@@ -1,0 +1,8 @@
+/build*/
+
+# Subprojects are downloaded by meson from the wrap files; only track the wraps and our patches.
+/subprojects/*
+!/subprojects/faest-arch-opt.wrap
+!/subprojects/gtest.wrap
+!/subprojects/google-benchmark.wrap
+!/subprojects/packagefiles/
