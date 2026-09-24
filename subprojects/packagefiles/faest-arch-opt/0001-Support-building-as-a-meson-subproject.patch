@@ -1,0 +1,43 @@
+diff --git a/meson.build b/meson.build
+index dfe5709..11360f9 100644
+--- a/meson.build
++++ b/meson.build
+@@ -14,10 +14,10 @@ project('faest', ['c', 'cpp'],
+ cpu_family = host_machine.cpu_family()
+ if cpu_family == 'aarch64'
+   arch = 'aarch64'
+-  add_global_arguments('-march=armv8.2-a+crypto', '-mtune=native', language : ['c', 'cpp'])
++  add_project_arguments('-march=armv8.2-a+crypto', '-mtune=native', language : ['c', 'cpp'])
+ elif cpu_family == 'x86_64'
+   arch = 'avx2'
+-  add_global_arguments('-march=native', '-mtune=native', language : ['c', 'cpp'])
++  add_project_arguments('-march=native', '-mtune=native', language : ['c', 'cpp'])
+ else
+   error('Unsupported CPU family: ' + cpu_family)
+ endif
+@@ -129,7 +129,10 @@ print_parameters = executable('print_parameters',
+   include_directories : faest_include_dirs,
+ )
+ 
+-subdir('test')
++# Only build the (slow to compile) tests and benchmarks when built standalone.
++if not meson.is_subproject()
++  subdir('test')
++endif
+ 
+ 
+ pymod = import('python')
+diff --git a/subprojects/packagefiles/xkcp/meson.build b/subprojects/packagefiles/xkcp/meson.build
+index 9ad5a7e..0477dc3 100644
+--- a/subprojects/packagefiles/xkcp/meson.build
++++ b/subprojects/packagefiles/xkcp/meson.build
+@@ -34,6 +34,9 @@ keccak_avx2_sources = [
+ ]
+ 
+ if host_machine.cpu_family() == 'x86_64'
++  # The AVX2 code needs these. faest-arch-opt can't set them for us with add_global_arguments()
++  # when it is itself a subproject, so set them here, as faest-arch-opt does for itself.
++  add_project_arguments('-march=native', '-mtune=native', language : 'c')
+   keccak_include_dirs += keccak_avx2_include_dirs
+   keccak_sources += keccak_avx2_sources
+ else
