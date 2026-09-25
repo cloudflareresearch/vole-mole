@@ -1,0 +1,2 @@
+option('impl', type : 'combo', choices : ['auto', 'ref', 'neon', 'avx2'], value : 'auto',
+  description : 'Implementation; auto selects neon on aarch64, avx2 on x86_64 and ref otherwise')

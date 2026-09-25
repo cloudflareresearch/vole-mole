@@ -3,6 +3,8 @@
 #ifndef VOLE_MOLE_MOUSSAKA_HPP
 #define VOLE_MOLE_MOUSSAKA_HPP
 
+#include "vole_mole/uov.hpp"
+
 #include <array>
 #include <cstddef>
 #include <cstdint>
@@ -12,19 +14,16 @@ namespace vole_mole::moussaka {
 // Version of the draft this implements; used for domain separation.
 constexpr uint8_t VERSION = 0;
 
-// UOV parameters (uov-Ip v3.0).
-constexpr size_t UOV_M = 45; // target length.
-
 // Protocol messages.
 constexpr size_t NF_BYTES = 24;            // nullifier length
 constexpr size_t R_BYTES = 16;             // commitment opening length
 constexpr size_t CTX_BYTES = 16;           // context length
 constexpr size_t ISSUE_PROOF_BYTES = 7657; // issuance proof length
-constexpr size_t ISSUE_REQUEST_BYTES = UOV_M + ISSUE_PROOF_BYTES;
+constexpr size_t ISSUE_REQUEST_BYTES = uov::M + ISSUE_PROOF_BYTES;
 using Nullifier = std::array<uint8_t, NF_BYTES>;
 using Opening = std::array<uint8_t, R_BYTES>;
 using Context = std::array<uint8_t, CTX_BYTES>;
-using Commitment = std::array<uint8_t, UOV_M>;
+using Commitment = uov::Target;
 using IssueRequest = std::array<uint8_t, ISSUE_REQUEST_BYTES>;
 
 // Randomness.

@@ -6,7 +6,7 @@ Implementation of the post-quantum candidates for [MoLE][mole] crypto:
    variant of the Issuer-Hiding Anonymous Token protocol built on UOV and the
    VOLE-in-the-Head (VOLEitH) proof system of [FAEST][faest].
 
-The VOLEitH machinery comes from [faest-arch-opt][arch-opt].
+VOLEitH comes from [faest-arch-opt][arch-opt]; UOV comes from [pqov][pqov].
 
 ## Building
 
@@ -33,9 +33,10 @@ meson test -C build-release --benchmark -v
 
 ## License
 
-BSD 3-Clause, see [LICENSE](LICENSE). faest-arch-opt, which is downloaded as a
-subproject, is MIT-licensed. `src/voleith.hpp` is adapted from faest-arch-opt
-and includes its MIT notice.
+BSD 3-Clause, see [LICENSE](LICENSE). [faest-arch-opt][arch-opt], which is
+downloaded as a subproject, is MIT-licensed. `src/voleith.hpp` is adapted from
+faest-arch-opt and includes its MIT notice. [pqov][pqov], also downloaded as a
+subproject, is licensed under CC0 or Apache-2.0.
 
 ## Acknowledgements
 
@@ -47,4 +48,5 @@ circuit design and the overall design of the protocols.
 [draft]: https://github.com/Moderation-of-unLinkable-Endorsements/internet-drafts/blob/main/draft-authors-mole-vole-ihat.md
 [faest]: https://faest.info
 [arch-opt]: https://github.com/faest-sign/faest-arch-opt
+[pqov]: https://github.com/pqov/pqov
 [meson]: https://mesonbuild.com
