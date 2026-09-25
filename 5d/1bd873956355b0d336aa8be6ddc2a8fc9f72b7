@@ -1,0 +1,37 @@
+.github/workflows/ci.yml
+  s_7a716a1cfbec78::t_3e9287bed8e99a 41
+.gitignore
+  s_7a716a1cfbec78::t_cbabef5db1cbe2 8
+README.md
+  s_7a716a1cfbec78::t_e3a6ea09b9bd1a 9-11,39-40,53
+meson.build
+  s_7a716a1cfbec78::t_6bfa8c9e3418b5 31-34,41,43
+src/uov/uov.cpp
+  s_7a716a1cfbec78::t_dc7f892e230c1f 1-71
+subprojects/packagefiles/pqov-patches/0001-Add-ov_sample_preimage.patch
+  s_7a716a1cfbec78::t_8fd2f84ef82ff8 1-191
+subprojects/packagefiles/pqov-patches/0002-Add-_UTILS_BUILTIN_-for-building-without-OpenSSL.patch
+  s_7a716a1cfbec78::t_8d702b814a9255 1-54
+subprojects/packagefiles/pqov/meson.build
+  s_7a716a1cfbec78::t_822dd2c51d8421 1-120
+tests/meson.build
+  s_7a716a1cfbec78::t_c58c43f2f2ce74 10
+tests/uov/test_uov.cpp
+  s_7a716a1cfbec78::t_c1626a7887cca5 1-88
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.10",
+  "base_commit_sha": "5d1bd873956355b0d336aa8be6ddc2a8fc9f72b7",
+  "prompts": {},
+  "sessions": {
+    "s_7a716a1cfbec78": {
+      "agent_id": {
+        "tool": "opencode",
+        "id": "ses_f251decf9ffeZ6Wse4Owi7K2Hz",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Christopher Patton <cpatton@cloudflare.com>"
+    }
+  }
+}
