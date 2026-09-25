@@ -3,8 +3,9 @@ url = https://github.com/faest-sign/faest-arch-opt.git
 # Tag v3.0.0 (implements FAEST specification v3).
 revision = 1d8330979cb467c54edac43ffe695da249fa3417
 depth = 1
-# Small build-system patch so the project can be consumed as a subproject. See the patch for details.
-diff_files = faest-arch-opt/0001-Support-building-as-a-meson-subproject.patch
+diff_files =
+  faest-arch-opt/0001-Support-building-as-a-meson-subproject.patch,
+  faest-arch-opt/0002-Allow-up-to-32-CRT-VOLE-masks.patch
 
 [provide]
 faest = faest_dep

@@ -1,0 +1,215 @@
+Allow up to 32 CRT VOLECommit masks
+
+The CRT VOLECommit stores, for each column of the lifted VOLE matrix, a hash with one bit per mask
+in a uint16_t, so it supports at most 16 masks (QuickSilver degree 13). vole-mole's issuance proof
+uses degree 16, which needs 15 + 4 = 19 masks.
+
+TODO(cjpatton) Propose this change to faest-arch-opt authors. First, check with the FAEST authors
+that nothing in the CRT VOLECommit analysis depends on at most 16 masks.
+
+diff --git a/crt_vole_helpers.inc b/crt_vole_helpers.inc
+index 8692e5f..69d454d 100644
+--- a/crt_vole_helpers.inc
++++ b/crt_vole_helpers.inc
+@@ -532,25 +532,25 @@ void lift_columns_secpar_prefix(
+ }
+ 
+ template <size_t ROWS, size_t COLUMNS, size_t LOOKUP_BITS>
+-void lift_columns_16bit(uint16_t* out, const uint16_t* in,
++void lift_columns_32bit(uint32_t* out, const uint32_t* in,
+                         const lift_columns_index_table_t<ROWS, COLUMNS, LOOKUP_BITS>& index_table)
+ {
+     // Parameters deciding the size of the lookup table:
+     // - 2^LOOKUP_BITS x BLOCKS_PER_ITERATION
+-    std::array<uint16_t, 1 << LOOKUP_BITS> table;
++    std::array<uint32_t, 1 << LOOKUP_BITS> table;
+ 
+     using lt_builder = gray_lookup_table_builder<LOOKUP_BITS>;
+     constexpr auto lt_setup = lt_builder::setup();
+     constexpr auto SPLIT = even_split(ROWS, LOOKUP_BITS);
+ 
+     // Clear output to work on
+-    memset(out, 0x00, COLUMNS * sizeof(uint16_t));
++    memset(out, 0x00, COLUMNS * sizeof(uint32_t));
+ 
+     if constexpr (SPLIT.N_MAX > 0)
+     {
+         for (size_t i = 0; i < SPLIT.N_MAX; ++i)
+         {
+-            lt_builder::template build_lookup_table<uint16_t, uint16_t, SPLIT.K_MAX>(
++            lt_builder::template build_lookup_table<uint32_t, uint32_t, SPLIT.K_MAX>(
+                 table, &in[i * SPLIT.K_MAX], 1, lt_setup);
+             for (size_t j = 0; j < COLUMNS; ++j)
+             {
+@@ -565,7 +565,7 @@ void lift_columns_16bit(uint16_t* out, const uint16_t* in,
+         constexpr auto OFFSET = SPLIT.N_MAX * SPLIT.K_MAX;
+         for (size_t i = 0; i < SPLIT.N_MIN; ++i)
+         {
+-            lt_builder::template build_lookup_table<uint16_t, uint16_t, SPLIT.K_MIN>(
++            lt_builder::template build_lookup_table<uint32_t, uint32_t, SPLIT.K_MIN>(
+                 table, &in[OFFSET + i * SPLIT.K_MIN], 1, lt_setup);
+             for (size_t j = 0; j < COLUMNS; ++j)
+             {
+@@ -597,10 +597,10 @@ template <typename P> ALWAYS_INLINE void crt_lift_q(vole_block* in_out, size_t s
+         in_out, stride, rows, C::W_CRT_LIFT_COLUMNS_INDEX_TAB);
+ }
+ 
+-template <typename P> ALWAYS_INLINE void gate_lift(uint16_t* out, const uint16_t* in)
++template <typename P> ALWAYS_INLINE void gate_lift(uint32_t* out, const uint32_t* in)
+ {
+     using C = CRT_CONSTANTS<P::secpar_v, P::tau_v, P::delta_bits_v>;
+-    lift_columns_16bit<P::CONSTS::CRT_NUM_MULT, P::secpar_bits, C::W_GATE_LIFT_COLUMNS_LOOKUP_BITS>(
++    lift_columns_32bit<P::CONSTS::CRT_NUM_MULT, P::secpar_bits, C::W_GATE_LIFT_COLUMNS_LOOKUP_BITS>(
+         out, in, C::W_GATE_LIFT_COLUMNS_INDEX_TAB);
+ }
+ 
+diff --git a/transpose.hpp b/transpose.hpp
+index f8614db..415e8d0 100644
+--- a/transpose.hpp
++++ b/transpose.hpp
+@@ -48,6 +48,21 @@ inline void transpose_16Nx16(uint8_t* __restrict__ output, const uint8_t* __rest
+     }
+ }
+ 
++// Transpose a (16*N x 32) bit matrix.
++inline void transpose_16Nx32(uint8_t* __restrict__ output, const uint8_t* __restrict__ input,
++                             size_t n_blocks)
++{
++    memset(output, 0x00, 4 * 16 * n_blocks);
++    for (size_t r = 0; r < 16 * n_blocks; ++r)
++    {
++        for (size_t c = 0; c < 32; ++c)
++        {
++            output[2 * n_blocks * c + (r / 8)] |= ((input[4 * r + (c / 8)] >> (c % 8)) & 1)
++                                                  << (r % 8);
++        }
++    }
++}
++
+ inline void transpose_16x16N(uint8_t* __restrict__ output, const uint8_t* __restrict__ input,
+                              size_t n_blocks)
+ {
+diff --git a/vole_commit.inc b/vole_commit.inc
+index 2710c29..ea392dd 100644
+--- a/vole_commit.inc
++++ b/vole_commit.inc
+@@ -341,8 +341,8 @@ template <typename P, bool VERIFIER>
+ void lift_and_hash_vq(
+     block128 iv, const vole_block* __restrict__ vq_columns,
+     std::conditional_t<VERIFIER, std::monostate, const vole_block* __restrict__> u,
+-    std::span<uint16_t, P::CONSTS::CRT_NUM_MULT> hashes_0,
+-    std::conditional_t<VERIFIER, std::monostate, std::span<uint16_t, P::CONSTS::CRT_NUM_MULT>>
++    std::span<uint32_t, P::CONSTS::CRT_NUM_MULT> hashes_0,
++    std::conditional_t<VERIFIER, std::monostate, std::span<uint32_t, P::CONSTS::CRT_NUM_MULT>>
+         hashes_1)
+ {
+     using CP = P::CONSTS;
+@@ -351,8 +351,8 @@ void lift_and_hash_vq(
+     constexpr auto N_MULT = CP::CRT_NUM_MULT;
+     static_assert(N_MULT != 0);
+     static_assert(N_MASK != 0);
+-    static_assert(N_MASK <= 16, "We assume that a hash fits into 16 bits.");
+-    // NB: The hash outputs 16 bits instead of N_MASK. The extra bits could be masked, but they will
++    static_assert(N_MASK <= 32, "We assume that a hash fits into 32 bits.");
++    // NB: The hash outputs 32 bits instead of N_MASK. The extra bits could be masked, but they will
+     // be ignored anyway.
+ 
+     if constexpr (!VERIFIER)
+@@ -434,8 +434,8 @@ void lift_and_hash_vq(
+ template <typename P>
+     requires(P::use_crt_vole_masks)
+ void compute_v_gate(const block_secpar<P::secpar_v>* __restrict__ u_mask,
+-                    std::span<uint16_t, P::CONSTS::CRT_NUM_MULT> hashes_0,
+-                    std::span<uint16_t, PADDED_N_MULT<P>> hashes_1,
++                    std::span<uint32_t, P::CONSTS::CRT_NUM_MULT> hashes_0,
++                    std::span<uint32_t, PADDED_N_MULT<P>> hashes_1,
+                     block_secpar<P::secpar_v>* __restrict__ v_mask, uint8_t* __restrict__ c_mult)
+ {
+     using CP = P::CONSTS;
+@@ -449,11 +449,11 @@ void compute_v_gate(const block_secpar<P::secpar_v>* __restrict__ u_mask,
+     constexpr auto PADDED_N_MULT_BYTES = (PADDED_N_MULT + 7) / 8;
+ 
+     // lift v_tilde with W_GATE
+-    std::array<uint16_t, P::secpar_bits> lifted_v_tilde{};
++    std::array<uint32_t, P::secpar_bits> lifted_v_tilde{};
+     gate_lift<P>(lifted_v_tilde.data(), hashes_0.data());
+     // transpose
+-    std::array<block_secpar<S>, 16> transposed_lifted_v_tilde;
+-    transpose_16Nx16(reinterpret_cast<uint8_t*>(transposed_lifted_v_tilde.data()),
++    std::array<block_secpar<S>, 32> transposed_lifted_v_tilde;
++    transpose_16Nx32(reinterpret_cast<uint8_t*>(transposed_lifted_v_tilde.data()),
+                      reinterpret_cast<const uint8_t*>(lifted_v_tilde.data()), P::secpar_bits / 16);
+     // xor into v_mask
+     for (size_t m = 0; m < N_MASK; ++m)
+@@ -462,9 +462,9 @@ void compute_v_gate(const block_secpar<P::secpar_v>* __restrict__ u_mask,
+     // for c_mult:
+     for (size_t e = 0; e < N_MULT; ++e)
+         hashes_1[e] ^= hashes_0[e];
+-    std::array<uint8_t, 2 * PADDED_N_MULT> transposed_xored_hs{};
++    std::array<uint8_t, 4 * PADDED_N_MULT> transposed_xored_hs{};
+     // transpose
+-    transpose_16Nx16(transposed_xored_hs.data(), reinterpret_cast<const uint8_t*>(hashes_1.data()),
++    transpose_16Nx32(transposed_xored_hs.data(), reinterpret_cast<const uint8_t*>(hashes_1.data()),
+                      PADDED_N_MULT / 16);
+ 
+     // - apply F to u_mask and xor into the above
+@@ -480,8 +480,8 @@ template <typename P>
+     requires(P::use_crt_vole_masks)
+ void compute_v_mask_and_c_mult(const block_secpar<P::secpar_v>* __restrict__ v,
+                                const block_secpar<P::secpar_v>* __restrict__ u_mask,
+-                               std::span<uint16_t, P::CONSTS::CRT_NUM_MULT> hashes_0,
+-                               std::span<uint16_t, PADDED_N_MULT<P>> hashes_1,
++                               std::span<uint32_t, P::CONSTS::CRT_NUM_MULT> hashes_0,
++                               std::span<uint32_t, PADDED_N_MULT<P>> hashes_1,
+                                block_secpar<P::secpar_v>* __restrict__ v_mask,
+                                uint8_t* __restrict__ c_mult)
+ {
+@@ -499,7 +499,7 @@ void compute_v_mask_and_c_mult(const block_secpar<P::secpar_v>* __restrict__ v,
+ 
+ template <typename P>
+     requires(P::use_crt_vole_masks)
+-void compute_q_gate(std::span<uint16_t, PADDED_N_MULT<P>> hashes, block_secpar<P::secpar_v> delta,
++void compute_q_gate(std::span<uint32_t, PADDED_N_MULT<P>> hashes, block_secpar<P::secpar_v> delta,
+                     const uint8_t* __restrict__ c_mult, block_secpar<P::secpar_v>* q_mask)
+ {
+     using CP = P::CONSTS;
+@@ -515,8 +515,8 @@ void compute_q_gate(std::span<uint16_t, PADDED_N_MULT<P>> hashes, block_secpar<P
+     G_lift_row_xor<P>(gamma.data(), delta);
+ 
+     // transpose
+-    std::array<uint8_t, 2 * PADDED_N_MULT> transposed_hs;
+-    transpose_16Nx16(reinterpret_cast<uint8_t*>(transposed_hs.data()),
++    std::array<uint8_t, 4 * PADDED_N_MULT> transposed_hs;
++    transpose_16Nx32(reinterpret_cast<uint8_t*>(transposed_hs.data()),
+                      reinterpret_cast<const uint8_t*>(hashes.data()), PADDED_N_MULT / 16);
+     for (size_t m = 0; m < N_MASK; ++m)
+         for (size_t i = 0; i < N_MULT_BYTES; ++i)
+@@ -529,7 +529,7 @@ void compute_q_gate(std::span<uint16_t, PADDED_N_MULT<P>> hashes, block_secpar<P
+ 
+ template <typename P>
+     requires(P::use_crt_vole_masks)
+-void compute_q_mask(std::span<uint16_t, PADDED_N_MULT<P>> hashes, block_secpar<P::secpar_v> delta,
++void compute_q_mask(std::span<uint32_t, PADDED_N_MULT<P>> hashes, block_secpar<P::secpar_v> delta,
+                     const block_secpar<P::secpar_v>* __restrict__ q,
+                     const uint8_t* __restrict__ c_mult,
+                     block_secpar<P::secpar_v>* __restrict__ q_mask)
+@@ -593,8 +593,8 @@ void crt_vole_commit(block_secpar<P::secpar_v> seed, block128 iv,
+                                 data.u().data(), data.v_columns().data(), commitment.data(),
+                                 check.data(), u_extra.data());
+ 
+-    std::array<uint16_t, N_MULT> hashes_0;
+-    std::array<uint16_t, PADDED_N_MULT> hashes_1{};
++    std::array<uint32_t, N_MULT> hashes_0;
++    std::array<uint32_t, PADDED_N_MULT> hashes_1{};
+     detail::lift_and_hash_vq<P, false>(iv, data.v_columns().data(), data.u().data(), hashes_0,
+                                        std::span(hashes_1).template subspan<0, N_MULT>());
+ 
+@@ -634,7 +634,7 @@ bool crt_vole_reconstruct(
+     if (!success)
+         return false;
+ 
+-    std::array<uint16_t, PADDED_N_MULT> hashes{};
++    std::array<uint32_t, PADDED_N_MULT> hashes{};
+     detail::lift_and_hash_vq<P, true>(iv, data.q_columns().data(), std::monostate{},
+                                       std::span(hashes).template subspan<0, N_MULT>(),
+                                       std::monostate{});

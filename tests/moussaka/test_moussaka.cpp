@@ -130,3 +130,23 @@ TEST(IssueRequest, RejectTamperedProof) {
     }
     EXPECT_TRUE(verify_issue_request(req, CTX_ISS));
 }
+
+// Every mask's row of the CRT VOLECommit's c_mult matrix is bound by the proof.
+TEST(IssueRequest, RejectTamperedCMult) {
+    using P = vole_mole::moussaka::detail::IssueParams;
+    constexpr size_t N_MASK = P::CONSTS::CRT_NUM_MASK;
+    constexpr size_t N_MULT_BYTES = P::CONSTS::CRT_NUM_MULT_BYTES;
+    static_assert(N_MASK == vole_mole::moussaka::detail::ISSUE_QS_DEGREE - 1 + 4);
+
+    const auto res = make_request();
+    IssueRequest req = res.request;
+    const auto c_mult =
+        faest::mutable_faest_signature<P>(std::span(req).last<ISSUE_PROOF_BYTES>().data())
+            .vole_commitment_cmult();
+    for (size_t m = 0; m < N_MASK; ++m) {
+        c_mult[m * N_MULT_BYTES] ^= 0x01;
+        EXPECT_FALSE(verify_issue_request(req, CTX_ISS)) << "flipped a bit of row " << m;
+        c_mult[m * N_MULT_BYTES] ^= 0x01;
+    }
+    EXPECT_TRUE(verify_issue_request(req, CTX_ISS));
+}
