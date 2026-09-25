@@ -1,0 +1,50 @@
+src/keccak/keccak.cpp
+  s_8557e21a96d6eb::t_334ab905b39bff 1-71
+meson.build
+  s_8557e21a96d6eb::t_04463f4a385dae 1-50
+tests/meson.build
+  s_8557e21a96d6eb::t_79ae8c045d15b4 1-35
+tests/test_data.hpp
+  s_8557e21a96d6eb::t_eb4b9d0b4468df 1-55
+include/vole_mole/moussaka.hpp
+  s_8557e21a96d6eb::t_aa2c82bd6f5197 1-69
+src/keccak/circuit.hpp
+  s_8557e21a96d6eb::t_e23637c99756e4 1-92
+src/moussaka/issue.hpp
+  s_8557e21a96d6eb::t_4d74ff8b681846 1-315
+src/voleith.hpp
+  s_8557e21a96d6eb::t_8b356044ddc14a 1-289
+tests/moussaka/test_issue.cpp
+  s_8557e21a96d6eb::t_134375f58c6493 1-140
+tests/moussaka/test_moussaka.cpp
+  s_8557e21a96d6eb::t_af7599e7f84499 1-167
+include/vole_mole/keccak.hpp
+  s_8557e21a96d6eb::t_29104fd129df46 1-32
+tests/keccak/kat.txt
+  s_8557e21a96d6eb::t_d5aa18a49f3859 1-8
+tests/keccak/keccak_ref.py
+  s_8557e21a96d6eb::t_d3d1a641f8d6c0 1-119
+src/moussaka/moussaka.cpp
+  s_8557e21a96d6eb::t_273dc6d5826e06 1-81
+tests/keccak/test_keccak.cpp
+  s_8557e21a96d6eb::t_cc4990c6ffd077 1-119
+README.md
+  s_8557e21a96d6eb::t_d8b025fbf92b2b 3-190,194-195
+  s_8557e21a96d6eb::t_ecec5705676c4c 196
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.10",
+  "base_commit_sha": "c77b9d70bce4f7f9b22fb3519374a6bf6d404faf",
+  "prompts": {},
+  "sessions": {
+    "s_8557e21a96d6eb": {
+      "agent_id": {
+        "tool": "opencode",
+        "id": "ses_f2b5fab15ffeHakKGiA7H9UX9p",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Christopher Patton <cpatton@cloudflare.com>"
+    }
+  }
+}
