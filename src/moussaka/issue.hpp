@@ -7,26 +7,24 @@
 // Arithmetization: Each round of Keccak-p[800, 12] has exactly one layer of ANDs, so the state
 // after k rounds is a polynomial of degree 2^k in the input. We split the 12 rounds into segments
 // of ROUNDS_PER_SEGMENT rounds and commit to the states between the segments as part of the
-// witness. With 3 rounds per segment, each segment yields constraints of degree 2^3 = 8:
+// witness. With 4 rounds per segment, each segment yields constraints of degree 2^4 = 16:
 //
-//   s3  = R_2(R_1(R_0(s0)))
-//   s6  = R_5(R_4(R_3(s3)))
-//   s9  = R_8(R_7(R_6(s6)))
-//   t   = R_11(R_10(R_9(s9)))[:45]
+//   s4  = R_3(R_2(R_1(R_0(s0))))
+//   s8  = R_7(R_6(R_5(R_4(s4))))
+//   t   = R_11(R_10(R_9(R_8(s8))))[:45]
 //
 // where R_i is round i of Keccak-p[800, 12] and s0 is the initial state. Each segment except the
-// last adds 800 constraints of degree 8; the last segment adds 360 constraints of degree 8. The
+// last adds 800 constraints of degree 16; the last segment adds 360 constraints of degree 16. The
 // witness layout is as follows:
 //
 //     0 ..  16   r
 //    16 ..  32   ctx_red
 //    32 ..  56   nf
-//    56 .. 156   s3, the state after 3 rounds
-//   156 .. 256   s6, the state after 6 rounds
-//   256 .. 356   s9, the state after 9 rounds
+//    56 .. 156   s4, the state after 4 rounds
+//   156 .. 256   s8, the state after 8 rounds
 //
 // Soundness of the proof requires proving each witness bit is in fact a bit; this adds an
-// additional 2848 constraints of degree 2.
+// additional 2048 constraints of degree 2.
 //
 // We use the VOLE-in-the-Head parameters of FAEST-EM-128f v3.
 
@@ -74,12 +72,14 @@ inline Kp800State encode_init_state(const Nullifier& nf, const Context& ctx_iss,
     return state;
 }
 
-constexpr size_t ROUNDS_PER_SEGMENT = 3;
+constexpr size_t ROUNDS_PER_SEGMENT = 4;
 constexpr size_t NUM_SEGMENTS = KP800_ROUNDS / ROUNDS_PER_SEGMENT;
 constexpr size_t NUM_COMMITTED_STATES = NUM_SEGMENTS - 1;
 constexpr size_t ISSUE_QS_DEGREE = size_t{1} << ROUNDS_PER_SEGMENT;
 static_assert(NUM_SEGMENTS * ROUNDS_PER_SEGMENT == KP800_ROUNDS);
-static_assert(ISSUE_QS_DEGREE <= 13, "faest-arch-opt currently supports a maximum degree of 13");
+// The CRT VOLE commitment needs ISSUE_QS_DEGREE - 1 masks for QuickSilver and 4 for the VOLE check.
+// faest-arch-opt supports at most 32 masks.
+static_assert(ISSUE_QS_DEGREE - 1 + 4 <= 32, "faest-arch-opt supports at most 32 masks");
 
 // Witness layout.
 constexpr size_t WIT_OFF_R = 0;
