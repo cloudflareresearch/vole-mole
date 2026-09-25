@@ -126,7 +126,7 @@ static_assert(com_to_wit_is_valid(), "COM_TO_WIT is malformed");
 constexpr size_t ISSUE_NUM_CONSTRAINTS =
     ISSUE_WITNESS_BITS                                   // bit constraints
     + NUM_COMMITTED_STATES * vole_mole::KP800_STATE_BITS // segment ends in a committed state
-    + 8 * UOV_M;                                         // last segment ends in the commitment
+    + 8 * uov::M;                                        // last segment ends in the commitment
 
 // Compute the full witness, including the intermediate Keccak states.
 inline std::array<uint8_t, ISSUE_WITNESS_BYTES> encode_issue_witness(const Nullifier& nf,
@@ -281,7 +281,7 @@ struct IssueRelation {
         // Add output constraint: The last segment ends in the commitment.
         const auto out = qs_keccak_rounds<QS, ROUNDS_PER_SEGMENT>(state, NUM_COMMITTED_STATES *
                                                                              ROUNDS_PER_SEGMENT);
-        for (size_t i = 0; i < 8 * UOV_M; ++i) {
+        for (size_t i = 0; i < 8 * uov::M; ++i) {
             qs->add_constraint(out[i] + poly1((x.t[i / 8] >> (i % 8)) & 1));
         }
     }
@@ -311,7 +311,7 @@ inline void prove_issue_request(IssueProof pf_iss, const Commitment& t, const Nu
 // compiled into the code that uses it (currently just the tests).
 inline bool verify_issue_request(const IssueRequest& request, const Context& ctx_iss) {
     Commitment t;
-    std::ranges::copy(std::span(request).first<UOV_M>(), t.begin());
+    std::ranges::copy(std::span(request).first<uov::M>(), t.begin());
     return voleith_verify<IssueRelation>(std::span(request).last<ISSUE_PROOF_BYTES>(),
                                          {t, ctx_iss});
 }

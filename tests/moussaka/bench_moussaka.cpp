@@ -1,15 +1,3 @@
-// Benchmarks of the issuance proof: IssueRequest() (commit + prove) and its verification.
-//
-// Run in a release build, so that assertions are disabled:
-//
-//   meson setup build-release --buildtype=release
-//   meson test -C build-release --benchmark -v
-//
-// or run the executable directly to pass Google Benchmark flags, e.g.:
-//
-//   ./build-release/tests/bench_moussaka --benchmark_repetitions=10
-//       --benchmark_report_aggregates_only=true
-
 #include "test.hpp"
 #include "vole_mole/moussaka.hpp"
 

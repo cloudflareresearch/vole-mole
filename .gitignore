@@ -5,4 +5,5 @@
 !/subprojects/faest-arch-opt.wrap
 !/subprojects/gtest.wrap
 !/subprojects/google-benchmark.wrap
+!/subprojects/pqov.wrap
 !/subprojects/packagefiles/

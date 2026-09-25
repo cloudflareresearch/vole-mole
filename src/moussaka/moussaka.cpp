@@ -57,7 +57,7 @@ IssueRequestResult issue_request_with_seed(const Context& ctx_iss, const Context
     IssueRequestResult result;
     result.pending_token = {rand.nf, rand.r};
     const Commitment t = commit(rand.nf, ctx_iss, ctx_red, rand.r);
-    std::ranges::copy(t, std::span(result.request).first<UOV_M>().begin());
+    std::ranges::copy(t, std::span(result.request).first<uov::M>().begin());
     detail::prove_issue_request(std::span(result.request).last<ISSUE_PROOF_BYTES>(), t, rand.nf,
                                 ctx_iss, ctx_red, rand.r, rand.rho);
     return result;

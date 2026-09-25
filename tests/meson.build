@@ -7,6 +7,7 @@ tests = [
   ['keccak', 'keccak/test_keccak.cpp'],
   ['moussaka-issue', 'moussaka/test_issue.cpp'],
   ['moussaka', 'moussaka/test_moussaka.cpp'],
+  ['uov', 'uov/test_uov.cpp'],
   ['voleith', 'voleith/test_voleith.cpp'],
 ]
 
@@ -28,10 +29,17 @@ benchmark_dep = dependency('benchmark_main',
   default_options : ['warning_level=0', 'tests=disabled'],
 ).as_system()
 
-bench_moussaka = executable('bench_moussaka', 'moussaka/bench_moussaka.cpp',
-  include_directories : test_inc,
-  dependencies : test_deps + [benchmark_dep],
-  # The BENCHMARK() macro uses __COUNTER__, which clang flags as an extension under -Wpedantic.
-  cpp_args : meson.get_compiler('cpp').get_supported_arguments('-Wno-c2y-extensions'),
-)
-benchmark('moussaka', bench_moussaka, timeout : 600)
+benchmarks = [
+  ['moussaka', 'moussaka/bench_moussaka.cpp'],
+  ['uov', 'uov/bench_uov.cpp'],
+]
+
+foreach b : benchmarks
+  exe = executable('bench_' + b[0], b[1],
+    include_directories : test_inc,
+    dependencies : test_deps + [benchmark_dep],
+    # The BENCHMARK() macro uses __COUNTER__, which clang flags as an extension under -Wpedantic.
+    cpp_args : meson.get_compiler('cpp').get_supported_arguments('-Wno-c2y-extensions'),
+  )
+  benchmark(b[0], exe, timeout : 600)
+endforeach

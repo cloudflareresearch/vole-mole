@@ -62,7 +62,7 @@ TEST(IssueRelation, WrongInstanceViolatesAConstraint) {
     const auto w = encode_issue_witness(NF, CTX_ISS, CTX_RED, R);
 
     // Each bit of t is constrained.
-    for (size_t i = 0; i < 8 * UOV_M; ++i) {
+    for (size_t i = 0; i < 8 * uov::M; ++i) {
         auto x = INSTANCE;
         x.t[i / 8] ^= static_cast<uint8_t>(1u << (i % 8));
         EXPECT_EQ(count_violated(evaluate(w, x)), 1u) << "flipping bit " << i << " of t";

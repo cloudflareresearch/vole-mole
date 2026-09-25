@@ -38,7 +38,7 @@ jobs:
           echo "CC=clang-22" >> "$GITHUB_ENV"
           echo "CXX=clang++-22" >> "$GITHUB_ENV"
 
-      # Subprojects (faest-arch-opt, XKCP, GoogleTest, Google Benchmark) are downloaded by Meson.
+      # Subprojects are downloaded by Meson.
       - name: Cache subproject downloads
         uses: actions/cache@v4
         with:

@@ -39,20 +39,20 @@ TEST(IssueRequest, WitnessIsConsistent) {
                 KP800_STATE_BYTES, state.begin());
     keccak_p800_rounds(state, NUM_COMMITTED_STATES * ROUNDS_PER_SEGMENT, ROUNDS_PER_SEGMENT);
     const Commitment t = commit(NF, CTX_ISS, CTX_RED, R);
-    EXPECT_EQ(to_hex(t), to_hex(std::span(state).first<UOV_M>()));
+    EXPECT_EQ(to_hex(t), to_hex(std::span(state).first<uov::M>()));
 }
 
 TEST(IssueRequest, Verifies) {
     const auto res = make_request();
     EXPECT_TRUE(verify_issue_request(res.request, CTX_ISS));
-    EXPECT_EQ(to_hex(std::span(res.request).first<UOV_M>()),
+    EXPECT_EQ(to_hex(std::span(res.request).first<uov::M>()),
               to_hex(commit(res.pending_token.nf, CTX_ISS, CTX_RED, res.pending_token.r)));
 }
 
 TEST(IssueRequest, RandomizedVerifies) {
     const auto res = issue_request(CTX_ISS, CTX_RED);
     EXPECT_TRUE(verify_issue_request(res.request, CTX_ISS));
-    EXPECT_EQ(to_hex(std::span(res.request).first<UOV_M>()),
+    EXPECT_EQ(to_hex(std::span(res.request).first<uov::M>()),
               to_hex(commit(res.pending_token.nf, CTX_ISS, CTX_RED, res.pending_token.r)));
 }
 
@@ -61,8 +61,8 @@ TEST(IssueRequest, IsDeterministicGivenSeed) {
     const auto b = make_request();
     EXPECT_EQ(to_hex(a.pending_token.nf), to_hex(b.pending_token.nf));
     EXPECT_EQ(to_hex(a.pending_token.r), to_hex(b.pending_token.r));
-    EXPECT_EQ(to_hex(std::span(a.request).first<UOV_M>()),
-              to_hex(std::span(b.request).first<UOV_M>()));
+    EXPECT_EQ(to_hex(std::span(a.request).first<uov::M>()),
+              to_hex(std::span(b.request).first<uov::M>()));
     EXPECT_TRUE(std::ranges::equal(std::span(a.request).last<ISSUE_PROOF_BYTES>(),
                                    std::span(b.request).last<ISSUE_PROOF_BYTES>()));
 
@@ -70,8 +70,8 @@ TEST(IssueRequest, IsDeterministicGivenSeed) {
     const auto c = make_request(filled<SEED_BYTES>(0x99));
     EXPECT_NE(to_hex(a.pending_token.nf), to_hex(c.pending_token.nf));
     EXPECT_NE(to_hex(a.pending_token.r), to_hex(c.pending_token.r));
-    EXPECT_NE(to_hex(std::span(a.request).first<UOV_M>()),
-              to_hex(std::span(c.request).first<UOV_M>()));
+    EXPECT_NE(to_hex(std::span(a.request).first<uov::M>()),
+              to_hex(std::span(c.request).first<uov::M>()));
     EXPECT_FALSE(std::ranges::equal(std::span(a.request).last<ISSUE_PROOF_BYTES>(),
                                     std::span(c.request).last<ISSUE_PROOF_BYTES>()));
     EXPECT_TRUE(verify_issue_request(c.request, CTX_ISS));

@@ -28,14 +28,18 @@ faest_proj = subproject('faest-arch-opt')
 faest_dep = faest_proj.get_variable('faest_dep').as_system()
 randomness_dep = faest_proj.get_variable('randomness_os_dep')
 
+pqov_proj = subproject('pqov')
+pqov_dep = pqov_proj.get_variable('pqov_dep').as_system()
+
 vole_mole_inc = include_directories('include')
 vole_mole_src_inc = include_directories('src')
 
 vole_mole_lib = static_library('vole-mole',
   'src/keccak/keccak.cpp',
   'src/moussaka/moussaka.cpp',
+  'src/uov/uov.cpp',
   include_directories : [vole_mole_inc, vole_mole_src_inc],
-  dependencies : [faest_dep, randomness_dep],
+  dependencies : [faest_dep, randomness_dep, pqov_dep],
 )
 
 vole_mole_dep = declare_dependency(

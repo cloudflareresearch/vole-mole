@@ -1,0 +1,13 @@
+[wrap-git]
+url = https://github.com/pqov/pqov.git
+# Round 3 update (UOV specification v3).
+revision = fac2ec1fe6d8ea508eab4b98eb5341e1eed930a4
+depth = 1
+# pqov only has a Makefile; packagefiles/pqov adds a meson build.
+patch_directory = pqov
+diff_files =
+  pqov-patches/0001-Add-ov_derive_preimage.patch,
+  pqov-patches/0002-Add-_UTILS_BUILTIN_-for-building-without-OpenSSL.patch
+
+[provide]
+pqov = pqov_dep

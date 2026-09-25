@@ -1,0 +1,197 @@
+From cef4c615fd3106c02b2dd2b3e504e12ee03eadf6 Mon Sep 17 00:00:00 2001
+From: vole-mole <vole-mole@localhost>
+Date: Fri, 25 Sep 2026 16:35:33 -0700
+Subject: [PATCH 1/2] Add ov_derive_preimage()
+
+Derive the preimage of a caller-supplied target under the public map. This
+is ov_sign() without hashing the message and salt to obtain the target, and
+with the vinegar derived from the target and the secret key, so the same
+target always gets the same preimage. The vinegar derivation is factored out
+of ov_sign_core() so that both share it; ov_sign() is unchanged.
+---
+ src/ov.c | 104 ++++++++++++++++++++++++++++++++++++++++---------------
+ src/ov.h |  17 +++++++++
+ 2 files changed, 94 insertions(+), 27 deletions(-)
+
+diff --git a/src/ov.c b/src/ov.c
+index 1dfa871..867073a 100644
+--- a/src/ov.c
++++ b/src/ov.c
+@@ -93,41 +93,36 @@ void ov_calc_l1_mat( uint8_t *mat_l1, const sk_t *sk, const uint8_t *vinegar ) {
+ #endif
+ 
+ 
++///
++/// @brief Derive the preimage w of the target y, i.e., P(w) = y.
++///
++/// The vinegar vector for attempt ctr is H(prefix||ctr), where prefix is the input absorbed
++/// by h_vinegar_prefix. h_vinegar_prefix is consumed (freed) by this function.
++///
++/// @param[out] w                 - the preimage, _PUB_N_BYTE bytes.
++/// @param[in]  sk                - the secret key.
++/// @param[in]  y                 - the target, _PUB_M_BYTE bytes.
++/// @param[in]  h_vinegar_prefix  - hash state for deriving vinegar vectors.
++/// @return 0 for success. -1 otherwise.
++///
+ static
+-int ov_sign_core( uint8_t *signature, const sk_t *sk, const uint8_t *message, size_t mlen ) {
++int ov_preimage_core( uint8_t *w, const sk_t *sk, const uint8_t *y, hash_ctx *h_vinegar_prefix ) {
+     // allocate temporary storage.
+     uint8_t mat_l1[_O * _O_BYTE];
+-    uint8_t salt[_SALT_BYTE];
+-    randombytes( salt, _SALT_BYTE );
+-    #if defined(_VALGRIND_)
+-    VALGRIND_MAKE_MEM_UNDEFINED(salt, _SALT_BYTE );  // mark secret data as undefined data
+-    VALGRIND_MAKE_MEM_UNDEFINED(sk, OV_SECRETKEYBYTES );  // mark secret data as undefined data
+-    #endif
+-
+     uint8_t vinegar[_V_BYTE];
+     uint8_t r_l1_F1[_O_BYTE];
+-    uint8_t y[_PUB_N_BYTE];
+     uint8_t x_o1[_O_BYTE];
++    uint8_t tmp[_PUB_N_BYTE];
+ 
+-    hash_ctx h_m_salt_secret;
+-    hash_ctx h_vinegar_copy;
+-    // The computation:  H(M||salt)  -->   y  --C-map-->   x   --T-->   w
+-    hash_init  (&h_m_salt_secret);
+-    hash_update(&h_m_salt_secret, message, mlen);
+-    hash_update(&h_m_salt_secret, salt, _SALT_BYTE);
+-    hash_ctx_copy(&h_vinegar_copy, &h_m_salt_secret);
+-    hash_final_digest( y, _PUB_M_BYTE, &h_m_salt_secret);    // H(M||salt)
+-
+-    hash_update(&h_vinegar_copy, sk->sk_seed, LEN_SKSEED );   // H(M||salt||sk_seed ...
+-
++    // The computation:  y  --C-map-->   x   --T-->   w
+     unsigned n_attempt = 0;
+     while ( MAX_ATTEMPT_VINEGAR > n_attempt ) {
+         uint8_t ctr = n_attempt & 0xff;                    // counter for generating vinegar
+         n_attempt++;
+         hash_ctx h_vinegar;
+-        hash_ctx_copy(&h_vinegar, &h_vinegar_copy);
+-        hash_update(&h_vinegar, &ctr, 1 );                  // H(M||salt||sk_seed||ctr ...
+-        hash_final_digest( vinegar, _V_BYTE, &h_vinegar);   // H(M||salt||sk_seed||ctr)
++        hash_ctx_copy(&h_vinegar, h_vinegar_prefix);
++        hash_update(&h_vinegar, &ctr, 1 );                  // H(prefix||ctr ...
++        hash_final_digest( vinegar, _V_BYTE, &h_vinegar);   // H(prefix||ctr)
+ 
+         #if defined(_VALGRIND_)
+         VALGRIND_MAKE_MEM_UNDEFINED(vinegar, _V_BYTE );  // mark secret data as undefined data
+@@ -167,20 +162,50 @@ int ov_sign_core( uint8_t *signature, const sk_t *sk, const uint8_t *message, si
+         #endif
+         break;
+     }
+-    hash_final_digest( NULL, 0, &h_vinegar_copy);   // free
++    hash_final_digest( NULL, 0, h_vinegar_prefix);   // free
+     if ( MAX_ATTEMPT_VINEGAR <= n_attempt ) {
+         return -1;
+     }
+ 
+     //  w = T^-1 * x
+-    uint8_t *w = signature;    // [_PUB_N_BYTE];
+     // identity part of T.
+     memcpy( w, vinegar, _V_BYTE );
+     memcpy( w + _V_BYTE, x_o1, _O_BYTE );
+ 
+     // Computing the O part of T.
+-    gfmat_prod(y, sk->O, _V_BYTE, _O, x_o1 );
+-    gf256v_add(w, y, _V_BYTE );
++    gfmat_prod(tmp, sk->O, _V_BYTE, _O, x_o1 );
++    gf256v_add(w, tmp, _V_BYTE );
++
++    return 0;
++}
++
++
++static
++int ov_sign_core( uint8_t *signature, const sk_t *sk, const uint8_t *message, size_t mlen ) {
++    uint8_t salt[_SALT_BYTE];
++    randombytes( salt, _SALT_BYTE );
++    #if defined(_VALGRIND_)
++    VALGRIND_MAKE_MEM_UNDEFINED(salt, _SALT_BYTE );  // mark secret data as undefined data
++    VALGRIND_MAKE_MEM_UNDEFINED(sk, OV_SECRETKEYBYTES );  // mark secret data as undefined data
++    #endif
++
++    uint8_t y[_PUB_M_BYTE];
++
++    hash_ctx h_m_salt_secret;
++    hash_ctx h_vinegar_copy;
++    // The computation:  H(M||salt)  -->   y  --C-map-->   x   --T-->   w
++    hash_init  (&h_m_salt_secret);
++    hash_update(&h_m_salt_secret, message, mlen);
++    hash_update(&h_m_salt_secret, salt, _SALT_BYTE);
++    hash_ctx_copy(&h_vinegar_copy, &h_m_salt_secret);
++    hash_final_digest( y, _PUB_M_BYTE, &h_m_salt_secret);    // H(M||salt)
++
++    hash_update(&h_vinegar_copy, sk->sk_seed, LEN_SKSEED );   // H(M||salt||sk_seed ...
++
++    int r = ov_preimage_core( signature, sk, y, &h_vinegar_copy );
++    if ( 0 != r ) {
++        return r;
++    }
+ 
+     // return: signature <- w || salt.
+     memcpy( signature + _PUB_N_BYTE, salt, _SALT_BYTE );
+@@ -189,6 +214,31 @@ int ov_sign_core( uint8_t *signature, const sk_t *sk, const uint8_t *message, si
+ }
+ 
+ 
++/// Domain separation for ov_derive_preimage() and ov_sign() in case the same secret key is used
++/// across both. ov_sign() derives its vinegar from H(M||salt||sk_seed||ctr), and the salt is part
++/// of the signature. Without the tag, a caller could get an ov_sign() signature of a 29-byte M and
++/// then ask for a preimage of target = M||salt. Both would use the same vinegar for distinct
++/// targets, revealing an oil vector.
++///
++/// TODO(cjpatton) Propose adding proper domain separation between the target and vinegar vector.
++static const uint8_t PREIMAGE_DST[] = "pqov-derive-preimage";
++
++int ov_derive_preimage( uint8_t *preimage, const sk_t *sk, const uint8_t *target ) {
++    #if defined(_VALGRIND_)
++    VALGRIND_MAKE_MEM_UNDEFINED(sk, OV_SECRETKEYBYTES );  // mark secret data as undefined data
++    #endif
++
++    // vinegar <- H(target||sk_seed||DST||ctr)
++    hash_ctx h_vinegar_prefix;
++    hash_init  (&h_vinegar_prefix);
++    hash_update(&h_vinegar_prefix, target, _PUB_M_BYTE);
++    hash_update(&h_vinegar_prefix, sk->sk_seed, LEN_SKSEED );
++    hash_update(&h_vinegar_prefix, PREIMAGE_DST, sizeof(PREIMAGE_DST) - 1 );
++
++    return ov_preimage_core( preimage, sk, target, &h_vinegar_prefix );
++}
++
++
+ #if !defined(_OV_PKC_SKC)
+ int ov_sign( uint8_t *signature, const sk_t *sk, const uint8_t *message, size_t mlen ) {
+     return ov_sign_core( signature, sk, message, mlen );
+diff --git a/src/ov.h b/src/ov.h
+index 536b350..2cbffd7 100644
+--- a/src/ov.h
++++ b/src/ov.h
+@@ -164,6 +164,23 @@ void ov_publicmap_pkc( unsigned char *z, const cpk_t *pk, const unsigned char *w
+ int ov_sign( uint8_t *signature, const sk_t *sk, const uint8_t *message, size_t mlen );
+ #endif
+ 
++///
++/// @brief Derive the preimage of a target under the public map.
++///
++/// Unlike ov_sign(), the target is used as is rather than hashed with a random salt. The vinegar
++/// vector is derived deterministically from the target and the secret key as usual.
++///
++/// A key used with this function must not also be used with ov_sign(): a preimage of
++/// H(M||salt) is a valid ov_sign() signature of M.
++///
++/// @param[out] preimage  - the preimage, _PUB_N_BYTE bytes.
++/// @param[in]  sk        - the secret key.
++/// @param[in]  target    - the target, _PUB_M_BYTE bytes.
++/// @return 0 for success. -1 otherwise.
++///
++#define ov_derive_preimage PQOV_NAMESPACE(ov_derive_preimage)
++int ov_derive_preimage( uint8_t *preimage, const sk_t *sk, const uint8_t *target );
++
+ ///
+ /// @brief Verifying function.
+ ///
+-- 
+2.50.1 (Apple Git-155)
+
