@@ -231,7 +231,8 @@ struct IssueRelation {
 
     static constexpr size_t NUM_CONSTRAINTS = ISSUE_NUM_CONSTRAINTS;
 
-    // Hashed before the instance; see `hash_mu` in voleith.hpp.
+    static constexpr size_t WITNESS_PREFIX_BYTES = ISSUE_WITNESS_BYTES;
+
     static constexpr std::span<const uint8_t> DST = MOUSSAKA_ISSUE_PROOF_DST;
 
     static void hash_instance(faest::hash_state& hasher, const instance& x) {

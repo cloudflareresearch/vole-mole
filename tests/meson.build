@@ -7,6 +7,7 @@ tests = [
   ['keccak', 'keccak/test_keccak.cpp'],
   ['moussaka-issue', 'moussaka/test_issue.cpp'],
   ['moussaka', 'moussaka/test_moussaka.cpp'],
+  ['voleith', 'voleith/test_voleith.cpp'],
 ]
 
 # Test data files (e.g., known answers) are read from the source tree; see `data_path` in

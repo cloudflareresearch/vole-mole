@@ -64,7 +64,10 @@ template <typename Relation>
 using const_proof_span = std::span<const uint8_t, PROOF_BYTES<Relation>>;
 template <typename Relation> using witness_span = std::span<const uint8_t, WITNESS_BYTES<Relation>>;
 
-// mu <- H_2^0(dst || instance)
+// Size of the prefix of the witness provided to VOLE generation.
+template <typename Relation> constexpr size_t WITNESS_PREFIX_BYTES = Relation::WITNESS_PREFIX_BYTES;
+
+// mu <- H_2^0(instance || dst)
 //
 // This is analogous to mu <- H_2^0(pk || msg) in FAEST, with an added domain separator that
 // identifies the relation being proven. Subsequent H invocations are bound to the domain separator
@@ -110,13 +113,15 @@ void voleith_prove(proof_span<Relation> proof_bytes, witness_span<Relation> witn
 
     const auto mu = hash_mu<Relation>(instance);
 
-    // (r, iv^pre) <- H_3(witness || mu || rho)
+    // (r, iv^pre) <- H_3(witness_prefix || mu || rho)
     block_secpar<S> seed;
     block128 iv_pre;
     {
         std::array<uint8_t, sizeof(seed) + sizeof(iv_pre)> seed_iv_pre;
         hasher.init(S);
-        hasher.update(witness);
+        static_assert(0 < WITNESS_PREFIX_BYTES<Relation> &&
+                      WITNESS_PREFIX_BYTES<Relation> <= WITNESS_BYTES<Relation>);
+        hasher.update(witness.template first<WITNESS_PREFIX_BYTES<Relation>>());
         hasher.update(&mu, sizeof(mu));
         hasher.update(rho);
         hasher.update_byte(3); // domain separator for H_3
