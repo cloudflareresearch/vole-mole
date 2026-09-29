@@ -1,0 +1,23 @@
+include/vole_mole/pomfrit.hpp
+  s_3f1f8a3b3bc642::t_a3926620bef2aa 1-30,32-33,37-39,41-45,47-49,51,53-58,60,62-71,73-74,76-77,82-86,89-95,97-101,103-107,109-114,116-120,122
+src/pomfrit/pomfrit.cpp
+  s_3f1f8a3b3bc642::t_beec342d006e97 1-77
+src/uov/uov.cpp
+  s_3f1f8a3b3bc642::t_a9ee14d0fd00d1 1
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.10",
+  "base_commit_sha": "59039ba5848c2b6eaec5014c864dc57ba9af0c6c",
+  "prompts": {},
+  "sessions": {
+    "s_3f1f8a3b3bc642": {
+      "agent_id": {
+        "tool": "opencode",
+        "id": "ses_f128c29dbffeQ6jzj7ENrMANbZ",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Christopher Patton <cpatton@cloudflare.com>"
+    }
+  }
+}
