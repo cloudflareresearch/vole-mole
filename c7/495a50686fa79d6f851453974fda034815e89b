@@ -1,0 +1,23 @@
+src/moussaka/issue.hpp
+  s_dbb34d3d3f8eb5::t_3b9d6b73ee32a6 234-235,302
+src/moussaka/moussaka.cpp
+  s_dbb34d3d3f8eb5::t_eb75780ba14a9c 30
+tests/voleith/test_voleith.cpp
+  s_dbb34d3d3f8eb5::t_d51c2edfc1d02d 41-43,57-64,75,386-446
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.10",
+  "base_commit_sha": "c7495a50686fa79d6f851453974fda034815e89b",
+  "prompts": {},
+  "sessions": {
+    "s_dbb34d3d3f8eb5": {
+      "agent_id": {
+        "tool": "opencode",
+        "id": "ses_f11f94ff0ffeRo7hZXhxbCcdhy",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Christopher Patton <cpatton@cloudflare.com>"
+    }
+  }
+}
