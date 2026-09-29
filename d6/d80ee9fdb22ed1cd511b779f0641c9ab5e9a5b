@@ -1,0 +1,23 @@
+tests/meson.build
+  s_dbb34d3d3f8eb5::t_1ad6581c261bd7 12,16,43-44
+tests/voleith/kat.txt
+  s_dbb34d3d3f8eb5::t_17263242164153 1-9
+tests/voleith/test_voleith.cpp
+  s_dbb34d3d3f8eb5::t_8360656eee9037 1-199
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.10",
+  "base_commit_sha": "d6d80ee9fdb22ed1cd511b779f0641c9ab5e9a5b",
+  "prompts": {},
+  "sessions": {
+    "s_dbb34d3d3f8eb5": {
+      "agent_id": {
+        "tool": "opencode",
+        "id": "ses_f11f94ff0ffeRo7hZXhxbCcdhy",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Christopher Patton <cpatton@cloudflare.com>"
+    }
+  }
+}
