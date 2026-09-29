@@ -49,12 +49,14 @@ Commitment commit(const Nullifier& nf, const Context& ctx_iss, const Context& ct
 // Generate an issue request for an issuance and redemption context.
 //
 // Throws std::bad_alloc if memory allocation fails and std::runtime_error if the operating
-// system's random number generator fails.
+// system's random number generator fails or if proof generation fails (which happens with
+// negligible probability).
 IssueRequestResult issue_request(const Context& ctx_iss, const Context& ctx_red);
 
 // Compute the issuance request with the given random seed.
 //
-// Throws std::bad_alloc if memory allocation fails.
+// Throws std::bad_alloc if memory allocation fails and std::runtime_error if proof generation fails
+// (which happens with negligible probability).
 IssueRequestResult issue_request_with_seed(const Context& ctx_iss, const Context& ctx_red,
                                            const Seed& seed);
 

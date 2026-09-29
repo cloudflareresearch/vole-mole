@@ -7,6 +7,7 @@
 #define VOLE_MOLE_DST_HPP
 
 #include "vole_mole/moussaka.hpp"
+#include "vole_mole/pomfrit.hpp"
 
 #include <array>
 #include <cstddef>
@@ -32,12 +33,17 @@ constexpr Dst MOUSSAKA_COM_DST = make_dst("mous", moussaka::VERSION, 'c', '0');
 constexpr Dst MOUSSAKA_ISSUE_PROOF_DST = make_dst("mous", moussaka::VERSION, 'i', '0');
 constexpr Dst MOUSSAKA_ISSUE_SEED_DST = make_dst("mous", moussaka::VERSION, 's', '0');
 
+// PomFRIT
+constexpr Dst POMFRIT_PROOF_DST = make_dst("pomf", pomfrit::VERSION, 'p', '0'); // VOLEitH relation
+constexpr Dst POMFRIT_REFRESHER_DST = make_dst("pomf", pomfrit::VERSION, 'r', '0'); // refresher_com
+constexpr Dst POMFRIT_SEED_DST = make_dst("pomf", pomfrit::VERSION, 's', '0');      // Client's seed
+constexpr Dst POMFRIT_TARGET_DST = make_dst("pomf", pomfrit::VERSION, 'h', '0'); // H(pk, pi_1, msg)
+
 constexpr bool dsts_are_distinct() {
     // Every DST must be distinct. Add new DSTs to this list.
     std::array all = {
-        MOUSSAKA_COM_DST,
-        MOUSSAKA_ISSUE_PROOF_DST,
-        MOUSSAKA_ISSUE_SEED_DST,
+        MOUSSAKA_COM_DST,      MOUSSAKA_ISSUE_PROOF_DST, MOUSSAKA_ISSUE_SEED_DST, POMFRIT_PROOF_DST,
+        POMFRIT_REFRESHER_DST, POMFRIT_SEED_DST,         POMFRIT_TARGET_DST,
     };
     bool distinct = true;
     for (size_t i = 0; i < all.size(); ++i) {

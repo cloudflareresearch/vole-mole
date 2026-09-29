@@ -7,6 +7,7 @@ tests = [
   ['keccak', 'keccak/test_keccak.cpp'],
   ['moussaka-issue', 'moussaka/test_issue.cpp'],
   ['moussaka', 'moussaka/test_moussaka.cpp'],
+  ['pomfrit', 'pomfrit/test_pomfrit.cpp'],
   ['uov', 'uov/test_uov.cpp'],
   ['voleith', 'voleith/test_voleith.cpp'],
 ]
@@ -31,6 +32,7 @@ benchmark_dep = dependency('benchmark_main',
 
 benchmarks = [
   ['moussaka', 'moussaka/bench_moussaka.cpp'],
+  ['pomfrit', 'pomfrit/bench_pomfrit.cpp'],
   ['uov', 'uov/bench_uov.cpp'],
 ]
 

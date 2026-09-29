@@ -37,6 +37,7 @@ vole_mole_src_inc = include_directories('src')
 vole_mole_lib = static_library('vole-mole',
   'src/keccak/keccak.cpp',
   'src/moussaka/moussaka.cpp',
+  'src/pomfrit/pomfrit.cpp',
   'src/uov/uov.cpp',
   include_directories : [vole_mole_inc, vole_mole_src_inc],
   dependencies : [faest_dep, randomness_dep, pqov_dep],
