@@ -16,6 +16,14 @@ tests/voleith/test_split.cpp
         "model": "claude-opus-5-5"
       },
       "human_author": "Christopher Patton <cpatton@cloudflare.com>"
+    },
+    "s_dbb34d3d3f8eb5": {
+      "agent_id": {
+        "tool": "opencode",
+        "id": "ses_f11f94ff0ffeRo7hZXhxbCcdhy",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Christopher Patton <cpatton@cloudflare.com>"
     }
   }
 }
