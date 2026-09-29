@@ -1,0 +1,36 @@
+tests/voleith/test_voleith.cpp
+  s_dbb34d3d3f8eb5::t_d51c2edfc1d02d 67,378-474
+  s_dbb34d3d3f8eb5::t_06fec2ec89e792 5,16,19
+src/moussaka/issue.hpp
+  s_dbb34d3d3f8eb5::t_3b9d6b73ee32a6 300
+src/voleith.hpp
+  s_8557e21a96d6eb::t_9f001fe228f9e9 148
+  s_8557e21a96d6eb::t_8b356044ddc14a 73,79-82,86,91-93,95,100-108,110-113,115-127,129-131,139-142,149,151-152,161-165,174-175,190,194,204-234,237-241,243-246,251,261,266-267,278-279,292-293,295-299,301-326,334,339-340,359,362,367,377-406,409-416,452-462
+  s_dbb34d3d3f8eb5::t_6e4495900f8695 47,55-59,144-145
+src/moussaka/moussaka.cpp
+  s_dbb34d3d3f8eb5::t_eb75780ba14a9c 30
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.10",
+  "base_commit_sha": "62f106d35d25229d9ddf18fc7106d9fd6a9e6d38",
+  "prompts": {},
+  "sessions": {
+    "s_8557e21a96d6eb": {
+      "agent_id": {
+        "tool": "opencode",
+        "id": "ses_f2b5fab15ffeHakKGiA7H9UX9p",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Christopher Patton <cpatton@cloudflare.com>"
+    },
+    "s_dbb34d3d3f8eb5": {
+      "agent_id": {
+        "tool": "opencode",
+        "id": "ses_f11f94ff0ffeRo7hZXhxbCcdhy",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Christopher Patton <cpatton@cloudflare.com>"
+    }
+  }
+}
