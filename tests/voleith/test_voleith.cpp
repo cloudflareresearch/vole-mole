@@ -2,6 +2,7 @@
 
 #include "voleith.hpp" // internal
 
+#include "api.hpp"        // from faest-arch-opt
 #include "faest_keys.hpp" // from faest-arch-opt
 #include "owf_proof.hpp"  // from faest-arch-opt
 #include "parameters.hpp" // from faest-arch-opt
@@ -12,8 +13,10 @@
 #include <array>
 #include <cstddef>
 #include <cstdint>
+#include <cstring>
 #include <span>
 #include <string_view>
+#include <utility>
 #include <vector>
 
 namespace {
@@ -61,7 +64,7 @@ static_assert(SIG_BYTES == faest::FAEST_SIGNATURE_BYTES<P>);
 constexpr std::string_view MSG =
     "This document describes and specifies the FAEST digital signature algorithm.";
 
-const std::array<uint8_t, 16> RHO = {
+const vole_mole::detail::ProveSeed<FaestRelation> RHO = {
     0x00, 0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 0x08, 0x09, 0x0a, 0x0b, 0x0c, 0x0d, 0x0e, 0x0f,
 };
 
@@ -371,4 +374,232 @@ TEST(FaestInterop, ProveKnownAnswer) {
     const auto [got, want] = std::ranges::mismatch(sig, SIG);
     EXPECT_TRUE(got == sig.end()) << "signatures differ first at byte " << (got - sig.begin())
                                   << " of " << SIG_BYTES;
+}
+
+namespace {
+
+using Proof = std::array<uint8_t, SIG_BYTES>;
+using Witness = std::array<uint8_t, WITNESS_BYTES>;
+
+constexpr size_t WITNESS_PREFIX_BYTES = FaestRelation::WITNESS_PREFIX_BYTES;
+constexpr size_t WITNESS_SUFFIX_BYTES = WITNESS_BYTES - WITNESS_PREFIX_BYTES;
+
+// Options for proving or verifying in two steps. `witness` and `rho` are only used by the prover.
+struct ProveOptions {
+    // Bind the instance in the second step (true) or, as in FAEST, the first (false).
+    bool delay_instance = true;
+    std::span<const uint8_t> chal1_binder = {};
+    std::span<const uint8_t> chal2_binder = {};
+    Witness witness = WITNESS;
+    vole_mole::detail::ProveSeed<FaestRelation> rho = RHO;
+};
+
+// Generate a proof in two steps: VOLE generation, then commit-and-prove.
+Proof prove_with_opts(const FaestRelation::instance& x, const ProveOptions& opts = {}) {
+    Proof proof{};
+    auto pending = vole_mole::detail::voleith_vole_gen<FaestRelation>(
+        proof, opts.delay_instance ? nullptr : &x,
+        std::span(opts.witness).first<WITNESS_PREFIX_BYTES>(), opts.rho, opts.chal1_binder);
+    vole_mole::detail::voleith_prove_commit<FaestRelation>(
+        proof, x, std::span(opts.witness).last<WITNESS_SUFFIX_BYTES>(), std::move(pending),
+        opts.chal2_binder);
+    return proof;
+}
+
+// Verify a proof in two steps: VOLE reconstruction, then the rest of verification.
+bool verify_with_opts(const Proof& proof, const FaestRelation::instance& x,
+                      const ProveOptions& opts = {}) {
+    auto pending = vole_mole::detail::voleith_vole_reconstruct<FaestRelation>(
+        proof, opts.delay_instance ? nullptr : &x, opts.chal1_binder);
+    return pending && vole_mole::detail::voleith_verify_commit<FaestRelation>(
+                          proof, x, std::move(*pending), opts.chal2_binder);
+}
+
+// A fresh FAEST key pair: the instance (with the known answer's message) and the extended witness.
+std::pair<FaestRelation::instance, std::array<uint8_t, WITNESS_BYTES>> fresh_key_pair() {
+    FaestRelation::instance x{};
+    std::array<uint8_t, faest::FAEST_SECRET_KEY_BYTES<P>> sk;
+    faest::faest_scheme<P>::crypto_sign_keypair(x.pk_packed.data(), sk.data());
+    faest::faest_unpack_public_key<P>(&x.pk, x.pk_packed.data());
+    x.msg.assign(MSG.begin(), MSG.end());
+
+    faest::secret_key<P> unpacked;
+    const bool ok = faest::faest_unpack_secret_key<P>(&unpacked, sk.data());
+    EXPECT_TRUE(ok);
+    std::array<uint8_t, WITNESS_BYTES> witness;
+    std::memcpy(witness.data(), unpacked.witness.data(), witness.size());
+    return {x, witness};
+}
+
+// The part of the proof computed before the instance is bound: the VOLE commitment, the VOLE
+// consistency check, iv_pre, and the correction of the witness prefix (pi_1 in PomFRIT).
+std::vector<uint8_t> first_part(const Proof& proof) {
+    const faest::faest_signature<P> view(proof.data());
+    const auto witness_prefix_correction =
+        view.correction().first<FaestRelation::WITNESS_PREFIX_BYTES>();
+    std::vector<uint8_t> out;
+    out.insert(out.end(), view.vole_commitment().begin(), view.vole_commitment().end());
+    out.insert(out.end(), view.vole_check_proof().begin(), view.vole_check_proof().end());
+    out.insert(out.end(), view.iv_pre().begin(), view.iv_pre().end());
+    out.insert(out.end(), witness_prefix_correction.begin(), witness_prefix_correction.end());
+    return out;
+}
+
+// Binders for the challenge binder tests.
+constexpr std::array<uint8_t, 5> CHAL1_BINDER = {'c', 'h', 'a', 'l', '1'};
+constexpr std::array<uint8_t, 5> CHAL2_BINDER = {'c', 'h', 'a', 'l', '2'};
+
+} // namespace
+
+TEST(DelayedInstanceBinding, Verifies) {
+    auto x = kat_instance();
+    const Proof proof = prove_with_opts(x);
+    EXPECT_TRUE(verify_with_opts(proof, x));
+
+    // ... and rejects it for a different message. Since the constraints don't depend on msg, this
+    // checks that the instance is bound to chal2.
+    x.msg[0] ^= 1;
+    EXPECT_FALSE(verify_with_opts(proof, x));
+}
+
+// The part of the proof computed before the instance is bound doesn't depend on the instance.
+TEST(DelayedInstanceBinding, FirstPartIsIndependentOfInstance) {
+    const auto x = kat_instance();
+    auto x2 = x;
+    x2.msg[0] ^= 1;
+    const Proof proof = prove_with_opts(x);
+    const Proof proof2 = prove_with_opts(x2);
+    EXPECT_TRUE(std::ranges::equal(first_part(proof), first_part(proof2)));
+    EXPECT_FALSE(std::ranges::equal(proof, proof2));
+    EXPECT_TRUE(verify_with_opts(proof2, x2));
+
+    // It does depend on rho.
+    auto rho2 = RHO;
+    rho2[0] ^= 1;
+    EXPECT_FALSE(
+        std::ranges::equal(first_part(proof), first_part(prove_with_opts(x, {.rho = rho2}))));
+}
+
+// Proofs with and without delayed instance binding aren't interchangeable.
+TEST(DelayedInstanceBinding, DiffersFromFaest) {
+    const auto x = kat_instance();
+    const Proof proof = prove_with_opts(x);
+    EXPECT_FALSE(std::ranges::equal(proof, SIG));
+    EXPECT_FALSE(vole_mole::detail::voleith_verify<FaestRelation>(proof, x));
+    EXPECT_FALSE(verify_with_opts(proof, x, {.delay_instance = false}));
+    EXPECT_FALSE(verify_with_opts(SIG, x));
+}
+
+// Splitting the witness between the two steps, without delaying the instance, computes FAEST's
+// signature.
+TEST(PartialWitness, SplitMatchesFaest) {
+    const auto x = kat_instance();
+    const Proof proof = prove_with_opts(x, {.delay_instance = false});
+    const auto [got, want] = std::ranges::mismatch(proof, SIG);
+    EXPECT_TRUE(got == proof.end())
+        << "signatures differ first at byte " << (got - proof.begin()) << " of " << SIG_BYTES;
+    EXPECT_TRUE(verify_with_opts(SIG, x, {.delay_instance = false}));
+}
+
+// The witness prefix is hashed into the prover's seed, so the first part depends on it.
+TEST(PartialWitness, FirstPartDependsOnWitnessPrefix) {
+    const auto x = kat_instance();
+    const Proof proof = prove_with_opts(x);
+    const auto [x2, witness2] = fresh_key_pair();
+    const Proof proof2 = prove_with_opts(x2, {.witness = witness2});
+    EXPECT_FALSE(std::ranges::equal(first_part(proof), first_part(proof2)));
+    EXPECT_TRUE(verify_with_opts(proof2, x2));
+}
+
+// The commit-and-prove step only writes the correction of the witness suffix, leaving the first
+// part (including the correction of the witness prefix) as written by VOLE generation.
+TEST(PartialWitness, CommitAndProvePreservesFirstPart) {
+    const auto x = kat_instance();
+    Proof proof{};
+    auto pending = vole_mole::detail::voleith_vole_gen<FaestRelation>(
+        proof, nullptr, std::span(WITNESS).first<WITNESS_PREFIX_BYTES>(), RHO);
+    const auto before = first_part(proof);
+    vole_mole::detail::voleith_prove_commit<FaestRelation>(
+        proof, x, std::span(WITNESS).last<WITNESS_SUFFIX_BYTES>(), std::move(pending));
+    EXPECT_TRUE(std::ranges::equal(before, first_part(proof)));
+    EXPECT_TRUE(verify_with_opts(proof, x));
+}
+
+// The correction of the witness prefix, written in the first step, is checked by the verifier.
+TEST(PartialWitness, WitnessPrefixCorrectionIsBound) {
+    const auto x = kat_instance();
+    Proof proof = prove_with_opts(x);
+    ASSERT_TRUE(verify_with_opts(proof, x));
+    const faest::mutable_faest_signature<P> view(proof.data());
+    view.correction()[0] ^= 1;
+    EXPECT_FALSE(verify_with_opts(proof, x));
+}
+
+TEST(ChallengeBinders, Verifies) {
+    const auto x = kat_instance();
+    for (const bool delay_instance : {true, false}) {
+        SCOPED_TRACE(delay_instance ? "delayed instance" : "early instance");
+        const ProveOptions opts = {.delay_instance = delay_instance,
+                                   .chal1_binder = CHAL1_BINDER,
+                                   .chal2_binder = CHAL2_BINDER};
+        const Proof proof = prove_with_opts(x, opts);
+        EXPECT_TRUE(verify_with_opts(proof, x, opts));
+
+        // The binders change the proof.
+        EXPECT_FALSE(
+            std::ranges::equal(proof, prove_with_opts(x, {.delay_instance = delay_instance})));
+    }
+}
+
+TEST(ChallengeBinders, RejectsWrongChal1Binder) {
+    const auto x = kat_instance();
+    for (const bool delay_instance : {true, false}) {
+        SCOPED_TRACE(delay_instance ? "delayed instance" : "early instance");
+        const ProveOptions opts = {.delay_instance = delay_instance,
+                                   .chal1_binder = CHAL1_BINDER,
+                                   .chal2_binder = CHAL2_BINDER};
+        const Proof proof = prove_with_opts(x, opts);
+        EXPECT_FALSE(verify_with_opts(
+            proof, x, {.delay_instance = delay_instance, .chal2_binder = CHAL2_BINDER}));
+    }
+}
+
+TEST(ChallengeBinders, RejectsWrongChal2Binder) {
+    const auto x = kat_instance();
+    for (const bool delay_instance : {true, false}) {
+        SCOPED_TRACE(delay_instance ? "delayed instance" : "early instance");
+        const ProveOptions opts = {.delay_instance = delay_instance,
+                                   .chal1_binder = CHAL1_BINDER,
+                                   .chal2_binder = CHAL2_BINDER};
+        const Proof proof = prove_with_opts(x, opts);
+        EXPECT_FALSE(verify_with_opts(
+            proof, x, {.delay_instance = delay_instance, .chal1_binder = CHAL1_BINDER}));
+    }
+}
+
+// The two binders aren't interchangeable.
+TEST(ChallengeBinders, RejectsSwappedBinders) {
+    const auto x = kat_instance();
+    const Proof proof = prove_with_opts(x, {.chal1_binder = CHAL1_BINDER});
+    EXPECT_FALSE(verify_with_opts(proof, x, {.chal2_binder = CHAL1_BINDER}));
+
+    const Proof proof2 = prove_with_opts(x, {.chal2_binder = CHAL2_BINDER});
+    EXPECT_FALSE(verify_with_opts(proof2, x, {.chal1_binder = CHAL2_BINDER}));
+}
+
+// chal1 is computed in the first step, so its binder must be known then.
+TEST(ChallengeBinders, Chal1BinderChangesFirstPart) {
+    const auto x = kat_instance();
+    EXPECT_FALSE(
+        std::ranges::equal(first_part(prove_with_opts(x)),
+                           first_part(prove_with_opts(x, {.chal1_binder = CHAL1_BINDER}))));
+}
+
+// chal2 is computed in the second step, so its binder may be chosen after the first part is sent.
+TEST(ChallengeBinders, FirstPartIsIndependentOfChal2Binder) {
+    const auto x = kat_instance();
+    const Proof proof = prove_with_opts(x);
+    const Proof proof2 = prove_with_opts(x, {.chal2_binder = CHAL2_BINDER});
+    EXPECT_TRUE(std::ranges::equal(first_part(proof), first_part(proof2)));
+    EXPECT_FALSE(std::ranges::equal(proof, proof2));
 }

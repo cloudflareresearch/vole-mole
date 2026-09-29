@@ -1,8 +1,10 @@
-// Helpers shared by the tests and benchmarks, e.g., for building and comparing byte strings, and
-// evaluating constraint systems in the clear.
+// Helpers shared by the tests and benchmarks, e.g., for building and comparing byte strings, a
+// fixed UOV key pair, and evaluating constraint systems in the clear.
 
 #ifndef VOLE_MOLE_TEST_HPP
 #define VOLE_MOLE_TEST_HPP
+
+#include "vole_mole/uov.hpp"
 
 #include "moussaka/issue.hpp" // internal: ISSUE_QS_DEGREE
 
@@ -16,6 +18,7 @@
 #include <span>
 #include <string>
 #include <string_view>
+#include <utility>
 #include <vector>
 
 namespace vole_mole::test {
@@ -27,6 +30,24 @@ template <size_t N> std::array<uint8_t, N> filled(uint8_t start) {
         out[i] = static_cast<uint8_t>(start + i);
     }
     return out;
+}
+
+// The secret key of the fixed test key pair.
+inline const uov::SecretKeyBytes UOV_SK_BYTES = filled<uov::SECRET_KEY_BYTES>(0x60);
+
+// An expanded UOV key pair.
+struct UovKeyPair {
+    uov::PublicKey pk;
+    uov::SecretKey sk;
+
+    // Members are initialized in declaration order, so pk is expanded from sk_ before it's moved.
+    explicit UovKeyPair(uov::SecretKey sk_) : pk(sk_.public_key()), sk(std::move(sk_)) {}
+};
+
+// The fixed test key pair, expanded once.
+inline const UovKeyPair& uov_key_pair() {
+    static const UovKeyPair kp(uov::SecretKey{UOV_SK_BYTES});
+    return kp;
 }
 
 inline std::optional<std::vector<uint8_t>> hex_decode(std::string_view hex) {

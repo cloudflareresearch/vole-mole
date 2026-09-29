@@ -3,6 +3,9 @@
 #include "vole_mole/moussaka.hpp"
 #include "vole_mole/uov.hpp"
 
+#include "uov/circuit.hpp"    // internal
+#include "uov/public_key.hpp" // internal
+
 #include "test.hpp"
 
 extern "C" {
@@ -11,49 +14,59 @@ extern "C" {
 
 #include <gtest/gtest.h>
 
+#include <array>
+#include <cstddef>
+#include <cstdint>
+#include <random>
+#include <span>
 #include <type_traits>
 #include <utility>
+#include <vector>
 
 using namespace vole_mole;
 using vole_mole::test::filled;
 using vole_mole::test::to_hex;
+using vole_mole::test::uov_key_pair;
+using vole_mole::test::UOV_SK_BYTES;
+using vole_mole::test::UovKeyPair;
 
 // A Moussaka commitment is a UOV target.
 static_assert(std::is_same_v<moussaka::Commitment, uov::Target>);
 
 namespace {
 
+using vole_mole::uov::detail::for_each_monomial;
+
 const moussaka::Context CTX_ISS = filled<moussaka::CTX_BYTES>(0x10);
 const moussaka::Context CTX_RED = filled<moussaka::CTX_BYTES>(0x20);
 const moussaka::Nullifier NF = filled<moussaka::NF_BYTES>(0x30);
 const moussaka::Opening R = filled<moussaka::R_BYTES>(0x40);
 
-const uov::SecretKeyBytes SK_BYTES = filled<uov::SECRET_KEY_BYTES>(0x60);
+const uov::Target T = filled<uov::M>(0x70);
 
-struct KeyPair {
-    uov::PublicKey pk;
-    uov::SecretKey sk;
-
-    // Members are initialized in declaration order, so pk is expanded from sk_ before it's moved.
-    explicit KeyPair(uov::SecretKey sk_) : pk(sk_.public_key()), sk(std::move(sk_)) {}
-};
-
-const KeyPair& key_pair() {
-    static const KeyPair kp(uov::SecretKey{SK_BYTES});
-    return kp;
+// Multiplication in GF(256) = GF(2)[x] / (x^8 + x^4 + x^3 + x + 1), as in UOV.
+uint8_t gf256_mul(uint8_t a, uint8_t b) {
+    uint8_t out = 0;
+    for (size_t i = 0; i < 8; ++i) {
+        if ((b >> i) & 1) {
+            out ^= a;
+        }
+        a = static_cast<uint8_t>((a << 1) ^ ((a >> 7) * 0x1b));
+    }
+    return out;
 }
 
 } // namespace
 
 TEST(Uov, DerivePreimageOfCommitment) {
-    const auto& [pk, sk] = key_pair();
+    const auto& [pk, sk] = uov_key_pair();
     const moussaka::Commitment t = moussaka::commit(NF, CTX_ISS, CTX_RED, R);
     const uov::Preimage w = sk.derive_preimage(t);
     EXPECT_EQ(to_hex(pk.eval(w)), to_hex(t));
 }
 
 TEST(Uov, DerivePreimageIsDeterministic) {
-    const auto& [pk, sk] = key_pair();
+    const auto& [pk, sk] = uov_key_pair();
     const moussaka::Commitment t = moussaka::commit(NF, CTX_ISS, CTX_RED, R);
     EXPECT_EQ(to_hex(sk.derive_preimage(t)), to_hex(sk.derive_preimage(t)));
 
@@ -67,15 +80,27 @@ TEST(Uov, DerivePreimageIsDeterministic) {
 }
 
 TEST(Uov, SecretKeyExpansionIsDeterministic) {
-    const auto& [pk, sk] = key_pair();
-    const uov::SecretKey sk2(SK_BYTES);
+    const auto& [pk, sk] = uov_key_pair();
+    const uov::SecretKey sk2(UOV_SK_BYTES);
     EXPECT_EQ(to_hex(sk2.public_key()), to_hex(sk.public_key()));
     const moussaka::Commitment t = moussaka::commit(NF, CTX_ISS, CTX_RED, R);
     EXPECT_EQ(to_hex(sk2.derive_preimage(t)), to_hex(sk.derive_preimage(t)));
 }
 
+// The digest identifies the public key.
+TEST(Uov, PublicKeyDigest) {
+    using uov::detail::PublicKeyAccess;
+    const auto& [pk, sk] = uov_key_pair();
+    EXPECT_EQ(to_hex(PublicKeyAccess::digest(uov::PublicKey(sk.public_key()))),
+              to_hex(PublicKeyAccess::digest(pk)));
+
+    const uov::SecretKey other(filled<uov::SECRET_KEY_BYTES>(0x61));
+    EXPECT_NE(to_hex(PublicKeyAccess::digest(uov::PublicKey(other.public_key()))),
+              to_hex(PublicKeyAccess::digest(pk)));
+}
+
 TEST(Uov, KeysAreMovable) {
-    uov::SecretKey sk(SK_BYTES);
+    uov::SecretKey sk(UOV_SK_BYTES);
     const uov::PublicKeyBytes pk_bytes = sk.public_key();
     uov::SecretKey sk2 = std::move(sk);
     uov::PublicKey pk(pk_bytes);
@@ -85,15 +110,15 @@ TEST(Uov, KeysAreMovable) {
 }
 
 TEST(Uov, RejectWrongKey) {
-    const auto& [pk, sk] = key_pair();
-    const KeyPair other(uov::SecretKey{filled<uov::SECRET_KEY_BYTES>(0x61)});
+    const auto& [pk, sk] = uov_key_pair();
+    const UovKeyPair other(uov::SecretKey{filled<uov::SECRET_KEY_BYTES>(0x61)});
     EXPECT_NE(to_hex(other.sk.public_key()), to_hex(sk.public_key()));
     const moussaka::Commitment t = moussaka::commit(NF, CTX_ISS, CTX_RED, R);
     EXPECT_NE(to_hex(other.pk.eval(sk.derive_preimage(t))), to_hex(t));
 }
 
 TEST(Uov, RejectTamperedPublicKey) {
-    const auto& [pk, sk] = key_pair();
+    const auto& [pk, sk] = uov_key_pair();
     const moussaka::Commitment t = moussaka::commit(NF, CTX_ISS, CTX_RED, R);
     const uov::Preimage w = sk.derive_preimage(t);
 
@@ -106,12 +131,95 @@ TEST(Uov, RejectTamperedPublicKey) {
 }
 
 TEST(Uov, RejectTamperedPreimage) {
-    const auto& [pk, sk] = key_pair();
+    const auto& [pk, sk] = uov_key_pair();
     const moussaka::Commitment t = moussaka::commit(NF, CTX_ISS, CTX_RED, R);
     const uov::Preimage w = sk.derive_preimage(t);
     for (size_t i = 0; i < w.size(); i += 7) {
         uov::Preimage bad = w;
         bad[i] ^= 1;
         EXPECT_NE(to_hex(pk.eval(bad)), to_hex(t)) << "flipped a bit of byte " << i;
+    }
+}
+
+// Test that the UOV public map circuit properly embeds GF(256) in GF(2^128).
+TEST(UovCircuit, EmbeddingIsHomomorphism) {
+    using QS = faest::quicksilver_state<faest::secpar::s128, true, 2>;
+    const auto embed = uov::detail::embed<QS>;
+    for (unsigned a = 0; a < 256; ++a) {
+        for (unsigned b = 0; b < 256; ++b) {
+            const auto x = static_cast<uint8_t>(a);
+            const auto y = static_cast<uint8_t>(b);
+            ASSERT_TRUE(embed(x) + embed(y) == embed(x ^ y)) << a << " + " << b;
+            ASSERT_TRUE((embed(x) * embed(y)).reduce_to<128>() == embed(gf256_mul(x, y)))
+                << a << " * " << b;
+        }
+    }
+}
+
+TEST(UovCircuit, ForEachMonomialEvaluatesPublicMap) {
+    const auto& [pk, sk] = uov_key_pair();
+    const uov::Preimage s = sk.derive_preimage(T);
+
+    uov::Target got{};
+    size_t num_monomials = 0;
+    for_each_monomial(uov::detail::PublicKeyAccess::expanded(pk),
+                      [&](size_t i, size_t j, std::span<const uint8_t, uov::M> coeffs) {
+                          ASSERT_LE(i, j);
+                          const uint8_t monomial = gf256_mul(s[i], s[j]);
+                          for (size_t k = 0; k < uov::M; ++k) {
+                              got[k] ^= gf256_mul(coeffs[k], monomial);
+                          }
+                          ++num_monomials;
+                      });
+    EXPECT_EQ(num_monomials, uov::N * (uov::N + 1) / 2);
+    EXPECT_EQ(to_hex(got), to_hex(T));
+    EXPECT_EQ(to_hex(got), to_hex(pk.eval(s)));
+}
+
+namespace {
+
+// Evaluate the public map circuit at s with the QuickSilver prover's types, which track the value
+// of each committed element (with arbitrary VOLE tags), and check that the result is the embedding
+// of `want`.
+void expect_circuit_eval(const uov::PublicKey& pk, const uov::Preimage& s,
+                         const uov::Target& want) {
+    using QS = faest::quicksilver_state<faest::secpar::s128, false, 2>;
+    std::vector<faest::block_secpar<faest::secpar::s128>> macs(8 * uov::N);
+    std::array<uint8_t, faest::QS_CONSTANTS<faest::secpar::s128, 2>::CHALLENGE_BYTES> challenge{};
+    const QS qs(s.data(), macs.data(), uov::M, challenge.data());
+
+    std::array<uov::detail::qs_val<QS, 1>, uov::N> s_committed;
+    for (size_t i = 0; i < uov::N; ++i) {
+        s_committed[i] = qs.load_witness_8_bits_and_combine(8 * i);
+    }
+    const auto p = uov::detail::qs_eval_public_map<QS>(pk, s_committed);
+    for (size_t k = 0; k < uov::M; ++k) {
+        EXPECT_TRUE(p[k].value() == uov::detail::embed<QS>(want[k]))
+            << "component " << k << " at s = " << to_hex(s);
+    }
+}
+
+} // namespace
+
+TEST(UovCircuit, CircuitEvalPublicMapMatchesPlaintext) {
+    const auto& [pk, sk] = uov_key_pair();
+    expect_circuit_eval(pk, sk.derive_preimage(T), T);
+
+    const UovKeyPair other(uov::SecretKey{filled<uov::SECRET_KEY_BYTES>(0x61)});
+    std::mt19937 rng(0); // fixed seed, so that failures are reproducible
+    for (const uov::PublicKey* public_key : {&pk, &other.pk}) {
+        uov::Preimage ones;
+        ones.fill(0xff);
+        std::vector<uov::Preimage> points = {uov::Preimage{}, ones};
+        for (int n = 0; n < 8; ++n) {
+            uov::Preimage s;
+            for (uint8_t& b : s) {
+                b = static_cast<uint8_t>(rng());
+            }
+            points.push_back(s);
+        }
+        for (const uov::Preimage& s : points) {
+            expect_circuit_eval(*public_key, s, public_key->eval(s));
+        }
     }
 }

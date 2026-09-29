@@ -296,10 +296,11 @@ using IssueProof = std::span<uint8_t, ISSUE_PROOF_BYTES>;
 // Compute the issuance proof pf_iss that t = Com(nf, ctx_iss, ctx_red, r), where t and ctx_iss
 // are public. `rho` is randomness for the VOLEitH prover (see `voleith_prove`).
 //
-// Throws std::bad_alloc if memory allocation fails.
+// Throws std::bad_alloc if memory allocation fails and std::runtime_error if grinding fails (which
+// happens with negligible probability).
 inline void prove_issue_request(IssueProof pf_iss, const Commitment& t, const Nullifier& nf,
                                 const Context& ctx_iss, const Context& ctx_red, const Opening& r,
-                                std::span<const uint8_t> rho) {
+                                const ProveSeed<IssueRelation>& rho) {
     const auto witness = encode_issue_witness(nf, ctx_iss, ctx_red, r);
     voleith_prove<IssueRelation>(pf_iss, witness, {t, ctx_iss}, rho);
 }

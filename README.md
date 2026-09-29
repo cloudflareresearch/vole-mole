@@ -2,9 +2,12 @@
 
 Implementation of the post-quantum candidates for [MoLE][mole] crypto:
 
-1. Moussaka ([draft-authors-mole-vole-ihat][draft]), a plausibly post-quantum
-   variant of the Issuer-Hiding Anonymous Token protocol built on UOV and the
+1. Moussaka ([draft-authors-mole-vole-ihat][draft]), a post-quantum variant of
+   the Issuer-Hiding Anonymous Token protocol built on UOV and the
    VOLE-in-the-Head (VOLEitH) proof system of [FAEST][faest].
+
+2. PomFRIT ([ePrint 2026/109][pomfrit], Algorithm 2), a post-quantum blind
+   signature scheme built on VOLEitH, with UOV in place of MAYO.
 
 VOLEitH comes from [faest-arch-opt][arch-opt]; UOV comes from [pqov][pqov].
 
@@ -46,6 +49,7 @@ circuit design and the overall design of the protocols.
 
 [mole]: https://github.com/Moderation-of-unLinkable-Endorsements/internet-drafts
 [draft]: https://github.com/Moderation-of-unLinkable-Endorsements/internet-drafts/blob/main/draft-authors-mole-vole-ihat.md
+[pomfrit]: https://eprint.iacr.org/2026/109
 [faest]: https://faest.info
 [arch-opt]: https://github.com/faest-sign/faest-arch-opt
 [pqov]: https://github.com/pqov/pqov

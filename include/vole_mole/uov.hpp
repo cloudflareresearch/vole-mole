@@ -8,6 +8,10 @@
 
 namespace vole_mole::uov {
 
+namespace detail {
+struct PublicKeyAccess;
+} // namespace detail
+
 constexpr size_t N = 119; // number of variables (preimage length)
 constexpr size_t M = 45;  // number of equations (target length)
 
@@ -74,6 +78,8 @@ class PublicKey {
   private:
     struct Impl;
     std::unique_ptr<Impl> impl_;
+
+    friend struct detail::PublicKeyAccess;
 };
 
 } // namespace vole_mole::uov

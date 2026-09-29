@@ -20,7 +20,7 @@ using namespace vole_mole::detail;
 struct IssueRandomness {
     Nullifier nf;
     Opening r;
-    std::array<uint8_t, 32> rho;
+    ProveSeed<IssueRelation> rho;
 };
 
 // Expand `seed` into the issue request randomness.
