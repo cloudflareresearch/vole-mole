@@ -1,0 +1,21 @@
+src/voleith.hpp
+  s_3f1f8a3b3bc642::t_d9e5658f9b706f 42,89-180,271-273,356-359,361-388,390-513,515-775,777-778
+tests/voleith/test_split.cpp
+  s_3f1f8a3b3bc642::t_924b56fd15d6f5 1-216
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.10",
+  "base_commit_sha": "2a188205a8ac19bbce69ba5e50d6f2e10fd8aeee",
+  "prompts": {},
+  "sessions": {
+    "s_3f1f8a3b3bc642": {
+      "agent_id": {
+        "tool": "opencode",
+        "id": "ses_f128c29dbffeQ6jzj7ENrMANbZ",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Christopher Patton <cpatton@cloudflare.com>"
+    }
+  }
+}
