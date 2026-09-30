@@ -1,0 +1,66 @@
+src/uov/uov.cpp
+  s_2d53470fd179d7::t_f9e2f08ad64662 3-6,16-17,31-32,41,67-71,92-99
+tests/pomfrit/test_pomfrit.cpp
+  s_2d53470fd179d7::t_777f552f98bbd2 4-6,11-15,17-18,31-38,41-66,71,75-188
+include/vole_mole/uov.hpp
+  s_2d53470fd179d7::t_f6e5b54db0da90 11-14,20,26,72,75-77,81-82
+src/moussaka/issue.hpp
+  s_2d53470fd179d7::t_5c2aaeea975f0b 37
+  s_8557e21a96d6eb::t_4d74ff8b681846 56,65,234
+src/dst.hpp
+  s_2d53470fd179d7::t_db3d4db762beb6 1-4,6-7,10,16,21-28,31-40,44-47,58
+src/uov/public_map.hpp
+  s_2d53470fd179d7::t_bc6f9e2f169e8d 1-59
+src/voleith.hpp
+  s_8557e21a96d6eb::t_8b356044ddc14a 97-98,130,292,369,482-485
+  s_2d53470fd179d7::t_24d83ea943fd5f 6-12,47,74-89,94-96,127-128,131-135,138-140,158-163,169-170,184,198-201,232-233,240,244-255,259-263,274-275,281,287-289,291,296,298,300-307,309,317-318,374-375,384-385,425,433,442,451-452,458,464-470,473-475,486
+include/vole_mole/pomfrit.hpp
+  s_2d53470fd179d7::t_7646e3ccd45ef0 11,29,31-35,51-52,54,57-60,82-83
+tests/meson.build
+  s_2d53470fd179d7::t_2fcb25f1b8be18 35
+tests/uov/test_uov.cpp
+  s_7a716a1cfbec78::t_c1626a7887cca5 64,66-67,99-107,149-206
+  s_2d53470fd179d7::t_d97b2c52d5ffef 6-8,17-20,23,54-63,65
+README.md
+  s_2d53470fd179d7::t_f321765e7a5aa4 8-9,51
+src/uov/circuit.hpp
+  s_2d53470fd179d7::t_1d2361af367c6d 1-108
+src/pomfrit/pomfrit.cpp
+  s_2d53470fd179d7::t_37953dfcc29880 3-8,13,19-90,95-98,108-123,128-152,169-181
+src/pomfrit/redeem.hpp
+  s_2d53470fd179d7::t_79f1e5bf4a9bd4 1-171
+src/moussaka/moussaka.cpp
+  s_8557e21a96d6eb::t_273dc6d5826e06 3,37
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.10",
+  "base_commit_sha": "68bbfb6290a90fbc3ea507830ab9ff62d16a31c5",
+  "prompts": {},
+  "sessions": {
+    "s_2d53470fd179d7": {
+      "agent_id": {
+        "tool": "opencode",
+        "id": "ses_f109359f2ffe7oVHmagnS0Pync",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Christopher Patton <cpatton@cloudflare.com>"
+    },
+    "s_7a716a1cfbec78": {
+      "agent_id": {
+        "tool": "opencode",
+        "id": "ses_f251decf9ffeZ6Wse4Owi7K2Hz",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Christopher Patton <cpatton@cloudflare.com>"
+    },
+    "s_8557e21a96d6eb": {
+      "agent_id": {
+        "tool": "opencode",
+        "id": "ses_f2b5fab15ffeHakKGiA7H9UX9p",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Christopher Patton <cpatton@cloudflare.com>"
+    }
+  }
+}
