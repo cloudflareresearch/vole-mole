@@ -1,0 +1,143 @@
+src/keccak/keccak.cpp
+  s_8557e21a96d6eb::t_334ab905b39bff 1-71
+subprojects/google-benchmark.wrap
+  s_8557e21a96d6eb::t_7c81860c3c37ed 1-13
+tests/meson.build
+  s_8557e21a96d6eb::t_79ae8c045d15b4 1-9,13-32,33-34,36-46
+  s_8557e21a96d6eb::t_a94d97e3cc008c 47
+  s_7a716a1cfbec78::t_c58c43f2f2ce74 11
+  s_dbb34d3d3f8eb5::t_1ad6581c261bd7 12
+  s_2d53470fd179d7::t_2fcb25f1b8be18 35
+src/keccak/circuit.hpp
+  s_8557e21a96d6eb::t_e23637c99756e4 1-92
+src/voleith.hpp
+  s_8557e21a96d6eb::t_8b356044ddc14a 1-3,5,23-56,58-62,64-70,76-86,88-89,91-94,100-101,102-109,110,111-114,115-117,118,119-120,121-124,125,127,128,130-131,141,142,143,146,147-148,151-153,154-159,161,162-165,164,166,167-171,174,175-182,183-184,185-196,197-198,199,200-201,203-209,211-213,218,223,226,234-235,236-238,239-243,247-254,256,258,261-263,264,268,271,272-287,285-286,288-289,290-310,297-298,311,312,313,314,315-316,317-321,322-323,324-327,328,329-330,331-332,334,335,337-339,342-344,345-348,349,350-370,354,371-372,373,374-375,376,377-379,381-387,381,389-391,392-396,398-402,405-410,412,413-415,417-422,419-425,426,428-449,450,451-462,463,464,465,466-472,473-475
+  s_dbb34d3d3f8eb5::t_6e4495900f8695 63,71-75,158
+  s_8557e21a96d6eb::t_865ec4eea8337d 90
+  s_2d53470fd179d7::t_24d83ea943fd5f 4,6-22,57,87,95-99,126,129,132-137,139-140,144-145,149-150,159-160,172-173,202-203,210,214-233,244-246,255,257,259,265,267,270,280,333,340-341,380,388,397,403-404,411,416,427
+  s_8557e21a96d6eb::t_16aeb72933b0ba 336
+tests/keccak/kat.txt
+  s_8557e21a96d6eb::t_d5aa18a49f3859 1-8
+tests/moussaka/test_moussaka.cpp
+  s_8557e21a96d6eb::t_af7599e7f84499 1-41,42,43-47,48,49-54,55,56-63,64-65,66-72,73-74,75-132
+  s_8557e21a96d6eb::t_23043caa6f3298 133-152
+tests/test.hpp
+  s_8557e21a96d6eb::t_43ca0091f1649a 1-110
+src/moussaka/issue.hpp
+  s_8557e21a96d6eb::t_4d74ff8b681846 1-9,11,15-16,18-22,25-26,28-36,38,39-55,56,57-64,65,66-72,74-77,81-126,127,128-231,232,234,235-281,282,283-299,301-311,312,313-319
+  s_8557e21a96d6eb::t_86ee3407dbda23 10,12-14,17,23-24,27,73,78-80
+  s_dbb34d3d3f8eb5::t_3b9d6b73ee32a6 300
+  s_2d53470fd179d7::t_5c2aaeea975f0b 37
+README.md
+  s_8557e21a96d6eb::t_d8b025fbf92b2b 4,5-6,8,11,12,13-15,19-27,29-30,32-36,38,43,45,54,56
+  s_2d53470fd179d7::t_f321765e7a5aa4 9-10,52
+tests/keccak/test_keccak.cpp
+  s_8557e21a96d6eb::t_cc4990c6ffd077 1-125
+include/vole_mole/keccak.hpp
+  s_8557e21a96d6eb::t_29104fd129df46 1-32
+src/moussaka/moussaka.cpp
+  s_8557e21a96d6eb::t_273dc6d5826e06 1-2,3,4-13,14-28,30-36,37,38-65,66,67-81
+  s_dbb34d3d3f8eb5::t_eb75780ba14a9c 29
+tests/moussaka/test_issue.cpp
+  s_8557e21a96d6eb::t_134375f58c6493 1-64,65,66-87
+tests/keccak/keccak_ref.py
+  s_8557e21a96d6eb::t_d3d1a641f8d6c0 1-119
+include/vole_mole/moussaka.hpp
+  s_8557e21a96d6eb::t_aa2c82bd6f5197 1-5,8-16,17-20,22,23-25,26,27-63
+  s_8557e21a96d6eb::t_aef4792150df1b 21
+  s_7a716a1cfbec78::t_5d5a36ae5f027d 6-7
+meson.build
+  s_8557e21a96d6eb::t_04463f4a385dae 1-30,34-39,42,44-51
+  s_7a716a1cfbec78::t_6bfa8c9e3418b5 31-33,41,43
+subprojects/faest-arch-opt.wrap
+  s_8557e21a96d6eb::t_06e7d19ae0c987 6-8
+subprojects/packagefiles/pqov-patches/0002-Add-_UTILS_BUILTIN_-for-building-without-OpenSSL.patch
+  s_7a716a1cfbec78::t_8d702b814a9255 1-54
+src/uov/uov.cpp
+  s_7a716a1cfbec78::t_dc7f892e230c1f 1-2,7-15,18-30,33-40,42-66,72-91,100
+  s_2d53470fd179d7::t_f9e2f08ad64662 3-6,16-17,31-32,41,67-71,92-99
+tests/uov/bench_uov.cpp
+  s_7a716a1cfbec78::t_27465b39ebc61d 1-78
+subprojects/packagefiles/pqov/meson.options
+  s_7a716a1cfbec78::t_d8cb52a73f423f 1-2
+.gitignore
+  s_7a716a1cfbec78::t_cbabef5db1cbe2 8
+subprojects/packagefiles/pqov-patches/0001-Add-ov_derive_preimage.patch
+  s_7a716a1cfbec78::t_45640fbc7a1f5b 1-197
+.github/workflows/ci.yml
+  s_7a716a1cfbec78::t_3e9287bed8e99a 41
+include/vole_mole/uov.hpp
+  s_7a716a1cfbec78::t_9d5712a0ad804e 1-10,15-19,21-25,27-71,73-74,78-80,83-87
+  s_2d53470fd179d7::t_f6e5b54db0da90 11-14,20,26,72,75-77,81-82
+subprojects/packagefiles/pqov/meson.build
+  s_7a716a1cfbec78::t_822dd2c51d8421 1-94
+tests/uov/test_uov.cpp
+  s_7a716a1cfbec78::t_c1626a7887cca5 1-5,9-16,21-22,24-53,64,66-67,68-98,99-107,108-148,149-206
+  s_2d53470fd179d7::t_d97b2c52d5ffef 6-8,17-20,23,54-63,65
+subprojects/pqov.wrap
+  s_7a716a1cfbec78::t_7f9596ba74b77e 1-13
+tests/voleith/test_voleith.cpp
+  s_dbb34d3d3f8eb5::t_8360656eee9037 2,4,9-15,17,20-21,22-23,25,31,37,39,43,50-51,54,56,63,69-70,76,84,356-357,368-369,377
+  s_dbb34d3d3f8eb5::t_d51c2edfc1d02d 67,378-390,391-395,396-444,445-446,447-455,456-461,462-471,472-479
+  s_dbb34d3d3f8eb5::t_06fec2ec89e792 5,16,19
+  s_2d53470fd179d7::t_1d66389c8267d6 42
+src/pomfrit/pomfrit.cpp
+  s_2d53470fd179d7::t_37953dfcc29880 3-8,13-17,23-74,76-101,103,105-108,116,119-152,164,166-194,197,199-212
+src/uov/public_map.hpp
+  s_2d53470fd179d7::t_bc6f9e2f169e8d 1-59
+include/vole_mole/pomfrit.hpp
+  s_2d53470fd179d7::t_56922e1471d39d 94-95
+  s_2d53470fd179d7::t_7646e3ccd45ef0 12,24-32,37,39-43,59-62,64,67-69,88-89,91-93
+  s_2d53470fd179d7::t_82a4a4206530ac 10-11
+src/pomfrit/redeem.hpp
+  s_2d53470fd179d7::t_79f1e5bf4a9bd4 1-152
+tests/pomfrit/test_pomfrit.cpp
+  s_2d53470fd179d7::t_127ed8773f0c8a 4
+  s_2d53470fd179d7::t_777f552f98bbd2 5-9,14-19,21-22,35-50,53-78,83,87-348
+src/uov/circuit.hpp
+  s_2d53470fd179d7::t_1d2361af367c6d 1-108
+src/dst.hpp
+  s_2d53470fd179d7::t_db3d4db762beb6 1-4,6-7,10,16,21-28,31-40,44-47,58
+tests/pomfrit/bench_pomfrit.cpp
+  s_2d53470fd179d7::t_7ca9781ca87ddd 1-92
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.10",
+  "base_commit_sha": "58ee359c977cd096fac169b108f4fdf0e8da3dee",
+  "prompts": {},
+  "sessions": {
+    "s_2d53470fd179d7": {
+      "agent_id": {
+        "tool": "opencode",
+        "id": "ses_f109359f2ffe7oVHmagnS0Pync",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Christopher Patton <cpatton@cloudflare.com>"
+    },
+    "s_7a716a1cfbec78": {
+      "agent_id": {
+        "tool": "opencode",
+        "id": "ses_f251decf9ffeZ6Wse4Owi7K2Hz",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Christopher Patton <cpatton@cloudflare.com>"
+    },
+    "s_8557e21a96d6eb": {
+      "agent_id": {
+        "tool": "opencode",
+        "id": "ses_f2b5fab15ffeHakKGiA7H9UX9p",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Christopher Patton <cpatton@cloudflare.com>"
+    },
+    "s_dbb34d3d3f8eb5": {
+      "agent_id": {
+        "tool": "opencode",
+        "id": "ses_f11f94ff0ffeRo7hZXhxbCcdhy",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Christopher Patton <cpatton@cloudflare.com>"
+    }
+  }
+}
