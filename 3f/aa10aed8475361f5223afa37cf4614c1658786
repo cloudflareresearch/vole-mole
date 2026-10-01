@@ -1,0 +1,109 @@
+tests/pomfrit/bench_pomfrit.cpp
+  s_2d53470fd179d7::t_7ca9781ca87ddd 1-78
+README.md
+  s_8557e21a96d6eb::t_d8b025fbf92b2b 5-6,11
+  s_2d53470fd179d7::t_f321765e7a5aa4 9-10,52
+include/vole_mole/pomfrit.hpp
+  s_2d53470fd179d7::t_af9329971e01eb 95-97
+  s_2d53470fd179d7::t_6654131d86bcd5 48-52
+  s_2d53470fd179d7::t_82e3596ab0a543 1
+  s_2d53470fd179d7::t_683b36e9b7ec60 85-89
+  s_2d53470fd179d7::t_56922e1471d39d 53-54
+  s_2d53470fd179d7::t_4daa4ff817de57 79-83
+  s_2d53470fd179d7::t_873a00aea12b95 73-77
+  s_2d53470fd179d7::t_7646e3ccd45ef0 2-47,72,78,84,90
+  s_2d53470fd179d7::t_20ecb1da2e5316 55-71
+  s_2d53470fd179d7::t_a25f69c21e2caf 91-94
+src/uov/circuit.hpp
+  s_2d53470fd179d7::t_1d2361af367c6d 1-107
+tests/uov/test_uov.cpp
+  s_2d53470fd179d7::t_135c3bd902afbe 84
+  s_2d53470fd179d7::t_d97b2c52d5ffef 6-8,17-21,24,29-31,38-39,45,47-54,56
+  s_7a716a1cfbec78::t_c1626a7887cca5 55,62,69,83,90-101,103,113-114,121,134,143-225
+src/pomfrit/pomfrit.cpp
+  s_2d53470fd179d7::t_54d19a9e0841ca 1-2,221-222
+  s_2d53470fd179d7::t_37953dfcc29880 3-220
+src/pomfrit/redeem.hpp
+  s_2d53470fd179d7::t_79f1e5bf4a9bd4 1-137
+src/voleith.hpp
+  s_8557e21a96d6eb::t_78dfbbd254b5ed 138
+  s_02495226f1569a::t_298cbbcde89c4a 258
+  s_2d53470fd179d7::t_24d83ea943fd5f 6-17,52,89-93,120,123,126-130,132-133,140-141,145-146,156,198,206,210-213,215-218,220-221,223-229,242-244,253,255,257,263-265,267-268,334,344-345,384,392,410-411,418,423,434
+  s_dbb34d3d3f8eb5::t_6e4495900f8695 58,66-70
+  s_8557e21a96d6eb::t_8b356044ddc14a 1,3-4,86-88,104,109-111,113-114,119,121-122,124-125,135-137,139,143-144,157,170,179-180,195,230-241,245-252,254,256,259-262,269,286-287,309-310,312-314,316-333,335-343,353,377,380,396-409,412-417,419-422,430-433,457,470-482
+tests/test.hpp
+  s_8557e21a96d6eb::t_43ca0091f1649a 1-2,7-8,21,35-52
+src/dst.hpp
+  s_2d53470fd179d7::t_db3d4db762beb6 10,36-41,45-46
+include/vole_mole/uov.hpp
+  s_2d53470fd179d7::t_f6e5b54db0da90 11-14,76-77
+tests/voleith/test_voleith.cpp
+  s_dbb34d3d3f8eb5::t_06fec2ec89e792 5,16,19
+  s_dbb34d3d3f8eb5::t_d51c2edfc1d02d 67,378-605
+src/moussaka/issue.hpp
+  s_8557e21a96d6eb::t_4d74ff8b681846 299-300
+  s_dbb34d3d3f8eb5::t_3b9d6b73ee32a6 303
+src/uov/public_key.hpp
+  s_2d53470fd179d7::t_e3397085a44b97 1-67
+include/vole_mole/moussaka.hpp
+  s_8557e21a96d6eb::t_aa2c82bd6f5197 52-53,58-59
+tests/meson.build
+  s_2d53470fd179d7::t_2fcb25f1b8be18 35
+src/moussaka/moussaka.cpp
+  s_dbb34d3d3f8eb5::t_eb75780ba14a9c 31
+src/uov/uov.cpp
+  s_2d53470fd179d7::t_f9e2f08ad64662 3-6,16-17,31-32,41,67-71,92-101
+tests/pomfrit/test_pomfrit.cpp
+  s_2d53470fd179d7::t_777f552f98bbd2 4-199
+  s_2d53470fd179d7::t_947845c659dd35 1-3
+tests/uov/bench_uov.cpp
+  s_2d53470fd179d7::t_5ac58fc4987531 25,32,41,51-52
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.10",
+  "base_commit_sha": "3faa10aed8475361f5223afa37cf4614c1658786",
+  "prompts": {},
+  "sessions": {
+    "s_02495226f1569a": {
+      "agent_id": {
+        "tool": "opencode",
+        "id": "ses_f0761dc6effeD77il7JKk7B211",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Christopher Patton <cpatton@cloudflare.com>"
+    },
+    "s_2d53470fd179d7": {
+      "agent_id": {
+        "tool": "opencode",
+        "id": "ses_f109359f2ffe7oVHmagnS0Pync",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Christopher Patton <cpatton@cloudflare.com>"
+    },
+    "s_7a716a1cfbec78": {
+      "agent_id": {
+        "tool": "opencode",
+        "id": "ses_f251decf9ffeZ6Wse4Owi7K2Hz",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Christopher Patton <cpatton@cloudflare.com>"
+    },
+    "s_8557e21a96d6eb": {
+      "agent_id": {
+        "tool": "opencode",
+        "id": "ses_f2b5fab15ffeHakKGiA7H9UX9p",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Christopher Patton <cpatton@cloudflare.com>"
+    },
+    "s_dbb34d3d3f8eb5": {
+      "agent_id": {
+        "tool": "opencode",
+        "id": "ses_f11f94ff0ffeRo7hZXhxbCcdhy",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Christopher Patton <cpatton@cloudflare.com>"
+    }
+  }
+}
