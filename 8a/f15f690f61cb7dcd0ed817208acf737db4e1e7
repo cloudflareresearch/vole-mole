@@ -12,6 +12,7 @@ include/vole_mole/keccak.hpp
   s_8557e21a96d6eb::t_29104fd129df46 1-32
 tests/moussaka/test_moussaka.cpp
   s_8557e21a96d6eb::t_af7599e7f84499 1-132
+  s_8557e21a96d6eb::t_23043caa6f3298 133-152
 src/voleith.hpp
   s_8557e21a96d6eb::t_8b356044ddc14a 1-313
 README.md
