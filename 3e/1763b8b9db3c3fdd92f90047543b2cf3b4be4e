@@ -1,0 +1,105 @@
+include/vole_mole/uov.hpp
+  s_2d53470fd179d7::t_f6e5b54db0da90 11-14,76-77
+tests/meson.build
+  s_2d53470fd179d7::t_2fcb25f1b8be18 35
+src/pomfrit/redeem.hpp
+  s_2d53470fd179d7::t_79f1e5bf4a9bd4 1-139
+tests/voleith/test_voleith.cpp
+  s_dbb34d3d3f8eb5::t_06fec2ec89e792 5,16,19
+  s_dbb34d3d3f8eb5::t_d51c2edfc1d02d 67,378-479
+tests/uov/bench_uov.cpp
+  s_2d53470fd179d7::t_5ac58fc4987531 25,32,41,51-52
+tests/pomfrit/bench_pomfrit.cpp
+  s_2d53470fd179d7::t_7ca9781ca87ddd 1-79
+src/moussaka/moussaka.cpp
+  s_dbb34d3d3f8eb5::t_eb75780ba14a9c 31
+src/uov/uov.cpp
+  s_2d53470fd179d7::t_f9e2f08ad64662 3-6,16-17,31-32,41,67-71,92-101
+include/vole_mole/pomfrit.hpp
+  s_2d53470fd179d7::t_4daa4ff817de57 73-77
+  s_2d53470fd179d7::t_82e3596ab0a543 1
+  s_2d53470fd179d7::t_20ecb1da2e5316 50-66
+  s_2d53470fd179d7::t_56922e1471d39d 48-49
+  s_2d53470fd179d7::t_a25f69c21e2caf 84-86
+  s_2d53470fd179d7::t_af9329971e01eb 87-89
+  s_2d53470fd179d7::t_873a00aea12b95 68-71
+  s_2d53470fd179d7::t_683b36e9b7ec60 79-82
+  s_2d53470fd179d7::t_7646e3ccd45ef0 2-47,67,72,78,83
+src/pomfrit/pomfrit.cpp
+  s_2d53470fd179d7::t_54d19a9e0841ca 1-2,221-222
+  s_2d53470fd179d7::t_37953dfcc29880 3-220
+src/uov/circuit.hpp
+  s_2d53470fd179d7::t_1d2361af367c6d 1-107
+tests/uov/test_uov.cpp
+  s_2d53470fd179d7::t_d97b2c52d5ffef 6-8,17-20,23,28-30,37-38,44,46-53,55
+  s_2d53470fd179d7::t_135c3bd902afbe 83
+  s_7a716a1cfbec78::t_c1626a7887cca5 54,61,68,82,89-100,102,112-113,120,133,142-198
+src/moussaka/issue.hpp
+  s_dbb34d3d3f8eb5::t_3b9d6b73ee32a6 302
+tests/test.hpp
+  s_8557e21a96d6eb::t_43ca0091f1649a 1-2,7-8,21,35-52
+src/uov/public_key.hpp
+  s_2d53470fd179d7::t_e3397085a44b97 1-67
+README.md
+  s_2d53470fd179d7::t_f321765e7a5aa4 9-10,52
+  s_8557e21a96d6eb::t_d8b025fbf92b2b 5-6,11
+tests/pomfrit/test_pomfrit.cpp
+  s_2d53470fd179d7::t_127ed8773f0c8a 4
+  s_2d53470fd179d7::t_777f552f98bbd2 5-203
+  s_2d53470fd179d7::t_947845c659dd35 1-3
+src/voleith.hpp
+  s_8557e21a96d6eb::t_8b356044ddc14a 1,3-4,86-88,104,109-111,113-114,119,121-122,124-125,135-136,140-141,154,167,176-177,192,227-236,240-247,249,251,254-257,264,281-282,304-305,307,309-326,328-335,345,369,372,388-400,403-408,410-413,421-424,448,461-472
+  s_dbb34d3d3f8eb5::t_6e4495900f8695 58,66-70
+  s_2d53470fd179d7::t_24d83ea943fd5f 6-17,52,89-93,120,123,126-130,132-133,137-138,142-143,153,195,203,207-210,212-215,217-218,220-226,237-239,248,250,252,258-260,262-263,327,336-337,376,384,401-402,409,414,425
+  s_02495226f1569a::t_298cbbcde89c4a 253
+src/dst.hpp
+  s_2d53470fd179d7::t_db3d4db762beb6 10,36-41,45-46
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.10",
+  "base_commit_sha": "3e1763b8b9db3c3fdd92f90047543b2cf3b4be4e",
+  "prompts": {},
+  "sessions": {
+    "s_02495226f1569a": {
+      "agent_id": {
+        "tool": "opencode",
+        "id": "ses_f0761dc6effeD77il7JKk7B211",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Christopher Patton <cpatton@cloudflare.com>"
+    },
+    "s_2d53470fd179d7": {
+      "agent_id": {
+        "tool": "opencode",
+        "id": "ses_f109359f2ffe7oVHmagnS0Pync",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Christopher Patton <cpatton@cloudflare.com>"
+    },
+    "s_7a716a1cfbec78": {
+      "agent_id": {
+        "tool": "opencode",
+        "id": "ses_f251decf9ffeZ6Wse4Owi7K2Hz",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Christopher Patton <cpatton@cloudflare.com>"
+    },
+    "s_8557e21a96d6eb": {
+      "agent_id": {
+        "tool": "opencode",
+        "id": "ses_f2b5fab15ffeHakKGiA7H9UX9p",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Christopher Patton <cpatton@cloudflare.com>"
+    },
+    "s_dbb34d3d3f8eb5": {
+      "agent_id": {
+        "tool": "opencode",
+        "id": "ses_f11f94ff0ffeRo7hZXhxbCcdhy",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Christopher Patton <cpatton@cloudflare.com>"
+    }
+  }
+}
