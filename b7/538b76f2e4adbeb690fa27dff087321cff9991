@@ -1,0 +1,85 @@
+src/uov/circuit.hpp
+  s_2d53470fd179d7::t_1d2361af367c6d 1-108
+src/moussaka/issue.hpp
+  s_8557e21a96d6eb::t_4d74ff8b681846 56,65,232,234
+  s_2d53470fd179d7::t_5c2aaeea975f0b 37
+src/dst.hpp
+  s_2d53470fd179d7::t_db3d4db762beb6 1-4,6-7,10,16,21-28,31-40,44-47,58
+src/uov/public_map.hpp
+  s_2d53470fd179d7::t_bc6f9e2f169e8d 1-59
+src/pomfrit/pomfrit.cpp
+  s_2d53470fd179d7::t_37953dfcc29880 3-8,13-17,23-74,76-101,103,105-108,116,119-152,164,166-194,197,199-212
+tests/voleith/test_voleith.cpp
+  s_dbb34d3d3f8eb5::t_d51c2edfc1d02d 391-395,445-446,462-471
+  s_2d53470fd179d7::t_1d66389c8267d6 42
+src/uov/uov.cpp
+  s_2d53470fd179d7::t_f9e2f08ad64662 3-6,16-17,31-32,41,67-71,92-99
+include/vole_mole/pomfrit.hpp
+  s_2d53470fd179d7::t_7646e3ccd45ef0 12,24-32,37,39-43,59-62,64,67-69,88-89,91-93
+  s_2d53470fd179d7::t_56922e1471d39d 94-95
+  s_2d53470fd179d7::t_82a4a4206530ac 10-11
+tests/meson.build
+  s_2d53470fd179d7::t_2fcb25f1b8be18 35
+src/pomfrit/redeem.hpp
+  s_2d53470fd179d7::t_79f1e5bf4a9bd4 1-152
+tests/pomfrit/test_pomfrit.cpp
+  s_2d53470fd179d7::t_777f552f98bbd2 5-9,14-19,21-22,35-50,53-78,83,87-348
+  s_2d53470fd179d7::t_127ed8773f0c8a 4
+src/moussaka/moussaka.cpp
+  s_8557e21a96d6eb::t_273dc6d5826e06 3,37
+tests/uov/test_uov.cpp
+  s_7a716a1cfbec78::t_c1626a7887cca5 64,66-67,99-107,149-206
+  s_2d53470fd179d7::t_d97b2c52d5ffef 6-8,17-20,23,54-63,65
+README.md
+  s_8557e21a96d6eb::t_d8b025fbf92b2b 5-6,11
+  s_2d53470fd179d7::t_f321765e7a5aa4 9-10,52
+src/voleith.hpp
+  s_8557e21a96d6eb::t_16aeb72933b0ba 336
+  s_2d53470fd179d7::t_24d83ea943fd5f 4,6-22,57,87,95-99,126,129,132-137,139-140,144-145,149-150,159-160,172-173,202-203,210,214-233,244-246,255,257,259,265,267,270,280,333,340-341,380,388,397,403-404,411,416,427
+  s_8557e21a96d6eb::t_8b356044ddc14a 1-3,91-94,100-101,110,119-120,128,142,161,164,166,174,236-238,261-263,268,271,285-286,288-289,297-298,311,313,317-321,328,331-332,335,354,381,419-425,450,463,465
+  s_8557e21a96d6eb::t_865ec4eea8337d 90
+include/vole_mole/uov.hpp
+  s_2d53470fd179d7::t_f6e5b54db0da90 11-14,20,26,72,75-77,81-82
+tests/pomfrit/bench_pomfrit.cpp
+  s_2d53470fd179d7::t_7ca9781ca87ddd 1-92
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.10",
+  "base_commit_sha": "b7538b76f2e4adbeb690fa27dff087321cff9991",
+  "prompts": {},
+  "sessions": {
+    "s_2d53470fd179d7": {
+      "agent_id": {
+        "tool": "opencode",
+        "id": "ses_f109359f2ffe7oVHmagnS0Pync",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Christopher Patton <cpatton@cloudflare.com>"
+    },
+    "s_7a716a1cfbec78": {
+      "agent_id": {
+        "tool": "opencode",
+        "id": "ses_f251decf9ffeZ6Wse4Owi7K2Hz",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Christopher Patton <cpatton@cloudflare.com>"
+    },
+    "s_8557e21a96d6eb": {
+      "agent_id": {
+        "tool": "opencode",
+        "id": "ses_f2b5fab15ffeHakKGiA7H9UX9p",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Christopher Patton <cpatton@cloudflare.com>"
+    },
+    "s_dbb34d3d3f8eb5": {
+      "agent_id": {
+        "tool": "opencode",
+        "id": "ses_f11f94ff0ffeRo7hZXhxbCcdhy",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Christopher Patton <cpatton@cloudflare.com>"
+    }
+  }
+}
