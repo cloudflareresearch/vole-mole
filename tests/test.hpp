@@ -97,8 +97,10 @@ template <size_t deg> struct faest::quicksilver_gfsecpar<vole_mole::test::PlainQ
     quicksilver_gfsecpar operator+(faest::poly1 c) const {
         return quicksilver_gfsecpar(v != (c.data != 0));
     }
-    quicksilver_gfsecpar<PlainQS, 2 * deg> operator*(const quicksilver_gfsecpar& o) const {
-        return quicksilver_gfsecpar<PlainQS, 2 * deg>(v && o.v);
+    template <size_t deg2>
+    quicksilver_gfsecpar<PlainQS, deg + deg2>
+    operator*(const quicksilver_gfsecpar<PlainQS, deg2>& o) const {
+        return quicksilver_gfsecpar<PlainQS, deg + deg2>(v && o.v);
     }
 };
 

@@ -68,6 +68,46 @@ constexpr size_t keccak_bit_index(size_t x, size_t y, size_t z) {
     return KECCAK_W * (5 * y + x) + z;
 }
 
+// Inverse of theta.
+//
+// theta adds D[x][z] = C[x-1][z] + C[x+1][z-1] to each bit of column (x, z), where C[x][z] is the
+// parity of column (x, z) of the input. Since a column has an odd number of bits (5), the column
+// parities of the output are C' = C + D = (1 + M) C, where M is the linear map C -> D. Hence
+//
+//   D = M C = M (1 + M)^{-1} C' = ((1 + M)^{-1} + 1) C',
+//
+// so theta is inverted by adding the same D to each column of its output.
+//
+// (1 + M)^{-1} is dense, but has a sparse factorization: M = X^-1 + X Z^-1, where X and Z are the
+// translations by 1 in x and z, which commute. Over GF(2), squaring is linear, so
+//
+//   (1 + M) (1 + M) (1 + M^2) (1 + M^4) ... (1 + M^(w/2)) = 1 + M^w = 1 + X^-w + X^w,
+//
+// as Z^w = 1. Hence (1 + M)^{-1} = Q^{-1} (1 + M) (1 + M^2) ... (1 + M^(w/2)) where Q^{-1} is the
+// inverse of 1 + X^-w + X^w, a polynomial in X modulo X^5 + 1.
+//
+// Bit i of KECCAK_THETA_INV_Q is the coefficient of X^i of Q^{-1}.
+constexpr uint8_t KECCAK_THETA_INV_Q = [] {
+    const auto mul = [](unsigned a, unsigned b) { // in GF(2)[X] / (X^5 + 1)
+        unsigned out = 0;
+        for (size_t i = 0; i < 5; ++i) {
+            for (size_t j = 0; j < 5; ++j) {
+                if (((a >> i) & 1) && ((b >> j) & 1)) {
+                    out ^= 1u << ((i + j) % 5);
+                }
+            }
+        }
+        return out;
+    };
+    const unsigned q = 1u ^ (1u << (5 - KECCAK_W % 5) % 5) ^ (1u << KECCAK_W % 5);
+    for (unsigned r = 1; r < 32; ++r) {
+        if (mul(q, r) == 1) {
+            return static_cast<uint8_t>(r);
+        }
+    }
+    throw "theta is not invertible"; // not a constant expression: fails compilation
+}();
+static_assert(KECCAK_THETA_INV_Q == 0b10011); // (1 + X^2 + X^3)^{-1} = 1 + X + X^4
 // Sanity checks against well-known values of the 64-bit constants (low 32 bits).
 static_assert(KP800_RC[0] == 0x80008009u);  // RC[10] = 0x0000000080008009
 static_assert(KP800_RC[11] == 0x00008080u); // RC[21] = 0x8000000000008080

@@ -37,7 +37,7 @@ TEST(IssueRequest, WitnessIsConsistent) {
     Kp800State state;
     std::copy_n(w.begin() + WIT_OFF_STATES + (NUM_COMMITTED_STATES - 1) * KP800_STATE_BYTES,
                 KP800_STATE_BYTES, state.begin());
-    keccak_p800_rounds(state, NUM_COMMITTED_STATES * ROUNDS_PER_SEGMENT, ROUNDS_PER_SEGMENT);
+    keccak_p800_rounds(state, SEGMENT_START[NUM_COMMITTED_STATES], FINAL_ROUNDS);
     const Commitment t = commit(NF, CTX_ISS, CTX_RED, R);
     EXPECT_EQ(to_hex(t), to_hex(std::span(state).first<uov::M>()));
 }
