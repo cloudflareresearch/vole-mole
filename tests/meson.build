@@ -14,7 +14,7 @@ tests = [
 ]
 
 # Test data files (e.g., known answers) are read from the source tree; see `data_path` in
-# keccak/test_keccak.cpp.
+# keccak/test_keccak.cpp and moussaka/test_moussaka.cpp.
 test_data_arg = '-DVOLE_MOLE_TEST_DATA_DIR="@0@"'.format(meson.current_source_dir())
 
 foreach t : tests
@@ -26,6 +26,12 @@ foreach t : tests
   # protocol 'gtest' lets Meson report the individual GoogleTest test cases.
   test(t[0], exe, protocol : 'gtest', timeout : 300)
 endforeach
+
+# Run explicitly to regenerate Moussaka known answers, never as part of the test suite.
+executable('gen_moussaka_kat', 'moussaka/gen_moussaka_kat.cpp',
+  include_directories : test_inc,
+  dependencies : test_deps,
+)
 
 benchmark_dep = dependency('benchmark_main',
   default_options : ['warning_level=0', 'tests=disabled'],

@@ -1,7 +1,6 @@
-#include "vole_mole/moussaka.hpp"
-
-#include "moussaka/issue.hpp" // internal
-#include "moussaka/token.hpp" // internal
+#include "moussaka/issue.hpp"  // internal
+#include "moussaka/redeem.hpp" // internal
+#include "moussaka/token.hpp"  // internal
 
 #include "test.hpp"
 
@@ -10,8 +9,11 @@
 #include <algorithm>
 #include <array>
 #include <cstddef>
+#include <fstream>
 #include <span>
 #include <stdexcept>
+#include <string>
+#include <string_view>
 #include <type_traits>
 #include <utility>
 #include <vector>
@@ -41,7 +43,126 @@ bool verifies(const IssueRequest& request, const Context& ctx_iss) {
     return issue_response(uov_key_pair().sk, request, ctx_iss).has_value();
 }
 
+template <size_t N>
+bool read_kat_field(std::istream& in, std::string_view name, std::array<uint8_t, N>& out) {
+    std::string label, hex;
+    if (!(in >> label >> hex) || label != name) {
+        return false;
+    }
+    const auto bytes = vole_mole::test::hex_decode(hex);
+    if (!bytes || bytes->size() != N) {
+        return false;
+    }
+    std::ranges::copy(*bytes, out.begin());
+    return true;
+}
+
+bool read_kat_index(std::istream& in, std::string_view name, size_t& out) {
+    std::string label;
+    return bool(in >> label >> out) && label == name;
+}
+
 } // namespace
+
+// Freeze both witness layouts and the complete deterministic protocol transcript. Verification
+// of the stored messages also catches changes that break compatibility with existing proofs.
+TEST(Moussaka, KnownAnswers) {
+    std::ifstream in(std::string(VOLE_MOLE_TEST_DATA_DIR) + "/moussaka/moussaka_kat.txt");
+    ASSERT_TRUE(in.is_open()) << "can't open moussaka/moussaka_kat.txt";
+    size_t count = 0;
+    while (in >> std::ws && in.peek() != std::char_traits<char>::eof()) {
+        if (in.peek() == '#') {
+            std::string comment;
+            std::getline(in, comment);
+            continue;
+        }
+        SCOPED_TRACE("known answer " + std::to_string(count));
+        Seed issue_seed, redeem_seed;
+        Context ctx_iss, ctx_red;
+        Nullifier nf;
+        Opening r;
+        Commitment commitment;
+        std::array<uint8_t, moussaka::detail::ISSUE_WITNESS_BYTES> issue_witness;
+        std::array<uint8_t, moussaka::detail::REDEEM_WITNESS_BYTES> redeem_witness;
+        IssueRequest request;
+        IssueResponse response;
+        RedeemRequest redeem_request;
+        Nullifier redeemed_nf;
+        size_t anchor_count, issuer;
+        ASSERT_TRUE(read_kat_field(in, "issue_seed", issue_seed));
+        ASSERT_TRUE(read_kat_field(in, "redeem_seed", redeem_seed));
+        ASSERT_TRUE(read_kat_field(in, "ctx_iss", ctx_iss));
+        ASSERT_TRUE(read_kat_field(in, "ctx_red", ctx_red));
+        ASSERT_TRUE(read_kat_index(in, "anchor_count", anchor_count));
+        ASSERT_GE(anchor_count, 1u);
+        ASSERT_LE(anchor_count, MAX_ANCHORS);
+        ASSERT_TRUE(read_kat_index(in, "issuer", issuer));
+        ASSERT_LT(issuer, anchor_count);
+        std::vector<UovKeyPair> key_pairs;
+        key_pairs.reserve(anchor_count);
+        for (size_t u = 0; u < anchor_count; ++u) {
+            uov::SecretKeyBytes sk;
+            ASSERT_TRUE(read_kat_field(in, "anchor_sk", sk));
+            key_pairs.emplace_back(uov::SecretKey{sk});
+        }
+        std::vector<AnchorRef> refs;
+        for (const auto& kp : key_pairs) {
+            refs.emplace_back(kp.pk);
+        }
+        const AnchorSet anchors(refs);
+        ASSERT_TRUE(read_kat_field(in, "nf", nf));
+        ASSERT_TRUE(read_kat_field(in, "r", r));
+        ASSERT_TRUE(read_kat_field(in, "commitment", commitment));
+        ASSERT_TRUE(read_kat_field(in, "issue_witness", issue_witness));
+        ASSERT_TRUE(read_kat_field(in, "issue_request", request));
+        ASSERT_TRUE(read_kat_field(in, "issue_response", response));
+        ASSERT_TRUE(read_kat_field(in, "redeem_witness", redeem_witness));
+        ASSERT_TRUE(read_kat_field(in, "redeem_request", redeem_request));
+        ASSERT_TRUE(read_kat_field(in, "redeemed_nf", redeemed_nf));
+
+        auto res = issue_request_with_seed(ctx_iss, ctx_red, issue_seed);
+        EXPECT_EQ(TokenAccess::nf(res.pending_token), nf);
+        EXPECT_EQ(TokenAccess::r(res.pending_token), r);
+        EXPECT_EQ(moussaka::detail::encode_issue_witness(nf, ctx_iss, ctx_red, r), issue_witness);
+        EXPECT_EQ(commit(nf, ctx_iss, ctx_red, r), commitment);
+        EXPECT_EQ(to_hex(commitment), to_hex(std::span(request).first<uov::M>()));
+        EXPECT_TRUE(std::ranges::equal(res.request, request)) << "request bytes differ";
+
+        const auto generated_response = issue_response(key_pairs[issuer].sk, res.request, ctx_iss);
+        ASSERT_TRUE(generated_response.has_value());
+        EXPECT_EQ(*generated_response, response);
+        // Verify the stored issuance proof independently of the regenerated request.
+        const auto stored_response = issue_response(key_pairs[issuer].sk, request, ctx_iss);
+        ASSERT_TRUE(stored_response.has_value());
+        EXPECT_EQ(*stored_response, response);
+        EXPECT_EQ(key_pairs[issuer].pk.eval(response), commitment);
+
+        auto token = std::move(res.pending_token).finalize_issue(key_pairs[issuer].pk, response);
+        ASSERT_TRUE(token.has_value());
+        EXPECT_EQ(TokenAccess::nf(*token), nf);
+        EXPECT_EQ(TokenAccess::r(*token), r);
+        EXPECT_EQ(TokenAccess::s(*token), response);
+        EXPECT_EQ(moussaka::detail::encode_redeem_witness(TokenAccess::nf(*token), ctx_iss, ctx_red,
+                                                          TokenAccess::r(*token),
+                                                          TokenAccess::s(*token), issuer),
+                  redeem_witness);
+        const auto generated_redemption = std::move(*token).redeem_request_with_seed(
+            anchors, issuer, ctx_iss, ctx_red, redeem_seed);
+        EXPECT_TRUE(std::ranges::equal(generated_redemption, redeem_request))
+            << "redemption request bytes differ";
+        EXPECT_EQ(to_hex(std::span(redeem_request).first<NF_BYTES>()), to_hex(nf));
+        EXPECT_EQ(redeemed_nf, nf);
+        const auto generated_nf = finalize_redeem(anchors, generated_redemption, ctx_iss, ctx_red);
+        ASSERT_TRUE(generated_nf.has_value());
+        EXPECT_EQ(*generated_nf, redeemed_nf);
+        // Verify the stored redemption proof even if regeneration changes its bytes.
+        const auto stored_nf = finalize_redeem(anchors, redeem_request, ctx_iss, ctx_red);
+        ASSERT_TRUE(stored_nf.has_value());
+        EXPECT_EQ(*stored_nf, redeemed_nf);
+        ++count;
+    }
+    EXPECT_EQ(count, 3u);
+}
 
 TEST(IssueRequest, WitnessIsConsistent) {
     using namespace moussaka::detail;
