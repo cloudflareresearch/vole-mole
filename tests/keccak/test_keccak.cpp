@@ -123,3 +123,49 @@ TEST(Keccak, CircuitMatchesLanes) {
     }
     EXPECT_EQ(to_hex(output), to_hex(keccak_p800(input)));
 }
+
+// The bit-level inverse rounds undo the plaintext rounds, one round at a time and for the full
+// permutation.
+TEST(Keccak, InverseCircuitInvertsLanes) {
+    const auto to_bits = [](const Kp800State& s) {
+        std::vector<Bit> bits(KP800_STATE_BITS);
+        for (size_t i = 0; i < bits.size(); ++i) {
+            bits[i] = {((s[i / 8] >> (i % 8)) & 1) != 0};
+        }
+        return bits;
+    };
+    const auto chi_inv = [](Bit a, Bit b, Bit c, Bit d, Bit e) {
+        return Bit{a.v != (!b.v && (c.v != (!d.v && e.v)))};
+    };
+    const auto add_one = [](Bit x) { return Bit{!x.v}; };
+
+    Kp800State input;
+    for (size_t i = 0; i < input.size(); ++i) {
+        input[i] = static_cast<uint8_t>(5 * i * i + 11 * i + 2);
+    }
+
+    // Single rounds.
+    for (size_t r = 0; r < KP800_ROUNDS; ++r) {
+        SCOPED_TRACE("round " + std::to_string(r));
+        Kp800State output = input;
+        keccak_p800_rounds(output, r, 1);
+        const auto bits = detail::keccak_round_inverse(to_bits(output), r, chi_inv, add_one);
+        EXPECT_EQ(bits.size(), KP800_STATE_BITS);
+        bool equal = true;
+        for (size_t i = 0; i < bits.size(); ++i) {
+            equal &= bits[i].v == (((input[i / 8] >> (i % 8)) & 1) != 0);
+        }
+        EXPECT_TRUE(equal);
+    }
+
+    // Full permutation.
+    auto bits = to_bits(keccak_p800(input));
+    for (size_t r = KP800_ROUNDS; r-- > 0;) {
+        bits = detail::keccak_round_inverse(bits, r, chi_inv, add_one);
+    }
+    Kp800State recovered{};
+    for (size_t i = 0; i < bits.size(); ++i) {
+        recovered[i / 8] |= static_cast<uint8_t>(bits[i].v << (i % 8));
+    }
+    EXPECT_EQ(to_hex(recovered), to_hex(input));
+}
