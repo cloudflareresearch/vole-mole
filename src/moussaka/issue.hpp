@@ -178,9 +178,10 @@ struct IssueRelation {
         // Add segment constraints: All but the last segment end in the expected intermediate state.
         const auto out = keccak::detail::qs_keccak(
             qs, keccak::detail::qs_input(qs, encode_init_state({}, x.ctx_iss, {}, {}), COM_TO_WIT),
-            WIT_OFF_STATES);
+            WIT_OFF_STATES, 8 * uov::M);
 
-        // Add output constraint: The last segment ends in the commitment.
+        // Add output constraint: The last segment ends in the commitment. (Only the bits of t are
+        // computed in the last round.)
         for (size_t i = 0; i < 8 * uov::M; ++i) {
             qs->add_constraint(out[i] + poly1((x.t[i / 8] >> (i % 8)) & 1));
         }
