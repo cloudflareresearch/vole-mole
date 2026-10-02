@@ -76,28 +76,27 @@ void commit_to_refresher(std::span<uint8_t, REFRESHER_BYTES> refresher_com,
 }
 
 // PomFRIT <https://ia.cr/2026/109>, Algorithm 2: h <- H(pk, pi1, msg), where pi1 is the output of
-// the VOLE generation step and the commitment to the refresher.
+// the VOLE generation step, including the corrections for the target mask.
 //
-// TODO(cjpatton) Unlike the paper, the Client samples r for the instance P(s) = h + r rather than
-// borrowing it from the VOLE generator. This is intended to simplify PomFRIT by not treating the
-// borrowed VOLEs as a special case. (The cost is sending an additional uov::M corrections in the
-// proof.) On the other hand, it's now necessary to bind the additional corrections to h. Otherwise,
-// the Client could easily forge many signatures for the same target. Discuss this change with the
-// PomFRIT and FAEST authors and see what they might prefer.
+// TODO(cjpatton) Unlike the paper, the Client samples r for the instance P(s) = h + r rather
+// than borrowing it from the VOLE generator. This is intended to simplify PomFRIT by not
+// treating the borrowed VOLEs as a special case. (The cost is sending an additional uov::M
+// corrections in the proof.) On the other hand, it's now necessary to bind the additional
+// corrections to h. Otherwise, the Client could easily forge many signatures for the same
+// target. Discuss this change with the PomFRIT and FAEST authors and see what they might
+// prefer.
 uov::Target hash_to_target(const uov::PublicKey& pk, const BlindSignature& sig,
-                           std::span<const uint8_t> msg) {
+                           std::span<const uint8_t> chal1, std::span<const uint8_t> msg) {
     constexpr auto S = relation_params<RedeemRelation>::secpar_v;
     const ProofView proof = sig_proof(sig).data();
     uov::Target h;
     faest::hash_state hasher;
     hasher.init(S);
     hasher.update(POMFRIT_TARGET_DST);
-    hasher.update(PublicKeyAccess::digest(pk)); // not included in the PomFRIT paper
-    hasher.update(proof.vole_commitment());
+    hasher.update(PublicKeyAccess::digest(pk));
+    hasher.update(chal1);
     hasher.update(proof.vole_check_proof());
-    hasher.update(proof.iv_pre());
-    hasher.update(sig_witness_prefix_correction(sig)); // not included in the PomFRIT paper
-    hasher.update(sig_refresher_com(sig));
+    hasher.update(sig_witness_prefix_correction(sig));
     hasher.update(msg);
     hasher.finalize(h);
     return h;
@@ -110,7 +109,7 @@ struct PendingBlindSignature::Impl {
     IssueRequest t;
     uov::Target h;
     BlindSignature sig;
-    PendingProof<RedeemRelation> pending_proof;
+    PendingProof<RedeemRelation> pending;
 };
 
 PendingBlindSignature::PendingBlindSignature(std::unique_ptr<Impl> impl) : impl_(std::move(impl)) {}
@@ -142,11 +141,10 @@ IssueRequestResult issue_request_with_seed(const uov::PublicKey& pk, std::span<c
     // depends on pi1, and the witness suffix (s) comes from the Issuer's response.
     const auto refresher_com = sig_refresher_com(sig);
     commit_to_refresher(refresher_com, refresher);
-    auto pending_proof =
-        voleith_vole_gen<RedeemRelation>(sig_proof(sig), nullptr, r, rho, refresher_com);
+    auto pending = voleith_vole_gen<RedeemRelation>(sig_proof(sig), nullptr, r, rho, refresher_com);
 
     // Line 5: Compute the target (binding it to pi1).
-    const uov::Target h = hash_to_target(pk, sig, msg);
+    const uov::Target h = hash_to_target(pk, sig, pending.chal1, msg);
 
     // Line 6: Compute the masked target.
     IssueRequest t;
@@ -155,7 +153,7 @@ IssueRequestResult issue_request_with_seed(const uov::PublicKey& pk, std::span<c
     }
 
     auto impl = std::unique_ptr<PendingBlindSignature::Impl>(new PendingBlindSignature::Impl{
-        PublicKeyAccess::digest(pk), t, h, sig, std::move(pending_proof)});
+        PublicKeyAccess::digest(pk), t, h, sig, std::move(pending)});
     return {PendingBlindSignature(std::move(impl)), t};
 }
 
@@ -195,7 +193,7 @@ PendingBlindSignature::finalize_issue(const uov::PublicKey& pk, const IssueRespo
     // Lines 13-14: Step 2 of proof generation (pi2). Bind the instance and the witness suffix (s);
     // the witness prefix (r) was committed in step 1.
     voleith_prove_commit<RedeemRelation>(sig_proof(impl->sig), {&pk, impl->h}, response,
-                                         std::move(impl->pending_proof), sig_refresher(impl->sig));
+                                         std::move(impl->pending), sig_refresher(impl->sig));
     return impl->sig;
 }
 
@@ -205,18 +203,19 @@ bool verify(const uov::PublicKey& pk, std::span<const uint8_t> msg, const BlindS
     const auto refresher_com = sig_refresher_com(sig);
     const auto refresher = sig_refresher(sig);
 
-    // Line 17
-    const uov::Target h = hash_to_target(pk, sig, msg);
-
-    // Lines 18-19
     Refresher expected_refresher_com;
     commit_to_refresher(expected_refresher_com, refresher);
     if (!std::ranges::equal(expected_refresher_com, refresher_com)) {
         return false;
     }
     auto pending = voleith_vole_reconstruct<RedeemRelation>(proof, nullptr, refresher_com);
-    return pending &&
-           voleith_verify_commit<RedeemRelation>(proof, {&pk, h}, std::move(*pending), refresher);
+    if (!pending) {
+        return false;
+    }
+
+    const uov::Target h = hash_to_target(pk, sig, pending->chal1, msg);
+
+    return voleith_verify_commit<RedeemRelation>(proof, {&pk, h}, std::move(*pending), refresher);
 }
 
 } // namespace vole_mole::pomfrit

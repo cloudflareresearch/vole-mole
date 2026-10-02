@@ -117,6 +117,7 @@ hash_mu(const typename Relation::instance* instance) {
 }
 
 template <typename Relation> struct PendingProof {
+    std::array<uint8_t, relation_params<Relation>::CONSTS::VOLE_CHECK::CHALLENGE_BYTES> chal1;
     faest::hash_state chal2_hasher;
     faest::vole_commit_data<relation_params<Relation>, false> vole_com_data;
     bool delayed_instance;
@@ -225,7 +226,8 @@ voleith_vole_gen(proof_span<Relation> proof_bytes, const typename Relation::inst
         correction[i] = u[i] ^ witness_prefix[i];
     }
 
-    PendingProof<Relation> pending{chal2_hasher, std::move(vole_com_data), delayed_instance, {}};
+    PendingProof<Relation> pending{
+        chal1, chal2_hasher, std::move(vole_com_data), delayed_instance, {}};
     std::ranges::copy(witness_prefix, pending.witness.begin());
     return pending;
 }
@@ -252,7 +254,7 @@ void voleith_prove_commit(proof_span<Relation> proof_bytes,
     static_assert(P::use_crt_vole_masks && P::use_grinding && P::use_v3_hash_inputs,
                   "only the FAEST v3 code path is implemented");
 
-    auto& [hasher, vole_com_data, delayed_instance, witness] = pending;
+    auto& [chal1, hasher, vole_com_data, delayed_instance, witness] = pending;
     const mutable_faest_signature<P> proof = proof_bytes.data();
     std::ranges::copy(witness_suffix, witness.begin() + WITNESS_PREFIX_BYTES<Relation>);
 
