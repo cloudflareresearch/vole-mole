@@ -29,6 +29,7 @@
 #include "dst.hpp"
 #include "keccak/segmented.hpp"
 #include "moussaka/commit.hpp"
+#include "qs_bit.hpp"
 #include "voleith.hpp"
 
 #include "constants.hpp"
@@ -169,11 +170,10 @@ struct IssueRelation {
     static void constraints(QS* qs, const instance& x, std::span<const uint8_t> /* chal2 */) {
         static_assert(QS::max_degree == ISSUE_QS_DEGREE);
         using faest::poly1;
-        using qs_bit = keccak::detail::qs_val<QS, 1>;
 
         // Add bit constraints: Every witness bit is a bit.
         for (size_t i = 0; i < ISSUE_WITNESS_BITS; ++i) {
-            qs->add_bit_constraint(qs_bit(qs->get_witness_bit(i)));
+            qs_add_bit_constraint(qs, qs->get_witness_bit(i));
         }
 
         // Add segment constraints: All but the last segment end in the expected intermediate state.
@@ -184,7 +184,7 @@ struct IssueRelation {
         // Add output constraint: The last segment ends in the commitment. (Only the bits of t are
         // computed in the last round.)
         for (size_t i = 0; i < 8 * uov::M; ++i) {
-            qs->add_constraint(out[i] + poly1((x.t[i / 8] >> (i % 8)) & 1));
+            qs->add_constraint(qs_to_gfsecpar(out[i] + poly1((x.t[i / 8] >> (i % 8)) & 1)));
         }
     }
 };
