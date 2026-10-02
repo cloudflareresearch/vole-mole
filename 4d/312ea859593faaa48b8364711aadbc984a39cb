@@ -1,0 +1,27 @@
+src/moussaka/moussaka.cpp
+  s_e625d996a5d132::t_4d1075f1e035dd 29,31
+src/voleith.hpp
+  s_e625d996a5d132::t_01524cbbf4a0fd 83,121,135,153,164,197,240,265,276,305
+subprojects/packagefiles/faest-arch-opt/0004-Add-a-TurboSHAKE-option.patch
+  s_e625d996a5d132::t_2051a081338735 1-399
+tests/hash/test_hash.cpp
+  s_e625d996a5d132::t_32d85180311d6a 1-150
+tests/voleith/test_voleith.cpp
+  s_e625d996a5d132::t_5e53c2b63637cd 5-6,17,24-32,36-37,40-41,45,49,60,64-75,369-370,372,397-416
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.10",
+  "base_commit_sha": "4d312ea859593faaa48b8364711aadbc984a39cb",
+  "prompts": {},
+  "sessions": {
+    "s_e625d996a5d132": {
+      "agent_id": {
+        "tool": "opencode",
+        "id": "ses_f02d13ceaffel5wAyl2lmXwpL3",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Bas Westerbaan <bas@cloudflare.com>"
+    }
+  }
+}

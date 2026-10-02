@@ -1,0 +1,19 @@
+subprojects/packagefiles/faest-arch-opt/0003-Add-faster-Keccak-x4-backends-for-aarch64.patch
+  s_e625d996a5d132::t_9898dd9852f273 1-180
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.10",
+  "base_commit_sha": "2e86570382b8d514444dc2ce49356d5e866a74af",
+  "prompts": {},
+  "sessions": {
+    "s_e625d996a5d132": {
+      "agent_id": {
+        "tool": "opencode",
+        "id": "ses_f02d13ceaffel5wAyl2lmXwpL3",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Bas Westerbaan <bas@cloudflare.com>"
+    }
+  }
+}
