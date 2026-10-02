@@ -105,7 +105,7 @@ hash_mu(const typename Relation::instance* instance) {
     constexpr auto S = relation_params<Relation>::secpar_v;
     faest::block_2secpar<S> mu;
     faest::hash_state hasher;
-    hasher.init(S);
+    hasher.init(S, relation_params<Relation>::xof_v);
     if (instance) {
         Relation::hash_instance(hasher, *instance);
     }
@@ -165,7 +165,7 @@ voleith_vole_gen(proof_span<Relation> proof_bytes, const typename Relation::inst
     block128 iv_pre;
     {
         std::array<uint8_t, sizeof(seed) + sizeof(iv_pre)> seed_iv_pre;
-        hasher.init(S);
+        hasher.init(S, P::xof_v);
         static_assert(0 < WITNESS_PREFIX_BYTES<Relation> &&
                       WITNESS_PREFIX_BYTES<Relation> <= WITNESS_BYTES<Relation>);
         hasher.update(witness_prefix);
@@ -181,7 +181,7 @@ voleith_vole_gen(proof_span<Relation> proof_bytes, const typename Relation::inst
 
     // iv <- H_4(iv^pre || mu)
     block128 iv;
-    hasher.init(S);
+    hasher.init(S, P::xof_v);
     hasher.update(&iv_pre, sizeof(iv_pre));
     hasher.update(&mu, sizeof(mu));
     hasher.update_byte(4); // domain separator for H_4
@@ -199,7 +199,7 @@ voleith_vole_gen(proof_span<Relation> proof_bytes, const typename Relation::inst
 
     // chal1 <- H_2^1(mu || com || c_1 || ... || c_\tau-1 || c_mult || iv_pre || chal1_binder)
     std::array<uint8_t, CP::VOLE_CHECK::CHALLENGE_BYTES> chal1;
-    hasher.init(S);
+    hasher.init(S, P::xof_v);
     hasher.update(&mu, sizeof(mu));
     hasher.update(vole_commit_check);
     hasher.update(proof.vole_commitment_corrections());
@@ -212,7 +212,7 @@ voleith_vole_gen(proof_span<Relation> proof_bytes, const typename Relation::inst
     // Begin chal2 <- H_2^2(chal1 || \tilde{u} || h_V || [mu] || chal2_binder || d).
     // The optional delayed-instance hash mu, chal2_binder, and d are hashed in the next step.
     hash_state chal2_hasher;
-    chal2_hasher.init(S);
+    chal2_hasher.init(S, P::xof_v);
     chal2_hasher.update(chal1);
     kos_vole_check_sender<P>(
         vole_com_data.u_bytes().template subspan<0, CP::VOLE_CORRECTION_BYTES>(),
@@ -291,7 +291,7 @@ void voleith_prove_commit(proof_span<Relation> proof_bytes,
     // chal3 <- H_2^3(chal2 || \tilde{a}_0 || \tilde{a}_1 || ... || ctr), where ctr is chosen
     // such that the last w_grind bits of chal3 are zero ("grinding").
     hash_state_x4 grinding_hasher;
-    grinding_hasher.init(S);
+    grinding_hasher.init(S, P::xof_v);
     grinding_hasher.update_1(chal2);
     grinding_hasher.update_1(qs_check);
     grinding_hasher.update_1(proof.qs_proof());
@@ -364,7 +364,7 @@ voleith_vole_reconstruct(const_proof_span<Relation> proof_bytes,
 
     // iv <- H_4(iv^pre || mu)
     block128 iv;
-    hasher.init(S);
+    hasher.init(S, P::xof_v);
     hasher.update(proof.iv_pre());
     hasher.update(&mu, sizeof(mu));
     hasher.update_byte(4); // domain separator for H_4
@@ -389,7 +389,7 @@ voleith_vole_reconstruct(const_proof_span<Relation> proof_bytes,
 
     // chal1 <- H_2^1(mu || com || c_1 || ... || c_\tau-1 || c_mult || iv_pre || chal1_binder)
     std::array<uint8_t, CP::VOLE_CHECK::CHALLENGE_BYTES> chal1;
-    hasher.init(S);
+    hasher.init(S, P::xof_v);
     hasher.update(&mu, sizeof(mu));
     hasher.update(vole_commit_check);
     hasher.update(proof.vole_commitment_corrections());
@@ -429,7 +429,7 @@ bool voleith_verify_commit(const_proof_span<Relation> proof_bytes,
     // chal2 <- H_2^2(chal1 || \tilde{u} || h_V || [mu] || chal2_binder || d),
     // where mu is included only for delayed instance binding.
     std::array<uint8_t, CP::QS::CHALLENGE_BYTES> chal2;
-    hasher.init(S);
+    hasher.init(S, P::xof_v);
     hasher.update(chal1);
     kos_vole_check_receiver<P>(delta,
                                vole_com_data.q().template subspan<0, CP::VOLE_CORRECTION_ROWS>(),
@@ -463,7 +463,7 @@ bool voleith_verify_commit(const_proof_span<Relation> proof_bytes,
 
     // chal3 <- H_2^3(chal2 || \tilde{a}_0 || \tilde{a}_1 || ... || ctr)
     block_secpar<S> delta_check;
-    hasher.init(S);
+    hasher.init(S, P::xof_v);
     hasher.update(chal2);
     hasher.update(qs_check);
     hasher.update(proof.qs_proof());

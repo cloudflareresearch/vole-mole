@@ -1,0 +1,577 @@
+Add a TurboSHAKE option
+
+Add a parameter-set option to use TurboSHAKE (RFC 9861) instead of SHAKE for all hashing that
+depends on the parameter set: Fiat-Shamir, VOLECommit (the hash of the leaf commitments and the
+CRT VOLE masks) and grinding. TurboSHAKE is SHAKE with Keccak-p[1600] reduced from 24 to 12
+rounds; we use its default domain separation byte, 0x1F, which matches SHAKE's padding. The default
+is SHAKE, so the FAEST parameter sets are unchanged; TurboSHAKE is not compatible with FAEST.
+
+hash_state and hash_state_x4 take the XOF in init(), defaulting to SHAKE. Code that depends on a
+parameter set passes P::xof_v. The SHAKE-based PRG and leaf hash (leaf_hash::shake, also used for
+the stat-binding leaf hash IV) always use SHAKE.
+
+Build XKCP's TurboSHAKE for the 1-way hash, and instantiate the x4 sponge with
+Keccak-p[1600, 12]x4 for the 4-way hash. Also patch XKCP to use the SHA3 instructions for
+Keccak-p[1600, 12]x2 on ARMv8A, which fallback-on2 uses for Keccak-p[1600, 12]x4.
+
+TODO(cjpatton) Propose this change to faest-arch-opt authors.
+
+diff --git a/faest.inc b/faest.inc
+index 3ca3e1b..3fede69 100644
+--- a/faest.inc
++++ b/faest.inc
+@@ -44,7 +44,7 @@ bool faest_sign(uint8_t* signature_p, const uint8_t* msg, size_t msg_len, const
+ 
+     // mu <- H_2^0(pk || msg)
+     block_2secpar<S> mu;
+-    hasher.init(S);
++    hasher.init(S, P::xof_v);
+     hasher.update(pk_packed, FAEST_PUBLIC_KEY_BYTES<P>);
+     hasher.update(msg, msg_len);
+     hasher.update_byte(8 + 0);
+@@ -55,7 +55,7 @@ bool faest_sign(uint8_t* signature_p, const uint8_t* msg, size_t msg_len, const
+     block128 iv;
+     block128 iv_pre;
+     std::array<uint8_t, sizeof(seed) + sizeof(iv_pre)> seed_iv_pre;
+-    hasher.init(S);
++    hasher.init(S, P::xof_v);
+     hasher.update(&sk.sk, sizeof(sk.sk));
+     hasher.update(&mu, sizeof(mu));
+     if (random_seed) // rho (NB: spec assumes rho is always given and \lambda bit long)
+@@ -66,7 +66,7 @@ bool faest_sign(uint8_t* signature_p, const uint8_t* msg, size_t msg_len, const
+     memcpy(&iv_pre, &seed_iv_pre[sizeof(seed)], sizeof(iv_pre));
+ 
+     // iv <- H_4(iv^pre || mu)
+-    hasher.init(S);
++    hasher.init(S, P::xof_v);
+     hasher.update(&iv_pre, sizeof(iv_pre));
+     if constexpr (P::use_v3_hash_inputs)
+     {
+@@ -99,7 +99,7 @@ bool faest_sign(uint8_t* signature_p, const uint8_t* msg, size_t msg_len, const
+ 
+     // chall_1 <- H_2^1(mu || com || c_1 || ... || c_\tau-1 || iv_pre)
+     std::array<uint8_t, CP::VOLE_CHECK::CHALLENGE_BYTES> chal1;
+-    hasher.init(S);
++    hasher.init(S, P::xof_v);
+     hasher.update(&mu, sizeof(mu));
+     hasher.update(vole_commit_check);
+     hasher.update(signature.vole_commitment_corrections());
+@@ -122,7 +122,7 @@ bool faest_sign(uint8_t* signature_p, const uint8_t* msg, size_t msg_len, const
+ 
+     // chall_2 <- H_2^2(chall_1 || \tilde{u} || h_V || d)
+     std::array<uint8_t, CP::QS::CHALLENGE_BYTES> chal2;
+-    hasher.init(S);
++    hasher.init(S, P::xof_v);
+     hasher.update(chal1);
+ 
+     if constexpr (!P::use_crt_vole_masks)
+@@ -190,7 +190,7 @@ bool faest_sign(uint8_t* signature_p, const uint8_t* msg, size_t msg_len, const
+     if constexpr (!P::use_grinding)
+     {
+         // chall_3 <- H_2^3(chall_2 || \tilde{a}_0 || \tilde{a}_1 || \tilde{a}_2)
+-        hasher.init(S);
++        hasher.init(S, P::xof_v);
+         hasher.update(chal2);
+         hasher.update(qs_check);
+         hasher.update(signature.qs_proof());
+@@ -208,7 +208,7 @@ bool faest_sign(uint8_t* signature_p, const uint8_t* msg, size_t msg_len, const
+         // chall_3 <- H_2^3(chall_2 || \tilde{a}_0 || \tilde{a}_1 || \tilde{a}_2 || ctr)
+         // Initialize a 4x hasher and hash the common input prefix.
+         hash_state_x4 grinding_hasher;
+-        grinding_hasher.init(S);
++        grinding_hasher.init(S, P::xof_v);
+         grinding_hasher.update_1(chal2);
+         grinding_hasher.update_1(qs_check);
+         grinding_hasher.update_1(signature.qs_proof());
+@@ -248,7 +248,7 @@ bool faest_verify(const uint8_t* signature_p, const uint8_t* msg, size_t msg_len
+ 
+     // mu <- H_2^0(pk || msg)
+     block_2secpar<S> mu;
+-    hasher.init(S);
++    hasher.init(S, P::xof_v);
+     hasher.update(pk_packed, FAEST_PUBLIC_KEY_BYTES<P>);
+     hasher.update(msg, msg_len);
+     hasher.update_byte(8 + 0);
+@@ -257,7 +257,7 @@ bool faest_verify(const uint8_t* signature_p, const uint8_t* msg, size_t msg_len
+     block128 iv;
+ 
+     // iv <- H_4(iv^pre || mu || mu || mu || mu || mu || mu || mu || mu || mu)
+-    hasher.init(S);
++    hasher.init(S, P::xof_v);
+     hasher.update(signature.iv_pre());
+     if constexpr (P::use_v3_hash_inputs)
+     {
+@@ -297,7 +297,7 @@ bool faest_verify(const uint8_t* signature_p, const uint8_t* msg, size_t msg_len
+ 
+     // chall_1 <- H_2^1(mu || com || c_1 || ... || c_\tau-1 || iv_pre)
+     std::array<uint8_t, CP::VOLE_CHECK::CHALLENGE_BYTES> chal1;
+-    hasher.init(S);
++    hasher.init(S, P::xof_v);
+     hasher.update(&mu, sizeof(mu));
+     hasher.update(vole_commit_check);
+     hasher.update(signature.vole_commitment_corrections());
+@@ -320,7 +320,7 @@ bool faest_verify(const uint8_t* signature_p, const uint8_t* msg, size_t msg_len
+ 
+     // chall_2 <- H_2^2(chall_1 || \tilde{u} || h_V || d)
+     std::array<uint8_t, CP::QS::CHALLENGE_BYTES> chal2;
+-    hasher.init(S);
++    hasher.init(S, P::xof_v);
+     hasher.update(chal1);
+ 
+     // vole_check_receiver hashes D
+@@ -387,7 +387,7 @@ bool faest_verify(const uint8_t* signature_p, const uint8_t* msg, size_t msg_len
+ 
+     // chall_3' <- H_2^3(chall_2 || \tilde{a}_0 || \tilde{a}_1 || \tilde{a}_2 [|| ctr])
+     block_secpar<S> delta_check;
+-    hasher.init(S);
++    hasher.init(S, P::xof_v);
+     hasher.update(chal2.data(), sizeof(chal2));
+     hasher.update(qs_check.data(), CP::QS::CHECK_BYTES);
+     hasher.update(signature.qs_proof());
+diff --git a/hash.hpp b/hash.hpp
+index 9774a8d..f3a1724 100644
+--- a/hash.hpp
++++ b/hash.hpp
+@@ -10,20 +10,36 @@ extern "C"
+ {
+ #include "sha3/KeccakHash-times4.h"
+ #include <KeccakHash.h>
++#include <TurboSHAKE.h>
+ }
+ 
+ namespace faest
+ {
+ 
++// TurboSHAKE's domain separation byte. 0x1F is the default (RFC 9861), and makes TurboSHAKE the
++// same as SHAKE except for the number of rounds.
++constexpr uint8_t TURBOSHAKE_DOMAIN = 0x1F;
++
+ // TODO: Is the error checking really needed?
+ // Either add it to hash_state_x4, or remove it from hash_state.
+ 
++// hash_state and hash_state_x4 compute SHAKE or TurboSHAKE, as selected by init(), defaulting to
++// SHAKE as in FAEST. Code that depends on a parameter set should pass P::xof_v.
++
+ struct hash_state
+ {
+-    Keccak_HashInstance ctx;
++    union
++    {
++        Keccak_HashInstance ctx;      // SHAKE
++        TurboSHAKE_Instance turbo_ctx; // TurboSHAKE
++    };
++    bool turbo;
+ 
+-    inline int init(secpar s)
++    inline int init(secpar s, xof x = xof::shake)
+     {
++        this->turbo = x == xof::turboshake;
++        if (this->turbo)
++            return TurboSHAKE_Initialize(&this->turbo_ctx, secpar_to_bits(s) <= 128 ? 256 : 512);
+         if (secpar_to_bits(s) <= 128)
+             return Keccak_HashInitialize_SHAKE128(&this->ctx);
+         else
+@@ -37,6 +53,8 @@ struct hash_state
+ 
+     inline int update(const void* input, size_t bytes)
+     {
++        if (this->turbo)
++            return TurboSHAKE_Absorb(&this->turbo_ctx, (const uint8_t*)input, bytes);
+         return Keccak_HashUpdate(&this->ctx, (const uint8_t*)input, bytes * 8);
+     }
+ 
+@@ -49,6 +67,13 @@ struct hash_state
+ 
+     inline int finalize(void* digest, size_t bytes)
+     {
++        if (this->turbo)
++        {
++            int ret = TurboSHAKE_AbsorbDomainSeparationByte(&this->turbo_ctx, TURBOSHAKE_DOMAIN);
++            if (ret)
++                return ret;
++            return TurboSHAKE_Squeeze(&this->turbo_ctx, (uint8_t*)digest, bytes);
++        }
+         int ret = Keccak_HashFinal(&this->ctx, NULL);
+         if (ret != KECCAK_SUCCESS)
+             return ret;
+@@ -59,11 +84,22 @@ struct hash_state
+ // Mostly copied from Picnic: Instances that work with 4 states in parallel.
+ struct hash_state_x4
+ {
+-    Keccak_HashInstance_x4 ctx;
++    union
++    {
++        Keccak_HashInstance_x4 ctx;           // SHAKE
++        TurboSHAKEx4_SpongeInstance turbo_ctx; // TurboSHAKE
++    };
++    bool turbo;
+ 
+-    inline void init(secpar s)
++    inline void init(secpar s, xof x = xof::shake)
+     {
+-        if (secpar_to_bits(s) <= 128)
++        this->turbo = x == xof::turboshake;
++        if (this->turbo)
++        {
++            unsigned int capacity = secpar_to_bits(s) <= 128 ? 256 : 512;
++            TurboSHAKEx4_SpongeInitialize(&this->turbo_ctx, 1600 - capacity, capacity);
++        }
++        else if (secpar_to_bits(s) <= 128)
+             Keccak_HashInitialize_x4_SHAKE128(&this->ctx);
+         else
+             Keccak_HashInitialize_x4_SHAKE256(&this->ctx);
+@@ -73,7 +109,10 @@ struct hash_state_x4
+     {
+         const uint8_t* data_casted[4] = {(const uint8_t*)data[0], (const uint8_t*)data[1],
+                                          (const uint8_t*)data[2], (const uint8_t*)data[3]};
+-        Keccak_HashUpdate_x4(&this->ctx, data_casted, size << 3);
++        if (this->turbo)
++            TurboSHAKEx4_SpongeAbsorb(&this->turbo_ctx, data_casted, size);
++        else
++            Keccak_HashUpdate_x4(&this->ctx, data_casted, size << 3);
+     }
+ 
+     inline void update_4(const void* data0, const void* data1, const void* data2, const void* data3,
+@@ -95,9 +134,9 @@ struct hash_state_x4
+ 
+     inline void update_1_byte(uint8_t b) { this->update_1(&b, 1); }
+ 
+-    inline void init_prefix(secpar s, const uint8_t prefix)
++    inline void init_prefix(secpar s, const uint8_t prefix, xof x = xof::shake)
+     {
+-        this->init(s);
++        this->init(s, x);
+         this->update_1(&prefix, sizeof(prefix));
+     }
+ 
+@@ -105,6 +144,12 @@ struct hash_state_x4
+     {
+         uint8_t* buffer_casted[4] = {(uint8_t*)buffer[0], (uint8_t*)buffer[1], (uint8_t*)buffer[2],
+                                      (uint8_t*)buffer[3]};
++        if (this->turbo)
++        {
++            TurboSHAKEx4_SpongeAbsorbLastFewBits(&this->turbo_ctx, TURBOSHAKE_DOMAIN);
++            TurboSHAKEx4_SpongeSqueeze(&this->turbo_ctx, buffer_casted, buflen);
++            return;
++        }
+         Keccak_HashFinal_x4(&this->ctx, NULL);
+         Keccak_HashSqueeze_x4(&this->ctx, buffer_casted, buflen << 3);
+     }
+@@ -134,7 +179,7 @@ inline void shake_prg_impl(const block_secpar<S>* __restrict__ keys, const block
+         }
+ 
+         hash_state_x4 hasher;
+-        hasher.init(S);
++        hasher.init(S, xof::shake);
+         hasher.update(key_arr, sizeof(keys[i]));
+         hasher.update_1(&iv, sizeof(iv));
+         hasher.update_1(&tweak, sizeof(tweak));
+@@ -145,7 +190,7 @@ inline void shake_prg_impl(const block_secpar<S>* __restrict__ keys, const block
+     for (; i < num_keys; ++i)
+     {
+         hash_state hasher;
+-        hasher.init(S);
++        hasher.init(S, xof::shake);
+         hasher.update(&keys[i], sizeof(keys[i]));
+         hasher.update(&iv, sizeof(iv));
+         hasher.update(&tweak, sizeof(tweak));
+diff --git a/parameters.hpp b/parameters.hpp
+index 3676979..cf56ea2 100644
+--- a/parameters.hpp
++++ b/parameters.hpp
+@@ -176,6 +176,18 @@ enum class bavc
+     one_tree,
+ };
+ 
++// Enum of the supported hash functions (XOFs). FAEST uses SHAKE. TurboSHAKE (RFC 9861) is the same
++// sponge with the default domain separation byte 0x1F (matching SHAKE's padding), but with the
++// Keccak-p[1600] permutation reduced from 24 to 12 rounds, so it is not compatible with FAEST.
++//
++// SHAKE128 or TurboSHAKE128 is used for secpar 128, and SHAKE256 or TurboSHAKE256 otherwise. The
++// SHAKE-based PRG and leaf hash (leaf_hash::shake) always use SHAKE.
++enum class xof
++{
++    shake,
++    turboshake,
++};
++
+ template <secpar S, std::size_t TAU, std::size_t DELTA_BITS, prg TREE_PRG, leaf_hash LEAF_HASH,
+           std::size_t VOLE_WIDTH_SHIFT>
+ struct ggm_forest_bavc;
+@@ -221,10 +233,11 @@ template <typename P> struct CONSTANTS;
+ // - the PRG used for inner nodes in the GGM trees
+ // - the PRG used for leaf nodes of the GGM trees
+ // - number of zero bits in Delta
++// - the hash function used for Fiat-Shamir and inside VOLECommit (see `xof`)
+ template <secpar S, std::size_t TAU, owf OWF, prg VOLE_PRG, prg TREE_PRG = prg::aes_ctr,
+           leaf_hash LEAF_HASH = leaf_hash::shake, std::size_t ZERO_BITS_IN_DELTA = 0,
+           std::pair<bavc, std::size_t> BAVC = {bavc::ggm_forest, 0}, bool CRT_VOLE_MASKS = false,
+-          bool HASH_INPUTS_V3 = false>
++          bool HASH_INPUTS_V3 = false, xof XOF = xof::shake>
+ struct parameter_set
+ {
+     // Values of the template parameters as constants
+@@ -242,6 +255,8 @@ struct parameter_set
+     // use v2 test vectors.
+     constexpr static bool use_v3_hash_inputs = HASH_INPUTS_V3;
+ 
++    constexpr static xof xof_v = XOF;
++
+     // Shorthands for the security parameter in bits and bytes
+     constexpr static std::size_t secpar_bits = secpar_to_bits(S);
+     constexpr static std::size_t secpar_bytes = secpar_to_bytes(S);
+@@ -252,7 +267,7 @@ struct parameter_set
+     // Access to the implementation constants that depend on the parameters
+     using CONSTS =
+         CONSTANTS<parameter_set<S, TAU, OWF, VOLE_PRG, TREE_PRG, LEAF_HASH, ZERO_BITS_IN_DELTA,
+-                                BAVC, CRT_VOLE_MASKS, HASH_INPUTS_V3>>;
++                                BAVC, CRT_VOLE_MASKS, HASH_INPUTS_V3, XOF>>;
+     // Access to the one-way function constants that depend on the parameters
+     using OWF_CONSTS = OWF_CONSTANTS<S, OWF>;
+     static_assert(CONSTS::valid, "CONSTS are invalid");
+diff --git a/sha3/KeccakSponge-times4.c b/sha3/KeccakSponge-times4.c
+index 91f6521..3d394cd 100644
+--- a/sha3/KeccakSponge-times4.c
++++ b/sha3/KeccakSponge-times4.c
+@@ -34,4 +34,16 @@ http://creativecommons.org/publicdomain/zero/1.0/
+     #undef PlSnP_width
+     #undef PlSnP_PermuteAll
+     /* #undef PlSnP_FastLoop_Absorb */
++
++    #define prefix TurboSHAKEx4
++    #define PlSnP KeccakP1600times4
++    #define PlSnP_state KeccakP1600times4_state
++    #define PlSnP_width 1600
++    #define PlSnP_PermuteAll KeccakP1600times4_PermuteAll_12rounds
++        #include "KeccakSponge-times4.inc"
++    #undef prefix
++    #undef PlSnP
++    #undef PlSnP_state
++    #undef PlSnP_width
++    #undef PlSnP_PermuteAll
+ #endif
+diff --git a/sha3/KeccakSponge-times4.h b/sha3/KeccakSponge-times4.h
+index d473d5a..ec85957 100644
+--- a/sha3/KeccakSponge-times4.h
++++ b/sha3/KeccakSponge-times4.h
+@@ -46,6 +46,10 @@ http://creativecommons.org/publicdomain/zero/1.0/
+     XKCP_DeclareSpongeStructure_x4(KeccakWidth1600x4, KeccakP1600times4_states)
+     XKCP_DeclareSpongeFunctions_x4(KeccakWidth1600x4)
+     /* #define XKCP_has_Sponge_Keccak_width1600 */
++
++    /* The same sponge, but with Keccak-p[1600, 12], for TurboSHAKE. */
++    XKCP_DeclareSpongeStructure_x4(TurboSHAKEx4, KeccakP1600times4_states)
++    XKCP_DeclareSpongeFunctions_x4(TurboSHAKEx4)
+ #endif
+ 
+ #endif
+diff --git a/subprojects/packagefiles/0002-Use-SHA3-instructions-for-Keccak-p-1600-12-x2-on-ARMv8A.patch b/subprojects/packagefiles/0002-Use-SHA3-instructions-for-Keccak-p-1600-12-x2-on-ARMv8A.patch
+new file mode 100644
+index 0000000..66990db
+--- /dev/null
++++ b/subprojects/packagefiles/0002-Use-SHA3-instructions-for-Keccak-p-1600-12-x2-on-ARMv8A.patch
+@@ -0,0 +1,93 @@
++Use the SHA3 instructions for Keccak-p[1600, 12]x2 on ARMv8A
++
++With __ARM_FEATURE_SHA3, KeccakP1600times2_PermuteAll_24rounds uses the NEON+SHA3 core from
++mlkem-native, but PermuteAll_12rounds still used the pure-NEON round loop, which is ~2x slower.
++Let the SHA3 core take the number of rounds, and use it for 12 rounds too.
++
++diff --git a/lib/low/KeccakP-1600-times2/ARMv8A/KeccakP-1600-inplace-pl2-armv8a-neon.s b/lib/low/KeccakP-1600-times2/ARMv8A/KeccakP-1600-inplace-pl2-armv8a-neon.s
++index 7798933..b9213b9 100644
++--- a/lib/low/KeccakP-1600-times2/ARMv8A/KeccakP-1600-inplace-pl2-armv8a-neon.s
+++++ b/lib/low/KeccakP-1600-times2/ARMv8A/KeccakP-1600-inplace-pl2-armv8a-neon.s
++@@ -16,8 +16,10 @@
++ #if defined(__ARM_FEATURE_SHA3)
++ #  if defined(__APPLE__)
++ #    define KeccakP1600times2_v84a_permute24_REF _KeccakP1600times2_v84a_permute24
+++#    define KeccakP1600times2_v84a_permute_REF _KeccakP1600times2_v84a_permute
++ #  else
++ #    define KeccakP1600times2_v84a_permute24_REF KeccakP1600times2_v84a_permute24
+++#    define KeccakP1600times2_v84a_permute_REF KeccakP1600times2_v84a_permute
++ #  endif
++ #endif
++ // ---
++@@ -1145,9 +1147,15 @@ KeccakP1600times2_PermuteAll_24rounds:
++ .global _KeccakP1600times2_PermuteAll_12rounds
++ .set _KeccakP1600times2_PermuteAll_12rounds, KeccakP1600times2_PermuteAll_12rounds
++ KeccakP1600times2_PermuteAll_12rounds:
+++#if defined(__ARM_FEATURE_SHA3)
+++    adr     x1, KeccakP1600times2_Permute_RoundConstants12
+++    mov     x2, #12
+++    b       KeccakP1600times2_v84a_permute_REF
+++#else
++     adr     x1, KeccakP1600times2_Permute_RoundConstants12
++     mov     w2, #12
++     b       KeccakP1600times2_PermuteAll
+++#endif
++ 
++ 
++ //----------------------------------------------------------------------------
++diff --git a/lib/low/KeccakP-1600-times2/ARMv8A/KeccakP-1600-times2-x2-v84a-asm.s b/lib/low/KeccakP-1600-times2/ARMv8A/KeccakP-1600-times2-x2-v84a-asm.s
++index af4fced..42b6b54 100644
++--- a/lib/low/KeccakP-1600-times2/ARMv8A/KeccakP-1600-times2-x2-v84a-asm.s
+++++ b/lib/low/KeccakP-1600-times2/ARMv8A/KeccakP-1600-times2-x2-v84a-asm.s
++@@ -24,6 +24,11 @@
++ //
++ // void KeccakP1600times2_v84a_permute24(void *statesAsLanes /*x0*/,
++ //                                       const uint64_t *rc /*x1*/)
+++// void KeccakP1600times2_v84a_permute(void *statesAsLanes /*x0*/,
+++//                                     const uint64_t *rc /*x1*/, size_t nrounds /*x2*/)
+++//
+++// The latter applies the nrounds rounds with constants rc[0..nrounds-1], e.g., the last 12 rounds
+++// of Keccak-f[1600] for Keccak-p[1600, 12] (nrounds > 0).
++ 
++ #if defined(__ARM_FEATURE_SHA3)
++ 
++@@ -39,8 +44,22 @@
++ #if defined(__ELF__)
++ .type XKCP_SYM(KeccakP1600times2_v84a_permute24), %function
++ #endif
+++.global XKCP_SYM(KeccakP1600times2_v84a_permute)
+++#if defined(__ELF__)
+++.type XKCP_SYM(KeccakP1600times2_v84a_permute), %function
+++#endif
++ XKCP_SYM(KeccakP1600times2_v84a_permute24):
+++        .cfi_startproc
+++        mov x2, #0x18               // =24
+++        b XKCP_SYM(KeccakP1600times2_v84a_permute)
+++        .cfi_endproc
++ 
+++#if defined(__ELF__)
+++.size XKCP_SYM(KeccakP1600times2_v84a_permute24), .-XKCP_SYM(KeccakP1600times2_v84a_permute24)
+++#endif
+++
+++.balign 4
+++XKCP_SYM(KeccakP1600times2_v84a_permute):
++         .cfi_startproc
++         sub sp, sp, #0x40
++         .cfi_adjust_cfa_offset 0x40
++@@ -71,7 +90,6 @@ XKCP_SYM(KeccakP1600times2_v84a_permute24):
++         ldp q20, q21, [x0, #0x140]
++         ldp q22, q23, [x0, #0x160]
++         ldr q24, [x0, #0x180]
++-        mov x2, #0x18               // =24
++ 
++ Lkeccak_f1600_x2_v84a_xkcp_loop:
++         eor3 v30.16b, v0.16b, v5.16b, v10.16b
++@@ -177,7 +195,7 @@ Lkeccak_f1600_x2_v84a_xkcp_loop:
++         .cfi_endproc
++ 
++ #if defined(__ELF__)
++-.size XKCP_SYM(KeccakP1600times2_v84a_permute24), .-XKCP_SYM(KeccakP1600times2_v84a_permute24)
+++.size XKCP_SYM(KeccakP1600times2_v84a_permute), .-XKCP_SYM(KeccakP1600times2_v84a_permute)
++ #endif
++ 
++ #endif /* __ARM_FEATURE_SHA3 */
+diff --git a/subprojects/packagefiles/xkcp/meson.build b/subprojects/packagefiles/xkcp/meson.build
+index 7045b31..a51ce3c 100644
+--- a/subprojects/packagefiles/xkcp/meson.build
++++ b/subprojects/packagefiles/xkcp/meson.build
+@@ -5,6 +5,7 @@ keccak_include_dirs = [
+   'lib/common/',
+   'lib/high/Keccak/',
+   'lib/high/Keccak/FIPS202/',
++  'lib/high/TurboSHAKE/',
+   'lib/low/common/',
+   'lib/low/KeccakP-1600/common/',
+ ]
+@@ -12,6 +13,7 @@ keccak_include_dirs = [
+ keccak_sources = [
+   'lib/high/Keccak/FIPS202/KeccakHash.c',
+   'lib/high/Keccak/KeccakSponge.c',
++  'lib/high/TurboSHAKE/TurboSHAKE.c',
+ ]
+ keccak_generic_include_dirs = [
+   'lib/low/KeccakP-1600/plain-64bits/',
+diff --git a/subprojects/xkcp.wrap b/subprojects/xkcp.wrap
+index de54109..393b0df 100644
+--- a/subprojects/xkcp.wrap
++++ b/subprojects/xkcp.wrap
+@@ -4,7 +4,9 @@ revision = eb5244d6b95fb1c434b211bac293093e18aa8fd1
+ depth = 1
+ patch_directory = xkcp
+ 
+-diff_files = 0001-Fix-unaligned-load-in-KeccakP1600times4_AVX2_AddByte.patch
++diff_files =
++  0001-Fix-unaligned-load-in-KeccakP1600times4_AVX2_AddByte.patch,
++  0002-Use-SHA3-instructions-for-Keccak-p-1600-12-x2-on-ARMv8A.patch
+ 
+ [provide]
+ dependency_names = xkcp
+diff --git a/vector_com.cpp b/vector_com.cpp
+index 0b5c177..801cae8 100644
+--- a/vector_com.cpp
++++ b/vector_com.cpp
+@@ -7,7 +7,7 @@ void stat_binding_leaf_hash_iv_impl(secpar secpar_v, const block128& prg_iv, uns
+                                     uint32_t max_tweaks)
+ {
+     hash_state hasher;
+-    hasher.init(secpar_v);
++    hasher.init(secpar_v, xof::shake);
+     hasher.update(&prg_iv, sizeof(prg_iv));
+     hasher.update_byte(0);
+     hasher.finalize(hash_iv, (size_t) max_tweaks * 3 * secpar_to_bytes(secpar_v));
+diff --git a/vole_commit.inc b/vole_commit.inc
+index ea392dd..dcf4fed 100644
+--- a/vole_commit.inc
++++ b/vole_commit.inc
+@@ -25,7 +25,7 @@ namespace faest
+ namespace detail
+ {
+ 
+-template <secpar S>
++template <secpar S, xof XOF>
+ static void hash_hashed_leaves_all_same_size(hash_state* __restrict__ hasher,
+                                              const unsigned char* __restrict__ hashed_leaves,
+                                              size_t num_trees, size_t leaves_total_size)
+@@ -38,7 +38,7 @@ static void hash_hashed_leaves_all_same_size(hash_state* __restrict__ hasher,
+ 
+         block_2secpar<S> leaves_hashes[4];
+         hash_state_x4 leaves_hasher;
+-        leaves_hasher.init(S);
++        leaves_hasher.init(S, XOF);
+         leaves_hasher.update(to_hash, leaves_total_size);
+         leaves_hasher.update_1_byte(1);
+         leaves_hasher.finalize_4(&leaves_hashes[0], &leaves_hashes[1], &leaves_hashes[2],
+@@ -52,7 +52,7 @@ static void hash_hashed_leaves_all_same_size(hash_state* __restrict__ hasher,
+     {
+         block_2secpar<S> leaves_hash;
+         hash_state leaves_hasher;
+-        leaves_hasher.init(S);
++        leaves_hasher.init(S, XOF);
+         leaves_hasher.update(hashed_leaves, leaves_total_size);
+         leaves_hasher.update_byte(1);
+         leaves_hasher.finalize(&leaves_hash, sizeof(leaves_hash));
+@@ -69,10 +69,10 @@ static void hash_hashed_leaves(const unsigned char* __restrict__ hashed_leaves,
+     using VC = P::CONSTS::VEC_COM;
+ 
+     hash_state hasher;
+-    hasher.init(P::secpar_v);
+-    hash_hashed_leaves_all_same_size<P::secpar_v>(&hasher, hashed_leaves, VC::NUM_MAX_K,
++    hasher.init(P::secpar_v, P::xof_v);
++    hash_hashed_leaves_all_same_size<P::secpar_v, P::xof_v>(&hasher, hashed_leaves, VC::NUM_MAX_K,
+                                                   P::leaf_hash_t::hash_len << VC::MAX_K);
+-    hash_hashed_leaves_all_same_size<P::secpar_v>(
++    hash_hashed_leaves_all_same_size<P::secpar_v, P::xof_v>(
+         &hasher, hashed_leaves + P::leaf_hash_t::hash_len * ((size_t)VC::NUM_MAX_K << VC::MAX_K),
+         VC::NUM_MIN_K, P::leaf_hash_t::hash_len << VC::MIN_K);
+     hasher.update_byte(1);
+@@ -370,7 +370,7 @@ void lift_and_hash_vq(
+ 
+     // hash the resulting matrix column-wise
+     hash_state_x4 hasher, hasher_copy;
+-    hasher.init(S);
++    hasher.init(S, P::xof_v);
+     hasher.update_1(&iv, sizeof(iv));
+     std::array<uint32_t, 4> counters = {0, 1, 2, 3};
+     constexpr auto FULL_ITERATIONS = N_MULT / 4;
+@@ -409,7 +409,7 @@ void lift_and_hash_vq(
+     if constexpr (LAST_ITERATIONS > 0)
+     {
+         hash_state hasher, hasher_copy;
+-        hasher.init(S);
++        hasher.init(S, P::xof_v);
+         hasher.update(&iv, sizeof(iv));
+         for (uint32_t e = 0; e < LAST_ITERATIONS; e += 1)
+         {

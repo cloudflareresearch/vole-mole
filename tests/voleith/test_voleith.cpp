@@ -3,8 +3,8 @@
 #include "voleith.hpp" // internal
 
 #include "api.hpp"        // from faest-arch-opt
-#include "faest_keys.hpp" // from faest-arch-opt
-#include "owf_proof.hpp"  // from faest-arch-opt
+#include "faest_keys.inc" // from faest-arch-opt: to instantiate for PTurbo
+#include "owf_proof.inc"  // from faest-arch-opt: to instantiate owf_constraints<PTurbo>
 #include "parameters.hpp" // from faest-arch-opt
 
 #include <gtest/gtest.h>
@@ -16,6 +16,7 @@
 #include <cstring>
 #include <span>
 #include <string_view>
+#include <type_traits>
 #include <utility>
 #include <vector>
 
@@ -23,23 +24,32 @@ namespace {
 
 using P = faest::v3::faest_em_128_f;
 
-// voleith_prove and  voleith_verify are adapted from FAEST. When the relation is FAEST's one-way
-// function (OWF), they should compute and verify FAEST signatures. We check this against a FAEST v3
-// known answer for FAEST-EM-128f, the parameter set our proofs are based on.
-struct FaestRelation {
-    using params = P;
+// FAEST-EM-128f, but with TurboSHAKE instead of SHAKE.
+using PTurbo =
+    faest::parameter_set<P::secpar_v, P::tau_v, P::owf_v, P::vole_prg_v, P::tree_prg_v,
+                         P::leaf_hash_v, P::zero_bits_in_delta_v, {faest::bavc::one_tree, 105},
+                         P::use_crt_vole_masks, P::use_v3_hash_inputs, faest::xof::turboshake>;
+static_assert(P::xof_v == faest::xof::shake);
+static_assert(std::is_same_v<PTurbo::bavc_t, P::bavc_t>);
+static_assert(faest::FAEST_SIGNATURE_BYTES<PTurbo> == faest::FAEST_SIGNATURE_BYTES<P>);
+
+// voleith_prove and  voleith_verify are adapted from FAEST. When the relation is FAEST's
+// one-way function (OWF), they should compute and verify FAEST signatures. We check this
+// against a FAEST v3 known answer for FAEST-EM-128f, the parameter set our proofs are based on.
+template <typename Params> struct FaestRelationT {
+    using params = Params;
 
     struct instance {
-        std::array<uint8_t, faest::FAEST_PUBLIC_KEY_BYTES<P>> pk_packed;
-        faest::public_key<P> pk;
+        std::array<uint8_t, faest::FAEST_PUBLIC_KEY_BYTES<Params>> pk_packed;
+        faest::public_key<Params> pk;
         std::vector<uint8_t> msg;
     };
 
-    static constexpr size_t NUM_CONSTRAINTS = P::OWF_CONSTS::OWF_NUM_CONSTRAINTS;
+    static constexpr size_t NUM_CONSTRAINTS = Params::OWF_CONSTS::OWF_NUM_CONSTRAINTS;
 
     // FAEST derives the prover's seed from the secret key (the OWF key), which is the first
     // secpar_bytes of the extended witness.
-    static constexpr size_t WITNESS_PREFIX_BYTES = P::secpar_bytes;
+    static constexpr size_t WITNESS_PREFIX_BYTES = Params::secpar_bytes;
 
     // FAEST has no domain separator.
     static constexpr std::span<const uint8_t> DST = {};
@@ -50,9 +60,21 @@ struct FaestRelation {
     }
 
     template <typename QS> static void constraints(QS* qs, const instance& x) {
-        faest::owf_constraints<P>(qs, &x.pk);
+        faest::owf_constraints<Params>(qs, &x.pk);
     }
 };
+
+using FaestRelation = FaestRelationT<P>;
+using FaestTurboRelation = FaestRelationT<PTurbo>;
+
+} // namespace
+
+// faest-arch-opt only instantiates owf_constraints for its own parameter sets.
+namespace faest {
+INST_OWF_CONSTRAINTS(PTurbo)
+} // namespace faest
+
+namespace {
 
 constexpr size_t SIG_BYTES = vole_mole::detail::PROOF_BYTES<FaestRelation>;
 constexpr size_t WITNESS_BYTES = vole_mole::detail::WITNESS_BYTES<FaestRelation>;
@@ -347,10 +369,10 @@ const std::array<uint8_t, SIG_BYTES> SIG = {
 };
 // clang-format on
 
-FaestRelation::instance kat_instance() {
-    FaestRelation::instance x{};
+template <typename R = FaestRelation> typename R::instance kat_instance() {
+    typename R::instance x{};
     x.pk_packed = PK;
-    faest::faest_unpack_public_key<P>(&x.pk, PK.data());
+    faest::faest_unpack_public_key<typename R::params>(&x.pk, PK.data());
     x.msg.assign(MSG.begin(), MSG.end());
     return x;
 }
@@ -608,4 +630,24 @@ TEST(ChallengeBinders, FirstPartIsIndependentOfChal2Binder) {
     const Proof proof2 = prove_with_opts(x, {.chal2_binder = CHAL2_BINDER});
     EXPECT_TRUE(std::ranges::equal(first_part(proof), first_part(proof2)));
     EXPECT_FALSE(std::ranges::equal(proof, proof2));
+}
+
+// With TurboSHAKE, our prover and verifier work, but the proof is no longer a FAEST signature.
+TEST(VoleithTurboShake, ProveAndVerify) {
+    using vole_mole::detail::voleith_prove;
+    using vole_mole::detail::voleith_verify;
+
+    std::array<uint8_t, SIG_BYTES> proof{};
+    voleith_prove<FaestTurboRelation>(proof, WITNESS, kat_instance<FaestTurboRelation>(), RHO);
+    EXPECT_TRUE(voleith_verify<FaestTurboRelation>(proof, kat_instance<FaestTurboRelation>()));
+    EXPECT_FALSE(std::ranges::equal(proof, SIG));
+
+    // SHAKE and TurboSHAKE proofs are not interchangeable.
+    EXPECT_FALSE(voleith_verify<FaestRelation>(proof, kat_instance<FaestRelation>()));
+    EXPECT_FALSE(voleith_verify<FaestTurboRelation>(SIG, kat_instance<FaestTurboRelation>()));
+
+    // ... and the proof is bound to the message.
+    auto x = kat_instance<FaestTurboRelation>();
+    x.msg[0] ^= 1;
+    EXPECT_FALSE(voleith_verify<FaestTurboRelation>(proof, x));
 }

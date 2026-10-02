@@ -4,6 +4,7 @@ test_inc = include_directories('.', '../src')
 gtest_dep = dependency('gtest_main', default_options : ['warning_level=0']).as_system()
 
 tests = [
+  ['hash', 'hash/test_hash.cpp'],
   ['keccak', 'keccak/test_keccak.cpp'],
   ['moussaka-issue', 'moussaka/test_issue.cpp'],
   ['moussaka-redeem', 'moussaka/test_redeem.cpp'],

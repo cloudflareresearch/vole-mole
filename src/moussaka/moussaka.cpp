@@ -36,8 +36,9 @@ struct IssueRandomness {
 // Expand `seed` into the issue request randomness.
 IssueRandomness expand_issue_seed(const Seed& seed) {
     static_assert(IssueRelation::params::secpar_v == faest::secpar::s128);
+    // Always SHAKE128 (regardless of IssueParams::xof_v), since we access the SHAKE context below.
     faest::hash_state xof;
-    xof.init(faest::secpar::s128);
+    xof.init(faest::secpar::s128, faest::xof::shake);
     xof.update(MOUSSAKA_ISSUE_SEED_DST);
     xof.update(seed);
 

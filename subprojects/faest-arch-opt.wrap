@@ -6,7 +6,8 @@ depth = 1
 diff_files =
   faest-arch-opt/0001-Support-building-as-a-meson-subproject.patch,
   faest-arch-opt/0002-Allow-up-to-32-CRT-VOLE-masks.patch,
-  faest-arch-opt/0003-Add-faster-Keccak-x4-backends-for-aarch64.patch
+  faest-arch-opt/0003-Add-faster-Keccak-x4-backends-for-aarch64.patch,
+  faest-arch-opt/0004-Add-a-TurboSHAKE-option.patch
 
 [provide]
 faest = faest_dep
