@@ -1,0 +1,25 @@
+src/moussaka/commit.hpp
+  s_3ed3cdefcfb693::t_40fb817ec63e63 1-39
+src/moussaka/issue.hpp
+  s_3ed3cdefcfb693::t_8d406c00f7fbf7 7-10,30-31,44,50-51,61,65-67,80-81,84-86,98-100,171,179-181
+src/keccak/segmented.hpp
+  s_3ed3cdefcfb693::t_2a158b534ab7a7 1-281
+tests/moussaka/test_moussaka.cpp
+  s_3ed3cdefcfb693::t_36c4a3c79d1586 34
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.10",
+  "base_commit_sha": "f25be2fd1071f4a5df84aded598e3d675689501f",
+  "prompts": {},
+  "sessions": {
+    "s_3ed3cdefcfb693": {
+      "agent_id": {
+        "tool": "opencode",
+        "id": "ses_f01dc83d1ffeiX4DGMPGUmM5lC",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Christopher Patton <cpatton@cloudflare.com>"
+    }
+  }
+}
