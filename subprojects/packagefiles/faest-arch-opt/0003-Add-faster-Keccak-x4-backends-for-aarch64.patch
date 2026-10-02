@@ -1,0 +1,180 @@
+Add faster Keccak-p[1600]x4 backends for aarch64
+
+Off x86-64, Keccak-p[1600]x4 used fallback-on1, i.e., four serial plain 64-bit permutations, which
+is about a quarter of the time of VOLEitH proving and verification on Apple M4. Use the AArch64
+code that the pinned XKCP revision already has instead:
+
+* With the ARMv8.4-A SHA3 instructions (e.g., Apple M1 and later), a new fallback-on2 backend
+  that runs two KeccakP-1600-times2/ARMv8A (NEON+SHA3) permutations. On an M4 this is ~2.1x
+  faster than four serial permutations, and ~1.4x faster than the hybrid x4 core.
+* Otherwise, the scalar+NEON hybrid x4 core from KeccakP-1600-times4/ARMv8A (~1.5x faster than
+  four serial permutations; the pure-NEON x2 code is slower than serial without SHA3).
+
+The assembly uses the C preprocessor, which GCC (unlike Clang) does not apply to .s files, so
+build it with -x assembler-with-cpp.
+
+TODO(cjpatton) Propose fallback-on2 and the meson.build change to the XKCP and faest-arch-opt
+authors.
+
+diff --git a/subprojects/packagefiles/xkcp/lib/low/KeccakP-1600-times4/fallback-on2/KeccakP-1600-times4-SnP.h b/subprojects/packagefiles/xkcp/lib/low/KeccakP-1600-times4/fallback-on2/KeccakP-1600-times4-SnP.h
+new file mode 100644
+index 0000000..39078b6
+--- /dev/null
++++ b/subprojects/packagefiles/xkcp/lib/low/KeccakP-1600-times4/fallback-on2/KeccakP-1600-times4-SnP.h
+@@ -0,0 +1,54 @@
++/*
++The Keccak-p permutations, designed by Guido Bertoni, Joan Daemen, Michaël Peeters and Gilles Van Assche.
++
++To the extent possible under law, the implementer has waived all copyright
++and related or neighboring rights to the source code in this file.
++http://creativecommons.org/publicdomain/zero/1.0/
++
++---
++
++Keccak-p[1600]x4 as two Keccak-p[1600]x2 instances, analogous to fallback-on1 (which uses four
++Keccak-p[1600] instances). Any x2 backend can be used. On AArch64 with the SHA3 instructions, two
++x2 permutations are faster than the scalar/NEON hybrid x4 core in KeccakP-1600-times4/ARMv8A.
++
++Please refer to PlSnP-documentation.h for more details.
++*/
++
++#ifndef _KeccakP_1600_times4_SnP_h_
++#define _KeccakP_1600_times4_SnP_h_
++
++#include "KeccakP-1600-times2-SnP.h"
++#include "PlSnP-common.h"
++
++typedef struct {
++    KeccakP1600times2_states states[2];
++} KeccakP1600times4_states;
++
++#define KeccakP1600times4_GetImplementation()       "fallback on times-2 implementation"
++#define KeccakP1600times4_GetFeatures()             PlSnP_Feature_Main
++
++void KeccakP1600times4_StaticInitialize(void);
++void KeccakP1600times4_InitializeAll(KeccakP1600times4_states *states);
++void KeccakP1600times4_AddByte(KeccakP1600times4_states *states, unsigned int instanceIndex, unsigned char data, unsigned int offset);
++void KeccakP1600times4_AddBytes(KeccakP1600times4_states *states, unsigned int instanceIndex, const unsigned char *data, unsigned int offset, unsigned int length);
++void KeccakP1600times4_AddLanesAll(KeccakP1600times4_states *states, const unsigned char *data, unsigned int laneCount, unsigned int laneOffset);
++void KeccakP1600times4_OverwriteBytes(KeccakP1600times4_states *states, unsigned int instanceIndex, const unsigned char *data, unsigned int offset, unsigned int length);
++void KeccakP1600times4_OverwriteLanesAll(KeccakP1600times4_states *states, const unsigned char *data, unsigned int laneCount, unsigned int laneOffset);
++void KeccakP1600times4_OverwriteWithZeroes(KeccakP1600times4_states *states, unsigned int instanceIndex, unsigned int byteCount);
++void KeccakP1600times4_PermuteAll_4rounds(KeccakP1600times4_states *states);
++void KeccakP1600times4_PermuteAll_6rounds(KeccakP1600times4_states *states);
++void KeccakP1600times4_PermuteAll_12rounds(KeccakP1600times4_states *states);
++void KeccakP1600times4_PermuteAll_24rounds(KeccakP1600times4_states *states);
++void KeccakP1600times4_ExtractBytes(const KeccakP1600times4_states *states, unsigned int instanceIndex, unsigned char *data, unsigned int offset, unsigned int length);
++void KeccakP1600times4_ExtractLanesAll(const KeccakP1600times4_states *states, unsigned char *data, unsigned int laneCount, unsigned int laneOffset);
++void KeccakP1600times4_ExtractAndAddBytes(const KeccakP1600times4_states *states, unsigned int instanceIndex,  const unsigned char *input, unsigned char *output, unsigned int offset, unsigned int length);
++void KeccakP1600times4_ExtractAndAddLanesAll(const KeccakP1600times4_states *states, const unsigned char *input, unsigned char *output, unsigned int laneCount, unsigned int laneOffset);
++
++#define KeccakF1600times4_FastLoop_Absorb(...)              0
++#define KeccakP1600times4_12rounds_FastLoop_Absorb(...)     0
++#define KeccakP1600times4_KravatteCompress(...)             0
++#define KeccakP1600times4_KravatteExpand(...)               0
++#define KeccakP1600times4_KT128ProcessLeaves(...)
++#define KeccakP1600times4_KT256ProcessLeaves(...)
++
++#endif
+diff --git a/subprojects/packagefiles/xkcp/lib/low/KeccakP-1600-times4/fallback-on2/KeccakP-1600-times4-on2.c b/subprojects/packagefiles/xkcp/lib/low/KeccakP-1600-times4/fallback-on2/KeccakP-1600-times4-on2.c
+new file mode 100644
+index 0000000..6b39710
+--- /dev/null
++++ b/subprojects/packagefiles/xkcp/lib/low/KeccakP-1600-times4/fallback-on2/KeccakP-1600-times4-on2.c
+@@ -0,0 +1,34 @@
++/*
++The Keccak-p permutations, designed by Guido Bertoni, Joan Daemen, Michaël Peeters and Gilles Van Assche.
++
++To the extent possible under law, the implementer has waived all copyright
++and related or neighboring rights to the source code in this file.
++http://creativecommons.org/publicdomain/zero/1.0/
++
++---
++
++This file implements Keccak-p[1600]x4 in a PlSnP-compatible way, on top of a Keccak-p[1600]x2
++implementation.
++Please refer to PlSnP-documentation.h for more details.
++
++This implementation comes with KeccakP-1600-times4-SnP.h in the same folder.
++*/
++
++#include "KeccakP-1600-times2-SnP.h"
++#include "KeccakP-1600-times4-SnP.h"
++
++#define prefix                          KeccakP1600times4
++#define PlSnP_baseParallelism           2
++#define PlSnP_targetParallelism         4
++#define SnP_laneLengthInBytes           8
++#define SnP                             KeccakP1600times2
++#define SnP_PermuteAll                  KeccakP1600times2_PermuteAll_24rounds
++#define SnP_PermuteAll_12rounds         KeccakP1600times2_PermuteAll_12rounds
++#define SnP_PermuteAll_6rounds          KeccakP1600times2_PermuteAll_6rounds
++#define SnP_PermuteAll_4rounds          KeccakP1600times2_PermuteAll_4rounds
++#define PlSnP_PermuteAll                KeccakP1600times4_PermuteAll_24rounds
++#define PlSnP_PermuteAll_12rounds       KeccakP1600times4_PermuteAll_12rounds
++#define PlSnP_PermuteAll_6rounds        KeccakP1600times4_PermuteAll_6rounds
++#define PlSnP_PermuteAll_4rounds        KeccakP1600times4_PermuteAll_4rounds
++
++#include "PlSnP-Fallback.inc"
+diff --git a/subprojects/packagefiles/xkcp/meson.build b/subprojects/packagefiles/xkcp/meson.build
+index 0477dc3..7045b31 100644
+--- a/subprojects/packagefiles/xkcp/meson.build
++++ b/subprojects/packagefiles/xkcp/meson.build
+@@ -22,6 +22,7 @@ keccak_generic_sources = [
+   'lib/low/KeccakP-1600/plain-64bits/KeccakP-1600-opt64.c',
+   'lib/low/KeccakP-1600-times4/fallback-on1/KeccakP-1600-times4-on1.c',
+ ]
++keccak_asm_sources = []
+ keccak_avx2_include_dirs = [
+   'lib/low/KeccakP-1600/AVX2/',
+   'lib/low/KeccakP-1600/AVX2/SnP/',
+@@ -39,13 +40,48 @@ if host_machine.cpu_family() == 'x86_64'
+   add_project_arguments('-march=native', '-mtune=native', language : 'c')
+   keccak_include_dirs += keccak_avx2_include_dirs
+   keccak_sources += keccak_avx2_sources
++elif host_machine.cpu_family() == 'aarch64'
++  # Keccak-p[1600]: plain 64-bit C. Keccak-p[1600]x4: with the ARMv8.4-A SHA3 instructions, two
++  # NEON+SHA3 x2 permutations; without them, the scalar+NEON hybrid x4 core (which is faster than
++  # pure-NEON x2). Both are faster than four serial permutations (fallback-on1).
++  keccak_include_dirs += [
++    'lib/low/KeccakP-1600/plain-64bits/',
++    'lib/low/KeccakP-1600/plain-64bits/SnP/',
++  ]
++  keccak_sources += 'lib/low/KeccakP-1600/plain-64bits/KeccakP-1600-opt64.c'
++  if meson.get_compiler('c').get_define('__ARM_FEATURE_SHA3') != ''
++    keccak_include_dirs += [
++      'lib/low/KeccakP-1600-times2/ARMv8A/',
++      'lib/low/KeccakP-1600-times4/fallback-on2/',
++    ]
++    keccak_sources += [
++      'lib/low/KeccakP-1600-times2/ARMv8A/KeccakP-1600-times2-armv8a-neon.c',
++      'lib/low/KeccakP-1600-times4/fallback-on2/KeccakP-1600-times4-on2.c',
++    ]
++    keccak_asm_sources += [
++      'lib/low/KeccakP-1600-times2/ARMv8A/KeccakP-1600-inplace-pl2-armv8a-neon.s',
++      'lib/low/KeccakP-1600-times2/ARMv8A/KeccakP-1600-times2-x2-v84a-asm.s',
++    ]
++  else
++    keccak_include_dirs += 'lib/low/KeccakP-1600-times4/ARMv8A/'
++    keccak_sources += 'lib/low/KeccakP-1600-times4/ARMv8A/KeccakP-1600-times4-armv8a.c'
++    keccak_asm_sources += 'lib/low/KeccakP-1600-times4/ARMv8A/KeccakP-1600-times4-x4-v8a-asm.s'
++  endif
+ else
+   keccak_include_dirs += keccak_generic_include_dirs
+   keccak_sources += keccak_generic_sources
+ endif
+ 
++# Assembly that needs the C preprocessor. Clang preprocesses .s files anyway, but GCC doesn't.
++keccak_asm_libs = []
++if keccak_asm_sources.length() > 0
++  keccak_asm_libs += static_library('xkcp-asm', keccak_asm_sources,
++    c_args : ['-x', 'assembler-with-cpp'])
++endif
++
+ xkcp_lib = static_library('xkcp', keccak_sources,
+-  include_directories : keccak_include_dirs)
++  include_directories : keccak_include_dirs,
++  link_whole : keccak_asm_libs)
+ 
+ xkcp_dep = declare_dependency(
+   include_directories : keccak_include_dirs,
