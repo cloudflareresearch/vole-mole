@@ -518,11 +518,17 @@ TEST(PartialWitness, CommitAndProvePreservesFirstPart) {
     Proof proof{};
     auto pending = vole_mole::detail::voleith_vole_gen<FaestRelation>(
         proof, nullptr, std::span(WITNESS).first<WITNESS_PREFIX_BYTES>(), RHO);
+    const auto chal1 = pending.chal1;
     const auto before = first_part(proof);
     vole_mole::detail::voleith_prove_commit<FaestRelation>(
         proof, x, std::span(WITNESS).last<WITNESS_SUFFIX_BYTES>(), std::move(pending));
     EXPECT_TRUE(std::ranges::equal(before, first_part(proof)));
     EXPECT_TRUE(verify_with_opts(proof, x));
+
+    const auto reconstructed =
+        vole_mole::detail::voleith_vole_reconstruct<FaestRelation>(proof, nullptr);
+    ASSERT_TRUE(reconstructed.has_value());
+    EXPECT_EQ(chal1, reconstructed->chal1);
 }
 
 // The correction of the witness prefix, written in the first step, is checked by the verifier.
