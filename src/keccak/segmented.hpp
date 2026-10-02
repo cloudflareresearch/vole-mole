@@ -33,6 +33,7 @@
 #include "vole_mole/keccak.hpp"
 
 #include "keccak/circuit.hpp"
+#include "qs_bit.hpp"
 
 #include "polynomials.hpp" // from faest-arch-opt
 #include "quicksilver.hpp" // from faest-arch-opt
@@ -51,6 +52,9 @@ using vole_mole::detail::keccak_iota_chi_inverse;
 using vole_mole::detail::keccak_round;
 using vole_mole::detail::keccak_theta_rho_pi;
 using vole_mole::detail::keccak_theta_rho_pi_inverse;
+using vole_mole::detail::qs_bit;
+using vole_mole::detail::qs_mul;
+using vole_mole::detail::qs_to_gfsecpar;
 
 // A segment of the permutation that ends in a committed state: `forward` rounds forward from the
 // previous state (the input or a committed state) meet `backward` rounds backward from the
@@ -114,25 +118,21 @@ inline void encode_committed_states(std::span<uint8_t, COMMITTED_STATES_BYTES> o
     }
 }
 
-// A QuickSilver-committed value of degree `deg`.
-//
-// Keccak state bits are GF(2) values, but we represent them as elements of GF(2^128)
-// (`quicksilver_gfsecpar`) rather than GF(2) (`quicksilver_gf2`): faest-arch-opt only implements
-// products of `quicksilver_gf2` values for the verifier and for degree-0 operands, since FAEST
-// itself never multiplies two GF(2) values of positive degree.
+// A QuickSilver-committed value in GF(2^128) of degree `deg`.
 template <typename QS, size_t deg> using qs_val = faest::quicksilver_gfsecpar<QS, deg>;
 
-// The committed bits of a Keccak-p[800] state, of degree `deg`.
-template <typename QS, size_t deg = 1> using QsState = std::vector<qs_val<QS, deg>>;
+// The committed bits of a Keccak-p[800] state, of degree `deg`. (Keccak state bits are GF(2)
+// values, so we represent them as qs_bit rather than qs_val; see qs_bit.hpp.)
+template <typename QS, size_t deg = 1> using QsState = std::vector<qs_bit<QS, deg>>;
 
 // One Keccak round: degree d in, degree 2d out.
 template <typename QS, size_t d>
 QsState<QS, 2 * d> qs_keccak_round(const QsState<QS, d>& in, size_t round) {
-    const auto chi = [](const qs_val<QS, d>& a, const qs_val<QS, d>& b, const qs_val<QS, d>& c) {
+    const auto chi = [](const qs_bit<QS, d>& a, const qs_bit<QS, d>& b, const qs_bit<QS, d>& c) {
         // a ^ (~b & c) = a + (b + 1) * c
-        return qs_val<QS, 2 * d>(a) + (b + faest::poly1(1)) * c;
+        return qs_bit<QS, 2 * d>(a) + qs_mul<QS, d, d>(b + faest::poly1(1), c);
     };
-    const auto add_one = [](const qs_val<QS, 2 * d>& x) { return x + faest::poly1(1); };
+    const auto add_one = [](const qs_bit<QS, 2 * d>& x) { return x + faest::poly1(1); };
     return keccak_round(in, round, chi, add_one);
 }
 
@@ -150,13 +150,15 @@ auto qs_keccak_rounds(const QsState<QS, d>& in, size_t first_round) {
 // Inverse of chi and iota of one Keccak round: degree d in, degree 3d out.
 template <typename QS, size_t d>
 QsState<QS, 3 * d> qs_keccak_iota_chi_inverse(const QsState<QS, d>& in, size_t round) {
-    const auto chi_inv = [](const qs_val<QS, d>& a, const qs_val<QS, d>& b, const qs_val<QS, d>& c,
-                            const qs_val<QS, d>& dd, const qs_val<QS, d>& e) {
+    const auto chi_inv = [](const qs_bit<QS, d>& a, const qs_bit<QS, d>& b, const qs_bit<QS, d>& c,
+                            const qs_bit<QS, d>& dd, const qs_bit<QS, d>& e) {
         // a ^ (~b & (c ^ (~d & e))) = a + (b + 1) * (c + (d + 1) * e)
-        return qs_val<QS, 3 * d>(a) +
-               (b + faest::poly1(1)) * (qs_val<QS, 2 * d>(c) + (dd + faest::poly1(1)) * e);
+        return qs_bit<QS, 3 * d>(a) +
+               qs_mul<QS, d, 2 * d>(b + faest::poly1(1),
+                                    qs_bit<QS, 2 * d>(c) +
+                                        qs_mul<QS, d, d>(dd + faest::poly1(1), e));
     };
-    const auto add_one = [](const qs_val<QS, d>& x) { return x + faest::poly1(1); };
+    const auto add_one = [](const qs_bit<QS, d>& x) { return x + faest::poly1(1); };
     return keccak_iota_chi_inverse(in, round, chi_inv, add_one);
 }
 
@@ -181,6 +183,10 @@ auto qs_keccak_rounds_inverse_partial(const QsState<QS, d>& in, size_t end_round
 template <size_t deg, typename QS, size_t d> qs_val<QS, deg> qs_lift(const qs_val<QS, d>& x) {
     static_assert(d <= deg);
     return qs_val<QS, deg>(x);
+}
+template <size_t deg, typename QS, size_t d> qs_bit<QS, deg> qs_lift(const qs_bit<QS, d>& x) {
+    static_assert(d <= deg);
+    return qs_bit<QS, deg>(x);
 }
 
 // Map of the index of each byte of a Keccak-p[800] input to its index in the witness. Index is -1
@@ -243,7 +249,7 @@ void segment_constraint(QS* qs, QsState<QS>& state, size_t wit_off_states) {
     const auto fwd = qs_keccak_rounds<QS, seg.forward>(state, SEGMENT_START[k]);
     if constexpr (seg.backward == 0) {
         for (size_t i = 0; i < KP800_STATE_BITS; ++i) {
-            qs->add_constraint(qs_lift<deg>(fwd[i]) + qs_lift<deg>(next[i]));
+            qs->add_constraint(qs_to_gfsecpar(qs_lift<deg>(fwd[i]) + qs_lift<deg>(next[i])));
         }
     } else {
         // Meet after the linear layer of round SEGMENT_START[k] + seg.forward.
@@ -251,7 +257,7 @@ void segment_constraint(QS* qs, QsState<QS>& state, size_t wit_off_states) {
         const auto bwd =
             qs_keccak_rounds_inverse_partial<QS, seg.backward>(next, SEGMENT_START[k + 1]);
         for (size_t i = 0; i < KP800_STATE_BITS; ++i) {
-            qs->add_constraint(qs_lift<deg>(lin[i]) + qs_lift<deg>(bwd[i]));
+            qs->add_constraint(qs_to_gfsecpar(qs_lift<deg>(lin[i]) + qs_lift<deg>(bwd[i])));
         }
     }
     state = std::move(next);
@@ -282,9 +288,9 @@ QsState<QS, OUTPUT_DEGREE> qs_keccak(QS* qs, QsState<QS> state, size_t wit_off_s
 // UOV public map evaluation.
 template <typename QS, size_t deg>
 qs_val<QS, deg> qs_byte(const QsState<QS, deg>& state, size_t k) {
-    qs_val<QS, deg> out = state[8 * k];
+    qs_val<QS, deg> out = qs_to_gfsecpar(state[8 * k]);
     for (size_t j = 1; j < 8; ++j) {
-        out += state[8 * k + j] *
+        out += qs_to_gfsecpar(state[8 * k + j]) *
                faest::poly_secpar<QS::secpar_v>::from_8_byte(static_cast<uint8_t>(1u << j));
     }
     return out;
