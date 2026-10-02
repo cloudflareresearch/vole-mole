@@ -32,6 +32,8 @@ constexpr Dst make_dst(const char (&protocol)[5], uint8_t version, char purpose,
 constexpr Dst MOUSSAKA_COM_DST = make_dst("mous", moussaka::VERSION, 'c', '0');
 constexpr Dst MOUSSAKA_ISSUE_PROOF_DST = make_dst("mous", moussaka::VERSION, 'i', '0');
 constexpr Dst MOUSSAKA_ISSUE_SEED_DST = make_dst("mous", moussaka::VERSION, 's', '0');
+constexpr Dst MOUSSAKA_REDEEM_PROOF_DST = make_dst("mous", moussaka::VERSION, 'r', '0');
+constexpr Dst MOUSSAKA_REDEEM_SEED_DST = make_dst("mous", moussaka::VERSION, 's', '1');
 
 // PomFRIT
 constexpr Dst POMFRIT_PROOF_DST = make_dst("pomf", pomfrit::VERSION, 'p', '0'); // VOLEitH relation
@@ -42,8 +44,9 @@ constexpr Dst POMFRIT_TARGET_DST = make_dst("pomf", pomfrit::VERSION, 'h', '0');
 constexpr bool dsts_are_distinct() {
     // Every DST must be distinct. Add new DSTs to this list.
     std::array all = {
-        MOUSSAKA_COM_DST,      MOUSSAKA_ISSUE_PROOF_DST, MOUSSAKA_ISSUE_SEED_DST, POMFRIT_PROOF_DST,
-        POMFRIT_REFRESHER_DST, POMFRIT_SEED_DST,         POMFRIT_TARGET_DST,
+        MOUSSAKA_COM_DST,          MOUSSAKA_ISSUE_PROOF_DST, MOUSSAKA_ISSUE_SEED_DST,
+        MOUSSAKA_REDEEM_PROOF_DST, MOUSSAKA_REDEEM_SEED_DST, POMFRIT_PROOF_DST,
+        POMFRIT_REFRESHER_DST,     POMFRIT_SEED_DST,         POMFRIT_TARGET_DST,
     };
     bool distinct = true;
     for (size_t i = 0; i < all.size(); ++i) {

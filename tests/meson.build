@@ -6,6 +6,7 @@ gtest_dep = dependency('gtest_main', default_options : ['warning_level=0']).as_s
 tests = [
   ['keccak', 'keccak/test_keccak.cpp'],
   ['moussaka-issue', 'moussaka/test_issue.cpp'],
+  ['moussaka-redeem', 'moussaka/test_redeem.cpp'],
   ['moussaka', 'moussaka/test_moussaka.cpp'],
   ['pomfrit', 'pomfrit/test_pomfrit.cpp'],
   ['uov', 'uov/test_uov.cpp'],

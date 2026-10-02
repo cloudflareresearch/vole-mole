@@ -11,6 +11,20 @@ Implementation of the post-quantum candidates for [MoLE][mole] crypto:
 
 VOLEitH comes from [faest-arch-opt][arch-opt]; UOV comes from [pqov][pqov].
 
+The Moussaka API is in [`include/vole_mole/moussaka.hpp`](include/vole_mole/moussaka.hpp). It
+implements issuance (`issue_request`, `issue_response`, `PendingToken::finalize_issue`) and
+redemption (`Token::redeem_request`, `finalize_redeem`) as specified in the draft; Anchor keys are UOV keys (see
+[`include/vole_mole/uov.hpp`](include/vole_mole/uov.hpp)). Implementation choices:
+
+* The redemption witness has a fixed length, so the Anchor Set holds at most
+  `MAX_ANCHORS` (64) keys. The issuance proof is 7272 bytes and the redemption
+  proof is 8751 bytes.
+* The selector vector `b` is committed as bits rather than elements of `F_q`.
+  This lets us check `Q(s) = Com(nf, ctx_iss, ctx_red, r)` as
+  `sum_u b[u] * P[u](s)` without expanding `Q`.
+* The `challenge_digest` binding mentioned in the draft's TODO isn't
+  implemented yet.
+
 ## Building
 
 Requirements: [Meson][meson] >= 1.4, Ninja, Python 3, and a compiler with good
