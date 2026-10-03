@@ -31,6 +31,7 @@ IssueRequestResult make_request(const Seed& seed = SEED) {
 
 TEST(IssueRequest, WitnessIsConsistent) {
     using namespace moussaka::detail;
+    using namespace keccak::detail;
     const auto w = encode_issue_witness(NF, CTX_ISS, CTX_RED, R);
 
     // Re-run the last segment from the last committed state; it must yield the commitment.
