@@ -192,6 +192,7 @@ static_assert(ISSUE_PROOF_BYTES == PROOF_BYTES<IssueRelation>,
               "ISSUE_PROOF_BYTES is out of sync with faest-arch-opt");
 
 using IssueProof = std::span<uint8_t, ISSUE_PROOF_BYTES>;
+using ConstIssueProof = std::span<const uint8_t, ISSUE_PROOF_BYTES>;
 
 // Compute the issuance proof pf_iss that t = Com(nf, ctx_iss, ctx_red, r), where t and ctx_iss
 // are public. `rho` is randomness for the VOLEitH prover (see `voleith_prove`).
@@ -205,16 +206,10 @@ inline void prove_issue_request(IssueProof pf_iss, const Commitment& t, const Nu
     voleith_prove<IssueRelation>(pf_iss, witness, {t, ctx_iss}, rho);
 }
 
-// Check that the issue request commits to the given issuance context, i.e., verify the issuance
-// proof (steps 1-3 of IssueResponse).
-//
-// This is `inline` in an internal header, rather than part of the public API, so that it's only
-// compiled into the code that uses it (currently just the tests).
-inline bool verify_issue_request(const IssueRequest& request, const Context& ctx_iss) {
-    Commitment t;
-    std::ranges::copy(std::span(request).first<uov::M>(), t.begin());
-    return voleith_verify<IssueRelation>(std::span(request).last<ISSUE_PROOF_BYTES>(),
-                                         {t, ctx_iss});
+// Verify the issuance proof pf_iss that t commits to ctx_iss.
+inline bool verify_issue_proof(ConstIssueProof pf_iss, const Commitment& t,
+                               const Context& ctx_iss) {
+    return voleith_verify<IssueRelation>(pf_iss, {t, ctx_iss});
 }
 
 } // namespace vole_mole::moussaka::detail

@@ -276,6 +276,20 @@ QsState<QS, OUTPUT_DEGREE> qs_keccak(QS* qs, QsState<QS> state, size_t wit_off_s
     return qs_keccak_rounds<QS, FINAL_ROUNDS>(state, SEGMENT_START[NUM_COMMITTED_STATES]);
 }
 
+// Combine bits 8k .. 8k + 8 of a committed state into an element of the GF(256) subfield of
+// GF(2^128), with bit j of the byte as the coefficient of x^j. This is the same embedding as
+// `load_witness_8_bits_and_combine` and uov::detail::embed, so the result can be compared with a
+// UOV public map evaluation.
+template <typename QS, size_t deg>
+qs_val<QS, deg> qs_byte(const QsState<QS, deg>& state, size_t k) {
+    qs_val<QS, deg> out = state[8 * k];
+    for (size_t j = 1; j < 8; ++j) {
+        out += state[8 * k + j] *
+               faest::poly_secpar<QS::secpar_v>::from_8_byte(static_cast<uint8_t>(1u << j));
+    }
+    return out;
+}
+
 } // namespace vole_mole::keccak::detail
 
 #endif
