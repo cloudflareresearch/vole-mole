@@ -137,6 +137,10 @@ template <size_t deg> struct faest::quicksilver_gf2<vole_mole::test::PlainQS, de
 
     quicksilver_gf2 operator+(const quicksilver_gf2& o) const { return quicksilver_gf2(v != o.v); }
     quicksilver_gf2 operator+(faest::poly1 c) const { return quicksilver_gf2(v != (c.data != 0)); }
+    template <typename T> quicksilver_gf2& operator+=(const T& o) {
+        *this = *this + o;
+        return *this;
+    }
 };
 
 // Plaintext stand-in for a QuickSilver value of degree `deg`. The degree is only tracked by the
