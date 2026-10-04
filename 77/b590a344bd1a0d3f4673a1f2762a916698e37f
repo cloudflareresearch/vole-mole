@@ -1,0 +1,21 @@
+src/moussaka/issue.hpp
+  s_e625d996a5d132::t_421c6efa9dcece 177-178,188
+tests/test.hpp
+  s_e625d996a5d132::t_73691be50f69b2 110,126,132-133,136,138-139,144,167,178-179,201,203
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.10",
+  "base_commit_sha": "77b590a344bd1a0d3f4673a1f2762a916698e37f",
+  "prompts": {},
+  "sessions": {
+    "s_e625d996a5d132": {
+      "agent_id": {
+        "tool": "opencode",
+        "id": "ses_f02d13ceaffel5wAyl2lmXwpL3",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Bas Westerbaan <bas@cloudflare.com>"
+    }
+  }
+}
