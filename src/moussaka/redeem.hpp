@@ -1,6 +1,6 @@
 // QuickSilver constraints for the redemption proof:
 //
-//   Instance: P[0], ..., P[N-1] (Anchor Set) where N < MAX_ANCHORS, nf (nullifier), ctx_iss
+//   Instance: P[0], ..., P[N-1] (Anchor Set) where N <= MAX_ANCHORS, nf (nullifier), ctx_iss
 //             (issuance context), ctx_red (redemption context)
 //   Witness:  r (opening), s (UOV preimage), b (selector)
 //   Constraints:
