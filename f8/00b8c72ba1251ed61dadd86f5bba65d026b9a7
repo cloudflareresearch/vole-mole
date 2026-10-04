@@ -1,0 +1,23 @@
+src/uov/circuit.hpp
+  s_ce416607fc8043::t_54a5518ce81b23 19,25-30,72-73,75-76,114-386
+tests/uov/bench_uov.cpp
+  s_ce416607fc8043::t_b29ef968d01e4e 3-4,7-9,12,14,73-118
+tests/uov/test_uov.cpp
+  s_ce416607fc8043::t_be96b2128a3bac 23,230-314
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.10",
+  "base_commit_sha": "f800b8c72ba1251ed61dadd86f5bba65d026b9a7",
+  "prompts": {},
+  "sessions": {
+    "s_ce416607fc8043": {
+      "agent_id": {
+        "tool": "opencode",
+        "id": "ses_ef9def7deffeOdDpRxuCQfnl1B",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Bas Westerbaan <bas@cloudflare.com>"
+    }
+  }
+}
