@@ -43,6 +43,7 @@
 #include "keccak/segmented.hpp"
 #include "moussaka/commit.hpp"
 #include "qs_bit.hpp"
+#include "qs_gf256.hpp"
 #include "uov/circuit.hpp"
 #include "uov/public_key.hpp"
 #include "voleith.hpp"
@@ -237,9 +238,9 @@ struct RedeemRelation {
             REDEEM_WIT_OFF_STATES);
 
         // Compute Q(s) = sum_u b[u] * P[u](s).
-        std::array<qs_1, uov::N> s;
+        std::array<vole_mole::detail::qs_gf256<QS, 1>, uov::N> s;
         for (size_t i = 0; i < uov::N; ++i) {
-            s[i] = qs->load_witness_8_bits_and_combine(8 * (REDEEM_WIT_OFF_S + i));
+            s[i] = vole_mole::detail::qs_load_gf256(qs, 8 * (REDEEM_WIT_OFF_S + i));
         }
         std::array<qs_3, uov::M> q;
         q.fill(qs_3(poly1(0), qs));

@@ -17,6 +17,7 @@
 
 #include "dst.hpp"
 #include "qs_bit.hpp"
+#include "qs_gf256.hpp"
 #include "uov/circuit.hpp"
 #include "uov/public_key.hpp"
 #include "voleith.hpp"
@@ -115,9 +116,9 @@ struct RedeemRelation {
         }
 
         // Evaluate P(s).
-        std::array<qs_1, uov::N> s;
+        std::array<qs_gf256<QS, 1>, uov::N> s;
         for (size_t i = 0; i < uov::N; ++i) {
-            s[i] = qs->load_witness_8_bits_and_combine(8 * (WIT_OFF_S + i));
+            s[i] = qs_load_gf256(qs, 8 * (WIT_OFF_S + i));
         }
         const auto p = uov::detail::qs_eval_public_map<QS>(*x.pk, s);
 

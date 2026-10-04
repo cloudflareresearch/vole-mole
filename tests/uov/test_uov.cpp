@@ -20,6 +20,7 @@ extern "C" {
 #include <array>
 #include <cstddef>
 #include <cstdint>
+#include <cstring>
 #include <random>
 #include <span>
 #include <type_traits>
@@ -191,9 +192,9 @@ void expect_circuit_eval(const uov::PublicKey& pk, const uov::Preimage& s,
     std::array<uint8_t, faest::QS_CONSTANTS<faest::secpar::s128, 2>::CHALLENGE_BYTES> challenge{};
     const QS qs(s.data(), macs.data(), uov::M, challenge.data());
 
-    std::array<uov::detail::qs_val<QS, 1>, uov::N> s_committed;
+    std::array<vole_mole::detail::qs_gf256<QS, 1>, uov::N> s_committed;
     for (size_t i = 0; i < uov::N; ++i) {
-        s_committed[i] = qs.load_witness_8_bits_and_combine(8 * i);
+        s_committed[i] = vole_mole::detail::qs_load_gf256(&qs, 8 * i);
     }
     const auto p = uov::detail::qs_eval_public_map<QS>(pk, s_committed);
     for (size_t k = 0; k < uov::M; ++k) {
@@ -223,6 +224,52 @@ TEST(UovCircuit, CircuitEvalPublicMapMatchesPlaintext) {
         }
         for (const uov::Preimage& s : points) {
             expect_circuit_eval(*public_key, s, public_key->eval(s));
+        }
+    }
+}
+
+// The prover's specialized evaluation of the public map computes the same MAC polynomials as the
+// generic one, for arbitrary VOLE tags.
+TEST(UovCircuit, ProverEvalPublicMapMatchesGeneric) {
+    using QS = faest::quicksilver_state<faest::secpar::s128, false, 2>;
+    const auto& [pk, sk] = uov_key_pair();
+    const UovKeyPair other(uov::SecretKey{filled<uov::SECRET_KEY_BYTES>(0x61)});
+    std::mt19937 rng(1); // fixed seed, so that failures are reproducible
+    for (const uov::PublicKey* public_key : {&pk, &other.pk}) {
+        for (int n = 0; n < 4; ++n) {
+            uov::Preimage s;
+            for (uint8_t& b : s) {
+                b = static_cast<uint8_t>(rng());
+            }
+            if (n == 0) {
+                s = sk.derive_preimage(T);
+            }
+            std::vector<faest::block_secpar<faest::secpar::s128>> macs(8 * uov::N);
+            for (auto& mac : macs) {
+                std::array<uint8_t, sizeof(mac)> bytes;
+                for (uint8_t& b : bytes) {
+                    b = static_cast<uint8_t>(rng());
+                }
+                std::memcpy(&mac, bytes.data(), sizeof(mac));
+            }
+            std::array<uint8_t, faest::QS_CONSTANTS<faest::secpar::s128, 2>::CHALLENGE_BYTES>
+                challenge{};
+            const QS qs(s.data(), macs.data(), uov::M, challenge.data());
+
+            std::array<vole_mole::detail::qs_gf256<QS, 1>, uov::N> s_committed;
+            std::array<uov::detail::qs_val<QS, 1>, uov::N> s_gfsecpar;
+            for (size_t i = 0; i < uov::N; ++i) {
+                s_committed[i] = vole_mole::detail::qs_load_gf256(&qs, 8 * i);
+                s_gfsecpar[i] = qs.load_witness_8_bits_and_combine(8 * i);
+            }
+            const auto got = uov::detail::qs_eval_public_map_prover<QS>(*public_key, s_committed);
+            const auto want = uov::detail::qs_eval_public_map_generic<QS>(*public_key, s_gfsecpar);
+            for (size_t k = 0; k < uov::M; ++k) {
+                for (size_t c = 0; c < 3; ++c) {
+                    EXPECT_TRUE(got[k].mac.coeffs[c] == want[k].mac.coeffs[c])
+                        << "component " << k << ", coefficient " << c << " at s = " << to_hex(s);
+                }
+            }
         }
     }
 }
