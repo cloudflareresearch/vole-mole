@@ -1,0 +1,19 @@
+src/uov/circuit.hpp
+  s_ce416607fc8043::t_bef4f59c5fe91b 98,100
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.10",
+  "base_commit_sha": "1b94cf1215236940ddd475401bb1611fda985dc9",
+  "prompts": {},
+  "sessions": {
+    "s_ce416607fc8043": {
+      "agent_id": {
+        "tool": "opencode",
+        "id": "ses_ef9def7deffeOdDpRxuCQfnl1B",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Bas Westerbaan <bas@cloudflare.com>"
+    }
+  }
+}
