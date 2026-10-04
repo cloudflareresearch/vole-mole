@@ -42,6 +42,7 @@
 #include "dst.hpp"
 #include "keccak/segmented.hpp"
 #include "moussaka/commit.hpp"
+#include "qs_bit.hpp"
 #include "uov/circuit.hpp"
 #include "uov/public_key.hpp"
 #include "voleith.hpp"
@@ -193,6 +194,10 @@ struct RedeemRelation {
     template <typename QS> static void constraints(QS* qs, const instance& x) {
         static_assert(QS::max_degree == REDEEM_QS_DEGREE);
         using faest::poly1;
+        using vole_mole::detail::qs_add_bit_constraint;
+        using vole_mole::detail::qs_mul;
+        using vole_mole::detail::qs_to_gfsecpar;
+        using qs_bit = vole_mole::detail::qs_bit<QS, 1>;
         using qs_1 = keccak::detail::qs_val<QS, 1>;
         using qs_3 = keccak::detail::qs_val<QS, 3>;
         static_assert(3 <= keccak::detail::OUTPUT_DEGREE);
@@ -200,29 +205,29 @@ struct RedeemRelation {
 
         // Add bit constraints: Every bit of r, s, and the intermediate states is a bit.
         for (size_t i = 0; i < 8 * REDEEM_WIT_OFF_B; ++i) {
-            qs->add_bit_constraint(qs_1(qs->get_witness_bit(i)));
+            qs_add_bit_constraint(qs, qs->get_witness_bit(i));
         }
 
         // Add selector constraints: b[u] is a bit for u in [N] and 0 otherwise; ...
-        std::array<qs_1, MAX_ANCHORS> b;
+        std::array<qs_bit, MAX_ANCHORS> b;
         for (size_t u = 0; u < MAX_ANCHORS; ++u) {
-            b[u] = qs_1(qs->get_witness_bit(selector_bit(u)));
+            b[u] = qs->get_witness_bit(selector_bit(u));
             if (u < n) {
-                qs->add_bit_constraint(b[u]);
+                qs_add_bit_constraint(qs, b[u]);
             } else {
-                qs->add_constraint(b[u]);
+                qs->add_constraint(qs_to_gfsecpar(b[u]));
             }
         }
 
         // ... sum(b[0..u+1]) * b[u+1] = 0 for each u in [MAX_ANCHORS - 1]; ...
-        qs_1 prefix = b[0];
+        qs_bit prefix = b[0];
         for (size_t u = 0; u + 1 < MAX_ANCHORS; ++u) {
-            qs->add_constraint(prefix * b[u + 1]);
+            qs->add_constraint(qs_to_gfsecpar(qs_mul<QS, 1, 1>(prefix, b[u + 1])));
             prefix += b[u + 1];
         }
 
         // ... and sum(b) = 1.
-        qs->add_constraint(prefix + poly1(1));
+        qs->add_constraint(qs_to_gfsecpar(prefix + poly1(1)));
 
         // Add segment constraints: All but the last segment end in the expected intermediate state.
         const auto out = keccak::detail::qs_keccak(
@@ -241,7 +246,7 @@ struct RedeemRelation {
         for (size_t u = 0; u < n; ++u) {
             const auto p = uov::detail::qs_eval_public_map<QS>(x.anchors[u].get(), s);
             for (size_t k = 0; k < uov::M; ++k) {
-                q[k] += b[u] * p[k];
+                q[k] += qs_mul<QS, 1, 2>(b[u], p[k]);
             }
         }
 
