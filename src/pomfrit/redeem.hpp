@@ -20,6 +20,7 @@
 
 #include "dst.hpp"
 #include "qs_bit.hpp"
+#include "qs_gf256.hpp"
 #include "uov/circuit.hpp"
 #include "uov/public_key.hpp"
 #include "voleith.hpp"
@@ -120,9 +121,9 @@ struct RedeemRelation {
 
         // Evaluate l(P(s)), where l is the random linear combination of the M components.
         const uov::detail::Combination<QS> l(chal2, POMFRIT_COMBINE_DST);
-        std::array<qs_1, uov::N> s;
+        std::array<vole_mole::detail::qs_gf256<QS, 1>, uov::N> s;
         for (size_t i = 0; i < uov::N; ++i) {
-            s[i] = qs->load_witness_8_bits_and_combine(8 * (WIT_OFF_S + i));
+            s[i] = vole_mole::detail::qs_load_gf256(qs, 8 * (WIT_OFF_S + i));
         }
         const qs_2 p = uov::detail::qs_eval_combined_public_map<QS>(*x.pk, s, l);
 

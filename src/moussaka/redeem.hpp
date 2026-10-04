@@ -45,6 +45,7 @@
 #include "keccak/segmented.hpp"
 #include "moussaka/commit.hpp"
 #include "qs_bit.hpp"
+#include "qs_gf256.hpp"
 #include "uov/circuit.hpp"
 #include "uov/public_key.hpp"
 #include "voleith.hpp"
@@ -244,9 +245,9 @@ struct RedeemRelation {
         // Compute l(Q(s)) = sum_u b[u] * l(P[u](s)), where l is the random linear combination of
         // the M components.
         const uov::detail::Combination<QS> l(chal2, MOUSSAKA_REDEEM_COMBINE_DST);
-        std::array<qs_1, uov::N> s;
+        std::array<vole_mole::detail::qs_gf256<QS, 1>, uov::N> s;
         for (size_t i = 0; i < uov::N; ++i) {
-            s[i] = qs->load_witness_8_bits_and_combine(8 * (REDEEM_WIT_OFF_S + i));
+            s[i] = vole_mole::detail::qs_load_gf256(qs, 8 * (REDEEM_WIT_OFF_S + i));
         }
         qs_3 q(poly1(0), qs);
         for (size_t u = 0; u < n; ++u) {

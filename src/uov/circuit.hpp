@@ -13,6 +13,8 @@
 
 #include "vole_mole/uov.hpp"
 
+#include "gf256.hpp"
+#include "qs_gf256.hpp"
 #include "uov/public_key.hpp"
 
 #include "hash.hpp"        // from faest-arch-opt
@@ -26,6 +28,12 @@
 #include <vector>
 
 namespace vole_mole::uov::detail {
+
+using vole_mole::detail::gf256_madd;
+using vole_mole::detail::gf256_padded;
+using vole_mole::detail::Gf256MulByConst;
+using vole_mole::detail::IS_QS_PROVER;
+using vole_mole::detail::qs_gf256;
 
 // A QuickSilver-committed element of GF(2^128) of degree `deg`.
 template <typename QS, size_t deg> using qs_val = faest::quicksilver_gfsecpar<QS, deg>;
@@ -108,9 +116,12 @@ template <typename QS> class Combination {
 };
 
 // Evaluate sum_k l[k] * P(s)[k] at the committed preimage s, where l is the given combination.
+// This is the generic implementation, for any QuickSilver state; see
+// qs_eval_combined_public_map.
 template <typename QS>
-qs_val<QS, 2> qs_eval_combined_public_map(const PublicKey& pk, std::span<const qs_val<QS, 1>, N> s,
-                                          const Combination<QS>& l) {
+qs_val<QS, 2> qs_eval_combined_public_map_generic(const PublicKey& pk,
+                                                  std::span<const qs_val<QS, 1>, N> s,
+                                                  const Combination<QS>& l) {
     using qs_1 = qs_val<QS, 1>;
     using qs_2 = qs_val<QS, 2>;
 
@@ -131,6 +142,82 @@ qs_val<QS, 2> qs_eval_combined_public_map(const PublicKey& pk, std::span<const q
                       });
     y += s[current_i] * row;
     return y;
+}
+
+// The same as qs_eval_combined_public_map_generic, for the QuickSilver prover.
+//
+// Write s_j = m_j X^0 + v_j X^1, with MAC m_j and value v_j in GF(256) (see qs_gf256.hpp). The
+// MAC of row_i = sum_{j >= i} c_{ij} * s_j needs the combined coefficients c_{ij}, but its value is
+//
+//   sum_j c_{ij} v_j = sum_k l[k] * (sum_j a_{ij}[k] v_j),
+//
+// so we accumulate the M bytes sum_j a_{ij}[k] v_j with gf256_madd and combine them once per row
+// rather than once per monomial. All products are accumulated without reduction. The result is the
+// same as qs_eval_combined_public_map_generic's.
+template <typename QS>
+    requires IS_QS_PROVER<QS>
+qs_val<QS, 2> qs_eval_combined_public_map_prover(const PublicKey& pk,
+                                                 std::span<const qs_gf256<QS, 1>, N> s,
+                                                 const Combination<QS>& l) {
+    constexpr faest::secpar S = QS::secpar_v;
+    using poly = faest::poly_secpar<S>;
+    using poly2 = faest::poly_2secpar<S>;
+
+    std::array<poly, N> mac;
+    std::array<uint8_t, N> value;
+    std::vector<Gf256MulByConst> mul_value(N);
+    for (size_t j = 0; j < N; ++j) {
+        mac[j] = s[j].mac.coeffs[0];
+        value[j] = s[j].value;
+        mul_value[j] = Gf256MulByConst(value[j]);
+    }
+
+    // y = y0 + y1 X + y2 X^2, accumulated without reduction.
+    poly2 y0 = poly2::set_zero(), y1 = poly2::set_zero(), y2 = poly2::set_zero();
+
+    // The MAC (unreduced) and the uncombined value of row_i for the current i.
+    poly2 row_mac = poly2::set_zero();
+    std::array<uint8_t, gf256_padded(M)> row_value{};
+    size_t current_i = 0;
+    const auto finish_row = [&](size_t i) {
+        // s_i * row = m_i m_row + (m_i v_row + v_i m_row) X + v_i v_row X^2
+        const poly m_row = row_mac.template reduce_to<QS::secpar_bits>();
+        const poly v_row = l.combine(std::span<const uint8_t, M>(row_value.data(), M));
+        const poly embed_v_i = embed<QS>(value[i]);
+        y0 += mac[i] * m_row;
+        y1 += mac[i] * v_row + embed_v_i * m_row;
+        y2 += embed_v_i * v_row;
+        row_mac = poly2::set_zero();
+        row_value.fill(0);
+    };
+    for_each_monomial(PublicKeyAccess::expanded(pk),
+                      [&](size_t i, size_t j, std::span<const uint8_t, M> coeffs) {
+                          if (i != current_i) {
+                              finish_row(current_i);
+                              current_i = i;
+                          }
+                          row_mac += l.combine(coeffs) * mac[j];
+                          gf256_madd(row_value, coeffs, mul_value[j]);
+                      });
+    finish_row(current_i);
+
+    qs_val<QS, 2> out;
+    out.mac.coeffs[0] = y0.template reduce_to<QS::secpar_bits>();
+    out.mac.coeffs[1] = y1.template reduce_to<QS::secpar_bits>();
+    out.mac.coeffs[2] = y2.template reduce_to<QS::secpar_bits>();
+    return out;
+}
+
+// Evaluate sum_k l[k] * P(s)[k] at the committed preimage s, where l is the given combination.
+template <typename QS>
+qs_val<QS, 2> qs_eval_combined_public_map(const PublicKey& pk,
+                                          std::span<const qs_gf256<QS, 1>, N> s,
+                                          const Combination<QS>& l) {
+    if constexpr (IS_QS_PROVER<QS>) {
+        return qs_eval_combined_public_map_prover<QS>(pk, s, l);
+    } else {
+        return qs_eval_combined_public_map_generic<QS>(pk, s, l);
+    }
 }
 
 } // namespace vole_mole::uov::detail

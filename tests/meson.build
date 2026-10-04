@@ -9,6 +9,7 @@ tests = [
   ['moussaka-redeem', 'moussaka/test_redeem.cpp'],
   ['moussaka', 'moussaka/test_moussaka.cpp'],
   ['pomfrit', 'pomfrit/test_pomfrit.cpp'],
+  ['qs', 'qs/test_qs_gf256.cpp'],
   ['uov', 'uov/test_uov.cpp'],
   ['voleith', 'voleith/test_voleith.cpp'],
 ]
