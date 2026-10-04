@@ -1,0 +1,23 @@
+src/keccak/circuit.hpp
+  s_ce416607fc8043::t_4a23854e6c3b3a 62-63,68-69,77-80,85
+src/keccak/segmented.hpp
+  s_ce416607fc8043::t_700b2061a946d7 128-129,131-132,138,141-142,144-145,148-149,152,276-277,279-280,282,285-286
+src/moussaka/issue.hpp
+  s_ce416607fc8043::t_ee5be2e7d56910 181,183-184
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.10",
+  "base_commit_sha": "1c84ce385788ffce779e910ab73380c08f2912c3",
+  "prompts": {},
+  "sessions": {
+    "s_ce416607fc8043": {
+      "agent_id": {
+        "tool": "opencode",
+        "id": "ses_ef9def7deffeOdDpRxuCQfnl1B",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Bas Westerbaan <bas@cloudflare.com>"
+    }
+  }
+}
