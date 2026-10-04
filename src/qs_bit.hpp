@@ -28,9 +28,9 @@ faest::quicksilver_gfsecpar<QS, deg> qs_to_gfsecpar(const qs_bit<QS, deg>& x) {
 // Product of two committed bits.
 //
 // faest-arch-opt declares this product, but its prover implementation doesn't compile (FAEST itself
-// never multiplies two GF(2) values of positive degree), so we do it here. If a = A(X) + a_v X^da and b = B(X) + b_v X^db,
-// where A and B are the MAC polynomials (of degree < da and < db) and a_v and b_v the value bits,
-// then a b = A B + b_v A X^db + a_v B X^da + a_v b_v X^(da + db).
+// never multiplies two GF(2) values of positive degree), so we do it here. If a = A(X) + a_v X^da
+// and b = B(X) + b_v X^db, where A and B are the MAC polynomials (of degree < da and < db) and a_v
+// and b_v the value bits, then a b = A B + b_v A X^db + a_v B X^da + a_v b_v X^(da + db).
 template <typename QS, size_t da, size_t db>
 qs_bit<QS, da + db> qs_mul(const qs_bit<QS, da>& a, const qs_bit<QS, db>& b) {
     if constexpr (requires { a.value_; }) {
@@ -46,6 +46,27 @@ qs_bit<QS, da + db> qs_mul(const qs_bit<QS, da>& a, const qs_bit<QS, db>& b) {
         return out;
     } else {
         return a * b;
+    }
+}
+
+// Product of a committed bit and a committed element of GF(2^128).
+//
+// As above: if a = A(X) + a_v X^da, where A is the MAC polynomial (of degree < da) and a_v the
+// value bit, and b = B(X) (of degree db), then a b = A B + a_v B X^da. This costs da (db + 1)
+// rather than (da + 1) (db + 1) multiplications in GF(2^128). (As for the product of two bits,
+// faest-arch-opt's prover implementation doesn't compile.)
+template <typename QS, size_t da, size_t db>
+faest::quicksilver_gfsecpar<QS, da + db> qs_mul(const qs_bit<QS, da>& a,
+                                                const faest::quicksilver_gfsecpar<QS, db>& b) {
+    if constexpr (requires { a.value_; }) {
+        faest::quicksilver_gfsecpar<QS, da + db> out(static_cast<const QS*>(nullptr));
+        out.mac = (a.mac * b.mac).template reduce_to<QS::secpar_bits>();
+        for (size_t i = 0; i <= db; ++i) {
+            out.mac.coeffs[i + da] += a.value() * b.mac.coeffs[i];
+        }
+        return out;
+    } else {
+        return faest::quicksilver_gfsecpar<QS, da>(a) * b;
     }
 }
 

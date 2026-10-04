@@ -19,6 +19,7 @@
 #include "vole_mole/uov.hpp"
 
 #include "dst.hpp"
+#include "qs_bit.hpp"
 #include "uov/circuit.hpp"
 #include "uov/public_key.hpp"
 #include "voleith.hpp"
@@ -114,7 +115,7 @@ struct RedeemRelation {
 
         // Add bit constraints: Every witness bit is a bit.
         for (size_t i = 0; i < REDEEM_WITNESS_BITS; ++i) {
-            qs->add_bit_constraint(qs_1(qs->get_witness_bit(i)));
+            qs_add_bit_constraint(qs, qs->get_witness_bit(i));
         }
 
         // Evaluate l(P(s)), where l is the random linear combination of the M components.
