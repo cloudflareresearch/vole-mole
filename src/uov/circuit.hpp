@@ -95,8 +95,9 @@ std::array<qs_val<QS, 2>, M> qs_eval_public_map(const PublicKey& pk,
                               finish_row(current_i);
                               current_i = i;
                           }
+                          const Gf256MulTable<QS>& t = s_mul[j];
                           for (size_t k = 0; k < M; ++k) {
-                              row[k] += s_mul[j].mul(coeffs[k]);
+                              row[k] += t.mul(coeffs[k]);
                           }
                       });
     finish_row(current_i);
