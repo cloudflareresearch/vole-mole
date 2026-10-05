@@ -107,7 +107,7 @@ struct PlainQS {
     const uint8_t* witness;
     std::vector<bool> violated; // one entry per constraint
 
-    faest::quicksilver_gfsecpar<PlainQS, 1> get_witness_bit(size_t i) const;
+    faest::quicksilver_gf2<PlainQS, 1> get_witness_bit(size_t i) const;
     // The 8 bits starting at bit i, which must be a multiple of 8, as an element of GF(256).
     faest::quicksilver_gfsecpar<PlainQS, 1> load_witness_8_bits_and_combine(size_t i) const;
 
@@ -120,6 +120,28 @@ struct PlainQS {
 };
 
 } // namespace vole_mole::test
+
+// Plaintext stand-in for a QuickSilver bit of degree `deg`. It's always just a bit. As for
+// quicksilver_gfsecpar below, the degree is only tracked by the type.
+template <size_t deg> struct faest::quicksilver_gf2<vole_mole::test::PlainQS, deg> {
+    using PlainQS = vole_mole::test::PlainQS;
+
+    bool v = false;
+
+    quicksilver_gf2() = default;
+    explicit quicksilver_gf2(bool b) : v(b) {}
+    quicksilver_gf2(faest::poly1 c, const PlainQS*) : v(c.data != 0) {}
+    template <size_t deg2>
+        requires(deg2 < deg)
+    quicksilver_gf2(const quicksilver_gf2<PlainQS, deg2>& lower) : v(lower.v) {}
+
+    quicksilver_gf2 operator+(const quicksilver_gf2& o) const { return quicksilver_gf2(v != o.v); }
+    quicksilver_gf2 operator+(faest::poly1 c) const { return quicksilver_gf2(v != (c.data != 0)); }
+    template <typename T> quicksilver_gf2& operator+=(const T& o) {
+        *this = *this + o;
+        return *this;
+    }
+};
 
 // Plaintext stand-in for a QuickSilver value of degree `deg`. The degree is only tracked by the
 // type, so that the same relation code compiles for PlainQS and for faest::quicksilver_state.
@@ -141,6 +163,11 @@ template <size_t deg> struct faest::quicksilver_gfsecpar<vole_mole::test::PlainQ
     template <size_t deg2>
         requires(deg2 < deg)
     quicksilver_gfsecpar(const quicksilver_gfsecpar<PlainQS, deg2>& lower) : v(lower.v) {}
+    // Embed a bit, as faest-arch-opt does.
+    template <size_t deg2>
+        requires(deg2 <= deg)
+    quicksilver_gfsecpar(const quicksilver_gf2<PlainQS, deg2>& bit)
+        : v(poly::from_1(faest::poly1(bit.v))) {}
 
     quicksilver_gfsecpar operator+(const quicksilver_gfsecpar& o) const {
         return quicksilver_gfsecpar(v + o.v);
@@ -166,12 +193,19 @@ operator*(const faest::quicksilver_gfsecpar<PlainQS, deg_a>& a,
         (a.v * b.v).template reduce_to<PlainQS::secpar_bits>());
 }
 
+// As above, for products of bits.
+template <size_t deg_a, size_t deg_b>
+faest::quicksilver_gf2<PlainQS, deg_a + deg_b>
+operator*(const faest::quicksilver_gf2<PlainQS, deg_a>& a,
+          const faest::quicksilver_gf2<PlainQS, deg_b>& b) {
+    return faest::quicksilver_gf2<PlainQS, deg_a + deg_b>(a.v && b.v);
+}
+
 } // namespace vole_mole::test
 
-inline faest::quicksilver_gfsecpar<vole_mole::test::PlainQS, 1>
+inline faest::quicksilver_gf2<vole_mole::test::PlainQS, 1>
 vole_mole::test::PlainQS::get_witness_bit(size_t i) const {
-    return faest::quicksilver_gfsecpar<PlainQS, 1>(
-        faest::poly_secpar<secpar_v>::from_1(faest::poly1((witness[i / 8] >> (i % 8)) & 1)));
+    return faest::quicksilver_gf2<PlainQS, 1>(((witness[i / 8] >> (i % 8)) & 1) != 0);
 }
 
 inline faest::quicksilver_gfsecpar<vole_mole::test::PlainQS, 1>
