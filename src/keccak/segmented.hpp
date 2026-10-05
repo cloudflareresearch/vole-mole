@@ -122,7 +122,7 @@ inline void encode_committed_states(std::span<uint8_t, COMMITTED_STATES_BYTES> o
 template <typename QS, size_t deg> using qs_val = faest::quicksilver_gfsecpar<QS, deg>;
 
 // The committed bits of a Keccak-p[800] state, of degree `deg`. (Keccak state bits are GF(2)
-// values, so we represent them as qs_bit rather than qs_val; see qs_bit.hpp.)
+// values, so we represent them as qs_bit rather than qs_val.)
 template <typename QS, size_t deg = 1> using QsState = std::vector<qs_bit<QS, deg>>;
 
 // One Keccak round: degree d in, degree 2d out. Only the first `num_out_bits` output bits are
