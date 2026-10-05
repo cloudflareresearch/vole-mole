@@ -17,6 +17,7 @@ extern "C" {
 
 #include <gtest/gtest.h>
 
+#include <algorithm>
 #include <array>
 #include <cstddef>
 #include <cstdint>
@@ -100,6 +101,24 @@ TEST(Uov, PublicKeyDigest) {
     const uov::SecretKey other(filled<uov::SECRET_KEY_BYTES>(0x61));
     EXPECT_NE(to_hex(PublicKeyAccess::digest(uov::PublicKey(other.public_key()))),
               to_hex(PublicKeyAccess::digest(pk)));
+}
+
+// The secret key's expanded public key is the expansion of its compressed public key, and it
+// survives moving the secret key.
+TEST(Uov, SecretKeyHasExpandedPublicKey) {
+    using uov::detail::PublicKeyAccess;
+    const auto& [pk, sk] = uov_key_pair();
+    const uov::PublicKey& expanded = sk.expanded_public_key();
+    EXPECT_EQ(to_hex(PublicKeyAccess::digest(expanded)), to_hex(PublicKeyAccess::digest(pk)));
+    EXPECT_TRUE(
+        std::ranges::equal(PublicKeyAccess::expanded(expanded), PublicKeyAccess::expanded(pk)));
+
+    uov::SecretKey sk2(UOV_SK_BYTES);
+    const uov::PublicKey* before = &sk2.expanded_public_key();
+    const uov::SecretKey sk3 = std::move(sk2);
+    EXPECT_EQ(&sk3.expanded_public_key(), before);
+    const moussaka::Commitment t = moussaka::commit(NF, CTX_ISS, CTX_RED, R);
+    EXPECT_EQ(to_hex(sk3.expanded_public_key().eval(sk3.derive_preimage(t))), to_hex(t));
 }
 
 TEST(Uov, KeysAreMovable) {
@@ -197,8 +216,8 @@ poly combine_plain(const Combination& l, const uov::Target& t) {
 // Evaluate the combined public map circuit at s with the QuickSilver prover's types, which track
 // the value of each committed element (with arbitrary VOLE tags), and check that the result is the
 // combination of `want`.
-void expect_circuit_eval(const uov::PublicKey& pk, const uov::Preimage& s,
-                         const uov::Target& want, const Combination& l) {
+void expect_circuit_eval(const uov::PublicKey& pk, const uov::Preimage& s, const uov::Target& want,
+                         const Combination& l) {
     std::vector<faest::block_secpar<faest::secpar::s128>> macs(8 * uov::N);
     std::array<uint8_t, faest::QS_CONSTANTS<faest::secpar::s128, 2>::CHALLENGE_BYTES> challenge{};
     const QS qs(s.data(), macs.data(), 1, challenge.data());

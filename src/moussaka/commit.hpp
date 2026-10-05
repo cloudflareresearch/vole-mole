@@ -22,8 +22,8 @@ constexpr size_t COM_OFF_CTX_RED = COM_OFF_CTX_ISS + CTX_BYTES;
 constexpr size_t COM_OFF_NF = COM_OFF_CTX_RED + CTX_BYTES;
 static_assert(COM_OFF_NF + NF_BYTES + (68 - NF_BYTES - 2 * CTX_BYTES) == KP800_STATE_BYTES);
 
-inline Kp800State encode_init_state(const Nullifier& nf, const Context& ctx_iss,
-                                    const Context& ctx_red, const Opening& r) {
+inline Kp800State encode_com_state(const Nullifier& nf, const Context& ctx_iss,
+                                   const Context& ctx_red, const Opening& r) {
     Kp800State state{};
     std::ranges::copy(MOUSSAKA_COM_DST, state.begin());
     std::ranges::copy(r, state.begin() + COM_OFF_R);

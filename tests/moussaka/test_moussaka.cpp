@@ -22,6 +22,8 @@ using namespace vole_mole;
 using namespace vole_mole::moussaka;
 using vole_mole::moussaka::detail::TokenAccess;
 using vole_mole::test::filled;
+using vole_mole::test::read_kat_field;
+using vole_mole::test::read_kat_number;
 using vole_mole::test::to_hex;
 using vole_mole::test::uov_key_pair;
 using vole_mole::test::UovKeyPair;
@@ -41,25 +43,6 @@ IssueRequestResult make_request(const Seed& seed = SEED) {
 // Whether an Anchor accepts the issue request.
 bool verifies(const IssueRequest& request, const Context& ctx_iss) {
     return issue_response(uov_key_pair().sk, request, ctx_iss).has_value();
-}
-
-template <size_t N>
-bool read_kat_field(std::istream& in, std::string_view name, std::array<uint8_t, N>& out) {
-    std::string label, hex;
-    if (!(in >> label >> hex) || label != name) {
-        return false;
-    }
-    const auto bytes = vole_mole::test::hex_decode(hex);
-    if (!bytes || bytes->size() != N) {
-        return false;
-    }
-    std::ranges::copy(*bytes, out.begin());
-    return true;
-}
-
-bool read_kat_index(std::istream& in, std::string_view name, size_t& out) {
-    std::string label;
-    return bool(in >> label >> out) && label == name;
 }
 
 } // namespace
@@ -93,10 +76,10 @@ TEST(Moussaka, KnownAnswers) {
         ASSERT_TRUE(read_kat_field(in, "redeem_seed", redeem_seed));
         ASSERT_TRUE(read_kat_field(in, "ctx_iss", ctx_iss));
         ASSERT_TRUE(read_kat_field(in, "ctx_red", ctx_red));
-        ASSERT_TRUE(read_kat_index(in, "anchor_count", anchor_count));
+        ASSERT_TRUE(read_kat_number(in, "anchor_count", anchor_count));
         ASSERT_GE(anchor_count, 1u);
         ASSERT_LE(anchor_count, MAX_ANCHORS);
-        ASSERT_TRUE(read_kat_index(in, "issuer", issuer));
+        ASSERT_TRUE(read_kat_number(in, "issuer", issuer));
         ASSERT_LT(issuer, anchor_count);
         std::vector<UovKeyPair> key_pairs;
         key_pairs.reserve(anchor_count);

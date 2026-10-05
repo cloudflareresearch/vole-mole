@@ -9,12 +9,15 @@ tests = [
   ['moussaka-redeem', 'moussaka/test_redeem.cpp'],
   ['moussaka', 'moussaka/test_moussaka.cpp'],
   ['pomfrit', 'pomfrit/test_pomfrit.cpp'],
+  ['ratatouille-issue', 'ratatouille/test_issue.cpp'],
+  ['ratatouille-spend', 'ratatouille/test_spend.cpp'],
+  ['ratatouille', 'ratatouille/test_ratatouille.cpp'],
   ['uov', 'uov/test_uov.cpp'],
   ['voleith', 'voleith/test_voleith.cpp'],
 ]
 
 # Test data files (e.g., known answers) are read from the source tree; see `data_path` in
-# keccak/test_keccak.cpp and moussaka/test_moussaka.cpp.
+# keccak/test_keccak.cpp, moussaka/test_moussaka.cpp, and ratatouille/test_ratatouille.cpp.
 test_data_arg = '-DVOLE_MOLE_TEST_DATA_DIR="@0@"'.format(meson.current_source_dir())
 
 foreach t : tests
@@ -27,11 +30,14 @@ foreach t : tests
   test(t[0], exe, protocol : 'gtest', timeout : 300)
 endforeach
 
-# Run explicitly to regenerate Moussaka known answers, never as part of the test suite.
-executable('gen_moussaka_kat', 'moussaka/gen_moussaka_kat.cpp',
-  include_directories : test_inc,
-  dependencies : test_deps,
-)
+# Run explicitly to regenerate Moussaka and Ratatouille known answers, never as part of the test
+# suite.
+foreach g : ['moussaka', 'ratatouille']
+  executable('gen_@0@_kat'.format(g), '@0@/gen_@0@_kat.cpp'.format(g),
+    include_directories : test_inc,
+    dependencies : test_deps,
+  )
+endforeach
 
 benchmark_dep = dependency('benchmark_main',
   default_options : ['warning_level=0', 'tests=disabled'],
@@ -40,6 +46,7 @@ benchmark_dep = dependency('benchmark_main',
 benchmarks = [
   ['moussaka', 'moussaka/bench_moussaka.cpp'],
   ['pomfrit', 'pomfrit/bench_pomfrit.cpp'],
+  ['ratatouille', 'ratatouille/bench_ratatouille.cpp'],
   ['uov', 'uov/bench_uov.cpp'],
 ]
 

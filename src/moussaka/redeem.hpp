@@ -4,7 +4,7 @@
 //             (issuance context), ctx_red (redemption context)
 //   Witness:  r (opening), s (UOV preimage), b (selector)
 //   Constraints:
-//     - Q(s) = commit(nf, ctx_iss, ctx_red, r), where Q = sum_u b[u] * P[u]
+//     - Q(s) = Com(nf, ctx_iss, ctx_red, r), where Q = sum_u b[u] * P[u]
 //     - sum(b[0..u+1]) * b[u+1] = 0 for u in [N-1] (parity constraints)
 //     - sum(b) = 1 (weight constraint)
 //
@@ -82,7 +82,7 @@ constexpr size_t REDEEM_WITNESS_BITS = 8 * REDEEM_WITNESS_BYTES;
 // The witness index of the bit b[u] of the selector.
 constexpr size_t selector_bit(size_t u) { return 8 * REDEEM_WIT_OFF_B + u; }
 
-// Map of the index of each byte of the initial state of the commitment to its index in the witness.
+// Map of the index of each byte of the input of Com to its index in the witness.
 // Only the opening is secret.
 constexpr keccak::detail::InputMap REDEEM_COM_TO_WIT = [] {
     keccak::detail::InputMap map;
@@ -114,7 +114,7 @@ encode_redeem_witness(const Nullifier& nf, const Context& ctx_iss, const Context
     std::ranges::copy(s, w.begin() + REDEEM_WIT_OFF_S);
     keccak::detail::encode_committed_states(
         std::span(w).subspan<REDEEM_WIT_OFF_STATES, keccak::detail::COMMITTED_STATES_BYTES>(),
-        encode_init_state(nf, ctx_iss, ctx_red, r));
+        encode_com_state(nf, ctx_iss, ctx_red, r));
     const size_t b = selector_bit(i);
     w[b / 8] = static_cast<uint8_t>(1u << (b % 8));
     return w;
@@ -238,7 +238,7 @@ struct RedeemRelation {
         // Add segment constraints: All but the last segment end in the expected intermediate state.
         const auto out = keccak::detail::qs_keccak(
             qs,
-            keccak::detail::qs_input(qs, encode_init_state(x.nf, x.ctx_iss, x.ctx_red, {}),
+            keccak::detail::qs_input(qs, encode_com_state(x.nf, x.ctx_iss, x.ctx_red, {}),
                                      REDEEM_COM_TO_WIT),
             REDEEM_WIT_OFF_STATES);
 
