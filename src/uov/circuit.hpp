@@ -54,13 +54,16 @@ template <typename QS> class Combination {
     static constexpr size_t POLY_BYTES = faest::secpar_to_bytes(QS::secpar_v);
     static constexpr size_t L_BYTES = M * POLY_BYTES;
 
-    // Derive l from the QuickSilver challenge chal2 and a domain separation tag.
-    Combination(std::span<const uint8_t, CHALLENGE_BYTES> chal2, std::span<const uint8_t> dst) {
+    // Derive l from the QuickSilver challenge chal2, a domain separation tag, and optional
+    // public binder (e.g., an Anchor key digest for independent per-key combinations).
+    Combination(std::span<const uint8_t, CHALLENGE_BYTES> chal2, std::span<const uint8_t> dst,
+                std::span<const uint8_t> binder = {}) {
         std::array<uint8_t, L_BYTES> l_bytes;
         faest::hash_state hasher;
         hasher.init(QS::secpar_v);
         hasher.update(chal2);
         hasher.update(dst);
+        hasher.update(binder);
         hasher.finalize(l_bytes);
         std::array<poly, M> l;
         for (size_t k = 0; k < M; ++k) {

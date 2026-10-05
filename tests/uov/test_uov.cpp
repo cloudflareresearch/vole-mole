@@ -3,6 +3,7 @@
 #include "vole_mole/moussaka.hpp"
 #include "vole_mole/uov.hpp"
 
+#include "dst.hpp"           // internal
 #include "uov/circuit.hpp"    // internal
 #include "uov/public_key.hpp" // internal
 
@@ -268,6 +269,22 @@ TEST(UovCircuit, CombinationDependsOnChallengeAndDst) {
         EXPECT_TRUE(a.coeff(k) == b.coeff(k));
         EXPECT_FALSE(a.coeff(k) == c.coeff(k));
         EXPECT_FALSE(a.coeff(k) == d.coeff(k));
+    }
+}
+
+// Distinct Anchor keys get independent combinations under the same proof challenge.
+TEST(UovCircuit, CombinationDependsOnAnchorKey) {
+    using vole_mole::detail::MOUSSAKA_REDEEM_COMBINE_DST;
+    const auto chal = filled<Combination::CHALLENGE_BYTES>(0x70);
+    const auto& pk = uov_key_pair().pk;
+    const UovKeyPair other(uov::SecretKey{filled<uov::SECRET_KEY_BYTES>(0x61)});
+    const Combination a(chal, MOUSSAKA_REDEEM_COMBINE_DST, uov::detail::PublicKeyAccess::digest(pk));
+    const Combination b(chal, MOUSSAKA_REDEEM_COMBINE_DST, uov::detail::PublicKeyAccess::digest(pk));
+    const Combination c(chal, MOUSSAKA_REDEEM_COMBINE_DST,
+                        uov::detail::PublicKeyAccess::digest(other.pk));
+    for (size_t k = 0; k < uov::M; ++k) {
+        EXPECT_TRUE(a.coeff(k) == b.coeff(k));
+        EXPECT_FALSE(a.coeff(k) == c.coeff(k));
     }
 }
 

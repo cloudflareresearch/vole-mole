@@ -8,15 +8,13 @@
 //     - sum(b[0..u+1]) * b[u+1] = 0 for u in [N-1] (parity constraints)
 //     - sum(b) = 1 (weight constraint)
 //
-// Arithmetization: The commitment is evaluated as described in keccak/segmented.hpp, which adds
-// 800 constraints of degree at most 9 for each of the two committed intermediate states. Rather
-// than constraining each of the 8 * M bits of the output of the last segment, we combine each byte
-// of the output (degree 8) into an element of the GF(256) subfield of GF(2^128), so that the M
+// Arithmetization: The commitment is evaluated as described in keccak/segmented.hpp, which adds 800
+// constraints of degree at most 9 for each of the two committed intermediate states. Rather than
+// constraining each of the 8 * M bits of the output of the last segment, we combine each byte of
+// the output (degree 8) into an element of the GF(256) subfield of GF(2^128), so that the M
 // components of Q(s) can be compared directly. Rather than comparing each of the M components, we
-// compare a random linear combination l of them, with coefficients in GF(2^128) derived from the
-// QuickSilver challenge (see uov::detail::Combination). l(Q(s)) is computed as
-// sum_u b[u] * l(P[u](s)): each l(P[u](s)) has degree 2 (see uov/circuit.hpp), so l(Q(s)) has
-// degree 3, and the single output constraint has degree 8.
+// compare an independent random linear combination for each Anchor, with coefficients in GF(2^128)
+// derived from the QuickSilver challenge and key digest.
 //
 // The selector b is a vector of MAX_ANCHORS bits. Each bit is constrained to be a bit, or to be
 // zero if it's beyond the end of the Anchor Set. Since every b[u] is a bit, the parity constraints
@@ -200,8 +198,9 @@ struct RedeemRelation {
         using qs_1 = keccak::detail::qs_val<QS, 1>;
         using qs_2 = keccak::detail::qs_val<QS, 2>;
         using qs_3 = keccak::detail::qs_val<QS, 3>;
-        using qs_out = keccak::detail::qs_val<QS, keccak::detail::OUTPUT_DEGREE>;
-        static_assert(3 <= keccak::detail::OUTPUT_DEGREE);
+        using qs_out = keccak::detail::qs_val<QS, keccak::detail::OUTPUT_DEGREE + 1>;
+        static_assert(3 <= keccak::detail::OUTPUT_DEGREE + 1);
+        static_assert(keccak::detail::OUTPUT_DEGREE + 1 <= REDEEM_QS_DEGREE);
         const size_t n = x.anchors.size();
 
         // Add bit constraints: Every bit of r, s, and the intermediate states is a bit.
@@ -237,26 +236,33 @@ struct RedeemRelation {
                                      REDEEM_COM_TO_WIT),
             REDEEM_WIT_OFF_STATES);
 
-        // Compute l(Q(s)) = sum_u b[u] * l(P[u](s)), where l is the random linear combination of
-        // the M components.
-        const uov::detail::Combination<QS> l(chal2, MOUSSAKA_REDEEM_COMBINE_DST);
+        // Compute sum_u b[u] * l_u(P[u](s)) and the selected coefficients
+        // L[k] = sum_u b[u] * l_u[k]. Construct one combination at a time to bound table storage.
         std::array<qs_1, uov::N> s;
         for (size_t i = 0; i < uov::N; ++i) {
             s[i] = qs->load_witness_8_bits_and_combine(8 * (REDEEM_WIT_OFF_S + i));
         }
         qs_3 lq(poly1(0), qs);
+        std::array<qs_1, uov::M> selected_l;
+        selected_l.fill(qs_1(poly1(0), qs));
         for (size_t u = 0; u < n; ++u) {
-            const qs_2 lp = uov::detail::qs_eval_combined_public_map<QS>(x.anchors[u].get(), s, l);
+            const auto& pk = x.anchors[u].get();
+            const uov::detail::Combination<QS> l(chal2, MOUSSAKA_REDEEM_COMBINE_DST,
+                                                 uov::detail::PublicKeyAccess::digest(pk));
+            const qs_2 lp = uov::detail::qs_eval_combined_public_map<QS>(pk, s, l);
             lq += b[u] * lp;
+            for (size_t k = 0; k < uov::M; ++k) {
+                selected_l[k] += l.coeff(k) * b[u];
+            }
         }
 
-        // Add output constraint: The last segment ends in Q(s), i.e., l(Q(s)) = l(out). Each byte
-        // of the output is combined into an element of GF(256).
+        // Add output constraint using the same selected combination as the public-map side.
+        // Each byte of the output is combined into an element of GF(256).
         qs_out lout(poly1(0), qs);
         for (size_t k = 0; k < uov::M; ++k) {
-            lout += l.coeff(k) * keccak::detail::qs_byte(out, k);
+            lout += selected_l[k] * keccak::detail::qs_byte(out, k);
         }
-        qs->add_constraint(lout + keccak::detail::qs_lift<keccak::detail::OUTPUT_DEGREE>(lq));
+        qs->add_constraint(lout + keccak::detail::qs_lift<keccak::detail::OUTPUT_DEGREE + 1>(lq));
     }
 };
 
