@@ -1,0 +1,21 @@
+README.md
+  s_399085703b3426::t_59b5864a2a3caf 28
+src/voleith.hpp
+  s_399085703b3426::t_f36ce6852ed745 210,213-215,228-253,255-257,259-277,282-283,290-293,420-422,429-433,445-455,458,482-493,533,537
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.10",
+  "base_commit_sha": "6e31270838f3f79496fa0004596c32ea1421e0a2",
+  "prompts": {},
+  "sessions": {
+    "s_399085703b3426": {
+      "agent_id": {
+        "tool": "opencode",
+        "id": "ses_ef221eca0ffe7CEoGk1MYYa9nx",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Bas Westerbaan <bas@cloudflare.com>"
+    }
+  }
+}
