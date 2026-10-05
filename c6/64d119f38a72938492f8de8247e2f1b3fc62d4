@@ -1,0 +1,61 @@
+include/vole_mole/moussaka.hpp
+  s_399085703b3426::t_23c08026e1440d 30,32
+src/dst.hpp
+  s_399085703b3426::t_af49f93d1b9877 38-39,53
+src/keccak/segmented.hpp
+  s_399085703b3426::t_a50c101b792f50 29-31,96-98,101-103,107-109,113,230-234,239,248-253,255,257-258,260,269,277-279,281,284-285,288-295,297-299,307-308,310,315-318
+src/moussaka/issue.hpp
+  s_399085703b3426::t_a1ce8f19e4c026 8-10,18-22,35,55-58,71-73,94-95,118,133,169-171,181-184,187,190-195
+src/moussaka/redeem.hpp
+  s_399085703b3426::t_b140a051ad28f5 11-14,16-32,51,71-73,75-76,91-93,112-114,134-135,147,185-187,211-215,221-227,231,233,242,244,252,254-256,261-262,264,266,268-270,279,283
+src/mq/key_bits.hpp
+  s_399085703b3426::t_e5ed2fc72732e7 1-84
+src/mq/prg.hpp
+  s_399085703b3426::t_c03fbf5671d926 1-408
+src/qs_bit.hpp
+  s_399085703b3426::t_0ca0d99d7fd468 73,75-76
+src/uov/circuit.hpp
+  s_399085703b3426::t_2527c2db99a0b6 26,113-121
+src/voleith.hpp
+  s_399085703b3426::t_77a5f6b6e6c33c 22-36,62-63,77,84,95-111,113-125,127-135,139-151,192-264,407-409,416-418,434-437,467,473-474,476-488,590-591,603-605,621-624
+tests/meson.build
+  s_399085703b3426::t_4d9201e2fb4a55 11,43
+tests/moussaka/gen_moussaka_kat.cpp
+  s_399085703b3426::t_3fbbfa0d536e5c 34-37
+tests/moussaka/moussaka_kat.txt
+  s_399085703b3426::t_0ee860be5a0a15 2,4-6,21,24,40,43,120,123
+tests/moussaka/test_issue.cpp
+  s_399085703b3426::t_26d7a2c19ff3cd 26,31-35
+tests/moussaka/test_moussaka.cpp
+  s_399085703b3426::t_92ea0df47a7d6d 23-25,267-269,277-292,570-572,581-597
+tests/moussaka/test_redeem.cpp
+  s_399085703b3426::t_98acd3c2d598b9 64-70,83
+tests/mq/bench_mq.cpp
+  s_399085703b3426::t_1cc8493cb59b54 1-102
+tests/mq/kat.txt
+  s_399085703b3426::t_47b0414380a7ae 1-31
+tests/mq/test_mq.cpp
+  s_399085703b3426::t_1c270a4338b880 1-243
+tests/test.hpp
+  s_399085703b3426::t_66d0aa067f198e 9-10,102,106,219-234
+tools/mq_key_bits.py
+  s_399085703b3426::t_81f038ce7039fc 1-110
+tools/mq_ref.py
+  s_399085703b3426::t_37e5f4001d350c 1-159
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.10",
+  "base_commit_sha": "c664d119f38a72938492f8de8247e2f1b3fc62d4",
+  "prompts": {},
+  "sessions": {
+    "s_399085703b3426": {
+      "agent_id": {
+        "tool": "opencode",
+        "id": "ses_ef221eca0ffe7CEoGk1MYYa9nx",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Bas Westerbaan <bas@cloudflare.com>"
+    }
+  }
+}
