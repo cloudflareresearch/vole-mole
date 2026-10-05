@@ -1,0 +1,38 @@
+tests/uov/test_uov.cpp
+  s_ce416607fc8043::t_be96b2128a3bac 23,195,197,230-275
+tests/meson.build
+  s_ce416607fc8043::t_506fc3c345efdd 12
+src/pomfrit/redeem.hpp
+  s_ce416607fc8043::t_742716a3ce3fda 20
+  s_ce416607fc8043::t_55036e0e2e8f62 119,121
+tests/uov/bench_uov.cpp
+  s_ce416607fc8043::t_b29ef968d01e4e 4-5,8-10,13,15,74-130
+  s_ce416607fc8043::t_47e706dbbaa98f 3
+src/qs_gf256.hpp
+  s_ce416607fc8043::t_98ed9414be83be 1-147
+src/gf256.hpp
+  s_ce416607fc8043::t_887c5253f1cfa1 1-106
+src/uov/circuit.hpp
+  s_ce416607fc8043::t_92a107a4b24e8a 13-14,28-33
+  s_ce416607fc8043::t_54a5518ce81b23 73-74,76-77,116-219
+tests/qs/test_qs_gf256.cpp
+  s_ce416607fc8043::t_d3e160f400d17f 1-179
+src/moussaka/redeem.hpp
+  s_ce416607fc8043::t_eb0111026c594e 46,241,243
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.10",
+  "base_commit_sha": "a60b6271fb9f94115f31e8b95503d4ec90c2ce5c",
+  "prompts": {},
+  "sessions": {
+    "s_ce416607fc8043": {
+      "agent_id": {
+        "tool": "opencode",
+        "id": "ses_ef9def7deffeOdDpRxuCQfnl1B",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Bas Westerbaan <bas@cloudflare.com>"
+    }
+  }
+}
