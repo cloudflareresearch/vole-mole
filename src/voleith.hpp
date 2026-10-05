@@ -14,6 +14,11 @@
 // 3. Challenge binders: The application may provide additional data to bind at each step of proof
 //    generation.
 //
+// 4. Challenge-dependent constraints: The relation's constraints are given the QuickSilver
+//    challenge chal2, which is derived after the prover is committed to the entire witness. The
+//    relation may use it to derive public randomness, e.g., to replace a set of constraints by a
+//    random linear combination of them (see uov/circuit.hpp).
+//
 // This code was adapted from faest-arch-opt, which is distributed under the following license:
 //
 //   Copyright (c) 2023 FAEST Team
@@ -282,7 +287,7 @@ void voleith_prove_commit(proof_span<Relation> proof_bytes,
     // WITNESS_BITS entries of v, and the masks are separate.
     quicksilver_state<S, false, OC::QS_DEGREE> qs(witness.data(), vole_com_data.v().data(),
                                                   Relation::NUM_CONSTRAINTS, chal2.data());
-    Relation::constraints(&qs, instance);
+    Relation::constraints(&qs, instance, std::span<const uint8_t>(chal2));
 
     std::array<uint8_t, CP::QS::CHECK_BYTES> qs_check;
     qs.prove(vole_com_data.u_mask().data(), vole_com_data.v_mask().data(), proof.qs_proof().data(),
@@ -456,7 +461,7 @@ bool voleith_verify_commit(const_proof_span<Relation> proof_bytes,
 
     quicksilver_state<S, true, OC::QS_DEGREE> qs(vole_com_data.q().data(),
                                                  Relation::NUM_CONSTRAINTS, delta, chal2.data());
-    Relation::constraints(&qs, instance);
+    Relation::constraints(&qs, instance, std::span<const uint8_t>(chal2));
 
     std::array<uint8_t, CP::QS::CHECK_BYTES> qs_check;
     qs.verify(vole_com_data.q_mask().data(), proof.qs_proof().data(), qs_check.data());

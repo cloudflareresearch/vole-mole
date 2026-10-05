@@ -25,7 +25,7 @@ const Opening R = filled<R_BYTES>(0x40);
 std::vector<bool> evaluate(const std::array<uint8_t, ISSUE_WITNESS_BYTES>& w,
                            const IssueRelation::instance& x) {
     PlainQS qs{w.data(), {}};
-    IssueRelation::constraints(&qs, x);
+    IssueRelation::constraints(&qs, x, {});
     return qs.violated;
 }
 

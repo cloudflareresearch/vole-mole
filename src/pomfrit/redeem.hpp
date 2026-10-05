@@ -4,9 +4,12 @@
 //   Witness:  r (target mask), s (UOV preimage)
 //   Constraint: P(s) = h + r
 //
-// Arithmetization: We evaluate P directly on the committed GF(256) elements of s. Since P is a
-// quadratic map, each of the M constraints has degree 2. We also need to confirm that each bit of
-// witness is a bit, which adds 8 * (M + N) = 1312 constraints of degree 2.
+// Arithmetization: We evaluate P directly on the committed GF(256) elements of s. Rather than
+// checking each of the M components, we check a random linear combination l of them, with
+// coefficients in GF(2^128) derived from the QuickSilver challenge (<https://ia.cr/2026/109>,
+// Section 8; see uov::detail::Combination). Since P is a quadratic map, this constraint has degree
+// 2. We also need to confirm that each bit of witness is a bit, which adds 8 * (M + N) = 1312
+// constraints of degree 2.
 //
 // We use the VOLE-in-the-Head parameters of FAEST-EM-128f v3.
 
@@ -40,7 +43,7 @@ constexpr size_t REDEEM_WITNESS_BITS = 8 * REDEEM_WITNESS_BYTES;
 constexpr size_t REDEEM_QS_DEGREE = 2;
 
 constexpr size_t REDEEM_NUM_CONSTRAINTS = REDEEM_WITNESS_BITS // bit constraints
-                                          + uov::M;           // P(s) = h + r
+                                          + 1; // P(s) = h + r (random linear combination)
 
 // The VOLEitH parameter set for RedeemRelation.
 constexpr faest::owf OWF_REDEEM =
@@ -103,7 +106,8 @@ struct RedeemRelation {
         hasher.update(x.h);
     }
 
-    template <typename QS> static void constraints(QS* qs, const instance& x) {
+    template <typename QS>
+    static void constraints(QS* qs, const instance& x, std::span<const uint8_t> chal2) {
         static_assert(QS::max_degree == REDEEM_QS_DEGREE);
         using qs_1 = uov::detail::qs_val<QS, 1>;
         using qs_2 = uov::detail::qs_val<QS, 2>;
@@ -113,18 +117,24 @@ struct RedeemRelation {
             qs->add_bit_constraint(qs_1(qs->get_witness_bit(i)));
         }
 
-        // Evaluate P(s).
+        // Evaluate l(P(s)), where l is the random linear combination of the M components.
+        const uov::detail::Combination<QS> l(chal2, POMFRIT_COMBINE_DST);
         std::array<qs_1, uov::N> s;
         for (size_t i = 0; i < uov::N; ++i) {
             s[i] = qs->load_witness_8_bits_and_combine(8 * (WIT_OFF_S + i));
         }
-        const auto p = uov::detail::qs_eval_public_map<QS>(*x.pk, s);
+        const qs_2 p = uov::detail::qs_eval_combined_public_map<QS>(*x.pk, s, l);
 
-        // Add output constraints: P(s) + h + r = 0.
+        // Add output constraint: l(P(s) + h + r) = 0.
+        qs_1 lhr = qs_1(faest::poly1(0), qs);
+        faest::poly_secpar<QS::secpar_v> lh = faest::poly_secpar<QS::secpar_v>::set_zero();
         for (size_t k = 0; k < uov::M; ++k) {
             const qs_1 r_k = qs->load_witness_8_bits_and_combine(8 * (WIT_OFF_R + k));
-            qs->add_constraint(p[k] + qs_2(r_k) + uov::detail::embed<QS>(x.h[k]));
+            lhr += l.coeff(k) * r_k;
+            lh = lh + (l.coeff(k) * uov::detail::embed<QS>(x.h[k]))
+                          .template reduce_to<faest::secpar_to_bits(QS::secpar_v)>();
         }
+        qs->add_constraint(p + qs_2(lhr + lh));
     }
 };
 

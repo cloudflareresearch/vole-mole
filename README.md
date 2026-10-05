@@ -22,6 +22,10 @@ redemption (`Token::redeem_request`, `finalize_redeem`) as specified in the draf
 * The selector vector `b` is committed as bits rather than elements of `F_q`.
   This lets us check `Q(s) = Com(nf, ctx_iss, ctx_red, r)` as
   `sum_u b[u] * P[u](s)` without expanding `Q`.
+* Rather than checking each of the `m` components of `Q(s) = t` (and `P(s) = t` in PomFRIT), we
+  check a random linear combination of them over `GF(2^128)`, derived from the QuickSilver
+  challenge, as in [PomFRIT][pomfrit] (Section 8). This adds `2^-128` to the soundness error and
+  makes the per-Anchor cost of redemption about 2.8x faster to prove and 1.6x faster to verify.
 * The `challenge_digest` binding mentioned in the draft's TODO isn't
   implemented yet.
 

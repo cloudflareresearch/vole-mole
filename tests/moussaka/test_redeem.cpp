@@ -58,8 +58,10 @@ Witness honest_witness(size_t i = ISSUER) {
 }
 
 std::vector<bool> evaluate(const Witness& w, const RedeemRelation::instance& x) {
+    // An arbitrary QuickSilver challenge, from which the random linear combination is derived.
+    static const auto chal2 = filled<48>(0x50);
     PlainQS qs{w.data(), {}};
-    RedeemRelation::constraints(&qs, x);
+    RedeemRelation::constraints(&qs, x, chal2);
     return qs.violated;
 }
 
