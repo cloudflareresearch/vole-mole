@@ -1,0 +1,56 @@
+src/ratatouille/token.hpp
+  s_a10d9eb0ca6fc6::t_93769c205ac3f7 1-52
+tests/ratatouille/test_issue.cpp
+  s_a10d9eb0ca6fc6::t_989dcb9bf49aa7 1-148
+tests/ratatouille/test_spend.cpp
+  s_a10d9eb0ca6fc6::t_2f1eb9fe2f109a 1-247
+src/ratatouille/ratatouille.cpp
+  s_a10d9eb0ca6fc6::t_5c32bd384842b5 1-385
+tests/ratatouille/test_ratatouille.cpp
+  s_a10d9eb0ca6fc6::t_d9657bcf65b27f 1-552
+src/ratatouille/spend.hpp
+  s_a10d9eb0ca6fc6::t_72b4b5c6d5bc3e 1-433
+src/ratatouille/issue.hpp
+  s_a10d9eb0ca6fc6::t_d5b6c085a59884 1-215
+src/dst.hpp
+  s_a10d9eb0ca6fc6::t_7ae3c8faa44632 11,40-48,59-70
+  s_a10d9eb0ca6fc6::t_20714a42acac32 71-73
+tests/meson.build
+  s_a10d9eb0ca6fc6::t_efcf7ccc815f3c 12-14,46
+README.md
+  s_2d53470fd179d7::t_f321765e7a5aa4 8-10
+  s_8557e21a96d6eb::t_d8b025fbf92b2b 3-4
+  s_2d53470fd179d7::t_bd2586ab479ebd 11-13
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.10",
+  "base_commit_sha": "ff2fdfc96f9c48d5cf2f0e97a368313084ec11e3",
+  "prompts": {},
+  "sessions": {
+    "s_2d53470fd179d7": {
+      "agent_id": {
+        "tool": "opencode",
+        "id": "ses_f109359f2ffe7oVHmagnS0Pync",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Christopher Patton <cpatton@cloudflare.com>"
+    },
+    "s_8557e21a96d6eb": {
+      "agent_id": {
+        "tool": "opencode",
+        "id": "ses_f2b5fab15ffeHakKGiA7H9UX9p",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Christopher Patton <cpatton@cloudflare.com>"
+    },
+    "s_a10d9eb0ca6fc6": {
+      "agent_id": {
+        "tool": "opencode",
+        "id": "ses_ef633e4aeffekYsLfcB7rmbw3Y",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Christopher Patton <cpatton@cloudflare.com>"
+    }
+  }
+}
