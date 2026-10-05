@@ -2,7 +2,7 @@
 //
 //   Instance: t (commitment), ctx_iss (issuance context)
 //   Witness:  nf (nullifier), r (opening), ctx_red (redemption context)
-//   Constraint: t = commit(nf, ctx_iss, ctx_red, r)
+//   Constraint: t = Com(nf, ctx_iss, ctx_red, r)
 //
 // Arithmetization: The commitment is evaluated as described in keccak/segmented.hpp, which adds
 // 800 constraints of degree at most 9 for each of the two committed intermediate states. The
@@ -62,7 +62,7 @@ constexpr size_t WIT_OFF_STATES = WIT_OFF_NF + NF_BYTES;
 constexpr size_t ISSUE_WITNESS_BYTES = WIT_OFF_STATES + keccak::detail::COMMITTED_STATES_BYTES;
 constexpr size_t ISSUE_WITNESS_BITS = 8 * ISSUE_WITNESS_BYTES;
 
-// Map of the index of each byte of the initial state of the commitment to its index in the witness.
+// Map of the index of each byte of the input of Com to its index in the witness.
 // The opening, redemption context, and nullifier are secret.
 constexpr keccak::detail::InputMap COM_TO_WIT = [] {
     keccak::detail::InputMap map;
@@ -98,7 +98,7 @@ inline std::array<uint8_t, ISSUE_WITNESS_BYTES> encode_issue_witness(const Nulli
 
     keccak::detail::encode_committed_states(
         std::span(w).subspan<WIT_OFF_STATES, keccak::detail::COMMITTED_STATES_BYTES>(),
-        encode_init_state(nf, ctx_iss, ctx_red, r));
+        encode_com_state(nf, ctx_iss, ctx_red, r));
     return w;
 }
 
@@ -167,9 +167,9 @@ struct IssueRelation {
     }
 
     template <typename QS>
-    static void constraints(
-        QS* qs, const instance& x,
-        std::span<const uint8_t, params::CONSTS::QS::CHALLENGE_BYTES> /* chal2 */) {
+    static void
+    constraints(QS* qs, const instance& x,
+                std::span<const uint8_t, params::CONSTS::QS::CHALLENGE_BYTES> /* chal2 */) {
         static_assert(QS::max_degree == ISSUE_QS_DEGREE);
         using faest::poly1;
 
@@ -180,7 +180,7 @@ struct IssueRelation {
 
         // Add segment constraints: All but the last segment end in the expected intermediate state.
         const auto out = keccak::detail::qs_keccak(
-            qs, keccak::detail::qs_input(qs, encode_init_state({}, x.ctx_iss, {}, {}), COM_TO_WIT),
+            qs, keccak::detail::qs_input(qs, encode_com_state({}, x.ctx_iss, {}, {}), COM_TO_WIT),
             WIT_OFF_STATES, 8 * uov::M);
 
         // Add output constraint: The last segment ends in the commitment. (Only the bits of t are
@@ -199,7 +199,7 @@ using IssueProof = std::span<uint8_t, ISSUE_PROOF_BYTES>;
 using ConstIssueProof = std::span<const uint8_t, ISSUE_PROOF_BYTES>;
 
 // Compute the issuance proof pf_iss that t = Com(nf, ctx_iss, ctx_red, r), where t and ctx_iss
-// are public. `rho` is randomness for the VOLEitH prover (see `voleith_prove`).
+// are public. rho is randomness for the VOLEitH prover.
 //
 // Throws std::bad_alloc if memory allocation fails and std::runtime_error if grinding fails (which
 // happens with negligible probability).

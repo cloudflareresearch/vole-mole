@@ -11,11 +11,14 @@
 #include "polynomials.hpp" // from faest-arch-opt
 #include "quicksilver.hpp" // from faest-arch-opt
 
+#include <algorithm>
 #include <array>
 #include <charconv>
+#include <concepts>
 #include <cstddef>
 #include <cstdint>
 #include <deque>
+#include <istream>
 #include <optional>
 #include <span>
 #include <string>
@@ -37,13 +40,15 @@ template <size_t N> std::array<uint8_t, N> filled(uint8_t start) {
 // The secret key of the fixed test key pair.
 inline const uov::SecretKeyBytes UOV_SK_BYTES = filled<uov::SECRET_KEY_BYTES>(0x60);
 
-// An expanded UOV key pair.
+// An expanded UOV key pair. pk is the secret key's expanded public key.
 struct UovKeyPair {
-    uov::PublicKey pk;
+    const uov::PublicKey& pk;
     uov::SecretKey sk;
 
-    // Members are initialized in declaration order, so pk is expanded from sk_ before it's moved.
-    explicit UovKeyPair(uov::SecretKey sk_) : pk(sk_.public_key()), sk(std::move(sk_)) {}
+    // Members are initialized in declaration order, so pk refers to the public key of sk_ before
+    // it's moved. The reference remains valid, since moving a secret key doesn't move its expanded
+    // public key.
+    explicit UovKeyPair(uov::SecretKey sk_) : pk(sk_.expanded_public_key()), sk(std::move(sk_)) {}
 };
 
 // The fixed test key pair, expanded once.
@@ -92,6 +97,29 @@ inline std::string to_hex(std::span<const uint8_t> bytes) {
         out.push_back(digits[b & 0xf]);
     }
     return out;
+}
+
+// Read a known-answer field "name HEX" of exactly N bytes. Returns false if the label or length
+// doesn't match.
+template <size_t N>
+bool read_kat_field(std::istream& in, std::string_view name, std::array<uint8_t, N>& out) {
+    std::string label, hex;
+    if (!(in >> label >> hex) || label != name) {
+        return false;
+    }
+    const auto bytes = hex_decode(hex);
+    if (!bytes || bytes->size() != N) {
+        return false;
+    }
+    std::ranges::copy(*bytes, out.begin());
+    return true;
+}
+
+// Read a known-answer field "name DECIMAL". Returns false if the label doesn't match.
+template <std::unsigned_integral T>
+bool read_kat_number(std::istream& in, std::string_view name, T& out) {
+    std::string label;
+    return bool(in >> label >> out) && label == name;
 }
 
 // Plaintext stand-in for faest::quicksilver_state: evaluates each constraint of a relation on a

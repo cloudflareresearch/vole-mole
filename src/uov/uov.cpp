@@ -11,6 +11,7 @@ extern "C" {
 
 #include <cstdlib>
 #include <cstring>
+#include <memory>
 #include <stdexcept>
 
 // pqov normally implements randombytes() with OpenSSL. We build it without OpenSSL, in which case
@@ -34,6 +35,7 @@ static_assert(detail::EXPANDED_PUBLIC_KEY_BYTES == _PK_P1_BYTE + _PK_P2_BYTE + _
 struct SecretKey::Impl {
     sk_t sk;
     PublicKeyBytes public_key;
+    std::unique_ptr<PublicKey> expanded_public_key;
 };
 
 struct PublicKey::Impl {
@@ -48,6 +50,7 @@ SecretKey::SecretKey(const SecretKeyBytes& bytes) : impl_(std::make_unique<Impl>
     }
     // Copy rather than cast; see PublicKey::PublicKey().
     std::memcpy(impl_->public_key.data(), &cpk, sizeof(cpk));
+    impl_->expanded_public_key = std::make_unique<PublicKey>(impl_->public_key);
 }
 
 SecretKey::SecretKey(SecretKey&&) noexcept = default;
@@ -55,6 +58,8 @@ SecretKey& SecretKey::operator=(SecretKey&&) noexcept = default;
 SecretKey::~SecretKey() = default;
 
 const PublicKeyBytes& SecretKey::public_key() const { return impl_->public_key; }
+
+const PublicKey& SecretKey::expanded_public_key() const { return *impl_->expanded_public_key; }
 
 PublicKey::PublicKey(const PublicKeyBytes& bytes) : impl_(std::make_unique<Impl>()) {
     // cpk_t is a packed struct of byte arrays, so `bytes` has exactly its layout, but casting

@@ -1,4 +1,4 @@
-// Moussaka, a post-quantum variant of the Issuer-Hiding Anonymous Token (IHAT) protocol.
+// Moussaka, a post-quantum Issuer-Hiding Anonymous Token (IHAT) protocol.
 
 #ifndef VOLE_MOLE_MOUSSAKA_HPP
 #define VOLE_MOLE_MOUSSAKA_HPP
@@ -17,7 +17,7 @@
 
 namespace vole_mole::moussaka {
 
-// Version of the draft this implements; used for domain separation.
+// Version of the draft this implements.
 constexpr uint8_t VERSION = 0;
 
 // The maximum size of an Anchor Set.

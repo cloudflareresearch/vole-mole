@@ -12,6 +12,8 @@ namespace detail {
 struct PublicKeyAccess;
 } // namespace detail
 
+class PublicKey;
+
 constexpr size_t N = 119; // number of variables (preimage length)
 constexpr size_t M = 45;  // number of equations (target length)
 
@@ -23,7 +25,7 @@ using Preimage = std::array<uint8_t, N>;
 using SecretKeyBytes = std::array<uint8_t, SECRET_KEY_BYTES>;
 using PublicKeyBytes = std::array<uint8_t, PUBLIC_KEY_BYTES>;
 
-// An expanded secret key, alongside the compressed public key.
+// An expanded secret key, alongside the compressed and expanded public key.
 //
 // The key pair lives on the heap and is move-only.
 class SecretKey {
@@ -40,6 +42,13 @@ class SecretKey {
 
     // The compressed public key bytes.
     const PublicKeyBytes& public_key() const;
+
+    // The expanded public key, i.e., PublicKey(public_key()). It's expanded once when the secret
+    // key is constructed and owned by the key pair; it's not reference counted. The reference
+    // remains valid when the secret key is moved (it then belongs to the moved-to secret key), and
+    // is invalidated when the owning secret key is destroyed or assigned to. Must not be called on
+    // a moved-from secret key.
+    const PublicKey& expanded_public_key() const;
 
     // Derive the preimage of the given target, i.e., P(preimage) = target, where P is the public
     // map.

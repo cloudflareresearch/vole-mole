@@ -2,14 +2,11 @@
 
 #include "dst.hpp"
 #include "pomfrit/redeem.hpp"
+#include "random.hpp"
 #include "uov/public_key.hpp"
 #include "voleith.hpp"
 
 #include "hash.hpp" // from faest-arch-opt
-
-extern "C" {
-#include "randomness.h" // from faest-arch-opt
-}
 
 #include <algorithm>
 #include <array>
@@ -158,12 +155,7 @@ IssueRequestResult issue_request_with_seed(const uov::PublicKey& pk, std::span<c
 }
 
 IssueRequestResult issue_request(const uov::PublicKey& pk, std::span<const uint8_t> msg) {
-    Seed seed;
-    if (rand_bytes(seed.data(), seed.size()) != 0) {
-        throw std::runtime_error("failed to get randomness from the operating system");
-    }
-
-    return issue_request_with_seed(pk, msg, seed);
+    return issue_request_with_seed(pk, msg, random_bytes<SEED_BYTES>());
 }
 
 // PomFRIT <https://ia.cr/2026/109>: Algorithm 2, Sig2()

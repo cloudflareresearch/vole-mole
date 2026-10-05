@@ -5,11 +5,8 @@
 #include "moussaka/issue.hpp"
 #include "moussaka/redeem.hpp"
 #include "moussaka/token.hpp"
+#include "random.hpp"
 #include "uov/public_key.hpp"
-
-extern "C" {
-#include "randomness.h" // from faest-arch-opt
-}
 
 #include <algorithm>
 #include <memory>
@@ -63,19 +60,11 @@ ProveSeed<RedeemRelation> expand_redeem_seed(const Seed& seed) {
     return rho;
 }
 
-template <size_t N> std::array<uint8_t, N> random_bytes() {
-    std::array<uint8_t, N> out;
-    if (rand_bytes(out.data(), out.size()) != 0) {
-        throw std::runtime_error("failed to get randomness from the operating system");
-    }
-    return out;
-}
-
 } // namespace
 
 Commitment commit(const Nullifier& nf, const Context& ctx_iss, const Context& ctx_red,
                   const Opening& r) {
-    const Kp800State out = keccak_p800(detail::encode_init_state(nf, ctx_iss, ctx_red, r));
+    const Kp800State out = keccak_p800(detail::encode_com_state(nf, ctx_iss, ctx_red, r));
 
     Commitment t;
     std::copy_n(out.begin(), t.size(), t.begin());
