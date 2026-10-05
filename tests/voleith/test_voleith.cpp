@@ -49,7 +49,8 @@ struct FaestRelation {
         hasher.update(x.msg);
     }
 
-    template <typename QS> static void constraints(QS* qs, const instance& x) {
+    template <typename QS>
+    static void constraints(QS* qs, const instance& x, std::span<const uint8_t> /* chal2 */) {
         faest::owf_constraints<P>(qs, &x.pk);
     }
 };

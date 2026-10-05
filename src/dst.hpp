@@ -34,19 +34,24 @@ constexpr Dst MOUSSAKA_ISSUE_PROOF_DST = make_dst("mous", moussaka::VERSION, 'i'
 constexpr Dst MOUSSAKA_ISSUE_SEED_DST = make_dst("mous", moussaka::VERSION, 's', '0');
 constexpr Dst MOUSSAKA_REDEEM_PROOF_DST = make_dst("mous", moussaka::VERSION, 'r', '0');
 constexpr Dst MOUSSAKA_REDEEM_SEED_DST = make_dst("mous", moussaka::VERSION, 's', '1');
+// Random linear combination of the components of Q(s) in the redemption proof
+constexpr Dst MOUSSAKA_REDEEM_COMBINE_DST = make_dst("mous", moussaka::VERSION, 'l', '0');
 
 // PomFRIT
 constexpr Dst POMFRIT_PROOF_DST = make_dst("pomf", pomfrit::VERSION, 'p', '0'); // VOLEitH relation
 constexpr Dst POMFRIT_REFRESHER_DST = make_dst("pomf", pomfrit::VERSION, 'r', '0'); // refresher_com
 constexpr Dst POMFRIT_SEED_DST = make_dst("pomf", pomfrit::VERSION, 's', '0');      // Client's seed
 constexpr Dst POMFRIT_TARGET_DST = make_dst("pomf", pomfrit::VERSION, 'h', '0'); // H(pk, pi_1, msg)
+// Random linear combination of the components of P(s)
+constexpr Dst POMFRIT_COMBINE_DST = make_dst("pomf", pomfrit::VERSION, 'l', '0');
 
 constexpr bool dsts_are_distinct() {
     // Every DST must be distinct. Add new DSTs to this list.
     std::array all = {
-        MOUSSAKA_COM_DST,          MOUSSAKA_ISSUE_PROOF_DST, MOUSSAKA_ISSUE_SEED_DST,
-        MOUSSAKA_REDEEM_PROOF_DST, MOUSSAKA_REDEEM_SEED_DST, POMFRIT_PROOF_DST,
-        POMFRIT_REFRESHER_DST,     POMFRIT_SEED_DST,         POMFRIT_TARGET_DST,
+        MOUSSAKA_COM_DST,           MOUSSAKA_ISSUE_PROOF_DST, MOUSSAKA_ISSUE_SEED_DST,
+        MOUSSAKA_REDEEM_PROOF_DST,  MOUSSAKA_REDEEM_SEED_DST, MOUSSAKA_REDEEM_COMBINE_DST,
+        POMFRIT_PROOF_DST,          POMFRIT_REFRESHER_DST,    POMFRIT_SEED_DST,
+        POMFRIT_TARGET_DST,         POMFRIT_COMBINE_DST,
     };
     bool distinct = true;
     for (size_t i = 0; i < all.size(); ++i) {

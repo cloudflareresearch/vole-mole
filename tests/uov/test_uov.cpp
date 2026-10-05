@@ -181,32 +181,47 @@ TEST(UovCircuit, ForEachMonomialEvaluatesPublicMap) {
 
 namespace {
 
-// Evaluate the public map circuit at s with the QuickSilver prover's types, which track the value
-// of each committed element (with arbitrary VOLE tags), and check that the result is the embedding
-// of `want`.
+using QS = faest::quicksilver_state<faest::secpar::s128, false, 2>;
+using Combination = uov::detail::Combination<QS>;
+using poly = Combination::poly;
+
+// sum_k l[k] * t[k] in the clear.
+poly combine_plain(const Combination& l, const uov::Target& t) {
+    poly out = poly::set_zero();
+    for (size_t k = 0; k < uov::M; ++k) {
+        out = out + (l.coeff(k) * uov::detail::embed<QS>(t[k])).reduce_to<128>();
+    }
+    return out;
+}
+
+// Evaluate the combined public map circuit at s with the QuickSilver prover's types, which track
+// the value of each committed element (with arbitrary VOLE tags), and check that the result is the
+// combination of `want`.
 void expect_circuit_eval(const uov::PublicKey& pk, const uov::Preimage& s,
-                         const uov::Target& want) {
-    using QS = faest::quicksilver_state<faest::secpar::s128, false, 2>;
+                         const uov::Target& want, const Combination& l) {
     std::vector<faest::block_secpar<faest::secpar::s128>> macs(8 * uov::N);
     std::array<uint8_t, faest::QS_CONSTANTS<faest::secpar::s128, 2>::CHALLENGE_BYTES> challenge{};
-    const QS qs(s.data(), macs.data(), uov::M, challenge.data());
+    const QS qs(s.data(), macs.data(), 1, challenge.data());
 
     std::array<uov::detail::qs_val<QS, 1>, uov::N> s_committed;
     for (size_t i = 0; i < uov::N; ++i) {
         s_committed[i] = qs.load_witness_8_bits_and_combine(8 * i);
     }
-    const auto p = uov::detail::qs_eval_public_map<QS>(pk, s_committed);
-    for (size_t k = 0; k < uov::M; ++k) {
-        EXPECT_TRUE(p[k].value() == uov::detail::embed<QS>(want[k]))
-            << "component " << k << " at s = " << to_hex(s);
-    }
+    const auto p = uov::detail::qs_eval_combined_public_map<QS>(pk, s_committed, l);
+    EXPECT_TRUE(p.value() == combine_plain(l, want)) << "at s = " << to_hex(s);
+}
+
+// A combination derived from an arbitrary challenge.
+const Combination& combination() {
+    static const Combination l(filled<48>(0x70), std::array<uint8_t, 3>{'d', 's', 't'});
+    return l;
 }
 
 } // namespace
 
-TEST(UovCircuit, CircuitEvalPublicMapMatchesPlaintext) {
+TEST(UovCircuit, CircuitEvalCombinedPublicMapMatchesPlaintext) {
     const auto& [pk, sk] = uov_key_pair();
-    expect_circuit_eval(pk, sk.derive_preimage(T), T);
+    expect_circuit_eval(pk, sk.derive_preimage(T), T, combination());
 
     const UovKeyPair other(uov::SecretKey{filled<uov::SECRET_KEY_BYTES>(0x61)});
     std::mt19937 rng(0); // fixed seed, so that failures are reproducible
@@ -222,7 +237,45 @@ TEST(UovCircuit, CircuitEvalPublicMapMatchesPlaintext) {
             points.push_back(s);
         }
         for (const uov::Preimage& s : points) {
-            expect_circuit_eval(*public_key, s, public_key->eval(s));
+            expect_circuit_eval(*public_key, s, public_key->eval(s), combination());
         }
+    }
+}
+
+// Each coefficient of the combination is used: with the unit vector e_k as the combination, the
+// circuit evaluates the k-th component of P(s).
+TEST(UovCircuit, CircuitEvalCombinedPublicMapUnitVectors) {
+    const auto& [pk, sk] = uov_key_pair();
+    const uov::Preimage s = sk.derive_preimage(T);
+    for (size_t k = 0; k < uov::M; ++k) {
+        std::array<poly, uov::M> e;
+        e.fill(poly::set_zero());
+        e[k] = uov::detail::embed<QS>(1);
+        expect_circuit_eval(pk, s, T, Combination(e));
+    }
+}
+
+// The combination is derived deterministically from the challenge and DST, and depends on both.
+TEST(UovCircuit, CombinationDependsOnChallengeAndDst) {
+    const auto chal = filled<48>(0x70);
+    const std::array<uint8_t, 3> dst = {'d', 's', 't'};
+    const std::array<uint8_t, 3> other_dst = {'d', 's', 'u'};
+    auto other_chal = chal;
+    other_chal[0] ^= 1;
+    const Combination a(chal, dst), b(chal, dst), c(other_chal, dst), d(chal, other_dst);
+    for (size_t k = 0; k < uov::M; ++k) {
+        EXPECT_TRUE(a.coeff(k) == b.coeff(k));
+        EXPECT_FALSE(a.coeff(k) == c.coeff(k));
+        EXPECT_FALSE(a.coeff(k) == d.coeff(k));
+    }
+}
+
+// A target that differs from P(s) in a single component is detected by the combination.
+TEST(UovCircuit, CombinationDetectsWrongComponent) {
+    for (size_t k = 0; k < uov::M; ++k) {
+        uov::Target wrong = T;
+        wrong[k] ^= 1;
+        EXPECT_FALSE(combine_plain(combination(), wrong) == combine_plain(combination(), T))
+            << "component " << k;
     }
 }

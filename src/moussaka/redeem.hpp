@@ -12,9 +12,11 @@
 // 800 constraints of degree at most 9 for each of the two committed intermediate states. Rather
 // than constraining each of the 8 * M bits of the output of the last segment, we combine each byte
 // of the output (degree 8) into an element of the GF(256) subfield of GF(2^128), so that the M
-// components of Q(s) can be compared directly. Q(s) is computed as sum_u b[u] * P[u](s): each
-// P[u](s) has degree 2 (see uov/circuit.hpp), so Q(s) has degree 3, and the M output constraints
-// have degree 8.
+// components of Q(s) can be compared directly. Rather than comparing each of the M components, we
+// compare a random linear combination l of them, with coefficients in GF(2^128) derived from the
+// QuickSilver challenge (see uov::detail::Combination). l(Q(s)) is computed as
+// sum_u b[u] * l(P[u](s)): each l(P[u](s)) has degree 2 (see uov/circuit.hpp), so l(Q(s)) has
+// degree 3, and the single output constraint has degree 8.
 //
 // The selector b is a vector of MAX_ANCHORS bits. Each bit is constrained to be a bit, or to be
 // zero if it's beyond the end of the Anchor Set. Since every b[u] is a bit, the parity constraints
@@ -99,7 +101,7 @@ constexpr size_t REDEEM_NUM_CONSTRAINTS =
     + (MAX_ANCHORS - 1)  // parity constraints
     + 1                  // weight constraint
     + keccak::detail::NUM_SEGMENT_CONSTRAINTS // segment ends in a committed state
-    + uov::M;                                 // Q(s) = commitment
+    + 1; // Q(s) = commitment (a random linear combination of the M components)
 
 // Compute the full witness, including the intermediate Keccak states and the selector for the
 // Anchor at index i.
@@ -190,11 +192,14 @@ struct RedeemRelation {
         hasher.update(x.ctx_red);
     }
 
-    template <typename QS> static void constraints(QS* qs, const instance& x) {
+    template <typename QS>
+    static void constraints(QS* qs, const instance& x, std::span<const uint8_t> chal2) {
         static_assert(QS::max_degree == REDEEM_QS_DEGREE);
         using faest::poly1;
         using qs_1 = keccak::detail::qs_val<QS, 1>;
+        using qs_2 = keccak::detail::qs_val<QS, 2>;
         using qs_3 = keccak::detail::qs_val<QS, 3>;
+        using qs_out = keccak::detail::qs_val<QS, keccak::detail::OUTPUT_DEGREE>;
         static_assert(3 <= keccak::detail::OUTPUT_DEGREE);
         const size_t n = x.anchors.size();
 
@@ -231,26 +236,26 @@ struct RedeemRelation {
                                      REDEEM_COM_TO_WIT),
             REDEEM_WIT_OFF_STATES);
 
-        // Compute Q(s) = sum_u b[u] * P[u](s).
+        // Compute l(Q(s)) = sum_u b[u] * l(P[u](s)), where l is the random linear combination of
+        // the M components.
+        const uov::detail::Combination<QS> l(chal2, MOUSSAKA_REDEEM_COMBINE_DST);
         std::array<qs_1, uov::N> s;
         for (size_t i = 0; i < uov::N; ++i) {
             s[i] = qs->load_witness_8_bits_and_combine(8 * (REDEEM_WIT_OFF_S + i));
         }
-        std::array<qs_3, uov::M> q;
-        q.fill(qs_3(poly1(0), qs));
+        qs_3 q(poly1(0), qs);
         for (size_t u = 0; u < n; ++u) {
-            const auto p = uov::detail::qs_eval_public_map<QS>(x.anchors[u].get(), s);
-            for (size_t k = 0; k < uov::M; ++k) {
-                q[k] += b[u] * p[k];
-            }
+            const qs_2 p = uov::detail::qs_eval_combined_public_map<QS>(x.anchors[u].get(), s, l);
+            q += b[u] * p;
         }
 
-        // Add output constraints: The last segment ends in Q(s). Each byte of the commitment is
-        // combined into an element of GF(256).
+        // Add output constraint: The last segment ends in Q(s), i.e., l(Q(s)) = l(out). Each byte
+        // of the output is combined into an element of GF(256).
+        qs_out lout(poly1(0), qs);
         for (size_t k = 0; k < uov::M; ++k) {
-            qs->add_constraint(keccak::detail::qs_byte(out, k) +
-                               keccak::detail::qs_lift<keccak::detail::OUTPUT_DEGREE>(q[k]));
+            lout += l.coeff(k) * keccak::detail::qs_byte(out, k);
         }
+        qs->add_constraint(lout + keccak::detail::qs_lift<keccak::detail::OUTPUT_DEGREE>(q));
     }
 };
 
