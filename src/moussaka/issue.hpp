@@ -166,7 +166,9 @@ struct IssueRelation {
     }
 
     template <typename QS>
-    static void constraints(QS* qs, const instance& x, std::span<const uint8_t> /* chal2 */) {
+    static void constraints(
+        QS* qs, const instance& x,
+        std::span<const uint8_t, params::CONSTS::QS::CHALLENGE_BYTES> /* chal2 */) {
         static_assert(QS::max_degree == ISSUE_QS_DEGREE);
         using faest::poly1;
         using qs_bit = keccak::detail::qs_val<QS, 1>;

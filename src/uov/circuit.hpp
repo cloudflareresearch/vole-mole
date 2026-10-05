@@ -5,8 +5,7 @@
 // so we can evaluate P directly on committed field elements. Each component of P is a quadratic
 // form in s, so if the elements of s have degree 1, then the components of P(s) have degree 2.
 //
-// Rather than evaluating each of the M components, we evaluate a random linear combination of them
-// (see Combination below).
+// Rather than evaluating each of the M components, we evaluate a random linear combination of them.
 
 #ifndef VOLE_MOLE_UOV_CIRCUIT_HPP
 #define VOLE_MOLE_UOV_CIRCUIT_HPP
@@ -15,6 +14,7 @@
 
 #include "uov/public_key.hpp"
 
+#include "constants.hpp"   // from faest-arch-opt
 #include "hash.hpp"        // from faest-arch-opt
 #include "polynomials.hpp" // from faest-arch-opt
 #include "quicksilver.hpp" // from faest-arch-opt
@@ -35,7 +35,7 @@ template <typename QS> faest::poly_secpar<QS::secpar_v> embed(uint8_t a) {
     return faest::poly_secpar<QS::secpar_v>::from_8_byte(a);
 }
 
-// A random linear combination of the M components of the public map, which lets us prove
+// A random linear combination of the M components of the target, which lets us prove
 // P(s) = t with a single constraint sum_k l[k] * (P(s)[k] - t[k]) = 0 rather than M of them
 // (<https://ia.cr/2026/109>, Section 8, "Evaluation of MAYO").
 //
@@ -49,20 +49,22 @@ template <typename QS> faest::poly_secpar<QS::secpar_v> embed(uint8_t a) {
 template <typename QS> class Combination {
   public:
     using poly = faest::poly_secpar<QS::secpar_v>;
+    static constexpr size_t CHALLENGE_BYTES =
+        faest::QS_CONSTANTS<QS::secpar_v, QS::max_degree>::CHALLENGE_BYTES;
     static constexpr size_t POLY_BYTES = faest::secpar_to_bytes(QS::secpar_v);
-    static constexpr size_t SEED_BYTES = M * POLY_BYTES;
+    static constexpr size_t L_BYTES = M * POLY_BYTES;
 
     // Derive l from the QuickSilver challenge chal2 and a domain separation tag.
-    Combination(std::span<const uint8_t> chal2, std::span<const uint8_t> dst) {
-        std::array<uint8_t, SEED_BYTES> seed;
+    Combination(std::span<const uint8_t, CHALLENGE_BYTES> chal2, std::span<const uint8_t> dst) {
+        std::array<uint8_t, L_BYTES> l_bytes;
         faest::hash_state hasher;
         hasher.init(QS::secpar_v);
         hasher.update(chal2);
         hasher.update(dst);
-        hasher.finalize(seed);
+        hasher.finalize(l_bytes);
         std::array<poly, M> l;
         for (size_t k = 0; k < M; ++k) {
-            l[k] = poly::load(&seed[k * POLY_BYTES]);
+            l[k] = poly::load(&l_bytes[k * POLY_BYTES]);
         }
         init(l);
     }

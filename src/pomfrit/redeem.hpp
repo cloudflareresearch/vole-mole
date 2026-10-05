@@ -107,7 +107,8 @@ struct RedeemRelation {
     }
 
     template <typename QS>
-    static void constraints(QS* qs, const instance& x, std::span<const uint8_t> chal2) {
+    static void constraints(QS* qs, const instance& x,
+                            std::span<const uint8_t, params::CONSTS::QS::CHALLENGE_BYTES> chal2) {
         static_assert(QS::max_degree == REDEEM_QS_DEGREE);
         using qs_1 = uov::detail::qs_val<QS, 1>;
         using qs_2 = uov::detail::qs_val<QS, 2>;
@@ -123,18 +124,18 @@ struct RedeemRelation {
         for (size_t i = 0; i < uov::N; ++i) {
             s[i] = qs->load_witness_8_bits_and_combine(8 * (WIT_OFF_S + i));
         }
-        const qs_2 p = uov::detail::qs_eval_combined_public_map<QS>(*x.pk, s, l);
+        const qs_2 lp = uov::detail::qs_eval_combined_public_map<QS>(*x.pk, s, l);
 
         // Add output constraint: l(P(s) + h + r) = 0.
-        qs_1 lhr = qs_1(faest::poly1(0), qs);
+        qs_1 lr = qs_1(faest::poly1(0), qs);
         faest::poly_secpar<QS::secpar_v> lh = faest::poly_secpar<QS::secpar_v>::set_zero();
         for (size_t k = 0; k < uov::M; ++k) {
             const qs_1 r_k = qs->load_witness_8_bits_and_combine(8 * (WIT_OFF_R + k));
-            lhr += l.coeff(k) * r_k;
-            lh = lh + (l.coeff(k) * uov::detail::embed<QS>(x.h[k]))
-                          .template reduce_to<faest::secpar_to_bits(QS::secpar_v)>();
+            lr += l.coeff(k) * r_k;
+            lh += (l.coeff(k) * uov::detail::embed<QS>(x.h[k]))
+                      .template reduce_to<faest::secpar_to_bits(QS::secpar_v)>();
         }
-        qs->add_constraint(p + qs_2(lhr + lh));
+        qs->add_constraint(lp + qs_2(lr + lh));
     }
 };
 
