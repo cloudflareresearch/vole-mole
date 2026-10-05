@@ -193,7 +193,8 @@ struct RedeemRelation {
     }
 
     template <typename QS>
-    static void constraints(QS* qs, const instance& x, std::span<const uint8_t> chal2) {
+    static void constraints(QS* qs, const instance& x,
+                            std::span<const uint8_t, params::CONSTS::QS::CHALLENGE_BYTES> chal2) {
         static_assert(QS::max_degree == REDEEM_QS_DEGREE);
         using faest::poly1;
         using qs_1 = keccak::detail::qs_val<QS, 1>;
@@ -243,10 +244,10 @@ struct RedeemRelation {
         for (size_t i = 0; i < uov::N; ++i) {
             s[i] = qs->load_witness_8_bits_and_combine(8 * (REDEEM_WIT_OFF_S + i));
         }
-        qs_3 q(poly1(0), qs);
+        qs_3 lq(poly1(0), qs);
         for (size_t u = 0; u < n; ++u) {
-            const qs_2 p = uov::detail::qs_eval_combined_public_map<QS>(x.anchors[u].get(), s, l);
-            q += b[u] * p;
+            const qs_2 lp = uov::detail::qs_eval_combined_public_map<QS>(x.anchors[u].get(), s, l);
+            lq += b[u] * lp;
         }
 
         // Add output constraint: The last segment ends in Q(s), i.e., l(Q(s)) = l(out). Each byte
@@ -255,7 +256,7 @@ struct RedeemRelation {
         for (size_t k = 0; k < uov::M; ++k) {
             lout += l.coeff(k) * keccak::detail::qs_byte(out, k);
         }
-        qs->add_constraint(lout + keccak::detail::qs_lift<keccak::detail::OUTPUT_DEGREE>(q));
+        qs->add_constraint(lout + keccak::detail::qs_lift<keccak::detail::OUTPUT_DEGREE>(lq));
     }
 };
 

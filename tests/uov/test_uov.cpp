@@ -213,7 +213,8 @@ void expect_circuit_eval(const uov::PublicKey& pk, const uov::Preimage& s,
 
 // A combination derived from an arbitrary challenge.
 const Combination& combination() {
-    static const Combination l(filled<48>(0x70), std::array<uint8_t, 3>{'d', 's', 't'});
+    static const Combination l(filled<Combination::CHALLENGE_BYTES>(0x70),
+                               std::array<uint8_t, 3>{'d', 's', 't'});
     return l;
 }
 
@@ -257,7 +258,7 @@ TEST(UovCircuit, CircuitEvalCombinedPublicMapUnitVectors) {
 
 // The combination is derived deterministically from the challenge and DST, and depends on both.
 TEST(UovCircuit, CombinationDependsOnChallengeAndDst) {
-    const auto chal = filled<48>(0x70);
+    const auto chal = filled<Combination::CHALLENGE_BYTES>(0x70);
     const std::array<uint8_t, 3> dst = {'d', 's', 't'};
     const std::array<uint8_t, 3> other_dst = {'d', 's', 'u'};
     auto other_chal = chal;
