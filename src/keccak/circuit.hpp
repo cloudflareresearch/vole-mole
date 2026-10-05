@@ -59,12 +59,14 @@ template <typename T> std::vector<T> keccak_theta_rho_pi(const std::vector<T>& a
     return b;
 }
 
-// Full round `round` (0-based index into Keccak-p[800, 12]).
+// Full round `round` (0-based index into Keccak-p[800, 12]). Only the first `num_out_bits` bits of
+// the output are computed.
 //
 // `Chi` computes `a ^ (~b & c)` from three bits of the input type (and in doing so doubles the
 // degree); `AddConst` XORs a public bit into a bit of the output type.
 template <typename In, typename Chi, typename AddConst>
-auto keccak_round(const std::vector<In>& in, size_t round, Chi chi, AddConst add_const) {
+auto keccak_round(const std::vector<In>& in, size_t round, Chi chi, AddConst add_const,
+                  size_t num_out_bits = KP800_STATE_BITS) {
     constexpr size_t w = KECCAK_W;
     const auto idx = keccak_bit_index;
 
@@ -72,19 +74,15 @@ auto keccak_round(const std::vector<In>& in, size_t round, Chi chi, AddConst add
 
     using Out = decltype(chi(b[0], b[0], b[0]));
     std::vector<Out> out;
-    out.reserve(KP800_STATE_BITS);
-    for (size_t y = 0; y < 5; ++y) {
-        for (size_t x = 0; x < 5; ++x) {
-            for (size_t z = 0; z < w; ++z) {
-                out.push_back(
-                    chi(b[idx(x, y, z)], b[idx((x + 1) % 5, y, z)], b[idx((x + 2) % 5, y, z)]));
-            }
-        }
+    out.reserve(num_out_bits);
+    for (size_t i = 0; i < num_out_bits; ++i) {
+        const size_t lane = i / w, z = i % w, x = lane % 5, y = lane / 5;
+        out.push_back(chi(b[i], b[idx((x + 1) % 5, y, z)], b[idx((x + 2) % 5, y, z)]));
     }
 
     // iota: only lane (0, 0) is affected.
     const uint32_t rc = KP800_RC[round];
-    for (size_t z = 0; z < w; ++z) {
+    for (size_t z = 0; z < w && z < num_out_bits; ++z) {
         if ((rc >> z) & 1) {
             out[idx(0, 0, z)] = add_const(out[idx(0, 0, z)]);
         }

@@ -125,25 +125,31 @@ template <typename QS, size_t deg> using qs_val = faest::quicksilver_gfsecpar<QS
 // The committed bits of a Keccak-p[800] state, of degree `deg`.
 template <typename QS, size_t deg = 1> using QsState = std::vector<qs_val<QS, deg>>;
 
-// One Keccak round: degree d in, degree 2d out.
+// One Keccak round: degree d in, degree 2d out. Only the first `num_out_bits` output bits are
+// computed.
 template <typename QS, size_t d>
-QsState<QS, 2 * d> qs_keccak_round(const QsState<QS, d>& in, size_t round) {
+QsState<QS, 2 * d> qs_keccak_round(const QsState<QS, d>& in, size_t round,
+                                   size_t num_out_bits = KP800_STATE_BITS) {
     const auto chi = [](const qs_val<QS, d>& a, const qs_val<QS, d>& b, const qs_val<QS, d>& c) {
         // a ^ (~b & c) = a + (b + 1) * c
         return qs_val<QS, 2 * d>(a) + (b + faest::poly1(1)) * c;
     };
     const auto add_one = [](const qs_val<QS, 2 * d>& x) { return x + faest::poly1(1); };
-    return keccak_round(in, round, chi, add_one);
+    return keccak_round(in, round, chi, add_one, num_out_bits);
 }
 
-// `num_rounds` rounds starting at `first_round`: degree d in, degree d * 2^num_rounds out.
+// `num_rounds` rounds starting at `first_round`: degree d in, degree d * 2^num_rounds out. Only the
+// first `num_out_bits` bits of the output are computed (unless num_rounds = 0).
 template <typename QS, size_t num_rounds, size_t d = 1>
-auto qs_keccak_rounds(const QsState<QS, d>& in, size_t first_round) {
+auto qs_keccak_rounds(const QsState<QS, d>& in, size_t first_round,
+                      size_t num_out_bits = KP800_STATE_BITS) {
     if constexpr (num_rounds == 0) {
         return in;
+    } else if constexpr (num_rounds == 1) {
+        return qs_keccak_round<QS, d>(in, first_round, num_out_bits);
     } else {
         return qs_keccak_rounds<QS, num_rounds - 1, 2 * d>(qs_keccak_round<QS, d>(in, first_round),
-                                                           first_round + 1);
+                                                           first_round + 1, num_out_bits);
     }
 }
 
@@ -267,13 +273,17 @@ void segment_constraints(QS* qs, QsState<QS>& state, size_t wit_off_states,
 // witness bytes starting at `wit_off_states` (see encode_committed_states).
 //
 // Adds NUM_SEGMENT_CONSTRAINTS constraints (one per bit of each intermediate state) and
-// returns the bits of the output, of degree OUTPUT_DEGREE.
+// returns the first `num_out_bits` bits of the output, of degree OUTPUT_DEGREE. (Only these are
+// computed in the last round.)
 template <typename QS>
-QsState<QS, OUTPUT_DEGREE> qs_keccak(QS* qs, QsState<QS> state, size_t wit_off_states) {
+QsState<QS, OUTPUT_DEGREE> qs_keccak(QS* qs, QsState<QS> state, size_t wit_off_states,
+                                     size_t num_out_bits = KP800_STATE_BITS) {
     static_assert(QS::max_degree >= QS_DEGREE);
+    static_assert(FINAL_ROUNDS >= 1);
     segment_constraints(qs, state, wit_off_states,
                         std::make_index_sequence<NUM_COMMITTED_STATES>());
-    return qs_keccak_rounds<QS, FINAL_ROUNDS>(state, SEGMENT_START[NUM_COMMITTED_STATES]);
+    return qs_keccak_rounds<QS, FINAL_ROUNDS>(state, SEGMENT_START[NUM_COMMITTED_STATES],
+                                              num_out_bits);
 }
 
 // Combine bits 8k .. 8k + 8 of a committed state into an element of the GF(256) subfield of
