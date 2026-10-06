@@ -1,0 +1,37 @@
+src/moussaka/issue.hpp
+  s_399085703b3426::t_8fa9e5e68ddb71 68-75
+src/moussaka/redeem.hpp
+  s_399085703b3426::t_6b2270cb771bf8 88-95
+src/mq/local.hpp
+  s_399085703b3426::t_bf8689bc627c16 73-134,142,148-150,205,213-312
+src/mq/split.hpp
+  s_399085703b3426::t_a2b81e0a6a90fb 70
+src/ratatouille/issue.hpp
+  s_399085703b3426::t_11d52412c15f77 65-72
+src/ratatouille/spend.hpp
+  s_399085703b3426::t_c6440540d83b69 130-137
+src/voleith.hpp
+  s_399085703b3426::t_40c8ce687a9ab2 152-160,162-163,245,276,332,485,526
+subprojects/faest-arch-opt.wrap
+  s_399085703b3426::t_38873fecb0dc47 9-10
+subprojects/packagefiles/faest-arch-opt/0004-Allow-up-to-64-CRT-VOLE-masks.patch
+  s_399085703b3426::t_7521079f5a516e 1-206
+tests/mq/test_mq.cpp
+  s_399085703b3426::t_137ae55190c386 339-343,393-397,403-406,408,417-420,442-467
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.10",
+  "base_commit_sha": "cda9d091a9fe3541149c42e76f12c0a6d44c1a4b",
+  "prompts": {},
+  "sessions": {
+    "s_399085703b3426": {
+      "agent_id": {
+        "tool": "opencode",
+        "id": "ses_ef221eca0ffe7CEoGk1MYYa9nx",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Bas Westerbaan <bas@cloudflare.com>"
+    }
+  }
+}
