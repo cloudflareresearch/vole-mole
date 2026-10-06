@@ -10,6 +10,7 @@
 #include <array>
 #include <bit>
 #include <cstdint>
+#include <cstdio>
 #include <cstdlib>
 #include <optional>
 #include <print>

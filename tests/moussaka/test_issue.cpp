@@ -1,6 +1,10 @@
 // Tests for the issuance proof relation.
 
-#include "moussaka/issue.hpp" // internal
+#include "vole_mole/moussaka.hpp"
+#include "vole_mole/uov.hpp"
+
+#include "moussaka/commit.hpp" // internal
+#include "moussaka/issue.hpp"  // internal
 
 #include "test.hpp"
 
@@ -8,6 +12,7 @@
 
 #include <array>
 #include <cstddef>
+#include <cstdint>
 #include <vector>
 
 using namespace vole_mole;

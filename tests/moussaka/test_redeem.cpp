@@ -1,6 +1,12 @@
 // Tests for the redemption proof relation.
 
-#include "moussaka/redeem.hpp" // internal
+#include "vole_mole/keccak.hpp"
+#include "vole_mole/moussaka.hpp"
+#include "vole_mole/uov.hpp"
+
+#include "keccak/segmented.hpp" // internal
+#include "moussaka/commit.hpp"  // internal
+#include "moussaka/redeem.hpp"  // internal
 
 #include "test.hpp"
 

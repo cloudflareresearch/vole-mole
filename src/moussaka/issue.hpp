@@ -23,8 +23,8 @@
 #ifndef VOLE_MOLE_MOUSSAKA_ISSUE_HPP
 #define VOLE_MOLE_MOUSSAKA_ISSUE_HPP
 
-#include "vole_mole/keccak.hpp"
 #include "vole_mole/moussaka.hpp"
+#include "vole_mole/uov.hpp"
 
 #include "dst.hpp"
 #include "keccak/segmented.hpp"
@@ -35,7 +35,7 @@
 #include "constants.hpp"   // from faest-arch-opt
 #include "hash.hpp"        // from faest-arch-opt
 #include "parameters.hpp"  // from faest-arch-opt
-#include "quicksilver.hpp" // from faest-arch-opt
+#include "polynomials.hpp" // from faest-arch-opt
 
 #include <algorithm>
 #include <array>

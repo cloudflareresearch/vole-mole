@@ -3,7 +3,10 @@
 #include "voleith.hpp" // internal
 
 #include "api.hpp"        // from faest-arch-opt
+#include "faest.hpp"      // from faest-arch-opt
 #include "faest_keys.hpp" // from faest-arch-opt
+#include "faest_sig.hpp"  // from faest-arch-opt
+#include "hash.hpp"       // from faest-arch-opt
 #include "owf_proof.hpp"  // from faest-arch-opt
 #include "parameters.hpp" // from faest-arch-opt
 

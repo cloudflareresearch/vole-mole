@@ -1,5 +1,8 @@
 #include "vole_mole/ratatouille.hpp"
+#include "vole_mole/uov.hpp"
 
+#include "keccak/segmented.hpp"   // internal
+#include "ratatouille/commit.hpp" // internal
 #include "ratatouille/issue.hpp"  // internal
 #include "ratatouille/seeded.hpp" // internal
 #include "ratatouille/spend.hpp"  // internal
@@ -7,6 +10,8 @@
 
 #include "test.hpp"
 
+#include <cstddef>
+#include <cstdint>
 #include <fstream>
 #include <iostream>
 #include <limits>

@@ -6,6 +6,7 @@
 
 #include <benchmark/benchmark.h>
 
+#include <cstddef>
 #include <cstdint>
 #include <span>
 #include <string>

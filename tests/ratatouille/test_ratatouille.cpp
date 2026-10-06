@@ -1,4 +1,5 @@
 #include "vole_mole/ratatouille.hpp"
+#include "vole_mole/uov.hpp"
 
 #include "ratatouille/commit.hpp" // internal
 #include "ratatouille/issue.hpp"  // internal
@@ -13,7 +14,9 @@
 #include <algorithm>
 #include <array>
 #include <cstddef>
+#include <cstdint>
 #include <fstream>
+#include <istream>
 #include <limits>
 #include <optional>
 #include <set>

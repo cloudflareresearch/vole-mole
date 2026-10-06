@@ -1,6 +1,8 @@
 #include "vole_mole/ratatouille.hpp"
 
+#include "vole_mole/keccak.hpp"
 #include "vole_mole/random.hpp"
+#include "vole_mole/uov.hpp"
 
 #include "dst.hpp"
 #include "ratatouille/commit.hpp"
@@ -8,9 +10,20 @@
 #include "ratatouille/seeded.hpp"
 #include "ratatouille/spend.hpp"
 #include "ratatouille/token.hpp"
+#include "voleith.hpp"
+
+#include "hash.hpp"       // from faest-arch-opt
+#include "parameters.hpp" // from faest-arch-opt
+
+extern "C" {
+#include "KeccakHash.h" // from xkcp
+}
 
 #include <algorithm>
+#include <cstddef>
+#include <cstdint>
 #include <memory>
+#include <optional>
 #include <span>
 #include <stdexcept>
 #include <utility>

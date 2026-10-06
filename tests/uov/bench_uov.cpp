@@ -4,6 +4,7 @@
 
 #include <benchmark/benchmark.h>
 
+#include <cstddef>
 #include <cstdint>
 
 using namespace vole_mole;

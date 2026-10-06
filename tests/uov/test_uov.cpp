@@ -10,11 +10,8 @@
 #include "test.hpp"
 
 #include "constants.hpp"   // from faest-arch-opt
+#include "parameters.hpp"  // from faest-arch-opt
 #include "quicksilver.hpp" // from faest-arch-opt
-
-extern "C" {
-#include "randomness.h" // from faest-arch-opt
-}
 
 #include <gtest/gtest.h>
 
