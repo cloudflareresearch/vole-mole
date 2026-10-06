@@ -1,6 +1,8 @@
-#include "pomfrit/seeded.hpp" // internal
-#include "test.hpp"
 #include "vole_mole/pomfrit.hpp"
+
+#include "pomfrit/seeded.hpp" // internal
+
+#include "test.hpp"
 
 #include <benchmark/benchmark.h>
 

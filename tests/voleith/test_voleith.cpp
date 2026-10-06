@@ -50,9 +50,9 @@ struct FaestRelation {
     }
 
     template <typename QS>
-    static void constraints(
-        QS* qs, const instance& x,
-        std::span<const uint8_t, params::CONSTS::QS::CHALLENGE_BYTES> /* chal2 */) {
+    static void
+    constraints(QS* qs, const instance& x,
+                std::span<const uint8_t, params::CONSTS::QS::CHALLENGE_BYTES> /* chal2 */) {
         faest::owf_constraints<P>(qs, &x.pk);
     }
 };
