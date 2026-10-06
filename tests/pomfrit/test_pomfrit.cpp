@@ -4,6 +4,7 @@
 #include "pomfrit/redeem.hpp" // internal
 #include "voleith.hpp"        // internal
 
+#include "pomfrit/seeded.hpp" // internal
 #include "test.hpp"
 
 #include <gtest/gtest.h>
@@ -20,6 +21,9 @@
 
 using namespace vole_mole;
 using namespace vole_mole::pomfrit;
+using vole_mole::pomfrit::detail::issue_request_with_seed;
+using vole_mole::pomfrit::detail::Seed;
+using vole_mole::pomfrit::detail::SEED_BYTES;
 using vole_mole::test::filled;
 using vole_mole::test::to_hex;
 using vole_mole::test::uov_key_pair;

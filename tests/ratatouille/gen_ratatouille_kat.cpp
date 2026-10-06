@@ -1,6 +1,7 @@
 #include "vole_mole/ratatouille.hpp"
 
 #include "ratatouille/issue.hpp"
+#include "ratatouille/seeded.hpp" // internal
 #include "ratatouille/spend.hpp"
 #include "ratatouille/token.hpp"
 #include "test.hpp"
@@ -13,6 +14,11 @@
 #include <vector>
 
 using namespace vole_mole::ratatouille;
+using vole_mole::ratatouille::detail::commit;
+using vole_mole::ratatouille::detail::issue_request_with_seed;
+using vole_mole::ratatouille::detail::Seed;
+using vole_mole::ratatouille::detail::SEED_BYTES;
+using vole_mole::ratatouille::detail::spend_request_with_seed;
 using vole_mole::ratatouille::detail::TokenAccess;
 using vole_mole::test::filled;
 using vole_mole::test::to_hex;
@@ -127,7 +133,7 @@ int main(int argc, char** argv) {
             const auto spent_r = TokenAccess::r(*token);
             const auto s = TokenAccess::s(*token);
             auto [pending, request] =
-                std::move(*token).spend_request_with_seed(kp.pk, spend.d, kat.ctx_iss, spend.seed);
+                spend_request_with_seed(std::move(*token), kp.pk, spend.d, kat.ctx_iss, spend.seed);
             const auto nf_next = TokenAccess::nf(pending);
             if (!nullifiers.insert(nf_next).second) {
                 std::cerr << "Repeated nullifier in case " << i << '\n';

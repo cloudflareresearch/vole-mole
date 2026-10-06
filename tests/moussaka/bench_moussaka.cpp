@@ -1,7 +1,8 @@
 #include "test.hpp"
 #include "vole_mole/moussaka.hpp"
 
-#include "moussaka/token.hpp" // internal: TokenAccess
+#include "moussaka/seeded.hpp" // internal
+#include "moussaka/token.hpp"  // internal: TokenAccess
 
 #include <benchmark/benchmark.h>
 
@@ -12,6 +13,9 @@
 
 using namespace vole_mole;
 using namespace vole_mole::moussaka;
+using vole_mole::moussaka::detail::issue_request_with_seed;
+using vole_mole::moussaka::detail::redeem_request_with_seed;
+using vole_mole::moussaka::detail::Seed;
 using vole_mole::moussaka::detail::TokenAccess;
 using vole_mole::test::uov_key_pair;
 
@@ -96,8 +100,8 @@ void BM_RedeemRequest(benchmark::State& state) {
     const auto keys = anchor_set(static_cast<size_t>(state.range(0)));
     uint64_t i = 0;
     for (auto _ : state) {
-        auto req = copy(token()).redeem_request_with_seed(keys, keys.size() - 1, CTX_ISS, CTX_RED,
-                                                          seed_from_counter(i++));
+        auto req = redeem_request_with_seed(copy(token()), keys, keys.size() - 1, CTX_ISS, CTX_RED,
+                                            seed_from_counter(i++));
         benchmark::DoNotOptimize(req);
     }
     state.SetLabel(std::to_string(REDEEM_PROOF_BYTES) + "-byte proof");
@@ -107,8 +111,8 @@ BENCHMARK(BM_RedeemRequest)->Arg(1)->Arg(8)->Arg(MAX_ANCHORS)->Unit(benchmark::k
 // Argument: size of the Anchor Set.
 void BM_FinalizeRedeem(benchmark::State& state) {
     const auto keys = anchor_set(static_cast<size_t>(state.range(0)));
-    const auto req = copy(token()).redeem_request_with_seed(keys, keys.size() - 1, CTX_ISS, CTX_RED,
-                                                            seed_from_counter(0));
+    const auto req = redeem_request_with_seed(copy(token()), keys, keys.size() - 1, CTX_ISS,
+                                              CTX_RED, seed_from_counter(0));
     for (auto _ : state) {
         auto nf = finalize_redeem(keys, req, CTX_ISS, CTX_RED);
         benchmark::DoNotOptimize(nf);

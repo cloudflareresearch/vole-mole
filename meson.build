@@ -38,6 +38,7 @@ vole_mole_lib = static_library('vole-mole',
   'src/keccak/keccak.cpp',
   'src/moussaka/moussaka.cpp',
   'src/pomfrit/pomfrit.cpp',
+  'src/random.cpp',
   'src/ratatouille/ratatouille.cpp',
   'src/uov/uov.cpp',
   include_directories : [vole_mole_inc, vole_mole_src_inc],
@@ -49,4 +50,10 @@ vole_mole_dep = declare_dependency(
   include_directories : vole_mole_inc,
 )
 
-subdir('tests')
+if get_option('tests') or get_option('benchmarks')
+  subdir('tests')
+endif
+
+if get_option('examples')
+  subdir('examples')
+endif

@@ -1,4 +1,5 @@
 #include "vole_mole/uov.hpp"
+#include "vole_mole/random.hpp"
 
 #include "uov/public_key.hpp"
 
@@ -31,6 +32,8 @@ static_assert(SECRET_KEY_BYTES == LEN_SKSEED);
 static_assert(PUBLIC_KEY_BYTES == sizeof(cpk_t));
 static_assert(detail::V == _V && detail::EXPANDED_PUBLIC_KEY_BYTES == sizeof(pk_t));
 static_assert(detail::EXPANDED_PUBLIC_KEY_BYTES == _PK_P1_BYTE + _PK_P2_BYTE + _PK_P3_BYTE);
+
+SecretKeyBytes generate_secret_key_bytes() { return vole_mole::random_bytes<SECRET_KEY_BYTES>(); }
 
 struct SecretKey::Impl {
     sk_t sk;

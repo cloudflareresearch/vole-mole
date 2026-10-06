@@ -28,11 +28,9 @@ using IssueResponse = uov::Preimage; // Issuer -> Client response
 constexpr size_t SIGNATURE_BYTES = 5387;
 using BlindSignature = std::array<uint8_t, SIGNATURE_BYTES>;
 
-// Client's randomness.
-constexpr size_t SEED_BYTES = 32;
-using Seed = std::array<uint8_t, SEED_BYTES>;
-
-struct IssueRequestResult;
+namespace detail {
+struct PendingBlindSignatureAccess;
+} // namespace detail
 
 // Client state while awaiting the response from the Issuer.
 class PendingBlindSignature {
@@ -58,9 +56,7 @@ class PendingBlindSignature {
     std::unique_ptr<Impl> impl_;
 
     explicit PendingBlindSignature(std::unique_ptr<Impl> impl);
-    friend IssueRequestResult issue_request_with_seed(const uov::PublicKey& pk,
-                                                      std::span<const uint8_t> msg,
-                                                      const Seed& seed);
+    friend struct detail::PendingBlindSignatureAccess;
 };
 
 struct IssueRequestResult {
@@ -73,12 +69,6 @@ struct IssueRequestResult {
 // Throws std::bad_alloc if memory allocation fails and std::runtime_error if the operating
 // system's random number generator fails.
 IssueRequestResult issue_request(const uov::PublicKey& pk, std::span<const uint8_t> msg);
-
-// Request issuance for msg under public key pk using seed as the source of randomness.
-//
-// Throws std::bad_alloc if memory allocation fails.
-IssueRequestResult issue_request_with_seed(const uov::PublicKey& pk, std::span<const uint8_t> msg,
-                                           const Seed& seed);
 
 // Issue a blind signature under secret key sk.
 //

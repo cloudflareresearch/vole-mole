@@ -1,8 +1,9 @@
 #include "vole_mole/pomfrit.hpp"
+#include "vole_mole/random.hpp"
 
 #include "dst.hpp"
 #include "pomfrit/redeem.hpp"
-#include "random.hpp"
+#include "pomfrit/seeded.hpp"
 #include "uov/public_key.hpp"
 #include "voleith.hpp"
 
@@ -20,6 +21,8 @@ namespace vole_mole::pomfrit {
 
 using detail::ProofView;
 using detail::RedeemRelation;
+using detail::Seed;
+using detail::SEED_BYTES;
 using detail::WIT_OFF_R;
 using uov::detail::PublicKeyAccess;
 
@@ -114,9 +117,20 @@ PendingBlindSignature::PendingBlindSignature(PendingBlindSignature&&) noexcept =
 PendingBlindSignature& PendingBlindSignature::operator=(PendingBlindSignature&&) noexcept = default;
 PendingBlindSignature::~PendingBlindSignature() = default;
 
+struct detail::PendingBlindSignatureAccess {
+    static PendingBlindSignature
+    make_pending_blind_signature(const uov::PublicKey& pk, const IssueRequest& t,
+                                 const uov::Target& h, const BlindSignature& sig,
+                                 PendingProof<RedeemRelation>&& pending) {
+        return PendingBlindSignature(
+            std::unique_ptr<PendingBlindSignature::Impl>(new PendingBlindSignature::Impl{
+                PublicKeyAccess::digest(pk), t, h, sig, std::move(pending)}));
+    }
+};
+
 // PomFRIT <https://ia.cr/2026/109>: Algorithm 2, Sig1()
-IssueRequestResult issue_request_with_seed(const uov::PublicKey& pk, std::span<const uint8_t> msg,
-                                           const Seed& seed) {
+IssueRequestResult detail::issue_request_with_seed(const uov::PublicKey& pk,
+                                                   std::span<const uint8_t> msg, const Seed& seed) {
     BlindSignature sig{};
 
     // Expand the seed into the prover seed (rho), the refresher, and the target mask (r).
@@ -149,13 +163,13 @@ IssueRequestResult issue_request_with_seed(const uov::PublicKey& pk, std::span<c
         t[i] = h[i] ^ r[i];
     }
 
-    auto impl = std::unique_ptr<PendingBlindSignature::Impl>(new PendingBlindSignature::Impl{
-        PublicKeyAccess::digest(pk), t, h, sig, std::move(pending)});
-    return {PendingBlindSignature(std::move(impl)), t};
+    return {PendingBlindSignatureAccess::make_pending_blind_signature(pk, t, h, sig,
+                                                                      std::move(pending)),
+            t};
 }
 
 IssueRequestResult issue_request(const uov::PublicKey& pk, std::span<const uint8_t> msg) {
-    return issue_request_with_seed(pk, msg, random_bytes<SEED_BYTES>());
+    return detail::issue_request_with_seed(pk, msg, random_bytes<SEED_BYTES>());
 }
 
 // PomFRIT <https://ia.cr/2026/109>: Algorithm 2, Sig2()

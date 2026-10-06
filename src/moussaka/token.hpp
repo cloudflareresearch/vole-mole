@@ -6,13 +6,18 @@
 #include "vole_mole/moussaka.hpp"
 #include "vole_mole/uov.hpp"
 
+#include "moussaka/commit.hpp"
+
 namespace vole_mole::moussaka::detail {
 
 struct TokenAccess {
-    // Construct a token from its contents. The contents aren't validated.
-    //
     // Throws std::bad_alloc if memory allocation fails.
-    static Token make(const Nullifier& nf, const Opening& r, const uov::Preimage& s);
+    static Token make_token(const Nullifier& nf, const Opening& r, const uov::Preimage& s);
+
+    // Throws std::bad_alloc if memory allocation fails.
+    static PendingToken make_pending_token(const Nullifier& nf, const Opening& r,
+                                           const Context& ctx_iss, const Context& ctx_red,
+                                           const Commitment& t);
 
     // Copy a token or pending token. (They're move-only so that redemption and finalization
     // consume them, but tests and benchmarks need to consume the same one several times.) Throws

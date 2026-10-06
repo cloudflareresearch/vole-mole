@@ -2,6 +2,7 @@
 
 #include "moussaka/issue.hpp"
 #include "moussaka/redeem.hpp"
+#include "moussaka/seeded.hpp" // internal
 #include "moussaka/token.hpp"
 #include "test.hpp"
 
@@ -11,6 +12,11 @@
 #include <vector>
 
 using namespace vole_mole::moussaka;
+using vole_mole::moussaka::detail::commit;
+using vole_mole::moussaka::detail::issue_request_with_seed;
+using vole_mole::moussaka::detail::redeem_request_with_seed;
+using vole_mole::moussaka::detail::Seed;
+using vole_mole::moussaka::detail::SEED_BYTES;
 using vole_mole::test::filled;
 using vole_mole::test::to_hex;
 
@@ -82,8 +88,8 @@ int main(int argc, char** argv) {
         }
         const auto redeem_witness =
             detail::encode_redeem_witness(nf, ctx_iss, ctx_red, r, *response, issuer);
-        const auto redeem_request = std::move(*token).redeem_request_with_seed(
-            anchors, issuer, ctx_iss, ctx_red, redeem_seed);
+        const auto redeem_request = redeem_request_with_seed(std::move(*token), anchors, issuer,
+                                                             ctx_iss, ctx_red, redeem_seed);
         const auto redeemed_nf = finalize_redeem(anchors, redeem_request, ctx_iss, ctx_red);
         if (!redeemed_nf || *redeemed_nf != nf) {
             std::cerr << "Redemption failed verification for case " << i << '\n';

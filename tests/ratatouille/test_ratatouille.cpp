@@ -2,6 +2,7 @@
 
 #include "ratatouille/commit.hpp" // internal
 #include "ratatouille/issue.hpp"  // internal
+#include "ratatouille/seeded.hpp" // internal
 #include "ratatouille/spend.hpp"  // internal
 #include "ratatouille/token.hpp"  // internal
 
@@ -23,6 +24,15 @@
 
 using namespace vole_mole;
 using namespace vole_mole::ratatouille;
+using vole_mole::ratatouille::detail::commit;
+using vole_mole::ratatouille::detail::Commitment;
+using vole_mole::ratatouille::detail::issue_request_with_seed;
+using vole_mole::ratatouille::detail::Opening;
+using vole_mole::ratatouille::detail::R_BYTES;
+using vole_mole::ratatouille::detail::Seed;
+using vole_mole::ratatouille::detail::SEED_BYTES;
+using vole_mole::ratatouille::detail::spend_request_with_seed;
+using vole_mole::ratatouille::detail::tag;
 using vole_mole::ratatouille::detail::TokenAccess;
 using vole_mole::test::filled;
 using vole_mole::test::read_kat_field;
@@ -82,7 +92,7 @@ Token copy(const Token& t) { return TokenAccess::copy(t); }
 // The spend of D credits from token().
 const SpendRequestResult& spend() {
     static const SpendRequestResult res =
-        copy(token()).spend_request_with_seed(uov_key_pair().pk, D, CTX_ISS, SPEND_SEED);
+        spend_request_with_seed(copy(token()), uov_key_pair().pk, D, CTX_ISS, SPEND_SEED);
     return res;
 }
 
@@ -211,7 +221,7 @@ TEST(Ratatouille, KnownAnswers) {
             EXPECT_EQ(ratatouille::detail::encode_spend_witness(st, d, ctx_iss), spend_witness);
 
             auto [pending, generated_req] =
-                std::move(*token).spend_request_with_seed(kp.pk, d, ctx_iss, spend_seed);
+                spend_request_with_seed(std::move(*token), kp.pk, d, ctx_iss, spend_seed);
             EXPECT_EQ(TokenAccess::nf(pending), nf_next);
             EXPECT_EQ(TokenAccess::t(pending), t_next);
             EXPECT_EQ(TokenAccess::r(pending), r_next);
@@ -420,10 +430,10 @@ TEST(Spend, SeedExpansion) {
 
 TEST(Spend, IsDeterministicGivenSeed) {
     const auto& pk = uov_key_pair().pk;
-    const auto b = copy(token()).spend_request_with_seed(pk, D, CTX_ISS, SPEND_SEED);
+    const auto b = spend_request_with_seed(copy(token()), pk, D, CTX_ISS, SPEND_SEED);
     EXPECT_TRUE(std::ranges::equal(spend().request, b.request));
 
-    const auto c = copy(token()).spend_request_with_seed(pk, D, CTX_ISS, filled<SEED_BYTES>(0x91));
+    const auto c = spend_request_with_seed(copy(token()), pk, D, CTX_ISS, filled<SEED_BYTES>(0x91));
     EXPECT_FALSE(std::ranges::equal(spend().request, c.request));
     EXPECT_TRUE(spend_verifies(c.request));
 }
@@ -559,8 +569,8 @@ TEST(Spend, RejectsWrongCommitment) {
 
     // The commitment of another spend.
     SpendRequest req = spend().request;
-    const auto other =
-        copy(token()).spend_request_with_seed(uov_key_pair().pk, D, CTX_ISS, filled<SEED_BYTES>(1));
+    const auto other = spend_request_with_seed(copy(token()), uov_key_pair().pk, D, CTX_ISS,
+                                               filled<SEED_BYTES>(1));
     std::copy_n(other.request.begin() + REQ_OFF_C_NEXT, COMMITMENT_BYTES,
                 req.begin() + REQ_OFF_C_NEXT);
     EXPECT_FALSE(spend_verifies(req));
@@ -600,15 +610,15 @@ TEST(Spend, RequestRejectsInvalidArguments) {
     EXPECT_THROW((void)std::move(t).spend_request(pk, D, ctx), std::invalid_argument);
 
     // The token's contents are wrong.
-    Token bad = TokenAccess::make(TokenAccess::nf(token()), T_INIT + 1, TokenAccess::r(token()), 0,
-                                  TokenAccess::s(token()));
+    Token bad = TokenAccess::make_token(TokenAccess::nf(token()), T_INIT + 1,
+                                        TokenAccess::r(token()), 0, TokenAccess::s(token()));
     EXPECT_THROW((void)std::move(bad).spend_request(pk, D, CTX_ISS), std::invalid_argument);
-    bad = TokenAccess::make(TokenAccess::nf(token()), T_INIT, TokenAccess::r(token()), 1,
-                            TokenAccess::s(token()));
+    bad = TokenAccess::make_token(TokenAccess::nf(token()), T_INIT, TokenAccess::r(token()), 1,
+                                  TokenAccess::s(token()));
     EXPECT_THROW((void)std::move(bad).spend_request(pk, D, CTX_ISS), std::invalid_argument);
 
     // The token is still intact.
-    const auto res = std::move(t).spend_request_with_seed(pk, D, CTX_ISS, SPEND_SEED);
+    const auto res = spend_request_with_seed(std::move(t), pk, D, CTX_ISS, SPEND_SEED);
     EXPECT_TRUE(std::ranges::equal(res.request, spend().request));
 }
 
@@ -619,7 +629,7 @@ TEST(Spend, OverflowingBalance) {
     const Opening r = filled<R_BYTES>(0x40);
     const Credits t = MAX_CREDITS - 1, x = 10;
     const uov::Preimage s = sk.derive_preimage(tag(commit(nf, CTX_ISS, t, r), x));
-    const Token big = TokenAccess::make(nf, t, r, x, s);
+    const Token big = TokenAccess::make_token(nf, t, r, x, s);
 
     // t + x - d = 2^64 + 8 - d must be at most 2^64 - 1.
     EXPECT_THROW((void)copy(big).spend_request(pk, 0, CTX_ISS), std::invalid_argument);
@@ -639,7 +649,7 @@ TEST(Spend, ConsumesToken) {
     Token t = copy(token());
     (void)std::move(t).spend_request(pk, D, CTX_ISS);
     EXPECT_THROW((void)std::move(t).spend_request(pk, D, CTX_ISS), std::logic_error);
-    EXPECT_THROW((void)std::move(t).spend_request_with_seed(pk, D, CTX_ISS, SPEND_SEED),
+    EXPECT_THROW((void)spend_request_with_seed(std::move(t), pk, D, CTX_ISS, SPEND_SEED),
                  std::logic_error);
     EXPECT_THROW((void)t.credit(), std::logic_error);
     EXPECT_THROW((void)t.refund(), std::logic_error);
@@ -678,7 +688,7 @@ TEST(FinalizeSpend, RejectsInvalidResponse) {
 
     // The response to another spend.
     const auto other =
-        copy(token()).spend_request_with_seed(pk, D, CTX_ISS, filled<SEED_BYTES>(0x91));
+        spend_request_with_seed(copy(token()), pk, D, CTX_ISS, filled<SEED_BYTES>(0x91));
     EXPECT_FALSE(pending().finalize_spend(pk, *respond(other.request, 12)));
 
     EXPECT_TRUE(pending().finalize_spend(pk, response));

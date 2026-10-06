@@ -1,10 +1,11 @@
-// The input layouts of the Ratatouille commitment and tag.
+// The Ratatouille commitment and tag, and their input layouts.
 
 #ifndef VOLE_MOLE_RATATOUILLE_COMMIT_HPP
 #define VOLE_MOLE_RATATOUILLE_COMMIT_HPP
 
 #include "vole_mole/keccak.hpp"
 #include "vole_mole/ratatouille.hpp"
+#include "vole_mole/uov.hpp"
 
 #include "dst.hpp"
 
@@ -17,6 +18,17 @@
 namespace vole_mole::ratatouille::detail {
 
 using namespace vole_mole::detail;
+
+constexpr size_t R_BYTES = 16; // commitment opening length
+using Opening = std::array<uint8_t, R_BYTES>;
+using Commitment = std::array<uint8_t, COMMITMENT_BYTES>;
+
+// Compute the commitment Com(nf, ctx_iss, t, r) to a nullifier, issuance context, and credit value
+// with the given opening.
+Commitment commit(const Nullifier& nf, const Context& ctx_iss, Credits t, const Opening& r);
+
+// Compute the UOV target Tag(c, x) that binds the commitment c to the refund x.
+uov::Target tag(const Commitment& c, Credits x);
 
 using CreditBytes = std::array<uint8_t, CREDIT_BYTES>;
 
