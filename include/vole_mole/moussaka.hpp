@@ -25,23 +25,16 @@ constexpr size_t MAX_ANCHORS = 64;
 
 // Protocol messages.
 constexpr size_t NF_BYTES = 24;            // nullifier length
-constexpr size_t R_BYTES = 16;             // commitment opening length
 constexpr size_t CTX_BYTES = 16;           // context length
 constexpr size_t ISSUE_PROOF_BYTES = 7272; // issuance proof length
 constexpr size_t ISSUE_REQUEST_BYTES = uov::M + ISSUE_PROOF_BYTES;
 constexpr size_t REDEEM_PROOF_BYTES = 8751; // redemption proof length
 constexpr size_t REDEEM_REQUEST_BYTES = NF_BYTES + REDEEM_PROOF_BYTES;
 using Nullifier = std::array<uint8_t, NF_BYTES>;
-using Opening = std::array<uint8_t, R_BYTES>;
 using Context = std::array<uint8_t, CTX_BYTES>;
-using Commitment = uov::Target;
 using IssueRequest = std::array<uint8_t, ISSUE_REQUEST_BYTES>;
 using IssueResponse = uov::Preimage;
 using RedeemRequest = std::array<uint8_t, REDEEM_REQUEST_BYTES>;
-
-// Randomness.
-constexpr size_t SEED_BYTES = 32;
-using Seed = std::array<uint8_t, SEED_BYTES>;
 
 // A reference to an Anchor's public key.
 using AnchorRef = std::reference_wrapper<const uov::PublicKey>;
@@ -68,8 +61,6 @@ namespace detail {
 struct TokenAccess;
 } // namespace detail
 
-struct IssueRequestResult;
-
 // A Moussaka token.
 class Token {
   public:
@@ -86,15 +77,6 @@ class Token {
     // generator fails or proof generation fails (which happens with negligible probability).
     RedeemRequest redeem_request(const AnchorSet& anchors, size_t i, const Context& ctx_iss,
                                  const Context& ctx_red) &&;
-
-    // Consume the token and generate a redemption request with the given random seed. See
-    // redeem_request.
-    //
-    // Throws as for redeem_request, except that it doesn't use the operating system's random number
-    // generator.
-    RedeemRequest redeem_request_with_seed(const AnchorSet& anchors, size_t i,
-                                           const Context& ctx_iss, const Context& ctx_red,
-                                           const Seed& seed) &&;
 
   private:
     struct Impl;
@@ -124,8 +106,6 @@ class PendingToken {
     std::unique_ptr<Impl> impl_;
 
     explicit PendingToken(std::unique_ptr<Impl> impl);
-    friend IssueRequestResult issue_request_with_seed(const Context& ctx_iss,
-                                                      const Context& ctx_red, const Seed& seed);
     friend struct detail::TokenAccess;
 };
 
@@ -134,24 +114,12 @@ struct IssueRequestResult {
     IssueRequest request;
 };
 
-// Compute a commitment to a nullifier, issuance context, and redemption context with the given
-// opening.
-Commitment commit(const Nullifier& nf, const Context& ctx_iss, const Context& ctx_red,
-                  const Opening& r);
-
 // Generate an issue request for an issuance and redemption context.
 //
 // Throws std::bad_alloc if memory allocation fails and std::runtime_error if the operating
 // system's random number generator fails or if proof generation fails (which happens with
 // negligible probability).
 IssueRequestResult issue_request(const Context& ctx_iss, const Context& ctx_red);
-
-// Compute the issuance request with the given random seed.
-//
-// Throws std::bad_alloc if memory allocation fails and std::runtime_error if proof generation fails
-// (which happens with negligible probability).
-IssueRequestResult issue_request_with_seed(const Context& ctx_iss, const Context& ctx_red,
-                                           const Seed& seed);
 
 // Respond to an issue request for the issuance context with the Anchor's secret key sk. Returns
 // std::nullopt if the issuance proof is invalid, i.e., the request doesn't commit to ctx_iss.
@@ -163,6 +131,13 @@ std::optional<IssueResponse> issue_response(const uov::SecretKey& sk, const Issu
 
 // Verify a redemption request for the Anchor Set and the issuance and redemption context. Returns
 // the nullifier of the redeemed token, or std::nullopt if the request is invalid.
+//
+// It's the caller's responsibility to record the nullifier of every token it accepts for ctx_iss
+// and ctx_red, and to reject a request whose nullifier it has already recorded. The record must
+// cover every Anchor Set the caller accepts for these contexts, since a token is valid under any
+// Anchor Set that contains its Anchor. Records must be kept for as long as tokens for these
+// contexts are accepted (so contexts that expire, e.g., an issuance epoch, bound the storage
+// required).
 //
 // Throws std::bad_alloc if memory allocation fails. An invalid request never causes an exception.
 std::optional<Nullifier> finalize_redeem(const AnchorSet& anchors, const RedeemRequest& request,

@@ -1,9 +1,10 @@
 #include "vole_mole/ratatouille.hpp"
+#include "vole_mole/random.hpp"
 
 #include "dst.hpp"
-#include "random.hpp"
 #include "ratatouille/commit.hpp"
 #include "ratatouille/issue.hpp"
+#include "ratatouille/seeded.hpp"
 #include "ratatouille/spend.hpp"
 #include "ratatouille/token.hpp"
 
@@ -15,10 +16,17 @@
 
 namespace vole_mole::ratatouille {
 
+using detail::commit;
+using detail::Commitment;
 using detail::decode_credits;
 using detail::encode_credits;
 using detail::IssueRelation;
+using detail::Opening;
+using detail::Seed;
+using detail::SEED_BYTES;
 using detail::SpendRelation;
+using detail::tag;
+using detail::TokenAccess;
 
 namespace {
 
@@ -69,14 +77,15 @@ void check_t_init(Credits t_init) {
 
 } // namespace
 
-Commitment commit(const Nullifier& nf, const Context& ctx_iss, Credits t, const Opening& r) {
+Commitment detail::commit(const Nullifier& nf, const Context& ctx_iss, Credits t,
+                          const Opening& r) {
     const Kp800State out = keccak_p800(detail::encode_com_state(nf, ctx_iss, t, r));
     Commitment c;
     std::copy_n(out.begin(), c.size(), c.begin());
     return c;
 }
 
-uov::Target tag(const Commitment& c, Credits x) {
+uov::Target detail::tag(const Commitment& c, Credits x) {
     const Kp800State out = keccak_p800(detail::encode_tag_state(c, x));
     uov::Target y;
     std::copy_n(out.begin(), y.size(), y.begin());
@@ -126,24 +135,22 @@ PendingToken::PendingToken(PendingToken&&) noexcept = default;
 PendingToken& PendingToken::operator=(PendingToken&&) noexcept = default;
 PendingToken::~PendingToken() = default;
 
-IssueRequestResult issue_request_with_seed(Credits t_init, const Context& ctx_iss,
-                                           const Seed& seed) {
+IssueRequestResult detail::issue_request_with_seed(Credits t_init, const Context& ctx_iss,
+                                                   const Seed& seed) {
     check_t_init(t_init);
     const auto rand = expand_seed<IssueRelation>(RATATOUILLE_ISSUE_SEED_DST, seed);
 
     const Commitment c = commit(rand.nf, ctx_iss, t_init, rand.r);
     IssueRequest request;
     std::ranges::copy(c, std::span(request).first<COMMITMENT_BYTES>().begin());
-    detail::prove_issue_request(std::span(request).last<ISSUE_PROOF_BYTES>(), c, rand.nf, t_init,
-                                ctx_iss, rand.r, rand.rho);
-    auto impl =
-        std::make_unique<PendingToken::Impl>(PendingToken::Impl{rand.nf, rand.r, t_init, c});
-    return {PendingToken(std::move(impl)), request};
+    prove_issue_request(std::span(request).last<ISSUE_PROOF_BYTES>(), c, rand.nf, t_init, ctx_iss,
+                        rand.r, rand.rho);
+    return {TokenAccess::make_pending_token(rand.nf, rand.r, t_init, c), request};
 }
 
 IssueRequestResult issue_request(Credits t_init, const Context& ctx_iss) {
     check_t_init(t_init);
-    return issue_request_with_seed(t_init, ctx_iss, random_bytes<SEED_BYTES>());
+    return detail::issue_request_with_seed(t_init, ctx_iss, random_bytes<SEED_BYTES>());
 }
 
 std::optional<IssueResponse> issue_response(const uov::SecretKey& sk, const IssueRequest& request,
@@ -187,12 +194,14 @@ PendingSpend::PendingSpend(PendingSpend&&) noexcept = default;
 PendingSpend& PendingSpend::operator=(PendingSpend&&) noexcept = default;
 PendingSpend::~PendingSpend() = default;
 
-SpendRequestResult Token::spend_request_with_seed(const uov::PublicKey& pk, Credits d,
-                                                  const Context& ctx_iss, const Seed& seed) && {
-    if (!impl_) {
-        throw std::logic_error("Ratatouille: token was moved from");
-    }
-    const auto& [nf, t, r, x, s] = *impl_;
+SpendRequestResult detail::spend_request_with_seed(Token&& token, const uov::PublicKey& pk,
+                                                   Credits d, const Context& ctx_iss,
+                                                   const Seed& seed) {
+    const Nullifier& nf = TokenAccess::nf(token); // throws if the token was moved from
+    const Opening& r = TokenAccess::r(token);
+    const uov::Preimage& s = TokenAccess::s(token);
+    const Credits t = token.credit();
+    const Credits x = token.refund();
 
     // The prover requires a valid witness. (A proof for an invalid one wouldn't verify anyway.)
     if (pk.eval(s) != tag(commit(nf, ctx_iss, t, r), x)) {
@@ -212,24 +221,21 @@ SpendRequestResult Token::spend_request_with_seed(const uov::PublicKey& pk, Cred
     }
     const Credits t_next = lo - d; // mod 2^64
 
-    // The arguments are valid, so consume the token.
-    const std::unique_ptr<Impl> impl = std::move(impl_);
+    // The arguments are valid, so consume the token. (The references above remain valid, since the
+    // contents live on the heap and are now owned by `consumed`.)
+    const Token consumed = std::move(token);
 
     const auto rand = expand_seed<SpendRelation>(RATATOUILLE_SPEND_SEED_DST, seed);
     const Commitment c_next = commit(rand.nf, ctx_iss, t_next, rand.r);
 
     SpendRequest request;
-    std::ranges::copy(impl->nf, request.begin() + REQ_OFF_NF);
+    std::ranges::copy(nf, request.begin() + REQ_OFF_NF);
     std::ranges::copy(encode_credits(d), request.begin() + REQ_OFF_D);
     std::ranges::copy(c_next, request.begin() + REQ_OFF_C_NEXT);
-    detail::prove_spend_request(
-        std::span(request).last<SPEND_PROOF_BYTES>(), pk,
-        {impl->nf, impl->t, impl->r, impl->x, impl->s, rand.nf, t_next, rand.r}, d, c_next, ctx_iss,
-        rand.rho);
+    prove_spend_request(std::span(request).last<SPEND_PROOF_BYTES>(), pk,
+                        {nf, t, r, x, s, rand.nf, t_next, rand.r}, d, c_next, ctx_iss, rand.rho);
 
-    auto pending =
-        std::make_unique<PendingSpend::Impl>(PendingSpend::Impl{rand.nf, t_next, rand.r, c_next});
-    return {PendingSpend(std::move(pending)), request};
+    return {TokenAccess::make_pending_spend(rand.nf, t_next, rand.r, c_next), request};
 }
 
 SpendRequestResult Token::spend_request(const uov::PublicKey& pk, Credits d,
@@ -237,7 +243,8 @@ SpendRequestResult Token::spend_request(const uov::PublicKey& pk, Credits d,
     if (!impl_) {
         throw std::logic_error("Ratatouille: token was moved from");
     }
-    return std::move(*this).spend_request_with_seed(pk, d, ctx_iss, random_bytes<SEED_BYTES>());
+    return detail::spend_request_with_seed(std::move(*this), pk, d, ctx_iss,
+                                           random_bytes<SEED_BYTES>());
 }
 
 std::optional<SpendResponseResult> spend_response(const uov::SecretKey& sk,
@@ -283,9 +290,19 @@ std::optional<Token> PendingSpend::finalize_spend(const uov::PublicKey& pk,
 
 // Internal access
 
-Token detail::TokenAccess::make(const Nullifier& nf, Credits t, const Opening& r, Credits x,
-                                const uov::Preimage& s) {
+Token detail::TokenAccess::make_token(const Nullifier& nf, Credits t, const Opening& r, Credits x,
+                                      const uov::Preimage& s) {
     return Token(std::make_unique<Token::Impl>(Token::Impl{nf, t, r, x, s}));
+}
+
+PendingToken detail::TokenAccess::make_pending_token(const Nullifier& nf, const Opening& r,
+                                                     Credits t_init, const Commitment& c) {
+    return PendingToken(std::make_unique<PendingToken::Impl>(PendingToken::Impl{nf, r, t_init, c}));
+}
+
+PendingSpend detail::TokenAccess::make_pending_spend(const Nullifier& nf, Credits t,
+                                                     const Opening& r, const Commitment& c) {
+    return PendingSpend(std::make_unique<PendingSpend::Impl>(PendingSpend::Impl{nf, t, r, c}));
 }
 
 const Token& detail::TokenAccess::checked(const Token& token) {

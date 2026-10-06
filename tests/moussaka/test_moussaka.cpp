@@ -1,5 +1,6 @@
 #include "moussaka/issue.hpp"  // internal
 #include "moussaka/redeem.hpp" // internal
+#include "moussaka/seeded.hpp" // internal
 #include "moussaka/token.hpp"  // internal
 
 #include "test.hpp"
@@ -20,6 +21,14 @@
 
 using namespace vole_mole;
 using namespace vole_mole::moussaka;
+using vole_mole::moussaka::detail::commit;
+using vole_mole::moussaka::detail::Commitment;
+using vole_mole::moussaka::detail::issue_request_with_seed;
+using vole_mole::moussaka::detail::Opening;
+using vole_mole::moussaka::detail::R_BYTES;
+using vole_mole::moussaka::detail::redeem_request_with_seed;
+using vole_mole::moussaka::detail::Seed;
+using vole_mole::moussaka::detail::SEED_BYTES;
 using vole_mole::moussaka::detail::TokenAccess;
 using vole_mole::test::filled;
 using vole_mole::test::read_kat_field;
@@ -129,8 +138,8 @@ TEST(Moussaka, KnownAnswers) {
                                                           TokenAccess::r(*token),
                                                           TokenAccess::s(*token), issuer),
                   redeem_witness);
-        const auto generated_redemption = std::move(*token).redeem_request_with_seed(
-            anchors, issuer, ctx_iss, ctx_red, redeem_seed);
+        const auto generated_redemption = redeem_request_with_seed(
+            std::move(*token), anchors, issuer, ctx_iss, ctx_red, redeem_seed);
         EXPECT_TRUE(std::ranges::equal(generated_redemption, redeem_request))
             << "redemption request bytes differ";
         EXPECT_EQ(to_hex(std::span(redeem_request).first<NF_BYTES>()), to_hex(nf));
@@ -328,8 +337,8 @@ Token copy(const Token& t) { return TokenAccess::copy(t); }
 const Seed REDEEM_SEED = filled<SEED_BYTES>(0x90);
 
 const RedeemRequest& redemption() {
-    static const RedeemRequest req = copy(token()).redeem_request_with_seed(
-        anchors().keys, ISSUER, CTX_ISS, CTX_RED, REDEEM_SEED);
+    static const RedeemRequest req = redeem_request_with_seed(copy(token()), anchors().keys, ISSUER,
+                                                              CTX_ISS, CTX_RED, REDEEM_SEED);
     return req;
 }
 
@@ -425,7 +434,7 @@ TEST(Redeem, VerifiesAtEveryPosition) {
         for (size_t i = 0; i < n; ++i) {
             const AnchorSet keys = anchor_set_with_issuer_at(n, i);
             const auto req =
-                copy(token()).redeem_request_with_seed(keys, i, CTX_ISS, CTX_RED, REDEEM_SEED);
+                redeem_request_with_seed(copy(token()), keys, i, CTX_ISS, CTX_RED, REDEEM_SEED);
             EXPECT_TRUE(finalize_redeem(keys, req, CTX_ISS, CTX_RED))
                 << "n = " << n << ", i = " << i;
         }
@@ -434,8 +443,8 @@ TEST(Redeem, VerifiesAtEveryPosition) {
 
 TEST(Redeem, VerifiesLargestAnchorSet) {
     const AnchorSet keys = anchor_set_with_issuer_at(MAX_ANCHORS, MAX_ANCHORS / 2);
-    const auto req = copy(token()).redeem_request_with_seed(keys, MAX_ANCHORS / 2, CTX_ISS, CTX_RED,
-                                                            REDEEM_SEED);
+    const auto req = redeem_request_with_seed(copy(token()), keys, MAX_ANCHORS / 2, CTX_ISS,
+                                              CTX_RED, REDEEM_SEED);
     EXPECT_TRUE(finalize_redeem(keys, req, CTX_ISS, CTX_RED));
 }
 
@@ -466,13 +475,13 @@ TEST(Redeem, AnchorSetFromOwnedKeys) {
 
 TEST(Redeem, IsDeterministicGivenSeed) {
     const auto& a = redemption();
-    const auto b = copy(token()).redeem_request_with_seed(anchors().keys, ISSUER, CTX_ISS, CTX_RED,
-                                                          REDEEM_SEED);
+    const auto b = redeem_request_with_seed(copy(token()), anchors().keys, ISSUER, CTX_ISS, CTX_RED,
+                                            REDEEM_SEED);
     EXPECT_TRUE(std::ranges::equal(a, b));
 
     // A different seed yields a different proof for the same token.
-    const auto c = copy(token()).redeem_request_with_seed(anchors().keys, ISSUER, CTX_ISS, CTX_RED,
-                                                          filled<SEED_BYTES>(0x91));
+    const auto c = redeem_request_with_seed(copy(token()), anchors().keys, ISSUER, CTX_ISS, CTX_RED,
+                                            filled<SEED_BYTES>(0x91));
     EXPECT_FALSE(std::ranges::equal(a, c));
     EXPECT_TRUE(std::ranges::equal(std::span(a).first<NF_BYTES>(), std::span(c).first<NF_BYTES>()));
     EXPECT_TRUE(finalize_redeem(anchors().keys, c, CTX_ISS, CTX_RED));
@@ -574,13 +583,13 @@ TEST(Redeem, RequestRejectsInvalidArguments) {
                  std::invalid_argument);
     Opening bad_r = TokenAccess::r(token());
     bad_r[0] ^= 1;
-    Token bad = TokenAccess::make(TokenAccess::nf(token()), bad_r, TokenAccess::s(token()));
+    Token bad = TokenAccess::make_token(TokenAccess::nf(token()), bad_r, TokenAccess::s(token()));
     EXPECT_THROW((void)std::move(bad).redeem_request(keys, ISSUER, CTX_ISS, CTX_RED),
                  std::invalid_argument);
 
     // The token is still intact.
     const auto req =
-        std::move(t).redeem_request_with_seed(keys, ISSUER, CTX_ISS, CTX_RED, REDEEM_SEED);
+        redeem_request_with_seed(std::move(t), keys, ISSUER, CTX_ISS, CTX_RED, REDEEM_SEED);
     EXPECT_TRUE(std::ranges::equal(req, redemption()));
 }
 
@@ -592,7 +601,7 @@ TEST(Redeem, ConsumesToken) {
     EXPECT_THROW((void)std::move(t).redeem_request(keys, ISSUER, CTX_ISS, CTX_RED),
                  std::logic_error);
     EXPECT_THROW(
-        (void)std::move(t).redeem_request_with_seed(keys, ISSUER, CTX_ISS, CTX_RED, REDEEM_SEED),
+        (void)redeem_request_with_seed(std::move(t), keys, ISSUER, CTX_ISS, CTX_RED, REDEEM_SEED),
         std::logic_error);
 
     // Likewise for a token that was moved from.

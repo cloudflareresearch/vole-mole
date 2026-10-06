@@ -1,3 +1,4 @@
+#include "pomfrit/seeded.hpp" // internal
 #include "test.hpp"
 #include "vole_mole/pomfrit.hpp"
 
@@ -10,6 +11,8 @@
 
 using namespace vole_mole;
 using namespace vole_mole::pomfrit;
+using vole_mole::pomfrit::detail::issue_request_with_seed;
+using vole_mole::pomfrit::detail::Seed;
 using vole_mole::test::uov_key_pair;
 
 namespace {

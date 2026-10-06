@@ -1,0 +1,6 @@
+option('tests', type : 'boolean', value : true,
+  description : 'Build the tests (requires GoogleTest)')
+option('benchmarks', type : 'boolean', value : true,
+  description : 'Build the benchmarks (requires Google Benchmark)')
+option('examples', type : 'boolean', value : true,
+  description : 'Build the examples')

@@ -1,6 +1,6 @@
 # vole-mole
 
-Implementation of the post-quantum candidates for [MoLE][mole] crypto, all built
+Implementation of the post-quantum candidates for [MOLE][mole] crypto, all built
 on the [UOV][uov] signature scheme and the VOLE-in-the-Head (VOLEitH) proof
 system of [FAEST][faest]:
 
@@ -62,9 +62,14 @@ Clang 17 is too old). On macOS with Homebrew:
 brew install meson ninja llvm@22
 CC=$(brew --prefix llvm@22)/bin/clang CXX=$(brew --prefix llvm@22)/bin/clang++ meson setup build
 meson compile -C build
-meson test -C build            # add --print-errorlogs to see failures
-./build/tests/test_moussaka    # verbose test output
+meson test -C build --print-errorlogs
+./build/tests/test_pomfrit  # verbose test output
+./build/tests/test_moussaka
 ./build/tests/test_ratatouille
+./build/examples/example_keys  # run examples
+./build/examples/example_pomfrit
+./build/examples/example_moussaka
+./build/examples/example_ratatouille
 ```
 
 Benchmarks should be run in the release build:

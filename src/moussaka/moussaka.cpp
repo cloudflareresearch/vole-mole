@@ -1,11 +1,12 @@
 #include "vole_mole/moussaka.hpp"
+#include "vole_mole/random.hpp"
 
 #include "dst.hpp"
 #include "moussaka/commit.hpp"
 #include "moussaka/issue.hpp"
 #include "moussaka/redeem.hpp"
+#include "moussaka/seeded.hpp"
 #include "moussaka/token.hpp"
-#include "random.hpp"
 #include "uov/public_key.hpp"
 
 #include <algorithm>
@@ -16,8 +17,14 @@
 
 namespace vole_mole::moussaka {
 
+using detail::commit;
+using detail::Commitment;
 using detail::IssueRelation;
+using detail::Opening;
 using detail::RedeemRelation;
+using detail::Seed;
+using detail::SEED_BYTES;
+using detail::TokenAccess;
 using uov::detail::PublicKeyAccess;
 
 namespace {
@@ -62,8 +69,8 @@ ProveSeed<RedeemRelation> expand_redeem_seed(const Seed& seed) {
 
 } // namespace
 
-Commitment commit(const Nullifier& nf, const Context& ctx_iss, const Context& ctx_red,
-                  const Opening& r) {
+Commitment detail::commit(const Nullifier& nf, const Context& ctx_iss, const Context& ctx_red,
+                          const Opening& r) {
     const Kp800State out = keccak_p800(detail::encode_com_state(nf, ctx_iss, ctx_red, r));
 
     Commitment t;
@@ -84,22 +91,20 @@ PendingToken::PendingToken(PendingToken&&) noexcept = default;
 PendingToken& PendingToken::operator=(PendingToken&&) noexcept = default;
 PendingToken::~PendingToken() = default;
 
-IssueRequestResult issue_request_with_seed(const Context& ctx_iss, const Context& ctx_red,
-                                           const Seed& seed) {
+IssueRequestResult detail::issue_request_with_seed(const Context& ctx_iss, const Context& ctx_red,
+                                                   const Seed& seed) {
     const IssueRandomness rand = expand_issue_seed(seed);
 
     const Commitment t = commit(rand.nf, ctx_iss, ctx_red, rand.r);
     IssueRequest request;
     std::ranges::copy(t, std::span(request).first<uov::M>().begin());
-    detail::prove_issue_request(std::span(request).last<ISSUE_PROOF_BYTES>(), t, rand.nf, ctx_iss,
-                                ctx_red, rand.r, rand.rho);
-    auto impl = std::make_unique<PendingToken::Impl>(
-        PendingToken::Impl{rand.nf, rand.r, ctx_iss, ctx_red, t});
-    return {PendingToken(std::move(impl)), request};
+    prove_issue_request(std::span(request).last<ISSUE_PROOF_BYTES>(), t, rand.nf, ctx_iss, ctx_red,
+                        rand.r, rand.rho);
+    return {TokenAccess::make_pending_token(rand.nf, rand.r, ctx_iss, ctx_red, t), request};
 }
 
 IssueRequestResult issue_request(const Context& ctx_iss, const Context& ctx_red) {
-    return issue_request_with_seed(ctx_iss, ctx_red, random_bytes<SEED_BYTES>());
+    return detail::issue_request_with_seed(ctx_iss, ctx_red, random_bytes<SEED_BYTES>());
 }
 
 std::optional<IssueResponse> issue_response(const uov::SecretKey& sk, const IssueRequest& request,
@@ -159,17 +164,16 @@ std::optional<Token> PendingToken::finalize_issue(const uov::PublicKey& pk,
     return Token(std::make_unique<Token::Impl>(Token::Impl{impl->nf, impl->r, response}));
 }
 
-RedeemRequest Token::redeem_request_with_seed(const AnchorSet& anchors, size_t i,
-                                              const Context& ctx_iss, const Context& ctx_red,
-                                              const Seed& seed) && {
-    if (!impl_) {
-        throw std::logic_error("Moussaka: token was moved from");
-    }
+RedeemRequest detail::redeem_request_with_seed(Token&& token, const AnchorSet& anchors, size_t i,
+                                               const Context& ctx_iss, const Context& ctx_red,
+                                               const Seed& seed) {
+    const Nullifier& nf = TokenAccess::nf(token); // throws if the token was moved from
+    const Opening& r = TokenAccess::r(token);
+    const uov::Preimage& s = TokenAccess::s(token);
+
     if (i >= anchors.size()) {
         throw std::invalid_argument("Moussaka: Anchor index is out of range");
     }
-
-    const auto& [nf, r, s] = *impl_;
 
     // The prover requires a valid witness. (A proof for an invalid one wouldn't verify anyway.)
     if (anchors[i].eval(s) != commit(nf, ctx_iss, ctx_red, r)) {
@@ -178,13 +182,12 @@ RedeemRequest Token::redeem_request_with_seed(const AnchorSet& anchors, size_t i
     }
 
     // The arguments are valid, so consume the token.
-    const std::unique_ptr<Impl> impl = std::move(impl_);
+    const Token consumed = std::move(token);
 
     RedeemRequest request;
-    std::ranges::copy(impl->nf, std::span(request).first<NF_BYTES>().begin());
-    detail::prove_redeem_request(std::span(request).last<REDEEM_PROOF_BYTES>(), anchors.keys(), i,
-                                 impl->nf, ctx_iss, ctx_red, impl->r, impl->s,
-                                 expand_redeem_seed(seed));
+    std::ranges::copy(nf, std::span(request).first<NF_BYTES>().begin());
+    prove_redeem_request(std::span(request).last<REDEEM_PROOF_BYTES>(), anchors.keys(), i, nf,
+                         ctx_iss, ctx_red, r, s, expand_redeem_seed(seed));
     return request;
 }
 
@@ -193,12 +196,20 @@ RedeemRequest Token::redeem_request(const AnchorSet& anchors, size_t i, const Co
     if (!impl_) {
         throw std::logic_error("Moussaka: token was moved from");
     }
-    return std::move(*this).redeem_request_with_seed(anchors, i, ctx_iss, ctx_red,
-                                                     random_bytes<SEED_BYTES>());
+    return detail::redeem_request_with_seed(std::move(*this), anchors, i, ctx_iss, ctx_red,
+                                            random_bytes<SEED_BYTES>());
 }
 
-Token detail::TokenAccess::make(const Nullifier& nf, const Opening& r, const uov::Preimage& s) {
+Token detail::TokenAccess::make_token(const Nullifier& nf, const Opening& r,
+                                      const uov::Preimage& s) {
     return Token(std::make_unique<Token::Impl>(Token::Impl{nf, r, s}));
+}
+
+PendingToken detail::TokenAccess::make_pending_token(const Nullifier& nf, const Opening& r,
+                                                     const Context& ctx_iss, const Context& ctx_red,
+                                                     const Commitment& t) {
+    return PendingToken(
+        std::make_unique<PendingToken::Impl>(PendingToken::Impl{nf, r, ctx_iss, ctx_red, t}));
 }
 
 const Token& detail::TokenAccess::checked(const Token& token) {
