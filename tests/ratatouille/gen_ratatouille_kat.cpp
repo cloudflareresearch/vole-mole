@@ -1,9 +1,10 @@
 #include "vole_mole/ratatouille.hpp"
 
-#include "ratatouille/issue.hpp"
+#include "ratatouille/issue.hpp"  // internal
 #include "ratatouille/seeded.hpp" // internal
-#include "ratatouille/spend.hpp"
-#include "ratatouille/token.hpp"
+#include "ratatouille/spend.hpp"  // internal
+#include "ratatouille/token.hpp"  // internal
+
 #include "test.hpp"
 
 #include <fstream>

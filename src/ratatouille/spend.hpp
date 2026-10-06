@@ -65,10 +65,10 @@
 #include "uov/public_key.hpp"
 #include "voleith.hpp"
 
-#include "constants.hpp"
-#include "hash.hpp"
-#include "parameters.hpp"
-#include "quicksilver.hpp"
+#include "constants.hpp"   // from faest-arch-opt
+#include "hash.hpp"        // from faest-arch-opt
+#include "parameters.hpp"  // from faest-arch-opt
+#include "quicksilver.hpp" // from faest-arch-opt
 
 #include <algorithm>
 #include <array>

@@ -7,4 +7,30 @@ InsertBraces: true
 PointerAlignment: Left
 TabWidth: 4
 UseTab: Never
+# Includes are grouped as follows, with a blank line between groups:
+#
+#   1. The public API: "vole_mole/..." (or <vole_mole/...> in the examples).
+#   2. Internal headers from src/. Outside of src/ (i.e., in tests and benchmarks), each is
+#      commented "// internal".
+#   3. Test helpers: "test.hpp".
+#   4. Third-party headers, each commented with its origin, e.g., "// from faest-arch-opt".
+#   5. Third-party test frameworks: <gtest/...> and <benchmark/...>.
+#   6. The standard library.
+#
+# Internal headers are recognized by path, so a new header at the top level of src/ must be added to
+# the regex below; otherwise it's treated as third-party.
+IncludeBlocks: Regroup
+IncludeCategories:
+  - Regex: '^[<"]vole_mole/'
+    Priority: 1
+  - Regex: '^"((keccak|moussaka|pomfrit|ratatouille|uov)/.*|dst\.hpp|qs_bit\.hpp|voleith\.hpp)"$'
+    Priority: 2
+  - Regex: '^"test\.hpp"$'
+    Priority: 3
+  - Regex: '^"'
+    Priority: 4
+  - Regex: '^<(gtest|benchmark)/'
+    Priority: 5
+  - Regex: '^<'
+    Priority: 6
 ...

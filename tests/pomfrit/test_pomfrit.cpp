@@ -2,9 +2,9 @@
 #include "vole_mole/uov.hpp"
 
 #include "pomfrit/redeem.hpp" // internal
+#include "pomfrit/seeded.hpp" // internal
 #include "voleith.hpp"        // internal
 
-#include "pomfrit/seeded.hpp" // internal
 #include "test.hpp"
 
 #include <gtest/gtest.h>

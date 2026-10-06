@@ -1,8 +1,9 @@
-#include "test.hpp"
 #include "vole_mole/ratatouille.hpp"
 
 #include "ratatouille/seeded.hpp" // internal
 #include "ratatouille/token.hpp"  // internal: TokenAccess
+
+#include "test.hpp"
 
 #include <benchmark/benchmark.h>
 

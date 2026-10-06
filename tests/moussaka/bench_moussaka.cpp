@@ -1,8 +1,9 @@
-#include "test.hpp"
 #include "vole_mole/moussaka.hpp"
 
 #include "moussaka/seeded.hpp" // internal
 #include "moussaka/token.hpp"  // internal: TokenAccess
+
+#include "test.hpp"
 
 #include <benchmark/benchmark.h>
 

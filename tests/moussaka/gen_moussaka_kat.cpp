@@ -1,9 +1,10 @@
 #include "vole_mole/moussaka.hpp"
 
-#include "moussaka/issue.hpp"
-#include "moussaka/redeem.hpp"
+#include "moussaka/issue.hpp"  // internal
+#include "moussaka/redeem.hpp" // internal
 #include "moussaka/seeded.hpp" // internal
-#include "moussaka/token.hpp"
+#include "moussaka/token.hpp"  // internal
+
 #include "test.hpp"
 
 #include <fstream>
