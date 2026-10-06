@@ -4,6 +4,7 @@
 #include <vole_mole/uov.hpp>
 
 #include <cstdint>
+#include <cstdio>
 #include <cstdlib>
 #include <optional>
 #include <print>

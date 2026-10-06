@@ -10,6 +10,7 @@
 #include <cstddef>
 #include <cstdint>
 #include <string>
+#include <utility>
 
 using namespace vole_mole;
 using namespace vole_mole::ratatouille;

@@ -1,8 +1,17 @@
 // Tests for the spend proof relation.
 
-#include "ratatouille/spend.hpp" // internal
+#include "vole_mole/keccak.hpp"
+#include "vole_mole/ratatouille.hpp"
+#include "vole_mole/uov.hpp"
+
+#include "keccak/segmented.hpp"   // internal
+#include "qs_bit.hpp"             // internal
+#include "ratatouille/commit.hpp" // internal
+#include "ratatouille/spend.hpp"  // internal
 
 #include "test.hpp"
+
+#include "polynomials.hpp" // from faest-arch-opt
 
 #include <gtest/gtest.h>
 
@@ -12,6 +21,7 @@
 #include <cstdint>
 #include <limits>
 #include <random>
+#include <utility>
 #include <vector>
 
 using namespace vole_mole;

@@ -8,6 +8,7 @@
 
 #include "keccak/segmented.hpp" // internal: keccak::detail::QS_DEGREE
 
+#include "parameters.hpp"  // from faest-arch-opt
 #include "polynomials.hpp" // from faest-arch-opt
 #include "quicksilver.hpp" // from faest-arch-opt
 
@@ -23,6 +24,7 @@
 #include <span>
 #include <string>
 #include <string_view>
+#include <system_error>
 #include <utility>
 #include <vector>
 

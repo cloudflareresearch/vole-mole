@@ -2,7 +2,10 @@
 
 #include "keccak/tables.hpp"
 
+#include <array>
 #include <cassert>
+#include <cstddef>
+#include <cstdint>
 
 namespace vole_mole {
 

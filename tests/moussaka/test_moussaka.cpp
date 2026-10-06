@@ -1,7 +1,13 @@
-#include "moussaka/issue.hpp"  // internal
-#include "moussaka/redeem.hpp" // internal
-#include "moussaka/seeded.hpp" // internal
-#include "moussaka/token.hpp"  // internal
+#include "vole_mole/keccak.hpp"
+#include "vole_mole/moussaka.hpp"
+#include "vole_mole/uov.hpp"
+
+#include "keccak/segmented.hpp" // internal
+#include "moussaka/commit.hpp"  // internal
+#include "moussaka/issue.hpp"   // internal
+#include "moussaka/redeem.hpp"  // internal
+#include "moussaka/seeded.hpp"  // internal
+#include "moussaka/token.hpp"   // internal
 
 #include "test.hpp"
 
@@ -10,7 +16,9 @@
 #include <algorithm>
 #include <array>
 #include <cstddef>
+#include <cstdint>
 #include <fstream>
+#include <istream>
 #include <span>
 #include <stdexcept>
 #include <string>

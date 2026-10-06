@@ -1,6 +1,8 @@
 #include "vole_mole/moussaka.hpp"
 
+#include "vole_mole/keccak.hpp"
 #include "vole_mole/random.hpp"
+#include "vole_mole/uov.hpp"
 
 #include "dst.hpp"
 #include "moussaka/commit.hpp"
@@ -9,12 +11,24 @@
 #include "moussaka/seeded.hpp"
 #include "moussaka/token.hpp"
 #include "uov/public_key.hpp"
+#include "voleith.hpp"
+
+#include "hash.hpp"       // from faest-arch-opt
+#include "parameters.hpp" // from faest-arch-opt
+
+extern "C" {
+#include "KeccakHash.h" // from xkcp
+}
 
 #include <algorithm>
+#include <cstddef>
+#include <initializer_list>
 #include <memory>
+#include <optional>
 #include <span>
 #include <stdexcept>
 #include <utility>
+#include <vector>
 
 namespace vole_mole::moussaka {
 

@@ -1,6 +1,11 @@
 // Tests for the issuance proof relation.
 
-#include "ratatouille/issue.hpp" // internal
+#include "vole_mole/keccak.hpp"
+#include "vole_mole/ratatouille.hpp"
+
+#include "keccak/segmented.hpp"   // internal
+#include "ratatouille/commit.hpp" // internal
+#include "ratatouille/issue.hpp"  // internal
 
 #include "test.hpp"
 
@@ -10,6 +15,7 @@
 #include <array>
 #include <cstddef>
 #include <cstdint>
+#include <span>
 #include <vector>
 
 using namespace vole_mole;

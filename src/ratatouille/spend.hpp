@@ -68,7 +68,7 @@
 #include "constants.hpp"   // from faest-arch-opt
 #include "hash.hpp"        // from faest-arch-opt
 #include "parameters.hpp"  // from faest-arch-opt
-#include "quicksilver.hpp" // from faest-arch-opt
+#include "polynomials.hpp" // from faest-arch-opt
 
 #include <algorithm>
 #include <array>

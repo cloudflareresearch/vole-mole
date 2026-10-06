@@ -4,16 +4,21 @@
 
 #include "uov/public_key.hpp"
 
-#include "hash.hpp" // from faest-arch-opt
+#include "hash.hpp"       // from faest-arch-opt
+#include "parameters.hpp" // from faest-arch-opt
 
 extern "C" {
 #include "ov.h"         // from pqov
+#include "ov_keypair.h" // from pqov
+#include "params.h"     // from pqov
 #include "randomness.h" // from faest-arch-opt
 }
 
+#include <cstdint>
 #include <cstdlib>
 #include <cstring>
 #include <memory>
+#include <span>
 #include <stdexcept>
 
 // pqov normally implements randombytes() with OpenSSL. We build it without OpenSSL, in which case

@@ -1,12 +1,17 @@
 #include "vole_mole/moussaka.hpp"
+#include "vole_mole/uov.hpp"
 
-#include "moussaka/issue.hpp"  // internal
-#include "moussaka/redeem.hpp" // internal
-#include "moussaka/seeded.hpp" // internal
-#include "moussaka/token.hpp"  // internal
+#include "keccak/segmented.hpp" // internal
+#include "moussaka/commit.hpp"  // internal
+#include "moussaka/issue.hpp"   // internal
+#include "moussaka/redeem.hpp"  // internal
+#include "moussaka/seeded.hpp"  // internal
+#include "moussaka/token.hpp"   // internal
 
 #include "test.hpp"
 
+#include <cstddef>
+#include <cstdint>
 #include <fstream>
 #include <iostream>
 #include <utility>

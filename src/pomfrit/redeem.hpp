@@ -24,14 +24,17 @@
 #include "uov/public_key.hpp"
 #include "voleith.hpp"
 
-#include "constants.hpp"  // from faest-arch-opt
-#include "hash.hpp"       // from faest-arch-opt
-#include "parameters.hpp" // from faest-arch-opt
+#include "constants.hpp"   // from faest-arch-opt
+#include "faest_sig.hpp"   // from faest-arch-opt
+#include "hash.hpp"        // from faest-arch-opt
+#include "parameters.hpp"  // from faest-arch-opt
+#include "polynomials.hpp" // from faest-arch-opt
 
 #include <array>
 #include <cstddef>
 #include <cstdint>
 #include <span>
+#include <type_traits>
 
 namespace vole_mole::pomfrit::detail {
 

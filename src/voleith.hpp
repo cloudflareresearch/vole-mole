@@ -44,11 +44,12 @@
 #ifndef VOLE_MOLE_VOLEITH_HPP
 #define VOLE_MOLE_VOLEITH_HPP
 
+#include "block.hpp"          // from faest-arch-opt
 #include "faest_sig.hpp"      // from faest-arch-opt
 #include "hash.hpp"           // from faest-arch-opt
 #include "kos_vole_check.hpp" // from faest-arch-opt
 #include "quicksilver.hpp"    // from faest-arch-opt
-#include "util.hpp"           // from faest-arch-opt
+#include "vole_commit.hpp"    // from faest-arch-opt
 // faest-arch-opt only instantiates these templates for its own parameter sets, so we include the
 // implementations to instantiate them for ours.
 #include "small_vole.inc"  // from faest-arch-opt

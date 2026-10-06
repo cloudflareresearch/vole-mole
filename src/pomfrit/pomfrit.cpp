@@ -1,6 +1,7 @@
 #include "vole_mole/pomfrit.hpp"
 
 #include "vole_mole/random.hpp"
+#include "vole_mole/uov.hpp"
 
 #include "dst.hpp"
 #include "pomfrit/redeem.hpp"
@@ -10,10 +11,16 @@
 
 #include "hash.hpp" // from faest-arch-opt
 
+extern "C" {
+#include "KeccakHash.h" // from xkcp
+}
+
 #include <algorithm>
 #include <array>
 #include <cstddef>
 #include <cstdint>
+#include <memory>
+#include <optional>
 #include <span>
 #include <stdexcept>
 #include <utility>

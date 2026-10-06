@@ -23,7 +23,6 @@
 #ifndef VOLE_MOLE_RATATOUILLE_ISSUE_HPP
 #define VOLE_MOLE_RATATOUILLE_ISSUE_HPP
 
-#include "vole_mole/keccak.hpp"
 #include "vole_mole/ratatouille.hpp"
 
 #include "dst.hpp"
@@ -35,7 +34,7 @@
 #include "constants.hpp"   // from faest-arch-opt
 #include "hash.hpp"        // from faest-arch-opt
 #include "parameters.hpp"  // from faest-arch-opt
-#include "quicksilver.hpp" // from faest-arch-opt
+#include "polynomials.hpp" // from faest-arch-opt
 
 #include <algorithm>
 #include <array>
