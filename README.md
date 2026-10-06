@@ -30,7 +30,6 @@ protocol uses a 46591 B (byte) UOV public key.
 |             | `issue_response`           | Issuer    | 119 B   | 0.019 ms |
 |             | `finalize_issue`           | Client    | 5387 B  | 0.26 ms  |
 |             | `verify`                   | Verifier  | —       | 0.48 ms  |
-|:------------|:---------------------------|:----------|--------:|---------:|
 | Moussaka    | `issue_request`            | Client    | 7317 B  | 0.93 ms  |
 |             | `issue_response`           | Anchor    | 119 B   | 0.50 ms  |
 |             | `finalize_issue`           | Client    | —       | 0.017 ms |
@@ -40,7 +39,6 @@ protocol uses a 46591 B (byte) UOV public key.
 |             | `finalize_redeem` (N = 1)  | Moderator | —       | 0.68 ms  |
 |             | `finalize_redeem` (N = 8)  | Moderator | —       | 1.58 ms  |
 |             | `finalize_redeem` (N = 64) | Moderator | —       | 8.82 ms  |
-|:------------|:---------------------------|:----------|--------:|---------:|
 | Ratatouille | `issue_request`            | Client    | 7032 B  | 0.90 ms  |
 |             | `issue_response`           | Issuer    | 119 B   | 0.49 ms  |
 |             | `finalize_issue`           | Client    | —       | 0.017 ms |
@@ -80,6 +78,40 @@ meson test -C build-release --benchmark -v
 # or, to pass Google Benchmark flags (e.g., repetitions, JSON output):
 ./build-release/tests/bench_moussaka --benchmark_repetitions=10 --benchmark_report_aggregates_only=true
 ```
+
+## Reducing communication cost
+
+The VOLEitH proofs in our protocols use the same parameters as FAEST-EM-128f.
+These parameters optimize for speed, at the cost of larger proofs. Using the
+FAEST-EM-128s parameters, which optimize for size, our proofs would be 22–31%
+smaller, but proving and verifying would be roughly 1.3–7× slower:
+
+| Protocol    | Step                       | Party     | Sends   | Time     |
+|:------------|:---------------------------|:----------|--------:|---------:|
+| PomFRIT     | `issue_request`            | Client    | 45 B    | 2.42 ms  |
+|             | `issue_response`           | Issuer    | 119 B   | 0.019 ms |
+|             | `finalize_issue`           | Client    | 4179 B  | 0.62 ms  |
+|             | `verify`                   | Verifier  | —       | 2.59 ms  |
+| Moussaka    | `issue_request`            | Client    | 5557 B  | 3.49 ms  |
+|             | `issue_response`           | Anchor    | 119 B   | 2.74 ms  |
+|             | `finalize_issue`           | Client    | —       | 0.017 ms |
+|             | `redeem_request` (N = 1)   | Client    | 6493 B  | 3.94 ms  |
+|             | `redeem_request` (N = 8)   | Client    | 6493 B  | 4.83 ms  |
+|             | `redeem_request` (N = 64)  | Client    | 6493 B  | 12.4 ms  |
+|             | `finalize_redeem` (N = 1)  | Moderator | —       | 3.14 ms  |
+|             | `finalize_redeem` (N = 8)  | Moderator | —       | 4.07 ms  |
+|             | `finalize_redeem` (N = 64) | Moderator | —       | 11.3 ms  |
+| Ratatouille | `issue_request`            | Client    | 5368 B  | 3.48 ms  |
+|             | `issue_response`           | Issuer    | 119 B   | 2.76 ms  |
+|             | `finalize_issue`           | Client    | —       | 0.017 ms |
+|             | `spend_request`            | Client    | 12077 B | 5.88 ms  |
+|             | `spend_response`           | Issuer    | 127 B   | 4.46 ms  |
+|             | `finalize_spend`           | Client    | —       | 0.017 ms |
+
+In fact, the proof size can be driven down even further, but VOLEitH imposes a
+lower limit, and we start to see diminishing returns the more we optimize. For
+example, we can get PomFRIT signatures down to ~3.5KB, but the high verification
+time (~80ms) would make the scheme impractical for many use cases.
 
 ## License
 
