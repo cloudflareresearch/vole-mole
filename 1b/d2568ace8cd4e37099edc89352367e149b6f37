@@ -1,0 +1,47 @@
+src/moussaka/issue.hpp
+  s_e1f22194f17fe7::t_95bf64fdfdba24 21-22,132,137-138
+src/moussaka/moussaka.cpp
+  s_e1f22194f17fe7::t_96fb79bc886d08 58,60,75,77
+src/moussaka/redeem.hpp
+  s_e1f22194f17fe7::t_988d5eb4e7eae5 36-37,143,148-149
+src/pomfrit/pomfrit.cpp
+  s_e1f22194f17fe7::t_fecd3c7ee59323 150-152
+src/pomfrit/redeem.hpp
+  s_e1f22194f17fe7::t_c0c181cc216b0f 14-15,73,78-79
+src/ratatouille/issue.hpp
+  s_e1f22194f17fe7::t_bb34c424832586 21-22,118,123-124
+src/ratatouille/ratatouille.cpp
+  s_e1f22194f17fe7::t_61f5c1053a3b7f 72-73,75
+src/ratatouille/spend.hpp
+  s_e1f22194f17fe7::t_b12c66a4a05ea5 51-52,286,291-292
+src/voleith.hpp
+  s_e1f22194f17fe7::t_e832ea44f34e89 114,174,190,208,221,300,373,398,438,472
+subprojects/packagefiles/faest-arch-opt/0004-Add-a-TurboSHAKE-option.patch
+  s_e1f22194f17fe7::t_a87dfd3e1ae41a 1-399
+tests/hash/test_hash.cpp
+  s_e1f22194f17fe7::t_50fff9c288b6c6 1-150
+tests/meson.build
+  s_e1f22194f17fe7::t_675ed9c0235565 8
+tests/moussaka/moussaka_kat.txt
+  s_e1f22194f17fe7::t_b5b63b13565ea9 20,23,39,42,119,122
+tests/ratatouille/ratatouille_kat.txt
+  s_e1f22194f17fe7::t_62946baeae1523 18,29,39,50,61,71,82,93,103
+tests/voleith/test_voleith.cpp
+  s_e1f22194f17fe7::t_e9ce2f015e551c 7,10,22,30-43,46-47,51,55,69,73-84,378-379,381,640-659
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.10",
+  "base_commit_sha": "1bd2568ace8cd4e37099edc89352367e149b6f37",
+  "prompts": {},
+  "sessions": {
+    "s_e1f22194f17fe7": {
+      "agent_id": {
+        "tool": "opencode",
+        "id": "ses_ee8c1bd12ffe35d7lvxukqdzne",
+        "model": "@cf/zai-org/glm-5.3"
+      },
+      "human_author": "Christopher Patton <cpatton@cloudflare.com>"
+    }
+  }
+}
