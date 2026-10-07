@@ -122,7 +122,9 @@ IssueRequestResult issue_request_with_seed(const uov::PublicKey& pk, std::span<c
                                            const Seed& seed) {
     BlindSignature sig{};
 
-    // Expand the seed into the prover seed (rho), the refresher, and the target mask (r).
+    // Expand the seed into the prover seed (rho), the refresher, and the target mask (r). pk and
+    // msg are absorbed too: the VOLE commitment depends only on (r, rho), so the same seed for
+    // another message or key would otherwise reuse it (#34).
     ProveSeed<RedeemRelation> rho;
     const auto refresher = sig_refresher(sig);
     uov::Target r;
@@ -131,6 +133,8 @@ IssueRequestResult issue_request_with_seed(const uov::PublicKey& pk, std::span<c
         xof.init(RedeemRelation::params::secpar_v);
         xof.update(POMFRIT_SEED_DST);
         xof.update(seed);
+        xof.update(PublicKeyAccess::digest(pk));
+        xof.update(msg);
         Keccak_HashFinal(&xof.ctx, nullptr);
         Keccak_HashSqueeze(&xof.ctx, rho.data(), 8 * rho.size());
         Keccak_HashSqueeze(&xof.ctx, refresher.data(), 8 * refresher.size());
