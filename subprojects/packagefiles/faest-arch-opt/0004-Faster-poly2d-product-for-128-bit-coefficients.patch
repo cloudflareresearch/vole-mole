@@ -1,0 +1,135 @@
+Faster reduced poly2d product for 128-bit coefficients
+
+Add mul_reduce, the product of two poly2d reduced in the inner variable, and use it for QuickSilver
+products. For 128-bit coefficients, it computes the Karatsuba half sums once per input coefficient,
+and accumulates the uncombined CLMUL results of each output coefficient before interpolating,
+recombining, and reducing it once.
+
+TODO Propose this change to faest-arch-opt authors.
+
+diff --git a/poly2d.hpp b/poly2d.hpp
+index 48dae81..f8cf69b 100644
+--- a/poly2d.hpp
++++ b/poly2d.hpp
+@@ -101,4 +101,90 @@ operator*(const poly2d<size_a_1, size_a_2>& a, const poly2d<size_b_1, size_b_2>&
+     return out;
+ }
+ 
++// Product reduced to polynomials of size out_size_2 in the inner variable, i.e.,
++// (a * b).template reduce_to<out_size_2>(). Also works for plain polynomials.
++template <size_t out_size_2, typename A, typename B>
++inline auto mul_reduce(const A& a, const B& b)
++{
++    return (a * b).template reduce_to<out_size_2>();
++}
++
++namespace detail
++{
++// Karatsuba interpolation of the three uncombined CLMUL results of a 128x128-bit product (or a sum
++// of them), recombination into 256 bits, and reduction. The middle term is
++// (a0 + a1)(b0 + b1) + a0 b0 + a1 b1.
++inline poly128 karatsuba_finish_reduce_128(clmul_block lo, clmul_block mid, clmul_block hi)
++{
++    const poly128 parts[3] = {{lo}, {mid ^ lo ^ hi}, {hi}};
++    poly256 full;
++    combine_poly128s(&full.data[0], &parts[0], 3);
++    return full.template reduce_to<128>();
++}
++}
++
++// The same for inner size 128 (e.g., MACs in GF(2^128)), which is chosen over the above by partial
++// ordering. Each coefficient product in operator* above is a full Karatsuba multiplication: the
++// sums of the 64-bit halves, three CLMULs, and the interpolation and recombination into a 256-bit
++// product, which is then accumulated and reduced. Only the three CLMULs depend on both inputs, so
++// we compute the half sums once per input coefficient, and accumulate the three uncombined CLMUL
++// results of each output coefficient before interpolating, recombining, and reducing it. The
++// number of CLMULs is the same (3 size_a_1 size_b_1), but the other work drops from
++// O(size_a_1 size_b_1) to O(size_a_1 + size_b_1).
++template <size_t out_size_2, size_t size_a_1, size_t size_b_1>
++requires (out_size_2 == 128 && size_a_1 > 0 && size_b_1 > 0)
++inline poly2d<size_a_1 + size_b_1 - 1, 128>
++mul_reduce(const poly2d<size_a_1, 128>& a, const poly2d<size_b_1, 128>& b)
++{
++    constexpr size_t n = size_a_1 + size_b_1 - 1;
++
++    // Sum of the halves of a_i in the low 64 bits, and of b_j in the high 64 bits, which is where
++    // clmul_lh takes them from.
++    std::array<clmul_block, size_a_1> a_sum;
++    for (size_t i = 0; i < size_a_1; ++i)
++        a_sum[i] = a.coeffs[i].data ^ a.coeffs[i].data.shift_right_64();
++    std::array<clmul_block, size_b_1> b_sum;
++    for (size_t j = 0; j < size_b_1; ++j)
++        b_sum[j] = b.coeffs[j].data ^ b.coeffs[j].data.shift_left_64();
++
++    poly2d<n, 128> out;
++    if constexpr (n <= 8)
++    {
++        // Accumulate into all output coefficients at once. Fastest while the 3 n accumulators fit
++        // in registers.
++        std::array<clmul_block, n> lo, mid, hi;
++        for (size_t k = 0; k < n; ++k)
++            lo[k] = mid[k] = hi[k] = clmul_block::set_zero();
++        for (size_t i = 0; i < size_a_1; ++i)
++            for (size_t j = 0; j < size_b_1; ++j)
++            {
++                lo[i + j] = lo[i + j] ^ clmul_block::clmul_ll(a.coeffs[i].data, b.coeffs[j].data);
++                mid[i + j] = mid[i + j] ^ clmul_block::clmul_lh(a_sum[i], b_sum[j]);
++                hi[i + j] = hi[i + j] ^ clmul_block::clmul_hh(a.coeffs[i].data, b.coeffs[j].data);
++            }
++        for (size_t k = 0; k < n; ++k)
++            out.coeffs[k] = detail::karatsuba_finish_reduce_128(lo[k], mid[k], hi[k]);
++    }
++    else
++    {
++        // One output coefficient at a time, which keeps only three accumulators live, so that
++        // larger products don't spill registers.
++        for (size_t k = 0; k < n; ++k)
++        {
++            clmul_block lo = clmul_block::set_zero(), mid = lo, hi = lo;
++            const size_t i_begin = k < size_b_1 ? 0 : k - size_b_1 + 1;
++            const size_t i_end = k < size_a_1 ? k + 1 : size_a_1;
++            for (size_t i = i_begin; i < i_end; ++i)
++            {
++                const size_t j = k - i;
++                lo = lo ^ clmul_block::clmul_ll(a.coeffs[i].data, b.coeffs[j].data);
++                mid = mid ^ clmul_block::clmul_lh(a_sum[i], b_sum[j]);
++                hi = hi ^ clmul_block::clmul_hh(a.coeffs[i].data, b.coeffs[j].data);
++            }
++            out.coeffs[k] = detail::karatsuba_finish_reduce_128(lo, mid, hi);
++        }
++    }
++    return out;
++}
++
+ }
+diff --git a/quicksilver.hpp b/quicksilver.hpp
+index ccfdac4..a2b6413 100644
+--- a/quicksilver.hpp
++++ b/quicksilver.hpp
+@@ -793,7 +793,7 @@ inline quicksilver_gfsecpar<QS, deg_a + deg_b>
+ operator*(const quicksilver_gfsecpar<QS, deg_a>& a, const quicksilver_gfsecpar<QS, deg_b>& b)
+ {
+     quicksilver_gfsecpar<QS, deg_a + deg_b> out(0, a);
+-    out.mac = (a.mac * b.mac).template reduce_to<QS::secpar_bits>();
++    out.mac = mul_reduce<QS::secpar_bits>(a.mac, b.mac);
+     if constexpr (QS::is_verifier)
+     {
+         FAEST_ASSERT(a.delta_powers == b.delta_powers);
+@@ -809,7 +809,7 @@ operator*(const quicksilver_gfsecpar<QS, deg_a>& a, const quicksilver_gf2<QS, de
+     if constexpr (!QS::is_verifier)
+     {
+         quicksilver_gfsecpar<QS, deg_a + deg_b> out(0, a);
+-        out.mac = (a.mac * b.mac).template reduce_to<QS::secpar_bits>();
++        out.mac = mul_reduce<QS::secpar_bits>(a.mac, b.mac);
+         out.mac += (a.mac * b.value()).template shift_left<deg_b>();
+         return out;
+     }
+@@ -824,7 +824,7 @@ operator*(const quicksilver_gf2<QS, deg_a>& a, const quicksilver_gf2<QS, deg_b>&
+     quicksilver_gf2<QS, deg_a + deg_b> out(0, a);
+     if constexpr (!QS::is_verifier)
+     {
+-        out.mac = (a.mac * b.mac).template reduce_to<QS::secpar_bits>();
++        out.mac = mul_reduce<QS::secpar_bits>(a.mac, b.mac);
+         out.mac += (a.mac * b.value()).template shift_left<deg_b>() +
+                    (b.mac * a.value()).template shift_left<deg_a>();
+         out.value() = a.value() * b.value();
