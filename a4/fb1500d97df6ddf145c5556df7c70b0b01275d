@@ -1,0 +1,91 @@
+tests/moussaka/gen_moussaka_kat.cpp
+  s_d51244ca0e0a34::t_f7576e4a6db058 5,15-19,91-92
+src/ratatouille/ratatouille.cpp
+  s_d51244ca0e0a34::t_715c88818aab9f 7,19-20,24-26,28-29
+  s_a10d9eb0ca6fc6::t_5c32bd384842b5 80-81,88,138-139,146-148,153,197-204,224-226,232,235-238,246-247,293-294,298-307
+  s_d51244ca0e0a34::t_081b0c3df0a126 2
+src/moussaka/token.hpp
+  s_d51244ca0e0a34::t_3ecb069bbbf523 15-20
+README.md
+  s_8557e21a96d6eb::t_d8b025fbf92b2b 3
+tests/ratatouille/bench_ratatouille.cpp
+  s_a10d9eb0ca6fc6::t_6e6cf71bb33a46 4-5,15-17,91,101,115
+tests/ratatouille/test_ratatouille.cpp
+  s_d51244ca0e0a34::t_d93b13d5a77013 29-34
+  s_d51244ca0e0a34::t_182a9e9c31d0d0 5,27-28,35
+  s_a10d9eb0ca6fc6::t_d9657bcf65b27f 95,224,433,436,572-573,613-614,616-617,621,632,652,691
+src/ratatouille/token.hpp
+  s_a10d9eb0ca6fc6::t_93769c205ac3f7 18-19
+  s_d51244ca0e0a34::t_e9d591c6c01014 20-33
+src/pomfrit/pomfrit.cpp
+  s_2d53470fd179d7::t_37953dfcc29880 132-133,166-168,172
+  s_d51244ca0e0a34::t_92bdfef175afbe 6,24-25,120-130
+  s_d51244ca0e0a34::t_255617a75634a7 2
+tests/pomfrit/test_pomfrit.cpp
+  s_d51244ca0e0a34::t_7a26b1418c2c5c 7,24-26
+include/vole_mole/pomfrit.hpp
+  s_2d53470fd179d7::t_20ecb1da2e5316 59
+  s_2d53470fd179d7::t_7646e3ccd45ef0 33
+  s_d51244ca0e0a34::t_0f930b2c01f896 31-32
+tests/pomfrit/bench_pomfrit.cpp
+  s_d51244ca0e0a34::t_2b9e517b2591f8 1,14-15
+tests/ratatouille/gen_ratatouille_kat.cpp
+  s_d51244ca0e0a34::t_26b5638530dd94 4,17-21
+  s_a10d9eb0ca6fc6::t_400812a7789245 136
+src/moussaka/moussaka.cpp
+  s_d51244ca0e0a34::t_f2c24cdfcf668f 8,20-21,23,25-27,72-73,94-95,101-103,107,167-173,185,188-190,199-200,203-204,208-214
+  s_d51244ca0e0a34::t_3deb57de9f4373 2
+tests/moussaka/test_moussaka.cpp
+  s_d51244ca0e0a34::t_d71ae54cc8273e 26-31,141-142,340-341,437,446-447,478-479,483-484,586,592,604
+  s_d51244ca0e0a34::t_82e561e04096db 3,24-25
+src/ratatouille/commit.hpp
+  s_a10d9eb0ca6fc6::t_93f2c881e6b733 1,8,22-32
+tests/moussaka/bench_moussaka.cpp
+  s_d51244ca0e0a34::t_e2f6dbee9cc030 4-5,16-18,103-104,114-115
+tests/uov/test_uov.cpp
+  s_a10d9eb0ca6fc6::t_3125859a023761 68,75,91,121,132,142,150,156,169
+  s_2d53470fd179d7::t_d97b2c52d5ffef 6-8
+  s_d51244ca0e0a34::t_f24afc07d31bce 39,48,79,81,125-131,133-135
+src/uov/uov.cpp
+  s_d51244ca0e0a34::t_a97fad57ed18c1 2,36-37
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.10",
+  "base_commit_sha": "a4fb1500d97df6ddf145c5556df7c70b0b01275d",
+  "prompts": {},
+  "sessions": {
+    "s_2d53470fd179d7": {
+      "agent_id": {
+        "tool": "opencode",
+        "id": "ses_f109359f2ffe7oVHmagnS0Pync",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Christopher Patton <cpatton@cloudflare.com>"
+    },
+    "s_8557e21a96d6eb": {
+      "agent_id": {
+        "tool": "opencode",
+        "id": "ses_f2b5fab15ffeHakKGiA7H9UX9p",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Christopher Patton <cpatton@cloudflare.com>"
+    },
+    "s_a10d9eb0ca6fc6": {
+      "agent_id": {
+        "tool": "opencode",
+        "id": "ses_ef633e4aeffekYsLfcB7rmbw3Y",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Christopher Patton <cpatton@cloudflare.com>"
+    },
+    "s_d51244ca0e0a34": {
+      "agent_id": {
+        "tool": "opencode",
+        "id": "ses_eee50cdb9ffe8TWb1V5LP7Yp0l",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Christopher Patton <cpatton@cloudflare.com>"
+    }
+  }
+}

@@ -1,0 +1,51 @@
+src/moussaka/issue.hpp
+  s_d51244ca0e0a34::t_4201ce2cd287b3 35-38
+src/moussaka/moussaka.cpp
+  s_d51244ca0e0a34::t_581c4a875ca350 2
+src/moussaka/redeem.hpp
+  s_d51244ca0e0a34::t_751cdccc5bb847 52-55
+src/pomfrit/pomfrit.cpp
+  s_d51244ca0e0a34::t_6eeba7fb5c18c1 2
+src/pomfrit/redeem.hpp
+  s_d51244ca0e0a34::t_871a851189af08 27-29
+src/ratatouille/issue.hpp
+  s_d51244ca0e0a34::t_acf2fe6f3baccd 35-38
+src/ratatouille/ratatouille.cpp
+  s_d51244ca0e0a34::t_f6062b62345da8 2
+src/ratatouille/spend.hpp
+  s_d51244ca0e0a34::t_8574ca0c335780 68-71
+src/uov/uov.cpp
+  s_d51244ca0e0a34::t_65e2216bd1f2df 2
+src/voleith.hpp
+  s_d51244ca0e0a34::t_32420351551f3b 47-51,54-55
+tests/moussaka/bench_moussaka.cpp
+  s_d51244ca0e0a34::t_768527ecb19f20 6-7
+tests/moussaka/gen_moussaka_kat.cpp
+  s_d51244ca0e0a34::t_b97793b53441a2 3-4,6-7
+tests/pomfrit/bench_pomfrit.cpp
+  s_d51244ca0e0a34::t_9e24eb10cd13e1 1-2,4
+tests/pomfrit/test_pomfrit.cpp
+  s_d51244ca0e0a34::t_7c3c83641c2061 5
+tests/ratatouille/bench_ratatouille.cpp
+  s_d51244ca0e0a34::t_82a4cd1a0cee9d 6-7
+tests/ratatouille/gen_ratatouille_kat.cpp
+  s_d51244ca0e0a34::t_18c9b769128759 3,5-7
+tests/voleith/test_voleith.cpp
+  s_d51244ca0e0a34::t_f27eb36ff0efe2 53-55
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.10",
+  "base_commit_sha": "9f6a1ab3b79ddbcf38851133dc8b95fb07eadab5",
+  "prompts": {},
+  "sessions": {
+    "s_d51244ca0e0a34": {
+      "agent_id": {
+        "tool": "opencode",
+        "id": "ses_eee50cdb9ffe8TWb1V5LP7Yp0l",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Christopher Patton <cpatton@cloudflare.com>"
+    }
+  }
+}
