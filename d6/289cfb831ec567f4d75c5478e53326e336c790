@@ -1,0 +1,169 @@
+include/vole_mole/ratatouille.hpp
+  s_1298347061c4d8::t_cab25a44041bbc 1-24,25-33,34,35-52,53-56,57-84,85-114,115-137,138-150,151-157,158-169,170,171-179,180-183,184-192
+tests/moussaka/test_moussaka.cpp
+  s_a10d9eb0ca6fc6::t_635cbddf3a7227 34-35,88,91
+  s_d51244ca0e0a34::t_82e561e04096db 3,24-25
+  s_d51244ca0e0a34::t_d71ae54cc8273e 26-31,141-142,340-341,437,446-447,478-479,483-484,586,592,604
+tests/ratatouille/test_spend.cpp
+  s_a10d9eb0ca6fc6::t_2f1eb9fe2f109a 1-356
+src/dst.hpp
+  s_a10d9eb0ca6fc6::t_20714a42acac32 71-73
+  s_a10d9eb0ca6fc6::t_7ae3c8faa44632 11,40-48,59-70
+  s_a10d9eb0ca6fc6::t_aecf197df67c9a 74-76
+README.md
+  s_2d53470fd179d7::t_12bbd581c8a1b4 20-22
+  s_2d53470fd179d7::t_c5f95d0a4e8178 44-46
+  s_2d53470fd179d7::t_f321765e7a5aa4 8-10
+  s_2d53470fd179d7::t_8989772b7b41ef 26-28,33,43
+  s_2d53470fd179d7::t_7fc033f5ea683a 50-52
+  s_2d53470fd179d7::t_25510bf4e885fe 17-19
+  s_2d53470fd179d7::t_62e9631a2b2e16 29-32
+  s_2d53470fd179d7::t_a9538b9a61d27e 47-49
+  s_2d53470fd179d7::t_87e9b31048c017 53
+  s_2d53470fd179d7::t_112d443f50dc50 14-16
+  s_2d53470fd179d7::t_a321bcdd6bdfc4 23-25
+  s_2d53470fd179d7::t_bd2586ab479ebd 11-13
+  s_8557e21a96d6eb::t_d8b025fbf92b2b 3,4
+  s_2d53470fd179d7::t_c9138677240aec 34-42
+src/ratatouille/spend.hpp
+  s_a10d9eb0ca6fc6::t_72b4b5c6d5bc3e 1-432
+tests/ratatouille/bench_ratatouille.cpp
+  s_a10d9eb0ca6fc6::t_6e6cf71bb33a46 1-3,4-5,6-14,15-17,18-90,91,92-100,101,102-114,115,116-124
+src/moussaka/issue.hpp
+  s_a10d9eb0ca6fc6::t_5f2869bab5f3c1 65,101,170-172,183,202
+src/ratatouille/commit.hpp
+  s_a10d9eb0ca6fc6::t_93f2c881e6b733 1,2-7,8,9-21,22-32,33-97
+src/ratatouille/token.hpp
+  s_a10d9eb0ca6fc6::t_93769c205ac3f7 1-9,12-17,18-19,34-68
+  s_d51244ca0e0a34::t_e9d591c6c01014 20-33
+src/ratatouille/ratatouille.cpp
+  s_a10d9eb0ca6fc6::t_5c32bd384842b5 1,3-4,5-6,8-18,21-23,27,30-79,80-81,82-87,88,89-137,138-139,140-145,146-148,149-152,153,154-196,197-204,205-223,224-226,227-231,232,233-234,235-238,239-245,246-247,248-292,293-294,295-297,298-307,308-362
+  s_d51244ca0e0a34::t_081b0c3df0a126 2
+  s_d51244ca0e0a34::t_715c88818aab9f 7,19-20,24-26,28-29
+src/moussaka/moussaka.cpp
+  s_a10d9eb0ca6fc6::t_328b332a584239 74
+  s_d51244ca0e0a34::t_3deb57de9f4373 2
+  s_d51244ca0e0a34::t_f2c24cdfcf668f 8,20-21,23,25-27,72-73,94-95,101-103,107,167-173,185,188-190,199-200,203-204,208-214
+src/uov/uov.cpp
+  s_a10d9eb0ca6fc6::t_9743e40e1dff1f 15,41,56,65-66
+  s_d51244ca0e0a34::t_a97fad57ed18c1 2,36-37
+tests/ratatouille/ratatouille_kat.txt
+  s_a10d9eb0ca6fc6::t_82f3591c159b0b 1-104
+src/moussaka/commit.hpp
+  s_a10d9eb0ca6fc6::t_071c66902840d7 39-40
+tests/ratatouille/test_ratatouille.cpp
+  s_a10d9eb0ca6fc6::t_d9657bcf65b27f 1-4,6-26,36-94,95,96-223,224,225-432,433,434-435,436,437-571,572-573,574-612,613-614,615,616-617,618-620,621,622-631,632,633-651,652,653-690,691,692-704
+  s_d51244ca0e0a34::t_182a9e9c31d0d0 5,27-28,35
+  s_d51244ca0e0a34::t_d93b13d5a77013 29-34
+tests/test.hpp
+  s_a10d9eb0ca6fc6::t_6bba57e024ce3b 14,17,21,102-124
+  s_a10d9eb0ca6fc6::t_793444af8203f3 50-51
+  s_8557e21a96d6eb::t_43ca0091f1649a 43,45,48-49
+src/moussaka/redeem.hpp
+  s_a10d9eb0ca6fc6::t_6da375f945d48b 85,117,241
+src/ratatouille/issue.hpp
+  s_a10d9eb0ca6fc6::t_d5b6c085a59884 1-214
+include/vole_mole/moussaka.hpp
+  s_1298347061c4d8::t_4a2825bdddf27b 20
+tests/ratatouille/README.md
+  s_a10d9eb0ca6fc6::t_46d5756efedbbc 1-11
+tests/ratatouille/gen_ratatouille_kat.cpp
+  s_a10d9eb0ca6fc6::t_400812a7789245 1-3,5-16,22-135,136,137-171
+  s_d51244ca0e0a34::t_26b5638530dd94 4,17-21
+tests/ratatouille/test_issue.cpp
+  s_a10d9eb0ca6fc6::t_989dcb9bf49aa7 1-148
+include/vole_mole/uov.hpp
+  s_a10d9eb0ca6fc6::t_e012cbab4cc4da 15-16,36,54-60
+  s_d51244ca0e0a34::t_46b8d1021c1af7 28-35,64-65
+tests/uov/test_uov.cpp
+  s_a10d9eb0ca6fc6::t_3125859a023761 21,68,75,91,107-120,121,122-124,132,142,150,156,169,232
+  s_7a716a1cfbec78::t_c1626a7887cca5 231
+  s_2d53470fd179d7::t_d97b2c52d5ffef 6-8
+  s_d51244ca0e0a34::t_f24afc07d31bce 39,48,79,81,125-131,133-135
+tests/pomfrit/bench_pomfrit.cpp
+  s_d51244ca0e0a34::t_2b9e517b2591f8 1,14-15
+tests/pomfrit/test_pomfrit.cpp
+  s_d51244ca0e0a34::t_7a26b1418c2c5c 7,24-26
+tests/moussaka/bench_moussaka.cpp
+  s_d51244ca0e0a34::t_e2f6dbee9cc030 4-5,16-18,103-104,114-115
+src/pomfrit/pomfrit.cpp
+  s_d51244ca0e0a34::t_92bdfef175afbe 6,24-25,120-130
+  s_2d53470fd179d7::t_37953dfcc29880 132-133,166-168,172
+  s_d51244ca0e0a34::t_255617a75634a7 2
+include/vole_mole/pomfrit.hpp
+  s_2d53470fd179d7::t_7646e3ccd45ef0 33
+  s_d51244ca0e0a34::t_0f930b2c01f896 31-32
+  s_2d53470fd179d7::t_20ecb1da2e5316 59
+src/moussaka/token.hpp
+  s_d51244ca0e0a34::t_3ecb069bbbf523 15-20
+tests/moussaka/gen_moussaka_kat.cpp
+  s_d51244ca0e0a34::t_f7576e4a6db058 5,15-19,91-92
+examples/moussaka.cpp
+  s_d51244ca0e0a34::t_ec78a7854b8269 1-125
+examples/pomfrit.cpp
+  s_d51244ca0e0a34::t_dbabaed612d857 1-51
+examples/ratatouille.cpp
+  s_d51244ca0e0a34::t_5979742c9689d9 1-110
+src/moussaka/seeded.hpp
+  s_d51244ca0e0a34::t_f17e15af5d314d 1-35
+src/pomfrit/seeded.hpp
+  s_d51244ca0e0a34::t_4025b2a0b59d3c 1-27
+src/ratatouille/seeded.hpp
+  s_d51244ca0e0a34::t_0b1030d65d7bd3 1-35
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.10",
+  "base_commit_sha": "d6289cfb831ec567f4d75c5478e53326e336c790",
+  "prompts": {},
+  "sessions": {
+    "s_1298347061c4d8": {
+      "agent_id": {
+        "tool": "opencode",
+        "id": "ses_ef1ee9fd6ffexEg0xot7tdUW5f",
+        "model": "@cf/zai-org/glm-5.3-flash"
+      },
+      "human_author": "Christopher Patton <cpatton@cloudflare.com>"
+    },
+    "s_2d53470fd179d7": {
+      "agent_id": {
+        "tool": "opencode",
+        "id": "ses_f109359f2ffe7oVHmagnS0Pync",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Christopher Patton <cpatton@cloudflare.com>"
+    },
+    "s_7a716a1cfbec78": {
+      "agent_id": {
+        "tool": "opencode",
+        "id": "ses_f251decf9ffeZ6Wse4Owi7K2Hz",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Christopher Patton <cpatton@cloudflare.com>"
+    },
+    "s_8557e21a96d6eb": {
+      "agent_id": {
+        "tool": "opencode",
+        "id": "ses_f2b5fab15ffeHakKGiA7H9UX9p",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Christopher Patton <cpatton@cloudflare.com>"
+    },
+    "s_a10d9eb0ca6fc6": {
+      "agent_id": {
+        "tool": "opencode",
+        "id": "ses_ef633e4aeffekYsLfcB7rmbw3Y",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Christopher Patton <cpatton@cloudflare.com>"
+    },
+    "s_d51244ca0e0a34": {
+      "agent_id": {
+        "tool": "opencode",
+        "id": "ses_eee50cdb9ffe8TWb1V5LP7Yp0l",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Christopher Patton <cpatton@cloudflare.com>"
+    }
+  }
+}
