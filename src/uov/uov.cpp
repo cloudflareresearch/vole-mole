@@ -98,8 +98,10 @@ Preimage SecretKey::derive_preimage(const Target& target) const {
 }
 
 Target PublicKey::eval(const Preimage& preimage) const {
+    // The preimage may be secret, so use the constant-time evaluation rather
+    // than ov_publicmap() (the default), whose memory accesses depend on the input.
     Target target;
-    ov_publicmap(target.data(), impl_->pk.pk, preimage.data());
+    ov_publicmap_ct(target.data(), impl_->pk.pk, preimage.data());
     return target;
 }
 
