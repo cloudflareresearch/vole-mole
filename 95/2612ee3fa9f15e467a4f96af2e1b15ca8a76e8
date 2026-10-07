@@ -1,0 +1,29 @@
+include/vole_mole/ratatouille.hpp
+  s_399085703b3426::t_db285068ead4f7 28,30
+src/dst.hpp
+  s_399085703b3426::t_1251c2dfb73f5b 50-51,78-79
+src/ratatouille/issue.hpp
+  s_399085703b3426::t_f8bdd98d2fd2ec 18-20,32-33,52-55,68-73,91-92,121,158-161,172-177,180,183,185-188,198
+src/ratatouille/spend.hpp
+  s_399085703b3426::t_78263b0a650f04 52,54-67,80-81,103-106,108-109,134-139,195,278,317-320,333-338,341,343-349,353-355,357,359-362,368-369,375-376,380,383-384,386,388-391,394,397-399,402-403,405-406,408,410,415,418,420-423,431
+tests/ratatouille/test_issue.cpp
+  s_399085703b3426::t_9035aa8d877aa2 33-39
+tests/ratatouille/test_spend.cpp
+  s_399085703b3426::t_cd0aa43cb9b866 60-66,75
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.10",
+  "base_commit_sha": "952612ee3fa9f15e467a4f96af2e1b15ca8a76e8",
+  "prompts": {},
+  "sessions": {
+    "s_399085703b3426": {
+      "agent_id": {
+        "tool": "opencode",
+        "id": "ses_ef221eca0ffe7CEoGk1MYYa9nx",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Bas Westerbaan <bas@cloudflare.com>"
+    }
+  }
+}

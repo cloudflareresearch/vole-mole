@@ -1,0 +1,21 @@
+tests/meson.build
+  s_0c5212468921e6::t_c03df51f602848 12
+subprojects/packagefiles/faest-arch-opt/0004-Faster-poly2d-product-for-128-bit-coefficients.patch
+  s_0c5212468921e6::t_f53d4036fbb263 1-71
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.10",
+  "base_commit_sha": "228b84ca60ff40cb3346e806f111676f837ca83b",
+  "prompts": {},
+  "sessions": {
+    "s_0c5212468921e6": {
+      "agent_id": {
+        "tool": "opencode",
+        "id": "ses_ee9181bd2ffeb3DoiTDpGTJ0H8",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Bas Westerbaan <bas@cloudflare.com>"
+    }
+  }
+}
