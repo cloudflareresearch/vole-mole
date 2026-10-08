@@ -1,0 +1,35 @@
+include/vole_mole/minifaest.hpp
+  s_4868955cf0d71f::t_b24ac5af499f08 1-80
+meson.build
+  s_4868955cf0d71f::t_cac26b99148a95 39
+src/dst.hpp
+  s_4868955cf0d71f::t_b2561b742ee5e7 9,33-37,65-67
+src/minifaest/minifaest.cpp
+  s_4868955cf0d71f::t_a505820195b478 1-47
+src/minifaest/owf.hpp
+  s_4868955cf0d71f::t_44787947705b66 1-312
+src/minifaest/sign.hpp
+  s_4868955cf0d71f::t_da49a1b4061882 1-164
+tests/meson.build
+  s_4868955cf0d71f::t_57775bc0ec2c3c 9,52
+tests/minifaest/bench_minifaest.cpp
+  s_4868955cf0d71f::t_85345562232593 1-108
+tests/minifaest/test_minifaest.cpp
+  s_4868955cf0d71f::t_2511e095ca885a 1-235
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.10",
+  "base_commit_sha": "a9771fd01ab9fe9c7b97420bcc913d71258ae088",
+  "prompts": {},
+  "sessions": {
+    "s_4868955cf0d71f": {
+      "agent_id": {
+        "tool": "opencode",
+        "id": "ses_ee35612b0ffeT4qz6wqk2NdUm0",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Christopher Patton <cpatton@cloudflare.com>"
+    }
+  }
+}
