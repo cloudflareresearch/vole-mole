@@ -1,0 +1,24 @@
+subprojects/packagefiles/faest-arch-opt/0004-Faster-poly2d-product-for-128-bit-coefficients.patch
+  s_0c5212468921e6::t_f53d4036fbb263 1-104
+  s_0c5212468921e6::t_29924007aadfc0 105-135
+src/qs_bit.hpp
+  s_0c5212468921e6::t_f271056951939b 38,63
+tests/poly2d/test_poly2d.cpp
+  s_0c5212468921e6::t_a00fc1b0184309 1-73
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.10",
+  "base_commit_sha": "3f473b9039995144fe219b3069cb27c3e43c168d",
+  "prompts": {},
+  "sessions": {
+    "s_0c5212468921e6": {
+      "agent_id": {
+        "tool": "opencode",
+        "id": "ses_ee9181bd2ffeb3DoiTDpGTJ0H8",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Bas Westerbaan <bas@cloudflare.com>"
+    }
+  }
+}
