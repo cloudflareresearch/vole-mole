@@ -1,0 +1,19 @@
+tests/moussaka/moussaka_kat.txt
+  s_f154a0ae6ad144::t_a92425f713fd6a 13,24,31,44,51,125
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.10",
+  "base_commit_sha": "9ec027f3923dbdc332e032b0537d4bfdaae85aa4",
+  "prompts": {},
+  "sessions": {
+    "s_f154a0ae6ad144": {
+      "agent_id": {
+        "tool": "opencode",
+        "id": "ses_ee1f90434ffe93FLb1dbE0xqHI",
+        "model": "gpt-6.1-sol"
+      },
+      "human_author": "Christopher Patton <cpatton@cloudflare.com>"
+    }
+  }
+}
