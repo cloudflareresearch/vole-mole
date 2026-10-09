@@ -25,6 +25,7 @@ namespace {
 
 const Context CTX_ISS = vole_mole::test::filled<CTX_BYTES>(0x10);
 const Context CTX_RED = vole_mole::test::filled<CTX_BYTES>(0x20);
+const ChallengeDigest CHALLENGE_DIGEST = vole_mole::test::filled<CHALLENGE_DIGEST_BYTES>(0x70);
 
 // A different seed per iteration, so that every run proves a fresh statement.
 Seed seed_from_counter(uint64_t i) {
@@ -103,7 +104,7 @@ void BM_RedeemRequest(benchmark::State& state) {
     uint64_t i = 0;
     for (auto _ : state) {
         auto req = redeem_request_with_seed(copy(token()), keys, keys.size() - 1, CTX_ISS, CTX_RED,
-                                            seed_from_counter(i++));
+                                            CHALLENGE_DIGEST, seed_from_counter(i++));
         benchmark::DoNotOptimize(req);
     }
     state.SetLabel(std::to_string(REDEEM_PROOF_BYTES) + "-byte proof");
@@ -114,9 +115,9 @@ BENCHMARK(BM_RedeemRequest)->Arg(1)->Arg(8)->Arg(MAX_ANCHORS)->Unit(benchmark::k
 void BM_FinalizeRedeem(benchmark::State& state) {
     const auto keys = anchor_set(static_cast<size_t>(state.range(0)));
     const auto req = redeem_request_with_seed(copy(token()), keys, keys.size() - 1, CTX_ISS,
-                                              CTX_RED, seed_from_counter(0));
+                                              CTX_RED, CHALLENGE_DIGEST, seed_from_counter(0));
     for (auto _ : state) {
-        auto nf = finalize_redeem(keys, req, CTX_ISS, CTX_RED);
+        auto nf = finalize_redeem(keys, req, CTX_ISS, CTX_RED, CHALLENGE_DIGEST);
         benchmark::DoNotOptimize(nf);
         if (!nf) {
             state.SkipWithError("proof failed to verify");

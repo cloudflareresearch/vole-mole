@@ -31,6 +31,7 @@ namespace {
 
 const Context CTX_ISS = filled<CTX_BYTES>(0x10);
 const Context CTX_RED = filled<CTX_BYTES>(0x20);
+const ChallengeDigest CHALLENGE_DIGEST = filled<CHALLENGE_DIGEST_BYTES>(0x70);
 const Nullifier NF = filled<NF_BYTES>(0x30);
 const Opening R = filled<R_BYTES>(0x40);
 
@@ -56,7 +57,7 @@ const uov::Preimage& signature() {
 }
 
 RedeemRelation::instance make_instance(AnchorSpan keys = anchors().keys) {
-    return {keys, NF, CTX_ISS, CTX_RED};
+    return {keys, NF, CTX_ISS, CTX_RED, CHALLENGE_DIGEST};
 }
 
 Witness honest_witness(size_t i = ISSUER) {

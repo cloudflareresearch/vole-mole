@@ -73,8 +73,10 @@ int main() {
     const moussaka::AnchorSet anchors(anchor_pks); // anchor_pks must outlive anchors
 
     // Handle a redemption request. Returns true if the token is accepted.
-    const auto handle_redeem = [&](const moussaka::RedeemRequest& request) {
-        const auto nf = moussaka::finalize_redeem(anchors, request, ctx_iss, ctx_red);
+    const auto handle_redeem = [&](const moussaka::RedeemRequest& request,
+                                   const moussaka::ChallengeDigest& challenge_digest) {
+        const auto nf =
+            moussaka::finalize_redeem(anchors, request, ctx_iss, ctx_red, challenge_digest);
         if (!nf) {
             std::println("Moderator: rejected an invalid token");
             return false;
@@ -109,16 +111,21 @@ int main() {
 
     // Redeem.
     //
+    // Client and Moderator compute the digest of the challenge that triggered redemption. Use
+    // an illustrative fixed digest here. This value is bound to the redemption proof.
+    const moussaka::ChallengeDigest challenge_digest{0x01};
+
     // Client: Request redemption.
-    const auto redeem_request = std::move(*token).redeem_request(anchors, ISSUER, ctx_iss, ctx_red);
+    const auto redeem_request =
+        std::move(*token).redeem_request(anchors, ISSUER, ctx_iss, ctx_red, challenge_digest);
 
     // Moderator: Finalize redemption.
-    if (!handle_redeem(redeem_request)) {
+    if (!handle_redeem(redeem_request, challenge_digest)) {
         return EXIT_FAILURE;
     }
 
     // Malicious Client: Try to replay the redemption request.
-    if (handle_redeem(redeem_request)) {
+    if (handle_redeem(redeem_request, challenge_digest)) {
         return EXIT_FAILURE;
     }
 

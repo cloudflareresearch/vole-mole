@@ -49,6 +49,7 @@ namespace {
 
 const Context CTX_ISS = filled<CTX_BYTES>(0x10);
 const Context CTX_RED = filled<CTX_BYTES>(0x20);
+const ChallengeDigest CHALLENGE_DIGEST = filled<CHALLENGE_DIGEST_BYTES>(0x70);
 const Nullifier NF = filled<NF_BYTES>(0x30);
 const Opening R = filled<R_BYTES>(0x40);
 const Seed SEED = filled<SEED_BYTES>(0x50);
@@ -79,6 +80,7 @@ TEST(Moussaka, KnownAnswers) {
         SCOPED_TRACE("known answer " + std::to_string(count));
         Seed issue_seed, redeem_seed;
         Context ctx_iss, ctx_red;
+        ChallengeDigest challenge_digest;
         Nullifier nf;
         Opening r;
         Commitment commitment;
@@ -93,6 +95,7 @@ TEST(Moussaka, KnownAnswers) {
         ASSERT_TRUE(read_kat_field(in, "redeem_seed", redeem_seed));
         ASSERT_TRUE(read_kat_field(in, "ctx_iss", ctx_iss));
         ASSERT_TRUE(read_kat_field(in, "ctx_red", ctx_red));
+        ASSERT_TRUE(read_kat_field(in, "challenge_digest", challenge_digest));
         ASSERT_TRUE(read_kat_number(in, "anchor_count", anchor_count));
         ASSERT_GE(anchor_count, 1u);
         ASSERT_LE(anchor_count, MAX_ANCHORS);
@@ -147,16 +150,18 @@ TEST(Moussaka, KnownAnswers) {
                                                           TokenAccess::s(*token), issuer),
                   redeem_witness);
         const auto generated_redemption = redeem_request_with_seed(
-            std::move(*token), anchors, issuer, ctx_iss, ctx_red, redeem_seed);
+            std::move(*token), anchors, issuer, ctx_iss, ctx_red, challenge_digest, redeem_seed);
         EXPECT_TRUE(std::ranges::equal(generated_redemption, redeem_request))
             << "redemption request bytes differ";
         EXPECT_EQ(to_hex(std::span(redeem_request).first<NF_BYTES>()), to_hex(nf));
         EXPECT_EQ(redeemed_nf, nf);
-        const auto generated_nf = finalize_redeem(anchors, generated_redemption, ctx_iss, ctx_red);
+        const auto generated_nf =
+            finalize_redeem(anchors, generated_redemption, ctx_iss, ctx_red, challenge_digest);
         ASSERT_TRUE(generated_nf.has_value());
         EXPECT_EQ(*generated_nf, redeemed_nf);
         // Verify the stored redemption proof even if regeneration changes its bytes.
-        const auto stored_nf = finalize_redeem(anchors, redeem_request, ctx_iss, ctx_red);
+        const auto stored_nf =
+            finalize_redeem(anchors, redeem_request, ctx_iss, ctx_red, challenge_digest);
         ASSERT_TRUE(stored_nf.has_value());
         EXPECT_EQ(*stored_nf, redeemed_nf);
         ++count;
@@ -345,8 +350,8 @@ Token copy(const Token& t) { return TokenAccess::copy(t); }
 const Seed REDEEM_SEED = filled<SEED_BYTES>(0x90);
 
 const RedeemRequest& redemption() {
-    static const RedeemRequest req = redeem_request_with_seed(copy(token()), anchors().keys, ISSUER,
-                                                              CTX_ISS, CTX_RED, REDEEM_SEED);
+    static const RedeemRequest req = redeem_request_with_seed(
+        copy(token()), anchors().keys, ISSUER, CTX_ISS, CTX_RED, CHALLENGE_DIGEST, REDEEM_SEED);
     return req;
 }
 
@@ -418,7 +423,8 @@ TEST(FinalizeIssue, ConsumesPendingToken) {
 }
 
 TEST(Redeem, Verifies) {
-    const auto nf = finalize_redeem(anchors().keys, redemption(), CTX_ISS, CTX_RED);
+    const auto nf =
+        finalize_redeem(anchors().keys, redemption(), CTX_ISS, CTX_RED, CHALLENGE_DIGEST);
     ASSERT_TRUE(nf.has_value());
     EXPECT_EQ(to_hex(*nf), to_hex(TokenAccess::nf(token())));
     EXPECT_EQ(to_hex(std::span(redemption()).first<NF_BYTES>()), to_hex(TokenAccess::nf(token())));
@@ -430,8 +436,9 @@ TEST(Redeem, RandomizedVerifies) {
     auto t = std::move(pending).finalize_issue(pk, *issue_response(sk, request, CTX_ISS));
     ASSERT_TRUE(t.has_value());
     const Nullifier want = TokenAccess::nf(*t);
-    const auto req = std::move(*t).redeem_request(anchors().keys, ISSUER, CTX_ISS, CTX_RED);
-    const auto nf = finalize_redeem(anchors().keys, req, CTX_ISS, CTX_RED);
+    const auto req =
+        std::move(*t).redeem_request(anchors().keys, ISSUER, CTX_ISS, CTX_RED, CHALLENGE_DIGEST);
+    const auto nf = finalize_redeem(anchors().keys, req, CTX_ISS, CTX_RED, CHALLENGE_DIGEST);
     ASSERT_TRUE(nf.has_value());
     EXPECT_EQ(to_hex(*nf), to_hex(want));
 }
@@ -441,9 +448,9 @@ TEST(Redeem, VerifiesAtEveryPosition) {
     for (const size_t n : {size_t{1}, size_t{2}}) {
         for (size_t i = 0; i < n; ++i) {
             const AnchorSet keys = anchor_set_with_issuer_at(n, i);
-            const auto req =
-                redeem_request_with_seed(copy(token()), keys, i, CTX_ISS, CTX_RED, REDEEM_SEED);
-            EXPECT_TRUE(finalize_redeem(keys, req, CTX_ISS, CTX_RED))
+            const auto req = redeem_request_with_seed(copy(token()), keys, i, CTX_ISS, CTX_RED,
+                                                      CHALLENGE_DIGEST, REDEEM_SEED);
+            EXPECT_TRUE(finalize_redeem(keys, req, CTX_ISS, CTX_RED, CHALLENGE_DIGEST))
                 << "n = " << n << ", i = " << i;
         }
     }
@@ -452,8 +459,8 @@ TEST(Redeem, VerifiesAtEveryPosition) {
 TEST(Redeem, VerifiesLargestAnchorSet) {
     const AnchorSet keys = anchor_set_with_issuer_at(MAX_ANCHORS, MAX_ANCHORS / 2);
     const auto req = redeem_request_with_seed(copy(token()), keys, MAX_ANCHORS / 2, CTX_ISS,
-                                              CTX_RED, REDEEM_SEED);
-    EXPECT_TRUE(finalize_redeem(keys, req, CTX_ISS, CTX_RED));
+                                              CTX_RED, CHALLENGE_DIGEST, REDEEM_SEED);
+    EXPECT_TRUE(finalize_redeem(keys, req, CTX_ISS, CTX_RED, CHALLENGE_DIGEST));
 }
 
 // Example: An application that owns its Anchors' keys in a container builds an Anchor Set from
@@ -466,41 +473,70 @@ TEST(Redeem, AnchorSetFromOwnedKeys) {
     keys.emplace_back(anchors().c.sk.public_key());
 
     const AnchorSet anchor_set(keys);
-    const auto req = copy(token()).redeem_request(anchor_set, ISSUER, CTX_ISS, CTX_RED);
-    const auto nf = finalize_redeem(anchor_set, req, CTX_ISS, CTX_RED);
+    const auto req =
+        copy(token()).redeem_request(anchor_set, ISSUER, CTX_ISS, CTX_RED, CHALLENGE_DIGEST);
+    const auto nf = finalize_redeem(anchor_set, req, CTX_ISS, CTX_RED, CHALLENGE_DIGEST);
     ASSERT_TRUE(nf.has_value());
     EXPECT_EQ(to_hex(*nf), to_hex(TokenAccess::nf(token())));
 
     // The same Anchor Set, from references to the keys.
     const std::vector<AnchorRef> refs(keys.begin(), keys.end());
-    EXPECT_TRUE(finalize_redeem(AnchorSet(refs), req, CTX_ISS, CTX_RED));
+    EXPECT_TRUE(finalize_redeem(AnchorSet(refs), req, CTX_ISS, CTX_RED, CHALLENGE_DIGEST));
 
     // A different Anchor Set: the first two keys in reverse order.
     const AnchorSet subset({keys[1], keys[0]});
-    const auto req2 = copy(token()).redeem_request(subset, 0, CTX_ISS, CTX_RED);
-    EXPECT_TRUE(finalize_redeem(subset, req2, CTX_ISS, CTX_RED));
+    const auto req2 = copy(token()).redeem_request(subset, 0, CTX_ISS, CTX_RED, CHALLENGE_DIGEST);
+    EXPECT_TRUE(finalize_redeem(subset, req2, CTX_ISS, CTX_RED, CHALLENGE_DIGEST));
 }
 
 TEST(Redeem, IsDeterministicGivenSeed) {
     const auto& a = redemption();
     const auto b = redeem_request_with_seed(copy(token()), anchors().keys, ISSUER, CTX_ISS, CTX_RED,
-                                            REDEEM_SEED);
+                                            CHALLENGE_DIGEST, REDEEM_SEED);
     EXPECT_TRUE(std::ranges::equal(a, b));
 
     // A different seed yields a different proof for the same token.
     const auto c = redeem_request_with_seed(copy(token()), anchors().keys, ISSUER, CTX_ISS, CTX_RED,
-                                            filled<SEED_BYTES>(0x91));
+                                            CHALLENGE_DIGEST, filled<SEED_BYTES>(0x91));
     EXPECT_FALSE(std::ranges::equal(a, c));
     EXPECT_TRUE(std::ranges::equal(std::span(a).first<NF_BYTES>(), std::span(c).first<NF_BYTES>()));
-    EXPECT_TRUE(finalize_redeem(anchors().keys, c, CTX_ISS, CTX_RED));
+    EXPECT_TRUE(finalize_redeem(anchors().keys, c, CTX_ISS, CTX_RED, CHALLENGE_DIGEST));
+}
+
+// The challenge is chosen after issuance. The same token can produce a proof for either
+// challenge, but each proof must verify only for its own digest, with the same nullifier.
+TEST(Redeem, BindsChallengeDigest) {
+    ChallengeDigest other = CHALLENGE_DIGEST;
+    other.back() ^= 1;
+    const auto req = redeem_request_with_seed(copy(token()), anchors().keys, ISSUER, CTX_ISS,
+                                              CTX_RED, other, REDEEM_SEED);
+    EXPECT_FALSE(std::ranges::equal(req, redemption()));
+    EXPECT_EQ(finalize_redeem(anchors().keys, req, CTX_ISS, CTX_RED, other),
+              finalize_redeem(anchors().keys, redemption(), CTX_ISS, CTX_RED, CHALLENGE_DIGEST));
+    EXPECT_FALSE(finalize_redeem(anchors().keys, req, CTX_ISS, CTX_RED, CHALLENGE_DIGEST));
+
+    // Even with the same witness and seed, different challenges must use different VOLE
+    // randomness. iv_pre is derived along with the VOLE seed from the instance hash mu.
+    using P = moussaka::detail::RedeemParams;
+    const faest::faest_signature<P> a = std::span(redemption()).last<REDEEM_PROOF_BYTES>().data();
+    const faest::faest_signature<P> b = std::span(req).last<REDEEM_PROOF_BYTES>().data();
+    EXPECT_FALSE(std::ranges::equal(a.iv_pre(), b.iv_pre()));
+
+    for (size_t i = 0; i < CHALLENGE_DIGEST_BYTES; ++i) {
+        ChallengeDigest wrong = CHALLENGE_DIGEST;
+        wrong[i] ^= 1;
+        EXPECT_FALSE(finalize_redeem(anchors().keys, redemption(), CTX_ISS, CTX_RED, wrong))
+            << "changed digest byte " << i;
+    }
+    EXPECT_TRUE(finalize_redeem(anchors().keys, redemption(), CTX_ISS, CTX_RED, CHALLENGE_DIGEST));
 }
 
 TEST(Redeem, RejectsWrongContext) {
     Context ctx = CTX_ISS;
     ctx[7] ^= 1;
-    EXPECT_FALSE(finalize_redeem(anchors().keys, redemption(), ctx, CTX_RED));
-    EXPECT_FALSE(finalize_redeem(anchors().keys, redemption(), CTX_ISS, ctx));
-    EXPECT_FALSE(finalize_redeem(anchors().keys, redemption(), CTX_RED, CTX_ISS));
+    EXPECT_FALSE(finalize_redeem(anchors().keys, redemption(), ctx, CTX_RED, CHALLENGE_DIGEST));
+    EXPECT_FALSE(finalize_redeem(anchors().keys, redemption(), CTX_ISS, ctx, CHALLENGE_DIGEST));
+    EXPECT_FALSE(finalize_redeem(anchors().keys, redemption(), CTX_RED, CTX_ISS, CHALLENGE_DIGEST));
 }
 
 TEST(Redeem, RejectsWrongAnchorSet) {
@@ -509,33 +545,34 @@ TEST(Redeem, RejectsWrongAnchorSet) {
     const uov::PublicKey& other = vole_mole::test::distinct_uov_public_key(0);
 
     // The issuing Anchor is missing.
-    EXPECT_FALSE(finalize_redeem(AnchorSet({keys[0], keys[2]}), redemption(), CTX_ISS, CTX_RED));
-    EXPECT_FALSE(
-        finalize_redeem(AnchorSet(keys.keys().first(ISSUER)), redemption(), CTX_ISS, CTX_RED));
+    EXPECT_FALSE(finalize_redeem(AnchorSet({keys[0], keys[2]}), redemption(), CTX_ISS, CTX_RED,
+                                 CHALLENGE_DIGEST));
+    EXPECT_FALSE(finalize_redeem(AnchorSet(keys.keys().first(ISSUER)), redemption(), CTX_ISS,
+                                 CTX_RED, CHALLENGE_DIGEST));
 
     // The Anchors are reordered.
-    EXPECT_FALSE(
-        finalize_redeem(AnchorSet({keys[1], keys[0], keys[2]}), redemption(), CTX_ISS, CTX_RED));
+    EXPECT_FALSE(finalize_redeem(AnchorSet({keys[1], keys[0], keys[2]}), redemption(), CTX_ISS,
+                                 CTX_RED, CHALLENGE_DIGEST));
 
     // An Anchor is added.
     EXPECT_FALSE(finalize_redeem(AnchorSet({keys[0], keys[1], keys[2], other}), redemption(),
-                                 CTX_ISS, CTX_RED));
+                                 CTX_ISS, CTX_RED, CHALLENGE_DIGEST));
 
     // An Anchor that didn't issue the token is replaced.
-    EXPECT_FALSE(
-        finalize_redeem(AnchorSet({other, keys[1], keys[2]}), redemption(), CTX_ISS, CTX_RED));
+    EXPECT_FALSE(finalize_redeem(AnchorSet({other, keys[1], keys[2]}), redemption(), CTX_ISS,
+                                 CTX_RED, CHALLENGE_DIGEST));
 }
 
 TEST(Redeem, RejectsWrongNullifier) {
     RedeemRequest req = redemption();
     req[0] ^= 1;
-    EXPECT_FALSE(finalize_redeem(anchors().keys, req, CTX_ISS, CTX_RED));
+    EXPECT_FALSE(finalize_redeem(anchors().keys, req, CTX_ISS, CTX_RED, CHALLENGE_DIGEST));
 
     // The proof for one token doesn't transfer to another token's nullifier.
     const Token other = issue(filled<SEED_BYTES>(0x99));
     req = redemption();
     std::ranges::copy(TokenAccess::nf(other), req.begin());
-    EXPECT_FALSE(finalize_redeem(anchors().keys, req, CTX_ISS, CTX_RED));
+    EXPECT_FALSE(finalize_redeem(anchors().keys, req, CTX_ISS, CTX_RED, CHALLENGE_DIGEST));
 }
 
 TEST(Redeem, RejectsTamperedProof) {
@@ -543,18 +580,18 @@ TEST(Redeem, RejectsTamperedProof) {
     auto proof = std::span(req).last<REDEEM_PROOF_BYTES>();
     for (size_t i = 0; i < REDEEM_PROOF_BYTES; i += 101) {
         proof[i] ^= 0x10;
-        EXPECT_FALSE(finalize_redeem(anchors().keys, req, CTX_ISS, CTX_RED))
+        EXPECT_FALSE(finalize_redeem(anchors().keys, req, CTX_ISS, CTX_RED, CHALLENGE_DIGEST))
             << "flipped a bit of byte " << i;
         proof[i] ^= 0x10;
     }
     // The last bytes are delta (chall_3), iv_pre and the grinding counter.
     for (size_t i = REDEEM_PROOF_BYTES - 36; i < REDEEM_PROOF_BYTES; ++i) {
         proof[i] ^= 0x01;
-        EXPECT_FALSE(finalize_redeem(anchors().keys, req, CTX_ISS, CTX_RED))
+        EXPECT_FALSE(finalize_redeem(anchors().keys, req, CTX_ISS, CTX_RED, CHALLENGE_DIGEST))
             << "flipped a bit of byte " << i;
         proof[i] ^= 0x01;
     }
-    EXPECT_TRUE(finalize_redeem(anchors().keys, req, CTX_ISS, CTX_RED));
+    EXPECT_TRUE(finalize_redeem(anchors().keys, req, CTX_ISS, CTX_RED, CHALLENGE_DIGEST));
 }
 
 // An issuance proof isn't a redemption proof, and vice versa, even though both are VOLEitH proofs
@@ -564,7 +601,7 @@ TEST(Redeem, RejectsIssuanceProof) {
     RedeemRequest req = redemption();
     std::ranges::copy(std::span(issue_req).last<ISSUE_PROOF_BYTES>(),
                       std::span(req).last<REDEEM_PROOF_BYTES>().begin());
-    EXPECT_FALSE(finalize_redeem(anchors().keys, req, CTX_ISS, CTX_RED));
+    EXPECT_FALSE(finalize_redeem(anchors().keys, req, CTX_ISS, CTX_RED, CHALLENGE_DIGEST));
 }
 
 // Invalid arguments leave the token unchanged, so it can still be redeemed afterwards.
@@ -573,31 +610,34 @@ TEST(Redeem, RequestRejectsInvalidArguments) {
     Token t = copy(token());
 
     // Index out of range.
-    EXPECT_THROW((void)std::move(t).redeem_request(keys, keys.size(), CTX_ISS, CTX_RED),
-                 std::invalid_argument);
+    EXPECT_THROW(
+        (void)std::move(t).redeem_request(keys, keys.size(), CTX_ISS, CTX_RED, CHALLENGE_DIGEST),
+        std::invalid_argument);
 
     // The token wasn't issued by the Anchor at the given index, or for these contexts.
-    EXPECT_THROW((void)std::move(t).redeem_request(keys, 0, CTX_ISS, CTX_RED),
+    EXPECT_THROW((void)std::move(t).redeem_request(keys, 0, CTX_ISS, CTX_RED, CHALLENGE_DIGEST),
                  std::invalid_argument);
     Context ctx = CTX_ISS;
     ctx[0] ^= 1;
-    EXPECT_THROW((void)std::move(t).redeem_request(keys, ISSUER, ctx, CTX_RED),
+    EXPECT_THROW((void)std::move(t).redeem_request(keys, ISSUER, ctx, CTX_RED, CHALLENGE_DIGEST),
                  std::invalid_argument);
     ctx = CTX_RED;
     ctx[0] ^= 1;
-    EXPECT_THROW((void)std::move(t).redeem_request(keys, ISSUER, CTX_ISS, ctx),
+    EXPECT_THROW((void)std::move(t).redeem_request(keys, ISSUER, CTX_ISS, ctx, CHALLENGE_DIGEST),
                  std::invalid_argument);
-    EXPECT_THROW((void)std::move(t).redeem_request(keys, ISSUER, CTX_RED, CTX_ISS),
-                 std::invalid_argument);
+    EXPECT_THROW(
+        (void)std::move(t).redeem_request(keys, ISSUER, CTX_RED, CTX_ISS, CHALLENGE_DIGEST),
+        std::invalid_argument);
     Opening bad_r = TokenAccess::r(token());
     bad_r[0] ^= 1;
     Token bad = TokenAccess::make_token(TokenAccess::nf(token()), bad_r, TokenAccess::s(token()));
-    EXPECT_THROW((void)std::move(bad).redeem_request(keys, ISSUER, CTX_ISS, CTX_RED),
-                 std::invalid_argument);
+    EXPECT_THROW(
+        (void)std::move(bad).redeem_request(keys, ISSUER, CTX_ISS, CTX_RED, CHALLENGE_DIGEST),
+        std::invalid_argument);
 
     // The token is still intact.
-    const auto req =
-        redeem_request_with_seed(std::move(t), keys, ISSUER, CTX_ISS, CTX_RED, REDEEM_SEED);
+    const auto req = redeem_request_with_seed(std::move(t), keys, ISSUER, CTX_ISS, CTX_RED,
+                                              CHALLENGE_DIGEST, REDEEM_SEED);
     EXPECT_TRUE(std::ranges::equal(req, redemption()));
 }
 
@@ -605,18 +645,20 @@ TEST(Redeem, RequestRejectsInvalidArguments) {
 TEST(Redeem, ConsumesToken) {
     const auto& keys = anchors().keys;
     Token t = copy(token());
-    (void)std::move(t).redeem_request(keys, ISSUER, CTX_ISS, CTX_RED);
-    EXPECT_THROW((void)std::move(t).redeem_request(keys, ISSUER, CTX_ISS, CTX_RED),
-                 std::logic_error);
+    (void)std::move(t).redeem_request(keys, ISSUER, CTX_ISS, CTX_RED, CHALLENGE_DIGEST);
     EXPECT_THROW(
-        (void)redeem_request_with_seed(std::move(t), keys, ISSUER, CTX_ISS, CTX_RED, REDEEM_SEED),
+        (void)std::move(t).redeem_request(keys, ISSUER, CTX_ISS, CTX_RED, CHALLENGE_DIGEST),
         std::logic_error);
+    EXPECT_THROW((void)redeem_request_with_seed(std::move(t), keys, ISSUER, CTX_ISS, CTX_RED,
+                                                CHALLENGE_DIGEST, REDEEM_SEED),
+                 std::logic_error);
 
     // Likewise for a token that was moved from.
     Token u = copy(token());
     const Token v = std::move(u);
-    EXPECT_THROW((void)std::move(u).redeem_request(keys, ISSUER, CTX_ISS, CTX_RED),
-                 std::logic_error);
+    EXPECT_THROW(
+        (void)std::move(u).redeem_request(keys, ISSUER, CTX_ISS, CTX_RED, CHALLENGE_DIGEST),
+        std::logic_error);
     EXPECT_THROW((void)TokenAccess::nf(u), std::logic_error);
 }
 
