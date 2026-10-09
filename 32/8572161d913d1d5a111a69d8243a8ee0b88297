@@ -1,0 +1,57 @@
+include/vole_mole/microfaest.hpp
+  s_4868955cf0d71f::t_6779e1a358f803 1-80
+meson.build
+  s_4868955cf0d71f::t_dbba00446ca95e 39
+src/dst.hpp
+  s_4868955cf0d71f::t_33d8711a29a949 9,34-38,71-73
+src/keccak/circuit.hpp
+  s_4868955cf0d71f::t_9d272a55c1eeb3 1-2,29-34,55-56,59,65,70,72-75,77,88,98-102,107-108,111,115-116,147,154,162,167,170-172,176,185,198,201-205,208-209
+src/keccak/owf.hpp
+  s_4868955cf0d71f::t_a268e88abee146 1-343
+src/keccak/owf_signature.hpp
+  s_4868955cf0d71f::t_786764376568d9 1-125
+src/keccak/segmented.hpp
+  s_4868955cf0d71f::t_67249a6e07c325 36,56,131-133,135,141,146-147,151,153-154,159,170,178,181,185-186
+src/keccak/tables.hpp
+  s_4868955cf0d71f::t_89bbccefafa481 1-2,10,13,32-33,35,41-43,45-49,51-58,61-71,73-137,139-140,142-145
+src/microfaest/microfaest.cpp
+  s_4868955cf0d71f::t_284d732cc4ce36 1-39
+src/microfaest/owf.hpp
+  s_4868955cf0d71f::t_d3bbb7b90f7dda 1-63
+src/microfaest/sign.hpp
+  s_4868955cf0d71f::t_54ae3f46d6104f 1-90
+src/minifaest/sign.hpp
+  s_4868955cf0d71f::t_cbdb7d0027a394 1-2,10,35-36,42-45,47-49,51-54,56,59,62-69,73-74,85
+tests/keccak/bench_keccak_faest.cpp
+  s_4868955cf0d71f::t_b996cb9475fdb4 1,25-32,35-45,48-66,68-79
+tests/keccak/kat400.txt
+  s_4868955cf0d71f::t_3a80d97d87d9ee 1-8
+tests/keccak/keccak_ref.py
+  s_4868955cf0d71f::t_918ebd3c2d9411 3,94-114,131-149
+tests/keccak/owf_signature_tests.hpp
+  s_4868955cf0d71f::t_a42aeef8e718b4 1-293
+tests/keccak/test_keccak.cpp
+  s_4868955cf0d71f::t_9ad8265c53b0d4 57,59,62,67-108,112-115,123,125,129-130,134-138,143-146,151,154-155,157,162-165,171,177,179-182,186-188,190
+tests/meson.build
+  s_4868955cf0d71f::t_edbc66f1621947 9,53,61
+tests/microfaest/test_microfaest.cpp
+  s_4868955cf0d71f::t_43b43318bc91ed 1-89
+tests/minifaest/test_minifaest.cpp
+  s_4868955cf0d71f::t_b5299fa85ed34c 3-4,17-44,48,50,52-54
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.10",
+  "base_commit_sha": "328572161d913d1d5a111a69d8243a8ee0b88297",
+  "prompts": {},
+  "sessions": {
+    "s_4868955cf0d71f": {
+      "agent_id": {
+        "tool": "opencode",
+        "id": "ses_ee35612b0ffeT4qz6wqk2NdUm0",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Christopher Patton <cpatton@cloudflare.com>"
+    }
+  }
+}
