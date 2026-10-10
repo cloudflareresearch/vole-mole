@@ -9,8 +9,8 @@ ov_publicmap_ct() evaluates P(w) = P1(v) + v^T P2 o + P3(o) with the
 constant-time routines of the signing path instead.
 ---
  src/ov.h           |  9 +++++++++
- src/ov_publicmap.c | 20 ++++++++++++++++++++
- 2 files changed, 29 insertions(+)
+ src/ov_publicmap.c | 21 +++++++++++++++++++++
+ 2 files changed, 30 insertions(+)
 
 diff --git a/src/ov.h b/src/ov.h
 --- a/src/ov.h
@@ -18,7 +18,7 @@ diff --git a/src/ov.h b/src/ov.h
 @@ -139,6 +139,15 @@
  #define ov_publicmap_pkc PQOV_NAMESPACE(ov_publicmap_pkc)
  void ov_publicmap_pkc( unsigned char *z, const cpk_t *pk, const unsigned char *w );
- 
+
 +///
 +/// @brief Public-key evaluation in time independent of the input: z = P(w).
 +///
@@ -28,13 +28,13 @@ diff --git a/src/ov.h b/src/ov.h
 +///
 +#define ov_publicmap_ct PQOV_NAMESPACE(ov_publicmap_ct)
 +void ov_publicmap_ct( unsigned char *z, const unsigned char *pk, const unsigned char *w );
- 
- 
- 
+
+
+
 diff --git a/src/ov_publicmap.c b/src/ov_publicmap.c
 --- a/src/ov_publicmap.c
 +++ b/src/ov_publicmap.c
-@@ -461,6 +461,26 @@
+@@ -461,6 +461,27 @@
      unsupported _GFSIZE
      #endif
  }
@@ -46,20 +46,21 @@ diff --git a/src/ov_publicmap.c b/src/ov_publicmap.c
 +    const unsigned char *P3 = P2 + _PK_P2_BYTE;
 +    const unsigned char *v = x;             // the vinegar variables, x[0 .. _V)
 +    const unsigned char *o = x + _V_BYTE;   // the oil variables, x[_V .. _PUB_N)
++    PQOV_ALIGN unsigned char mat[_O * _O_BYTE];
 +    PQOV_ALIGN unsigned char tmp[_O_BYTE];
- 
+
 +    // y = v^T P1 v
 +    batch_quad_trimat_eval( y, P1, v, _V, _O_BYTE );
- 
-+    // y += v^T P2 o = sum_i v_i * (P2_i o), where P2_i is row i of P2, a batched 1 x _O matrix.
-+    for (unsigned i = 0; i < _V; i++) {
-+        gfmat_prod( tmp, P2 + i * _O * _O_BYTE, _O_BYTE, _O, o );
-+        gfv_madd( y, tmp, gfv_get_ele( v, i ), _O_BYTE );
-+    }
- 
+
++    // y += v^T P2 o = (sum_i v_i P2_i) o, with P2 viewed as _V columns of _O * _O_BYTE bytes.
++    // The first product is how l1_mat_from_p2() in ov.c forms the signing matrix.
++    gfmat_prod( mat, P2, _O * _O_BYTE, _V, v );
++    gfmat_prod( tmp, mat, _O_BYTE, _O, o );
++    gf256v_add( y, tmp, _O_BYTE );
+
 +    // y += o^T P3 o
 +    batch_quad_trimat_eval( tmp, P3, o, _O, _O_BYTE );
 +    gf256v_add( y, tmp, _O_BYTE );
 +}
--- 
+--
 vole-mole
