@@ -1,6 +1,6 @@
 # vole-mole
 
-Implementation of the post-quantum candidates for [MOLE][mole] crypto, all built
+Implementation of various post-quantum anonymous tokens, all built
 on the [UOV][uov] signature scheme and the VOLE-in-the-Head (VOLEitH) proof
 system of [FAEST][faest]:
 
@@ -16,6 +16,8 @@ system of [FAEST][faest]:
 3. Ratatouille ([draft-authors-mole-vole-act][rata]), an Anonymous Credit Token
    (ACT). Here the token encodes a small amount of client-secret state, which
    the issuer updates when the token is spent.
+
+Moussaka and Ratatouille were designed for [MOLE][mole].
 
 The table below summarizes the performance of each protocol, including the
 runtime and communication cost for each step. The `Party` column indicates which
@@ -135,3 +137,4 @@ circuit design and the overall design of the protocols.
 [arch-opt]: https://github.com/faest-sign/faest-arch-opt
 [pqov]: https://github.com/pqov/pqov
 [meson]: https://mesonbuild.com
+[uov]: https://csrc.nist.gov/csrc/media/Projects/pqc-dig-sig/documents/UOV_Specification_R3.pdf
