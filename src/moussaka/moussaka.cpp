@@ -181,6 +181,7 @@ std::optional<Token> PendingToken::finalize_issue(const uov::PublicKey& pk,
 
 RedeemRequest detail::redeem_request_with_seed(Token&& token, const AnchorSet& anchors, size_t i,
                                                const Context& ctx_iss, const Context& ctx_red,
+                                               const ChallengeDigest& challenge_digest,
                                                const Seed& seed) {
     const Nullifier& nf = TokenAccess::nf(token); // throws if the token was moved from
     const Opening& r = TokenAccess::r(token);
@@ -202,17 +203,18 @@ RedeemRequest detail::redeem_request_with_seed(Token&& token, const AnchorSet& a
     RedeemRequest request;
     std::ranges::copy(nf, std::span(request).first<NF_BYTES>().begin());
     prove_redeem_request(std::span(request).last<REDEEM_PROOF_BYTES>(), anchors.keys(), i, nf,
-                         ctx_iss, ctx_red, r, s, expand_redeem_seed(seed));
+                         ctx_iss, ctx_red, challenge_digest, r, s, expand_redeem_seed(seed));
     return request;
 }
 
 RedeemRequest Token::redeem_request(const AnchorSet& anchors, size_t i, const Context& ctx_iss,
-                                    const Context& ctx_red) && {
+                                    const Context& ctx_red,
+                                    const ChallengeDigest& challenge_digest) && {
     if (!impl_) {
         throw std::logic_error("Moussaka: token was moved from");
     }
     return detail::redeem_request_with_seed(std::move(*this), anchors, i, ctx_iss, ctx_red,
-                                            random_bytes<SEED_BYTES>());
+                                            challenge_digest, random_bytes<SEED_BYTES>());
 }
 
 Token detail::TokenAccess::make_token(const Nullifier& nf, const Opening& r,
@@ -261,12 +263,13 @@ const Opening& detail::TokenAccess::r(const Token& token) { return checked(token
 const uov::Preimage& detail::TokenAccess::s(const Token& token) { return checked(token).impl_->s; }
 
 std::optional<Nullifier> finalize_redeem(const AnchorSet& anchors, const RedeemRequest& request,
-                                         const Context& ctx_iss, const Context& ctx_red) {
+                                         const Context& ctx_iss, const Context& ctx_red,
+                                         const ChallengeDigest& challenge_digest) {
     Nullifier nf;
     std::ranges::copy(std::span(request).first<NF_BYTES>(), nf.begin());
 
     if (!detail::verify_redeem_proof(std::span(request).last<REDEEM_PROOF_BYTES>(), anchors.keys(),
-                                     nf, ctx_iss, ctx_red)) {
+                                     nf, ctx_iss, ctx_red, challenge_digest)) {
         return std::nullopt;
     }
     return nf;

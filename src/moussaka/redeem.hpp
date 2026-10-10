@@ -166,6 +166,7 @@ struct RedeemRelation {
         Nullifier nf;
         Context ctx_iss;
         Context ctx_red;
+        ChallengeDigest challenge_digest;
     };
 
     static constexpr size_t NUM_CONSTRAINTS = REDEEM_NUM_CONSTRAINTS;
@@ -191,6 +192,7 @@ struct RedeemRelation {
         hasher.update(x.nf);
         hasher.update(x.ctx_iss);
         hasher.update(x.ctx_red);
+        hasher.update(x.challenge_digest);
     }
 
     template <typename QS>
@@ -280,16 +282,20 @@ using ConstRedeemProof = std::span<const uint8_t, REDEEM_PROOF_BYTES>;
 // happens with negligible probability).
 inline void prove_redeem_request(RedeemProof pf_red, AnchorSpan anchors, size_t i,
                                  const Nullifier& nf, const Context& ctx_iss,
-                                 const Context& ctx_red, const Opening& r, const uov::Preimage& s,
+                                 const Context& ctx_red, const ChallengeDigest& challenge_digest,
+                                 const Opening& r, const uov::Preimage& s,
                                  const ProveSeed<RedeemRelation>& rho) {
     const auto witness = encode_redeem_witness(nf, ctx_iss, ctx_red, r, s, i);
-    voleith_prove<RedeemRelation>(pf_red, witness, {anchors, nf, ctx_iss, ctx_red}, rho);
+    voleith_prove<RedeemRelation>(pf_red, witness,
+                                  {anchors, nf, ctx_iss, ctx_red, challenge_digest}, rho);
 }
 
 // Verify the redemption proof (steps 2-3 of FinalizeRedeem).
 inline bool verify_redeem_proof(ConstRedeemProof pf_red, AnchorSpan anchors, const Nullifier& nf,
-                                const Context& ctx_iss, const Context& ctx_red) {
-    return voleith_verify<RedeemRelation>(pf_red, {anchors, nf, ctx_iss, ctx_red});
+                                const Context& ctx_iss, const Context& ctx_red,
+                                const ChallengeDigest& challenge_digest) {
+    return voleith_verify<RedeemRelation>(pf_red,
+                                          {anchors, nf, ctx_iss, ctx_red, challenge_digest});
 }
 
 } // namespace vole_mole::moussaka::detail

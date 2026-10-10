@@ -51,16 +51,19 @@ int main(int argc, char** argv) {
     for (size_t i = 0; i < 3; ++i) {
         Seed seed{}, redeem_seed{};
         Context ctx_iss{}, ctx_red{};
+        ChallengeDigest challenge_digest{};
         if (i == 1) {
             seed = filled<SEED_BYTES>(0x50);
             redeem_seed = filled<SEED_BYTES>(0x90);
             ctx_iss = filled<CTX_BYTES>(0x10);
             ctx_red = filled<CTX_BYTES>(0x20);
+            challenge_digest = filled<CHALLENGE_DIGEST_BYTES>(0x70);
         } else if (i == 2) {
             seed.fill(0xff);
             redeem_seed.fill(0xff);
             ctx_iss.fill(0xff);
             ctx_red.fill(0xff);
+            challenge_digest.fill(0xff);
         }
         const size_t anchor_count = i == 0 ? 1 : i == 1 ? 3 : MAX_ANCHORS;
         const size_t issuer = i == 0 ? 0 : i == 1 ? 1 : anchor_count - 1;
@@ -94,9 +97,10 @@ int main(int argc, char** argv) {
         }
         const auto redeem_witness =
             detail::encode_redeem_witness(nf, ctx_iss, ctx_red, r, *response, issuer);
-        const auto redeem_request = redeem_request_with_seed(std::move(*token), anchors, issuer,
-                                                             ctx_iss, ctx_red, redeem_seed);
-        const auto redeemed_nf = finalize_redeem(anchors, redeem_request, ctx_iss, ctx_red);
+        const auto redeem_request = redeem_request_with_seed(
+            std::move(*token), anchors, issuer, ctx_iss, ctx_red, challenge_digest, redeem_seed);
+        const auto redeemed_nf =
+            finalize_redeem(anchors, redeem_request, ctx_iss, ctx_red, challenge_digest);
         if (!redeemed_nf || *redeemed_nf != nf) {
             std::cerr << "Redemption failed verification for case " << i << '\n';
             return 1;
@@ -104,7 +108,8 @@ int main(int argc, char** argv) {
 
         out << "\nissue_seed " << to_hex(seed) << "\nredeem_seed " << to_hex(redeem_seed)
             << "\nctx_iss " << to_hex(ctx_iss) << "\nctx_red " << to_hex(ctx_red)
-            << "\nanchor_count " << anchor_count << "\nissuer " << issuer;
+            << "\nchallenge_digest " << to_hex(challenge_digest) << "\nanchor_count "
+            << anchor_count << "\nissuer " << issuer;
         for (const auto& sk : key_bytes) {
             out << "\nanchor_sk " << to_hex(sk);
         }

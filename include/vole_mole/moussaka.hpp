@@ -24,14 +24,16 @@ constexpr uint8_t VERSION = 0;
 constexpr size_t MAX_ANCHORS = 64;
 
 // Protocol messages.
-constexpr size_t NF_BYTES = 24;            // nullifier length
-constexpr size_t CTX_BYTES = 16;           // context length
-constexpr size_t ISSUE_PROOF_BYTES = 7272; // issuance proof length
+constexpr size_t NF_BYTES = 24;               // nullifier length
+constexpr size_t CTX_BYTES = 16;              // context length
+constexpr size_t CHALLENGE_DIGEST_BYTES = 32; // challenge digest length
+constexpr size_t ISSUE_PROOF_BYTES = 7272;    // issuance proof length
 constexpr size_t ISSUE_REQUEST_BYTES = uov::M + ISSUE_PROOF_BYTES;
 constexpr size_t REDEEM_PROOF_BYTES = 8751; // redemption proof length
 constexpr size_t REDEEM_REQUEST_BYTES = NF_BYTES + REDEEM_PROOF_BYTES;
 using Nullifier = std::array<uint8_t, NF_BYTES>;
 using Context = std::array<uint8_t, CTX_BYTES>;
+using ChallengeDigest = std::array<uint8_t, CHALLENGE_DIGEST_BYTES>;
 using IssueRequest = std::array<uint8_t, ISSUE_REQUEST_BYTES>;
 using IssueResponse = uov::Preimage;
 using RedeemRequest = std::array<uint8_t, REDEEM_REQUEST_BYTES>;
@@ -69,14 +71,17 @@ class Token {
     ~Token();
 
     // Consume the token and generate a redemption request for it, where the token was issued by
-    // anchors[i] for the given issuance and redemption context.
+    // anchors[i] for the given issuance and redemption context. challenge_digest binds the
+    // challenge that triggered redemption to the proof; the Moderator must verify with the same
+    // digest. The challenge digest is determined at redemption time and isn't in the commitment.
     //
     // Throws std::logic_error if the token was already consumed, std::invalid_argument if i is out
     // of range or the token wasn't issued by anchors[i] for ctx_iss and ctx_red, std::bad_alloc if
     // memory allocation fails, and std::runtime_error if the operating system's random number
     // generator fails or proof generation fails (which happens with negligible probability).
     RedeemRequest redeem_request(const AnchorSet& anchors, size_t i, const Context& ctx_iss,
-                                 const Context& ctx_red) &&;
+                                 const Context& ctx_red,
+                                 const ChallengeDigest& challenge_digest) &&;
 
   private:
     struct Impl;
@@ -129,8 +134,9 @@ IssueRequestResult issue_request(const Context& ctx_iss, const Context& ctx_red)
 std::optional<IssueResponse> issue_response(const uov::SecretKey& sk, const IssueRequest& request,
                                             const Context& ctx_iss);
 
-// Verify a redemption request for the Anchor Set and the issuance and redemption context. Returns
-// the nullifier of the redeemed token, or std::nullopt if the request is invalid.
+// Verify a redemption request for the Anchor Set, the issuance and redemption context, and the
+// digest of the challenge that triggered redemption. Returns the nullifier of the redeemed token,
+// or std::nullopt if the request is invalid (including if the challenge digest doesn't match).
 //
 // It's the caller's responsibility to record the nullifier of every token it accepts for ctx_iss
 // and ctx_red, and to reject a request whose nullifier it has already recorded. The record must
@@ -141,7 +147,8 @@ std::optional<IssueResponse> issue_response(const uov::SecretKey& sk, const Issu
 //
 // Throws std::bad_alloc if memory allocation fails. An invalid request never causes an exception.
 std::optional<Nullifier> finalize_redeem(const AnchorSet& anchors, const RedeemRequest& request,
-                                         const Context& ctx_iss, const Context& ctx_red);
+                                         const Context& ctx_iss, const Context& ctx_red,
+                                         const ChallengeDigest& challenge_digest);
 
 } // namespace vole_mole::moussaka
 

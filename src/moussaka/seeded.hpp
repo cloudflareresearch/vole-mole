@@ -28,7 +28,7 @@ IssueRequestResult issue_request_with_seed(const Context& ctx_iss, const Context
 // number generator.
 RedeemRequest redeem_request_with_seed(Token&& token, const AnchorSet& anchors, size_t i,
                                        const Context& ctx_iss, const Context& ctx_red,
-                                       const Seed& seed);
+                                       const ChallengeDigest& challenge_digest, const Seed& seed);
 
 } // namespace vole_mole::moussaka::detail
 
