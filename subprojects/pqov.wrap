@@ -7,7 +7,8 @@ depth = 1
 patch_directory = pqov
 diff_files =
   pqov-patches/0001-Add-ov_derive_preimage.patch,
-  pqov-patches/0002-Add-_UTILS_BUILTIN_-for-building-without-OpenSSL.patch
+  pqov-patches/0002-Add-_UTILS_BUILTIN_-for-building-without-OpenSSL.patch,
+  pqov-patches/0003-Add-ov_publicmap_ct.patch
 
 [provide]
 pqov = pqov_dep

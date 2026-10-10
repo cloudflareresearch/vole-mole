@@ -1,0 +1,66 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: vole-mole <vole-mole@localhost>
+Date: Wed, 7 Oct 2026 12:00:00 -0700
+Subject: [PATCH 3/3] Add ov_publicmap_ct()
+
+ov_publicmap() is a verification routine: it buckets the coefficient vectors
+by the products w_i * w_j of the input, so its memory accesses leak the input.
+ov_publicmap_ct() evaluates P(w) = P1(v) + v^T P2 o + P3(o) with the
+constant-time routines of the signing path instead.
+---
+ src/ov.h           |  9 +++++++++
+ src/ov_publicmap.c | 21 +++++++++++++++++++++
+ 2 files changed, 30 insertions(+)
+
+diff --git a/src/ov.h b/src/ov.h
+--- a/src/ov.h
++++ b/src/ov.h
+@@ -139,6 +139,15 @@
+ #define ov_publicmap_pkc PQOV_NAMESPACE(ov_publicmap_pkc)
+ void ov_publicmap_pkc( unsigned char *z, const cpk_t *pk, const unsigned char *w );
+
++///
++/// @brief Public-key evaluation in time independent of the input: z = P(w).
++///
++/// ov_publicmap() buckets by the products w_i * w_j of the input, so its memory accesses depend
++/// on w. Use this function when w is secret. It uses the constant-time routines of the signing
++/// path, whose control flow and memory accesses depend only on the dimensions.
++///
++#define ov_publicmap_ct PQOV_NAMESPACE(ov_publicmap_ct)
++void ov_publicmap_ct( unsigned char *z, const unsigned char *pk, const unsigned char *w );
+
+
+
+diff --git a/src/ov_publicmap.c b/src/ov_publicmap.c
+--- a/src/ov_publicmap.c
++++ b/src/ov_publicmap.c
+@@ -461,6 +461,27 @@
+     unsupported _GFSIZE
+     #endif
+ }
++
++
++void ov_publicmap_ct( unsigned char *y, const unsigned char *pk, const unsigned char *x ) {
++    const unsigned char *P1 = pk;
++    const unsigned char *P2 = P1 + _PK_P1_BYTE;
++    const unsigned char *P3 = P2 + _PK_P2_BYTE;
++    const unsigned char *v = x;             // the vinegar variables, x[0 .. _V)
++    const unsigned char *o = x + _V_BYTE;   // the oil variables, x[_V .. _PUB_N)
++    PQOV_ALIGN unsigned char mat[_O * _O_BYTE];
++    PQOV_ALIGN unsigned char tmp[_O_BYTE];
+
++    // y = v^T P1 v
++    batch_quad_trimat_eval( y, P1, v, _V, _O_BYTE );
+
++    // y += v^T P2 o = (sum_i v_i P2_i) o, with P2 viewed as _V columns of _O * _O_BYTE bytes.
++    // The first product is how l1_mat_from_p2() in ov.c forms the signing matrix.
++    gfmat_prod( mat, P2, _O * _O_BYTE, _V, v );
++    gfmat_prod( tmp, mat, _O_BYTE, _O, o );
++    gf256v_add( y, tmp, _O_BYTE );
+
++    // y += o^T P3 o
++    batch_quad_trimat_eval( tmp, P3, o, _O, _O_BYTE );
++    gf256v_add( y, tmp, _O_BYTE );
++}
+--
+vole-mole
