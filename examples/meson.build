@@ -1,4 +1,4 @@
-foreach e : ['keys', 'pomfrit', 'ihat', 'unbound_ihat', 'act']
+foreach e : ['keys', 'pomfrit', 'ihat', 'unbound_ihat', 'act', 'mlkem_pop']
   exe = executable('example_' + e, e + '.cpp',
     dependencies : vole_mole_dep,
   )
