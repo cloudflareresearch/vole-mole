@@ -1,5 +1,8 @@
 # vole-mole
 
+> WARNING: This code is still fairly experimental and is subject to breaking
+> changes as the specifications evolve.
+
 Implementation of various post-quantum anonymous tokens, all built
 on the [UOV][uov] signature scheme and the VOLE-in-the-Head (VOLEitH) proof
 system of [FAEST][faest]:
