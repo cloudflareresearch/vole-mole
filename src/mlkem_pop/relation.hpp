@@ -21,6 +21,7 @@
 #include "dst.hpp"
 #include "mlkem/mlkem.hpp"
 #include "voleith_fq/field.hpp"
+#include "voleith_fq/mq.hpp"
 #include "voleith_fq/voleith.hpp"
 
 #include "hash.hpp" // from faest-arch-opt
@@ -60,7 +61,10 @@ template <size_t ETA> constexpr std::array<Fq, 2 * ETA + 2> range_poly() {
 static_assert(range_poly<2>() ==
               std::array<Fq, 6>{0, 4, 0, voleith_fq::detail::Q - 5, 0, 1}); // x^5 - 5x^3 + 4x
 
-template <mlkem::ParamSet P> struct PopRelation {
+// Prg is the witness PRG (see voleith_fq/mq.hpp): NoPrg to commit to s directly, or MqPrg<c> to
+// derive it from a short key (experimental).
+template <mlkem::ParamSet P, typename Prg = voleith_fq::detail::NoPrg> struct PopRelation {
+    using WitnessPrg = Prg;
     static constexpr size_t K = P::K;
     static constexpr size_t ETA = P::ETA1;
     static constexpr size_t WITNESS_LEN = K * mlkem::detail::N;
