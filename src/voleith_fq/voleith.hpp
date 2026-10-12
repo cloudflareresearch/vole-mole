@@ -60,11 +60,12 @@
 //
 // 6. Derived witnesses (experimental). Each witness element costs TAU elements of proof (its
 //    correction d and the VOLE corrections c_1, ..., c_{TAU-1}). If the relation defines
-//    WitnessPrg (see mq.hpp; NoPrg by default), the witness w is instead derived from a short key
-//    K with a PRG G of degree 2, as in src/voleith.hpp: the VOLE witness is K <- H(w || mu || rho),
-//    and the proof carries e = w - G(K) right after d (both bound to chal2). The constraints are
-//    evaluated on the committed w = G(K) + e, of degree 2 in Delta, so the QuickSilver degree
-//    doubles. Soundness is unaffected; zero knowledge additionally requires G to be a PRG.
+//    WitnessPrg (MqPrg in mq.hpp or LocalPrg in local.hpp; NoPrg by default), the witness w is
+//    instead derived from a short key K with a PRG G of degree 2, as in src/voleith.hpp: the VOLE
+//    witness is K <- H(w || mu || rho), and the proof carries e = w - G(K) right after d (both
+//    bound to chal2). The constraints are evaluated on the committed w = G(K) + e, of degree 2
+//    in Delta, so the QuickSilver degree doubles. Soundness is unaffected; zero knowledge
+//    additionally requires G to be a PRG.
 //
 // Soundness. The QuickSilver check fails with probability at least 1 - DEGREE / 2^128 over Delta
 // (Schwartz-Zippel over F_{q^16}, with Delta uniform in a set of size 2^128). The other
