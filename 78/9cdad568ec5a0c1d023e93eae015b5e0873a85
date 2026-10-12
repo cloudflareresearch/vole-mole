@@ -1,0 +1,77 @@
+.clang-format
+  s_3c36208e1ae23a::t_b0621cecbe9770 26
+include/vole_mole/keccak.hpp
+  s_3c36208e1ae23a::t_52b99458e374ec 30-46
+include/vole_mole/mldsa.hpp
+  s_3c36208e1ae23a::t_a7cdf042b92562 1-128
+include/vole_mole/mldsa_pok.hpp
+  s_3c36208e1ae23a::t_4753dfd9cc006d 1-59
+meson.build
+  s_3c36208e1ae23a::t_066c7add05a4f7 39-40
+src/dst.hpp
+  s_3c36208e1ae23a::t_e4c02b2dc6e6d6 9,34-40,81-90
+src/keccak/circuit.hpp
+  s_3c36208e1ae23a::t_10a714b9506aa6 1-2,29-33,54-55,58,64-65,69,71-76,78,89,99-102,107-108,111,115-116,147,154,161-162,167,170-171,175,184,197,200-204,207-208
+src/keccak/keccak.cpp
+  s_3c36208e1ae23a::t_7b6db04a478980 14-17,19-20,22,27,34,38,53-56,58,60-64,68,72-73,78-87
+src/keccak/segmented.hpp
+  s_3c36208e1ae23a::t_41e4fca0f6e1a0 1-3,24-27,48,70,72-73,75-77,79-87,89-97,100-123,125-127,130-131,133-141,143-155,158-170,172-184,186-200,202-216,219-231,233-247,250-295,297-302
+src/keccak/tables.hpp
+  s_3c36208e1ae23a::t_4a387c31462b22 1-3,31-35,40-47,49-57,59-67,70-111,113-142
+src/mldsa/mldsa.cpp
+  s_3c36208e1ae23a::t_ad57cfe9e9faf4 1-700
+src/mldsa/mldsa.hpp
+  s_3c36208e1ae23a::t_0fe96a76ac3f5a 1-114
+src/mldsa_pok/columns.hpp
+  s_3c36208e1ae23a::t_4ae739d47e5c10 1-221
+src/mldsa_pok/mldsa_pok.cpp
+  s_3c36208e1ae23a::t_70f779826df8ff 1-431
+src/mldsa_pok/modq.hpp
+  s_3c36208e1ae23a::t_17d6d0b16d827e 1-311
+src/mldsa_pok/prover.hpp
+  s_3c36208e1ae23a::t_2b04423a6d3d6a 1-45
+src/mldsa_pok/relation.hpp
+  s_3c36208e1ae23a::t_f361e010cc1d09 1-370
+src/mldsa_pok/sample_in_ball.hpp
+  s_3c36208e1ae23a::t_e5ed51faf96f31 1-490
+src/mldsa_pok/shake_relation.hpp
+  s_3c36208e1ae23a::t_2bc3455a770057 1-228
+src/mq/local_key_bits.hpp
+  s_3c36208e1ae23a::t_bc3f4cd0218667 71-113,117-232,236-334
+tests/keccak/test_keccak.cpp
+  s_3c36208e1ae23a::t_184831dbac4616 4-8,19,180-287
+tests/meson.build
+  s_3c36208e1ae23a::t_bbafab1e06c60a 9,13-15,62-63
+tests/mldsa/test_mldsa.cpp
+  s_3c36208e1ae23a::t_ff253ef5eb82a9 1-158
+tests/mldsa_pok/bench_mldsa_pok.cpp
+  s_3c36208e1ae23a::t_deac6e4bf04007 1-50
+tests/mldsa_pok/bench_shake_relation.cpp
+  s_3c36208e1ae23a::t_eaec1c12271dce 1-76
+tests/mldsa_pok/cost_model.py
+  s_3c36208e1ae23a::t_db1d0236a94cac 1-166
+tests/mldsa_pok/test_mldsa_pok.cpp
+  s_3c36208e1ae23a::t_bc970d8678a828 1-375
+tests/mldsa_pok/test_sample_in_ball.cpp
+  s_3c36208e1ae23a::t_150d7b7e3eda33 1-206
+tests/mldsa_pok/test_shake_relation.cpp
+  s_3c36208e1ae23a::t_0141300c1d9804 1-91
+tools/local_key_bits.py
+  s_3c36208e1ae23a::t_dc8f19e39fd715 36,45,47-54,66-68,71,93-96,105-110
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.10",
+  "base_commit_sha": "789cdad568ec5a0c1d023e93eae015b5e0873a85",
+  "prompts": {},
+  "sessions": {
+    "s_3c36208e1ae23a": {
+      "agent_id": {
+        "tool": "opencode",
+        "id": "ses_ecfe959ebffeOme1dG0POu0H2L",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Bas Westerbaan <bas@cloudflare.com>"
+    }
+  }
+}
