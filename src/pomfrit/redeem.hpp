@@ -23,6 +23,7 @@
 #include "uov/circuit.hpp"
 #include "uov/public_key.hpp"
 #include "voleith.hpp"
+#include "witness_prg.hpp"
 
 #include "constants.hpp"   // from faest-arch-opt
 #include "faest_sig.hpp"   // from faest-arch-opt
@@ -56,9 +57,9 @@ static_assert(faest::is_owf_with_witness_bits_check(OWF_REDEEM));
 static_assert(!faest::is_owf_with_aes_ecb(OWF_REDEEM));
 static_assert(!faest::is_owf_with_aes_em(OWF_REDEEM));
 
-// Commit to the witness directly rather than deriving it with the MQ PRG (see "Derived witnesses"
-// in voleith.hpp).
-constexpr size_t REDEEM_MQ_PRG_INSTANCES = 0;
+// Commit to the witness directly rather than deriving it from a short key with a PRG (see
+// "Derived witnesses" in voleith.hpp and witness_prg.hpp).
+using RedeemWitnessPrg = vole_mole::detail::NoPrg;
 
 } // namespace vole_mole::pomfrit::detail
 
@@ -66,7 +67,7 @@ template <>
 struct faest::OWF_CONSTANTS<faest::secpar::s128, vole_mole::pomfrit::detail::OWF_REDEEM>
     : vole_mole::detail::RelationConstants<vole_mole::pomfrit::detail::REDEEM_WITNESS_BITS,
                                            vole_mole::pomfrit::detail::REDEEM_QS_DEGREE,
-                                           vole_mole::pomfrit::detail::REDEEM_MQ_PRG_INSTANCES> {};
+                                           vole_mole::pomfrit::detail::RedeemWitnessPrg> {};
 
 namespace vole_mole::pomfrit::detail {
 
@@ -108,8 +109,8 @@ struct RedeemRelation {
 
     static constexpr std::span<const uint8_t> DST = POMFRIT_PROOF_DST;
 
-    // The public maps of the MQ PRG, if the witness is derived.
-    static constexpr std::span<const uint8_t> MQ_PRG_DST = POMFRIT_MQ_DST;
+    // The public map of the witness PRG, if the witness is derived.
+    static constexpr std::span<const uint8_t> WITNESS_PRG_DST = POMFRIT_PRG_DST;
 
     static void hash_instance(faest::hash_state& hasher, const instance& x) {
         hasher.update(uov::detail::PublicKeyAccess::digest(*x.pk));

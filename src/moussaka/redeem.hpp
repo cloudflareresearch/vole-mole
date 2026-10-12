@@ -33,7 +33,11 @@
 // Every bit of r, s, and the intermediate states is constrained to be a bit, adding 2680
 // constraints of degree 2.
 //
-// We use the VOLE-in-the-Head parameters of FAEST-EM-128f v3.
+// We use the VOLE-in-the-Head parameters of FAEST-EM-128f v3. Optionally, the witness is derived
+// from a short key with the witness PRG RedeemWitnessPrg (see "Derived witnesses" in voleith.hpp).
+// Then the witness bits are committed values of degree 2, so all of the degrees above double.
+// (The bit constraints on the witness are then redundant, as the bits of the key are constrained
+// to be bits, but they're cheap.)
 
 #ifndef VOLE_MOLE_MOUSSAKA_REDEEM_HPP
 #define VOLE_MOLE_MOUSSAKA_REDEEM_HPP
@@ -49,6 +53,7 @@
 #include "uov/circuit.hpp"
 #include "uov/public_key.hpp"
 #include "voleith.hpp"
+#include "witness_prg.hpp"
 
 #include "constants.hpp"   // from faest-arch-opt
 #include "hash.hpp"        // from faest-arch-opt
@@ -131,9 +136,11 @@ static_assert(faest::is_owf_with_witness_bits_check(OWF_MOUSSAKA_REDEEM));
 static_assert(!faest::is_owf_with_aes_ecb(OWF_MOUSSAKA_REDEEM));
 static_assert(!faest::is_owf_with_aes_em(OWF_MOUSSAKA_REDEEM));
 
-// Commit to the witness directly rather than deriving it with the MQ PRG (see "Derived witnesses"
-// in voleith.hpp).
-constexpr size_t REDEEM_MQ_PRG_INSTANCES = 0;
+// Commit to the witness directly rather than deriving it from a short key with a PRG (see
+// "Derived witnesses" in voleith.hpp and witness_prg.hpp). MqPrg<2> makes the proof much smaller,
+// at the cost of proving and verification time; it then deviates from the draft, and
+// REDEEM_PROOF_BYTES must be updated.
+using RedeemWitnessPrg = vole_mole::detail::NoPrg;
 
 } // namespace vole_mole::moussaka::detail
 
@@ -142,7 +149,7 @@ template <>
 struct faest::OWF_CONSTANTS<faest::secpar::s128, vole_mole::moussaka::detail::OWF_MOUSSAKA_REDEEM>
     : vole_mole::detail::RelationConstants<vole_mole::moussaka::detail::REDEEM_WITNESS_BITS,
                                            vole_mole::moussaka::detail::REDEEM_QS_DEGREE,
-                                           vole_mole::moussaka::detail::REDEEM_MQ_PRG_INSTANCES> {};
+                                           vole_mole::moussaka::detail::RedeemWitnessPrg> {};
 
 namespace vole_mole::moussaka::detail {
 
@@ -182,8 +189,8 @@ struct RedeemRelation {
 
     static constexpr std::span<const uint8_t> DST = MOUSSAKA_REDEEM_PROOF_DST;
 
-    // The public maps of the MQ PRG, if the witness is derived.
-    static constexpr std::span<const uint8_t> MQ_PRG_DST = MOUSSAKA_REDEEM_MQ_DST;
+    // The public map of the witness PRG, if the witness is derived.
+    static constexpr std::span<const uint8_t> WITNESS_PRG_DST = MOUSSAKA_REDEEM_PRG_DST;
 
     static void hash_instance(faest::hash_state& hasher, const instance& x) {
         static_assert(MAX_ANCHORS <= UINT32_MAX);

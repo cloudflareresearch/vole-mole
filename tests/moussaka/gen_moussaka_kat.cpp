@@ -44,13 +44,12 @@ int main(int argc, char** argv) {
     for (size_t k = 1; k <= vole_mole::keccak::detail::NUM_COMMITTED_STATES; ++k) {
         out << " s" << vole_mole::keccak::detail::SEGMENT_START[k];
     }
-    using vole_mole::detail::MQ_PRG_INSTANCES;
     using vole_mole::detail::VOLE_WITNESS_BYTES;
+    using vole_mole::detail::WitnessPrg;
     out << ".\n# Witness bytes: issuance " << detail::ISSUE_WITNESS_BYTES << ", redemption "
-        << detail::REDEEM_WITNESS_BYTES
-        << ".\n# MQ PRG instances (0 if the witness isn't derived): issuance "
-        << MQ_PRG_INSTANCES<detail::IssueRelation> << ", redemption "
-        << MQ_PRG_INSTANCES<detail::RedeemRelation> << ".\n# VOLE witness bytes: issuance "
+        << detail::REDEEM_WITNESS_BYTES << ".\n# Witness PRGs: issuance "
+        << WitnessPrg<detail::IssueRelation>::name() << "; redemption "
+        << WitnessPrg<detail::RedeemRelation>::name() << ".\n# VOLE witness bytes: issuance "
         << VOLE_WITNESS_BYTES<detail::IssueRelation> << ", redemption "
         << VOLE_WITNESS_BYTES<detail::RedeemRelation> << ".\n# Proof bytes: issuance "
         << ISSUE_PROOF_BYTES << ", redemption " << REDEEM_PROOF_BYTES

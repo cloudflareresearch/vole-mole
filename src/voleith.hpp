@@ -22,10 +22,10 @@
 //    random linear combination of them.
 //
 // 5. Derived witnesses: Each witness bit costs tau bits of proof (its correction d and the VOLE
-//    corrections c_1, ..., c_{tau-1}). With the MQ_PRG_INSTANCES parameter (see
-//    RelationConstants), the witness w is instead derived from a short key K with the MQ PRG G of
-//    degree 2 (see mq/prg.hpp), split into MQ_PRG_INSTANCES instances (see mq/split.hpp): The VOLE
-//    witness is K, and the proof carries the public vector e = w + G(K), one bit per witness bit.
+//    corrections c_1, ..., c_{tau-1}). With the WitnessPrg parameter (see RelationConstants), the
+//    witness w is instead derived from a short key K with a PRG G of degree 2 (see
+//    witness_prg.hpp): The VOLE witness is K, and the proof carries the public vector
+//    e = w + G(K), one bit per witness bit.
 //    The relation's constraints are evaluated unchanged on the committed values w = e + G(K) of
 //    degree 2, through DerivedQS (see mq/derived_qs.hpp), so the QuickSilver degree doubles. Each
 //    bit of K is constrained to be a bit, so each bit of w is a bit, too.
@@ -34,7 +34,7 @@
 //    correction of K and the part of e for the witness prefix; the commit-and-prove step writes
 //    the rest of e. e is bound to chal2. Soundness is unaffected (K and e determine w); zero
 //    knowledge additionally requires G to be a PRG. The public maps of G are derived from the
-//    relation's MQ_PRG_DST. The proof is the FAEST proof followed by e.
+//    relation's WITNESS_PRG_DST. The proof is the FAEST proof followed by e.
 //
 // This code was adapted from faest-arch-opt, which is distributed under the following license:
 //
@@ -63,8 +63,8 @@
 
 #include "mq/derived_qs.hpp"
 #include "mq/prg.hpp"
-#include "mq/split.hpp"
 #include "qs_bit.hpp"
+#include "witness_prg.hpp"
 
 #include "block.hpp"          // from faest-arch-opt
 #include "faest_sig.hpp"      // from faest-arch-opt
@@ -101,29 +101,29 @@ template <typename Relation> using ProveSeed = std::array<uint8_t, PROVE_SEED_BY
 // faest-arch-opt describes the statement being proven through `faest::OWF_CONSTANTS<S, owf>`, from
 // which it derives the length of the VOLE witness and the QuickSilver degree. A relation registers
 // a new "one-way function" whose OWF_CONSTANTS derive from RelationConstants, given the length of
-// the relation's witness (in bits), the degree of its constraints, and MQ_PRG_INSTANCES, which
-// determines whether the witness is derived with the MQ PRG (see "Derived witnesses" above): If
-// MQ_PRG_INSTANCES = 0, then the VOLE witness is the witness. Otherwise, it's the key from which
-// the witness is derived with MQ_PRG_INSTANCES instances of the MQ PRG, and the QuickSilver degree
-// is mq::detail::DEGREE times the degree of the constraints. This is a VOLEitH parameter, like tau:
+// the relation's witness (in bits), the degree of its constraints, and the witness PRG, which
+// determines whether and how the witness is derived (see "Derived witnesses" above): If it's
+// NoPrg, then the VOLE witness is the witness. Otherwise, it's the key from which the witness is
+// derived with the PRG (e.g., MqPrg<c>, see witness_prg.hpp), and the QuickSilver degree is
+// mq::detail::DEGREE times the degree of the constraints. This is a VOLEitH parameter, like tau:
 // it doesn't change the relation's constraints, only the proof size and the cost of proving and
 // verifying.
-template <size_t RELATION_WITNESS_BITS_, size_t RELATION_QS_DEGREE_, size_t MQ_PRG_INSTANCES_>
+template <size_t RELATION_WITNESS_BITS_, size_t RELATION_QS_DEGREE_, typename WitnessPrg_>
 struct RelationConstants {
     static constexpr size_t RELATION_WITNESS_BITS = RELATION_WITNESS_BITS_;
     static constexpr size_t RELATION_QS_DEGREE = RELATION_QS_DEGREE_;
-    static constexpr size_t MQ_PRG_INSTANCES = MQ_PRG_INSTANCES_;
+    using WitnessPrg = WitnessPrg_;
     static_assert(RELATION_WITNESS_BITS % 8 == 0);
 
     static constexpr size_t WITNESS_BITS = [] {
-        if constexpr (MQ_PRG_INSTANCES == 0) {
-            return RELATION_WITNESS_BITS;
+        if constexpr (derives_witness<WitnessPrg>) {
+            return WitnessPrg::template Map<RELATION_WITNESS_BITS>::KEY_BITS;
         } else {
-            return mq::detail::split_key_bits<RELATION_WITNESS_BITS, MQ_PRG_INSTANCES>;
+            return RELATION_WITNESS_BITS;
         }
     }();
     static constexpr size_t QS_DEGREE =
-        MQ_PRG_INSTANCES == 0 ? RELATION_QS_DEGREE : mq::detail::DEGREE * RELATION_QS_DEGREE;
+        derives_witness<WitnessPrg> ? mq::detail::DEGREE * RELATION_QS_DEGREE : RELATION_QS_DEGREE;
     // The CRT VOLE commitment needs QS_DEGREE - 1 masks for QuickSilver and 4 for the VOLE check.
     static_assert(QS_DEGREE - 1 + 4 <= 32, "faest-arch-opt supports at most 32 masks");
 
@@ -132,17 +132,18 @@ struct RelationConstants {
 
 template <typename Relation> using owf_constants = typename relation_params<Relation>::OWF_CONSTS;
 
-// The number of instances of the MQ PRG from which the relation's witness is derived, or 0 if it
-// isn't derived. (FAEST's own OWF constants don't derive from RelationConstants.)
+// The PRG from which the relation's witness is derived, or NoPrg. (FAEST's own OWF constants don't
+// derive from RelationConstants.)
+template <typename Relation> struct witness_prg_of {
+    using type = NoPrg;
+};
 template <typename Relation>
-constexpr size_t MQ_PRG_INSTANCES = [] {
-    if constexpr (requires { owf_constants<Relation>::MQ_PRG_INSTANCES; }) {
-        return owf_constants<Relation>::MQ_PRG_INSTANCES;
-    } else {
-        return size_t{0};
-    }
-}();
-template <typename Relation> constexpr bool DERIVED_WITNESS = MQ_PRG_INSTANCES<Relation> > 0;
+    requires requires { typename owf_constants<Relation>::WitnessPrg; }
+struct witness_prg_of<Relation> {
+    using type = typename owf_constants<Relation>::WitnessPrg;
+};
+template <typename Relation> using WitnessPrg = typename witness_prg_of<Relation>::type;
+template <typename Relation> constexpr bool DERIVED_WITNESS = derives_witness<WitnessPrg<Relation>>;
 
 // Size of the VOLE witness in bytes: the witness, or the key from which it's derived.
 template <typename Relation>
@@ -224,19 +225,19 @@ using quicksilver_for = faest::quicksilver_state<relation_params<Relation>::secp
 // A committed bit of a derived witness.
 template <typename QS> using derived_bit = qs_bit<QS, mq::detail::DEGREE>;
 
-// The public map of the (split) MQ PRG from which the relation's witness is derived.
+// The public map of the PRG from which the relation's witness is derived.
 template <typename Relation>
     requires DERIVED_WITNESS<Relation>
-using DerivedMap = mq::detail::SplitMap<8 * WITNESS_BYTES<Relation>, MQ_PRG_INSTANCES<Relation>>;
+using DerivedMap = typename WitnessPrg<Relation>::template Map<8 * WITNESS_BYTES<Relation>>;
 
 template <typename Relation>
     requires DERIVED_WITNESS<Relation>
 const DerivedMap<Relation>& derived_map() {
     static_assert(
-        requires { Relation::MQ_PRG_DST; },
-        "a relation whose witness is derived must define MQ_PRG_DST");
+        requires { Relation::WITNESS_PRG_DST; },
+        "a relation whose witness is derived must define WITNESS_PRG_DST");
     static_assert(VOLE_WITNESS_BYTES<Relation> == DerivedMap<Relation>::KEY_BYTES);
-    static const DerivedMap<Relation> map(Relation::MQ_PRG_DST);
+    static const DerivedMap<Relation> map(Relation::WITNESS_PRG_DST);
     return map;
 }
 
