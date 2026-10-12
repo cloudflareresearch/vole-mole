@@ -4,6 +4,7 @@
 
 #include "mlkem_pop/prg_helpers.hpp"
 #include "voleith_fq/field.hpp"   // internal
+#include "voleith_fq/local.hpp"   // internal
 #include "voleith_fq/mq.hpp"      // internal
 #include "voleith_fq/voleith.hpp" // internal
 
@@ -40,8 +41,11 @@ template <typename P_, typename Prg_> struct Config {
 };
 
 template <typename C> class MlKemPopPrgTest : public ::testing::Test {};
-using Configs = ::testing::Types<Config<MlKem512, MqPrg<1>>, Config<MlKem768, MqPrg<1>>,
-                                 Config<MlKem768, MqPrg<3>>, Config<MlKem1024, MqPrg<1>>>;
+using Configs =
+    ::testing::Types<Config<MlKem512, MqPrg<1>>, Config<MlKem768, MqPrg<1>>,
+                     Config<MlKem768, MqPrg<3>>, Config<MlKem1024, MqPrg<1>>,
+                     Config<MlKem512, LocalPrg<true>>, Config<MlKem768, LocalPrg<true>>,
+                     Config<MlKem1024, LocalPrg<true>>, Config<MlKem768, LocalPrg<false>>>;
 TYPED_TEST_SUITE(MlKemPopPrgTest, Configs);
 
 } // namespace
@@ -49,7 +53,7 @@ TYPED_TEST_SUITE(MlKemPopPrgTest, Configs);
 // The committed evaluation of the PRG is consistent: c0 + c1 Delta + c2 Delta^2 = G(V + k Delta),
 // and c2 = G(k).
 template <typename Map> class FqPrgTest : public ::testing::Test {};
-using Maps = ::testing::Types<MqMap<96, 2>, MqMap<128, 1>>;
+using Maps = ::testing::Types<MqMap<96, 2>, LocalPrg<true>::Map<96>, LocalPrg<false>::Map<256>>;
 TYPED_TEST_SUITE(FqPrgTest, Maps);
 
 TYPED_TEST(FqPrgTest, CommittedEvalConsistent) {

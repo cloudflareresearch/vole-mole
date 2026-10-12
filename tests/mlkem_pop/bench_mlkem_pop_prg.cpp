@@ -4,6 +4,8 @@
 #include "vole_mole/mlkem.hpp"
 
 #include "mlkem_pop/prg_helpers.hpp"
+#include "voleith_fq/field.hpp"   // internal
+#include "voleith_fq/local.hpp"   // internal
 #include "voleith_fq/mq.hpp"      // internal
 #include "voleith_fq/voleith.hpp" // internal
 
@@ -20,6 +22,7 @@
 
 using namespace vole_mole;
 using namespace vole_mole::test::mlkem_pop_prg;
+using voleith_fq::detail::LocalPrg;
 using voleith_fq::detail::MqPrg;
 using voleith_fq::detail::NoPrg;
 
@@ -77,7 +80,11 @@ template <mlkem::ParamSet P, typename Prg> void BM_Verify(benchmark::State& stat
     BENCHMARK(BM_Prove<P, MqPrg<4>>)->Unit(benchmark::kMillisecond);                               \
     BENCHMARK(BM_Verify<P, MqPrg<4>>)->Unit(benchmark::kMillisecond);                              \
     BENCHMARK(BM_Prove<P, MqPrg<8>>)->Unit(benchmark::kMillisecond);                               \
-    BENCHMARK(BM_Verify<P, MqPrg<8>>)->Unit(benchmark::kMillisecond);
+    BENCHMARK(BM_Verify<P, MqPrg<8>>)->Unit(benchmark::kMillisecond);                              \
+    BENCHMARK(BM_Prove<P, LocalPrg<true>>)->Unit(benchmark::kMillisecond);                         \
+    BENCHMARK(BM_Verify<P, LocalPrg<true>>)->Unit(benchmark::kMillisecond);                        \
+    BENCHMARK(BM_Prove<P, LocalPrg<false>>)->Unit(benchmark::kMillisecond);                        \
+    BENCHMARK(BM_Verify<P, LocalPrg<false>>)->Unit(benchmark::kMillisecond);
 
 BENCH_ALL(mlkem::MlKem512)
 BENCH_ALL(mlkem::MlKem768)
