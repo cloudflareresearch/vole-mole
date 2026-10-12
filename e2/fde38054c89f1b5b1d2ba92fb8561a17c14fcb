@@ -1,0 +1,23 @@
+README.md
+  s_3c36208e1ae23a::t_dc3fdda363e238 57-90,105,110,242
+examples/meson.build
+  s_3c36208e1ae23a::t_aee661b667af97 1
+examples/mlkem_pop.cpp
+  s_3c36208e1ae23a::t_75307446e34196 1-39
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.10",
+  "base_commit_sha": "e2fde38054c89f1b5b1d2ba92fb8561a17c14fcb",
+  "prompts": {},
+  "sessions": {
+    "s_3c36208e1ae23a": {
+      "agent_id": {
+        "tool": "opencode",
+        "id": "ses_ecfe959ebffeOme1dG0POu0H2L",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Bas Westerbaan <bas@cloudflare.com>"
+    }
+  }
+}
