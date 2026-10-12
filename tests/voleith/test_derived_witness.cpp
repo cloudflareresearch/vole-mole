@@ -1,7 +1,8 @@
 // Tests for deriving the witness from a short key with a PRG (see "Derived witnesses" in
 // voleith.hpp). The same relation is proven with the witness committed directly (NoPrg) and derived
-// with one or more instances of the MQ PRG.
+// with one or more instances of the MQ PRG and with the local PRG.
 
+#include "mq/local.hpp"    // internal
 #include "mq/split.hpp"    // internal
 #include "qs_bit.hpp"      // internal
 #include "voleith.hpp"     // internal
@@ -10,7 +11,6 @@
 #include "test.hpp"
 
 #include "constants.hpp"   // from faest-arch-opt
-#include "faest_sig.hpp"   // from faest-arch-opt
 #include "hash.hpp"        // from faest-arch-opt
 #include "parameters.hpp"  // from faest-arch-opt
 #include "polynomials.hpp" // from faest-arch-opt
@@ -24,7 +24,6 @@
 #include <span>
 #include <type_traits>
 #include <utility>
-#include <vector>
 
 namespace toy {
 
@@ -37,14 +36,18 @@ constexpr size_t QS_DEGREE = 2;
 constexpr size_t NUM_CONSTRAINTS = 8 * WITNESS_BYTES + 8 * T_BYTES;
 
 // The variants: c = 0 commits to the witness directly, c = 1, 2, 3 derive it with c instances of
-// the MQ PRG.
+// the MQ PRG, and c = 4 with the local PRG.
 template <size_t c> struct prg {
     using type = vole_mole::detail::MqPrg<c>;
 };
 template <> struct prg<0> {
     using type = vole_mole::detail::NoPrg;
 };
+template <> struct prg<4> {
+    using type = vole_mole::detail::LocalPrg<1>;
+};
 template <size_t c> using Prg = typename prg<c>::type;
+constexpr size_t LOCAL = 4;
 
 template <size_t c>
 constexpr faest::owf OWF = static_cast<faest::owf>(((0x54u + c) << 8) | 0b10'0000);
@@ -61,6 +64,7 @@ TOY_OWF_CONSTANTS(0);
 TOY_OWF_CONSTANTS(1);
 TOY_OWF_CONSTANTS(2);
 TOY_OWF_CONSTANTS(3);
+TOY_OWF_CONSTANTS(4);
 #undef TOY_OWF_CONSTANTS
 
 namespace {
@@ -160,7 +164,8 @@ template <size_t c> std::array<uint8_t, 32> prefix_commitment(const Proof<c>& pr
 
 template <typename T> class DerivedWitness : public testing::Test {};
 template <size_t c> using Instances = std::integral_constant<size_t, c>;
-using AllInstances = testing::Types<Instances<0>, Instances<1>, Instances<2>, Instances<3>>;
+using AllInstances =
+    testing::Types<Instances<0>, Instances<1>, Instances<2>, Instances<3>, Instances<toy::LOCAL>>;
 TYPED_TEST_SUITE(DerivedWitness, AllInstances);
 
 } // namespace
@@ -180,6 +185,14 @@ TEST(DerivedWitnessLayout, Sizes) {
     static_assert(VOLE_WITNESS_BYTES<ToyRelation<2>> ==
                   vole_mole::mq::detail::split_key_bits<8 * toy::WITNESS_BYTES, 2> / 8);
     static_assert(relation_params<ToyRelation<2>>::OWF_CONSTS::QS_DEGREE == 2 * toy::QS_DEGREE);
+
+    constexpr size_t L = toy::LOCAL;
+    static_assert(DERIVED_WITNESS<ToyRelation<L>>);
+    static_assert(PROOF_BYTES<ToyRelation<L>> ==
+                  FAEST_PROOF_BYTES<ToyRelation<L>> + toy::WITNESS_BYTES);
+    static_assert(VOLE_WITNESS_BYTES<ToyRelation<L>> ==
+                  vole_mole::mq::detail::local_key_bits(8 * toy::WITNESS_BYTES, 1) / 8);
+    static_assert(relation_params<ToyRelation<L>>::OWF_CONSTS::QS_DEGREE == 2 * toy::QS_DEGREE);
 }
 
 TYPED_TEST(DerivedWitness, Verifies) {

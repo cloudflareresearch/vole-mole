@@ -177,6 +177,27 @@ That estimate is crude and needs to be checked (e.g., with CryptographicEstimato
 before relying on it, and zero knowledge then also relies on `G` being a PRG.
 It also changes the proof format, which then deviates from the drafts.
 
+Alternatively, `LocalPrg<1>` derives the witness with Goldreich's local PRG with
+the predicate XOR₁₆-AND₂ ([`src/mq/local.hpp`](src/mq/local.hpp)): each output
+bit is the sum of 16 key bits plus the product of 2 more, at public
+pseudorandom positions. It's much cheaper to evaluate than the MQ PRG, but
+needs a longer key. For Moussaka (Apple M4 Pro):
+
+| Step                      | Sends (MQ, `c = 2` → local) | Time (MQ, `c = 2` → local) |
+|:--------------------------|----------------------------:|---------------------------:|
+| `issue_request`           | 4804 → 5212 B               | 3.65 → 1.05 ms             |
+| `issue_response`          | —                           | 2.38 → 0.34 ms             |
+| `redeem_request` (N = 1)  | 5006 → 5499 B               | 5.62 → 1.28 ms             |
+| `finalize_redeem` (N = 1) | —                           | 4.16 → 0.48 ms             |
+
+Local PRGs are a different and less studied assumption than dense MQ, and the
+key length (704 bits for 2048 outputs, from
+[`tools/local_key_bits.py`](tools/local_key_bits.py)) only accounts for a
+guess-and-determine attack and the dense MQ estimate. It has *not* been checked
+against the literature on attacks on local PRGs (e.g., Couteau et al.,
+Asiacrypt 2018; Ünal, Eurocrypt 2023), so it's experimental, and no protocol
+uses it by default.
+
 ## License
 
 BSD 3-Clause, see [LICENSE](LICENSE). Meson downloads

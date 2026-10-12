@@ -1,7 +1,9 @@
 // Tests for the MQ PRG.
 
-#include "mq/prg.hpp"   // internal
-#include "mq/split.hpp" // internal
+#include "mq/key_bits.hpp" // internal
+#include "mq/local.hpp"    // internal
+#include "mq/prg.hpp"      // internal
+#include "mq/split.hpp"    // internal
 
 #include "test.hpp"
 
@@ -336,4 +338,101 @@ TEST(MqSplit, InstancesDiffer) {
     auto md = std::make_unique<Map::InstanceMap<0>::Matrix>();
     direct.matrix(0, *md);
     EXPECT_EQ(*m0, *md);
+}
+
+namespace {
+
+// The committed evaluation of the local PRG matches the plaintext one, for the prover and the
+// verifier, and the verifier's MACs are the prover's polynomials evaluated at delta.
+template <size_t KEY_BITS, size_t NUM_OUTPUTS, size_t ANDS> void check_local_evaluation() {
+    constexpr size_t MAX_DEGREE = 18;
+    using Prover = faest::quicksilver_state<faest::secpar::s128, false, MAX_DEGREE>;
+    using Verifier = faest::quicksilver_state<faest::secpar::s128, true, MAX_DEGREE>;
+    using Map = LocalMap<KEY_BITS, NUM_OUTPUTS, LOCAL_LINEAR_TERMS, ANDS>;
+    using faest::block128;
+    using faest::poly128;
+
+    const Map map(filled<7>(0x33));
+    const auto key = filled<KEY_BITS / 8>(0x5a);
+    const auto e = filled<NUM_OUTPUTS / 8>(0xc3);
+    const std::vector<uint8_t> challenge(1024, 0x77);
+
+    // The indices of each output are distinct and in range.
+    for (size_t i = 0; i < NUM_OUTPUTS; ++i) {
+        const auto ix = map.indices(i);
+        std::vector<uint16_t> sorted(ix.begin(), ix.end());
+        std::ranges::sort(sorted);
+        EXPECT_EQ(std::ranges::adjacent_find(sorted), sorted.end()) << "output " << i;
+        EXPECT_LT(sorted.back(), KEY_BITS);
+    }
+
+    const auto delta_bytes = filled<16>(0x99);
+    const poly128 delta = poly128::load(delta_bytes.data());
+    std::vector<block128> prover_macs(KEY_BITS);
+    std::vector<block128> verifier_macs(KEY_BITS);
+    for (size_t j = 0; j < KEY_BITS; ++j) {
+        const auto bytes = filled<16>(static_cast<uint8_t>(3 * j + 1));
+        prover_macs[j] = block128::load(bytes.data());
+        poly128 q = poly128::load(bytes.data());
+        if ((key[j / 8] >> (j % 8)) & 1) {
+            q += delta;
+        }
+        q.store(&verifier_macs[j]);
+    }
+    const Prover prover(key.data(), prover_macs.data(), 1, challenge.data());
+    const Verifier verifier(verifier_macs.data(), 1, block128::load(delta_bytes.data()),
+                            challenge.data());
+    std::vector<qs_bit<Prover, 1>> pk;
+    std::vector<qs_bit<Verifier, 1>> vk;
+    for (size_t j = 0; j < KEY_BITS; ++j) {
+        pk.push_back(prover.get_witness_bit(j));
+        vk.push_back(verifier.get_witness_bit(j));
+    }
+    const auto p = map.template qs_eval<Prover>(std::span<const qs_bit<Prover, 1>, KEY_BITS>(pk),
+                                                std::span(e));
+    const auto v = map.template qs_eval<Verifier>(
+        std::span<const qs_bit<Verifier, 1>, KEY_BITS>(vk), std::span(e));
+
+    std::array<uint8_t, NUM_OUTPUTS / 8> expected;
+    map.eval(std::span(key), std::span(expected));
+    size_t ones = 0;
+    const poly128 delta2 = (delta * delta).template reduce_to<128>();
+    for (size_t i = 0; i < NUM_OUTPUTS; ++i) {
+        const bool g = ((expected[i / 8] >> (i % 8)) & 1) != 0;
+        ones += g;
+        const bool bit = g != (((e[i / 8] >> (i % 8)) & 1) != 0);
+        EXPECT_EQ(p[i].value().data & 1, bit ? 1 : 0) << "output " << i;
+        poly128 at_delta =
+            p[i].mac.coeffs[0] + (p[i].mac.coeffs[1] * delta).template reduce_to<128>();
+        if (bit) {
+            at_delta += delta2;
+        }
+        EXPECT_TRUE(at_delta == v[i].mac) << "output " << i;
+    }
+    // The outputs look balanced.
+    EXPECT_GT(ones, NUM_OUTPUTS / 2 - NUM_OUTPUTS / 8);
+    EXPECT_LT(ones, NUM_OUTPUTS / 2 + NUM_OUTPUTS / 8);
+}
+
+} // namespace
+
+TEST(LocalPrg, CommittedEvaluationMatchesPlaintext) {
+    check_local_evaluation<464, 1920, 1>();
+    check_local_evaluation<464, 1920, 2>();
+    check_local_evaluation<136, 64, 4>();
+}
+
+TEST(LocalPrg, KeyBits) {
+    static_assert(local_key_bits(6776, 2) == 688);
+    static_assert(local_key_bits(6776, 4) >= key_bits(6776)); // at least the dense MQ estimate
+    static_assert(local_key_bits(2048, 1) > local_key_bits(2048, 2));
+    static_assert(local_key_bits(2048, 1) == 704);
+    static_assert(local_key_bits(2744, 1) == 808);
+}
+
+TEST(LocalPrg, DependsOnDst) {
+    using Map = LocalMap<464, 1920, LOCAL_LINEAR_TERMS, 2>;
+    const Map a(filled<5>(0x01));
+    const Map b(filled<5>(0x02));
+    EXPECT_FALSE(std::ranges::equal(a.indices(0), b.indices(0)));
 }
