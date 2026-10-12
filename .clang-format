@@ -23,7 +23,7 @@ IncludeBlocks: Regroup
 IncludeCategories:
   - Regex: '^[<"]vole_mole/'
     Priority: 1
-  - Regex: '^"((keccak|moussaka|pomfrit|ratatouille|uov)/.*|dst\.hpp|qs_bit\.hpp|voleith\.hpp)"$'
+  - Regex: '^"((keccak|moussaka|pomfrit|ratatouille|uov)/.*|ct\.hpp|dst\.hpp|qs_bit\.hpp|voleith\.hpp)"$'
     Priority: 2
   - Regex: '^"test\.hpp"$'
     Priority: 3

@@ -41,6 +41,7 @@
 #include "vole_mole/moussaka.hpp"
 #include "vole_mole/uov.hpp"
 
+#include "ct.hpp"
 #include "dst.hpp"
 #include "keccak/segmented.hpp"
 #include "moussaka/commit.hpp"
@@ -115,8 +116,11 @@ encode_redeem_witness(const Nullifier& nf, const Context& ctx_iss, const Context
     keccak::detail::encode_committed_states(
         std::span(w).subspan<REDEEM_WIT_OFF_STATES, keccak::detail::COMMITTED_STATES_BYTES>(),
         encode_com_state(nf, ctx_iss, ctx_red, r));
-    const size_t b = selector_bit(i);
-    w[b / 8] = static_cast<uint8_t>(1u << (b % 8));
+    // Write every selector bit so that the memory access pattern doesn't depend on i.
+    for (size_t u = 0; u < MAX_ANCHORS; ++u) {
+        const size_t b = selector_bit(u);
+        w[b / 8] |= static_cast<uint8_t>(vole_mole::detail::ct_eq_mask(u, i) & (1u << (b % 8)));
+    }
     return w;
 }
 
