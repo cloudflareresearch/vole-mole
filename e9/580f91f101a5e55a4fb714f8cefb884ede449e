@@ -1,0 +1,33 @@
+src/moussaka/issue.hpp
+  s_53f0de9abaa628::t_5e031b26013bb4 21-25,123-126
+include/vole_mole/moussaka.hpp
+  s_53f0de9abaa628::t_eb5154d781e221 30,32
+tests/moussaka/moussaka_kat.txt
+  s_53f0de9abaa628::t_e3710e1af96fa2 2,5-7,23,26,43,46,124,127
+README.md
+  s_53f0de9abaa628::t_aa1790d976d112 35-43,53-55,120-160
+  s_53f0de9abaa628::t_6f77438c23f493 161
+tests/moussaka/test_moussaka.cpp
+  s_53f0de9abaa628::t_10a67b19f722bd 32,36,40,272-274,282-301,307,611-613,622-639,641
+  s_53f0de9abaa628::t_819108c244f435 640,642
+src/moussaka/redeem.hpp
+  s_53f0de9abaa628::t_bd5eeac60a86f8 36-40,134-137
+tests/moussaka/gen_moussaka_kat.cpp
+  s_53f0de9abaa628::t_1e043450149d27 40-42,46-47,49-55
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.10",
+  "base_commit_sha": "e9580f91f101a5e55a4fb714f8cefb884ede449e",
+  "prompts": {},
+  "sessions": {
+    "s_53f0de9abaa628": {
+      "agent_id": {
+        "tool": "opencode",
+        "id": "ses_ecfcbbcd4ffeWHsyNK4WpEjPLC",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Bas Westerbaan <bas@cloudflare.com>"
+    }
+  }
+}
