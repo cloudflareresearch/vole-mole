@@ -24,6 +24,21 @@ else
 endif
 add_project_arguments(arch_args + ['-Wno-psabi'], language : ['c', 'cpp'])
 
+# Meson applies a wrap's patches only when it first downloads the subproject, so changing a wrap
+# leaves existing checkouts stale. Meson records the wrap's hash in the checkout but merely warns on
+# a mismatch; make it fatal instead. Meson doesn't hash the patches themselves, so when editing a
+# patch in packagefiles/, also change the wrap (e.g., rename the patch). See AGENT.md.
+fs = import('fs')
+foreach name : ['faest-arch-opt', 'pqov']
+  wrap = 'subprojects' / name + '.wrap'
+  stamp = 'subprojects' / name / '.meson-subproject-wrap-hash.txt'
+  fs.read(wrap) # reconfigure when the wrap changes
+  if fs.is_file(stamp) and fs.read(stamp).strip() != fs.hash(wrap, 'sha256')
+    error('subprojects/@0@ is out of date: @0@.wrap changed since it was downloaded. '.format(name)
+      + 'Run `meson subprojects update --reset @0@` and reconfigure.'.format(name))
+  endif
+endforeach
+
 faest_proj = subproject('faest-arch-opt')
 faest_dep = faest_proj.get_variable('faest_dep').as_system()
 randomness_dep = faest_proj.get_variable('randomness_os_dep')
