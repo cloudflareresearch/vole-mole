@@ -8,6 +8,7 @@
 
 #include "vole_mole/act.hpp"
 #include "vole_mole/ihat.hpp"
+#include "vole_mole/mlkem_pop.hpp"
 #include "vole_mole/pomfrit.hpp"
 
 #include <array>
@@ -76,6 +77,11 @@ constexpr Dst UNBOUND_IHAT_REDEEM_PROOF_DST =
 constexpr Dst UNBOUND_IHAT_REDEEM_SEED_DST =
     make_dst("mous", ihat::detail::UNBOUND_VERSION, 's', '1');
 
+// ML-KEM proof of possession: the VOLEitH relation for each parameter set, indexed by k.
+constexpr Dst MLKEM_POP_PROOF_512_DST = make_dst("mpop", mlkem_pop::VERSION, 'p', '2');
+constexpr Dst MLKEM_POP_PROOF_768_DST = make_dst("mpop", mlkem_pop::VERSION, 'p', '3');
+constexpr Dst MLKEM_POP_PROOF_1024_DST = make_dst("mpop", mlkem_pop::VERSION, 'p', '4');
+
 // PomFRIT
 constexpr Dst POMFRIT_COMBINE_DST = make_dst("pomf", pomfrit::VERSION, 'l', '0');
 constexpr Dst POMFRIT_PRG_DST = make_dst("pomf", pomfrit::VERSION, 'q', '0');   // witness PRG
@@ -104,6 +110,9 @@ constexpr bool dsts_are_distinct() {
         IHAT_REDEEM_PRG_DST,
         IHAT_REDEEM_PROOF_DST,
         IHAT_REDEEM_SEED_DST,
+        MLKEM_POP_PROOF_512_DST,
+        MLKEM_POP_PROOF_768_DST,
+        MLKEM_POP_PROOF_1024_DST,
         POMFRIT_COMBINE_DST,
         POMFRIT_PRG_DST,
         POMFRIT_PROOF_DST,
