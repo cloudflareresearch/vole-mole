@@ -1,0 +1,19 @@
+meson.build
+  s_af6b815b1765fa::t_de5c3b6dcf82cd 27-41
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.10",
+  "base_commit_sha": "95186006e6e7532a7e622839d6004bac86623c31",
+  "prompts": {},
+  "sessions": {
+    "s_af6b815b1765fa": {
+      "agent_id": {
+        "tool": "opencode",
+        "id": "ses_ecfe180eaffeE9h9gtqCXP0VR1",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Bas Westerbaan <bas@cloudflare.com>"
+    }
+  }
+}
