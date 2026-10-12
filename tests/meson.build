@@ -15,6 +15,7 @@ if get_option('tests')
     ['ihat', 'ihat/test_ihat.cpp'],
     ['unbound-ihat', 'ihat/test_unbound_ihat.cpp'],
     ['keccak', 'keccak/test_keccak.cpp'],
+    ['mq', 'mq/test_mq.cpp'],
     ['pomfrit', 'pomfrit/test_pomfrit.cpp'],
     ['poly2d', 'poly2d/test_poly2d.cpp'],
     ['random', 'random/test_random.cpp'],
@@ -54,6 +55,7 @@ if get_option('benchmarks')
   benchmarks = [
     ['act', 'act/bench_act.cpp'],
     ['ihat', 'ihat/bench_ihat.cpp'],
+    ['mq', 'mq/bench_mq.cpp'],
     ['pomfrit', 'pomfrit/bench_pomfrit.cpp'],
     ['uov', 'uov/bench_uov.cpp'],
   ]
