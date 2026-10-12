@@ -85,6 +85,7 @@ functions, including what they return and throw.
 | [`pomfrit.cpp`](examples/pomfrit.cpp)          | Blind signature issuance and verification                     |
 | [`moussaka.cpp`](examples/moussaka.cpp)        | Issuance from one of several Anchors and redemption, with replay rejection |
 | [`ratatouille.cpp`](examples/ratatouille.cpp)  | Issuance, spending credits, and double-spend rejection        |
+| [`mlkem_pop.cpp`](examples/mlkem_pop.cpp)      | ML-KEM proof of possession bound to a context                 |
 
 Build as above, then run:
 
@@ -198,6 +199,39 @@ against the literature on attacks on local PRGs (e.g., Couteau et al.,
 Asiacrypt 2018; Ünal, Eurocrypt 2023), so it's experimental, and no protocol
 uses it by default.
 
+## ML-KEM proof of possession
+
+`vole_mole::mlkem_pop` is a zero-knowledge proof of possession (PoP) of an
+[ML-KEM][fips203] decapsulation key. A KEM key can't sign a certificate signing
+request, so instead the key holder proves knowledge of the secret behind its
+encapsulation key `ek`. The proof is bound to a context string, e.g., a
+challenge chosen by the verifier. Specifically, the prover shows knowledge of
+`s` and `e` with coefficients in `[-η₁, η₁]` such that
+`t̂ = Â ∘ NTT(s) + NTT(e) mod q`, where `ek = ByteEncode₁₂(t̂) || ρ` and `Â` is
+expanded from `ρ`. This is exactly the secret needed to decapsulate.
+
+FAEST's VOLEitH authenticates bits, so arithmetic modulo q = 3329 would need
+binary adder circuits. (A prototype that commits to the bits of `s` and `e`
+and checks the relation with adder circuits gave 504 KB proofs for
+ML-KEM-768.) Instead we built a VOLEitH proof system over F_3329
+(`src/voleith_fq/`), with 16 GGM trees of 256 leaves and MACs in
+F_3329^16 = F_3329[X]/(X^16 - 3). Over this field the whole MLWE relation is
+linear: `e` is an affine function of the committed `s`, computed with the NTT.
+The only nonlinear constraints are the 2·k·256 range checks
+`x(x² - 1)⋯(x² - η₁²) = 0`, of degree 2η₁ + 1. The protocol otherwise follows
+FAEST v1: VOLE consistency check, QuickSilver, and Fiat–Shamir with no
+grinding. Soundness is about 2^-125 per hash query.
+
+| Parameter set | `ek`   | Proof   | `prove` | `verify` |
+|:--------------|-------:|--------:|--------:|---------:|
+| ML-KEM-512    | 800 B  | 17568 B | 3.95 ms | 3.97 ms  |
+| ML-KEM-768    | 1184 B | 22944 B | 4.46 ms | 4.47 ms  |
+| ML-KEM-1024   | 1568 B | 29088 B | 5.44 ms | 5.41 ms  |
+
+These were measured for the release build on an Apple M4 Pro. Most of the
+proof is the VOLE corrections, i.e., 15 × (k·256 + 16·2η₁ + 16) elements of
+F_q at 12 bits each. ML-KEM key generation (`vole_mole::mlkem`) is included and is tested against OpenSSL.
+
 ## License
 
 BSD 3-Clause, see [LICENSE](LICENSE). Meson downloads
@@ -220,4 +254,5 @@ the circuit and protocol designs.
 [arch-opt]: https://github.com/faest-sign/faest-arch-opt
 [pqov]: https://github.com/pqov/pqov
 [meson]: https://mesonbuild.com
+[fips203]: https://csrc.nist.gov/pubs/fips/203/final
 [uov]: https://csrc.nist.gov/csrc/media/Projects/pqc-dig-sig/documents/UOV_Specification_R3.pdf
