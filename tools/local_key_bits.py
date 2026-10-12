@@ -33,6 +33,7 @@ Usage: tools/local_key_bits.py | clang-format --assume-filename=src/mq/local_key
   > src/mq/local_key_bits.hpp
 """
 
+import multiprocessing
 import sys
 from math import log2
 
@@ -41,8 +42,16 @@ import mq_key_bits
 SECURITY_BITS = 128
 ANDS = (1, 2, 4)
 MIN_KEY_BITS = 128
-MAX_KEY_BITS = 1536
+MAX_KEY_BITS = 2560
 KEY_BITS_STEP = 8
+# The search for N is capped at MAX_STRETCH n outputs. Larger stretches matter only for long
+# witnesses (e.g., the ML-DSA proof of knowledge), so the table for EXT_ANDS products continues
+# beyond MAX_KEY_BITS, in coarser steps and with a larger cap. (The estimate is slow for large N.)
+MAX_STRETCH = 64
+EXT_ANDS = 2
+EXT_MAX_KEY_BITS = 6144
+EXT_KEY_BITS_STEP = 64
+EXT_MAX_STRETCH = 4096
 
 
 def log2_cost_guess_and_determine(n, m, q):
@@ -54,11 +63,12 @@ def log2_cost_guess_and_determine(n, m, q):
     return n
 
 
-def max_outputs(n, q):
-    """The largest m for which both estimates are at least SECURITY_BITS, or 0 if there is none."""
+def max_outputs(n, q, max_stretch=MAX_STRETCH):
+    """The largest m (capped at max_stretch n) for which both estimates are at least
+    SECURITY_BITS, or 0 if there is none."""
     if log2_cost_guess_and_determine(n, n, q) < SECURITY_BITS:
         return 0
-    lo, hi = n, 64 * n
+    lo, hi = n, max_stretch * n
     while hi - lo > 1:
         mid = (lo + hi) // 2
         if log2_cost_guess_and_determine(n, mid, q) >= SECURITY_BITS:
@@ -80,6 +90,10 @@ def max_outputs(n, q):
     return lo2
 
 
+def ext_max_outputs(n):
+    return max_outputs(n, EXT_ANDS, EXT_MAX_STRETCH)
+
+
 def main():
     tables = {}
     for q in ANDS:
@@ -88,6 +102,12 @@ def main():
             m = max_outputs(n, q)
             if m > 0 and (not entries or m > entries[-1][1]):
                 entries.append((n, m))
+        if q == EXT_ANDS:
+            ns = range(MAX_KEY_BITS + EXT_KEY_BITS_STEP, EXT_MAX_KEY_BITS + 1, EXT_KEY_BITS_STEP)
+            with multiprocessing.Pool() as pool:
+                for n, m in zip(ns, pool.map(ext_max_outputs, ns)):
+                    if m > 0 and (not entries or m > entries[-1][1]):
+                        entries.append((n, m))
         print(f"q = {q}: {entries[0]} ... {entries[-1]}", file=sys.stderr)
         tables[q] = entries
 

@@ -1,4 +1,6 @@
-// QuickSilver arithmetization of Keccak-p[800, 12] with committed intermediate states.
+// QuickSilver arithmetization of Keccak-p[800, 12] and Keccak-f[1600] with committed intermediate
+// states. (The discussion below is for Keccak-p[800, 12]; Keccak-f[1600] is the same with 24 rounds
+// of 1600 bits, see SegmentedKf1600.)
 //
 // Each round of Keccak-p[800, 12] has exactly one layer of ANDs, so the state after k rounds is a
 // polynomial of degree 2^k in the input. Each round is a permutation, and its inverse also has one
@@ -19,10 +21,10 @@
 //   R_6(R_5(s5))       = R_7^-1(R_8^-1(s9))   (degree max(2^2, 3^2) = 9)
 //   out = R_11(R_10(R_9(s9)))                 (degree 2^3 = 8)
 //
-// where R_i is round i of Keccak-p[800, 12] and s0 is the input. The layout is set by
-// SEGMENTS and FINAL_ROUNDS below; e.g., `{{5, 3}}` and 4 commits to s8 only and has
-// degree 32 (which needs more CRT VOLE masks than faest-arch-opt currently supports). Each segment
-// except the last adds 800 constraints.
+// where R_i is round i of Keccak-p[800, 12] and s0 is the input. The layout is set by the
+// SEGMENTS and FINAL_ROUNDS of SegmentedKp800 below; e.g., `{{5, 3}}` and 4 commits to s8 only and
+// has degree 32 (which needs more CRT VOLE masks than faest-arch-opt currently supports). Each
+// segment except the last adds 800 constraints.
 //
 // A relation may evaluate the permutation any number of times, as long as each evaluation has its
 // own committed intermediate states in the witness.
@@ -33,6 +35,7 @@
 #include "vole_mole/keccak.hpp"
 
 #include "keccak/circuit.hpp"
+#include "keccak/tables.hpp"
 #include "qs_bit.hpp"
 
 #include "polynomials.hpp" // from faest-arch-opt
@@ -43,6 +46,7 @@
 #include <cstddef>
 #include <cstdint>
 #include <span>
+#include <type_traits>
 #include <utility>
 #include <vector>
 
@@ -64,126 +68,14 @@ struct Segment {
     size_t backward;
 };
 
-// The segments ending in the committed states, in order, followed by FINAL_ROUNDS rounds
-// forward from the last committed state to the output.
-constexpr std::array SEGMENTS = {Segment{3, 2}, Segment{2, 2}};
-constexpr size_t FINAL_ROUNDS = 3;
-
-constexpr size_t NUM_COMMITTED_STATES = SEGMENTS.size();
-
 constexpr size_t ipow(size_t base, size_t exp) { return exp == 0 ? 1 : base * ipow(base, exp - 1); }
-
-// Index of the first round of segment k; SEGMENT_START[NUM_COMMITTED_STATES] is the
-// first round of the final segment. Committed state k is the state after SEGMENT_START[k + 1]
-// rounds.
-constexpr std::array<size_t, NUM_COMMITTED_STATES + 1> SEGMENT_START = [] {
-    std::array<size_t, NUM_COMMITTED_STATES + 1> out{};
-    for (size_t k = 0; k < NUM_COMMITTED_STATES; ++k) {
-        out[k + 1] = out[k] + SEGMENTS[k].forward + SEGMENTS[k].backward;
-    }
-    return out;
-}();
-static_assert(SEGMENT_START[NUM_COMMITTED_STATES] + FINAL_ROUNDS == KP800_ROUNDS);
-
-// The degree of the constraints of a segment.
-constexpr size_t segment_degree(const Segment& s) {
-    return std::max(ipow(2, s.forward), ipow(3, s.backward));
-}
-
-// The degree of the output of the permutation.
-constexpr size_t OUTPUT_DEGREE = ipow(2, FINAL_ROUNDS);
-
-// The maximum degree of the segment constraints and the output, and hence the minimum QuickSilver
-// degree of a relation that evaluates the permutation.
-constexpr size_t QS_DEGREE = [] {
-    size_t deg = OUTPUT_DEGREE;
-    for (const Segment& s : SEGMENTS) {
-        deg = std::max(deg, segment_degree(s));
-    }
-    return deg;
-}();
-
-// Size of the intermediate states committed to in the witness for each evaluation.
-constexpr size_t COMMITTED_STATES_BYTES = NUM_COMMITTED_STATES * KP800_STATE_BYTES;
-
-// Number of constraints added by each call to `qs_keccak`.
-constexpr size_t NUM_SEGMENT_CONSTRAINTS = NUM_COMMITTED_STATES * KP800_STATE_BITS;
-
-// Compute the intermediate states to commit to in the witness, starting from input `state`.
-inline void encode_committed_states(std::span<uint8_t, COMMITTED_STATES_BYTES> out,
-                                    Kp800State state) {
-    for (size_t k = 0; k < NUM_COMMITTED_STATES; ++k) {
-        keccak_p800_rounds(state, SEGMENT_START[k], SEGMENT_START[k + 1] - SEGMENT_START[k]);
-        std::ranges::copy(state, out.begin() + k * KP800_STATE_BYTES);
-    }
-}
 
 // A QuickSilver-committed value in GF(2^128) of degree `deg`.
 template <typename QS, size_t deg> using qs_val = faest::quicksilver_gfsecpar<QS, deg>;
 
-// The committed bits of a Keccak-p[800] state, of degree `deg`. (Keccak state bits are GF(2)
-// values, so we represent them as qs_bit rather than qs_val.)
+// The committed bits of a Keccak state, of degree `deg`. (Keccak state bits are GF(2) values, so we
+// represent them as qs_bit rather than qs_val.)
 template <typename QS, size_t deg = 1> using QsState = std::vector<qs_bit<QS, deg>>;
-
-// One Keccak round: degree d in, degree 2d out. Only the first `num_out_bits` output bits are
-// computed.
-template <typename QS, size_t d>
-QsState<QS, 2 * d> qs_keccak_round(const QsState<QS, d>& in, size_t round,
-                                   size_t num_out_bits = KP800_STATE_BITS) {
-    const auto chi = [](const qs_bit<QS, d>& a, const qs_bit<QS, d>& b, const qs_bit<QS, d>& c) {
-        // a ^ (~b & c) = a + (b + 1) * c
-        return qs_bit<QS, 2 * d>(a) + qs_mul<QS, d, d>(b + faest::poly1(1), c);
-    };
-    const auto add_one = [](const qs_bit<QS, 2 * d>& x) { return x + faest::poly1(1); };
-    return keccak_round(in, round, chi, add_one, num_out_bits);
-}
-
-// `num_rounds` rounds starting at `first_round`: degree d in, degree d * 2^num_rounds out. Only the
-// first `num_out_bits` bits of the output are computed (unless num_rounds = 0).
-template <typename QS, size_t num_rounds, size_t d = 1>
-auto qs_keccak_rounds(const QsState<QS, d>& in, size_t first_round,
-                      size_t num_out_bits = KP800_STATE_BITS) {
-    if constexpr (num_rounds == 0) {
-        return in;
-    } else if constexpr (num_rounds == 1) {
-        return qs_keccak_round<QS, d>(in, first_round, num_out_bits);
-    } else {
-        return qs_keccak_rounds<QS, num_rounds - 1, 2 * d>(qs_keccak_round<QS, d>(in, first_round),
-                                                           first_round + 1, num_out_bits);
-    }
-}
-
-// Inverse of chi and iota of one Keccak round: degree d in, degree 3d out.
-template <typename QS, size_t d>
-QsState<QS, 3 * d> qs_keccak_iota_chi_inverse(const QsState<QS, d>& in, size_t round) {
-    const auto chi_inv = [](const qs_bit<QS, d>& a, const qs_bit<QS, d>& b, const qs_bit<QS, d>& c,
-                            const qs_bit<QS, d>& dd, const qs_bit<QS, d>& e) {
-        // a ^ (~b & (c ^ (~d & e))) = a + (b + 1) * (c + (d + 1) * e)
-        return qs_bit<QS, 3 * d>(a) +
-               qs_mul<QS, d, 2 * d>(b + faest::poly1(1),
-                                    qs_bit<QS, 2 * d>(c) +
-                                        qs_mul<QS, d, d>(dd + faest::poly1(1), e));
-    };
-    const auto add_one = [](const qs_bit<QS, d>& x) { return x + faest::poly1(1); };
-    return keccak_iota_chi_inverse(in, round, chi_inv, add_one);
-}
-
-// Inverse of the `num_rounds` rounds ending before `end_round`, i.e., of rounds
-// end_round - num_rounds, ..., end_round - 1, except for the linear layer (theta, rho, pi) of the
-// first of these rounds: degree d in, degree d * 3^num_rounds out. (The linear layer is cheap to
-// compute forward but expensive to invert, so we instead apply it to the other side of the
-// constraint.) Requires num_rounds >= 1.
-template <typename QS, size_t num_rounds, size_t d = 1>
-auto qs_keccak_rounds_inverse_partial(const QsState<QS, d>& in, size_t end_round) {
-    static_assert(num_rounds >= 1);
-    auto out = qs_keccak_iota_chi_inverse<QS, d>(in, end_round - 1);
-    if constexpr (num_rounds == 1) {
-        return out;
-    } else {
-        return qs_keccak_rounds_inverse_partial<QS, num_rounds - 1, 3 * d>(
-            keccak_theta_rho_pi_inverse(out), end_round - 1);
-    }
-}
 
 // Lift a value to degree `deg` (which may equal its degree).
 template <size_t deg, typename QS, size_t d> qs_val<QS, deg> qs_lift(const qs_val<QS, d>& x) {
@@ -193,6 +85,222 @@ template <size_t deg, typename QS, size_t d> qs_val<QS, deg> qs_lift(const qs_va
 template <size_t deg, typename QS, size_t d> qs_bit<QS, deg> qs_lift(const qs_bit<QS, d>& x) {
     static_assert(d <= deg);
     return qs_bit<QS, deg>(x);
+}
+
+// The plaintext rounds [first_round, first_round + num_rounds) of Spec, in place.
+template <typename Spec>
+void plain_rounds(typename Spec::State& state, size_t first_round, size_t num_rounds) {
+    if constexpr (std::is_same_v<Spec, vole_mole::detail::Kp800>) {
+        keccak_p800_rounds(state, first_round, num_rounds);
+    } else {
+        static_assert(std::is_same_v<Spec, vole_mole::detail::Kf1600>);
+        keccak_f1600_rounds(state, first_round, num_rounds);
+    }
+}
+
+// The arithmetization of the permutation Spec, with the given SEGMENTS ending in the committed
+// states, in order, followed by FINAL_ROUNDS rounds forward from the last committed state to the
+// output. If FINAL_ROUNDS is 0, the output is the last committed state.
+template <typename Spec, auto SEGMENTS_, size_t FINAL_ROUNDS_> struct SegmentedKeccak {
+    using State = typename Spec::State;
+    static constexpr size_t STATE_BITS = Spec::STATE_BITS;
+    static constexpr size_t STATE_BYTES = Spec::STATE_BYTES;
+
+    static constexpr auto SEGMENTS = SEGMENTS_;
+    static constexpr size_t FINAL_ROUNDS = FINAL_ROUNDS_;
+    static constexpr size_t NUM_COMMITTED_STATES = SEGMENTS.size();
+    static_assert(NUM_COMMITTED_STATES >= 1);
+
+    // Index of the first round of segment k; SEGMENT_START[NUM_COMMITTED_STATES] is the
+    // first round of the final segment. Committed state k is the state after SEGMENT_START[k + 1]
+    // rounds.
+    static constexpr std::array<size_t, NUM_COMMITTED_STATES + 1> SEGMENT_START = [] {
+        std::array<size_t, NUM_COMMITTED_STATES + 1> out{};
+        for (size_t k = 0; k < NUM_COMMITTED_STATES; ++k) {
+            out[k + 1] = out[k] + SEGMENTS[k].forward + SEGMENTS[k].backward;
+        }
+        return out;
+    }();
+    static_assert(SEGMENT_START[NUM_COMMITTED_STATES] + FINAL_ROUNDS == Spec::ROUNDS);
+
+    // The degree of the constraints of a segment.
+    static constexpr size_t segment_degree(const Segment& s) {
+        return std::max(ipow(2, s.forward), ipow(3, s.backward));
+    }
+
+    // The degree of the output of the permutation.
+    static constexpr size_t OUTPUT_DEGREE = ipow(2, FINAL_ROUNDS);
+
+    // The maximum degree of the segment constraints and the output, and hence the minimum
+    // QuickSilver degree of a relation that evaluates the permutation.
+    static constexpr size_t QS_DEGREE = [] {
+        size_t deg = OUTPUT_DEGREE;
+        for (const Segment& s : SEGMENTS) {
+            deg = std::max(deg, segment_degree(s));
+        }
+        return deg;
+    }();
+
+    // Size of the intermediate states committed to in the witness for each evaluation.
+    static constexpr size_t COMMITTED_STATES_BYTES = NUM_COMMITTED_STATES * STATE_BYTES;
+
+    // Number of constraints added by each call to `qs_keccak`.
+    static constexpr size_t NUM_SEGMENT_CONSTRAINTS = NUM_COMMITTED_STATES * STATE_BITS;
+
+    // Compute the intermediate states to commit to in the witness, starting from input `state`.
+    static void encode_committed_states(std::span<uint8_t, COMMITTED_STATES_BYTES> out,
+                                        State state) {
+        for (size_t k = 0; k < NUM_COMMITTED_STATES; ++k) {
+            plain_rounds<Spec>(state, SEGMENT_START[k], SEGMENT_START[k + 1] - SEGMENT_START[k]);
+            std::ranges::copy(state, out.begin() + static_cast<std::ptrdiff_t>(k * STATE_BYTES));
+        }
+    }
+
+    // One Keccak round: degree d in, degree 2d out. Only the first `num_out_bits` output bits are
+    // computed (all of them if `num_out_bits` is 0).
+    template <typename QS, size_t d>
+    static QsState<QS, 2 * d> qs_round(const QsState<QS, d>& in, size_t round,
+                                       size_t num_out_bits = 0) {
+        const auto chi = [](const qs_bit<QS, d>& a, const qs_bit<QS, d>& b,
+                            const qs_bit<QS, d>& c) {
+            // a ^ (~b & c) = a + (b + 1) * c
+            return qs_bit<QS, 2 * d>(a) + qs_mul<QS, d, d>(b + faest::poly1(1), c);
+        };
+        const auto add_one = [](const qs_bit<QS, 2 * d>& x) { return x + faest::poly1(1); };
+        return keccak_round<Spec>(in, round, chi, add_one, num_out_bits);
+    }
+
+    // `num_rounds` rounds starting at `first_round`: degree d in, degree d * 2^num_rounds out. Only
+    // the first `num_out_bits` bits of the output are computed (unless num_rounds = 0).
+    template <typename QS, size_t num_rounds, size_t d = 1>
+    static auto qs_rounds(const QsState<QS, d>& in, size_t first_round, size_t num_out_bits = 0) {
+        if constexpr (num_rounds == 0) {
+            return in;
+        } else if constexpr (num_rounds == 1) {
+            return qs_round<QS, d>(in, first_round, num_out_bits);
+        } else {
+            return qs_rounds<QS, num_rounds - 1, 2 * d>(qs_round<QS, d>(in, first_round),
+                                                        first_round + 1, num_out_bits);
+        }
+    }
+
+    // Inverse of chi and iota of one Keccak round: degree d in, degree 3d out.
+    template <typename QS, size_t d>
+    static QsState<QS, 3 * d> qs_iota_chi_inverse(const QsState<QS, d>& in, size_t round) {
+        const auto chi_inv = [](const qs_bit<QS, d>& a, const qs_bit<QS, d>& b,
+                                const qs_bit<QS, d>& c, const qs_bit<QS, d>& dd,
+                                const qs_bit<QS, d>& e) {
+            // a ^ (~b & (c ^ (~d & e))) = a + (b + 1) * (c + (d + 1) * e)
+            return qs_bit<QS, 3 * d>(a) +
+                   qs_mul<QS, d, 2 * d>(b + faest::poly1(1),
+                                        qs_bit<QS, 2 * d>(c) +
+                                            qs_mul<QS, d, d>(dd + faest::poly1(1), e));
+        };
+        const auto add_one = [](const qs_bit<QS, d>& x) { return x + faest::poly1(1); };
+        return keccak_iota_chi_inverse<Spec>(in, round, chi_inv, add_one);
+    }
+
+    // Inverse of the `num_rounds` rounds ending before `end_round`, i.e., of rounds
+    // end_round - num_rounds, ..., end_round - 1, except for the linear layer (theta, rho, pi) of
+    // the first of these rounds: degree d in, degree d * 3^num_rounds out. (The linear layer is
+    // cheap to compute forward but expensive to invert, so we instead apply it to the other side of
+    // the constraint.) Requires num_rounds >= 1.
+    template <typename QS, size_t num_rounds, size_t d = 1>
+    static auto qs_rounds_inverse_partial(const QsState<QS, d>& in, size_t end_round) {
+        static_assert(num_rounds >= 1);
+        auto out = qs_iota_chi_inverse<QS, d>(in, end_round - 1);
+        if constexpr (num_rounds == 1) {
+            return out;
+        } else {
+            return qs_rounds_inverse_partial<QS, num_rounds - 1, 3 * d>(
+                keccak_theta_rho_pi_inverse<Spec>(out), end_round - 1);
+        }
+    }
+
+    // Segment k: The rounds forward from `state` meet the rounds backward from committed state k.
+    // Afterwards, `state` is committed state k.
+    template <size_t k, typename QS>
+    static void segment_constraint(QS* qs, QsState<QS>& state, size_t wit_off_states) {
+        constexpr Segment seg = SEGMENTS[k];
+        constexpr size_t deg = segment_degree(seg);
+        const size_t bit_offset = 8 * (wit_off_states + k * STATE_BYTES);
+
+        QsState<QS> next;
+        next.reserve(STATE_BITS);
+        for (size_t i = 0; i < STATE_BITS; ++i) {
+            next.emplace_back(qs->get_witness_bit(bit_offset + i));
+        }
+
+        const auto fwd = qs_rounds<QS, seg.forward>(state, SEGMENT_START[k]);
+        if constexpr (seg.backward == 0) {
+            for (size_t i = 0; i < STATE_BITS; ++i) {
+                qs->add_constraint(qs_to_gfsecpar(qs_lift<deg>(fwd[i]) + qs_lift<deg>(next[i])));
+            }
+        } else {
+            // Meet after the linear layer of round SEGMENT_START[k] + seg.forward.
+            const auto lin = keccak_theta_rho_pi<Spec>(fwd);
+            const auto bwd =
+                qs_rounds_inverse_partial<QS, seg.backward>(next, SEGMENT_START[k + 1]);
+            for (size_t i = 0; i < STATE_BITS; ++i) {
+                qs->add_constraint(qs_to_gfsecpar(qs_lift<deg>(lin[i]) + qs_lift<deg>(bwd[i])));
+            }
+        }
+        state = std::move(next);
+    }
+
+    template <typename QS, size_t... k>
+    static void segment_constraints(QS* qs, QsState<QS>& state, size_t wit_off_states,
+                                    std::index_sequence<k...>) {
+        (segment_constraint<k>(qs, state, wit_off_states), ...);
+    }
+
+    // Evaluate the permutation on the committed input `state`. The intermediate states are the
+    // witness bytes starting at `wit_off_states` (see encode_committed_states).
+    //
+    // Adds NUM_SEGMENT_CONSTRAINTS constraints (one per bit of each intermediate state) and
+    // returns the first `num_out_bits` bits of the output (all of them if `num_out_bits` is 0, or
+    // if FINAL_ROUNDS is 0), of degree OUTPUT_DEGREE.
+    template <typename QS>
+    static QsState<QS, OUTPUT_DEGREE> qs_keccak(QS* qs, QsState<QS> state, size_t wit_off_states,
+                                                size_t num_out_bits = 0) {
+        static_assert(QS::max_degree >= QS_DEGREE);
+        segment_constraints(qs, state, wit_off_states,
+                            std::make_index_sequence<NUM_COMMITTED_STATES>());
+        return qs_rounds<QS, FINAL_ROUNDS>(state, SEGMENT_START[NUM_COMMITTED_STATES],
+                                           num_out_bits);
+    }
+};
+
+// Keccak-p[800, 12] with all constraints of degree at most 9 (see the top of this file).
+using SegmentedKp800 =
+    SegmentedKeccak<vole_mole::detail::Kp800, std::array{Segment{3, 2}, Segment{2, 2}}, 3>;
+
+// Keccak-f[1600] with all constraints of degree at most 9: four segments of 3 rounds forward and
+// 2 backward, and one of 2 and 2, ending in the output.
+using SegmentedKf1600 = SegmentedKeccak<
+    vole_mole::detail::Kf1600,
+    std::array{Segment{3, 2}, Segment{3, 2}, Segment{3, 2}, Segment{3, 2}, Segment{2, 2}}, 0>;
+
+// Names for Keccak-p[800, 12], which predate SegmentedKeccak.
+constexpr auto SEGMENTS = SegmentedKp800::SEGMENTS;
+constexpr size_t FINAL_ROUNDS = SegmentedKp800::FINAL_ROUNDS;
+constexpr size_t NUM_COMMITTED_STATES = SegmentedKp800::NUM_COMMITTED_STATES;
+constexpr auto SEGMENT_START = SegmentedKp800::SEGMENT_START;
+constexpr size_t OUTPUT_DEGREE = SegmentedKp800::OUTPUT_DEGREE;
+constexpr size_t QS_DEGREE = SegmentedKp800::QS_DEGREE;
+constexpr size_t COMMITTED_STATES_BYTES = SegmentedKp800::COMMITTED_STATES_BYTES;
+constexpr size_t NUM_SEGMENT_CONSTRAINTS = SegmentedKp800::NUM_SEGMENT_CONSTRAINTS;
+
+inline void encode_committed_states(std::span<uint8_t, COMMITTED_STATES_BYTES> out,
+                                    Kp800State state) {
+    SegmentedKp800::encode_committed_states(out, state);
+}
+
+template <typename QS>
+QsState<QS, OUTPUT_DEGREE> qs_keccak(QS* qs, QsState<QS> state, size_t wit_off_states,
+                                     size_t num_out_bits = KP800_STATE_BITS) {
+    static_assert(FINAL_ROUNDS >= 1);
+    return SegmentedKp800::qs_keccak(qs, std::move(state), wit_off_states, num_out_bits);
 }
 
 // Map of the index of each byte of a Keccak-p[800] input to its index in the witness. Index is -1
@@ -236,60 +344,6 @@ QsState<QS> qs_input(const QS* qs, const Kp800State& public_state, const InputMa
         }
     }
     return state;
-}
-
-// Segment k: The rounds forward from `state` meet the rounds backward from committed state k.
-// Afterwards, `state` is committed state k.
-template <size_t k, typename QS>
-void segment_constraint(QS* qs, QsState<QS>& state, size_t wit_off_states) {
-    constexpr Segment seg = SEGMENTS[k];
-    constexpr size_t deg = segment_degree(seg);
-    const size_t bit_offset = 8 * (wit_off_states + k * KP800_STATE_BYTES);
-
-    QsState<QS> next;
-    next.reserve(KP800_STATE_BITS);
-    for (size_t i = 0; i < KP800_STATE_BITS; ++i) {
-        next.emplace_back(qs->get_witness_bit(bit_offset + i));
-    }
-
-    const auto fwd = qs_keccak_rounds<QS, seg.forward>(state, SEGMENT_START[k]);
-    if constexpr (seg.backward == 0) {
-        for (size_t i = 0; i < KP800_STATE_BITS; ++i) {
-            qs->add_constraint(qs_to_gfsecpar(qs_lift<deg>(fwd[i]) + qs_lift<deg>(next[i])));
-        }
-    } else {
-        // Meet after the linear layer of round SEGMENT_START[k] + seg.forward.
-        const auto lin = keccak_theta_rho_pi(fwd);
-        const auto bwd =
-            qs_keccak_rounds_inverse_partial<QS, seg.backward>(next, SEGMENT_START[k + 1]);
-        for (size_t i = 0; i < KP800_STATE_BITS; ++i) {
-            qs->add_constraint(qs_to_gfsecpar(qs_lift<deg>(lin[i]) + qs_lift<deg>(bwd[i])));
-        }
-    }
-    state = std::move(next);
-}
-
-template <typename QS, size_t... k>
-void segment_constraints(QS* qs, QsState<QS>& state, size_t wit_off_states,
-                         std::index_sequence<k...>) {
-    (segment_constraint<k>(qs, state, wit_off_states), ...);
-}
-
-// Evaluate Keccak-p[800, 12] on the committed input `state`. The intermediate states are the
-// witness bytes starting at `wit_off_states` (see encode_committed_states).
-//
-// Adds NUM_SEGMENT_CONSTRAINTS constraints (one per bit of each intermediate state) and
-// returns the first `num_out_bits` bits of the output, of degree OUTPUT_DEGREE. (Only these are
-// computed in the last round.)
-template <typename QS>
-QsState<QS, OUTPUT_DEGREE> qs_keccak(QS* qs, QsState<QS> state, size_t wit_off_states,
-                                     size_t num_out_bits = KP800_STATE_BITS) {
-    static_assert(QS::max_degree >= QS_DEGREE);
-    static_assert(FINAL_ROUNDS >= 1);
-    segment_constraints(qs, state, wit_off_states,
-                        std::make_index_sequence<NUM_COMMITTED_STATES>());
-    return qs_keccak_rounds<QS, FINAL_ROUNDS>(state, SEGMENT_START[NUM_COMMITTED_STATES],
-                                              num_out_bits);
 }
 
 // Combine bits 8k .. 8k + 8 of a committed state into an element of the GF(256) subfield of
