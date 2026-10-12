@@ -1,0 +1,23 @@
+.clang-format
+  s_53f0de9abaa628::t_35a5683918758d 26
+src/mq/derived_qs.hpp
+  s_53f0de9abaa628::t_1c7af71c8e1182 16
+src/voleith.hpp
+  s_53f0de9abaa628::t_f69a0b28480871 64-66,73-74
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.10",
+  "base_commit_sha": "a2ccc338ab2af2ea7a8deeafbbd77699020102f6",
+  "prompts": {},
+  "sessions": {
+    "s_53f0de9abaa628": {
+      "agent_id": {
+        "tool": "opencode",
+        "id": "ses_ecfcbbcd4ffeWHsyNK4WpEjPLC",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Bas Westerbaan <bas@cloudflare.com>"
+    }
+  }
+}
