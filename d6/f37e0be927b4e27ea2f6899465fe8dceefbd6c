@@ -1,0 +1,31 @@
+.clang-format
+  s_3c36208e1ae23a::t_e040d23a40ed47 26
+include/vole_mole/mlkem.hpp
+  s_3c36208e1ae23a::t_cf6b2c9a86e180 1-67
+meson.build
+  s_3c36208e1ae23a::t_3c8dc07b8a9d77 39
+src/mlkem/mlkem.cpp
+  s_3c36208e1ae23a::t_2559cd31fe5eef 1-273
+src/mlkem/mlkem.hpp
+  s_3c36208e1ae23a::t_f79e3424eda0ef 1-74
+tests/meson.build
+  s_3c36208e1ae23a::t_bf368012bb617d 9
+tests/mlkem/test_mlkem.cpp
+  s_3c36208e1ae23a::t_bc6179ffb61211 1-117
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.10",
+  "base_commit_sha": "d6f37e0be927b4e27ea2f6899465fe8dceefbd6c",
+  "prompts": {},
+  "sessions": {
+    "s_3c36208e1ae23a": {
+      "agent_id": {
+        "tool": "opencode",
+        "id": "ses_ecfe959ebffeOme1dG0POu0H2L",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Bas Westerbaan <bas@cloudflare.com>"
+    }
+  }
+}
