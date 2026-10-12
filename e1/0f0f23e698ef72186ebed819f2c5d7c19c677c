@@ -1,0 +1,65 @@
+.clang-format
+  s_3c36208e1ae23a::t_569d33aeca95be 26
+README.md
+  s_3c36208e1ae23a::t_34bbd914bf0cf0 55-86,101,106,174
+examples/meson.build
+  s_3c36208e1ae23a::t_26d13f2a5b1b90 1
+examples/mlkem_pop.cpp
+  s_3c36208e1ae23a::t_f7959ad591e57a 1-39
+include/vole_mole/mlkem.hpp
+  s_3c36208e1ae23a::t_cbbded05340709 1-67
+include/vole_mole/mlkem_pop.hpp
+  s_3c36208e1ae23a::t_fc4bef2c737f99 1-79
+meson.build
+  s_3c36208e1ae23a::t_8ede50ad64a640 39-41
+src/dst.hpp
+  s_3c36208e1ae23a::t_1638c7522e882e 9,33-41,69-74
+src/mlkem/mlkem.cpp
+  s_3c36208e1ae23a::t_95b0d016b2b29f 1-273
+src/mlkem/mlkem.hpp
+  s_3c36208e1ae23a::t_0ebd25f3086346 1-74
+src/mlkem_pop/mlkem_pop.cpp
+  s_3c36208e1ae23a::t_625cc317fd83a3 1-162
+src/mlkem_pop/relation.hpp
+  s_3c36208e1ae23a::t_a5e828218b9273 1-143
+src/mlkem_pop/seeded.hpp
+  s_3c36208e1ae23a::t_87e969a37e5127 1-36
+src/mlkem_pop_gf2/mlkem_pop_gf2.cpp
+  s_3c36208e1ae23a::t_6da6d47213866e 1-305
+src/mlkem_pop_gf2/mlkem_pop_gf2.hpp
+  s_3c36208e1ae23a::t_375d651abbf7c7 1-40
+src/mlkem_pop_gf2/relation.hpp
+  s_3c36208e1ae23a::t_febd9acd89ac64 1-337
+src/voleith_fq/field.hpp
+  s_3c36208e1ae23a::t_efb74050c68811 1-202
+src/voleith_fq/voleith.hpp
+  s_3c36208e1ae23a::t_466c08a812b3eb 1-867
+tests/meson.build
+  s_3c36208e1ae23a::t_de96cbe3c4fefb 9-11,23,56
+tests/mlkem/test_mlkem.cpp
+  s_3c36208e1ae23a::t_3ec787d9fb0a05 1-117
+tests/mlkem_pop/bench_mlkem_pop.cpp
+  s_3c36208e1ae23a::t_bff773a0254ae9 1-91
+tests/mlkem_pop/test_mlkem_pop.cpp
+  s_3c36208e1ae23a::t_f0150b90e7cc69 1-258
+tests/mlkem_pop_gf2/test_mlkem_pop_gf2.cpp
+  s_3c36208e1ae23a::t_4fa240f0a9bea8 1-155
+tests/voleith_fq/test_voleith_fq.cpp
+  s_3c36208e1ae23a::t_903feb47fd9e9e 1-254
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.10",
+  "base_commit_sha": "e10f0f23e698ef72186ebed819f2c5d7c19c677c",
+  "prompts": {},
+  "sessions": {
+    "s_3c36208e1ae23a": {
+      "agent_id": {
+        "tool": "opencode",
+        "id": "ses_ecfe959ebffeOme1dG0POu0H2L",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Bas Westerbaan <bas@cloudflare.com>"
+    }
+  }
+}
