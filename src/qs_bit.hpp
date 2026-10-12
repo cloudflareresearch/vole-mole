@@ -65,6 +65,8 @@ faest::quicksilver_gfsecpar<QS, da + db> qs_mul(const qs_bit<QS, da>& a,
             out.mac.coeffs[i + da] += a.value() * b.mac.coeffs[i];
         }
         return out;
+    } else if constexpr (requires { typename QS::inner_qs; }) {
+        return a * b; // DerivedQS (see mq/derived_qs.hpp) uses this product of its inner QS
     } else {
         return faest::quicksilver_gfsecpar<QS, da>(a) * b;
     }

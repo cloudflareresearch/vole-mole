@@ -113,17 +113,21 @@ static_assert(faest::is_owf_with_witness_bits_check(OWF_IHAT_ISSUE));
 static_assert(!faest::is_owf_with_aes_ecb(OWF_IHAT_ISSUE));
 static_assert(!faest::is_owf_with_aes_em(OWF_IHAT_ISSUE));
 
+// Commit to the witness directly rather than deriving it with the MQ PRG (see "Derived witnesses"
+// in voleith.hpp).
+constexpr size_t ISSUE_MQ_PRG_INSTANCES = 0;
+
 } // namespace vole_mole::ihat::detail
 
 // Must be declared outside of our namespace, since it specializes a template of faest-arch-opt.
+// The witness starts with the opening of the commitment, which the Client never reveals, so the CRT
+// VOLE masks may reuse it (REUSE_CRT_WITNESS).
 template <>
-struct faest::OWF_CONSTANTS<faest::secpar::s128, vole_mole::ihat::detail::OWF_IHAT_ISSUE> {
-    constexpr static size_t WITNESS_BITS = vole_mole::ihat::detail::ISSUE_WITNESS_BITS;
-    constexpr static size_t QS_DEGREE = vole_mole::ihat::detail::ISSUE_QS_DEGREE;
-    // The witness starts with the opening of the commitment, which the Client never reveals.
-    constexpr static bool REUSE_CRT_WITNESS = true;
-    constexpr static bool valid = true;
-};
+struct faest::OWF_CONSTANTS<faest::secpar::s128, vole_mole::ihat::detail::OWF_IHAT_ISSUE>
+    : vole_mole::detail::RelationConstants<vole_mole::ihat::detail::ISSUE_WITNESS_BITS,
+                                           vole_mole::ihat::detail::ISSUE_QS_DEGREE,
+                                           vole_mole::ihat::detail::ISSUE_MQ_PRG_INSTANCES,
+                                           /* REUSE_CRT_WITNESS */ true> {};
 
 namespace vole_mole::ihat::detail {
 
@@ -144,6 +148,9 @@ struct IssueRelation {
     static constexpr size_t WITNESS_PREFIX_BYTES = ISSUE_WITNESS_BYTES;
 
     static constexpr std::span<const uint8_t> DST = IHAT_ISSUE_PROOF_DST;
+
+    // The public maps of the MQ PRG, if the witness is derived.
+    static constexpr std::span<const uint8_t> MQ_PRG_DST = IHAT_ISSUE_MQ_DST;
 
     static void hash_instance(faest::hash_state& hasher, const instance& x) {
         hasher.update(x.t);
