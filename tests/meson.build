@@ -9,6 +9,7 @@ if get_option('tests')
     ['moussaka-issue', 'moussaka/test_issue.cpp'],
     ['moussaka-redeem', 'moussaka/test_redeem.cpp'],
     ['moussaka', 'moussaka/test_moussaka.cpp'],
+    ['mq', 'mq/test_mq.cpp'],
     ['pomfrit', 'pomfrit/test_pomfrit.cpp'],
     ['poly2d', 'poly2d/test_poly2d.cpp'],
     ['random', 'random/test_random.cpp'],
@@ -50,6 +51,7 @@ if get_option('benchmarks')
 
   benchmarks = [
     ['moussaka', 'moussaka/bench_moussaka.cpp'],
+    ['mq', 'mq/bench_mq.cpp'],
     ['pomfrit', 'pomfrit/bench_pomfrit.cpp'],
     ['ratatouille', 'ratatouille/bench_ratatouille.cpp'],
     ['uov', 'uov/bench_uov.cpp'],
