@@ -2,6 +2,8 @@
 # QuickSilver degrees: issuance 9, redemption 9.
 # Committed states: s5 s9.
 # Witness bytes: issuance 256, redemption 343.
+# MQ PRG instances (0 if the witness isn't derived): issuance 0, redemption 0.
+# VOLE witness bytes: issuance 256, redemption 343.
 # Proof bytes: issuance 7272, redemption 8751.
 # Fields are hex bytes, except anchor_count and issuer (decimal, zero-based).
 # anchor_sk repeats once per Anchor, in Anchor Set order; compact test-only UOV keys.

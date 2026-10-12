@@ -7,6 +7,7 @@
 #include "moussaka/redeem.hpp"  // internal
 #include "moussaka/seeded.hpp"  // internal
 #include "moussaka/token.hpp"   // internal
+#include "voleith.hpp"          // internal
 
 #include "test.hpp"
 
@@ -37,14 +38,22 @@ int main(int argc, char** argv) {
         return 1;
     }
     out << "# Moussaka v" << unsigned(VERSION) << " issuance and redemption KATs.\n"
-        << "# QuickSilver degrees: issuance " << detail::ISSUE_QS_DEGREE << ", redemption "
-        << detail::REDEEM_QS_DEGREE << ".\n# Committed states:";
+        << "# QuickSilver degrees: issuance " << detail::IssueParams::OWF_CONSTS::QS_DEGREE
+        << ", redemption " << detail::RedeemParams::OWF_CONSTS::QS_DEGREE
+        << ".\n# Committed states:";
     for (size_t k = 1; k <= vole_mole::keccak::detail::NUM_COMMITTED_STATES; ++k) {
         out << " s" << vole_mole::keccak::detail::SEGMENT_START[k];
     }
+    using vole_mole::detail::MQ_PRG_INSTANCES;
+    using vole_mole::detail::VOLE_WITNESS_BYTES;
     out << ".\n# Witness bytes: issuance " << detail::ISSUE_WITNESS_BYTES << ", redemption "
-        << detail::REDEEM_WITNESS_BYTES << ".\n# Proof bytes: issuance " << ISSUE_PROOF_BYTES
-        << ", redemption " << REDEEM_PROOF_BYTES
+        << detail::REDEEM_WITNESS_BYTES
+        << ".\n# MQ PRG instances (0 if the witness isn't derived): issuance "
+        << MQ_PRG_INSTANCES<detail::IssueRelation> << ", redemption "
+        << MQ_PRG_INSTANCES<detail::RedeemRelation> << ".\n# VOLE witness bytes: issuance "
+        << VOLE_WITNESS_BYTES<detail::IssueRelation> << ", redemption "
+        << VOLE_WITNESS_BYTES<detail::RedeemRelation> << ".\n# Proof bytes: issuance "
+        << ISSUE_PROOF_BYTES << ", redemption " << REDEEM_PROOF_BYTES
         << ".\n# Fields are hex bytes, except anchor_count and issuer (decimal, zero-based).\n"
            "# anchor_sk repeats once per Anchor, in Anchor Set order; compact test-only UOV "
            "keys.\n";
