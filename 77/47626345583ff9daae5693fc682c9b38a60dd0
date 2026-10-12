@@ -1,0 +1,19 @@
+README.md
+  s_af6b815b1765fa::t_ac518e9d32acaf 31-49,53,93-111
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.10",
+  "base_commit_sha": "7747626345583ff9daae5693fc682c9b38a60dd0",
+  "prompts": {},
+  "sessions": {
+    "s_af6b815b1765fa": {
+      "agent_id": {
+        "tool": "opencode",
+        "id": "ses_ecfe180eaffeE9h9gtqCXP0VR1",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Bas Westerbaan <bas@cloudflare.com>"
+    }
+  }
+}
