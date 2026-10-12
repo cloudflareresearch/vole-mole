@@ -6,6 +6,7 @@
 #ifndef VOLE_MOLE_DST_HPP
 #define VOLE_MOLE_DST_HPP
 
+#include "vole_mole/mlkem_pop.hpp"
 #include "vole_mole/moussaka.hpp"
 #include "vole_mole/pomfrit.hpp"
 #include "vole_mole/ratatouille.hpp"
@@ -28,6 +29,11 @@ constexpr Dst make_dst(const char (&protocol)[5], uint8_t version, char purpose,
             static_cast<uint8_t>(purpose),
             static_cast<uint8_t>(index)};
 }
+
+// ML-KEM proof of possession: the VOLEitH relation for each parameter set, indexed by k.
+constexpr Dst MLKEM_POP_PROOF_512_DST = make_dst("mpop", mlkem_pop::VERSION, 'p', '2');
+constexpr Dst MLKEM_POP_PROOF_768_DST = make_dst("mpop", mlkem_pop::VERSION, 'p', '3');
+constexpr Dst MLKEM_POP_PROOF_1024_DST = make_dst("mpop", mlkem_pop::VERSION, 'p', '4');
 
 // Moussaka
 constexpr Dst MOUSSAKA_COM_DST = make_dst("mous", moussaka::VERSION, 'c', '0');
@@ -64,6 +70,9 @@ constexpr Dst RATATOUILLE_TAG_DST = make_dst("rata", ratatouille::VERSION, 't', 
 constexpr bool dsts_are_distinct() {
     // Every DST must be distinct. Add new DSTs to this list.
     std::array all = {
+        MLKEM_POP_PROOF_512_DST,
+        MLKEM_POP_PROOF_768_DST,
+        MLKEM_POP_PROOF_1024_DST,
         MOUSSAKA_COM_DST,
         MOUSSAKA_ISSUE_PRG_DST,
         MOUSSAKA_ISSUE_PROOF_DST,

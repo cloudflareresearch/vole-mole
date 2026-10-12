@@ -7,6 +7,7 @@ if get_option('tests')
   tests = [
     ['keccak', 'keccak/test_keccak.cpp'],
     ['mlkem', 'mlkem/test_mlkem.cpp'],
+    ['mlkem-pop', 'mlkem_pop/test_mlkem_pop.cpp'],
     ['moussaka-issue', 'moussaka/test_issue.cpp'],
     ['moussaka-redeem', 'moussaka/test_redeem.cpp'],
     ['moussaka', 'moussaka/test_moussaka.cpp'],
@@ -53,6 +54,7 @@ if get_option('benchmarks')
   ).as_system()
 
   benchmarks = [
+    ['mlkem_pop', 'mlkem_pop/bench_mlkem_pop.cpp'],
     ['moussaka', 'moussaka/bench_moussaka.cpp'],
     ['mq', 'mq/bench_mq.cpp'],
     ['pomfrit', 'pomfrit/bench_pomfrit.cpp'],
