@@ -44,20 +44,16 @@ using Refresher = std::array<uint8_t, REFRESHER_BYTES>;
 // The blind signature consists of the VOLEitH proof, the refresher_com (denoted rand_com in
 // PomFRIT <https://ia.cr/2026/109>), and the refresher (rand).
 constexpr size_t SIG_OFF_PROOF = 0;
-constexpr size_t SIG_OFF_PROOF_CORRECTION = SIG_OFF_PROOF + ProofView::OFFSET_CORRECTION;
 constexpr size_t SIG_OFF_REFRESHER_COM = SIG_OFF_PROOF + PROOF_BYTES<RedeemRelation>;
 constexpr size_t SIG_OFF_REFRESHER = SIG_OFF_REFRESHER_COM + REFRESHER_BYTES;
 static_assert(SIGNATURE_BYTES == SIG_OFF_REFRESHER + REFRESHER_BYTES);
-static_assert(WIT_OFF_R == 0 && ProofView::SIZE_CORRECTION == WITNESS_BYTES<RedeemRelation>);
+static_assert(WIT_OFF_R == 0 && RedeemRelation::WITNESS_PREFIX_BYTES == uov::M);
 
 auto sig_proof(BlindSignature& sig) {
     return std::span(sig).subspan<SIG_OFF_PROOF, PROOF_BYTES<RedeemRelation>>();
 }
 auto sig_proof(const BlindSignature& sig) {
     return std::span(sig).subspan<SIG_OFF_PROOF, PROOF_BYTES<RedeemRelation>>();
-}
-auto sig_witness_prefix_correction(const BlindSignature& sig) {
-    return std::span(sig).subspan<SIG_OFF_PROOF_CORRECTION, uov::M>();
 }
 auto sig_refresher_com(BlindSignature& sig) {
     return std::span(sig).subspan<SIG_OFF_REFRESHER_COM, REFRESHER_BYTES>();
@@ -104,7 +100,7 @@ uov::Target hash_to_target(const uov::PublicKey& pk, const BlindSignature& sig,
     hasher.update(PublicKeyAccess::digest(pk));
     hasher.update(chal1);
     hasher.update(proof.vole_check_proof());
-    hasher.update(sig_witness_prefix_correction(sig));
+    hash_witness_prefix_commitment<RedeemRelation>(hasher, sig_proof(sig));
     hasher.update(msg);
     hasher.finalize(h);
     return h;

@@ -101,15 +101,19 @@ static_assert(faest::is_owf_with_witness_bits_check(OWF_RATATOUILLE_ISSUE));
 static_assert(!faest::is_owf_with_aes_ecb(OWF_RATATOUILLE_ISSUE));
 static_assert(!faest::is_owf_with_aes_em(OWF_RATATOUILLE_ISSUE));
 
+// Commit to the witness directly rather than deriving it with the MQ PRG (see "Derived witnesses"
+// in voleith.hpp).
+constexpr size_t ISSUE_MQ_PRG_INSTANCES = 0;
+
 } // namespace vole_mole::ratatouille::detail
 
 // Must be declared outside of our namespace, since it specializes a template of faest-arch-opt.
 template <>
 struct faest::OWF_CONSTANTS<faest::secpar::s128,
-                            vole_mole::ratatouille::detail::OWF_RATATOUILLE_ISSUE> {
-    constexpr static size_t WITNESS_BITS = vole_mole::ratatouille::detail::ISSUE_WITNESS_BITS;
-    constexpr static size_t QS_DEGREE = vole_mole::ratatouille::detail::ISSUE_QS_DEGREE;
-    constexpr static bool valid = true;
+                            vole_mole::ratatouille::detail::OWF_RATATOUILLE_ISSUE>
+    : vole_mole::detail::RelationConstants<vole_mole::ratatouille::detail::ISSUE_WITNESS_BITS,
+                                           vole_mole::ratatouille::detail::ISSUE_QS_DEGREE,
+                                           vole_mole::ratatouille::detail::ISSUE_MQ_PRG_INSTANCES> {
 };
 
 namespace vole_mole::ratatouille::detail {
@@ -147,6 +151,9 @@ struct IssueRelation {
     static constexpr size_t WITNESS_PREFIX_BYTES = ISSUE_WITNESS_BYTES;
 
     static constexpr std::span<const uint8_t> DST = RATATOUILLE_ISSUE_PROOF_DST;
+
+    // The public maps of the MQ PRG, if the witness is derived.
+    static constexpr std::span<const uint8_t> MQ_PRG_DST = RATATOUILLE_ISSUE_MQ_DST;
 
     static void hash_instance(faest::hash_state& hasher, const instance& x) {
         hasher.update(x.c);

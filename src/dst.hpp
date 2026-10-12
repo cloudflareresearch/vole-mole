@@ -31,14 +31,17 @@ constexpr Dst make_dst(const char (&protocol)[5], uint8_t version, char purpose,
 
 // Moussaka
 constexpr Dst MOUSSAKA_COM_DST = make_dst("mous", moussaka::VERSION, 'c', '0');
+constexpr Dst MOUSSAKA_ISSUE_MQ_DST = make_dst("mous", moussaka::VERSION, 'q', '0'); // MQ PRG
 constexpr Dst MOUSSAKA_ISSUE_PROOF_DST = make_dst("mous", moussaka::VERSION, 'i', '0');
 constexpr Dst MOUSSAKA_ISSUE_SEED_DST = make_dst("mous", moussaka::VERSION, 's', '0');
 constexpr Dst MOUSSAKA_REDEEM_COMBINE_DST = make_dst("mous", moussaka::VERSION, 'l', '0');
+constexpr Dst MOUSSAKA_REDEEM_MQ_DST = make_dst("mous", moussaka::VERSION, 'q', '1'); // MQ PRG
 constexpr Dst MOUSSAKA_REDEEM_PROOF_DST = make_dst("mous", moussaka::VERSION, 'r', '0');
 constexpr Dst MOUSSAKA_REDEEM_SEED_DST = make_dst("mous", moussaka::VERSION, 's', '1');
 
 // PomFRIT
 constexpr Dst POMFRIT_COMBINE_DST = make_dst("pomf", pomfrit::VERSION, 'l', '0');
+constexpr Dst POMFRIT_MQ_DST = make_dst("pomf", pomfrit::VERSION, 'q', '0');    // MQ PRG
 constexpr Dst POMFRIT_PROOF_DST = make_dst("pomf", pomfrit::VERSION, 'p', '0'); // VOLEitH relation
 constexpr Dst POMFRIT_REFRESHER_DST = make_dst("pomf", pomfrit::VERSION, 'r', '0'); // refresher_com
 constexpr Dst POMFRIT_SEED_DST = make_dst("pomf", pomfrit::VERSION, 's', '0');      // Client's seed
@@ -46,9 +49,11 @@ constexpr Dst POMFRIT_TARGET_DST = make_dst("pomf", pomfrit::VERSION, 'h', '0');
 
 // Ratatouille
 constexpr Dst RATATOUILLE_COM_DST = make_dst("rata", ratatouille::VERSION, 'c', '0');
+constexpr Dst RATATOUILLE_ISSUE_MQ_DST = make_dst("rata", ratatouille::VERSION, 'q', '0'); // MQ PRG
 constexpr Dst RATATOUILLE_ISSUE_PROOF_DST = make_dst("rata", ratatouille::VERSION, 'i', '0');
 constexpr Dst RATATOUILLE_ISSUE_SEED_DST = make_dst("rata", ratatouille::VERSION, 's', '0');
 constexpr Dst RATATOUILLE_SPEND_COMBINE_DST = make_dst("rata", ratatouille::VERSION, 'l', '0');
+constexpr Dst RATATOUILLE_SPEND_MQ_DST = make_dst("rata", ratatouille::VERSION, 'q', '1'); // MQ PRG
 constexpr Dst RATATOUILLE_SPEND_PROOF_DST = make_dst("rata", ratatouille::VERSION, 'p', '0');
 constexpr Dst RATATOUILLE_SPEND_SEED_DST = make_dst("rata", ratatouille::VERSION, 's', '1');
 constexpr Dst RATATOUILLE_TAG_DST = make_dst("rata", ratatouille::VERSION, 't', '0');
@@ -57,20 +62,25 @@ constexpr bool dsts_are_distinct() {
     // Every DST must be distinct. Add new DSTs to this list.
     std::array all = {
         MOUSSAKA_COM_DST,
+        MOUSSAKA_ISSUE_MQ_DST,
         MOUSSAKA_ISSUE_PROOF_DST,
         MOUSSAKA_ISSUE_SEED_DST,
         MOUSSAKA_REDEEM_COMBINE_DST,
+        MOUSSAKA_REDEEM_MQ_DST,
         MOUSSAKA_REDEEM_PROOF_DST,
         MOUSSAKA_REDEEM_SEED_DST,
         POMFRIT_COMBINE_DST,
+        POMFRIT_MQ_DST,
         POMFRIT_PROOF_DST,
         POMFRIT_REFRESHER_DST,
         POMFRIT_SEED_DST,
         POMFRIT_TARGET_DST,
         RATATOUILLE_COM_DST,
+        RATATOUILLE_ISSUE_MQ_DST,
         RATATOUILLE_ISSUE_PROOF_DST,
         RATATOUILLE_ISSUE_SEED_DST,
         RATATOUILLE_SPEND_COMBINE_DST,
+        RATATOUILLE_SPEND_MQ_DST,
         RATATOUILLE_SPEND_PROOF_DST,
         RATATOUILLE_SPEND_SEED_DST,
         RATATOUILLE_TAG_DST,

@@ -131,15 +131,18 @@ static_assert(faest::is_owf_with_witness_bits_check(OWF_MOUSSAKA_REDEEM));
 static_assert(!faest::is_owf_with_aes_ecb(OWF_MOUSSAKA_REDEEM));
 static_assert(!faest::is_owf_with_aes_em(OWF_MOUSSAKA_REDEEM));
 
+// Commit to the witness directly rather than deriving it with the MQ PRG (see "Derived witnesses"
+// in voleith.hpp).
+constexpr size_t REDEEM_MQ_PRG_INSTANCES = 0;
+
 } // namespace vole_mole::moussaka::detail
 
 // Must be declared outside of our namespace, since it specializes a template of faest-arch-opt.
 template <>
-struct faest::OWF_CONSTANTS<faest::secpar::s128, vole_mole::moussaka::detail::OWF_MOUSSAKA_REDEEM> {
-    constexpr static size_t WITNESS_BITS = vole_mole::moussaka::detail::REDEEM_WITNESS_BITS;
-    constexpr static size_t QS_DEGREE = vole_mole::moussaka::detail::REDEEM_QS_DEGREE;
-    constexpr static bool valid = true;
-};
+struct faest::OWF_CONSTANTS<faest::secpar::s128, vole_mole::moussaka::detail::OWF_MOUSSAKA_REDEEM>
+    : vole_mole::detail::RelationConstants<vole_mole::moussaka::detail::REDEEM_WITNESS_BITS,
+                                           vole_mole::moussaka::detail::REDEEM_QS_DEGREE,
+                                           vole_mole::moussaka::detail::REDEEM_MQ_PRG_INSTANCES> {};
 
 namespace vole_mole::moussaka::detail {
 
@@ -178,6 +181,9 @@ struct RedeemRelation {
     static constexpr size_t WITNESS_PREFIX_BYTES = REDEEM_WITNESS_BYTES;
 
     static constexpr std::span<const uint8_t> DST = MOUSSAKA_REDEEM_PROOF_DST;
+
+    // The public maps of the MQ PRG, if the witness is derived.
+    static constexpr std::span<const uint8_t> MQ_PRG_DST = MOUSSAKA_REDEEM_MQ_DST;
 
     static void hash_instance(faest::hash_state& hasher, const instance& x) {
         static_assert(MAX_ANCHORS <= UINT32_MAX);

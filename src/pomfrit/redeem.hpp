@@ -56,14 +56,17 @@ static_assert(faest::is_owf_with_witness_bits_check(OWF_REDEEM));
 static_assert(!faest::is_owf_with_aes_ecb(OWF_REDEEM));
 static_assert(!faest::is_owf_with_aes_em(OWF_REDEEM));
 
+// Commit to the witness directly rather than deriving it with the MQ PRG (see "Derived witnesses"
+// in voleith.hpp).
+constexpr size_t REDEEM_MQ_PRG_INSTANCES = 0;
+
 } // namespace vole_mole::pomfrit::detail
 
 template <>
-struct faest::OWF_CONSTANTS<faest::secpar::s128, vole_mole::pomfrit::detail::OWF_REDEEM> {
-    constexpr static size_t WITNESS_BITS = vole_mole::pomfrit::detail::REDEEM_WITNESS_BITS;
-    constexpr static size_t QS_DEGREE = vole_mole::pomfrit::detail::REDEEM_QS_DEGREE;
-    constexpr static bool valid = true;
-};
+struct faest::OWF_CONSTANTS<faest::secpar::s128, vole_mole::pomfrit::detail::OWF_REDEEM>
+    : vole_mole::detail::RelationConstants<vole_mole::pomfrit::detail::REDEEM_WITNESS_BITS,
+                                           vole_mole::pomfrit::detail::REDEEM_QS_DEGREE,
+                                           vole_mole::pomfrit::detail::REDEEM_MQ_PRG_INSTANCES> {};
 
 namespace vole_mole::pomfrit::detail {
 
@@ -104,6 +107,9 @@ struct RedeemRelation {
     static_assert(WIT_OFF_R == 0 && WIT_OFF_S == WITNESS_PREFIX_BYTES);
 
     static constexpr std::span<const uint8_t> DST = POMFRIT_PROOF_DST;
+
+    // The public maps of the MQ PRG, if the witness is derived.
+    static constexpr std::span<const uint8_t> MQ_PRG_DST = POMFRIT_MQ_DST;
 
     static void hash_instance(faest::hash_state& hasher, const instance& x) {
         hasher.update(uov::detail::PublicKeyAccess::digest(*x.pk));
