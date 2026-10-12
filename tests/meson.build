@@ -6,6 +6,7 @@ if get_option('tests')
 
   tests = [
     ['keccak', 'keccak/test_keccak.cpp'],
+    ['mlkem', 'mlkem/test_mlkem.cpp'],
     ['moussaka-issue', 'moussaka/test_issue.cpp'],
     ['moussaka-redeem', 'moussaka/test_redeem.cpp'],
     ['moussaka', 'moussaka/test_moussaka.cpp'],
