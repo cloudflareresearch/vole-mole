@@ -15,6 +15,7 @@ if get_option('tests')
     ['ihat', 'ihat/test_ihat.cpp'],
     ['unbound-ihat', 'ihat/test_unbound_ihat.cpp'],
     ['keccak', 'keccak/test_keccak.cpp'],
+    ['mlkem', 'mlkem/test_mlkem.cpp'],
     ['mq', 'mq/test_mq.cpp'],
     ['pomfrit', 'pomfrit/test_pomfrit.cpp'],
     ['poly2d', 'poly2d/test_poly2d.cpp'],
