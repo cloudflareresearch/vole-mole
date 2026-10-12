@@ -1,0 +1,52 @@
+tests/meson.build
+  s_53f0de9abaa628::t_dd052df3d98430 21
+src/ratatouille/spend.hpp
+  s_53f0de9abaa628::t_625a574d7b26d8 272-275,281-284,325-326
+  s_53f0de9abaa628::t_5fb1ed44700345 327
+src/mq/derived_qs.hpp
+  s_53f0de9abaa628::t_19086f2468ba4e 1-218
+tests/voleith/test_derived_witness.cpp
+  s_53f0de9abaa628::t_e327fdacfb813f 1-236
+src/pomfrit/redeem.hpp
+  s_53f0de9abaa628::t_2460b6a4a4a112 59-62,66-69,111-112
+  s_53f0de9abaa628::t_c9827532798ff1 113
+src/dst.hpp
+  s_53f0de9abaa628::t_953fd975b51037 34,38,44,52,56,65,69,73,79,83
+src/pomfrit/pomfrit.cpp
+  s_53f0de9abaa628::t_c451840af954b6 50,103
+src/qs_bit.hpp
+  s_3c36208e1ae23a::t_14e73c59d5eb07 68-69
+src/ratatouille/issue.hpp
+  s_53f0de9abaa628::t_5fda64f72cf288 104-107,113-116,155-156
+  s_53f0de9abaa628::t_85827a6ad612bf 157
+src/moussaka/issue.hpp
+  s_53f0de9abaa628::t_97d59300990d31 119-122,127-130,167-169
+src/moussaka/redeem.hpp
+  s_53f0de9abaa628::t_b8dd8337f285d9 130-133,138-141,181-183
+src/voleith.hpp
+  s_53f0de9abaa628::t_e0999305eb44fc 12-14,24-38,64-65,70-74,89,100-135,137-148,152-176,218-353,360-363,373-374,452-453,463,465-486,511,515-516,525-537,543-553,696-697,709-711,727-740
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.10",
+  "base_commit_sha": "32e0d89ae6bf7919907c12456e38d1f467b6c37a",
+  "prompts": {},
+  "sessions": {
+    "s_3c36208e1ae23a": {
+      "agent_id": {
+        "tool": "opencode",
+        "id": "ses_ecfe959ebffeOme1dG0POu0H2L",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Bas Westerbaan <bas@cloudflare.com>"
+    },
+    "s_53f0de9abaa628": {
+      "agent_id": {
+        "tool": "opencode",
+        "id": "ses_ecfcbbcd4ffeWHsyNK4WpEjPLC",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Bas Westerbaan <bas@cloudflare.com>"
+    }
+  }
+}
