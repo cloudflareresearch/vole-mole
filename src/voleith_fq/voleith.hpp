@@ -58,6 +58,14 @@
 // 5. Fiat-Shamir. Delta = H(chal2 || A_0 || A_1 || ...), with A_0 recomputed by the verifier, as
 //    in FAEST. The prover opens all leaves of tree t but leaf Delta_t.
 //
+// 6. Derived witnesses (experimental). Each witness element costs TAU elements of proof (its
+//    correction d and the VOLE corrections c_1, ..., c_{TAU-1}). If the relation defines
+//    WitnessPrg (see mq.hpp; NoPrg by default), the witness w is instead derived from a short key
+//    K with a PRG G of degree 2, as in src/voleith.hpp: the VOLE witness is K <- H(w || mu || rho),
+//    and the proof carries e = w - G(K) right after d (both bound to chal2). The constraints are
+//    evaluated on the committed w = G(K) + e, of degree 2 in Delta, so the QuickSilver degree
+//    doubles. Soundness is unaffected; zero knowledge additionally requires G to be a PRG.
+//
 // Soundness. The QuickSilver check fails with probability at least 1 - DEGREE / 2^128 over Delta
 // (Schwartz-Zippel over F_{q^16}, with Delta uniform in a set of size 2^128). The other
 // challenges contribute negligibly: chi and the hash key are uniform in F_{q^16}, of size
@@ -73,6 +81,7 @@
 #define VOLE_MOLE_VOLEITH_FQ_VOLEITH_HPP
 
 #include "voleith_fq/field.hpp"
+#include "voleith_fq/mq.hpp"
 
 #include "aes.hpp"        // from faest-arch-opt
 #include "block.hpp"      // from faest-arch-opt
@@ -92,6 +101,7 @@ extern "C" {
 #include <cstdint>
 #include <cstring>
 #include <span>
+#include <type_traits>
 #include <utility>
 #include <vector>
 
@@ -127,18 +137,45 @@ enum : uint8_t {
     DS_QS_CHI = 8,
     DS_CHAL3 = 9,
     DS_LEAF_COMMITMENTS = 10,
+    DS_PRG_KEY = 11,
+    DS_PRG_COEFFS = 12,
 };
+
+// The witness PRG of relation R: R::WitnessPrg if it's defined, and NoPrg otherwise.
+template <typename R> struct witness_prg_of {
+    using type = NoPrg;
+};
+template <typename R>
+    requires requires { typename R::WitnessPrg; }
+struct witness_prg_of<R> {
+    using type = typename R::WitnessPrg;
+};
+template <typename R> using WitnessPrgOf = typename witness_prg_of<R>::type;
+template <typename R> constexpr bool DERIVED = !std::is_same_v<WitnessPrgOf<R>, NoPrg>;
+
+// The degree in Delta of the committed witness: 2 if it's derived with a PRG of degree 2.
+template <typename R> constexpr size_t WITNESS_DEGREE = DERIVED<R> ? 2 : 1;
+
+template <typename R> constexpr size_t vole_witness_len() {
+    if constexpr (DERIVED<R>) {
+        return WitnessPrgOf<R>::template Map<R::WITNESS_LEN>::KEY_LEN;
+    } else {
+        return R::WITNESS_LEN;
+    }
+}
 
 // Layout of the VOLE and of the proof for Relation R.
 template <typename R> struct Layout {
     static constexpr size_t L = R::WITNESS_LEN;
-    static constexpr size_t D = R::DEGREE;
-    static_assert(L % 2 == 0, "pack12 encodes pairs of elements");
+    static constexpr size_t E = WITNESS_DEGREE<R>;
+    static constexpr size_t VL = vole_witness_len<R>(); // the witness, or the key it's derived from
+    static constexpr size_t D = E * R::DEGREE;          // the QuickSilver degree
+    static_assert(L % 2 == 0 && VL % 2 == 0, "pack12 encodes pairs of elements");
     static_assert(D >= 2);
 
     // The VOLE: u = (witness masks, QuickSilver masks, VOLE check mask).
-    static constexpr size_t OFF_QS_MASK = L;                        // D - 1 elements of F_{q^16}
-    static constexpr size_t OFF_VC_MASK = L + (D - 1) * EXT_DEGREE; // 1 element of F_{q^16}
+    static constexpr size_t OFF_QS_MASK = VL;                        // D - 1 elements of F_{q^16}
+    static constexpr size_t OFF_VC_MASK = VL + (D - 1) * EXT_DEGREE; // 1 element of F_{q^16}
     static constexpr size_t LHAT = OFF_VC_MASK + EXT_DEGREE;
 
     // The proof.
@@ -148,8 +185,10 @@ template <typename R> struct Layout {
     static constexpr size_t OFF_UTILDE = OFF_CORR + CORR_BYTES;
     static constexpr size_t UTILDE_BYTES = packed12_bytes(EXT_DEGREE);
     static constexpr size_t OFF_D = OFF_UTILDE + UTILDE_BYTES; // witness correction
-    static constexpr size_t D_BYTES = packed12_bytes(L);
-    static constexpr size_t OFF_QS = OFF_D + D_BYTES; // A_1, ..., A_{D - 1}
+    static constexpr size_t D_BYTES = packed12_bytes(VL);
+    static constexpr size_t OFF_E = OFF_D + D_BYTES; // e = w - G(K), if the witness is derived
+    static constexpr size_t E_BYTES = DERIVED<R> ? packed12_bytes(L) : 0;
+    static constexpr size_t OFF_QS = OFF_E + E_BYTES; // A_1, ..., A_{D - 1}
     static constexpr size_t QS_BYTES = packed12_bytes((D - 1) * EXT_DEGREE);
     static constexpr size_t OFF_DELTA = OFF_QS + QS_BYTES;
     static constexpr size_t OFF_OPEN = OFF_DELTA + DELTA_BYTES;
@@ -225,6 +264,24 @@ inline void expand_leaf(const Seed& seed, const faest::block128& iv, size_t t, s
             }
         }
     }
+}
+
+// The coefficients of instance t of the MQ PRG (see mq.hpp).
+inline void mq_expand_coefficients(std::span<const uint8_t> dst, size_t n, size_t num_outputs,
+                                   size_t t, std::span<Fq> out) {
+    faest::hash_state h;
+    h.init(faest::secpar::s128);
+    h.update(dst);
+    for (const uint32_t v :
+         {static_cast<uint32_t>(n), static_cast<uint32_t>(num_outputs), static_cast<uint32_t>(t)}) {
+        for (size_t b = 0; b < 4; ++b) {
+            h.update_byte(static_cast<uint8_t>(v >> (8 * b)));
+        }
+    }
+    h.update_byte(DS_PRG_COEFFS);
+    Seed seed;
+    h.finalize(seed);
+    expand_leaf(seed, faest::block128::set_zero(), t, 0, out);
 }
 
 // The leaf PRG seed and commitment: (seed || com) <- H(leaf || iv || t || x).
@@ -360,11 +417,14 @@ class VoleHash {
 // ---------------------------------------------------------------------------------------------
 // QuickSilver
 
-// A committed vector of `size()` elements of F_q. Lane t < TAU holds coordinate t of the MAC
-// (prover: V, verifier: K) of each element; the prover has an extra lane TAU with the values.
-template <bool IsVerifier> class CommittedVec {
+// A committed vector of `size()` elements of F_q, of degree E in Delta. The verifier's lane t < TAU
+// holds coordinate t of the MAC K of each element. The prover holds the polynomial
+// p(Delta) = p_0 + p_1 Delta + ... + p_E Delta^E = K of each element, where p_E is its value:
+// lane i TAU + t (i < E, t < TAU) holds coordinate t of p_i, and lane E TAU holds the values.
+// For E = 1, p_0 = V is the MAC of a VOLE commitment.
+template <bool IsVerifier, size_t E = 1> class CommittedVec {
   public:
-    static constexpr size_t LANES = IsVerifier ? TAU : TAU + 1;
+    static constexpr size_t LANES = IsVerifier ? TAU : E * TAU + 1;
 
     explicit CommittedVec(size_t len) : len_(len), data_(LANES * len) {}
 
@@ -372,11 +432,14 @@ template <bool IsVerifier> class CommittedVec {
     std::span<Fq> lane(size_t i) { return std::span(data_).subspan(i * len_, len_); }
     std::span<const Fq> lane(size_t i) const { return std::span(data_).subspan(i * len_, len_); }
 
-    // The MAC of element j as an element of F_{q^16}.
-    Fq16 mac(size_t j) const {
+    // The MAC of element j as an element of F_{q^16} (for the prover: p_0).
+    Fq16 mac(size_t j) const { return coeff(0, j); }
+
+    // The prover's coefficient p_i (i < E) of element j.
+    Fq16 coeff(size_t i, size_t j) const {
         Fq16 out;
         for (size_t t = 0; t < TAU; ++t) {
-            out.c[t] = data_[t * len_ + j];
+            out.c[t] = data_[(i * TAU + t) * len_ + j];
         }
         return out;
     }
@@ -387,9 +450,9 @@ template <bool IsVerifier> class CommittedVec {
 };
 
 // Operations shared by the prover and verifier.
-template <bool IsVerifier> class QsBase {
+template <bool IsVerifier, size_t E> class QsBase {
   public:
-    using Vec = CommittedVec<IsVerifier>;
+    using Vec = CommittedVec<IsVerifier, E>;
 
     const Vec& witness() const { return witness_; }
 
@@ -412,13 +475,22 @@ template <bool IsVerifier> class QsBase {
     Fq16 chi_; // beta^c for the c-th constraint
 };
 
-template <size_t DEGREE> class ProverQs : public QsBase<false> {
+// QuickSilver for root constraints of degree at most DEGREE on committed values of degree E in
+// Delta. The combined polynomial has degree E * DEGREE.
+template <size_t DEGREE, size_t E = 1> class ProverQs : public QsBase<false, E> {
+    using Base = QsBase<false, E>;
+    using Base::beta_;
+    using Base::chi_;
+
   public:
-    ProverQs(Vec witness, const Fq16& beta) : QsBase(std::move(witness), beta) {}
+    using typename Base::Vec;
+    static constexpr size_t QS_DEGREE = E * DEGREE;
+
+    ProverQs(Vec witness, const Fq16& beta) : Base(std::move(witness), beta) {}
 
     // v += c for a public vector c.
     void add_constant(Vec& v, std::span<const Fq> c) const {
-        auto values = v.lane(TAU);
+        auto values = v.lane(E * TAU);
         for (size_t j = 0; j < v.size(); ++j) {
             values[j] = fq_add(values[j], c[j]);
         }
@@ -434,10 +506,9 @@ template <size_t DEGREE> class ProverQs : public QsBase<false> {
                 binom[t][m] = fq_add(binom[t - 1][m - 1], m < t ? binom[t - 1][m] : Fq{0});
             }
         }
-        const auto values = v.lane(TAU);
+        const auto values = v.lane(E * TAU);
         for (size_t j = 0; j < v.size(); ++j) {
             const Fq a = values[j];
-            const Fq16 mac = v.mac(j);
 
             // The Taylor coefficients f^(m)(a) / m! = sum_{t >= m} f[t] (t choose m) a^(t - m).
             std::array<Fq, DEGREE + 1> a_pow;
@@ -455,13 +526,40 @@ template <size_t DEGREE> class ProverQs : public QsBase<false> {
                 taylor[m] = fq_reduce(acc);
             }
 
-            // chi * g(K, Delta) = sum_m taylor[m] chi V^m Delta^(DEGREE - m).
-            coeffs_[DEGREE].add_scaled(taylor[0], chi_);
-            Fq16 p = chi_ * mac;
-            for (size_t m = 1; m <= DEGREE; ++m) {
-                coeffs_[DEGREE - m].add_scaled(taylor[m], p);
-                if (m < DEGREE) {
-                    p *= mac;
+            if constexpr (E == 1) {
+                // chi * g(K, Delta) = sum_m taylor[m] chi V^m Delta^(DEGREE - m).
+                const Fq16 mac = v.mac(j);
+                coeffs_[DEGREE].add_scaled(taylor[0], chi_);
+                Fq16 p = chi_ * mac;
+                for (size_t m = 1; m <= DEGREE; ++m) {
+                    coeffs_[DEGREE - m].add_scaled(taylor[m], p);
+                    if (m < DEGREE) {
+                        p *= mac;
+                    }
+                }
+            } else {
+                // With K = a Delta^E + r(Delta), where r = p_0 + ... + p_{E-1} Delta^(E-1),
+                // chi * g(K, Delta) = sum_m taylor[m] chi r^m Delta^(E (DEGREE - m)).
+                std::array<Fq16, E> r;
+                for (size_t i = 0; i < E; ++i) {
+                    r[i] = v.coeff(i, j);
+                }
+                coeffs_[QS_DEGREE].add_scaled(taylor[0], chi_);
+                // pw = chi r^m, of degree (E - 1) m.
+                std::array<Fq16, (E - 1) * DEGREE + 1> pw{}, next{};
+                pw[0] = chi_;
+                for (size_t m = 1; m <= DEGREE; ++m) {
+                    const size_t deg = (E - 1) * (m - 1);
+                    std::fill_n(next.begin(), deg + E, Fq16::zero());
+                    for (size_t a = 0; a <= deg; ++a) {
+                        for (size_t b = 0; b < E; ++b) {
+                            next[a + b] += pw[a] * r[b];
+                        }
+                    }
+                    pw = next;
+                    for (size_t k = 0; k <= deg + E - 1; ++k) {
+                        coeffs_[k + E * (DEGREE - m)].add_scaled(taylor[m], pw[k]);
+                    }
                 }
             }
             chi_ *= beta_;
@@ -470,31 +568,38 @@ template <size_t DEGREE> class ProverQs : public QsBase<false> {
 
     // The coefficients of the combined polynomial in Delta. The leading coefficient is zero if
     // all constraints hold.
-    std::array<Fq16, DEGREE + 1>& coeffs() { return coeffs_; }
+    std::array<Fq16, QS_DEGREE + 1>& coeffs() { return coeffs_; }
 
   private:
-    std::array<Fq16, DEGREE + 1> coeffs_{};
+    std::array<Fq16, QS_DEGREE + 1> coeffs_{};
 };
 
-template <size_t DEGREE> class VerifierQs : public QsBase<true> {
+template <size_t DEGREE, size_t E = 1> class VerifierQs : public QsBase<true, E> {
+    using Base = QsBase<true, E>;
+    using Base::beta_;
+    using Base::chi_;
+
   public:
+    using typename Base::Vec;
+    static constexpr size_t QS_DEGREE = E * DEGREE;
+
     VerifierQs(Vec witness, const Fq16& beta, std::span<const uint8_t, DELTA_BYTES> delta)
-        : QsBase(std::move(witness), beta) {
+        : Base(std::move(witness), beta) {
         for (size_t t = 0; t < TAU; ++t) {
             delta_.c[t] = delta[t];
         }
         delta_pow_[0] = Fq16::constant(1);
-        for (size_t i = 1; i <= DEGREE; ++i) {
+        for (size_t i = 1; i <= QS_DEGREE; ++i) {
             delta_pow_[i] = delta_pow_[i - 1] * delta_;
         }
     }
 
-    // v += c for a public vector c: K += c Delta.
+    // v += c for a public vector c: K += c Delta^E.
     void add_constant(Vec& v, std::span<const Fq> c) const {
         for (size_t t = 0; t < TAU; ++t) {
             auto lane = v.lane(t);
             for (size_t j = 0; j < v.size(); ++j) {
-                lane[j] = fq_reduce(lane[j] + uint32_t{c[j]} * delta_.c[t]);
+                lane[j] = fq_reduce(lane[j] + uint32_t{c[j]} * delta_pow_[E].c[t]);
             }
         }
     }
@@ -502,11 +607,11 @@ template <size_t DEGREE> class VerifierQs : public QsBase<true> {
     void constrain_roots(const Vec& v, std::span<const Fq, DEGREE + 1> f) {
         for (size_t j = 0; j < v.size(); ++j) {
             const Fq16 k = v.mac(j);
-            // g(K, Delta) = sum_t f[t] K^t Delta^(DEGREE - t), by Horner's rule.
+            // g(K, Delta) = sum_t f[t] K^t Delta^(E (DEGREE - t)), by Horner's rule.
             Fq16 g = Fq16::constant(f[DEGREE]);
             for (size_t t = DEGREE; t-- > 0;) {
                 g *= k;
-                g.add_scaled(f[t], delta_pow_[DEGREE - t]);
+                g.add_scaled(f[t], delta_pow_[E * (DEGREE - t)]);
             }
             sum_ += chi_ * g;
             chi_ *= beta_;
@@ -519,7 +624,7 @@ template <size_t DEGREE> class VerifierQs : public QsBase<true> {
 
   private:
     Fq16 delta_;
-    std::array<Fq16, DEGREE + 1> delta_pow_;
+    std::array<Fq16, QS_DEGREE + 1> delta_pow_;
     Fq16 sum_ = Fq16::zero();
 };
 
@@ -563,7 +668,35 @@ inline Fq16 gather16_mac(std::span<const std::vector<Fq>, TAU> lanes, size_t off
     return out;
 }
 
+// Uniform elements of F_q derived from H(input || ds), by rejection sampling.
+inline void sample_fq_vec(faest::hash_state& h, uint8_t ds, std::span<Fq> out) {
+    h.update_byte(ds);
+    Keccak_HashFinal(&h.ctx, nullptr);
+    size_t n = 0;
+    while (n < out.size()) {
+        std::array<uint8_t, 3> b;
+        Keccak_HashSqueeze(&h.ctx, b.data(), 8 * b.size());
+        const uint32_t d1 = b[0] | ((uint32_t{b[1]} & 0xf) << 8);
+        const uint32_t d2 = (uint32_t{b[1]} >> 4) | (uint32_t{b[2]} << 4);
+        if (d1 < Q) {
+            out[n++] = static_cast<Fq>(d1);
+        }
+        if (d2 < Q && n < out.size()) {
+            out[n++] = static_cast<Fq>(d2);
+        }
+    }
+}
+
 } // namespace internal
+
+// The public map of the PRG from which R's witness is derived, expanded once.
+template <typename R>
+    requires DERIVED<R>
+const auto& witness_map() {
+    using Map = typename WitnessPrgOf<R>::template Map<R::WITNESS_LEN>;
+    static const Map map(R::DST);
+    return map;
+}
 
 // Generate a proof that witness w satisfies relation R for instance x. rho is the prover's
 // randomness. The proof is a deterministic function of (x, w, rho).
@@ -574,9 +707,21 @@ template <typename R>
 void prove(std::span<uint8_t, PROOF_BYTES<R>> proof, const typename R::instance& x,
            std::span<const Fq, R::WITNESS_LEN> w, const ProveSeed& rho) {
     using Lay = Layout<R>;
-    constexpr size_t L = Lay::L, D = Lay::D, LHAT = Lay::LHAT;
+    constexpr size_t L = Lay::L, D = Lay::D, LHAT = Lay::LHAT, VL = Lay::VL, E = Lay::E;
 
     const Digest mu = internal::hash_mu<R>(x);
+
+    // The VOLE witness: w, or the key K <- H(w || mu || rho) from which it's derived.
+    std::vector<Fq> vw(VL);
+    if constexpr (DERIVED<R>) {
+        auto h = new_hasher();
+        internal::hash_fq(h, w);
+        h.update(mu);
+        h.update(rho);
+        internal::sample_fq_vec(h, DS_PRG_KEY, vw);
+    } else {
+        std::ranges::copy(w, vw.begin());
+    }
 
     // (seed, iv) <- H(w || mu || rho)
     std::array<uint8_t, SEED_BYTES + IV_BYTES> seed_iv;
@@ -667,15 +812,40 @@ void prove(std::span<uint8_t, PROOF_BYTES<R>> proof, const typename R::instance&
         std::span(proof).template subspan<Lay::OFF_UTILDE, Lay::UTILDE_BYTES>();
     pack12(u_tilde.c, u_tilde_bytes);
 
-    // 3. Witness commitment: d = w - u[0..L).
-    std::vector<Fq> d(L);
-    for (size_t j = 0; j < L; ++j) {
-        d[j] = fq_sub(w[j], u[j]);
+    // 3. Witness commitment: d = w - u[0..L) (or K - u[0..VL)).
+    std::vector<Fq> d(VL);
+    for (size_t j = 0; j < VL; ++j) {
+        d[j] = fq_sub(vw[j], u[j]);
     }
     const auto d_bytes = std::span(proof).template subspan<Lay::OFF_D, Lay::D_BYTES>();
     pack12(d, d_bytes);
 
-    // chal2 <- H(chal1 || u-tilde || h_0 || ... || h_{TAU - 1} || d)
+    // For a derived witness, e = w - G(K), and the committed w = G(K) + e, of degree 2.
+    typename ProverQs<R::DEGREE, E>::Vec witness(L);
+    const auto e_bytes = std::span(proof).template subspan<Lay::OFF_E, Lay::E_BYTES>();
+    if constexpr (DERIVED<R>) {
+        std::array<std::span<const Fq>, TAU> v_lanes;
+        for (size_t t = 0; t < TAU; ++t) {
+            v_lanes[t] = std::span<const Fq>(v[t]).first(VL);
+        }
+        auto c0 = std::span(witness.lane(0).data(), TAU * L);
+        auto c1 = std::span(witness.lane(TAU).data(), TAU * L);
+        auto c2 = witness.lane(2 * TAU);
+        witness_map<R>().prove_eval(v_lanes, vw, c0, c1, c2);
+        std::vector<Fq> e(L);
+        for (size_t j = 0; j < L; ++j) {
+            e[j] = fq_sub(w[j], c2[j]);
+            c2[j] = w[j];
+        }
+        pack12(e, e_bytes);
+    } else {
+        for (size_t t = 0; t < TAU; ++t) {
+            std::copy_n(v[t].begin(), L, witness.lane(t).begin());
+        }
+        std::ranges::copy(w, witness.lane(TAU).begin());
+    }
+
+    // chal2 <- H(chal1 || u-tilde || h_0 || ... || h_{TAU - 1} || d || e)
     Digest chal2;
     {
         auto h = new_hasher();
@@ -685,16 +855,12 @@ void prove(std::span<uint8_t, PROOF_BYTES<R>> proof, const typename R::instance&
             internal::hash_fq16(h, vole_hash(v[t]));
         }
         h.update(d_bytes);
+        h.update(e_bytes);
         chal2 = finalize<DIGEST_BYTES>(h, DS_CHAL2);
     }
 
     // 4. QuickSilver.
-    typename ProverQs<D>::Vec witness(L);
-    for (size_t t = 0; t < TAU; ++t) {
-        std::copy_n(v[t].begin(), L, witness.lane(t).begin());
-    }
-    std::ranges::copy(w, witness.lane(TAU).begin());
-    ProverQs<D> qs(std::move(witness), sample_fq16(chal2, DS_QS_CHI));
+    ProverQs<R::DEGREE, E> qs(std::move(witness), sample_fq16(chal2, DS_QS_CHI));
     R::constraints(qs, x);
 
     // Add the mask sum_{i = 1}^{D - 1} K_{r_i} Delta^(i - 1), where K_{r_i} = M_i + r_i Delta.
@@ -740,21 +906,23 @@ void prove(std::span<uint8_t, PROOF_BYTES<R>> proof, const typename R::instance&
 template <typename R>
 bool verify(std::span<const uint8_t, PROOF_BYTES<R>> proof, const typename R::instance& x) {
     using Lay = Layout<R>;
-    constexpr size_t L = Lay::L, D = Lay::D, LHAT = Lay::LHAT;
+    constexpr size_t L = Lay::L, D = Lay::D, LHAT = Lay::LHAT, VL = Lay::VL, E = Lay::E;
 
     // Decode the proof. Every element of F_q must be in canonical form.
     const auto iv = proof.template subspan<Lay::OFF_IV, IV_BYTES>();
     const auto corr_bytes = proof.template subspan<Lay::OFF_CORR, Lay::CORR_BYTES>();
     const auto u_tilde_bytes = proof.template subspan<Lay::OFF_UTILDE, Lay::UTILDE_BYTES>();
     const auto d_bytes = proof.template subspan<Lay::OFF_D, Lay::D_BYTES>();
+    const auto e_bytes = proof.template subspan<Lay::OFF_E, Lay::E_BYTES>();
     const auto qs_bytes = proof.template subspan<Lay::OFF_QS, Lay::QS_BYTES>();
     const auto delta = proof.template subspan<Lay::OFF_DELTA, DELTA_BYTES>();
     std::vector<Fq> corrections((TAU - 1) * LHAT);
     Fq16 u_tilde;
-    std::vector<Fq> d(L);
+    std::vector<Fq> d(VL);
+    std::vector<Fq> e(DERIVED<R> ? L : 0);
     std::array<Fq, (D - 1) * EXT_DEGREE> qs_proof;
     if (!unpack12(corr_bytes, corrections) || !unpack12(u_tilde_bytes, u_tilde.c) ||
-        !unpack12(d_bytes, d) || !unpack12(qs_bytes, qs_proof)) {
+        !unpack12(d_bytes, d) || !unpack12(e_bytes, e) || !unpack12(qs_bytes, qs_proof)) {
         return false;
     }
     const faest::block128 iv_block = faest::block128::load(iv.data());
@@ -836,21 +1004,46 @@ bool verify(std::span<const uint8_t, PROOF_BYTES<R>> proof, const typename R::in
             internal::hash_fq16(h, vole_hash(q[t]) - Fq{delta[t]} * u_tilde);
         }
         h.update(d_bytes);
+        h.update(e_bytes);
         chal2 = finalize<DIGEST_BYTES>(h, DS_CHAL2);
     }
 
-    // 3. Witness MACs: K_j = Q_j + d_j Delta.
-    typename VerifierQs<D>::Vec witness(L);
+    // 3. Witness MACs: K_j = Q_j + d_j Delta (of w, or of the key K).
+    std::array<std::vector<Fq>, TAU> vw_mac;
     for (size_t t = 0; t < TAU; ++t) {
         const uint32_t delta_t = delta[t];
-        auto lane = witness.lane(t);
-        for (size_t j = 0; j < L; ++j) {
-            lane[j] = fq_reduce(q[t][j] + d[j] * delta_t);
+        vw_mac[t].resize(VL);
+        for (size_t j = 0; j < VL; ++j) {
+            vw_mac[t][j] = fq_reduce(q[t][j] + d[j] * delta_t);
+        }
+    }
+    typename VerifierQs<R::DEGREE, E>::Vec witness(L);
+    if constexpr (DERIVED<R>) {
+        // The MACs of w = G(K) + e: G(K) + e Delta^2.
+        std::array<std::span<const Fq>, TAU> k_lanes;
+        for (size_t t = 0; t < TAU; ++t) {
+            k_lanes[t] = vw_mac[t];
+        }
+        Fq16 delta1;
+        for (size_t t = 0; t < TAU; ++t) {
+            delta1.c[t] = delta[t];
+        }
+        witness_map<R>().verify_eval(k_lanes, delta1, std::span(witness.lane(0).data(), TAU * L));
+        const Fq16 delta2 = delta1 * delta1;
+        for (size_t t = 0; t < TAU; ++t) {
+            auto lane = witness.lane(t);
+            for (size_t j = 0; j < L; ++j) {
+                lane[j] = fq_reduce(lane[j] + uint32_t{e[j]} * delta2.c[t]);
+            }
+        }
+    } else {
+        for (size_t t = 0; t < TAU; ++t) {
+            std::ranges::copy(vw_mac[t], witness.lane(t).begin());
         }
     }
 
     // 4. QuickSilver.
-    VerifierQs<D> qs(std::move(witness), sample_fq16(chal2, DS_QS_CHI), delta);
+    VerifierQs<R::DEGREE, E> qs(std::move(witness), sample_fq16(chal2, DS_QS_CHI), delta);
     R::constraints(qs, x);
     Fq16 a0 = qs.sum();
     for (size_t i = 1; i < D; ++i) {
