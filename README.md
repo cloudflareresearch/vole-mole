@@ -56,7 +56,7 @@ running on an Apple M4 Pro.
 
 Requirements: [Meson][meson] >= 1.4, Ninja, Python 3, and a compiler with good
 C++23 support (faest-arch-opt is tested with Clang >= 22 or GCC >= 16; Apple
-Clang 17 is too old). On macOS with Homebrew:
+Clang 21 also works, but Apple Clang 17 is too old). On macOS with Homebrew:
 
 ```sh
 brew install meson ninja llvm@22
