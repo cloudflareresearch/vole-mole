@@ -4,6 +4,7 @@
 #include "vole_mole/random.hpp"
 #include "vole_mole/uov.hpp"
 
+#include "ct.hpp"
 #include "dst.hpp"
 #include "moussaka/commit.hpp"
 #include "moussaka/issue.hpp"
@@ -22,6 +23,7 @@ extern "C" {
 
 #include <algorithm>
 #include <cstddef>
+#include <cstdint>
 #include <initializer_list>
 #include <memory>
 #include <optional>
@@ -191,10 +193,21 @@ RedeemRequest detail::redeem_request_with_seed(Token&& token, const AnchorSet& a
         throw std::invalid_argument("Moussaka: Anchor index is out of range");
     }
 
-    // The prover requires a valid witness. (A proof for an invalid one wouldn't verify anyway.)
-    if (anchors[i].eval(s) != commit(nf, ctx_iss, ctx_red, r)) {
-        throw std::invalid_argument("Moussaka: token wasn't issued by this Anchor for this "
-                                    "issuance and redemption context");
+    // Check that the token was issued by the indicated Anchor, in constant time so that this method
+    // doesn't leak the index of the Anchor.
+    uint64_t ok = 0;
+    auto t = commit(nf, ctx_iss, ctx_red, r);
+    for (size_t u = 0; u < anchors.size(); ++u) {
+        auto t_u = anchors[u].eval(s);
+        uint64_t diff = 0;
+        for (size_t j = 0; j < uov::M; ++j) {
+            diff |= t[j] ^ t_u[j];
+        }
+
+        ok |= vole_mole::detail::ct_eq_mask(u, i) & vole_mole::detail::ct_is_zero_mask(diff);
+    }
+    if (!ok) {
+        throw std::invalid_argument("Moussaka: invalid token");
     }
 
     // The arguments are valid, so consume the token.
