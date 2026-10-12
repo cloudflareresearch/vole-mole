@@ -1,6 +1,11 @@
 #include "vole_mole/keccak.hpp"
 
 #include "keccak/circuit.hpp" // internal
+#include "keccak/tables.hpp"  // internal
+
+extern "C" {
+#include "KeccakHash.h" // from xkcp
+}
 
 #include "test.hpp"
 
@@ -11,6 +16,7 @@
 #include <cstdint>
 #include <fstream>
 #include <optional>
+#include <span>
 #include <sstream>
 #include <string>
 #include <string_view>
@@ -170,4 +176,112 @@ TEST(Keccak, InverseCircuitInvertsLanes) {
         recovered[i / 8] |= static_cast<uint8_t>(bits[i].v << (i % 8));
     }
     EXPECT_EQ(to_hex(recovered), to_hex(input));
+}
+
+namespace {
+
+template <typename State> std::vector<Bit> state_bits(const State& s) {
+    std::vector<Bit> bits(8 * s.size());
+    for (size_t i = 0; i < bits.size(); ++i) {
+        bits[i] = {((s[i / 8] >> (i % 8)) & 1) != 0};
+    }
+    return bits;
+}
+
+template <typename State> State bits_state(const std::vector<Bit>& bits) {
+    State s{};
+    for (size_t i = 0; i < bits.size(); ++i) {
+        s[i / 8] |= static_cast<uint8_t>(bits[i].v << (i % 8));
+    }
+    return s;
+}
+
+// SHAKE256 of `msg` with our permutation (FIPS 202, Section 4 and 6.2).
+std::vector<uint8_t> shake256(std::span<const uint8_t> msg, size_t out_len) {
+    constexpr size_t RATE = 136;
+    Kf1600State s{};
+    std::vector<uint8_t> padded(msg.begin(), msg.end());
+    padded.push_back(0x1f);
+    while (padded.size() % RATE != 0) {
+        padded.push_back(0);
+    }
+    padded.back() |= 0x80;
+    for (size_t off = 0; off < padded.size(); off += RATE) {
+        for (size_t i = 0; i < RATE; ++i) {
+            s[i] ^= padded[off + i];
+        }
+        s = keccak_f1600(s);
+    }
+    std::vector<uint8_t> out;
+    while (true) {
+        for (size_t i = 0; i < RATE; ++i) {
+            out.push_back(s[i]);
+            if (out.size() == out_len) {
+                return out;
+            }
+        }
+        s = keccak_f1600(s);
+    }
+}
+
+} // namespace
+
+TEST(KeccakF1600, ZeroState) {
+    // The first lane of Keccak-f[1600] applied to the all-zero state (the Keccak team's
+    // KeccakF-1600-IntermediateValues.txt): F1258F7940E1DDE7, in little-endian byte order.
+    const auto out = keccak_f1600({});
+    EXPECT_EQ(to_hex(std::span(out).first(8)), "e7dde140798f25f1");
+}
+
+TEST(KeccakF1600, ShakeMatchesXkcp) {
+    for (const size_t len :
+         {size_t{0}, size_t{1}, size_t{135}, size_t{136}, size_t{137}, size_t{832}}) {
+        std::vector<uint8_t> msg(len);
+        for (size_t i = 0; i < len; ++i) {
+            msg[i] = static_cast<uint8_t>(31 * i + 7);
+        }
+        std::vector<uint8_t> want(300);
+        Keccak_HashInstance h;
+        Keccak_HashInitialize_SHAKE256(&h);
+        Keccak_HashUpdate(&h, msg.data(), 8 * msg.size());
+        Keccak_HashFinal(&h, nullptr);
+        Keccak_HashSqueeze(&h, want.data(), 8 * want.size());
+        EXPECT_EQ(to_hex(shake256(msg, want.size())), to_hex(want)) << len;
+    }
+}
+
+TEST(KeccakF1600, CircuitMatchesLanes) {
+    Kf1600State input;
+    for (size_t i = 0; i < input.size(); ++i) {
+        input[i] = static_cast<uint8_t>(i * i + 1);
+    }
+    const auto chi = [](Bit a, Bit b, Bit c) { return Bit{a.v != (!b.v && c.v)}; };
+    const auto add_one = [](Bit x) { return Bit{!x.v}; };
+    auto bits = state_bits(input);
+    for (size_t r = 0; r < KF1600_ROUNDS; ++r) {
+        bits = detail::keccak_round<detail::Kf1600>(bits, r, chi, add_one);
+    }
+    EXPECT_EQ(to_hex(bits_state<Kf1600State>(bits)), to_hex(keccak_f1600(input)));
+
+    // Rounds compose.
+    Kf1600State split = input;
+    keccak_f1600_rounds(split, 0, 7);
+    keccak_f1600_rounds(split, 7, 17);
+    EXPECT_EQ(to_hex(split), to_hex(keccak_f1600(input)));
+}
+
+TEST(KeccakF1600, InverseCircuitInvertsLanes) {
+    const auto chi_inv = [](Bit a, Bit b, Bit c, Bit d, Bit e) {
+        return Bit{a.v != (!b.v && (c.v != (!d.v && e.v)))};
+    };
+    const auto add_one = [](Bit x) { return Bit{!x.v}; };
+    Kf1600State input;
+    for (size_t i = 0; i < input.size(); ++i) {
+        input[i] = static_cast<uint8_t>(5 * i * i + 11 * i + 2);
+    }
+    auto bits = state_bits(keccak_f1600(input));
+    for (size_t r = KF1600_ROUNDS; r-- > 0;) {
+        bits = detail::keccak_round_inverse<detail::Kf1600>(bits, r, chi_inv, add_one);
+    }
+    EXPECT_EQ(to_hex(bits_state<Kf1600State>(bits)), to_hex(input));
 }

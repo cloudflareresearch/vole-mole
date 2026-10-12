@@ -27,6 +27,23 @@ inline Kp800State keccak_p800(Kp800State state) {
     return state;
 }
 
+// Keccak-f[1600], the permutation of SHA-3 and SHAKE, operates on a 200-byte state, or 25 lanes of
+// 64 bits each.
+constexpr size_t KF1600_STATE_BYTES = 200;
+constexpr size_t KF1600_STATE_BITS = 8 * KF1600_STATE_BYTES;
+constexpr size_t KF1600_ROUNDS = 24;
+
+using Kf1600State = std::array<uint8_t, KF1600_STATE_BYTES>;
+
+// As keccak_p800_rounds, for Keccak-f[1600].
+void keccak_f1600_rounds(Kf1600State& state, size_t first_round, size_t num_rounds);
+
+// Apply Keccak-f[1600] to `state`.
+inline Kf1600State keccak_f1600(Kf1600State state) {
+    keccak_f1600_rounds(state, 0, KF1600_ROUNDS);
+    return state;
+}
+
 } // namespace vole_mole
 
 #endif
