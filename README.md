@@ -28,29 +28,29 @@ protocol uses a 46591 B (byte) UOV public key.
 
 | Protocol    | Step                       | Party     | Sends   | Time     |
 |:------------|:---------------------------|:----------|--------:|---------:|
-| PomFRIT     | `issue_request`            | Client    | 45 B    | 0.35 ms  |
-|             | `issue_response`           | Issuer    | 119 B   | 0.019 ms |
-|             | `finalize_issue`           | Client    | 5387 B  | 0.26 ms  |
-|             | `verify`                   | Verifier  | —       | 0.48 ms  |
-| Moussaka    | `issue_request`            | Client    | 7317 B  | 0.93 ms  |
-|             | `issue_response`           | Anchor    | 119 B   | 0.50 ms  |
-|             | `finalize_issue`           | Client    | —       | 0.017 ms |
-|             | `redeem_request` (N = 1)   | Client    | 8775 B  | 1.19 ms  |
-|             | `redeem_request` (N = 8)   | Client    | 8775 B  | 2.13 ms  |
-|             | `redeem_request` (N = 64)  | Client    | 8775 B  | 9.77 ms  |
-|             | `finalize_redeem` (N = 1)  | Moderator | —       | 0.68 ms  |
-|             | `finalize_redeem` (N = 8)  | Moderator | —       | 1.58 ms  |
-|             | `finalize_redeem` (N = 64) | Moderator | —       | 8.82 ms  |
-| Ratatouille | `issue_request`            | Client    | 7032 B  | 0.90 ms  |
-|             | `issue_response`           | Issuer    | 119 B   | 0.49 ms  |
-|             | `finalize_issue`           | Client    | —       | 0.017 ms |
-|             | `spend_request`            | Client    | 17383 B | 2.25 ms  |
-|             | `spend_response`           | Issuer    | 127 B   | 1.14 ms  |
-|             | `finalize_spend`           | Client    | —       | 0.017 ms |
+| PomFRIT     | `issue_request`            | Client    | 45 B    | 0.26 ms  |
+|             | `issue_response`           | Issuer    | 119 B   | 0.013 ms |
+|             | `finalize_issue`           | Client    | 5387 B  | 0.19 ms  |
+|             | `verify`                   | Verifier  | —       | 0.37 ms  |
+| Moussaka    | `issue_request`            | Client    | 7317 B  | 0.60 ms  |
+|             | `issue_response`           | Anchor    | 119 B   | 0.36 ms  |
+|             | `finalize_issue`           | Client    | —       | 0.008 ms |
+|             | `redeem_request` (N = 1)   | Client    | 8775 B  | 0.77 ms  |
+|             | `redeem_request` (N = 8)   | Client    | 8775 B  | 1.44 ms  |
+|             | `redeem_request` (N = 64)  | Client    | 8775 B  | 6.87 ms  |
+|             | `finalize_redeem` (N = 1)  | Moderator | —       | 0.51 ms  |
+|             | `finalize_redeem` (N = 8)  | Moderator | —       | 1.19 ms  |
+|             | `finalize_redeem` (N = 64) | Moderator | —       | 6.55 ms  |
+| Ratatouille | `issue_request`            | Client    | 7032 B  | 0.58 ms  |
+|             | `issue_response`           | Issuer    | 119 B   | 0.35 ms  |
+|             | `finalize_issue`           | Client    | —       | 0.008 ms |
+|             | `spend_request`            | Client    | 17383 B | 1.45 ms  |
+|             | `spend_response`           | Issuer    | 127 B   | 0.84 ms  |
+|             | `finalize_spend`           | Client    | —       | 0.008 ms |
 
 We use the VOLEitH implementation from [faest-arch-opt][arch-opt] and the UOV
 implementation from [pqov][pqov]. Measurements were taken for the release build
-running on an Apple M1 Pro.
+running on an Apple M4 Pro.
 
 ## Building
 
@@ -90,25 +90,25 @@ smaller, but proving and verifying would be roughly 1.3–7× slower:
 
 | Protocol    | Step                       | Party     | Sends   | Time     |
 |:------------|:---------------------------|:----------|--------:|---------:|
-| PomFRIT     | `issue_request`            | Client    | 45 B    | 2.42 ms  |
-|             | `issue_response`           | Issuer    | 119 B   | 0.019 ms |
-|             | `finalize_issue`           | Client    | 4179 B  | 0.62 ms  |
-|             | `verify`                   | Verifier  | —       | 2.59 ms  |
-| Moussaka    | `issue_request`            | Client    | 5557 B  | 3.49 ms  |
-|             | `issue_response`           | Anchor    | 119 B   | 2.74 ms  |
-|             | `finalize_issue`           | Client    | —       | 0.017 ms |
-|             | `redeem_request` (N = 1)   | Client    | 6493 B  | 3.94 ms  |
-|             | `redeem_request` (N = 8)   | Client    | 6493 B  | 4.83 ms  |
-|             | `redeem_request` (N = 64)  | Client    | 6493 B  | 12.4 ms  |
-|             | `finalize_redeem` (N = 1)  | Moderator | —       | 3.14 ms  |
-|             | `finalize_redeem` (N = 8)  | Moderator | —       | 4.07 ms  |
-|             | `finalize_redeem` (N = 64) | Moderator | —       | 11.3 ms  |
-| Ratatouille | `issue_request`            | Client    | 5368 B  | 3.48 ms  |
-|             | `issue_response`           | Issuer    | 119 B   | 2.76 ms  |
-|             | `finalize_issue`           | Client    | —       | 0.017 ms |
-|             | `spend_request`            | Client    | 12077 B | 5.88 ms  |
-|             | `spend_response`           | Issuer    | 127 B   | 4.46 ms  |
-|             | `finalize_spend`           | Client    | —       | 0.017 ms |
+| PomFRIT     | `issue_request`            | Client    | 45 B    | 1.76 ms  |
+|             | `issue_response`           | Issuer    | 119 B   | 0.013 ms |
+|             | `finalize_issue`           | Client    | 4179 B  | 0.46 ms  |
+|             | `verify`                   | Verifier  | —       | 1.95 ms  |
+| Moussaka    | `issue_request`            | Client    | 5557 B  | 2.47 ms  |
+|             | `issue_response`           | Anchor    | 119 B   | 2.02 ms  |
+|             | `finalize_issue`           | Client    | —       | 0.008 ms |
+|             | `redeem_request` (N = 1)   | Client    | 6493 B  | 2.73 ms  |
+|             | `redeem_request` (N = 8)   | Client    | 6493 B  | 3.45 ms  |
+|             | `redeem_request` (N = 64)  | Client    | 6493 B  | 8.91 ms  |
+|             | `finalize_redeem` (N = 1)  | Moderator | —       | 2.27 ms  |
+|             | `finalize_redeem` (N = 8)  | Moderator | —       | 2.96 ms  |
+|             | `finalize_redeem` (N = 64) | Moderator | —       | 8.33 ms  |
+| Ratatouille | `issue_request`            | Client    | 5368 B  | 2.43 ms  |
+|             | `issue_response`           | Issuer    | 119 B   | 2.01 ms  |
+|             | `finalize_issue`           | Client    | —       | 0.008 ms |
+|             | `spend_request`            | Client    | 12077 B | 4.04 ms  |
+|             | `spend_response`           | Issuer    | 127 B   | 3.20 ms  |
+|             | `finalize_spend`           | Client    | —       | 0.008 ms |
 
 In fact, the proof size can be driven down even further, but VOLEitH imposes a
 lower limit, and we start to see diminishing returns the more we optimize. For
