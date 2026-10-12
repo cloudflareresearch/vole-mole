@@ -1,0 +1,21 @@
+src/mldsa_pok/modq.hpp
+  s_3c36208e1ae23a::t_b447eaffd350cd 12-17,24-26,28-42,57,97-106,108-109,111-116,136-139,147-158,160-182,184-191,193-200,202,216,224,227,234,292-293,308-309,327,329-330,333
+src/mldsa_pok/relation.hpp
+  s_3c36208e1ae23a::t_7592a589463cfc 243-244,246-247
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.10",
+  "base_commit_sha": "df5595f398e1cc1d71bfd80ce19d9cc1255e6c7f",
+  "prompts": {},
+  "sessions": {
+    "s_3c36208e1ae23a": {
+      "agent_id": {
+        "tool": "opencode",
+        "id": "ses_ecfe959ebffeOme1dG0POu0H2L",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Bas Westerbaan <bas@cloudflare.com>"
+    }
+  }
+}
