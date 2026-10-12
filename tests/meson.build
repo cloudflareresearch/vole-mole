@@ -19,6 +19,7 @@ if get_option('tests')
     ['uov', 'uov/test_uov.cpp'],
     ['voleith', 'voleith/test_voleith.cpp'],
     ['voleith-derived', 'voleith/test_derived_witness.cpp'],
+    ['voleith-fq', 'voleith_fq/test_voleith_fq.cpp'],
   ]
 
   # Test data files (e.g., known answers) are read from the source tree; see `data_path` in
