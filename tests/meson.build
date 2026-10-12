@@ -10,6 +10,7 @@ if get_option('tests')
     ['moussaka-redeem', 'moussaka/test_redeem.cpp'],
     ['moussaka', 'moussaka/test_moussaka.cpp'],
     ['pomfrit', 'pomfrit/test_pomfrit.cpp'],
+    ['poly2d', 'poly2d/test_poly2d.cpp'],
     ['random', 'random/test_random.cpp'],
     ['ratatouille-issue', 'ratatouille/test_issue.cpp'],
     ['ratatouille-spend', 'ratatouille/test_spend.cpp'],

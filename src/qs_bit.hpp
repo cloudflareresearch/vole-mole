@@ -35,7 +35,7 @@ template <typename QS, size_t da, size_t db>
 qs_bit<QS, da + db> qs_mul(const qs_bit<QS, da>& a, const qs_bit<QS, db>& b) {
     if constexpr (requires { a.value_; }) {
         qs_bit<QS, da + db> out(static_cast<const QS*>(nullptr));
-        out.mac = (a.mac * b.mac).template reduce_to<QS::secpar_bits>();
+        out.mac = faest::mul_reduce<QS::secpar_bits>(a.mac, b.mac);
         for (size_t i = 0; i < da; ++i) {
             out.mac.coeffs[i + db] += b.value() * a.mac.coeffs[i];
         }
@@ -60,7 +60,7 @@ faest::quicksilver_gfsecpar<QS, da + db> qs_mul(const qs_bit<QS, da>& a,
                                                 const faest::quicksilver_gfsecpar<QS, db>& b) {
     if constexpr (requires { a.value_; }) {
         faest::quicksilver_gfsecpar<QS, da + db> out(static_cast<const QS*>(nullptr));
-        out.mac = (a.mac * b.mac).template reduce_to<QS::secpar_bits>();
+        out.mac = faest::mul_reduce<QS::secpar_bits>(a.mac, b.mac);
         for (size_t i = 0; i <= db; ++i) {
             out.mac.coeffs[i + da] += a.value() * b.mac.coeffs[i];
         }
