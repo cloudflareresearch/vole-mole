@@ -1,0 +1,35 @@
+src/mq/split.hpp
+  s_53f0de9abaa628::t_b256f27aaf83a3 1-134
+tests/mq/kat.txt
+  s_53f0de9abaa628::t_75f73d550982e5 1-31
+tools/mq_ref.py
+  s_53f0de9abaa628::t_9a94a7b9cbd286 1-159
+tests/meson.build
+  s_53f0de9abaa628::t_dd052df3d98430 12,54
+tools/mq_key_bits.py
+  s_53f0de9abaa628::t_b27eb76650a664 1-110
+tests/mq/bench_mq.cpp
+  s_53f0de9abaa628::t_0a65c5c4c79d97 1-102
+tests/mq/test_mq.cpp
+  s_53f0de9abaa628::t_ce78f4af5be298 1-332
+src/mq/prg.hpp
+  s_53f0de9abaa628::t_4110105a4ecf39 1-408
+src/mq/key_bits.hpp
+  s_53f0de9abaa628::t_1e27a827970684 1-84
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.10",
+  "base_commit_sha": "58c9a2a5cf8ac56ad68a888b247e24688d67f9e8",
+  "prompts": {},
+  "sessions": {
+    "s_53f0de9abaa628": {
+      "agent_id": {
+        "tool": "opencode",
+        "id": "ses_ecfcbbcd4ffeWHsyNK4WpEjPLC",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Bas Westerbaan <bas@cloudflare.com>"
+    }
+  }
+}
