@@ -1,10 +1,16 @@
+#include "p256/field.hpp"
 #include "voleith_p256/voleith.hpp"
+
+#include "aes.hpp"        // from faest-arch-opt
+#include "block.hpp"      // from faest-arch-opt
+#include "parameters.hpp" // from faest-arch-opt
 
 #include <gtest/gtest.h>
 
 #include <array>
+#include <cstddef>
 #include <cstdint>
-#include <vector>
+#include <span>
 
 namespace {
 
@@ -102,6 +108,30 @@ TEST(VoleithP256, CheatingProver) {
     proof = prove<Fast>(w, &failed);
     EXPECT_GT(failed, 0u);
     EXPECT_FALSE(verify<Fast>(proof, w.kp));
+}
+
+// The leaf PRG matches faest's AES-CTR PRG.
+TEST(VoleithP256, LeafPrg) {
+    using namespace vole_mole::voleith_p256::detail;
+    for (uint8_t seed_byte : {0, 1, 77}) {
+        Seed seed{};
+        seed.fill(seed_byte);
+        seed[3] = 9;
+        Prg::expanded_key_t key;
+        faest::aes_keygen<faest::secpar::s128>(&key, faest::block128::load(seed.data()));
+        std::array<uint8_t, 16> iv_bytes{};
+        iv_bytes.fill(static_cast<uint8_t>(seed_byte * 3 + 1));
+        const auto iv = faest::block128::load(iv_bytes.data());
+        std::array<faest::block128, 64> a, b;
+        leaf_prg<64>(key, iv, 0x12345u + seed_byte, a.data());
+        Prg::gen<1, 64>(&key, iv, 0x12345u + seed_byte, uint32_t{0}, b.data());
+        for (size_t i = 0; i < 64; ++i) {
+            std::array<uint8_t, 16> x, y;
+            a[i].store(x.data());
+            b[i].store(y.data());
+            EXPECT_EQ(x, y) << i;
+        }
+    }
 }
 
 } // namespace

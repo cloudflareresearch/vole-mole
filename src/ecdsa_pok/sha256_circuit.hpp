@@ -14,7 +14,8 @@
 //   2 (E_t - d + S0(a) - A_t)           + 2 Maj(a, b, c) = 0,
 //
 // whose wires are all linear. (E_t = d + T1 and A_t = T1 + T2 = E_t - d + T2.) Each sum has about
-// 10 wires per column, reduced by one counter of degree 8 that commits 3 carries.
+// 10 wires per column, reduced by counters: one of size 3 (degree 8) that commits 3 carries, or
+// a few of size 2 (degree 4).
 
 #ifndef VOLE_MOLE_ECDSA_POK_SHA256_CIRCUIT_HPP
 #define VOLE_MOLE_ECDSA_POK_SHA256_CIRCUIT_HPP
@@ -22,6 +23,7 @@
 #include "ecdsa_pok/bin_ops.hpp"
 #include "sha256/sha256.hpp"
 
+#include <algorithm>
 #include <array>
 #include <cstddef>
 #include <cstdint>
@@ -30,7 +32,8 @@
 
 namespace vole_mole::ecdsa_pok::detail {
 
-template <typename Ops> struct ShaCircuit {
+// LOG is the size of the counters (see bin_ops.hpp).
+template <typename Ops, size_t LOG> struct ShaCircuit {
     using W = Word<Ops>;
     using Wire = typename Ops::Wire;
 
@@ -101,7 +104,7 @@ template <typename Ops> struct ShaCircuit {
             sum.add_word(ss0(w[t - 15]), 0);
             sum.add_word(w[t - 16], 0);
             sum.sub_word(w[t], 0);
-            sum.template assert_zero<SHA_COUNTER_LOG>();
+            sum.template assert_zero<LOG>();
         }
 
         // a[t + 4] = A_t, so a[0..4) = A_{-4}, ..., A_{-1} = h[3], h[2], h[1], h[0].
@@ -128,7 +131,7 @@ template <typename Ops> struct ShaCircuit {
                 sum.add_const(0xffffffff, 0);
                 sum.sub_word(x(ee, f), 0);
                 sum.sub_word(n(x(ee, g)), 0);
-                sum.template assert_zero<SHA_COUNTER_LOG>();
+                sum.template assert_zero<LOG>();
             }
             {
                 ColSum<Ops> sum(ops, 33);
@@ -140,7 +143,7 @@ template <typename Ops> struct ShaCircuit {
                 sum.add_word(b, 0);
                 sum.add_word(c, 0);
                 sum.sub_word(x(x(aa, b), c), 0);
-                sum.template assert_zero<SHA_COUNTER_LOG>();
+                sum.template assert_zero<LOG>();
             }
             a[t + 4] = an;
             e[t + 4] = en;
@@ -155,7 +158,7 @@ template <typename Ops> struct ShaCircuit {
             sum.add_word(h[i], 0);
             sum.add_word(*s[i], 0);
             sum.sub_word(out[i], 0);
-            sum.template assert_zero<SHA_COUNTER_LOG>();
+            sum.template assert_zero<LOG>();
         }
         return out;
     }

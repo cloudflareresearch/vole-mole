@@ -4,8 +4,10 @@
 
 #include <gtest/gtest.h>
 
-#include <array>
+#include <algorithm>
+#include <cstddef>
 #include <cstdint>
+#include <optional>
 #include <random>
 #include <string>
 #include <string_view>
@@ -114,10 +116,13 @@ TEST(Curve, HashToPoint) {
 
 // RFC 6979, A.2.5 (P-256, SHA-256).
 TEST(Ecdsa, Rfc6979) {
-    const Fn d = Fn::reduce_32(b32("c9afa9d845ba75166b5c215767b1d6934e50c3db36e89b127b8a622b120f6721"));
+    const Fn d =
+        Fn::reduce_32(b32("c9afa9d845ba75166b5c215767b1d6934e50c3db36e89b127b8a622b120f6721"));
     const Affine q = scalar_mul(GENERATOR, d.canonical()).to_affine();
-    EXPECT_EQ(q.x.to_bytes(), b32("60fed4ba255a9d31c961eb74c6356d68c049b8923b61fa6ce669622e60f29fb6"));
-    EXPECT_EQ(q.y.to_bytes(), b32("7903fe1008b8bc99a41ae9e95628bc64f2f1b20c2d7e9f5177a3c294d4462299"));
+    EXPECT_EQ(q.x.to_bytes(),
+              b32("60fed4ba255a9d31c961eb74c6356d68c049b8923b61fa6ce669622e60f29fb6"));
+    EXPECT_EQ(q.y.to_bytes(),
+              b32("7903fe1008b8bc99a41ae9e95628bc64f2f1b20c2d7e9f5177a3c294d4462299"));
     EXPECT_EQ(decode_point(encode_point(q)), q);
 
     struct Vector {

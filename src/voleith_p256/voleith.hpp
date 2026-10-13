@@ -31,8 +31,9 @@
 //      Q_j = V_j + u_j Delta,  where Q_j = sum_t N^t q_{t,j}, V_j = sum_t N^t v_{t,j}, and
 //                                    Delta = sum_t N^t Delta_t,
 //
-//    i.e., a MAC Q_j of u_j under the key Delta, in the field of row j. Delta is an integer, uniform
-//    in [0, N^TAU), and N^TAU < n < p, so it's uniform in a set of N^TAU elements of either field.
+//    i.e., a MAC Q_j of u_j under the key Delta, in the field of row j. Delta is an integer,
+//    uniform in [0, N^TAU), and N^TAU < n < p, so it's uniform in a set of N^TAU elements of either
+//    field.
 //
 // 2. VOLE consistency check, per field (as in FAEST v1). The verifier's challenge determines a
 //    linear universal hash H(x) = sum_{j < m} alpha^(j + 1) x_j + x_m, where m = LHAT_F - 1 and
@@ -64,9 +65,10 @@
 // making 2^k hash queries succeeds with probability about 2^k D / N^TAU.
 //
 // Zero knowledge. Corrections, d, u-tilde, and the A_i are masked by the (uniform) contribution of
-// the unopened leaves. Leaf vectors are sampled from AES-CTR by rejection sampling (accepting 32-byte
-// candidates less than the modulus, which fails with probability about 2^-32), so they're exactly
-// uniform; the rejection loop runs in time that depends on the PRG output, not on the witness.
+// the unopened leaves. Leaf vectors are sampled from AES-CTR by rejection sampling (accepting
+// 32-byte candidates less than the modulus, which fails with probability about 2^-32), so they're
+// exactly uniform; the rejection loop runs in time that depends on the PRG output, not on the
+// witness.
 
 #ifndef VOLE_MOLE_VOLEITH_P256_VOLEITH_HPP
 #define VOLE_MOLE_VOLEITH_P256_VOLEITH_HPP
@@ -74,13 +76,19 @@
 #include "p256/field.hpp"
 #include "voleith_p256/qs.hpp"
 
-#include "block.hpp" // from faest-arch-opt
-#include "hash.hpp"  // from faest-arch-opt
-#include "prgs.hpp"  // from faest-arch-opt
+#include "aes.hpp"        // from faest-arch-opt
+#include "block.hpp"      // from faest-arch-opt
+#include "hash.hpp"       // from faest-arch-opt
+#include "parameters.hpp" // from faest-arch-opt
+#include "prgs.hpp"       // from faest-arch-opt
 
 extern "C" {
 #include "KeccakHash.h" // from xkcp
 }
+
+#if defined(__aarch64__)
+#include <arm_neon.h>
+#endif
 
 #include <algorithm>
 #include <array>
@@ -121,6 +129,8 @@ template <size_t TAU_, size_t DEPTH_> struct VoleParams {
 
 // FAEST-128f-like: 16 trees of 256 leaves.
 using Fast = VoleParams<16, 8>;
+// In between: 13 trees of 1024 leaves.
+using Medium = VoleParams<13, 10>;
 // FAEST-128s-like: 11 trees of 4096 leaves.
 using Small = VoleParams<11, 12>;
 
@@ -174,26 +184,101 @@ template <typename F> bool accept(const uint8_t* b, F& out) {
     return true;
 }
 
-// Expand a leaf's PRG seed into uniform elements of F_p (out_p) and then F_n (out_n).
-inline void expand_leaf(const Seed& seed, const faest::block128& iv, size_t t, size_t x,
-                        std::span<Fp> out_p, std::span<Fn> out_n) {
+// An unreduced sum of Montgomery representations, as a 320-bit integer. The sums of a tree are less
+// than 2^(256 + 2 DEPTH) <= 2^288, so they fit; reducing them once per tree is much cheaper than
+// reducing each addition.
+struct Acc {
+    std::array<uint64_t, 5> l{};
+
+    void add4(const uint64_t* x) {
+        unsigned long long c = 0;
+        l[0] = __builtin_addcll(l[0], x[0], 0, &c);
+        l[1] = __builtin_addcll(l[1], x[1], c, &c);
+        l[2] = __builtin_addcll(l[2], x[2], c, &c);
+        l[3] = __builtin_addcll(l[3], x[3], c, &c);
+        l[4] += c;
+    }
+    void add(const Acc& x) {
+        unsigned long long c = 0;
+        l[0] = __builtin_addcll(l[0], x.l[0], 0, &c);
+        l[1] = __builtin_addcll(l[1], x.l[1], c, &c);
+        l[2] = __builtin_addcll(l[2], x.l[2], c, &c);
+        l[3] = __builtin_addcll(l[3], x.l[3], c, &c);
+        l[4] += x.l[4] + c;
+    }
+    // The element whose Montgomery representation is the sum modulo F::M: with the sum
+    // hi 2^256 + lo, that's from_mont(lo) + hi, since 2^256 is the Montgomery radix.
+    template <typename F> F reduce() const {
+        static_assert(F::M[3] >= (uint64_t{1} << 63)); // lo < 2^256 < 2 M
+        p256::Limbs lo{l[0], l[1], l[2], l[3]};
+        if (p256::detail::limbs_ge(lo, F::M)) {
+            p256::Limbs d{};
+            p256::detail::limbs_sub(d, lo, F::M);
+            lo = d;
+        }
+        return F::from_mont(lo) + F::from_u64(l[4]);
+    }
+};
+
+// CHUNK blocks of AES-128-CTR output, as Prg::gen<1, CHUNK> (with counters 0, 1, ...): the
+// blocks iv + (counter, 0, 0, tweak) (as 32-bit lanes) encrypted under the expanded key. faest's
+// aarch64 AES works round by round over all the blocks in memory, so on aarch64 we keep 8 blocks
+// and the round keys in registers instead; the output is the same.
+template <size_t CHUNK>
+inline void leaf_prg(const Prg::expanded_key_t& key, const faest::block128& iv, uint32_t tweak,
+                     faest::block128* out) {
+#if defined(__aarch64__) && defined(__ARM_FEATURE_AES)
+    static_assert(CHUNK % 8 == 0);
+    std::array<uint8x16_t, 11> k;
+    for (size_t r = 0; r < 11; ++r) {
+        k[r] = vreinterpretq_u8_u32(key.keys[r].data);
+    }
+    for (size_t j = 0; j < CHUNK; j += 8) {
+        std::array<uint8x16_t, 8> st;
+        for (size_t i = 0; i < 8; ++i) {
+            const std::array<uint32_t, 4> ctr = {static_cast<uint32_t>(j + i), 0, 0, tweak};
+            st[i] = vreinterpretq_u8_u32(vaddq_u32(iv.data, vld1q_u32(ctr.data())));
+        }
+        for (size_t r = 0; r < 9; ++r) {
+            for (size_t i = 0; i < 8; ++i) {
+                st[i] = vaesmcq_u8(vaeseq_u8(st[i], k[r]));
+            }
+        }
+        for (size_t i = 0; i < 8; ++i) {
+            out[j + i] = {vreinterpretq_u32_u8(veorq_u8(vaeseq_u8(st[i], k[9]), k[10]))};
+        }
+    }
+#else
+    Prg::gen<1, CHUNK>(&key, iv, tweak, uint32_t{0}, out);
+#endif
+}
+
+// Expand a leaf's PRG seed into uniform elements of F_p and then F_n, and add their Montgomery
+// representations to suf_p and suf_n.
+inline void expand_leaf_add(const Seed& seed, const faest::block128& iv, size_t t, size_t x,
+                            std::span<Acc> suf_p, std::span<Acc> suf_n) {
     constexpr size_t CHUNK_BLOCKS = 64; // AES_MAX_CTR bounds the counter, so we change the tweak
     Prg::expanded_key_t expanded;
     faest::aes_keygen<faest::secpar::s128>(&expanded, faest::block128::load(seed.data()));
-    std::array<faest::block128, CHUNK_BLOCKS> blocks;
-    alignas(16) std::array<uint8_t, CHUNK_BLOCKS * 16> buf;
+    alignas(16) std::array<faest::block128, CHUNK_BLOCKS> blocks;
     size_t np = 0, nn = 0;
-    for (size_t chunk = 0; np < out_p.size() || nn < out_n.size(); ++chunk) {
-        Prg::gen<1, CHUNK_BLOCKS>(&expanded, iv, leaf_tweak(t, x, chunk), uint32_t{0},
-                                  blocks.data());
-        for (size_t i = 0; i < CHUNK_BLOCKS; ++i) {
-            blocks[i].store(&buf[16 * i]);
-        }
-        for (size_t off = 0; off < buf.size(); off += 32) {
-            if (np < out_p.size()) {
-                np += accept(&buf[off], out_p[np]);
-            } else if (nn < out_n.size()) {
-                nn += accept(&buf[off], out_n[nn]);
+    for (size_t chunk = 0; np < suf_p.size() || nn < suf_n.size(); ++chunk) {
+        leaf_prg<CHUNK_BLOCKS>(expanded, iv, leaf_tweak(t, x, chunk), blocks.data());
+        for (size_t i = 0; i < CHUNK_BLOCKS; i += 2) {
+            alignas(16) std::array<uint64_t, 4> c;
+            blocks[i].store(&c[0]);
+            blocks[i + 1].store(&c[2]);
+            // A 32-byte little-endian candidate, accepted if it's less than the modulus. It's
+            // used as the Montgomery representation of the element, which is uniform if the
+            // candidate is.
+            if (np < suf_p.size()) {
+                if (!p256::detail::limbs_ge(c, Fp::M)) {
+                    suf_p[np++].add4(c.data());
+                }
+            } else if (nn < suf_n.size()) {
+                if (!p256::detail::limbs_ge(c, Fn::M)) {
+                    suf_n[nn++].add4(c.data());
+                }
             } else {
                 break;
             }
@@ -435,13 +520,14 @@ ProverState<R, P> prove_commit(std::span<uint8_t, Layout<R, P>::PROOF_BYTES> pro
     uint8_t* corr = proof.data() + Lay::OFF_CORR;
     {
         std::vector<std::array<uint8_t, LEAF_HASH_BYTES>> leaf_hashes(LEAVES);
-        std::vector<Fp> rp(LHAT_P), suf_p(LHAT_P);
-        std::vector<Fn> rn(LHAT_N), suf_n(LHAT_N);
+        std::vector<Fp> suf_p(LHAT_P);
+        std::vector<Fn> suf_n(LHAT_N);
+        std::vector<Acc> acc_suf(LHAT_P + LHAT_N), acc_sum(LHAT_P + LHAT_N);
         for (size_t t = 0; t < TAU; ++t) {
             expand_tree_from<P>(st.trees[t], nullptr, iv_block, t);
             hash_leaves(st.trees[t].leaves(), iv, t, leaf_hashes);
-            std::ranges::fill(suf_p, Fp::zero());
-            std::ranges::fill(suf_n, Fn::zero());
+            std::ranges::fill(acc_suf, Acc{});
+            std::ranges::fill(acc_sum, Acc{});
             // From the last leaf down: suf = sum_{x' >= x} r_{x'}, and
             // sum_{x >= 1} suf_x = sum_x x r_x.
             for (size_t xi = LEAVES; xi-- > 0;) {
@@ -449,21 +535,21 @@ ProverState<R, P> prove_commit(std::span<uint8_t, Layout<R, P>::PROOF_BYTES> pro
                 std::copy_n(leaf_hashes[xi].begin(), SEED_BYTES, leaf_seed.begin());
                 std::copy_n(leaf_hashes[xi].begin() + SEED_BYTES, COM_BYTES,
                             st.coms[t * LEAVES + xi].begin());
-                expand_leaf(leaf_seed, iv_block, t, xi, rp, rn);
-                for (size_t j = 0; j < LHAT_P; ++j) {
-                    suf_p[j] += rp[j];
-                }
-                for (size_t j = 0; j < LHAT_N; ++j) {
-                    suf_n[j] += rn[j];
-                }
+                expand_leaf_add(leaf_seed, iv_block, t, xi, std::span(acc_suf).first(LHAT_P),
+                                std::span(acc_suf).subspan(LHAT_P));
                 if (xi > 0) {
-                    for (size_t j = 0; j < LHAT_P; ++j) {
-                        sp[t][j] += suf_p[j];
-                    }
-                    for (size_t j = 0; j < LHAT_N; ++j) {
-                        sn[t][j] += suf_n[j];
+                    for (size_t j = 0; j < LHAT_P + LHAT_N; ++j) {
+                        acc_sum[j].add(acc_suf[j]);
                     }
                 }
+            }
+            for (size_t j = 0; j < LHAT_P; ++j) {
+                suf_p[j] = acc_suf[j].reduce<Fp>();
+                sp[t][j] = acc_sum[j].reduce<Fp>();
+            }
+            for (size_t j = 0; j < LHAT_N; ++j) {
+                suf_n[j] = acc_suf[LHAT_P + j].reduce<Fn>();
+                sn[t][j] = acc_sum[LHAT_P + j].reduce<Fn>();
             }
             for (size_t xi = 0; xi < LEAVES; ++xi) {
                 h_com.update(st.coms[t * LEAVES + xi]);
@@ -637,7 +723,8 @@ void prove_finish(std::span<uint8_t, Layout<R, P>::PROOF_BYTES> proof, ProverSta
         store(q, cn[i]);
     }
 
-    const auto delta = derive_delta<P>(seed, cp[0], cn[0], proof.subspan(Lay::OFF_QS, Lay::QS_BYTES));
+    const auto delta =
+        derive_delta<P>(seed, cp[0], cn[0], proof.subspan(Lay::OFF_QS, Lay::QS_BYTES));
     std::ranges::copy(delta, proof.begin() + Lay::OFF_DELTA);
 
     // Open all leaves but leaf Delta_t of tree t.
@@ -732,8 +819,9 @@ verify_commit(std::span<const uint8_t, Layout<R, P>::PROOF_BYTES> proof, const D
     {
         Tree<P> tree;
         std::vector<std::array<uint8_t, LEAF_HASH_BYTES>> leaf_hashes(LEAVES);
-        std::vector<Fp> rp(LHAT_P), suf_p(LHAT_P), sum_p(LHAT_P);
-        std::vector<Fn> rn(LHAT_N), suf_n(LHAT_N), sum_n(LHAT_N);
+        std::vector<Fp> suf_p(LHAT_P), sum_p(LHAT_P);
+        std::vector<Fn> suf_n(LHAT_N), sum_n(LHAT_N);
+        std::vector<Acc> acc_suf(LHAT_P + LHAT_N), acc_sum(LHAT_P + LHAT_N);
         for (size_t t = 0; t < TAU; ++t) {
             const size_t pt = delta_t<P>(delta, t);
             const uint8_t* opening = proof.data() + Lay::OFF_OPEN + t * P::OPENING_BYTES;
@@ -746,30 +834,28 @@ verify_commit(std::span<const uint8_t, Layout<R, P>::PROOF_BYTES> proof, const D
             tree.nodes[LEAVES - 1 + pt] = {}; // unknown; its hash is ignored
             expand_tree_from<P>(tree, &known, iv_block, t);
             hash_leaves(tree.leaves(), iv, t, leaf_hashes);
-            std::ranges::fill(suf_p, Fp::zero());
-            std::ranges::fill(sum_p, Fp::zero());
-            std::ranges::fill(suf_n, Fn::zero());
-            std::ranges::fill(sum_n, Fn::zero());
+            std::ranges::fill(acc_suf, Acc{});
+            std::ranges::fill(acc_sum, Acc{});
             for (size_t xi = LEAVES; xi-- > 0;) {
                 if (xi != pt) {
                     Seed leaf_seed;
                     std::copy_n(leaf_hashes[xi].begin(), SEED_BYTES, leaf_seed.begin());
-                    expand_leaf(leaf_seed, iv_block, t, xi, rp, rn);
-                    for (size_t j = 0; j < LHAT_P; ++j) {
-                        suf_p[j] += rp[j];
-                    }
-                    for (size_t j = 0; j < LHAT_N; ++j) {
-                        suf_n[j] += rn[j];
-                    }
+                    expand_leaf_add(leaf_seed, iv_block, t, xi, std::span(acc_suf).first(LHAT_P),
+                                    std::span(acc_suf).subspan(LHAT_P));
                 }
                 if (xi > 0) {
-                    for (size_t j = 0; j < LHAT_P; ++j) {
-                        sum_p[j] += suf_p[j];
-                    }
-                    for (size_t j = 0; j < LHAT_N; ++j) {
-                        sum_n[j] += suf_n[j];
+                    for (size_t j = 0; j < LHAT_P + LHAT_N; ++j) {
+                        acc_sum[j].add(acc_suf[j]);
                     }
                 }
+            }
+            for (size_t j = 0; j < LHAT_P; ++j) {
+                suf_p[j] = acc_suf[j].reduce<Fp>();
+                sum_p[j] = acc_sum[j].reduce<Fp>();
+            }
+            for (size_t j = 0; j < LHAT_N; ++j) {
+                suf_n[j] = acc_suf[LHAT_P + j].reduce<Fn>();
+                sum_n[j] = acc_sum[LHAT_P + j].reduce<Fn>();
             }
             for (size_t xi = 0; xi < LEAVES; ++xi) {
                 if (xi == pt) {

@@ -5,7 +5,8 @@
 
 #include "p256/field.hpp"
 
-#include "hash.hpp" // from faest-arch-opt
+#include "hash.hpp"       // from faest-arch-opt
+#include "parameters.hpp" // from faest-arch-opt
 
 extern "C" {
 #include "KeccakHash.h" // from xkcp
@@ -16,7 +17,6 @@ extern "C" {
 #include <cstddef>
 #include <cstdint>
 #include <span>
-#include <vector>
 
 namespace vole_mole::ecdsa_pok::detail {
 
@@ -88,7 +88,9 @@ inline LinkChallenge derive_link_challenge(const Digest& digest) {
 }
 
 // Little-endian bit vectors of integers.
-inline bool get_bit(std::span<const uint8_t> b, size_t i) { return ((b[i / 8] >> (i % 8)) & 1) != 0; }
+inline bool get_bit(std::span<const uint8_t> b, size_t i) {
+    return ((b[i / 8] >> (i % 8)) & 1) != 0;
+}
 inline void set_bit(std::span<uint8_t> b, size_t i, bool v) {
     b[i / 8] = static_cast<uint8_t>((b[i / 8] & ~(1u << (i % 8))) | (unsigned{v} << (i % 8)));
 }

@@ -31,10 +31,12 @@ constexpr Dst make_dst(const char (&protocol)[5], uint8_t version, char purpose,
 }
 
 // ECDSA proof of knowledge
-constexpr Dst ECDSA_POK_BINARY_DST = make_dst("ecpk", ecdsa_pok::VERSION, 'b', '0'); // binary VOLEitH
+constexpr Dst ECDSA_POK_BINARY_DST =
+    make_dst("ecpk", ecdsa_pok::VERSION, 'b', '0'); // binary VOLEitH
 constexpr Dst ECDSA_POK_BINDER_DST = make_dst("ecpk", ecdsa_pok::VERSION, 'f', '0'); // F_p, F_n QS
-constexpr Dst ECDSA_POK_LINK_DST = make_dst("ecpk", ecdsa_pok::VERSION, 'l', '0');   // link chal
-constexpr Dst ECDSA_POK_SEED_DST = make_dst("ecpk", ecdsa_pok::VERSION, 's', '0');   // prover seed
+constexpr Dst ECDSA_POK_BINARY_PRG_DST = make_dst("ecpk", ecdsa_pok::VERSION, 'q', '0'); // wit PRG
+constexpr Dst ECDSA_POK_LINK_DST = make_dst("ecpk", ecdsa_pok::VERSION, 'l', '0'); // link chal
+constexpr Dst ECDSA_POK_SEED_DST = make_dst("ecpk", ecdsa_pok::VERSION, 's', '0'); // prover seed
 constexpr Dst ECDSA_POK_STATEMENT_DST = make_dst("ecpk", ecdsa_pok::VERSION, 'x', '0'); // mu
 
 // Moussaka
@@ -74,6 +76,7 @@ constexpr bool dsts_are_distinct() {
     std::array all = {
         ECDSA_POK_BINARY_DST,
         ECDSA_POK_BINDER_DST,
+        ECDSA_POK_BINARY_PRG_DST,
         ECDSA_POK_LINK_DST,
         ECDSA_POK_SEED_DST,
         ECDSA_POK_STATEMENT_DST,

@@ -59,7 +59,7 @@ constexpr Limbs limbs_from_hex(const char (&hex)[65]) {
     Limbs out{};
     for (size_t i = 0; i < 64; ++i) {
         const char c = hex[i];
-        const u64 v = c >= '0' && c <= '9' ? static_cast<u64>(c - '0')
+        const u64 v = c >= '0' && c <= '9'   ? static_cast<u64>(c - '0')
                       : c >= 'a' && c <= 'f' ? static_cast<u64>(c - 'a' + 10)
                                              : static_cast<u64>(c - 'A' + 10);
         const size_t bit = 4 * (63 - i);

@@ -17,9 +17,14 @@
 // the proof over F_p and F_n), and the carries of the link sums are committed in the second step.
 // Their number depends on the weights, so we reserve a budget of carries (LINK_BUDGET), and the
 // unused ones must be zero.
+//
+// The witness may be derived from a short key with a PRG (BinPrg), which changes the sizes of the
+// counters (Shape) but not the statement.
 
 #ifndef VOLE_MOLE_ECDSA_POK_BINARY_HPP
 #define VOLE_MOLE_ECDSA_POK_BINARY_HPP
+
+#include "vole_mole/ecdsa_pok.hpp"
 
 #include "dst.hpp"
 #include "ecdsa_pok/bin_ops.hpp"
@@ -29,8 +34,8 @@
 #include "qs_bit.hpp"
 #include "sha256/sha256.hpp"
 #include "voleith.hpp"
+#include "witness_prg.hpp"
 
-#include "faest_sig.hpp"  // from faest-arch-opt
 #include "hash.hpp"       // from faest-arch-opt
 #include "parameters.hpp" // from faest-arch-opt
 
@@ -55,24 +60,46 @@ constexpr size_t ZP_COLS = RHO_P_BITS + 1;
 constexpr size_t Z_BYTES = 81;
 static_assert(8 * Z_BYTES >= ZN_COLS && 8 * Z_BYTES >= ZP_COLS);
 
+// The sizes of the counters (see bin_ops.hpp) of SHA-256 and X < p, whose columns have fewer than
+// 16 wires, and of the link sums, whose columns have up to 63. Without a derived witness, they're
+// 3 (degree 8) and 4 (degree 16), which minimizes the committed bits. A derived witness doubles
+// the QuickSilver degree (which faest-arch-opt limits to 29) but makes each committed bit cost only
+// one bit of proof, so then they're both 2 (degree 4, so QuickSilver degree 8): about 10,000 more
+// committed bits (about 1 KB), but proving is about a third faster.
+struct Shape {
+    size_t sha_log, link_log;
+    constexpr size_t degree() const { return size_t{1} << std::max(sha_log, link_log); }
+};
+constexpr Shape SHAPE_DIRECT{3, 4};
+constexpr Shape SHAPE_DERIVED{2, 2};
+
 // Committed bits per SHA-256 block (sha256_circuit.hpp, checked by tests), besides the message.
-constexpr size_t SHA_FIRST_BLOCK_BITS = 20968;
-constexpr size_t SHA_NEXT_BLOCK_BITS = 21080;
+constexpr size_t sha_first_block_bits(size_t log) { return log == 3 ? 20968 : 26568; }
+constexpr size_t sha_next_block_bits(size_t log) { return log == 3 ? 21080 : 26917; }
 // The carries of the check X < p.
 constexpr size_t X_LT_P_BITS = 256;
-// The budget of carries of the link sums. Over random challenges their number has mean ~5376 and
-// standard deviation ~31 (max 5518 over 50000 trials), so the budget is ~8 standard deviations
+// The budget of carries of the link sums, for counters of size LOG (see bin_ops.hpp). Over 20000
+// to 50000 random challenges, their number has mean ~5376 and standard deviation ~31 (max 5518)
+// for LOG = 4, mean ~7849 and standard deviation ~44 (max 8036) for LOG = 3, and mean ~12937 and
+// standard deviation ~33 (max 13072) for LOG = 2. So the budget is 8 to 10 standard deviations
 // above the mean; the prover retries with a fresh seed in the unlikely case it is exceeded.
-constexpr size_t LINK_BUDGET = 8 * 704;
+template <size_t LOG>
+constexpr size_t LINK_BUDGET = LOG == 4   ? 8 * 704
+                               : LOG == 3 ? 8 * 1040
+                                          : 8 * 1660;
 
-constexpr size_t sha_bits(size_t nb) {
-    return 512 * nb + SHA_FIRST_BLOCK_BITS + (nb - 1) * SHA_NEXT_BLOCK_BITS;
+constexpr size_t sha_bits(size_t nb, size_t log) {
+    return 512 * nb + sha_first_block_bits(log) + (nb - 1) * sha_next_block_bits(log);
 }
-constexpr size_t prefix_bits(size_t nb) {
-    return sha_bits(nb) + 256 + X_LT_P_BITS + RHO_N_BITS + RHO_P_BITS;
+constexpr size_t prefix_bits(size_t nb, size_t sha_log) {
+    return sha_bits(nb, sha_log) + 256 + X_LT_P_BITS + RHO_N_BITS + RHO_P_BITS;
 }
-constexpr size_t prefix_bytes(size_t nb) { return (prefix_bits(nb) + 7) / 8; }
-constexpr size_t witness_bits(size_t nb) { return 8 * prefix_bytes(nb) + LINK_BUDGET; }
+constexpr size_t prefix_bytes(size_t nb, size_t sha_log) {
+    return (prefix_bits(nb, sha_log) + 7) / 8;
+}
+template <Shape SH> constexpr size_t witness_bits(size_t nb) {
+    return 8 * prefix_bytes(nb, SH.sha_log) + LINK_BUDGET<SH.link_log>;
+}
 
 // 2^256 - p, so that X + (2^256 - p) < 2^256 iff X < p.
 constexpr std::array<uint8_t, 32> TWO256_MINUS_P = [] {
@@ -92,14 +119,15 @@ template <typename Ops> struct PrefixWires {
 
 // The values the prover commits to in the prefix (PlainOps only).
 struct PrefixValues {
-    std::vector<uint8_t> padded;              // the padded message
-    std::vector<sha256::Trace> traces;        // SHA-256 traces
-    std::array<uint8_t, 32> x;                // X, little endian
+    std::vector<uint8_t> padded;               // the padded message
+    std::vector<sha256::Trace> traces;         // SHA-256 traces
+    std::array<uint8_t, 32> x;                 // X, little endian
     std::array<uint8_t, Z_BYTES> rho_n, rho_p; // little endian
 };
 
-// The prefix circuit, for a message of msg_len bytes. vals is null except for PlainOps.
-template <typename Ops>
+// The prefix circuit, for a message of msg_len bytes, with counters of size LOG. vals is null
+// except for PlainOps.
+template <size_t LOG, typename Ops>
 PrefixWires<Ops> prefix_circuit(Ops& ops, size_t msg_len, const PrefixValues* vals) {
     using Wire = typename Ops::Wire;
     const size_t nb = sha256::num_blocks(msg_len);
@@ -113,11 +141,12 @@ PrefixWires<Ops> prefix_circuit(Ops& ops, size_t msg_len, const PrefixValues* va
         msg.push_back(ops.commit(vals && get_bit(vals->padded, i)));
         // One constraint per message bit, so that the number of constraints doesn't depend on the
         // message length: the padding is public, and the message bits are free.
-        ops.assert_eq(i / 8 >= msg_len ? msg.back() : ops.zero(), i / 8 >= msg_len && get_bit(pad, i));
+        ops.assert_eq(i / 8 >= msg_len ? msg.back() : ops.zero(),
+                      i / 8 >= msg_len && get_bit(pad, i));
     }
 
     // e = SHA-256(msg) as an integer: digest word w holds bits 32 (7 - w), ..., 32 (7 - w) + 31.
-    ShaCircuit<Ops> sha{ops};
+    ShaCircuit<Ops, LOG> sha{ops};
     const auto h = sha.hash(msg, vals ? &vals->traces : nullptr);
     out.e.resize(256);
     for (size_t w = 0; w < 8; ++w) {
@@ -139,7 +168,7 @@ PrefixWires<Ops> prefix_circuit(Ops& ops, size_t msg_len, const PrefixValues* va
                 sum.add(ops.one(), i);
             }
         }
-        sum.template reduce<SHA_COUNTER_LOG>([&](size_t col, const Wire& w) {
+        sum.template reduce<LOG>([&](size_t col, const Wire& w) {
             if (col == 256) {
                 ops.assert_eq(w, false);
             }
@@ -157,7 +186,7 @@ PrefixWires<Ops> prefix_circuit(Ops& ops, size_t msg_len, const PrefixValues* va
 
 // The link sums Z_n and Z_p. If `record`, then writes the sums to zn and zp (PlainOps);
 // otherwise, constrains them to be zn and zp.
-template <typename Ops>
+template <size_t LOG, typename Ops>
 void link_sums(Ops& ops, const PrefixWires<Ops>& in, const LinkChallenge& chal,
                std::span<uint8_t, Z_BYTES> zn, std::span<uint8_t, Z_BYTES> zp, bool record) {
     using Wire = typename Ops::Wire;
@@ -192,7 +221,7 @@ void link_sums(Ops& ops, const PrefixWires<Ops>& in, const LinkChallenge& chal,
         for (size_t i = 0; i < RHO_N_BITS; ++i) {
             sum.add(in.rho_n[i], i);
         }
-        sum.template reduce<LINK_COUNTER_LOG>(check(zn));
+        sum.template reduce<LOG>(check(zn));
     }
     {
         ColSum<Ops> sum(ops, ZP_COLS);
@@ -204,12 +233,12 @@ void link_sums(Ops& ops, const PrefixWires<Ops>& in, const LinkChallenge& chal,
         for (size_t i = 0; i < RHO_P_BITS; ++i) {
             sum.add(in.rho_p[i], i);
         }
-        sum.template reduce<LINK_COUNTER_LOG>(check(zp));
+        sum.template reduce<LOG>(check(zp));
     }
 }
 
 // The number of carries of the link sums for a challenge.
-inline size_t link_carries(const LinkChallenge& chal) {
+template <size_t LOG> size_t link_carries(const LinkChallenge& chal) {
     CountOps ops;
     PrefixWires<CountOps> in;
     in.e.resize(256);
@@ -217,69 +246,98 @@ inline size_t link_carries(const LinkChallenge& chal) {
     in.rho_n.resize(RHO_N_BITS);
     in.rho_p.resize(RHO_P_BITS);
     std::array<uint8_t, Z_BYTES> zn{}, zp{};
-    link_sums(ops, in, chal, zn, zp, false);
+    link_sums<LOG>(ops, in, chal, zn, zp, false);
     return ops.next;
 }
 
-// The link circuit: the link sums, with carries in [first, first + LINK_BUDGET), where the unused
-// carries must be zero. Throws std::runtime_error if the budget is exceeded (which happens with
-// negligible probability).
-template <typename Ops>
+// The link circuit: the link sums, with carries in [first, first + LINK_BUDGET<LOG>), where the
+// unused carries must be zero. Throws std::runtime_error if the budget is exceeded (which happens
+// with negligible probability).
+template <size_t LOG, typename Ops>
 void link_circuit(Ops& ops, const PrefixWires<Ops>& in, const LinkChallenge& chal,
                   std::span<uint8_t, Z_BYTES> zn, std::span<uint8_t, Z_BYTES> zp, bool record) {
     const size_t first = ops.next;
-    link_sums(ops, in, chal, zn, zp, record);
-    if (ops.next > first + LINK_BUDGET) {
+    link_sums<LOG>(ops, in, chal, zn, zp, record);
+    if (ops.next > first + LINK_BUDGET<LOG>) {
         throw std::runtime_error("ecdsa_pok: link carry budget exceeded");
     }
-    while (ops.next < first + LINK_BUDGET) {
+    while (ops.next < first + LINK_BUDGET<LOG>) {
         ops.assert_eq(ops.commit(false), false);
     }
 }
 
-// The number of constraints of the circuit, besides the bit constraints.
-inline size_t count_circuit_constraints(size_t msg_len) {
+// The number of constraints of the circuit, besides the bit constraints, for a message of nb
+// blocks: count_circuit_constraints computes it, and CIRCUIT_CONSTRAINTS (a constant expression,
+// as voleith.hpp needs) is checked against it by test_ecdsa_pok.cpp. The link circuit has one
+// constraint per carry in the budget, besides those of the outputs.
+template <Shape SH> size_t count_circuit_constraints(size_t msg_len) {
     CountOps ops;
-    auto wires = prefix_circuit(ops, msg_len, nullptr);
-    ops.next = 8 * prefix_bytes(sha256::num_blocks(msg_len));
+    auto wires = prefix_circuit<SH.sha_log>(ops, msg_len, nullptr);
+    ops.next = 8 * prefix_bytes(sha256::num_blocks(msg_len), SH.sha_log);
     const LinkChallenge chal = derive_link_challenge(Digest{});
     std::array<uint8_t, Z_BYTES> zn{}, zp{};
-    link_circuit(ops, wires, chal, zn, zp, false);
+    link_circuit<SH.link_log>(ops, wires, chal, zn, zp, false);
     return ops.constraints;
 }
+template <Shape SH> constexpr size_t CIRCUIT_CONSTRAINTS(size_t nb) {
+    const size_t base = SH.sha_log == 3 ? 23148 + (nb - 1) * 21720 : 28748 + (nb - 1) * 27557;
+    return base + LINK_BUDGET<SH.link_log>;
+}
 
-// The QuickSilver degree: the counters of the link sums have degree 16.
-constexpr size_t BIN_QS_DEGREE = COUNTER_DEGREE;
+// The witness PRG of the binary proof (see "Derived witnesses" in voleith.hpp): none, the local
+// PRG with 2 products per output, or the MQ PRG split into 2 instances.
+enum class BinPrg : uint8_t { none = 0, local = 1, mq = 2 };
 
-constexpr faest::owf owf_for_blocks(size_t nb) {
-    return static_cast<faest::owf>(((0x60u + nb) << 8) | faest::owf_flag_witness_bits_check);
+template <BinPrg PRG> struct bin_prg;
+template <> struct bin_prg<BinPrg::none> {
+    using type = vole_mole::detail::NoPrg;
+};
+template <> struct bin_prg<BinPrg::local> {
+    using type = vole_mole::detail::LocalPrg<2>;
+};
+template <> struct bin_prg<BinPrg::mq> {
+    using type = vole_mole::detail::MqPrg<2>;
+};
+
+template <BinPrg PRG> constexpr Shape SHAPE = PRG == BinPrg::none ? SHAPE_DIRECT : SHAPE_DERIVED;
+template <BinPrg PRG> constexpr size_t BIN_QS_DEGREE = SHAPE<PRG>.degree();
+
+constexpr faest::owf owf_for(size_t nb, BinPrg prg) {
+    return static_cast<faest::owf>(((0x60u + 0x10u * std::to_underlying(prg) + nb) << 8) |
+                                   faest::owf_flag_witness_bits_check);
 }
 constexpr bool is_ecdsa_owf(faest::owf o) {
     const auto v = std::to_underlying(o);
-    return (v & 0xff) == faest::owf_flag_witness_bits_check && (v >> 8) >= 0x61 &&
-           (v >> 8) <= 0x6f;
+    const auto hi = v >> 8;
+    return (v & 0xff) == faest::owf_flag_witness_bits_check && hi >= 0x61 && hi < 0x90 &&
+           (hi & 0xf) >= 1 && (hi & 0xf) <= MAX_BLOCKS;
 }
-constexpr size_t blocks_of_owf(faest::owf o) { return (std::to_underlying(o) >> 8) - 0x60; }
+constexpr size_t blocks_of_owf(faest::owf o) { return (std::to_underlying(o) >> 8) & 0xf; }
+constexpr BinPrg prg_of_owf(faest::owf o) {
+    return static_cast<BinPrg>(((std::to_underlying(o) >> 8) - 0x60) >> 4);
+}
 
 } // namespace vole_mole::ecdsa_pok::detail
 
 template <faest::owf O>
     requires(vole_mole::ecdsa_pok::detail::is_ecdsa_owf(O))
-struct faest::OWF_CONSTANTS<faest::secpar::s128, O> {
-    constexpr static size_t WITNESS_BITS =
-        vole_mole::ecdsa_pok::detail::witness_bits(vole_mole::ecdsa_pok::detail::blocks_of_owf(O));
-    constexpr static size_t QS_DEGREE = vole_mole::ecdsa_pok::detail::BIN_QS_DEGREE;
-    constexpr static bool valid = true;
-};
+struct faest::OWF_CONSTANTS<faest::secpar::s128, O>
+    : vole_mole::detail::RelationConstants<
+          vole_mole::ecdsa_pok::detail::witness_bits<
+              vole_mole::ecdsa_pok::detail::SHAPE<vole_mole::ecdsa_pok::detail::prg_of_owf(O)>>(
+              vole_mole::ecdsa_pok::detail::blocks_of_owf(O)),
+          vole_mole::ecdsa_pok::detail::BIN_QS_DEGREE<vole_mole::ecdsa_pok::detail::prg_of_owf(O)>,
+          typename vole_mole::ecdsa_pok::detail::bin_prg<vole_mole::ecdsa_pok::detail::prg_of_owf(
+              O)>::type> {};
 
 namespace vole_mole::ecdsa_pok::detail {
 
 // The binary VOLEitH parameters: as faest::v3::faest_em_128_f or faest_em_128_s.
-template <size_t NB, bool SMALL>
-using BinParams = faest::parameter_set<
-    faest::secpar::s128, SMALL ? 11 : 17, owf_for_blocks(NB), faest::prg::aes_ctr,
-    faest::prg::aes_ctr, faest::leaf_hash::aes_ctr, SMALL ? 7 : 8,
-    {faest::bavc::one_tree, SMALL ? 103u : 105u}, true, true>;
+template <size_t NB, bool SMALL, BinPrg PRG>
+using BinParams =
+    faest::parameter_set<faest::secpar::s128, SMALL ? 11 : 17, owf_for(NB, PRG),
+                         faest::prg::aes_ctr, faest::prg::aes_ctr, faest::leaf_hash::aes_ctr,
+                         SMALL ? 7 : 8, {faest::bavc::one_tree, SMALL ? 103u : 105u}, true, true>;
 
 // The public statement shared by both proofs.
 struct Statement {
@@ -287,8 +345,10 @@ struct Statement {
     size_t msg_len;
 };
 
-template <size_t NB, bool SMALL> struct BinRelation {
-    using params = BinParams<NB, SMALL>;
+template <size_t NB, bool SMALL, BinPrg PRG> struct BinRelation {
+    using params = BinParams<NB, SMALL, PRG>;
+    static constexpr Shape SH = SHAPE<PRG>;
+    static constexpr bool DERIVED = PRG != BinPrg::none;
 
     struct instance {
         const Statement* stmt;
@@ -296,14 +356,17 @@ template <size_t NB, bool SMALL> struct BinRelation {
         std::array<uint8_t, Z_BYTES> zn, zp;
     };
 
-    static constexpr size_t WITNESS_BITS = witness_bits(NB);
-    static constexpr size_t WITNESS_PREFIX_BYTES = prefix_bytes(NB);
+    // The relation's witness (derived from a short key if DERIVED).
+    static constexpr size_t RELATION_WITNESS_BITS = witness_bits<SH>(NB);
+    static constexpr size_t WITNESS_PREFIX_BYTES = prefix_bytes(NB, SH.sha_log);
     static constexpr std::span<const uint8_t> DST = vole_mole::detail::ECDSA_POK_BINARY_DST;
+    static constexpr std::span<const uint8_t> WITNESS_PRG_DST =
+        vole_mole::detail::ECDSA_POK_BINARY_PRG_DST;
 
-    // The bit constraints and the circuit's (which don't depend on the message length within NB
-    // blocks).
-    inline static const size_t NUM_CONSTRAINTS =
-        WITNESS_BITS + count_circuit_constraints(64 * NB - 9);
+    // The bit constraints (unless the witness is derived: its bits are bits by construction) and
+    // the circuit's (which don't depend on the message length within NB blocks).
+    static constexpr size_t NUM_CONSTRAINTS =
+        (DERIVED ? 0 : RELATION_WITNESS_BITS) + CIRCUIT_CONSTRAINTS<SH>(NB);
 
     static void hash_instance(faest::hash_state& hasher, const instance& x) {
         hasher.update(x.stmt->mu);
@@ -315,15 +378,18 @@ template <size_t NB, bool SMALL> struct BinRelation {
     template <typename QS>
     static void constraints(QS* qs, const instance& x,
                             std::span<const uint8_t, params::CONSTS::QS::CHALLENGE_BYTES>) {
-        for (size_t i = 0; i < WITNESS_BITS; ++i) {
-            vole_mole::detail::qs_add_bit_constraint(qs, qs->get_witness_bit(i));
+        static_assert(QS::max_degree == BIN_QS_DEGREE<PRG>);
+        if constexpr (!DERIVED) {
+            for (size_t i = 0; i < RELATION_WITNESS_BITS; ++i) {
+                vole_mole::detail::qs_add_bit_constraint(qs, qs->get_witness_bit(i));
+            }
         }
         QsOps<QS> ops{qs};
-        const auto wires = prefix_circuit(ops, x.stmt->msg_len, nullptr);
+        const auto wires = prefix_circuit<SH.sha_log>(ops, x.stmt->msg_len, nullptr);
         ops.next = 8 * WITNESS_PREFIX_BYTES;
         auto zn = x.zn;
         auto zp = x.zp;
-        link_circuit(ops, wires, *x.chal, zn, zp, false);
+        link_circuit<SH.link_log>(ops, wires, *x.chal, zn, zp, false);
     }
 };
 

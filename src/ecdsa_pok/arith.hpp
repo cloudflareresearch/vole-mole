@@ -14,12 +14,13 @@
 //   A_0 = H_0,  A_{k+1} = A_k + T_k[a_k][b_k] (k < 64),  R = A_64 + P*,
 //
 // where P* = -(H_0 + 64 H), and H_0, H are points of unknown discrete logarithm. The coordinates of
-// T_k[a_k][b_k] are polynomials of degree 15 + 15 in the committed digits, by Lagrange
-// interpolation on [0, 16)^2. Each addition A + T commits only to the slope lambda, constrained by
-// lambda (x_T - x_A) = y_T - y_A, and the coordinates of the sum are expressions in lambda and the
-// inputs: x' = lambda^2 - x_A - x_T and y' = lambda (x_A - x') - y_A. They're linear in x_A and
-// y_A, so the coordinates of every A_k have degree at most 31, without committing to them, and so
-// does the constraint. Each digit d is constrained by prod_{m < 16} (d - m) = 0, of degree 16.
+// T_k[a_k][b_k] are polynomials of degree 15 + 15 in the committed digits, by interpolation on
+// [0, 16)^2 (in Newton form, see Tables). Each addition A + T commits only to the slope lambda,
+// constrained by lambda (x_T - x_A) = y_T - y_A, and the coordinates of the sum are expressions in
+// lambda and the inputs: x' = lambda^2 - x_A - x_T and y' = lambda (x_A - x') - y_A. They're linear
+// in x_A and y_A, so the coordinates of every A_k have degree at most 31, without committing to
+// them, and so does the constraint. Each digit d is constrained by prod_{m < 16} (d - m) = 0, of
+// degree 16.
 //
 // The incomplete addition formula is wrong only if x_T = x_A, i.e., A_k = +-T_k[a_k][b_k]. If
 // A_k = -T, then the constraint can't hold (y_T - y_A = 2 y_T != 0, since P-256 has no points of
@@ -93,23 +94,80 @@ inline bool y_in_range(const p256::Limbs& y) {
 }
 
 inline const Affine& offset_h0() {
-    static const Affine p = p256::hash_to_point(std::array<uint8_t, 10>{'e', 'c', 'd', 's', 'a',
-                                                                       '-', 'p', 'o', 'k', '0'});
+    static const Affine p = p256::hash_to_point(
+        std::array<uint8_t, 10>{'e', 'c', 'd', 's', 'a', '-', 'p', 'o', 'k', '0'});
     return p;
 }
 inline const Affine& offset_h() {
-    static const Affine p = p256::hash_to_point(std::array<uint8_t, 10>{'e', 'c', 'd', 's', 'a',
-                                                                       '-', 'p', 'o', 'k', '1'});
+    static const Affine p = p256::hash_to_point(
+        std::array<uint8_t, 10>{'e', 'c', 'd', 's', 'a', '-', 'p', 'o', 'k', '1'});
     return p;
 }
 
-// The comb tables for a public key.
+// The comb tables for a public key, and the coordinates of T_k in Newton form: with the falling
+// factorials F_i(z) = z (z - 1) ... (z - i + 1),
+//
+//   x(T_k[a][b]) = sum_{i, j < 16} nx_k[i][j] F_i(a) F_j(b)  for a, b in [0, 16),
+//
+// where nx_k[i][j] = (D_a^i D_b^j x(T_k))[0][0] / (i! j!) for the forward differences D_a, D_b
+// (Newton's forward difference formula, in each variable), and likewise for y. The differences
+// take only subtractions, and evaluating the Newton form on committed digits takes about a third
+// of the multiplications that the Lagrange form takes.
 struct Tables {
-    std::vector<Affine> t; // t[256 k + 16 a + b] = T_k[a][b]
+    std::vector<Affine> t;  // t[256 k + 16 a + b] = T_k[a][b]
+    std::vector<Fp> nx, ny; // nx[256 k + 16 i + j] = nx_k[i][j]
     Affine h0, pstar;
 
-    const Affine& at(size_t k, size_t a, size_t b) const { return t[RADIX * RADIX * k + RADIX * a + b]; }
+    const Affine& at(size_t k, size_t a, size_t b) const {
+        return t[RADIX * RADIX * k + RADIX * a + b];
+    }
+    const Fp& newton_x(size_t k, size_t i, size_t j) const {
+        return nx[RADIX * RADIX * k + RADIX * i + j];
+    }
+    const Fp& newton_y(size_t k, size_t i, size_t j) const {
+        return ny[RADIX * RADIX * k + RADIX * i + j];
+    }
 };
+
+// 1/i! for i < 16.
+inline const std::array<Fp, RADIX>& inv_factorials() {
+    static const std::array<Fp, RADIX> out = [] {
+        std::array<Fp, RADIX> f;
+        Fp acc = Fp::one();
+        for (size_t i = 0; i < RADIX; ++i) {
+            if (i > 0) {
+                acc *= Fp::from_u64(i);
+            }
+            f[i] = acc.inv();
+        }
+        return f;
+    }();
+    return out;
+}
+
+// In place, the Newton coefficients of a function on [0, 16)^2 (see Tables).
+inline void newton_form(std::span<Fp, RADIX * RADIX> m) {
+    for (size_t i = 1; i < RADIX; ++i) {
+        for (size_t a = RADIX - 1; a >= i; --a) {
+            for (size_t b = 0; b < RADIX; ++b) {
+                m[RADIX * a + b] -= m[RADIX * (a - 1) + b];
+            }
+        }
+    }
+    for (size_t j = 1; j < RADIX; ++j) {
+        for (size_t b = RADIX - 1; b >= j; --b) {
+            for (size_t a = 0; a < RADIX; ++a) {
+                m[RADIX * a + b] -= m[RADIX * a + b - 1];
+            }
+        }
+    }
+    const auto& inv_fact = inv_factorials();
+    for (size_t a = 0; a < RADIX; ++a) {
+        for (size_t b = 0; b < RADIX; ++b) {
+            m[RADIX * a + b] *= inv_fact[a] * inv_fact[b];
+        }
+    }
+}
 
 // Throws std::runtime_error if a table entry is the identity (which happens with negligible
 // probability).
@@ -135,10 +193,18 @@ inline Tables make_tables(const Affine& q) {
         }
     }
     out.t = p256::batch_to_affine(pts);
-    for (const auto& p : out.t) {
-        if (p.inf) {
+    out.nx.resize(out.t.size());
+    out.ny.resize(out.t.size());
+    for (size_t i = 0; i < out.t.size(); ++i) {
+        if (out.t[i].inf) {
             throw std::runtime_error("ecdsa_pok: degenerate table");
         }
+        out.nx[i] = out.t[i].x;
+        out.ny[i] = out.t[i].y;
+    }
+    for (size_t k = 0; k < NUM_DIGITS; ++k) {
+        newton_form(std::span<Fp, RADIX * RADIX>(&out.nx[RADIX * RADIX * k], RADIX * RADIX));
+        newton_form(std::span<Fp, RADIX * RADIX>(&out.ny[RADIX * RADIX * k], RADIX * RADIX));
     }
     out.h0 = offset_h0();
     Jacobian s = Jacobian::from(out.h0);
@@ -152,30 +218,24 @@ inline Tables make_tables(const Affine& q) {
 // The public values of the arithmetic relation.
 struct ArithInstance {
     const Tables* tables;
-    Fn c1, c2;    // link weights for e and X (F_n)
-    Fp c3;        // link weight for X (F_p)
-    Fn zn;        // Z_n mod n
-    Fp zp;        // Z_p mod p
+    Fn c1, c2; // link weights for e and X (F_n)
+    Fp c3;     // link weight for X (F_p)
+    Fn zn;     // Z_n mod n
+    Fp zp;     // Z_p mod p
     std::array<std::array<Fp, 2 * NUM_LIMBS>, NUM_Y_CHECKS> gamma_p;
     std::array<std::array<Fn, 2 * NUM_LIMBS>, NUM_Y_CHECKS> gamma_n;
     std::array<Fp, NUM_Y_CHECKS> y_p;
     std::array<Fn, NUM_Y_CHECKS> y_n;
 };
 
-// 1 / prod_{m != i} (i - m) for the Lagrange basis on [0, 16).
-template <typename F> const std::array<F, RADIX>& lagrange_denominators() {
-    static const std::array<F, RADIX> out = [] {
-        std::array<F, RADIX> d;
-        for (size_t i = 0; i < RADIX; ++i) {
-            F acc = F::one();
-            for (size_t m = 0; m < RADIX; ++m) {
-                if (m != i) {
-                    acc *= i > m ? F::from_u64(i - m) : -F::from_u64(m - i);
-                }
-            }
-            d[i] = acc.inv();
+// The small constants 0, ..., 16 of F_p.
+inline const std::array<Fp, RADIX + 1>& small_constants() {
+    static const std::array<Fp, RADIX + 1> out = [] {
+        std::array<Fp, RADIX + 1> c;
+        for (size_t i = 0; i <= RADIX; ++i) {
+            c[i] = Fp::from_u64(i);
         }
-        return d;
+        return c;
     }();
     return out;
 }
@@ -184,29 +244,37 @@ struct ArithRelation {
     static constexpr size_t LP = detail::LP, LN = detail::LN, DP = detail::DP, DN = detail::DN;
     using instance = ArithInstance;
 
-    // The Lagrange basis l_0(z), ..., l_15(z) on [0, 16), and prod_m (z - m).
+    // The falling factorials F_0(z), ..., F_16(z), where F_i(z) = z (z - 1) ... (z - i + 1).
+    // F_16(z) is zero iff z is in [0, 16).
     template <typename Ctx, typename V>
-    static std::array<V, RADIX> lagrange(const Ctx& ctx, const V& z, V* range) {
-        std::array<V, RADIX> lin;
-        for (size_t m = 0; m < RADIX; ++m) {
-            lin[m] = z - ctx.cp(Fp::from_u64(m));
+    static std::array<V, RADIX + 1> falling(const Ctx& ctx, const V& z) {
+        const auto& c = small_constants();
+        std::array<V, RADIX + 1> f;
+        f[0] = ctx.cp(c[1]);
+        f[1] = z;
+        for (size_t i = 2; i <= RADIX; ++i) {
+            f[i] = f[i - 1] * (z - ctx.cp(c[i - 1]));
         }
-        std::array<V, RADIX> pre, suf;
-        pre[0] = ctx.cp(Fp::one());
-        for (size_t i = 1; i < RADIX; ++i) {
-            pre[i] = pre[i - 1] * lin[i - 1];
+        return f;
+    }
+
+    // sum_{i, j} n(i, j) F_i(a) F_j(b) = Q_0 + b (Q_1 + (b - 1) (Q_2 + ... + (b - 14) Q_15)) for
+    // Q_j = sum_i n(i, j) F_i(a).
+    template <typename Ctx, typename V, typename N>
+    static V newton_eval(const Ctx& ctx, const std::array<V, RADIX + 1>& fa, const V& b, N&& n) {
+        const auto& c = small_constants();
+        auto q = [&](size_t j) {
+            V acc = fa[0] * n(0, j);
+            for (size_t i = 1; i < RADIX; ++i) {
+                acc += fa[i] * n(i, j);
+            }
+            return acc;
+        };
+        V acc = q(RADIX - 1);
+        for (size_t j = RADIX - 1; j-- > 0;) {
+            acc = q(j) + (b - ctx.cp(c[j])) * acc;
         }
-        suf[RADIX - 1] = ctx.cp(Fp::one());
-        for (size_t i = RADIX - 1; i-- > 0;) {
-            suf[i] = suf[i + 1] * lin[i + 1];
-        }
-        *range = pre[RADIX - 1] * lin[RADIX - 1];
-        const auto& den = lagrange_denominators<Fp>();
-        std::array<V, RADIX> out;
-        for (size_t i = 0; i < RADIX; ++i) {
-            out[i] = pre[i] * suf[i] * den[i];
-        }
-        return out;
+        return acc;
     }
 
     template <typename Ctx> static void constraints(Ctx& ctx, const instance& x) {
@@ -219,26 +287,16 @@ struct ArithRelation {
         for (size_t k = 0; k < NUM_STEPS; ++k) {
             PV tx, ty;
             if (k < NUM_DIGITS) {
-                PV range_a, range_b;
-                const auto la = lagrange(ctx, ctx.wp(WP_A + k), &range_a);
-                const auto lb = lagrange(ctx, ctx.wp(WP_B + k), &range_b);
-                ctx.add_p(range_a);
-                ctx.add_p(range_b);
-                // x_T = sum_b l_b(b_k) sum_a X[a][b] l_a(a_k), and likewise y_T.
-                for (size_t b = 0; b < RADIX; ++b) {
-                    PV cx = la[0] * tab.at(k, 0, b).x, cy = la[0] * tab.at(k, 0, b).y;
-                    for (size_t a = 1; a < RADIX; ++a) {
-                        cx += la[a] * tab.at(k, a, b).x;
-                        cy += la[a] * tab.at(k, a, b).y;
-                    }
-                    if (b == 0) {
-                        tx = cx * lb[b];
-                        ty = cy * lb[b];
-                    } else {
-                        tx += cx * lb[b];
-                        ty += cy * lb[b];
-                    }
-                }
+                const PV bk = ctx.wp(WP_B + k);
+                const auto fa = falling(ctx, ctx.wp(WP_A + k));
+                const auto fb = falling(ctx, bk);
+                ctx.add_p(fa[RADIX]);
+                ctx.add_p(fb[RADIX]);
+                // The coordinates of T_k[a_k][b_k], in Newton form.
+                tx = newton_eval(ctx, fa, bk,
+                                 [&](size_t i, size_t j) { return tab.newton_x(k, i, j); });
+                ty = newton_eval(ctx, fa, bk,
+                                 [&](size_t i, size_t j) { return tab.newton_y(k, i, j); });
             } else {
                 tx = ctx.cp(tab.pstar.x);
                 ty = ctx.cp(tab.pstar.y);

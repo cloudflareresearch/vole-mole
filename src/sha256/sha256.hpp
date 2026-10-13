@@ -62,7 +62,8 @@ inline Trace compress_trace(const State& h, const Block& block) {
         tr.w[t] = load_be32(&block[4 * t]);
     }
     for (size_t t = 16; t < 64; ++t) {
-        tr.w[t] = small_sigma1(tr.w[t - 2]) + tr.w[t - 7] + small_sigma0(tr.w[t - 15]) + tr.w[t - 16];
+        tr.w[t] =
+            small_sigma1(tr.w[t - 2]) + tr.w[t - 7] + small_sigma0(tr.w[t - 15]) + tr.w[t - 16];
     }
     uint32_t a = h[0], b = h[1], c = h[2], d = h[3], e = h[4], f = h[5], g = h[6], hh = h[7];
     for (size_t t = 0; t < 64; ++t) {

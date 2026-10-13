@@ -12,8 +12,8 @@
 // homogeneous evaluation. Expressions are combined with +, -, and *, and with public constants (of
 // degree 0). Both parties evaluate the same expressions in the same order, so their degrees agree.
 //
-// Constraints f_1, f_2, ... are combined as sum_c chi^c f_c (lifted to degree D) for a random chi in
-// F. If some f_c(w) != 0, then the leading coefficient of the combination is nonzero except with
+// Constraints f_1, f_2, ... are combined as sum_c chi^c f_c (lifted to degree D) for a random chi
+// in F. If some f_c(w) != 0, then the leading coefficient of the combination is nonzero except with
 // probability (#constraints) / |F| over chi; see voleith.hpp for the rest of the check.
 
 #ifndef VOLE_MOLE_VOLEITH_P256_QS_HPP

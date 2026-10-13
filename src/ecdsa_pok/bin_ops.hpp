@@ -26,7 +26,6 @@
 #include "qs_bit.hpp"
 
 #include "polynomials.hpp" // from faest-arch-opt
-#include "quicksilver.hpp" // from faest-arch-opt
 
 #include <algorithm>
 #include <array>
@@ -42,13 +41,9 @@
 namespace vole_mole::ecdsa_pok::detail {
 
 // Counters of size LOG take up to 2^(LOG + 1) - 1 wires and commit up to LOG carries, with
-// constraints of degree up to 2^LOG. We use LOG = 3 (15 inputs, degree 8) for SHA-256, whose
-// columns have fewer than 16 wires, and LOG = 4 (31 inputs, degree 16) for the link sums, whose
-// columns have up to 63.
+// constraints of degree up to 2^LOG. Smaller counters commit more carries but have lower degree,
+// which makes QuickSilver cheaper; binary.hpp picks the sizes (`Shape`).
 constexpr size_t MAX_COUNTER_LOG = 4;
-constexpr size_t SHA_COUNTER_LOG = 3;
-constexpr size_t LINK_COUNTER_LOG = 4;
-constexpr size_t COUNTER_DEGREE = size_t{1} << MAX_COUNTER_LOG;
 
 struct CountOps {
     struct Wire {};
@@ -88,8 +83,8 @@ struct PlainOps {
         if (b / 8 >= witness.size()) {
             throw std::logic_error("ecdsa_pok: witness overflow");
         }
-        witness[b / 8] = static_cast<uint8_t>((witness[b / 8] & ~(1u << (b % 8))) |
-                                              (unsigned{v} << (b % 8)));
+        witness[b / 8] =
+            static_cast<uint8_t>((witness[b / 8] & ~(1u << (b % 8))) | (unsigned{v} << (b % 8)));
         return v ? 1 : 0;
     }
     Wire bit(size_t i) const { return (witness[i / 8] >> (i % 8)) & 1; }
@@ -131,13 +126,17 @@ template <typename QS> struct QsOps {
     }
 
   private:
+    // Counters whose constraints exceed the QuickSilver degree aren't instantiated (the circuit
+    // doesn't use them).
     template <size_t O> void dispatch(std::span<const Wire> in, std::span<const Wire> out) {
-        if constexpr (O <= MAX_COUNTER_LOG) {
+        if constexpr (O <= MAX_COUNTER_LOG && (size_t{1} << O) <= QS::max_degree) {
             if (out.size() == O) {
                 check_counter<O>(in, out);
             } else {
                 dispatch<O + 1>(in, out);
             }
+        } else {
+            throw std::logic_error("ecdsa_pok: counter exceeds the QuickSilver degree");
         }
     }
 
@@ -182,8 +181,7 @@ template <typename QS> struct QsOps {
 // Reduce `cols` with counters of size LOG and call output(col, wire) with the final wire of each
 // column.
 template <size_t LOG, typename Ops, typename Output>
-void reduce_columns(Ops& ops, std::vector<std::vector<typename Ops::Wire>>& cols,
-                    Output&& output) {
+void reduce_columns(Ops& ops, std::vector<std::vector<typename Ops::Wire>>& cols, Output&& output) {
     using Wire = typename Ops::Wire;
     const size_t num_cols = cols.size();
     for (size_t col = 0; col < num_cols; ++col) {

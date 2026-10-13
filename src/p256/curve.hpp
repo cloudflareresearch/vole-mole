@@ -9,6 +9,7 @@
 #include "p256/field.hpp"
 #include "sha256/sha256.hpp"
 
+#include <algorithm>
 #include <array>
 #include <cstddef>
 #include <cstdint>
@@ -219,7 +220,7 @@ inline Limbs ecdsa_e(std::span<const uint8_t> msg) {
 
 // Sign with secret key d and nonce k (both nonzero and less than n). For tests; not constant time.
 inline std::optional<Signature> ecdsa_sign_with_nonce(const Fn& d, const Fn& k,
-                                                       std::span<const uint8_t> msg) {
+                                                      std::span<const uint8_t> msg) {
     const Affine rp = scalar_mul(GENERATOR, k.canonical()).to_affine();
     const Fn r = Fn::reduce_32(rp.x.to_bytes());
     const Fn e = Fn::reduce_32(sha256::hash(msg));
@@ -240,8 +241,7 @@ inline bool ecdsa_verify(const Affine& q, std::span<const uint8_t> msg, const Si
     const Fn w = s->inv();
     const Fn u1 = e * w;
     const Fn u2 = *r * w;
-    const Jacobian rp =
-        scalar_mul(GENERATOR, u1.canonical()).add(scalar_mul(q, u2.canonical()));
+    const Jacobian rp = scalar_mul(GENERATOR, u1.canonical()).add(scalar_mul(q, u2.canonical()));
     if (rp.is_inf()) {
         return false;
     }

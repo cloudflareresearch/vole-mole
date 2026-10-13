@@ -20,7 +20,9 @@
 // Proof. Each part of the statement is proven where it's cheap:
 //
 //   - (c), on bits, in FAEST's binary VOLEitH (binary.hpp): the SHA-256 compressions, X < p, and
-//     X as 256 committed bits;
+//     X as 256 committed bits. By default, the binary witness is derived from a short key with
+//     the local PRG (see "Derived witnesses" in voleith.hpp), so each of its bits costs one bit of
+//     proof rather than tau;
 //   - (a), over F_p, in a VOLEitH over the fields of P-256 (voleith_p256/), with a fixed-base comb
 //     on the digits of u1, u2 (arith.hpp);
 //   - (b), over F_n, in the same VOLEitH.
@@ -29,11 +31,12 @@
 //
 //   - e (bits) and X (bits) to F_n: Z_n = c_1 e + c_2 X + rho_n. The binary proof shows this over
 //     the integers (by column compression), for the committed bits of e, X, and rho_n; the proof
-//     over F_n shows Z_n = c_1 e' + c_2 X' + rho_n' (mod n) for its committed e', X', rho_n'. Z_n is
-//     public.
+//     over F_n shows Z_n = c_1 e' + c_2 X' + rho_n' (mod n) for its committed e', X', rho_n'. Z_n
+//     is public.
 //   - X (bits) to F_p: likewise, Z_p = c_3 X + rho_p, where the proof over F_p uses its expression
 //     for x(R).
-//   - u1, u2 (digits over F_p) to F_n (limbs): Y_i = sum_l gamma_{i,l} L_l + sigma_i, for the 64-bit
+//   - u1, u2 (digits over F_p) to F_n (limbs): Y_i = sum_l gamma_{i,l} L_l + sigma_i, for the
+//   64-bit
 //     limbs L_l of u1 and u2 (two checks, i = 1, 2).
 //
 // The link challenge (the c_i and gamma_{i,l}) is derived from the commitments to the binary
@@ -64,19 +67,26 @@
 #ifndef VOLE_MOLE_ECDSA_POK_RELATION_HPP
 #define VOLE_MOLE_ECDSA_POK_RELATION_HPP
 
+#include "vole_mole/ecdsa_pok.hpp"
+
 #include "dst.hpp"
 #include "ecdsa_pok/arith.hpp"
 #include "ecdsa_pok/bin_ops.hpp"
 #include "ecdsa_pok/binary.hpp"
 #include "ecdsa_pok/link.hpp"
+#include "ecdsa_pok/sha256_circuit.hpp"
 #include "p256/curve.hpp"
 #include "p256/field.hpp"
 #include "sha256/sha256.hpp"
 #include "voleith.hpp"
 #include "voleith_p256/voleith.hpp"
 
-#include "faest_sig.hpp" // from faest-arch-opt
-#include "hash.hpp"      // from faest-arch-opt
+#include "hash.hpp"       // from faest-arch-opt
+#include "parameters.hpp" // from faest-arch-opt
+
+#include <algorithm>
+#include <type_traits>
+#include <utility>
 
 extern "C" {
 #include "KeccakHash.h" // from xkcp
@@ -97,9 +107,10 @@ namespace vp = vole_mole::voleith_p256;
 
 constexpr size_t Y_BYTES = 32;
 
-template <size_t NB, bool SMALL> struct Scheme {
-    using Bin = BinRelation<NB, SMALL>;
-    using VP = std::conditional_t<SMALL, vp::Small, vp::Fast>;
+template <size_t NB, Vole V, BinPrg PRG> struct Scheme {
+    using Bin = BinRelation<NB, V == Vole::small, PRG>;
+    using VP = std::conditional_t<V == Vole::small, vp::Small,
+                                  std::conditional_t<V == Vole::medium, vp::Medium, vp::Fast>>;
     using Arith = vp::Layout<ArithRelation, VP>;
 
     static constexpr size_t BIN_BYTES = vole_mole::detail::PROOF_BYTES<Bin>;
@@ -113,11 +124,12 @@ template <size_t NB, bool SMALL> struct Scheme {
 };
 
 inline Digest statement_digest(const p256::PublicKeyBytes& pk, size_t msg_len,
-                               std::span<const uint8_t> ctx, bool small) {
+                               std::span<const uint8_t> ctx, Vole vole, BinPrg prg) {
     faest::hash_state h;
     h.init(faest::secpar::s128);
     h.update(vole_mole::detail::ECDSA_POK_STATEMENT_DST);
-    h.update_byte(small ? 1 : 0);
+    h.update_byte(std::to_underlying(vole));
+    h.update_byte(std::to_underlying(prg));
     h.update(pk);
     for (const uint64_t v : {uint64_t{msg_len}, uint64_t{ctx.size()}}) {
         for (size_t i = 0; i < 8; ++i) {
@@ -135,14 +147,15 @@ template <typename Bin>
 LinkChallenge link_challenge(const Digest& mu, const vp::Digest& arith_chal2,
                              std::span<const uint8_t> bin_chal1,
                              std::span<const uint8_t, vole_mole::detail::PROOF_BYTES<Bin>> bin) {
-    const faest::faest_signature<typename Bin::params> view(bin.data());
     faest::hash_state h;
     h.init(faest::secpar::s128);
     h.update(vole_mole::detail::ECDSA_POK_LINK_DST);
     h.update(mu);
     h.update(arith_chal2);
     h.update(bin_chal1);
-    h.update(view.correction().template first<Bin::WITNESS_PREFIX_BYTES>());
+    // The commitment to the binary witness prefix: its correction, or, if it's derived, the
+    // correction of the key and the prefix of e.
+    vole_mole::detail::hash_witness_prefix_commitment<Bin>(h, bin);
     Digest d;
     h.finalize(d);
     return derive_link_challenge(d);
@@ -179,8 +192,7 @@ inline ArithInstance arith_instance(const Tables* tables, const LinkChallenge& c
         x.y_p[i] = Fp::from_canonical(y[i]);
         // y < 2^256 < 2 n
         p256::Limbs d{};
-        x.y_n[i] = Fn::from_canonical(
-            p256::detail::limbs_sub(d, y[i], Fn::M) == 0 ? d : y[i]);
+        x.y_n[i] = Fn::from_canonical(p256::detail::limbs_sub(d, y[i], Fn::M) == 0 ? d : y[i]);
     }
     return x;
 }
@@ -200,9 +212,9 @@ inline p256::Limbs load_limbs_le(const uint8_t* in) {
 
 // The prover's witness.
 struct Witness {
-    std::vector<Fp> wp; // ArithRelation's F_p witness
-    std::vector<Fn> wn; // F_n witness
-    PrefixValues bin;   // the binary witness prefix's values
+    std::vector<Fp> wp;           // ArithRelation's F_p witness
+    std::vector<Fn> wn;           // F_n witness
+    PrefixValues bin;             // the binary witness prefix's values
     std::array<p256::Limbs, 2> u; // u1, u2 (integers of the digits)
     std::array<p256::Limbs, NUM_Y_CHECKS> sigma;
 };
@@ -298,7 +310,7 @@ inline Witness make_witness(const Affine& q, const Tables& tables, std::span<con
 
 // Y_i = sum_l gamma_{i,l} L_l + sigma_i.
 inline std::array<p256::Limbs, NUM_Y_CHECKS> y_values(const Witness& wit,
-                                                     const LinkChallenge& chal) {
+                                                      const LinkChallenge& chal) {
     std::array<p256::Limbs, NUM_Y_CHECKS> out;
     for (size_t i = 0; i < NUM_Y_CHECKS; ++i) {
         Fp acc = Fp::from_canonical(wit.sigma[i]);
@@ -312,11 +324,11 @@ inline std::array<p256::Limbs, NUM_Y_CHECKS> y_values(const Witness& wit,
     return out;
 }
 
-template <size_t NB, bool SMALL>
-void prove_with_witness(std::span<uint8_t, Scheme<NB, SMALL>::PROOF_BYTES> proof,
-                        const Digest& mu, size_t msg_len, const Tables& tables,
-                        const Witness& wit, std::span<const uint8_t, 32> seed) {
-    using S = Scheme<NB, SMALL>;
+template <size_t NB, Vole V, BinPrg PRG>
+void prove_with_witness(std::span<uint8_t, Scheme<NB, V, PRG>::PROOF_BYTES> proof, const Digest& mu,
+                        size_t msg_len, const Tables& tables, const Witness& wit,
+                        std::span<const uint8_t, 32> seed) {
+    using S = Scheme<NB, V, PRG>;
     using Bin = typename S::Bin;
     using VP = typename S::VP;
     const auto bin = proof.template subspan<S::OFF_BIN, S::BIN_BYTES>();
@@ -344,9 +356,9 @@ void prove_with_witness(std::span<uint8_t, Scheme<NB, SMALL>::PROOF_BYTES> proof
         ar, mu, std::span<const Fp, LP>(wit.wp), std::span<const Fn, LN>(wit.wn), rho_arith);
 
     // The binary witness prefix, and its commitment.
-    std::vector<uint8_t> bin_witness(Bin::WITNESS_BITS / 8, 0);
+    std::vector<uint8_t> bin_witness(Bin::RELATION_WITNESS_BITS / 8, 0);
     PlainOps ops{bin_witness};
-    const auto wires = prefix_circuit(ops, msg_len, &wit.bin);
+    const auto wires = prefix_circuit<Bin::SH.sha_log>(ops, msg_len, &wit.bin);
     auto pending = vole_mole::detail::voleith_vole_gen<Bin>(
         bin, nullptr,
         std::span<const uint8_t, Bin::WITNESS_PREFIX_BYTES>(bin_witness.data(),
@@ -356,7 +368,7 @@ void prove_with_witness(std::span<uint8_t, Scheme<NB, SMALL>::PROOF_BYTES> proof
     // The link challenge and values.
     const LinkChallenge chal = link_challenge<Bin>(mu, arith_state.chal2, pending.chal1, bin);
     ops.next = 8 * Bin::WITNESS_PREFIX_BYTES;
-    link_circuit(ops, wires, chal, zn, zp, true);
+    link_circuit<Bin::SH.link_log>(ops, wires, chal, zn, zp, true);
     const auto y = y_values(wit, chal);
     for (size_t i = 0; i < NUM_Y_CHECKS; ++i) {
         store_limbs_le(proof.data() + S::OFF_Y + i * Y_BYTES, y[i]);
@@ -380,10 +392,10 @@ void prove_with_witness(std::span<uint8_t, Scheme<NB, SMALL>::PROOF_BYTES> proof
     vp::prove_finish<ArithRelation, VP>(ar, arith_state, ar_inst, binder);
 }
 
-template <size_t NB, bool SMALL>
-bool verify_proof(std::span<const uint8_t, Scheme<NB, SMALL>::PROOF_BYTES> proof,
-                  const Digest& mu, size_t msg_len, const Tables& tables) {
-    using S = Scheme<NB, SMALL>;
+template <size_t NB, Vole V, BinPrg PRG>
+bool verify_proof(std::span<const uint8_t, Scheme<NB, V, PRG>::PROOF_BYTES> proof, const Digest& mu,
+                  size_t msg_len, const Tables& tables) {
+    using S = Scheme<NB, V, PRG>;
     using Bin = typename S::Bin;
     using VP = typename S::VP;
     const auto bin = proof.template subspan<S::OFF_BIN, S::BIN_BYTES>();

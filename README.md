@@ -207,7 +207,9 @@ signature stay hidden. It combines two VOLEitH proofs:
 
 - a binary proof (FAEST-EM-128 parameters) of SHA-256 on the padded message,
   of `X < p` for the x-coordinate `X` of `R`, and of two masked integer
-  linear combinations of the hash `e` and `X`;
+  linear combinations of the hash `e` and `X`. By default, its witness is
+  derived from a short key with the (experimental) local PRG, see
+  [above](#deriving-the-witness-with-a-prg);
 - a prime-field proof over F_p and F_n, which proves that `R = u1 G + u2 Q`
   using a radix-16 fixed-base comb on precomputed tables (only the slopes are
   committed). It also proves `u1 X = u2 e` and `u2 X != 0` over F_n (so
@@ -220,13 +222,18 @@ proofs commit, tie `e` and `X` across the two proofs. See
 
 | Parameters | Message   | Proof     | Prove   | Verify  |
 |:-----------|:----------|----------:|--------:|--------:|
-| fast       | ≤ 55 B    | 192505 B  | 41.5 ms | 19.7 ms |
-| fast       | 56–119 B  | 238388 B  | 46.4 ms | 21.7 ms |
-| small      | ≤ 55 B    | 131451 B  | 156 ms  | 131 ms  |
-| small      | 56–119 B  | 161140 B  | 163 ms  | 136 ms  |
+| fast       | ≤ 55 B    | 138549 B  | 22.6 ms | 13.4 ms |
+| fast       | 56–119 B  | 142470 B  | 26.1 ms | 14.5 ms |
+| medium     | ≤ 55 B    | 115055 B  | 31.6 ms | 22.6 ms |
+| medium     | 56–119 B  | 118976 B  | 35.6 ms | 24.2 ms |
+| small      | ≤ 55 B    | 98243 B   | 64.6 ms | 56.0 ms |
+| small      | 56–119 B  | 101990 B  | 69.0 ms | 57.8 ms |
 
-Computing the comb tables for a public key takes another 5 ms. Prover and
-verifier both do this.
+Without deriving the binary witness (`WitnessPrg::none`), proofs are
+192505 B (fast), 169011 B (medium) and 131451 B (small) for messages of up to
+55 bytes, and proving takes 15–25% longer. Computing the comb tables for a
+public key takes another 6 ms. Prover and verifier both do this. Measured with
+Apple clang 21, release build.
 
 ## License
 
