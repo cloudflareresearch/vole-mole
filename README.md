@@ -55,6 +55,36 @@ We use the VOLEitH implementation from [faest-arch-opt][arch-opt] and the UOV
 implementation from [pqov][pqov]. Measurements were taken for the release build
 running on an Apple M4 Pro.
 
+## Proof of knowledge of an ECDSA signature
+
+`vole_mole/ecdsa_pok.hpp` is an experimental proof of knowledge of an
+ECDSA-P256-SHA256 signature on a hidden message. The public key, the message
+length (at most 119 bytes) and a context string are public; the message and
+signature stay hidden. It combines two VOLEitH proofs:
+
+- a binary proof (FAEST-EM-128 parameters) of SHA-256 on the padded message,
+  of `X < p` for the x-coordinate `X` of `R`, and of two masked integer
+  linear combinations of the hash `e` and `X`;
+- a prime-field proof over F_p and F_n, which proves that `R = u1 G + u2 Q`
+  using a radix-16 fixed-base comb on precomputed tables (only the slopes are
+  committed). It also proves `u1 X = u2 e` and `u2 X != 0` over F_n (so
+  `r = X mod n`), and that the digits of `u1` and `u2` match their values over
+  F_n.
+
+The same masked linear combinations, with a challenge derived after both
+proofs commit, tie `e` and `X` across the two proofs. See
+`src/ecdsa_pok/relation.hpp` for the full relation and soundness argument.
+
+| Parameters | Message   | Proof     | Prove   | Verify  |
+|:-----------|:----------|----------:|--------:|--------:|
+| fast       | ≤ 55 B    | 192505 B  | 41.5 ms | 19.7 ms |
+| fast       | 56–119 B  | 238388 B  | 46.4 ms | 21.7 ms |
+| small      | ≤ 55 B    | 131451 B  | 156 ms  | 131 ms  |
+| small      | 56–119 B  | 161140 B  | 163 ms  | 136 ms  |
+
+Computing the comb tables for a public key takes another 5 ms. Prover and
+verifier both do this.
+
 ## Building
 
 Requirements: [Meson][meson] >= 1.4, Ninja, Python 3, and a compiler with good
