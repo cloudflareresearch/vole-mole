@@ -1,0 +1,68 @@
+include/vole_mole/mlkem_pop.hpp
+  s_3c36208e1ae23a::t_5a3d77b4e930df 1-79
+meson.build
+  s_3c36208e1ae23a::t_ef00668676eafe 55
+src/dst.hpp
+  s_3c36208e1ae23a::t_7e711f7934139a 9,33-37,73-75
+src/mlkem_pop/relation.hpp
+  s_3c36208e1ae23a::t_cac4c5092939ad 1-23,25-28,30-63,68-148
+  s_496e3744d02ce0::t_b2c97aea0611b1 64-67
+src/mlkem_pop/seeded.hpp
+  s_3c36208e1ae23a::t_b6917018057544 1-9,10-11,13-36
+tests/meson.build
+  s_3c36208e1ae23a::t_0991b022478ff6 10,58
+  s_496e3744d02ce0::t_c75dbee9746f18 11,59
+tests/mlkem_pop/bench_mlkem_pop.cpp
+  s_3c36208e1ae23a::t_053379e41c8639 1-58
+tests/mlkem_pop/test_mlkem_pop.cpp
+  s_3c36208e1ae23a::t_e69a6fbc7f7631 1-293
+README.md
+  s_3c36208e1ae23a::t_dc3fdda363e238 8,12,14,26,28,257
+examples/meson.build
+  s_3c36208e1ae23a::t_aee661b667af97 1
+examples/mlkem_pop.cpp
+  s_3c36208e1ae23a::t_75307446e34196 1-39
+src/voleith_fq/mq.hpp
+  s_496e3744d02ce0::t_b0facd56f3f17b 1-364
+src/voleith_fq/mq_key_len.hpp
+  s_496e3744d02ce0::t_5dcf9328b6202a 1-73
+tests/mlkem_pop/bench_mlkem_pop_prg.cpp
+  s_496e3744d02ce0::t_db8be5f0dd12ed 1-6,9-18,20,22-24,26-82,88-142
+  s_496e3744d02ce0::t_1e98dc259bbef8 8,25,83-87
+tools/mq_fq_key_len.py
+  s_496e3744d02ce0::t_bebea045f9b57e 1-117
+tests/mlkem_pop/test_mlkem_pop_prg.cpp
+  s_496e3744d02ce0::t_22f6ba11a9f30b 7,44-48,56
+src/voleith_fq/voleith.hpp
+  s_496e3744d02ce0::t_11dca707cbf0c7 63-68
+src/voleith_fq/local_key_len.hpp
+  s_496e3744d02ce0::t_f4c26f4ecd482c 1-122
+tools/local_fq_key_len.py
+  s_496e3744d02ce0::t_9e800cc24cd4dd 1-100
+src/voleith_fq/local.hpp
+  s_496e3744d02ce0::t_2e4c7d2b375486 1-33,35-194
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.10",
+  "base_commit_sha": "7031bf972c39fe96ff039545d5234182ac2a0b91",
+  "prompts": {},
+  "sessions": {
+    "s_3c36208e1ae23a": {
+      "agent_id": {
+        "tool": "opencode",
+        "id": "ses_ecfe959ebffeOme1dG0POu0H2L",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Bas Westerbaan <bas@cloudflare.com>"
+    },
+    "s_496e3744d02ce0": {
+      "agent_id": {
+        "tool": "opencode",
+        "id": "ses_ecf861843ffexrTQAw7vEluymL",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Bas Westerbaan <bas@cloudflare.com>"
+    }
+  }
+}
