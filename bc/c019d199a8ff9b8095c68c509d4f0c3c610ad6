@@ -1,0 +1,115 @@
+src/mq/split.hpp
+  s_53f0de9abaa628::t_b256f27aaf83a3 1-134
+tests/mq/kat.txt
+  s_53f0de9abaa628::t_75f73d550982e5 1-31
+tools/mq_ref.py
+  s_53f0de9abaa628::t_9a94a7b9cbd286 1-159
+tests/meson.build
+  s_53f0de9abaa628::t_dd052df3d98430 12,21,56
+  s_3c36208e1ae23a::t_24db304389c162 22
+tools/mq_key_bits.py
+  s_53f0de9abaa628::t_b27eb76650a664 1-110
+tests/mq/bench_mq.cpp
+  s_53f0de9abaa628::t_0a65c5c4c79d97 1-102
+tests/mq/test_mq.cpp
+  s_53f0de9abaa628::t_ce78f4af5be298 1-2,4-333
+  s_53f0de9abaa628::t_db42bcb46e595e 3,334-430
+src/mq/prg.hpp
+  s_53f0de9abaa628::t_4110105a4ecf39 1-408
+src/mq/key_bits.hpp
+  s_53f0de9abaa628::t_1e27a827970684 1-84
+tests/moussaka/test_moussaka.cpp
+  s_53f0de9abaa628::t_819108c244f435 640,642
+  s_53f0de9abaa628::t_10a67b19f722bd 32,36,40,272-274,282-301,307,611-613,622-639,641
+tests/moussaka/gen_moussaka_kat.cpp
+  s_53f0de9abaa628::t_1e043450149d27 40-42,46,52-54
+  s_53f0de9abaa628::t_3b93be8968223e 47,49-51
+README.md
+  s_53f0de9abaa628::t_aa1790d976d112 57-58,123-135,124-135,140-164,140,145-163
+  s_53f0de9abaa628::t_6f77438c23f493 165
+  s_53f0de9abaa628::t_1285df57560cf3 136-139
+  s_53f0de9abaa628::t_1d33d6b68e8d07 57-58,123,141-144,164
+tests/moussaka/moussaka_kat.txt
+  s_53f0de9abaa628::t_d22c1498119768 6
+  s_53f0de9abaa628::t_af10f7321fecb8 2,5-7,23,26,43,46,124,127
+src/ratatouille/spend.hpp
+  s_53f0de9abaa628::t_625a574d7b26d8 275,281-283
+  s_53f0de9abaa628::t_5fb1ed44700345 326
+  s_53f0de9abaa628::t_5c3acdfe98053b 272-274,284,324-325
+src/mq/derived_qs.hpp
+  s_53f0de9abaa628::t_19086f2468ba4e 1-15,17-18,19-218
+  s_53f0de9abaa628::t_1c7af71c8e1182 16
+tests/voleith/test_derived_witness.cpp
+  s_53f0de9abaa628::t_e327fdacfb813f 4-35,50-58,61-64,66-72,74-91,93-164,167-185,194-261
+  s_53f0de9abaa628::t_fb0bb82dcd4f37 1-2,36,38-43,47,49,59-60,73,92
+  s_53f0de9abaa628::t_6b502b5ed13909 3,37,44-46,48,65,165-166,186-193
+src/pomfrit/redeem.hpp
+  s_53f0de9abaa628::t_2460b6a4a4a112 62,66-68
+  s_53f0de9abaa628::t_c9827532798ff1 113
+  s_53f0de9abaa628::t_4ad2c77d862220 59-61,69,111-112
+src/pomfrit/pomfrit.cpp
+  s_53f0de9abaa628::t_c451840af954b6 50,103
+src/qs_bit.hpp
+  s_3c36208e1ae23a::t_14e73c59d5eb07 68-69
+src/ratatouille/issue.hpp
+  s_53f0de9abaa628::t_5fda64f72cf288 107,113-115
+  s_53f0de9abaa628::t_85827a6ad612bf 156
+  s_53f0de9abaa628::t_b46cdba2ddd573 104-106,116,154-155
+src/moussaka/issue.hpp
+  s_53f0de9abaa628::t_97d59300990d31 128,133-135,175
+  s_53f0de9abaa628::t_5e031b26013bb4 23-25
+  s_53f0de9abaa628::t_e978be88690834 136,173-174
+  s_53f0de9abaa628::t_e5deb521dfd238 21-22,123,127
+src/moussaka/redeem.hpp
+  s_53f0de9abaa628::t_b8dd8337f285d9 143,148-150,193
+  s_53f0de9abaa628::t_bd5eeac60a86f8 38-40
+  s_53f0de9abaa628::t_89ffb3fd927aae 151,191-192
+  s_53f0de9abaa628::t_94ef99c226726e 36-37,138,142
+src/voleith.hpp
+  s_53f0de9abaa628::t_e0999305eb44fc 12-14,24,29-36,38,67,69,90,101-103,109-110,112-114,116-118,121,123-125,127-134,147-150,154-178,220-227,229-230,232-236,239,241-355,362-365,375-376,454-455,465,467-488,513,517-518,527-539,545-555,698-699,711-713,729-742
+  s_53f0de9abaa628::t_f69a0b28480871 64-66,74-75
+  s_53f0de9abaa628::t_482e45e5b374c2 25-28,37,68,104-108,111,115,119-120,122,126,135-139,141-146,228,231,237-238,240
+src/dst.hpp
+  s_53f0de9abaa628::t_53baddac45fbb0 34,38-39,45,53-54,58-59,68,72,76,82,86
+src/witness_prg.hpp
+  s_53f0de9abaa628::t_6e729387f4d11d 3,11-14,16-25,27-28,31,54-56,59-62
+  s_53f0de9abaa628::t_f67f87834c2264 1-2,4-10,15,26,29-30,32-53,57-58
+src/mq/local.hpp
+  s_53f0de9abaa628::t_1821db44898767 1-198
+src/mq/local_key_bits.hpp
+  s_53f0de9abaa628::t_d0646de3313218 1-192
+tools/local_key_bits.py
+  s_53f0de9abaa628::t_120940657261f9 1-122
+include/vole_mole/moussaka.hpp
+  s_53f0de9abaa628::t_e8a96263d16683 30,32
+src/voleith_fq/field.hpp
+  s_3c36208e1ae23a::t_b42d3cecf17465 1-208
+src/voleith_fq/voleith.hpp
+  s_3c36208e1ae23a::t_2b1c33a1db97c7 1-872
+tests/voleith_fq/test_voleith_fq.cpp
+  s_3c36208e1ae23a::t_ce86e249009f7d 1-254
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.10",
+  "base_commit_sha": "bcc019d199a8ff9b8095c68c509d4f0c3c610ad6",
+  "prompts": {},
+  "sessions": {
+    "s_3c36208e1ae23a": {
+      "agent_id": {
+        "tool": "opencode",
+        "id": "ses_ecfe959ebffeOme1dG0POu0H2L",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Bas Westerbaan <bas@cloudflare.com>"
+    },
+    "s_53f0de9abaa628": {
+      "agent_id": {
+        "tool": "opencode",
+        "id": "ses_ecfcbbcd4ffeWHsyNK4WpEjPLC",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Bas Westerbaan <bas@cloudflare.com>"
+    }
+  }
+}
