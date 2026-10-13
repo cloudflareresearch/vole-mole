@@ -8,6 +8,7 @@
 #include "moussaka/redeem.hpp"  // internal
 #include "moussaka/seeded.hpp"  // internal
 #include "moussaka/token.hpp"   // internal
+#include "voleith.hpp"          // internal
 
 #include "test.hpp"
 
@@ -31,12 +32,15 @@
 
 using namespace vole_mole;
 using namespace vole_mole::moussaka;
+using vole_mole::detail::FAEST_PROOF_BYTES;
 using vole_mole::moussaka::detail::commit;
 using vole_mole::moussaka::detail::Commitment;
 using vole_mole::moussaka::detail::issue_request_with_seed;
+using vole_mole::moussaka::detail::IssueRelation;
 using vole_mole::moussaka::detail::Opening;
 using vole_mole::moussaka::detail::R_BYTES;
 using vole_mole::moussaka::detail::redeem_request_with_seed;
+using vole_mole::moussaka::detail::RedeemRelation;
 using vole_mole::moussaka::detail::Seed;
 using vole_mole::moussaka::detail::SEED_BYTES;
 using vole_mole::moussaka::detail::TokenAccess;
@@ -268,11 +272,32 @@ TEST(IssueRequest, RejectTamperedProof) {
         EXPECT_FALSE(verifies(req, CTX_ISS)) << "flipped a bit of byte " << i;
         std::span(req).last<ISSUE_PROOF_BYTES>()[i] ^= 0x04;
     }
-    // The last bytes are delta (chall_3), iv_pre and the grinding counter.
-    for (size_t i = ISSUE_PROOF_BYTES - 36; i < ISSUE_PROOF_BYTES; ++i) {
+    // The last bytes of the FAEST part are delta (chall_3), iv_pre and the grinding counter.
+    constexpr size_t FAEST_BYTES = FAEST_PROOF_BYTES<IssueRelation>;
+    for (size_t i = FAEST_BYTES - 36; i < FAEST_BYTES; ++i) {
         std::span(req).last<ISSUE_PROOF_BYTES>()[i] ^= 0x01;
         EXPECT_FALSE(verifies(req, CTX_ISS)) << "flipped a bit of byte " << i;
         std::span(req).last<ISSUE_PROOF_BYTES>()[i] ^= 0x01;
+    }
+    EXPECT_TRUE(verifies(req, CTX_ISS));
+}
+
+// The proof ends with e = w + G(K), one bit per bit of the derived witness w.
+TEST(IssueRequest, RejectTamperedDerivedWitness) {
+    constexpr size_t FAEST_BYTES = FAEST_PROOF_BYTES<IssueRelation>;
+    if constexpr (!vole_mole::detail::DERIVED_WITNESS<IssueRelation>) {
+        GTEST_SKIP() << "the witness isn't derived";
+    }
+    static_assert(ISSUE_PROOF_BYTES ==
+                  FAEST_BYTES + vole_mole::detail::DERIVED_E_BYTES<IssueRelation>);
+    const auto res = make_request();
+    IssueRequest req = res.request;
+    const auto e = std::span(req).last<ISSUE_PROOF_BYTES>().subspan<FAEST_BYTES>();
+    for (size_t i = 0; i < e.size(); i += (i < 8 || i + 8 >= e.size()) ? 1 : 13) {
+        const auto mask = static_cast<uint8_t>(1u << (i % 8));
+        e[i] ^= mask;
+        EXPECT_FALSE(verifies(req, CTX_ISS)) << "flipped bit " << i % 8 << " of byte " << i;
+        e[i] ^= mask;
     }
     EXPECT_TRUE(verifies(req, CTX_ISS));
 }
@@ -282,7 +307,7 @@ TEST(IssueRequest, RejectTamperedCMult) {
     using P = vole_mole::moussaka::detail::IssueParams;
     constexpr size_t N_MASK = P::CONSTS::CRT_NUM_MASK;
     constexpr size_t N_MULT_BYTES = P::CONSTS::CRT_NUM_MULT_BYTES;
-    static_assert(N_MASK == vole_mole::moussaka::detail::ISSUE_QS_DEGREE - 1 + 4);
+    static_assert(N_MASK == P::OWF_CONSTS::QS_DEGREE - 1 + 4);
 
     const auto res = make_request();
     IssueRequest req = res.request;
@@ -586,12 +611,34 @@ TEST(Redeem, RejectsTamperedProof) {
             << "flipped a bit of byte " << i;
         proof[i] ^= 0x10;
     }
-    // The last bytes are delta (chall_3), iv_pre and the grinding counter.
-    for (size_t i = REDEEM_PROOF_BYTES - 36; i < REDEEM_PROOF_BYTES; ++i) {
+    // The last bytes of the FAEST part are delta (chall_3), iv_pre and the grinding counter.
+    constexpr size_t FAEST_BYTES = FAEST_PROOF_BYTES<RedeemRelation>;
+    for (size_t i = FAEST_BYTES - 36; i < FAEST_BYTES; ++i) {
         proof[i] ^= 0x01;
         EXPECT_FALSE(finalize_redeem(anchors().keys, req, CTX_ISS, CTX_RED, CHALLENGE_DIGEST))
             << "flipped a bit of byte " << i;
         proof[i] ^= 0x01;
+    }
+    EXPECT_TRUE(finalize_redeem(anchors().keys, req, CTX_ISS, CTX_RED, CHALLENGE_DIGEST));
+}
+
+// The proof ends with e = w + G(K), one bit per bit of the derived witness w. Every part of the
+// witness (r, s, the intermediate states, and the selector) is covered.
+TEST(Redeem, RejectsTamperedDerivedWitness) {
+    constexpr size_t FAEST_BYTES = FAEST_PROOF_BYTES<RedeemRelation>;
+    if constexpr (!vole_mole::detail::DERIVED_WITNESS<RedeemRelation>) {
+        GTEST_SKIP() << "the witness isn't derived";
+    }
+    static_assert(REDEEM_PROOF_BYTES ==
+                  FAEST_BYTES + vole_mole::detail::DERIVED_E_BYTES<RedeemRelation>);
+    RedeemRequest req = redemption();
+    const auto e = std::span(req).last<REDEEM_PROOF_BYTES>().subspan<FAEST_BYTES>();
+    for (size_t i = 0; i < e.size(); i += (i < 8 || i + 8 >= e.size()) ? 1 : 13) {
+        const auto mask = static_cast<uint8_t>(1u << (i % 8));
+        e[i] ^= mask;
+        EXPECT_FALSE(finalize_redeem(anchors().keys, req, CTX_ISS, CTX_RED, CHALLENGE_DIGEST))
+            << "flipped bit " << i % 8 << " of byte " << i;
+        e[i] ^= mask;
     }
     EXPECT_TRUE(finalize_redeem(anchors().keys, req, CTX_ISS, CTX_RED, CHALLENGE_DIGEST));
 }

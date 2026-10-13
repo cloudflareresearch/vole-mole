@@ -134,6 +134,70 @@ takes under 2 ms, except Moussaka redemption, which grows with the number of
 Anchors (about 7 ms for 64). See [docs/perf.md](docs/perf.md) for full numbers, the smaller-proof
 parameter trade-off (4-12KB), and how to run the benchmarks.
 
+### Deriving the witness with a PRG
+
+Each committed witness bit costs τ = 17 bits of proof. Instead, the witness `w`
+can be derived from a short key `K` with a dense quadratic PRG `G` over `GF(2)`
+([`src/mq/prg.hpp`](src/mq/prg.hpp)): the VOLE witness is `K`, and the proof
+carries `e = w + G(K)`, one bit per witness bit. The constraints are evaluated
+unchanged on the committed `w = e + G(K)`, which has degree 2, so the
+QuickSilver degree doubles (see "Derived witnesses" in
+[`src/voleith.hpp`](src/voleith.hpp)). `G` is split into `c` independent
+instances ([`src/mq/split.hpp`](src/mq/split.hpp)), each with its own key: this
+divides the cost of evaluating `G` by about `c`, while the total key grows like
+`√c`.
+
+Like τ, this is a VOLEitH parameter of each relation: its witness PRG
+([`src/witness_prg.hpp`](src/witness_prg.hpp): `MqPrg<c>`, or `NoPrg` to commit
+to the witness directly) next to its parameter set, e.g., `IssueWitnessPrg` in
+[`src/moussaka/issue.hpp`](src/moussaka/issue.hpp).
+Changing it changes the proof size, so the size in the public header has to be
+updated, too. By default, none of the protocols derives its witnesses. Deriving
+them makes the proofs 29–52% smaller, but proving and verifying several
+milliseconds slower (Apple M4 Pro, `c = 2` except for `spend_request`, which has
+a much longer witness and uses `c = 8`):
+
+| Protocol    | Step                      | Party     | Sends (off → on)  | Time (off → on)    |
+|:------------|:--------------------------|:----------|------------------:|-------------------:|
+| PomFRIT     | `issue_request`           | Client    | 45 B              | 0.26 → 1.53 ms     |
+|             | `finalize_issue`          | Client    | 5387 → 3825 B     | 0.19 → 0.22 ms     |
+|             | `verify`                  | Verifier  | —                 | 0.38 → 1.39 ms     |
+| Moussaka    | `issue_request`           | Client    | 7317 → 4804 B     | 0.60 → 3.65 ms     |
+|             | `issue_response`          | Anchor    | 119 B             | 0.36 → 2.38 ms     |
+|             | `redeem_request` (N = 1)  | Client    | 8775 → 5006 B     | 0.77 → 5.62 ms     |
+|             | `finalize_redeem` (N = 1) | Moderator | —                 | 0.51 → 4.16 ms     |
+| Ratatouille | `issue_request`           | Client    | 7032 → 4775 B     | 0.58 → 3.40 ms     |
+|             | `issue_response`          | Issuer    | 119 B             | 0.35 → 2.26 ms     |
+|             | `spend_request`           | Client    | 17383 → 8406 B    | 1.39 → 10.2 ms     |
+|             | `spend_response`          | Issuer    | 127 B             | 0.83 → 6.75 ms     |
+
+The key length of each instance is the smallest for which solving its MQ system
+is *estimated* to cost 2^128 ([`tools/mq_key_bits.py`](tools/mq_key_bits.py)).
+That estimate is crude and needs to be checked (e.g., with CryptographicEstimators)
+before relying on it, and zero knowledge then also relies on `G` being a PRG.
+It also changes the proof format, which then deviates from the drafts.
+
+Alternatively, `LocalPrg<1>` derives the witness with Goldreich's local PRG with
+the predicate XOR₁₆-AND₂ ([`src/mq/local.hpp`](src/mq/local.hpp)): each output
+bit is the sum of 16 key bits plus the product of 2 more, at public
+pseudorandom positions. It's much cheaper to evaluate than the MQ PRG, but
+needs a longer key. For Moussaka (Apple M4 Pro):
+
+| Step                      | Sends (MQ, `c = 2` → local) | Time (MQ, `c = 2` → local) |
+|:--------------------------|----------------------------:|---------------------------:|
+| `issue_request`           | 4804 → 5212 B               | 3.65 → 1.05 ms             |
+| `issue_response`          | —                           | 2.38 → 0.34 ms             |
+| `redeem_request` (N = 1)  | 5006 → 5499 B               | 5.62 → 1.28 ms             |
+| `finalize_redeem` (N = 1) | —                           | 4.16 → 0.48 ms             |
+
+Local PRGs are a different and less studied assumption than dense MQ, and the
+key length (704 bits for 2048 outputs, from
+[`tools/local_key_bits.py`](tools/local_key_bits.py)) only accounts for a
+guess-and-determine attack and the dense MQ estimate. It has *not* been checked
+against the literature on attacks on local PRGs (e.g., Couteau et al.,
+Asiacrypt 2018; Ünal, Eurocrypt 2023), so it's experimental, and no protocol
+uses it by default.
+
 ## License
 
 BSD 3-Clause, see [LICENSE](LICENSE). Meson downloads

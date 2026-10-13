@@ -18,7 +18,11 @@
 // Soundness of the proof requires proving each witness bit is in fact a bit; this adds an
 // additional 2048 constraints of degree 2.
 //
-// We use the VOLE-in-the-Head parameters of FAEST-EM-128f v3.
+// We use the VOLE-in-the-Head parameters of FAEST-EM-128f v3. Optionally, the witness is derived
+// from a short key with the witness PRG IssueWitnessPrg (see "Derived witnesses" in voleith.hpp).
+// Then the witness bits are committed values of degree 2, so all of the degrees above double.
+// (The bit constraints on the witness are then redundant, as the bits of the key are constrained
+// to be bits, but they're cheap.)
 
 #ifndef VOLE_MOLE_MOUSSAKA_ISSUE_HPP
 #define VOLE_MOLE_MOUSSAKA_ISSUE_HPP
@@ -31,6 +35,7 @@
 #include "moussaka/commit.hpp"
 #include "qs_bit.hpp"
 #include "voleith.hpp"
+#include "witness_prg.hpp"
 
 #include "constants.hpp"   // from faest-arch-opt
 #include "hash.hpp"        // from faest-arch-opt
@@ -116,15 +121,20 @@ static_assert(faest::is_owf_with_witness_bits_check(OWF_MOUSSAKA_ISSUE));
 static_assert(!faest::is_owf_with_aes_ecb(OWF_MOUSSAKA_ISSUE));
 static_assert(!faest::is_owf_with_aes_em(OWF_MOUSSAKA_ISSUE));
 
+// Commit to the witness directly rather than deriving it from a short key with a PRG (see
+// "Derived witnesses" in voleith.hpp and witness_prg.hpp). MqPrg<2> makes the proof much smaller,
+// at the cost of proving and verification time; it then deviates from the draft, and
+// ISSUE_PROOF_BYTES must be updated.
+using IssueWitnessPrg = vole_mole::detail::NoPrg;
+
 } // namespace vole_mole::moussaka::detail
 
 // Must be declared outside of our namespace, since it specializes a template of faest-arch-opt.
 template <>
-struct faest::OWF_CONSTANTS<faest::secpar::s128, vole_mole::moussaka::detail::OWF_MOUSSAKA_ISSUE> {
-    constexpr static size_t WITNESS_BITS = vole_mole::moussaka::detail::ISSUE_WITNESS_BITS;
-    constexpr static size_t QS_DEGREE = vole_mole::moussaka::detail::ISSUE_QS_DEGREE;
-    constexpr static bool valid = true;
-};
+struct faest::OWF_CONSTANTS<faest::secpar::s128, vole_mole::moussaka::detail::OWF_MOUSSAKA_ISSUE>
+    : vole_mole::detail::RelationConstants<vole_mole::moussaka::detail::ISSUE_WITNESS_BITS,
+                                           vole_mole::moussaka::detail::ISSUE_QS_DEGREE,
+                                           vole_mole::moussaka::detail::IssueWitnessPrg> {};
 
 namespace vole_mole::moussaka::detail {
 
@@ -160,6 +170,9 @@ struct IssueRelation {
     static constexpr size_t WITNESS_PREFIX_BYTES = ISSUE_WITNESS_BYTES;
 
     static constexpr std::span<const uint8_t> DST = MOUSSAKA_ISSUE_PROOF_DST;
+
+    // The public map of the witness PRG, if the witness is derived.
+    static constexpr std::span<const uint8_t> WITNESS_PRG_DST = MOUSSAKA_ISSUE_PRG_DST;
 
     static void hash_instance(faest::hash_state& hasher, const instance& x) {
         hasher.update(x.t);
