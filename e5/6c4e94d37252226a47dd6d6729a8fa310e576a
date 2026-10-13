@@ -1,0 +1,19 @@
+src/voleith.hpp
+  s_d48dc7b9b48cca::t_509b71051e24a9 73
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.10",
+  "base_commit_sha": "e56c4e94d37252226a47dd6d6729a8fa310e576a",
+  "prompts": {},
+  "sessions": {
+    "s_d48dc7b9b48cca": {
+      "agent_id": {
+        "tool": "opencode",
+        "id": "ses_ec9cc6c73ffeWyoYv4Mmn69Mci",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Bas Westerbaan <bas@cloudflare.com>"
+    }
+  }
+}
