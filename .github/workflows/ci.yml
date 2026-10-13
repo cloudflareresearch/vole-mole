@@ -10,13 +10,14 @@ permissions:
 
 jobs:
   test:
-    name: test (${{ matrix.os }})
+    name: test (${{ matrix.os }}${{ matrix.sanitize && ', asan+ubsan' || '' }})
     strategy:
       fail-fast: false
       matrix:
         # macOS runners are Apple Silicon (aarch64); Ubuntu runners are x86_64. Between them, both
         # of faest-arch-opt's ISA-specific code paths are covered.
         os: [macos-latest, ubuntu-latest]
+        sanitize: [false, true]
     runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v4
@@ -45,11 +46,53 @@ jobs:
           path: subprojects/packagecache
           key: subprojects-${{ hashFiles('subprojects/*.wrap') }}
 
+      # The sanitized build keeps the default debugoptimized build type: at -O0, the slowest tests
+      # come close to their timeouts. meson test sets halt_on_error=1 for both sanitizers.
       - name: Configure
-        run: meson setup build
+        run: >-
+          meson setup build
+          ${{ matrix.sanitize && '-Db_sanitize=address,undefined -Db_lundef=false' || '' }}
 
       - name: Build
         run: meson compile -C build
 
       - name: Test
         run: meson test -C build --print-errorlogs
+
+  lint:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install dependencies
+        run: |
+          wget -q https://apt.llvm.org/llvm.sh
+          sudo bash llvm.sh 22
+          pipx install meson
+          sudo apt-get install -y ninja-build clang-format-22 clang-tidy-22
+          echo "CC=clang-22" >> "$GITHUB_ENV"
+          echo "CXX=clang++-22" >> "$GITHUB_ENV"
+
+      - name: clang-format
+        run: git ls-files -z '*.c' '*.cpp' '*.h' '*.hpp' | xargs -0 clang-format-22 --dry-run -Werror
+
+      - name: Cache subproject downloads
+        uses: actions/cache@v4
+        with:
+          path: subprojects/packagecache
+          key: subprojects-${{ hashFiles('subprojects/*.wrap') }}
+
+      # clang-tidy needs compile_commands.json, which meson setup writes, and also the headers that
+      # faest-arch-opt generates at build time.
+      - name: Configure
+        run: meson setup build
+
+      - name: Build
+        run: meson compile -C build
+
+      # Pass headers explicitly: run-clang-tidy only checks files listed in compile_commands.json.
+      # Each file's output is buffered so that parallel runs don't interleave.
+      - name: clang-tidy
+        run: |
+          git ls-files -z '*.cpp' '*.hpp' | xargs -0 -n1 -P"$(nproc)" sh -c \
+            'out=$(clang-tidy-22 -p build -quiet "$1" 2>&1) || { printf "%s\n" "$out"; exit 1; }' sh

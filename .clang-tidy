@@ -1,0 +1,5 @@
+# CI runs clang-tidy on each source file and header separately (see .github/workflows/ci.yml), so
+# only report findings in the file being checked.
+Checks: '-*,misc-include-cleaner'
+WarningsAsErrors: '*'
+HeaderFilterRegex: ''

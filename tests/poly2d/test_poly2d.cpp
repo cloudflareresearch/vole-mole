@@ -1,7 +1,8 @@
 // faest-arch-opt's reduced product of poly2d with 128-bit coefficients, mul_reduce, which we add in
 // subprojects/packagefiles/faest-arch-opt/0004-Faster-poly2d-product-for-128-bit-coefficients.patch.
 
-#include "poly2d.hpp" // from faest-arch-opt
+#include "poly2d.hpp"      // from faest-arch-opt
+#include "polynomials.hpp" // from faest-arch-opt
 
 #include <gtest/gtest.h>
 
