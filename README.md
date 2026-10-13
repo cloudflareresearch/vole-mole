@@ -1,135 +1,151 @@
 # vole-mole
 
-> WARNING: This code is still fairly experimental and is subject to breaking
-> changes as the specifications evolve.
+C++23 library for post-quantum anonymous tokens. A client gets a token from an
+issuer, then presents it later without the issuer linking the two steps.
 
-Implementation of various post-quantum anonymous tokens, all built
-on the [UOV][uov] signature scheme and the VOLE-in-the-Head (VOLEitH) proof
-system of [FAEST][faest]:
+All protocols use [UOV][uov] signatures and the VOLE-in-the-Head (VOLEitH)
+proof system from [FAEST][faest].
 
-1. PomFRIT ([ePrint 2026/109][pomfrit], Algorithm 2), a
-   [Fischlin][fischlin]-style blind signature. The issuer signs a commitment,
-   then the client produces a proof of knowledge of the signature and the
-   opening of the commitment. This proof constitutes the blind signature.
+> [!WARNING]
+> Experimental and not audited. Do not use in production. APIs and wire formats
+> will change as the specifications evolve.
 
-2. Moussaka ([draft-authors-mole-vole-ihat][mous]), an Issuer-Hiding Anonymous
-   Token (IHAT). Similar to the blind signature, except the client proves
-   knowledge of a signature produced by _some_ issuer without revealing which.
+## Protocols
 
-3. Ratatouille ([draft-authors-mole-vole-act][rata]), an Anonymous Credit Token
-   (ACT). Here the token encodes a small amount of client-secret state, which
-   the issuer updates when the token is spent.
+| Protocol    | Use it when                                                                    | Header                     |
+|:------------|:-------------------------------------------------------------------------------|:---------------------------|
+| PomFRIT     | You need a blind signature: the issuer signs a message it never sees.          | `vole_mole/pomfrit.hpp`     |
+| Moussaka    | A verifier trusts several issuers and must not learn which one issued a token. | `vole_mole/moussaka.hpp`    |
+| Ratatouille | A token carries a hidden credit balance that the issuer updates on each spend. | `vole_mole/ratatouille.hpp` |
 
-Moussaka and Ratatouille were designed for [MOLE][mole].
+PomFRIT implements Algorithm 2 of [ePrint 2026/109][pomfrit], a
+[Fischlin][fischlin]-style blind signature. Moussaka is an Issuer-Hiding
+Anonymous Token ([draft-authors-mole-vole-ihat][mous]). Ratatouille is an
+Anonymous Credit Token ([draft-authors-mole-vole-act][rata]). Moussaka and
+Ratatouille were designed for [MOLE][mole], but do not depend on it.
 
-The table below summarizes the performance of each protocol, including the
-runtime and communication cost for each step. The `Party` column indicates which
-party performs the operation; the `Sends` column indicates the number of bytes
-sent by the party; and the `Time` column indicates the runtime of the operation.
-`N` indicates the number of Anchors in the Anchor Set for IHAT redemption. Each
-protocol uses a 46591 B (byte) UOV public key.
+## Build
 
-| Protocol    | Step                       | Party     | Sends   | Time     |
-|:------------|:---------------------------|:----------|--------:|---------:|
-| PomFRIT     | `issue_request`            | Client    | 45 B    | 0.26 ms  |
-|             | `issue_response`           | Issuer    | 119 B   | 0.013 ms |
-|             | `finalize_issue`           | Client    | 5387 B  | 0.19 ms  |
-|             | `verify`                   | Verifier  | —       | 0.37 ms  |
-| Moussaka    | `issue_request`            | Client    | 7317 B  | 0.60 ms  |
-|             | `issue_response`           | Anchor    | 119 B   | 0.36 ms  |
-|             | `finalize_issue`           | Client    | —       | 0.008 ms |
-|             | `redeem_request` (N = 1)   | Client    | 8775 B  | 0.77 ms  |
-|             | `redeem_request` (N = 8)   | Client    | 8775 B  | 1.44 ms  |
-|             | `redeem_request` (N = 64)  | Client    | 8775 B  | 6.87 ms  |
-|             | `finalize_redeem` (N = 1)  | Moderator | —       | 0.51 ms  |
-|             | `finalize_redeem` (N = 8)  | Moderator | —       | 1.19 ms  |
-|             | `finalize_redeem` (N = 64) | Moderator | —       | 6.55 ms  |
-| Ratatouille | `issue_request`            | Client    | 7032 B  | 0.58 ms  |
-|             | `issue_response`           | Issuer    | 119 B   | 0.35 ms  |
-|             | `finalize_issue`           | Client    | —       | 0.008 ms |
-|             | `spend_request`            | Client    | 17383 B | 1.45 ms  |
-|             | `spend_response`           | Issuer    | 127 B   | 0.84 ms  |
-|             | `finalize_spend`           | Client    | —       | 0.008 ms |
+You need [Meson][meson] 1.4 or later, Ninja, Python 3, and Clang 21+ or GCC 16+.
+Apple Clang 17 is too old. Meson downloads the other dependencies.
 
-We use the VOLEitH implementation from [faest-arch-opt][arch-opt] and the UOV
-implementation from [pqov][pqov]. Measurements were taken for the release build
-running on an Apple M4 Pro.
+Supported CPUs are aarch64 with the crypto extensions and x86_64. On x86_64 the
+build uses `-march=native`, so binaries may not run on other machines.
 
-## Building
+```sh
+meson setup build
+meson compile -C build
+meson test -C build --print-errorlogs
+```
 
-Requirements: [Meson][meson] >= 1.4, Ninja, Python 3, and a compiler with good
-C++23 support (faest-arch-opt is tested with Clang >= 21 or GCC >= 16; Apple
-Clang 17 is too old). On macOS with Homebrew:
+On macOS, install a recent LLVM with Homebrew and select it before setup:
 
 ```sh
 brew install meson ninja llvm@22
-CC=$(brew --prefix llvm@22)/bin/clang CXX=$(brew --prefix llvm@22)/bin/clang++ meson setup build
-meson compile -C build
-meson test -C build --print-errorlogs
-./build/tests/test_pomfrit  # verbose test output
-./build/tests/test_moussaka
-./build/tests/test_ratatouille
-./build/examples/example_keys  # run examples
-./build/examples/example_pomfrit
-./build/examples/example_moussaka
-./build/examples/example_ratatouille
+export CC=$(brew --prefix llvm@22)/bin/clang
+export CXX=$(brew --prefix llvm@22)/bin/clang++
 ```
 
-Benchmarks should be run in the release build:
+## Quick start
+
+Issue and verify a PomFRIT blind signature:
+
+```cpp
+#include <vole_mole/pomfrit.hpp>
+#include <vole_mole/uov.hpp>
+
+using namespace vole_mole;
+
+// Issuer: generate a key pair once and publish pk.
+const uov::SecretKey sk(uov::generate_secret_key_bytes());
+const uov::PublicKey pk(sk.public_key());
+
+// Client: blind the message. The Issuer never sees msg.
+auto [pending, request] = pomfrit::issue_request(pk, msg);
+
+// Issuer: sign the blinded request.
+const auto response = pomfrit::issue_response(sk, request);
+
+// Client: unblind. Returns std::nullopt if the response is invalid.
+const auto sig = std::move(pending).finalize_issue(pk, response);
+if (!sig) return EXIT_FAILURE;
+
+// Verifier: check the signature. It cannot be linked to the issuance.
+const bool ok = pomfrit::verify(pk, msg, *sig);
+```
+
+`msg` is a `std::span<const uint8_t>`. Each public header documents its
+functions, including what they return and throw.
+
+## Examples
+
+| Example                                        | Shows                                                         |
+|:-----------------------------------------------|:--------------------------------------------------------------|
+| [`keys.cpp`](examples/keys.cpp)                | UOV key generation, encoding, and expansion                   |
+| [`pomfrit.cpp`](examples/pomfrit.cpp)          | Blind signature issuance and verification                     |
+| [`moussaka.cpp`](examples/moussaka.cpp)        | Issuance from one of several Anchors and redemption, with replay rejection |
+| [`ratatouille.cpp`](examples/ratatouille.cpp)  | Issuance, spending credits, and double-spend rejection        |
+
+Build as above, then run:
 
 ```sh
-CC=$(brew --prefix llvm@22)/bin/clang CXX=$(brew --prefix llvm@22)/bin/clang++ meson setup build-release --buildtype=release
-meson test -C build-release --benchmark -v
-# or, to pass Google Benchmark flags (e.g., repetitions, JSON output):
-./build-release/tests/bench_moussaka --benchmark_repetitions=10 --benchmark_report_aggregates_only=true
+./build/examples/example_pomfrit
 ```
 
-## Reducing communication cost
+## Use in a Meson project
 
-The VOLEitH proofs in our protocols use the same parameters as FAEST-EM-128f.
-These parameters optimize for speed, at the cost of larger proofs. Using the
-FAEST-EM-128s parameters, which optimize for size, our proofs would be 22–31%
-smaller, but proving and verifying would be roughly 1.3–7× slower:
+Create `subprojects/vole-mole.wrap` in your project:
 
-| Protocol    | Step                       | Party     | Sends   | Time     |
-|:------------|:---------------------------|:----------|--------:|---------:|
-| PomFRIT     | `issue_request`            | Client    | 45 B    | 1.76 ms  |
-|             | `issue_response`           | Issuer    | 119 B   | 0.013 ms |
-|             | `finalize_issue`           | Client    | 4179 B  | 0.46 ms  |
-|             | `verify`                   | Verifier  | —       | 1.95 ms  |
-| Moussaka    | `issue_request`            | Client    | 5557 B  | 2.47 ms  |
-|             | `issue_response`           | Anchor    | 119 B   | 2.02 ms  |
-|             | `finalize_issue`           | Client    | —       | 0.008 ms |
-|             | `redeem_request` (N = 1)   | Client    | 6493 B  | 2.73 ms  |
-|             | `redeem_request` (N = 8)   | Client    | 6493 B  | 3.45 ms  |
-|             | `redeem_request` (N = 64)  | Client    | 6493 B  | 8.91 ms  |
-|             | `finalize_redeem` (N = 1)  | Moderator | —       | 2.27 ms  |
-|             | `finalize_redeem` (N = 8)  | Moderator | —       | 2.96 ms  |
-|             | `finalize_redeem` (N = 64) | Moderator | —       | 8.33 ms  |
-| Ratatouille | `issue_request`            | Client    | 5368 B  | 2.43 ms  |
-|             | `issue_response`           | Issuer    | 119 B   | 2.01 ms  |
-|             | `finalize_issue`           | Client    | —       | 0.008 ms |
-|             | `spend_request`            | Client    | 12077 B | 4.04 ms  |
-|             | `spend_response`           | Issuer    | 127 B   | 3.20 ms  |
-|             | `finalize_spend`           | Client    | —       | 0.008 ms |
+```ini
+[wrap-git]
+url = https://github.com/cloudflareresearch/vole-mole.git
+revision = <commit>
+depth = 1
+```
 
-In fact, the proof size can be driven down even further, but VOLEitH imposes a
-lower limit, and we start to see diminishing returns the more we optimize. For
-example, we can get PomFRIT signatures down to ~3.5KB, but the high verification
-time (~80ms) would make the scheme impractical for many use cases.
+Set `revision` to a commit hash. The API is unstable, so don't track a branch.
+Meson clones the repository and its dependencies during `meson setup`. Then
+add to your `meson.build`:
+
+```meson
+vole_mole_dep = subproject('vole-mole',
+  default_options : ['tests=false', 'benchmarks=false', 'examples=false'],
+).get_variable('vole_mole_dep')
+```
+
+There is no installed package or pkg-config file yet.
+
+## Security considerations
+
+This code has not been audited.
+
+The library does not prevent double spending. Moussaka `finalize_redeem` and
+Ratatouille `spend_response` return a nullifier for each accepted token. Store
+it and reject any request that reuses it, for as long as you accept tokens for
+those contexts. For Moussaka, one record must cover every Anchor Set you accept,
+since a token is valid under any set that contains its Anchor. Expiring
+contexts, such as an issuance epoch, bound the storage. PomFRIT has no built-in
+nullifier; to make signatures single-use, put one in the signed message.
+
+## Performance
+
+Client messages carrying proofs are 5–17 KB. On an Apple M4 Pro, every step
+takes under 2 ms, except Moussaka redemption, which grows with the number of
+Anchors (about 7 ms for 64). See [docs/perf.md](docs/perf.md) for full numbers, the smaller-proof
+parameter trade-off (4-12KB), and how to run the benchmarks.
 
 ## License
 
-BSD 3-Clause, see [LICENSE](LICENSE). [faest-arch-opt][arch-opt], which is
-downloaded as a subproject, is MIT-licensed. `src/voleith.hpp` is adapted from
-faest-arch-opt and includes its MIT notice. [pqov][pqov], also downloaded as a
-subproject, is licensed under CC0 or Apache-2.0.
+BSD 3-Clause, see [LICENSE](LICENSE). Meson downloads
+[faest-arch-opt][arch-opt] (MIT) and [pqov][pqov] (CC0 or Apache-2.0) as
+subprojects. `src/voleith.hpp` is adapted from faest-arch-opt and keeps its MIT
+notice.
 
 ## Acknowledgements
 
-This work is based on a prototype written by Tianyu Zhang during his
-internship at Cloudflare Research (Summer 2026). Tianyu also contributed to the
-circuit design and the overall design of the protocols.
+This library is based on a prototype by Tianyu Zhang, written during
+his Summer 2026 internship at Cloudflare Research. Tianyu also contributed to
+the circuit and protocol designs.
 
 [mole]: https://github.com/Moderation-of-unLinkable-Endorsements/internet-drafts
 [pomfrit]: https://eprint.iacr.org/2026/109

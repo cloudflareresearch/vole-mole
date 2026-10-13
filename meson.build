@@ -27,7 +27,7 @@ add_project_arguments(arch_args + ['-Wno-psabi'], language : ['c', 'cpp'])
 # Meson applies a wrap's patches only when it first downloads the subproject, so changing a wrap
 # leaves existing checkouts stale. Meson records the wrap's hash in the checkout but merely warns on
 # a mismatch; make it fatal instead. Meson doesn't hash the patches themselves, so when editing a
-# patch in packagefiles/, also change the wrap (e.g., rename the patch). See AGENT.md.
+# patch in packagefiles/, also change the wrap (e.g., rename the patch). See AGENTS.md.
 fs = import('fs')
 foreach name : ['faest-arch-opt', 'pqov']
   wrap = 'subprojects' / name + '.wrap'
