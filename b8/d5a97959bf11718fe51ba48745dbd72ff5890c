@@ -1,0 +1,35 @@
+src/mlkem_pop/relation.hpp
+  s_d48dc7b9b48cca::t_1c7f2bcf308487 24,64-67
+src/voleith_fq/mq.hpp
+  s_d48dc7b9b48cca::t_e5390e26fdbc29 1-364
+src/voleith_fq/mq_key_len.hpp
+  s_d48dc7b9b48cca::t_e5c1edaf711b96 1-73
+src/voleith_fq/voleith.hpp
+  s_d48dc7b9b48cca::t_6b1cddb60031e6 61-68,84,104,140-151,153-165,170-173,177-178,188-191,269-286,420-425,427,435-439,442,453,455,478-484,486-489,493,509,529-562,571,574,577-581,583-585,587,592,597,602,610,614,627,671-689,692-700,710,714-725,815-818,823-848,858,863,909,916,921-922,925,1007,1011-1012,1015-1041,1046
+tests/meson.build
+  s_d48dc7b9b48cca::t_1dc166eae54310 11,59
+tests/mlkem_pop/bench_mlkem_pop_prg.cpp
+  s_d48dc7b9b48cca::t_f27c7eeb14a3e9 1-135
+tests/mlkem_pop/prg_helpers.hpp
+  s_d48dc7b9b48cca::t_e8270a72902e98 1-63
+tests/mlkem_pop/test_mlkem_pop_prg.cpp
+  s_d48dc7b9b48cca::t_d0150a58ee4d80 1-145
+tools/mq_fq_key_len.py
+  s_d48dc7b9b48cca::t_fe149c6e75bf72 1-117
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.10",
+  "base_commit_sha": "b8d5a97959bf11718fe51ba48745dbd72ff5890c",
+  "prompts": {},
+  "sessions": {
+    "s_d48dc7b9b48cca": {
+      "agent_id": {
+        "tool": "opencode",
+        "id": "ses_ec9cc6c73ffeWyoYv4Mmn69Mci",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Bas Westerbaan <bas@cloudflare.com>"
+    }
+  }
+}
