@@ -1,0 +1,234 @@
+src/mq/split.hpp
+  s_53f0de9abaa628::t_b256f27aaf83a3 1-134
+tests/mq/kat.txt
+  s_53f0de9abaa628::t_75f73d550982e5 1-31
+tools/mq_ref.py
+  s_53f0de9abaa628::t_9a94a7b9cbd286 1-159
+tests/meson.build
+  s_53f0de9abaa628::t_dd052df3d98430 20,29,69
+  s_3c36208e1ae23a::t_24db304389c162 30
+  s_3c36208e1ae23a::t_bf368012bb617d 10
+  s_3c36208e1ae23a::t_0991b022478ff6 11,65
+  s_496e3744d02ce0::t_c75dbee9746f18 13,67
+  s_3c36208e1ae23a::t_7d8c6046f450a1 12,66
+  s_3c36208e1ae23a::t_770d8ef6169c44 9,14-16,63-64
+tools/mq_key_bits.py
+  s_53f0de9abaa628::t_b27eb76650a664 1-110
+tests/mq/bench_mq.cpp
+  s_53f0de9abaa628::t_0a65c5c4c79d97 1-102
+tests/mq/test_mq.cpp
+  s_53f0de9abaa628::t_ce78f4af5be298 1-2,4-333
+  s_53f0de9abaa628::t_db42bcb46e595e 3,334-430
+src/mq/prg.hpp
+  s_53f0de9abaa628::t_4110105a4ecf39 1-408
+src/mq/key_bits.hpp
+  s_53f0de9abaa628::t_1e27a827970684 1-84
+tests/moussaka/test_moussaka.cpp
+  s_53f0de9abaa628::t_819108c244f435 640,642
+  s_53f0de9abaa628::t_10a67b19f722bd 32,36,40,272-274,282-301,307,611-613,622-639,641
+tests/moussaka/gen_moussaka_kat.cpp
+  s_53f0de9abaa628::t_1e043450149d27 40-42,46,52-54
+  s_53f0de9abaa628::t_3b93be8968223e 47,49-51
+README.md
+  s_53f0de9abaa628::t_aa1790d976d112 57-58,159-171,160-171,176-200,176,181-199
+  s_53f0de9abaa628::t_6f77438c23f493 201
+  s_53f0de9abaa628::t_1285df57560cf3 172-175
+  s_53f0de9abaa628::t_1d33d6b68e8d07 57-58,159,177-180,200
+  s_3c36208e1ae23a::t_dc3fdda363e238 60-93,108,113,245
+tests/moussaka/moussaka_kat.txt
+  s_53f0de9abaa628::t_d22c1498119768 6
+  s_53f0de9abaa628::t_af10f7321fecb8 2,5-7,23,26,43,46,124,127
+src/ratatouille/spend.hpp
+  s_53f0de9abaa628::t_625a574d7b26d8 275,281-283
+  s_53f0de9abaa628::t_5fb1ed44700345 326
+  s_53f0de9abaa628::t_5c3acdfe98053b 272-274,284,324-325
+src/mq/derived_qs.hpp
+  s_53f0de9abaa628::t_19086f2468ba4e 1-15,17-18,19-218
+  s_53f0de9abaa628::t_1c7af71c8e1182 16
+tests/voleith/test_derived_witness.cpp
+  s_53f0de9abaa628::t_e327fdacfb813f 4-35,50-58,61-64,66-72,74-91,93-164,167-185,194-261
+  s_53f0de9abaa628::t_fb0bb82dcd4f37 1-2,36,38-43,47,49,59-60,73,92
+  s_53f0de9abaa628::t_6b502b5ed13909 3,37,44-46,48,65,165-166,186-193
+src/pomfrit/redeem.hpp
+  s_53f0de9abaa628::t_2460b6a4a4a112 62,66-68
+  s_53f0de9abaa628::t_c9827532798ff1 113
+  s_53f0de9abaa628::t_4ad2c77d862220 59-61,69,111-112
+src/pomfrit/pomfrit.cpp
+  s_53f0de9abaa628::t_c451840af954b6 50,103
+src/qs_bit.hpp
+  s_3c36208e1ae23a::t_14e73c59d5eb07 68-69
+src/ratatouille/issue.hpp
+  s_53f0de9abaa628::t_5fda64f72cf288 107,113-115
+  s_53f0de9abaa628::t_85827a6ad612bf 156
+  s_53f0de9abaa628::t_b46cdba2ddd573 104-106,116,154-155
+src/moussaka/issue.hpp
+  s_53f0de9abaa628::t_97d59300990d31 128,133-135,175
+  s_53f0de9abaa628::t_5e031b26013bb4 23-25
+  s_53f0de9abaa628::t_e978be88690834 136,173-174
+  s_53f0de9abaa628::t_e5deb521dfd238 21-22,123,127
+src/moussaka/redeem.hpp
+  s_53f0de9abaa628::t_b8dd8337f285d9 143,148-150,193
+  s_53f0de9abaa628::t_bd5eeac60a86f8 38-40
+  s_53f0de9abaa628::t_89ffb3fd927aae 151,191-192
+  s_53f0de9abaa628::t_94ef99c226726e 36-37,138,142
+src/voleith.hpp
+  s_53f0de9abaa628::t_e0999305eb44fc 12-14,24,29-36,38,67,69,90,101-103,109-110,112-114,116-118,121,123-125,127-134,147-150,154-178,220-227,229-230,232-236,239,241-355,362-365,375-376,454-455,465,467-488,513,517-518,527-539,545-555,698-699,711-713,729-742
+  s_53f0de9abaa628::t_f69a0b28480871 64-66,74-75
+  s_53f0de9abaa628::t_482e45e5b374c2 25-28,37,68,104-108,111,115,119-120,122,126,135-139,141-146,228,231,237-238,240
+src/dst.hpp
+  s_53f0de9abaa628::t_53baddac45fbb0 48,52-53,59,67-68,72-73
+  s_3c36208e1ae23a::t_7e711f7934139a 10,41-45
+  s_3c36208e1ae23a::t_1dbce56ae6af54 9,34-40,81-90
+src/witness_prg.hpp
+  s_53f0de9abaa628::t_6e729387f4d11d 3,11-14,16-25,27-28,31,54-56,59-62
+  s_53f0de9abaa628::t_f67f87834c2264 1-2,4-10,15,26,29-30,32-53,57-58
+src/mq/local.hpp
+  s_53f0de9abaa628::t_1821db44898767 1-198
+src/mq/local_key_bits.hpp
+  s_53f0de9abaa628::t_d0646de3313218 1-70,114-116,233-235,335-339
+  s_3c36208e1ae23a::t_3d741d35b993de 71-113,117-232,236-334
+tools/local_key_bits.py
+  s_53f0de9abaa628::t_120940657261f9 1-35,37-44,46,55-65,69-70,72-92,97-104,111-142
+  s_3c36208e1ae23a::t_2d2c5d54194618 36,45,47-54,66-68,71,93-96,105-110
+include/vole_mole/moussaka.hpp
+  s_53f0de9abaa628::t_e8a96263d16683 30,32
+src/voleith_fq/field.hpp
+  s_3c36208e1ae23a::t_b42d3cecf17465 1-208
+src/voleith_fq/voleith.hpp
+  s_3c36208e1ae23a::t_2b1c33a1db97c7 1-60,70-84,87-102,104-138,151,165-168,173-175,178-186,191-266,285-417,424,426-432,438-439,441-450,452,454-475,483,488-490,492-506,508-509,510-526,561-568,570-571,573-574,580,584,586-589,591-594,596-599,601-607,609-611,613-624,626-668,688-689,699-707,709-711,724-812,817-820,847-855,857-860,862-906,908-913,915-918,921-922,924-1004,1006-1008,1011-1012,1040-1043,1045-1067
+  s_496e3744d02ce0::t_11dca707cbf0c7 63-68,85
+tests/voleith_fq/test_voleith_fq.cpp
+  s_3c36208e1ae23a::t_ce86e249009f7d 1-254
+include/vole_mole/mlkem.hpp
+  s_3c36208e1ae23a::t_cf6b2c9a86e180 1-67
+meson.build
+  s_3c36208e1ae23a::t_3c8dc07b8a9d77 56
+  s_3c36208e1ae23a::t_ef00668676eafe 57
+  s_3c36208e1ae23a::t_9f91153ed9a4d1 54-55
+src/mlkem/mlkem.cpp
+  s_3c36208e1ae23a::t_2559cd31fe5eef 1-273
+src/mlkem/mlkem.hpp
+  s_3c36208e1ae23a::t_f79e3424eda0ef 1-74
+tests/mlkem/test_mlkem.cpp
+  s_3c36208e1ae23a::t_bc6179ffb61211 1-117
+include/vole_mole/mlkem_pop.hpp
+  s_3c36208e1ae23a::t_5a3d77b4e930df 1-79
+src/mlkem_pop/relation.hpp
+  s_3c36208e1ae23a::t_cac4c5092939ad 1-61,66-146
+  s_496e3744d02ce0::t_b2c97aea0611b1 62-65
+src/mlkem_pop/seeded.hpp
+  s_3c36208e1ae23a::t_b6917018057544 1-36
+tests/mlkem_pop/bench_mlkem_pop.cpp
+  s_3c36208e1ae23a::t_053379e41c8639 1-58
+tests/mlkem_pop/test_mlkem_pop.cpp
+  s_3c36208e1ae23a::t_e69a6fbc7f7631 1-293
+examples/meson.build
+  s_3c36208e1ae23a::t_aee661b667af97 1
+examples/mlkem_pop.cpp
+  s_3c36208e1ae23a::t_75307446e34196 1-39
+src/voleith_fq/mq.hpp
+  s_496e3744d02ce0::t_b0facd56f3f17b 1-364
+src/voleith_fq/mq_key_len.hpp
+  s_496e3744d02ce0::t_5dcf9328b6202a 1-73
+tests/mlkem_pop/bench_mlkem_pop_prg.cpp
+  s_496e3744d02ce0::t_db8be5f0dd12ed 1-6,8-21,23-79,85-139
+  s_496e3744d02ce0::t_1e98dc259bbef8 7,22,80-84
+tools/mq_fq_key_len.py
+  s_496e3744d02ce0::t_bebea045f9b57e 1-117
+tests/mlkem_pop/test_mlkem_pop_prg.cpp
+  s_496e3744d02ce0::t_22f6ba11a9f30b 7,45-49,57
+src/voleith_fq/local_key_len.hpp
+  s_496e3744d02ce0::t_f4c26f4ecd482c 1-122
+tools/local_fq_key_len.py
+  s_496e3744d02ce0::t_9e800cc24cd4dd 1-100
+src/voleith_fq/local.hpp
+  s_496e3744d02ce0::t_2e4c7d2b375486 1-193
+src/mlkem_pop/binary.hpp
+  s_3c36208e1ae23a::t_c80329295ab5b0 1-457
+src/modq/columns.hpp
+  s_3c36208e1ae23a::t_37661d9add2e22 1-221
+src/modq/modq.hpp
+  s_3c36208e1ae23a::t_555aa298a8e9e7 1-376
+src/modq/range_le.hpp
+  s_3c36208e1ae23a::t_6a2e7c999ba4e8 1-89
+tests/mlkem_pop/bench_mlkem_pop_binary.cpp
+  s_3c36208e1ae23a::t_768173f74c1c1b 1-54
+tests/mlkem_pop/test_mlkem_pop_binary.cpp
+  s_3c36208e1ae23a::t_826dbbb85a5e46 1-180
+include/vole_mole/keccak.hpp
+  s_3c36208e1ae23a::t_a754a8784a5ef3 30-46
+include/vole_mole/mldsa.hpp
+  s_3c36208e1ae23a::t_bb4ffef447a343 1-128
+include/vole_mole/mldsa_pok.hpp
+  s_3c36208e1ae23a::t_6b4de8d085bfeb 1-59
+src/keccak/circuit.hpp
+  s_3c36208e1ae23a::t_a235e8db98dbb2 1-2,29-33,54-55,58,64-65,69,71-76,78,89,99-102,107-108,111,115-116,147,154,161-162,167,170-171,175,184,197,200-204,207-208
+src/keccak/keccak.cpp
+  s_3c36208e1ae23a::t_2e36990600d9ca 14-17,19-20,22,27,34,38,53-56,58,60-64,68,72-73,78-87
+src/keccak/segmented.hpp
+  s_3c36208e1ae23a::t_eb6caf62e936ed 1-3,24-27,48,70,72-73,75-77,79-87,89-97,100-123,125-127,130-131,133-141,143-155,158-170,172-184,186-200,202-216,219-231,233-247,250-295,297-302
+src/keccak/tables.hpp
+  s_3c36208e1ae23a::t_e9e17814eba314 1-3,31-35,40-47,49-57,59-67,70-111,113-142
+src/mldsa/mldsa.cpp
+  s_3c36208e1ae23a::t_79cc5c8ae9238d 1-700
+src/mldsa/mldsa.hpp
+  s_3c36208e1ae23a::t_0e27f955397121 1-114
+src/mldsa_pok/mldsa_pok.cpp
+  s_3c36208e1ae23a::t_5824cc6b0e18c9 1-432
+src/mldsa_pok/prover.hpp
+  s_3c36208e1ae23a::t_7202d44e1be593 1-45
+src/mldsa_pok/relation.hpp
+  s_3c36208e1ae23a::t_ea951ead771dbe 1-305
+src/mldsa_pok/sample_in_ball.hpp
+  s_3c36208e1ae23a::t_313d7bd040b4c9 1-490
+src/mldsa_pok/shake_relation.hpp
+  s_3c36208e1ae23a::t_fd292d11d3aca6 1-228
+tests/keccak/test_keccak.cpp
+  s_3c36208e1ae23a::t_21c4f74e61f5b2 4-8,19,180-287
+tests/mldsa/test_mldsa.cpp
+  s_3c36208e1ae23a::t_cce2512b995ed6 1-158
+tests/mldsa_pok/bench_mldsa_pok.cpp
+  s_3c36208e1ae23a::t_44e28a285f519a 1-50
+tests/mldsa_pok/bench_shake_relation.cpp
+  s_3c36208e1ae23a::t_8504d5f71ff7f4 1-76
+tests/mldsa_pok/cost_model.py
+  s_3c36208e1ae23a::t_4ff347f72c35d5 1-167
+tests/mldsa_pok/test_mldsa_pok.cpp
+  s_3c36208e1ae23a::t_3a948fbc9af971 1-373
+tests/mldsa_pok/test_sample_in_ball.cpp
+  s_3c36208e1ae23a::t_06af1a415cda5b 1-206
+tests/mldsa_pok/test_shake_relation.cpp
+  s_3c36208e1ae23a::t_9604de8c544813 1-91
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.10",
+  "base_commit_sha": "f4777343109a83f425775210cac3ae0f8d44a42a",
+  "prompts": {},
+  "sessions": {
+    "s_3c36208e1ae23a": {
+      "agent_id": {
+        "tool": "opencode",
+        "id": "ses_ecfe959ebffeOme1dG0POu0H2L",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Bas Westerbaan <bas@cloudflare.com>"
+    },
+    "s_496e3744d02ce0": {
+      "agent_id": {
+        "tool": "opencode",
+        "id": "ses_ecf861843ffexrTQAw7vEluymL",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Bas Westerbaan <bas@cloudflare.com>"
+    },
+    "s_53f0de9abaa628": {
+      "agent_id": {
+        "tool": "opencode",
+        "id": "ses_ecfcbbcd4ffeWHsyNK4WpEjPLC",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Bas Westerbaan <bas@cloudflare.com>"
+    }
+  }
+}
