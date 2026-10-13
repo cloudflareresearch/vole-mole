@@ -1,0 +1,50 @@
+tests/voleith/test_derived_witness.cpp
+  s_53f0de9abaa628::t_e327fdacfb813f 5-7
+  s_d48dc7b9b48cca::t_207a42f7b1f1d5 1-3,8,39-48,58-59,71,90
+README.md
+  s_d48dc7b9b48cca::t_4bfd41e730aaa4 150-153
+src/dst.hpp
+  s_d48dc7b9b48cca::t_a93ac969a8f1dd 34,38-39,45,53-54,58-59,68,72,76,82,86
+src/moussaka/issue.hpp
+  s_d48dc7b9b48cca::t_7ec25d0f182dfe 21-25,38,124-128,137,174-175
+src/moussaka/redeem.hpp
+  s_d48dc7b9b48cca::t_4e7c97871852af 36-40,56,139-143,152,192-193
+src/pomfrit/redeem.hpp
+  s_d48dc7b9b48cca::t_a2c7373eeb41ed 26,60-62,70,112-113
+src/ratatouille/issue.hpp
+  s_d48dc7b9b48cca::t_263b4dde6326a9 33,105-107,117,155-156
+src/ratatouille/spend.hpp
+  s_d48dc7b9b48cca::t_86a6e9b27ffee0 67,273-275,285,325-326
+src/voleith.hpp
+  s_d48dc7b9b48cca::t_ab932e23dd43a1 25-28,37,67,104-108,111,115,119-120,122,126,135-139,141-146,228,231,237-238,240
+src/witness_prg.hpp
+  s_d48dc7b9b48cca::t_72e321f0e5fd06 1-38
+tests/moussaka/gen_moussaka_kat.cpp
+  s_d48dc7b9b48cca::t_0efe205d7c422d 48,50-52
+tests/moussaka/moussaka_kat.txt
+  s_d48dc7b9b48cca::t_29824ef4fe57e0 5
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.10",
+  "base_commit_sha": "64e00bc9534e2b48f64811ebed272ae6f719f943",
+  "prompts": {},
+  "sessions": {
+    "s_53f0de9abaa628": {
+      "agent_id": {
+        "tool": "opencode",
+        "id": "ses_ecfcbbcd4ffeWHsyNK4WpEjPLC",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Bas Westerbaan <bas@cloudflare.com>"
+    },
+    "s_d48dc7b9b48cca": {
+      "agent_id": {
+        "tool": "opencode",
+        "id": "ses_ec9cc6c73ffeWyoYv4Mmn69Mci",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Bas Westerbaan <bas@cloudflare.com>"
+    }
+  }
+}
