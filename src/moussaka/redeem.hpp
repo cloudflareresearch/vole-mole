@@ -135,11 +135,10 @@ static_assert(!faest::is_owf_with_aes_em(OWF_MOUSSAKA_REDEEM));
 
 // Must be declared outside of our namespace, since it specializes a template of faest-arch-opt.
 template <>
-struct faest::OWF_CONSTANTS<faest::secpar::s128, vole_mole::moussaka::detail::OWF_MOUSSAKA_REDEEM> {
-    constexpr static size_t WITNESS_BITS = vole_mole::moussaka::detail::REDEEM_WITNESS_BITS;
-    constexpr static size_t QS_DEGREE = vole_mole::moussaka::detail::REDEEM_QS_DEGREE;
-    constexpr static bool valid = true;
-};
+struct faest::OWF_CONSTANTS<faest::secpar::s128, vole_mole::moussaka::detail::OWF_MOUSSAKA_REDEEM>
+    : vole_mole::detail::PaddedOwfConstants<faest::secpar::s128,
+                                            vole_mole::moussaka::detail::REDEEM_WITNESS_BITS,
+                                            vole_mole::moussaka::detail::REDEEM_QS_DEGREE> {};
 
 namespace vole_mole::moussaka::detail {
 

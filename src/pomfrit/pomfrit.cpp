@@ -48,7 +48,8 @@ constexpr size_t SIG_OFF_PROOF_CORRECTION = SIG_OFF_PROOF + ProofView::OFFSET_CO
 constexpr size_t SIG_OFF_REFRESHER_COM = SIG_OFF_PROOF + PROOF_BYTES<RedeemRelation>;
 constexpr size_t SIG_OFF_REFRESHER = SIG_OFF_REFRESHER_COM + REFRESHER_BYTES;
 static_assert(SIGNATURE_BYTES == SIG_OFF_REFRESHER + REFRESHER_BYTES);
-static_assert(WIT_OFF_R == 0 && ProofView::SIZE_CORRECTION == WITNESS_BYTES<RedeemRelation>);
+static_assert(WIT_OFF_R == 0 && ProofView::SIZE_CORRECTION == WITNESS_PAD_BYTES<RedeemRelation> +
+                                                                  WITNESS_BYTES<RedeemRelation>);
 
 auto sig_proof(BlindSignature& sig) {
     return std::span(sig).subspan<SIG_OFF_PROOF, PROOF_BYTES<RedeemRelation>>();
@@ -56,8 +57,10 @@ auto sig_proof(BlindSignature& sig) {
 auto sig_proof(const BlindSignature& sig) {
     return std::span(sig).subspan<SIG_OFF_PROOF, PROOF_BYTES<RedeemRelation>>();
 }
+// The corrections written by VOLE generation: those of the witness pad and of r.
 auto sig_witness_prefix_correction(const BlindSignature& sig) {
-    return std::span(sig).subspan<SIG_OFF_PROOF_CORRECTION, uov::M>();
+    return std::span(sig)
+        .subspan<SIG_OFF_PROOF_CORRECTION, WITNESS_PAD_BYTES<RedeemRelation> + uov::M>();
 }
 auto sig_refresher_com(BlindSignature& sig) {
     return std::span(sig).subspan<SIG_OFF_REFRESHER_COM, REFRESHER_BYTES>();
@@ -84,7 +87,7 @@ void commit_to_refresher(std::span<uint8_t, REFRESHER_BYTES> refresher_com,
 }
 
 // PomFRIT <https://ia.cr/2026/109>, Algorithm 2: h <- H(pk, pi1, msg), where pi1 is the output of
-// the VOLE generation step, including the corrections for the target mask.
+// the VOLE generation step, including the corrections for the witness pad and the target mask.
 //
 // TODO(cjpatton) Unlike the paper, the Client samples r for the instance P(s) = h + r rather
 // than borrowing it from the VOLE generator. This is intended to simplify PomFRIT by not

@@ -59,11 +59,10 @@ static_assert(!faest::is_owf_with_aes_em(OWF_REDEEM));
 } // namespace vole_mole::pomfrit::detail
 
 template <>
-struct faest::OWF_CONSTANTS<faest::secpar::s128, vole_mole::pomfrit::detail::OWF_REDEEM> {
-    constexpr static size_t WITNESS_BITS = vole_mole::pomfrit::detail::REDEEM_WITNESS_BITS;
-    constexpr static size_t QS_DEGREE = vole_mole::pomfrit::detail::REDEEM_QS_DEGREE;
-    constexpr static bool valid = true;
-};
+struct faest::OWF_CONSTANTS<faest::secpar::s128, vole_mole::pomfrit::detail::OWF_REDEEM>
+    : vole_mole::detail::PaddedOwfConstants<faest::secpar::s128,
+                                            vole_mole::pomfrit::detail::REDEEM_WITNESS_BITS,
+                                            vole_mole::pomfrit::detail::REDEEM_QS_DEGREE> {};
 
 namespace vole_mole::pomfrit::detail {
 

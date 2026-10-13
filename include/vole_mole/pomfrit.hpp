@@ -25,7 +25,7 @@ using IssueRequest = uov::Target;    // Client -> Issuer request
 using IssueResponse = uov::Preimage; // Issuer -> Client response
 
 // The blind signature presented by the Client to the relying party.
-constexpr size_t SIGNATURE_BYTES = 5387;
+constexpr size_t SIGNATURE_BYTES = 5659;
 using BlindSignature = std::array<uint8_t, SIGNATURE_BYTES>;
 
 namespace detail {

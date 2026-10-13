@@ -107,6 +107,7 @@ inline std::array<uint8_t, ISSUE_WITNESS_BYTES> encode_issue_witness(const Nulli
 // faest-arch-opt describes the statement being proven through `faest::OWF_CONSTANTS<S, owf>`, from
 // which it derives the witness length and the QuickSilver degree. We register the issuance relation
 // as a new "one-way function" OWF_MOUSSAKA_ISSUE so that we can reuse the machinery unmodified.
+// PaddedOwfConstants adds the VOLEitH witness pad to the witness length (see voleith.hpp).
 //
 // TODO(cjpatton) This is a bit hacky. Discuss with the faest-arch-opt authors whether/how to
 // properly extract a generic VOLEitH implementation (that is wire compatible with FAEST).
@@ -120,11 +121,10 @@ static_assert(!faest::is_owf_with_aes_em(OWF_MOUSSAKA_ISSUE));
 
 // Must be declared outside of our namespace, since it specializes a template of faest-arch-opt.
 template <>
-struct faest::OWF_CONSTANTS<faest::secpar::s128, vole_mole::moussaka::detail::OWF_MOUSSAKA_ISSUE> {
-    constexpr static size_t WITNESS_BITS = vole_mole::moussaka::detail::ISSUE_WITNESS_BITS;
-    constexpr static size_t QS_DEGREE = vole_mole::moussaka::detail::ISSUE_QS_DEGREE;
-    constexpr static bool valid = true;
-};
+struct faest::OWF_CONSTANTS<faest::secpar::s128, vole_mole::moussaka::detail::OWF_MOUSSAKA_ISSUE>
+    : vole_mole::detail::PaddedOwfConstants<faest::secpar::s128,
+                                            vole_mole::moussaka::detail::ISSUE_WITNESS_BITS,
+                                            vole_mole::moussaka::detail::ISSUE_QS_DEGREE> {};
 
 namespace vole_mole::moussaka::detail {
 

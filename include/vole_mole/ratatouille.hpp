@@ -24,9 +24,9 @@ constexpr size_t CREDIT_BYTES = sizeof(Credits);
 constexpr size_t NF_BYTES = 24;            // nullifier length
 constexpr size_t CTX_BYTES = 16;           // issuance context length
 constexpr size_t COMMITMENT_BYTES = 32;    // commitment length
-constexpr size_t ISSUE_PROOF_BYTES = 7000; // issuance proof length
+constexpr size_t ISSUE_PROOF_BYTES = 7272; // issuance proof length
 constexpr size_t ISSUE_REQUEST_BYTES = COMMITMENT_BYTES + ISSUE_PROOF_BYTES;
-constexpr size_t SPEND_PROOF_BYTES = 17319; // spend proof length
+constexpr size_t SPEND_PROOF_BYTES = 17591; // spend proof length
 constexpr size_t SPEND_REQUEST_BYTES =
     NF_BYTES + CREDIT_BYTES + COMMITMENT_BYTES + SPEND_PROOF_BYTES;
 constexpr size_t SPEND_RESPONSE_BYTES = CREDIT_BYTES + uov::N;

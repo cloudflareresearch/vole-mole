@@ -38,8 +38,12 @@ namespace {
 using pomfrit::detail::RedeemRelation;
 using Proof = pomfrit::detail::ProofView;
 
-// The proof has FAEST's layout.
-static_assert(Proof::SIZE_CORRECTION == uov::M + uov::N);
+// The proof has FAEST's layout. The witness is r and s, preceded by the VOLEitH witness pad.
+constexpr size_t PAD_BYTES = vole_mole::detail::WITNESS_PAD_BYTES<RedeemRelation>;
+static_assert(PAD_BYTES == 16);
+static_assert(Proof::SIZE_CORRECTION == PAD_BYTES + uov::M + uov::N);
+constexpr size_t OFFSET_CORRECTION_R = Proof::OFFSET_CORRECTION + PAD_BYTES;
+constexpr size_t OFFSET_CORRECTION_S = OFFSET_CORRECTION_R + uov::M;
 
 // The signature is the proof, followed by refresher_com and refresher, 32 bytes each.
 constexpr size_t REFRESHER_BYTES = 32;
@@ -126,12 +130,13 @@ TEST(Pomfrit, RejectsWrongKey) {
 TEST(Pomfrit, RejectsTamperedSignature) {
     const auto& [pk, sk] = uov_key_pair();
     const BlindSignature sig = issue(pk, sk, MSG);
-    const std::array<std::pair<const char*, size_t>, 12> fields = {{
+    const std::array<std::pair<const char*, size_t>, 13> fields = {{
         {"vole_commitment_corrections", Proof::OFFSET_VOLE_COMMITMENT_CORRECTIONS},
         {"vole_commitment_cmult", Proof::OFFSET_VOLE_COMMITMENT_CMULT},
         {"vole_check_proof", Proof::OFFSET_VOLE_CHECK_PROOF},
-        {"correction of r", Proof::OFFSET_CORRECTION},
-        {"correction of s", Proof::OFFSET_CORRECTION + uov::M},
+        {"correction of the pad", Proof::OFFSET_CORRECTION},
+        {"correction of r", OFFSET_CORRECTION_R},
+        {"correction of s", OFFSET_CORRECTION_S},
         {"qs_proof", Proof::OFFSET_QS_PROOF},
         {"veccom_open", Proof::OFFSET_VECCOM_OPEN},
         {"delta", Proof::OFFSET_DELTA},
@@ -196,8 +201,36 @@ TEST(Pomfrit, FirstPartDependsOnSeed) {
     EXPECT_NE(vole_commitment(sig1), vole_commitment(sig2));
     EXPECT_NE(iv_pre(sig1), iv_pre(sig2));
     // The correction of r, which is part of pi_1 because it's hashed into h.
-    EXPECT_NE(to_hex(sig_field(sig1, Proof::OFFSET_CORRECTION, uov::M)),
-              to_hex(sig_field(sig2, Proof::OFFSET_CORRECTION, uov::M)));
+    EXPECT_NE(to_hex(sig_field(sig1, OFFSET_CORRECTION_R, uov::M)),
+              to_hex(sig_field(sig2, OFFSET_CORRECTION_R, uov::M)));
     EXPECT_NE(to_hex(std::span(sig1).subspan(SIG_OFF_REFRESHER_COM, REFRESHER_BYTES)),
               to_hex(std::span(sig2).subspan(SIG_OFF_REFRESHER_COM, REFRESHER_BYTES)));
+}
+
+// The first lambda VOLE witness rows are the pad, not r. Otherwise, d[0..lambda) + r[0..lambda)
+// would be the prover's VOLE u on those rows, the label offset of the CRT VOLE mask circuit. The
+// Issuer can compute r from the issue request and the signature, and could then recover the
+// VOLE masks and link the signature to its issuance (see voleith.hpp).
+TEST(Pomfrit, WitnessPadHidesLabelOffset) {
+    using vole_mole::detail::PROOF_BYTES;
+    constexpr size_t LAMBDA_BYTES = RedeemRelation::params::secpar_bytes;
+    const uov::Target r = filled<uov::M>(0x90);
+    std::array<uint8_t, PROOF_BYTES<RedeemRelation>> proof{};
+    const auto pending = vole_mole::detail::voleith_vole_gen<RedeemRelation>(
+        proof, nullptr, r, filled<vole_mole::detail::PROVE_SEED_BYTES<RedeemRelation>>(0xa0));
+
+    // The VOLE witness is the pad, then r.
+    const auto vole_witness = std::span(pending.witness);
+    EXPECT_NE(to_hex(vole_witness.first<LAMBDA_BYTES>()),
+              to_hex(std::span(r).first<LAMBDA_BYTES>()));
+    EXPECT_EQ(to_hex(vole_witness.subspan<PAD_BYTES, uov::M>()), to_hex(r));
+
+    // So the label offset u[0..lambda) is d[0..lambda) + pad, not d[0..lambda) + r[0..lambda).
+    const Proof view(proof.data());
+    std::array<uint8_t, LAMBDA_BYTES> d_plus_r;
+    for (size_t i = 0; i < LAMBDA_BYTES; ++i) {
+        d_plus_r[i] = view.correction()[i] ^ r[i];
+    }
+    const auto u = pending.vole_com_data.u_bytes().first<LAMBDA_BYTES>();
+    EXPECT_NE(to_hex(u), to_hex(d_plus_r));
 }

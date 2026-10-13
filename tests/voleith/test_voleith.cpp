@@ -1,14 +1,16 @@
 // Tests for our VOLEitH prover and verifier.
 
+#include "qs_bit.hpp"  // internal
 #include "voleith.hpp" // internal
 
-#include "api.hpp"        // from faest-arch-opt
-#include "faest.hpp"      // from faest-arch-opt
-#include "faest_keys.hpp" // from faest-arch-opt
-#include "faest_sig.hpp"  // from faest-arch-opt
-#include "hash.hpp"       // from faest-arch-opt
-#include "owf_proof.hpp"  // from faest-arch-opt
-#include "parameters.hpp" // from faest-arch-opt
+#include "api.hpp"         // from faest-arch-opt
+#include "faest.hpp"       // from faest-arch-opt
+#include "faest_keys.hpp"  // from faest-arch-opt
+#include "faest_sig.hpp"   // from faest-arch-opt
+#include "hash.hpp"        // from faest-arch-opt
+#include "owf_proof.hpp"   // from faest-arch-opt
+#include "parameters.hpp"  // from faest-arch-opt
+#include "polynomials.hpp" // from faest-arch-opt
 
 #include <gtest/gtest.h>
 
@@ -43,6 +45,10 @@ struct FaestRelation {
     // FAEST derives the prover's seed from the secret key (the OWF key), which is the first
     // secpar_bytes of the extended witness.
     static constexpr size_t WITNESS_PREFIX_BYTES = P::secpar_bytes;
+
+    // FAEST's witness starts with its secret key, which is uniformly random and secret, so it needs
+    // no pad (see voleith.hpp).
+    static constexpr bool WITNESS_PAD = false;
 
     // FAEST has no domain separator.
     static constexpr std::span<const uint8_t> DST = {};
@@ -614,4 +620,144 @@ TEST(ChallengeBinders, FirstPartIsIndependentOfChal2Binder) {
     const Proof proof2 = prove_with_opts(x, {.chal2_binder = CHAL2_BINDER});
     EXPECT_TRUE(std::ranges::equal(first_part(proof), first_part(proof2)));
     EXPECT_FALSE(std::ranges::equal(proof, proof2));
+}
+
+// A toy relation with a padded witness (see voleith.hpp): The witness equals the instance.
+namespace toy {
+
+constexpr size_t WITNESS_BYTES = 32;
+constexpr size_t WITNESS_BITS = 8 * WITNESS_BYTES;
+constexpr size_t QS_DEGREE = 2;
+
+constexpr faest::owf OWF =
+    static_cast<faest::owf>((0x54u << 8) | 0b10'0000 /* owf_flag_witness_bits_check */);
+
+} // namespace toy
+
+template <>
+struct faest::OWF_CONSTANTS<faest::secpar::s128, toy::OWF>
+    : vole_mole::detail::PaddedOwfConstants<faest::secpar::s128, toy::WITNESS_BITS,
+                                            toy::QS_DEGREE> {};
+
+namespace toy {
+
+// Same as faest::v3::faest_em_128_f, except for the OWF.
+using Params = faest::parameter_set<faest::secpar::s128, /* TAU */ 17, OWF, faest::prg::aes_ctr,
+                                    faest::prg::aes_ctr, faest::leaf_hash::aes_ctr, /* W_GRIND */ 8,
+                                    {faest::bavc::one_tree, /* T_OPEN */ 105},
+                                    /* CRT_VOLE_MASKS */ true, /* HASH_INPUTS_V3 */ true>;
+
+using Witness = std::array<uint8_t, WITNESS_BYTES>;
+
+constexpr std::array<uint8_t, 3> DST = {'t', 'o', 'y'};
+
+struct Relation {
+    using params = Params;
+    using instance = Witness;
+
+    static constexpr size_t NUM_CONSTRAINTS = 2 * WITNESS_BITS;
+    static constexpr size_t WITNESS_PREFIX_BYTES = 16;
+    static constexpr std::span<const uint8_t> DST = toy::DST;
+
+    static void hash_instance(faest::hash_state& hasher, const instance& x) { hasher.update(x); }
+
+    template <typename QS>
+    static void
+    constraints(QS* qs, const instance& x,
+                std::span<const uint8_t, params::CONSTS::QS::CHALLENGE_BYTES> /* chal2 */) {
+        for (size_t i = 0; i < WITNESS_BITS; ++i) {
+            const auto w_i = qs->get_witness_bit(i);
+            vole_mole::detail::qs_add_bit_constraint(qs, w_i);
+            qs->add_constraint(
+                vole_mole::detail::qs_to_gfsecpar(w_i + faest::poly1((x[i / 8] >> (i % 8)) & 1)));
+        }
+    }
+};
+
+constexpr size_t PAD_BYTES = vole_mole::detail::WITNESS_PAD_BYTES<Relation>;
+static_assert(PAD_BYTES == Params::secpar_bytes);
+static_assert(vole_mole::detail::WITNESS_BYTES<Relation> == WITNESS_BYTES);
+static_assert(faest::faest_signature<Params>::SIZE_CORRECTION == PAD_BYTES + WITNESS_BYTES);
+
+using Proof = std::array<uint8_t, vole_mole::detail::PROOF_BYTES<Relation>>;
+using ProveSeed = vole_mole::detail::ProveSeed<Relation>;
+using Pad = std::array<uint8_t, PAD_BYTES>;
+
+const Witness W = [] {
+    Witness w;
+    for (size_t i = 0; i < w.size(); ++i) {
+        w[i] = static_cast<uint8_t>(0xa0 + i);
+    }
+    return w;
+}();
+const ProveSeed RHO = {0x01};
+const ProveSeed OTHER_RHO = {0x02};
+
+Proof prove(const Witness& w, const Witness& x, const ProveSeed& rho = RHO) {
+    Proof proof{};
+    vole_mole::detail::voleith_prove<Relation>(proof, w, x, rho);
+    return proof;
+}
+
+// Run VOLE generation for W and return the prover's state.
+vole_mole::detail::PendingProof<Relation> vole_gen(const ProveSeed& rho = RHO) {
+    Proof proof{};
+    return vole_mole::detail::voleith_vole_gen<Relation>(
+        proof, &W, std::span(W).first<Relation::WITNESS_PREFIX_BYTES>(), rho);
+}
+
+Pad pad_correction(const Proof& proof) {
+    Pad out;
+    std::ranges::copy(faest::faest_signature<Params>(proof.data()).correction().first<PAD_BYTES>(),
+                      out.begin());
+    return out;
+}
+
+Pad pad(const vole_mole::detail::PendingProof<Relation>& pending) {
+    Pad out;
+    std::ranges::copy(std::span(pending.witness).first<PAD_BYTES>(), out.begin());
+    return out;
+}
+
+} // namespace toy
+
+// The relation sees its own witness, not the pad, from index 0.
+TEST(WitnessPad, RelationWitnessRoundTrips) {
+    using vole_mole::detail::voleith_verify;
+    EXPECT_TRUE(voleith_verify<toy::Relation>(toy::prove(toy::W, toy::W), toy::W));
+
+    // ... and rejects it for any other instance, e.g., one that differs from W in the first or last
+    // bit. (The prover asserts that the constraints hold, so we can't prove for a wrong witness.)
+    const toy::Proof proof = toy::prove(toy::W, toy::W);
+    for (const size_t i : {size_t{0}, toy::WITNESS_BITS - 1}) {
+        toy::Witness x = toy::W;
+        x[i / 8] ^= 1 << (i % 8);
+        EXPECT_FALSE(voleith_verify<toy::Relation>(proof, x)) << i;
+    }
+
+    // The VOLE witness is the pad, followed by the relation's witness, of which VOLE generation
+    // knows the prefix.
+    constexpr size_t PREFIX_BYTES = toy::Relation::WITNESS_PREFIX_BYTES;
+    const auto pending = toy::vole_gen();
+    EXPECT_TRUE(
+        std::ranges::equal(std::span(pending.witness).subspan<toy::PAD_BYTES, PREFIX_BYTES>(),
+                           std::span(toy::W).first<PREFIX_BYTES>()));
+}
+
+// The pad, and hence its correction, is fresh for each rho. Like the rest of the proof, it is
+// derandomized.
+TEST(WitnessPad, PadDependsOnRho) {
+    EXPECT_EQ(toy::prove(toy::W, toy::W), toy::prove(toy::W, toy::W));
+    EXPECT_NE(toy::pad_correction(toy::prove(toy::W, toy::W)),
+              toy::pad_correction(toy::prove(toy::W, toy::W, toy::OTHER_RHO)));
+
+    EXPECT_EQ(toy::pad(toy::vole_gen()), toy::pad(toy::vole_gen()));
+    EXPECT_NE(toy::pad(toy::vole_gen()), toy::pad(toy::vole_gen(toy::OTHER_RHO)));
+    EXPECT_NE(toy::pad(toy::vole_gen()), toy::Pad{});
+}
+
+// FAEST needs no pad, so its VOLE witness is its witness.
+TEST(WitnessPad, NoPadForFaest) {
+    static_assert(vole_mole::detail::WITNESS_PAD_BYTES<FaestRelation> == 0);
+    static_assert(vole_mole::detail::VOLE_WITNESS_BYTES<FaestRelation> == WITNESS_BYTES);
 }

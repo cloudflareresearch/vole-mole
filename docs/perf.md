@@ -14,48 +14,48 @@ proof size.
 |:------------|:---------------------------|:----------|--------:|---------:|
 | PomFRIT     | `issue_request`            | Client    | 45 B    | 0.26 ms  |
 |             | `issue_response`           | Issuer    | 119 B   | 0.013 ms |
-|             | `finalize_issue`           | Client    | 5387 B  | 0.19 ms  |
+|             | `finalize_issue`           | Client    | 5659 B  | 0.19 ms  |
 |             | `verify`                   | Verifier  | —       | 0.37 ms  |
-| Moussaka    | `issue_request`            | Client    | 7317 B  | 0.60 ms  |
+| Moussaka    | `issue_request`            | Client    | 7589 B  | 0.60 ms  |
 |             | `issue_response`           | Anchor    | 119 B   | 0.36 ms  |
 |             | `finalize_issue`           | Client    | —       | 0.008 ms |
-|             | `redeem_request` (N = 1)   | Client    | 8775 B  | 0.77 ms  |
-|             | `redeem_request` (N = 8)   | Client    | 8775 B  | 1.44 ms  |
-|             | `redeem_request` (N = 64)  | Client    | 8775 B  | 6.87 ms  |
+|             | `redeem_request` (N = 1)   | Client    | 9047 B  | 0.77 ms  |
+|             | `redeem_request` (N = 8)   | Client    | 9047 B  | 1.44 ms  |
+|             | `redeem_request` (N = 64)  | Client    | 9047 B  | 6.87 ms  |
 |             | `finalize_redeem` (N = 1)  | Moderator | —       | 0.51 ms  |
 |             | `finalize_redeem` (N = 8)  | Moderator | —       | 1.19 ms  |
 |             | `finalize_redeem` (N = 64) | Moderator | —       | 6.55 ms  |
-| Ratatouille | `issue_request`            | Client    | 7032 B  | 0.58 ms  |
+| Ratatouille | `issue_request`            | Client    | 7304 B  | 0.58 ms  |
 |             | `issue_response`           | Issuer    | 119 B   | 0.35 ms  |
 |             | `finalize_issue`           | Client    | —       | 0.008 ms |
-|             | `spend_request`            | Client    | 17383 B | 1.45 ms  |
+|             | `spend_request`            | Client    | 17655 B | 1.45 ms  |
 |             | `spend_response`           | Issuer    | 127 B   | 0.84 ms  |
 |             | `finalize_spend`           | Client    | —       | 0.008 ms |
 
 ## Smaller proofs
 
-With the FAEST-EM-128s parameters, which favor size, proofs would be 22–31%
+With the FAEST-EM-128s parameters, which favor size, proofs would be 23–31%
 smaller, but proving and verifying would be roughly 1.3–7× slower:
 
 | Protocol    | Step                       | Party     | Sends   | Time     |
 |:------------|:---------------------------|:----------|--------:|---------:|
 | PomFRIT     | `issue_request`            | Client    | 45 B    | 1.76 ms  |
 |             | `issue_response`           | Issuer    | 119 B   | 0.013 ms |
-|             | `finalize_issue`           | Client    | 4179 B  | 0.46 ms  |
+|             | `finalize_issue`           | Client    | 4355 B  | 0.46 ms  |
 |             | `verify`                   | Verifier  | —       | 1.95 ms  |
-| Moussaka    | `issue_request`            | Client    | 5557 B  | 2.47 ms  |
+| Moussaka    | `issue_request`            | Client    | 5733 B  | 2.47 ms  |
 |             | `issue_response`           | Anchor    | 119 B   | 2.02 ms  |
 |             | `finalize_issue`           | Client    | —       | 0.008 ms |
-|             | `redeem_request` (N = 1)   | Client    | 6493 B  | 2.73 ms  |
-|             | `redeem_request` (N = 8)   | Client    | 6493 B  | 3.45 ms  |
-|             | `redeem_request` (N = 64)  | Client    | 6493 B  | 8.91 ms  |
+|             | `redeem_request` (N = 1)   | Client    | 6669 B  | 2.73 ms  |
+|             | `redeem_request` (N = 8)   | Client    | 6669 B  | 3.45 ms  |
+|             | `redeem_request` (N = 64)  | Client    | 6669 B  | 8.91 ms  |
 |             | `finalize_redeem` (N = 1)  | Moderator | —       | 2.27 ms  |
 |             | `finalize_redeem` (N = 8)  | Moderator | —       | 2.96 ms  |
 |             | `finalize_redeem` (N = 64) | Moderator | —       | 8.33 ms  |
-| Ratatouille | `issue_request`            | Client    | 5368 B  | 2.43 ms  |
+| Ratatouille | `issue_request`            | Client    | 5544 B  | 2.43 ms  |
 |             | `issue_response`           | Issuer    | 119 B   | 2.01 ms  |
 |             | `finalize_issue`           | Client    | —       | 0.008 ms |
-|             | `spend_request`            | Client    | 12077 B | 4.04 ms  |
+|             | `spend_request`            | Client    | 12253 B | 4.04 ms  |
 |             | `spend_response`           | Issuer    | 127 B   | 3.20 ms  |
 |             | `finalize_spend`           | Client    | —       | 0.008 ms |
 
