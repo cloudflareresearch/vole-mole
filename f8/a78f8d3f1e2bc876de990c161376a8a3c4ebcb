@@ -1,0 +1,29 @@
+tests/mlkem_pop/test_mlkem_pop_prg.cpp
+  s_496e3744d02ce0::t_22f6ba11a9f30b 7,45-49,57
+tests/mlkem_pop/bench_mlkem_pop_prg.cpp
+  s_496e3744d02ce0::t_1e98dc259bbef8 7,22,80-84
+src/voleith_fq/voleith.hpp
+  s_496e3744d02ce0::t_11dca707cbf0c7 63-68,85
+src/voleith_fq/local_key_len.hpp
+  s_496e3744d02ce0::t_f4c26f4ecd482c 1-122
+tools/local_fq_key_len.py
+  s_496e3744d02ce0::t_9e800cc24cd4dd 1-100
+src/voleith_fq/local.hpp
+  s_496e3744d02ce0::t_2e4c7d2b375486 1-193
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.10",
+  "base_commit_sha": "f8a78f8d3f1e2bc876de990c161376a8a3c4ebcb",
+  "prompts": {},
+  "sessions": {
+    "s_496e3744d02ce0": {
+      "agent_id": {
+        "tool": "opencode",
+        "id": "ses_ecf861843ffexrTQAw7vEluymL",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Bas Westerbaan <bas@cloudflare.com>"
+    }
+  }
+}
