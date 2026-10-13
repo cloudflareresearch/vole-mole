@@ -1,0 +1,21 @@
+tests/moussaka/gen_moussaka_kat.cpp
+  s_d48dc7b9b48cca::t_5a8552a76cd026 10
+tests/moussaka/test_moussaka.cpp
+  s_d48dc7b9b48cca::t_c5e2bed484aafb 11
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.10",
+  "base_commit_sha": "5c1ad4bf4847ba32d1d206e5a093823438f0c4c6",
+  "prompts": {},
+  "sessions": {
+    "s_d48dc7b9b48cca": {
+      "agent_id": {
+        "tool": "opencode",
+        "id": "ses_ec9cc6c73ffeWyoYv4Mmn69Mci",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Bas Westerbaan <bas@cloudflare.com>"
+    }
+  }
+}
