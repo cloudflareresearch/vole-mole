@@ -1,0 +1,70 @@
+tests/meson.build
+  s_2d60702b50e65a::t_9d61d1807abdfd 8-9,16,25,58
+src/ecdsa_pok/sha256_circuit.hpp
+  s_2d60702b50e65a::t_909ca35728f84f 1-193
+meson.build
+  s_2d60702b50e65a::t_6e7e281609ed31 53
+tests/ecdsa_pok/test_sha256_circuit.cpp
+  s_2d60702b50e65a::t_cc456ec4806ecc 1-120
+src/p256/curve.hpp
+  s_2d60702b50e65a::t_a245fda285a3c9 1-252
+src/dst.hpp
+  s_2d60702b50e65a::t_0f2a94e065488a 9,33-40,76-77
+  s_d48dc7b9b48cca::t_a93ac969a8f1dd 78-84
+src/ecdsa_pok/arith.hpp
+  s_2d60702b50e65a::t_c9fb94957a5b62 1-302
+src/ecdsa_pok/bin_ops.hpp
+  s_2d60702b50e65a::t_c9a64f361a16e1 1-319
+tests/ecdsa_pok/bench_ecdsa_pok.cpp
+  s_2d60702b50e65a::t_c8a3ae82965b1b 1-73
+src/ecdsa_pok/ecdsa_pok.cpp
+  s_2d60702b50e65a::t_75e90327f32859 1-102
+src/voleith_p256/voleith.hpp
+  s_2d60702b50e65a::t_5d5d9590dd370b 1-912
+tests/ecdsa_pok/test_ecdsa_pok.cpp
+  s_2d60702b50e65a::t_a4314dbecaa0b3 1-293
+README.md
+  s_d48dc7b9b48cca::t_31d1cd5b10f345 201-230
+include/vole_mole/ecdsa_pok.hpp
+  s_d48dc7b9b48cca::t_8ae015d28a6491 1-66
+src/ecdsa_pok/binary.hpp
+  s_d48dc7b9b48cca::t_60333f72de5375 1-332
+src/ecdsa_pok/link.hpp
+  s_d48dc7b9b48cca::t_612e6e3083a1da 1-109
+src/ecdsa_pok/relation.hpp
+  s_d48dc7b9b48cca::t_8c4a2bde4f7437 1-438
+src/p256/field.hpp
+  s_d48dc7b9b48cca::t_eda2ee2e97fae1 1-293
+src/sha256/sha256.hpp
+  s_d48dc7b9b48cca::t_2ea1e416287415 1-125
+src/voleith_p256/qs.hpp
+  s_d48dc7b9b48cca::t_de97021f6445f7 1-266
+tests/p256/test_p256.cpp
+  s_d48dc7b9b48cca::t_454dcebf45df53 1-158
+tests/voleith_p256/test_voleith_p256.cpp
+  s_d48dc7b9b48cca::t_ddda0edd06e503 1-107
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.10",
+  "base_commit_sha": "0bf382a2c3924c903202ac1ead29662379b6f29c",
+  "prompts": {},
+  "sessions": {
+    "s_2d60702b50e65a": {
+      "agent_id": {
+        "tool": "opencode",
+        "id": "ses_ecdc4ba1bffelWWtpltD4qQXVY",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Bas Westerbaan <bas@cloudflare.com>"
+    },
+    "s_d48dc7b9b48cca": {
+      "agent_id": {
+        "tool": "opencode",
+        "id": "ses_ec9cc6c73ffeWyoYv4Mmn69Mci",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Bas Westerbaan <bas@cloudflare.com>"
+    }
+  }
+}
