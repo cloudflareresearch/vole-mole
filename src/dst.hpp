@@ -6,6 +6,7 @@
 #ifndef VOLE_MOLE_DST_HPP
 #define VOLE_MOLE_DST_HPP
 
+#include "vole_mole/ecdsa_pok.hpp"
 #include "vole_mole/moussaka.hpp"
 #include "vole_mole/pomfrit.hpp"
 #include "vole_mole/ratatouille.hpp"
@@ -28,6 +29,13 @@ constexpr Dst make_dst(const char (&protocol)[5], uint8_t version, char purpose,
             static_cast<uint8_t>(purpose),
             static_cast<uint8_t>(index)};
 }
+
+// ECDSA proof of knowledge
+constexpr Dst ECDSA_POK_BINARY_DST = make_dst("ecpk", ecdsa_pok::VERSION, 'b', '0'); // binary VOLEitH
+constexpr Dst ECDSA_POK_BINDER_DST = make_dst("ecpk", ecdsa_pok::VERSION, 'f', '0'); // F_p, F_n QS
+constexpr Dst ECDSA_POK_LINK_DST = make_dst("ecpk", ecdsa_pok::VERSION, 'l', '0');   // link chal
+constexpr Dst ECDSA_POK_SEED_DST = make_dst("ecpk", ecdsa_pok::VERSION, 's', '0');   // prover seed
+constexpr Dst ECDSA_POK_STATEMENT_DST = make_dst("ecpk", ecdsa_pok::VERSION, 'x', '0'); // mu
 
 // Moussaka
 constexpr Dst MOUSSAKA_COM_DST = make_dst("mous", moussaka::VERSION, 'c', '0');
@@ -64,6 +72,11 @@ constexpr Dst RATATOUILLE_TAG_DST = make_dst("rata", ratatouille::VERSION, 't', 
 constexpr bool dsts_are_distinct() {
     // Every DST must be distinct. Add new DSTs to this list.
     std::array all = {
+        ECDSA_POK_BINARY_DST,
+        ECDSA_POK_BINDER_DST,
+        ECDSA_POK_LINK_DST,
+        ECDSA_POK_SEED_DST,
+        ECDSA_POK_STATEMENT_DST,
         MOUSSAKA_COM_DST,
         MOUSSAKA_ISSUE_PRG_DST,
         MOUSSAKA_ISSUE_PROOF_DST,

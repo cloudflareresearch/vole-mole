@@ -5,12 +5,15 @@ if get_option('tests')
   gtest_dep = dependency('gtest_main', default_options : ['warning_level=0']).as_system()
 
   tests = [
+    ['ecdsa-pok', 'ecdsa_pok/test_ecdsa_pok.cpp'],
+    ['ecdsa-pok-sha256', 'ecdsa_pok/test_sha256_circuit.cpp'],
     ['keccak', 'keccak/test_keccak.cpp'],
     ['moussaka-issue', 'moussaka/test_issue.cpp'],
     ['moussaka-redeem', 'moussaka/test_redeem.cpp'],
     ['moussaka', 'moussaka/test_moussaka.cpp'],
     ['mq', 'mq/test_mq.cpp'],
     ['pomfrit', 'pomfrit/test_pomfrit.cpp'],
+    ['p256', 'p256/test_p256.cpp'],
     ['poly2d', 'poly2d/test_poly2d.cpp'],
     ['random', 'random/test_random.cpp'],
     ['ratatouille-issue', 'ratatouille/test_issue.cpp'],
@@ -19,6 +22,7 @@ if get_option('tests')
     ['uov', 'uov/test_uov.cpp'],
     ['voleith', 'voleith/test_voleith.cpp'],
     ['voleith-derived', 'voleith/test_derived_witness.cpp'],
+    ['voleith-p256', 'voleith_p256/test_voleith_p256.cpp'],
   ]
 
   # Test data files (e.g., known answers) are read from the source tree; see `data_path` in
@@ -51,6 +55,7 @@ if get_option('benchmarks')
   ).as_system()
 
   benchmarks = [
+    ['ecdsa_pok', 'ecdsa_pok/bench_ecdsa_pok.cpp'],
     ['moussaka', 'moussaka/bench_moussaka.cpp'],
     ['mq', 'mq/bench_mq.cpp'],
     ['pomfrit', 'pomfrit/bench_pomfrit.cpp'],
