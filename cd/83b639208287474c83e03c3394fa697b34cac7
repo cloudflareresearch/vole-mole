@@ -1,0 +1,57 @@
+README.md
+  s_d48dc7b9b48cca::t_f8ef478c45177f 210-212,225-236
+include/vole_mole/ecdsa_pok.hpp
+  s_d48dc7b9b48cca::t_f41c05c7cc0a39 38-53,58,66-67,75
+src/dst.hpp
+  s_d48dc7b9b48cca::t_d7b770cd1b37b0 34-35,37-39,79
+src/ecdsa_pok/arith.hpp
+  s_d48dc7b9b48cca::t_f330e28faa83a5 17-23,97-98,102-103,107-115,117-118,121-129,132-171,196-199,202-207,221-224,231-236,238,247-248,250-256,258-275,277,290-299
+src/ecdsa_pok/bin_ops.hpp
+  s_d48dc7b9b48cca::t_d99ffc7b2a1c04 44-45,86-87,129-130,132,138-139,184
+src/ecdsa_pok/binary.hpp
+  s_d48dc7b9b48cca::t_8869683ca7555b 20-22,27-28,37,63-75,77-78,81-84,86-89,91-92,94-101,122-124,128-130,144-145,149,171,189,224,236,241,249,253-256,260-261,264,269-273,275-276,279,282-285,287-289,291-307,311-317,324-331,336-340,348-351,359-361,363-364,366-369,381-385,388,392
+src/ecdsa_pok/ecdsa_pok.cpp
+  s_d48dc7b9b48cca::t_1b701127c70a20 3-7,12,26-37,44-55,58-59,63-65,68-69,78,88-91,118-121
+src/ecdsa_pok/link.hpp
+  s_d48dc7b9b48cca::t_1cb86234fe98ef 8-9,91-93
+src/ecdsa_pok/relation.hpp
+  s_d48dc7b9b48cca::t_b49ba0a12da549 23-25,34-35,38-39,70-71,77,84-89,110-113,127,131-132,156-158,195,215-217,313,327-331,359,361,371,395-398
+src/ecdsa_pok/sha256_circuit.hpp
+  s_d48dc7b9b48cca::t_06515266d13827 17-18,26,35-36,107,134,146,161
+src/p256/curve.hpp
+  s_d48dc7b9b48cca::t_0110f39c4cf530 12,223,244
+src/p256/field.hpp
+  s_d48dc7b9b48cca::t_13b9d0c845543e 62
+src/sha256/sha256.hpp
+  s_d48dc7b9b48cca::t_0ec176911e3eb5 65-66
+src/voleith_p256/qs.hpp
+  s_d48dc7b9b48cca::t_dc985b9a3cb6a0 15-16
+src/voleith_p256/voleith.hpp
+  s_d48dc7b9b48cca::t_9ef9f19ccda0a0 34-36,68-71,79-83,89-92,132-133,187-259,263,265-281,523-525,529-530,538-539,541-542,546-553,726-727,822-824,837-838,843-844,847-848,852-859
+tests/ecdsa_pok/bench_ecdsa_pok.cpp
+  s_d48dc7b9b48cca::t_e45fff24a675ce 5,39-55,58,65,69,76
+tests/ecdsa_pok/test_ecdsa_pok.cpp
+  s_d48dc7b9b48cca::t_6bbc9bce41c3ac 3-6,9-10,16,20-23,73-83,85-106,108-113,140-141,148,156,159-160,164-165,169-176,180-181,183-186,199-200,218,220,227-228,235,237,258-259,266-267,277-278,288-289,301,306-333
+tests/ecdsa_pok/test_sha256_circuit.cpp
+  s_d48dc7b9b48cca::t_9ffcde2e9ae714 1-2,8,10,12,27,37,55,79,84,87,93-98,105,109,115-116,119,123-124,126-132
+tests/p256/test_p256.cpp
+  s_d48dc7b9b48cca::t_f532dff62417eb 7-8,10,119-120,122-125
+tests/voleith_p256/test_voleith_p256.cpp
+  s_d48dc7b9b48cca::t_0fcb026cd1fb34 1,4-7,11,13,113-136
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.10",
+  "base_commit_sha": "cd83b639208287474c83e03c3394fa697b34cac7",
+  "prompts": {},
+  "sessions": {
+    "s_d48dc7b9b48cca": {
+      "agent_id": {
+        "tool": "opencode",
+        "id": "ses_ec9cc6c73ffeWyoYv4Mmn69Mci",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Bas Westerbaan <bas@cloudflare.com>"
+    }
+  }
+}
