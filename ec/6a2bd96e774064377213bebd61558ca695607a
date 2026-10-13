@@ -1,0 +1,54 @@
+tests/mlkem_pop/test_mlkem_pop.cpp
+  s_3c36208e1ae23a::t_e69a6fbc7f7631 1-293
+src/mlkem_pop/relation.hpp
+  s_496e3744d02ce0::t_b2c97aea0611b1 63-66
+  s_3c36208e1ae23a::t_cac4c5092939ad 1-62,67-144
+meson.build
+  s_3c36208e1ae23a::t_ef00668676eafe 55
+src/mlkem_pop/seeded.hpp
+  s_3c36208e1ae23a::t_b6917018057544 1-36
+tests/mlkem_pop/bench_mlkem_pop.cpp
+  s_3c36208e1ae23a::t_053379e41c8639 1-58
+src/dst.hpp
+  s_3c36208e1ae23a::t_7e711f7934139a 9,33-37,73-75
+include/vole_mole/mlkem_pop.hpp
+  s_3c36208e1ae23a::t_5a3d77b4e930df 1-79
+tests/meson.build
+  s_3c36208e1ae23a::t_0991b022478ff6 10,57
+.clang-format
+  s_d48dc7b9b48cca::t_84069b959e7e7a 26
+src/mlkem_pop/mlkem_pop.cpp
+  s_d48dc7b9b48cca::t_0019e064146f1e 1-165
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.10",
+  "base_commit_sha": "ec6a2bd96e774064377213bebd61558ca695607a",
+  "prompts": {},
+  "sessions": {
+    "s_3c36208e1ae23a": {
+      "agent_id": {
+        "tool": "opencode",
+        "id": "ses_ecfe959ebffeOme1dG0POu0H2L",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Bas Westerbaan <bas@cloudflare.com>"
+    },
+    "s_496e3744d02ce0": {
+      "agent_id": {
+        "tool": "opencode",
+        "id": "ses_ecf861843ffexrTQAw7vEluymL",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Bas Westerbaan <bas@cloudflare.com>"
+    },
+    "s_d48dc7b9b48cca": {
+      "agent_id": {
+        "tool": "opencode",
+        "id": "ses_ec9cc6c73ffeWyoYv4Mmn69Mci",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Bas Westerbaan <bas@cloudflare.com>"
+    }
+  }
+}
