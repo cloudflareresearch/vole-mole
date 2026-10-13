@@ -1,0 +1,81 @@
+src/dst.hpp
+  s_3c36208e1ae23a::t_1dbce56ae6af54 9,34-40,81-90
+tests/mldsa_pok/cost_model.py
+  s_3c36208e1ae23a::t_4ff347f72c35d5 1-167
+src/mldsa_pok/relation.hpp
+  s_3c36208e1ae23a::t_ea951ead771dbe 1-301
+src/mldsa/mldsa.hpp
+  s_3c36208e1ae23a::t_0e27f955397121 1-114
+src/mldsa_pok/shake_relation.hpp
+  s_3c36208e1ae23a::t_fd292d11d3aca6 1-227
+src/keccak/tables.hpp
+  s_3c36208e1ae23a::t_e9e17814eba314 1-3,31-35,40-47,49-57,59-67,70-111,113-142
+src/keccak/keccak.cpp
+  s_3c36208e1ae23a::t_2e36990600d9ca 14-17,19-20,22,27,34,38,53-56,58,60-64,68,72-73,78-87
+tests/mldsa_pok/test_sample_in_ball.cpp
+  s_3c36208e1ae23a::t_06af1a415cda5b 1-212
+src/mq/local_key_bits.hpp
+  s_3c36208e1ae23a::t_3d741d35b993de 71-113,117-232,236-334
+include/vole_mole/mldsa_pok.hpp
+  s_3c36208e1ae23a::t_6b4de8d085bfeb 1-59
+src/mldsa_pok/prover.hpp
+  s_3c36208e1ae23a::t_7202d44e1be593 1-45
+src/keccak/segmented.hpp
+  s_3c36208e1ae23a::t_eb6caf62e936ed 1-3,24-27,38,49,71,73-74,76-78,80-88,90-98,101-124,126-128,131-132,134-142,144-156,159-171,173-185,187-201,203-217,220-232,234-248,251-296,298-303
+tests/mldsa_pok/test_mldsa_pok.cpp
+  s_3c36208e1ae23a::t_3a948fbc9af971 1-376
+tests/mldsa_pok/test_shake_relation.cpp
+  s_3c36208e1ae23a::t_9604de8c544813 1-89
+tests/mldsa/test_mldsa.cpp
+  s_3c36208e1ae23a::t_cce2512b995ed6 1-158
+tests/mldsa_pok/bench_mldsa_pok.cpp
+  s_3c36208e1ae23a::t_44e28a285f519a 1-50
+tests/mldsa_pok/bench_shake_relation.cpp
+  s_3c36208e1ae23a::t_8504d5f71ff7f4 1-76
+tests/keccak/test_keccak.cpp
+  s_3c36208e1ae23a::t_21c4f74e61f5b2 4-8,19,180-287
+include/vole_mole/mldsa.hpp
+  s_3c36208e1ae23a::t_bb4ffef447a343 1-128
+meson.build
+  s_3c36208e1ae23a::t_9f91153ed9a4d1 54-55
+tools/local_key_bits.py
+  s_3c36208e1ae23a::t_2d2c5d54194618 36,45,47-54,66-68,71,93-96,105-110
+src/mldsa_pok/sample_in_ball.hpp
+  s_3c36208e1ae23a::t_313d7bd040b4c9 1-489
+include/vole_mole/keccak.hpp
+  s_3c36208e1ae23a::t_a754a8784a5ef3 30-46
+src/mldsa_pok/mldsa_pok.cpp
+  s_3c36208e1ae23a::t_5824cc6b0e18c9 1-438
+src/keccak/circuit.hpp
+  s_3c36208e1ae23a::t_a235e8db98dbb2 1-2,27-31,52-53,56,62-63,67,69-74,76,87,97-100,105-106,109,113-114,145,152,159-160,165,168-169,173,182,195,198-202,205-206
+src/mldsa/mldsa.cpp
+  s_3c36208e1ae23a::t_79cc5c8ae9238d 1-700
+.clang-format
+  s_d48dc7b9b48cca::t_fe27ac0f3dc5b7 26
+tests/meson.build
+  s_d48dc7b9b48cca::t_f38a77012ccb6d 9,14-16,63-64
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.10",
+  "base_commit_sha": "338b570cce74e6c14d5abe68b918e7116fb08c47",
+  "prompts": {},
+  "sessions": {
+    "s_3c36208e1ae23a": {
+      "agent_id": {
+        "tool": "opencode",
+        "id": "ses_ecfe959ebffeOme1dG0POu0H2L",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Bas Westerbaan <bas@cloudflare.com>"
+    },
+    "s_d48dc7b9b48cca": {
+      "agent_id": {
+        "tool": "opencode",
+        "id": "ses_ec9cc6c73ffeWyoYv4Mmn69Mci",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Bas Westerbaan <bas@cloudflare.com>"
+    }
+  }
+}
