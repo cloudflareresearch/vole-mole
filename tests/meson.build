@@ -6,6 +6,10 @@ if get_option('tests')
 
   tests = [
     ['keccak', 'keccak/test_keccak.cpp'],
+    ['mlkem', 'mlkem/test_mlkem.cpp'],
+    ['mlkem-pop', 'mlkem_pop/test_mlkem_pop.cpp'],
+    ['mlkem-pop-binary', 'mlkem_pop/test_mlkem_pop_binary.cpp'],
+    ['mlkem-pop-prg', 'mlkem_pop/test_mlkem_pop_prg.cpp'],
     ['moussaka-issue', 'moussaka/test_issue.cpp'],
     ['moussaka-redeem', 'moussaka/test_redeem.cpp'],
     ['moussaka', 'moussaka/test_moussaka.cpp'],
@@ -19,6 +23,7 @@ if get_option('tests')
     ['uov', 'uov/test_uov.cpp'],
     ['voleith', 'voleith/test_voleith.cpp'],
     ['voleith-derived', 'voleith/test_derived_witness.cpp'],
+    ['voleith-fq', 'voleith_fq/test_voleith_fq.cpp'],
   ]
 
   # Test data files (e.g., known answers) are read from the source tree; see `data_path` in
@@ -51,6 +56,9 @@ if get_option('benchmarks')
   ).as_system()
 
   benchmarks = [
+    ['mlkem_pop', 'mlkem_pop/bench_mlkem_pop.cpp'],
+    ['mlkem_pop_binary', 'mlkem_pop/bench_mlkem_pop_binary.cpp'],
+    ['mlkem_pop_prg', 'mlkem_pop/bench_mlkem_pop_prg.cpp'],
     ['moussaka', 'moussaka/bench_moussaka.cpp'],
     ['mq', 'mq/bench_mq.cpp'],
     ['pomfrit', 'pomfrit/bench_pomfrit.cpp'],
