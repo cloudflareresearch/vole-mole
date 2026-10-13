@@ -52,7 +52,7 @@
 #include "vole_commit.hpp"    // from faest-arch-opt
 // faest-arch-opt only instantiates these templates for its own parameter sets, so we include the
 // implementations to instantiate them for ours.
-#include "small_vole.inc"  // from faest-arch-opt
+#include "small_vole.inc"  // from faest-arch-opt; NOLINT(misc-include-cleaner)
 #include "vole_commit.inc" // from faest-arch-opt
 
 #include <algorithm>

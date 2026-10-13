@@ -11,6 +11,8 @@
 
 #include "test.hpp"
 
+#include "faest_sig.hpp" // from faest-arch-opt
+
 #include <gtest/gtest.h>
 
 #include <algorithm>
