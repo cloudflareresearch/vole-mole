@@ -1,0 +1,27 @@
+src/moussaka/issue.hpp
+  s_d48dc7b9b48cca::t_9ddce939520950 38
+src/moussaka/redeem.hpp
+  s_d48dc7b9b48cca::t_cecc680acee8af 56
+src/pomfrit/redeem.hpp
+  s_d48dc7b9b48cca::t_e79ef74f298891 26
+src/ratatouille/issue.hpp
+  s_d48dc7b9b48cca::t_546d20377a811a 33
+src/ratatouille/spend.hpp
+  s_d48dc7b9b48cca::t_946fd384331458 67
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.10",
+  "base_commit_sha": "ceb46abde96444eb5118520fa5b13856006ffb7e",
+  "prompts": {},
+  "sessions": {
+    "s_d48dc7b9b48cca": {
+      "agent_id": {
+        "tool": "opencode",
+        "id": "ses_ec9cc6c73ffeWyoYv4Mmn69Mci",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Bas Westerbaan <bas@cloudflare.com>"
+    }
+  }
+}
