@@ -1,4 +1,5 @@
-import VoleMole.Verifier.VOLE
+import VoleMole.Verifier.Kats
+import VoleMole.Verifier.CrtGen
 
 /-!
 # `lake exe verifier_vectors`
@@ -20,58 +21,18 @@ written by `tests/voleith/dump_verifier_vectors.cpp` (format documented there):
   a byte of the corrections, `c_mult`, the opening or `iv_pre` changes `chal1` or is rejected;
   setting a grinding bit of `Δ` fails `check_format`.
 
-Usage: `lake exe verifier_vectors [VECTOR_DIR]` (default `vectors`). Exits with status 1 on any
-failure.
+* All KAT proofs (`Verifier/Kats.lean`, milestone 6): every proof in the Moussaka, Ratatouille
+  and PomFRIT KAT files is verified in full and must be accepted; mutated proofs and instances
+  must be rejected.
+
+Usage: `lake exe verifier_vectors [VECTOR_DIR [TESTS_DIR [FILTER]]]` (defaults `vectors`,
+`../tests`, and the empty filter; with a filter, only the KAT checks whose label starts with it run).
+Exits with status 1 on any failure.
 -/
 
 namespace VoleMole.Verifier.Vectors
 
 open VoleMole.Verifier
-
-def nibble? (c : Char) : Option Nat :=
-  if '0' ≤ c ∧ c ≤ '9' then some (c.toNat - '0'.toNat)
-  else if 'a' ≤ c ∧ c ≤ 'f' then some (c.toNat - 'a'.toNat + 10)
-  else none
-
-/-- Decode lowercase hex (`-` is empty). -/
-def unhex (s : String) : Option ByteArray := Id.run do
-  if s == "-" then return some ByteArray.empty
-  let cs := s.toList.toArray
-  if cs.size % 2 != 0 then return none
-  let mut out := ByteArray.emptyWithCapacity (cs.size / 2)
-  for i in [0:cs.size / 2] do
-    match nibble? cs[2 * i]!, nibble? cs[2 * i + 1]! with
-    | some h, some l => out := out.push (h * 16 + l).toUInt8
-    | _, _ => return none
-  return some out
-
-structure Record where
-  group : String
-  name : String
-  fields : List (String × String)
-
-def Record.get (r : Record) (k : String) : String :=
-  (r.fields.lookup k).getD ""
-
-def Record.bytes (r : Record) (k : String) : ByteArray :=
-  (unhex (r.get k)).getD ByteArray.empty
-
-def parse (contents : String) : Array Record := Id.run do
-  let mut out : Array Record := #[]
-  let mut cur : Option Record := none
-  for line in contents.splitOn "\n" do
-    if line.isEmpty || line.startsWith "#" then continue
-    match line.splitOn " ", cur with
-    | ["record", g, n], none => cur := some ⟨g, n, []⟩
-    | ["end"], some r => out := out.push { r with fields := r.fields.reverse }; cur := none
-    | [k, v], some r => cur := some { r with fields := (k, v) :: r.fields }
-    | _, _ => pure ()
-  return out
-
-/-- Run one check, print failures, return success. -/
-def check (label : String) (ok : Bool) : IO Bool := do
-  unless ok do IO.eprintln s!"FAIL {label}"
-  return ok
 
 def checkPrims (rs : Array Record) : IO (Bool × Nat) := do
   let mut ok := true
@@ -183,6 +144,11 @@ def checkKatRecord (T : CrtTables) (r : Record) : IO Bool := do
   ok := (← check s!"{label} q_mask" (w128Bytes crt.qMask == r.bytes "q_mask")) && ok
   ok := (← check s!"{label} delta_lifted" (crt.deltaLifted.toBytes == r.bytes "delta_lifted")) && ok
   let t3 ← IO.monoMsNow
+  -- Milestone 5: VOLE check and chal2.
+  let hV := voleHashReceiver p c1 crt.rows crt.qMask crt.deltaLifted.toGF pf.voleCheck
+  let c2 := chal2 pf c1 hV (if delayed then mu else ByteArray.empty) (r.bytes "binder2")
+  ok := (← check s!"{label} chal2" (c2 == r.bytes "chal2")) && ok
+  let t4 ← IO.monoMsNow
   -- Mutations: each changes chal1 (or is rejected).
   let flip (off : Nat) : Proof := { pf with bytes := pf.bytes.set! off (pf.bytes.get! off ^^^ 1) }
   let chal1Of (q : Proof) : Option ByteArray := do
@@ -195,7 +161,7 @@ def checkKatRecord (T : CrtTables) (r : Record) : IO Bool := do
       for o in [off, off + n / 2, off + n - 1] do
         ok := (← check s!"{label} mutated {k}@{o}" (chal1Of (flip o) != some c1)) && ok
   ok := (← check s!"{label} mutated grinding bits rejected" !(flip (pf.params.proofBytes - 21)).checkFormat) && ok
-  IO.println s!"  {label}: bavc+chal1 {t1 - t0} ms, ConvertToVOLE {t2 - t1} ms, CRT {t3 - t2} ms"
+  IO.println s!"  {label}: bavc+chal1 {t1 - t0} ms, ConvertToVOLE {t2 - t1} ms, CRT {t3 - t2} ms, KOS {t4 - t3} ms"
   return ok
 
 def checkKat (rs : Array Record) : IO Bool := do
@@ -219,9 +185,24 @@ def main (args : List String) : IO UInt32 := do
   IO.println s!"verifier_prims: {n} records, {if ok1 then "ok" else "FAILED"}"
   let ok2 ← checkBavc (parse (← IO.FS.readFile s!"{dir}/verifier_bavc.txt"))
   IO.println s!"verifier_bavc: {if ok2 then "ok" else "FAILED"}"
-  let ok3 ← checkKat (parse (← IO.FS.readFile s!"{dir}/verifier_kat.txt"))
+  let katRecs := parse (← IO.FS.readFile s!"{dir}/verifier_kat.txt")
+  let ok3 ← checkKat katRecs
   IO.println s!"verifier_kat: {if ok3 then "ok" else "FAILED"}"
-  return if ok1 && ok2 && ok3 then 0 else 1
+  let some tr := katRecs.find? (·.group == "crt") | return 1
+  -- The CRT tables from `CrtData`: recomputed parts, the defining identity, and agreement with the
+  -- C++ row tables. The KAT run below uses them, not the dumped ones.
+  let D := parseTables tr
+  let G := CrtGen.tables
+  let t0 ← IO.monoMsNow
+  let okT := (← check "CRT: M_tree = prod M_i" CrtGen.mTreeOk) &&
+    (← check "CRT: W_crt = CRT basis of the moduli" CrtGen.wCrtOk) &&
+    (← check "CRT: bilinear identity of F, G, W_tree, W_gate" CrtGen.identityOk) &&
+    (← check "CRT: row tables = C++ tables" (G.mI == D.mI && G.wCrt == D.wCrt &&
+      G.wTree == D.wTree && G.wGate == D.wGate && G.g == D.g))
+  let t1 ← IO.monoMsNow
+  IO.println s!"CRT tables: {if okT then "ok" else "FAILED"} ({t1 - t0} ms)"
+  let ok4 ← Kats.main G katRecs dir (args.getD 1 "../tests") (args.getD 2 "")
+  return if ok1 && ok2 && ok3 && okT && ok4 then 0 else 1
 
 end VoleMole.Verifier.Vectors
 

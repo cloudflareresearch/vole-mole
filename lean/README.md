@@ -214,7 +214,7 @@ parameters (UOV verification is concrete). Cross-checked against the C++ known a
 | `Spec/PomFRIT.lean`, `Spec/Moussaka.lean` | done: every party's steps and errors; honest runs succeed; at most one acceptance per nullifier and context over any request sequence; injectivity of the hashed encodings (`H_T` binds d[0..M), Moussaka binds `challenge_digest`); input validation. All deterministic KAT fields match (`tests/pomfrit/pomfrit_kat.txt` is new). |
 | `Spec/Ratatouille.lean` | done: issue, spend, refund, change tokens, every abort path; honest runs succeed; nullifiers accepted once; balance `Σd ≤ ΣT_init + Σx′` per context over adversarial request sequences (soundness and unforgeability as hypotheses); the findings of `security/ratatouille.md` (copied requests, consumed pending state, unbounded refunds, signing before the nullifier check) as theorems, including a concrete run that breaks balance after one leaked response. All deterministic KAT fields match. |
 
-### 8. A Lean VOLEitH verifier (started) — `VoleMole/Verifier/`
+### 8. A Lean VOLEitH verifier (accepts all KAT proofs) — `VoleMole/Verifier/`
 
 Goal: an executable Lean verifier that accepts the real C++ proofs (the KAT files contain them) and
 rejects mutated ones, built from the same models the proofs use. Plan and milestones:
@@ -225,8 +225,13 @@ rejects mutated ones, built from the same models the proofs use. Plan and milest
 |---|---|
 | SHAKE, AES-128, faest-arch-opt's CTR PRG | done; FIPS-197 and C++ vectors |
 | One-tree BAVC (GGM) reconstruction and `vole_commit_check` | done; reproduces a real Moussaka issuance proof byte for byte |
-| Proof parsing, `chal1`, ConvertToVOLE, CRT VOLE (lifted rows, masks, lifted Δ) | done; on one real proof of each of the five relations, every value matches the C++ byte for byte (CRT tables and instance encodings still read from the dump) |
-| KOS check and `chal2`; QuickSilver; full accept; label-rows variant; bridge theorems | not started |
+| Proof parsing, `chal1`, ConvertToVOLE, CRT VOLE (lifted rows, masks, lifted Δ) | done; on one real proof of each of the five relations, every value matches the C++ byte for byte |
+| KOS VOLE check and `chal2` (`KOS.lean`) | done; matches the C++ for all five relations |
+| QuickSilver (`QuickSilver.lean`) | done; the verifier's value for a degree-`d` constraint is `Δ^d·f(q/Δ)`, so the proved `Arith/*` generators are evaluated unchanged at `q·Δ⁻¹` |
+| Full verification (`Verify.lean`, `Relations.lean`, `Kats.lean`) | done; all 18 proofs in the three KAT files are accepted (3 PomFRIT, 6 Moussaka, 9 Ratatouille), with statements built in Lean from the KAT fields and the `Spec/*` instance encoders; 51 mutations (each proof field, each instance field, PomFRIT's refresher) are rejected. Runtime about 5 min, dominated by UOV public-map evaluation |
+| CRT tables (`CrtData.lean`, `CrtGen.lean`) | partly: `W_crt` and `M_tree` are recomputed from the moduli; F, G, W_tree, W_gate are copied from faest-arch-opt's build output and checked against their defining bilinear identity on all basis pairs, not regenerated |
+| UOV keys | partly: compressed public keys are expanded in Lean (pqov `expand_pk`, using the Lean AES). Moussaka/Ratatouille KATs only contain secret keys, so their compressed public keys come from `lean/vectors/verifier_keys.txt`; pqov key generation is not modelled |
+| Label-rows variant; bridge theorems to `Seed/*` | not started |
 
 ## Gaps
 
