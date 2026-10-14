@@ -6,16 +6,19 @@ if get_option('tests')
 
   tests = [
     ['keccak', 'keccak/test_keccak.cpp'],
+    ['lean-models', 'voleith/test_lean_models.cpp'],
     ['moussaka-issue', 'moussaka/test_issue.cpp'],
     ['moussaka-redeem', 'moussaka/test_redeem.cpp'],
     ['moussaka', 'moussaka/test_moussaka.cpp'],
+    ['pomfrit-redeem', 'pomfrit/test_redeem.cpp'],
     ['pomfrit', 'pomfrit/test_pomfrit.cpp'],
     ['poly2d', 'poly2d/test_poly2d.cpp'],
     ['random', 'random/test_random.cpp'],
     ['ratatouille-issue', 'ratatouille/test_issue.cpp'],
     ['ratatouille-spend', 'ratatouille/test_spend.cpp'],
     ['ratatouille', 'ratatouille/test_ratatouille.cpp'],
-    ['uov', 'uov/test_uov.cpp'],
+    # Compared against pqov's reference implementation of the public map.
+    ['uov', 'uov/test_uov.cpp', [pqov_dep]],
     ['voleith', 'voleith/test_voleith.cpp'],
   ]
 
@@ -26,7 +29,7 @@ if get_option('tests')
   foreach t : tests
     exe = executable('test_' + t[0].replace('-', '_'), t[1],
       include_directories : test_inc,
-      dependencies : test_deps + [gtest_dep],
+      dependencies : test_deps + [gtest_dep] + (t.length() > 2 ? t[2] : []),
       cpp_args : test_data_arg,
     )
     # protocol 'gtest' lets Meson report the individual GoogleTest test cases.
@@ -41,6 +44,13 @@ if get_option('tests')
       dependencies : test_deps,
     )
   endforeach
+
+  # Run explicitly to regenerate the differential test vectors for the Lean models of the constraint
+  # generators (lean/vectors), never as part of the test suite.
+  executable('dump_arith_vectors', 'arith/dump_arith_vectors.cpp',
+    include_directories : test_inc,
+    dependencies : test_deps + [pqov_dep],
+  )
 endif
 
 if get_option('benchmarks')

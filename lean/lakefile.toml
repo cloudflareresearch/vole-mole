@@ -1,0 +1,21 @@
+name = "vole_mole"
+version = "0.1.0"
+defaultTargets = ["VoleMole"]
+
+[leanOptions]
+pp.unicode.fun = true
+relaxedAutoImplicit = false
+autoImplicit = false
+
+[[require]]
+name = "mathlib"
+scope = "leanprover-community"
+rev = "v4.34.0-rc1"
+
+[[lean_lib]]
+name = "VoleMole"
+
+# Differential tests of the Lean constraint generators against the C++ (lean/vectors/).
+[[lean_exe]]
+name = "arith_vectors"
+root = "VoleMole.Arith.VectorsMain"

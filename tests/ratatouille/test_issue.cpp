@@ -152,3 +152,33 @@ TEST(Commitment, Layout) {
     EXPECT_EQ(off + 36 - CREDIT_BYTES, KP800_STATE_BYTES);
     EXPECT_EQ(tg, want);
 }
+
+// For any witness, the input of the Keccak evaluation is the commitment input for the public
+// ctx_iss and T_init and the nf and r read from the witness. Each input byte is either a public
+// constant or a copy of one witness byte, so two witnesses suffice: in the first, the bytes of r
+// and nf are pairwise distinct (which pins down the witness byte that each secret input byte is
+// copied from), and the second is its complement (so a public input byte can't depend on the
+// witness).
+TEST(IssueRelation, KeccakInputIsCommitmentInput) {
+    std::array<uint8_t, ISSUE_WITNESS_BYTES> w{};
+    for (size_t i = 0; i < w.size(); ++i) {
+        w[i] = static_cast<uint8_t>(i + 1);
+    }
+    for (int pass = 0; pass < 2; ++pass) {
+        PlainQS qs{w.data(), {}};
+        const auto bits = keccak::detail::qs_input(&qs, encode_com_state({}, CTX_ISS, T_INIT, {}),
+                                                   ISSUE_COM_TO_WIT);
+        Kp800State in{};
+        for (size_t i = 0; i < bits.size(); ++i) {
+            in[i / 8] |= static_cast<uint8_t>(bits[i].v << (i % 8));
+        }
+        Opening r;
+        Nullifier nf;
+        std::copy_n(w.begin() + ISSUE_WIT_OFF_R, R_BYTES, r.begin());
+        std::copy_n(w.begin() + ISSUE_WIT_OFF_NF, NF_BYTES, nf.begin());
+        EXPECT_EQ(in, encode_com_state(nf, CTX_ISS, T_INIT, r)) << "pass " << pass;
+        for (uint8_t& b : w) {
+            b = static_cast<uint8_t>(~b);
+        }
+    }
+}

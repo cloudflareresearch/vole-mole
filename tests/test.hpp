@@ -127,19 +127,19 @@ bool read_kat_number(std::istream& in, std::string_view name, T& out) {
 // Plaintext stand-in for faest::quicksilver_state: evaluates each constraint of a relation on a
 // plaintext witness and records whether the constraint is violated (i.e., evaluates to a non-zero
 // value). Values are elements of GF(2^128) (witness bits are embedded as 0 or 1), so this can
-// evaluate any relation of degree at most `max_degree` that is built from the operations below.
-struct PlainQS {
+// evaluate any relation of degree at most `max_deg` that is built from the operations below.
+template <size_t max_deg> struct BasicPlainQS {
     static constexpr faest::secpar secpar_v = faest::secpar::s128;
     static constexpr size_t secpar_bits = 128;
-    static constexpr size_t max_degree = keccak::detail::QS_DEGREE;
+    static constexpr size_t max_degree = max_deg;
     static constexpr bool is_verifier = false;
 
     const uint8_t* witness;
     std::vector<bool> violated; // one entry per constraint
 
-    faest::quicksilver_gf2<PlainQS, 1> get_witness_bit(size_t i) const;
+    faest::quicksilver_gf2<BasicPlainQS, 1> get_witness_bit(size_t i) const;
     // The 8 bits starting at bit i, which must be a multiple of 8, as an element of GF(256).
-    faest::quicksilver_gfsecpar<PlainQS, 1> load_witness_8_bits_and_combine(size_t i) const;
+    faest::quicksilver_gfsecpar<BasicPlainQS, 1> load_witness_8_bits_and_combine(size_t i) const;
 
     template <typename T> void add_constraint(const T& x) {
         violated.push_back(!(x.v == faest::poly_secpar<secpar_v>::set_zero()));
@@ -149,12 +149,16 @@ struct PlainQS {
     }
 };
 
+// For the Keccak-based relations.
+using PlainQS = BasicPlainQS<keccak::detail::QS_DEGREE>;
+
 } // namespace vole_mole::test
 
 // Plaintext stand-in for a QuickSilver bit of degree `deg`. It's always just a bit. As for
 // quicksilver_gfsecpar below, the degree is only tracked by the type.
-template <size_t deg> struct faest::quicksilver_gf2<vole_mole::test::PlainQS, deg> {
-    using PlainQS = vole_mole::test::PlainQS;
+template <size_t max_deg, size_t deg>
+struct faest::quicksilver_gf2<vole_mole::test::BasicPlainQS<max_deg>, deg> {
+    using PlainQS = vole_mole::test::BasicPlainQS<max_deg>;
 
     bool v = false;
 
@@ -175,8 +179,9 @@ template <size_t deg> struct faest::quicksilver_gf2<vole_mole::test::PlainQS, de
 
 // Plaintext stand-in for a QuickSilver value of degree `deg`. The degree is only tracked by the
 // type, so that the same relation code compiles for PlainQS and for faest::quicksilver_state.
-template <size_t deg> struct faest::quicksilver_gfsecpar<vole_mole::test::PlainQS, deg> {
-    using PlainQS = vole_mole::test::PlainQS;
+template <size_t max_deg, size_t deg>
+struct faest::quicksilver_gfsecpar<vole_mole::test::BasicPlainQS<max_deg>, deg> {
+    using PlainQS = vole_mole::test::BasicPlainQS<max_deg>;
     using poly = faest::poly_secpar<PlainQS::secpar_v>;
 
     poly v = poly::set_zero();
@@ -214,33 +219,37 @@ template <size_t deg> struct faest::quicksilver_gfsecpar<vole_mole::test::PlainQ
 namespace vole_mole::test {
 
 // Found by argument-dependent lookup, and more specialized than faest-arch-opt's generic product,
-// so it's preferred for PlainQS.
-template <size_t deg_a, size_t deg_b>
-faest::quicksilver_gfsecpar<PlainQS, deg_a + deg_b>
-operator*(const faest::quicksilver_gfsecpar<PlainQS, deg_a>& a,
-          const faest::quicksilver_gfsecpar<PlainQS, deg_b>& b) {
-    return faest::quicksilver_gfsecpar<PlainQS, deg_a + deg_b>(
-        (a.v * b.v).template reduce_to<PlainQS::secpar_bits>());
+// so it's preferred for BasicPlainQS.
+template <size_t max_deg, size_t deg_a, size_t deg_b>
+faest::quicksilver_gfsecpar<BasicPlainQS<max_deg>, deg_a + deg_b>
+operator*(const faest::quicksilver_gfsecpar<BasicPlainQS<max_deg>, deg_a>& a,
+          const faest::quicksilver_gfsecpar<BasicPlainQS<max_deg>, deg_b>& b) {
+    return faest::quicksilver_gfsecpar<BasicPlainQS<max_deg>, deg_a + deg_b>(
+        (a.v * b.v).template reduce_to<BasicPlainQS<max_deg>::secpar_bits>());
 }
 
 // As above, for products of bits.
-template <size_t deg_a, size_t deg_b>
-faest::quicksilver_gf2<PlainQS, deg_a + deg_b>
-operator*(const faest::quicksilver_gf2<PlainQS, deg_a>& a,
-          const faest::quicksilver_gf2<PlainQS, deg_b>& b) {
-    return faest::quicksilver_gf2<PlainQS, deg_a + deg_b>(a.v && b.v);
+template <size_t max_deg, size_t deg_a, size_t deg_b>
+faest::quicksilver_gf2<BasicPlainQS<max_deg>, deg_a + deg_b>
+operator*(const faest::quicksilver_gf2<BasicPlainQS<max_deg>, deg_a>& a,
+          const faest::quicksilver_gf2<BasicPlainQS<max_deg>, deg_b>& b) {
+    return faest::quicksilver_gf2<BasicPlainQS<max_deg>, deg_a + deg_b>(a.v && b.v);
 }
 
 } // namespace vole_mole::test
 
-inline faest::quicksilver_gf2<vole_mole::test::PlainQS, 1>
-vole_mole::test::PlainQS::get_witness_bit(size_t i) const {
-    return faest::quicksilver_gf2<PlainQS, 1>(((witness[i / 8] >> (i % 8)) & 1) != 0);
+template <size_t max_deg>
+faest::quicksilver_gf2<vole_mole::test::BasicPlainQS<max_deg>, 1>
+vole_mole::test::BasicPlainQS<max_deg>::get_witness_bit(size_t i) const {
+    return faest::quicksilver_gf2<BasicPlainQS, 1>(((witness[i / 8] >> (i % 8)) & 1) != 0);
 }
 
-inline faest::quicksilver_gfsecpar<vole_mole::test::PlainQS, 1>
-vole_mole::test::PlainQS::load_witness_8_bits_and_combine(size_t i) const {
-    return faest::quicksilver_gfsecpar<PlainQS, 1>(
+// As faest-arch-opt's load_witness_8_bits_and_combine (tests/uov/test_uov.cpp checks that they
+// agree).
+template <size_t max_deg>
+faest::quicksilver_gfsecpar<vole_mole::test::BasicPlainQS<max_deg>, 1>
+vole_mole::test::BasicPlainQS<max_deg>::load_witness_8_bits_and_combine(size_t i) const {
+    return faest::quicksilver_gfsecpar<BasicPlainQS, 1>(
         faest::poly_secpar<secpar_v>::from_8_byte(witness[i / 8]));
 }
 
