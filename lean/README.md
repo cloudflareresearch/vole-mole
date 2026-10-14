@@ -186,6 +186,7 @@ pins down the constraint polynomials, not just their values on bits) and compare
 | `Arith/GF.lean`, `GFEmbedding.lean`: concrete GF(2¹²⁸), GF(256), the embedding | done; embedding proved an injective ring homomorphism in the kernel |
 | C++ dumper (`tests/arith/`) and `lake exe arith_vectors` | done; Lean and C++ constraint values agree on every UOV and PomFRIT record, at bit and random field-valued witnesses |
 | `Arith/Moussaka.lean`: Moussaka issue (commitment opening) and redeem (one-hot selector, UOV preimage under the selected anchor key, Keccak commitment) | done: generators, completeness, soundness, 1/\|F\| bound; cross-checked |
+| `Arith/Pqov.lean`, `Arith/Concrete.lean`: pqov's `ov_publicmap` equals the model; the relations read as the C++ byte checks on concrete GF(256) | done; cross-checked |
 | `Arith/Ratatouille.lean`: Ratatouille issue (commitment opening) and spend (two commitments, tag, conservation `t + x = t' + d` over ℕ with 64-bit ranges, UOV preimage of the tag) | done: generators, completeness, soundness, 1/\|F\| bound; cross-checked |
 
 The UOV gadget's hypothesis, that the embedding GF(256) → GF(2¹²⁸) given by the β constants is an
@@ -212,11 +213,13 @@ What is **not** established, roughly in order of importance:
 2. **Code ↔ model is tested, not proved.** Each Lean model was written by reading the C++ and is
    tied to it by tests in `tests/voleith/test_lean_models.cpp` (and, when finished, the `Arith`
    cross-check). Compiler behaviour, memory safety and constant-time execution are out of scope.
-3. **Arithmetization: small leftovers.** All five relations are modelled and proved (§6), but:
-   that the public-map layout equals pqov's `ov_publicmap` rests on a randomized test (miss
-   probability below 2⁻²⁰⁰); degree bounds are proved for UOV, PomFRIT and Keccak but not for the
-   Moussaka and Ratatouille systems; and the step "`l` is uniform because it is a random-oracle
-   output" is on paper.
+3. **Arithmetization: small leftovers.** All five relations are modelled and proved (§6), and
+   pqov's `ov_publicmap` is proved equal to the modelled public map over any commutative ring
+   (`Arith/Pqov.lean`). Remaining: the concrete GF(2¹²⁸) has no Lean `Field` instance, so the
+   soundness corollaries are stated over an abstract field with the (kernel-proved) embedding
+   facts as hypotheses; on the concrete fields agreement is checked by `arith_vectors`. pqov's
+   constant-time `ov_publicmap_ct`, which the code calls, is checked against `ov_publicmap` by the
+   dumper, not modelled. The step "`l` is uniform because it is a random-oracle output" is on paper.
 4. **Idealized models.** AES-128 is an ideal cipher (classical and quantum), SHAKE and Keccak-p are
    random oracles or random permutations. The Keccak-p[800,12] relations additionally need
    one-wayness/binding assumptions on a 12-round permutation that have little cryptanalysis.

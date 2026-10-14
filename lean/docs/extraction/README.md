@@ -210,7 +210,7 @@ Done. The Lean hypothesis `Claim4Hyp.tree_form` matches the code: `Q[j] = W_crt(
 Done: on a chain where L1–L4 hold, either some known tree's candidate satisfies the constraints, or
 at most `max(d, 1)` admissible chall₃ values are accepted.
 
-### L7 — Arithmetization soundness (constraints ⇒ relation) [paper + tests: `L7-uov.md`, `L7-keccak.md`]
+### L7 — Arithmetization soundness (constraints ⇒ relation) [Lean: `lean/VoleMole/Arith/`; paper: `L7-uov.md`, `L7-keccak.md`]
 
 **Proved for all five relations**, with no soundness bug found. The pieces:
 - the GF(256) embedding is a field homomorphism on all four code paths, tested exhaustively;
@@ -221,8 +221,12 @@ at most `max(d, 1)` admissible chall₃ values are accepted.
 - the commitment wiring is correct;
 - Ratatouille's adder is exact on 65-bit sums.
 
-The one step that rests on a randomized test is pqov's key layout (miss probability below
-`2^{−200}`). Tests were added under `tests/`; the suite passes, 17 of 17.
+Now mechanized in `lean/VoleMole/Arith/`: executable models of all five constraint generators with
+completeness, soundness for arbitrary field-valued committed values, and the `1/|F|` combination
+bound, cross-checked against the C++ by `lake exe arith_vectors`. pqov's key layout is proved too:
+the model of `ov_publicmap` equals the `for_each_monomial` layout (`Arith/Pqov.lean`). What remains
+outside Lean: the step from the abstract field `F` to `GF128` (no `Field` instance), and
+`ov_publicmap_ct` (agreement with `ov_publicmap` is tested).
 
 The original requirements:
 
