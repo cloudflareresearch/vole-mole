@@ -13,11 +13,10 @@ re-proving the field axioms for `GF128`, the bridge theorems take a **field embe
 about the executable code is then of the form "`φ` of what the verifier computes is the model's
 quantity at the `φ`-images".
 
-**Assumed, not proved:** that such an embedding into a field with `2¹²⁸` elements exists, i.e.
-that `GF128`'s operations make it the field GF(2¹²⁸) (`X¹²⁸ + X⁷ + X² + X + 1` irreducible and the
-multiplication loop correct). `lake exe arith_vectors` checks `GF128.mul` against the C++, and
-`Arith/GF.lean` proves bilinearity and `1 * b = b`, but associativity, commutativity and inverses
-are not proved.
+Such an embedding into a field with `2¹²⁸` elements exists: `Bridge/Concrete.lean` builds
+`gfK : GFEmbedding GF128.K` (`K = GF(2)[X]/(X¹²⁸ + X⁷ + X² + X + 1)`, from `Arith/GFField.lean`,
+which proves the modulus irreducible and `GF128 ≃+* K` in the kernel) and restates the theorems that
+assume `|F| = 2¹²⁸` at it. The statements here stay generic in `φ`.
 
 Results (all for any embedding `φ`):
 * `map_horner`: `φ (horner key xs) = Seed.horner (φ key) n (φ ∘ xs)` (the executable Horner fold

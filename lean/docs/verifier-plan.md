@@ -161,7 +161,7 @@ is part of milestone 6.
      `BAVC.children`, `BAVC.leafCom` and `convertToVole` lie in `Commitments.tweaks` of their
      roles, so `ctrBlock_ne_of_roles` (from `role_inputs_ne`) separates them. No assumptions.
    * `Field.lean`: `GFEmbedding F`, an injective map `GF128 → F` into a field preserving `1`, `+`,
-     `*`. **Assumed** (not proved): one exists with `|F| = 2¹²⁸`. Under it, the executable
+     `*`. One exists with `|F| = 2¹²⁸` (`Concrete.lean`, below). For any such `φ`, the executable
      `horner` is `Seed.horner`, `hornerPoly`'s evaluation and the C++ blocked hash
      (`Seed.blockedHash`, so `zkHash_eq_code` applies), `gfPow` is the power, `gfInv` the inverse.
    * `KOS.lean`: `φ` of `voleHashReceiver` is `Seed.kosValue` (challenge parsed from `chal1`, `Q`
@@ -176,7 +176,13 @@ is part of milestone 6.
      (the QuickSilver inputs are `EndToEnd.macs`' `Q_j + d_j Δ`, zero beyond `ℓ`, for both layouts),
      `accept_hacc` (acceptance ⇒ `φ Δ_lifted ≠ 0`, `chal3 = Δ`, and `EndToEnd`'s accepting equation
      `qsCheck + R(Δ) = 0` at this transcript, with `R = maskPoly d (φ ∘ q_mask) 0 ã (φ check_V)`).
+   * `Concrete.lean`: `gfK : GFEmbedding GF128.K`, `K = GF(2)[X]/(X¹²⁸ + X⁷ + X² + X + 1)`, from
+     `Arith/GFField.lean` (kernel-checked: the modulus is irreducible, by Mathlib's degree criterion
+     with `X^(2¹²⁸) = X` and an inverse of `X^(2⁶⁴) + X` computed in `GF128`; evaluation at the root
+     is multiplicative and bijective, `GF128 ≃+* K`, `Field GF128`). `accept_hacc_K`,
+     `map_constraintKeys_K`, `map_gfInv_K`, `map_voleHashReceiver_K` (`T = univ`) restate the
+     theorems at `gfK` with `|F| = 2¹²⁸` and characteristic 2 proved.
    Still open: the per-tree/affine-in-Δ structure of the executable `Q`, `D`, `q_mask` across
    challenges (ConvertToVOLE and `crtReconstruct` as functions of Δ against `Claim4Hyp`/`KOSGood`,
-   and `W_CRT` against the model's injective lift `e`); the field embedding; `hvals` per relation;
+   and `W_CRT` against the model's injective lift `e`); `hvals` per relation;
    the random-oracle steps.

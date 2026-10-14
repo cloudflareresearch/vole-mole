@@ -33,7 +33,7 @@ multiplies by `Δ^d`, and computes the mask term with a loop over `q_mask` and `
 * `hacc_of_qsCheck`: in characteristic 2, with `z := φ(check_V)` (the value the verifier hashes into
   `chal3`), the accepting equation of `EndToEnd.claim3_of_system` / `extract_or_few` holds.
 
-**Assumed:** besides the embedding (`Bridge/Field.lean`), `hvals` — that the relation's evaluator
+**Assumed:** `hvals` (the embedding itself is constructed in `Bridge/Concrete.lean`) — that the relation's evaluator
 `values : (ℕ → GF128) → List GF128` (the `Arith/*` sharing evaluators at `F := GF128`) commutes
 with `φ`, i.e. maps to `System.values cs` over `F`. The evaluators are generic in the field, and
 the `Arith/*` files prove them equal to `System.values` (e.g. `issueValues_eq`), so this is

@@ -16,8 +16,9 @@ This file imports only Lean core.
 * `beta b` is `β_b`: `β_0 = 1` and `β_b = gf8_in_gf128[b-1]` (`faest-arch-opt/
   polynomials_constants.cpp`), and `iota a = Σ_b a_b β_b` is `poly128::from_8_byte(a)`.
 
-There is deliberately no `Field GF128` instance: only `+`, `*`, `0`, `1`, which is all the
-generators need.
+There is deliberately no `Field GF128` instance here: only `+`, `*`, `0`, `1`, which is all the
+generators need, and this file stays Lean-core only. `Arith/GFField.lean` proves (with Mathlib, in
+the kernel) that these operations make `GF128` the field GF(2¹²⁸) and provides the instance.
 
 ## `ι` is an injective ring homomorphism (kernel-checked)
 
