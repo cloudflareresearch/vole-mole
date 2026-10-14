@@ -36,3 +36,6 @@ import VoleMole.Arith.Keccak
 import VoleMole.Arith.Adder
 import VoleMole.Arith.Moussaka
 import VoleMole.Arith.Ratatouille
+import VoleMole.EndToEnd.Core
+import VoleMole.EndToEnd.Degree
+import VoleMole.EndToEnd.Relations

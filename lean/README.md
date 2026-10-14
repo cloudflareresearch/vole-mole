@@ -93,6 +93,14 @@ cipher.
 | L6 | Per-chain case analysis: extract, or accept at most max(d,1) challenges | [Lean] `SeedExtraction.lean` |
 | L7 | Arithmetization soundness: satisfied constraints imply the relation | [Lean] `Arith/` for all five relations + [test] cross-check (§6); paper `L7-uov.md`, `L7-keccak.md` |
 
+**End-to-end deterministic theorem** ([Lean] `EndToEnd/`). For each of the five relations,
+`*_extract` joins L5–L7 with the real constraint system: on a chain satisfying the hypotheses that
+L1–L4 provide (stated explicitly in `EndToEnd/Relations.lean`), either some known tree's candidate
+decodes to a witness of the actual relation (e.g. `P(s) = h ⊕ r`), or at most max(d,1) challenges
+are accepted. The QuickSilver check polynomial is built from the relation's `Arith` system and
+matched to the verifier's MAC arithmetic. What remains on paper is the probability of each
+hypothesis (ε_KOS, ε_QS, 1/|F| for the combination, and L1's binding).
+
 Along the way the analysis corrected the sketch's definition of an "alive" leaf (the original
 admitted an attack with probability about τ·q₂·2⁻¹²⁸) and found that bad-challenge terms must be
 charged per H₂¹/H₂² query, not per H₂³ query.

@@ -340,6 +340,20 @@ Fix a classical prover `P*`. The analysis goes chain by chain:
    λ-bit chall₃. All of `A` has zero grinding bits, so the query is accepted with probability at
    most `max(d,1)·2^{−λ}`. A union over the `Q` H₂³ queries gives `Q·max(d,1)·2^{−λ}`.
 
+**Lean, steps 2–3 per relation** (`VoleMole/EndToEnd/`). `Core.lean` translates `Arith.Expr`
+into the verifier's circuit (`toQS`, adding the degree raisings) and proves that the check polynomial
+of an `Arith.System` has degree `≤ d` and top coefficient `Σ_k χ_k f_k(w*)`
+(`sysCheckPoly_natDegree_coeff`). `extract_or_few` then runs `accepting_card_le` with the real
+system. The combination challenge `l` is handled by splitting L4's bad event in two:
+`hQS` (system fails at `w*`, yet the ZKHash vanishes: `ε_QS`, `card_qs_bad_le`) and `hcomb` (the
+system holds at `w*` for the chain's `l`, yet `w*` is not a witness: `1/|F|`, the relation's
+`*_sound_card`, restated as `*_comb_bad`). No linearity-in-`l` argument is needed. `Relations.lean`
+has one theorem per relation (`pomfrit_extract`, `moussaka_issue_extract`,
+`moussaka_redeem_extract`, `ratatouille_issue_extract`, `ratatouille_spend_extract`): a known
+tree's candidate decodes to a witness of the actual relation, or at most `max(d,1)` admissible
+chall₃ are accepted. Its docstring lists each hypothesis and the lemma that discharges it.
+`Degree.lean` proves the degree bound `≤ 9` for the four Keccak-based systems.
+
 Summing gives `ε_ext`. Simulation-extractability adds L8's terms. The steps that are paper only
 are the random-oracle and ideal-cipher probability arguments (L1–L4's freshness steps) and the
 union bounds. Every deterministic step is in Lean or is an exhaustive test.
