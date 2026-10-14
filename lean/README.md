@@ -225,7 +225,8 @@ rejects mutated ones, built from the same models the proofs use. Plan and milest
 |---|---|
 | SHAKE, AES-128, faest-arch-opt's CTR PRG | done; FIPS-197 and C++ vectors |
 | One-tree BAVC (GGM) reconstruction and `vole_commit_check` | done; reproduces a real Moussaka issuance proof byte for byte |
-| chal1 and proof parsing; ConvertToVOLE; CRT VOLE; KOS and chal2; QuickSilver; full accept | not started |
+| Proof parsing, `chal1`, ConvertToVOLE, CRT VOLE (lifted rows, masks, lifted Δ) | done; on one real proof of each of the five relations, every value matches the C++ byte for byte (CRT tables and instance encodings still read from the dump) |
+| KOS check and `chal2`; QuickSilver; full accept; label-rows variant; bridge theorems | not started |
 
 ## Gaps
 

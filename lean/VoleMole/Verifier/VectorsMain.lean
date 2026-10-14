@@ -1,4 +1,4 @@
-import VoleMole.Verifier.BAVC
+import VoleMole.Verifier.VOLE
 
 /-!
 # `lake exe verifier_vectors`
@@ -12,9 +12,13 @@ written by `tests/voleith/dump_verifier_vectors.cpp` (format documented there):
 * `verifier_bavc.txt`: `BAVC.commit` (whole tree, leaves, commitments, check value) and
   `BAVC.reconstruct` (verifier's leaves and commitments, check value) for a fixed seed and `Δ`,
   plus rejection of mutated openings.
-* `verifier_kat.txt`: on the first Moussaka issuance KAT proof, `iv = H_4(iv_pre ‖ mu ‖ 4)` and the
-  BAVC reconstruction from the proof's opening and `Δ` (leaves, commitments, and the VOLE
-  commitment check value `vole_commit_check`).
+* `verifier_kat.txt`: one KAT proof per relation (Moussaka issuance and redemption, Ratatouille
+  issuance and spend, PomFRIT redemption with delayed instance binding and binders): the
+  parameters and proof layout, `check_format`, `mu`/`mu₁`, `iv`, the BAVC reconstruction and
+  `vole_commit_check`, `chal1` (milestone 2); the ConvertToVOLE key columns (milestone 3); the gate
+  hashes, `r̃`, the CRT-lifted rows, `q_mask` and the lifted `Δ` (milestone 4). Mutations: flipping
+  a byte of the corrections, `c_mult`, the opening or `iv_pre` changes `chal1` or is rejected;
+  setting a grinding bit of `Δ` fails `check_format`.
 
 Usage: `lake exe verifier_vectors [VECTOR_DIR]` (default `vectors`). Exits with status 1 on any
 failure.
@@ -121,33 +125,91 @@ def checkBavc (rs : Array Record) : IO Bool := do
     ((BAVC.reconstruct iv bad2 delta).map (BAVC.check ·.coms) != some (o.bytes "check"))) && ok
   return ok
 
-/-- Offsets in a Moussaka issuance proof (7272 bytes; `faest_sig.hpp:39-66`). -/
-def issueOffsets : List (String × Nat × Nat) :=
-  let corr := 16 * 256
-  let cmult := 12 * 39
-  let fields := [("corrections", corr), ("cmult", cmult), ("vole_check", 64), ("correction", 256),
-    ("qs_proof", 128), ("open", BAVC.openSize), ("delta", 16), ("iv_pre", 16), ("ctr", 4)]
-  let (_, out) := fields.foldl (fun (off, acc) (k, n) => (off + n, acc ++ [(k, off, n)])) (0, [])
-  out
+def w128s (b : ByteArray) (stride : Nat) : Array W128 :=
+  (Array.range (b.size / stride)).map fun i => W128.ofBytes b (stride * i)
 
-def field (proof : ByteArray) (k : String) : ByteArray :=
-  match issueOffsets.lookup k with
-  | some (off, n) => proof.extract off (off + n)
-  | none => ByteArray.empty
+def parseTables (r : Record) : CrtTables :=
+  let g := r.bytes "g"
+  { mI := wordsOf (r.bytes "m_i")
+    wCrt := w128s (r.bytes "w_crt") 16
+    wTree := w128s (r.bytes "w_tree") 16
+    wGate := w128s (r.bytes "w_gate") 16
+    g := (Array.range (g.size / 40)).map fun i => wordsOf (g.extract (40 * i) (40 * i + 40)) }
+
+def w128Bytes (a : Array W128) : ByteArray := a.foldl (fun acc w => acc ++ w.toBytes) ByteArray.empty
+
+def u32Bytes (a : Array UInt32) : ByteArray := a.foldl AES.pushLE32 ByteArray.empty
+
+/-- Milestones 2-4 on one KAT record; returns success and the time in ms of each stage. -/
+def checkKatRecord (T : CrtTables) (r : Record) : IO Bool := do
+  let label := r.name
+  let p : Params := { witnessBytes := (r.get "witness_bytes").toNat!,
+                      qsDegree := (r.get "qs_degree").toNat! }
+  let pf : Proof := { params := p, bytes := r.bytes "proof" }
+  let mut ok := true
+  ok := (← check s!"{label} params" (p.nMask == (r.get "n_mask").toNat! &&
+    p.voleColBlocks == (r.get "vole_col_blocks").toNat! &&
+    p.voleRows == (r.get "vole_rows").toNat! &&
+    p.witnessBits == (r.get "correction_rows").toNat!)) && ok
+  ok := (← check s!"{label} check_format" pf.checkFormat) && ok
+  -- Milestone 2: mu, iv, BAVC, chal1.
+  let inst := r.bytes "inst_enc"
+  let dst := r.bytes "dst"
+  let delayed := r.get "delayed" == "1"
+  let mu := Verifier.mu (some inst) dst
+  let mu1 := if delayed then Verifier.mu none dst else mu
+  ok := (← check s!"{label} mu" (mu == r.bytes "mu" && mu1 == r.bytes "mu1")) && ok
+  let iv := ivOf pf mu1
+  ok := (← check s!"{label} iv" (iv == r.bytes "iv")) && ok
+  let t0 ← IO.monoMsNow
+  let some leaves := BAVC.reconstruct iv pf.opening pf.delta
+    | check s!"{label} bavc accepted" false
+  let check1 := BAVC.check leaves.coms
+  ok := (← check s!"{label} leaves" (leaves.keys == r.bytes "leaves" &&
+    leaves.coms == r.bytes "hashed_leaves")) && ok
+  ok := (← check s!"{label} vole_commit_check" (check1 == r.bytes "vole_commit_check")) && ok
+  let c1 := chal1 pf mu1 check1 (r.bytes "binder1")
+  ok := (← check s!"{label} chal1" (c1 == r.bytes "chal1")) && ok
+  let t1 ← IO.monoMsNow
+  -- Milestone 3: ConvertToVOLE.
+  let cols := convertToVole pf iv leaves
+  ok := (← check s!"{label} q_columns" (columnsBytes cols == r.bytes "q_columns")) && ok
+  let t2 ← IO.monoMsNow
+  -- Milestone 4: CRT.
+  let crt := crtReconstruct pf T iv cols
+  ok := (← check s!"{label} gate_hashes" (u32Bytes crt.hashes == r.bytes "gate_hashes")) && ok
+  ok := (← check s!"{label} r_tilde" (w128Bytes crt.rTilde == r.bytes "r_tilde")) && ok
+  ok := (← check s!"{label} q_rows" (w128Bytes crt.rows == r.bytes "q_rows")) && ok
+  ok := (← check s!"{label} q_mask" (w128Bytes crt.qMask == r.bytes "q_mask")) && ok
+  ok := (← check s!"{label} delta_lifted" (crt.deltaLifted.toBytes == r.bytes "delta_lifted")) && ok
+  let t3 ← IO.monoMsNow
+  -- Mutations: each changes chal1 (or is rejected).
+  let flip (off : Nat) : Proof := { pf with bytes := pf.bytes.set! off (pf.bytes.get! off ^^^ 1) }
+  let chal1Of (q : Proof) : Option ByteArray := do
+    if !q.checkFormat then none
+    let l ← BAVC.reconstruct (ivOf q mu1) q.opening q.delta
+    some (chal1 q mu1 (BAVC.check l.coms) (r.bytes "binder1"))
+  for (k, _) in p.fieldSizes do
+    if k == "corrections" || k == "cmult" || k == "open" || k == "iv_pre" then
+      let some (off, n) := p.field? k | pure ()
+      for o in [off, off + n / 2, off + n - 1] do
+        ok := (← check s!"{label} mutated {k}@{o}" (chal1Of (flip o) != some c1)) && ok
+  ok := (← check s!"{label} mutated grinding bits rejected" !(flip (pf.params.proofBytes - 21)).checkFormat) && ok
+  IO.println s!"  {label}: bavc+chal1 {t1 - t0} ms, ConvertToVOLE {t2 - t1} ms, CRT {t3 - t2} ms"
+  return ok
 
 def checkKat (rs : Array Record) : IO Bool := do
-  let some r := rs[0]? | check "kat record" false
-  let proof := r.bytes "proof"
+  let some tr := rs.find? (·.group == "crt") | check "crt tables record" false
+  let T := parseTables tr
   let mut ok := true
-  ok := (← check "kat proof length" (proof.size == 7272)) && ok
-  let iv := Spec.SHAKE.shake128 ((field proof "iv_pre" ++ r.bytes "mu").push 4) 16
-  ok := (← check "kat iv" (iv == r.bytes "iv")) && ok
-  match BAVC.reconstruct iv (field proof "open") (field proof "delta") with
-  | none => ok := (← check "kat bavc accepted" false) && ok
-  | some v =>
-    ok := (← check "kat leaves" (v.keys == r.bytes "leaves")) && ok
-    ok := (← check "kat hashed_leaves" (v.coms == r.bytes "hashed_leaves")) && ok
-    ok := (← check "kat vole_commit_check" (BAVC.check v.coms == r.bytes "vole_commit_check")) && ok
+  ok := (← check "crt tables shape" (T.mI.size == 17 && T.wCrt.size == 120 && T.wTree.size == 120 &&
+    T.wGate.size == 312 && T.g.size == 120)) && ok
+  let mut n := 0
+  for r in rs do
+    if r.group == "kat" then
+      n := n + 1
+      ok := (← checkKatRecord T r) && ok
+  ok := (← check "kat records" (n == 5)) && ok
   return ok
 
 def main (args : List String) : IO UInt32 := do

@@ -49,3 +49,5 @@ import VoleMole.Spec.Ratatouille
 import VoleMole.Spec.RatatouilleKats
 import VoleMole.Verifier.AES
 import VoleMole.Verifier.BAVC
+import VoleMole.Verifier.Proof
+import VoleMole.Verifier.VOLE
