@@ -16,7 +16,9 @@ quantity at the `φ`-images".
 Such an embedding into a field with `2¹²⁸` elements exists: `Bridge/Concrete.lean` builds
 `gfK : GFEmbedding GF128.K` (`K = GF(2)[X]/(X¹²⁸ + X⁷ + X² + X + 1)`, from `Arith/GFField.lean`,
 which proves the modulus irreducible and `GF128 ≃+* K` in the kernel) and restates the theorems that
-assume `|F| = 2¹²⁸` at it. The statements here stay generic in `φ`.
+assume `|F| = 2¹²⁸` at it. `Arith/GFField.lean` also makes `GF128` itself a field (`instField`, with
+`GF.lean`'s operations), so the identity is an embedding too (`gfId`, `Bridge/Relations.lean`).
+The statements here stay generic in `φ`.
 
 Results (all for any embedding `φ`):
 * `map_horner`: `φ (horner key xs) = Seed.horner (φ key) n (φ ∘ xs)` (the executable Horner fold

@@ -23,10 +23,13 @@ the field with `2¹²⁸` elements, without `native_decide`:
 * **The field.** `K = AdjoinRoot modulus` is then a field with `card_K : Fintype.card K = 2¹²⁸`
   (power basis), `eval (root)` is injective (a nonzero polynomial of degree `< 128` is not divisible
   by the modulus), hence bijective by counting (`eval_bijective`). `ringEquivK : GF128 ≃+* K`, and
-  `instField : Field GF128` keeps `GF.lean`'s `0`, `1`, `+`, `*` and transports the rest from `K`.
+  `instField : Field GF128` keeps `GF.lean`'s `0`, `1`, `+`, `*` and transports the rest from `K`;
+  `CharP GF128 2` follows.
 
 `Verifier/Bridge/Concrete.lean` uses this to discharge the field-embedding hypothesis of the
-verifier bridge theorems.
+verifier bridge theorems, `Arith/ConcreteField.lean` instantiates the relations' soundness theorems
+at `F := GF128`, and `Verifier/Bridge/Relations.lean` states the bridge theorems per relation over
+`GF128` itself.
 -/
 
 namespace VoleMole.Arith
@@ -434,6 +437,9 @@ noncomputable def ringEquivK : GF128 ≃+* K :=
     map_add' := equivK_add }
 
 lemma ringEquivK_apply (a : GF128) : ringEquivK a = eval (AdjoinRoot.root modulus) a := rfl
+
+instance instCharP : CharP GF128 2 :=
+  charP_of_injective_ringHom (f := (ringEquivK.symm : K →+* GF128)) ringEquivK.symm.injective 2
 
 end GF128
 

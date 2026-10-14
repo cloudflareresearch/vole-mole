@@ -33,11 +33,11 @@ multiplies by `Δ^d`, and computes the mask term with a loop over `q_mask` and `
 * `hacc_of_qsCheck`: in characteristic 2, with `z := φ(check_V)` (the value the verifier hashes into
   `chal3`), the accepting equation of `EndToEnd.claim3_of_system` / `extract_or_few` holds.
 
-**Assumed:** `hvals` (the embedding itself is constructed in `Bridge/Concrete.lean`) — that the relation's evaluator
-`values : (ℕ → GF128) → List GF128` (the `Arith/*` sharing evaluators at `F := GF128`) commutes
-with `φ`, i.e. maps to `System.values cs` over `F`. The evaluators are generic in the field, and
-the `Arith/*` files prove them equal to `System.values` (e.g. `issueValues_eq`), so this is
-parametricity; `eval_map` below does the `System` half.
+**Hypothesis** `hvals`: the relation's evaluator `values : (ℕ → GF128) → List GF128` (the `Arith/*`
+sharing evaluators at `F := GF128`), transported along `φ`, is `System.values cs` over `F`. It is
+proved for all five relations in `Bridge/Relations.lean`: at `φ = gfId` (`GF128` is a field) it is
+the `Arith/*` theorems that the evaluators are `System.values` (e.g. `issueValues_eq`); for other
+`φ` take `cs` mapped along `φ` (`values_map`, via `eval_map` below).
 -/
 
 open Finset Polynomial

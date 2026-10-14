@@ -184,7 +184,8 @@ pins down the constraint polynomials, not just their values on bits) and compare
 | `Arith/Keccak/`, `Arith/Keccak.lean`: Keccak-p[800,12] segmented gadget (`src/keccak/`) | done: reference permutation (checked on the KATs), inverse layers proved, generator, completeness, soundness (outputs equal Keccak-p[800] of the input) |
 | `Arith/Adder.lean`: Ratatouille's 64-bit credit adder | done: exact 65-bit sum |
 | `Arith/GF.lean`, `GFEmbedding.lean`: concrete GF(2¹²⁸), GF(256), the embedding | done; embedding proved an injective ring homomorphism in the kernel |
-| `Arith/GFField.lean`: `GF128` is the field GF(2¹²⁸) | done, in the kernel: `X¹²⁸ + X⁷ + X² + X + 1` irreducible over GF(2), `GF128 ≃+* GF(2)[X]/(X¹²⁸ + X⁷ + X² + X + 1)`, `Field GF128` |
+| `Arith/GFField.lean`: `GF128` is the field GF(2¹²⁸) | done, in the kernel: `X¹²⁸ + X⁷ + X² + X + 1` irreducible over GF(2), `GF128 ≃+* GF(2)[X]/(X¹²⁸ + X⁷ + X² + X + 1)`, `Field GF128`, `CharP GF128 2` |
+| `Arith/ConcreteField.lean`, `EndToEnd/Concrete.lean`: the soundness corollaries at GF(2¹²⁸) | done: `uov_*`, `*_complete`, `*_sound_card` and the five `EndToEnd` `*_extract` theorems at `F := GF128`, `β := beta`, `K := GF256`, with `IsEmbedding beta`, `beta 0 = 1` and `\|F\| = 2¹²⁸` discharged; the bad-`l` fraction is `≤ 2⁻¹²⁸` |
 | C++ dumper (`tests/arith/`) and `lake exe arith_vectors` | done; Lean and C++ constraint values agree on every UOV and PomFRIT record, at bit and random field-valued witnesses |
 | `Arith/Moussaka.lean`: Moussaka issue (commitment opening) and redeem (one-hot selector, UOV preimage under the selected anchor key, Keccak commitment) | done: generators, completeness, soundness, 1/\|F\| bound; cross-checked |
 | `Arith/Pqov.lean`, `Arith/Concrete.lean`: pqov's `ov_publicmap` equals the model; the relations read as the C++ byte checks on concrete GF(256) | done; cross-checked |
@@ -192,7 +193,9 @@ pins down the constraint polynomials, not just their values on bits) and compare
 
 The UOV gadget's hypothesis, that the embedding GF(256) → GF(2¹²⁸) given by the β constants is an
 injective ring homomorphism, is discharged in the kernel for the concrete constants
-(`VoleMole.Arith.isEmbedding`). The constants themselves, and the GF(2¹²⁸) and GF(256)
+(`VoleMole.Arith.isEmbedding`), and with `Field GF128` the soundness theorems are instantiated at
+the concrete field with no hypotheses left (`Arith/ConcreteField.lean`, e.g.
+`Moussaka.redeem_sound_card_gf128`; `EndToEnd/Concrete.lean`, e.g. `moussaka_redeem_extract_gf128`). The constants themselves, and the GF(2¹²⁸) and GF(256)
 multiplications, are checked against the C++ tables by `arith_vectors`.
 
 `Arith/GFField.lean` proves that the concrete `GF128` operations form the field GF(2¹²⁸), without
@@ -240,7 +243,7 @@ rejects mutated ones, built from the same models the proofs use. Plan and milest
 | CRT tables (`CrtData.lean`, `CrtGen.lean`) | partly: `W_crt` and `M_tree` are recomputed from the moduli; F, G, W_tree, W_gate are copied from faest-arch-opt's build output and checked against their defining bilinear identity on all basis pairs, not regenerated |
 | UOV keys | partly: compressed public keys are expanded in Lean (pqov `expand_pk`, using the Lean AES). Moussaka/Ratatouille KATs only contain secret keys, so their compressed public keys come from `lean/vectors/verifier_keys.txt`; pqov key generation is not modelled |
 | Label-rows variant (`Params.labelRows`) | done; the same verifier, with the flag set, accepts all 18 KAT proofs of branch `voleith-label-rows` (KATs regenerated there, PomFRIT's too) and rejects the same 51 mutations; every intermediate value of the five dumped proofs matches |
-| Bridge theorems (`Verifier/Bridge/*`) | partly: proved that the executable CTR blocks are `Seed.Commitments.ctrInput` (and its role separation applies to the verifier's tweaks), that the VOLE check is `Seed.kosValue`, that the QuickSilver check value is `EndToEnd.qsCheck` + `Seed.maskPoly` (including the `Δ^d·f(q/Δ)` shortcut), and that acceptance gives `EndToEnd`'s accepting equation at that transcript. The field embedding is constructed (`Bridge/Concrete.lean`, from `Arith/GFField.lean`) and the theorems that assumed one (`accept_hacc`, `map_constraintKeys`, `map_gfInv`, `map_voleHashReceiver`) are restated at it without that hypothesis. Assumed: the relations' `GF128` evaluators transport to `System.values`. Not bridged: ConvertToVOLE/CRT as functions of Δ (the per-tree form of `Claim4Hyp`) |
+| Bridge theorems (`Verifier/Bridge/*`) | partly: proved that the executable CTR blocks are `Seed.Commitments.ctrInput` (and its role separation applies to the verifier's tweaks), that the VOLE check is `Seed.kosValue`, that the QuickSilver check value is `EndToEnd.qsCheck` + `Seed.maskPoly` (including the `Δ^d·f(q/Δ)` shortcut), and that acceptance gives `EndToEnd`'s accepting equation at that transcript. The field embedding is constructed (`Bridge/Concrete.lean`, from `Arith/GFField.lean`) and the theorems that assumed one (`accept_hacc`, `map_constraintKeys`, `map_gfInv`, `map_voleHashReceiver`) are restated at it without that hypothesis. Per relation (`Bridge/Relations.lean`): with `GF128` itself as the field, each relation's evaluator is `System.values` of its `Arith/*` system (`betaFast = beta`, cached UOV coefficients unchanged), so acceptance by the executable `verify` gives `EndToEnd`'s accepting equation for that system over GF(2¹²⁸) with no hypothesis (`moussakaIssue_accept`, …, `pomfritVerify_accept`), i.e. `hacc` of `*_extract_gf128` at that Δ. Not bridged: ConvertToVOLE/CRT as functions of Δ (the per-tree form of `Claim4Hyp`, needed for `hacc` on all of `A`) |
 
 ## Gaps
 
@@ -255,10 +258,10 @@ What is **not** established, roughly in order of importance:
    cross-check). Compiler behaviour, memory safety and constant-time execution are out of scope.
 3. **Arithmetization: small leftovers.** All five relations are modelled and proved (§6), and
    pqov's `ov_publicmap` is proved equal to the modelled public map over any commutative ring
-   (`Arith/Pqov.lean`). The soundness corollaries are stated over an abstract field with the
-   (kernel-proved) embedding facts as hypotheses; the concrete GF(2¹²⁸) is proved to be such a
-   field (`Arith/GFField.lean`), but the corollaries are not restated at it, and on the concrete
-   fields agreement is also checked by `arith_vectors`. pqov's
+   (`Arith/Pqov.lean`). The soundness corollaries are proved over an abstract field and
+   instantiated at the concrete GF(2¹²⁸) with all hypotheses discharged (`Arith/ConcreteField.lean`,
+   `EndToEnd/Concrete.lean`); the verifier's evaluators are proved to be the systems' values
+   (`Verifier/Bridge/Relations.lean`), and agreement with the C++ is checked by `arith_vectors`. pqov's
    constant-time `ov_publicmap_ct`, which the code calls, is checked against `ov_publicmap` by the
    dumper, not modelled. The step "`l` is uniform because it is a random-oracle output" is on paper.
 4. **Idealized models.** AES-128 is an ideal cipher (classical and quantum), SHAKE and Keccak-p are

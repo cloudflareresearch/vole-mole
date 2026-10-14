@@ -169,9 +169,9 @@ is part of milestone 6.
    * `QuickSilver.lean`: `mac_constraintQS` (the MAC of `constraintQS d e` is `Δ^d·e(m/Δ)`, the
      executable's shortcut), `qsCheck_zkCoeff`, `map_constraintKeys`, `map_qsCheck`
      (`φ(check_V) + z = EndToEnd.qsCheck … + (Seed.maskPoly d a b ã z).eval Δ` when the mask MACs are
-     `a_i + b_i Δ`), `hacc_of_qsCheck` (char 2, `z = φ(check_V)`). **Assumed:** `hvals`, the
-     relation's `GF128` evaluator is `System.values cs` transported along `φ` (parametricity of the
-     `Arith/*` evaluators; `eval_map` proves the `System` half).
+     `a_i + b_i Δ`), `hacc_of_qsCheck` (char 2, `z = φ(check_V)`). Hypothesis `hvals`, the
+     relation's `GF128` evaluator is `System.values cs` transported along `φ`: proved per relation
+     in `Relations.lean` (below).
    * `Accept.lean`: `accept_iff` (the verifier unfolded into its step functions), `map_correctedKeys`
      (the QuickSilver inputs are `EndToEnd.macs`' `Q_j + d_j Δ`, zero beyond `ℓ`, for both layouts),
      `accept_hacc` (acceptance ⇒ `φ Δ_lifted ≠ 0`, `chal3 = Δ`, and `EndToEnd`'s accepting equation
@@ -182,7 +182,20 @@ is part of milestone 6.
      is multiplicative and bijective, `GF128 ≃+* K`, `Field GF128`). `accept_hacc_K`,
      `map_constraintKeys_K`, `map_gfInv_K`, `map_voleHashReceiver_K` (`T = univ`) restate the
      theorems at `gfK` with `|F| = 2¹²⁸` and characteristic 2 proved.
+   * `Relations.lean`: `GF128` is itself a field (`GF128.instField`, `CharP GF128 2`), so
+     `gfId : GFEmbedding GF128` and `accept_hacc_GF` (`hvals` an equation over `GF128`). Per
+     relation, the statement's evaluator is `System.values` of the `Arith/*` system at
+     `β := beta`, `K := GF256` and the verifier's instance data (`*_values`: the `Arith/*`
+     `issueValues_eq`/`redeemValues_eq`/`issueSystem_values`/`spendSystem_values`, `betaFast_eq`;
+     the cached UOV coefficients `ofArr (combinationArr …)` are the system's `l`), and the degree
+     bounds are `EndToEnd/Degree`'s. Hence `moussakaIssue_accept`, `moussakaRedeem_accept`,
+     `ratatouilleIssue_accept`, `ratatouilleSpend_accept`, `pomfritRedeem_accept`,
+     `pomfritVerify_accept` (also the refresher check): acceptance gives `EndToEnd`'s accepting
+     equation for the relation's system over GF(2¹²⁸), no hypotheses. `values_map` gives `hvals`
+     at any other `φ` (e.g. `gfK`) with the system mapped by `Expr.map`. The systems' soundness at
+     GF(2¹²⁸) and the `*_extract` theorems there are `Arith/ConcreteField.lean` and
+     `EndToEnd/Concrete.lean`.
    Still open: the per-tree/affine-in-Δ structure of the executable `Q`, `D`, `q_mask` across
    challenges (ConvertToVOLE and `crtReconstruct` as functions of Δ against `Claim4Hyp`/`KOSGood`,
-   and `W_CRT` against the model's injective lift `e`); `hvals` per relation;
-   the random-oracle steps.
+   and `W_CRT` against the model's injective lift `e`), which `*_extract_gf128` needs to turn the
+   per-transcript equation into `hacc` on the whole accepting set; the random-oracle steps.

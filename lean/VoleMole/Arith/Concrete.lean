@@ -16,12 +16,12 @@ as the C++ checks: `PublicKey::eval(s) == h ⊕ r` (PomFRIT), `anchors[u₀].eva
 
 ## Concrete soundness
 
-The soundness theorems need `[Field F] [CharP F 2]`, which `GF128` deliberately lacks, so they
-cannot be instantiated at `F := GF128`. The corollaries below fix the K side (`K := GF256`,
-`toBits := GF256.toBits`, `ofByte := GF256.ofBits`) and state the conclusion in byte form; the
-remaining hypotheses are `IsEmbedding β GF256.toBits GF256.ofBits` and `β 0 = 1` on the abstract
-`F`. For the concrete `β := beta` both are proved (`isEmbedding`, `beta_zero`); only the `Field`
-instance on `GF128` is missing to close the instantiation.
+The soundness theorems need `[Field F] [CharP F 2]`. The corollaries below fix the K side
+(`K := GF256`, `toBits := GF256.toBits`, `ofByte := GF256.ofBits`) and state the conclusion in byte
+form; the remaining hypotheses are `IsEmbedding β GF256.toBits GF256.ofBits` and `β 0 = 1` on the
+abstract `F`. For the concrete `β := beta` both are proved (`isEmbedding`, `beta_zero`), and
+`Arith/GFField.lean` makes `GF128` a field of characteristic 2; `Arith/ConcreteField.lean`
+instantiates the corollaries at `F := GF128`, `β := beta` with no hypotheses left.
 
 ## Main results
 

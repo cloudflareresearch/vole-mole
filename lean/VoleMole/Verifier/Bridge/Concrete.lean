@@ -16,9 +16,10 @@ proved (`GF128.card_K`, the `CharP K 2` instance):
   ranging over all of `K` (`T = univ`);
 * `map_constraintKeys_K`: the executable constraint values are the `c_k = Δ^d·f_k(m/Δ)`;
 * `accept_hacc_K`: acceptance gives `EndToEnd`'s accepting equation at that transcript.
-The theorems of `Bridge/*` without these hypotheses apply to `gfK` directly. What remains assumed is
-listed in `Bridge/Accept.lean` (`hvals`, the per-tree form of `Q`, `D`, `q_mask` across `Δ`, the
-random-oracle steps); the embedding is no longer among it.
+The theorems of `Bridge/*` without these hypotheses apply to `gfK` directly. `hvals` is proved per
+relation in `Bridge/Relations.lean` (over `GF128` itself, or at `gfK` via `values_map`). What
+remains assumed is listed in `Bridge/Accept.lean` (the per-tree form of `Q`, `D`, `q_mask` across
+`Δ`, the random-oracle steps).
 -/
 
 namespace VoleMole.Verifier.Bridge

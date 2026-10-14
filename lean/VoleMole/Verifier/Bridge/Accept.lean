@@ -22,8 +22,9 @@ import VoleMole.Verifier.Bridge.QuickSilver
   verifier's check value, which `chal3 = H(chal2 ‖ z ‖ ã ‖ ctr ‖ 11) = Δ` binds.
 
 **What is not bridged** (still assumed by the end-to-end theorems, or argued only on paper):
-* `hvals` (`Bridge/QuickSilver.lean`). (The field embedding is constructed in
-  `Bridge/Concrete.lean`, which restates `accept_hacc` at it as `accept_hacc_K`.)
+* (`hvals` and the field embedding are no longer assumed: `Bridge/Concrete.lean` constructs the
+  embedding and restates `accept_hacc` as `accept_hacc_K`; `Bridge/Relations.lean` takes `GF128`
+  itself as the field and proves `hvals` for the five relations, `*_accept`.)
 * that the `Q`, `D` and mask MACs computed from one proof are, as functions of `Δ`, the per-tree
   affine forms `Claim4Hyp`, `KOSGood` and L3 reason about: `accept_hacc` is pointwise in `Δ` (here
   `b = 0`; across `Δ` the masks are `a_i + b_i·Δ` by L3). Relating `convertToVole` and
