@@ -18,8 +18,9 @@ models the same check as `kosValue c e Q D u Δ = VOLEHash_c(Q(Δ)) + D(Δ) + e(
 * `D(Δ)_j = φ q_mask[d − 1 + j]` (the four direct masks), `e(Δ) = φ Δ_lifted`, `u_j = φ ũ_j`.
 
 The model's response functions `Q`, `D` vary with `Δ`; the verifier computes them at the proof's
-`Δ` only, so the statement is pointwise (`X := Unit`). That the executable `Q`, `D` have L3's
-per-tree form across `Δ` (ConvertToVOLE and the CRT step as functions of `Δ`) is not bridged here.
+`Δ` only, so the statement is pointwise (`X := Unit`). Across `Δ`, with the commitments fixed,
+`Bridge/Chain.lean` (`vole_kosValue`) restates it with `X` the challenge blocks and `Q`, `D` the
+committed responses.
 -/
 
 namespace VoleMole.Verifier.Bridge

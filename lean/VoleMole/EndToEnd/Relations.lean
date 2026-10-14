@@ -22,8 +22,9 @@ decoding satisfies the relation, or at most `max(d, 1)` admissible `chall₃` ar
 ## Hypotheses, and what discharges them
 
 Common to all five (one chain = an `H₂²` input `y` and the `H₂³` queries extending it):
-* `hK : Claim4Hyp e A known u Q u*`. `lift_inj` (W_crt injective, a [test]); `tree_form` (L1
-  committed data + L5's per-tree form); `unknown_fixed` (L2: a tree with a dead leaf has a fixed
+* `hK : Claim4Hyp e A known u Q u*`. `lift_inj` (W_crt injective; proved for the executable
+  tables, `Verifier/Bridge/Lift.lean`); `tree_form` (L1 committed data + L5's per-tree form;
+  proved for the executable ConvertToVOLE, `Verifier/Bridge/Columns.lean`); `unknown_fixed` (L2: a tree with a dead leaf has a fixed
   block); `consistent` (L3, `claim4Hyp_of_kosGood` on a good `chall₁`; bad with prob. `ε_KOS` per
   `H₂¹` query). `u*` is L4 §5's canonical slope, from L3 on `A_V ⊇ A`, so it is fixed before
   `chall₂`.
@@ -49,7 +50,8 @@ Total per `H₂²` query: `ε_QS(n) + 1/|F|` (L4 Prop. 3), or `ε_QS(n)` for the
 `EndToEnd/Concrete.lean` instantiates all five at the concrete GF(2¹²⁸) (`F := GF128`,
 `β := beta`, `K := GF256`), with `hcomb`'s failure bound `2⁻¹²⁸` proved (`*_comb_bad_gf128`);
 `Verifier/Bridge/Relations.lean` proves `hacc` at the `Δ` of any transcript the executable verifier
-accepts.
+accepts, and `Verifier/Bridge/ChainRelations.lean` proves `hK` (except L2's `unknown_fixed` and
+L3's good `chal1`) and `hacc` on a whole chain.
 
 The QuickSilver degree bound `hdeg` is proved (`degree_pomfritRedeemSystem`, `EndToEnd/Degree`).
 The witness rows are exactly the relation's witness bits (`J = Fin ℓ`, `ℓ = WITNESS_BITS`), each

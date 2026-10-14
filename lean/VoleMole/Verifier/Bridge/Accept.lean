@@ -25,11 +25,9 @@ import VoleMole.Verifier.Bridge.QuickSilver
 * (`hvals` and the field embedding are no longer assumed: `Bridge/Concrete.lean` constructs the
   embedding and restates `accept_hacc` as `accept_hacc_K`; `Bridge/Relations.lean` takes `GF128`
   itself as the field and proves `hvals` for the five relations, `*_accept`.)
-* that the `Q`, `D` and mask MACs computed from one proof are, as functions of `Δ`, the per-tree
-  affine forms `Claim4Hyp`, `KOSGood` and L3 reason about: `accept_hacc` is pointwise in `Δ` (here
-  `b = 0`; across `Δ` the masks are `a_i + b_i·Δ` by L3). Relating `convertToVole` and
-  `crtReconstruct` to the extraction model's `Q[j](Δ) = Σ_i …` (and the CRT lift `W_CRT` to the
-  model's injective `e`) is open;
+* (`accept_hacc` is pointwise in `Δ`, with `b = 0`. The per-tree affine form of the witness rows
+  across `Δ`, the injective CRT lift, and the accepting equation on a whole chain with masks
+  `a_i + b_i·Δ` from L3 are `Bridge/Lift.lean`, `Bridge/Columns.lean`, `Bridge/Chain.lean`.)
 * that `chal1`, `chal2`, `chal3` are random-oracle outputs (the random-oracle steps of L1-L4).
 -/
 

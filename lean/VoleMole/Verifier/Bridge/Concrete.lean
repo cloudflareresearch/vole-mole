@@ -18,8 +18,8 @@ proved (`GF128.card_K`, the `CharP K 2` instance):
 * `accept_hacc_K`: acceptance gives `EndToEnd`'s accepting equation at that transcript.
 The theorems of `Bridge/*` without these hypotheses apply to `gfK` directly. `hvals` is proved per
 relation in `Bridge/Relations.lean` (over `GF128` itself, or at `gfK` via `values_map`). What
-remains assumed is listed in `Bridge/Accept.lean` (the per-tree form of `Q`, `D`, `q_mask` across
-`Δ`, the random-oracle steps).
+remains assumed is listed in `Bridge/Accept.lean` and `Bridge/ChainRelations.lean` (the
+random-oracle and probabilistic steps).
 -/
 
 namespace VoleMole.Verifier.Bridge

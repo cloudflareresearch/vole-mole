@@ -19,7 +19,13 @@ where `c_i` (`i ≥ 1`; `c_0 = 0`) is the correction from the proof on the first
 (`ℓ' = VOLE_CORRECTION_ROWS`: `ℓ`, or `ℓ + 128` with dedicated label rows), zero below.
 Columns `120 … 127` (the zero bits of `Δ`) are zero. faest-arch-opt computes the same sum over its
 permuted leaf order with Gray-code accumulation (`xor_reduce`, `process_prg_output`); here it is
-written out directly. A column is a bit vector over rows (row `r` = bit `r % 8` of byte `r / 8`).
+written out directly (`treeColumns`, one fold per column over the `R_j`, each computed once). A
+column is a bit vector over rows (row `r` = bit `r % 8` of byte `r / 8`).
+
+The steps take `Δ` as its bits (`BAVC.deltaBit`, `c < 120`) and the commitments as separate
+arguments (`convertToVoleAt`, `crtReconstructAt`; `convertToVole`, `crtReconstruct` read them off a
+proof), so that `Bridge/Columns.lean` can treat them as functions of the challenge with the
+commitments fixed.
 
 ## The CRT step
 
@@ -115,42 +121,53 @@ def wordsOf (b : ByteArray) : Array UInt64 :=
 
 def bytesOfWords (w : Array UInt64) : ByteArray := w.foldl W128.pushWord ByteArray.empty
 
-/-- `a ⊕= b` on word arrays of equal length. -/
-@[inline] def xorWords (a b : Array UInt64) : Array UInt64 := Id.run do
-  let mut a := a
-  for i in [0:b.size] do
-    a := a.set! i (a[i]! ^^^ b[i]!)
-  return a
+/-- `a ⊕ b` on word arrays (the length of `a`; `b` read as zero beyond its end). -/
+@[inline] def xorWords (a b : Array UInt64) : Array UInt64 := a.mapIdx fun i x => x ^^^ b[i]!
+
+/-- A zero column (`colBytes / 8` words). -/
+def zeroCol (p : Params) : Array UInt64 := Array.replicate (p.colBytes / 8) 0
+
+/-- The correction `c_i` of small VOLE `i` as a column (zero for `i = 0`, zero-padded below). -/
+def corrWords (p : Params) (i : Nat) (corr : ByteArray) : Array UInt64 :=
+  if i == 0 then zeroCol p else wordsOf (corr ++ ⟨Array.replicate (p.colBytes - corr.size) 0⟩)
+
+/-- `R = PRG(key, iv, 2³¹ + i)`, `VOLE_COL_BLOCKS` blocks, as a column. -/
+def prgWords (p : Params) (iv : ByteArray) (i : Nat) (key : ByteArray) : Array UInt64 :=
+  wordsOf (AES.prg key iv (((1 : UInt32) <<< 31) + i.toUInt32) 0 p.voleColBlocks)
+
+/-- `R_j` for the leaves `j < 2^{k_i}` of small VOLE `i`, except the hidden one `dI` (zero). -/
+def prgOuts (p : Params) (iv : ByteArray) (i dI : Nat) (key : Nat → ByteArray) :
+    Array (Array UInt64) :=
+  (Array.range (2 ^ BAVC.kOf i)).map fun j => if j == dI then zeroCol p else prgWords p iv i (key j)
+
+/-- The `k_i` key columns of small VOLE `i` (`q_{p_i + b}`, `b < k_i`), from its hidden index
+`dI`, its correction `corr` (`c_i`, bytes) and its leaf keys `key j`:
+`q_{p_i + b} = dI_b · c_i + Σ_{j ≠ dI} (j ⊕ dI)_b · R_j`. The PRG outputs `R_j` are computed once
+per leaf; the hidden leaf's key is never read. -/
+def treeColumns (p : Params) (iv : ByteArray) (i dI : Nat) (corr : ByteArray)
+    (key : Nat → ByteArray) : Array (Array UInt64) :=
+  let prgOut := prgOuts p iv i dI key
+  (Array.range (BAVC.kOf i)).map fun b =>
+    (List.range (2 ^ BAVC.kOf i)).foldl
+      (fun acc j => if j != dI && (j ^^^ dI).testBit b then xorWords acc prgOut[j]! else acc)
+      (if dI.testBit b then corrWords p i corr else zeroCol p)
+
+/-- The verifier's 128 key columns (`colBytes / 8` words each) before the CRT lift, from the bits
+`dbit c` of `Δ`, the corrections `corr i` and the leaf keys `key i j` (leaf `j` of vector `i`). -/
+def convertToVoleAt (p : Params) (dbit : Nat → Bool) (corr : Nat → ByteArray) (iv : ByteArray)
+    (key : Nat → Nat → ByteArray) : Array (Array UInt64) :=
+  let trees : Array (Array (Array UInt64)) := (Array.range BAVC.tau).map fun i =>
+    treeColumns p iv i (BAVC.hiddenIndex dbit i) (corr i) (key i)
+  (Array.range 128).map fun c =>
+    if c < 120 then trees[BAVC.treeOf c]![c - BAVC.bitOffset (BAVC.treeOf c)]! else zeroCol p
+
+/-- Leaf `j` of vector `i` (16 bytes). -/
+def leafKey (leaves : BAVC.Leaves) (i j : Nat) : ByteArray :=
+  leaves.keys.extract (16 * (BAVC.leafOffset i + j)) (16 * (BAVC.leafOffset i + j) + 16)
 
 /-- The verifier's 128 key columns (`colBytes / 8` words each) before the CRT lift. -/
 def convertToVole (pf : Proof) (iv : ByteArray) (leaves : BAVC.Leaves) : Array (Array UInt64) :=
-  Id.run do
-  let p := pf.params
-  let nWords := p.colBytes / 8
-  let zeroCol : Array UInt64 := Array.replicate nWords 0
-  let mut cols : Array (Array UInt64) := Array.replicate 128 zeroCol
-  for i in [0:BAVC.tau] do
-    let k := BAVC.kOf i
-    let dI := BAVC.deltaIndex pf.delta i
-    let corr : Array UInt64 :=
-      if i == 0 then zeroCol
-      else
-        let c := pf.correctionOf i
-        wordsOf (c ++ ⟨Array.replicate (p.colBytes - c.size) 0⟩)
-    let mut acc : Array (Array UInt64) := (Array.range k).map fun b =>
-      if (dI >>> b) % 2 == 1 then corr else zeroCol
-    let tweak : UInt32 := ((1 : UInt32) <<< 31) + i.toUInt32
-    let off := BAVC.leafOffset i
-    for j in [0:2 ^ k] do
-      if j != dI then
-        let key := leaves.keys.extract (16 * (off + j)) (16 * (off + j) + 16)
-        let r := wordsOf (AES.prg key iv tweak 0 p.voleColBlocks)
-        let y := j ^^^ dI
-        for b in [0:k] do
-          if (y >>> b) % 2 == 1 then acc := acc.set! b (xorWords acc[b]! r)
-    for b in [0:k] do
-      cols := cols.set! (BAVC.bitOffset i + b) acc[b]!
-  return cols
+  convertToVoleAt pf.params (BAVC.deltaBit pf.delta) pf.correctionOf iv (leafKey leaves)
 
 /-- The columns as bytes, concatenated (the dump's `q_columns`). -/
 def columnsBytes (cols : Array (Array UInt64)) : ByteArray :=
@@ -196,47 +213,53 @@ structure CrtOut where
   qMask : Array W128
   deltaLifted : W128
 
-/-- `crt_vole_reconstruct` after the plain reconstruction, and `crt_lift_delta`. -/
-def crtReconstruct (pf : Proof) (T : CrtTables) (iv : ByteArray) (cols : Array (Array UInt64)) :
-    CrtOut := Id.run do
-  let p := pf.params
+/-- `γ = Δ · G`, from the bits `dbit c` (`c < 120`) of `Δ`. -/
+def gammaOf (T : CrtTables) (dbit : Nat → Bool) : Array UInt64 :=
+  (List.range 120).foldl (fun acc c => if dbit c then xorWords acc T.g[c]! else acc)
+    (Array.replicate 5 0)
+
+/-- `r̃_m` from the 8 mask rows `src` of mask `m`. -/
+def rTildeOf (T : CrtTables) (src : Array W128) : W128 := Id.run do
+  let mut rt := W128.zero
+  for i in [0:BAVC.tau] do
+    let k := BAVC.kOf i
+    let o := BAVC.bitOffset i
+    let mut x : UInt64 := 0
+    for t in [0:k] do
+      let mut bits : UInt64 := 0
+      for b in [0:k] do
+        if src[t]!.bit (o + b) then bits := bits ||| ((1 : UInt64) <<< b.toUInt64)
+      x := x ^^^ (bits <<< t.toUInt64)
+    let red := polyMod x T.mI[i]!
+    for b in [0:k] do
+      if (red >>> b.toUInt64) &&& 1 == 1 then
+        let pos := o + b
+        rt := if pos < 64 then { rt with lo := rt.lo ||| ((1 : UInt64) <<< pos.toUInt64) }
+          else { rt with hi := rt.hi ||| ((1 : UInt64) <<< (pos - 64).toUInt64) }
+  return rt
+
+/-- `crt_vole_reconstruct` after the plain reconstruction, and `crt_lift_delta`, from the bits
+`dbit c` (`c < 120`) of `Δ` and `c_mult`. Lifted row `r` is `Σ_{c < 120} q_c[r] · W_CRT[c]`. -/
+def crtReconstructAt (p : Params) (dbit : Nat → Bool) (cmult : ByteArray) (T : CrtTables)
+    (iv : ByteArray) (cols : Array (Array UInt64)) : CrtOut :=
   let ell := p.correctionRows
   let hashes := gateHashes p T iv cols
   let rows : Array W128 := (Array.range ell).map fun r =>
-    let x := rowOf cols r
-    W128.rowMul x.bit 120 T.wCrt
-  let delta := W128.ofBytes pf.delta
-  let gamma : Array UInt64 := Id.run do
-    let mut acc : Array UInt64 := Array.replicate 5 0
-    for c in [0:120] do
-      if delta.bit c then acc := xorWords acc T.g[c]!
-    return acc
-  let mut rTilde : Array W128 := #[]
-  let mut qMask : Array W128 := #[]
-  for m in [0:p.nMask] do
-    let src : Array W128 := (Array.range 8).map fun t => rowOf cols (ell + 8 * m + t)
-    let mut rt := W128.zero
-    for i in [0:BAVC.tau] do
-      let k := BAVC.kOf i
-      let o := BAVC.bitOffset i
-      let mut x : UInt64 := 0
-      for t in [0:k] do
-        let mut bits : UInt64 := 0
-        for b in [0:k] do
-          if src[t]!.bit (o + b) then bits := bits ||| ((1 : UInt64) <<< b.toUInt64)
-        x := x ^^^ (bits <<< t.toUInt64)
-      let red := polyMod x T.mI[i]!
-      for b in [0:k] do
-        if (red >>> b.toUInt64) &&& 1 == 1 then
-          let pos := o + b
-          rt := if pos < 64 then { rt with lo := rt.lo ||| ((1 : UInt64) <<< pos.toUInt64) }
-            else { rt with hi := rt.hi ||| ((1 : UInt64) <<< (pos - 64).toUInt64) }
-    rTilde := rTilde.push rt
-    let cm := pf.cmult.extract (m * p.nMultBytes) ((m + 1) * p.nMultBytes)
+    W128.rowMul (fun c => wbit cols[c]! r) 120 T.wCrt
+  let gamma := gammaOf T dbit
+  let rTilde : Array W128 := (Array.range p.nMask).map fun m =>
+    rTildeOf T ((Array.range 8).map fun t => rowOf cols (ell + 8 * m + t))
+  let qMask : Array W128 := (Array.range p.nMask).map fun m =>
+    let cm := cmult.extract (m * p.nMultBytes) ((m + 1) * p.nMultBytes)
     let gateRow : Nat → Bool := fun e =>
       ((hashes[e]! >>> m.toUInt32) &&& 1 == 1) ^^
         (wbit gamma e && (cm.get! (e / 8) >>> (e % 8).toUInt8) &&& 1 == 1)
-    qMask := qMask.push ((W128.rowMul rt.bit 120 T.wTree).xor (W128.rowMul gateRow p.nMult T.wGate))
-  return { hashes, rTilde, rows, qMask, deltaLifted := W128.rowMul delta.bit 120 T.wCrt }
+    (W128.rowMul rTilde[m]!.bit 120 T.wTree).xor (W128.rowMul gateRow p.nMult T.wGate)
+  { hashes, rTilde, rows, qMask, deltaLifted := W128.rowMul dbit 120 T.wCrt }
+
+/-- `crt_vole_reconstruct` after the plain reconstruction, and `crt_lift_delta`. -/
+def crtReconstruct (pf : Proof) (T : CrtTables) (iv : ByteArray) (cols : Array (Array UInt64)) :
+    CrtOut :=
+  crtReconstructAt pf.params (BAVC.deltaBit pf.delta) pf.cmult T iv cols
 
 end VoleMole.Verifier

@@ -195,7 +195,34 @@ is part of milestone 6.
      at any other `φ` (e.g. `gfK`) with the system mapped by `Expr.map`. The systems' soundness at
      GF(2¹²⁸) and the `*_extract` theorems there are `Arith/ConcreteField.lean` and
      `EndToEnd/Concrete.lean`.
-   Still open: the per-tree/affine-in-Δ structure of the executable `Q`, `D`, `q_mask` across
-   challenges (ConvertToVOLE and `crtReconstruct` as functions of Δ against `Claim4Hyp`/`KOSGood`,
-   and `W_CRT` against the model's injective lift `e`), which `*_extract_gf128` needs to turn the
-   per-transcript equation into `hacc` on the whole accepting set; the random-oracle steps.
+   * Across Δ (`Lift.lean`, `Columns.lean`, `Chain.lean`, `ChainRelations.lean`). Executable
+     refactor (checked: all intermediate values of the five dumped proofs, 18 accepted / 51
+     rejected): `convertToVoleAt`/`crtReconstructAt` take `Δ` as bits (`BAVC.deltaBit`, `c < 120`)
+     and the commitments as arguments; `treeColumns` computes each column as one fold over the
+     PRG outputs (`prgOuts`, hidden leaf never read); `xorWords` is a `mapIdx`.
+     - `Lift.lean`: `Blocks` (`Δ_i ∈ F₂^{k_i}`), `blocksOf`/`dbitOf`, `sum_range_120` (the 120 bit
+       positions are the `p_i + b`); `lift T` (the CRT lift as `Blocks →+ GF128`), `rowMul_lift`
+       (`crt_lift_delta` is `lift T (blocksOf dbit)`), `blockLift_lift`; `lift_injective` for any
+       tables with `liftInvOk` (an offline left inverse of `W_CRT`, 120 linear forms), and
+       `liftInvOk_tables` (`decide +kernel`, ≈ 30 s).
+     - `Columns.lean`: `treeColumns_affine` (column `p_i + b` is `V_{i,b} + dI_b · u^{(i)}`,
+       `u^{(i)} = c_i + Σ_j R_j` = `smallVoleU`, for any `dI`), `testBit_hiddenIndex`,
+       `resp_row` (lifted row `r` is `C_r + Σ_i u^{(i)}_r · e_i(Δ_i)`: `Claim4Hyp.tree_form`);
+       `convertToVoleAt_congr_key` and `crtReconstruct_eq_respAt` (a run whose opening
+       reconstructs the committed keys off the hidden leaves is the committed response `respAt`).
+     - `Chain.lean`: `Chain` (reference proof for `c_i`, `c_mult`, `iv_pre`, `ũ`, `d`, `ã`, `ctr`;
+       committed keys; `chal1`, `h_V`, `z`; `chal2` derived), `OnChain` (the committed responses
+       at `Δ'` give `Δ_lifted ≠ 0`, the chain's `h_V` and `z`), `vole_kosValue` (`KOSGood`'s
+       `Q`, `D` are the committed hashed rows/masks, `X` = blocks), `chain_kos_affine`,
+       `chain_tree_form`, `chain_claim4` (`Claim4Hyp` and the accepting equation on all of `A`
+       with one `R = maskPoly d a b ã z`), `onChain_of_accept` (an accepted proof of the chain is
+       on the chain at its `Δ`, and `Δ = chal3`).
+     - `ChainRelations.lean`: `moussakaIssue_extract_chain`, `moussakaRedeem_extract_chain`,
+       `ratatouilleIssue_extract_chain`, `ratatouilleSpend_extract_chain`,
+       `pomfritRedeem_extract_chain`.
+   Still open (all probabilistic or random-oracle, kept as hypotheses): `KOSGood` for `chal1`
+   (L3), `IsFixed` for the dead-leaf trees (L2), `hQS`/`hcomb` for the slope of the witness rows
+   on `A` (guarded by `|A| ≥ 2`, where it is L4 §5's canonical slope), `hδ`/`hclaim1` and the
+   binding of the leaf commitments (`hbind`, and the chain identification of `chal1`, `h_V`, `z`
+   in `onChain_of_accept`) (L1). `pomfritVerify`'s refresher check is not part of the chain
+   theorem (its proof part is `pomfritRedeem`).

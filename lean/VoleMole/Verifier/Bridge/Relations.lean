@@ -36,9 +36,9 @@ No parametricity argument is needed: the evaluator and the system live over the 
   `ratatouilleSpend_accept`, `pomfritRedeem_accept`, `pomfritVerify_accept`: **if the executable
   verifier accepts, `EndToEnd`'s accepting equation holds at that transcript for the relation's
   `Arith/*` system over GF(2¹²⁸)**, the `hacc` of the `*_extract_gf128` theorems
-  (`EndToEnd/Concrete.lean`) at that `Δ`, with nothing assumed. What `*_extract_gf128` needs
-  beyond this is the per-tree/affine-in-`Δ` structure of `Q`, `D`, `q_mask` across challenges and
-  the random-oracle steps (`Bridge/Accept.lean`).
+  (`EndToEnd/Concrete.lean`) at that `Δ`, with nothing assumed. On a whole chain of challenges,
+  `Bridge/Chain.lean` and `Bridge/ChainRelations.lean` discharge `Claim4Hyp` and `hacc` on all of
+  `A`, leaving the random-oracle and probabilistic steps.
 * `values_map`, `degree_map`: the same `hvals` for any other embedding `φ` (e.g. `gfK`), with
   `cs` mapped along `φ` by `Expr.map`, so `accept_hacc_K` applies too.
 -/
