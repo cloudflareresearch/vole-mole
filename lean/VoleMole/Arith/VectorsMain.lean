@@ -2,6 +2,7 @@ import VoleMole.Arith.Vectors
 import VoleMole.Arith.GFEmbedding
 import VoleMole.Arith.UOV
 import VoleMole.Arith.PomFRIT
+import VoleMole.Arith.VectorsKeccak
 
 /-!
 # `lake exe arith_vectors`
@@ -42,8 +43,9 @@ def pomfritRedeemGenerator : Generator := fun env r => do
   pure (PomFRIT.pomfritRedeemSystem beta GF256.toBits uovN uovM pk (fun k => ⟨h k.val⟩) l)
 
 /-- Relation name (the `RELATION` of `record RELATION NAME`) ↦ Lean generator. -/
-def registry : List (String × Generator) :=
+def registry : List (String × AnyGenerator) :=
   [("uov", uovGenerator),
+   ("keccak", keccakGenerator),
    ("pomfrit_redeem", pomfritRedeemGenerator)]
 
 /-- The hypotheses `UOV.IsEmbedding beta GF256.toBits GF256.ofBits`, checked exhaustively, and
