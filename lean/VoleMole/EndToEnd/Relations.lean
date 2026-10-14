@@ -46,6 +46,11 @@ Relations with a combined slot (PomFRIT redeem, Moussaka redeem, Ratatouille spe
 For the issue relations `hcomb` is proved (`*_sound`), since their systems ignore `chall₂`.
 Total per `H₂²` query: `ε_QS(n) + 1/|F|` (L4 Prop. 3), or `ε_QS(n)` for the issue relations.
 
+`EndToEnd/Concrete.lean` instantiates all five at the concrete GF(2¹²⁸) (`F := GF128`,
+`β := beta`, `K := GF256`), with `hcomb`'s failure bound `2⁻¹²⁸` proved (`*_comb_bad_gf128`);
+`Verifier/Bridge/Relations.lean` proves `hacc` at the `Δ` of any transcript the executable verifier
+accepts.
+
 The QuickSilver degree bound `hdeg` is proved (`degree_pomfritRedeemSystem`, `EndToEnd/Degree`).
 The witness rows are exactly the relation's witness bits (`J = Fin ℓ`, `ℓ = WITNESS_BITS`), each
 of which carries a bit constraint (or, for Moussaka's unused selector bits, `b_u = 0`), which is
