@@ -19,6 +19,7 @@ size `2⁶⁴` or more is enumerated: every cardinality is a product of `|UInt8|
   field elements and the low word at byte 128).
 * `chal2Equiv : Bytes 56 ≃ Chal2 = GF128 × GF128 × GF128 × shortKeys`, the arguments
   `gfOfBytes chal2 0/16/32`, `⟨W128.word chal2 48, 0⟩` that `*_extract_chain` passes to `zkCoeff`.
+* `combEquiv M : Bytes (16·M) ≃ (Fin M → GF128)` (`combDec`, as `combinationArr` decodes `l`).
 * **`hδ`, deterministic** (L1 bookkeeping): `admissible` (the `2¹²⁰` values of `chal3` with zero
   grinding bits, those `check_format` accepts), `deltaBlocks x = blocksOf (deltaBit x)`,
   `deltaBlocks_injOn`, and `prU_accept_le`: if at most `N` admissible `chal3` are accepted, a
@@ -175,6 +176,24 @@ noncomputable def chal2Equiv : Bytes 56 ≃ Chal2 :=
     ⟨ch2Dec_injective, by rw [card_bytes, card_chal2]⟩)
 
 @[simp] lemma chal2Equiv_apply (b : Bytes 56) : chal2Equiv b = ch2Dec b := rfl
+
+/-! ## The UOV combination `l` -/
+
+/-- `16·M` bytes decoded as `M` field elements, as `combinationArr` decodes `H(chal2 ‖ dst)`
+(`gfOfBytes` at offsets `0, 16, 32, …`). -/
+def combDec {M : ℕ} (b : Bytes (16 * M)) : Fin M → GF128 := fun k => gfOfBytes b.ba (16 * k)
+
+theorem combDec_injective {M : ℕ} : Function.Injective (combDec (M := M)) := fun b b' h =>
+  eq_of_words (by omega) fun o ho =>
+    words_of_gf_eq (congrFun h ⟨o / 2, by omega⟩) o (by simp only; omega)
+
+/-- **A uniform `16·M`-byte string is a uniform combination vector.** -/
+noncomputable def combEquiv (M : ℕ) : Bytes (16 * M) ≃ (Fin M → GF128) :=
+  Equiv.ofBijective combDec ((Fintype.bijective_iff_injective_and_card _).2
+    ⟨combDec_injective, by
+      rw [card_bytes, Fintype.card_fun, Fintype.card_fin, GF128.card_eq, ← pow_mul]; ring_nf⟩)
+
+@[simp] lemma combEquiv_apply {M : ℕ} (b : Bytes (16 * M)) : combEquiv M b = combDec b := rfl
 
 /-! ## `chal3`: admissible values and their blocks (`hδ`) -/
 

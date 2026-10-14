@@ -12,6 +12,13 @@ name = "mathlib"
 scope = "leanprover-community"
 rev = "v4.34.0"
 
+# Oracle computations and the lazy random oracle, for `VoleMole/ROM/` only (nothing else imports
+# it; see docs/probabilistic-plan.md, M4). Pinned: the API changes often.
+[[require]]
+name = "VCVio"
+git = "https://github.com/dtumad/VCV-io"
+rev = "afa6593f15e1e79ecb3cf22fc56191cecb452bb0"
+
 [[lean_lib]]
 name = "VoleMole"
 
