@@ -174,12 +174,22 @@ pins down the constraint polynomials, not just their values on bits) and compare
 | `Arith/UOV.lean`: UOV public-map gadget (`src/uov/circuit.hpp`) | done: generator, completeness, soundness, 1/\|F\| combination bound |
 | `Arith/PomFRIT.lean`: PomFRIT redeem, `P(s) = h ⊕ r` | done: generator, completeness, soundness, end-to-end 1/\|F\| bound |
 | `Arith/Keccak/`: Keccak-p[800,12] segmented gadget | in progress (round layers written) |
-| C++ dumper (`tests/arith/`) and `lake exe arith_vectors` | C++ side written, Lean runner in progress |
+| `Arith/GF.lean`, `GFEmbedding.lean`: concrete GF(2¹²⁸), GF(256), the embedding | done; embedding proved an injective ring homomorphism in the kernel |
+| C++ dumper (`tests/arith/`) and `lake exe arith_vectors` | done; Lean and C++ constraint values agree on every UOV and PomFRIT record, at bit and random field-valued witnesses |
 | Moussaka issue/redeem, Ratatouille issue/spend | not started (need the Keccak gadget) |
 
-The single assumption of the UOV gadget is that the embedding GF(256) → GF(2¹²⁸) given by the β
-constants is an injective ring homomorphism; it is checked exhaustively by the test harness rather
-than proved in the kernel.
+The UOV gadget's hypothesis, that the embedding GF(256) → GF(2¹²⁸) given by the β constants is an
+injective ring homomorphism, is discharged in the kernel for the concrete constants
+(`VoleMole.Arith.isEmbedding`). The constants themselves, and the GF(2¹²⁸) and GF(256)
+multiplications, are checked against the C++ tables by `arith_vectors`.
+
+To regenerate and check the vectors (the first `lake build arith_vectors` compiles Mathlib to native
+code and takes about 10 minutes; `lean/vectors/` is not committed):
+
+```sh
+./build/tests/dump_arith_vectors lean/vectors
+cd lean && lake build arith_vectors && lake exe arith_vectors
+```
 
 ## Gaps
 

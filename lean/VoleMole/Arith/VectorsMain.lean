@@ -1,4 +1,5 @@
 import VoleMole.Arith.Vectors
+import VoleMole.Arith.GFEmbedding
 import VoleMole.Arith.UOV
 import VoleMole.Arith.PomFRIT
 
@@ -10,7 +11,8 @@ Runs the differential tests of `VoleMole/Arith/Vectors.lean` over the vector fil
 
 1. the field arithmetic (`field.txt`) and the exhaustive check that `ι` is an injective ring
    homomorphism, plus the concrete `UOV.IsEmbedding` hypotheses for `β := beta`,
-   `toBits := GF256.toBits`, `ofByte := GF256.ofBits`;
+   `toBits := GF256.toBits`, `ofByte := GF256.ofBits` (also kernel-checked:
+   `VoleMole.Arith.isEmbedding` in `GFEmbedding.lean`, imported here so that it is built);
 2. for every relation record, the leading bit constraints (a framework self-test);
 3. every record whose relation has a generator in `registry`.
 

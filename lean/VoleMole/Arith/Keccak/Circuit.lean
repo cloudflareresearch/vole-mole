@@ -128,6 +128,17 @@ def cz (j : Fin 160) : Fin 32 := ⟨j.1 % 32, Nat.mod_lt _ (by norm_num)⟩
 theorem idx_lt_32 (x y : Fin 5) (z : Fin 32) : (idx x y z).1 < 32 ↔ x = 0 ∧ y = 0 := by
   simp only [idx, Fin.ext_iff, Fin.val_zero]; omega
 
+theorem exists_idx (i : ℕ) (hi : i < 800) : ∃ x y z, i = (idx x y z).1 :=
+  ⟨ix ⟨i, hi⟩, iy ⟨i, hi⟩, iz ⟨i, hi⟩, by rw [idx_decode]⟩
+
+theorem iota_cond (j : ℕ) (k y : Fin 5) (z : Fin 32) :
+    ((idx k y z).1 < 32 ∧ (rc j).getLsbD (idx k y z).1 = true) ↔
+      (k = 0 ∧ (y = 0 ∧ (rc j).getLsbD z.1 = true)) := by
+  rw [idx_lt_32]
+  constructor
+  · rintro ⟨⟨rfl, rfl⟩, h⟩; exact ⟨rfl, rfl, by simpa [idx] using h⟩
+  · rintro ⟨rfl, rfl, h⟩; exact ⟨⟨rfl, rfl⟩, by simpa [idx] using h⟩
+
 /-! ## The layers -/
 
 section Layers
@@ -168,6 +179,12 @@ def roundN (j n : ℕ) (hn : n ≤ 800) (a : Vector T 800) : Vector T n :=
 
 /-- A full round `R_j`. -/
 def round (j : ℕ) (a : Vector T 800) : Vector T 800 := roundN O j 800 le_rfl a
+
+/-- `qs_keccak_rounds<num>(in, first)` with all output bits (`segmented.hpp:141-154`): rounds
+`first, …, first + num - 1`. -/
+def rounds (first : ℕ) : ℕ → Vector T 800 → Vector T 800
+  | 0, a => a
+  | num + 1, a => rounds (first + 1) num (round O first a)
 
 /-- One step of the `p` loop of `keccak_theta_rho_pi_inverse` (`circuit.hpp:132-142`):
 `p ↦ (1 + M^s) p`. -/
@@ -249,6 +266,12 @@ theorem roundN_rel (hR : BitOps.Rel O P R) (j n : ℕ) (hn : n ≤ 800) {a : Vec
 theorem round_rel (hR : BitOps.Rel O P R) (j : ℕ) {a : Vector T 800} {a' : Vector U 800}
     (h : VRel R a a') : VRel R (round O j a) (round P j a') :=
   roundN_rel hR j 800 le_rfl h
+
+theorem rounds_rel (hR : BitOps.Rel O P R) (first num : ℕ) {a : Vector T 800}
+    {a' : Vector U 800} (h : VRel R a a') : VRel R (rounds O first num a) (rounds P first num a') := by
+  induction num generalizing first a a' with
+  | zero => exact h
+  | succ num ih => exact ih (first + 1) (round_rel hR first h)
 
 theorem thetaInvStep_rel (hR : BitOps.AddRel O P R) (s : ℕ) {p : Vector T 160}
     {p' : Vector U 160} (h : VRel R p p') : VRel R (thetaInvStep O p s) (thetaInvStep P p' s) := by
