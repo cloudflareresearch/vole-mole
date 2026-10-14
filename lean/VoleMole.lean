@@ -45,3 +45,5 @@ import VoleMole.Spec.Common
 import VoleMole.Spec.PomFRIT
 import VoleMole.Spec.Moussaka
 import VoleMole.Spec.Kats
+import VoleMole.Spec.Ratatouille
+import VoleMole.Spec.RatatouilleKats
