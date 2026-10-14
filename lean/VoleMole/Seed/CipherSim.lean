@@ -108,7 +108,6 @@ theorem sn_stage_bound (j : ℕ) (hj : j ≤ 128) :
     (2 * 127 * 2 ^ 300) ^ 2 * (2 ^ j) ^ 3 * 3 ^ (2 * 1178) ≤ (2354 + 2) ^ 2 * 4 ^ (2 * 1178) := by
   refine le_trans ?_ sn_top_stage_bound
   gcongr
-  · norm_num
 
 /-- `2354` is the least even round count that works for the top stage. -/
 theorem sn_top_stage_tight :
