@@ -6,9 +6,9 @@ import VoleMole.Arith.UOV
 
 For the concrete fields of `VoleMole/Arith/GF.lean`, the hypotheses `UOV.IsEmbedding` of the UOV
 gadget hold with `β := beta`, `toBits := GF256.toBits`, `ofByte := GF256.ofBits`, proved in the
-kernel from `iota_add`, `iota_mul`, `iota_injective`. (The UOV theorems themselves assume a `Field`,
-which `GF128` deliberately is not; this only discharges the embedding hypotheses on the concrete
-constants. `lake exe arith_vectors` also checks them exhaustively at run time.)
+kernel from `iota_add`, `iota_mul`, `iota_injective`. (The UOV theorems themselves assume a `Field`;
+`GF128` gets one only in `Arith/GFField.lean`, which this file does not import. `lake exe
+arith_vectors` also checks the embedding hypotheses exhaustively at run time.)
 -/
 
 namespace VoleMole.Arith
