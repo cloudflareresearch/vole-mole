@@ -177,7 +177,8 @@ pins down the constraint polynomials, not just their values on bits) and compare
 | `Arith/Adder.lean`: Ratatouille's 64-bit credit adder | done: exact 65-bit sum |
 | `Arith/GF.lean`, `GFEmbedding.lean`: concrete GF(2¹²⁸), GF(256), the embedding | done; embedding proved an injective ring homomorphism in the kernel |
 | C++ dumper (`tests/arith/`) and `lake exe arith_vectors` | done; Lean and C++ constraint values agree on every UOV and PomFRIT record, at bit and random field-valued witnesses |
-| Moussaka issue/redeem, Ratatouille issue/spend | in progress |
+| `Arith/Moussaka.lean`: Moussaka issue (commitment opening) and redeem (one-hot selector, UOV preimage under the selected anchor key, Keccak commitment) | done: generators, completeness, soundness, 1/\|F\| bound; cross-checked |
+| Ratatouille issue/spend | in progress |
 
 The UOV gadget's hypothesis, that the embedding GF(256) → GF(2¹²⁸) given by the β constants is an
 injective ring homomorphism, is discharged in the kernel for the concrete constants
