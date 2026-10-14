@@ -6,8 +6,8 @@ import VoleMole.Spec.Ratatouille
 
 Reads `tests/ratatouille/ratatouille_kat.txt` (`tests/ratatouille/gen_ratatouille_kat.cpp`; one
 record per issuance followed by one record per spend, each spend spending the previous change
-token) and the expanded public maps of `lean/vectors/uov_keys.txt` (`test`, `alt61`, `alt62` are
-the keys with secret key `filled(0x60)`, `filled(0x61)`, `filled(0x62)`).
+token) and the expanded public maps `test`, `alt61`, `alt62` of the keys with secret key
+`filled(0x60)`, `filled(0x61)`, `filled(0x62)` (generated in Lean by `Spec/Kats.lean`).
 
 For each case it runs the model's client and Issuer code, with abstract primitives instantiated
 by the file's values (the prover returns the file's proof bytes, the verifier accepts, the signer
@@ -83,7 +83,7 @@ def checkIssue (keys : Std.HashMap String ByteArray) (r : Rec) :
     | 0x61 => "alt61"
     | 0x62 => "alt62"
     | _ => ""
-  let some pkb := keys[name]? | throw s!"uov_keys.txt has no key for issuer_sk {start} (`{name}`)"
+  let some pkb := keys[name]? | throw s!"no key for issuer_sk {start} (`{name}`)"
   let pk := pkOf pkb
   let nf ← field r "nf" 24
   let rr ← field r "r" 16

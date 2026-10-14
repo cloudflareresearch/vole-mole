@@ -1,6 +1,8 @@
 import VoleMole.Spec.PomFRIT
 import VoleMole.Spec.Moussaka
 import VoleMole.Spec.RatatouilleKats
+import VoleMole.Verifier.Relations
+import VoleMole.Verifier.CrtGen
 
 /-!
 # Known-answer cross-checks of the protocol specs against the C++ (`lake exe spec_kats`)
@@ -11,15 +13,24 @@ Usage: `lake exe spec_kats [REPO_ROOT]` (default `..`, i.e. run from `lean/`). R
 * `tests/pomfrit/pomfrit_kat.txt` (`tests/pomfrit/gen_pomfrit_kat.cpp`),
 * `tests/ratatouille/ratatouille_kat.txt` (`tests/ratatouille/gen_ratatouille_kat.cpp`; checked by
   `Spec/RatatouilleKats.lean`, see there),
-* `lean/vectors/uov_keys.txt` (expanded public maps, `tests/arith/dump_arith_vectors.cpp`):
-  key `test` is the key pair with secret key `filled(0x60)`, `alt61` and `alt62` the ones with
-  `filled(0x61)` and `filled(0x62)`.
-
 and recomputes with `Spec.Moussaka` / `Spec.PomFRIT` every field that does not depend on the
 VOLEitH internals: seed expansions, commitments, witness layouts, request/response framing,
 `P(s) = t` on the responses, the refresher commitment, `hash_to_target` and the masked target. The
 proof bytes themselves are abstract; for PomFRIT, `chal1` (an output of the abstract
 `voleith_vole_reconstruct`) is taken from the file.
+
+UOV public keys are generated from the compact secret keys in Lean (`Verifier.UovPk.ofSecret`:
+pqov's key generation and `expand_pk`, `Verifier/Keygen.lean`): key `test` has secret key
+`filled(0x60)`, `alt61` and `alt62` have `filled(0x61)` and `filled(0x62)`. If
+`lean/vectors/uov_keys.txt` (expanded public maps, `tests/arith/dump_arith_vectors.cpp`) exists,
+the generated `test`, `alt61`, `alt62` are compared with it; it is not needed.
+
+Moussaka redemption depends on the whole Anchor Set only through the proof's instance (the
+digests of all Anchor keys, `RedeemInstance.encode`). So the redemption request is checked by
+`finalizeRedeem` with the abstract verifier instantiated by the Lean VOLEitH verifier
+(`Verifier.verify` on `Verifier.moussakaRedeem`, CRT tables from `Verifier.CrtGen`), under the
+Anchor Set generated from the `anchor_sk` fields: the proof must be accepted, which checks every
+Anchor's digest, and rejected when two non-issuer Anchors are swapped.
 -/
 
 namespace VoleMole.Spec.Kats
@@ -51,8 +62,19 @@ def zeroRedeemProver : Moussaka.NIZK Moussaka.RedeemInstance :=
 
 /-! ## Moussaka -/
 
-def checkMoussaka (keys : Std.HashMap String ByteArray) (r : KatRecord) :
-    Except String (List String) := do
+/-- Moussaka's redemption NIZK with the Lean VOLEitH verifier: Anchor keys are identified by their
+digests in `pks` (a key not in `pks` fails verification). Proving is not modelled. -/
+def verifierRedeem (pks : List Verifier.UovPk) : Moussaka.NIZK Moussaka.RedeemInstance :=
+  ⟨fun _ _ _ => [], fun pf x =>
+    match x.anchors.mapM fun k => pks.find? (·.digest.toList == k.digest) with
+    | some ps => (Verifier.verify Verifier.CrtGen.tables
+        (Verifier.moussakaRedeem ps (Verifier.toBA x.nf) (Verifier.toBA x.ctxIss)
+          (Verifier.toBA x.ctxRed) (Verifier.toBA x.challengeDigest)) (Verifier.toBA pf)).accept
+    | none => false⟩
+
+/-- `pks`: compact secret key (hex) ↦ generated public key, for every `anchor_sk`. -/
+def checkMoussaka (keys : Std.HashMap String ByteArray) (pks : Std.HashMap String Verifier.UovPk)
+    (swapCheck : Bool) (r : KatRecord) : Except String (List String) := do
   let seed ← r.bytes "issue_seed"
   let ctxIss ← r.bytes "ctx_iss"
   let ctxRed ← r.bytes "ctx_red"
@@ -82,17 +104,15 @@ def checkMoussaka (keys : Std.HashMap String ByteArray) (r : KatRecord) :
   -- The issuer's key is `test` (filled(0x60)): check P(s) = t through finalizeIssue.
   if sks[issuer]? ≠ some (Hex.bytesToHex (filled 0x60)) then
     errs := errs ++ ["issuer key is not filled(0x60)"]
-  let some test := keys["test"]? | throw "uov_keys.txt has no key `test`"
+  let some test := keys["test"]? | throw "no key `test`"
   let pkTest := UOVKey.ofExpanded [] test
+  -- The Anchor Set, generated from the secret keys.
+  let some anchors := sks.mapM (pks[·]?) | throw "anchor_sk without a generated key"
   let pending : Moussaka.PendingToken := ⟨nf, rr, ctxIss, ctxRed, t⟩
   match Moussaka.finalizeIssue pkTest pending s with
   | none => errs := errs ++ ["finalizeIssue: P(s) ≠ t for the issuer key"]
   | some tok =>
-    -- Redeem framing with the issuer at its index (other Anchors as placeholders with distinct
-    -- digests; only the indicated key is evaluated).
-    let anchorKeys := (List.range n).map fun u =>
-      if u = issuer then { pkTest with digest := [u.toUInt8] } else ⟨[u.toUInt8], fun _ => 0⟩
-    match Moussaka.AnchorSet.mk? anchorKeys with
+    match Moussaka.AnchorSet.mk? (anchors.map Verifier.UovPk.toSpec) with
     | .error _ => errs := errs ++ ["AnchorSet.mk? rejected the Anchor Set"]
     | .ok A =>
       match Moussaka.redeemRequest zeroRedeemProver tok A issuer ctxIss ctxRed cd [] with
@@ -102,6 +122,23 @@ def checkMoussaka (keys : Std.HashMap String ByteArray) (r : KatRecord) :
       | .error _ => errs := errs ++ ["redeemRequest rejected the honest token"]
       if (Moussaka.redeemRequest zeroRedeemProver tok A n ctxIss ctxRed cd []) matches .ok _ then
         errs := errs ++ ["redeemRequest accepted an out-of-range index"]
+      -- The redemption proof, verified under the generated Anchor Set (all digests).
+      let VR := verifierRedeem anchors
+      if Moussaka.finalizeRedeem VR A rreq ctxIss ctxRed cd ≠ some nf then
+        errs := errs ++ ["finalizeRedeem (Lean verifier) rejected the redeem request"]
+      -- Two non-issuer Anchors swapped: rejected (if `swapCheck`; each verification costs
+      -- about a second per Anchor).
+      match (List.range n).filter (· ≠ issuer) with
+      | u :: w :: _ =>
+        if swapCheck then
+          let dummy : Verifier.UovPk := ⟨.empty, .empty⟩
+          let swapped := (anchors.set u (anchors.getD w dummy)).set w (anchors.getD u dummy)
+          match Moussaka.AnchorSet.mk? (swapped.map Verifier.UovPk.toSpec) with
+          | .ok A' =>
+            if (Moussaka.finalizeRedeem VR A' rreq ctxIss ctxRed cd).isSome then
+              errs := errs ++ [s!"finalizeRedeem accepted with Anchors {u} and {w} swapped"]
+          | .error _ => errs := errs ++ ["AnchorSet.mk? rejected the swapped Anchor Set"]
+      | _ => pure ()
   -- A different key (`alt61`, filled(0x61)) does not verify the token.
   if let some alt := keys["alt61"]? then
     if (UOVKey.ofExpanded [] alt).eval s = t then errs := errs ++ ["alt61 verifies the token"]
@@ -152,25 +189,46 @@ def checkPomfrit (pk : UOVKey) (r : KatRecord) : Except String (List String) := 
 
 def main (args : List String) : IO UInt32 := do
   let root := args.headD ".."
+  -- UOV keys, generated in Lean; compared with uov_keys.txt if present.
+  let t0 ← IO.monoMsNow
   let mut keys : Std.HashMap String ByteArray := {}
-  for line in (← IO.FS.readFile s!"{root}/lean/vectors/uov_keys.txt").splitOn "\n" do
-    if let ["key", name, hex] := line.splitOn " " then
-      match Hex.decodeByteArray? hex with
-      | some b => keys := keys.insert name b
-      | none => throw (IO.userError s!"uov_keys.txt: bad hex for key {name}")
+  for (name, start) in [("test", 0x60), ("alt61", 0x61), ("alt62", 0x62)] do
+    keys := keys.insert name (Verifier.UovPk.ofSecret (Verifier.toBA (filled start))).expanded
   let mut ok := true
-  -- Moussaka.
+  let path := s!"{root}/lean/vectors/uov_keys.txt"
+  if ← System.FilePath.pathExists path then
+    let mut errs : List String := []
+    let mut n := 0
+    for line in (← IO.FS.readFile path).splitOn "\n" do
+      if let ["key", name, hex] := line.splitOn " " then
+        n := n + 1
+        if keys[name]?.map (·.toList) ≠ (Hex.decodeByteArray? hex).map (·.toList) then
+          errs := errs ++ [s!"key {name} differs"]
+    if n = 0 then errs := errs ++ ["no keys"]
+    ok := (← report "generated UOV keys = uov_keys.txt (test, alt61, alt62)" errs) && ok
+  else IO.println "      (no lean/vectors/uov_keys.txt: generated keys not compared with the C++)"
   let mous := parseKat (← IO.FS.readFile s!"{root}/tests/moussaka/moussaka_kat.txt")
+  let mut pks : Std.HashMap String Verifier.UovPk := {}
+  for r in mous do
+    for sk in r.getAll "anchor_sk" do
+      if !pks.contains sk then
+        let some b := Hex.decodeByteArray? sk | throw (IO.userError s!"bad anchor_sk {sk}")
+        pks := pks.insert sk (Verifier.UovPk.ofSecret b)
+  IO.println s!"      UOV key generation: {pks.size + 3} keys ({(← IO.monoMsNow) - t0} ms)"
+  -- Moussaka.
   if mous.size ≠ 3 then ok := false; IO.println s!"FAIL  moussaka_kat.txt: {mous.size} records"
   for h : i in [0:mous.size] do
-    ok := (← report s!"moussaka_kat.txt case {i}" (runChecks (checkMoussaka keys mous[i]))) && ok
+    let t1 ← IO.monoMsNow
+    let errs ← IO.lazyPure fun _ =>
+      runChecks (checkMoussaka keys pks ((mous[i].getAll "anchor_sk").length ≤ 3) mous[i])
+    ok := (← report s!"moussaka_kat.txt case {i} ({(← IO.monoMsNow) - t1} ms)" errs) && ok
   -- PomFRIT.
   let pom := parseKat (← IO.FS.readFile s!"{root}/tests/pomfrit/pomfrit_kat.txt")
   match pom[0]? with
   | none => ok := false; IO.println "FAIL  pomfrit_kat.txt: empty"
   | some hdr =>
     ok := (← report "pomfrit_kat.txt layout and key digest" (runChecks (checkPomfritHeader hdr))) && ok
-    let some test := keys["test"]? | throw (IO.userError "uov_keys.txt has no key `test`")
+    let some test := keys["test"]? | throw (IO.userError "no key `test`")
     let dig ← IO.ofExcept (hdr.bytes "pk_digest")
     let pk := UOVKey.ofExpanded dig test
     if pom.size ≠ 4 then ok := false; IO.println s!"FAIL  pomfrit_kat.txt: {pom.size} records"

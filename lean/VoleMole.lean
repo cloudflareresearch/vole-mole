@@ -61,6 +61,8 @@ import VoleMole.Verifier.Relations
 import VoleMole.Verifier.Kats
 import VoleMole.Verifier.CrtData
 import VoleMole.Verifier.CrtGen
+import VoleMole.Verifier.CrtSearch
+import VoleMole.Verifier.Keygen
 import VoleMole.Verifier.VectorFile
 import VoleMole.Verifier.Bridge.CtrInput
 import VoleMole.Verifier.Bridge.Field

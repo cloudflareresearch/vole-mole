@@ -21,14 +21,14 @@ name = "arith_vectors"
 root = "VoleMole.Arith.VectorsMain"
 
 # Known-answer cross-checks of the protocol specs (Spec/) against the C++: run from lean/ as
-# `lake exe spec_kats` (reads tests/*/..._kat.txt and lean/vectors/uov_keys.txt).
+# `lake exe spec_kats` (reads tests/*/..._kat.txt; lean/vectors/uov_keys.txt is an optional cross-check).
 [[lean_exe]]
 name = "spec_kats"
 root = "VoleMole.Spec.Kats"
 
 # Executable pieces of the Lean VOLEitH verifier (Verifier/) checked against the C++: run from
 # lean/ as `lake exe verifier_vectors` (reads lean/vectors/verifier_*.txt, written by
-# tests/voleith/dump_verifier_vectors.cpp).
+# tests/voleith/dump_verifier_vectors.cpp, and tests/*/..._kat.txt).
 [[lean_exe]]
 name = "verifier_vectors"
 root = "VoleMole.Verifier.VectorsMain"
