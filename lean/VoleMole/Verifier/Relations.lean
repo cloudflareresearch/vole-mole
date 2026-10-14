@@ -1,4 +1,5 @@
 import VoleMole.Verifier.Verify
+import VoleMole.Verifier.Keygen
 import VoleMole.Spec.Moussaka
 import VoleMole.Spec.PomFRIT
 import VoleMole.Arith.Moussaka
@@ -28,7 +29,8 @@ For each of vole-mole's relations, a `Statement` built from the instance: parame
   (`subprojects/pqov/src/ov_keypair.c:66-76`): `P1 ‖ P2` is AES-128-CTR under the 16-byte
   `pk_seed` (zero 12-byte nonce, 32-bit big-endian block counter from 0;
   `pqov/utils/utils_prng.c:287-320`), followed by `P3` from the compressed key; the digest is
-  `SHAKE256(cpk)` (32 bytes, `src/uov/uov.cpp:73-86`).
+  `SHAKE256(cpk)` (32 bytes, `src/uov/uov.cpp:73-86`). `UovPk.ofSecret` derives the compressed
+  key from a compact secret key first (pqov's key generation, `Verifier/Keygen.lean`).
 -/
 
 namespace VoleMole.Verifier
@@ -51,17 +53,13 @@ namespace UovPk
 def p12Bytes : ℕ := 45 * (74 * 75 / 2) + 45 * 74 * 45
 
 /-- pqov's `expand_pk` and the vole-mole digest. -/
-def ofCompressed (cpk : ByteArray) : UovPk := Id.run do
-  let rk := AES.expandKey (cpk.extract 0 16)
-  let nBlocks := (p12Bytes + 15) / 16
-  let mut out := ByteArray.emptyWithCapacity (nBlocks * 16 + cpk.size)
-  for j in [0:nBlocks] do
-    let ctr := j.toUInt32
-    let blk : ByteArray := ⟨(Array.replicate 12 (0 : UInt8)) ++
-      #[(ctr >>> 24).toUInt8, (ctr >>> 16).toUInt8, (ctr >>> 8).toUInt8, ctr.toUInt8]⟩
-    out := out ++ AES.encrypt rk blk
+def ofCompressed (cpk : ByteArray) : UovPk :=
   { digest := SHAKE.shake256 cpk 32
-    expanded := out.extract 0 p12Bytes ++ cpk.extract 16 cpk.size }
+    expanded := Keygen.publicInputs (cpk.extract 0 16) p12Bytes ++ cpk.extract 16 cpk.size }
+
+/-- The public key of a compact secret key (`SecretKey(bytes)`): pqov's key generation
+(`Keygen.compressedPk`), then `expand_pk`. -/
+def ofSecret (sk : ByteArray) : UovPk := ofCompressed (Keygen.compressedPk sk)
 
 /-- The public map's coefficients (`ℕ → GF256`, zero beyond the end). -/
 def map (pk : UovPk) : ℕ → GF256 := fun i =>

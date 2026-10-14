@@ -69,15 +69,17 @@ Notes.
 | AES-128, `aes_ctr_prg<s128>` | `Verifier/AES.lean` | FIPS 197 A.1/B/C.1 `#guard`s; `verifier_vectors`: 4 AES (round keys + ct) and 3 PRG records (lane wrap-around of counter and tweak) |
 | GF(2¹²⁸) | `Arith/GF.lean` | already cross-checked (`arith_vectors`) |
 | One-tree BAVC + `hash_hashed_leaves` | `Verifier/BAVC.lean` | `verifier_vectors`: whole tree, leaves, commitments, check for a fixed seed; reconstruction at Δ; the first Moussaka KAT proof's opening (leaves, commitments, `vole_commit_check`); mutated openings |
-| CRT tables (Mᵢ, W_CRT, W_TREE, W_GATE, G) | `Verifier/CrtData.lean` (generated matrices) + `Verifier/CrtGen.lean` | `W_crt`, `M_tree` recomputed from the moduli; bilinear identity checked on all basis pairs; row tables equal the dumped C++ ones |
+| CRT tables (Mᵢ, W_CRT, W_TREE, W_GATE, G) | `Verifier/CrtData.lean` (generated matrices) + `Verifier/CrtGen.lean`, `Verifier/CrtSearch.lean` (port of `vole_mult_tables.py`) | `W_crt`, `M_tree` recomputed from the moduli; bilinear identity checked on all basis pairs; F, G, W_tree, W_gate regenerated exactly; row tables equal the dumped C++ ones |
 | Proof layout, `check_format`, `mu`, `iv`, `chal1` | `Verifier/Proof.lean` | `verifier_vectors`, 5 relations |
 | VOLE check, QuickSilver, full verifier, relations | `Verifier/KOS.lean`, `QuickSilver.lean`, `Verify.lean`, `Relations.lean`, `Kats.lean` | all 18 KAT proofs accepted, 51 mutations rejected |
-| pqov `expand_pk` (AES-128-CTR) | `Verifier/Relations.lean` `UovPk.ofCompressed` | equals the C++ expanded `test` key |
+| pqov `expand_pk` (AES-128-CTR) | `Verifier/Relations.lean` `UovPk.ofCompressed`, `Verifier/Keygen.lean` `publicInputs` | equals the C++ expanded `test` key |
+| pqov key generation (`generate_keypair_pkc`) | `Verifier/Keygen.lean` `compressedPk` | equals all 64 compressed keys of `verifier_keys.txt` |
 | ConvertToVOLE, CRT VOLE (gate hashes, row lift, r̃, `q_mask`, lifted Δ) | `Verifier/VOLE.lean` | `verifier_vectors`, 5 relations |
 
-AES also unblocks the protocol specs: Moussaka's spec cannot yet check the digests of non-issuer
-anchor keys, because expanding a compressed UOV public key needs AES-128-CTR (pqov's
-`pk_seed` expansion). `Verifier/AES.lean` provides that (pqov's CTR layout still to be matched).
+AES also unblocks the protocol specs: with pqov key generation (`Verifier/Keygen.lean`) and
+`expand_pk`, `lake exe spec_kats` builds every Moussaka Anchor key from its `anchor_sk` and checks
+the redemption requests with `finalizeRedeem`, the abstract verifier instantiated by the Lean
+verifier, so the digests of non-issuer Anchors are checked too (and a swap of two is rejected).
 
 ## Debug dumps (`tests/voleith/dump_verifier_vectors.cpp` → `lean/vectors/verifier_*.txt`)
 
@@ -100,8 +102,8 @@ order). Currently:
 Label-rows vectors (milestone 7): in a worktree at `formal-proofs-wip` with `d5def9c`
 cherry-picked (the dumper and `gen_pomfrit_kat` live only on this branch), build
 `tests/dump_verifier_vectors` and `tests/gen_pomfrit_kat`, regenerate
-`tests/pomfrit/pomfrit_kat.txt` there, dump into a fresh directory, copy `lean/vectors/uov_keys.txt`
-next to it, and run `lake exe verifier_vectors DIR WORKTREE/tests`; the layout is read off
+`tests/pomfrit/pomfrit_kat.txt` there, dump into a fresh directory (optionally copy
+`lean/vectors/uov_keys.txt` next to it for the expanded-key cross-check), and run `lake exe verifier_vectors DIR WORKTREE/tests`; the layout is read off
 `correction_rows`. The dumper applies `d` to the `WITNESS_BITS` rows only (as `voleith.hpp` does
 on both branches). The relation-specific
 `inst_enc` is taken from the dump; building it in Lean from the instance (via the `Spec/*` modules)
@@ -141,11 +143,18 @@ is part of milestone 6.
    from the moduli, checks the defining bilinear identity of `F`, `G`, `W_tree`, `W_gate` on all
    `128 · 120` basis pairs, and builds the row tables (equal to the C++'s); the verifier no
    longer reads tables from the dump.
-   Still open: (a) the UOV keys of the Moussaka/Ratatouille KATs come from the compressed public
-   keys dumped in `lean/vectors/verifier_keys.txt` (pqov key generation from the compact secret
-   key, `calculate_F2_P3`, is not modelled); (b) generating `F`, `G`, `W_gate` themselves (the
-   evaluation-place portfolio of `vole_mult_tables.py`) is not ported, only checked;
-   (c) speed: the UOV evaluation goes through `Expr` trees and `GF128.mul` (≈ 1.7 µs).
+   Done since: (a) pqov key generation (`Verifier/Keygen.lean`: `generate_keypair_pkc` of
+   uov-Ip-pkc, `SHAKE256(sk_seed) = pk_seed ‖ O`, `P1 ‖ P2` from the AES-128-CTR public-input PRG,
+   `calculate_F2_P3`'s `P3 = UT(M + Mᵀ)` with `M = Oᵀ(P1·O + P2)`, table-driven GF(256) loops on
+   `ByteArray`s, ≈ 0.12 s per key, 8 s for the 64 KAT keys); `Verifier/Kats.lean` and
+   `Spec/Kats.lean` derive every UOV key from the KATs' compact secret keys, and compare with
+   `verifier_keys.txt` (64 of 64 compressed keys equal) and `uov_keys.txt` only when present;
+   (b) `Verifier/CrtSearch.lean` ports `vole_mult_tables.py` for `128f` (tree moduli, the cost
+   search with the script's tie-breaking, the bilinear algorithms, interpolation by the same
+   elimination, `build_tables`, `prune`); its `F`, `G`, `W_tree`, `W_gate` (25 places, 312
+   gates) equal `CrtData`'s, checked by `verifier_vectors`. `CrtData` stays the verifier's source
+   (the regenerated tables are compared with it, not substituted).
+   Still open: (c) speed: the UOV evaluation goes through `Expr` trees and `GF128.mul` (≈ 1.7 µs).
 7. **Done:** label-rows variant behind `Params.labelRows` (`Proof.lean`: correction rows/bytes and
    label-row offset; `VOLE.lean`: gate labels from rows `o … o + 127` of each column, lifted rows
    and mask rows relative to `correctionRows`; `Relations.lean`: `(labelRows := …)` on every

@@ -7,11 +7,11 @@ import VoleMole.Verifier.VectorFile
 Runs `Verifier.verify` on every proof in `tests/moussaka/moussaka_kat.txt` (issuance and
 redemption requests), `tests/ratatouille/ratatouille_kat.txt` (issuance and spend requests) and
 `tests/pomfrit/pomfrit_kat.txt` (blind signatures, with PomFRIT's refresher check), building each
-statement from the KAT fields alone: the UOV public keys come from the compact secret keys via
-`lean/vectors/verifier_keys.txt` (compressed public keys dumped by
-`tests/voleith/dump_verifier_vectors.cpp`, expanded in Lean; deriving them from the secret keys,
-i.e. pqov's key generation, is not modelled) or, for PomFRIT, from the compressed key in the KAT
-file. Every proof must be accepted. For the first proof of each relation, a byte flipped in each
+statement from the KAT fields alone: the UOV public keys are generated in Lean from the compact
+secret keys (`Keygen.compressedPk`, pqov's key generation, then `expand_pk`) or, for PomFRIT, expanded
+from the compressed key in the KAT file. When present, `lean/vectors/verifier_keys.txt` (compressed
+public keys dumped by `tests/voleith/dump_verifier_vectors.cpp`) and the expanded `test` key of
+`uov_keys.txt` are compared with the generated keys; neither is needed. Every proof must be accepted. For the first proof of each relation, a byte flipped in each
 proof field, and a changed instance, must be rejected. The transcripts of the proofs that also
 appear in `verifier_kat.txt` are compared with the dumped `chal2` and `qs_check`.
 
@@ -55,7 +55,7 @@ instance : Hashable ByteArray := ⟨fun b => hash b.toList⟩
 
 structure Ctx where
   T : CrtTables
-  /-- Compact secret key (hex) ↦ compressed public key. -/
+  /-- Compact secret key (hex) ↦ compressed public key (generated in Lean). -/
   cpks : Std.HashMap String ByteArray
   /-- Proof (hex) ↦ dumped `chal2`, `qs_check`. -/
   dumped : Std.HashMap ByteArray (ByteArray × ByteArray)
@@ -195,28 +195,50 @@ def pomfrit (c : Ctx) (path : String) : IO Bool := do
 /-- Run everything; `dir` is the vector directory, `tests` the repository's `tests/`. -/
 def main (T : CrtTables) (dumpedRecs : Array Vectors.Record) (dir tests filter : String)
     (labelRows : Bool) : IO Bool := do
+  -- UOV keys: generated from every compact secret key in the KAT files.
+  let mousPath := s!"{tests}/moussaka/moussaka_kat.txt"
+  let rataPath := s!"{tests}/ratatouille/ratatouille_kat.txt"
+  let sks := (getAll (← readLines mousPath) "anchor_sk") ++ (getAll (← readLines rataPath) "issuer_sk")
+  let t0 ← IO.monoMsNow
   let mut cpks : Std.HashMap String ByteArray := {}
-  for line in (← IO.FS.readFile s!"{dir}/verifier_keys.txt").splitOn "\n" do
-    match line.splitOn " " with
-    | ["key", sk, cpk] => cpks := cpks.insert sk (unhex cpk)
-    | _ => pure ()
+  for sk in sks do
+    if !cpks.contains sk then cpks := cpks.insert sk (Keygen.compressedPk (unhex sk))
+  let t1 ← IO.monoMsNow
+  IO.println s!"UOV key generation: {cpks.size} keys ({t1 - t0} ms)"
+  let mut ok := true
+  -- Optional cross-checks against the C++ keys.
+  if ← System.FilePath.pathExists s!"{dir}/verifier_keys.txt" then
+    let mut n := 0
+    let mut bad := 0
+    for line in (← IO.FS.readFile s!"{dir}/verifier_keys.txt").splitOn "\n" do
+      if let ["key", sk, cpk] := line.splitOn " " then
+        n := n + 1
+        let ours := match cpks[sk]? with
+          | some k => k
+          | none => Keygen.compressedPk (unhex sk)
+        if ours != unhex cpk then bad := bad + 1
+    IO.println s!"  generated keys = C++ compressed keys (verifier_keys.txt): {n - bad} of {n}"
+    ok := (← Vectors.check s!"pqov key generation = C++ compressed keys ({n} keys of verifier_keys.txt)"
+      (n > 0 && bad == 0)) && ok
+  else IO.println "  (no verifier_keys.txt: generated keys not compared with the C++)"
   let mut dumped : Std.HashMap ByteArray (ByteArray × ByteArray) := {}
   for r in dumpedRecs do
     if r.group == "kat" then
       dumped := dumped.insert (r.bytes "proof") (r.bytes "chal2", r.bytes "qs_check")
   let c : Ctx := { T, cpks, dumped, filter, labelRows, accepted := ← IO.mkRef 0, rejected := ← IO.mkRef 0 }
-  let mut ok := true
   -- The expansion of the `test` key agrees with the C++ expanded key of `uov_keys.txt`.
-  let testSk := "606162636465666768696a6b6c6d6e6f707172737475767778797a7b7c7d7e7f"
-  let mut expTest : ByteArray := ByteArray.empty
-  for line in (← IO.FS.readFile s!"{dir}/uov_keys.txt").splitOn "\n" do
-    match line.splitOn " " with
-    | ["key", "test", hex] => expTest := unhex hex
-    | _ => pure ()
-  ok := (← Vectors.check "UOV expand_pk (test key) = C++ expanded key"
-    (match c.pk testSk with | .ok pk => pk.expanded == expTest | .error _ => false)) && ok
-  let ok1 ← moussaka c s!"{tests}/moussaka/moussaka_kat.txt"
-  let ok2 ← ratatouille c s!"{tests}/ratatouille/ratatouille_kat.txt"
+  if ← System.FilePath.pathExists s!"{dir}/uov_keys.txt" then
+    let testSk := "606162636465666768696a6b6c6d6e6f707172737475767778797a7b7c7d7e7f"
+    let mut expTest : ByteArray := ByteArray.empty
+    for line in (← IO.FS.readFile s!"{dir}/uov_keys.txt").splitOn "\n" do
+      match line.splitOn " " with
+      | ["key", "test", hex] => expTest := unhex hex
+      | _ => pure ()
+    ok := (← Vectors.check "UOV key generation + expand_pk (test key) = C++ expanded key"
+      (match c.pk testSk with | .ok pk => pk.expanded == expTest | .error _ => false)) && ok
+    IO.println "  expanded `test` key compared with uov_keys.txt"
+  let ok1 ← moussaka c mousPath
+  let ok2 ← ratatouille c rataPath
   let ok3 ← pomfrit c s!"{tests}/pomfrit/pomfrit_kat.txt"
   IO.println s!"KAT proofs: {← c.accepted.get} accepted, {← c.rejected.get} mutations rejected, \
     {if ok1 && ok2 && ok3 then "ok" else "FAILED"}"
