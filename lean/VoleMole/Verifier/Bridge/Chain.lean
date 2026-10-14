@@ -17,9 +17,12 @@ receives `chal1 = H₂¹(…)`, sends `ũ` and `d`, the verifier's VOLE hash `h_
 `chal2 = H₂²(y)`, the prover sends `ã` and the check value `z`, and `chal3 = H₂³(chal2 ‖ z ‖ ã ‖ ctr)`
 must equal `Δ`. A *chain* (L4 §1) fixes everything up to the `H₂³` input: here a reference proof
 (`Chain.proof`: its `c_i`, `c_mult`, `ũ`, `d`, `ã`, `iv_pre`, `ctr`; its `Δ` and opening are not used),
-the committed leaf keys `K i j` (L1), `chal1`, `h_V` and `z`. `chal2` is then determined
-(`Chain.chal2`), before any `Δ`; `Δ` determines only the opening, the verifier's responses and
-whether `chal3` hits it.
+the committed leaf keys `K i j` (L1), `chal1`, `h_V` and `z`, and `chal2` with the constraint
+evaluator `vals` of the QuickSilver check. For the executable verifier `chal2 = H₂²(…)` and
+`vals = st.values chal1 chal2` (which reads `l = H(chal2 ‖ dst)` for the combined relations), both
+determined before any `Δ`; they are fields, with those equations hypotheses of `onChain_of_accept`,
+so that `Prob/` can sample `chal2` and `l` independently. `Δ` determines only the opening, the
+verifier's responses and whether `chal3` hits it.
 
 The verifier's responses at a challenge `Δ'` are the committed response `Chain.resp`
 (`respAt`: ConvertToVOLE and the CRT step from the commitments, `Bridge/Columns.lean`), a function
@@ -52,6 +55,9 @@ The `*_extract_gf128` theorems applied to the executable verifier's chains. What
   `onChain_of_accept`);
 * `A ⊆ {OnChain}`: the definition of the chain's accepting set (its `H₂²` and `H₂³` inputs are the
   verifier's), and the binding of the leaf commitments (`hbind` in `onChain_of_accept`).
+
+`Prob/ChainRelations.lean` (`*_chain_prob`) discharges `hkos`, `hQS`, `hcomb` and `hδ` for uniform
+independent `chal1`, `chal2` and `l` (L3, L4 with the canonical slope `Chain.uCanon`).
 -/
 
 open Finset Polynomial
@@ -79,6 +85,14 @@ structure Chain where
   hV : Array GF128
   /-- The QuickSilver check value `z` in the `H₂³` input. -/
   z : GF128
+  /-- `chal2`. For the executable verifier it is `H₂²(chal1 ‖ ũ ‖ h_V ‖ [mu] ‖ binder₂ ‖ d ‖ 10)`
+  (`Verifier.chal2`, a hypothesis of `onChain_of_accept`); as a field it can be sampled
+  (`Prob/`). -/
+  chal2 : ByteArray
+  /-- The constraint evaluator of the QuickSilver check. For the executable verifier it is
+  `st.values chal1 chal2` (a hypothesis of `onChain_of_accept`), which for the combined relations
+  reads `l = H(chal2 ‖ dst)`; as a field, `l` can be sampled independently (`Prob/`). -/
+  vals : (ℕ → GF128) → List GF128
 
 namespace Chain
 
@@ -93,11 +107,6 @@ def mu1 : ByteArray :=
 
 def iv : ByteArray := ivOf (ch.pf st) (Chain.mu1 st)
 
-/-- `chal2 = H₂²(chal1 ‖ ũ ‖ h_V ‖ [mu] ‖ binder₂ ‖ d ‖ 10)`, fixed by the chain. -/
-def chal2 : ByteArray :=
-  Verifier.chal2 (ch.pf st) ch.chal1 ch.hV
-    (if st.delayed then mu (some (st.instEnc ch.chal1)) st.dst else ByteArray.empty) st.binder2
-
 /-- The corrections `c_i`. -/
 def corr (i : ℕ) : ByteArray :=
   (ch.pf st).corrections.extract ((i - 1) * st.params.correctionBytes)
@@ -111,9 +120,9 @@ def resp (Δ : Blocks) : CrtOut :=
 def check (Δ : Blocks) : GF128 :=
   let crt := ch.resp st T Δ
   let deltaL := crt.deltaLifted.toGF
-  qsCheck (ch.pf st) (ch.chal2 st)
-    (constraintKeys st.params (correctedKeys (ch.pf st) crt.rows deltaL) deltaL
-      (st.values ch.chal1 (ch.chal2 st))) crt.qMask deltaL
+  qsCheck (ch.pf st) ch.chal2
+    (constraintKeys st.params (correctedKeys (ch.pf st) crt.rows deltaL) deltaL (ch.vals))
+    crt.qMask deltaL
 
 /-- **`Δ'` is on the chain**: the committed responses at `Δ'` give `Δ_lifted ≠ 0`, the chain's
 `h_V` (the verifier's `H₂²` input is the chain's) and the chain's `z` (its `H₂³` input is too). -/
@@ -233,35 +242,36 @@ theorem kos_onChain (st : Statement) (ch : Chain) (T : CrtTables) {Δ : Blocks}
 /-! ## The accepting equation at one `Δ'`, with affine masks -/
 
 /-- `accept_hacc`'s computation at `gfId`, for any mask MACs `a_i + b_i·Δ` and without
-acceptance: the verifier's check value `z` gives `qsCheck + maskPoly d a b ã z = 0`. -/
-theorem hacc_at (st : Statement) (cs : ByteArray → ByteArray → System GF128)
-    (hvals : ∀ c1 c2 x, st.values c1 c2 x = (cs c1 c2).values x)
-    (hdeg : ∀ c1 c2, ∀ e ∈ cs c1 c2, e.degree ≤ st.params.qsDegree) (bytes c1 c2 : ByteArray)
-    (rows qMask : Array W128) {deltaL : GF128} (hΔ : deltaL ≠ 0) (a b : ℕ → GF128)
+acceptance: the verifier's check value `z` gives `qsCheck + maskPoly d a b ã z = 0`, for any
+constraint evaluator `vals` that is `System.values` of a system `cs` of degree `≤ d`. -/
+theorem hacc_at (st : Statement) (vals : (ℕ → GF128) → List GF128) (cs : System GF128)
+    (hvals : ∀ x, vals x = cs.values x) (hdeg : ∀ e ∈ cs, e.degree ≤ st.params.qsDegree)
+    (bytes c2 : ByteArray) (rows qMask : Array W128) {deltaL : GF128} (hΔ : deltaL ≠ 0)
+    (a b : ℕ → GF128)
     (hmask : ∀ i < st.params.qsDegree - 1, qMask[i]!.toGF = a i + b i * deltaL) :
     let pf : Proof := { params := st.params, bytes := bytes }
-    EndToEnd.qsCheck (cs c1 c2) st.params.qsDegree
-        (Seed.zkCoeff (cs c1 c2).length (gfOfBytes c2 0) (gfOfBytes c2 16) (gfOfBytes c2 32)
+    EndToEnd.qsCheck cs st.params.qsDegree
+        (Seed.zkCoeff cs.length (gfOfBytes c2 0) (gfOfBytes c2 16) (gfOfBytes c2 32)
           ⟨W128.word c2 48, 0⟩)
         (extW fun j : Fin st.params.witnessBits =>
           rows[(j : ℕ)]!.toGF + SeedExtraction.bit (corrBit pf j) * deltaL) deltaL +
       (Seed.maskPoly st.params.qsDegree a b (fun i => gfOfBytes pf.qsProof (16 * (i - 1)))
-        (qsCheck pf c2 (constraintKeys st.params (correctedKeys pf rows deltaL) deltaL
-          (st.values c1 c2)) qMask deltaL)).eval deltaL = 0 := by
+        (qsCheck pf c2 (constraintKeys st.params (correctedKeys pf rows deltaL) deltaL vals)
+          qMask deltaL)).eval deltaL = 0 := by
   intro pf
   have hm := map_correctedKeys gfId pf rows deltaL
   have h := hacc_of_qsCheck gfId pf c2 (constraintKeys st.params (correctedKeys pf rows deltaL)
-    deltaL (st.values c1 c2)) qMask deltaL (cs c1 c2)
+    deltaL vals) qMask deltaL cs
     (fun j => gfId ((correctedKeys pf rows deltaL).getD j 0)) ?_ a b hmask
   · rw [hm] at h
     exact h
   · rw [map_constraintKeys gfId GF128.card_eq _ _ _ _ _
-      (fun x => (List.map_id _).trans (hvals c1 c2 x))]
+      (fun x => (List.map_id _).trans (hvals x))]
     congr 1
     funext k
     rw [keyVals, sysQS]
     exact (mac_constraintQS _ (show gfId.toFun deltaL ≠ 0 from hΔ) _
-      (hdeg c1 c2 _ (List.get_mem _ k))).symm
+      (hdeg _ (List.get_mem _ k))).symm
 
 /-! ## `Claim4Hyp` and the accepting equation on the chain -/
 
@@ -327,10 +337,9 @@ the trees outside `known` have a fixed block on `A` (L2), then for some slope `u
 the witness rows on `A`) `Claim4Hyp` holds with the executable lift, the committed witness rows
 and the extractor's `u^{(i)}`, and there is one remainder `R` of degree `≤ d − 1` with the
 accepting equation on all of `A`. -/
-theorem chain_claim4 {T : CrtTables} (hT : liftInvOk T = true) (st : Statement)
-    (cs : ByteArray → ByteArray → System GF128)
-    (hvals : ∀ c1 c2 x, st.values c1 c2 x = (cs c1 c2).values x)
-    (hdeg : ∀ c1 c2, ∀ e ∈ cs c1 c2, e.degree ≤ st.params.qsDegree) (ch : Chain)
+theorem chain_claim4 {T : CrtTables} (hT : liftInvOk T = true) (st : Statement) (ch : Chain)
+    (cs : System GF128) (hvals : ∀ x, ch.vals x = cs.values x)
+    (hdeg : ∀ e ∈ cs, e.degree ≤ st.params.qsDegree)
     {A : Finset Blocks} (hA : ∀ Δ ∈ A, ch.OnChain st T Δ) {S : Set Blocks}
     (hAS : (A : Set Blocks) ⊆ S)
     (hkos : Seed.KOSGood ch.kosCh S (lift T) (ch.kosQ st T) (ch.kosD st T))
@@ -338,10 +347,10 @@ theorem chain_claim4 {T : CrtTables} (hT : liftInvOk T = true) (st : Statement)
     ∃ (uStar : Fin st.params.witnessBits → GF128) (R : GF128[X]),
       R.natDegree ≤ st.params.qsDegree - 1 ∧
       Claim4Hyp (lift T) (A : Set Blocks) known (ch.u st) (ch.Qw st T) uStar ∧
-      ∀ Δ ∈ A, EndToEnd.qsCheck (cs ch.chal1 (ch.chal2 st)) st.params.qsDegree
-          (Seed.zkCoeff (cs ch.chal1 (ch.chal2 st)).length (gfOfBytes (ch.chal2 st) 0)
-            (gfOfBytes (ch.chal2 st) 16) (gfOfBytes (ch.chal2 st) 32)
-            ⟨W128.word (ch.chal2 st) 48, 0⟩)
+      ∀ Δ ∈ A, EndToEnd.qsCheck cs st.params.qsDegree
+          (Seed.zkCoeff cs.length (gfOfBytes ch.chal2 0)
+            (gfOfBytes ch.chal2 16) (gfOfBytes ch.chal2 32)
+            ⟨W128.word ch.chal2 48, 0⟩)
           (macs (lift T) (ch.Qw st T) (ch.dc st) Δ) (lift T Δ) + R.eval (lift T Δ) = 0 := by
   obtain ⟨uQ, vQ, hrow, hmask⟩ := chain_kos_affine T st ch hA hAS hkos
   let a : ℕ → GF128 := fun i => vQ (st.params.correctionRows + i)
@@ -354,7 +363,7 @@ theorem chain_claim4 {T : CrtTables} (hT : liftInvOk T = true) (st : Statement)
   · rw [Chain.Qw, hrow j (lt_of_lt_of_le j.isLt (witnessBits_le _)) Δ (Finset.mem_coe.1 hΔ),
       mul_comm]
   · have hon := hA Δ hΔ
-    have h := hacc_at st cs hvals hdeg ch.proof ch.chal1 (ch.chal2 st) (ch.resp st T Δ).rows
+    have h := hacc_at st ch.vals cs hvals hdeg ch.proof ch.chal2 (ch.resp st T Δ).rows
       (ch.resp st T Δ).qMask hon.1 a b fun i hi => by
         rw [hmask i hi Δ hΔ, ch.resp_deltaL st T Δ]
     have hz : ch.check st T Δ = ch.z := hon.2.2
@@ -380,8 +389,13 @@ committed keys off the hidden leaves and the verifier's `chal1` is the chain's (
 commitments bind); and the verifier's `h_V` and check value are the chain's (the proof's `H₂²` and
 `H₂³` inputs are the chain's). The verifier's run is then the committed response
 (`crtReconstruct_eq_respAt`), so `OnChain` holds at `Δ' = blocksOf (deltaBit Δ)`: this is
-`hclaim1` (accepted `chal3` lie in `A`). -/
-theorem onChain_of_accept (T : CrtTables) (st : Statement) (ch : Chain) (proof : ByteArray)
+`hclaim1` (accepted `chal3` lie in `A`). The chain's `chal2` and constraint evaluator must be the
+executable verifier's (`hc2`, `hvals`; for a chain built from a run of the verifier both are
+`rfl`). -/
+theorem onChain_of_accept (T : CrtTables) (st : Statement) (ch : Chain)
+    (hc2 : ch.chal2 = Verifier.chal2 (ch.pf st) ch.chal1 ch.hV
+      (if st.delayed then mu (some (st.instEnc ch.chal1)) st.dst else ByteArray.empty) st.binder2)
+    (hvals : ch.vals = st.values ch.chal1 ch.chal2) (proof : ByteArray)
     (h : (verify T st proof).accept = true) (hf : ChainFields st ch proof)
     (hrun : let pf : Proof := { params := st.params, bytes := proof }
       ∀ leaves, BAVC.reconstruct (ch.iv st) pf.opening pf.delta = some leaves →
@@ -400,7 +414,7 @@ theorem onChain_of_accept (T : CrtTables) (st : Statement) (ch : Chain) (proof :
               st.binder2))) crt.qMask deltaL = ch.z) :
     let pf : Proof := { params := st.params, bytes := proof }
     ch.OnChain st T (blocksOf (BAVC.deltaBit pf.delta)) ∧
-      chal3 (ch.pf st) (ch.chal2 st) ch.z = pf.delta := by
+      chal3 (ch.pf st) ch.chal2 ch.z = pf.delta := by
   obtain ⟨-, leaves, hr, h0, h3⟩ := (accept_iff T st proof).1 h
   beta_reduce at hr h0 h3
   obtain ⟨hc, hm, hiv, hu, hd, hq, hctr⟩ := hf
@@ -415,10 +429,10 @@ theorem onChain_of_accept (T : CrtTables) (st : Statement) (ch : Chain) (proof :
   have hresp : crtReconstruct pf T (ch.iv st) (convertToVole pf (ch.iv st) leaves) =
       ch.resp st T (blocksOf (BAVC.deltaBit pf.delta)) := by
     rw [crtReconstruct_eq_respAt T pf _ leaves ch.keys hbind, Chain.resp, hc, hm]
-  have hc2 : chal2 pf ch.chal1 ch.hV
+  have hc2' : chal2 pf ch.chal1 ch.hV
       (if st.delayed then mu (some (st.instEnc ch.chal1)) st.dst else ByteArray.empty) st.binder2 =
-      ch.chal2 st := by
-    simp only [Chain.chal2, Verifier.chal2, hu, hd]
+      ch.chal2 := by
+    simp only [hc2, Verifier.chal2, hu, hd]
   have hck : ∀ (c2 : ByteArray) (rows qMask : Array W128) (dl : GF128),
       qsCheck pf c2 (constraintKeys st.params (correctedKeys pf rows dl) dl
         (st.values ch.chal1 c2)) qMask dl =
@@ -428,13 +442,13 @@ theorem onChain_of_accept (T : CrtTables) (st : Statement) (ch : Chain) (proof :
     simp only [qsCheck, correctedKeys, hq, hd]
     rfl
   rw [hresp] at hV hz h0 h3
-  rw [hc2, hck] at hz
-  rw [hc1, hV, hc2, hck] at h3
+  rw [hc2', hck] at hz
+  rw [hc1, hV, hc2', hck] at h3
   rw [hu] at hV
   dsimp only
   refine ⟨?_, ?_⟩
   · refine ⟨h0, hV, ?_⟩
-    simp only [Chain.check]
+    simp only [Chain.check, hvals]
     exact hz
   rw [← h3]
   simp only [chal3] at hz ⊢
