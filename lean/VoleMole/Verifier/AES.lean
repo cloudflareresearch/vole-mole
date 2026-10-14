@@ -14,8 +14,9 @@
   starts at `counter = 0` (`expand_chunk`, `vector_com.inc:39-77`; `gen_u_hi`,
   `vole_commit.inc:242`; `vole_sender/receiver`, `small_vole.inc`).
 
-Executable data structures only (`ByteArray`, `Array UInt8`). Checked by the `#guard`s below
-(FIPS 197 Appendices B and C.1, and PRG blocks recomputed from `encrypt`) and, at run time, by
+Executable data structures only (`ByteArray`, `Array UInt8`, `Array UInt32`); `encrypt` uses
+the usual four 256-entry round tables (`te0` … `te3`, from the S-box). Checked by the `#guard`s
+below (FIPS 197 Appendices B and C.1, and PRG blocks recomputed from `encrypt`) and, at run time, by
 `lake exe verifier_vectors` against values dumped from faest-arch-opt
 (`tests/voleith/dump_verifier_vectors.cpp`, `lean/vectors/verifier_prims.txt`).
 -/
@@ -76,30 +77,6 @@ def expandKey (key : ByteArray) : ByteArray := Id.run do
     w := w.push (w.get! (4 * i - 13) ^^^ t3)
   return w
 
-/-- Encrypt one block (`pt` 16 bytes) with expanded round keys `rk` (176 bytes). -/
-def encrypt (rk : ByteArray) (pt : ByteArray) : ByteArray := Id.run do
-  let mut s : Array UInt8 := (Array.range 16).map fun i => pt.get! i ^^^ rk.get! i
-  for r in [1:11] do
-    -- SubBytes and ShiftRows: new byte (row i, column c) is old (row i, column c + i).
-    let t : Array UInt8 := (Array.range 16).map fun j =>
-      let row := j % 4
-      let col := j / 4
-      sub s[row + 4 * ((col + row) % 4)]!
-    -- MixColumns (skipped in the last round), then AddRoundKey.
-    let mut u := t
-    if r != 10 then
-      for c in [0:4] do
-        let a0 := t[4 * c]!
-        let a1 := t[4 * c + 1]!
-        let a2 := t[4 * c + 2]!
-        let a3 := t[4 * c + 3]!
-        u := u.set! (4 * c) (xtime a0 ^^^ (xtime a1 ^^^ a1) ^^^ a2 ^^^ a3)
-        u := u.set! (4 * c + 1) (a0 ^^^ xtime a1 ^^^ (xtime a2 ^^^ a2) ^^^ a3)
-        u := u.set! (4 * c + 2) (a0 ^^^ a1 ^^^ xtime a2 ^^^ (xtime a3 ^^^ a3))
-        u := u.set! (4 * c + 3) ((xtime a0 ^^^ a0) ^^^ a1 ^^^ a2 ^^^ xtime a3)
-    s := (Array.range 16).map fun j => u[j]! ^^^ rk.get! (16 * r + j)
-  return ⟨s⟩
-
 /-- Little-endian 32-bit word at byte offset `o`. -/
 @[inline] def getLE32 (b : ByteArray) (o : Nat) : UInt32 :=
   (b.get! o).toUInt32 ||| ((b.get! (o + 1)).toUInt32 <<< 8) |||
@@ -108,6 +85,45 @@ def encrypt (rk : ByteArray) (pt : ByteArray) : ByteArray := Id.run do
 /-- Append the little-endian encoding of `x`. -/
 @[inline] def pushLE32 (b : ByteArray) (x : UInt32) : ByteArray :=
   b.push x.toUInt8 |>.push (x >>> 8).toUInt8 |>.push (x >>> 16).toUInt8 |>.push (x >>> 24).toUInt8
+
+/-- The round tables: entry `x` of `te k` is column `k` of MixColumns times `S[x]`, as a
+little-endian word (rows 0-3 in bytes 0-3): `te 0 x = (2·S[x], S[x], S[x], 3·S[x])`, and `te k` is
+`te 0` with the rows rotated down by `k`. -/
+def te0 : Array UInt32 := (Array.range 256).map fun i =>
+  let s := sbox[i]!
+  (xtime s).toUInt32 ||| (s.toUInt32 <<< 8) ||| (s.toUInt32 <<< 16) |||
+    ((xtime s ^^^ s).toUInt32 <<< 24)
+def te1 : Array UInt32 := te0.map fun (x : UInt32) => (x <<< 8) ||| (x >>> 24)
+def te2 : Array UInt32 := te0.map fun (x : UInt32) => (x <<< 16) ||| (x >>> 16)
+def te3 : Array UInt32 := te0.map fun (x : UInt32) => (x <<< 24) ||| (x >>> 8)
+
+/-- Byte `k` (row `k`) of a column word, as a table index. -/
+@[inline] def byteOf (x : UInt32) (k : UInt32) : Nat := ((x >>> (8 * k)) &&& 0xff).toNat
+
+/-- Encrypt one block (`pt` 16 bytes) with expanded round keys `rk` (176 bytes). The state is four
+little-endian column words (column `c` = bytes `4c … 4c+3`); a full round computes output column
+`c` as `Σ_r te r [S-box input: row r of column c + r]` (SubBytes, ShiftRows, MixColumns) plus the
+round key; the last round has no MixColumns. -/
+def encrypt (rk : ByteArray) (pt : ByteArray) : ByteArray := Id.run do
+  let mut s0 := getLE32 pt 0 ^^^ getLE32 rk 0
+  let mut s1 := getLE32 pt 4 ^^^ getLE32 rk 4
+  let mut s2 := getLE32 pt 8 ^^^ getLE32 rk 8
+  let mut s3 := getLE32 pt 12 ^^^ getLE32 rk 12
+  for r in [1:10] do
+    let col (a b c d : UInt32) (o : Nat) : UInt32 :=
+      te0[byteOf a 0]! ^^^ te1[byteOf b 1]! ^^^ te2[byteOf c 2]! ^^^ te3[byteOf d 3]! ^^^
+        getLE32 rk (16 * r + o)
+    let t0 := col s0 s1 s2 s3 0
+    let t1 := col s1 s2 s3 s0 4
+    let t2 := col s2 s3 s0 s1 8
+    let t3 := col s3 s0 s1 s2 12
+    s0 := t0; s1 := t1; s2 := t2; s3 := t3
+  let last (a b c d : UInt32) (o : Nat) : UInt32 :=
+    (sbox[byteOf a 0]!.toUInt32 ||| (sbox[byteOf b 1]!.toUInt32 <<< 8) |||
+      (sbox[byteOf c 2]!.toUInt32 <<< 16) ||| (sbox[byteOf d 3]!.toUInt32 <<< 24)) ^^^
+      getLE32 rk (160 + o)
+  return pushLE32 (pushLE32 (pushLE32 (pushLE32 (ByteArray.emptyWithCapacity 16)
+    (last s0 s1 s2 s3 0)) (last s1 s2 s3 s0 4)) (last s2 s3 s0 s1 8)) (last s3 s0 s1 s2 12)
 
 /-- `iv.add32(set_low_high32(cnt, twk))`: the CTR input block. -/
 def ctrBlock (iv : ByteArray) (cnt tweak : UInt32) : ByteArray :=
