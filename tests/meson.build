@@ -59,6 +59,15 @@ if get_option('tests')
     include_directories : test_inc,
     dependencies : test_deps,
   )
+
+  # Run explicitly to regenerate the test vectors for the Lean model of the VOLEitH verifier
+  # (lean/vectors/verifier_*.txt, checked by `lake exe verifier_vectors`), never as part of the test
+  # suite.
+  executable('dump_verifier_vectors', 'voleith/dump_verifier_vectors.cpp',
+    include_directories : test_inc,
+    dependencies : test_deps,
+    cpp_args : test_data_arg,
+  )
 endif
 
 if get_option('benchmarks')
