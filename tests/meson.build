@@ -54,6 +54,14 @@ if get_option('tests')
     include_directories : test_inc,
     dependencies : test_deps + [pqov_dep],
   )
+
+  # Run explicitly to regenerate the PomFRIT known answers for the Lean protocol spec
+  # (tests/pomfrit/pomfrit_kat.txt, checked by `lake exe spec_kats`), never as part of the test
+  # suite.
+  executable('gen_pomfrit_kat', 'pomfrit/gen_pomfrit_kat.cpp',
+    include_directories : test_inc,
+    dependencies : test_deps,
+  )
 endif
 
 if get_option('benchmarks')
