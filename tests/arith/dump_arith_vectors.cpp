@@ -383,6 +383,9 @@ constexpr size_t ALL = SIZE_MAX;
 // Name of each UOV key in uov_keys.txt.
 constexpr std::string_view KEY_TEST = "test"; // test::uov_key_pair()
 constexpr std::string_view KEY_ALT = "alt61"; // the key pair with secret key filled(0x61)
+// The key pair with secret key filled(0x62): only dumped, for the Ratatouille KAT check of
+// `lake exe spec_kats` (tests/ratatouille/ratatouille_kat.txt, third case).
+constexpr std::string_view KEY_ALT62 = "alt62";
 
 const test::UovKeyPair& alt_key_pair() {
     static const test::UovKeyPair kp(uov::SecretKey{filled<uov::SECRET_KEY_BYTES>(0x61)});
@@ -391,8 +394,10 @@ const test::UovKeyPair& alt_key_pair() {
 
 void dump_keys(const std::string& dir) {
     VectorFile f(dir, "uov_keys", "Expanded UOV public maps, referred to by name.");
+    const test::UovKeyPair alt62(uov::SecretKey{filled<uov::SECRET_KEY_BYTES>(0x62)});
     for (const auto& [name, pk] :
-         {std::pair{KEY_TEST, &test::uov_key_pair().pk}, std::pair{KEY_ALT, &alt_key_pair().pk}}) {
+         {std::pair{KEY_TEST, &test::uov_key_pair().pk}, std::pair{KEY_ALT, &alt_key_pair().pk},
+          std::pair{KEY_ALT62, &alt62.pk}}) {
         f.out() << "key " << name << ' ' << to_hex(uov::detail::PublicKeyAccess::expanded(*pk))
                 << '\n';
     }

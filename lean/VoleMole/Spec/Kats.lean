@@ -1,5 +1,6 @@
 import VoleMole.Spec.PomFRIT
 import VoleMole.Spec.Moussaka
+import VoleMole.Spec.RatatouilleKats
 
 /-!
 # Known-answer cross-checks of the protocol specs against the C++ (`lake exe spec_kats`)
@@ -8,8 +9,11 @@ Usage: `lake exe spec_kats [REPO_ROOT]` (default `..`, i.e. run from `lean/`). R
 
 * `tests/moussaka/moussaka_kat.txt` (`tests/moussaka/gen_moussaka_kat.cpp`),
 * `tests/pomfrit/pomfrit_kat.txt` (`tests/pomfrit/gen_pomfrit_kat.cpp`),
+* `tests/ratatouille/ratatouille_kat.txt` (`tests/ratatouille/gen_ratatouille_kat.cpp`; checked by
+  `Spec/RatatouilleKats.lean`, see there),
 * `lean/vectors/uov_keys.txt` (expanded public maps, `tests/arith/dump_arith_vectors.cpp`):
-  key `test` is the key pair with secret key `filled(0x60)`, key `alt61` the one with `filled(0x61)`.
+  key `test` is the key pair with secret key `filled(0x60)`, `alt61` and `alt62` the ones with
+  `filled(0x61)` and `filled(0x62)`.
 
 and recomputes with `Spec.Moussaka` / `Spec.PomFRIT` every field that does not depend on the
 VOLEitH internals: seed expansions, commitments, witness layouts, request/response framing,
@@ -172,6 +176,13 @@ def main (args : List String) : IO UInt32 := do
     if pom.size ≠ 4 then ok := false; IO.println s!"FAIL  pomfrit_kat.txt: {pom.size} records"
     for h : i in [1:pom.size] do
       ok := (← report s!"pomfrit_kat.txt case {i - 1}" (runChecks (checkPomfrit pk pom[i]))) && ok
+  -- Ratatouille.
+  let rata := parseKat (← IO.FS.readFile s!"{root}/tests/ratatouille/ratatouille_kat.txt")
+  let rataResults := Ratatouille.Kats.checkFile keys rata
+  if rataResults.length ≠ 3 then
+    ok := false; IO.println s!"FAIL  ratatouille_kat.txt: {rataResults.length} cases"
+  for (label, errs) in rataResults do
+    ok := (← report label errs) && ok
   IO.println (if ok then "all spec known answers match" else "MISMATCHES")
   return if ok then 0 else 1
 
