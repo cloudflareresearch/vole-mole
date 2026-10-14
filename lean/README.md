@@ -91,7 +91,7 @@ cipher.
 | L4 | QuickSilver with challenge-dependent constraints: either the constraints hold or few challenges accept | [paper] + [Lean] `Seed/QuickSilver.lean` + [test] |
 | L5 | A tree whose challenge block varies holds the witness (Claim 4) | [Lean] `SeedExtraction.lean` |
 | L6 | Per-chain case analysis: extract, or accept at most max(d,1) challenges | [Lean] `SeedExtraction.lean` |
-| L7 | Arithmetization soundness: satisfied constraints imply the relation | [paper] `L7-uov.md`, `L7-keccak.md` + [test]; Lean in progress (§6) |
+| L7 | Arithmetization soundness: satisfied constraints imply the relation | [Lean] `Arith/` for all five relations + [test] cross-check (§6); paper `L7-uov.md`, `L7-keccak.md` |
 
 Along the way the analysis corrected the sketch's definition of an "alive" leaf (the original
 admitted an attack with probability about τ·q₂·2⁻¹²⁸) and found that bad-challenge terms must be
@@ -156,7 +156,7 @@ all protocols share the UOV key type. If one key serves PomFRIT and another prot
 mint Ratatouille credits or forge Moussaka tokens (demonstrated). Keys must be separated by
 protocol.
 
-### 6. Arithmetization in Lean (in progress) — `VoleMole/Arith/`
+### 6. Arithmetization in Lean — `VoleMole/Arith/`
 
 Goal: replace the paper proof of L7 with executable Lean models of each relation's constraint
 generator, mirroring the C++ call by call, with Lean proofs of
@@ -178,7 +178,7 @@ pins down the constraint polynomials, not just their values on bits) and compare
 | `Arith/GF.lean`, `GFEmbedding.lean`: concrete GF(2¹²⁸), GF(256), the embedding | done; embedding proved an injective ring homomorphism in the kernel |
 | C++ dumper (`tests/arith/`) and `lake exe arith_vectors` | done; Lean and C++ constraint values agree on every UOV and PomFRIT record, at bit and random field-valued witnesses |
 | `Arith/Moussaka.lean`: Moussaka issue (commitment opening) and redeem (one-hot selector, UOV preimage under the selected anchor key, Keccak commitment) | done: generators, completeness, soundness, 1/\|F\| bound; cross-checked |
-| Ratatouille issue/spend | in progress |
+| `Arith/Ratatouille.lean`: Ratatouille issue (commitment opening) and spend (two commitments, tag, conservation `t + x = t' + d` over ℕ with 64-bit ranges, UOV preimage of the tag) | done: generators, completeness, soundness, 1/\|F\| bound; cross-checked |
 
 The UOV gadget's hypothesis, that the embedding GF(256) → GF(2¹²⁸) given by the β constants is an
 injective ring homomorphism, is discharged in the kernel for the concrete constants
@@ -204,9 +204,11 @@ What is **not** established, roughly in order of importance:
 2. **Code ↔ model is tested, not proved.** Each Lean model was written by reading the C++ and is
    tied to it by tests in `tests/voleith/test_lean_models.cpp` (and, when finished, the `Arith`
    cross-check). Compiler behaviour, memory safety and constant-time execution are out of scope.
-3. **Arithmetization soundness in Lean is incomplete** (§6). Until it is, L7 rests on the paper
-   proofs and exhaustive tests. One step there rests on a randomized test: that the public-map
-   layout equals pqov's `ov_publicmap` (miss probability below 2⁻²⁰⁰).
+3. **Arithmetization: small leftovers.** All five relations are modelled and proved (§6), but:
+   that the public-map layout equals pqov's `ov_publicmap` rests on a randomized test (miss
+   probability below 2⁻²⁰⁰); degree bounds are proved for UOV, PomFRIT and Keccak but not for the
+   Moussaka and Ratatouille systems; and the step "`l` is uniform because it is a random-oracle
+   output" is on paper.
 4. **Idealized models.** AES-128 is an ideal cipher (classical and quantum), SHAKE and Keccak-p are
    random oracles or random permutations. The Keccak-p[800,12] relations additionally need
    one-wayness/binding assumptions on a 12-round permutation that have little cryptanalysis.
