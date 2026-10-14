@@ -13,7 +13,9 @@ arith_vectors` (`VoleMole/Arith/VectorsMain.lean`) runs it over every file.
 ## Plugging in a generator
 
 A generator is registered as a `Generator`: a function from the record (and the UOV keys) to the
-constraint system over `GF128`. The harness evaluates it at the bits of `wit` and at `field_wit` and
+constraint system over `GF128` (or as a `ValuesGenerator`, returning the constraint values as a
+function of the committed values, when the `Expr` trees are too large to evaluate; both coerce to
+the registry's `AnyGenerator`). The harness evaluates it at the bits of `wit` and at `field_wit` and
 compares with `values_bits` and `values_field` (and the count with `num_constraints`). To add one,
 append an entry `(relationName, myGenerator)` to `registry` in `VectorsMain.lean`, where the name is
 the `RELATION` of the records (`uov`, `keccak`, `pomfrit_redeem`, `moussaka_issue`,
@@ -127,6 +129,24 @@ def parse (file contents : String) :
 /-- A generator, instantiated over `GF128`: the constraint system of a record. -/
 abbrev Generator := Env → Record → Except String (System GF128)
 
+/-- A values generator: the constraint values of a record as a function of the committed values,
+for gadgets whose `Expr` trees are too large to evaluate directly (e.g. Keccak). It should be
+proved equal to `System.values` of the corresponding generator (e.g. `Keccak.qsKeccak_values`). -/
+abbrev ValuesGenerator := Env → Record → Except String ((ℕ → GF128) → List GF128)
+
+/-- A registry entry: a `Generator` (coerced) or a `ValuesGenerator`. -/
+inductive AnyGenerator where
+  | system (gen : Generator)
+  | values (gen : ValuesGenerator)
+
+instance : Coe Generator AnyGenerator := ⟨AnyGenerator.system⟩
+instance : Coe ValuesGenerator AnyGenerator := ⟨AnyGenerator.values⟩
+
+/-- The constraint values of a record, as a function of the committed values. -/
+def AnyGenerator.valuesOf : AnyGenerator → Env → Record → Except String ((ℕ → GF128) → List GF128)
+  | .system gen, env, r => return (← gen env r).values
+  | .values gen, env, r => gen env r
+
 /-- The committed values of a field assignment (zero beyond the end). -/
 def ofArray (a : Array GF128) : ℕ → GF128 := fun i => a.getD i 0
 
@@ -154,16 +174,17 @@ inductive Outcome where
 
 /-- Check a record against a generator: the constraint count, the values at the bits of `wit`,
 and the values at `field_wit`. -/
-def checkWith (gen : Generator) (env : Env) (r : Record) : Except String (Option String) := do
-  let cs ← gen env r
+def checkWith (gen : AnyGenerator) (env : Env) (r : Record) : Except String (Option String) := do
+  let vals ← gen.valuesOf env r
   let n ← r.nat "num_constraints"
-  if cs.length ≠ n then
-    return some s!"{cs.length} constraints, C++ has {n}"
   let wit ← r.bytes "wit"
   let fw ← r.gfList "field_wit"
-  if let some e := compareValues "bits" (cs.values (ofWitBytes wit)) (← r.gfList "values_bits") then
+  let vb := vals (ofWitBytes wit)
+  if vb.length ≠ n then
+    return some s!"{vb.length} constraints, C++ has {n}"
+  if let some e := compareValues "bits" vb (← r.gfList "values_bits") then
     return some e
-  return compareValues "field" (cs.values (ofArray fw)) (← r.gfList "values_field")
+  return compareValues "field" (vals (ofArray fw)) (← r.gfList "values_field")
 
 /-- The number of leading bit constraints `x_i (x_i + 1)`, `i < B`, of each relation (all witness
 bits, except for Moussaka redeem, whose selector bits come later). -/
