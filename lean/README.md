@@ -202,6 +202,18 @@ code and takes about 10 minutes; `lean/vectors/` is not committed):
 cd lean && lake build arith_vectors && lake exe arith_vectors
 ```
 
+### 7. Executable protocol specs — `VoleMole/Spec/`
+
+Byte-level Lean models of the protocol logic, with the proof system and UOV signing as abstract
+parameters (UOV verification is concrete). Cross-checked against the C++ known answers by
+`lake exe spec_kats` (needs `lean/vectors/uov_keys.txt`, see §6).
+
+| Piece | Status |
+|---|---|
+| `Spec/SHAKE.lean`: Keccak-f[1600], SHAKE128/256 | done; standard vectors |
+| `Spec/PomFRIT.lean`, `Spec/Moussaka.lean` | done: every party's steps and errors; honest runs succeed; at most one acceptance per nullifier and context over any request sequence; injectivity of the hashed encodings (`H_T` binds d[0..M), Moussaka binds `challenge_digest`); input validation. All deterministic KAT fields match (`tests/pomfrit/pomfrit_kat.txt` is new). |
+| `Spec/Ratatouille.lean` | in progress |
+
 ## Gaps
 
 What is **not** established, roughly in order of importance:

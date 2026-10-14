@@ -41,3 +41,7 @@ import VoleMole.EndToEnd.Degree
 import VoleMole.EndToEnd.Relations
 import VoleMole.Arith.Pqov
 import VoleMole.Arith.Concrete
+import VoleMole.Spec.Common
+import VoleMole.Spec.PomFRIT
+import VoleMole.Spec.Moussaka
+import VoleMole.Spec.Kats

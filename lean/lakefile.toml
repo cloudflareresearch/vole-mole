@@ -19,3 +19,9 @@ name = "VoleMole"
 [[lean_exe]]
 name = "arith_vectors"
 root = "VoleMole.Arith.VectorsMain"
+
+# Known-answer cross-checks of the protocol specs (Spec/) against the C++: run from lean/ as
+# `lake exe spec_kats` (reads tests/*/..._kat.txt and lean/vectors/uov_keys.txt).
+[[lean_exe]]
+name = "spec_kats"
+root = "VoleMole.Spec.Kats"
