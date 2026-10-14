@@ -4,6 +4,7 @@ import VoleMole.Arith.UOV
 import VoleMole.Arith.PomFRIT
 import VoleMole.Arith.VectorsKeccak
 import VoleMole.Arith.VectorsMoussaka
+import VoleMole.Arith.VectorsRatatouille
 
 /-!
 # `lake exe arith_vectors`
@@ -49,7 +50,9 @@ def registry : List (String × AnyGenerator) :=
    ("keccak", keccakGenerator),
    ("pomfrit_redeem", pomfritRedeemGenerator),
    ("moussaka_issue", moussakaIssueGenerator),
-   ("moussaka_redeem", moussakaRedeemGenerator)]
+   ("moussaka_redeem", moussakaRedeemGenerator),
+   ("ratatouille_issue", ratatouilleIssueGenerator),
+   ("ratatouille_spend", ratatouilleSpendGenerator)]
 
 /-- The hypotheses `UOV.IsEmbedding beta GF256.toBits GF256.ofBits`, checked exhaustively, and
 agreement of `UOV.embed beta ∘ GF256.toBits` with `iota`. -/

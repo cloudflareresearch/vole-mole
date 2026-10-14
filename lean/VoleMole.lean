@@ -35,3 +35,4 @@ import VoleMole.Arith.GFEmbedding
 import VoleMole.Arith.Keccak
 import VoleMole.Arith.Adder
 import VoleMole.Arith.Moussaka
+import VoleMole.Arith.Ratatouille
