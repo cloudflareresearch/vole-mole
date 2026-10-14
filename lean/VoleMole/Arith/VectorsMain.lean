@@ -2,6 +2,7 @@ import VoleMole.Arith.Vectors
 import VoleMole.Arith.GFEmbedding
 import VoleMole.Arith.UOV
 import VoleMole.Arith.PomFRIT
+import VoleMole.Arith.Pqov
 import VoleMole.Arith.VectorsKeccak
 import VoleMole.Arith.VectorsMoussaka
 import VoleMole.Arith.VectorsRatatouille
@@ -17,6 +18,8 @@ Runs the differential tests of `VoleMole/Arith/Vectors.lean` over the vector fil
    `toBits := GF256.toBits`, `ofByte := GF256.ofBits` (also kernel-checked:
    `VoleMole.Arith.isEmbedding` in `GFEmbedding.lean`, imported here so that it is built);
 2. for every relation record, the leading bit constraints (a framework self-test);
+   for every `uov` record, Claim 2b on the concrete GF(256): the model `Pqov.ovPublicmap` of pqov's
+   `ov_publicmap` and `UOV.publicMap` both equal the dumped `public_map` (pqov's own output);
 3. every record whose relation has a generator in `registry`.
 
 Usage: `lake exe arith_vectors [VECTOR_DIR]` (default `vectors`, i.e. `lean/vectors` when run from
@@ -43,6 +46,21 @@ def pomfritRedeemGenerator : Generator := fun env r => do
   let h ← r.byte "h"
   let l ← r.coeffs "l" uovM
   pure (PomFRIT.pomfritRedeemSystem beta GF256.toBits uovN uovM pk (fun k => ⟨h k.val⟩) l)
+
+/-- Claim 2b on a `uov` record: `Pqov.ovPublicmap` (with the GF(256) nibble split) and
+`UOV.publicMap` at the witness bytes `s` both equal pqov's `ov_publicmap(s)` (`public_map`). -/
+def checkPublicMap (env : Env) (r : Record) : Except String (List String) := do
+  let pk ← env.pk (← r.get "pk")
+  let s ← r.byte "wit"
+  let want ← r.byte "public_map"
+  let x : ℕ → GF256 := fun i => ⟨s i⟩
+  let viaPqov := Pqov.ovPublicmap Pqov.GF256.lo Pqov.GF256.hi GF256.basis uovN uovM pk x
+  let viaLayout := UOV.publicMap uovN uovM pk x
+  let mut errs : List String := []
+  for k in List.finRange uovM do
+    if (viaPqov k).val ≠ want k.val then errs := errs ++ [s!"ovPublicmap differs at {k}"]
+    if (viaLayout k).val ≠ want k.val then errs := errs ++ [s!"publicMap differs at {k}"]
+  return errs
 
 /-- Relation name (the `RELATION` of `record RELATION NAME`) ↦ Lean generator. -/
 def registry : List (String × AnyGenerator) :=
@@ -118,6 +136,9 @@ def run (dir : String) : IO UInt32 := do
       if let .ok (some _) := bitPrefix r then
         ok ← report ok s!"{r.label}: bit-constraint prefix (self-test)"
           (match checkBitPrefix r with | .ok none => [] | .ok (some e) => [e] | .error e => [e])
+      if r.relation = "uov" then
+        ok ← report ok s!"{r.label}: ovPublicmap = publicMap = pqov ov_publicmap (Claim 2b)"
+          (match checkPublicMap env r with | .ok e => e | .error e => [e])
       match registry.lookup r.relation with
       | none => skipped := skipped ++ [r.label]
       | some gen =>

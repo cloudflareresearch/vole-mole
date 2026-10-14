@@ -41,7 +41,8 @@
 // is the public part of the K-th Keccak-p[800] input state, as passed to keccak::detail::qs_input):
 //
 //   uov               pk, l (random rather than derived from a challenge), target (P(s), or `-`
-//                     if s is random). One constraint: l(P(s)), with
+//                     if s is random), public_map (pqov's ov_publicmap(s), checked to equal
+//                     PublicKey::eval(s)). One constraint: l(P(s)), with
 //                     s_i = load_witness_8_bits_and_combine(8 i), i < N.
 //   keccak            input_map (100 ints), public_state, wit_off_states, num_out_bits. The
 //                     constraints are qs_keccak's segment constraints, then out[i] for
@@ -84,6 +85,7 @@
 
 extern "C" {
 #include "gf16.h" // from pqov
+#include "ov.h"   // from pqov
 }
 
 #include <algorithm>
@@ -492,10 +494,18 @@ void dump_uov(const std::string& dir) {
     };
     for (const bool honest : {true, false}) {
         const uov::Preimage s = honest ? preimage : random_bytes<uov::N>(rng);
+        uov::Target public_map{};
+        ov_publicmap(public_map.data(),
+                     uov::detail::PublicKeyAccess::expanded(test::uov_key_pair().pk).data(),
+                     s.data());
+        if (public_map != test::uov_key_pair().pk.eval(s)) {
+            fail("uov: ov_publicmap and PublicKey::eval disagree");
+        }
         write_record<2>(f.out(), "uov", honest ? "preimage" : "random", s,
                         {{"pk", std::string(KEY_TEST)},
                          {"l", hex128_list(l_vec)},
-                         {"target", honest ? to_hex(target) : "-"}},
+                         {"target", honest ? to_hex(target) : "-"},
+                         {"public_map", to_hex(public_map)}},
                         rng, 0, constraints);
     }
 }

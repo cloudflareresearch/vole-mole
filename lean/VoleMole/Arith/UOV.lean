@@ -7,8 +7,8 @@ import VoleMole.SeedExtraction
 An executable model of `uov::detail::qs_eval_combined_public_map` (`src/uov/circuit.hpp:114-137`)
 and of the monomial enumeration `for_each_monomial` (`src/uov/public_key.hpp:45-63`) it uses, with
 soundness and completeness proofs. This mechanizes Lemma 1's consequences and Claim 2a of
-`lean/docs/extraction/L7-uov.md`; Claim 2b (the layout equals pqov's `ov_publicmap`) stays outside Lean, and
-`publicMap` below is *defined* by `for_each_monomial`'s layout.
+`lean/docs/extraction/L7-uov.md`. `publicMap` below is *defined* by `for_each_monomial`'s layout;
+Claim 2b (it equals pqov's `ov_publicmap`) is `Pqov.ovPublicmap_eq_publicMap` (`Arith/Pqov.lean`).
 
 ## Model
 
@@ -208,7 +208,7 @@ variable {F K : Type*}
 
 /-- `P(σ)_k = Σ_m p^k_m σ_i σ_j` over `K`, with monomials and coefficients read by
 `for_each_monomial` (`public_key.hpp:36-39`). Claim 2b of L7-uov.md identifies it with pqov's
-`ov_publicmap` (not mechanized). -/
+`ov_publicmap` (`Pqov.ovPublicmap_eq_publicMap`). -/
 def publicMap [Add K] [Mul K] [Zero K] (N M : ℕ) (pk : ℕ → K) (σ : ℕ → K) (k : Fin M) : K :=
   ((forEachMonomial N M).map fun m => pk (m.off + k) * σ m.i * σ m.j).sum
 

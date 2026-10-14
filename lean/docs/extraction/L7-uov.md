@@ -184,18 +184,24 @@ Each step reads one `M`-byte vector, which is accumulated into `x_i x_j`. This i
 Under the code-reading hypothesis (bilinear form) that test has error below `2^{−200}`. The
 UOV/pqov spec defines `P` via `ov_publicmap`, so this is the stated `P`.
 
+*Update (Lean).* For `ov_publicmap` the identity is now proved: `Pqov.ovPublicmap_eq_publicMap`
+(`lean/VoleMole/Arith/Pqov.lean`) models its pointer walk, nibble buckets and `madd_reduce_gf256`
+over an abstract commutative ring and proves it equal to the `for_each_monomial` layout, and
+`lake exe arith_vectors` checks the model against pqov's output. `ov_publicmap_ct` (used by
+`PublicKey::eval`) is not modelled; its agreement with `ov_publicmap` rests on the tests above.
+
 ## 3. Lemma 3: bit constraints [proof]
 
 `qs_add_bit_constraint(x)` (`src/qs_bit.hpp:75-77`) adds `qs_mul(x, x + 1)`. Its value is
 `w_i(w_i + 1)`. Over the field `F` this is zero iff `w_i ∈ {0,1}`.
 
 Witness bits covered, per relation:
-- **PomFRIT:** every `i < REDEEM_WITNESS_BITS = 8(M+N)` (`src/pomfrit/redeem.hpp:127-129`).
-- **Ratatouille spend:** every `i < SPEND_WITNESS_BITS` (`src/ratatouille/spend.hpp:348-350`).
+- **PomFRIT:** every `i < REDEEM_WITNESS_BITS = 8(M+N)` (`src/pomfrit/redeem.hpp:120-123`).
+- **Ratatouille spend:** every `i < SPEND_WITNESS_BITS` (`src/ratatouille/spend.hpp:341-344`).
 - **Moussaka redeem:**
-  - every `i < 8·REDEEM_WIT_OFF_B` gets a bit constraint (`src/moussaka/redeem.hpp:225-227`);
+  - every `i < 8·REDEEM_WIT_OFF_B` gets a bit constraint (`src/moussaka/redeem.hpp:218-221`);
   - for the selector bits `8·REDEEM_WIT_OFF_B + u`, `u < MAX_ANCHORS`, the code adds a bit
-    constraint if `u < n` and the constraint `b_u = 0` (value `b_u`) otherwise (`:231-238`);
+    constraint if `u < n` and the constraint `b_u = 0` (value `b_u`) otherwise (`:223-232`);
   - since `REDEEM_WITNESS_BITS = 8·REDEEM_WIT_OFF_B + MAX_ANCHORS` (`:79-81`), every witness bit
     is constrained to `{0,1}`, and to `0` for `u ≥ n`.
 
@@ -206,11 +212,11 @@ degree 1, not of the form `x(x+1)`.
 ## 4. PomFRIT redeem [proved]
 
 Witness layout: `r` = bytes `[0, M)` and `s` = bytes `[M, M+N)` (`redeem.hpp:42-45`). Bytes
-decode as `ρ_k, σ_i ∈ K`. The combined constraint (`:132-148`) is
+decode as `ρ_k, σ_i ∈ K`. The combined constraint (`:125-142`) is
 `lp + (lr + lh)` lifted to degree 2, where:
-- `lp = E(S(w), l)` with `S_i(w) = B_{M+i}(w)` (`:133-137`);
-- `lr = Σ_k l_k B_k(w)` (`:143-144`);
-- `lh = Σ_k l_k ι(h_k)` (`:145-146`).
+- `lp = E(S(w), l)` with `S_i(w) = B_{M+i}(w)` (`:126-131`);
+- `lr = Σ_k l_k B_k(w)` (`:134-138`);
+- `lh = Σ_k l_k ι(h_k)` (`:135-141`).
 
 By Claim 2a,
 
@@ -239,14 +245,14 @@ The converse also holds: an honest witness satisfies every constraint. There are
 
 Instance: `n = |anchors|`, with `1 ≤ n ≤ MAX_ANCHORS = 64`. This is enforced by `AnchorSet`
 (`src/moussaka/moussaka.cpp:139-142`), the only type through which the verifier receives anchors.
-`RedeemRelation::constraints` itself indexes `b[u]` for `u < n` (`redeem.hpp:265-268`), so it
+`RedeemRelation::constraints` itself indexes `b[u]` for `u < n` (`redeem.hpp:259-262`), so it
 relies on `n ≤ MAX_ANCHORS`.
 
-**Selector constraints** (`redeem.hpp:230-248`), with `b_u = w_{8·OFF_B + u}`:
+**Selector constraints** (`redeem.hpp:223-242`), with `b_u = w_{8·OFF_B + u}`:
 - (S1) `b_u(b_u + 1) = 0` for `u < n`, and `b_u = 0` for `n ≤ u < 64`;
 - (S2) parity: for `u = 0..62`, `π_u · b_{u+1} = 0`, where `π_u = Σ_{v≤u} b_v`. `prefix` is a
-  `qs_bit` sum, i.e. field addition (`:241-245`);
-- (S3) weight: `π_63 + 1 = 0` (`:248`).
+  `qs_bit` sum, i.e. field addition (`:235-239`);
+- (S3) weight: `π_63 + 1 = 0` (`:242`).
 
 **Lemma 4.** For a bit vector `b`, (S1)–(S3) hold iff `b = e_{u₀}` for some `u₀ < n`.
 
@@ -266,10 +272,10 @@ Test: `SelectorConstraintsHoldIffOneHot` (`tests/moussaka/test_redeem.cpp:240`) 
 
 The existing `RejectsWrongSelector` and `ParityConstraintsRejectOddWeight` also cover this.
 
-**Output constraint** (`redeem.hpp:259-276`). With `S_i(w) = B_{OFF_S+i}(w)` (`:260-263`):
+**Output constraint** (`redeem.hpp:251-270`). With `S_i(w) = B_{OFF_S+i}(w)` (`:254-257`):
 - `lq = Σ_{u<n} b_u · E^{(u)}(S(w), l)`, where `E^{(u)}` is Claim 2a's `E` for key `anchors[u]`
-  (`:264-268`; `qs_mul<1,2>` has value `b_u·E`, `qs_bit.hpp:58-67`);
-- `lout = Σ_k l_k O_k(w)` with `O_k(w) = Σ_j β_j out_{8k+j}(w)` (`:272-275`).
+  (`:258-262`; `qs_mul<1,2>` has value `b_u·E`, `qs_bit.hpp:58-72`);
+- `lout = Σ_k l_k O_k(w)` with `O_k(w) = Σ_j β_j out_{8k+j}(w)` (`:266-270`).
 
 The constraint is `lout + lift(lq)`, so
 
@@ -300,9 +306,9 @@ that index's key.
 
 ## 6. Ratatouille spend: the UOV part [proved, given the Keccak interface]
 
-With `S_i(w) = B_{SPEND_WIT_OFF_S+i}(w)` (`spend.hpp:386-389`), `lp = E(S(w), l)` for the key
-`x.pk` (`:390`). `ly = Σ_k l_k T_k(w)` with `T_k(w) = Σ_j β_j tag_out_{8k+j}(w)` (`:391-394`), and
-the constraint is `ly + lift(lp)` (`:395`). So
+With `S_i(w) = B_{SPEND_WIT_OFF_S+i}(w)` (`spend.hpp:380-383`), `lp = E(S(w), l)` for the key
+`x.pk` (`:384`). `ly = Σ_k l_k T_k(w)` with `T_k(w) = Σ_j β_j tag_out_{8k+j}(w)` (`:385-388`), and
+the constraint is `ly + lift(lp)` (`:389`). So
 
     f_comb(w) = Σ_k l_k A_k(w),   A_k(w) = T_k(w) + E_k(S(w)).
 
@@ -328,7 +334,7 @@ Existing tests: `tests/ratatouille/test_spend.cpp` (`HonestWitnessSatisfiesAllCo
 | witness loader, verifier key combination, `qs_byte` all equal `ι` | code reading, plus exhaustive test over all 256 bytes |
 | `Combination` tables `= l_k ι(a)` | proof by induction, plus exhaustive test |
 | `qs_eval_combined_public_map` `= Σ_k l_k ι(P_k)` | proof (Claim 2a), plus tests with unit vectors |
-| `for_each_monomial` layout `=` pqov's `ov_publicmap` / `ov_publicmap_ct` | code reading, plus randomized identity test on random keys (miss probability `< 2^{−200}`, given the bilinear form). **Not** an exhaustive proof |
+| `for_each_monomial` layout `=` pqov's `ov_publicmap` / `ov_publicmap_ct` | `ov_publicmap`: proved in Lean (`Arith/Pqov.lean`) for a model of the C code. `ov_publicmap_ct`: code reading, plus randomized identity test on random keys (miss probability `< 2^{−200}`, given the bilinear form) |
 | QuickSilver top-coefficient semantics (`f_e`) | structural induction over `quicksilver.hpp` (§0); the "check polynomial" part belongs to L4 |
 | selector ⇒ one-hot | proof (Lemma 4), plus tests |
 | Keccak outputs `out`, `tag`, and `c = Com(…)` | black box (`L7-keccak.md`) |

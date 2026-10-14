@@ -183,10 +183,10 @@ statically, adds that each witness byte is used once, but soundness does not nee
 
 | Relation | Bit constraints | Coverage |
 |---|---|---|
-| Moussaka issue | `src/moussaka/issue.hpp:183-185`, `i < ISSUE_WITNESS_BITS` | all bits |
-| Ratatouille issue | `src/ratatouille/issue.hpp:171-173` | all bits |
-| Ratatouille spend | `src/ratatouille/spend.hpp:348-350`, `i < SPEND_WITNESS_BITS` | all bits, carries included |
-| Moussaka redeem | `src/moussaka/redeem.hpp:225-227` for `i < 8·REDEEM_WIT_OFF_B` (r, s, s₅, s₉); `:231-238` for the selector | every bit is either constrained to be a bit (`u < n`) or constrained to `0` (`u ≥ n`) |
+| Moussaka issue | `src/moussaka/issue.hpp:176-179`, `i < ISSUE_WITNESS_BITS` | all bits |
+| Ratatouille issue | `src/ratatouille/issue.hpp:164-167` | all bits |
+| Ratatouille spend | `src/ratatouille/spend.hpp:341-344`, `i < SPEND_WITNESS_BITS` | all bits, carries included |
+| Moussaka redeem | `src/moussaka/redeem.hpp:218-221` for `i < 8·REDEEM_WIT_OFF_B` (r, s, s₅, s₉); `:223-232` for the selector | every bit is either constrained to be a bit (`u < n`) or constrained to `0` (`u ≥ n`) |
 
 So every witness coordinate is in `{0,1}`, and Fact 1.1 applies. (`qs_add_bit_constraint`,
 `src/qs_bit.hpp:75-77`, is `x·(x+1) = 0`, whose roots in `F` are exactly `0` and `1`.)
@@ -205,13 +205,13 @@ So every witness coordinate is in `{0,1}`, and Fact 1.1 applies. (`qs_add_bit_co
 - **Dec:** `r = w[0..16)`, `ctx_red = w[16..32)`, `nf = w[32..56)` (`issue.hpp:58-61`).
 
 The constraint input is `qs_input(encode_com_state({}, ctx_iss, {}, {}), COM_TO_WIT)`
-(`issue.hpp:188-190`, map `:67-80`). By §2.5 and the test
+(`issue.hpp:182-184`, map `:67-81`). By §2.5 and the test
 `tests/moussaka/test_issue.cpp:121` `IssueRelation.KeccakInputIsCommitmentInput`, it equals
 `encode_com_state(nf, ctx_iss, ctx_red, r)` for every `w`. Here `ctx_iss` is a public constant;
 `r`, `ctx_red` and `nf` come from the witness.
 
 By Lemma 2.2 (with `num_out_bits = 8M = 360`), `out_i` is bit `i` of `Com`. The output constraints
-`out_i + t_i = 0` for all `i < 360` (`issue.hpp:194-195`) give `t = Com(Dec(w))`, compared in full.
+`out_i + t_i = 0` for all `i < 360` (`issue.hpp:188-190`) give `t = Com(Dec(w))`, compared in full.
 `WrongInstanceViolatesAConstraint` checks that each of the 360 bits of `t` is constrained. The new
 test `Commitment.Layout` pins the layout above.
 
@@ -221,7 +221,7 @@ test `Commitment.Layout` pins the layout above.
 
 - **Witness:** `r = w[0..16)`.
 - **Input:** `qs_input(encode_com_state(nf, ctx_iss, ctx_red, {}), REDEEM_COM_TO_WIT)`
-  (`redeem.hpp:251-255`, map `:88-95`). The public `nf`, `ctx_iss` and `ctx_red` are constants.
+  (`redeem.hpp:245-249`, map `:88-95`). The public `nf`, `ctx_iss` and `ctx_red` are constants.
 
 By `test_redeem.cpp:279` `KeccakInputIsCommitmentInput`, this input equals
 `encode_com_state(nf, ctx_iss, ctx_red, r)`. By Lemma 2.2 (all 800 bits), `out = keccak_p800(·)`,
@@ -229,7 +229,7 @@ so `qs_byte(out, k) = β(Com_k) = from_8_byte(Com_k)` (F4). `KeccakOutputBytesAr
 (`:303`) checks this for the honest witness.
 
 Interface to `L7-uov.md`: the *uncombined* output constraints are the `M` components
-`qs_byte(out,k) + Q(s)_k = 0`, combined by `l` at `redeem.hpp:270-276`. If `Q(s)_k = from_8_byte(y_k)`
+`qs_byte(out,k) + Q(s)_k = 0`, combined by `l` at `redeem.hpp:264-270`. If `Q(s)_k = from_8_byte(y_k)`
 for a byte `y_k` (the UOV half), then injectivity (F4) gives `y = Com(nf, ctx_iss, ctx_red, r)`,
 i.e., `Q(s) = Com(...)`.
 
@@ -240,35 +240,35 @@ i.e., `Q(s) = Com(...)`.
 - **Statement:** `c = Com(nf, ctx_iss, T_init, r)`.
 - **Layout:** `"rata"‖VERSION‖"c0" ‖ r ‖ 0⁹ ‖ ctx_iss ‖ ⟨t⟩₈ ‖ nf ‖ 0²⁰` (`src/ratatouille/commit.hpp:56-77`).
 - **Dec:** `r = w[0..16)`, `nf = w[16..40)` (`issue.hpp:55-57`).
-- **Input:** `encode_com_state({}, ctx_iss, T_init, {})` with `ISSUE_COM_TO_WIT` (`:176-180`, map
-  `:64-75`). The public values `ctx_iss` and `T_init` (little-endian) are constants.
+- **Input:** `encode_com_state({}, ctx_iss, T_init, {})` with `ISSUE_COM_TO_WIT` (`:170-174`, map
+  `:64-74`). The public values `ctx_iss` and `T_init` (little-endian) are constants.
 
 `tests/ratatouille/test_issue.cpp:162` `KeccakInputIsCommitmentInput` establishes the wiring. The
 layout is pinned by the pre-existing `Commitment.Layout` (`:125`). With Lemma 2.2
-(`num_out_bits = 256`) and the 256 output constraints (`issue.hpp:184-185`), `c = Com(Dec(w))`.
+(`num_out_bits = 256`) and the 256 output constraints (`issue.hpp:177-180`), `c = Com(Dec(w))`.
 
 **Proved.**
 
 ### 4.4 Ratatouille spend (`src/ratatouille/spend.hpp`)
 
 - **Statement:** V1–V4 (`spend.hpp:1-10`).
-- **Dec:** read from `spend.hpp:92-102`: `r`, `t`, `x`, `c`, `nf'`, `t'`, `r'`, `s`, carries `k¹`
+- **Dec:** read from `spend.hpp:91-109`: `r`, `t`, `x`, `c`, `nf'`, `t'`, `r'`, `s`, carries `k¹`
   and `k²`, then the states.
 
 **V1, Com.** The input is `encode_com_state(nf, ctx_iss, 0, {})` with `SPEND_COM_TO_WIT`
-(`:368-372`). The public `nf` and `ctx_iss` are constants, and the bytes of `r` and `⟨t⟩` come
-from the witness. Lemma 2.2 (256 bits) and the constraints `com_out_i + c_i = 0` (`:373-376`)
+(`:362-366`). The public `nf` and `ctx_iss` are constants, and the bytes of `r` and `⟨t⟩` come
+from the witness. Lemma 2.2 (256 bits) and the constraints `com_out_i + c_i = 0` (`:367-370`)
 give `c = Com(nf, ctx_iss, t, r)`, where `c` is the 256 witness bits at `SPEND_WIT_OFF_C`.
 
-**V1, Tag.** The input is `encode_tag_state({}, 0)` with `SPEND_TAG_TO_WIT` (`:378-380`). The
+**V1, Tag.** The input is `encode_tag_state({}, 0)` with `SPEND_TAG_TO_WIT` (`:372-374`). The
 bytes of `c` and `⟨x⟩` come from the witness: the *same* bytes of `c` as above, and the same `x` as
 the adder. By Lemma 2.2 (`8M` bits) and F4, `qs_byte(tag_out,k) = from_8_byte(Tag(c,x)_k)`. With the
-`M` uncombined components `qs_byte(tag_out,k) + P(s)_k = 0` (combined at `:385-395`) and the UOV
+`M` uncombined components `qs_byte(tag_out,k) + P(s)_k = 0` (combined at `:379-389`) and the UOV
 half, `P(s) = Tag(Com(nf, ctx_iss, t, r), x)`.
 
 **V2.** The input is `encode_com_state({}, ctx_iss, 0, {})` with `SPEND_COM_NEXT_TO_WIT`
-(`:398-402`), and the bytes of `nf'`, `⟨t'⟩` and `r'` come from the witness. Together with the
-256 constraints against public `c'` (`:403-406`), this gives `c' = Com(nf', ctx_iss, t', r')`.
+(`:392-396`), and the bytes of `nf'`, `⟨t'⟩` and `r'` come from the witness. Together with the
+256 constraints against public `c'` (`:397-400`), this gives `c' = Com(nf', ctx_iss, t', r')`.
 
 All three wirings are established, for every `w`, by `tests/ratatouille/test_spend.cpp:434`
 `KeccakInputsAreRelationInputs`.
@@ -278,7 +278,7 @@ All three wirings are established, for every `w`, by `tests/ratatouille/test_spe
 *Setup.* Values are read bitwise by `credit_bit(off,i) = 8·off + i` (`src/ratatouille/commit.hpp:54`).
 This matches `encode_credits`, which is little-endian (`:36-42`), so the bits read are exactly the
 bits of the integers that enter Keccak as `⟨t⟩`, `⟨x⟩` and `⟨t'⟩`. The public `d` enters as the
-constant bits `(d ≫ i) & 1` (`spend.hpp:360`).
+constant bits `(d ≫ i) & 1` (`spend.hpp:354`).
 
 *Range (V4).* `t`, `x` and `t'` are 64 witness bits each, and `d` is a public `uint64`, so all four
 lie in `[0, 2⁶⁴)` by construction.
@@ -300,7 +300,7 @@ carries telescope:
 
 so `A + B = Σ_{i<64} σ_i 2^i + 2⁶⁴ k_64`. ∎
 
-*Conservation.* The constraints `sum1_i + sum2_i = 0` for all `i ≤ 64` (`spend.hpp:363-365`)
+*Conservation.* The constraints `sum1_i + sum2_i = 0` for all `i ≤ 64` (`spend.hpp:356-359`)
 make the two 65-bit vectors equal. By Lemma 4.1, applied to `(t, x, k¹)` and `(t', d, k²)`,
 
     t + x = t' + d   in ℤ.
@@ -343,14 +343,16 @@ certified state is bound to the presented nullifier. `nf'` is secret and enters 
 ## 6. What rests on tests or inspection rather than proof
 
 - **(S1)–(S4)**: by inspection of short loops; cited above.
-- **F1–F4**: by tests that enumerate the whole finite domain (32 row values × 160 rows × 12 rounds;
-  800 basis vectors; 256 bytes). They rely on (S1)–(S4) to reduce to that domain.
+- **F1–F3** are now proved in Lean for the Lean model of the gadget (`lean/VoleMole/Arith/Keccak/Inverse.lean`:
+  F1, F2; `Lanes.lean`: F3), which `lake exe arith_vectors` cross-checks against the C++
+  constraint values. **F4** (256 bytes) is proved in Lean as `iota_injective`
+  (`Arith/GF.lean`). The C++ tests above remain as independent checks.
 - **Wiring (§2.5).** The tests call `qs_input` with the *same* map constant and the same
   public-state expression as the relation's `constraints`. That the expression is the same is by
   inspection of the cited lines; the tests do not intercept the call inside `constraints`.
 - **Semantics (§1).** The `PlainQS` reading equals the polynomial that the real QuickSilver types
   commit to. This is the responsibility of L4 and faest-arch-opt.
-- **Adder (Lemma 4.1).** A paper proof; the tests only corroborate it.
+- **Adder (Lemma 4.1).** Also proved in Lean (`lean/VoleMole/Arith/Adder.lean`); the tests corroborate it.
 - **FIPS 202 conformance** of `keccak_p800`: by KAT only. L7 does not need it (§0).
 
 ## 7. Tests added
