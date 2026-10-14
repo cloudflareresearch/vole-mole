@@ -336,17 +336,6 @@ end VoleMole.Arith.Keccak
 
 namespace VoleMole.Arith.Keccak
 
-theorem exists_idx (i : ℕ) (hi : i < 800) : ∃ x y z, i = (idx x y z).1 :=
-  ⟨ix ⟨i, hi⟩, iy ⟨i, hi⟩, iz ⟨i, hi⟩, by rw [idx_decode]⟩
-
-theorem iota_cond (j : ℕ) (k y : Fin 5) (z : Fin 32) :
-    ((idx k y z).1 < 32 ∧ (rc j).getLsbD (idx k y z).1 = true) ↔
-      (k = 0 ∧ (y = 0 ∧ (rc j).getLsbD z.1 = true)) := by
-  rw [idx_lt_32]
-  constructor
-  · rintro ⟨⟨rfl, rfl⟩, h⟩; exact ⟨rfl, rfl, by simpa [idx] using h⟩
-  · rintro ⟨rfl, rfl, h⟩; exact ⟨⟨rfl, rfl⟩, by simpa [idx] using h⟩
-
 /-- ι on a row: flip bit `0` if `c`. -/
 def rowIota (c : Bool) (r : Fin 5 → Bool) (k : Fin 5) : Bool :=
   if k = 0 ∧ c = true then BitOps.bool.add (r k) BitOps.bool.one else r k
