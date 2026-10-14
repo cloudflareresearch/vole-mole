@@ -67,8 +67,10 @@ Notes.
 | AES-128, `aes_ctr_prg<s128>` | `Verifier/AES.lean` | FIPS 197 A.1/B/C.1 `#guard`s; `verifier_vectors`: 4 AES (round keys + ct) and 3 PRG records (lane wrap-around of counter and tweak) |
 | GF(2¹²⁸) | `Arith/GF.lean` | already cross-checked (`arith_vectors`) |
 | One-tree BAVC + `hash_hashed_leaves` | `Verifier/BAVC.lean` | `verifier_vectors`: whole tree, leaves, commitments, check for a fixed seed; reconstruction at Δ; the first Moussaka KAT proof's opening (leaves, commitments, `vole_commit_check`); mutated openings |
-| CRT tables (Mᵢ, W_CRT, W_TREE, W_GATE, G) | dumped (`record crt tables`), parsed in `Verifier/VectorsMain.lean` | used by the CRT step below, which matches the C++; porting `fao/tools/gen_crt_tables.py` (or reading `crt_constants_128f.json`) is still to do |
+| CRT tables (Mᵢ, W_CRT, W_TREE, W_GATE, G) | `Verifier/CrtData.lean` (generated matrices) + `Verifier/CrtGen.lean` | `W_crt`, `M_tree` recomputed from the moduli; bilinear identity checked on all basis pairs; row tables equal the dumped C++ ones |
 | Proof layout, `check_format`, `mu`, `iv`, `chal1` | `Verifier/Proof.lean` | `verifier_vectors`, 5 relations |
+| VOLE check, QuickSilver, full verifier, relations | `Verifier/KOS.lean`, `QuickSilver.lean`, `Verify.lean`, `Relations.lean`, `Kats.lean` | all 18 KAT proofs accepted, 51 mutations rejected |
+| pqov `expand_pk` (AES-128-CTR) | `Verifier/Relations.lean` `UovPk.ofCompressed` | equals the C++ expanded `test` key |
 | ConvertToVOLE, CRT VOLE (gate hashes, row lift, r̃, `q_mask`, lifted Δ) | `Verifier/VOLE.lean` | `verifier_vectors`, 5 relations |
 
 AES also unblocks the protocol specs: Moussaka's spec cannot yet check the digests of non-issuer
@@ -113,12 +115,30 @@ is part of milestone 6.
    W_CRT, r̃ mod Mᵢ, W_TREE/W_GATE/γ∧c_mult, lifted Δ); matches `gate_hashes`, `r_tilde`,
    `q_rows`, `q_mask`, `delta_lifted` for all five relations, 30-60 ms per proof. The tables still
    come from the dump.
-5. **KOS + chal2** (steps 7-8): VOLEHash with `Arith/GF.lean`; check `chal2`. State
-   `voleHash_eq` against `Seed/KOS.lean`'s `voleHashP`.
-6. **QuickSilver** (step 9): verifier MAC semiring (value, degree) over `GF128` with Δ powers; run
-   the `Arith/*` generators at it (as `arith_vectors` does with `BitOps.field`); ZKHash; check
-   `qs_check`, then `delta_check` and full accept on all KAT proofs; mutation tests (flip a byte in
-   each proof field → reject).
+5. **Done:** KOS + chal2 (steps 7-8): `Verifier/KOS.lean` (`voleHashReceiver`: Horner VOLEHash
+   over `Arith/GF.lean`'s `GF128`, `chal2`); matches `chal2` for all five relations, 12-60 ms.
+   Still to state: `voleHash_eq` against `Seed/KOS.lean`'s `voleHashP`.
+6. **Done:** QuickSilver + full accept (steps 9-10): `Verifier/QuickSilver.lean` (constraint keys as
+   `Δ^d · f_k(q/Δ)`, so the `Arith/*` sharing evaluators run unchanged at `x_j = q_j Δ⁻¹`; ZKHash,
+   mask, `chal3`), `Verifier/Verify.lean` (the whole verifier for a `Statement`),
+   `Verifier/Relations.lean` (the five relations; instance encodings from `Spec.Moussaka`
+   `IssueInstance/RedeemInstance.encode` and `Spec.PomFRIT.hashToTarget`, Ratatouille's written out
+   since `Spec/Ratatouille.lean` has none; UOV keys expanded from compressed keys with
+   `Verifier/AES.lean`, pqov's `expand_pk`), `Verifier/Kats.lean`. `lake exe verifier_vectors`
+   accepts all 18 KAT proofs (6 Moussaka, 9 Ratatouille, 3 PomFRIT) and rejects 51 mutations
+   (a byte flipped in each proof field of the first proof of each relation; a changed instance;
+   PomFRIT's refresher). Time ≈ 5 min, dominated by the UOV public maps (≈ 2.3 s per key, 156 s
+   for the 64-anchor redemption); Moussaka/Ratatouille issuance ≈ 0.3 s.
+   CRT tables: `Verifier/CrtData.lean` holds faest-arch-opt's generated matrices
+   (`vole_mult_tables.py --preset 128f`); `Verifier/CrtGen.lean` recomputes `W_crt` and `M_tree`
+   from the moduli, checks the defining bilinear identity of `F`, `G`, `W_tree`, `W_gate` on all
+   `128 · 120` basis pairs, and builds the row tables (equal to the C++'s); the verifier no
+   longer reads tables from the dump.
+   Still open: (a) the UOV keys of the Moussaka/Ratatouille KATs come from the compressed public
+   keys dumped in `lean/vectors/verifier_keys.txt` (pqov key generation from the compact secret
+   key, `calculate_F2_P3`, is not modelled); (b) generating `F`, `G`, `W_gate` themselves (the
+   evaluation-place portfolio of `vole_mult_tables.py`) is not ported, only checked;
+   (c) speed: the UOV evaluation goes through `Expr` trees and `GF128.mul` (≈ 1.7 µs).
 7. **Label-rows variant** behind a flag, checked on the `voleith-label-rows` KATs.
 8. **Bridges** (proofs, not tests): AES-CTR input = `Commitments.ctrInput`; ZKHash code =
    `Seed/QuickSilver.lean`'s `zkHash_eq_code`; VOLEHash = `Seed/KOS.lean`'s model; accept ⇒ the
