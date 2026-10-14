@@ -5,22 +5,27 @@ import VoleMole.Spec.PomFRIT
 import VoleMole.Arith.Moussaka
 import VoleMole.Arith.Ratatouille
 import VoleMole.Arith.PomFRIT
+import VoleMole.Verifier.UovEval
 
 /-!
 # The five relations as verifier statements
 
 For each of vole-mole's relations, a `Statement` built from the instance: parameters, DST
 (`src/dst.hpp`), the instance encoding (`hash_instance`), binders, and the constraint evaluator
-(the sharing evaluators of `Arith/*`, instantiated at `F := GF128`, `β := beta`, `K := GF256`).
+(the sharing evaluators of `Arith/*`, instantiated at `F := GF128`, `β := beta`, `K := GF256`;
+for the three UOV relations with the UOV term computed directly over arrays,
+`Verifier/UovEval.lean`, proved equal).
 
 * Moussaka issuance and redemption: `Spec.Moussaka.IssueInstance.encode`,
-  `RedeemInstance.encode`; `Arith.Moussaka.issueValues`, `redeemValues`.
+  `RedeemInstance.encode`; `Arith.Moussaka.issueValues`, `UovEval.moussakaRedeemValues`
+  (`= Arith.Moussaka.redeemValues`).
 * Ratatouille issuance and spend: `hash_instance` (`src/ratatouille/issue.hpp:151-155`,
   `spend.hpp:321-327`) is written out here (`Spec/Ratatouille.lean` has no encoding);
-  `Arith.Ratatouille.issueValues`, `spendValues`.
+  `Arith.Ratatouille.issueValues`, `UovEval.ratatouilleSpendValues` (`= spendValues`).
 * PomFRIT redemption: delayed instance binding, binders `refresher_com` and `refresher`
   (`src/pomfrit/pomfrit.cpp:219-237`), instance `(pk, h)` with
-  `h = Spec.PomFRIT.hashToTarget dig(pk) chal1 sig msg`; `Arith.PomFRIT.pomfritRedeemSystem`.
+  `h = Spec.PomFRIT.hashToTarget dig(pk) chal1 sig msg`; `UovEval.pomfritRedeemValues`
+  (`= System.values` of `Arith.PomFRIT.pomfritRedeemSystem`).
 * `labelRows` (default `false`, `main`'s layout) selects the dedicated-label-row layout of branch
   `voleith-label-rows` (`Params.labelRows`), which all five relations use there.
 * The UOV combinations: `l = H(chal2 ‖ COMBINE_DST)`, 45 field elements
@@ -74,17 +79,6 @@ def combinationArr (n : ℕ) (chal2 dst : ByteArray) : Array GF128 :=
   let b := H (chal2 ++ dst) (16 * n)
   (Array.range n).map fun k => gfOfBytes b (16 * k)
 
-/-- An array as a function on `Fin n`. Apply it to an already computed array: a definition of the
-form `def f x : α → β := let a := …; fun y => …` is compiled with arity 2, so `a` would be
-recomputed at every application. -/
-def ofArr {n : ℕ} (a : Array GF128) : Fin n → GF128 := fun k => a.getD k.val 0
-
-/-- `beta` tabulated once (`beta b` decodes a byte list at every call). -/
-def betaTab : Array GF128 := (Array.range 8).map fun b => if h : b < 8 then beta ⟨b, h⟩ else 0
-
-/-- `beta`, by table lookup. -/
-def betaFast (b : Fin 8) : GF128 := betaTab.getD b.val 0
-
 /-- `encode_credits`: 8 bytes little-endian. -/
 def le64 (v : ℕ) : ByteArray := ⟨(Array.range 8).map fun i => (v / 2 ^ (8 * i)).toUInt8⟩
 
@@ -103,8 +97,8 @@ def moussakaRedeem (anchors : List UovPk) (nf ctxIss ctxRed challengeDigest : By
   instEnc := fun _ => toBA (Moussaka.RedeemInstance.encode
     ⟨anchors.map UovPk.toSpec, toL nf, toL ctxIss, toL ctxRed, toL challengeDigest⟩)
   values := fun _ c2 w =>
-    Moussaka.redeemValues betaFast GF256.toBits (anchors.map UovPk.map) (fnOf nf) (fnOf ctxIss)
-      (fnOf ctxRed) (ofArr (combinationArr Moussaka.M c2 (toBA (makeDst "mous" 0 'l' '0')))) w
+    UovEval.moussakaRedeemValues (anchors.map UovPk.map) (fnOf nf) (fnOf ctxIss) (fnOf ctxRed)
+      (combinationArr Moussaka.M c2 (toBA (makeDst "mous" 0 'l' '0'))) w
 
 /-! ## Ratatouille -/
 
@@ -121,8 +115,8 @@ def ratatouilleSpend (pk : UovPk) (nf : ByteArray) (d : ℕ) (cNext ctxIss : Byt
   dst := toBA (makeDst "rata" 0 'p' '0')
   instEnc := fun _ => pk.digest ++ nf ++ le64 d ++ cNext ++ ctxIss
   values := fun _ c2 w =>
-    Ratatouille.spendValues betaFast GF256.toBits pk.map (fnOf nf) d (fnOf cNext) (fnOf ctxIss)
-      (ofArr (combinationArr Ratatouille.uovM c2 (toBA (makeDst "rata" 0 'l' '0')))) w
+    UovEval.ratatouilleSpendValues pk.map (fnOf nf) d (fnOf cNext) (fnOf ctxIss)
+      (combinationArr Ratatouille.uovM c2 (toBA (makeDst "rata" 0 'l' '0'))) w
 
 /-! ## PomFRIT -/
 
@@ -154,8 +148,8 @@ def pomfritRedeem (pk : UovPk) (sig msg : ByteArray) (labelRows := false) : Stat
     instEnc := fun c1 => pk.digest ++ h c1
     values := fun c1 c2 w =>
       let hb := h c1
-      (PomFRIT.pomfritRedeemSystem betaFast GF256.toBits 119 45 pk.map (fun k => ⟨fnOf hb k.val⟩)
-        (ofArr (combinationArr 45 c2 (toBA (makeDst "pomf" 0 'l' '0'))))).values w }
+      UovEval.pomfritRedeemValues 119 45 pk.map (fun k => ⟨fnOf hb k.val⟩)
+        (combinationArr 45 c2 (toBA (makeDst "pomf" 0 'l' '0'))) w }
 
 /-- PomFRIT's `verify` (`pomfrit.cpp:219-237`): the refresher commitment, then the proof. -/
 def pomfritVerify (T : CrtTables) (pk : UovPk) (sig msg : ByteArray) (labelRows := false) :

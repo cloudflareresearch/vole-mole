@@ -17,11 +17,12 @@ two lists over `GF128`. For each relation of `Verifier/Relations.lean` it holds 
   equal to `System.values` (`Moussaka.issueValues_eq`, `Ratatouille.issueSystem_values`), for any
   `+ * 0 1`, so at `GF128`;
 * Moussaka redeem and Ratatouille spend likewise (`Moussaka.redeemValues_eq`,
-  `Ratatouille.spendSystem_values`), and PomFRIT redeem is `System.values` already; their
-  evaluators use the tabulated `betaFast`, equal to `beta` (`betaFast_eq`), and the cached
-  combination coefficients `ofArr (combinationArr n chal2 dst)`, which enter the system unchanged
-  as its `l` (`ofArr_combinationArr`: coefficient `k` is bytes `[16k, 16k+16)` of
-  `H(chal2 ‖ dst)`).
+  `Ratatouille.spendSystem_values`), and PomFRIT redeem is `System.values` already, once the UOV
+  term computed over arrays is replaced by the generator's (`UovEval.moussakaRedeemValues_eq`,
+  `ratatouilleSpendValues_eq`, `pomfritRedeemValues_eq`); their evaluators use the tabulated
+  `betaFast`, equal to `beta` (`betaFast_eq`), and the cached combination coefficients
+  `ofArr (combinationArr n chal2 dst)`, which enter the system unchanged as its `l`
+  (`ofArr_combinationArr`: coefficient `k` is bytes `[16k, 16k+16)` of `H(chal2 ‖ dst)`).
 
 No parametricity argument is needed: the evaluator and the system live over the same field.
 
@@ -144,8 +145,8 @@ theorem moussakaRedeem_values (anchors : List UovPk) (nf ctxIss ctxRed challenge
     (labelRows : Bool) (c1 c2 : ByteArray) (x : ℕ → GF128) :
     (moussakaRedeem anchors nf ctxIss ctxRed challengeDigest labelRows).values c1 c2 x =
       (moussakaRedeemSys anchors nf ctxIss ctxRed c2).values x := by
-  show Moussaka.redeemValues _ _ _ _ _ _ _ x = _
-  rw [Moussaka.redeemValues_eq, betaFast_eq]
+  show UovEval.moussakaRedeemValues _ _ _ _ _ x = _
+  rw [UovEval.moussakaRedeemValues_eq, Moussaka.redeemValues_eq, betaFast_eq]
   rfl
 
 theorem ratatouilleIssue_values (c : ByteArray) (tInit : ℕ) (ctxIss : ByteArray)
@@ -160,16 +161,17 @@ theorem ratatouilleSpend_values (pk : UovPk) (nf : ByteArray) (d : ℕ) (cNext c
     (labelRows : Bool) (c1 c2 : ByteArray) (x : ℕ → GF128) :
     (ratatouilleSpend pk nf d cNext ctxIss labelRows).values c1 c2 x =
       (ratatouilleSpendSys pk nf d cNext ctxIss c2).values x := by
-  show Ratatouille.spendValues _ _ _ _ _ _ _ _ x = _
-  rw [← Ratatouille.spendSystem_values, betaFast_eq]
+  show UovEval.ratatouilleSpendValues _ _ _ _ _ _ x = _
+  rw [UovEval.ratatouilleSpendValues_eq, ← Ratatouille.spendSystem_values, betaFast_eq]
   rfl
 
 theorem pomfritRedeem_values (pk : UovPk) (sig msg : ByteArray) (labelRows : Bool)
     (c1 c2 : ByteArray) (x : ℕ → GF128) :
     (pomfritRedeem pk sig msg labelRows).values c1 c2 x =
       (pomfritRedeemSys pk sig msg labelRows c1 c2).values x := by
-  unfold pomfritRedeem pomfritRedeemSys
-  rw [betaFast_eq]
+  show UovEval.pomfritRedeemValues 119 45 pk.map _ _ x = _
+  rw [UovEval.pomfritRedeemValues_eq, betaFast_eq]
+  rfl
 
 /-! ## Acceptance, per relation -/
 

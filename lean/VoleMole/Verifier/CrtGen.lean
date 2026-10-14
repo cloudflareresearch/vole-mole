@@ -77,14 +77,16 @@ def pdiv (a m : Nat) : Nat := Id.run do
 def pinv (a m : Nat) : Nat :=
   ((List.range (2 ^ m.log2)).find? fun x => pmod (pmul a x) m == 1).getD 0
 
-/-- Parity of `a AND b`. -/
+/-- Parity of `a AND b` (XOR of its 64-bit limbs, then of the bits of that word). -/
 def dot (a b : Nat) : Bool := Id.run do
   let mut x := a &&& b
-  let mut p := false
+  let mut v : UInt64 := 0
   while x != 0 do
-    p := !p
-    x := x &&& (x - 1)
-  return p
+    v := v ^^^ x.toUInt64
+    x := x >>> 64
+  for s in [32, 16, 8, 4, 2, 1] do
+    v := v ^^^ (v >>> s)
+  return v &&& 1 == 1
 
 def degs : Array Nat := moduli.map (·.log2)
 def offsets : Array Nat := Id.run do

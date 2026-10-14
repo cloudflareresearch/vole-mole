@@ -136,8 +136,8 @@ is part of milestone 6.
    `Verifier/AES.lean`, pqov's `expand_pk`), `Verifier/Kats.lean`. `lake exe verifier_vectors`
    accepts all 18 KAT proofs (6 Moussaka, 9 Ratatouille, 3 PomFRIT) and rejects 51 mutations
    (a byte flipped in each proof field of the first proof of each relation; a changed instance;
-   PomFRIT's refresher). Time ≈ 5 min, dominated by the UOV public maps (≈ 2.3 s per key, 156 s
-   for the 64-anchor redemption); Moussaka/Ratatouille issuance ≈ 0.3 s.
+   PomFRIT's refresher). Time ≈ 25 s (≈ 5 min before (c) below); Moussaka/Ratatouille issuance
+   ≈ 0.12 s, the 64-anchor redemption ≈ 0.8 s.
    CRT tables: `Verifier/CrtData.lean` holds faest-arch-opt's generated matrices
    (`vole_mult_tables.py --preset 128f`); `Verifier/CrtGen.lean` recomputes `W_crt` and `M_tree`
    from the moduli, checks the defining bilinear identity of `F`, `G`, `W_tree`, `W_gate` on all
@@ -146,7 +146,7 @@ is part of milestone 6.
    Done since: (a) pqov key generation (`Verifier/Keygen.lean`: `generate_keypair_pkc` of
    uov-Ip-pkc, `SHAKE256(sk_seed) = pk_seed ‖ O`, `P1 ‖ P2` from the AES-128-CTR public-input PRG,
    `calculate_F2_P3`'s `P3 = UT(M + Mᵀ)` with `M = Oᵀ(P1·O + P2)`, table-driven GF(256) loops on
-   `ByteArray`s, ≈ 0.12 s per key, 8 s for the 64 KAT keys); `Verifier/Kats.lean` and
+   `ByteArray`s, ≈ 0.08 s per key, 5 s for the 64 KAT keys); `Verifier/Kats.lean` and
    `Spec/Kats.lean` derive every UOV key from the KATs' compact secret keys, and compare with
    `verifier_keys.txt` (64 of 64 compressed keys equal) and `uov_keys.txt` only when present;
    (b) `Verifier/CrtSearch.lean` ports `vole_mult_tables.py` for `128f` (tree moduli, the cost
@@ -154,7 +154,22 @@ is part of milestone 6.
    elimination, `build_tables`, `prune`); its `F`, `G`, `W_tree`, `W_gate` (25 places, 312
    gates) equal `CrtData`'s, checked by `verifier_vectors`. `CrtData` stays the verifier's source
    (the regenerated tables are compared with it, not substituted).
-   Still open: (c) speed: the UOV evaluation goes through `Expr` trees and `GF128.mul` (≈ 1.7 µs).
+   (c) speed (`verifier_vectors` 5 min 20 s → 26 s, `spec_kats` 3.5 min → 16 s, same results).
+   The UOV constraints went through `Expr` trees: per monomial, `combineVec` (45 · 9 products) and
+   the 8-product byte loads were recomputed, ≈ 2.3 s per key. `Verifier/UovEval.lean` evaluates
+   `qs_eval_combined_public_map`'s loop on values (`publicMapValue`, equal to `Expr.eval` of
+   `evalCombinedPublicMap` for any `+ *`), with the coefficient of a monomial read from the table
+   `l_k·ι(a)` (`combTab`, 45 lookups) and the 119 loaded bytes computed once per proof and shared
+   by all Anchors (≈ 10 ms per key); `moussakaRedeemValues`, `ratatouilleSpendValues`,
+   `pomfritRedeemValues` replace only the UOV term and are proved equal to the `Arith/*`
+   evaluators (`*_eq`), which `Bridge/Relations.lean`'s `*_values` now go through, so the bridge
+   theorems are about what runs. `GF128.mul` is compiled as `mulFast` (`@[csimp]
+   mul_eq_mulFast`, `Arith/GF.lean`): the same shift-and-add on four unboxed `UInt64`s with the
+   bit read by a mask, proved equal by induction, ≈ 0.3 µs instead of 1.7 µs (KOS 12-60 ms →
+   2-11 ms). Outside QuickSilver: AES `encrypt` uses the four round tables (ConvertToVOLE
+   110-490 ms → 31-121 ms per proof; checked by the FIPS `#guard`s and the vectors), and
+   `CrtGen.dot` (the identity check, run at start-up) XORs 64-bit limbs instead of clearing bits
+   one by one (≈ 22 s → 5 s).
 7. **Done:** label-rows variant behind `Params.labelRows` (`Proof.lean`: correction rows/bytes and
    label-row offset; `VOLE.lean`: gate labels from rows `o … o + 127` of each column, lifted rows
    and mask rows relative to `correctionRows`; `Relations.lean`: `(labelRows := …)` on every
@@ -162,7 +177,7 @@ is part of milestone 6.
    (`pomfritTarget`; `Spec.PomFRIT` hard-codes `main`'s, checked by a `#guard`); `KOS.lean` and
    `QuickSilver.lean` needed no change). On vectors and KATs from a `voleith-label-rows` build: all
    intermediate values of the five dumped proofs match, all 18 KAT proofs are accepted and 51
-   mutations rejected, ≈ 5 min. `main`'s checks are unchanged.
+   mutations rejected, ≈ 26 s. `main`'s checks are unchanged.
 8. **Partly done: bridges** (`Verifier/Bridge/*`, proofs, no tests; no `sorry`/`axiom`/
    `native_decide`):
    * `CtrInput.lean`: `lanes (ctrBlock iv c t) = Commitments.ctrInput (lanes iv) c t`;

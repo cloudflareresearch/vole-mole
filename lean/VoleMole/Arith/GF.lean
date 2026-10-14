@@ -34,6 +34,11 @@ the kernel) that these operations make `GF128` the field GF(2¹²⁸) and provid
   with an integer product, and bits are read with `BitVec.getLsbD`.
 `lake exe arith_vectors` additionally checks all 65536 sums and products at run time, and checks
 `GF128` and `GF256` multiplication, `β` and `ι` against the C++ (`lean/vectors/field.txt`).
+
+## Execution
+
+`GF128.mul` is compiled as `mulFast` (`@[csimp] mul_eq_mulFast`): the same shift-and-add on four
+unboxed words, proved equal to `mul` by induction (`mulW_eq`), ≈ 5× faster.
 -/
 
 namespace VoleMole.Arith
@@ -73,6 +78,45 @@ def mulWord : Nat → UInt64 → GF128 → GF128 → GF128 × GF128
 def mul (a b : GF128) : GF128 :=
   let r := mulWord 64 a.lo 0 b
   (mulWord 64 a.hi r.1 r.2).1
+
+/-- `mulWord` with the state in four unboxed words and the bit read by a mask (the compiled `mul`:
+`mulWord` allocates two `GF128`s per step and reads bits through `toBitVec`, ≈ 1.7 µs per product,
+this ≈ 0.3 µs). Returns `(acc, p Xⁿ)` as `mulWord` does (`mulW_eq`). -/
+def mulW : Nat → UInt64 → UInt64 → UInt64 → UInt64 → UInt64 → GF128 × GF128
+  | 0, _, aLo, aHi, pLo, pHi => (⟨aLo, aHi⟩, ⟨pLo, pHi⟩)
+  | n + 1, w, aLo, aHi, pLo, pHi =>
+    let c := pHi >>> 63 -- `mulX`, written out
+    let pLo' := (pLo <<< 1) ^^^ c ^^^ (c <<< 1) ^^^ (c <<< 2) ^^^ (c <<< 7)
+    let pHi' := (pHi <<< 1) ^^^ (pLo >>> 63)
+    if w &&& 1 != 0 then mulW n (w >>> 1) (aLo ^^^ pLo) (aHi ^^^ pHi) pLo' pHi'
+    else mulW n (w >>> 1) aLo aHi pLo' pHi'
+
+/-- `mul` by `mulW`. -/
+def mulFast (a b : GF128) : GF128 :=
+  let r := mulW 64 a.lo 0 0 b.lo b.hi
+  (mulW 64 a.hi r.1.lo r.1.hi r.2.lo r.2.hi).1
+
+theorem and_one_ne_zero (w : UInt64) : (w &&& 1 != 0) = w.toBitVec.getLsbD 0 := by
+  rw [Bool.eq_iff_iff, bne_iff_ne, ne_eq, ← UInt64.toBitVec_inj, UInt64.toBitVec_and,
+    show UInt64.toBitVec 1 = 1#64 from rfl, show UInt64.toBitVec 0 = 0#64 from rfl,
+    BitVec.and_one_eq_setWidth_ofBool_getLsbD]
+  cases w.toBitVec.getLsbD 0 <;> decide
+
+theorem mulW_eq (n : Nat) (w aLo aHi pLo pHi : UInt64) :
+    mulW n w aLo aHi pLo pHi = mulWord n w ⟨aLo, aHi⟩ ⟨pLo, pHi⟩ := by
+  induction n generalizing w aLo aHi pLo pHi with
+  | zero => rfl
+  | succ n ih =>
+    simp only [mulW, mulWord, and_one_ne_zero]
+    split <;> rw [ih] <;> rfl
+
+/-- The compiler runs `mul` as `mulFast` (`@[csimp]`: a proved equation, not a trusted
+replacement), so every executable product, including the verifier's, is the `mul` the proofs are
+about. -/
+@[csimp] theorem mul_eq_mulFast : @mul = @mulFast := by
+  funext a b
+  simp only [mul, mulFast, mulW_eq]
+  rfl
 
 instance : Mul GF128 := ⟨mul⟩
 

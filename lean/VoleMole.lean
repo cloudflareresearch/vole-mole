@@ -57,6 +57,7 @@ import VoleMole.Verifier.VOLE
 import VoleMole.Verifier.KOS
 import VoleMole.Verifier.QuickSilver
 import VoleMole.Verifier.Verify
+import VoleMole.Verifier.UovEval
 import VoleMole.Verifier.Relations
 import VoleMole.Verifier.Kats
 import VoleMole.Verifier.CrtData
