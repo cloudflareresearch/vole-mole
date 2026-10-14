@@ -14,7 +14,7 @@ proof size.
 |:------------|:---------------------------|:----------|--------:|---------:|
 | PomFRIT     | `issue_request`            | Client    | 45 B    | 0.26 ms  |
 |             | `issue_response`           | Issuer    | 119 B   | 0.013 ms |
-|             | `finalize_issue`           | Client    | 5387 B  | 0.19 ms  |
+|             | `finalize_issue`           | Client    | 5690 B  | 0.19 ms  |
 |             | `verify`                   | Verifier  | —       | 0.37 ms  |
 | Moussaka    | `issue_request`            | Client    | 7317 B  | 0.60 ms  |
 |             | `issue_response`           | Anchor    | 119 B   | 0.36 ms  |
@@ -34,14 +34,14 @@ proof size.
 
 ## Smaller proofs
 
-With the FAEST-EM-128s parameters, which favor size, proofs would be 22–31%
+With the FAEST-EM-128s parameters, which favor size, proofs would be 24–31%
 smaller, but proving and verifying would be roughly 1.3–7× slower:
 
 | Protocol    | Step                       | Party     | Sends   | Time     |
 |:------------|:---------------------------|:----------|--------:|---------:|
 | PomFRIT     | `issue_request`            | Client    | 45 B    | 1.76 ms  |
 |             | `issue_response`           | Issuer    | 119 B   | 0.013 ms |
-|             | `finalize_issue`           | Client    | 4179 B  | 0.46 ms  |
+|             | `finalize_issue`           | Client    | 4278 B  | 0.46 ms  |
 |             | `verify`                   | Verifier  | —       | 1.95 ms  |
 | Moussaka    | `issue_request`            | Client    | 5557 B  | 2.47 ms  |
 |             | `issue_response`           | Anchor    | 119 B   | 2.02 ms  |

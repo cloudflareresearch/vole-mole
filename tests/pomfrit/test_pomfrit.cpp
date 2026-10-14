@@ -126,9 +126,9 @@ TEST(Pomfrit, RejectsWrongKey) {
 TEST(Pomfrit, RejectsTamperedSignature) {
     const auto& [pk, sk] = uov_key_pair();
     const BlindSignature sig = issue(pk, sk, MSG);
-    const std::array<std::pair<const char*, size_t>, 12> fields = {{
+    static_assert(Proof::SIZE_VOLE_COMMITMENT_CMULT == 0);
+    const std::array<std::pair<const char*, size_t>, 11> fields = {{
         {"vole_commitment_corrections", Proof::OFFSET_VOLE_COMMITMENT_CORRECTIONS},
-        {"vole_commitment_cmult", Proof::OFFSET_VOLE_COMMITMENT_CMULT},
         {"vole_check_proof", Proof::OFFSET_VOLE_CHECK_PROOF},
         {"correction of r", Proof::OFFSET_CORRECTION},
         {"correction of s", Proof::OFFSET_CORRECTION + uov::M},

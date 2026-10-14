@@ -19,6 +19,23 @@
 //    relation may use it to derive public randomness, e.g., to replace a set of constraints by a
 //    random linear combination of them.
 //
+// Zero knowledge: FAEST's analysis assumes the witness is secret from the verifier, and the proof
+// is not zero-knowledge in general if the verifier knows some of the witness bits. In particular,
+// with CRT VOLE masks (FAEST v3), the masks that hide the VOLE check and the QuickSilver proof are
+// derived from AND-gate labels whose offset is the prover's VOLE input u on the first lambda
+// witness rows. The proof publishes the correction d = u + w on these rows, so a verifier who knows
+// w[0..lambda) learns u there, computes both labels of every gate, and unmasks the VOLE check and
+// QuickSilver proof. Thus a relation that uses CRT VOLE masks must ensure that the first lambda
+// witness bits are unpredictable to the verifier, i.e., have about lambda bits of min-entropy given
+// everything the verifier knows. The simplest way to ensure this, and the setting of FAEST's
+// analysis, is for them to be uniformly random and secret, as FAEST's OWF key is.
+//
+// PomFRIT is an example where this doesn't hold: the redemption witness begins with the target mask
+// r, which the Issuer can compute from the target it signed during issuance. If the proof used CRT
+// VOLE masks, the Issuer could link a redemption to its issuance. Instead, PomFRIT's proof gets its
+// masks from additional VOLE rows (CRT_VOLE_MASKS = false), which the proof corrects across the
+// small VOLEs but never corrects to the witness, so u on them is uniform and secret.
+//
 // This code was adapted from faest-arch-opt, which is distributed under the following license:
 //
 //   Copyright (c) 2023 FAEST Team
@@ -44,12 +61,17 @@
 #ifndef VOLE_MOLE_VOLEITH_HPP
 #define VOLE_MOLE_VOLEITH_HPP
 
-#include "block.hpp"          // from faest-arch-opt
-#include "faest_sig.hpp"      // from faest-arch-opt
-#include "hash.hpp"           // from faest-arch-opt
-#include "kos_vole_check.hpp" // from faest-arch-opt
-#include "quicksilver.hpp"    // from faest-arch-opt
-#include "vole_commit.hpp"    // from faest-arch-opt
+#include "block.hpp"            // from faest-arch-opt
+#include "constants.hpp"        // from faest-arch-opt
+#include "faest_sig.hpp"        // from faest-arch-opt
+#include "hash.hpp"             // from faest-arch-opt
+#include "kos_vole_check.hpp"   // from faest-arch-opt
+#include "quicksilver.hpp"      // from faest-arch-opt
+#include "small_vole.hpp"       // from faest-arch-opt
+#include "transpose_secpar.hpp" // from faest-arch-opt
+#include "util.hpp"             // from faest-arch-opt
+#include "vole_check.hpp"       // from faest-arch-opt
+#include "vole_commit.hpp"      // from faest-arch-opt
 // faest-arch-opt only instantiates these templates for its own parameter sets, so we include the
 // implementations to instantiate them for ours.
 #include "small_vole.inc"  // from faest-arch-opt; NOLINT(misc-include-cleaner)
@@ -155,7 +177,7 @@ voleith_vole_gen(proof_span<Relation> proof_bytes, const typename Relation::inst
     using P = relation_params<Relation>;
     using CP = P::CONSTS;
     constexpr auto S = P::secpar_v;
-    static_assert(P::use_crt_vole_masks && P::use_grinding && P::use_v3_hash_inputs,
+    static_assert(P::use_grinding && P::use_v3_hash_inputs,
                   "only the FAEST v3 code path is implemented");
 
     const mutable_faest_signature<P> proof = proof_bytes.data();
@@ -200,16 +222,27 @@ voleith_vole_gen(proof_span<Relation> proof_bytes, const typename Relation::inst
     auto& vole_com_data = *allocated_vole_com_data;
 
     std::array<uint8_t, CP::VOLE_COMMIT_CHECK_SIZE> vole_commit_check;
-    crt_vole_commit<P>(seed, iv, vole_com_data, proof.vole_commitment_corrections(),
-                       vole_commit_check, proof.vole_commitment_cmult());
+    if constexpr (P::use_crt_vole_masks) {
+        crt_vole_commit<P>(seed, iv, vole_com_data, proof.vole_commitment_corrections(),
+                           vole_commit_check, proof.vole_commitment_cmult());
+    } else {
+        vole_commit<P>(seed, iv, vole_com_data, proof.vole_commitment_corrections(),
+                       vole_commit_check);
+        static_assert(CP::QUICKSILVER_ROWS_PADDED % TRANSPOSE_BITS_ROWS == 0);
+        transpose_secpar<S>(vole_com_data.v_columns().data(), vole_com_data.v().data(),
+                            CP::VOLE_COL_STRIDE, CP::QUICKSILVER_ROWS_PADDED);
+    }
 
-    // chal1 <- H_2^1(mu || com || c_1 || ... || c_\tau-1 || c_mult || iv_pre || chal1_binder)
+    // chal1 <- H_2^1(mu || com || c_1 || ... || c_\tau-1 || [c_mult] || iv_pre || chal1_binder),
+    // where c_mult is included only with CRT VOLE masks.
     std::array<uint8_t, CP::VOLE_CHECK::CHALLENGE_BYTES> chal1;
     hasher.init(S);
     hasher.update(&mu, sizeof(mu));
     hasher.update(vole_commit_check);
     hasher.update(proof.vole_commitment_corrections());
-    hasher.update(proof.vole_commitment_cmult());
+    if constexpr (P::use_crt_vole_masks) {
+        hasher.update(proof.vole_commitment_cmult());
+    }
     hasher.update(&iv_pre, sizeof(iv_pre));
     hasher.update(chal1_binder);
     hasher.update_byte(8 + 1); // domain separator for H_2^1
@@ -220,10 +253,16 @@ voleith_vole_gen(proof_span<Relation> proof_bytes, const typename Relation::inst
     hash_state chal2_hasher;
     chal2_hasher.init(S);
     chal2_hasher.update(chal1);
-    kos_vole_check_sender<P>(
-        vole_com_data.u_bytes().template subspan<0, CP::VOLE_CORRECTION_BYTES>(),
-        vole_com_data.v().template subspan<0, CP::VOLE_CORRECTION_ROWS>(), vole_com_data.u_mask(),
-        vole_com_data.v_mask(), chal1, proof.vole_check_proof(), chal2_hasher);
+    if constexpr (P::use_crt_vole_masks) {
+        kos_vole_check_sender<P>(
+            vole_com_data.u_bytes().template subspan<0, CP::VOLE_CORRECTION_BYTES>(),
+            vole_com_data.v().template subspan<0, CP::VOLE_CORRECTION_ROWS>(),
+            vole_com_data.u_mask(), vole_com_data.v_mask(), chal1, proof.vole_check_proof(),
+            chal2_hasher);
+    } else {
+        vole_check_sender<P>(vole_com_data.u().data(), vole_com_data.v_columns().data(),
+                             chal1.data(), proof.vole_check_proof().data(), chal2_hasher);
+    }
 
     // d = u + w: compute corrections for the witness prefix.
     const auto u = vole_com_data.u_bytes();
@@ -257,7 +296,7 @@ void voleith_prove_commit(proof_span<Relation> proof_bytes,
     using CP = P::CONSTS;
     using OC = P::OWF_CONSTS;
     constexpr auto S = P::secpar_v;
-    static_assert(P::use_crt_vole_masks && P::use_grinding && P::use_v3_hash_inputs,
+    static_assert(P::use_grinding && P::use_v3_hash_inputs,
                   "only the FAEST v3 code path is implemented");
 
     auto& [chal1, hasher, vole_com_data, delayed_instance, witness] = pending;
@@ -284,15 +323,25 @@ void voleith_prove_commit(proof_span<Relation> proof_bytes,
     hasher.update_byte(8 + 2); // domain separator for H_2^2
     hasher.finalize(chal2);
 
-    // QuickSilver: With CRT VOLECommit, the VOLE tags v for the witness bits are the first
-    // WITNESS_BITS entries of v, and the masks are separate.
-    quicksilver_state<S, false, OC::QS_DEGREE> qs(witness.data(), vole_com_data.v().data(),
+    // QuickSilver: The VOLE tags v for the witness bits are the first WITNESS_BITS entries of v.
+    // With CRT VOLE masks, the masks are separate. Otherwise, the masks are the VOLE rows following
+    // the witness, and QuickSilver reads both the witness and the masks' values from u.
+    const uint8_t* qs_witness = witness.data();
+    if constexpr (!P::use_crt_vole_masks) {
+        std::ranges::copy(witness, u.begin());
+        qs_witness = u.data();
+    }
+    quicksilver_state<S, false, OC::QS_DEGREE> qs(qs_witness, vole_com_data.v().data(),
                                                   Relation::NUM_CONSTRAINTS, chal2.data());
     Relation::constraints(&qs, instance, std::span<const uint8_t, CP::QS::CHALLENGE_BYTES>(chal2));
 
     std::array<uint8_t, CP::QS::CHECK_BYTES> qs_check;
-    qs.prove(vole_com_data.u_mask().data(), vole_com_data.v_mask().data(), proof.qs_proof().data(),
-             qs_check.data());
+    if constexpr (P::use_crt_vole_masks) {
+        qs.prove(vole_com_data.u_mask().data(), vole_com_data.v_mask().data(),
+                 proof.qs_proof().data(), qs_check.data());
+    } else {
+        qs.prove(OC::WITNESS_BITS, proof.qs_proof().data(), qs_check.data());
+    }
 
     // chal3 <- H_2^3(chal2 || \tilde{a}_0 || \tilde{a}_1 || ... || ctr), where ctr is chosen
     // such that the last w_grind bits of chal3 are zero ("grinding").
@@ -336,7 +385,7 @@ void voleith_prove(proof_span<Relation> proof_bytes, witness_span<Relation> witn
 template <typename Relation> struct PendingVerification {
     std::array<uint8_t, relation_params<Relation>::CONSTS::VOLE_CHECK::CHALLENGE_BYTES> chal1;
     faest::vole_commit_data<relation_params<Relation>, true> vole_com_data;
-    faest::block_secpar<relation_params<Relation>::secpar_v> delta; // lifted
+    faest::block_secpar<relation_params<Relation>::secpar_v> delta; // lifted with CRT VOLE masks
     bool delayed_instance;
 };
 
@@ -386,20 +435,33 @@ voleith_vole_reconstruct(const_proof_span<Relation> proof_bytes,
     auto& vole_com_data = *allocated_vole_com_data;
 
     std::array<uint8_t, CP::VOLE_COMMIT_CHECK_SIZE> vole_commit_check;
-    if (!crt_vole_reconstruct<P>(iv, vole_com_data, delta, proof.vole_commitment_corrections(),
-                                 proof.veccom_open(), vole_commit_check,
-                                 proof.vole_commitment_cmult())) {
-        return std::nullopt;
+    if constexpr (P::use_crt_vole_masks) {
+        if (!crt_vole_reconstruct<P>(iv, vole_com_data, delta, proof.vole_commitment_corrections(),
+                                     proof.veccom_open(), vole_commit_check,
+                                     proof.vole_commitment_cmult())) {
+            return std::nullopt;
+        }
+        delta = crt_lift_delta<P>(delta);
+    } else {
+        std::array<uint8_t, P::delta_bits_v> delta_bytes;
+        expand_bits_to_bytes(delta_bytes.data(), P::delta_bits_v, proof.delta().data());
+        if (!vole_reconstruct<P>(iv, vole_com_data, delta_bytes.data(),
+                                 proof.vole_commitment_corrections(), proof.veccom_open(),
+                                 vole_commit_check)) {
+            return std::nullopt;
+        }
     }
-    delta = crt_lift_delta<P>(delta);
 
-    // chal1 <- H_2^1(mu || com || c_1 || ... || c_\tau-1 || c_mult || iv_pre || chal1_binder)
+    // chal1 <- H_2^1(mu || com || c_1 || ... || c_\tau-1 || [c_mult] || iv_pre || chal1_binder),
+    // where c_mult is included only with CRT VOLE masks.
     std::array<uint8_t, CP::VOLE_CHECK::CHALLENGE_BYTES> chal1;
     hasher.init(S);
     hasher.update(&mu, sizeof(mu));
     hasher.update(vole_commit_check);
     hasher.update(proof.vole_commitment_corrections());
-    hasher.update(proof.vole_commitment_cmult());
+    if constexpr (P::use_crt_vole_masks) {
+        hasher.update(proof.vole_commitment_cmult());
+    }
     hasher.update(proof.iv_pre());
     hasher.update(chal1_binder);
     hasher.update_byte(8 + 1); // domain separator for H_2^1
@@ -435,11 +497,22 @@ bool voleith_verify_commit(const_proof_span<Relation> proof_bytes,
     // chal2 <- H_2^2(chal1 || \tilde{u} || h_V || [mu] || chal2_binder || d),
     // where mu is included only for delayed instance binding.
     std::array<uint8_t, CP::QS::CHALLENGE_BYTES> chal2;
+    [[maybe_unused]] std::array<uint8_t, P::delta_bits_v> delta_bytes;
+    if constexpr (!P::use_crt_vole_masks) {
+        expand_bits_to_bytes(delta_bytes.data(), P::delta_bits_v, proof.delta().data());
+    }
+
     hasher.init(S);
     hasher.update(chal1);
-    kos_vole_check_receiver<P>(delta,
-                               vole_com_data.q().template subspan<0, CP::VOLE_CORRECTION_ROWS>(),
-                               vole_com_data.q_mask(), chal1, proof.vole_check_proof(), hasher);
+    if constexpr (P::use_crt_vole_masks) {
+        kos_vole_check_receiver<P>(
+            delta, vole_com_data.q().template subspan<0, CP::VOLE_CORRECTION_ROWS>(),
+            vole_com_data.q_mask(), chal1, proof.vole_check_proof(), hasher);
+    } else {
+        hasher.update(proof.vole_check_proof());
+        vole_check_receiver<P>(vole_com_data.q_columns().data(), delta_bytes.data(), chal1.data(),
+                               proof.vole_check_proof().data(), hasher);
+    }
     if (delayed_instance) {
         const auto mu = hash_mu<Relation>(&instance);
         hasher.update(&mu, sizeof(mu));
@@ -450,14 +523,23 @@ bool voleith_verify_commit(const_proof_span<Relation> proof_bytes,
     hasher.finalize(chal2);
 
     // Apply the correction d to the verifier's VOLE keys: q_i += d_i * Delta.
-    {
-        const auto d = proof.correction();
+    const auto d = proof.correction();
+    if constexpr (P::use_crt_vole_masks) {
         const auto q = vole_com_data.q();
         for (size_t i = 0; i < CP::VOLE_CORRECTION_ROWS; ++i) {
             if ((d[i / 8] >> (i % 8)) & 1) {
                 q[i] = q[i] ^ delta;
             }
         }
+    } else {
+        // vole_block is defined in an architecture-specific header included by block.hpp.
+        std::array<vole_block, CP::WITNESS_BLOCKS> d_blocks{}; // NOLINT(misc-include-cleaner)
+        memcpy(d_blocks.data(), d.data(), d.size());
+        vole_receiver_apply_correction<P>(CP::WITNESS_BLOCKS, P::delta_bits_v, d_blocks.data(),
+                                          vole_com_data.q_columns().data(), delta_bytes.data());
+        static_assert(CP::QUICKSILVER_ROWS_PADDED % TRANSPOSE_BITS_ROWS == 0);
+        transpose_secpar<S>(vole_com_data.q_columns().data(), vole_com_data.q().data(),
+                            CP::VOLE_COL_STRIDE, CP::QUICKSILVER_ROWS_PADDED);
     }
 
     quicksilver_state<S, true, OC::QS_DEGREE> qs(vole_com_data.q().data(),
@@ -465,7 +547,11 @@ bool voleith_verify_commit(const_proof_span<Relation> proof_bytes,
     Relation::constraints(&qs, instance, std::span<const uint8_t, CP::QS::CHALLENGE_BYTES>(chal2));
 
     std::array<uint8_t, CP::QS::CHECK_BYTES> qs_check;
-    qs.verify(vole_com_data.q_mask().data(), proof.qs_proof().data(), qs_check.data());
+    if constexpr (P::use_crt_vole_masks) {
+        qs.verify(vole_com_data.q_mask().data(), proof.qs_proof().data(), qs_check.data());
+    } else {
+        qs.verify(OC::WITNESS_BITS, proof.qs_proof().data(), qs_check.data());
+    }
 
     // chal3 <- H_2^3(chal2 || \tilde{a}_0 || \tilde{a}_1 || ... || ctr)
     block_secpar<S> delta_check;

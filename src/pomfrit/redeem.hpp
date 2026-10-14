@@ -11,7 +11,7 @@
 // 2. We also need to confirm that each bit of witness is a bit, which adds 8 * (M + N) = 1312
 // constraints of degree 2.
 //
-// We use the VOLE-in-the-Head parameters of FAEST-EM-128f v3.
+// We use the VOLE-in-the-Head parameters of FAEST-EM-128f v3, but without CRT VOLE masks.
 
 #ifndef VOLE_MOLE_POMFRIT_REDEEM_HPP
 #define VOLE_MOLE_POMFRIT_REDEEM_HPP
@@ -69,12 +69,14 @@ namespace vole_mole::pomfrit::detail {
 
 using namespace vole_mole::detail;
 
-// Same as faest::v3::faest_em_128_f.
+// Same as faest::v3::faest_em_128_f, but without CRT VOLE masks. The Issuer can compute the target
+// mask r, which is the first lambda bits of the witness, so CRT VOLE masks would allow it to link
+// redemption to issuance.
 using RedeemParams =
     faest::parameter_set<faest::secpar::s128, /* TAU */ 17, OWF_REDEEM, faest::prg::aes_ctr,
                          faest::prg::aes_ctr, faest::leaf_hash::aes_ctr, /* W_GRIND */ 8,
                          {faest::bavc::one_tree, /* T_OPEN */ 105},
-                         /* CRT_VOLE_MASKS */ true, /* HASH_INPUTS_V3 */ true>;
+                         /* CRT_VOLE_MASKS */ false, /* HASH_INPUTS_V3 */ true>;
 
 namespace check {
 using EM128F = faest::v3::faest_em_128_f;
@@ -83,7 +85,7 @@ static_assert(RedeemParams::tau_v == EM128F::tau_v);
 static_assert(RedeemParams::delta_bits_v == EM128F::delta_bits_v);
 static_assert(RedeemParams::vole_prg_v == EM128F::vole_prg_v);
 static_assert(RedeemParams::leaf_hash_v == EM128F::leaf_hash_v);
-static_assert(RedeemParams::use_crt_vole_masks == EM128F::use_crt_vole_masks);
+static_assert(!RedeemParams::use_crt_vole_masks && EM128F::use_crt_vole_masks);
 static_assert(RedeemParams::use_v3_hash_inputs == EM128F::use_v3_hash_inputs);
 static_assert(RedeemParams::use_grinding == EM128F::use_grinding);
 } // namespace check
