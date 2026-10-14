@@ -48,7 +48,9 @@ Line references are to the working tree at commit `6d7113e`.
     total challenge width. It is wrong only with probability `2^{−71}` per H₂³ query.
   - This loss is a reduction artifact, not an attack (§6.3).
 - **F2 (blindness, `main`).** Confirmed. The fix is necessary and, with this note's proof,
-  sufficient.
+  sufficient. [Lean] `ZK/Relations.lean`: in every honest run the Issuer's `t ⊕ h(σ)` is `r`
+  (`issuerGuess_eq`), its sibling-label query hits on every tape and the attack test accepts every
+  real proof (`pomfrit_issuer_hits`, `pomfrit_attack_test`; `lean/docs/zk.md` §4.1).
 - **F3 (owner malleability).** `verify` does not check that `ctr` is minimal
   (`faest_sig.hpp:126-135`), so a Client can re-randomize its own signature. Demonstrated in
   `scratchpad/demo/ctr_malleability.cpp`: two distinct signatures on one message, from one Issuer

@@ -47,11 +47,11 @@ the flag and are unchanged.
 
 | Relation | `main` (labels on `w[0..λ)`) | Patched (dedicated label rows) |
 |---|---|---|
-| PomFRIT redeem (blind signature) | **Fails** against the Issuer, which can compute `r = t ⊕ h` (§4). Blindness is broken. | ZK; blindness no longer fails on this account |
-| Moussaka issue | ZK under (PU), computational (one-wayness of the Keccak-p[800] commitment in `r`) | ZK, statistical in `w` |
-| Moussaka redeem | ZK under (PU), with margin exactly 2¹²⁸ | ZK, statistical in `w` |
-| Ratatouille issue | ZK under (PU), computational | ZK, statistical in `w` |
-| Ratatouille spend | ZK under (PU), computational | ZK, statistical in `w` |
+| PomFRIT redeem (blind signature) | **Fails** against the Issuer, which can compute `r = t ⊕ h` (§4). Blindness is broken. [Lean, §4.1] | ZK; blindness no longer fails on this account |
+| Moussaka issue | ZK under (PU), computational (one-wayness of the Keccak-p[800] commitment in `r`). Bad event `≤ q·ε_PU` [Lean, §4.1] | ZK, statistical in `w` |
+| Moussaka redeem | ZK under (PU), with margin exactly 2¹²⁸: towards a verifier that has no information on `r` (the Moderator), `ε_PU = 2⁻¹²⁸` exactly, with no assumption [Lean, §4.1]; towards a colluding Anchor (knows `t`), computational as for issue | ZK, statistical in `w` |
+| Ratatouille issue | ZK under (PU), computational [Lean, §4.1] | ZK, statistical in `w` |
+| Ratatouille spend | ZK under (PU), computational [Lean, §4.1] | ZK, statistical in `w` |
 
 The rest of the construction checks out on both code versions (§§5–7):
 - The 4 + (d − 1) CRT masks hide the VOLE-check and QuickSilver responses.
@@ -251,6 +251,89 @@ likely has the same problem, because there `u[0..λ)` would be `r` directly.
 regression test `Pomfrit.LabelOffsetIsNotDeterminedByCorrectionAndWitness`
 (`tests/pomfrit/test_pomfrit.cpp`, branch) checks this, and §6 H6 bounds every other way of
 reaching the sibling label.
+
+### 4.1 ZK on `main` under (PU): what is mechanized
+
+`lean/VoleMole/ZK/Main.lean` and `ZK/Relations.lean` mechanize the (PU) hop on `main`: the
+counterpart of H6 for the unpatched layout, where the sibling label is `L^{γ_e} ⊕ d[0..λ) ⊕
+w[0..λ)` (`sibling_eq`).
+
+**Model.** As `LabelRows.lean`, but with the label rows equal to the first λ witness rows: the tape
+is the tree outputs `(u₀, u_i)` on the witness rows (uniform after H4), the view is `d = u₀ ⊕ w`,
+`c_i = u₀ ⊕ u_i` and the forced labels (a function `forcedOf` of public data), and
+`Θ = π(u₀)`, with `π` the projection to the first λ rows (`mainView`). For several proofs that
+share a secret (a token's issuance and redemption proofs, both with `r` first), `MainLayout`
+abstracts a family of such views with a re-parametrisation of the tapes; `MainLayout.prod` puts
+proofs side by side.
+
+**Statements (all proved, no hypotheses beyond those listed):**
+1. *The view without Θ is witness-independent* (H5, H7 on `main`): `(d, c_i, forced labels)` is
+   uniform on consistent values for every `w` (`mainView_card`, `mainView_indep`), also with the
+   bijectively masked KOS/QuickSilver responses, which may depend on Θ and `w`
+   (`mainView_responses_indep`).
+2. *But Θ is determined by the view and `w[0..λ)`*: `Θ = π(d) − π(w)` (`mainView_theta`); the
+   joint count with `Θ = θ` is 1 iff `θ = π(d) − π(w)` (`mainView_theta_card`). Compare
+   `labelView_theta_card`, where it is 1 for every θ.
+3. *The bad event is exactly prediction.* For a query `(j, X − L^{γ})` computed from auxiliary
+   information `aux(s)` about the secret, the view, and coins `ω` independent of the secret and
+   the tape, `Pr[hit] = Pr[B predicts w_j[0..λ) from aux(s)]`, where `B = MainLayout.predictor Q`
+   runs the query on the view of the zero witness (which needs no secret) and outputs
+   `Θ' − offset` for its own simulated `Θ'` (`MainLayout.prU_hit_eq`, an equality). For `q`
+   queries, `Pr[some query hits] ≤ Σ_k Pr[B_k predicts] ≤ q·ε_PU`
+   (`MainLayout.prU_exists_hit_le`), also when the queries see the responses (the predictor
+   samples them uniformly; `MainLayout.prU_exists_hit_responses_le`). **(PU) is the explicit
+   hypothesis** that each of these `q` predictors (efficient: the adversary plus a simulated view)
+   succeeds with probability `≤ ε_PU`.
+4. *Statistical case*: if `aux` is constant and each label prefix is uniform, every predictor,
+   unbounded, succeeds with probability at most `2^{−λ}` (`prU_guess_le_of_uniform`,
+   `MainLayout.prU_exists_hit_le_of_uniform`).
+5. *Per relation* (`ZK/Relations.lean`), from the `Arith/` witness layouts: the label prefix is
+   `labelOfBytes` of the commitment opening that the constraint systems read, `issueR`
+   (`issue.hpp:58, 95`), `redeemR` (`redeem.hpp:74-75, 114`), `bytesAt w 0` for both Ratatouille
+   relations (`ratatouille/issue.hpp:55, 89`, `spend.hpp:92, 240`): `moussakaIssue_labelPrefix`,
+   `moussakaRedeem_labelPrefix`, `ratatouilleIssue_labelPrefix`, `ratatouilleSpend_labelPrefix`;
+   the honest `Spec/Moussaka.lean` encodings start with `r` (`encodeIssueWitness_take`,
+   `encodeRedeemWitness_take`). With (PU) stated as predicting the 16 opening bytes
+   (`MainLayout.prU_exists_hit_le_opening`): `moussaka_main_zk` and `ratatouille_main_zk` bound the
+   bad event of a token's issuance and redemption (spend) proofs jointly by `q·ε_PU`, with the
+   responses. `moussakaRedeem_main_zk_uniform` gives `q·2⁻¹²⁸` for a redemption verifier whose
+   information does not depend on `r`.
+6. *PomFRIT* (`issuerGuess_eq`, `pomfrit_issuer_hits`, `pomfrit_issuer_prU_hit`,
+   `pomfrit_attack_test`): in every honest run of `Spec/PomFRIT.lean` (correct proof system and
+   signer), the Issuer's guess `t ⊕ hash_to_target(σ)` is exactly `r`, the witness prefix
+   (`WIT_OFF_R = 0`); so for every tape its query `π(d) − r[0..16)` is Θ, its predictor succeeds
+   with probability 1 (the hypothesis of item 3 fails for every `ε_PU < 1`), and the test of
+   Proposition 4.1 accepts every real `c_mult` column for every hash function, while a uniform
+   column passes for only `#S` of `|B|` values (`card_attack_test_ideal`).
+
+**The "margin exactly 2¹²⁸" remark, checked.** The redemption witness is `r ‖ s ‖ …` with
+`R_BYTES = 16 = λ/8` (`redeem.hpp:74-75`), so `w[0..λ)` is exactly `r` (item 5), and `s` starts
+at bit 128. Towards the Moderator, whose view (`nf`, contexts, Anchor Set, the proof) does not
+depend on `r` (it never sees `t`), `ε_PU = 2⁻¹²⁸` holds for every adversary
+(`moussakaRedeem_main_zk_uniform`): the same per-query term as the patched layout, and no more,
+since `r` has exactly 128 bits. Towards an Anchor that also issued the token (it knows
+`t = Com(nf, ctx_iss, ctx_red, r)`), `ε_PU` is the one-wayness of Keccak-p[800] in `r`, as for
+issuance (`security/moussaka.md` §3.2), whose generic estimate `(q+1)/2¹²⁸` again has margin
+exactly 2¹²⁸. The remark is accurate, but only for the non-colluding case it is unconditional.
+
+**Still on paper, for ZK on `main`:**
+- H1–H4 and H8, unchanged from §6 (`ε_rho`, `ε_prog`, `ε_hide`);
+- the identical-until-bad coupling H5 ≈ H6: that the two hybrids agree off the event "some H₅
+  query hits a sibling label" (lazy sampling of H₅ at the sibling points). Only the inequality it
+  feeds is in Lean (`prU_le_add_of_iff_off`);
+- that, before the first hit, an oracle adversary's queries are functions `Q_k(aux, view, ω)` with
+  `ω` (H₅ answers, the uniform `c_mult` of H6, the uniform responses of H7, the grinding outcome)
+  independent of the secret and the tape: the instantiation of item 3 from an oracle adversary;
+- the per-query selection of one proof via `iv` (`ε_iv`) and the union over proofs that are not
+  modelled jointly; the `Q_P·2^{−λ}` term for `Θ = 0`;
+- that the opened seeds and Δ, on which `forcedOf` depends, are fixed (the Lean bound holds for
+  every value) and that the predictor can sample them as the simulator does;
+- the (PU) bound itself for the colluding cases: one-wayness of Keccak-p[800] in `r`, an
+  assumption (`security/moussaka.md` §3.2, `security/ratatouille.md`);
+- the identification of the `main` code with the model (by inspection, `main:` citations above);
+- for PomFRIT, that `rank F ≤ λ < n_mult` (so `#S/|B|` is small); the bit-level link from
+  `Spec/PomFRIT.lean`'s byte `r` to the witness bit vector is a hypothesis (`hw`, the layout of
+  `Arith/PomFRIT.lean`).
 
 ## 5. The simulator
 
@@ -640,14 +723,23 @@ lists only `propext`, `Classical.choice` and `Quot.sound`.
 | **Patched layout:** sibling = forced + Θ (no witness term); a query that is any function of the view hits with probability exactly `2^{−λ}`; `Θ = 0` likewise | `sibling_eq_labelRows`, `query_hits_sibling_iff_labelRows`, `card_query_hits_sibling`, `card_query_hits_sibling_responses`, `card_theta_zero` | H6 |
 | **`main` layout:** sibling = forced + `d` + `w[0..λ)`; one query tests one guess | `sibling_eq`, `query_hits_sibling_iff` | §4 |
 | **`main` layout:** the attack recovers `F·ū` exactly | `attack_recovers` | §4 |
+| **`main` layout:** the view `(d, c_i, forced labels)` is witness-independent (also with the masked responses), but Θ = π(d) − π(w) is determined by it and `w[0..λ)` | `mainView_card`, `mainView_indep`, `mainView_responses_indep`, `mainView_theta`, `mainView_theta_card` | §4.1 |
+| **`main` layout:** `Pr[a query hits a sibling label] = Pr[an explicit predictor guesses w[0..λ) from aux]`; `q` queries (with the responses, several proofs sharing the secret) `≤ q·ε_PU` under (PU) as a hypothesis; `≤ q·2^{−λ}` when aux is constant | `MainLayout.prU_hit_eq`, `MainLayout.prU_exists_hit_le`, `MainLayout.prU_exists_hit_responses_le`, `MainLayout.prU_exists_hit_le_of_uniform`, `MainLayout.prod` | §4.1, H6 |
+| Identical until bad: `Pr[E] ≤ Pr[E'] + Pr[Bad]` if `E`, `E'` agree off `Bad` | `prU_le_add_of_iff_off` | H6 |
+| **`main` layout, per relation:** `w[0..16) = r`, the opening read by the constraint systems; the bound for a token's two proofs jointly; Moussaka redemption towards the Moderator `≤ q·2⁻¹²⁸` | `moussakaIssue_labelPrefix`, `moussakaRedeem_labelPrefix`, `ratatouilleIssue_labelPrefix`, `ratatouilleSpend_labelPrefix`, `encodeIssueWitness_take`, `encodeRedeemWitness_take`, `moussaka_main_zk`, `ratatouille_main_zk`, `moussakaRedeem_main_zk_uniform` | §4.1, §7.1 |
+| **`main` layout, PomFRIT:** the Issuer's `t ⊕ h(σ)` is `r` in every honest run; its sibling query hits with probability 1; the attack test accepts every real proof, a uniform `c_mult` only with probability `#S/|B|` | `issuerGuess_eq`, `pomfrit_issuer_hits`, `pomfrit_issuer_prU_hit`, `pomfrit_attack_test`, `attack_test_real`, `card_attack_test_ideal` | §4, §4.1 |
 | Grinding: first-hit law `|Aᶜ|ⁿ|Ω|^{N−1−n}`, uniform on A, unique; abort law | `card_isFirstHit`, `isFirstHit_uniform_on_A`, `isFirstHit_unique`, `card_noHit` | H2 |
 
 The patched-layout results are in `lean/VoleMole/ZK/LabelRows.lean`. The `main`-layout results
-stay in `Labels.lean`, labelled as statements about the unpatched layout.
+are in `Labels.lean` (sibling label, attack), `Main.lean` (the (PU) bound) and `Relations.lean`
+(per relation, PomFRIT), labelled as statements about the unpatched layout.
 
 **Proved only on paper:**
 - the random-oracle and lazy-sampling steps (H1, H2 programming, H6 identical-until-bad, and the
-  union bound over adaptive H₅ queries, each of which is a function of a Θ-independent view);
+  reduction of adaptive H₅ queries to functions of a Θ-independent view). For the `main` layout,
+  the probability bound that follows (union over `q` queries, each a function of the view, aux
+  and independent coins) is in Lean (§4.1); for the patched layout, the per-query count is
+  (`card_query_hits_sibling_responses`) and the union is on paper;
 - the PRP/GGM hiding (H4/H8, imported from spec Lemma 10.24);
 - the completeness identities (H3);
 - the identification of the Lean model with the C++ (§7.1, by inspection);

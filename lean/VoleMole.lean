@@ -10,6 +10,8 @@ import VoleMole.SeedExtraction
 import VoleMole.ZK.Masking
 import VoleMole.ZK.Labels
 import VoleMole.ZK.LabelRows
+import VoleMole.ZK.Main
+import VoleMole.ZK.Relations
 import VoleMole.ZK.Grinding
 import VoleMole.Seed.Commitments
 import VoleMole.Seed.KOS
