@@ -1,7 +1,8 @@
 # Plan: mechanizing the classical probabilistic steps
 
 Status: **phase A (M1–M3) implemented** in `VoleMole/Prob/` (Mathlib only, no new dependency), with
-the deviations listed in §2a; phase B (M4–M6) not started. Scope: the classical (ROM + ideal cipher) proof of knowledge
+the deviations listed in §2a. **Phase B: M4 done, M5 done** in `VoleMole/ROM/` (VCVio) except the
+items listed at the end of §2b; M6 not started. Scope: the classical (ROM + ideal cipher) proof of knowledge
 of `docs/extraction/README.md`. The ZK hybrids (`docs/zk.md` §10, "proved only on paper") and the
 QROM documents (Q1–Q7) are out of scope here. Notes on ZK are at the end.
 
@@ -53,7 +54,8 @@ So three kinds of work remain:
   round-by-round soundness.
 
 **Version compatibility, concretely.**
-- **Ours:** toolchain `v4.34.0-rc1`, Mathlib tag `v4.34.0-rc1` = `de5ce8a9` (2026-08-11).
+- **Ours:** toolchain `v4.34.0-rc1`, Mathlib tag `v4.34.0-rc1` = `de5ce8a9` (2026-08-11). (Since
+  M4: `v4.34.0`, Mathlib `5ed29652`, VCVio `afa6593f`; §2b.)
 - **VCVio `main`** (`afa6593f`, 2026-10-11) and tag `v4.34.0` (2026-09-17): toolchain `v4.34.0`,
   Mathlib `v4.34.0` = `5ed29652` (2026-09-15). VCVio tracks only stable tags and has never built
   against `-rc1`.
@@ -231,7 +233,66 @@ What phase A does not give, and phase B has to: that the executable verifier's `
 are fresh uniform RO answers on the chain and `l = H(chal2 ‖ dst)` is uniform and independent of
 `chal2` (the M3 statement is over independent samples); the union over queries; L2; `hclaim1`.
 
-### M4 — Mathlib bump and VCVio dependency (Phase B, ~1–3 days, mostly waiting on builds)
+### 2b. Phase B as implemented (M4, M5), and deviations
+
+Files: `ROM/Basic.lean` (M4), `ROM/UnionBound.lean`, `ROM/Fresh.lean`, `ROM/Chains.lean`,
+`ROM/Comb.lean` (M5); `Prob/Bytes.lean` gained `combEquiv`. Only `ROM/` imports VCVio.
+`#print axioms` of the main results: `propext`, `Classical.choice`, `Quot.sound`.
+
+- **The bump** (separate commit): `lean-toolchain`, `lakefile.toml`, `lake-manifest.json` to
+  `v4.34.0` (Mathlib `5ed29652`, the rev VCVio pins), and three fixes: `Arith/GFField.lean`
+  (`irreducible_modulus`: `simpa [hcard]` evaluated `2 ^ 64`, after which the kernel unfolded
+  `X ^ 2 ^ 64` until deep recursion; now `rw`), `Protocols/UOVAssumptions.lean`
+  (`Finset.prod_le_one` is now the ordered-monoid lemma; `prod_le_one₀`), `Seed/CipherSim.lean`
+  (`gcongr` now closes a side goal). No `decide +kernel` proof or heavy computation broke.
+- **VCVio** is pinned to `main` at `afa6593f` (2026-10-11, unchanged since the plan was written),
+  not to the tag `v4.34.0`. New packages: VCVio, PolyFun, cslib. Building what `ROM/` imports takes
+  about 120 modules and 2 minutes (2 threads, under 7 GB). The executables now link VCVio's empty
+  native-backend stubs; all runners pass unchanged.
+- **The oracle specification** is `OracleSpec.ofFn Ans` over `Dom = Kind × ByteArray`, with
+  `Ans (k, x) = Bytes k.outLen`: every domain answers bytes, and `l` is decoded by
+  `combEquiv M : Bytes (16·M) ≃ (Fin M → GF128)` (as `combinationArr` decodes it), so the range is
+  not `Fin 45 → GF128`. `comb M` is indexed by the number of combined equations; `H₁`'s three
+  shapes are one kind. The "domain separation ⇒ independent oracles" lemma is not done: splitting
+  SHAKE into these oracles is a modelling step.
+- **The bridge** is `SampleableType.prEvent_uniformSample` (an event of `$ᵗ α` is a count) against
+  `prU_eq_card`, not `evalDist_selectElem_eq_uniform` and `PMF.toMeasure`.
+- **The union bound exists in VCVio**: `prEvent_randomOracle_le_of_bad_queries[_weighted]`
+  (`QueryTracking/RandomOracle/FreshQuery.lean`). It is stronger than the sketch: the bad predicate
+  `bad t g` may read the whole answer table (eager sampling), provided resampling the cell `t` alone
+  bounds it for every background table, and the event is tied to bad queries by a deterministic
+  implication over complete tables (`htrace`, with `evalWithAnswerFn`, `tableQueryLog`) instead of a
+  logged run. We add per-domain counts (`IsKindQueryBound`, turned into VCVio's weighted budget)
+  and state it as `prEvent_exists_bad_query_le`.
+- **"Parse a prefix from `x`"** became chain data that are functions of the query input and the
+  table, with the hypothesis that they do not read the query's own cell (`ChainData.Committed`; for
+  `H₂²` of the combined relations, no combination cell either, `CombData.Committed`). This is the
+  sketch's "committed keys are a function of the prior log", in the all-table form.
+- **Freshness of `chal2 ‖ dst`** is not from the `Unpredictability`/birthday lemmas. For the combined
+  relations the `H₂²` bad event reads the cell `chal2 ‖ dst`, chosen by the answer, so no single-cell
+  bound holds. `ROM/Fresh.lean` re-proves VCVio's theorem with the bound averaged over the uncached
+  cells of a cache of fewer than `n` keys (`prEvent_randomOracle_le_of_fresh_bad_queries`), and
+  `prEvent_completeTable_le_two_cells` exposes `chal2` and then `l`. The freshness term is
+  `n·2⁻⁴⁴⁸` per `H₂²` query, with `n` the total query count, instead of `q_c·2⁻⁴⁴⁸` (`n ≥ q_c`).
+- **`ε_bind`, `ε_dead`** are named hypotheses on events of the game's output (`bindFail`,
+  `deadFail`, `Pr ≤ ε`), split off by the union bound.
+- **The theorems** (`prEvent_le_chain_terms`, `prEvent_le_comb_terms`, and numerically
+  `moussakaIssue_prEvent_le`, `ratatouilleIssue_prEvent_le`, `moussakaRedeem_prEvent_le`,
+  `ratatouilleSpend_prEvent_le`, `pomfritRedeem_prEvent_le`):
+  `Pr[event] ≤ q₁·2⁻¹⁵⁰ + q₂·(ε_QS(n') [+ 2⁻¹²⁸ + n·2⁻⁴⁴⁸]) + Q·N·2⁻¹²⁸ + ε_bind + ε_dead`, with
+  `N = max(d, 1)` as in M3 (9, or 2 for PomFRIT). The deterministic per-chain part of `htrace` is
+  proved (`chain_good_of_not_bad`, `comb_good_of_not_bad`, instantiated for Moussaka and
+  Ratatouille issuance and PomFRIT): a chain whose `H₂¹` and `H₂²` queries are not bad extracts or
+  has at most `N` accepted `chal3`, and then an accepted `H₂³` answer is a bad query
+  (`chainBad_h23_of_accept`).
+
+Not done in M5: the rest of `htrace` (the accepted proof's chain is in the log with these committed
+data, L2 and `hclaim1`: the "same chain" step of M6); the hash-record refactor of the verifier
+(§3), so the executable verifier is not yet run against the oracle and the event is abstract;
+statement binding before `chall₂` (`(q²+q)·2⁻²⁵⁶`); `*_good_of_not_bad` for Moussaka redemption and
+Ratatouille spend (the generic `comb_good_of_not_bad` applies).
+
+### M4 — Mathlib bump and VCVio dependency (Phase B, ~1–3 days, mostly waiting on builds) — done
 
 - Bump to `v4.34.0` (separate commit). Fix the breakage. Then `require VCVio` and add
   `VoleMole/ROM/Basic.lean`.
@@ -241,7 +302,7 @@ are fresh uniform RO answers on the chain and `l = H(chal2 ‖ dst)` is uniform 
   oracles): `H₂¹ : Bytes* → Bytes 136`, `H₂² → Bytes 56`, `H₂³ → Bytes 16`,
   `H_comb → Fin 45 → GF128`, `H₁`, `H₄`, `H₅`.
 
-### M5 — ROM: union over queries and freshness (Phase B, ~1–2 weeks)
+### M5 — ROM: union over queries and freshness (Phase B, ~1–2 weeks) — done, see §2b
 
 Lazy RO = `OracleSpec.randomOracle` (`uniformSampleImpl.withCaching`), adversary
 `P* : OracleComp spec α` with `IsPerIndexQueryBound P* qb`. Key generic lemma (check

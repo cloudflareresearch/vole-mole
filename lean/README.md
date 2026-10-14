@@ -39,6 +39,7 @@ lean/
     Spec/                   executable protocol specs
     Verifier/               executable VOLEitH verifier and its bridge theorems
     Prob/                   uniform-probability layer: single-challenge bounds, per-chain theorem
+    ROM/                    random-oracle model (VCVio): union bound over queries, per-chain terms
   vectors/                  test vectors dumped by the C++ for the Arith/ cross-check
   docs/
     sketch.md               the maintainer's original design note
@@ -61,7 +62,14 @@ cd lean
 lake exe cache get     # prebuilt Mathlib
 lake build             # the whole library; must finish with no warnings
 lake env lean VoleMole/Arith/UOV.lean    # check a single file
+lake build VoleMole.ROM.Comb             # the random-oracle layer (§9), which needs VCVio
 ```
+
+Toolchain and Mathlib: `v4.34.0`. [VCVio](https://github.com/dtumad/VCV-io) is pinned to a commit
+in `lakefile.toml` and imported only by `VoleMole/ROM/`. It has no prebuilt cache: the first build
+of `VoleMole/ROM/` compiles the part of VCVio, PolyFun and cslib it imports (about 120 modules, about
+2 minutes with 2 threads). The executables link VCVio's native-backend archives as empty stubs
+(`lake` prints `info: … native backend disabled`); nothing here calls them.
 
 The C++ side of the cross-checks runs with the normal test suite:
 
@@ -251,12 +259,12 @@ rejects mutated ones, built from the same models the proofs use. Plan and milest
 | Bridge theorems (`Verifier/Bridge/*`) | partly: proved that the executable CTR blocks are `Seed.Commitments.ctrInput` (and its role separation applies to the verifier's tweaks), that the VOLE check is `Seed.kosValue`, that the QuickSilver check value is `EndToEnd.qsCheck` + `Seed.maskPoly` (including the `Δ^d·f(q/Δ)` shortcut), and that acceptance gives `EndToEnd`'s accepting equation at that transcript. The field embedding is constructed (`Bridge/Concrete.lean`, from `Arith/GFField.lean`) and the theorems that assumed one (`accept_hacc`, `map_constraintKeys`, `map_gfInv`, `map_voleHashReceiver`) are restated at it without that hypothesis. Per relation (`Bridge/Relations.lean`): with `GF128` itself as the field, each relation's evaluator is `System.values` of its `Arith/*` system (`betaFast = beta`, cached UOV coefficients unchanged, the array-based UOV evaluation of `UovEval.lean` equal to the generator's), so acceptance by the executable `verify` gives `EndToEnd`'s accepting equation for that system over GF(2¹²⁸) with no hypothesis (`moussakaIssue_accept`, …, `pomfritVerify_accept`), i.e. `hacc` of `*_extract_gf128` at that Δ. |
 | Bridge across Δ (`Bridge/Lift.lean`, `Columns.lean`, `Chain.lean`, `ChainRelations.lean`) | done, modulo the probabilistic steps: ConvertToVOLE and the CRT step are read as functions of the challenge blocks with the commitments fixed (the steps take `Δ` as bits and the commitments as arguments: `convertToVoleAt`, `crtReconstructAt`). Proved: each column is `V_{i,b} + Δ_{i,b}·u^{(i)}` with `u^{(i)} = c_i + Σ_j PRG(K_{i,j})` (the hidden leaf's key never read), so each lifted witness row is `C_r + Σ_i u^{(i)}_r·e_i(Δ_i)` (`resp_row`); the executable lift `Δ ↦ Σ Δ_c W_CRT[c]` is additive and injective (`lift_injective`, an explicit left inverse checked by `decide +kernel`); an opening that reconstructs the committed keys makes the run equal to the committed response (`crtReconstruct_eq_respAt`). On a chain (fixed `chal1`, `h_V`, `z`; `chal2` determined before Δ), `chain_claim4` gives `Claim4Hyp` and the accepting equation on all of `A` with one remainder `maskPoly d a b ã z` (masks affine by L3); `onChain_of_accept` puts every accepted proof of the chain in `A` with `Δ = chal3`; `*_extract_chain` (five relations) apply `*_extract_gf128`. Assumed: `KOSGood` for `chal1` (L3), `IsFixed` for dead-leaf trees (L2), `hQS`/`hcomb` (L4), `hδ`/`hclaim1` and binding of the leaf commitments (L1). §9 discharges L3, L4 and `hδ` for uniform independent `chal1`, `chal2`, `l` |
 
-### 9. Probabilistic layer, phase A (single challenges, one chain) — `VoleMole/Prob/`
+### 9. Probabilistic layer — `VoleMole/Prob/` (single challenges) and `VoleMole/ROM/` (random oracle)
 
-Plan: `docs/probabilistic-plan.md` (milestones M1–M3, Mathlib only). Every statement is a
-probability `prU α P` under `PMF.uniformOfFintype`, over the byte strings the random oracle returns,
-decoded exactly as the executable verifier decodes them. No oracle model yet: the samples are
-uniform and independent by assumption, which is what the random-oracle steps (M5) will justify.
+Plan: `docs/probabilistic-plan.md`. **Phase A** (`Prob/`, milestones M1–M3, Mathlib only): every
+statement is a probability `prU α P` under `PMF.uniformOfFintype`, over the byte strings the random
+oracle returns, decoded exactly as the executable verifier decodes them. The samples are uniform and
+independent by assumption; phase B justifies this per query.
 
 | Piece | Status |
 |---|---|
@@ -264,12 +272,35 @@ uniform and independent by assumption, which is what the random-oracle steps (M5
 | `Prob/Bytes.lean` | done: `Bytes n`; the little-endian words determine the bytes (`word_byte`); `gf128OfBytesEquiv : Bytes 16 ≃ GF128`, `chal1Equiv : Bytes 136 ≃ Seed.Ch GF128 shortKeys` (forward map `chOf`), `chal2Equiv : Bytes 56 ≃ GF128³ × shortKeys` (the `zkCoeff` arguments), `card_shortKeys = 2⁶⁴` (no enumeration); `hδ` deterministically: the `2¹²⁰` admissible `chal3` (`check_format`) decode injectively into blocks (`deltaBlocks_injOn`), and `prU_accept_le` (at most `N` accepted ⇒ probability `≤ N·2⁻¹²⁸`) |
 | `Prob/Challenges.lean` | done: L3 over a uniform 136-byte `chal1`, `≤ epsKOS ≤ 2⁻¹⁵⁰` for `≤ 2¹²⁰` challenges (`chain_kos_bad_le`, `epsKOS_le`); the canonical slope `Chain.AV`, `Chain.uCanon`, `slope_eq_uCanon` (L4 §5: every slope on `A ⊆ A_V`, `\|A\| ≥ 2`, is `uCanon`, fixed before `chal2`); L4 over a uniform 56-byte `chal2` (`prU_qs_bad_le`, `≤ ε_QS(n)`), over uniform `l` (`prU_comb_bad_le`, `≤ 2⁻¹²⁸`) and over both independently (`prU_qs_comb_bad_le`) |
 | `Prob/ChainRelations.lean` | done: the per-chain theorem for all five relations (`*_chain_prob`, generic `chain_prob`). For a chain whose commitments are fixed before `chal1` and whose `ũ`, `d`, `h_V` are fixed before `chal2` (`Chain.SamePrefix`, `Chain.SameMid`), with `chal1`, `chal2`, `l` uniform and independent: `Pr[L2 ∧ hclaim1 ∧ ¬(extraction ∨ at most max(d,1) admissible chal3 accepted)] ≤ 2⁻¹⁵⁰ + ε_QS(n) + 2⁻¹²⁸` (no `2⁻¹²⁸` term for the issue relations; `ε_QS(n) ≤ 2⁻¹²⁷`, `epsQS_le`). L2 and `hclaim1` remain conjuncts of the event |
+| `Prob/Bytes.lean` (M5) | `combEquiv M : Bytes (16·M) ≃ (Fin M → GF128)`, the decoding of `l` |
 
 To make `chal2` and `l` samplable, `Bridge/Chain.lean`'s `Chain` now has `chal2` and the constraint
 evaluator `vals` as fields (it was `Chain.chal2 := Verifier.chal2 …`); `onChain_of_accept` takes
 `chal2 = Verifier.chal2 …` and `vals = st.values chal1 chal2` as hypotheses, and the combined
 relations' `*_extract_chain` take the system at a free `l` (`*SysL`). The executable verifier is
 unchanged.
+
+**Phase B** (`ROM/`, milestones M4–M5, VCVio). The SHAKE128 calls are one VCVio oracle specification
+indexed by L0 domain (`L0-L2-commitments.md` §2.1) and input string, answered by VCVio's lazy random
+oracle. The theorems bound an event of an arbitrary adversary `oa : OracleComp spec α` with at most
+`q₁`, `q₂`, `Q` queries to `H₂¹`, `H₂²`, `H₂³` (and `n` in total). `#print axioms`: `propext`,
+`Classical.choice`, `Quot.sound` (VCVio's lemmas used here add nothing).
+
+| Piece | Status |
+|---|---|
+| `ROM/Basic.lean` | done: `Pr{let x ← $ᵗ α}[P x] = prU α P` (`prEvent_uniformSample_eq_prU`), so every phase-A bound is a VCVio bound; the domains `Kind` (L0's rows 1–12, `comb M` for `l`) with their output lengths; `spec = OracleSpec.ofFn` over `Kind × ByteArray` |
+| `ROM/UnionBound.lean` | done: per-domain query counts `IsKindQueryBound` and their weighted budget; the union bound `prEvent_exists_bad_query_le` (VCVio's `prEvent_randomOracle_le_of_bad_queries_weighted`: a bad event may read the whole answer table, provided resampling its own cell bounds it) |
+| `ROM/Fresh.lean` | done: the union bound when a fresh query's bad event reads a second cell chosen by its answer, with a charge for that cell being cached (`prEvent_randomOracle_le_of_fresh_bad_queries`, `prEvent_completeTable_le_two_cells`) |
+| `ROM/Chains.lean` | done: bad `H₂¹` (KOS), `H₂²` (QS at the canonical witness), `H₂³` (accepted among at most `N`) queries, each bounded by its M2 lemma when its cell is resampled; `prEvent_le_chain_terms`: `Pr[event] ≤ q₁·ε_KOS + q₂·ε_QS(n) + Q·N·2⁻¹²⁸ + ε_bind + ε_dead`, numerically for the issue relations (`q₁·2⁻¹⁵⁰`, `N = 9`); the per-chain deterministic step (`chain_good_of_not_bad`, `*Issue_good_of_not_bad`) |
+| `ROM/Comb.lean` | done: the combined relations, with `l` read from the table at `chal2 ‖ dst`: per `H₂²` query `ε_QS(n) + 2⁻¹²⁸ + n·2⁻⁴⁴⁸` (the last term: `chal2 ‖ dst` already queried, L0 §2.2); `prEvent_le_comb_terms`, numerically for Moussaka redemption, Ratatouille spend and PomFRIT (`*_prEvent_le`); `comb_good_of_not_bad`, `pomfritRedeem_good_of_not_bad` |
+
+Still hypotheses of the phase-B theorems: `htrace` (an accepted, non-extracted proof gives a bad
+query, for every answer table), whose per-chain core is proved (`*_good_of_not_bad`) but whose
+"same chain" step is not (the accepted proof's chain is in the log, and its committed data `preOf`,
+`midOf`, `accOf` are functions of the table not reading their own cells); the binding failure
+`ε_bind` and the dead-leaf failure `ε_dead` (ideal cipher, L1/L2, plan M6). The executable
+verifier is not yet run against the oracle (it calls SHAKE directly), and splitting SHAKE into
+independent oracles per L0 domain is a modelling step, not a lemma.
 
 ## Gaps
 
@@ -285,10 +316,12 @@ What is **not** established, roughly in order of importance:
    commitments with accepted `chal3` landing in the chain's set (L1); `Verifier/Bridge/ChainRelations.lean`.
    §9 machine-checks the single-challenge part: for one chain with uniform independent `chal1`,
    `chal2`, `l`, the L3 and L4 failures have probability `≤ 2⁻¹⁵⁰ + ε_QS(n) + 2⁻¹²⁸`
-   (`Prob/ChainRelations.lean`). Still on paper: that the verifier's challenges are such samples
-   (random oracle: freshness, `l = H(chal2 ‖ dst)` independent of `chal2`, union over the queries),
-   L2 (`IsFixed`, ideal cipher) and `hclaim1` (binding of the leaf commitments, the "same chain"
-   step), which the per-chain theorem keeps as conjuncts of its event.
+   (`Prob/ChainRelations.lean`), and, in the random-oracle model, the union over all `H₂¹`, `H₂²`,
+   `H₂³` queries with the freshness of `chal2 ‖ dst` (`ROM/`): `q₁·2⁻¹⁵⁰ + q₂·(ε_QS(n) + 2⁻¹²⁸ +
+   n·2⁻⁴⁴⁸) + Q·max(d,1)·2⁻¹²⁸ + ε_bind + ε_dead`. Still on paper: the "same chain" step (the
+   accepted proof's chain is in the log; `htrace` of the `ROM/` theorems), L2 (`IsFixed`, ideal
+   cipher, `ε_dead`) and binding of the leaf commitments (`hclaim1`, `ε_bind`), the run of the
+   executable verifier against the oracle, and the splitting of SHAKE into independent oracles.
 2. **Code ↔ model is tested, not proved.** Each Lean model was written by reading the C++ and is
    tied to it by tests in `tests/voleith/test_lean_models.cpp` (and, when finished, the `Arith`
    cross-check). Compiler behaviour, memory safety and constant-time execution are out of scope.
@@ -299,7 +332,8 @@ What is **not** established, roughly in order of importance:
    `EndToEnd/Concrete.lean`); the verifier's evaluators are proved to be the systems' values
    (`Verifier/Bridge/Relations.lean`), and agreement with the C++ is checked by `arith_vectors`. pqov's
    constant-time `ov_publicmap_ct`, which the code calls, is checked against `ov_publicmap` by the
-   dumper, not modelled. The step "`l` is uniform because it is a random-oracle output" is on paper.
+   dumper, not modelled. The step "`l` is uniform because it is a random-oracle output" is proved in
+   the random-oracle model (`ROM/Comb.lean`), for `l` read from the oracle table.
 4. **Idealized models.** AES-128 is an ideal cipher (classical and quantum), SHAKE and Keccak-p are
    random oracles or random permutations. The Keccak-p[800,12] relations additionally need
    one-wayness/binding assumptions on a 12-round permutation that have little cryptanalysis.

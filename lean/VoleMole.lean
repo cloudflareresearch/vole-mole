@@ -80,3 +80,8 @@ import VoleMole.Prob.Uniform
 import VoleMole.Prob.Bytes
 import VoleMole.Prob.Challenges
 import VoleMole.Prob.ChainRelations
+import VoleMole.ROM.Basic
+import VoleMole.ROM.UnionBound
+import VoleMole.ROM.Fresh
+import VoleMole.ROM.Chains
+import VoleMole.ROM.Comb
