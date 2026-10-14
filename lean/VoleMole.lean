@@ -69,3 +69,7 @@ import VoleMole.Verifier.Bridge.QuickSilver
 import VoleMole.Verifier.Bridge.Accept
 import VoleMole.Verifier.Bridge.Concrete
 import VoleMole.Verifier.Bridge.Relations
+import VoleMole.Verifier.Bridge.Lift
+import VoleMole.Verifier.Bridge.Columns
+import VoleMole.Verifier.Bridge.Chain
+import VoleMole.Verifier.Bridge.ChainRelations

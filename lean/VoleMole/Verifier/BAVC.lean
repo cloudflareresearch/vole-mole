@@ -113,13 +113,20 @@ def commit (seed iv : ByteArray) : Array ByteArray × Leaves :=
   let t := expandTree seed iv
   (t, leavesOf iv t (fun _ => none) (fun _ => ByteArray.empty))
 
+/-- The small VOLE whose bits of `Δ` contain bit `c < 120` (`bitOffset i ≤ c < bitOffset i + k_i`). -/
+def treeOf (c : Nat) : Nat := if c < 8 then 0 else (c - 8) / 7 + 1
+
+/-- Bit `c` of the 16-byte `delta` (bit `c % 8` of byte `c / 8`), for the 120 bits `c < 120` that
+encode the `Δ_i` (`false` above; bits `120 … 127` are the grinding bits). -/
+def deltaBit (delta : ByteArray) (c : Nat) : Bool :=
+  decide (c < 120) && (delta.get! (c / 8) >>> (c % 8).toUInt8) &&& 1 == 1
+
+/-- `Δ_i = Σ_{d < k_i} Δ_{p_i + d} 2^d`, from the bits of `Δ`. -/
+def hiddenIndex (dbit : Nat → Bool) (i : Nat) : Nat :=
+  (List.range (kOf i)).foldl (fun x d => if dbit (bitOffset i + d) then x + 2 ^ d else x) 0
+
 /-- `Δ_i` from the 16-byte `delta`. -/
-def deltaIndex (delta : ByteArray) (i : Nat) : Nat := Id.run do
-  let mut x := 0
-  for d in [0:kOf i] do
-    let b := bitOffset i + d
-    if (delta.get! (b / 8) >>> (b % 8).toUInt8) &&& 1 == 1 then x := x + 2 ^ d
-  return x
+def deltaIndex (delta : ByteArray) (i : Nat) : Nat := hiddenIndex (deltaBit delta) i
 
 /-- `one_tree_bavc::verify`: the verifier's leaves, or `none` if the opening is malformed. -/
 def reconstruct (iv opening delta : ByteArray) : Option Leaves := Id.run do

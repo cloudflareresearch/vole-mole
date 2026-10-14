@@ -16,7 +16,8 @@ the executable verifier evaluates (`Verifier/Bridge/Relations.lean`):
   are those of `EndToEnd/Relations.lean` (`hK`, `hacc` on all of `A`, `hQS`, `hcomb`, `hδ`,
   `hclaim1`): the Δ-structure and random-oracle steps, none of which is about the field or the
   arithmetization. `Verifier/Bridge/Relations.lean` gives `hacc` at the `Δ` of an accepting
-  transcript of the executable verifier.
+  transcript of the executable verifier; `Verifier/Bridge/ChainRelations.lean` discharges `hK` and
+  `hacc` on all of `A` for the executable verifier's chains (`*_extract_chain`).
 -/
 
 set_option linter.unusedSectionVars false
