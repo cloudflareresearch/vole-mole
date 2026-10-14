@@ -7,12 +7,19 @@ The first steps of `voleith_vole_reconstruct` (`src/voleith.hpp:354-409`) for an
 relations, which differ only in the witness length `ℓ` (bytes `ℓ/8`) and the QuickSilver degree
 `d`; everything else is FAEST-EM-128f (`BAVC.lean`).
 
-* `Params`: `ℓ/8` and `d`, and the derived sizes of `fao/constants.hpp:333-470` (`fao/` is
-  `subprojects/faest-arch-opt/`): `N_MASK = (d − 1) + 4`, `N_MULT = 312` (generated CRT tables for
-  `(s128, τ = 17, 120)`), `VOLE_ROWS = ℓ + 8·N_MASK`, `VOLE_COL_BLOCKS` = `VOLE_ROWS` rounded up to a
-  multiple of 256 rows (`TRANSPOSE_BITS_ROWS`), in 128-bit blocks.
-* `Proof`: the fields of `fao/faest_sig.hpp:39-66`, in order: corrections `c₁ … c₁₆` (`ℓ/8` bytes
-  each), `c_mult` (`N_MASK` rows of 39 bytes), the VOLEHash `ũ` (64), the correction `d` (`ℓ/8`), the
+* `Params`: `ℓ/8`, `d` and the label-row switch, and the derived sizes of
+  `fao/constants.hpp:333-470` (`fao/` is `subprojects/faest-arch-opt/`): `N_MASK = (d − 1) + 4`,
+  `N_MULT = 312` (generated CRT tables for `(s128, τ = 17, 120)`), the corrected rows
+  `VOLE_CORRECTION_ROWS = ℓ + ℓ_lab`, `VOLE_ROWS = VOLE_CORRECTION_ROWS + 8·N_MASK`,
+  `VOLE_COL_BLOCKS` = `VOLE_ROWS` rounded up to a multiple of 256 rows (`TRANSPOSE_BITS_ROWS`), in
+  128-bit blocks.
+* Label rows. On `main` (as in FAEST), the CRT gate labels are taken from the first 128 witness
+  rows and `ℓ_lab = 0`. With `CRT_DEDICATED_LABEL_ROWS` (faest-arch-opt patch 0005, branch
+  `voleith-label-rows`), 128 dedicated rows `ℓ … ℓ + 127` follow the witness: they are corrected and
+  hashed by the VOLE check like witness rows, but get no `d`; `ℓ_lab = 128` and the label rows start
+  at row `ℓ`. `Params.labelRows` selects the layout.
+* `Proof`: the fields of `fao/faest_sig.hpp:39-66`, in order: corrections `c₁ … c₁₆`
+  (`VOLE_CORRECTION_ROWS/8` bytes each), `c_mult` (`N_MASK` rows of 39 bytes), the VOLEHash `ũ` (64), the correction `d` (`ℓ/8`), the
   QuickSilver proof (`(d − 1)·16`), the BAVC opening (2224), `Δ` (16), `iv_pre` (16), the grinding
   counter (4).
 * `checkFormat` (`faest_sig.hpp:126-152`): the top 8 bits of `Δ` are zero. (`N_MULT = 312` is a
@@ -37,6 +44,8 @@ structure Params where
   witnessBytes : Nat
   /-- QuickSilver degree `d` (`OWF_CONSTANTS::QS_DEGREE`). -/
   qsDegree : Nat
+  /-- `OWF_CONSTANTS::CRT_DEDICATED_LABEL_ROWS` (branch `voleith-label-rows`). -/
+  labelRows : Bool := false
 
 namespace Params
 
@@ -46,13 +55,18 @@ def witnessBits : Nat := 8 * p.witnessBytes
 def nMask : Nat := p.qsDegree - 1 + 4
 def nMult (_ : Params) : Nat := 312
 def nMultBytes (_ : Params) : Nat := 39
-def voleRows : Nat := p.witnessBits + 8 * p.nMask
+/-- Index of the first gate-label row (`CRT_LABEL_ROW_OFFSET`). -/
+def labelRowOffset : Nat := if p.labelRows then p.witnessBits else 0
+/-- `VOLE_CORRECTION_ROWS`: the rows corrected by `c_i`, CRT-lifted and hashed by the VOLE check. -/
+def correctionRows : Nat := p.witnessBits + if p.labelRows then 128 else 0
+def correctionBytes : Nat := p.correctionRows / 8
+def voleRows : Nat := p.correctionRows + 8 * p.nMask
 def voleColBlocks : Nat := 2 * ((p.voleRows + 255) / 256)
 def colBytes : Nat := 16 * p.voleColBlocks
 
 /-- Field sizes, in proof order. -/
 def fieldSizes : List (String × Nat) :=
-  [("corrections", 16 * p.witnessBytes), ("cmult", p.nMask * p.nMultBytes), ("vole_check", 64),
+  [("corrections", 16 * p.correctionBytes), ("cmult", p.nMask * p.nMultBytes), ("vole_check", 64),
    ("correction", p.witnessBytes), ("qs_proof", (p.qsDegree - 1) * 16), ("open", BAVC.openSize),
    ("delta", 16), ("iv_pre", 16), ("ctr", 4)]
 
@@ -85,7 +99,7 @@ def field (k : String) : ByteArray :=
 def corrections : ByteArray := pf.field "corrections"
 /-- `c_i` for `i = 1 … 16`. -/
 def correctionOf (i : Nat) : ByteArray :=
-  pf.corrections.extract ((i - 1) * pf.params.witnessBytes) (i * pf.params.witnessBytes)
+  pf.corrections.extract ((i - 1) * pf.params.correctionBytes) (i * pf.params.correctionBytes)
 def cmult : ByteArray := pf.field "cmult"
 def voleCheck : ByteArray := pf.field "vole_check"
 def correction : ByteArray := pf.field "correction"
@@ -119,5 +133,7 @@ def chal1 (pf : Proof) (mu1 voleCommitCheck binder1 : ByteArray) : ByteArray :=
 #guard ({ witnessBytes := 256, qsDegree := 9 } : Params).proofBytes == 7272
 #guard ({ witnessBytes := 164, qsDegree := 2 } : Params).proofBytes == 5323
 #guard ({ witnessBytes := 256, qsDegree := 9 } : Params).voleColBlocks == 18
+#guard ({ witnessBytes := 256, qsDegree := 9, labelRows := true } : Params).proofBytes == 7528
+#guard ({ witnessBytes := 164, qsDegree := 2, labelRows := true } : Params).proofBytes == 5579
 
 end VoleMole.Verifier

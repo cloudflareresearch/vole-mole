@@ -593,7 +593,8 @@ void dump_verification(std::ostream& out, const std::string& name,
     {
         const auto d = proof.correction();
         const auto q = data.q();
-        for (size_t i = 0; i < RCP::VOLE_CORRECTION_ROWS; ++i) {
+        // Witness rows only (dedicated label rows, if any, get no d).
+        for (size_t i = 0; i < OC::WITNESS_BITS; ++i) {
             if (((d[i / 8] >> (i % 8)) & 1) != 0) {
                 q[i] = q[i] ^ delta;
             }

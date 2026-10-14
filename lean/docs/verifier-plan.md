@@ -48,13 +48,15 @@ Notes.
   of `j ⊕ Δᵢ`, `fao/vole_key_index_permutation.hpp`, Gray code within chunks of 8) to make step 4
   cheap. The Lean model works in spec order (leaf `j` of vector `i`, hidden leaf zero) and computes
   step 4 as the plain sum; the dumper undoes the permutation before writing.
-* **Dedicated label rows (patch 0005, branch `voleith-label-rows` only).** Target `main`'s layout.
-  With `CRT_DEDICATED_LABEL_ROWS`, `VOLE_CORRECTION_ROWS` grows by 128 (rows `ℓ..ℓ+127` after the
+* **Dedicated label rows (patch 0005, branch `voleith-label-rows` only).** With
+  `CRT_DEDICATED_LABEL_ROWS`, `VOLE_CORRECTION_ROWS` grows by 128 (rows `ℓ..ℓ+127` after the
   witness feed the gate labels in step 5 instead of witness rows `0..127`), each correction cᵢ is 16
-  bytes longer (+256 B per proof), step 7's hashed rows include the 128 label rows, and step 8
-  applies `d` only to the `ℓ` witness rows. Keep "label row offset" and "corrected rows" as
-  parameters of the Lean model so both layouts are one switch apart. The KAT files differ between
-  the branches.
+  bytes longer (+256 B per proof), the mask rows move down by 128, step 7's hashed rows include the
+  128 label rows, and step 8 applies `d` only to the `ℓ` witness rows. In Lean this is the one
+  switch `Params.labelRows` (derived: `labelRowOffset`, `correctionRows`, `correctionBytes`); the
+  relation constructors of `Relations.lean` take `(labelRows := …)`. The KAT files differ between
+  the branches (PomFRIT's `pomfrit_kat.txt` exists only on this branch and must be regenerated with
+  `gen_pomfrit_kat` in a label-rows build).
 * **Spec vs. code risks to watch:** chal1/chal2 binders (empty for all KATs except where the
   protocol passes one), delayed-instance `mu` in chal2 (PomFRIT redemption, `src/voleith.hpp:445-
   448`), the 64-bit-key hashes (`uhasher_gfsecpar_64`), `load_dup` vs `load` of challenges.
@@ -95,8 +97,13 @@ order). Currently:
   `delta_lifted`, `chal1`, `chal2`, `qs_check`, `delta_check`, `accept`. The dumper re-runs the
   verifier's steps itself and asserts that `delta_check` = Δ and that the real verifier accepts.
 
-Still to add when needed: the VOLEHash `h` (64 B) and the ZKHash state before the mask (milestones
-5-6), and records from a `voleith-label-rows` build (milestone 7). The relation-specific
+Label-rows vectors (milestone 7): in a worktree at `formal-proofs-wip` with `d5def9c`
+cherry-picked (the dumper and `gen_pomfrit_kat` live only on this branch), build
+`tests/dump_verifier_vectors` and `tests/gen_pomfrit_kat`, regenerate
+`tests/pomfrit/pomfrit_kat.txt` there, dump into a fresh directory, copy `lean/vectors/uov_keys.txt`
+next to it, and run `lake exe verifier_vectors DIR WORKTREE/tests`; the layout is read off
+`correction_rows`. The dumper applies `d` to the `WITNESS_BITS` rows only (as `voleith.hpp` does
+on both branches). The relation-specific
 `inst_enc` is taken from the dump; building it in Lean from the instance (via the `Spec/*` modules)
 is part of milestone 6.
 
@@ -117,7 +124,7 @@ is part of milestone 6.
    come from the dump.
 5. **Done:** KOS + chal2 (steps 7-8): `Verifier/KOS.lean` (`voleHashReceiver`: Horner VOLEHash
    over `Arith/GF.lean`'s `GF128`, `chal2`); matches `chal2` for all five relations, 12-60 ms.
-   Still to state: `voleHash_eq` against `Seed/KOS.lean`'s `voleHashP`.
+   Stated and proved in milestone 8 (`Bridge/KOS.lean`, `map_voleHashReceiver`).
 6. **Done:** QuickSilver + full accept (steps 9-10): `Verifier/QuickSilver.lean` (constraint keys as
    `Δ^d · f_k(q/Δ)`, so the `Arith/*` sharing evaluators run unchanged at `x_j = q_j Δ⁻¹`; ZKHash,
    mask, `chal3`), `Verifier/Verify.lean` (the whole verifier for a `Statement`),
@@ -139,7 +146,37 @@ is part of milestone 6.
    key, `calculate_F2_P3`, is not modelled); (b) generating `F`, `G`, `W_gate` themselves (the
    evaluation-place portfolio of `vole_mult_tables.py`) is not ported, only checked;
    (c) speed: the UOV evaluation goes through `Expr` trees and `GF128.mul` (≈ 1.7 µs).
-7. **Label-rows variant** behind a flag, checked on the `voleith-label-rows` KATs.
-8. **Bridges** (proofs, not tests): AES-CTR input = `Commitments.ctrInput`; ZKHash code =
-   `Seed/QuickSilver.lean`'s `zkHash_eq_code`; VOLEHash = `Seed/KOS.lean`'s model; accept ⇒ the
-   hypotheses of the extraction theorems for the concrete transcript.
+7. **Done:** label-rows variant behind `Params.labelRows` (`Proof.lean`: correction rows/bytes and
+   label-row offset; `VOLE.lean`: gate labels from rows `o … o + 127` of each column, lifted rows
+   and mask rows relative to `correctionRows`; `Relations.lean`: `(labelRows := …)` on every
+   constructor, PomFRIT's `hash_to_target` reads `ũ` and `d` at the layout's offsets
+   (`pomfritTarget`; `Spec.PomFRIT` hard-codes `main`'s, checked by a `#guard`); `KOS.lean` and
+   `QuickSilver.lean` needed no change). On vectors and KATs from a `voleith-label-rows` build: all
+   intermediate values of the five dumped proofs match, all 18 KAT proofs are accepted and 51
+   mutations rejected, ≈ 5 min. `main`'s checks are unchanged.
+8. **Partly done: bridges** (`Verifier/Bridge/*`, proofs, no tests; no `sorry`/`axiom`/
+   `native_decide`):
+   * `CtrInput.lean`: `lanes (ctrBlock iv c t) = Commitments.ctrInput (lanes iv) c t`;
+     `prgExpanded` is the concatenation of the encrypted `ctrBlock iv (c + j) t`; the tweaks of
+     `BAVC.children`, `BAVC.leafCom` and `convertToVole` lie in `Commitments.tweaks` of their
+     roles, so `ctrBlock_ne_of_roles` (from `role_inputs_ne`) separates them. No assumptions.
+   * `Field.lean`: `GFEmbedding F`, an injective map `GF128 → F` into a field preserving `1`, `+`,
+     `*`. **Assumed** (not proved): one exists with `|F| = 2¹²⁸`. Under it, the executable
+     `horner` is `Seed.horner`, `hornerPoly`'s evaluation and the C++ blocked hash
+     (`Seed.blockedHash`, so `zkHash_eq_code` applies), `gfPow` is the power, `gfInv` the inverse.
+   * `KOS.lean`: `φ` of `voleHashReceiver` is `Seed.kosValue` (challenge parsed from `chal1`, `Q`
+     the `ℓ' + d − 1` hashed rows, `D` the four direct masks, `e(Δ) = φ Δ_lifted`), pointwise in Δ.
+   * `QuickSilver.lean`: `mac_constraintQS` (the MAC of `constraintQS d e` is `Δ^d·e(m/Δ)`, the
+     executable's shortcut), `qsCheck_zkCoeff`, `map_constraintKeys`, `map_qsCheck`
+     (`φ(check_V) + z = EndToEnd.qsCheck … + (Seed.maskPoly d a b ã z).eval Δ` when the mask MACs are
+     `a_i + b_i Δ`), `hacc_of_qsCheck` (char 2, `z = φ(check_V)`). **Assumed:** `hvals`, the
+     relation's `GF128` evaluator is `System.values cs` transported along `φ` (parametricity of the
+     `Arith/*` evaluators; `eval_map` proves the `System` half).
+   * `Accept.lean`: `accept_iff` (the verifier unfolded into its step functions), `map_correctedKeys`
+     (the QuickSilver inputs are `EndToEnd.macs`' `Q_j + d_j Δ`, zero beyond `ℓ`, for both layouts),
+     `accept_hacc` (acceptance ⇒ `φ Δ_lifted ≠ 0`, `chal3 = Δ`, and `EndToEnd`'s accepting equation
+     `qsCheck + R(Δ) = 0` at this transcript, with `R = maskPoly d (φ ∘ q_mask) 0 ã (φ check_V)`).
+   Still open: the per-tree/affine-in-Δ structure of the executable `Q`, `D`, `q_mask` across
+   challenges (ConvertToVOLE and `crtReconstruct` as functions of Δ against `Claim4Hyp`/`KOSGood`,
+   and `W_CRT` against the model's injective lift `e`); the field embedding; `hvals` per relation;
+   the random-oracle steps.

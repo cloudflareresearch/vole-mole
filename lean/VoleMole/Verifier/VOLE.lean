@@ -15,7 +15,8 @@ counter 0), column `p_i + b` (`b < k`) of the verifier's key matrix is
 
   `q_{p_i + b} = Δ_{i,b} · c_i + Σ_{j ≠ Δ_i} (j ⊕ Δ_i)_b · R_j`,
 
-where `c_i` (`i ≥ 1`; `c_0 = 0`) is the correction from the proof on the first `ℓ` rows, zero below.
+where `c_i` (`i ≥ 1`; `c_0 = 0`) is the correction from the proof on the first `ℓ'` rows
+(`ℓ' = VOLE_CORRECTION_ROWS`: `ℓ`, or `ℓ + 128` with dedicated label rows), zero below.
 Columns `120 … 127` (the zero bits of `Δ`) are zero. faest-arch-opt computes the same sum over its
 permuted leaf order with Gray-code accumulation (`xor_reduce`, `process_prg_output`); here it is
 written out directly. A column is a bit vector over rows (row `r` = bit `r % 8` of byte `r / 8`).
@@ -23,21 +24,21 @@ written out directly. A column is a bit vector over rows (row `r` = bit `r % 8` 
 ## The CRT step
 
 * Gate labels and hashes (`lift_and_hash_vq`, `vole_commit.inc:339-432`): `L_e = Σ_{c < 120}
-  G[c][e] · q_c[0..128)` for `e < N_MULT` (the first 128 rows of each column, as a block), and
-  `h_e` = the first 4 bytes of `H(iv ‖ e (u32 LE) ‖ L_e ‖ 5)`.
+  G[c][e] · q_c[o..o+128)` for `e < N_MULT` (the 128 label rows of each column, as a block; `o` is
+  `Params.labelRowOffset`: `0` on `main`, `ℓ` with dedicated label rows, patch 0005's
+  `crt_labels`), and `h_e` = the first 4 bytes of `H(iv ‖ e (u32 LE) ‖ L_e ‖ 5)`.
 * Rows: row `r` of the key matrix is the 128-bit vector whose bit `c` is bit `r` of column `c`. The
-  first `ℓ` rows are CRT-lifted, `q_r = row_r · W_CRT` (`crt_lift_q`; a row vector times a
-  120 × 128 matrix over GF(2)); the mask rows `ℓ + 8m + t` are used unlifted.
+  first `ℓ'` rows are CRT-lifted, `q_r = row_r · W_CRT` (`crt_lift_q`; a row vector times a
+  120 × 128 matrix over GF(2)); the mask rows `ℓ' + 8m + t` are used unlifted.
 * `r̃_m` (`compute_r_tilde`, `vole_commit.inc:284-335`): for small VOLE `i`,
   `Σ_{t < k_i} x_{m,t,i} · X^t mod M_i`, where `x_{m,t,i}` is bits `p_i … p_i + k_i − 1` of mask row
-  `ℓ + 8m + t` as a polynomial, written back to bits `p_i …` of `r̃_m`.
+  `ℓ' + 8m + t` as a polynomial, written back to bits `p_i …` of `r̃_m`.
 * `q_mask[m] = r̃_m · W_TREE + (H_m ⊕ (γ ∧ c_mult[m])) · W_GATE`, where bit `e` of `H_m` is bit `m` of
   `h_e` and `γ = Δ · G` (`compute_q_mask`, `compute_q_gate`, `vole_commit.inc:500-549`).
 * `crt_lift_delta(Δ) = Δ · W_CRT`.
 
 The matrices `G`, `W_CRT`, `W_TREE`, `W_GATE` and the moduli `M_i` are faest-arch-opt's generated
-tables for `(s128, τ = 17, 120)` (`fao/tools/gen_crt_tables.py`), read from
-`lean/vectors/verifier_kat.txt` (`record crt tables`) for now.
+tables for `(s128, τ = 17, 120)` (`fao/tools/gen_crt_tables.py`), from `CrtData.lean`.
 -/
 
 namespace VoleMole.Verifier
@@ -101,6 +102,12 @@ structure CrtTables where
 
 /-- Bit `r` of a bit vector stored as words. -/
 @[inline] def wbit (w : Array UInt64) (r : Nat) : Bool := (w[r / 64]! >>> (r % 64).toUInt64) &&& 1 == 1
+
+/-- Bits `o … o + 63` of a bit vector stored as words (zero beyond the end). -/
+@[inline] def wordAt (w : Array UInt64) (o : Nat) : UInt64 :=
+  let s := o % 64
+  if s == 0 then w.getD (o / 64) 0
+  else (w.getD (o / 64) 0 >>> s.toUInt64) ||| (w.getD (o / 64 + 1) 0 <<< (64 - s).toUInt64)
 
 /-- A byte string as little-endian words (length a multiple of 8). -/
 def wordsOf (b : ByteArray) : Array UInt64 :=
@@ -170,8 +177,9 @@ def polyMod (x m : UInt64) : UInt64 := Id.run do
 /-- The gate hashes `h_e` (as 32-bit words). -/
 def gateHashes (p : Params) (T : CrtTables) (iv : ByteArray) (cols : Array (Array UInt64)) :
     Array UInt32 := Id.run do
-  -- First 128 rows of each column, as a block.
-  let tops : Array W128 := (Array.range 120).map fun c => ⟨cols[c]![0]!, cols[c]![1]!⟩
+  -- The 128 label rows of each column, as a block.
+  let o := p.labelRowOffset
+  let tops : Array W128 := (Array.range 120).map fun c => ⟨wordAt cols[c]! o, wordAt cols[c]! (o + 64)⟩
   let mut out : Array UInt32 := #[]
   for e in [0:p.nMult] do
     let L := W128.rowMul (fun c => wbit T.g[c]! e) 120 tops
@@ -183,7 +191,7 @@ def gateHashes (p : Params) (T : CrtTables) (iv : ByteArray) (cols : Array (Arra
 structure CrtOut where
   hashes : Array UInt32
   rTilde : Array W128
-  /-- The first `ℓ` rows, CRT-lifted (before the correction `d`). -/
+  /-- The first `ℓ'` (`VOLE_CORRECTION_ROWS`) rows, CRT-lifted (before the correction `d`). -/
   rows : Array W128
   qMask : Array W128
   deltaLifted : W128
@@ -192,7 +200,7 @@ structure CrtOut where
 def crtReconstruct (pf : Proof) (T : CrtTables) (iv : ByteArray) (cols : Array (Array UInt64)) :
     CrtOut := Id.run do
   let p := pf.params
-  let ell := p.witnessBits
+  let ell := p.correctionRows
   let hashes := gateHashes p T iv cols
   let rows : Array W128 := (Array.range ell).map fun r =>
     let x := rowOf cols r

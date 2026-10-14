@@ -20,6 +20,8 @@ For each of vole-mole's relations, a `Statement` built from the instance: parame
 * PomFRIT redemption: delayed instance binding, binders `refresher_com` and `refresher`
   (`src/pomfrit/pomfrit.cpp:219-237`), instance `(pk, h)` with
   `h = Spec.PomFRIT.hashToTarget dig(pk) chal1 sig msg`; `Arith.PomFRIT.pomfritRedeemSystem`.
+* `labelRows` (default `false`, `main`'s layout) selects the dedicated-label-row layout of branch
+  `voleith-label-rows` (`Params.labelRows`), which all five relations use there.
 * The UOV combinations: `l = H(chal2 ‖ COMBINE_DST)`, 45 field elements
   (`uov::detail::Combination`, `src/uov/circuit.hpp:56-69`).
 * UOV public keys: `UovPk.ofCompressed` expands a compressed public key as pqov's `expand_pk`
@@ -90,15 +92,15 @@ def le64 (v : ℕ) : ByteArray := ⟨(Array.range 8).map fun i => (v / 2 ^ (8 * 
 
 /-! ## Moussaka -/
 
-def moussakaIssue (t ctxIss : ByteArray) : Statement where
-  params := { witnessBytes := 256, qsDegree := 9 }
+def moussakaIssue (t ctxIss : ByteArray) (labelRows := false) : Statement where
+  params := { witnessBytes := 256, qsDegree := 9, labelRows }
   dst := toBA (makeDst "mous" 0 'i' '0')
   instEnc := fun _ => toBA (Moussaka.IssueInstance.encode ⟨toL t, toL ctxIss⟩)
   values := fun _ _ w => Moussaka.issueValues (F := GF128) (fun k => fnOf t k.val) (fnOf ctxIss) w
 
-def moussakaRedeem (anchors : List UovPk) (nf ctxIss ctxRed challengeDigest : ByteArray) :
-    Statement where
-  params := { witnessBytes := 343, qsDegree := 9 }
+def moussakaRedeem (anchors : List UovPk) (nf ctxIss ctxRed challengeDigest : ByteArray)
+    (labelRows := false) : Statement where
+  params := { witnessBytes := 343, qsDegree := 9, labelRows }
   dst := toBA (makeDst "mous" 0 'r' '0')
   instEnc := fun _ => toBA (Moussaka.RedeemInstance.encode
     ⟨anchors.map UovPk.toSpec, toL nf, toL ctxIss, toL ctxRed, toL challengeDigest⟩)
@@ -108,15 +110,16 @@ def moussakaRedeem (anchors : List UovPk) (nf ctxIss ctxRed challengeDigest : By
 
 /-! ## Ratatouille -/
 
-def ratatouilleIssue (c : ByteArray) (tInit : ℕ) (ctxIss : ByteArray) : Statement where
-  params := { witnessBytes := 240, qsDegree := 9 }
+def ratatouilleIssue (c : ByteArray) (tInit : ℕ) (ctxIss : ByteArray) (labelRows := false) :
+    Statement where
+  params := { witnessBytes := 240, qsDegree := 9, labelRows }
   dst := toBA (makeDst "rata" 0 'i' '0')
   instEnc := fun _ => c ++ le64 tInit ++ ctxIss
   values := fun _ _ w => Ratatouille.issueValues (fnOf c) tInit (fnOf ctxIss) w
 
-def ratatouilleSpend (pk : UovPk) (nf : ByteArray) (d : ℕ) (cNext ctxIss : ByteArray) :
-    Statement where
-  params := { witnessBytes := 847, qsDegree := 9 }
+def ratatouilleSpend (pk : UovPk) (nf : ByteArray) (d : ℕ) (cNext ctxIss : ByteArray)
+    (labelRows := false) : Statement where
+  params := { witnessBytes := 847, qsDegree := 9, labelRows }
   dst := toBA (makeDst "rata" 0 'p' '0')
   instEnc := fun _ => pk.digest ++ nf ++ le64 d ++ cNext ++ ctxIss
   values := fun _ c2 w =>
@@ -125,16 +128,31 @@ def ratatouilleSpend (pk : UovPk) (nf : ByteArray) (d : ℕ) (cNext ctxIss : Byt
 
 /-! ## PomFRIT -/
 
+def pomfritParams (labelRows := false) : Params := { witnessBytes := 164, qsDegree := 2, labelRows }
+
+/-- `hash_to_target(pk, sig, chal1, msg)` with the proof layout of `p`: `Spec.PomFRIT.hashToTarget`,
+whose field offsets are `main`'s, reads `ũ` and `d[0..M)` at the offsets of `p` instead. -/
+def pomfritTarget (p : Params) (dig chal1 sig msg : ByteArray) : ByteArray :=
+  let pf : Proof := { params := p, bytes := sig.extract 0 p.proofBytes }
+  toBA (shake128B (PomFRIT.targetInput (toL dig) (toL chal1) (toL pf.voleCheck)
+    (toL (pf.correction.extract 0 uovM)) (toL msg)) uovM)
+
+-- `main`'s layout is the one `Spec.PomFRIT` hard-codes.
+#guard (pomfritParams).proofBytes == PomFRIT.proofBytes &&
+  (pomfritParams).field? "vole_check" == some (PomFRIT.offVoleCheck, PomFRIT.voleCheckBytes) &&
+  ((pomfritParams).field? "correction").map (·.1) == some PomFRIT.offCorrection
+
 /-- A PomFRIT blind signature `sig = proof ‖ refresher_com ‖ refresher` on `msg`. The proof is
-`sig[0 .. 5323)`. -/
-def pomfritRedeem (pk : UovPk) (sig msg : ByteArray) : Statement :=
-  let h : ByteArray → ByteArray := fun c1 =>
-    toBA (PomFRIT.hashToTarget (toL pk.digest) (toL c1) (toL sig) (toL msg))
-  { params := { witnessBytes := 164, qsDegree := 2 }
+`sig[0 .. proofBytes)` (5323 bytes, or 5579 with dedicated label rows). -/
+def pomfritRedeem (pk : UovPk) (sig msg : ByteArray) (labelRows := false) : Statement :=
+  let p := pomfritParams labelRows
+  let n := p.proofBytes
+  let h : ByteArray → ByteArray := fun c1 => pomfritTarget p pk.digest c1 sig msg
+  { params := p
     dst := toBA (makeDst "pomf" 0 'p' '0')
     delayed := true
-    binder1 := sig.extract PomFRIT.proofBytes (PomFRIT.proofBytes + 32)
-    binder2 := sig.extract (PomFRIT.proofBytes + 32) (PomFRIT.proofBytes + 64)
+    binder1 := sig.extract n (n + 32)
+    binder2 := sig.extract (n + 32) (n + 64)
     instEnc := fun c1 => pk.digest ++ h c1
     values := fun c1 c2 w =>
       let hb := h c1
@@ -142,10 +160,12 @@ def pomfritRedeem (pk : UovPk) (sig msg : ByteArray) : Statement :=
         (ofArr (combinationArr 45 c2 (toBA (makeDst "pomf" 0 'l' '0'))))).values w }
 
 /-- PomFRIT's `verify` (`pomfrit.cpp:219-237`): the refresher commitment, then the proof. -/
-def pomfritVerify (T : CrtTables) (pk : UovPk) (sig msg : ByteArray) : Transcript :=
-  let refresher := sig.extract (PomFRIT.proofBytes + 32) (PomFRIT.proofBytes + 64)
-  let com := sig.extract PomFRIT.proofBytes (PomFRIT.proofBytes + 32)
+def pomfritVerify (T : CrtTables) (pk : UovPk) (sig msg : ByteArray) (labelRows := false) :
+    Transcript :=
+  let n := (pomfritParams labelRows).proofBytes
+  let refresher := sig.extract (n + 32) (n + 64)
+  let com := sig.extract n (n + 32)
   if toBA (PomFRIT.commitRefresher (toL refresher)) != com then { error := "refresher_com" }
-  else verify T (pomfritRedeem pk sig msg) (sig.extract 0 PomFRIT.proofBytes)
+  else verify T (pomfritRedeem pk sig msg labelRows) (sig.extract 0 n)
 
 end VoleMole.Verifier
