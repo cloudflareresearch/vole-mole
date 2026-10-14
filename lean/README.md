@@ -214,6 +214,19 @@ parameters (UOV verification is concrete). Cross-checked against the C++ known a
 | `Spec/PomFRIT.lean`, `Spec/Moussaka.lean` | done: every party's steps and errors; honest runs succeed; at most one acceptance per nullifier and context over any request sequence; injectivity of the hashed encodings (`H_T` binds d[0..M), Moussaka binds `challenge_digest`); input validation. All deterministic KAT fields match (`tests/pomfrit/pomfrit_kat.txt` is new). |
 | `Spec/Ratatouille.lean` | done: issue, spend, refund, change tokens, every abort path; honest runs succeed; nullifiers accepted once; balance `Σd ≤ ΣT_init + Σx′` per context over adversarial request sequences (soundness and unforgeability as hypotheses); the findings of `security/ratatouille.md` (copied requests, consumed pending state, unbounded refunds, signing before the nullifier check) as theorems, including a concrete run that breaks balance after one leaked response. All deterministic KAT fields match. |
 
+### 8. A Lean VOLEitH verifier (started) — `VoleMole/Verifier/`
+
+Goal: an executable Lean verifier that accepts the real C++ proofs (the KAT files contain them) and
+rejects mutated ones, built from the same models the proofs use. Plan and milestones:
+`docs/verifier-plan.md`. Checked by `lake exe verifier_vectors` against vectors from
+`tests/voleith/dump_verifier_vectors.cpp`.
+
+| Milestone | Status |
+|---|---|
+| SHAKE, AES-128, faest-arch-opt's CTR PRG | done; FIPS-197 and C++ vectors |
+| One-tree BAVC (GGM) reconstruction and `vole_commit_check` | done; reproduces a real Moussaka issuance proof byte for byte |
+| chal1 and proof parsing; ConvertToVOLE; CRT VOLE; KOS and chal2; QuickSilver; full accept | not started |
+
 ## Gaps
 
 What is **not** established, roughly in order of importance:

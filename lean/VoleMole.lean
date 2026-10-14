@@ -47,3 +47,5 @@ import VoleMole.Spec.Moussaka
 import VoleMole.Spec.Kats
 import VoleMole.Spec.Ratatouille
 import VoleMole.Spec.RatatouilleKats
+import VoleMole.Verifier.AES
+import VoleMole.Verifier.BAVC

@@ -25,3 +25,10 @@ root = "VoleMole.Arith.VectorsMain"
 [[lean_exe]]
 name = "spec_kats"
 root = "VoleMole.Spec.Kats"
+
+# Executable pieces of the Lean VOLEitH verifier (Verifier/) checked against the C++: run from
+# lean/ as `lake exe verifier_vectors` (reads lean/vectors/verifier_*.txt, written by
+# tests/voleith/dump_verifier_vectors.cpp).
+[[lean_exe]]
+name = "verifier_vectors"
+root = "VoleMole.Verifier.VectorsMain"
