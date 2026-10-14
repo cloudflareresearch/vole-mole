@@ -49,6 +49,7 @@ if get_option('benchmarks')
   ).as_system()
 
   benchmarks = [
+    ['blindsig', 'blindsig/bench_blindsig.cpp'],
     ['moussaka', 'moussaka/bench_moussaka.cpp'],
     ['pomfrit', 'pomfrit/bench_pomfrit.cpp'],
     ['ratatouille', 'ratatouille/bench_ratatouille.cpp'],
@@ -64,4 +65,10 @@ if get_option('benchmarks')
     )
     benchmark(b[0], exe, timeout : 600)
   endforeach
+
+  # Writes the test vector for the Longfellow comparison in experiments/longfellow.
+  executable('gen_blindsig_vectors', 'blindsig/gen_blindsig_vectors.cpp',
+    include_directories : test_inc,
+    dependencies : test_deps,
+  )
 endif
