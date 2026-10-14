@@ -99,8 +99,8 @@ abbrev State := Vector UInt8 100
 
 /-- Little-endian lane packing (`keccak.cpp:57-61`). -/
 def toLanes (s : State) : Lanes :=
-  Vector.ofFn fun l => s[4 * l.1 + 3].toBitVec ++ s[4 * l.1 + 2].toBitVec ++
-    s[4 * l.1 + 1].toBitVec ++ s[4 * l.1].toBitVec
+  Vector.ofFn fun l => BitVec.cast (by norm_num) (s[4 * l.1 + 3].toBitVec ++ s[4 * l.1 + 2].toBitVec ++
+    s[4 * l.1 + 1].toBitVec ++ s[4 * l.1].toBitVec)
 
 /-- Unpacking (`keccak.cpp:66-70`). -/
 def fromLanes (a : Lanes) : State :=

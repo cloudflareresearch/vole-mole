@@ -173,10 +173,11 @@ pins down the constraint polynomials, not just their values on bits) and compare
 | `Arith/Basic.lean`: shared constraint-expression interface | done |
 | `Arith/UOV.lean`: UOV public-map gadget (`src/uov/circuit.hpp`) | done: generator, completeness, soundness, 1/\|F\| combination bound |
 | `Arith/PomFRIT.lean`: PomFRIT redeem, `P(s) = h ⊕ r` | done: generator, completeness, soundness, end-to-end 1/\|F\| bound |
-| `Arith/Keccak/`: Keccak-p[800,12] segmented gadget | in progress (round layers written) |
+| `Arith/Keccak/`, `Arith/Keccak.lean`: Keccak-p[800,12] segmented gadget (`src/keccak/`) | done: reference permutation (checked on the KATs), inverse layers proved, generator, completeness, soundness (outputs equal Keccak-p[800] of the input) |
+| `Arith/Adder.lean`: Ratatouille's 64-bit credit adder | done: exact 65-bit sum |
 | `Arith/GF.lean`, `GFEmbedding.lean`: concrete GF(2¹²⁸), GF(256), the embedding | done; embedding proved an injective ring homomorphism in the kernel |
 | C++ dumper (`tests/arith/`) and `lake exe arith_vectors` | done; Lean and C++ constraint values agree on every UOV and PomFRIT record, at bit and random field-valued witnesses |
-| Moussaka issue/redeem, Ratatouille issue/spend | not started (need the Keccak gadget) |
+| Moussaka issue/redeem, Ratatouille issue/spend | in progress |
 
 The UOV gadget's hypothesis, that the embedding GF(256) → GF(2¹²⁸) given by the β constants is an
 injective ring homomorphism, is discharged in the kernel for the concrete constants

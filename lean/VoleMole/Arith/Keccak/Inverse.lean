@@ -332,9 +332,11 @@ theorem thetaRhoPiInv_thetaRhoPi (a : Vector Bool 800) :
     thetaRhoPiInv BitOps.bool (thetaRhoPi BitOps.bool a) = a := by
   rw [thetaRhoPi_eq, thetaRhoPiInv_eq, piRhoInv_piRho, thetaInv_theta]
 
-end VoleMole.Arith.Keccak
+/-! ## `N_j ∘ N_j⁻ = N_j⁻ ∘ N_j = id` on plain bits (F2)
 
-namespace VoleMole.Arith.Keccak
+Both act on the 160 rows `(y, z)` independently (S3, S4). Each output bit is unfolded to an
+expression in the five bits of its row and the ι bit `c = (y = 0 ∧ RC_j[z])`, and the row identities
+are checked by `decide` over all `2 · 32` row values and the 5 positions. -/
 
 /-- ι on a row: flip bit `0` if `c`. -/
 def rowIota (c : Bool) (r : Fin 5 → Bool) (k : Fin 5) : Bool :=

@@ -9,8 +9,8 @@ Like the C++ templates, every layer is written once over an abstract "bit algebr
 * the constraint generator (`T = Expr F`, `BitOps.expr`),
 * the plain semantics (`T = Bool`, XOR / AND, `BitOps.bool`),
 * a degree counter (`T = ℕ` with `max` / `+`, `BitOps.deg`), and
-* a bit-sliced evaluator (`T = ℕ` with bitwise XOR / AND, `BitOps.nat`), used to check the linear
-  layers on all 800 basis vectors at once in `Keccak/Inverse.lean`.
+* field values (`T = F`, `BitOps.field` in `Arith/Keccak.lean`), to evaluate the constraints with
+  sharing.
 
 States are `Vector T 800`; bit `i` is bit `z` of lane `(x, y)` for `i = 32(5y + x) + z`
 (`tables.hpp:67-69`, `idx`). Index arithmetic mod 5 and mod 32 is `Fin` arithmetic, which equals the
@@ -22,7 +22,7 @@ Every layer comes with a *relational* lemma (`*_rel`): if a relation `R : T → 
 preserved by the operations (`BitOps.Rel`, or `BitOps.AddRel` for the linear layers), it is
 preserved by the layer, entrywise. Instances: `R e b := e.eval (ofBits w) = bitF b` (Expr ↔ Bool,
 soundness and completeness), `R e n := e.degree ≤ n` (Expr ↔ ℕ, degree bookkeeping), and
-`R n b := parity of n on s = b` (bit-sliced ↔ Bool).
+`R e v := e.eval w = v` (Expr ↔ F, differential tests).
 -/
 
 set_option linter.unusedSectionVars false
@@ -45,9 +45,6 @@ def BitOps.expr {F : Type*} [One F] : BitOps (Expr F) := ⟨Expr.add, Expr.mul, 
 
 /-- Degree counting: `deg (a + b) = max`, `deg (a b) = deg a + deg b`, `deg 1 = 0`. -/
 def BitOps.deg : BitOps ℕ := ⟨max, (· + ·), 0⟩
-
-/-- Bit-sliced plain bits: bit `k` of each number is an independent evaluation. -/
-def BitOps.nat : BitOps ℕ := ⟨(· ^^^ ·), (· &&& ·), 0⟩
 
 variable {T U : Type*}
 
