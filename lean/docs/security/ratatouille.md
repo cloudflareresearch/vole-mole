@@ -212,7 +212,8 @@ example of the latter is Moussaka, whose targets are KP800 outputs with DST "mou
       ε_ZK = ε_rho + ε_prog + 2ε_hide^AES + ε_lab + ε_iv
 
   - On `main`: `ε_lab = (Q₅ + n_mult·Q_V)·Pred_R + Q_P·2^{−128}`, with `Pred_R ≤ Adv^{ow}_{Com}`
-    ((PU) holds because `w[0..16) = r`).
+    ((PU) holds because `w[0..16) = r`; [Lean] `ZK/Relations.lean` `ratatouille_main_zk`, with
+    (PU) as a hypothesis on explicit predictors, `lean/docs/zk.md` §4.1).
   - On `voleith-label-rows`: `ε_lab = (Q₅ + n_mult·Q_V + Q_P)·2^{−128}`, which is standard
     adaptive NIZK. The labels come from dedicated VOLE rows (`CRT_DEDICATED_LABEL_ROWS`, faest
     patch 0005). This adds 256 bytes per proof (7256 and 17575 bytes).

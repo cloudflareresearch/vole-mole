@@ -132,6 +132,21 @@ blindness fails.
 **Fix:** derive the labels from dedicated VOLE rows (branch `voleith-label-rows`, faest-arch-opt
 patch 0005, +256 bytes per proof).
 
+**Statement (on `main`, `docs/zk.md` §4.1).** [Lean] `ZK/Main.lean`, `ZK/Relations.lean`: in the
+`main` layout the view `(d, c_i, forced labels)` is witness-independent, but the label offset is
+`π(d) − π(w)`; the probability that some of `q` H₅ queries hits a sibling label *equals* a sum of
+success probabilities of explicit predictors of `w[0..128)` from the adversary's auxiliary
+information, so it is `≤ q·ε_PU` under (PU), stated as a hypothesis on those predictors (also with
+the masked responses, and for a token's two proofs jointly). From the `Arith/` witness layouts,
+`w[0..16) = r` is the commitment opening for Moussaka issue/redeem and Ratatouille issue/spend
+(`moussaka_main_zk`, `ratatouille_main_zk`; (PU) there is one-wayness of Keccak-p[800] in `r`, an
+assumption); towards a Moussaka Moderator that never sees `t`, `ε_PU = 2⁻¹²⁸` unconditionally
+(`moussakaRedeem_main_zk_uniform`). For PomFRIT the Issuer's `t ⊕ h(σ)` is `r` in every honest run
+(`issuerGuess_eq`), so its query hits with probability 1 and the attack test accepts every real
+proof (`pomfrit_issuer_hits`, `pomfrit_attack_test`). Still [paper]: H1–H4, H8, the
+identical-until-bad coupling of H5 and H6 and the reduction of an oracle adversary to the query
+functions (`docs/zk.md` §4.1, "Still on paper").
+
 **Statement (with the fix).** Adaptive, multi-proof, statistical-in-the-witness zero knowledge in
 the classical ROM [paper] + [Lean] `ZK/`. Against quantum distinguishers [paper], with a bound of
 about 2⁻¹⁹ at 2³⁰ queries and 2³⁰ proofs. The dominant term, Q_P·√(q/2¹²⁸), is the standard
@@ -344,8 +359,12 @@ What is **not** established, roughly in order of importance:
 6. **Quantum bounds stop at about 2⁵¹·⁷ queries.** Going further needs a point-level
    multi-collision lemma for the compressed ideal cipher (M1–M3 in `Q6-cipher-binding.md` §7.3);
    none is known. Parallel quantum queries are not treated.
-7. **Zero knowledge on `main` is false**, and the fix is on a branch. The QROM ZK bound is loose
-   (2⁻¹⁹ at 2³⁰) until the 256-bit `rho` and salt are added.
+7. **Zero knowledge on `main` is false** for PomFRIT, and the fix is on a branch. For Moussaka and
+   Ratatouille on `main`, ZK rests on (PU), i.e. on the one-wayness of Keccak-p[800] in `r`
+   (except towards a Moussaka Moderator that never sees `t`); the bad-event bound is in Lean
+   (`ZK/Main.lean`, `ZK/Relations.lean`), but the hybrid chaining around it (H1–H4, the H5/H6
+   coupling, the reduction of an oracle adversary to query functions) is paper. The QROM ZK bound
+   is loose (2⁻¹⁹ at 2³⁰) until the 256-bit `rho` and salt are added.
 8. **Open deployment issues** found by the analysis and not yet fixed in the code: cross-protocol
    key reuse, Ratatouille spend binding, PomFRIT's `hash_to_target` domain byte and signature
    multiplicity, Moussaka nullifier squatting.

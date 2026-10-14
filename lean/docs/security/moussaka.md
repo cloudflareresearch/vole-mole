@@ -163,7 +163,11 @@ Let `q` be the adversary's total number of oracle queries, with the per-oracle c
   - `ε_ZK = ε_rho + ε_prog + 2ε_hide + ε_lab + ε_iv` with
     `ε_lab = (Q₅ + n_mult·Q_V)·Pred_R + Q_P·2^{−128}`;
   - for Moussaka, `Pred_R` is the probability of predicting `r` (the first 16 witness bytes of both
-    relations: `issue.hpp:58`, `redeem.hpp:74`).
+    relations: `issue.hpp:58`, `redeem.hpp:74`). [Lean] `ZK/Relations.lean`: `w[0..16) = r` from
+    the `Arith/` layouts, and the sibling-label bad event of both proofs jointly is
+    `≤ (#H₅ queries)·Pred_R` for explicit predictors (`moussaka_main_zk`); towards a Moderator
+    that never sees `t`, `Pred_R = 2^{−128}` unconditionally (`moussakaRedeem_main_zk_uniform`;
+    `lean/docs/zk.md` §4.1).
 
   On the fix (`voleith-label-rows`, `CRT_DEDICATED_LABEL_ROWS`), standard adaptive NIZK holds with
   `ε_lab = (Q₅ + n_mult·Q_V + Q_P)·2^{−128}`, with no `Pred` term.
