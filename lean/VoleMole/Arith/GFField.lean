@@ -272,9 +272,11 @@ theorem irreducible_modulus : Irreducible modulus := by
     intro f hf hfp
     have h1 : f.natDegree ∣ 128 :=
       hf.natDegree_dvd_of_dvd_X_pow_card_pow_sub_X (by rw [hcard]; exact hfp.trans modulus_dvd_128)
-    have h2 : ¬ f.natDegree ∣ 64 := fun h =>
-      hf.not_isUnit (modulus_coprime_64.isUnit_of_dvd' hfp
-        (by simpa [hcard] using (hf.natDegree_dvd_iff_dvd_X_pow_card_pow_sub_X (n := 64)).1 h))
+    -- `rw`, not `simp`: `simp` evaluates `2 ^ 64`, and the kernel then unfolds `X ^ 2 ^ 64`.
+    have h2 : ¬ f.natDegree ∣ 64 := fun h => by
+      have h' := (hf.natDegree_dvd_iff_dvd_X_pow_card_pow_sub_X (n := 64)).1 h
+      rw [hcard] at h'
+      exact hf.not_isUnit (modulus_coprime_64.isUnit_of_dvd' hfp h')
     obtain ⟨m, hm, he⟩ := (Nat.dvd_prime_pow (p := 2) Nat.prime_two).1 (show f.natDegree ∣ 2 ^ 7 from h1)
     rw [he] at h2 ⊢
     interval_cases m <;> simp_all

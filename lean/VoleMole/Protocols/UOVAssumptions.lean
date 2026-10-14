@@ -213,7 +213,7 @@ theorem singular_prob_bounds (n : ℕ) (hn : 1 ≤ n) (hq : 2 ≤ Fintype.card �
     have hfac : ∏ i : Fin n, (1 - a i) ≤ 1 - a j := by
       rw [← mul_prod_erase univ (fun i => 1 - a i) (mem_univ j)]
       have h1 : ∏ i ∈ univ.erase j, (1 - a i) ≤ 1 :=
-        prod_le_one (fun i _ => by linarith [ha1 i]) (fun i _ => by linarith [ha0 i])
+        prod_le_one₀ (fun i _ => by linarith [ha1 i]) (fun i _ => by linarith [ha0 i])
       have h2 : 0 ≤ 1 - a j := by linarith [ha1 j]
       nlinarith
     have haj : a j = 1 / q := by
