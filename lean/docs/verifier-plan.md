@@ -235,7 +235,8 @@ is part of milestone 6.
        `convertToVoleAt_congr_key` and `crtReconstruct_eq_respAt` (a run whose opening
        reconstructs the committed keys off the hidden leaves is the committed response `respAt`).
      - `Chain.lean`: `Chain` (reference proof for `c_i`, `c_mult`, `iv_pre`, `ũ`, `d`, `ã`, `ctr`;
-       committed keys; `chal1`, `h_V`, `z`; `chal2` derived), `OnChain` (the committed responses
+       committed keys; `chal1`, `h_V`, `z`; `chal2` and the constraint evaluator `vals` as fields, equal
+       to the executable verifier's by hypotheses of `onChain_of_accept`), `OnChain` (the committed responses
        at `Δ'` give `Δ_lifted ≠ 0`, the chain's `h_V` and `z`), `vole_kosValue` (`KOSGood`'s
        `Q`, `D` are the committed hashed rows/masks, `X` = blocks), `chain_kos_affine`,
        `chain_tree_form`, `chain_claim4` (`Claim4Hyp` and the accepting equation on all of `A`
@@ -249,4 +250,6 @@ is part of milestone 6.
    on `A` (guarded by `|A| ≥ 2`, where it is L4 §5's canonical slope), `hδ`/`hclaim1` and the
    binding of the leaf commitments (`hbind`, and the chain identification of `chal1`, `h_V`, `z`
    in `onChain_of_accept`) (L1). `pomfritVerify`'s refresher check is not part of the chain
-   theorem (its proof part is `pomfritRedeem`).
+   theorem (its proof part is `pomfritRedeem`). `Prob/` (`docs/probabilistic-plan.md`, phase A)
+   discharges `KOSGood`, `hQS`/`hcomb` and `hδ` for uniform independent `chal1`, `chal2`, `l`
+   (`*_chain_prob`).

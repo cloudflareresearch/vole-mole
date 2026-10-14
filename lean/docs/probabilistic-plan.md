@@ -1,6 +1,7 @@
 # Plan: mechanizing the classical probabilistic steps
 
-Status: plan only, nothing implemented. Scope: the classical (ROM + ideal cipher) proof of knowledge
+Status: **phase A (M1–M3) implemented** in `VoleMole/Prob/` (Mathlib only, no new dependency), with
+the deviations listed in §2a; phase B (M4–M6) not started. Scope: the classical (ROM + ideal cipher) proof of knowledge
 of `docs/extraction/README.md`. The ZK hybrids (`docs/zk.md` §10, "proved only on paper") and the
 QROM documents (Q1–Q7) are out of scope here. Notes on ZK are at the end.
 
@@ -83,7 +84,7 @@ So three kinds of work remain:
 
 Effort is in agent-days of focused work, assuming the current proof style.
 
-### M1 — Probability layer and byte decoding (Phase A, ~2–3 days)
+### M1 — Probability layer and byte decoding (Phase A, ~2–3 days) — done
 
 New file `VoleMole/Prob/Uniform.lean`:
 ```lean
@@ -106,7 +107,7 @@ ByteArray`. Decoding equivalences:
   an element of `chalSpace shortKeys`;
 - `card_shortKeys : #shortKeys = 2^64` (proved by injectivity, not by `decide`).
 
-### M2 — First target: single-challenge bounds for L3 and L4 (Phase A, ~4–6 days)
+### M2 — First target: single-challenge bounds for L3 and L4 (Phase A, ~4–6 days) — done
 
 These have the best value per effort. They turn the existing `*_card` lemmas into the exact
 probability statements the hypotheses need, at the executable verifier's challenge encoding.
@@ -163,7 +164,7 @@ the L4 paper proof also does.
 `δ x := blocksOf (BAVC.deltaBit (toBA x))`. Prove `Set.InjOn δ Z`, `#Z = 2^120`, so that the final
 step is `prU (Bytes 16) acc ≤ max(d,1)/2^128` from `#{x ∈ Z | acc x} ≤ max d 1`.
 
-### M3 — Per-chain conditional theorem (Phase A, ~3–4 days)
+### M3 — Per-chain conditional theorem (Phase A, ~3–4 days) — done
 
 For a fixed chain *prefix* (everything before `chal1`, then everything between `chal1` and `chal2`
 as a function of `chal1`), sample `chal1`, `chal2`, `l` uniformly and conclude, with `hL2` and
@@ -177,6 +178,58 @@ theorem pomfritRedeem_chain_prob (pre : ChainPrefix) (next : Bytes 136 → Chain
 This is the classical "one chain, independent challenges" form of L3 + L4 + L6, which is exactly
 the FAEST spec's per-round knowledge-soundness bound. It is a self-contained deliverable before
 any RO model exists.
+
+### 2a. Phase A as implemented, and deviations from the sketches above
+
+Files: `Prob/Uniform.lean` (M1), `Prob/Bytes.lean` (M1, and `hδ` of M2), `Prob/Challenges.lean`
+(M2), `Prob/ChainRelations.lean` (M3). `#print axioms` of the main results: `propext`,
+`Classical.choice`, `Quot.sound`.
+
+- **The chain refactor** (risk §3). `Chain` got two fields instead of `chal2` and `l`: `chal2`, and
+  `vals : (ℕ → GF128) → List GF128`, the constraint evaluator of the QuickSilver check (used by
+  `Chain.check`). For the executable verifier `vals = st.values chal1 chal2`, which reads
+  `l = H(chal2 ‖ dst)` internally; `onChain_of_accept` takes `hc2 : chal2 = Verifier.chal2 …` and
+  `hvals : vals = st.values chal1 chal2`. `chain_claim4` takes one system `cs` with
+  `vals = cs.values`. `Bridge/Relations.lean` gained `moussakaRedeemSysL`, `ratatouilleSpendSysL`,
+  `pomfritRedeemSysL` (the system at a free `l`; the old `*Sys … chal2` are these at
+  `ofArr (combinationArr …)`, by definition), and the combined relations' `*_extract_chain` take
+  `l` and `hvals : ∀ x, ch.vals x = (*SysL … l).values x`; PomFRIT's also takes the `c1` its
+  target is computed from. The executable verifier and the KAT runners are untouched.
+- **No `ChainPrefix`/`ChainMid` structures.** `proof` is one byte string holding data from all three
+  rounds, so the per-chain theorem takes a chain family `ch : Bytes 136 × Bytes 56 × Λ → Chain`
+  with hypotheses saying what it may depend on: `Chain.SamePrefix st pre (mid b₁)` (keys, `c_i`,
+  `c_mult`, `iv_pre` fixed), `Chain.SameMid st (mid ω.1) (ch ω)` (`chal1`, `ũ`, `d`, `h_V` functions
+  of `b₁`), `(mid b₁).chal1 = b₁`, `(ch ω).chal2 = b₂`, and `hvals` at `(b₁, l)`. `Chain.withChal1`
+  and its `rfl` lemmas exist (`chain_kos_bad_le`) but M3 does not need them.
+- **`chal2Equiv`** has codomain `Chal2 = GF128 × GF128 × GF128 × shortKeys` (a subtype); the count
+  is transported to `chalSpace shortKeys` inside `prU_qs_bad_le`. All decodings are proved
+  bijective by injectivity (`word_byte`: the words at offsets `0, 8, …` determine the bytes) and a
+  cardinality count; nothing of size `≥ 2⁶⁴` is enumerated.
+- **`epsKOS`** is an `ℝ≥0∞` ratio of naturals; `epsKOS_le` needs
+  `set_option exponentiation.threshold 1100` (Lean refuses to evaluate `2^n` for `n > 256` by
+  default). `ε_QS` stays real (`ENNReal.ofReal`), with `epsQS_le : ε_QS(n) ≤ 2⁻¹²⁷` for `n ≤ 2³²`.
+- **The canonical slope.** `uCanon` is "a slope on `A_V` if one exists, else `0`" (no case on
+  `|A_V| ≥ 2`: uniqueness is only needed on `A`). `slope_eq_uCanon` takes `A ⊆ A_V` (with
+  `mem_AV_of_onChain`) instead of `OnChain`; `forall_slope_of_uCanon` turns a property of `uCanon`
+  into `hQS`/`hcomb`'s quantified form.
+- **L4 names.** `prU_qs_bad_le` (one system, uniform `chal2`), `prU_comb_bad_le` (uniform `l`,
+  from a `*_comb_bad_gf128` count), `prU_qs_comb_bad_le` (both, independent, generic in the type of
+  `l`) instead of one lemma per relation.
+- **`hδ`.** `Z = admissible` (byte 15, the grinding bits, zero: what `check_format` accepts),
+  `δ = deltaBlocks = blocksOf ∘ deltaBit`, and the KOS set is `S = deltaBlocks '' admissible`
+  (`|S| ≤ 2¹²⁰`).
+- **M3's statement.** `chain_prob` is generic: a deterministic theorem `hdet` of the shape of
+  `*_extract_chain` is an argument, and each `*_chain_prob` instantiates it. The event is
+  `ChainHyps A known acc ∧ ¬(extraction ∨ #{x ∈ admissible | acc x} ≤ max(d, 1))` with
+  `A = onSet = {Δ ∈ S | OnChain}` and `ChainHyps` = L2 ∧ `hclaim1`. Bound:
+  `2⁻¹⁵⁰ + ε_QS(n) + 2⁻¹²⁸`. The issue relations have no `l`: they are stated over
+  `Bytes 136 × Bytes 56`, bound `2⁻¹⁵⁰ + ε_QS(n)`. The "same chain" binding is in `hclaim1`;
+  hypotheses on statement data that the `*_comb_bad` counts need (`anchors.length ≤ 64`,
+  `d < 2⁶⁴`) are hypotheses of the corresponding theorems.
+
+What phase A does not give, and phase B has to: that the executable verifier's `chal1`, `chal2`
+are fresh uniform RO answers on the chain and `l = H(chal2 ‖ dst)` is uniform and independent of
+`chal2` (the M3 statement is over independent samples); the union over queries; L2; `hclaim1`.
 
 ### M4 — Mathlib bump and VCVio dependency (Phase B, ~1–3 days, mostly waiting on builds)
 
@@ -232,7 +285,8 @@ and `ε_dead` as named hypotheses about the cipher.
 ## 3. Risks
 
 - **The executable verifier hard-codes SHAKE.** `Verifier.chal1`, `chal2`, `chal3`, `ivOf` and
-  `Combination` call the concrete `H`, and `Chain.chal2` is a def, not a field.
+  `Combination` call the concrete `H`, and `Chain.chal2` was a def, not a field (resolved for
+  phase A: §2a, first item).
   - For M2/M3: add `chal2` (and `l`) as chain fields, with `chal2 = Verifier.chal2 …` as an explicit
     hypothesis where `onChain_of_accept` needs it.
   - For M5+: parametrise the verifier by a hash record `Hs` (`verify (Hs := shakeHashes)` stays

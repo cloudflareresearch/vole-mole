@@ -36,6 +36,9 @@ lean/
     Protocols/              cores of the PomFRIT, Moussaka, Ratatouille, domain-separation and
                             UOV-assumption notes
     Arith/                  executable constraint generators + soundness/completeness (in progress)
+    Spec/                   executable protocol specs
+    Verifier/               executable VOLEitH verifier and its bridge theorems
+    Prob/                   uniform-probability layer: single-challenge bounds, per-chain theorem
   vectors/                  test vectors dumped by the C++ for the Arith/ cross-check
   docs/
     sketch.md               the maintainer's original design note
@@ -246,7 +249,27 @@ rejects mutated ones, built from the same models the proofs use. Plan and milest
 | UOV keys | done: pqov's key generation (`generate_keypair_pkc`, uov-Ip-pkc: `SHAKE256(sk_seed)` → `pk_seed ‖ O`, `P1 ‖ P2` by AES-128-CTR, `P3 = UT(M + Mᵀ)` with `M = Oᵀ(P1·O + P2)`, `Keygen.lean`, about 0.08 s per key) and `expand_pk` in Lean; the KAT runners derive every key from the compact secret keys. The 64 generated compressed keys equal the C++ ones in `lean/vectors/verifier_keys.txt`, and the expanded `test`/`alt61`/`alt62` keys equal `uov_keys.txt` (both optional cross-checks) |
 | Label-rows variant (`Params.labelRows`) | done; the same verifier, with the flag set, accepts all 18 KAT proofs of branch `voleith-label-rows` (KATs regenerated there, PomFRIT's too) and rejects the same 51 mutations; every intermediate value of the five dumped proofs matches |
 | Bridge theorems (`Verifier/Bridge/*`) | partly: proved that the executable CTR blocks are `Seed.Commitments.ctrInput` (and its role separation applies to the verifier's tweaks), that the VOLE check is `Seed.kosValue`, that the QuickSilver check value is `EndToEnd.qsCheck` + `Seed.maskPoly` (including the `Δ^d·f(q/Δ)` shortcut), and that acceptance gives `EndToEnd`'s accepting equation at that transcript. The field embedding is constructed (`Bridge/Concrete.lean`, from `Arith/GFField.lean`) and the theorems that assumed one (`accept_hacc`, `map_constraintKeys`, `map_gfInv`, `map_voleHashReceiver`) are restated at it without that hypothesis. Per relation (`Bridge/Relations.lean`): with `GF128` itself as the field, each relation's evaluator is `System.values` of its `Arith/*` system (`betaFast = beta`, cached UOV coefficients unchanged, the array-based UOV evaluation of `UovEval.lean` equal to the generator's), so acceptance by the executable `verify` gives `EndToEnd`'s accepting equation for that system over GF(2¹²⁸) with no hypothesis (`moussakaIssue_accept`, …, `pomfritVerify_accept`), i.e. `hacc` of `*_extract_gf128` at that Δ. |
-| Bridge across Δ (`Bridge/Lift.lean`, `Columns.lean`, `Chain.lean`, `ChainRelations.lean`) | done, modulo the probabilistic steps: ConvertToVOLE and the CRT step are read as functions of the challenge blocks with the commitments fixed (the steps take `Δ` as bits and the commitments as arguments: `convertToVoleAt`, `crtReconstructAt`). Proved: each column is `V_{i,b} + Δ_{i,b}·u^{(i)}` with `u^{(i)} = c_i + Σ_j PRG(K_{i,j})` (the hidden leaf's key never read), so each lifted witness row is `C_r + Σ_i u^{(i)}_r·e_i(Δ_i)` (`resp_row`); the executable lift `Δ ↦ Σ Δ_c W_CRT[c]` is additive and injective (`lift_injective`, an explicit left inverse checked by `decide +kernel`); an opening that reconstructs the committed keys makes the run equal to the committed response (`crtReconstruct_eq_respAt`). On a chain (fixed `chal1`, `h_V`, `z`; `chal2` determined before Δ), `chain_claim4` gives `Claim4Hyp` and the accepting equation on all of `A` with one remainder `maskPoly d a b ã z` (masks affine by L3); `onChain_of_accept` puts every accepted proof of the chain in `A` with `Δ = chal3`; `*_extract_chain` (five relations) apply `*_extract_gf128`. Assumed: `KOSGood` for `chal1` (L3), `IsFixed` for dead-leaf trees (L2), `hQS`/`hcomb` (L4), `hδ`/`hclaim1` and binding of the leaf commitments (L1) |
+| Bridge across Δ (`Bridge/Lift.lean`, `Columns.lean`, `Chain.lean`, `ChainRelations.lean`) | done, modulo the probabilistic steps: ConvertToVOLE and the CRT step are read as functions of the challenge blocks with the commitments fixed (the steps take `Δ` as bits and the commitments as arguments: `convertToVoleAt`, `crtReconstructAt`). Proved: each column is `V_{i,b} + Δ_{i,b}·u^{(i)}` with `u^{(i)} = c_i + Σ_j PRG(K_{i,j})` (the hidden leaf's key never read), so each lifted witness row is `C_r + Σ_i u^{(i)}_r·e_i(Δ_i)` (`resp_row`); the executable lift `Δ ↦ Σ Δ_c W_CRT[c]` is additive and injective (`lift_injective`, an explicit left inverse checked by `decide +kernel`); an opening that reconstructs the committed keys makes the run equal to the committed response (`crtReconstruct_eq_respAt`). On a chain (fixed `chal1`, `h_V`, `z`; `chal2` determined before Δ), `chain_claim4` gives `Claim4Hyp` and the accepting equation on all of `A` with one remainder `maskPoly d a b ã z` (masks affine by L3); `onChain_of_accept` puts every accepted proof of the chain in `A` with `Δ = chal3`; `*_extract_chain` (five relations) apply `*_extract_gf128`. Assumed: `KOSGood` for `chal1` (L3), `IsFixed` for dead-leaf trees (L2), `hQS`/`hcomb` (L4), `hδ`/`hclaim1` and binding of the leaf commitments (L1). §9 discharges L3, L4 and `hδ` for uniform independent `chal1`, `chal2`, `l` |
+
+### 9. Probabilistic layer, phase A (single challenges, one chain) — `VoleMole/Prob/`
+
+Plan: `docs/probabilistic-plan.md` (milestones M1–M3, Mathlib only). Every statement is a
+probability `prU α P` under `PMF.uniformOfFintype`, over the byte strings the random oracle returns,
+decoded exactly as the executable verifier decodes them. No oracle model yet: the samples are
+uniform and independent by assumption, which is what the random-oracle steps (M5) will justify.
+
+| Piece | Status |
+|---|---|
+| `Prob/Uniform.lean` | done: `prU`, count → probability (`prU_eq_card`, `prU_le_of_card_le`), union bound, pushforward along an equivalence, averaging over a product |
+| `Prob/Bytes.lean` | done: `Bytes n`; the little-endian words determine the bytes (`word_byte`); `gf128OfBytesEquiv : Bytes 16 ≃ GF128`, `chal1Equiv : Bytes 136 ≃ Seed.Ch GF128 shortKeys` (forward map `chOf`), `chal2Equiv : Bytes 56 ≃ GF128³ × shortKeys` (the `zkCoeff` arguments), `card_shortKeys = 2⁶⁴` (no enumeration); `hδ` deterministically: the `2¹²⁰` admissible `chal3` (`check_format`) decode injectively into blocks (`deltaBlocks_injOn`), and `prU_accept_le` (at most `N` accepted ⇒ probability `≤ N·2⁻¹²⁸`) |
+| `Prob/Challenges.lean` | done: L3 over a uniform 136-byte `chal1`, `≤ epsKOS ≤ 2⁻¹⁵⁰` for `≤ 2¹²⁰` challenges (`chain_kos_bad_le`, `epsKOS_le`); the canonical slope `Chain.AV`, `Chain.uCanon`, `slope_eq_uCanon` (L4 §5: every slope on `A ⊆ A_V`, `\|A\| ≥ 2`, is `uCanon`, fixed before `chal2`); L4 over a uniform 56-byte `chal2` (`prU_qs_bad_le`, `≤ ε_QS(n)`), over uniform `l` (`prU_comb_bad_le`, `≤ 2⁻¹²⁸`) and over both independently (`prU_qs_comb_bad_le`) |
+| `Prob/ChainRelations.lean` | done: the per-chain theorem for all five relations (`*_chain_prob`, generic `chain_prob`). For a chain whose commitments are fixed before `chal1` and whose `ũ`, `d`, `h_V` are fixed before `chal2` (`Chain.SamePrefix`, `Chain.SameMid`), with `chal1`, `chal2`, `l` uniform and independent: `Pr[L2 ∧ hclaim1 ∧ ¬(extraction ∨ at most max(d,1) admissible chal3 accepted)] ≤ 2⁻¹⁵⁰ + ε_QS(n) + 2⁻¹²⁸` (no `2⁻¹²⁸` term for the issue relations; `ε_QS(n) ≤ 2⁻¹²⁷`, `epsQS_le`). L2 and `hclaim1` remain conjuncts of the event |
+
+To make `chal2` and `l` samplable, `Bridge/Chain.lean`'s `Chain` now has `chal2` and the constraint
+evaluator `vals` as fields (it was `Chain.chal2 := Verifier.chal2 …`); `onChain_of_accept` takes
+`chal2 = Verifier.chal2 …` and `vals = st.values chal1 chal2` as hypotheses, and the combined
+relations' `*_extract_chain` take the system at a free `l` (`*SysL`). The executable verifier is
+unchanged.
 
 ## Gaps
 
@@ -260,6 +283,12 @@ What is **not** established, roughly in order of importance:
    executable verifier is exactly these steps: a good `chal1` (L3's `KOSGood`), fixed blocks for
    dead-leaf trees (L2), good `chal2`/`l` (L4's `hQS`, `hcomb`), and binding of the leaf
    commitments with accepted `chal3` landing in the chain's set (L1); `Verifier/Bridge/ChainRelations.lean`.
+   §9 machine-checks the single-challenge part: for one chain with uniform independent `chal1`,
+   `chal2`, `l`, the L3 and L4 failures have probability `≤ 2⁻¹⁵⁰ + ε_QS(n) + 2⁻¹²⁸`
+   (`Prob/ChainRelations.lean`). Still on paper: that the verifier's challenges are such samples
+   (random oracle: freshness, `l = H(chal2 ‖ dst)` independent of `chal2`, union over the queries),
+   L2 (`IsFixed`, ideal cipher) and `hclaim1` (binding of the leaf commitments, the "same chain"
+   step), which the per-chain theorem keeps as conjuncts of its event.
 2. **Code ↔ model is tested, not proved.** Each Lean model was written by reading the C++ and is
    tied to it by tests in `tests/voleith/test_lean_models.cpp` (and, when finished, the `Arith`
    cross-check). Compiler behaviour, memory safety and constant-time execution are out of scope.

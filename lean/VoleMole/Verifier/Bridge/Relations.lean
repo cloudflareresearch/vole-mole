@@ -109,29 +109,45 @@ theorem ofArr_combinationArr {n : ℕ} (chal2 dst : ByteArray) (k : Fin n) :
 def moussakaIssueSys (t ctxIss : ByteArray) : System GF128 :=
   Moussaka.issueSystem (fun k => fnOf t k.val) (fnOf ctxIss)
 
+/-- Moussaka redemption's system at a given combination vector `l`. -/
+def moussakaRedeemSysL (anchors : List UovPk) (nf ctxIss ctxRed : ByteArray)
+    (l : Fin Moussaka.M → GF128) : System GF128 :=
+  Moussaka.redeemSystem beta GF256.toBits (anchors.map UovPk.map) (fnOf nf) (fnOf ctxIss)
+    (fnOf ctxRed) l
+
 /-- Moussaka redemption's system at `l = Combination(chal2, MOUSSAKA_REDEEM_COMBINE_DST)`. -/
 def moussakaRedeemSys (anchors : List UovPk) (nf ctxIss ctxRed chal2 : ByteArray) :
     System GF128 :=
-  Moussaka.redeemSystem beta GF256.toBits (anchors.map UovPk.map) (fnOf nf) (fnOf ctxIss)
-    (fnOf ctxRed)
+  moussakaRedeemSysL anchors nf ctxIss ctxRed
     (ofArr (combinationArr Moussaka.M chal2 (toBA (Spec.makeDst "mous" 0 'l' '0'))))
 
 /-- Ratatouille issuance's system. -/
 def ratatouilleIssueSys (c : ByteArray) (tInit : ℕ) (ctxIss : ByteArray) : System GF128 :=
   Ratatouille.issueSystem (fnOf c) tInit (fnOf ctxIss)
 
+/-- Ratatouille spend's system at a given combination vector `l`. -/
+def ratatouilleSpendSysL (pk : UovPk) (nf : ByteArray) (d : ℕ) (cNext ctxIss : ByteArray)
+    (l : Fin Ratatouille.uovM → GF128) : System GF128 :=
+  Ratatouille.spendSystem beta GF256.toBits pk.map (fnOf nf) d (fnOf cNext) (fnOf ctxIss) l
+
 /-- Ratatouille spend's system at `l = Combination(chal2, RATATOUILLE_SPEND_COMBINE_DST)`. -/
 def ratatouilleSpendSys (pk : UovPk) (nf : ByteArray) (d : ℕ) (cNext ctxIss chal2 : ByteArray) :
     System GF128 :=
-  Ratatouille.spendSystem beta GF256.toBits pk.map (fnOf nf) d (fnOf cNext) (fnOf ctxIss)
+  ratatouilleSpendSysL pk nf d cNext ctxIss
     (ofArr (combinationArr Ratatouille.uovM chal2 (toBA (Spec.makeDst "rata" 0 'l' '0'))))
+
+/-- PomFRIT redemption's system at `h = hash_to_target(pk, sig, chal1, msg)` and a given
+combination vector `l`. -/
+def pomfritRedeemSysL (pk : UovPk) (sig msg : ByteArray) (labelRows : Bool) (chal1 : ByteArray)
+    (l : Fin 45 → GF128) : System GF128 :=
+  let hb := pomfritTarget (pomfritParams labelRows) pk.digest chal1 sig msg
+  PomFRIT.pomfritRedeemSystem beta GF256.toBits 119 45 pk.map (fun k => ⟨fnOf hb k.val⟩) l
 
 /-- PomFRIT redemption's system at `h = hash_to_target(pk, sig, chal1, msg)` and
 `l = Combination(chal2, POMFRIT_REDEEM_COMBINE_DST)`. -/
 def pomfritRedeemSys (pk : UovPk) (sig msg : ByteArray) (labelRows : Bool)
     (chal1 chal2 : ByteArray) : System GF128 :=
-  let hb := pomfritTarget (pomfritParams labelRows) pk.digest chal1 sig msg
-  PomFRIT.pomfritRedeemSystem beta GF256.toBits 119 45 pk.map (fun k => ⟨fnOf hb k.val⟩)
+  pomfritRedeemSysL pk sig msg labelRows chal1
     (ofArr (combinationArr 45 chal2 (toBA (Spec.makeDst "pomf" 0 'l' '0'))))
 
 theorem moussakaIssue_values (t ctxIss : ByteArray) (labelRows : Bool) (c1 c2 : ByteArray)
