@@ -32,3 +32,5 @@ import VoleMole.Arith.UOV
 import VoleMole.Arith.PomFRIT
 import VoleMole.Arith.GF
 import VoleMole.Arith.GFEmbedding
+import VoleMole.Arith.Keccak
+import VoleMole.Arith.Adder

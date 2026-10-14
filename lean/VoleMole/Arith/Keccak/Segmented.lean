@@ -58,18 +58,21 @@ def roundsOut (first : ℕ) : ℕ → (n : ℕ) → n ≤ 800 → Vector T 800 �
 /-- The committed state at bit offset `off`. -/
 def witState (wit : ℕ → T) (off : ℕ) : Vector T 800 := Vector.ofFn fun i => wit (off + i.1)
 
-/-- `segment_constraint<k>` (`segmented.hpp:241-270`), starting at round `start` from state `s`:
-the constraints and the next state (committed state `k`). -/
-def segmentConstraint (wit : ℕ → T) (wOff k start : ℕ) (seg : Segment) (s : Vector T 800) :
-    List T × Vector T 800 :=
-  let next := witState wit (8 * (wOff + 100 * k))
-  let fwd := rounds O start seg.forward s
+/-- The constraints of a segment from the forward side `fwd` and the committed state `next`
+(`segmented.hpp:255-268`): `fwd[i] + next[i]` if `backward = 0`, else `L(fwd)[i] + bwd[i]`. -/
+def meetConstraints (start : ℕ) (seg : Segment) (fwd next : Vector T 800) : List T :=
   if seg.backward = 0 then
-    ((List.finRange 800).map fun i => O.add fwd[i] next[i], next)
+    (List.finRange 800).map fun i => O.add fwd[i] next[i]
   else
     let lin := thetaRhoPi O fwd
     let bwd := roundsInvPartial O seg.backward (start + seg.len) next
-    ((List.finRange 800).map fun i => O.add lin[i] bwd[i], next)
+    (List.finRange 800).map fun i => O.add lin[i] bwd[i]
+
+/-- `segment_constraint<k>` (`segmented.hpp:241-270`), starting at round `start` from state `s`;
+the next state is committed state `k`, `witState wit (8 (wOff + 100 k))`. -/
+def segmentConstraint (wit : ℕ → T) (wOff k start : ℕ) (seg : Segment) (s : Vector T 800) :
+    List T :=
+  meetConstraints O start seg (rounds O start seg.forward s) (witState wit (8 * (wOff + 100 * k)))
 
 /-- `segment_constraints` (`segmented.hpp:272-276`): the constraints, the last committed state
 and the first round after it. -/
@@ -77,9 +80,9 @@ def segmentConstraints (wit : ℕ → T) (wOff : ℕ) :
     List Segment → ℕ → ℕ → Vector T 800 → List T × Vector T 800 × ℕ
   | [], _, start, s => ([], s, start)
   | seg :: segs, k, start, s =>
-    let r := segmentConstraint O wit wOff k start seg s
-    let r' := segmentConstraints wit wOff segs (k + 1) (start + seg.len) r.2
-    (r.1 ++ r'.1, r'.2)
+    let r := segmentConstraints wit wOff segs (k + 1) (start + seg.len)
+      (witState wit (8 * (wOff + 100 * k)))
+    (segmentConstraint O wit wOff k start seg s ++ r.1, r.2)
 
 /-- `qs_keccak` for a layout (`segmented.hpp:284-293`): the constraints and the first `n` output
 bits. -/
@@ -123,20 +126,25 @@ theorem forall₂_map_finRange {n : ℕ} {f : Fin n → T} {g : Fin n → U} (h 
   rw [List.forall₂_map_left_iff, List.forall₂_map_right_iff]
   exact List.forall₂_same.2 fun i _ => h i
 
+theorem meetConstraints_rel (hR : BitOps.Rel O P R) (start : ℕ) (seg : Segment)
+    {fwd next : Vector T 800} {fwd' next' : Vector U 800} (hf : VRel R fwd fwd')
+    (hn : VRel R next next') :
+    List.Forall₂ R (meetConstraints O start seg fwd next) (meetConstraints P start seg fwd' next') := by
+  unfold meetConstraints
+  split_ifs
+  · apply forall₂_map_finRange
+    intro i
+    exact hR.add (hf.get i) (hn.get i)
+  · apply forall₂_map_finRange
+    intro i
+    exact hR.add ((thetaRhoPi_rel hR.toAddRel hf).get i) ((roundsInvPartial_rel hR _ _ hn).get i)
+
 theorem segmentConstraint_rel (hR : BitOps.Rel O P R) {wit : ℕ → T} {wit' : ℕ → U}
     (hw : ∀ i, R (wit i) (wit' i)) (wOff k start : ℕ) (seg : Segment) {s : Vector T 800}
     {s' : Vector U 800} (h : VRel R s s') :
-    List.Forall₂ R (segmentConstraint O wit wOff k start seg s).1
-        (segmentConstraint P wit' wOff k start seg s').1 ∧
-      VRel R (segmentConstraint O wit wOff k start seg s).2
-        (segmentConstraint P wit' wOff k start seg s').2 := by
-  have hn := witState_rel hw (8 * (wOff + 100 * k))
-  have hf := rounds_rel hR start seg.forward h
-  unfold segmentConstraint
-  split_ifs
-  · exact ⟨forall₂_map_finRange fun i => hR.add (hf.get i) (hn.get i), hn⟩
-  · exact ⟨forall₂_map_finRange fun i => hR.add ((thetaRhoPi_rel hR.toAddRel hf).get i)
-      ((roundsInvPartial_rel hR _ _ hn).get i), hn⟩
+    List.Forall₂ R (segmentConstraint O wit wOff k start seg s)
+        (segmentConstraint P wit' wOff k start seg s') :=
+  meetConstraints_rel hR start seg (rounds_rel hR start seg.forward h) (witState_rel hw _)
 
 theorem segmentConstraints_rel (hR : BitOps.Rel O P R) {wit : ℕ → T} {wit' : ℕ → U}
     (hw : ∀ i, R (wit i) (wit' i)) (wOff : ℕ) (segs : List Segment) (k start : ℕ)
@@ -150,9 +158,8 @@ theorem segmentConstraints_rel (hR : BitOps.Rel O P R) {wit : ℕ → T} {wit' :
   induction segs generalizing k start s s' with
   | nil => exact ⟨List.Forall₂.nil, h, rfl⟩
   | cons seg segs ih =>
-    obtain ⟨h1, h2⟩ := segmentConstraint_rel hR hw wOff k start seg h
-    obtain ⟨h3, h4, h5⟩ := ih (k + 1) (start + seg.len) h2
-    exact ⟨List.rel_append h1 h3, h4, h5⟩
+    obtain ⟨h3, h4, h5⟩ := ih (k + 1) (start + seg.len) (witState_rel hw (8 * (wOff + 100 * k)))
+    exact ⟨List.rel_append (segmentConstraint_rel hR hw wOff k start seg h) h3, h4, h5⟩
 
 theorem qsKeccakG_rel (hR : BitOps.Rel O P R) {wit : ℕ → T} {wit' : ℕ → U}
     (hw : ∀ i, R (wit i) (wit' i)) (segs : List Segment) (final wOff n : ℕ) (hn : n ≤ 800)
@@ -183,16 +190,16 @@ theorem rounds_succ_right {T : Type*} (O : BitOps T) (first k : ℕ) (a : Vector
 theorem rounds_add {T : Type*} (O : BitOps T) (first a b : ℕ) (s : Vector T 800) :
     rounds O first (a + b) s = rounds O (first + a) b (rounds O first a s) := by
   induction a generalizing first s with
-  | zero => rfl
+  | zero => rw [Nat.zero_add, Nat.add_zero]; rfl
   | succ a ih =>
     rw [show a + 1 + b = (a + b) + 1 by omega, rounds, rounds, ih]
     congr 1; omega
 
-/-- `N_j` on plain bits. -/
-abbrev chiIotaB (j : ℕ) (b : Vector Bool 800) : Vector Bool 800 := chiIota BitOps.bool j 800 le_rfl b
-
 theorem round_bool (j : ℕ) (a : Vector Bool 800) :
-    round BitOps.bool j a = chiIotaB j (thetaRhoPi BitOps.bool a) := rfl
+    round BitOps.bool j a = chiIota BitOps.bool j 800 le_rfl (thetaRhoPi BitOps.bool a) := rfl
+
+theorem bool_xor_eq_false_iff (a b : Bool) : xor a b = false ↔ a = b := by
+  cases a <;> cases b <;> simp
 
 /-- Meeting in the middle: `L(x) = B_b(s)` iff `s` is `b` rounds forward from `x`, ending before
 round `e` (Lemma 2.1 of `L7-keccak.md`, both directions). -/
@@ -204,14 +211,12 @@ theorem thetaRhoPi_eq_roundsInvPartial_iff (b e : ℕ) (hb : 1 ≤ b) (he : b �
   | _ b ih =>
     match b, hb with
     | 1, _ =>
-      simp only [roundsInvPartial, rounds]
+      simp only [roundsInvPartial, rounds, round_bool]
       constructor
       · intro h
-        rw [round_bool, h]
-        exact (chiIota_iotaChiInv _ s).symm
+        rw [h, chiIota_iotaChiInv]
       · intro h
-        rw [h, round_bool, show e - 1 + 0 = e - 1 by omega]
-        exact (iotaChiInv_chiIota _ _).symm
+        rw [h, iotaChiInv_chiIota]
     | b + 2, _ =>
       simp only [roundsInvPartial]
       rw [ih (b + 1) (by omega) (e - 1) (by omega) (by omega)]
@@ -229,7 +234,7 @@ abbrev witVec (w : ℕ → Bool) (off : ℕ) : Vector Bool 800 := witState w off
 theorem map_add_eq_false_iff (u v : Vector Bool 800) :
     (∀ c ∈ (List.finRange 800).map (fun i => BitOps.bool.add u[i] v[i]), c = false) ↔ u = v := by
   simp only [List.mem_map, List.mem_finRange, true_and, forall_exists_index,
-    forall_apply_eq_imp_iff, BitOps.bool, Bool.xor_eq_false_iff]
+    forall_apply_eq_imp_iff, BitOps.bool, bool_xor_eq_false_iff]
   constructor
   · intro h; ext i hi; exact h ⟨i, hi⟩
   · rintro rfl i; rfl
@@ -238,14 +243,14 @@ theorem map_add_eq_false_iff (u v : Vector Bool 800) :
 the committed state is the output of the segment's rounds. -/
 theorem segmentConstraint_bool (w : ℕ → Bool) (wOff k start : ℕ) (seg : Segment)
     (s : Vector Bool 800) :
-    (∀ c ∈ (segmentConstraint BitOps.bool w wOff k start seg s).1, c = false) ↔
+    (∀ c ∈ segmentConstraint BitOps.bool w wOff k start seg s, c = false) ↔
       witVec w (8 * (wOff + 100 * k)) = rounds BitOps.bool start seg.len s := by
-  unfold segmentConstraint
+  unfold segmentConstraint meetConstraints
   split_ifs with hb
   · rw [map_add_eq_false_iff, Segment.len, hb, Nat.add_zero, eq_comm]
   · rw [map_add_eq_false_iff, thetaRhoPi_eq_roundsInvPartial_iff _ _ (by omega)
-      (by simp [Segment.len]), Segment.len, rounds_add]
-    congr 2; simp [Segment.len]
+      (by simp only [Segment.len]; omega), Segment.len, rounds_add]
+    rw [show start + (seg.forward + seg.backward) - seg.backward = start + seg.forward by omega]
 
 /-- The committed states of a layout are the true intermediate states. -/
 def Chain (w : ℕ → Bool) (wOff : ℕ) : List Segment → ℕ → ℕ → Vector Bool 800 → Prop
@@ -269,12 +274,7 @@ theorem segmentConstraints_bool (w : ℕ → Bool) (wOff : ℕ) (segs : List Seg
   | nil => exact ⟨by simp [segmentConstraints, Chain], by simp [segmentConstraints, segsLen],
       fun _ => rfl⟩
   | cons seg segs ih =>
-    obtain ⟨ih1, ih2, ih3⟩ := ih (k + 1) (start + seg.len)
-      (segmentConstraint BitOps.bool w wOff k start seg s).2
-    have e2 : (segmentConstraint BitOps.bool w wOff k start seg s).2 =
-        witVec w (8 * (wOff + 100 * k)) := by
-      unfold segmentConstraint; split_ifs <;> rfl
-    rw [e2] at ih1 ih2 ih3
+    obtain ⟨ih1, ih2, ih3⟩ := ih (k + 1) (start + seg.len) (witVec w (8 * (wOff + 100 * k)))
     refine ⟨?_, ?_, ?_⟩
     · simp only [segmentConstraints, List.mem_append, Chain]
       rw [← ih1, ← segmentConstraint_bool]
