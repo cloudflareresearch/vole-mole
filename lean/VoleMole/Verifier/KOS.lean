@@ -11,8 +11,9 @@ derivation of `chal2` (`src/voleith.hpp:435-450`).
 * `chal1` (136 bytes) is parsed as `kos_vole_check_challenge::load`: four field elements `r_i`
   (`matrix`), four keys `s_i` (`keys`) and a 64-bit key `t` (`key_4`, a field element of degree
   `< 64`).
-* The hashed rows are `x = (q_0, …, q_{ℓ−1}, q_mask[0], …, q_mask[d−2])` (`L = ℓ + d − 1` rows:
-  the CRT-lifted witness rows before the correction `d`, then the masks not used by the check).
+* The hashed rows are `x = (q_0, …, q_{ℓ'−1}, q_mask[0], …, q_mask[d−2])` (`L = ℓ' + d − 1` rows:
+  the CRT-lifted corrected rows before the correction `d`, i.e. the witness rows and, with
+  dedicated label rows, the 128 label rows; then the masks not used by the check).
   `P_s(x) = Σ_k x_k s^{L−1−k}` (Horner; `uhasher_gfsecpar`, `uhasher_gfsecpar_64`,
   `fao/universal_hash.hpp:12-150`).
 * `h_i = q_mask[d−1+i] + P_{s_{i+1}}(x) + r_i·P_{s_0}(x)` for `i < 3` and
@@ -22,7 +23,7 @@ derivation of `chal2` (`src/voleith.hpp:435-450`).
 * `chal2 = H(chal1 ‖ ũ ‖ h ‖ [mu] ‖ binder₂ ‖ d ‖ 10)` (56 bytes), with `mu` only for delayed
   instance binding.
 
-This is `Seed/KOS.lean`'s model (`voleHashP`, `kosValue`) with `L = ℓ + d − 1`.
+This is `Seed/KOS.lean`'s model (`voleHashP`, `kosValue`) with `L = ℓ' + d − 1`.
 -/
 
 namespace VoleMole.Verifier

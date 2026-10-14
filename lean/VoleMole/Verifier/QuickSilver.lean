@@ -35,18 +35,18 @@ namespace VoleMole.Verifier
 open VoleMole.Arith
 
 /-- `a^n` by square-and-multiply. -/
-def gfPow (a : GF128) (n : Nat) : GF128 := Id.run do
-  let mut r : GF128 := 1
-  for i in [0:n.log2 + 1] do
-    let b := n.log2 - i
-    r := r * r
-    if (n >>> b) % 2 == 1 then r := r * a
-  return r
+def gfPow (a : GF128) (n : Nat) : GF128 :=
+  if n = 0 then 1
+  else
+    let r := gfPow a (n / 2)
+    if n % 2 = 1 then r * r * a else r * r
+termination_by n
+decreasing_by omega
 
 /-- `a⁻¹ = a^(2¹²⁸ − 2)` (and `0 ↦ 0`). -/
 def gfInv (a : GF128) : GF128 := gfPow a (2 ^ 128 - 2)
 
-/-- The corrected witness keys `q_j = q_j + d_j Δ`, `j < ℓ`. -/
+/-- The corrected witness keys `q_j = q_j + d_j Δ`, `j < ℓ` (dedicated label rows get no `d`). -/
 def correctedKeys (pf : Proof) (rows : Array W128) (deltaL : GF128) : Array GF128 :=
   (Array.range pf.params.witnessBits).map fun j =>
     let q := rows[j]!.toGF
@@ -62,7 +62,7 @@ def constraintKeys (p : Params) (keys : Array GF128) (deltaL : GF128)
 
 /-- The QuickSilver check value. -/
 def qsCheck (pf : Proof) (chal2 : ByteArray) (cs : List GF128) (qMask : Array W128)
-    (deltaL : GF128) : GF128 := Id.run do
+    (deltaL : GF128) : GF128 :=
   let d := pf.params.qsDegree
   let a0 := gfOfBytes chal2 0
   let a1 := gfOfBytes chal2 16
@@ -72,13 +72,11 @@ def qsCheck (pf : Proof) (chal2 : ByteArray) (cs : List GF128) (qMask : Array W1
   let A := horner s arr
   let B := horner t arr
   let aT := fun i => gfOfBytes pf.qsProof (16 * i)
-  let mut mask : GF128 := 0
-  if d ≥ 2 then
-    mask := qMask[0]!.toGF
-    for i in [1:d - 1] do
-      mask := mask + (aT (i - 1) + qMask[i]!.toGF) * gfPow deltaL i
-    mask := mask + aT (d - 2) * gfPow deltaL (d - 1)
-  return mask + a0 * A + a1 * B
+  let mask : GF128 := if d ≥ 2 then
+      ((List.range (d - 2)).map fun j => (aT j + qMask[j + 1]!.toGF) * gfPow deltaL (j + 1)).foldl
+        (· + ·) qMask[0]!.toGF + aT (d - 2) * gfPow deltaL (d - 1)
+    else 0
+  mask + a0 * A + a1 * B
 
 /-- `chal3` (16 bytes). -/
 def chal3 (pf : Proof) (chal2 : ByteArray) (check : GF128) : ByteArray :=

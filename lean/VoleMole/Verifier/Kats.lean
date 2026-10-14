@@ -14,6 +14,9 @@ i.e. pqov's key generation, is not modelled) or, for PomFRIT, from the compresse
 file. Every proof must be accepted. For the first proof of each relation, a byte flipped in each
 proof field, and a changed instance, must be rejected. The transcripts of the proofs that also
 appear in `verifier_kat.txt` are compared with the dumped `chal2` and `qs_check`.
+
+With `labelRows`, all statements use the dedicated-label-row layout (`Params.labelRows`), for the
+KAT files of branch `voleith-label-rows` (and a PomFRIT KAT file regenerated there).
 -/
 
 namespace VoleMole.Verifier.Kats
@@ -58,6 +61,8 @@ structure Ctx where
   dumped : Std.HashMap ByteArray (ByteArray × ByteArray)
   /-- Only run the checks whose label starts with this. -/
   filter : String := ""
+  /-- Dedicated label rows (`Params.labelRows`). -/
+  labelRows : Bool := false
   /-- Number of valid proofs verified, and of mutations rejected. -/
   accepted : IO.Ref Nat
   rejected : IO.Ref Nat
@@ -108,18 +113,18 @@ def moussaka (c : Ctx) (path : String) : IO Bool := do
     let t := req.extract 0 45
     let proof := req.extract 45 req.size
     ok := (← run c s!"moussaka {i} issue" true proof fun _ =>
-      verify c.T (moussakaIssue t ctxIss) proof) && ok
+      verify c.T (moussakaIssue t ctxIss c.labelRows) proof) && ok
     if i == 0 then
-      for (k, off) in mutations (moussakaIssue t ctxIss).params do
+      for (k, off) in mutations (moussakaIssue t ctxIss c.labelRows).params do
         ok := (← run c s!"moussaka {i} issue, mutated {k}" false proof fun _ =>
-          verify c.T (moussakaIssue t ctxIss) (flip proof off)) && ok
+          verify c.T (moussakaIssue t ctxIss c.labelRows) (flip proof off)) && ok
       ok := (← run c s!"moussaka {i} issue, wrong ctx_iss" false proof fun _ =>
-        verify c.T (moussakaIssue t (flip ctxIss 0)) proof) && ok
+        verify c.T (moussakaIssue t (flip ctxIss 0) c.labelRows) proof) && ok
     let anchors ← IO.ofExcept ((getAll r "anchor_sk").toList.mapM c.pk)
     let rreq := unhex (get r "redeem_request")
     let nf := rreq.extract 0 24
     let rproof := rreq.extract 24 rreq.size
-    let st := moussakaRedeem anchors nf ctxIss ctxRed cd
+    let st := moussakaRedeem anchors nf ctxIss ctxRed cd c.labelRows
     ok := (← run c s!"moussaka {i} redeem ({anchors.length} anchors)" true rproof fun _ =>
       verify c.T st rproof) && ok
     if i == 0 then
@@ -127,7 +132,7 @@ def moussaka (c : Ctx) (path : String) : IO Bool := do
         ok := (← run c s!"moussaka {i} redeem, mutated {k}" false rproof fun _ =>
           verify c.T st (flip rproof off)) && ok
       ok := (← run c s!"moussaka {i} redeem, wrong challenge_digest" false rproof fun _ =>
-        verify c.T (moussakaRedeem anchors nf ctxIss ctxRed (flip cd 0)) rproof) && ok
+        verify c.T (moussakaRedeem anchors nf ctxIss ctxRed (flip cd 0) c.labelRows) rproof) && ok
   return ok
 
 def ratatouille (c : Ctx) (path : String) : IO Bool := do
@@ -142,13 +147,13 @@ def ratatouille (c : Ctx) (path : String) : IO Bool := do
     let cc := req.extract 0 32
     let proof := req.extract 32 req.size
     ok := (← run c s!"ratatouille {i} issue" true proof fun _ =>
-      verify c.T (ratatouilleIssue cc tInit ctxIss) proof) && ok
+      verify c.T (ratatouilleIssue cc tInit ctxIss c.labelRows) proof) && ok
     if i == 0 then
-      for (k, off) in mutations (ratatouilleIssue cc tInit ctxIss).params do
+      for (k, off) in mutations (ratatouilleIssue cc tInit ctxIss c.labelRows).params do
         ok := (← run c s!"ratatouille {i} issue, mutated {k}" false proof fun _ =>
-          verify c.T (ratatouilleIssue cc tInit ctxIss) (flip proof off)) && ok
+          verify c.T (ratatouilleIssue cc tInit ctxIss c.labelRows) (flip proof off)) && ok
       ok := (← run c s!"ratatouille {i} issue, wrong t_init" false proof fun _ =>
-        verify c.T (ratatouilleIssue cc (tInit + 1) ctxIss) proof) && ok
+        verify c.T (ratatouilleIssue cc (tInit + 1) ctxIss c.labelRows) proof) && ok
     let spends := getAll r "spend_request"
     for j in [0:spends.size] do
       let sreq := unhex spends[j]!
@@ -156,14 +161,14 @@ def ratatouille (c : Ctx) (path : String) : IO Bool := do
       let d := (sreq.extract 24 32).toList.foldr (fun b acc => acc * 256 + b.toNat) 0
       let cNext := sreq.extract 32 64
       let sproof := sreq.extract 64 sreq.size
-      let st := ratatouilleSpend pk nf d cNext ctxIss
+      let st := ratatouilleSpend pk nf d cNext ctxIss c.labelRows
       ok := (← run c s!"ratatouille {i} spend {j}" true sproof fun _ => verify c.T st sproof) && ok
       if i == 0 && j == 0 then
         for (k, off) in mutations st.params do
           ok := (← run c s!"ratatouille {i} spend {j}, mutated {k}" false sproof fun _ =>
             verify c.T st (flip sproof off)) && ok
         ok := (← run c s!"ratatouille {i} spend {j}, wrong d" false sproof fun _ =>
-          verify c.T (ratatouilleSpend pk nf (d + 1) cNext ctxIss) sproof) && ok
+          verify c.T (ratatouilleSpend pk nf (d + 1) cNext ctxIss c.labelRows) sproof) && ok
   return ok
 
 def pomfrit (c : Ctx) (path : String) : IO Bool := do
@@ -175,21 +180,21 @@ def pomfrit (c : Ctx) (path : String) : IO Bool := do
     let r := recs[i]!
     let sig := unhex (get r "signature")
     let msg := unhex (get r "msg")
-    let proof := sig.extract 0 VoleMole.Spec.PomFRIT.proofBytes
-    ok := (← run c s!"pomfrit {i}" true proof fun _ => pomfritVerify c.T pk sig msg) && ok
+    let proof := sig.extract 0 (pomfritParams c.labelRows).proofBytes
+    ok := (← run c s!"pomfrit {i}" true proof fun _ => pomfritVerify c.T pk sig msg c.labelRows) && ok
     if i == 0 then
-      for (k, off) in mutations (pomfritRedeem pk sig msg).params do
+      for (k, off) in mutations (pomfritParams c.labelRows) do
         ok := (← run c s!"pomfrit {i}, mutated {k}" false proof fun _ =>
-          pomfritVerify c.T pk (flip sig off) msg) && ok
+          pomfritVerify c.T pk (flip sig off) msg c.labelRows) && ok
       ok := (← run c s!"pomfrit {i}, mutated refresher" false proof fun _ =>
-        pomfritVerify c.T pk (flip sig (sig.size - 1)) msg) && ok
+        pomfritVerify c.T pk (flip sig (sig.size - 1)) msg c.labelRows) && ok
       ok := (← run c s!"pomfrit {i}, wrong msg" false proof fun _ =>
-        pomfritVerify c.T pk sig (msg.push 0)) && ok
+        pomfritVerify c.T pk sig (msg.push 0) c.labelRows) && ok
   return ok
 
 /-- Run everything; `dir` is the vector directory, `tests` the repository's `tests/`. -/
-def main (T : CrtTables) (dumpedRecs : Array Vectors.Record) (dir tests filter : String) :
-    IO Bool := do
+def main (T : CrtTables) (dumpedRecs : Array Vectors.Record) (dir tests filter : String)
+    (labelRows : Bool) : IO Bool := do
   let mut cpks : Std.HashMap String ByteArray := {}
   for line in (← IO.FS.readFile s!"{dir}/verifier_keys.txt").splitOn "\n" do
     match line.splitOn " " with
@@ -199,7 +204,7 @@ def main (T : CrtTables) (dumpedRecs : Array Vectors.Record) (dir tests filter :
   for r in dumpedRecs do
     if r.group == "kat" then
       dumped := dumped.insert (r.bytes "proof") (r.bytes "chal2", r.bytes "qs_check")
-  let c : Ctx := { T, cpks, dumped, filter, accepted := ← IO.mkRef 0, rejected := ← IO.mkRef 0 }
+  let c : Ctx := { T, cpks, dumped, filter, labelRows, accepted := ← IO.mkRef 0, rejected := ← IO.mkRef 0 }
   let mut ok := true
   -- The expansion of the `test` key agrees with the C++ expanded key of `uov_keys.txt`.
   let testSk := "606162636465666768696a6b6c6d6e6f707172737475767778797a7b7c7d7e7f"

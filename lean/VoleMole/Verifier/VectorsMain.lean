@@ -25,6 +25,10 @@ written by `tests/voleith/dump_verifier_vectors.cpp` (format documented there):
   and PomFRIT KAT files is verified in full and must be accepted; mutated proofs and instances
   must be rejected.
 
+The proof layout (`Params.labelRows`) is read off the dump: `correction_rows` is `8 · witness_bytes`
+on `main` and `8 · witness_bytes + 128` with dedicated label rows (a `voleith-label-rows` build of the
+dumper, with `TESTS_DIR` that branch's `tests/`); all records must agree.
+
 Usage: `lake exe verifier_vectors [VECTOR_DIR [TESTS_DIR [FILTER]]]` (defaults `vectors`,
 `../tests`, and the empty filter; with a filter, only the KAT checks whose label starts with it run).
 Exits with status 1 on any failure.
@@ -101,17 +105,22 @@ def w128Bytes (a : Array W128) : ByteArray := a.foldl (fun acc w => acc ++ w.toB
 
 def u32Bytes (a : Array UInt32) : ByteArray := a.foldl AES.pushLE32 ByteArray.empty
 
-/-- Milestones 2-4 on one KAT record; returns success and the time in ms of each stage. -/
+/-- Whether a KAT record has the dedicated-label-row layout. -/
+def labelRowsOf (r : Record) : Bool :=
+  (r.get "correction_rows").toNat! != 8 * (r.get "witness_bytes").toNat!
+
+/-- Milestones 2-5 on one KAT record; returns success. -/
 def checkKatRecord (T : CrtTables) (r : Record) : IO Bool := do
   let label := r.name
   let p : Params := { witnessBytes := (r.get "witness_bytes").toNat!,
-                      qsDegree := (r.get "qs_degree").toNat! }
+                      qsDegree := (r.get "qs_degree").toNat!, labelRows := labelRowsOf r }
   let pf : Proof := { params := p, bytes := r.bytes "proof" }
   let mut ok := true
   ok := (← check s!"{label} params" (p.nMask == (r.get "n_mask").toNat! &&
     p.voleColBlocks == (r.get "vole_col_blocks").toNat! &&
     p.voleRows == (r.get "vole_rows").toNat! &&
-    p.witnessBits == (r.get "correction_rows").toNat!)) && ok
+    p.correctionRows == (r.get "correction_rows").toNat! &&
+    pf.bytes.size == p.proofBytes)) && ok
   ok := (← check s!"{label} check_format" pf.checkFormat) && ok
   -- Milestone 2: mu, iv, BAVC, chal1.
   let inst := r.bytes "inst_enc"
@@ -176,6 +185,8 @@ def checkKat (rs : Array Record) : IO Bool := do
       n := n + 1
       ok := (← checkKatRecord T r) && ok
   ok := (← check "kat records" (n == 5)) && ok
+  let lr := (rs.filter (·.group == "kat")).map labelRowsOf
+  ok := (← check "kat records: one layout" (lr.all (· == lr[0]!))) && ok
   return ok
 
 def main (args : List String) : IO UInt32 := do
@@ -201,7 +212,9 @@ def main (args : List String) : IO UInt32 := do
       G.wTree == D.wTree && G.wGate == D.wGate && G.g == D.g))
   let t1 ← IO.monoMsNow
   IO.println s!"CRT tables: {if okT then "ok" else "FAILED"} ({t1 - t0} ms)"
-  let ok4 ← Kats.main G katRecs dir (args.getD 1 "../tests") (args.getD 2 "")
+  let labelRows := (katRecs.find? (·.group == "kat")).any labelRowsOf
+  IO.println s!"Proof layout: {if labelRows then "dedicated label rows" else "main"}"
+  let ok4 ← Kats.main G katRecs dir (args.getD 1 "../tests") (args.getD 2 "") labelRows
   return if ok1 && ok2 && ok3 && okT && ok4 then 0 else 1
 
 end VoleMole.Verifier.Vectors
