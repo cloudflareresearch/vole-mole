@@ -364,3 +364,118 @@ TEST(SpendRelation, WitnessIsConsistent) {
     const auto com_next = last_segment(SPEND_WIT_OFF_COM_NEXT_STATES);
     EXPECT_TRUE(std::equal(c_next.begin(), c_next.end(), com_next.begin()));
 }
+
+// The adder is sound for every carry vector, not just for single flips: exhaustively over a, b with
+// four low (or four high) bits and every value of the five carries around them, the carry
+// constraints hold iff the carries are the true ones, and then the 65-bit sum is a + b.
+TEST(SpendRelation, AdderExhaustiveSmall) {
+    for (const size_t shift : {size_t{0}, size_t{60}}) {
+        for (uint64_t a4 = 0; a4 < 16; ++a4) {
+            for (uint64_t b4 = 0; b4 < 16; ++b4) {
+                const uint64_t a = a4 << shift, b = b4 << shift;
+                for (uint64_t k5 = 0; k5 < 32; ++k5) {
+                    // Every value of k_1, ..., k_5 (shift 0) or k_60, ..., k_64 (shift 60); the
+                    // other carries are 0, which is their true value.
+                    const uint64_t k = shift == 0 ? k5 : k5 << (shift - 1);
+                    const unsigned __int128 expected = (unsigned __int128)a + b;
+                    for (const bool b_public : {false, true}) {
+                        const auto r = run_adder(adder_witness(a, b, k), b, b_public);
+                        const bool ok = count_violated(r.violated) == 0;
+                        EXPECT_EQ(ok, k == carries(a, b))
+                            << "a = " << a << ", b = " << b << ", k = " << k;
+                        if (ok) {
+                            EXPECT_EQ(r.low, uint64_t(expected));
+                            EXPECT_EQ(r.high, bool(expected >> 64));
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+// The carry and conservation constraints (V3) hold iff t + x = t' + d over the integers:
+// exhaustively for small t', d, and at the top of the range.
+TEST(SpendRelation, ConservationExhaustiveSmall) {
+    struct Case {
+        Credits t, x;
+        std::vector<Credits> values; // for t' and d
+    };
+    const std::vector<Case> cases = {
+        {5, 3, {0, 1, 2, 3, 4, 5, 6, 7, 8, 9, MAX_CREDITS - 1, MAX_CREDITS}},
+        {MAX_CREDITS, 2, {0, 1, 2, 3, MAX_CREDITS - 2, MAX_CREDITS - 1, MAX_CREDITS}},
+    };
+    for (const Case& c : cases) {
+        SpendState st = make_state(c.t, c.x, 0);
+        for (const Credits t_next : c.values) {
+            for (const Credits d : c.values) {
+                st.t_next = t_next;
+                const auto violated =
+                    evaluate(encode_spend_witness(st, d, CTX_ISS), make_instance(st, d));
+                const bool v3_ok =
+                    std::none_of(violated.begin() + CARRY_OFF, violated.begin() + KECCAK_OFF,
+                                 [](bool b) { return b; });
+                const bool conserved =
+                    (unsigned __int128)c.t + c.x == (unsigned __int128)t_next + d;
+                EXPECT_EQ(v3_ok, conserved)
+                    << "t = " << c.t << ", x = " << c.x << ", t' = " << t_next << ", d = " << d;
+                EXPECT_EQ(count_violated(violated) == 0, conserved);
+            }
+        }
+    }
+}
+
+// For any witness, the inputs of the three Keccak evaluations are those of the relation: Com(nf,
+// ctx_iss, t, r) and Tag(c, x) for the current state, and Com(nf', ctx_iss, t', r') for the updated
+// state, with nf and ctx_iss public and everything else read from the witness. Each input byte is
+// either a public constant or a copy of one witness byte, so two witnesses suffice: in the first,
+// the witness bytes are pairwise distinct (mod 256, which suffices for the first 112 bytes that
+// enter the inputs), and the second is its complement.
+TEST(SpendRelation, KeccakInputsAreRelationInputs) {
+    static_assert(SPEND_WIT_OFF_S <= 256);
+    Witness w;
+    for (size_t i = 0; i < w.size(); ++i) {
+        w[i] = static_cast<uint8_t>(i + 1);
+    }
+    const auto input = [](const Witness& wit, const Kp800State& pub,
+                          const keccak::detail::InputMap& map) {
+        PlainQS qs{wit.data(), {}};
+        const auto bits = keccak::detail::qs_input(&qs, pub, map);
+        Kp800State s{};
+        for (size_t i = 0; i < bits.size(); ++i) {
+            s[i / 8] |= static_cast<uint8_t>(bits[i].v << (i % 8));
+        }
+        return s;
+    };
+    for (int pass = 0; pass < 2; ++pass) {
+        const auto field = [&w]<size_t N>(size_t off, std::array<uint8_t, N>& out) {
+            std::copy_n(w.begin() + static_cast<std::ptrdiff_t>(off), N, out.begin());
+        };
+        Opening r, r_next;
+        Nullifier nf_next;
+        Commitment c;
+        CreditBytes t, x, t_next;
+        field(SPEND_WIT_OFF_R, r);
+        field(SPEND_WIT_OFF_T, t);
+        field(SPEND_WIT_OFF_X, x);
+        field(SPEND_WIT_OFF_C, c);
+        field(SPEND_WIT_OFF_NF_NEXT, nf_next);
+        field(SPEND_WIT_OFF_T_NEXT, t_next);
+        field(SPEND_WIT_OFF_R_NEXT, r_next);
+
+        // As in SpendRelation::constraints.
+        EXPECT_EQ(input(w, encode_com_state(NF, CTX_ISS, 0, {}), SPEND_COM_TO_WIT),
+                  encode_com_state(NF, CTX_ISS, decode_credits(t), r))
+            << "Com, pass " << pass;
+        EXPECT_EQ(input(w, encode_tag_state({}, 0), SPEND_TAG_TO_WIT),
+                  encode_tag_state(c, decode_credits(x)))
+            << "Tag, pass " << pass;
+        EXPECT_EQ(input(w, encode_com_state({}, CTX_ISS, 0, {}), SPEND_COM_NEXT_TO_WIT),
+                  encode_com_state(nf_next, CTX_ISS, decode_credits(t_next), r_next))
+            << "Com', pass " << pass;
+
+        for (uint8_t& b : w) {
+            b = static_cast<uint8_t>(~b);
+        }
+    }
+}
