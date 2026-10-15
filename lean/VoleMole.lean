@@ -151,6 +151,7 @@ import VoleMole.ZK.TwoPhaseReadsRO
 import VoleMole.Privacy.PomFRITRO
 import VoleMole.ZK.CollideRO
 import VoleMole.ZK.CollideRO2
+import VoleMole.ZK.SimAcceptFull
 import VoleMole.Privacy.MoussakaDelta
 import VoleMole.Privacy.RatatouilleDelta
 import VoleMole.Privacy.PomFRITDelta
