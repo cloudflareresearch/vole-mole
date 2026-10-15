@@ -161,3 +161,4 @@ import VoleMole.ZK.HopsPatch
 import VoleMole.Privacy.AdaptiveRO
 import VoleMole.ZK.AdaptRO
 import VoleMole.Privacy.MoussakaRA
+import VoleMole.Privacy.RatatouilleRA

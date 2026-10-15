@@ -187,32 +187,6 @@ theorem idealGameRA_eq [Fintype CI] [Fintype CR] :
   rw [← pr_equiv swapNRO]
   exact pr_congr fun x => Iff.rfl
 
-/-! ## Reads of the interaction -/
-
-section Reads
-
-variable {X : Type*} {p : Params}
-
-lemma SReads.rd3 {f : Tb p → X} {a3 a2 a5 aE : ℕ} (h : SReads p f a3 a2 a5 aE) (s : Sh p) :
-    Rd3 (fun g => f (g, s)) a3 := by
-  obtain ⟨Q, hQ, hc⟩ := h
-  exact ⟨fun g => (Q (g, s)).1, fun g => (hc _).1, fun g g' hg =>
-    (hQ (g, s) (g', s) ⟨hg, fun _ _ => rfl, fun _ _ => rfl, fun _ _ => rfl⟩).2⟩
-
-lemma SReads.rd5 {f : Tb p → X} {a3 a2 a5 aE : ℕ} (h : SReads p f a3 a2 a5 aE) (g : Tab3) :
-    Rd5 (fun s => f (g, s)) a5 := by
-  obtain ⟨Q, hQ, hc⟩ := h
-  exact ⟨fun s => (Q (g, s)).2.2.1, fun s => (hc _).2.2.1, fun s G5 h5 =>
-    (hQ (g, s) (g, (s.1, G5, s.2.2)) ⟨fun _ _ => rfl, fun _ _ => rfl, h5, fun _ _ => rfl⟩).2⟩
-
-lemma SReads.rdE {f : Tb p → X} {a3 a2 a5 aE : ℕ} (h : SReads p f a3 a2 a5 aE) (g : Tab3) :
-    RdE (fun s => f (g, s)) aE := by
-  obtain ⟨Q, hQ, hc⟩ := h
-  exact ⟨fun s => (Q (g, s)).2.2.2, fun s => (hc _).2.2.2, fun s E hE =>
-    (hQ (g, s) (g, (s.1, s.2.1, E)) ⟨fun _ _ => rfl, fun _ _ => rfl, fun _ _ => rfl, hE⟩).2⟩
-
-end Reads
-
 /-! ## The hybrids -/
 
 section Hops

@@ -801,6 +801,26 @@ lemma SReads.pair {f : Tb p → Y} {g : Tb p → X} {a3 a2 a5 aE b3 b2 b5 bE : �
     SReads p (fun t => (f t, g t)) (a3 + b3) (a2 + b2) (a5 + b5) (aE + bE) :=
   hf.bind (g := fun y t => (y, g t)) fun y => hg.map fun x => (y, x)
 
+/-- **A table reader with the shared tables fixed** reads its slice at at most `a₃` keys; with the
+slice fixed it reads `H₅` and the cipher at at most `a₅`, `a_E` keys. -/
+lemma SReads.rd3 {f : Tb p → X} {a3 a2 a5 aE : ℕ} (h : SReads p f a3 a2 a5 aE) (s : Sh p) :
+    Rd3 (fun g => f (g, s)) a3 := by
+  obtain ⟨Q, hQ, hc⟩ := h
+  exact ⟨fun g => (Q (g, s)).1, fun g => (hc _).1, fun g g' hg =>
+    (hQ (g, s) (g', s) ⟨hg, fun _ _ => rfl, fun _ _ => rfl, fun _ _ => rfl⟩).2⟩
+
+lemma SReads.rd5 {f : Tb p → X} {a3 a2 a5 aE : ℕ} (h : SReads p f a3 a2 a5 aE) (g : Tab3) :
+    Rd5 (fun s => f (g, s)) a5 := by
+  obtain ⟨Q, hQ, hc⟩ := h
+  exact ⟨fun s => (Q (g, s)).2.2.1, fun s => (hc _).2.2.1, fun s G5 h5 =>
+    (hQ (g, s) (g, (s.1, G5, s.2.2)) ⟨fun _ _ => rfl, fun _ _ => rfl, h5, fun _ _ => rfl⟩).2⟩
+
+lemma SReads.rdE {f : Tb p → X} {a3 a2 a5 aE : ℕ} (h : SReads p f a3 a2 a5 aE) (g : Tab3) :
+    RdE (fun s => f (g, s)) aE := by
+  obtain ⟨Q, hQ, hc⟩ := h
+  exact ⟨fun s => (Q (g, s)).2.2.2, fun s => (hc _).2.2.2, fun s E hE =>
+    (hQ (g, s) (g, (s.1, s.2.1, E)) ⟨fun _ _ => rfl, fun _ _ => rfl, fun _ _ => rfl, hE⟩).2⟩
+
 /-- **A consistent programming of `H₂³`**: `L` changes only `H₂³`, there only at keys of the
 blocks `Bk s`, and its blocks, its programmed answers and its reads `R5 s`, `RE s` of `H₅` and the
 cipher are determined by the tables on those reads (at most `m₅`, `m_E` keys). -/
