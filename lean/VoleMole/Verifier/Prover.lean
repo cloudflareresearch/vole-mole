@@ -73,21 +73,9 @@ open VoleMole.Arith
 
 namespace BAVC
 
-/-- The hidden nodes for `Δ` (the 17 hidden leaves and their ancestors), and the seeds the
-opening reveals, in the order `verify` reads them (walking `n = L − 2, …, 0`, the other child of
-every node with exactly one hidden child). -/
-def openSeeds (t : Array ByteArray) (delta : ByteArray) : Array ByteArray := Id.run do
-  let mut hidden : Array Bool := Array.replicate numNodes false
-  for i in [0:tau] do
-    hidden := hidden.set! (treePos i (deltaIndex delta i)) true
-  let mut seeds : Array ByteArray := #[]
-  for m in [0:numLeaves - 1] do
-    let n := numLeaves - 2 - m
-    let l := hidden[2 * n + 1]!
-    let r := hidden[2 * n + 2]!
-    hidden := hidden.set! n (l || r)
-    if l != r then seeds := seeds.push t[if l then 2 * n + 2 else 2 * n + 1]!
-  return seeds
+/-- The seeds an opening at `Δ` reveals (`openNodes`): nodes of the tree `t`. -/
+def openSeeds (t : Array ByteArray) (delta : ByteArray) : Array ByteArray :=
+  (openNodes delta).map (t[·]!)
 
 /-- `one_tree_bavc::open`: the opening of the tree `t` (with leaf commitments `coms`, spec order)
 at `Δ`, or `none` if it needs more than `T_OPEN = 105` seeds. -/
@@ -139,7 +127,7 @@ def findFirst {α : Type} (f : Nat → Option α) : Nat → Nat → Option α
 
 /-- `F` (312 rows over `u ∈ F₂¹²⁸`) and `M_tree = Π M_i` (degree 120), from `CrtData`. -/
 def fRows : Array W128 := CrtGen.F.map CrtGen.w128OfNat
-def mTree : Nat := CrtGen.hexNat CrtData.mTreeHex
+def mTree : Nat := CrtData.mTreeHex
 
 /-! ## ConvertToVOLE and the CRT VOLE, sender side -/
 

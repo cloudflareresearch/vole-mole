@@ -182,14 +182,13 @@ def rowOf (cols : Array (Array UInt64)) (r : Nat) : W128 := Id.run do
     if wbit cols[c + 64]! r then hi := hi ||| ((1 : UInt64) <<< c.toUInt64)
   return ⟨lo, hi⟩
 
-/-- `M_i`-reduction of a GF(2) polynomial (both as words). -/
-def polyMod (x m : UInt64) : UInt64 := Id.run do
+/-- `M_i`-reduction of a GF(2) polynomial (both as words): for `b = 63, …, deg M_i`, clear bit `b`
+with `M_i · X^{b − deg M_i}`. -/
+def polyMod (x m : UInt64) : UInt64 :=
   let deg := m.toNat.log2
-  let mut x := x
-  for s in [0:64] do
+  (List.range 64).foldl (fun x s =>
     let b := 63 - s
-    if b ≥ deg && (x >>> b.toUInt64) &&& 1 == 1 then x := x ^^^ (m <<< (b - deg).toUInt64)
-  return x
+    if b ≥ deg && (x >>> b.toUInt64) &&& 1 == 1 then x ^^^ (m <<< (b - deg).toUInt64) else x) x
 
 /-- The inputs `iv ‖ e (u32 LE) ‖ L_e ‖ 5` of the gate hashes, `e < N_MULT`. -/
 def gateInputs (p : Params) (T : CrtTables) (iv : ByteArray) (cols : Array (Array UInt64)) :
@@ -222,25 +221,31 @@ def gammaOf (T : CrtTables) (dbit : Nat → Bool) : Array UInt64 :=
   (List.range 120).foldl (fun acc c => if dbit c then xorWords acc T.g[c]! else acc)
     (Array.replicate 5 0)
 
-/-- `r̃_m` from the 8 mask rows `src` of mask `m`. -/
-def rTildeOf (T : CrtTables) (src : Array W128) : W128 := Id.run do
-  let mut rt := W128.zero
-  for i in [0:BAVC.tau] do
-    let k := BAVC.kOf i
-    let o := BAVC.bitOffset i
-    let mut x : UInt64 := 0
-    for t in [0:k] do
-      let mut bits : UInt64 := 0
-      for b in [0:k] do
-        if src[t]!.bit (o + b) then bits := bits ||| ((1 : UInt64) <<< b.toUInt64)
-      x := x ^^^ (bits <<< t.toUInt64)
-    let red := polyMod x T.mI[i]!
-    for b in [0:k] do
-      if (red >>> b.toUInt64) &&& 1 == 1 then
-        let pos := o + b
-        rt := if pos < 64 then { rt with lo := rt.lo ||| ((1 : UInt64) <<< pos.toUInt64) }
-          else { rt with hi := rt.hi ||| ((1 : UInt64) <<< (pos - 64).toUInt64) }
-  return rt
+/-- Bits `o … o + k − 1` of a block, as a polynomial (bit `b` = coefficient of `X^b`). -/
+def W128.bitsAt (a : W128) (o k : Nat) : UInt64 :=
+  (List.range k).foldl (fun acc b => if a.bit (o + b) then acc ^^^ ((1 : UInt64) <<< b.toUInt64)
+    else acc) 0
+
+/-- The block with the single bit `j` (`< 128`). -/
+def W128.single (j : Nat) : W128 :=
+  if j < 64 then ⟨(1 : UInt64) <<< j.toUInt64, 0⟩ else ⟨0, (1 : UInt64) <<< (j - 64).toUInt64⟩
+
+/-- The bits `0 … k − 1` of `w`, placed at bits `o …` of a block. -/
+def W128.place (w : UInt64) (o k : Nat) : W128 :=
+  (List.range k).foldl (fun acc b => if (w >>> b.toUInt64) &&& 1 == 1 then acc.xor (single (o + b))
+    else acc) zero
+
+/-- `Σ_{t < k_i} x_{m,t,i} · X^t` for small VOLE `i`, from the mask rows `src` (`x_{m,t,i}`: bits
+`p_i … p_i + k_i − 1` of row `t`). -/
+def rTildeIn (src : Array W128) (i : Nat) : UInt64 :=
+  (List.range (BAVC.kOf i)).foldl (fun x t =>
+    x ^^^ (src[t]!.bitsAt (BAVC.bitOffset i) (BAVC.kOf i) <<< t.toUInt64)) 0
+
+/-- `r̃_m` from the 8 mask rows `src` of mask `m`: bits `p_i …` are `rTildeIn src i mod M_i`. -/
+def rTildeOf (T : CrtTables) (src : Array W128) : W128 :=
+  (List.range BAVC.tau).foldl (fun rt i =>
+    rt.xor (W128.place (polyMod (rTildeIn src i) T.mI[i]!) (BAVC.bitOffset i) (BAVC.kOf i)))
+    W128.zero
 
 /-- `crt_vole_reconstruct` after the plain reconstruction and the gate hashes, and
 `crt_lift_delta`, from the gate hashes `hashes`, the bits `dbit c` (`c < 120`) of `Δ` and `c_mult`.

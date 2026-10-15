@@ -36,13 +36,15 @@ satisfies, for every `Δ` the grinding may produce.
   - `HashesWF Hs`: the hash functions have the domains' output lengths (`hashesWF_shake`: SHAKE128
     has them);
   - `BAVCComplete`: an opening of the prover's GGM tree reconstructs its leaf keys off the hidden
-    leaves and its commitments (an imperative walk over the 4607 nodes, not proved);
+    leaves and its commitments (proved: `Bridge/BAVCComplete.lean`, `bavcComplete`);
   - `CrtComplete`: the verifier's CRT masks are `ṽ_mask + u_mask·Δ'` for the prover's commitment
-    (the garbled gate labels and the bilinear identity of the CRT tables, not proved; the rows are);
+    (the garbled gate labels and the bilinear identity of the CRT tables; the rows are proved here,
+    the masks for faest-arch-opt's tables in `Bridge/CrtComplete.lean`, `crtComplete`);
   - `Δ' ≠ 0` for the ground `Δ` (probability `2⁻¹²⁰`; neither the C++ prover nor the Lean one
     tests it).
-  `lake exe prover_vectors` checks the two correctness assumptions on every proof it produces
-  (`ProverKats.checkCorrelation`). The witness need not be assumed to satisfy the relation:
+  `lake exe prover_vectors` also checks the two correctness facts on every proof it produces
+  (`ProverKats.checkCorrelation`). `Bridge/Complete.lean` restates the theorems below for
+  `CrtGen.tables` without them (`verify_prove_tables`, `*_complete_tables`, `*_complete_shake`). The witness need not be assumed to satisfy the relation:
   `Prover.qsProve` refuses otherwise.
 -/
 
@@ -1088,8 +1090,8 @@ lemma qsProve_aT_size {pf0 : Proof} {c2 : ByteArray} {values : (ℕ → GF128) �
   simp
 
 /-- **BAVC completeness** (`one_tree_bavc::open`, then `verify`): an opening of the prover's tree
-at `Δ` reconstructs the prover's leaf keys off the hidden leaves, and its commitments. Not proved
-here (an imperative walk over the 4607 tree nodes); `lake exe prover_vectors` checks it on every
+at `Δ` reconstructs the prover's leaf keys off the hidden leaves, and its commitments. Proved in
+`Bridge/BAVCComplete.lean` (`bavcComplete`); `lake exe prover_vectors` also checks it on every
 proof it produces (`ProverKats.checkCorrelation`). -/
 def BAVCComplete : Prop :=
   ∀ seed iv delta o : ByteArray,
@@ -1103,8 +1105,9 @@ def BAVCComplete : Prop :=
 `crt_vole_reconstruct`): at every `Δ`, the verifier's masks `q_mask[m]` are
 `ṽ_mask[m] + u_mask[m]·Δ'`. This is the content of faest-arch-opt's CRT construction (the
 garbled gate labels, `c_mult`, and the bilinear identity of `F`, `G`, `W_tree`, `W_gate` that
-`CrtGen.identityOk` checks at run time); not proved here, checked on every proof by
-`lake exe prover_vectors`. The rows are proved (`prover_row`). -/
+`CrtGen.identityOk` checks at run time). Proved for `CrtGen.tables` in `Bridge/CrtComplete.lean`
+(`crtComplete`, with the identity checked in the kernel, `Bridge/CrtCheck.lean`); also checked on
+every proof by `lake exe prover_vectors`. The rows are proved for any tables (`prover_row`). -/
 def CrtComplete (h5 : ByteArray → ByteArray) (T : CrtTables) (s : Prover.Pending) : Prop :=
   ∀ dbit : ℕ → Bool, ∀ m < s.params.nMask,
     (crtReconstructAt h5 s.params dbit

@@ -12,8 +12,8 @@ seeds:
 * `expandTree_size`, `expandTree_get_size`: the GGM tree has `2L − 1` nodes of 16 bytes (for a
   16-byte seed);
 * `commit_coms_size`: the leaf commitments are `32 L` bytes;
-* `openSeeds_eq`: the opened seeds are the tree's nodes at positions `openPos Δ` that depend on `Δ`
-  only (so `Sim.openCount` is their number, `openSeeds_size`), all below `2L − 1`.
+* `openSeeds_eq`: the opened seeds are the tree's nodes at positions `BAVC.openNodes Δ` that depend
+  on `Δ` only (so `Sim.openCount` is their number, `openSeeds_size`), all below `2L − 1`.
 -/
 
 namespace VoleMole.ZK.Sim
@@ -164,102 +164,28 @@ theorem commit_coms_size (seed iv : ByteArray) :
 
 /-! ## The opened seeds -/
 
-/-- The positions of the opened seeds (the walk of `BAVC.openSeeds`, recording positions). -/
-def openPos (delta : ByteArray) : Array ℕ := Id.run do
-  let mut hidden : Array Bool := Array.replicate BAVC.numNodes false
-  for i in [0:BAVC.tau] do
-    hidden := hidden.set! (BAVC.treePos i (BAVC.deltaIndex delta i)) true
-  let mut pos : Array ℕ := #[]
-  for m in [0:BAVC.numLeaves - 1] do
-    let n := BAVC.numLeaves - 2 - m
-    let l := hidden[2 * n + 1]!
-    let r := hidden[2 * n + 2]!
-    hidden := hidden.set! n (l || r)
-    if l != r then pos := pos.push (if l then 2 * n + 2 else 2 * n + 1)
-  return pos
-
-/-- One step of the opening walk, recording the opened node with `rec`. -/
-def walkStep {γ : Type} (rec : ℕ → γ) (m : ℕ) (x : Array Bool × Array γ) : Array Bool × Array γ :=
-  if (x.1[2 * (BAVC.numLeaves - 2 - m) + 1]! != x.1[2 * (BAVC.numLeaves - 2 - m) + 2]!) = true then
-    (x.1.set! (BAVC.numLeaves - 2 - m)
-      (x.1[2 * (BAVC.numLeaves - 2 - m) + 1]! || x.1[2 * (BAVC.numLeaves - 2 - m) + 2]!),
-     x.2.push (rec (if x.1[2 * (BAVC.numLeaves - 2 - m) + 1]! = true then
-       2 * (BAVC.numLeaves - 2 - m) + 2 else 2 * (BAVC.numLeaves - 2 - m) + 1)))
-  else
-    (x.1.set! (BAVC.numLeaves - 2 - m)
-      (x.1[2 * (BAVC.numLeaves - 2 - m) + 1]! || x.1[2 * (BAVC.numLeaves - 2 - m) + 2]!), x.2)
-
-/-- The hidden-node marks before the walk. -/
-def hiddenInit (delta : ByteArray) : Array Bool :=
-  (List.range BAVC.tau).foldl (fun h i => h.set! (BAVC.treePos i (BAVC.deltaIndex delta i)) true)
-    (Array.replicate BAVC.numNodes false)
-
-lemma pure_id_eq {α : Type} (a : α) : (pure a : Id α) = a := rfl
-
-lemma ite_pure_yield {β : Type} (c : Prop) [Decidable c] (a b : β) :
-    (if c then (pure (.yield a) : Id (ForInStep β)) else pure (.yield b)) =
-      pure (.yield (if c then a else b)) := by
-  split <;> rfl
-
-lemma openSeeds_walk (t : Array ByteArray) (delta : ByteArray) :
-    BAVC.openSeeds t delta = ((List.range (BAVC.numLeaves - 1)).foldl
-      (fun x m => walkStep (fun k => t[k]!) m x) (hiddenInit delta, #[])).2 := by
-  unfold BAVC.openSeeds
-  rw [Id.run]
-  simp only [ite_pure_yield, Std.Legacy.Range.forIn_eq_forIn_range', Std.Legacy.Range.size,
-    Nat.sub_zero, Nat.add_sub_cancel, Nat.div_one, ← List.range_eq_range',
-    List.forIn_pure_yield_eq_foldl, bind_pure_comp, map_pure, walkStep, hiddenInit]
-  exact pure_id_eq _
-
-lemma openPos_walk (delta : ByteArray) :
-    openPos delta = ((List.range (BAVC.numLeaves - 1)).foldl
-      (fun x m => walkStep id m x) (hiddenInit delta, #[])).2 := by
-  unfold openPos
-  rw [Id.run]
-  simp only [ite_pure_yield, Std.Legacy.Range.forIn_eq_forIn_range', Std.Legacy.Range.size,
-    Nat.sub_zero, Nat.add_sub_cancel, Nat.div_one, ← List.range_eq_range',
-    List.forIn_pure_yield_eq_foldl, bind_pure_comp, map_pure, walkStep, hiddenInit, id]
-  exact pure_id_eq _
-
-lemma walk_map {γ : Type} (g : ℕ → γ) : ∀ (l : List ℕ) (h : Array Bool) (q : Array ℕ),
-    (l.foldl (fun x m => walkStep g m x) (h, q.map g)) =
-      ((l.foldl (fun x m => walkStep id m x) (h, q)).1,
-        (l.foldl (fun x m => walkStep id m x) (h, q)).2.map g)
-  | [], _, _ => rfl
-  | m :: l, h, q => by
-    simp only [List.foldl_cons]
-    unfold walkStep
-    split
-    · rw [← Array.map_push]; exact walk_map g l _ _
-    · exact walk_map g l _ _
-
-/-- **The opened seeds are the nodes at `openPos Δ`**. -/
+/-- **The opened seeds are the nodes at `BAVC.openNodes Δ`**. -/
 theorem openSeeds_eq (t : Array ByteArray) (delta : ByteArray) :
-    BAVC.openSeeds t delta = (openPos delta).map fun k => t[k]! := by
-  have := walk_map (fun k => t[k]!) (List.range (BAVC.numLeaves - 1)) (hiddenInit delta) #[]
-  rw [Array.map_empty] at this
-  rw [openSeeds_walk, openPos_walk, this]
+    BAVC.openSeeds t delta = (BAVC.openNodes delta).map fun k => t[k]! := rfl
 
-lemma walk_lt : ∀ (l : List ℕ) (h : Array Bool) (q : Array ℕ), (∀ m ∈ l, m < BAVC.numLeaves - 1) →
-    (∀ k ∈ q, k < BAVC.numNodes) →
-    ∀ k ∈ (l.foldl (fun x m => walkStep id m x) (h, q)).2, k < BAVC.numNodes
-  | [], _, _, _, hq => hq
-  | m :: l, h, q, hl, hq => by
+lemma walk_lt : ∀ (l : List ℕ) (x : Array Bool × Array ℕ), (∀ m ∈ l, m < BAVC.numLeaves - 1) →
+    (∀ k ∈ x.2, k < BAVC.numNodes) → ∀ k ∈ (l.foldl BAVC.markStep x).2, k < BAVC.numNodes
+  | [], _, _, hq => hq
+  | m :: l, x, hl, hq => by
     simp only [List.foldl_cons]
     have hm := hl m (by simp)
-    unfold walkStep
-    split
-    · refine walk_lt l _ _ (fun m' hm' => hl m' (by simp [hm'])) fun k hk => ?_
-      rw [Array.mem_push] at hk
+    refine walk_lt l _ (fun m' hm' => hl m' (by simp [hm'])) fun k hk => ?_
+    simp only [BAVC.markStep] at hk
+    split at hk
+    · rw [Array.mem_push] at hk
       rcases hk with hk | rfl
       · exact hq k hk
       · have h1 : BAVC.numNodes = 2 * BAVC.numLeaves - 1 := rfl
-        simp only [id, h1]; split <;> omega
-    · exact walk_lt l _ _ (fun m' hm' => hl m' (by simp [hm'])) hq
+        simp only [h1]; split <;> omega
+    · exact hq k hk
 
-theorem openPos_lt (delta : ByteArray) : ∀ k ∈ openPos delta, k < BAVC.numNodes := by
-  rw [openPos_walk]
-  exact walk_lt _ _ _ (fun m hm => List.mem_range.1 hm) (by simp)
+theorem openNodes_lt (delta : ByteArray) : ∀ k ∈ BAVC.openNodes delta, k < BAVC.numNodes :=
+  walk_lt _ _ (fun m hm => List.mem_range.1 hm) (by simp)
 
 /-- The number of opened seeds depends on `Δ` only. -/
 theorem openSeeds_size (t : Array ByteArray) (delta : ByteArray) :

@@ -38,7 +38,9 @@ the verifier's `chal1` (`simPhase1`); its step 2 uniform `d[|r|..)` and `ã`.
 * **`twoPhase_close`**: `Close ε` between the real and the simulated run, under the two-phase tape
   hypothesis `TapeHyp2` (hybrids H1, H4, H6 and the grinding answers, as `TapeHyp`) and the
   deterministic hypotheses `RunHyp2` (those of `ZKHyp` for every instance and suffix the
-  continuation may pick, `BAVCComplete`, `CrtComplete`).
+  continuation may pick, `BAVCComplete`, `CrtComplete`). **`twoPhase_close_tables`**: the same for
+  faest-arch-opt's tables, where `RunHyp2.of_tables` proves the CRT certificate and both
+  completeness facts.
 
 `Privacy/PomFRITLean.lean` instantiates this for PomFRIT (`blindness_lean`).
 -/
@@ -682,5 +684,26 @@ theorem twoPhase_close {Hs : Hashes} {T : CrtTables} {st : Statement} {r : ByteA
   intro D
   rw [twoPhase_reduction h D]
   exact ht D
+
+/-- `RunHyp2` for faest-arch-opt's tables: the CRT certificate (`maskInvOk_tables`), BAVC and CRT
+completeness (`Bridge.bavcComplete`, `Bridge.crtComplete`) are theorems. -/
+theorem RunHyp2.of_tables {Hs : Hashes} {st : Statement} {r : ByteArray} {k : Cont2}
+    (hk : ∀ o x sfx, k o = some (x, sfx) → ZKHypQ (withInst st x) (r ++ sfx) x.sys)
+    (hr : r.size ≤ st.params.witnessBytes) (hnm : st.params.nMask ≤ 32) (hHs : HashesWF Hs)
+    (hlab : st.params.labelRowOffset + 128 ≤ st.params.correctionRows) :
+    RunHyp2 Hs CrtGen.tables st r k :=
+  ⟨hk, hr, hnm, maskInvOk_tables, hHs, bavcComplete,
+    fun rho => crtComplete Hs st.params _ r rho _ hlab, hlab⟩
+
+/-- **Two-phase zero knowledge with faest-arch-opt's tables**, from the tape hypothesis and the
+hypotheses of `ZKHyp` for every instance the continuation picks. -/
+theorem twoPhase_close_tables {Hs : Hashes} {st : Statement} {r : ByteArray} {k : Cont2}
+    (hk : ∀ o x sfx, k o = some (x, sfx) → ZKHypQ (withInst st x) (r ++ sfx) x.sys)
+    (hr : r.size ≤ st.params.witnessBytes) (hnm : st.params.nMask ≤ 32) (hHs : HashesWF Hs)
+    (hlab : st.params.labelRowOffset + 128 ≤ st.params.correctionRows) {ε : ℝ}
+    (ht : TapeHyp2 Hs CrtGen.tables st r k ε) :
+    Close ε (fun ρ : Bytes 16 => realRun2 Hs CrtGen.tables st r k (ba ρ))
+      (simRun2 Hs st r.size k) :=
+  twoPhase_close (RunHyp2.of_tables hk hr hnm hHs hlab) ht
 
 end VoleMole.ZK.Sim

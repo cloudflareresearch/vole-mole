@@ -90,6 +90,10 @@ lemma getElem!_range_map {α : Type} [Inhabited α] (n : ℕ) (f : ℕ → α) {
     ((Array.range n).map f)[b]! = f b := by
   simp [hb]
 
+lemma getElem!_map' {α β : Type} [Inhabited α] [Inhabited β] (a : Array α) (g : α → β) {k : ℕ}
+    (hk : k < a.size) : (a.map g)[k]! = g a[k]! := by
+  rw [getElem!_pos _ k (by simpa using hk), Array.getElem_map, getElem!_pos a k hk]
+
 /-- The rows `r < ℓ'` lie in every column. -/
 lemma correctionRows_lt (p : Params) : p.correctionRows ≤ 64 * (p.colBytes / 8) := by
   simp only [Params.colBytes, Params.voleColBlocks, Params.voleRows]

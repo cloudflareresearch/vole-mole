@@ -16,7 +16,8 @@ From `CrtData` (faest-arch-opt's generated matrices for FAEST-EM-128f):
   `⟨W_tree[k], r(u, Δ')⟩ ⊕ ⟨W_gate[k], g(u, Δ')⟩`, where `r` concatenates
   `(u mod M_i)(D mod M_i) mod M_i` and `g[e] = ⟨F[e], u⟩ ⟨G[e], Δ'⟩`. Both sides are bilinear, so
   checking the `128 · 120` basis pairs `(xⁱ, e_j)` proves it for all inputs (run time, in
-  `lake exe verifier_vectors`).
+  `lake exe verifier_vectors`). `Bridge/CrtCheck.lean` checks the same identity in the kernel, in
+  the form the verifier computes it (`CrtCheck.Lc_eq`).
 * `tables`: the verifier's row tables (`CrtTables`), the bit-transposes of the matrices, as
   `tools/gen_crt_tables.py` writes them (`gen_lift_row_table`).
 
@@ -28,20 +29,12 @@ namespace VoleMole.Verifier.CrtGen
 
 open CrtData
 
-def hexDigit (c : Char) : Nat :=
-  if '0' ≤ c ∧ c ≤ '9' then c.toNat - '0'.toNat
-  else if 'a' ≤ c ∧ c ≤ 'f' then c.toNat - 'a'.toNat + 10
-  else if 'A' ≤ c ∧ c ≤ 'F' then c.toNat - 'A'.toNat + 10
-  else 0
-
-def hexNat (s : String) : Nat := s.toList.foldl (fun acc c => 16 * acc + hexDigit c) 0
-
-def moduli : Array Nat := treeModuliHex.map hexNat
-def F : Array Nat := fHex.map hexNat
-def G : Array Nat := gHex.map hexNat
-def wTree : Array Nat := wTreeHex.map hexNat
-def wGate : Array Nat := wGateHex.map hexNat
-def wCrt : Array Nat := wCrtHex.map hexNat
+def moduli : Array Nat := treeModuliHex
+def F : Array Nat := fHex
+def G : Array Nat := gHex
+def wTree : Array Nat := wTreeHex
+def wGate : Array Nat := wGateHex
+def wCrt : Array Nat := wCrtHex
 
 /-- Carry-less product. -/
 def pmul (a b : Nat) : Nat := Id.run do
@@ -99,7 +92,7 @@ def offsets : Array Nat := Id.run do
 
 def mTree : Nat := moduli.foldl pmul 1
 
-def mTreeOk : Bool := mTree == hexNat mTreeHex
+def mTreeOk : Bool := mTree == mTreeHex
 
 /-- The CRT basis polynomial for tree `i`, bit `b`. -/
 def crtBasis (i b : Nat) : Nat :=
@@ -119,7 +112,7 @@ def wCrtOk : Bool := Id.run do
 
 /-- The defining identity on all basis pairs. -/
 def identityOk : Bool := Id.run do
-  let modulus := hexNat modulusHex
+  let modulus := modulusHex
   let cols : Array Nat := (Array.range 120).map wCrtCol
   for i in [0:128] do
     let u := 1 <<< i

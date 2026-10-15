@@ -2,6 +2,7 @@ import VoleMole.ZK.TwoPhase
 import VoleMole.ZK.Interp
 import VoleMole.Privacy.PomFRIT
 import VoleMole.Privacy.LeanProver
+import VoleMole.Verifier.Bridge.Complete
 
 /-!
 # PomFRIT blindness with the executable Lean prover (`security/pomfrit.md` §8.2, `zk.md` §10.1)
@@ -27,10 +28,11 @@ Signer's response `s` and the binder `refresher`. Its two-phase zero knowledge i
 * **`lean_zeroKnowledge`**: `Privacy.PomFRIT.ZeroKnowledge (leanProver Hs T) (leanSim Hs) ε` from
   the two-phase tape hypothesis `TapeHyp2` (`ε`) for every prefix, binder and valid continuation.
 * **`blindness_lean`**: the blindness game on the label-row layout (`Spec.PomFRIT.Layout.labelRows`)
-  with the Lean prover: `≤ 4ε`.
+  with the Lean prover and faest-arch-opt's tables: `≤ 4ε` (`blindness_lean_shake` with SHAKE).
 * `pomfritVerify_complete`: `pomfritVerify` accepts the final signature
   `proof ‖ refresher_com ‖ refresher` (step 2 keeps `ũ` and `d[0..M)`, so the verifier's target is
-  the Client's; `Bridge.pomfritRedeem_complete`).
+  the Client's; `Bridge.pomfritRedeem_complete`); `pomfritVerify_complete_tables` for
+  faest-arch-opt's tables, without the completeness assumptions.
 
 **On `main` this is false**: the label offset is a function of `r` there, the Issuer learns `r`
 (`ZK.issuerGuess_eq`), its sibling-label query hits with probability 1
@@ -38,9 +40,11 @@ Signer's response `s` and the binder `refresher`. Its two-phase zero knowledge i
 (`ZK.pomfrit_attack_test`), all in `ZK/Relations.lean`. With label rows the offset Θ is a separate
 uniform pad that step 1 does not reveal (`ZK/TwoPhase.lean`: step 1's fields are uniform).
 
-Remaining hypotheses: the tape hypothesis `TapeHyp2`, `BAVCComplete` and `CrtComplete` for step 1
-(both checked by `prover_vectors`), `HashesWF Hs`, and the CRT certificate `maskInvOk T` (proved
-for `CrtGen.tables`, `ZK.maskInvOk_tables`).
+Remaining hypotheses of `lean_zeroKnowledge` (any tables `T`): the tape hypothesis `TapeHyp2`,
+`BAVCComplete` and `CrtComplete` for step 1, `HashesWF Hs`, and the CRT certificate `maskInvOk T`.
+For faest-arch-opt's tables all but the tape hypothesis and `HashesWF` are theorems
+(`Bridge.bavcComplete`, `Bridge.crtComplete`, `ZK.maskInvOk_tables`), so `blindness_lean` assumes
+only those (and with SHAKE only the tape hypothesis).
 -/
 
 open Finset
@@ -226,20 +230,29 @@ lemma voleGen_length_lean (Hs : Hashes) (T : CrtTables) (r ρ b : Bytes) :
   show (pomfritParams true).proofBytes = 5579
   decide
 
-/-- **PomFRIT blindness with the Lean prover** (label rows; Theorem B from G1): for every Issuer,
-the acceptance probabilities of the two worlds differ by at most `4ε`, where `ε` bounds the
-two-phase tape hypothesis of every session. On `main` the corresponding statement is false
-(`ZK/Relations.lean`: `pomfrit_issuer_hits`, `pomfrit_attack_test`). -/
-theorem blindness_lean (A : Adversary) (Hs : Hashes) (T : CrtTables) (hHs : HashesWF Hs)
-    (hbavc : BAVCComplete) (hT : maskInvOk T = true)
-    (hcrt : ∀ (r b : Bytes) (rho : ByteArray),
-      CrtComplete (Hs.hash .h5) T (step1 Hs T (leanBase (toBA b)) (toBA r) rho))
+/-- **PomFRIT blindness with the Lean prover** (label rows; Theorem B from G1), with
+faest-arch-opt's CRT tables: for every Issuer, the acceptance probabilities of the two worlds differ
+by at most `4ε`, where `ε` bounds the two-phase tape hypothesis of every session. Assumed besides:
+the hash record's output lengths (`blindness_lean_shake`: none with SHAKE). On `main` the
+corresponding statement is false (`ZK/Relations.lean`: `pomfrit_issuer_hits`,
+`pomfrit_attack_test`). -/
+theorem blindness_lean (A : Adversary) (Hs : Hashes) (hHs : HashesWF Hs)
     {ε : ℝ} (ht : ∀ r b k, r.length = uovM → Cont.Valid r k →
-      TapeHyp2 Hs T (leanBase (toBA b)) (toBA r) (contOf k) ε) :
-    |pr _ (realGame Layout.labelRows A (leanProver Hs T) false) -
-        pr _ (realGame Layout.labelRows A (leanProver Hs T) true)| ≤ 4 * ε :=
-  blindness Layout.labelRows A (leanProver Hs T) (leanSim Hs) (voleGen_length_lean Hs T)
-    (lean_zeroKnowledge Hs T hHs hbavc hT hcrt ht)
+      TapeHyp2 Hs CrtGen.tables (leanBase (toBA b)) (toBA r) (contOf k) ε) :
+    |pr _ (realGame Layout.labelRows A (leanProver Hs CrtGen.tables) false) -
+        pr _ (realGame Layout.labelRows A (leanProver Hs CrtGen.tables) true)| ≤ 4 * ε :=
+  blindness Layout.labelRows A (leanProver Hs CrtGen.tables) (leanSim Hs)
+    (voleGen_length_lean Hs CrtGen.tables)
+    (lean_zeroKnowledge Hs CrtGen.tables hHs bavcComplete maskInvOk_tables
+      (fun _ _ rho => crtComplete Hs _ _ _ rho _ (hlab_of (show 16 ≤ 164 by decide))) ht)
+
+/-- **PomFRIT blindness with the Lean prover and SHAKE**: only the tape hypothesis is assumed. -/
+theorem blindness_lean_shake (A : Adversary)
+    {ε : ℝ} (ht : ∀ r b k, r.length = uovM → Cont.Valid r k →
+      TapeHyp2 Hashes.shake CrtGen.tables (leanBase (toBA b)) (toBA r) (contOf k) ε) :
+    |pr _ (realGame Layout.labelRows A (leanProver Hashes.shake CrtGen.tables) false) -
+        pr _ (realGame Layout.labelRows A (leanProver Hashes.shake CrtGen.tables) true)| ≤ 4 * ε :=
+  blindness_lean A Hashes.shake hashesWF_shake ht
 
 /-! ## Completeness on the final signature -/
 
@@ -358,5 +371,22 @@ theorem pomfritVerify_complete (Hs : Hashes) (hHs : HashesWF Hs) (hbavc : BAVCCo
     simp [ByteArray.beq]
   rw [hne, ite_eq_right (by simp), hst]
   exact hacc
+
+/-- `pomfritVerify_complete` for faest-arch-opt's tables: BAVC and CRT completeness proved. -/
+theorem pomfritVerify_complete_tables (Hs : Hashes) (hHs : HashesWF Hs) (pk : UovPk)
+    (msg r rho refresher wSuffix proof : ByteArray) (labelRows : Bool) (hr : r.size = uovM)
+    (href : refresher.size = 32)
+    (h : Prover.proveCommit Hs (pomfritRedeem pk ((pomfritPending Hs CrtGen.tables labelRows r rho
+      (toBA (commitRefresher (toL refresher)))).proof ++ toBA (commitRefresher (toL refresher)) ++
+      refresher) msg labelRows) wSuffix
+      (pomfritPending Hs CrtGen.tables labelRows r rho (toBA (commitRefresher (toL refresher)))) =
+        .ok proof)
+    (hΔ : (W128.rowMul (BAVC.deltaBit
+      ({ params := pomfritParams labelRows, bytes := proof } : Proof).delta) 120
+        CrtGen.tables.wCrt).toGF ≠ 0) :
+    (pomfritVerify Hs CrtGen.tables pk (proof ++ toBA (commitRefresher (toL refresher)) ++ refresher)
+      msg labelRows).accept = true :=
+  pomfritVerify_complete Hs hHs bavcComplete CrtGen.tables pk msg r rho refresher wSuffix proof
+    labelRows hr href h (crtComplete Hs _ _ r rho _ (hlab_of (show 16 ≤ 164 by decide))) hΔ
 
 end VoleMole.Privacy.PomFRIT

@@ -752,7 +752,9 @@ from per-proof zero knowledge and the hiding of `Com` for the explicit reduction
 `lean/VoleMole/Privacy/MoussakaLean.lean`: `anonymity_label_rows`, Theorem 4(a) with both proof
 systems the executable Lean prover with dedicated label rows (the statements of
 `Verifier/Relations.lean`), assuming only the tape hypotheses (`TapeHyp`, `lean/docs/zk.md`
-§10.1), the hiding of `Com`, `BAVCComplete` and `CrtComplete`: the witness encodings satisfy the
+§10.1), the hiding of `Com` and the hash record's output lengths (proved for SHAKE,
+`anonymity_label_rows_shake`; BAVC and CRT completeness are proved, `Verifier/Bridge/`): the
+witness encodings satisfy the
 issuance and redemption systems for every combination (`issue_holds`, `redeem_holds`, from the
 `Arith/Moussaka.lean` completeness theorems), and the other deterministic hypotheses are proved
 (`zkHypI`, `zkHypR`).

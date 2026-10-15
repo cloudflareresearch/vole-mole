@@ -18,7 +18,9 @@ label-row layout (`Spec.Ratatouille.Sizes.labelRows`: proofs of 7256 and 17575 b
   `Arith.Ratatouille.issue_complete` and `spend_complete_gf128`: the committed Keccak states, the
   carries of the two additions (`carries_testBit`) and the relation).
 * **`unlinkability_label_rows`**: Theorem 2 with the Lean prover, `≤ 4εI + 4εS + 2εhide`, assuming
-  only the tape hypotheses (`TapeHyp`), hiding, `BAVCComplete`, `CrtComplete` and `HashesWF`.
+  only the tape hypotheses (`TapeHyp`), hiding and `HashesWF` (BAVC and CRT completeness are
+  theorems, `Bridge.bavcComplete`, `Bridge.crtComplete`); `unlinkability_label_rows_shake` drops
+  `HashesWF` for SHAKE.
 -/
 
 open Finset
@@ -508,17 +510,10 @@ lemma bOf_vec (ρ : Coins 16) : bOf (vec ρ) = ba ρ := by
 /-- **Ratatouille unlinkability with the Lean prover** (Theorem 2), on the label-row layout: if the
 issuance and spend runs' tapes are `εI`- and `εS`-close to uniform (`TapeHyp`) and the hiding
 reductions have advantage `≤ εhide`, any two worlds differ by at most `4εI + 4εS + 2εhide`. Also
-assumed: `BAVCComplete` and `CrtComplete` (checked by `prover_vectors` on every proof) and the
-hash record's output lengths. -/
+assumed: the hash record's output lengths (`unlinkability_label_rows_shake`: none with SHAKE);
+BAVC and CRT completeness are theorems (`Bridge.bavcComplete`, `Bridge.crtComplete`). -/
 theorem unlinkability_label_rows (A : Adversary Sizes.labelRows) {SK : Type} (pk : SK → PublicKey)
     (derive : SK → Target → Option Preimage) (Hs : Hashes) (hHs : HashesWF Hs)
-    (hbavc : BAVCComplete)
-    (hcrtI : ∀ x w, IssueRel x w → ∀ rho : ByteArray, CrtComplete (Hs.hash .h5) CrtGen.tables
-      (Prover.voleGen Hs CrtGen.tables (stI x).params ((stI x).mu1 Hs)
-        ((encI x w).extract 0 (stI x).params.witnessBytes) rho (stI x).binder1))
-    (hcrtS : ∀ x w, SpendRel x w → ∀ rho : ByteArray, CrtComplete (Hs.hash .h5) CrtGen.tables
-      (Prover.voleGen Hs CrtGen.tables (stS x).params ((stS x).mu1 Hs)
-        ((encS x w).extract 0 (stS x).params.witnessBytes) rho (stS x).binder1))
     {εI εS εhide : ℝ} (hεI : 0 ≤ εI) (hεS : 0 ≤ εS)
     (htI : ∀ x w, IssueRel x w → TapeHyp Hs CrtGen.tables (stI x) (encI x w) εI)
     (htS : ∀ x w, SpendRel x w → TapeHyp Hs CrtGen.tables (stS x) (encS x w) εS)
@@ -531,6 +526,25 @@ theorem unlinkability_label_rows (A : Adversary Sizes.labelRows) {SK : Type} (pk
     (fun _ => rfl) rfl rfl encI encS (vecOf _) (vecOf _)
     (fun x w ρ => by simp only [leanPrim, bOf_vec])
     (fun x w ρ => by simp only [leanPrim, bOf_vec])
-    csI csS zkHypI zkHypS hHs hbavc hcrtI hcrtS hεI hεS htI htS hhide b₁ b₂ b₁' b₂'
+    csI csS zkHypI zkHypS hHs bavcComplete
+    (fun _ _ _ rho => crtComplete Hs _ _ _ rho _ (hlab_of (show 16 ≤ 240 by decide)))
+    (fun _ _ _ rho => crtComplete Hs _ _ _ rho _ (hlab_of (show 16 ≤ 847 by decide)))
+    hεI hεS htI htS hhide b₁ b₂ b₁' b₂'
+
+/-- **Ratatouille unlinkability with the Lean prover and SHAKE**: only the tape hypotheses and
+hiding are assumed. -/
+theorem unlinkability_label_rows_shake (A : Adversary Sizes.labelRows) {SK : Type}
+    (pk : SK → PublicKey) (derive : SK → Target → Option Preimage)
+    {εI εS εhide : ℝ} (hεI : 0 ≤ εI) (hεS : 0 ≤ εS)
+    (htI : ∀ x w, IssueRel x w → TapeHyp Hashes.shake CrtGen.tables (stI x) (encI x w) εI)
+    (htS : ∀ x w, SpendRel x w → TapeHyp Hashes.shake CrtGen.tables (stS x) (encS x w) εS)
+    (hhide : ∀ b₁ b₂ co, hidingAdv A.ctx (reduction A (fun _ c => vecOf _ (simulate pI c))
+      (fun _ c => vecOf _ (simulate pS c)) b₁ b₂ co) ≤ εhide)
+    (b₁ b₂ b₁' b₂' : Bool) :
+    |pr _ (realGame A (leanPrim Hashes.shake pk derive) b₁ b₂) -
+        pr _ (realGame A (leanPrim Hashes.shake pk derive) b₁' b₂')| ≤
+      4 * εI + 4 * εS + 2 * εhide :=
+  unlinkability_label_rows A pk derive Hashes.shake hashesWF_shake hεI hεS htI htS hhide
+    b₁ b₂ b₁' b₂'
 
 end VoleMole.Privacy.Ratatouille
