@@ -273,3 +273,59 @@ is part of milestone 6.
    `onChain_of_accept`); none mentions SHAKE, so no `Hashes.shake` corollaries are needed.
    `ROM/Verifier.lean` runs the same verifier with every hash a random-oracle query
    (`verifyQ`, equal to `verify (Hashes.ofTable g)` against a complete table).
+10. **Done: the prover** (`Verifier/Prover.lean`, `Verifier/ProverKats.lean`,
+   `Verifier/Bridge/Prover.lean`; `lake exe prover_vectors`, root `Verifier/ProverMain.lean`).
+   An executable Lean model of `voleith_vole_gen` + `voleith_prove_commit`
+   (`src/voleith.hpp:146-322`) that reproduces the C++ proofs byte for byte, built from the
+   verifier's own step functions:
+   * Step 1 (`Prover.voleGen`): `(seed, iv_pre) = H₃(w_prefix ‖ mu₁ ‖ rho ‖ 3)`, `iv`;
+     `BAVC.commit`; the prover's VOLE in spec order: `u^{(i)} = Σ_j R_j` (`smallVoleUWords`), the
+     tags `v` = the verifier's `convertToVoleAt` at `Δ = 0` (`senderColumns`; the hidden leaf is
+     leaf 0, which contributes nothing), `c_i = u^{(0)} ⊕ u^{(i)}` on the `ℓ'` corrected rows; CRT
+     sender (`crt_vole_commit`): labels `L0 = G·v` and `L1 = L0 ⊕ u[o..o+128)` (`gateInputsOff`,
+     `o` the label-row offset), their `H₅` hashes `h⁰`, `h¹`; lifted tags and `ṽ_mask` = the
+     verifier's `crtReconstructWith h⁰` at `Δ = 0`; `u_mask = W_CRT·u_low ⊕ M_tree·u_hi`
+     (`u_hi` = `PRG(seed, iv, 2³¹ − 1)`, `uMaskOf`); `c_mult` bit `e` of mask `m` = bit `m` of
+     `h⁰_e ⊕ h¹_e` plus `⟨F[e], u_mask[m]⟩` (`cMultOf`); `chal1` as the verifier; `ũ` and `h_V` =
+     the verifier's `voleHashReceiver` at `Δ' = 0` on `(u, u_mask)` and `(v, ṽ_mask)`; `d` on the
+     prefix.
+   * Step 2 (`Prover.proveCommit`): `d`, `chal2` as the verifier; QuickSilver (`qsProve`): the
+     verifier's check value `G(Δ')` with `ã = 0` at the prover's keys `v + wΔ'` and masks
+     `ṽ_mask + u_mask Δ'` (`qsAt`) is a polynomial of degree `≤ d`; it is evaluated at the `d + 1`
+     points `1 … d + 1` and interpolated, `ã_{i−1} = G_i`, `qs_check = G_0`, and the prover refuses
+     if `G_d ≠ 0` (witness does not satisfy the constraints). The C++ computes the same
+     coefficients with its degree-tracking `quicksilver_state<S, false, d>`; they are unique,
+     since acceptance needs the check value to be constant in `Δ'`. No separate coefficient
+     decomposition of the `Arith/*` constraints is needed. Grinding (`findFirst`, `grindStep`) and
+     the opening (`BAVC.openAt`, `one_tree_bavc::open`).
+   * PomFRIT: `voleGen` with `r`, `mu₁ = H₂⁴(DST ‖ 12)`, binder `refresher_com`; the statement
+     `pomfritRedeem` is built from step 1's signature (its `ũ`, `d[0..45)` give `h`); `proveCommit`
+     with the Signer's `s`, binder `refresher`.
+   * Seeds: the KATs carry the protocol seeds and witnesses; `rho` comes from the `Spec/*` seed
+     expanders, so no new C++ dumps were needed.
+   Checked by `lake exe prover_vectors [TESTS [main|labelrows]]`: all 18 KAT proofs
+   (6 Moussaka, 9 Ratatouille, 3 PomFRIT) reproduced byte for byte on `main`, and the 18
+   label-rows KAT proofs with `labelrows` (the KAT files of a `voleith-label-rows` build, as in
+   milestone 7); every Lean proof accepted by the
+   Lean verifier, including random statements of all five relations (seeds, contexts and credits
+   from SHAKE of a label; issuers' UOV preimages from a test-only oil-space sampler, `sample`) and
+   KAT witnesses with a random `rho`; a flipped witness bit or a wrong Signer response makes the
+   prover refuse. For every Lean proof the harness also checks the two facts the completeness
+   theorem assumes (the opening reconstructs the prover's keys and commitments; the verifier's
+   rows and masks are `v + u·Δ'`). About 44 s per layout (34 s of proving and verifying, 5 s of
+   UOV key generation); a proof takes 0.2–1.1 s, the 64-anchor redemption 6.5 s (10 evaluations
+   of its constraints).
+   Proved (`Bridge/Prover.lean`, no `sorry`, axioms `propext`, `Classical.choice`, `Quot.sound`):
+   the byte/word round trips of the proof format and the field layout of `assemble`; the VOLE
+   correlation on columns and lifted rows for every `Δ` (`prover_column`, `prover_row`); the VOLE
+   check identity (`voleHash_complete`); QuickSilver completeness for every `Δ' ≠ 0`
+   (`qsProve_complete`, via `EndToEnd.sysCheckPoly` and Lagrange uniqueness); and completeness of
+   the whole verifier on the prover's output (`verify_proveCommit`, `verify_prove`,
+   `moussakaIssue_complete`, `moussakaRedeem_complete`, `ratatouilleIssue_complete`,
+   `ratatouilleSpend_complete`, `pomfritRedeem_complete`), assuming `HashesWF` (discharged for
+   SHAKE, `hashesWF_shake`), `BAVCComplete` (the tree opening; an imperative walk over the 4607
+   nodes) and `CrtComplete` (the CRT masks are a VOLE: garbled labels plus the tables' bilinear
+   identity), and `Δ' ≠ 0` (probability `2⁻¹²⁰`; not tested by the C++ either). Not done: the
+   PomFRIT theorem is for the statement built from step 1's signature, not yet restated for
+   `pomfritVerify` on the final signature; the abstract `ZeroKnowledge` hypothesis of
+   `Privacy/Basic.lean` is not yet instantiated with this prover.

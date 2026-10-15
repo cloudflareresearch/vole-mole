@@ -37,7 +37,7 @@ lean/
                             UOV-assumption notes
     Arith/                  executable constraint generators + soundness/completeness (in progress)
     Spec/                   executable protocol specs
-    Verifier/               executable VOLEitH verifier and its bridge theorems
+    Verifier/               executable VOLEitH verifier and prover, and their bridge theorems
     Prob/                   uniform-probability layer: single-challenge bounds, per-chain theorem
     ROM/                    random-oracle model (VCVio): union bound over queries, per-chain terms,
                             the executable verifier against the oracle, domain separation
@@ -73,6 +73,9 @@ in `lakefile.toml` and imported only by `VoleMole/ROM/`. It has no prebuilt cach
 of `VoleMole/ROM/` compiles the part of VCVio, PolyFun and cslib it imports (about 120 modules, about
 2 minutes with 2 threads). The executables link VCVio's native-backend archives as empty stubs
 (`lake` prints `info: … native backend disabled`); nothing here calls them.
+
+The prover is checked against the KAT proofs with `lake exe prover_vectors` (from `lean/`; `lake exe
+prover_vectors DIR/tests labelrows` for the KAT files of a `voleith-label-rows` build).
 
 The C++ side of the cross-checks runs with the normal test suite:
 
@@ -257,12 +260,13 @@ compared with them when present but not needed.
 | `Spec/PomFRIT.lean`, `Spec/Moussaka.lean` | done: every party's steps and errors; honest runs succeed; at most one acceptance per nullifier and context over any request sequence; injectivity of the hashed encodings (`H_T` binds d[0..M), Moussaka binds `challenge_digest`); input validation. All deterministic KAT fields match (`tests/pomfrit/pomfrit_kat.txt` is new). Moussaka's redemption requests are also checked by `finalizeRedeem` with the abstract verifier instantiated by the Lean verifier (§8), under the Anchor Set generated from the `anchor_sk` fields, so the digests of all Anchors (not only the issuer's) are checked against the KATs; swapping two non-issuer Anchors is rejected |
 | `Spec/Ratatouille.lean` | done: issue, spend, refund, change tokens, every abort path; honest runs succeed; nullifiers accepted once; balance `Σd ≤ ΣT_init + Σx′` per context over adversarial request sequences (soundness and unforgeability as hypotheses); the findings of `security/ratatouille.md` (copied requests, consumed pending state, unbounded refunds, signing before the nullifier check) as theorems, including a concrete run that breaks balance after one leaked response. All deterministic KAT fields match. |
 
-### 8. A Lean VOLEitH verifier (accepts all KAT proofs, both layouts) — `VoleMole/Verifier/`
+### 8. A Lean VOLEitH verifier and prover (both match the C++ on all KAT proofs, both layouts) — `VoleMole/Verifier/`
 
 Goal: an executable Lean verifier that accepts the real C++ proofs (the KAT files contain them) and
-rejects mutated ones, built from the same models the proofs use. Plan and milestones:
-`docs/verifier-plan.md`. Checked by `lake exe verifier_vectors` against vectors from
-`tests/voleith/dump_verifier_vectors.cpp`.
+rejects mutated ones, built from the same models the proofs use, and an executable Lean prover that
+reproduces them. Plan and milestones: `docs/verifier-plan.md`. Checked by `lake exe
+verifier_vectors` against vectors from `tests/voleith/dump_verifier_vectors.cpp`, and by `lake exe
+prover_vectors` against the KAT files.
 
 | Milestone | Status |
 |---|---|
@@ -278,6 +282,8 @@ rejects mutated ones, built from the same models the proofs use. Plan and milest
 | Hash record (`Hashes.lean`) | done: the verifier takes its hashes as a record `Hs : Hashes`, one function per L0 domain (`Kind`: `H₁`, `H₂⁰`, `H₂⁴`, `H₄`, `H₅`, `H₂¹`, `H₂²`, `H₂³`, the combination); `Hashes.shake` is SHAKE128, which the runners use (same results on both layouts). The UOV combination is hashed by the verifier (`Statement.comb`, `combBytes`). Hashes outside L0 (UOV key digests and expansion, PomFRIT's `hash_to_target` and refresher commitment) stay SHAKE. The bridge theorems below are generic in `Hs`; §9 runs the verifier with the random oracle's answers (`Hashes.ofTable`) |
 | Bridge theorems (`Verifier/Bridge/*`) | partly: proved that the executable CTR blocks are `Seed.Commitments.ctrInput` (and its role separation applies to the verifier's tweaks), that the VOLE check is `Seed.kosValue`, that the QuickSilver check value is `EndToEnd.qsCheck` + `Seed.maskPoly` (including the `Δ^d·f(q/Δ)` shortcut), and that acceptance gives `EndToEnd`'s accepting equation at that transcript. The field embedding is constructed (`Bridge/Concrete.lean`, from `Arith/GFField.lean`) and the theorems that assumed one (`accept_hacc`, `map_constraintKeys`, `map_gfInv`, `map_voleHashReceiver`) are restated at it without that hypothesis. Per relation (`Bridge/Relations.lean`): with `GF128` itself as the field, each relation's evaluator is `System.values` of its `Arith/*` system (`betaFast = beta`, cached UOV coefficients unchanged, the array-based UOV evaluation of `UovEval.lean` equal to the generator's), so acceptance by the executable `verify` gives `EndToEnd`'s accepting equation for that system over GF(2¹²⁸) with no hypothesis (`moussakaIssue_accept`, …, `pomfritVerify_accept`), i.e. `hacc` of `*_extract_gf128` at that Δ. |
 | Bridge across Δ (`Bridge/Lift.lean`, `Columns.lean`, `Chain.lean`, `ChainRelations.lean`) | done, modulo the probabilistic steps: ConvertToVOLE and the CRT step are read as functions of the challenge blocks with the commitments fixed (the steps take `Δ` as bits and the commitments as arguments: `convertToVoleAt`, `crtReconstructAt`). Proved: each column is `V_{i,b} + Δ_{i,b}·u^{(i)}` with `u^{(i)} = c_i + Σ_j PRG(K_{i,j})` (the hidden leaf's key never read), so each lifted witness row is `C_r + Σ_i u^{(i)}_r·e_i(Δ_i)` (`resp_row`); the executable lift `Δ ↦ Σ Δ_c W_CRT[c]` is additive and injective (`lift_injective`, an explicit left inverse checked by `decide +kernel`); an opening that reconstructs the committed keys makes the run equal to the committed response (`crtReconstruct_eq_respAt`). On a chain (fixed `iv`, `H₅`, `chal1`, `h_V`, `z`; `chal2` determined before Δ), `chain_claim4` gives `Claim4Hyp` and the accepting equation on all of `A` with one remainder `maskPoly d a b ã z` (masks affine by L3); `onChain_of_accept` puts every accepted proof of the chain in `A` with `Δ = chal3`; `*_extract_chain` (five relations) apply `*_extract_gf128`. Assumed: `KOSGood` for `chal1` (L3), `IsFixed` for dead-leaf trees (L2), `hQS`/`hcomb` (L4), `hδ`/`hclaim1` and binding of the leaf commitments (L1). §9 discharges L3, L4 and `hδ` for uniform independent `chal1`, `chal2`, `l` |
+| Prover (`Prover.lean`, `ProverKats.lean`) | done: `voleith_vole_gen` + `voleith_prove_commit` with the C++'s seed derivation (`H₃(w_prefix ‖ mu₁ ‖ rho ‖ 3)`, `rho` from the `Spec/*` seed expanders). Each sender step is the verifier's step function at `Δ = 0` (tag columns, gate hashes, lifted rows, masks, VOLEHash), plus the prover-only `u`, `u_mask` (`M_tree`·PRG), the second gate labels and `c_mult`; QuickSilver's `ã` and check value are the coefficients of the verifier's check value as a polynomial in `Δ'`, obtained by evaluating it at `d + 1` points and interpolating (no coefficient decomposition of the constraints); grinding and the BAVC opening as `grind_and_open`. `lake exe prover_vectors` reproduces all 18 KAT proofs byte for byte on `main`, and all 18 of the label-rows KATs with `labelrows`; the Lean verifier accepts every Lean proof, also on random statements of all five relations (issuers' UOV preimages from a test-only oil-space sampler); a non-satisfying witness is refused. About 44 s per layout |
+| Completeness (`Bridge/Prover.lean`) | proved: the VOLE correlation of the prover's output for every `Δ` on columns and lifted rows (`prover_column`, `prover_row`), the VOLE check identity (`voleHash_complete`), QuickSilver completeness for every `Δ' ≠ 0` (`qsProve_complete`, via `EndToEnd.sysCheckPoly` and Lagrange uniqueness), and **completeness of `verify` on the prover's output** (`verify_proveCommit`, `verify_prove`, `*_complete` for the five relations), for any hash record with the right output lengths (SHAKE: `hashesWF_shake`). Assumed: BAVC opening correctness (`BAVCComplete`), the CRT masks' VOLE correlation for the prover's commitment (`CrtComplete`), `Δ' ≠ 0` (probability `2⁻¹²⁰`); `prover_vectors` checks the first two on every proof |
 
 ### 9. Probabilistic layer — `VoleMole/Prob/` (single challenges) and `VoleMole/ROM/` (random oracle)
 
@@ -383,7 +389,9 @@ What is **not** established, roughly in order of importance:
    simulator is a function of the instance; in the random-oracle model it also programs the
    oracle, which the abstract specs do not expose) and hiding of `Com` (for the explicit
    reductions) as hypotheses, so they apply to the label-row fix; on `main` the joint (PU) hop over
-   proofs sharing `r` replaces the per-proof hypothesis and is paper. The seed-XOF hop (the games
+   proofs sharing `r` replaces the per-proof hypothesis and is paper. The executable Lean prover (§8),
+   which reproduces the C++ proofs, is the prover such a hypothesis would be stated for; instantiating
+   it with the `ZK/*` results is not done. The seed-XOF hop (the games
    draw the XOF's outputs uniformly), Moussaka's non-colluding mode (Thm 4b) and the quantum
    versions are not mechanized.
 8. **Open deployment issues** found by the analysis and not yet fixed in the code: cross-protocol
