@@ -40,7 +40,8 @@ proof and the simulated one are equal in law for every shared tape).
 distinguisher that reads `H₃` and `H₅` at `q₃`, `q₅` keys and `H₂³` freely; the simulator
 programs every counter (`simTab`). **`zk_rom_h23_ro`**: the same for the simulator that programs
 only `c ≤ ctr` (`simTabRO`, `simulateRO`'s points; `sim_ro_eq`: the two have the same law, by a
-swap of the answers past `ctr`). `Pr[GrindBad] ≤ noHitProb + Pr[Δ' = 0]` (`grindBad_le`).
+swap of the answers past `ctr`). `Pr[GrindBad] ≤ noHitProb + Pr[Δ' = 0]` (`grindBad_le`), and
+`≤ 2⁻¹¹⁰` for these tables (`ZK/GrindNum.lean`, `grindBad_le_110`, `zk_rom_h23_num`).
 
 **The ideal cipher.** Every statement here is for any CTR PRG (`HasPrg`), so the completeness of
 the recomputation (`hyb3_vPre`) holds with the cipher a table `E` used in the whole commitment

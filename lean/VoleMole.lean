@@ -134,6 +134,8 @@ import VoleMole.ZK.HopsJoint
 import VoleMole.ZK.VerifyPre
 import VoleMole.ZK.HopsH23
 import VoleMole.ZK.HopsIC
+import VoleMole.ZK.AcceptCount
+import VoleMole.ZK.GrindNum
 import VoleMole.ZK.Interp
 import VoleMole.Spec.PomFRITLayout
 import VoleMole.Privacy.PomFRITLean

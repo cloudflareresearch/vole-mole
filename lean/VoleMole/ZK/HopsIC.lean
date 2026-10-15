@@ -44,12 +44,14 @@ adaptively at `q₃`, `q₅`, `q_E` keys and `H₂³` freely. The hybrids: `zk_p
 programming, the programmed points recomputed: for every `E`), `joint3_h4` (H4, jointly over the
 root seed and `E`), `zk_post_h4` (the tape, H6, the simulator: for every `E`).
 
-**Not covered.** `Pr[GrindBad] ≤ noHitProb + Pr[Δ' = 0]` (`grindBad_le`) is not bounded further. The
-second `4607` counts the honest recomputation's reads; they are all values of tree nodes off the
-hidden paths, which `IC.hop`'s candidates already contain, so an argument inside the hybrid would
-remove it. One proof; the cipher's rows are uniform functions, not permutations (the PRP/PRF
-switching term is on paper); SHAKE as a random oracle and AES as an ideal cipher are the modelling
-steps.
+`Pr[GrindBad] ≤ 2⁻¹¹⁰` for these tables (`ZK/GrindNum.lean`: `grindBad_le_110`, and
+`zk_rom_ic_h23_num`, the bound above with `2⁻¹¹⁰` in its place).
+
+**Not covered.** The second `4607` counts the honest recomputation's reads; they are all values
+of tree nodes off the hidden paths, which `IC.hop`'s candidates already contain, so an argument
+inside the hybrid would remove it. One proof; the cipher's rows are uniform functions, not
+permutations (the PRP/PRF switching term is on paper); SHAKE as a random oracle and AES as an
+ideal cipher are the modelling steps.
 -/
 
 open Finset
