@@ -72,6 +72,91 @@ lemma voleGen_more (Hs : Hashes) (T : CrtTables) (p : Params) (mu1 wPrefix rho b
   intro s key us cols uPre
   refine ⟨rfl, rfl, rfl, rfl, rfl, rfl, rfl⟩
 
+/-- `Prover.voleGen` with the root seed and `iv_pre` given instead of read off `H₃`'s answer
+(`voleGen_eq_voleGenAt`). Hybrid H1 samples them uniformly (`ZK/Hops.lean`). -/
+def voleGenAt (Hs : Hashes) (T : CrtTables) (p : Params) (mu1 wPrefix seed ivPre binder1 : ByteArray) :
+    Prover.Pending :=
+  let iv := Hs.hash .h4 ((ivPre ++ mu1).push 4)
+  let tl := BAVC.commit seed iv
+  let tree := tl.1
+  let leaves := tl.2
+  let check := BAVC.check (Hs.hash .h1) leaves.coms
+  let key := leafKey leaves
+  let us : Array (Array UInt64) :=
+    (Array.range BAVC.tau).map fun i => Prover.smallVoleUWords p iv i (key i)
+  let u := us[0]!
+  let cols := Prover.senderColumns p iv key
+  let corrections := (List.range (BAVC.tau - 1)).foldl
+    (fun acc i => acc ++ Prover.correctionOf p u us[i + 1]!) ByteArray.empty
+  let uPre : W128 := ⟨wordAt u p.labelRowOffset, wordAt u (p.labelRowOffset + 64)⟩
+  let h0 := gateWords ((Prover.gateInputsOff p T iv cols W128.zero).map (Hs.hash .h5))
+  let h1 := gateWords ((Prover.gateInputsOff p T iv cols uPre).map (Hs.hash .h5))
+  let vOut := crtReconstructWith h0 p (fun _ => false) ByteArray.empty T cols
+  let uMask := Prover.uMaskOf p T seed iv us
+  let cmult := Prover.cMultOf p h0 h1 uMask
+  let f0 : Prover.Fields :=
+    { corrections := corrections, cmult := cmult, voleCheck := .empty, correction := .empty,
+      qsProof := .empty, opening := .empty, delta := .empty, ivPre := ivPre, ctr := .empty }
+  let c1 := chal1 Hs { params := p, bytes := Prover.assemble p f0 } mu1 check binder1
+  let uRows : Array W128 := (Array.range p.correctionRows).map fun r =>
+    if wbit u r then ⟨1, 0⟩ else W128.zero
+  let uTilde := voleHashReceiver p c1 uRows uMask 0 (Prover.zeros 64)
+  let hV := voleHashReceiver p c1 vOut.rows vOut.qMask 0 (Prover.zeros 64)
+  let voleCheck := Prover.gfsToBytes uTilde
+  let ub := bytesOfWords u
+  let correction : ByteArray :=
+    ⟨(Array.range wPrefix.size).map fun k => ub.get! k ^^^ wPrefix.get! k⟩
+  { params := p, seed := seed, iv := iv, ivPre := ivPre, tree := tree, leaves := leaves, u := u,
+    vRows := vOut.rows, vMask := vOut.qMask, uMask := uMask, chal1 := c1, hV := hV,
+    wPrefix := wPrefix, fields := { f0 with voleCheck := voleCheck, correction := correction } }
+
+theorem voleGen_eq_voleGenAt (Hs : Hashes) (T : CrtTables) (p : Params)
+    (mu1 wPrefix rho binder1 : ByteArray) :
+    Prover.voleGen Hs T p mu1 wPrefix rho binder1 = voleGenAt Hs T p mu1 wPrefix
+      ((Hs.hash .h3 ((wPrefix ++ mu1 ++ rho).push 3)).extract 0 16)
+      ((Hs.hash .h3 ((wPrefix ++ mu1 ++ rho).push 3)).extract 16 32) binder1 := rfl
+
+/-- `voleGen_spec` and `voleGen_more` for `voleGenAt`. -/
+lemma voleGenAt_spec (Hs : Hashes) (T : CrtTables) (p : Params)
+    (mu1 wPrefix seed ivPre binder1 : ByteArray) :
+    let s := voleGenAt Hs T p mu1 wPrefix seed ivPre binder1
+    let key := leafKey s.leaves
+    s.params = p ∧ s.wPrefix = wPrefix ∧ s.seed = seed ∧ s.ivPre = ivPre ∧
+    s.iv = Hs.hash .h4 ((s.ivPre ++ mu1).push 4) ∧
+    s.tree = (BAVC.commit s.seed s.iv).1 ∧ s.leaves = (BAVC.commit s.seed s.iv).2 ∧
+    s.u = proverU p s.iv key 0 ∧
+    s.fields.corrections = (List.range (BAVC.tau - 1)).foldl
+      (fun acc j => acc ++ proverCorr p s.iv key (j + 1)) ByteArray.empty ∧
+    s.fields.ivPre = s.ivPre ∧ s.fields.qsProof = .empty ∧
+    s.chal1 = chal1 Hs (step1Proof p s) mu1 (BAVC.check (Hs.hash .h1) s.leaves.coms) binder1 ∧
+    s.fields.voleCheck = Prover.gfsToBytes (voleHashReceiver p s.chal1
+      ((Array.range p.correctionRows).map fun r =>
+        if wbit s.u r then (⟨1, 0⟩ : W128) else W128.zero)
+      s.uMask 0 (Prover.zeros 64)) ∧
+    s.uMask = uMaskOfHi p T (AES.prg s.seed s.iv (((1 : UInt32) <<< 31) - 1) 0
+      ((8 * p.nMask + 127) / 128)) ((Array.range BAVC.tau).map fun i =>
+        Prover.smallVoleUWords p s.iv i (key i)) ∧
+    s.fields.cmult = Prover.cMultOf p
+      (gateWords ((Prover.gateInputsOff p T s.iv (Prover.senderColumns p s.iv key)
+        W128.zero).map (Hs.hash .h5)))
+      (gateWords ((Prover.gateInputsOff p T s.iv (Prover.senderColumns p s.iv key)
+        ⟨wordAt s.u p.labelRowOffset, wordAt s.u (p.labelRowOffset + 64)⟩).map (Hs.hash .h5)))
+      s.uMask ∧
+    s.fields.opening = .empty ∧ s.fields.delta = .empty ∧ s.fields.ctr = .empty := by
+  intro s key
+  refine ⟨rfl, rfl, rfl, rfl, rfl, rfl, rfl, ?_, ?_, rfl, rfl, rfl, rfl, rfl, rfl, rfl, rfl, rfl⟩
+  · show ((Array.range BAVC.tau).map (fun i => Prover.smallVoleUWords p s.iv i (key i)))[0]! = _
+    rw [getElem!_range_map _ _ (show 0 < BAVC.tau by decide)]
+    rfl
+  · show (List.range (BAVC.tau - 1)).foldl (fun acc i => acc ++ Prover.correctionOf p
+        ((Array.range BAVC.tau).map (fun i => Prover.smallVoleUWords p s.iv i (key i)))[0]!
+        ((Array.range BAVC.tau).map (fun i => Prover.smallVoleUWords p s.iv i (key i)))[i + 1]!)
+        ByteArray.empty = _
+    refine List.foldl_ext _ _ _ fun acc j hj => ?_
+    have hj := List.mem_range.1 hj
+    simp only [proverCorr, proverU, getElem!_range_map _ _ (show 0 < BAVC.tau by decide),
+      getElem!_range_map _ _ (show j + 1 < BAVC.tau by simp [BAVC.tau] at hj ⊢; omega)]
+
 /-- The real `proveCommit`, once QuickSilver has succeeded. -/
 lemma proveCommit_eq (Hs : Hashes) (st : Statement) (s : Prover.Pending) (wSuffix w : ByteArray)
     (hp : s.params = st.params) (hw : s.wPrefix ++ wSuffix = w)
@@ -312,10 +397,12 @@ lemma tapeOf_eq_tapeAt (Hs : Hashes) (T : CrtTables) (st : Statement) (w rho : B
 /-- **The ideal run's step-1 values at the tape of a real step 1**, at any `Δ` whose opening fits
 (`BAVC.openAt` succeeds): the pads are the small VOLEs' inputs, the public values (`iv`, the
 opening) and the verifier's key columns are the real ones, and so are `c_mult`, `chal1` and the
-VOLE check `ũ`. -/
-theorem step1_real (Hs : Hashes) (T : CrtTables) (st : Statement) (s : Prover.Pending)
-    {wPrefix rho : ByteArray}
-    (hs : Prover.voleGen Hs T st.params (st.mu1 Hs) wPrefix rho st.binder1 = s)
+VOLE check `ũ`. For a step 1 with any 16-byte seed and `iv_pre` (`voleGenAt`); `step1_real` for
+`Prover.voleGen`. -/
+theorem step1_realAt (Hs : Hashes) (T : CrtTables) (st : Statement) (s : Prover.Pending)
+    {wPrefix seed ivPre : ByteArray}
+    (hs : voleGenAt Hs T st.params (st.mu1 Hs) wPrefix seed ivPre st.binder1 = s)
+    (hseed16 : seed.size = 16) (hivp16 : ivPre.size = 16)
     (hHs : HashesWF Hs) (hbavc : BAVCComplete)
     (hlab : st.params.labelRowOffset + 128 ≤ st.params.correctionRows)
     (g : Fin nGrind → Bytes 16) (ctr : ℕ) {delta opening : ByteArray} (hd16 : delta.size = 16)
@@ -338,14 +425,12 @@ theorem step1_real (Hs : Hashes) (T : CrtTables) (st : Statement) (s : Prover.Pe
       voleHashReceiver st.params s.chal1 ((Array.range st.params.correctionRows).map fun r =>
         if wbit s.u r then (⟨1, 0⟩ : W128) else W128.zero) s.uMask 0 (Prover.zeros 64) := by
   intro sh t P key qcols
-  have spec := voleGen_spec Hs T st.params (st.mu1 Hs) wPrefix rho st.binder1
-  have more := voleGen_more Hs T st.params (st.mu1 Hs) wPrefix rho st.binder1
-  rw [hs] at spec more
-  obtain ⟨hsp, hsw, hsiv, hsivp, hstree, hsleaves, hsu, hscorr, hsfiv, hsqs, hsvrows, hsvs, hsvm,
-    hsum, hsc1, hsvc, hshv⟩ := spec
-  obtain ⟨hseed, huMask, hcm, hsop, hsdl, hsct, hsu0⟩ := more
-  have hivs : s.ivPre.size = 16 := by rw [hsivp, ByteArray.size_extract, hHs]; rfl
-  have hseeds : s.seed.size = 16 := by rw [hseed, ByteArray.size_extract, hHs]; rfl
+  have spec := voleGenAt_spec Hs T st.params (st.mu1 Hs) wPrefix seed ivPre st.binder1
+  rw [hs] at spec
+  obtain ⟨-, -, hseed, hsivp, hsiv, hstree, hsleaves, hsu, hscorr, hsfiv, hsqs, hsc1, -, huMask,
+    hcm, hsop, hsdl, hsct⟩ := spec
+  have hivs : s.ivPre.size = 16 := by rw [hsivp]; exact hivp16
+  have hseeds : s.seed.size = 16 := by rw [hseed]; exact hseed16
   have hcs : s.leaves.coms.size = BAVC.hashLen * BAVC.numLeaves := by
     rw [hsleaves]; exact commit_coms_size _ _
   have htree : ∀ k < BAVC.numNodes, (s.tree[k]!).size = 16 := by
@@ -439,6 +524,36 @@ theorem step1_real (Hs : Hashes) (T : CrtTables) (st : Statement) (s : Prover.Pe
     hPop, hqcols, hcmI, h1, h4⟩
   rw [hhi]
   exact uMask_real T s _ _ huMask
+
+/-- `step1_realAt` for a real step 1 (`Prover.voleGen`, seed and `iv_pre` from `H₃`). -/
+theorem step1_real (Hs : Hashes) (T : CrtTables) (st : Statement) (s : Prover.Pending)
+    {wPrefix rho : ByteArray}
+    (hs : Prover.voleGen Hs T st.params (st.mu1 Hs) wPrefix rho st.binder1 = s)
+    (hHs : HashesWF Hs) (hbavc : BAVCComplete)
+    (hlab : st.params.labelRowOffset + 128 ≤ st.params.correctionRows)
+    (g : Fin nGrind → Bytes 16) (ctr : ℕ) {delta opening : ByteArray} (hd16 : delta.size = 16)
+    (hopen : BAVC.openAt s.tree s.leaves.coms delta = some opening) :
+    let sh : Shared := (blk 16 s.ivPre, g, comsOf s.leaves.coms delta, seedsOf s.tree delta)
+    let t := realPads Hs T st.params s delta
+    let P := pubOf Hs st sh (blk 16 delta)
+    let key := leafKey s.leaves
+    let qcols := convertToVoleAt st.params (BAVC.deltaBit delta) (proverCorr st.params s.iv key)
+      s.iv key
+    usOf st.params t = realUsW st.params s ∧ (realUsW st.params s)[0]! = s.u ∧
+    correctionsOf st.params (realUsW st.params s) = s.fields.corrections ∧
+    uMaskOfHi st.params T (ba t.2.2.2.2.2.1) (realUsW st.params s) = s.uMask ∧
+    P.iv = s.iv ∧ P.opening = opening ∧
+    qcolsOf st P (blk 16 delta) s.fields.corrections = qcols ∧
+    cmultIdeal Hs T st P (blk 16 delta) qcols s.u s.uMask t.2.2.2.2.2.2 = s.fields.cmult ∧
+    tC1 Hs st sh ctr (blk 16 delta) s.fields.corrections s.fields.cmult = s.chal1 ∧
+    tUt Hs st sh ctr (blk 16 delta) s.fields.corrections s.fields.cmult
+        ((Array.range st.params.correctionRows).map (wbit s.u)) s.uMask =
+      voleHashReceiver st.params s.chal1 ((Array.range st.params.correctionRows).map fun r =>
+        if wbit s.u r then (⟨1, 0⟩ : W128) else W128.zero) s.uMask 0 (Prover.zeros 64) := by
+  rw [voleGen_eq_voleGenAt] at hs
+  have h32 := hHs .h3 ((wPrefix ++ st.mu1 Hs ++ rho).push 3)
+  exact step1_realAt Hs T st s hs (by rw [ByteArray.size_extract, h32]; rfl)
+    (by rw [ByteArray.size_extract, h32]; rfl) hHs hbavc hlab g ctr hd16 hopen
 
 /-! ## The main theorem -/
 

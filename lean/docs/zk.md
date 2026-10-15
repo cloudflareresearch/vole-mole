@@ -767,7 +767,8 @@ simulated proof cannot depend on `r`, while the test for the real `r` accepts ev
 The statements above are about models of the views. For the executable Lean prover
 (`Verifier/Prover.lean`, which reproduces the C++ proofs byte for byte, README §8) the hybrids are
 mechanized down to one probabilistic hypothesis on the prover's tape, with an executable
-simulator:
+simulator, and that hypothesis is derived from one hypothesis per hop (H1, grinding, H4, H6), of
+which the random-oracle ones are proved with the hashed domain a uniform table:
 
 | Statement | Lean | Hybrids |
 |---|---|---|
@@ -778,15 +779,17 @@ simulator:
 | **On a uniform tape, the ideal-tape prover's output is distributed exactly as the simulator's**: corrections and `d` (one-time pads), `c_mult` (sibling answers, `N_MASK ≤ 32`), the CRT masks (`u_mask` uniform from uniform pads: a kernel-checked certificate for faest-arch-opt's tables), `ũ`, `ã` (KOS/QuickSilver bijection, coefficients through `ũ` only), grinding (`IsFirstHit` law) | `proveIdeal_close`, `balanced_crtVal_tables`, `maskInvOk_tables`, `upush_cmult`, `upush_resp`, `qsProve_eq` | H2, H5–H7, §7.4 |
 | **Label rows:** with the tape uniform, Θ is uniform and independent of the proof; a guess of Θ from the proof is right with probability exactly `2^{−8·labelBytes}` | `proveIdeal_theta_close`, `prove_guess_theta` | H6 |
 | **Reduction:** every distinguisher's advantage, real vs. simulated proofs, *equals* its advantage, real tape vs. uniform tape, seen through the ideal-tape prover | `zk_reduction` | — |
-| **Zero knowledge** from the tape hypothesis `TapeHyp … ε`: `Close ε (prove … ∘ rho) (simulate p)`; in the form of `Privacy.ZeroKnowledge` for a statement family with dedicated label rows; for faest-arch-opt's tables with BAVC and CRT completeness proved | `prove_close`, `labelRows_zeroKnowledge`, `labelRows_zeroKnowledge_tables` | all |
+| **Zero knowledge** from the tape hypothesis `TapeHyp … ε`: `Close ε (prove … ∘ rho) (simulate p)`; in the form of `Privacy.ZeroKnowledge` for a statement family with dedicated label rows; for faest-arch-opt's tables with BAVC and CRT completeness proved and the tape hypothesis from the hop hypotheses (error `ε_rho + ε_grind + ε_bavc + ε_lab`) | `prove_close`, `labelRows_zeroKnowledge`, `labelRows_zeroKnowledge_tables` | all |
+| **The tape hypothesis from one hypothesis per hop**, by a proved hybrid argument: H1 (`H3Hyp`: `H₃`'s answer at the seed input is close to uniform, `ε_rho`), grinding (`GrindHyp`: the `H₂³` answers at the grinding points of a prefix that is a function of the seed and `iv_pre`, `ε_grind`), H4 (`HideHyp`: for every `iv` and `Δ`, the hidden part of a commitment from a uniform root seed, i.e. the hidden commitments, the opened seeds, all `u^{(i)}` and `u_hi`, `ε_bavc`), H6 (`LabHyp`: on a uniform tape, the `H₅` answers at the sibling labels it determines against uniform ones, through the ideal-tape prover, `ε_lab`); `TapeHyp … (ε_rho + ε_grind + ε_bavc + ε_lab)`. The deterministic steps: the real run's sibling answers are the ones its tape determines (`fillSib_tapeAt_eq`, from `step1_realAt`), the seed slots past the opened ones are not read; for PomFRIT, `TapeHyp2` with the abort term `noHitProb` (the fallback block is read only if no grinding answer is accepted) | `HopHyps`, `tape_close_of_hops`, `tapeHyp_of_hops` (`ZK/Hops.lean`, `ZK/Exec.lean`), `HopHyps2`, `tapeHyp2_of_hops` (`ZK/TwoPhaseHops.lean`); `Privacy.Close.of_agree`, `Close.prod`, `Close.pi` (`Privacy/Hybrid.lean`) | H1, H2, H4, H6 |
+| **The random-oracle hops, with the hashed domain a uniform table** on the inputs the hop reads (`Hashes.withTable`): H1 holds with `ε = 0`, and `≤ q₃·2⁻¹²⁸` against a distinguisher that reads the `H₃` table at `q₃` inputs; grinding holds with `ε = 0`, and programming `H₂³` at the grinding points (as `simulateRO`) is perfect also for a distinguisher that reads the table; H6 is identical until a sibling input is read, for every run that reads the `H₅` table on a known set. Generic: a uniform table's answers at distinct points are uniform; programming is a bijection; identical until a programmed point is read | `h3_rom`, `h3_rom_query`, `grind_rom`, `grind_rom_program`, `lab_rom` (`ZK/HopsROM.lean`); `Privacy.close_restrict`, `pr_program_eq`, `abs_pr_hidden_le`, `abs_pr_hidden_one_le` (`Privacy/Hybrid.lean`) | H1, H2, H6 |
 | **BAVC completeness**: the prover's opening at any `Δ` reconstructs its leaf keys off the hidden leaves and its commitments (the walks as folds over the node index; opened nodes, placement, top-down derivation) | `Bridge.bavcComplete` (`Verifier/Bridge/BAVCComplete.lean`) | H3 |
 | **CRT completeness**: the verifier's CRT masks are `ṽ_mask + u_mask·Δ'` for every `Δ` (gate labels `L^{γ_e}`, `c_mult` read back, `r̃` bilinear, and the tables' bilinear identity `L_c(a) = a·W_crt[c]`, checked in the kernel on all `120 · 128` basis pairs) | `Bridge.crtComplete`, `Bridge.crt_core`, `CrtCheck.Lc_eq`, `CrtCheck.crtCheck_eq` (`Verifier/Bridge/CrtComplete.lean`, `CrtCheck.lean`) | H3 |
 | The privacy theorems with the Lean prover: Moussaka issuer hiding/unlinkability, Ratatouille unlinkability | `Privacy.Moussaka.anonymity_lean`, `Privacy.Ratatouille.unlinkability_lean` (`Privacy/LeanProver.lean`) | — |
 | **Newton interpolation is correct**: `InterpOk d` for `d + 1 < 2⁶⁴` (the code's divided-difference table is the recurrence `D(a, m)`; the Newton form interpolates its window, by Neville's identity; Horner's rule builds it) | `Interp.interpOk`, `interpOk_two`, `interpOk_nine`, `interpolate_correct`, `newton_interp` (`ZK/Interp.lean`) | H3 |
 | **Two phases, delayed instance** (PomFRIT): with the instance and the witness suffix chosen by any continuation from step 1's output (buffer and `chal1`), the real run is the ideal-tape run at its own tape (step 2: `proveCommit_eq_proveIdeal` for any split of the witness; step 1: `step1_real`); on a uniform tape the ideal run is distributed as the simulated one: step 1's `c_i`, `c_mult`, `ũ`, `d[0..|r|)` are uniform (so the simulator outputs them, and the verifier's `chal1`, before the instance exists), and `d[|r|..)` and `ã` stay uniform given them for every instance and suffix picked (`ã` is a bijection of the QuickSilver masks for every value of `ũ` and of the instance; `(c_i, d)` a bijection of the row pads for every suffix choice that reads `d[0..|r|)` only) | `realRun2_eq`, `idealPhase1_real`, `proveIdeal2_close`, `upush_respAd`, `upush_rowsAd`, `upush_fieldsAd` (`ZK/TwoPhase.lean`) | H2, H5–H7 |
 | **Two-phase zero knowledge** from the two-phase tape hypothesis `TapeHyp2`, and for PomFRIT's Lean prover (`leanProver`: `issue_request_with_seed`, then `finalize_issue` for the instance `(pk, h)` and `s`) in the form of `Privacy.PomFRIT.ZeroKnowledge`, with every deterministic hypothesis proved for valid continuations (`P(s) = h ⊕ r`); blindness with the Lean prover on the label-row layout; completeness of `pomfritVerify` on the final signature | `twoPhase_close`, `twoPhase_close_tables`, `Privacy.PomFRIT.lean_zeroKnowledge`, `runHyp2_lean`, `blindness_lean`, `blindness_lean_shake`, `pomfritVerify_complete_tables` (`Privacy/PomFRITLean.lean`) | all |
-| **Ratatouille, assembled**: the issuance and spend statements with label rows, the spec's witness encodings (`encode_issue_witness`, `encode_spend_witness`, with the committed Keccak states and the carries), the primitives `leanPrim` (proofs as the spec's label-row-sized vectors, `Spec.Ratatouille.Sizes.labelRows`); `ZKHyp` for every instance and witness; Theorem 2 with only the tape hypotheses, hiding and the hash record's output lengths left (with SHAKE only the first two) | `Privacy.Ratatouille.issue_holds`, `spend_holds`, `carries_testBit`, `zkHypI`, `zkHypS`, `unlinkability_label_rows`, `unlinkability_label_rows_shake` (`Privacy/RatatouilleLean.lean`) | — |
-| **Moussaka, assembled**: the issuance and redemption statements of `Verifier/Relations.lean` with label rows, `ZKHyp` for every well-formed instance (the spec's witness encodings satisfy the `Arith` systems for every combination); Theorem 4(a) with only the tape hypotheses, hiding and the hash record's output lengths left (with SHAKE only the first two) | `Privacy.Moussaka.issue_holds`, `redeem_holds`, `zkHypI`, `zkHypR`, `anonymity_label_rows`, `anonymity_label_rows_shake` (`Privacy/MoussakaLean.lean`) | — |
+| **Ratatouille, assembled**: the issuance and spend statements with label rows, the spec's witness encodings (`encode_issue_witness`, `encode_spend_witness`, with the committed Keccak states and the carries), the primitives `leanPrim` (proofs as the spec's label-row-sized vectors, `Spec.Ratatouille.Sizes.labelRows`); `ZKHyp` for every instance and witness; Theorem 2 with only the tape hypotheses, hiding and the hash record's output lengths left (with SHAKE only the hop hypotheses and hiding: `≤ 4(ε_rho + ε_grind + ε_bavc + ε_lab)_I + 4(…)_S + 2ε_hide`) | `Privacy.Ratatouille.issue_holds`, `spend_holds`, `carries_testBit`, `zkHypI`, `zkHypS`, `unlinkability_label_rows`, `unlinkability_label_rows_shake` (`Privacy/RatatouilleLean.lean`) | — |
+| **Moussaka, assembled**: the issuance and redemption statements of `Verifier/Relations.lean` with label rows, `ZKHyp` for every well-formed instance (the spec's witness encodings satisfy the `Arith` systems for every combination); Theorem 4(a) with only the tape hypotheses, hiding and the hash record's output lengths left (with SHAKE only the hop hypotheses and hiding: `≤ 4(ε_rho + ε_grind + ε_bavc + ε_lab)_I + 4(…)_R + 2ε_hide`) | `Privacy.Moussaka.issue_holds`, `redeem_holds`, `zkHypI`, `zkHypR`, `anonymity_label_rows`, `anonymity_label_rows_shake` (`Privacy/MoussakaLean.lean`) | — |
 
 `lake exe zk_sim [TESTS [main\|labelrows [FILTER]]]` runs, on all 18 KAT runs of each layout: the
 equation `prove = proveIdeal ∘ tapeOf` (all pass), the simulator with the programmed oracle
@@ -795,18 +798,38 @@ equation `prove = proveIdeal ∘ tapeOf` (all pass), the simulator with the prog
 `chal1`). About 15–60 s per run.
 
 **What remains assumed.**
-- **The tape hypothesis** `TapeHyp Hs T st w ε` (`ZK/Exec.lean`): the real run's tape,
-  `tapeOf … rho` for uniform `rho`, is `ε`-close to a uniform ideal tape against distinguishers
-  that see it through the ideal-tape prover (implied by the tape alone being `ε`-close,
-  `tapeHyp_of_close`). This is exactly H1 (seed and `iv_pre` from `H₃`), H4 (the hidden leaves'
-  PRG outputs, the root's `u_hi`, the hidden commitments and the opened seeds: AES as PRP, GGM),
-  H6 (the `H₅` answers at the sibling labels, identical until a query hits one: by
-  `prove_guess_theta`, the per-query probability is `2⁻¹²⁸` with label rows) and the
-  random-oracle answers at the grinding points (H2's freshness of `chal2`). With a fixed hash
-  record this is an idealization (it can hold only against distinguishers that cannot invert AES
-  or find the sibling labels), as every statement against all distinguishers in
-  `Privacy/Basic.lean`; on paper `ε = ε_rho + ε_prog + 2·ε_hide + ε_lab` (§3). On `main` the H6
-  part fails (§4).
+- **The hop hypotheses** (`HopHyps`, `ZK/Hops.lean`), from which the tape hypothesis
+  `TapeHyp Hs T st w ε` (`ZK/Exec.lean`: the real run's tape, `tapeOf … rho` for uniform `rho`,
+  is `ε`-close to a uniform ideal tape through the ideal-tape prover) is proved with
+  `ε = ε_rho + ε_grind + ε_bavc + ε_lab` (`tapeHyp_of_hops`; for PomFRIT `HopHyps2`,
+  `tapeHyp2_of_hops`, with `+ ε_abort`, `ε_abort = noHitProb = (|Aᶜ|/2¹²⁸)^{2³²}` by
+  `Grinding.card_noHit`). Each is a `Close` bound on a small explicit experiment for a fixed hash
+  record; as every statement against all distinguishers in `Privacy/Basic.lean`, that is an
+  idealization (a fixed record's `H₃` cannot map 16 bytes of `rho` to 32 uniform bytes against
+  every distinguisher). Their status:
+  - **H1** (`H3Hyp`, `ε_rho`) and **grinding** (`GrindHyp`, `ε_grind`): proved in the ROM, with the
+    hashed domain a uniform table on the inputs the hop reads (`ZK/HopsROM.lean`): both exact
+    (`h3_rom`, `grind_rom`), H1 `≤ q₃·2⁻¹²⁸` for a distinguisher that reads the `H₃` table at `q₃`
+    inputs (`h3_rom_query`: §3's `Q₃·2⁻¹²⁸`; the term for two proofs sharing `rho` concerns several
+    proofs), and programming `H₂³` at the grinding points is perfect (`grind_rom_program`; §3's
+    `ε_prog` concerns queries before `chal2` is fixed, i.e. several proofs). Modelling steps left:
+    the domain is a random oracle (SHAKE128, with L0's domain separation, `ROM/DomainSep.lean`), the
+    lazy oracle restricted to the hop's inputs is the table, and the prover's grinding prefix does
+    not read `H₂³` (by inspection of `realPre`).
+  - **H4** (`HideHyp`, `ε_bavc`, §3's `ε_hide`): assumed. It names only AES and the parameters: for
+    every `iv` and `Δ`, the hidden part of a commitment from a uniform root seed is close to
+    uniform (spec Lemma 10.24: GGM, leaf commitments and leaf PRGs with AES as an ideal cipher or
+    PRP, the four roles' inputs distinct, `Bridge.ctrBlock_ne_of_roles`). The executable AES is
+    not parametrized by a cipher, so neither the ideal-cipher model nor the GGM hybrid over the
+    `τ` hidden paths is instantiated (`Close.pi` gives the `τ·ε` composition for per-path
+    hypotheses).
+  - **H6** (`LabHyp`, `ε_lab`): in the ROM, identical until a sibling input is read (`lab_rom`, for
+    every run that reads the `H₅` table on a known set). Not mechanized: that the ideal-tape prover
+    reads `H₅` only at the active labels (a sibling input only if `Θ = 0`, `card_theta_zero`), and
+    that a distinguisher query is a sibling input with probability `2⁻¹²⁸`. The latter is
+    `prove_guess_theta` (`Θ` uniform given the proof) once the sibling input is written as a
+    function of the proof and `Θ` (`sibling_eq_labelRows` on the model). On paper
+    `ε_lab ≤ (Q₅ + 1)·2⁻¹²⁸` per proof (§3, H6). On `main` this hop fails (§4).
 - **Deterministic hypotheses**, per statement and witness (`ZKHyp`, `RunHyp`): the statement's
   evaluator is a system of degree `≤ d`, `1 ≤ d`, that the witness satisfies for every `chal1` and
   combination (for PomFRIT, for every instance the continuation picks: `RunHyp2`); `N_MASK ≤ 32`;
@@ -818,7 +841,8 @@ equation `prove = proveIdeal ∘ tapeOf` (all pass), the simulator with the prog
   (`anonymity_label_rows`), Ratatouille (`unlinkability_label_rows`) and PomFRIT
   (`blindness_lean`) all of them are proved, so these theorems assume only the tape hypotheses,
   hiding (Moussaka, Ratatouille) and the hash record's output lengths, the last proved for SHAKE
-  (`*_shake`: `hashesWF_shake`); Moussaka's
+  (`*_shake`: `hashesWF_shake`, which also take the tape hypotheses from the hop hypotheses, so
+  each proof's error is the sum of the named terms); Moussaka's
   zero-knowledge hypotheses are needed only for well-formed instances (`IssueRelW`, `RedeemRelW`:
   the lengths the C++ types fix, at most 64 Anchors).
 - `simulateRO_accept` assumes the simulated proof's run reaches `chal3` (checked by `zk_sim`).
@@ -826,7 +850,8 @@ equation `prove = proveIdeal ∘ tapeOf` (all pass), the simulator with the prog
   `Privacy.PomFRIT.ZeroKnowledge` is derived for the Lean prover with label rows
   (`lean_zeroKnowledge`) from the two-phase tape hypothesis `TapeHyp2` (`ZK/TwoPhase.lean`: the
   tape of a two-phase run, with step 1's output as a fallback block used only if no grinding
-  answer is accepted). Once picked, the instance `(pk, h)` is fixed, so the witness `r ‖ s`
+  answer is accepted), itself from the hop hypotheses `HopHyps2` (`ZK/TwoPhaseHops.lean`;
+  `blindness_lean_shake`: `≤ 4(ε_rho + ε_grind + ε_abort + ε_bavc + ε_lab)`). Once picked, the instance `(pk, h)` is fixed, so the witness `r ‖ s`
   satisfies its system for every `chal1` and combination. `Spec/PomFRITLayout.lean` states the
   protocol on the label-row layout (5579-byte proofs; `hash_to_target` reads `ũ` and `d` at its
   offsets), and `Privacy.PomFRIT.blindness` holds for either layout.

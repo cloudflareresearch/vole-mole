@@ -1,5 +1,5 @@
 import VoleMole.ZK.IdealSim
-import VoleMole.ZK.TapeOf
+import VoleMole.ZK.Hops
 import VoleMole.Verifier.Bridge.BAVCComplete
 import VoleMole.Verifier.Bridge.CrtComplete
 
@@ -21,7 +21,9 @@ against the simulator `Sim.simulate` (`ZK/Sim.lean`):
   `u_hi`, the hidden commitments and the opened seeds are uniform: AES as a PRP, GGM), H6 (the
   `H₅` answers at the sibling labels are uniform and independent of everything the distinguisher
   sees: identical until a query hits a sibling label) and the random-oracle answers at the
-  grinding points (H2's freshness of `chal2`). `TapeHyp` follows from the tape statement
+  grinding points (H2's freshness of `chal2`). **`tapeHyp_of_hops`** derives it from one
+  hypothesis per hop, each a `Close` bound on a small experiment (`HopHyps`, `ZK/Hops.lean`), with
+  `ε = ε_rho + ε_grind + ε_bavc + ε_lab`. `TapeHyp` also follows from the tape statement
   `Close ε (tapeOf …) id` (`tapeHyp_of_close`). As every statement against all distinguishers in
   `Privacy/Basic.lean`, it is an idealization: with a fixed hash record it holds only for
   distinguishers that cannot invert AES or find the sibling labels (on paper: `ε_rho + ε_prog +
@@ -31,7 +33,8 @@ against the simulator `Sim.simulate` (`ZK/Sim.lean`):
 * **`labelRows_zeroKnowledge`**: `Privacy.ZeroKnowledge` for a family of statements with dedicated
   label rows, from `TapeHyp` and the deterministic hypotheses.
 * **`labelRows_zeroKnowledge_tables`**: the same for faest-arch-opt's tables (`CrtGen.tables`),
-  with `BAVCComplete` and `CrtComplete` proved (`Bridge.bavcComplete`, `Bridge.crtComplete`).
+  with `BAVCComplete` and `CrtComplete` proved (`Bridge.bavcComplete`, `Bridge.crtComplete`) and
+  the tape hypothesis from the hop hypotheses: error `ε_rho + ε_grind + ε_bavc + ε_lab`.
 * `simulateRO_accept` (`ZK/SimAccept.lean`): the verifier, with `H₂³` programmed by
   `Sim.simulateRO`, accepts the simulated proof whenever its run reaches `chal3`.
 
@@ -57,6 +60,14 @@ grinding points). -/
 def TapeHyp (ε : ℝ) : Prop :=
   Close ε (fun ρ : Bytes 16 => proveIdeal Hs T st w (tapeOf Hs T st w (ba ρ)))
     (proveIdeal Hs T st w)
+
+/-- **The tape hypothesis from the hop hypotheses** (`ZK/Hops.lean`), with
+`ε = ε_rho + ε_grind + ε_bavc + ε_lab`. -/
+theorem tapeHyp_of_hops (hHs : HashesWF Hs) (hbavc : BAVCComplete)
+    (hlab : st.params.labelRowOffset + 128 ≤ st.params.correctionRows)
+    {εrho εgrind εbavc εlab : ℝ} (h : HopHyps Hs T st w εrho εgrind εbavc εlab) :
+    TapeHyp Hs T st w (εrho + εgrind + εbavc + εlab) :=
+  tape_close_of_hops Hs T st w hHs hbavc hlab h
 
 /-- The tape statement implies the tape hypothesis. -/
 theorem tapeHyp_of_close {ε : ℝ}
@@ -129,17 +140,24 @@ theorem labelRows_zeroKnowledge {I : Type*} (stOf : I → Statement) (p : Params
     (prove_close Hs T (stOf x) w ⟨h x w hxw, hHs, hbavc, hcrt x w hxw, hlab⟩ (ht x w hxw))
 
 /-- **Zero knowledge of the executable prover with faest-arch-opt's tables**: as
-`labelRows_zeroKnowledge`, with BAVC and CRT completeness proved. Assumed: the statements'
-deterministic hypotheses (`ZKHyp`), the hash record's output lengths and the tape hypothesis. -/
+`labelRows_zeroKnowledge`, with BAVC and CRT completeness proved and the tape hypothesis from the
+hop hypotheses (`HopHyps`, `ZK/Hops.lean`), so the error is the sum of the named terms
+`ε_rho + ε_grind + ε_bavc + ε_lab` (H1, the grinding answers, BAVC hiding, H6). Assumed: the
+statements' deterministic hypotheses (`ZKHyp`), the hash record's output lengths and the hop
+hypotheses. -/
 theorem labelRows_zeroKnowledge_tables {I : Type*} (stOf : I → Statement) (p : Params)
     (hp : ∀ x, (stOf x).params = p) (hlr : p.labelRows = true) (R : I → ByteArray → Prop)
     (cs : I → ByteArray → ByteArray → System GF128)
     (h : ∀ x w, R x w → ZKHyp CrtGen.tables (stOf x) w (cs x)) (hHs : HashesWF Hs)
-    {ε : ℝ} (ht : ∀ x w, R x w → TapeHyp Hs CrtGen.tables (stOf x) w ε) :
+    {εrho εgrind εbavc εlab : ℝ}
+    (ht : ∀ x w, R x w → HopHyps Hs CrtGen.tables (stOf x) w εrho εgrind εbavc εlab) :
     ZeroKnowledge R (fun x w (ρ : Bytes 16) => Prover.prove Hs CrtGen.tables (stOf x) w (ba ρ))
-      (fun _ c => simulate p c) ε :=
-  labelRows_zeroKnowledge Hs CrtGen.tables stOf p hp hlr R cs h hHs bavcComplete
-    (fun x _ _ rho => crtComplete Hs _ _ _ rho _ (by
-      rw [hp x]; simp [Params.labelRowOffset, Params.correctionRows, hlr])) ht
+      (fun _ c => simulate p c) (εrho + εgrind + εbavc + εlab) := by
+  have hlab : ∀ x, (stOf x).params.labelRowOffset + 128 ≤ (stOf x).params.correctionRows :=
+    fun x => by rw [hp x]; simp [Params.labelRowOffset, Params.correctionRows, hlr]
+  exact labelRows_zeroKnowledge Hs CrtGen.tables stOf p hp hlr R cs h hHs bavcComplete
+    (fun x _ _ rho => crtComplete Hs _ _ _ rho _ (hlab x))
+    (fun x w hxw => tapeHyp_of_hops Hs CrtGen.tables (stOf x) w hHs bavcComplete (hlab x)
+      (ht x w hxw))
 
 end VoleMole.ZK.Sim

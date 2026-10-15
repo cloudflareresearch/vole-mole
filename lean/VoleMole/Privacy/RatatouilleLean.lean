@@ -20,7 +20,8 @@ label-row layout (`Spec.Ratatouille.Sizes.labelRows`: proofs of 7256 and 17575 b
 * **`unlinkability_label_rows`**: Theorem 2 with the Lean prover, `≤ 4εI + 4εS + 2εhide`, assuming
   only the tape hypotheses (`TapeHyp`), hiding and `HashesWF` (BAVC and CRT completeness are
   theorems, `Bridge.bavcComplete`, `Bridge.crtComplete`); `unlinkability_label_rows_shake` drops
-  `HashesWF` for SHAKE.
+  `HashesWF` for SHAKE and takes the tape hypotheses from the hop hypotheses (`HopHyps`,
+  `ZK/Hops.lean`), so each error is the sum `ε_rho + ε_grind + ε_bavc + ε_lab` of the named terms.
 -/
 
 open Finset
@@ -531,20 +532,29 @@ theorem unlinkability_label_rows (A : Adversary Sizes.labelRows) {SK : Type} (pk
     (fun _ _ _ rho => crtComplete Hs _ _ _ rho _ (hlab_of (show 16 ≤ 847 by decide)))
     hεI hεS htI htS hhide b₁ b₂ b₁' b₂'
 
-/-- **Ratatouille unlinkability with the Lean prover and SHAKE**: only the tape hypotheses and
-hiding are assumed. -/
+/-- **Ratatouille unlinkability with the Lean prover and SHAKE**, with the tape hypotheses from
+the hop hypotheses (`HopHyps`, `ZK/Hops.lean`): the issuance and spend errors are the sums
+`ε_rho + ε_grind + ε_bavc + ε_lab` of the named terms (H1, the grinding answers, BAVC hiding, H6).
+Only the hop hypotheses and hiding are assumed. -/
 theorem unlinkability_label_rows_shake (A : Adversary Sizes.labelRows) {SK : Type}
     (pk : SK → PublicKey) (derive : SK → Target → Option Preimage)
-    {εI εS εhide : ℝ} (hεI : 0 ≤ εI) (hεS : 0 ≤ εS)
-    (htI : ∀ x w, IssueRel x w → TapeHyp Hashes.shake CrtGen.tables (stI x) (encI x w) εI)
-    (htS : ∀ x w, SpendRel x w → TapeHyp Hashes.shake CrtGen.tables (stS x) (encS x w) εS)
+    {εrhoI εgrindI εbavcI εlabI εrhoS εgrindS εbavcS εlabS εhide : ℝ}
+    (hεI : 0 ≤ εrhoI + εgrindI + εbavcI + εlabI) (hεS : 0 ≤ εrhoS + εgrindS + εbavcS + εlabS)
+    (htI : ∀ x w, IssueRel x w →
+      HopHyps Hashes.shake CrtGen.tables (stI x) (encI x w) εrhoI εgrindI εbavcI εlabI)
+    (htS : ∀ x w, SpendRel x w →
+      HopHyps Hashes.shake CrtGen.tables (stS x) (encS x w) εrhoS εgrindS εbavcS εlabS)
     (hhide : ∀ b₁ b₂ co, hidingAdv A.ctx (reduction A (fun _ c => vecOf _ (simulate pI c))
       (fun _ c => vecOf _ (simulate pS c)) b₁ b₂ co) ≤ εhide)
     (b₁ b₂ b₁' b₂' : Bool) :
     |pr _ (realGame A (leanPrim Hashes.shake pk derive) b₁ b₂) -
         pr _ (realGame A (leanPrim Hashes.shake pk derive) b₁' b₂')| ≤
-      4 * εI + 4 * εS + 2 * εhide :=
-  unlinkability_label_rows A pk derive Hashes.shake hashesWF_shake hεI hεS htI htS hhide
-    b₁ b₂ b₁' b₂'
+      4 * (εrhoI + εgrindI + εbavcI + εlabI) + 4 * (εrhoS + εgrindS + εbavcS + εlabS) +
+        2 * εhide :=
+  unlinkability_label_rows A pk derive Hashes.shake hashesWF_shake hεI hεS
+    (fun x w h => tapeHyp_of_hops _ _ _ _ hashesWF_shake bavcComplete
+      (hlab_of (show 16 ≤ 240 by decide)) (htI x w h))
+    (fun x w h => tapeHyp_of_hops _ _ _ _ hashesWF_shake bavcComplete
+      (hlab_of (show 16 ≤ 847 by decide)) (htS x w h)) hhide b₁ b₂ b₁' b₂'
 
 end VoleMole.Privacy.Ratatouille

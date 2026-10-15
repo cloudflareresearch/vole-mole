@@ -117,9 +117,13 @@ import VoleMole.ZK.IdealSim
 import VoleMole.ZK.BavcLemmas
 import VoleMole.ZK.TapeLemmas
 import VoleMole.ZK.TapeOf
+import VoleMole.Privacy.Hybrid
+import VoleMole.ZK.Hops
 import VoleMole.ZK.Exec
 import VoleMole.Privacy.LeanProver
 import VoleMole.ZK.TwoPhase
+import VoleMole.ZK.TwoPhaseHops
+import VoleMole.ZK.HopsROM
 import VoleMole.ZK.Interp
 import VoleMole.Spec.PomFRITLayout
 import VoleMole.Privacy.PomFRITLean

@@ -173,15 +173,27 @@ on the tape (`zk_reduction`), and `Privacy.ZeroKnowledge` holds with error `ε` 
 families with dedicated label rows (`labelRows_zeroKnowledge`) under the **tape hypothesis**
 `TapeHyp … ε` (H1, H4, H6 and the grinding answers: the run's tape is `ε`-close to uniform) and
 deterministic hypotheses (the witness satisfies the system for every `chal1`, `N_MASK ≤ 32`, and
-the two correctness facts of the completeness theorem, proved for faest-arch-opt's tables:
-`labelRows_zeroKnowledge_tables`; correct interpolation is proved, `ZK/Interp.lean`). PomFRIT's two-phase zero knowledge, with the instance chosen after step 1, is
-derived the same way (`ZK/TwoPhase.lean`: step 1's fields are uniform and independent of the
-witness, step 2 stays uniform given them for every adaptive choice; `twoPhase_close` under the
-two-phase tape hypothesis `TapeHyp2`; `twoPhase_close_tables`). For all three protocols the
-per-relation statements are assembled and every deterministic hypothesis is proved
-(`Privacy/MoussakaLean.lean`, `Privacy/RatatouilleLean.lean`, `Privacy/PomFRITLean.lean`; with
-SHAKE, `*_shake`, only the tape hypotheses and hiding remain). `lake exe zk_sim` checks the tape
-equation, the simulator and the ideal-tape prover on all 18 KAT runs of each layout.
+the two correctness facts of the completeness theorem, proved for faest-arch-opt's tables;
+correct interpolation is proved, `ZK/Interp.lean`). The tape hypothesis is in turn **derived from
+one hypothesis per hop** by a proved hybrid argument (`ZK/Hops.lean`, `HopHyps`,
+`tapeHyp_of_hops`), so `labelRows_zeroKnowledge_tables` has error
+`ε_rho + ε_grind + ε_bavc + ε_lab`: `H₃`'s answer at the seed input is close to uniform (H1),
+the `H₂³` answers at the grinding points are (grinding), the hidden part of a commitment from a
+uniform root seed is (H4, BAVC hiding: AES), and the `H₅` answers at the sibling labels are,
+through the ideal-tape prover (H6). With the hashed domain a uniform table (`ZK/HopsROM.lean`),
+H1 and grinding hold with `ε = 0`, H1 with `≤ q₃·2⁻¹²⁸` against a distinguisher reading `H₃` at
+`q₃` inputs, programming `H₂³` at the grinding points is perfect, and H6 costs the probability
+that a sibling input is read; H4 stays an assumption. PomFRIT's two-phase zero knowledge, with
+the instance chosen after step 1, is derived the same way (`ZK/TwoPhase.lean`: step 1's fields
+are uniform and independent of the witness, step 2 stays uniform given them for every adaptive
+choice; `twoPhase_close` under the two-phase tape hypothesis `TapeHyp2`; `twoPhase_close_tables`;
+`TapeHyp2` from the hops, with one more term, the abort probability `noHitProb`:
+`ZK/TwoPhaseHops.lean`). For all three protocols the per-relation statements are assembled and
+every deterministic hypothesis is proved (`Privacy/MoussakaLean.lean`,
+`Privacy/RatatouilleLean.lean`, `Privacy/PomFRITLean.lean`; with SHAKE, `*_shake`, only the hop
+hypotheses and hiding remain, each proof's error the sum of the named terms). `lake exe zk_sim`
+checks the tape equation, the simulator and the ideal-tape prover on all 18 KAT runs of each
+layout.
 
 The analysis also found a gap in the FAEST v3 specification's own ZK proof (between games G8 and
 G9).
@@ -213,7 +225,7 @@ limitation, not an attack) takes over. Strong simulation-extractability: 2⁻⁶
 | `ratatouille.md` | Balance (no inflation), no theft, unlinkability, correctness: proved. | Spends are not bound to a session, so a copied spend request can be redeemed first (medium). |
 | `domain-separation.md` | Every hash/XOF/permutation call lies in a disjoint domain, except below. [Lean] `Protocols/DomainSeparation.lean` | PomFRIT's `hash_to_target` overlaps four proof-system domains (no exploit found; fix: a final domain byte). |
 | `uov-assumptions.md` | Relates the protocol-specific UOV assumptions to each other and to standard UOV. [Lean] `Protocols/UOVAssumptions.lean` | Several reductions are unavailable; the note states why. |
-| Privacy on the specs ([Lean] `VoleMole/Privacy/`) | The privacy theorems as games on `Spec/*`, each hybrid hop mechanized: PomFRIT blindness (`Privacy.PomFRIT.blindness`, `≤ 4ε`), Moussaka issuer hiding and unlinkability against a Moderator colluding with all Anchors (`Privacy.Moussaka.anonymity`, `≤ 4εI + 4εR + 2εhide`), Ratatouille unlinkability of spends from issuances and from each other through change tokens (`Privacy.Ratatouille.unlinkability`, `≤ 4εI + 4εS + 2εhide`). Hypotheses: zero knowledge of the abstract proof systems (`Privacy.ZeroKnowledge`: a simulator from the instance alone, output `ε`-close to the prover's for every valid witness; `ε = 0` is equality of distributions), hiding of `Com` for the explicit reductions. The final hybrids are exact. With the executable Lean prover (label rows) as the proof system, zero knowledge is reduced to the tape hypothesis (`Privacy/LeanProver.lean`; `docs/zk.md` §10.1): with every other hypothesis proved (`Privacy.Moussaka.anonymity_label_rows`, `Privacy.Ratatouille.unlinkability_label_rows`, `Privacy.PomFRIT.blindness_lean`, assuming the hash record's output lengths; `*_shake` with SHAKE; the latter two on the label-row layout, `Spec.Ratatouille.Sizes.labelRows` and `Spec/PomFRITLayout.lean`). On paper: the seed-XOF hop, the tape hypothesis | The zero-knowledge hypothesis is false on `main` for PomFRIT (`ZK.pomfrit_issuer_hits`, `ZK.pomfrit_attack_test`); for Moussaka and Ratatouille no efficient simulator satisfies it per proof on `main`, and the joint (PU) hop replaces it (paper). PomFRIT note §8.3: the "both ⊥" rule is needed. Moussaka Thm 4(a) needs no `2⁻¹⁹²` term; Thm 4(b) misses an abort term. Ratatouille H3 needs the Client's validity check against the commitment it sent |
+| Privacy on the specs ([Lean] `VoleMole/Privacy/`) | The privacy theorems as games on `Spec/*`, each hybrid hop mechanized: PomFRIT blindness (`Privacy.PomFRIT.blindness`, `≤ 4ε`), Moussaka issuer hiding and unlinkability against a Moderator colluding with all Anchors (`Privacy.Moussaka.anonymity`, `≤ 4εI + 4εR + 2εhide`), Ratatouille unlinkability of spends from issuances and from each other through change tokens (`Privacy.Ratatouille.unlinkability`, `≤ 4εI + 4εS + 2εhide`). Hypotheses: zero knowledge of the abstract proof systems (`Privacy.ZeroKnowledge`: a simulator from the instance alone, output `ε`-close to the prover's for every valid witness; `ε = 0` is equality of distributions), hiding of `Com` for the explicit reductions. The final hybrids are exact. With the executable Lean prover (label rows) as the proof system, zero knowledge is reduced to the tape hypothesis (`Privacy/LeanProver.lean`; `docs/zk.md` §10.1): with every other hypothesis proved (`Privacy.Moussaka.anonymity_label_rows`, `Privacy.Ratatouille.unlinkability_label_rows`, `Privacy.PomFRIT.blindness_lean`, assuming the hash record's output lengths; `*_shake` with SHAKE and the tape hypothesis from the hop hypotheses, so each proof's error is `ε_rho + ε_grind + ε_bavc + ε_lab` (PomFRIT: `+ ε_abort`); the latter two on the label-row layout, `Spec.Ratatouille.Sizes.labelRows` and `Spec/PomFRITLayout.lean`). On paper: the seed-XOF hop, the hop hypotheses (H4 for AES; the random-oracle hops are proved for the hashed domain as a uniform table, `ZK/HopsROM.lean`) | The zero-knowledge hypothesis is false on `main` for PomFRIT (`ZK.pomfrit_issuer_hits`, `ZK.pomfrit_attack_test`); for Moussaka and Ratatouille no efficient simulator satisfies it per proof on `main`, and the joint (PU) hop replaces it (paper). PomFRIT note §8.3: the "both ⊥" rule is needed. Moussaka Thm 4(a) needs no `2⁻¹⁹²` term; Thm 4(b) misses an abort term. Ratatouille H3 needs the Client's validity check against the commitment it sent |
 
 **Cross-cutting finding (critical, deployment):** PomFRIT's Issuer signs arbitrary targets, and
 all protocols share the UOV key type. If one key serves PomFRIT and another protocol, anyone can
@@ -415,10 +427,16 @@ What is **not** established, roughly in order of importance:
    reductions) as hypotheses, so they apply to the label-row fix; on `main` the joint (PU) hop over
    proofs sharing `r` replaces the per-proof hypothesis and is paper. For the executable Lean prover
    (§8) with dedicated label rows the hypothesis is discharged (`ZK/Exec.lean`,
-   `Privacy/LeanProver.lean`, `docs/zk.md` §10.1) except for the **tape hypothesis** (`TapeHyp`: the
-   real run's tape is `ε`-close to uniform, which is H1, H4, H6 and the grinding answers: the
-   random-oracle, PRG and ideal-cipher steps; for PomFRIT its two-phase version `TapeHyp2`,
-   `ZK/TwoPhase.lean`); every other side condition is proved (the witness encodings satisfy the
+   `Privacy/LeanProver.lean`, `docs/zk.md` §10.1) except for the **hop hypotheses** (`HopHyps`,
+   `ZK/Hops.lean`, from which the tape hypothesis `TapeHyp` is proved: H1 `ε_rho`, the grinding
+   answers `ε_grind`, BAVC hiding `ε_bavc`, H6 `ε_lab`; for PomFRIT `HopHyps2` and `TapeHyp2`,
+   `ZK/TwoPhaseHops.lean`, plus the abort term). Each is a `Close` bound on a small experiment
+   for a fixed hash record, an idealization as every statement against all distinguishers in
+   `Privacy/Basic.lean`. With the hashed domain a uniform table the random-oracle ones are proved
+   (`ZK/HopsROM.lean`: H1 and grinding exact, H1 `≤ q₃·2⁻¹²⁸` with oracle access, H6 up to the
+   event that a sibling input is read, whose `(q₅ + 1)·2⁻¹²⁸` bound is not mechanized); H4, AES as
+   an ideal cipher/PRP with the GGM and leaf-PRG hybrids, is assumed; and that SHAKE is a random
+   oracle remains the modelling step. Every other side condition is proved (the witness encodings satisfy the
    systems, interpolation, `N_MASK`, the CRT certificate, BAVC and CRT completeness:
    `Privacy/MoussakaLean.lean`, `Privacy/RatatouilleLean.lean`, `Privacy/PomFRITLean.lean`,
    `Verifier/Bridge/BAVCComplete.lean`, `Verifier/Bridge/CrtComplete.lean`). The seed-XOF hop (the games

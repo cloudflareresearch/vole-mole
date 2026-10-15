@@ -42,6 +42,7 @@ the verifier's `chal1` (`simPhase1`); its step 2 uniform `d[|r|..)` and `ã`.
   faest-arch-opt's tables, where `RunHyp2.of_tables` proves the CRT certificate and both
   completeness facts.
 
+`ZK/TwoPhaseHops.lean` derives `TapeHyp2` from one hypothesis per hop (`tapeHyp2_of_hops`).
 `Privacy/PomFRITLean.lean` instantiates this for PomFRIT (`blindness_lean`).
 -/
 
@@ -183,17 +184,6 @@ def TapeHyp2 (Hs : Hashes) (T : CrtTables) (st : Statement) (r : ByteArray) (k :
     (proveIdeal2 Hs T st r k)
 
 /-! ## The real run is the ideal run at its tape -/
-
-lemma firstHit_accepts {g : Fin nGrind → Bytes 16} {ctr : ℕ} {d : Bytes 16}
-    (h : firstHit g = some (ctr, d)) : accepts (ba d) = true := by
-  obtain ⟨c, hc⟩ := findFirst_some _ _ _ h
-  split_ifs at hc with h1 h2
-  simp only [Option.some.injEq, Prod.mk.injEq] at hc
-  obtain ⟨rfl, rfl⟩ := hc
-  exact h2
-
-lemma blk_ba {n : ℕ} (d : Bytes n) : blk n (ba d) = d := by
-  funext i; rw [get_blk, get!_ba _ i.isLt]
 
 /-- **Step 1 of the ideal run, at the real run's tape**, is the real step 1, at any accepted
 grinding outcome. -/
