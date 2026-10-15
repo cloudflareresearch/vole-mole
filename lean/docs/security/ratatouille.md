@@ -455,6 +455,19 @@ and affords the amount, else it is refused for both (feasibility is leakage).
   (`encodeIssueWitness`, `encodeSpendWitness`) satisfy the issuance and spend systems for every
   combination (`issue_holds`, `spend_holds`: committed Keccak states, the carries of `t + x` and
   `t' + d` as `carries` computes them, `carries_testBit`, and `R_iss`, `R_spend`).
+- **[Lean] In the random-oracle and ideal-cipher model** (`lean/VoleMole/Privacy/RatatouilleRO.lean`,
+  `lean/docs/zk.md` §10.2): the Issuer's guess also sees the random tables (`H₃` per proof, `H₂³`,
+  `H₅`, the cipher) and the four proofs share them. `unlinkabilityRO` (any `ZeroKnowledgeRO`
+  proof systems with bounded reads) and `unlinkabilityRO_lean` (the Lean prover, SHAKE, AES as an
+  ideal cipher): any two worlds differ by at most
+  `8·εRO(q₃, q₅ + 3·624, q_E + 3·4607) + 2·δI₁ + Σ_w (δS₁ w + δS₂ w) + 2·εhide`, with the explicit
+  programming-collision terms `δ` (bounded on paper in zk.md §10.2). The simulated world is
+  `Ratatouille.view` for an Issuer that also sees the tables, programmed as a function of the
+  requests it sees and the simulator coins (`Vtab`, `simGameR_iff`), so `simGame_iff`,
+  `stage_ideal` and `idealGame_iff` are reused unchanged, with the coins and tables fixed in the
+  hiding reduction and in the exchange of the nullifiers (`idealGameR_eq`). A spend programs
+  `H₂³` only if its round runs. The Issuer's choices of responses and amounts do not read the
+  tables (only its guess does).
 
 **A precision found while mechanizing H3.** "The client still finalizes against the commitment
 string it sent" is not enough on its own: before its next spend the Client checks its token with
