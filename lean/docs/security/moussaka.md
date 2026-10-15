@@ -760,3 +760,23 @@ witness encodings satisfy the
 issuance and redemption systems for every combination (`issue_holds`, `redeem_holds`, from the
 `Arith/Moussaka.lean` completeness theorems), and the other deterministic hypotheses are proved
 (`zkHypI`, `zkHypR`).
+
+`lean/VoleMole/Privacy/MoussakaRO.lean`: Theorem 4(a) **in the random-oracle and ideal-cipher
+model**, where the adversary's final guess also sees the random tables (`H₃` per proof, `H₂³`,
+`H₅`, the cipher) and the four proofs share them (`lean/docs/zk.md` §10.2). `anonymityRO` (any
+proof systems that are `ZeroKnowledgeRO`, with bounded reads) and `anonymityRO_lean` (the
+executable Lean prover with SHAKE for the other hashes and AES as an ideal cipher):
+
+    |Pr[W₀] − Pr[W₁]| ≤ 8·εRO(q₃, q₅ + 3·624, q_E + 3·4607) + 2·δI₁ + Σ_b (δL b + δR b) + 2·εhide,
+
+`εRO q₃ q₅ q_E = q₃·2⁻¹²⁸ + 2⁻¹¹⁰ + 221·(4607 + q_E + 4607)·2⁻¹²⁸ + (q₅ + 1)·2⁻¹²⁸` the
+single-proof bound of `zk_rom_ic_h23_num`, at the budget of the reductions (each runs the later
+proofs for real, `624` `H₅` and `4607` cipher reads each, and applies the earlier simulations'
+`H₂³` programming, `312` and `4607` reads each). The `δ` are explicit programming-collision
+probabilities of the hybrids (a real proof reads `H₂³` at a point an earlier simulation
+programmed); on paper `δI₁ ≤ 2⁻¹⁰²⁴ + noHitProb` and each redemption's
+`δ ≤ εRO + 2⁻¹⁰²³ + 2·noHitProb` (zk.md §10.2), not mechanized. Restrictions of the model: the
+adversary's interaction (contexts, keys, responses, Anchor Sets, digests) does not read the
+tables, only its guess does (the zero-knowledge theorem is for statements fixed before the
+tables); the four `H₃` slices are independent (exact unless two proofs share `(μ₁, wPrefix)`,
+`≤ 2⁻¹⁹²`); hiding is for the reduction with the simulator coins and the tables fixed.

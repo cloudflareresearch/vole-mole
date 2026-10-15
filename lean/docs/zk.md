@@ -709,7 +709,8 @@ really is perfect, and the label offset is handled in H6 at cost `(Q₅ + n_mult
 ## 10. What is formalized in Lean
 
 All files are under `lean/VoleMole/ZK/` (and `Privacy/LeanProver.lean`, `Privacy/PomFRITLean.lean`,
-`Privacy/MoussakaLean.lean`, `Privacy/RatatouilleLean.lean`, §10.1). There is no `sorry` and no `axiom`. `#print axioms` lists
+`Privacy/MoussakaLean.lean`, `Privacy/RatatouilleLean.lean`, §10.1; `Privacy/ZeroKnowledgeRO.lean`,
+`Privacy/MoussakaRO.lean`, `Privacy/RatatouilleRO.lean`, §10.2). There is no `sorry` and no `axiom`. `#print axioms` lists
 only `propext`, `Classical.choice` and `Quot.sound`.
 
 | Statement | Lean | Used in |
@@ -801,6 +802,11 @@ which the random-oracle ones are proved with the hashed domain a uniform table:
 | **Two-phase zero knowledge** from the two-phase tape hypothesis `TapeHyp2`, and for PomFRIT's Lean prover (`leanProver`: `issue_request_with_seed`, then `finalize_issue` for the instance `(pk, h)` and `s`) in the form of `Privacy.PomFRIT.ZeroKnowledge`, with every deterministic hypothesis proved for valid continuations (`P(s) = h ⊕ r`); blindness with the Lean prover on the label-row layout; completeness of `pomfritVerify` on the final signature | `twoPhase_close`, `twoPhase_close_tables`, `Privacy.PomFRIT.lean_zeroKnowledge`, `runHyp2_lean`, `blindness_lean`, `blindness_lean_shake`, `pomfritVerify_complete_tables` (`Privacy/PomFRITLean.lean`) | all |
 | **Ratatouille, assembled**: the issuance and spend statements with label rows, the spec's witness encodings (`encode_issue_witness`, `encode_spend_witness`, with the committed Keccak states and the carries), the primitives `leanPrim` (proofs as the spec's label-row-sized vectors, `Spec.Ratatouille.Sizes.labelRows`); `ZKHyp` for every instance and witness; Theorem 2 with only the tape hypotheses, hiding and the hash record's output lengths left (with SHAKE only the hop hypotheses and hiding: `≤ 4(ε_rho + ε_grind + ε_bavc + ε_lab)_I + 4(…)_S + 2ε_hide`) | `Privacy.Ratatouille.issue_holds`, `spend_holds`, `carries_testBit`, `zkHypI`, `zkHypS`, `unlinkability_label_rows`, `unlinkability_label_rows_shake` (`Privacy/RatatouilleLean.lean`) | — |
 | **Moussaka, assembled**: the issuance and redemption statements of `Verifier/Relations.lean` with label rows, `ZKHyp` for every well-formed instance (the spec's witness encodings satisfy the `Arith` systems for every combination); Theorem 4(a) with only the tape hypotheses, hiding and the hash record's output lengths left (with SHAKE only the hop hypotheses and hiding: `≤ 4(ε_rho + ε_grind + ε_bavc + ε_lab)_I + 4(…)_R + 2ε_hide`) | `Privacy.Moussaka.issue_holds`, `redeem_holds`, `zkHypI`, `zkHypR`, `anonymity_label_rows`, `anonymity_label_rows_shake` (`Privacy/MoussakaLean.lean`) | — |
+| **Zero knowledge with the tables visible, as a notion**: `ZeroKnowledgeRO R prove sim prog Adm ε` (for every instance and witness and every admissible distinguisher of the output, the proof's `H₃` slice and the shared tables, the real experiment and the simulated one with the tables programmed by `prog x c` are `ε`-close); `hop_ro`, the hybrid step of a game whose proofs share the tables (the proofs simulated before have programmed them, the real proof of the step runs on the programmed tables): the zero-knowledge error at the reduction's budget **plus the collision term** `δ = Pr[the real proof's output changes with the earlier programming]` | `ZeroKnowledgeRO`, `ZeroKnowledgeRO.transfer`, `hop_ro`, `hop_ro_unused` (`Privacy/ZeroKnowledgeRO.lean`) | §10.2 |
+| **What the executable prover and the programming read** (the shared tables `Sh p = Tab2G p × Tab5F × Cipher`): reads as finite key sets that may depend on the tables (`Rd5`, `RdE`, `Rd3`; `IsProg` for a map that only reprograms `H₂³`), with their algebra (`bind`, `comp_prog`, `IsProg.comp`); the prover with the ideal cipher reads the cipher only at the rows of its GGM tree's `2L − 1 = 4607` nodes (the tree, the leaves' commitments, the small VOLEs, the sender columns and `u_hi`), and `H₅` only at its `2·312` gate inputs (`c_mult`'s two label hashes per gate); the simulator's programming reads `H₅` at `312` and the cipher at `4607` keys (the verifier's recomputation, `vIn5`, `rdKeys`); a simulation that produced no proof programs independently of its statement | `Rd5`, `RdE`, `Rd3`, `IsProg`, `treeNode_ic_congr`, `expandTree_ic_congr`, `commit_ic_congr`, `voleGenAt_ic_congr`, `realROb_rdE`, `realRO_rdE`, `voleGenAt_h5_congr`, `proveCommit_agreeOff_h5`, `realROb_rd5`, `realRO_rd5`, `progRO_isProg`, `progRO_of_error` (`ZK/ReadsRO.lean`) | §10.2 |
+| **`zk_rom_ic_h23_num` as `ZeroKnowledgeRO`**: the executable prover with the ideal cipher (`realRO`) and the programming simulator (`simulate`, `progRO`) for every statement family with dedicated label rows, against the distinguishers with budgets `(q₃, q₅, q_E)` (`Budget`), error `εRO q₃ q₅ q_E = q₃·2⁻¹²⁸ + 2⁻¹¹⁰ + 221·(4607 + q_E + 4607)·2⁻¹²⁸ + (q₅ + 1)·2⁻¹²⁸` | `zk_ro`, `lean_zeroKnowledgeRO`, `Budget`, `εRO`, `εRO_mono` (`ZK/ReadsRO.lean`); `leanPI_zkRO`, `leanPR_zkRO` (`Privacy/MoussakaRO.lean`), `leanPIR_zkRO`, `leanPSR_zkRO` (`Privacy/RatatouilleRO.lean`) | §10.2 |
+| **Moussaka issuer hiding and unlinkability in the ROM and ideal-cipher model** (four proofs sharing the tables, the adversary's guess sees all tables): `≤ 8·εRO(q₃, q₅ + 1872, q_E + 13821) + 2·δI₁ + Σ_b (δL b + δR b) + 2·εhide` for the Lean prover with SHAKE (generic: the four zero-knowledge errors at the reductions' budgets) | `anonymityRO`, `anonymityRO_lean`, `realGameRO`, `viewRO`, `hop0RO`, `hop1RO`, `hopLRO`, `hopRRO`, `deltaI1`, `deltaL`, `deltaR`, `simGameRO_iff`, `hiding_hopRO`, `idealGameRO_eq` (`Privacy/MoussakaRO.lean`) | §10.2 |
+| **Ratatouille unlinkability in the ROM and ideal-cipher model**: the same structure and bound (`2·δI₁ + Σ_w (δS₁ w + δS₂ w)`); the simulated world is `Ratatouille.view` for the Issuer that also sees the tables programmed as a function of the requests (`Vtab`), so `simGame_iff`, `stage_ideal`, `idealGame_iff` apply verbatim | `unlinkabilityRO`, `unlinkabilityRO_lean`, `realGameR`, `viewR`, `hopI0R`, `hopI1R`, `hopS1R`, `hopS2R`, `deltaI1R`, `deltaS1R`, `deltaS2R`, `Vtab`, `viewR_tab`, `simGameR_iff`, `hiding_hopR`, `idealGameR_eq` (`Privacy/RatatouilleRO.lean`) | §10.2 |
 
 `lake exe zk_sim [TESTS [main\|labelrows [FILTER]]]` runs, on all 18 KAT runs of each layout: the
 equation `prove = proveIdeal ∘ tapeOf` (all pass), the simulator with the programmed oracle
@@ -908,11 +914,15 @@ equation `prove = proveIdeal ∘ tapeOf` (all pass), the simulator with the prog
       on `A`. The paper's `2⁻¹²⁰` is `1/|A|` with `|A| ≈ 2¹²⁰`; the proved `2⁻¹¹¹` reflects the
       proved lower bound on `|A|`.
 
-    Left open: (b) the multi-proof terms (`ε_iv`, two proofs sharing `rho`, `ε_prog`); (c) the
-    privacy corollaries: `Privacy.ZeroKnowledge` quantifies over all distinguishers of the proof
-    alone, so the `*_shake` theorems still take the fixed-record `HopHyps`; PomFRIT's two-phase
-    prover is not composed. The PRP/PRF switching term and the modelling steps (SHAKE as a random
-    oracle, AES as an ideal cipher) remain.
+    Left open: (b) the multi-proof terms, now isolated: with several proofs on shared tables
+    (§10.2) each hybrid step costs a programming collision term `δ` (an explicit probability of
+    the game, bounded on paper in §10.2, not in Lean), and `ε_iv` (two proofs sharing an `H₃`
+    slice) is a modelling step of the per-proof slices; (c) the privacy corollaries in the ROM and
+    ideal-cipher model are proved for Moussaka and Ratatouille (§10.2: `anonymityRO_lean`,
+    `unlinkabilityRO_lean`, with the `δ` terms, for adversaries whose interaction does not read the
+    tables); the `*_shake` theorems with the fixed-record `HopHyps` remain, and PomFRIT's
+    two-phase prover is not composed in the ROM (§10.2). The PRP/PRF switching term and the
+    modelling steps (SHAKE as a random oracle, AES as an ideal cipher) remain.
 - **Deterministic hypotheses**, per statement and witness (`ZKHyp`, `RunHyp`): the statement's
   evaluator is a system of degree `≤ d`, `1 ≤ d`, that the witness satisfies for every `chal1` and
   combination (for PomFRIT, for every instance the continuation picks: `RunHyp2`); `N_MASK ≤ 32`;
@@ -942,3 +952,93 @@ equation `prove = proveIdeal ∘ tapeOf` (all pass), the simulator with the prog
   `Sizes.labelRows`); `unlinkability_label_rows` is on the label-row layout. The spend statement
   has no key digest in its instance encoding (the spec's key is its public map), unlike
   `hash_instance`; zero knowledge does not depend on the encoding.
+
+
+### 10.2 Privacy in the random-oracle and ideal-cipher model (`Privacy/ZeroKnowledgeRO.lean`, `ZK/ReadsRO.lean`, `Privacy/MoussakaRO.lean`, `Privacy/RatatouilleRO.lean`)
+
+The `*_shake` privacy theorems go through `Privacy.ZeroKnowledge`, whose distinguishers see the
+proof only, so they take the fixed-record hop hypotheses. Here the privacy adversary sees the
+random tables too, and the four proofs of a Moussaka or Ratatouille game share them.
+
+**The notion.** `ZeroKnowledgeRO R prove sim prog Adm ε`: the prover reads its randomness `ρ`,
+its private table `g` (its slice of `H₃`: `H₃` at `wPrefix ‖ μ₁ ‖ ρ ‖ 3`) and the shared tables
+`s`; the simulator outputs a proof from its coins only and programs the shared tables
+(`prog x c s`); for every admissible distinguisher of `(output, g, s)` the two experiments are
+`ε`-close. For the executable prover (`realRO`: `Prover.prove` with the record `recH` and the
+ideal-cipher PRG `icPrg E`) and the simulator (`simulate`, `progRO` = `simTab`), with the shared
+tables `Sh p = Tab2G p × Tab5F × Cipher` and admissibility `Budget p q₃ q₅ q_E` (reads of the
+slice, of `H₅` and of the cipher bounded, each with the rest fixed and adaptively; `H₂³` free),
+this is `zk_rom_ic_h23_num` (`zk_ro`, `lean_zeroKnowledgeRO`), with
+`εRO q₃ q₅ q_E = q₃·2⁻¹²⁸ + 2⁻¹¹⁰ + 221·(4607 + q_E + 4607)·2⁻¹²⁸ + (q₅ + 1)·2⁻¹²⁸`.
+
+**The model of a game.** One shared `Sh` (issuance and redemption, issuance and spend have the
+same `qsDegree = 9`, hence the same `H₂³` key set), and one `H₃` slice per proof. A global `H₃`
+restricted to the four slices is four independent tables when the four `(μ₁, wPrefix)` differ;
+the games do not force this (two Clients with equal `(nf, r)`, probability `≤ 2⁻¹⁹²` for
+independent nullifiers), so this modelling step carries the `ε_iv`-type term, on paper. The
+adversary's guess sees all tables, with a budget `(q₃, q₅, q_E)`; **its interaction (responses,
+Anchor Sets, digests, amounts) does not read the tables**: the zero-knowledge theorem is for a
+statement fixed before the tables are drawn, and the redemption and spend statements are the
+adversary's choices. Each slot of the game has an output on the tables the game runs on, an
+`H₂³` programming (identity for a real proof) and its slice; real proofs run on the tables
+programmed by the slots simulated so far; a redemption or spend programs only if its round runs
+(§6's rule), so that no programmed point depends on a world's hidden choice.
+
+**The hybrids** (`hop_ro`). The proofs are replaced in game order (issuances, then redemptions or
+spends): the statement of the replaced proof is then fixed by the coins of the simulated ones,
+which do not read the tables. Step `j` applies the zero-knowledge theorem to the distinguisher
+`(o, g, s) ↦ F γ o g (L γ s)`, `L γ` the earlier simulations' programming and `F γ` the rest of the
+game (later proofs real), so its budget is the adversary's plus the reads of the later real
+proofs (`624` `H₅` keys and `4607` cipher keys each: `realRO_rd5`, `realRO_rdE`) plus those of the
+earlier programmings (`312`, `4607` each: `progRO_isProg`); the four budgets are at most
+`(q₃, q₅ + 3·624, q_E + 3·4607)`. The step's real side is the real proof run on the programmed
+tables `L γ s`, the zero-knowledge theorem's on the original ones; the difference is the explicit
+collision term
+
+    δ_j = Pr[ prove_j(ρ, g, L γ s) ≠ prove_j(ρ, g, s) ],
+
+zero for the first proof. After the four steps the view is a function of the commitments, the
+nullifiers, the simulator coins and the tables; hiding (for the reduction with the coins and the
+tables fixed: a non-uniform reduction, which in an implementation samples the tables lazily) and
+the exchange of the fresh nullifiers finish as before. For Ratatouille the programmed tables are a
+function of the requests the Issuer sees and of the coins (`Vtab`; a simulation that produced no
+proof programs independently of its statement, `progRO_of_error`, and otherwise the statement is
+in the request, `issueReqC_mk`, `parse_toBytes`), so the simulated world is `Ratatouille.view` for
+the Issuer `A.at (Vtab …) sl` and `simGame_iff`, `stage_ideal`, `idealGame_iff` apply verbatim.
+
+**The bounds** (Lean, `#print axioms`: `propext`, `Classical.choice`, `Quot.sound`):
+
+    Moussaka (anonymityRO_lean):     |Pr[W₀] − Pr[W₁]| ≤ 8·εRO(q₃, q₅ + 1872, q_E + 13821)
+                                       + 2·δI₁ + Σ_b (δL b + δR b) + 2·εhide
+    Ratatouille (unlinkabilityRO_lean): |Pr[W_{b₁,b₂}] − Pr[W_{b₁',b₂'}]| ≤ 8·εRO(…same…)
+                                       + 2·δI₁ + Σ_w (δS₁ w + δS₂ w) + 2·εhide
+
+`8·εRO(q₃, q₅ + 1872, q_E + 13821) = 8·(2⁻¹¹⁰ + 221·(23035 + q_E)·2⁻¹²⁸ +
+(q₃ + q₅ + 1873)·2⁻¹²⁸)`, about `2⁻¹⁰²·⁶` plus `8·(q₃ + q₅ + 221·q_E)·2⁻¹²⁸`.
+
+**The collision terms, on paper.** The real proof `j` reads `H₂³` only at its grinding points
+`pre_j ‖ c ‖ 11` (`pre_j = chal2 ‖ qs_check ‖ ã`, computed without `H₂³`), and an earlier
+simulation `i` programs exactly the points `outPre_i ‖ c ‖ 11`; so `δ_j ≤ Pr[pre_j ∈ {outPre_i}]`
+(as `200`-byte prefixes). A simulated prefix ends with the simulator's uniform `ã_i`
+(`128` bytes). *Issuance `1` against issuance `0`* (`δI₁`): `pre₁` does not depend on issuance
+`0`'s coins, so `δI₁ ≤ 2⁻¹⁰²⁴ + noHitProb` (the second term: the simulation produced no proof).
+*Redemptions and spends*: their statements are chosen after the adversary saw the simulated
+requests, so `pre_j` may depend on `ã_i`. If the real proof's grinding succeeds, `pre_j` is the
+prefix the verifier recomputes from its proof (`vPre_proveCommit`), and
+"`vPre(o_j) ∈ {outPre_i}`" is a distinguisher of `o_j` and the tables reading `H₅` and the cipher
+at `(j−1)·312` and `(j−1)·4607` more keys; by zero knowledge of proof `j` its probability is at
+most the simulated one plus `εRO` at that budget, and for the simulated proof the last `128`
+bytes are its own uniform `ã_j`, independent of the `outPre_i`; if the real grinding fails (no
+accepted answer among the `2³²` original answers at `pre_j`, uniform since `pre_j` does not read
+`H₂³`), `≤ noHitProb`. So `δ_j ≤ εRO(0, j·312, j·4607) + (j−1)·2⁻¹⁰²⁴ + 2·noHitProb`, and the
+total is about `14·εRO`. These steps (the completeness of the recomputation on real proofs, the
+reconstruction of a simulated opening, the `ã` field's position in `vPre`, the second application
+of zero knowledge) are not mechanized.
+
+**PomFRIT.** Not composed: there is no random-oracle and ideal-cipher theorem for the two-phase
+prover (`ZK/TwoPhaseHops.lean` has only the fixed-record `HopHyps2`). It needs the chain of
+`zk_rom_ic_h23` for `tapeOf2`/`proveIdeal2`, where the simulator programs `H₂³` at the prefix it
+recomputes with the instance the continuation picks after step 1 (`h = hash_to_target(…, chal1, …)`,
+with `chal1` from step 1's output), the fallback block, and the continuation's dependence on the
+tables (the Client's step 2 is adaptive in step 1's output, which the tables determine). The
+generic layer (`ZeroKnowledgeRO`, `hop_ro`, the read algebra) applies once that theorem exists.

@@ -478,6 +478,14 @@ and `d` at 3075 and 3139; at `Layout.main` the definitions are the spec's, by `r
   so the simulator outputs them before the instance exists. `blindness_lean` is Theorem B (from
   G1) for this prover: `≤ 4ε`. On `main` the statement is false (`ZK/Relations.lean`).
   `pomfritVerify_complete_tables`: the final signature passes `verify`.
+- **Not done: blindness in the random-oracle and ideal-cipher model.** Moussaka and Ratatouille
+  have it (`lean/docs/zk.md` §10.2: the adversary sees the tables, the proofs share them). For
+  PomFRIT the missing piece is a random-oracle and ideal-cipher zero-knowledge theorem for the
+  two-phase prover (the chain of `zk_rom_ic_h23` for `tapeOf2`, with the simulator programming
+  `H₂³` at the prefix recomputed for the instance the Client picks after step 1, and the
+  fallback block); `ZK/TwoPhaseHops.lean` has only the fixed-record hop hypotheses. The game-level
+  layer (`Privacy.ZeroKnowledgeRO`, `hop_ro`, the read bounds of `ZK/ReadsRO.lean`) would then
+  apply as for the other two protocols.
 
 ### 8.3 Selective failure, the response `s`, and the check at `pomfrit.cpp:207`
 
