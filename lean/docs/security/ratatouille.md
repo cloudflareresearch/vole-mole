@@ -471,7 +471,10 @@ and affords the amount, else it is refused for both (feasibility is leakage).
   `stage_ideal` and `idealGame_iff` are reused unchanged, with the coins and tables fixed in the
   hiding reduction and in the exchange of the nullifiers (`idealGameR_eq`). A spend programs
   `H₂³` only if its round runs. The Issuer's choices of responses and amounts do not read the
-  tables (only its guess does).
+  tables (only its guess does). The zero-knowledge theorem for statements chosen from the tables
+  (`zk_adaptive`, `lean_zeroKnowledgeROA`, `pr_collide_adaptive`; zk.md §10.3), which lifts this
+  for Moussaka (`anonymityRA_lean_num`), applies to the spends in the same way. The Ratatouille
+  game is not restated with a table-reading Issuer.
 
 **A precision found while mechanizing H3.** "The client still finalizes against the commitment
 string it sent" is not enough on its own: before its next spend the Client checks its token with

@@ -791,3 +791,25 @@ adversary's interaction (contexts, keys, responses, Anchor Sets, digests) does n
 tables, only its guess does (the zero-knowledge theorem is for statements fixed before the
 tables); the four `H₃` slices are independent (exact unless two proofs share `(μ₁, wPrefix)`,
 `≤ 2⁻¹⁹²`); hiding is for the reduction with the simulator coins and the tables fixed.
+
+**With an interaction that reads the tables** (`lean/VoleMole/Privacy/MoussakaRA.lean`, zk.md
+§10.3). Here the responses, Anchor Sets and digests are functions of the two requests, the four
+`H₃` slices and the shared tables (programmed by the issuance simulations, in the hybrids). As a
+function of each slice and the shared tables, the transcript reads at most `i₃` slice keys, `i₂`
+`H₂³` keys, `i₅` `H₅` keys and `i_E` cipher keys, consistently (`AdversaryRA.IBudget`; any
+deterministic query algorithm). The redemption statements are then read off the tables. The
+redemption hops use zero knowledge for statements chosen from the tables (`zk_adaptive`,
+`lean_zeroKnowledgeROA`). It costs `s₃·2⁻¹²⁸` for the 16-byte `ρ`, `(s₅ + 1 + 221·s_E)·2⁻¹²⁸`
+for the reader's `H₅` and cipher reads in H6 and H4, and, if the reader reads `H₂³`, a second
+application of zero knowledge plus `2·s₂·2⁻¹⁰²⁴`. The transcript reads through the two issuance
+programmings, so the reader's budget is `(i₃, i₂, i₅ + 624, i_E + 9214)`. The collision terms are
+bounded the same way (`pr_collide_adaptive`). **`anonymityRA_lean_num`**:
+
+    |Pr[W₀] − Pr[W₁]| ≤ 4·εRO(i₃ + q₃, q₅ + i₅ + 1872, q_E + i_E + 13821)
+                        + 4·εAd(9; q₃, q₅ + 1248, q_E + 13821; i₃, i₂, i₅ + 624, i_E + 9214)
+                        + 4·(i₃·2⁻¹²⁸ + 2⁻¹¹⁰ + εROP(0, 312, 4607; i₅ + 624, i_E + 9214))
+                        + 6·noHitProb + 12·2⁻¹⁰²⁴ + 2·εhide,
+
+about `2⁻¹⁰¹·⁹` without budgets (`2⁻¹⁰¹·⁵` if the interaction reads `H₂³` at all). So the
+restriction to a table-oblivious interaction is not needed: there is no attack, and the cost is
+of the same order.

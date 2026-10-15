@@ -484,7 +484,8 @@ and `d` at 3075 and 3139; at `Layout.main` the definitions are the spec's, by `r
   `H₅` on every 37-byte input, the cipher of the BAVC and VOLE expansion; each session its own
   `H₃` slice), and the Issuer's guess sees all of them, reading `q₃` keys of each slice, `q₅` of
   `H₅`, `q_E` of the cipher and `H₂³` freely; its key, messages and responses do not read the
-  tables; `hash_to_target`, `XOF_seed` (drawn uniformly, G1) and the refresher commitment stay
+  tables (lifting this needs a two-phase analogue of the adaptive-statement theorem
+  `zk_adaptive`, lean/docs/zk.md §10.3, which is not done); `hash_to_target`, `XOF_seed` (drawn uniformly, G1) and the refresher commitment stay
   SHAKE. The game is the spec's (`realSession` on `Layout.labelRows`).
   - The two-phase zero-knowledge theorem behind it (`zk2_rom_ic_h23_num`): the single-proof bound
     `q₃·2⁻¹²⁸ + 2⁻¹¹⁰ + 221·(4607 + q_E + 4607)·2⁻¹²⁸ + (q₅ + 1)·2⁻¹²⁸` holds for the two-phase run,
