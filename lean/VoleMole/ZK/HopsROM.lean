@@ -31,15 +31,12 @@ table, both hops are proved, with the exact bounds:
   `Pr[some sibling input ∈ Q]`.
 
 The remaining modelling step is that the hash record's domain is a random oracle (SHAKE128 as a
-random oracle, with L0's domain separation: `ROM/DomainSep.lean`, `ROM/SingleOracle.lean`), and
-for grinding that the prover's prefix does not read `H₂³` (it reads `H₁`, `H₄`, `H₅`, `H₂⁰`,
-`H₂¹`, `H₂²` and the combination oracle; by inspection of `realPre`). For H6 two links are not
-mechanized: that the ideal-tape prover reads `H₅` only at the active labels `L^{γ_e}_e` (a
-sibling input only if `Θ = 0`, probability `2⁻¹²⁸`), and that each of the distinguisher's `q₅`
-queries is a sibling input with probability `≤ 2⁻¹²⁸`. The latter is `prove_guess_theta` (`Θ` is
-uniform given the proof) once the sibling input is written as a function of the proof and `Θ`
-(`sibling = active ⊕ Θ`, `ZK.sibling_eq_labelRows` on the model); so on paper
-`ε_lab ≤ (q₅ + 1)·2⁻¹²⁸` per proof.
+random oracle, with L0's domain separation: `ROM/DomainSep.lean`, `ROM/SingleOracle.lean`). The
+side conditions are proved in `ZK/HopsRead.lean` and `ZK/HopsH6.lean`: the prover's grinding
+prefix does not read `H₂³` (`realPre_pendAt_congr`; `grind_rom_prover`, `grind_rom_program_prover`
+are the grinding hops for the prover's own prefix), the ideal-tape prover reads `H₅` only at the
+active labels `L^{γ_e}_e` (`proveIdeal_h5_congr`), and the H6 gap is `≤ (q₅ + 1)·2⁻¹²⁸` against a
+distinguisher that reads the table at `q₅` keys (`lab_rom_query`, `lab_rom_hyp`).
 -/
 
 open Finset
@@ -403,7 +400,8 @@ input is read, for every run `A` of a tape and the table that reads the table on
 `LabHyp`, `A` is a distinguisher of the ideal-tape prover's output with `H₅` the table, and `Q`
 the inputs it reads: the prover's `H₅` queries at the active labels `L^{γ_e}_e` (a sibling input
 only if the label offset `Θ` is zero) and the distinguisher's own queries (each a sibling input
-with probability `2⁻¹²⁸`, as `Θ` is uniform given the proof: `prove_guess_theta`). -/
+with probability `2⁻¹²⁸`, as `Θ` is uniform given the proof). The bound is `lab_rom_query`
+(`ZK/HopsH6.lean`). -/
 theorem lab_rom (A : IdealTape st.params → (SKey st.params → Bytes 4) → Prop)
     (Q : IdealTape st.params → (SKey st.params → Bytes 4) → Finset (SKey st.params))
     (hQ : ∀ t G G', (∀ k ∈ Q t G, G k = G' k) → (A t G ↔ A t G')) :

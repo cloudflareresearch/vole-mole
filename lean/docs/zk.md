@@ -755,7 +755,8 @@ simulated proof cannot depend on `r`, while the test for the real `r` accepts ev
   reduction of adaptive H₅ queries to functions of a Θ-independent view). For the `main` layout,
   the probability bound that follows (union over `q` queries, each a function of the view, aux
   and independent coins) is in Lean (§4.1); for the patched layout, the per-query count is
-  (`card_query_hits_sibling_responses`) and the union is on paper;
+  (`card_query_hits_sibling_responses`), and for the executable prover the union over adaptive
+  `H₅` queries is mechanized with `H₅` a uniform table (§10.1, `lab_rom_query`);
 - the PRP/GGM hiding (H4/H8, imported from spec Lemma 10.24);
 - the completeness identities (H3) for the models (for the executable prover: §10.1);
 - the identification of the Lean model with the C++ (§7.1, by inspection);
@@ -782,6 +783,8 @@ which the random-oracle ones are proved with the hashed domain a uniform table:
 | **Zero knowledge** from the tape hypothesis `TapeHyp … ε`: `Close ε (prove … ∘ rho) (simulate p)`; in the form of `Privacy.ZeroKnowledge` for a statement family with dedicated label rows; for faest-arch-opt's tables with BAVC and CRT completeness proved and the tape hypothesis from the hop hypotheses (error `ε_rho + ε_grind + ε_bavc + ε_lab`) | `prove_close`, `labelRows_zeroKnowledge`, `labelRows_zeroKnowledge_tables` | all |
 | **The tape hypothesis from one hypothesis per hop**, by a proved hybrid argument: H1 (`H3Hyp`: `H₃`'s answer at the seed input is close to uniform, `ε_rho`), grinding (`GrindHyp`: the `H₂³` answers at the grinding points of a prefix that is a function of the seed and `iv_pre`, `ε_grind`), H4 (`HideHyp`: for every `iv` and `Δ`, the hidden part of a commitment from a uniform root seed, i.e. the hidden commitments, the opened seeds, all `u^{(i)}` and `u_hi`, `ε_bavc`), H6 (`LabHyp`: on a uniform tape, the `H₅` answers at the sibling labels it determines against uniform ones, through the ideal-tape prover, `ε_lab`); `TapeHyp … (ε_rho + ε_grind + ε_bavc + ε_lab)`. The deterministic steps: the real run's sibling answers are the ones its tape determines (`fillSib_tapeAt_eq`, from `step1_realAt`), the seed slots past the opened ones are not read; for PomFRIT, `TapeHyp2` with the abort term `noHitProb` (the fallback block is read only if no grinding answer is accepted) | `HopHyps`, `tape_close_of_hops`, `tapeHyp_of_hops` (`ZK/Hops.lean`, `ZK/Exec.lean`), `HopHyps2`, `tapeHyp2_of_hops` (`ZK/TwoPhaseHops.lean`); `Privacy.Close.of_agree`, `Close.prod`, `Close.pi` (`Privacy/Hybrid.lean`) | H1, H2, H4, H6 |
 | **The random-oracle hops, with the hashed domain a uniform table** on the inputs the hop reads (`Hashes.withTable`): H1 holds with `ε = 0`, and `≤ q₃·2⁻¹²⁸` against a distinguisher that reads the `H₃` table at `q₃` inputs; grinding holds with `ε = 0`, and programming `H₂³` at the grinding points (as `simulateRO`) is perfect also for a distinguisher that reads the table; H6 is identical until a sibling input is read, for every run that reads the `H₅` table on a known set. Generic: a uniform table's answers at distinct points are uniform; programming is a bijection; identical until a programmed point is read | `h3_rom`, `h3_rom_query`, `grind_rom`, `grind_rom_program`, `lab_rom` (`ZK/HopsROM.lean`); `Privacy.close_restrict`, `pr_program_eq`, `abs_pr_hidden_le`, `abs_pr_hidden_one_le` (`Privacy/Hybrid.lean`) | H1, H2, H6 |
+| **What the prover reads.** The grinding prefix (step 1 at the seed and `iv_pre`, then `chal2 ‖ qs_check ‖ ã`) is the same for any two hash records that agree off `H₂³`, so with `H₂³` a table the grinding hops hold for the prover's own prefix computed with the table. The ideal-tape prover reads `H₅` only at the active gate inputs `iv ‖ e ‖ L_e(q) ‖ 5` (the verifier's: `c_mult`'s forced gate hashes, `L(q ⊕ Δ·u) = L(q) ⊕ γ_e·u_pre`, and the CRT reconstruction's); the sibling input is `iv ‖ e ‖ (L_e(q) ⊕ u_pre) ‖ 5`, and a gate input determines its gate and offset | `realPre_pendAt_congr`, `grind_rom_prover`, `grind_rom_program_prover`, `proveIdeal_h5_congr`, `labelOf_tagCols`, `forcedInput_eq`, `siblingInput_eq`, `gateInputsOff_getD_inj` (`ZK/HopsRead.lean`); `sibInput_eq` (`ZK/HopsH6.lean`) | H2, H6 |
+| **H6 in the ROM with oracle access**: with `H₅` a uniform table on the sibling inputs and dedicated label rows, the H6 hop costs `≤ (q₅ + 1)·2⁻¹²⁸` against every distinguisher of the proof and the table that reads the table at `q₅` keys (chosen adaptively). The prover reads a sibling input only if `u_pre = 0`; a query is one only if `u_pre` equals the query's guess, a function of the shared tape and the proof's fields; `u_pre` is the label-row pad `Θ` (injectively), uniform and independent of them (`upush_fieldsOf`, as for `prove_guess_theta`) | `lab_rom_query`, `lab_rom_hyp`, `pr_bad_le`, `bad_mem_guesses`, `uPre_eq_thetaW`, `thetaW_injective` (`ZK/HopsH6.lean`) | H6 |
 | **BAVC completeness**: the prover's opening at any `Δ` reconstructs its leaf keys off the hidden leaves and its commitments (the walks as folds over the node index; opened nodes, placement, top-down derivation) | `Bridge.bavcComplete` (`Verifier/Bridge/BAVCComplete.lean`) | H3 |
 | **CRT completeness**: the verifier's CRT masks are `ṽ_mask + u_mask·Δ'` for every `Δ` (gate labels `L^{γ_e}`, `c_mult` read back, `r̃` bilinear, and the tables' bilinear identity `L_c(a) = a·W_crt[c]`, checked in the kernel on all `120 · 128` basis pairs) | `Bridge.crtComplete`, `Bridge.crt_core`, `CrtCheck.Lc_eq`, `CrtCheck.crtCheck_eq` (`Verifier/Bridge/CrtComplete.lean`, `CrtCheck.lean`) | H3 |
 | The privacy theorems with the Lean prover: Moussaka issuer hiding/unlinkability, Ratatouille unlinkability | `Privacy.Moussaka.anonymity_lean`, `Privacy.Ratatouille.unlinkability_lean` (`Privacy/LeanProver.lean`) | — |
@@ -812,10 +815,11 @@ equation `prove = proveIdeal ∘ tapeOf` (all pass), the simulator with the prog
     (`h3_rom`, `grind_rom`), H1 `≤ q₃·2⁻¹²⁸` for a distinguisher that reads the `H₃` table at `q₃`
     inputs (`h3_rom_query`: §3's `Q₃·2⁻¹²⁸`; the term for two proofs sharing `rho` concerns several
     proofs), and programming `H₂³` at the grinding points is perfect (`grind_rom_program`; §3's
-    `ε_prog` concerns queries before `chal2` is fixed, i.e. several proofs). Modelling steps left:
-    the domain is a random oracle (SHAKE128, with L0's domain separation, `ROM/DomainSep.lean`), the
-    lazy oracle restricted to the hop's inputs is the table, and the prover's grinding prefix does
-    not read `H₂³` (by inspection of `realPre`).
+    `ε_prog` concerns queries before `chal2` is fixed, i.e. several proofs). The prover's grinding
+    prefix does not read `H₂³` (`realPre_pendAt_congr`), so both hold for the prover's own prefix
+    computed with the table (`grind_rom_prover`, `grind_rom_program_prover`). Modelling steps left:
+    the domain is a random oracle (SHAKE128, with L0's domain separation, `ROM/DomainSep.lean`), and
+    the lazy oracle restricted to the hop's inputs is the table.
   - **H4** (`HideHyp`, `ε_bavc`, §3's `ε_hide`): assumed. It names only AES and the parameters: for
     every `iv` and `Δ`, the hidden part of a commitment from a uniform root seed is close to
     uniform (spec Lemma 10.24: GGM, leaf commitments and leaf PRGs with AES as an ideal cipher or
@@ -823,13 +827,20 @@ equation `prove = proveIdeal ∘ tapeOf` (all pass), the simulator with the prog
     not parametrized by a cipher, so neither the ideal-cipher model nor the GGM hybrid over the
     `τ` hidden paths is instantiated (`Close.pi` gives the `τ·ε` composition for per-path
     hypotheses).
-  - **H6** (`LabHyp`, `ε_lab`): in the ROM, identical until a sibling input is read (`lab_rom`, for
-    every run that reads the `H₅` table on a known set). Not mechanized: that the ideal-tape prover
-    reads `H₅` only at the active labels (a sibling input only if `Θ = 0`, `card_theta_zero`), and
-    that a distinguisher query is a sibling input with probability `2⁻¹²⁸`. The latter is
-    `prove_guess_theta` (`Θ` uniform given the proof) once the sibling input is written as a
-    function of the proof and `Θ` (`sibling_eq_labelRows` on the model). On paper
-    `ε_lab ≤ (Q₅ + 1)·2⁻¹²⁸` per proof (§3, H6). On `main` this hop fails (§4).
+  - **H6** (`LabHyp`, `ε_lab`): proved in the ROM with §3's bound for one proof: with `H₅` a
+    uniform table on the sibling inputs and dedicated label rows, `ε_lab ≤ (q₅ + 1)·2⁻¹²⁸` against a
+    distinguisher that reads the table at `q₅` keys, adaptively (§3's `Q₅ + n_mult·Q_V + Q_P` with
+    `Q_P = 1`: `q₅` counts every `H₅` query, including the `n_mult` of each verification the
+    distinguisher runs) (`lab_rom_hyp`, `lab_rom_query`,
+    `ZK/HopsH6.lean`): the ideal-tape prover reads `H₅` only at the active labels
+    (`proveIdeal_h5_congr`), a sibling input only if `u_pre = Θ = 0`, and each query is a sibling
+    input only if it guesses `Θ` from the shared tape and the proof's fields, of which `Θ` is
+    independent. Modelling steps left: as for H1 (SHAKE as a random oracle; the lazy oracle on the
+    sibling inputs is the table; the `H₅` inputs outside them are answered by the fixed record).
+    On `main` this hop fails (§4).
+  - The ROM results are per hop, each with its own table, while `tape_close_of_hops` composes the
+    fixed-record hypotheses; composing the ROM versions into one bound for a single random record
+    (its domains independent tables) is on paper.
 - **Deterministic hypotheses**, per statement and witness (`ZKHyp`, `RunHyp`): the statement's
   evaluator is a system of degree `≤ d`, `1 ≤ d`, that the witness satisfies for every `chal1` and
   combination (for PomFRIT, for every instance the continuation picks: `RunHyp2`); `N_MASK ≤ 32`;
