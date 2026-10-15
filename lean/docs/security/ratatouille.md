@@ -470,11 +470,37 @@ and affords the amount, else it is refused for both (feasibility is leakage).
   requests it sees and the simulator coins (`Vtab`, `simGameR_iff`), so `simGame_iff`,
   `stage_ideal` and `idealGame_iff` are reused unchanged, with the coins and tables fixed in the
   hiding reduction and in the exchange of the nullifiers (`idealGameR_eq`). A spend programs
-  `H₂³` only if its round runs. The Issuer's choices of responses and amounts do not read the
-  tables (only its guess does). The zero-knowledge theorem for statements chosen from the tables
-  (`zk_adaptive`, `lean_zeroKnowledgeROA`, `pr_collide_adaptive`; zk.md §10.3), which lifts this
-  for Moussaka (`anonymityRA_lean_num`), applies to the spends in the same way. The Ratatouille
-  game is not restated with a table-reading Issuer.
+  `H₂³` only if its round runs. Here the Issuer's choices of responses and amounts do not read the
+  tables (only its guess does).
+- **[Lean] With an Issuer whose interaction reads the tables**
+  (`lean/VoleMole/Privacy/RatatouilleRA.lean`, zk.md §10.3). Each of the Issuer's two message
+  stages reads the four slices and the shared tables, consistently, with a budget per stage
+  (`AdversaryRA.IBudget i₃ i₂ i₅ i_E`). Stage 1 is the issuance responses and `d₁`, read on the
+  tables after the issuance simulations. Stage 2 is the response to round 1 and `d₂`; it reads
+  round 1's request, on the tables after round 1's simulation. The game (`viewRA`) is `viewR` with
+  the messages fixed to this transcript. With real slots, every message and proof reads the
+  uniform tables. The issuance hops count both stages, the three real proofs and the guess as the
+  distinguisher. The spend hops are `hop_roA` with the adaptive theorem
+  (`ZK.Sim.lean_zeroKnowledgeROA`), and their collision terms are `pr_collide_adaptive`:
+  - round 1's statement (its token and `d₁`) is read by stage 1 through the two issuance
+    programmings: `(i₃, i₂, i₅ + 624, i_E + 9214)`;
+  - round 2's is read by the whole transcript, stage 2 also through round 1's programming:
+    `(2i₃, 2i₂, 2i₅ + 1560, 2i_E + 23035)`.
+
+  The simulated world is `Ratatouille.view` for the Issuer at fixed coins, slices and tables
+  (`atRA`). Its messages read the tables as functions of the requests it has seen, and `view_congr`
+  shows the two Issuers agree. So hiding and `idealGame_iff` apply unchanged.
+  **`unlinkabilityRA_lean_num`**: any two worlds differ by at most
+
+      4·εRO(2i₃ + q₃, q₅ + 2i₅ + 1872, q_E + 2i_E + 13821)
+        + 2·εAd(9; i₃ + q₃, q₅ + i₅ + 1248, q_E + i_E + 13821; i₃, i₂, i₅ + 624, i_E + 9214)
+        + 2·εAd(9; q₃, q₅ + 936, q_E + 13821; 2i₃, 2i₂, 2i₅ + 1560, 2i_E + 23035)
+        + 6·i₃·2⁻¹²⁸ + 4·(2⁻¹¹⁰ + εROP(0, 312, 4607; 2i₅ + 1560, 2i_E + 23035))
+        + 6·noHitProb + 12·2⁻¹⁰²⁴ + 2·εhide.
+
+  This is about `2⁻¹⁰¹·⁵` at zero budgets (`2⁻¹⁰¹·²` if the interaction reads `H₂³`), against
+  `2⁻¹⁰²·²` for `unlinkabilityRO_lean_num`. The difference is the simulations' programmings,
+  which the spend hops count as the reader's reads.
 
 **A precision found while mechanizing H3.** "The client still finalizes against the commitment
 string it sent" is not enough on its own: before its next spend the Client checks its token with

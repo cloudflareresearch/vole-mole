@@ -818,6 +818,7 @@ which the random-oracle ones are proved with the hashed domain a uniform table:
 | **The privacy theorems in the ROM and ideal-cipher model with every term explicit**: Moussaka `δI₁ ≤ noHitProb + 2⁻¹⁰²⁴`, `δL ≤ 2⁻¹¹⁰ + εRO(0, 312, 4607) + noHitProb + 2·2⁻¹⁰²⁴`, `δR ≤ … + 3·2⁻¹⁰²⁴`, so `≤ 8·εRO(q₃, q₅ + 1872, q_E + 13821) + 4·(2⁻¹¹⁰ + εRO(0, 312, 4607)) + 6·noHitProb + 12·2⁻¹⁰²⁴ + 2·εhide`; Ratatouille the same; PomFRIT `δ(A) ≤ noHitProb + 2⁻¹²⁸`, so `≤ 4·εRO(q₃, q₅ + 1248, q_E + 18428) + 2·noHitProb + 2·2⁻¹²⁸` | `deltaI1_le`, `deltaL_le`, `deltaR_le`, `anonymityRO_lean_num` (`Privacy/MoussakaDelta.lean`); `deltaI1R_le`, `deltaS1R_le`, `deltaS2R_le`, `unlinkabilityRO_lean_num` (`Privacy/RatatouilleDelta.lean`); `deltaRO_le`, `blindnessRO_lean_num` (`Privacy/PomFRITDelta.lean`) | §10.2 |
 | **Zero knowledge for a statement chosen by an adversary that reads the tables** (one proof, ROM and ideal cipher): the statement and witness are a function of the proof's `H₃` slice and the shared tables, read at `s₃`, `s₂`, `s₅`, `s_E` keys adaptively and consistently (`SReads`); then the real proof (fresh 16-byte `ρ`) or the simulated one (`H₂³` programmed); a distinguisher of the reader's output, the proof and the tables with budget `(q₃, q₅, q_E)`, `H₂³` free. Advantage `≤ εAd = εRO(q₃, q₅, q_E) + (s₃ + s₅ + 1 + 221·s_E)·2⁻¹²⁸ + [s₂ > 0]·(2⁻¹¹⁰ + εROP(0, 312, 4607; s₅, s_E) + 2·noHitProb + 2·s₂·2^{−8·16(d−1)})`. Lazy sampling of the reader's view (an involution of a uniform pair), then the chain with the tables patched at the reader's queries: the hops other than H6 and H4 hold for every value of `H₅` and the cipher, H6 and H4 with patched tables cost `(|P₅| + 1)·2⁻¹²⁸` and `221·|P_E|·2⁻¹²⁸` more, the `H₃` patch costs `Pr[ρ ∈ P₃]`, the `H₂³` patch the simulated block (uniform `ã`) and the real block (a second application of zero knowledge) among the patched blocks; the adaptive collision bound; the simulator's programming as a consistent reader | `zk_adaptive`, `zk_adaptive_at`, `zk_patched`, `zk_roP`, `lean_zeroKnowledgeROA`, `pr_collide_adaptive`, `pr_preTail_mem`, `pr_simBlk_mem`, `realRO_g3_congr`, `progRO_patch2`, `SReads`, `SReads.comp_prog`, `CProg`, `progRO_cprog`, `vIn5_ic_congr`, `rdKeys_ic_congr`, `εAd` (`ZK/AdaptRO.lean`); `zk_rom_ic_h23P`, `zk_pre_h4Φ`, `joint2_h6P`, `lab_rom_hyp_sGP`, `joint3_h4P`, `hide_rom_queryP` (`ZK/HopsPatch.lean`); `IC.hopP`, `IC.punctureP` (`ZK/IdealCipherP.lean`); `pr_resample` (`Privacy/Resample.lean`); `ZeroKnowledgeROA`, `hop_roA` (`Privacy/AdaptiveRO.lean`) | §10.3 |
 | **Moussaka anonymity with an interaction that reads the tables**: responses, Anchor Sets and digests are functions of the requests, the four slices and the shared tables (budget `(i₃, i₂, i₅, i_E)` per slice position, consistent); `≤ 4·εRO(i₃ + q₃, q₅ + i₅ + 1872, q_E + i_E + 13821) + 4·εAd(9; q₃, q₅ + 1248, q_E + 13821; i₃, i₂, i₅ + 624, i_E + 9214) + 4·(i₃·2⁻¹²⁸ + 2⁻¹¹⁰ + εROP(0, 312, 4607; i₅ + 624, i_E + 9214)) + 6·noHitProb + 12·2⁻¹⁰²⁴ + 2·εhide` | `AdversaryRA`, `viewRA`, `hop0RA`, `hop1RA`, `hopLRA`, `hopRRA`, `deltaLA_le`, `deltaRA_le`, `anonymityRA`, `anonymityRA_lean_num` (`Privacy/MoussakaRA.lean`) | §10.3 |
+| **Ratatouille unlinkability with an interaction that reads the tables**: each stage of the Issuer's interaction (issuance responses and `d₁`; round 1's response and `d₂`) is a function of what it has seen, the four slices and the shared tables (budget `(i₃, i₂, i₅, i_E)` per stage and slice position, consistent), read on the tables as the simulations before it programmed them; `≤ 4·εRO(2i₃ + q₃, q₅ + 2i₅ + 1872, q_E + 2i_E + 13821) + 2·εAd(9; i₃ + q₃, q₅ + i₅ + 1248, q_E + i_E + 13821; i₃, i₂, i₅ + 624, i_E + 9214) + 2·εAd(9; q₃, q₅ + 936, q_E + 13821; 2i₃, 2i₂, 2i₅ + 1560, 2i_E + 23035) + 6·i₃·2⁻¹²⁸ + 4·(2⁻¹¹⁰ + εROP(0, 312, 4607; 2i₅ + 1560, 2i_E + 23035)) + 6·noHitProb + 12·2⁻¹⁰²⁴ + 2·εhide` | `AdversaryRA`, `transR`, `viewRA`, `hopI0RA`, `hopI1RA`, `hopS1RA`, `hopS2RA`, `sReads_Sx1`, `sReads_Sx2`, `deltaS1A_le`, `deltaS2A_le`, `view_congr`, `simGameRA_iff`, `unlinkabilityRA`, `unlinkabilityRA_lean_num` (`Privacy/RatatouilleRA.lean`) | §10.3 |
 
 `lake exe zk_sim [TESTS [main\|labelrows [FILTER]]]` runs, on all 18 KAT runs of each layout: the
 equation `prove = proveIdeal ∘ tapeOf` (all pass), the simulator with the programmed oracle
@@ -936,10 +937,10 @@ as a check of the theorem's conditions and kept as a smoke test of the executabl
     Ratatouille and PomFRIT with every term explicit (§10.2: `anonymityRO_lean_num`,
     `unlinkabilityRO_lean_num`, `blindnessRO_lean_num`, for adversaries whose interaction does not
     read the tables; for PomFRIT on the two-phase theorem `zk2_rom_ic_h23_num`, whose continuation
-    may read the tables), and for Moussaka also with an interaction that reads every table
-    (§10.3: `zk_adaptive`, the single-proof theorem for statements chosen from the tables, and
-    `anonymityRA_lean_num`; Ratatouille and PomFRIT with a table-reading interaction are not
-    restated); the `*_shake` theorems with the
+    may read the tables), and for Moussaka and Ratatouille also with an interaction that reads
+    every table (§10.3: `zk_adaptive`, the single-proof theorem for statements chosen from the
+    tables, `anonymityRA_lean_num` and `unlinkabilityRA_lean_num`; PomFRIT with a table-reading
+    interaction is not restated); the `*_shake` theorems with the
     fixed-record `HopHyps` remain. The PRP/PRF switching term and the
     modelling steps (SHAKE as a random oracle, AES as an ideal cipher) remain.
 - **Deterministic hypotheses**, per statement and witness (`ZKHyp`, `RunHyp`): the statement's
@@ -1008,8 +1009,8 @@ independent nullifiers), so this modelling step carries the `ε_iv`-type term, o
 adversary's guess sees all tables, with a budget `(q₃, q₅, q_E)`; **its interaction (responses,
 Anchor Sets, digests, amounts) does not read the tables**: the zero-knowledge theorem is for a
 statement fixed before the tables are drawn, and the redemption and spend statements are the
-adversary's choices. (§10.3 lifts this for Moussaka, with a zero-knowledge theorem for statements
-chosen from the tables.) Each slot of the game has an output on the tables the game runs on, an
+adversary's choices. (§10.3 lifts this for Moussaka and Ratatouille, with a zero-knowledge theorem
+for statements chosen from the tables.) Each slot of the game has an output on the tables the game runs on, an
 `H₂³` programming (identity for a real proof) and its slice; real proofs run on the tables
 programmed by the slots simulated so far; a redemption or spend programs only if its round runs
 (§6's rule), so that no programmed point depends on a world's hidden choice.
@@ -1162,7 +1163,7 @@ The two sessions'
 `H₃` slices are independent tables when their `r` differ (`2⁻³⁶⁰` otherwise), as in the other two
 games.
 
-### 10.3 Statements chosen from the tables (`Privacy/Resample.lean`, `ZK/IdealCipherP.lean`, `ZK/HopsPatch.lean`, `ZK/AdaptRO.lean`, `Privacy/AdaptiveRO.lean`, `Privacy/MoussakaRA.lean`)
+### 10.3 Statements chosen from the tables (`Privacy/Resample.lean`, `ZK/IdealCipherP.lean`, `ZK/HopsPatch.lean`, `ZK/AdaptRO.lean`, `Privacy/AdaptiveRO.lean`, `Privacy/MoussakaRA.lean`, `Privacy/RatatouilleRA.lean`)
 
 §10.2's games assume that the adversary's interaction does not read the tables, because `zk_ro`
 is for a statement fixed before the tables are drawn. Here the statement and witness are chosen by
@@ -1265,10 +1266,51 @@ This is about `2⁻¹⁰¹·⁹` without budgets (`2⁻¹⁰¹·⁵` if the inte
 `2⁻¹⁰²·²` for the table-oblivious interaction (`anonymityRO_lean_num`). The difference comes from
 the issuance programmings' reads, which the redemption hops count as the reader's.
 
+**Ratatouille with a table-reading interaction** (`Privacy/RatatouilleRA.lean`).
+- *The adversary* (`AdversaryRA`): the interaction has two stages. Stage 1 (`msg₁`) is the two
+  issuance responses and `d₁`, from the issuance requests. Stage 2 (`msg₂`) is the response to
+  round 1 and `d₂`, also from round 1's request, so it reads spend 1's proof. Each stage reads the
+  four slices and the shared tables, with the budget `IBudget i₃ i₂ i₅ i_E` per stage and slice
+  position, consistently.
+- *The game* (`viewRA`): `viewR` with the messages fixed to the transcript (`fixR`, `transR`).
+  Each message reads the tables as the simulations before it programmed them: stage 1 after the
+  issuances, stage 2 after the issuances and round 1 (round 1 programs only if it runs). The
+  transcript computes round 1's request on the tables after the issuances, so it needs no
+  provisional round: those tables do not depend on the spends' programming. With real slots
+  nothing is programmed (`realGameRA`).
+- *The issuance hops* (`hopI0RA`, `hopI1RA`): `hop_ro`, with both stages, the two real spends and
+  the guess as the distinguisher. Each real proof is counted once (`rd5_viewRA`), so `H₅` is read
+  at `2i₅ + q₅ + 3·624` keys and each slice at `2i₃ + q₃` keys.
+- *Round 1's hop* (`hopS1RA`): `hop_roA` with `ZeroKnowledgeROA`. The statement (round 1's token
+  and `d₁`) is read by stage 1 through the two issuance programmings (`sReads_Sx1`:
+  `(i₃, i₂, i₅ + 624, i_E + 9214)`). Stage 2, which reads round 1's proof, is part of the
+  distinguisher (`FS1A`, budget `(i₃ + q₃, i₅ + q₅ + 1248, i_E + q_E + 13821)`) with round 2's
+  real proof and the guess.
+- *Round 2's hop* (`hopS2RA`): the statement is read by the whole transcript (`Sx2`). Stage 2
+  reads through round 1's programming, which depends on stage 1's messages (`SReads.bind`), so
+  the budget is `(2i₃, 2i₂, 2i₅ + 1560, 2i_E + 23035)` (`sReads_Sx2`: `5·312`, `5·4607`).
+- *The collision terms* (`deltaS1A_le`, `deltaS2A_le`) come from `pr_collide_adaptive`, at the
+  readers' budgets. The statement for the bound is the one whenever round 1's or 2's token passes
+  the Client's checks, which is when a real proof is computed.
+- *The end* (`simGameRA_iff`): the simulated world is `Ratatouille.view` for the Issuer at fixed
+  simulator coins, slices and tables (`atRA`). Its messages read `U₁ tr`, `U₂ tr rq`, the
+  programmed tables as functions of the requests it has seen. The two Issuers give the same view
+  (`view_congr`), since stage 2 matters only if round 1 runs. Hiding and the exchange of the
+  nullifiers finish as before.
+
+The bound:
+
+    Ratatouille (unlinkabilityRA_lean_num):  |Pr[W(b₁, b₂)] − Pr[W(b₁', b₂')]| ≤
+        4·εRO(2i₃ + q₃, q₅ + 2i₅ + 1872, q_E + 2i_E + 13821)
+      + 2·εAd(9; i₃ + q₃, q₅ + i₅ + 1248, q_E + i_E + 13821; i₃, i₂, i₅ + 624, i_E + 9214)
+      + 2·εAd(9; q₃, q₅ + 936, q_E + 13821; 2i₃, 2i₂, 2i₅ + 1560, 2i_E + 23035)
+      + 6·i₃·2⁻¹²⁸ + 4·(2⁻¹¹⁰ + εROP(0, 312, 4607; 2i₅ + 1560, 2i_E + 23035))
+      + 6·noHitProb + 12·2⁻¹⁰²⁴ + 2·εhide.
+
+This is about `2⁻¹⁰¹·⁵` without budgets (`2⁻¹⁰¹·²` if the interaction reads `H₂³`), against
+`2⁻¹⁰²·²` for the table-oblivious interaction (`unlinkabilityRO_lean_num`).
+
 **Open.**
-- *Ratatouille with a table-reading interaction*: not restated. It is the same construction as
-  Moussaka's, on `RatatouilleRO`'s game: the spend statements read off the transcript, `hop_roA`,
-  `lean_zeroKnowledgeROA`, `pr_collide_adaptive`. No new argument is needed.
 - *PomFRIT*: needs the two-phase analogue of `zk_adaptive`. That means the patched versions of
   `zk2_pre_h4`, `zk2_post_h4` (with `lab2_hyp`) and `joint3_h4_2`, by the technique of
   `ZK/HopsPatch.lean`, then `PomFRITRO`'s game restated. Not done.
