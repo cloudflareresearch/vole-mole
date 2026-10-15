@@ -17,8 +17,11 @@ comments at each component.
 
 This model predates the implementation and doesn't account for deriving the witness with a PRG
 (see "Derived witnesses" in src/voleith.hpp), which makes each witness bit cost one bit of proof.
-The implemented all-binary proof (src/mldsa_pok/relation.hpp, with the local PRG) measures
-97,981 bytes, 556 ms to prove, and 67 ms to verify (128f, release, Apple M4 Pro).
+The implementation (src/mldsa_pok/verify_gadget.hpp, all binary, with the local PRG) hides the
+message, too: mu is computed in the proof from a hidden 32-byte message (one more permutation), and
+the UseHint boundary is handled by two guarded bits per coefficient (after Baum and Beckmann). The
+standalone proof (relation.hpp) measures 66,951 bytes, 344 ms to prove, and 50 ms to verify (128f,
+release, Apple M4 Pro).
 """
 
 import math

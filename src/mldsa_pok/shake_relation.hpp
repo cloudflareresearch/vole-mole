@@ -111,11 +111,30 @@ struct ShakeShape {
     }
 
     // The sponge on committed bits: returns the state after the last permutation (of degree
-    // Seg::OUTPUT_DEGREE). The witness is at bit offset 0. Adds NUM_SPONGE_CONSTRAINTS
-    // constraints (no bit constraints, and no constraints on the output).
+    // Seg::OUTPUT_DEGREE). The witness starts at byte `wit_off` of the relation's witness. Adds
+    // NUM_SPONGE_CONSTRAINTS constraints (no bit constraints, and no constraints on the output).
     static constexpr size_t NUM_SPONGE_CONSTRAINTS = NUM_BLOCKS * Seg::NUM_SEGMENT_CONSTRAINTS;
     template <typename QS>
-    static auto qs_sponge(QS* qs, std::span<const uint8_t, PREFIX_BYTES> prefix) {
+    static auto qs_sponge(QS* qs, std::span<const uint8_t, PREFIX_BYTES> prefix,
+                          size_t wit_off = 0) {
+        return qs_sponge_impl<QS>(qs, prefix, nullptr, wit_off);
+    }
+
+    // As above, with a committed prefix: bit i of the prefix is prefix_bits[i] (of degree 1).
+    template <typename QS>
+    static auto
+    qs_sponge(QS* qs,
+              std::span<const vole_mole::detail::qs_bit<QS, 1>, 8 * PREFIX_BYTES> prefix_bits,
+              size_t wit_off = 0) {
+        static constexpr std::array<uint8_t, PREFIX_BYTES> zero{};
+        return qs_sponge_impl<QS>(qs, std::span(zero), prefix_bits.data(), wit_off);
+    }
+
+  private:
+    template <typename QS>
+    static auto qs_sponge_impl(QS* qs, std::span<const uint8_t, PREFIX_BYTES> prefix,
+                               const vole_mole::detail::qs_bit<QS, 1>* prefix_bits,
+                               size_t wit_off) {
         using Bit = vole_mole::detail::qs_bit<QS, 1>;
         using faest::poly1;
         static_assert(Seg::OUTPUT_DEGREE == 1, "the output feeds the next permutation");
@@ -124,20 +143,24 @@ struct ShakeShape {
         keccak::detail::QsState<QS> state(KF1600_STATE_BITS, Bit(poly1(0), qs));
         for (size_t b = 0; b < NUM_BLOCKS; ++b) {
             for (size_t i = 0; i < 8 * SHAKE256_RATE; ++i) {
-                const int v = padded_byte(prefix, b * SHAKE256_RATE + i / 8);
-                if (v >= 0) {
+                const size_t pos = b * SHAKE256_RATE + i / 8;
+                const int v = padded_byte(prefix, pos);
+                if (prefix_bits != nullptr && pos < PREFIX_BYTES) {
+                    state[i] = state[i] + prefix_bits[8 * pos + i % 8];
+                } else if (v >= 0) {
                     state[i] = state[i] + poly1((v >> (i % 8)) & 1);
                 } else {
-                    state[i] =
-                        state[i] + qs->get_witness_bit(8 * static_cast<size_t>(-1 - v) + i % 8);
+                    state[i] = state[i] + qs->get_witness_bit(
+                                              8 * (wit_off + static_cast<size_t>(-1 - v)) + i % 8);
                 }
             }
             state = Seg::qs_keccak(qs, std::move(state),
-                                   WIT_OFF_STATES + b * Seg::COMMITTED_STATES_BYTES);
+                                   wit_off + WIT_OFF_STATES + b * Seg::COMMITTED_STATES_BYTES);
         }
         return state;
     }
 
+  public:
     template <typename QS>
     static void constraints(QS* qs, std::span<const uint8_t, PREFIX_BYTES> prefix,
                             std::span<const uint8_t, OUT_BYTES> y) {
