@@ -39,6 +39,14 @@ constexpr Dst ECDSA_POK_LINK_DST = make_dst("ecpk", ecdsa_pok::VERSION, 'l', '0'
 constexpr Dst ECDSA_POK_SEED_DST = make_dst("ecpk", ecdsa_pok::VERSION, 's', '0'); // prover seed
 constexpr Dst ECDSA_POK_STATEMENT_DST = make_dst("ecpk", ecdsa_pok::VERSION, 'x', '0'); // mu
 
+// ECDSA proof with a hidden public key (experimental, src/ecdsa_pok/hk_relation.hpp)
+constexpr Dst ECDSA_HK_BINARY_DST = make_dst("echk", ecdsa_pok::VERSION, 'b', '0');
+constexpr Dst ECDSA_HK_BINDER_DST = make_dst("echk", ecdsa_pok::VERSION, 'f', '0');
+constexpr Dst ECDSA_HK_BINARY_PRG_DST = make_dst("echk", ecdsa_pok::VERSION, 'q', '0');
+constexpr Dst ECDSA_HK_LINK_DST = make_dst("echk", ecdsa_pok::VERSION, 'l', '0');
+constexpr Dst ECDSA_HK_SEED_DST = make_dst("echk", ecdsa_pok::VERSION, 's', '0');
+constexpr Dst ECDSA_HK_STATEMENT_DST = make_dst("echk", ecdsa_pok::VERSION, 'x', '0');
+
 // Moussaka
 constexpr Dst MOUSSAKA_COM_DST = make_dst("mous", moussaka::VERSION, 'c', '0');
 constexpr Dst MOUSSAKA_ISSUE_PRG_DST = make_dst("mous", moussaka::VERSION, 'q', '0'); // witness PRG
@@ -80,6 +88,12 @@ constexpr bool dsts_are_distinct() {
         ECDSA_POK_LINK_DST,
         ECDSA_POK_SEED_DST,
         ECDSA_POK_STATEMENT_DST,
+        ECDSA_HK_BINARY_DST,
+        ECDSA_HK_BINDER_DST,
+        ECDSA_HK_BINARY_PRG_DST,
+        ECDSA_HK_LINK_DST,
+        ECDSA_HK_SEED_DST,
+        ECDSA_HK_STATEMENT_DST,
         MOUSSAKA_COM_DST,
         MOUSSAKA_ISSUE_PRG_DST,
         MOUSSAKA_ISSUE_PROOF_DST,
