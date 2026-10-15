@@ -788,6 +788,7 @@ which the random-oracle ones are proved with the hashed domain a uniform table:
 | **What the prover reads.** The grinding prefix (step 1 at the seed and `iv_pre`, then `chal2 ‖ qs_check ‖ ã`) is the same for any two hash records that agree off `H₂³`, so with `H₂³` a table the grinding hops hold for the prover's own prefix computed with the table. The ideal-tape prover reads `H₅` only at the active gate inputs `iv ‖ e ‖ L_e(q) ‖ 5` (the verifier's: `c_mult`'s forced gate hashes, `L(q ⊕ Δ·u) = L(q) ⊕ γ_e·u_pre`, and the CRT reconstruction's); the sibling input is `iv ‖ e ‖ (L_e(q) ⊕ u_pre) ‖ 5`, and a gate input determines its gate and offset | `realPre_pendAt_congr`, `grind_rom_prover`, `grind_rom_program_prover`, `proveIdeal_h5_congr`, `labelOf_tagCols`, `forcedInput_eq`, `siblingInput_eq`, `gateInputsOff_getD_inj` (`ZK/HopsRead.lean`); `sibInput_eq` (`ZK/HopsH6.lean`) | H2, H6 |
 | **H6 in the ROM with oracle access**: with `H₅` a uniform table on the sibling inputs and dedicated label rows, the H6 hop costs `≤ (q₅ + 1)·2⁻¹²⁸` against every distinguisher of the proof and the table that reads the table at `q₅` keys (chosen adaptively). The prover reads a sibling input only if `u_pre = 0`; a query is one only if `u_pre` equals the query's guess, a function of the shared tape and the proof's fields; `u_pre` is the label-row pad `Θ` (injectively), uniform and independent of them (`upush_fieldsOf`, as for `prove_guess_theta`) | `lab_rom_query`, `lab_rom_hyp`, `pr_bad_le`, `bad_mem_guesses`, `uPre_eq_thetaW`, `thetaW_injective` (`ZK/HopsH6.lean`) | H6 |
 | **H4 in the ideal-cipher model** (the cipher a uniform table `E`, key ↦ row, the rows uniform functions: the PRF view of an ideal cipher; the BAVC rebuilt proof-only with the cipher as a parameter, `hiddenOutE`, equal to the executable `hiddenOut` at `E = AES`): the GGM hybrid replaces the rows of the nodes on the hidden paths (at most `τ·13 = 221`) by independent uniform rows, one node at a time in heap order, at `(4607 + q)·2⁻¹²⁸` each (the node's value is uniform and is used only as a key; the two experiments differ only if it is the key of one of the other `2L − 1 = 4607` nodes or of one of `A`'s `q` table queries; programming the table at it is perfect); with all of them replaced, the hidden part reads the new rows at distinct points (four tweak roles, counters, distinct opened nodes) and is exactly the ideal hidden part (commitments and seeds are the values, each `u^{(i)}` is the opened leaves' part XOR the hidden leaf's blocks, `u_hi` a truncation). Bound `221·(4607 + q)/2¹²⁸` against a distinguisher of the hidden part and the table that reads the table at `q` keys; `HideHypIC p (221·4607/2¹²⁸)` | `hiddenOutE`, `hiddenOut_eq`, `prg_eq_prgR`, `keyAt_aes`, `xIn_sib`, `hidOfRows_point`, `hide_puncture`, `hidSet_card` (`ZK/HopsH4.lean`); `IC.rowAt`, `IC.hop`, `IC.puncture`, `IC.pr_mem_reset_le`, `IC.rowAt_congr_points` (`ZK/IdealCipher.lean`); `pts_injective`, `fold_xor_diff`, `p5F_injective`, `final_close`, `exper_final`, `hide_rom_query`, `HideHypIC`, `hideHypIC_holds` (`ZK/HopsH4Ideal.lean`) | H4 |
+| **The hops composed in one random-oracle and ideal-cipher experiment** (one proof, label rows, `SmallParams`): the hash record `recOf Hb … pre G3 G2 G5` with `H₃` (seed inputs), `H₂³` (grinding points) and `H₅` (sibling inputs) independent uniform tables and every other domain, and these off those inputs, the base record's; the BAVC's cipher a uniform table `E` in the proof-only cipher-parametric prover `proveE` (the hidden part of the commitment is `hiddenOutE E`; the rest of the proof as the executable prover's, which recomputes the opened subtrees with AES; the grinding prefix `pre` any function of `G5`, `E` and the coins), equal to the executable prover at `E = AES` and the executable prefix. Against a distinguisher that sees the proof and `G3`, `G5`, `E` (not `G2`) and reads them adaptively at `q₃`, `q₅`, `q_E` keys: `proveE` vs. `simulate` with independent tables, advantage `≤ q₃·2⁻¹²⁸ + 0 + 221·(4607 + q_E)·2⁻¹²⁸ + (q₅ + 1)·2⁻¹²⁸`. The hybrids of `tape_close_of_hops`, each hop with the other tables fixed and averaged over; the ideal-tape prover reads neither `H₃` nor `H₂³` | `zk_rom_ic`, `joint_h1`, `joint_grind`, `joint_h4`, `joint_tape`, `joint_h6`, `joint_sim`, `proveE`, `proveE_aes`, `proveE_recOf_aes`, `recOf`, `proveIdeal_agreeOff`, `fillSib_agreeOff` (`ZK/HopsJoint.lean`) | H1, H2, H4, H6 |
 | **BAVC completeness**: the prover's opening at any `Δ` reconstructs its leaf keys off the hidden leaves and its commitments (the walks as folds over the node index; opened nodes, placement, top-down derivation) | `Bridge.bavcComplete` (`Verifier/Bridge/BAVCComplete.lean`) | H3 |
 | **CRT completeness**: the verifier's CRT masks are `ṽ_mask + u_mask·Δ'` for every `Δ` (gate labels `L^{γ_e}`, `c_mult` read back, `r̃` bilinear, and the tables' bilinear identity `L_c(a) = a·W_crt[c]`, checked in the kernel on all `120 · 128` basis pairs) | `Bridge.crtComplete`, `Bridge.crt_core`, `CrtCheck.Lc_eq`, `CrtCheck.crtCheck_eq` (`Verifier/Bridge/CrtComplete.lean`, `CrtCheck.lean`) | H3 |
 | The privacy theorems with the Lean prover: Moussaka issuer hiding/unlinkability, Ratatouille unlinkability | `Privacy.Moussaka.anonymity_lean`, `Privacy.Ratatouille.unlinkability_lean` (`Privacy/LeanProver.lean`) | — |
@@ -833,9 +834,9 @@ equation `prove = proveIdeal ∘ tapeOf` (all pass), the simulator with the prog
     (`hiddenOut_eq`). Modelling steps left: AES is an ideal cipher; its rows are permutations,
     not functions (the PRP/PRF switching term for the hidden paths' rows, about
     `221·B²·2⁻¹²⁹` with `B` the blocks read per row, at most `2 + VOLE_COL_BLOCKS`, is on paper;
-    so are inverse queries); and, as for the ROM hops, the result is for its own table, while
-    `tape_close_of_hops` composes `HideHyp` for the fixed AES (the executable prover is not
-    parametrized by a cipher, so the ideal-cipher version is not plugged into the tape hypothesis).
+    so are inverse queries). `tape_close_of_hops` composes `HideHyp` for the fixed AES; the
+    ideal-cipher version is plugged in through the proof-only cipher-parametric prover `proveE`
+    (`zk_rom_ic`, below).
   - **H6** (`LabHyp`, `ε_lab`): proved in the ROM with §3's bound for one proof: with `H₅` a
     uniform table on the sibling inputs and dedicated label rows, `ε_lab ≤ (q₅ + 1)·2⁻¹²⁸` against a
     distinguisher that reads the table at `q₅` keys, adaptively (§3's `Q₅ + n_mult·Q_V + Q_P` with
@@ -847,9 +848,26 @@ equation `prove = proveIdeal ∘ tapeOf` (all pass), the simulator with the prog
     independent. Modelling steps left: as for H1 (SHAKE as a random oracle; the lazy oracle on the
     sibling inputs is the table; the `H₅` inputs outside them are answered by the fixed record).
     On `main` this hop fails (§4).
-  - The ROM results are per hop, each with its own table, while `tape_close_of_hops` composes the
-    fixed-record hypotheses; composing the ROM versions into one bound for a single random record
-    (its domains independent tables) is on paper.
+  - **Composed** (`zk_rom_ic`, `ZK/HopsJoint.lean`): for one proof, with `H₃`, `H₂³`, `H₅`
+    independent uniform tables on the hops' inputs (every other domain fixed: `mu`, `H₁`, `H₄`,
+    `H₂¹`, `H₂²`, the combination, and the three domains off those inputs) and the BAVC's cipher a
+    uniform table, the cipher-parametric prover `proveE` (equal to the executable prover at AES,
+    `proveE_recOf_aes`) is `q₃·2⁻¹²⁸ + 221·(4607 + q_E)·2⁻¹²⁸ + (q₅ + 1)·2⁻¹²⁸`-close to the
+    simulator against a distinguisher that reads the `H₃`, `H₅` and cipher tables adaptively at
+    `q₃`, `q₅`, `q_E` keys. Left open there: (a) the distinguisher does not read `H₂³`; with that
+    access the simulator must program `H₂³` at the proof's grinding points (`simulateRO`), which
+    needs the programmed points, computed from the output, to be the prover's through the hybrids
+    after H4 (the verifier's recomputation of `chal2 ‖ qs_check ‖ ã` from the ideal-tape proof) and
+    the programmed answers carried through `proveIdeal_close`; (b) `proveE` uses `E` only for the
+    hidden part of the commitment: the public recomputation (the opened subtrees, inside the
+    ideal-tape prover) and the executable grinding prefix use AES, so `proveE E` is a real prover
+    only at `E = AES` (a fully cipher-parametric prover would need `BAVC.reconstruct` and the
+    verifier's VOLE expansion parametrized, and would add their reads, at most `4607` keys, to
+    `q_E`); (c) the multi-proof terms (`ε_iv`, two proofs sharing `rho`, `ε_prog`); (d) the
+    privacy corollaries: `Privacy.ZeroKnowledge` quantifies over all distinguishers of the proof
+    alone, so the `*_shake` theorems still take the fixed-record `HopHyps`; PomFRIT's two-phase
+    prover is not composed. The PRP/PRF switching term and the modelling steps (SHAKE as a random
+    oracle, AES as an ideal cipher) remain.
 - **Deterministic hypotheses**, per statement and witness (`ZKHyp`, `RunHyp`): the statement's
   evaluator is a system of degree `≤ d`, `1 ≤ d`, that the witness satisfies for every `chal1` and
   combination (for PomFRIT, for every instance the continuation picks: `RunHyp2`); `N_MASK ≤ 32`;
