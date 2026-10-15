@@ -461,7 +461,11 @@ and affords the amount, else it is refused for both (feasibility is leakage).
   proof systems with bounded reads) and `unlinkabilityRO_lean` (the Lean prover, SHAKE, AES as an
   ideal cipher): any two worlds differ by at most
   `8·εRO(q₃, q₅ + 3·624, q_E + 3·4607) + 2·δI₁ + Σ_w (δS₁ w + δS₂ w) + 2·εhide`, with the explicit
-  programming-collision terms `δ` (bounded on paper in zk.md §10.2). The simulated world is
+  programming-collision terms `δ`, bounded in Lean (`lean/VoleMole/Privacy/RatatouilleDelta.lean`,
+  zk.md §10.2): `δI₁ ≤ noHitProb + 2⁻¹⁰²⁴`, `δS₁ ≤ 2⁻¹¹⁰ + εRO(0, 312, 4607) + noHitProb +
+  2·2⁻¹⁰²⁴`, `δS₂ ≤ … + 3·2⁻¹⁰²⁴`, so **`unlinkabilityRO_lean_num`**: any two worlds differ by at
+  most `8·εRO(q₃, q₅ + 1872, q_E + 13821) + 4·(2⁻¹¹⁰ + εRO(0, 312, 4607)) + 6·noHitProb +
+  12·2⁻¹⁰²⁴ + 2·εhide` (about `2⁻¹⁰²` plus the budget terms). The simulated world is
   `Ratatouille.view` for an Issuer that also sees the tables, programmed as a function of the
   requests it sees and the simulator coins (`Vtab`, `simGameR_iff`), so `simGame_iff`,
   `stage_ideal` and `idealGame_iff` are reused unchanged, with the coins and tables fixed in the

@@ -45,8 +45,8 @@ simulated ones (simulated proofs do not depend on the tables). Each hop costs
 * **a programming collision term** `δ`: the probability that the proof being replaced, run for
   real, reads `H₂³` differently on the tables the earlier simulations programmed than on the
   original ones (`δI₁`, `δL`, `δR`; the first hop has none). These are explicit probabilities of
-  the game; bounding them needs the unpredictability of a real proof's grinding prefix (on paper:
-  `lean/docs/zk.md` §10.2).
+  the game, bounded in `Privacy/MoussakaDelta.lean` (`deltaI1_le`, `deltaL_le`, `deltaR_le`,
+  `anonymityRO_lean_num`; `lean/docs/zk.md` §10.2).
 
 Then the view is a function of the commitments, the nullifiers, the simulator coins and the
 tables (`hviewRO`, `simGameRO_iff`); hiding (`hidingAdv` for the reduction `reductionRO` with the

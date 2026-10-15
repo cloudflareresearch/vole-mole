@@ -774,8 +774,19 @@ single-proof bound of `zk_rom_ic_h23_num`, at the budget of the reductions (each
 proofs for real, `624` `H₅` and `4607` cipher reads each, and applies the earlier simulations'
 `H₂³` programming, `312` and `4607` reads each). The `δ` are explicit programming-collision
 probabilities of the hybrids (a real proof reads `H₂³` at a point an earlier simulation
-programmed); on paper `δI₁ ≤ 2⁻¹⁰²⁴ + noHitProb` and each redemption's
-`δ ≤ εRO + 2⁻¹⁰²³ + 2·noHitProb` (zk.md §10.2), not mechanized. Restrictions of the model: the
+programmed), bounded in Lean (`lean/VoleMole/Privacy/MoussakaDelta.lean`, `ZK/CollideRO.lean`,
+zk.md §10.2): `δI₁ ≤ noHitProb + 2⁻¹⁰²⁴` (`deltaI1_le`), `δL b ≤ 2⁻¹¹⁰ + εRO(0, 312, 4607) +
+noHitProb + 2·2⁻¹⁰²⁴` and `δR b ≤ … + 3·2⁻¹⁰²⁴` (`deltaL_le`, `deltaR_le`: the redemption
+statement may depend on the simulated requests' `ã`, so the bound applies zero knowledge a second
+time, to "the recomputed prefix's last `128` bytes are among the earlier simulations' `ã`"). So
+**`anonymityRO_lean_num`**:
+
+    |Pr[W₀] − Pr[W₁]| ≤ 8·εRO(q₃, q₅ + 1872, q_E + 13821) + 4·(2⁻¹¹⁰ + εRO(0, 312, 4607))
+                        + 6·noHitProb + 12·2⁻¹⁰²⁴ + 2·εhide,
+
+about `2⁻¹⁰²` plus `8·(q₃ + q₅ + 221·q_E)·2⁻¹²⁸` and `2·εhide` (`noHitProb ≤ 2^{−2¹⁵}`). The
+earlier paper bound for a redemption (`εRO + 2⁻¹⁰²³ + 2·noHitProb`) missed the `Δ' = 0` part of
+the grinding failure (`Pr[GrindBad] ≤ 2⁻¹¹⁰` instead of `noHitProb`). Restrictions of the model: the
 adversary's interaction (contexts, keys, responses, Anchor Sets, digests) does not read the
 tables, only its guess does (the zero-knowledge theorem is for statements fixed before the
 tables); the four `H₃` slices are independent (exact unless two proofs share `(μ₁, wPrefix)`,
