@@ -126,6 +126,9 @@ import VoleMole.ZK.TwoPhaseHops
 import VoleMole.ZK.HopsROM
 import VoleMole.ZK.HopsRead
 import VoleMole.ZK.HopsH6
+import VoleMole.ZK.IdealCipher
+import VoleMole.ZK.HopsH4
+import VoleMole.ZK.HopsH4Ideal
 import VoleMole.ZK.Interp
 import VoleMole.Spec.PomFRITLayout
 import VoleMole.Privacy.PomFRITLean

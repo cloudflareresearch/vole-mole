@@ -25,7 +25,10 @@ assumption per hop, each a `Close` bound on a small explicit experiment, by the 
   to uniform (`hiddenIdeal`: the seed slots past the `openCount Δ` opened ones are zero, as in the
   real opening). It depends only on AES and the parameters (no hash): PRG/GGM security with AES as
   an ideal cipher or PRP, the inputs of the four roles being distinct
-  (`Bridge.ctrBlock_ne_of_roles`). An assumption.
+  (`Bridge.ctrBlock_ne_of_roles`). An assumption for the fixed AES; with the cipher a uniform table
+  (uniform-function rows) it holds with `221·4607·2⁻¹²⁸`, and `≤ 221·(4607 + q)·2⁻¹²⁸` against a
+  distinguisher that reads the table at `q` keys (`hideHypIC_holds`, `hide_rom_query`,
+  `ZK/HopsH4Ideal.lean`).
 * **H6** (`LabHyp`, `ε_lab`): on a uniform tape, filling in the `H₅` answers at the sibling labels
   the tape determines (`fillSib`) is close to leaving them uniform, through the ideal-tape prover.
   In the ROM the gap is the probability that a sibling input is read (`lab_rom`), at most

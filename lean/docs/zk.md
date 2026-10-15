@@ -757,7 +757,9 @@ simulated proof cannot depend on `r`, while the test for the real `r` accepts ev
   and independent coins) is in Lean (§4.1); for the patched layout, the per-query count is
   (`card_query_hits_sibling_responses`), and for the executable prover the union over adaptive
   `H₅` queries is mechanized with `H₅` a uniform table (§10.1, `lab_rom_query`);
-- the PRP/GGM hiding (H4/H8, imported from spec Lemma 10.24);
+- the PRP/GGM hiding of H8 (spec Lemma 10.24), and for H4 the PRP/PRF switching of the hidden
+  paths' rows and the step from AES to an ideal cipher (H4 itself is mechanized in the
+  ideal-cipher model with uniform-function rows, §10.1, `hide_rom_query`);
 - the completeness identities (H3) for the models (for the executable prover: §10.1);
 - the identification of the Lean model with the C++ (§7.1, by inspection);
 - the claim that `rank F ≤ λ < n_mult` makes the attack's test sound on `main`. `n_mult` is
@@ -785,6 +787,7 @@ which the random-oracle ones are proved with the hashed domain a uniform table:
 | **The random-oracle hops, with the hashed domain a uniform table** on the inputs the hop reads (`Hashes.withTable`): H1 holds with `ε = 0`, and `≤ q₃·2⁻¹²⁸` against a distinguisher that reads the `H₃` table at `q₃` inputs; grinding holds with `ε = 0`, and programming `H₂³` at the grinding points (as `simulateRO`) is perfect also for a distinguisher that reads the table; H6 is identical until a sibling input is read, for every run that reads the `H₅` table on a known set. Generic: a uniform table's answers at distinct points are uniform; programming is a bijection; identical until a programmed point is read | `h3_rom`, `h3_rom_query`, `grind_rom`, `grind_rom_program`, `lab_rom` (`ZK/HopsROM.lean`); `Privacy.close_restrict`, `pr_program_eq`, `abs_pr_hidden_le`, `abs_pr_hidden_one_le` (`Privacy/Hybrid.lean`) | H1, H2, H6 |
 | **What the prover reads.** The grinding prefix (step 1 at the seed and `iv_pre`, then `chal2 ‖ qs_check ‖ ã`) is the same for any two hash records that agree off `H₂³`, so with `H₂³` a table the grinding hops hold for the prover's own prefix computed with the table. The ideal-tape prover reads `H₅` only at the active gate inputs `iv ‖ e ‖ L_e(q) ‖ 5` (the verifier's: `c_mult`'s forced gate hashes, `L(q ⊕ Δ·u) = L(q) ⊕ γ_e·u_pre`, and the CRT reconstruction's); the sibling input is `iv ‖ e ‖ (L_e(q) ⊕ u_pre) ‖ 5`, and a gate input determines its gate and offset | `realPre_pendAt_congr`, `grind_rom_prover`, `grind_rom_program_prover`, `proveIdeal_h5_congr`, `labelOf_tagCols`, `forcedInput_eq`, `siblingInput_eq`, `gateInputsOff_getD_inj` (`ZK/HopsRead.lean`); `sibInput_eq` (`ZK/HopsH6.lean`) | H2, H6 |
 | **H6 in the ROM with oracle access**: with `H₅` a uniform table on the sibling inputs and dedicated label rows, the H6 hop costs `≤ (q₅ + 1)·2⁻¹²⁸` against every distinguisher of the proof and the table that reads the table at `q₅` keys (chosen adaptively). The prover reads a sibling input only if `u_pre = 0`; a query is one only if `u_pre` equals the query's guess, a function of the shared tape and the proof's fields; `u_pre` is the label-row pad `Θ` (injectively), uniform and independent of them (`upush_fieldsOf`, as for `prove_guess_theta`) | `lab_rom_query`, `lab_rom_hyp`, `pr_bad_le`, `bad_mem_guesses`, `uPre_eq_thetaW`, `thetaW_injective` (`ZK/HopsH6.lean`) | H6 |
+| **H4 in the ideal-cipher model** (the cipher a uniform table `E`, key ↦ row, the rows uniform functions: the PRF view of an ideal cipher; the BAVC rebuilt proof-only with the cipher as a parameter, `hiddenOutE`, equal to the executable `hiddenOut` at `E = AES`): the GGM hybrid replaces the rows of the nodes on the hidden paths (at most `τ·13 = 221`) by independent uniform rows, one node at a time in heap order, at `(4607 + q)·2⁻¹²⁸` each (the node's value is uniform and is used only as a key; the two experiments differ only if it is the key of one of the other `2L − 1 = 4607` nodes or of one of `A`'s `q` table queries; programming the table at it is perfect); with all of them replaced, the hidden part reads the new rows at distinct points (four tweak roles, counters, distinct opened nodes) and is exactly the ideal hidden part (commitments and seeds are the values, each `u^{(i)}` is the opened leaves' part XOR the hidden leaf's blocks, `u_hi` a truncation). Bound `221·(4607 + q)/2¹²⁸` against a distinguisher of the hidden part and the table that reads the table at `q` keys; `HideHypIC p (221·4607/2¹²⁸)` | `hiddenOutE`, `hiddenOut_eq`, `prg_eq_prgR`, `keyAt_aes`, `xIn_sib`, `hidOfRows_point`, `hide_puncture`, `hidSet_card` (`ZK/HopsH4.lean`); `IC.rowAt`, `IC.hop`, `IC.puncture`, `IC.pr_mem_reset_le`, `IC.rowAt_congr_points` (`ZK/IdealCipher.lean`); `pts_injective`, `fold_xor_diff`, `p5F_injective`, `final_close`, `exper_final`, `hide_rom_query`, `HideHypIC`, `hideHypIC_holds` (`ZK/HopsH4Ideal.lean`) | H4 |
 | **BAVC completeness**: the prover's opening at any `Δ` reconstructs its leaf keys off the hidden leaves and its commitments (the walks as folds over the node index; opened nodes, placement, top-down derivation) | `Bridge.bavcComplete` (`Verifier/Bridge/BAVCComplete.lean`) | H3 |
 | **CRT completeness**: the verifier's CRT masks are `ṽ_mask + u_mask·Δ'` for every `Δ` (gate labels `L^{γ_e}`, `c_mult` read back, `r̃` bilinear, and the tables' bilinear identity `L_c(a) = a·W_crt[c]`, checked in the kernel on all `120 · 128` basis pairs) | `Bridge.crtComplete`, `Bridge.crt_core`, `CrtCheck.Lc_eq`, `CrtCheck.crtCheck_eq` (`Verifier/Bridge/CrtComplete.lean`, `CrtCheck.lean`) | H3 |
 | The privacy theorems with the Lean prover: Moussaka issuer hiding/unlinkability, Ratatouille unlinkability | `Privacy.Moussaka.anonymity_lean`, `Privacy.Ratatouille.unlinkability_lean` (`Privacy/LeanProver.lean`) | — |
@@ -820,13 +823,19 @@ equation `prove = proveIdeal ∘ tapeOf` (all pass), the simulator with the prog
     computed with the table (`grind_rom_prover`, `grind_rom_program_prover`). Modelling steps left:
     the domain is a random oracle (SHAKE128, with L0's domain separation, `ROM/DomainSep.lean`), and
     the lazy oracle restricted to the hop's inputs is the table.
-  - **H4** (`HideHyp`, `ε_bavc`, §3's `ε_hide`): assumed. It names only AES and the parameters: for
-    every `iv` and `Δ`, the hidden part of a commitment from a uniform root seed is close to
-    uniform (spec Lemma 10.24: GGM, leaf commitments and leaf PRGs with AES as an ideal cipher or
-    PRP, the four roles' inputs distinct, `Bridge.ctrBlock_ne_of_roles`). The executable AES is
-    not parametrized by a cipher, so neither the ideal-cipher model nor the GGM hybrid over the
-    `τ` hidden paths is instantiated (`Close.pi` gives the `τ·ε` composition for per-path
-    hypotheses).
+  - **H4** (`HideHyp`, `ε_bavc`, §3's `ε_hide`): proved in the ideal-cipher model, with the
+    cipher a uniform table of uniform-function rows (`ZK/IdealCipher.lean`, `ZK/HopsH4.lean`,
+    `ZK/HopsH4Ideal.lean`): `HideHypIC p (221·4607·2⁻¹²⁸)` (`hideHypIC_holds`, averaged over the
+    table, for every `iv` and `Δ`) and `≤ 221·(4607 + q)·2⁻¹²⁸` against a distinguisher that also
+    reads the table at `q` keys (`hide_rom_query`), for parameters with fewer than `2³²` blocks
+    per PRG call (`SmallParams`, `smallParams_of_le`). The BAVC is rebuilt proof-only with the
+    cipher as a parameter (`hiddenOutE`), and is the executable commitment at `E = AES`
+    (`hiddenOut_eq`). Modelling steps left: AES is an ideal cipher; its rows are permutations,
+    not functions (the PRP/PRF switching term for the hidden paths' rows, about
+    `221·B²·2⁻¹²⁹` with `B` the blocks read per row, at most `2 + VOLE_COL_BLOCKS`, is on paper;
+    so are inverse queries); and, as for the ROM hops, the result is for its own table, while
+    `tape_close_of_hops` composes `HideHyp` for the fixed AES (the executable prover is not
+    parametrized by a cipher, so the ideal-cipher version is not plugged into the tape hypothesis).
   - **H6** (`LabHyp`, `ε_lab`): proved in the ROM with §3's bound for one proof: with `H₅` a
     uniform table on the sibling inputs and dedicated label rows, `ε_lab ≤ (q₅ + 1)·2⁻¹²⁸` against a
     distinguisher that reads the table at `q₅` keys, adaptively (§3's `Q₅ + n_mult·Q_V + Q_P` with
