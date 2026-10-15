@@ -7,6 +7,7 @@ if get_option('tests')
   tests = [
     ['ecdsa-pok', 'ecdsa_pok/test_ecdsa_pok.cpp'],
     ['ecdsa-pok-hk', 'ecdsa_pok/test_ecdsa_pok_hk.cpp'],
+    ['ecdsa-pok-rr', 'ecdsa_pok/test_ecdsa_pok_rr.cpp'],
     ['ecdsa-pok-sha256', 'ecdsa_pok/test_sha256_circuit.cpp'],
     ['keccak', 'keccak/test_keccak.cpp'],
     ['moussaka-issue', 'moussaka/test_issue.cpp'],
@@ -58,6 +59,7 @@ if get_option('benchmarks')
   benchmarks = [
     ['ecdsa_pok', 'ecdsa_pok/bench_ecdsa_pok.cpp'],
     ['ecdsa_pok_hk', 'ecdsa_pok/bench_ecdsa_pok_hk.cpp'],
+    ['ecdsa_pok_rr', 'ecdsa_pok/bench_ecdsa_pok_rr.cpp'],
     ['moussaka', 'moussaka/bench_moussaka.cpp'],
     ['mq', 'mq/bench_mq.cpp'],
     ['pomfrit', 'pomfrit/bench_pomfrit.cpp'],
