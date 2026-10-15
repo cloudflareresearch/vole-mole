@@ -23,7 +23,7 @@ Line references are `file:line` at `6d7113e`.
 | **Balance** (no inflation): accepted spends ≤ issued + refunded, against adaptive malicious clients, honest clients present | **Proved** (Thm 1), classical | `ε_ext + Adv^{uf-tag} + q_K²·2^{−257}` |
 | **No theft**: an adversary cannot spend an honest client's credits through a request it did not copy verbatim | **Proved** (Thm 3), using weak SE and a ZK hop | `ε_ZK + ε_SE + q_K·2^{−127}` |
 | **No theft by copying** (hijack): anyone who obtains a spend request can redeem it first | **Fails** (F2). Nothing binds a spend to a session, unlike {{ACT}}'s `ctx_spend` and Moussaka's `challenge_digest` | — |
-| **Unlinkability/anonymity** against a malicious Issuer: spends and issuances leak only `(pk, ctx_iss, T_init, d)` and whether the client could afford the spend | **Proved** (Thm 2). On `main` it relies on Keccak one-wayness in `r`; with the fix it is standard NIZK | `ε_ZK + q_K·2^{−127}` |
+| **Unlinkability/anonymity** against a malicious Issuer: spends and issuances leak only `(pk, ctx_iss, T_init, d)` and whether the client could afford the spend | **Proved** (Thm 2). On `main` it relies on Keccak one-wayness in `r`; with the fix it is standard NIZK. [Lean] a two-round left/right form, from ZK and hiding hypotheses (`Privacy/Ratatouille.lean`) | `ε_ZK + q_K·2^{−127}` |
 | **Correctness** of issuance, spends, refunds and the 64-bit edge cases | **Proved** (Thm 4); arithmetic checked in Lean | prover abort `≤ (1−p)^{2³²}` |
 | **Refund integrity**: refunds are bound to their state and cannot be moved or altered | Proved, as part of Thm 1 and Thm 3 | — |
 | **Key separation across protocols** | **Fails if a key is shared with PomFRIT**: unbounded minting (F1, demonstrated) | — |
@@ -420,6 +420,37 @@ In H3 every message is a function of `ℒ` and fresh randomness. The values that
 state are `t`, `x`, `r`, `s`, `nf'`, `t'` and `r'`. Of these, `s` and the refund `x` reach the
 adversary only as witnesses of simulated proofs. So H3 is the ideal world. ∎
 
+**[Lean] `lean/VoleMole/Privacy/Ratatouille.lean`.** A left/right form of N3 on
+`Spec/Ratatouille.lean`'s `issueRequestWithSeed`, `finalizeIssue`, `spendRequestWithSeed` and
+`finalizeSpend`, with the seed XOF's outputs drawn uniformly (H1 is on paper;
+`issueRequestWithSeed_eq`, `spendRequestWithSeed_eq`). A malicious Issuer (any key, context,
+responses, refunds and amounts) issues a token worth `T_init` to each of two Clients; in round 1
+Client `b₁` spends `d₁` and finalizes its change token; in round 2 Client `b₂` spends `d₂` from its
+current token (the change token if `b₂ = b₁`). A round runs only if every candidate token is valid
+and affords the amount, else it is refused for both (feasibility is leakage).
+- H2, one proof at a time: `issue_close`, `spend_close`, from zero knowledge as the hypothesis
+  `Privacy.ZeroKnowledge` (including the grinding abort; the distinguisher may know the witness).
+  **On `main` no efficient simulator satisfies this per-proof hypothesis** (a distinguisher that
+  knows `r = w[0..16)` runs the test of `lean/docs/zk.md` Prop. 4.1); there the (PU) argument above
+  replaces it and is on paper. With the label-row fix it is `lean/docs/zk.md`'s
+  theorem.
+- After H2, `simGame_iff` (from `view_map`): the spec world is a *public* world whose tokens hold
+  `(nf, t, x, s)` and the commitment the Client sent, with no opening.
+- H3: `hiding_hop`, with `ε_hide^K` as the hypothesis `hidingAdv ≤ εhide` for the explicit
+  reduction (the four honest commitments, each evaluated at the credit value the run produces, and
+  their nullifiers).
+- In the ideal world the four worlds `(b₁, b₂)` have the same distribution exactly
+  (`idealGame_eq`): each spend reveals a nullifier that appears nowhere else.
+- `unlinkability`: any two worlds differ by at most `4εI + 4εS + 2εhide`. So a spend is unlinkable
+  to its issuance (`b₁`) and to an earlier spend of the same Client through the change token
+  (`b₂ = b₁` against `b₂ ≠ b₁`).
+
+**A precision found while mechanizing H3.** "The client still finalizes against the commitment
+string it sent" is not enough on its own: before its next spend the Client checks its token with
+`Com` recomputed from the opening (`ratatouille.cpp:221`, `TokenS.Valid`), and in H3 that check
+would fail for the uniform string. The hybrid Client must check validity against the commitment
+it sent; before H3 the two checks coincide (`simGame_iff`).
+
 **`main` versus the fix.**
 - **`main`.** lean/docs/zk.md's generic form `ε_lab = (Q₅ + n_mult·Q_V)·Pred_R + Q_P·2^{−128}` with
   `Pred_R ≤ (q_K + 1)·2^{−128}` is a product of query counts, and it is vacuous at
@@ -618,5 +649,8 @@ and determinism of `Tag`. The witness satisfies V3 by `change_correct`. ∎
 - Thm 3 uses SE in the classical model only. N2b (copying) is not provided at all (F2).
 - The UF-Tag reduction counts `q_T ≤ q_K` Tag inputs. Issuer aborts in `DerivePreimage` are
   treated as negligible.
+- Unlinkability (N3) is mechanized as a two-round game in `lean/VoleMole/Privacy/Ratatouille.lean`
+  (§6), with zero knowledge and hiding as hypotheses; H1 and the general adaptive schedule (any
+  number of Clients and spends) are on paper.
 - The Lean file covers the accounting and the 64-bit arithmetic only. Extraction, binding and
   forgery are paper arguments.

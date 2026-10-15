@@ -36,7 +36,7 @@ Contents:
 | One-more unforgeability, per issuance context (Thm 1) | **Yes** | `ε_ext^iss + ε_ext^red + ε_dig + Adv^bind_Com + K·Adv^ct-uf_UOV,Com` | PoK (extraction README), binding of `Com`, chosen-target unforgeability of UOV on `Com`-images (implied by one-more-UOV, heuristically) |
 | One nullifier per signed commitment; double-spend detection (Cor 2) | **Yes**, if the Moderator keeps one record per `(ctx_iss, ctx_red)` across all Anchor Sets (`moussaka.hpp:141-146`) | as Thm 1 | as Thm 1 |
 | Redemption non-malleability: no redirect to another `challenge_digest`, Anchor Set or `ctx_red` (Thm 3) | **Yes** | `ε_SE^red + Adv^bind + K·Adv^ct-uf + U·Adv^ow-r + ZK hops` | weak SE (L8), plus the above, plus one-wayness in `r` |
-| Issuer hiding and unlinkability vs a Moderator **colluding with all Anchors**, with adversarial keys (Thm 4a) | **Yes, computationally** | `2·ε_ZK^joint + 2·Adv^hide_Com + 2^{−192}` | ZK (lean/docs/zk.md), hiding of `Com` |
+| Issuer hiding and unlinkability vs a Moderator **colluding with all Anchors**, with adversarial keys (Thm 4a) | **Yes, computationally**; [Lean] from uniform seed outputs (`Privacy/Moussaka.lean`, `anonymity`) | `2·ε_ZK^joint + 2·Adv^hide_Com` (the `2^{−192}` is not needed, §6) | ZK (lean/docs/zk.md), hiding of `Com` |
 | The same vs a Moderator that sees no issuance (Thm 4b) | **Yes**, with no Keccak assumption | `2·Σ ε_ZK^red` with `Pred = 2^{−128}` | ZK only |
 | Issuer hiding under a Moderator-chosen Anchor Set | **Only relative to the Anchors in the set that are honest and in common use** (§7) | n/a | Anchor-Set consistency outside the library |
 
@@ -479,6 +479,41 @@ mode `Pred = 2^{−128}`, because `r` is independent of `A`'s view.
 *Proof (b).* As in (a), but `A` never sees `t₀` and `t₁`. After the hop, the nullifiers are
 independent uniform strings in both worlds. No Keccak assumption is used. ∎
 
+**[Lean] `lean/VoleMole/Privacy/Moussaka.lean`, Theorem 4(a).** The game above on
+`Spec/Moussaka.lean`'s `issueRequest`, `finalizeIssue` and `redeemRequest`, with the seed XOF's
+outputs `(nf, r, ρ_iss)` and `ρ_red` drawn uniformly (`issueRequest_eq`, `redeemRequest_eq`), any
+Client-side index rule `idx`, and the refusal rule above (`allOk`).
+- Step 1, one proof at a time: `issue_close`, `redeem_close`, from zero knowledge as the hypothesis
+  `Privacy.ZeroKnowledge` (simulator from the statement; `ε`-close for every statement and valid
+  witness, against distinguishers that may know the witness). **On `main` no efficient simulator
+  satisfies this per-proof hypothesis** (a distinguisher that knows `r = w[0..16)` computes Θ and
+  runs the test of `lean/docs/zk.md` Prop. 4.1); there the joint (PU) hop over the four proofs
+  replaces it and stays on paper. With the label-row
+  fix it is `lean/docs/zk.md`'s theorem.
+- Steps 2–3: `simGame_iff`: with all proofs simulated, the view is a function `hview` of
+  `t₀, t₁`, the nullifiers and the simulator coins; `r` enters nothing else.
+- Step 4: `hiding_hop`, with `Adv^hide_Com` as the hypothesis `hidingAdv ≤ εhide` for the explicit
+  reduction `reduction` (the adversary with the simulator coins fixed). After it the worlds
+  coincide exactly (`idealGame_eq`).
+- `anonymity`: `|Pr[A accepts | b = 0] − Pr[A accepts | b = 1]| ≤ 4εI + 4εR + 2εhide`, the
+  `2·ε_ZK^joint + 2·Adv^hide_Com` of Theorem 4(a) with `ε_ZK^joint` taken as the sum of the four
+  per-proof errors.
+
+Remarks from the mechanization:
+- **The `2^{−192}` term of Theorem 4(a) is not needed.** After the hiding hop the two revealed
+  nullifiers are a fresh independent pair in either order, which is exchangeable whether or not
+  they collide.
+- **Theorem 4(b) misses an abort term.** An honest Anchor's `DerivePreimage` fails on a fixed set
+  of targets, and success is a function of `t_c = Com(nf_c, …, r_c)`. Conditioned on both
+  issuances succeeding, `(nf₀, nf₁)` need not be exactly uniform, and with `pk⁰ ≠ pk¹` their
+  conditional laws can differ, so (b) holds up to about `2·Pr[DerivePreimage fails]` (negligible:
+  256 vinegar retries). Bounding that probability needs some statement about `Com`'s outputs, so
+  "no Keccak assumption" is not quite exact. (b) is not mechanized.
+- `Spec.Moussaka.finalizeIssue` accepts a response of any length (in C++, `s` is a 119-byte
+  `std::array`), so the spec admits tokens with `|s| ≠ 119`, for which `redeemRequest` would prove
+  a witness outside `RedeemRel`. The game types the adversary's responses as 119 bytes, as the C++
+  does. Harmless for the C++; noted for the spec.
+
 **What the bounds mean.**
 - *Issuer hiding* is (a) or (b) with `pk⁰ ≠ pk¹` and one redemption. The Moderator, even colluding
   with all Anchors and choosing the other keys, cannot tell whose token it sees.
@@ -706,3 +741,8 @@ demo2: adversary token with squatted nf ACCEPTED; honest token then REJECTED (do
   one-hot with entry 1 (§5.2).
 - An `example` showing that the weight constraint alone fails over `GF(2)`.
 - `exists_unsigned_of_card_lt`: the pigeonhole step of Theorem 1.
+
+`lean/VoleMole/Privacy/Moussaka.lean` (Theorem 4(a), §6): `anonymity` (`≤ 4εI + 4εR + 2εhide`
+from per-proof zero knowledge and the hiding of `Com` for the explicit reduction), with the hops
+`issue_close`, `redeem_close`, `simGame_iff`, `hiding_hop`, `idealGame_eq`. `#print axioms`:
+`propext`, `Classical.choice`, `Quot.sound`.

@@ -31,7 +31,7 @@ Line references are to the working tree at commit `6d7113e`.
 |---|---|---|---|
 | One-more unforgeability (paper Def. 2.5), classical ROM + ideal cipher | **Holds.** Tight under a τ-shift variant of UOV one-more preimage resistance (Thm U2). Under the paper's standard assumption (Def. 3.1) the reduction loses an extra `(Q₃+ℓ+1)·2^{−71}` (Thm U1) | Same (ZK is not used) | §5–§6 |
 | One-more unforgeability, QROM | **Open.** The reduction needs a first-phase extractor *during* the run; Q2 extracts only after the run | Same | §7 |
-| Blindness against a malicious Issuer (paper Def. 2.4: malicious key, selective-failure form) | **Fails.** An honest-but-curious Issuer links with advantage ≈ 1 using about 310 SHAKE calls per (signature, session) pair (`lean/docs/zk.md` §4) | **Holds** (Thm B), with advantage `≤ ε_ZK^fix(Q_P = 2) + 2Q_X·2^{−256}` | §8 |
+| Blindness against a malicious Issuer (paper Def. 2.4: malicious key, selective-failure form) | **Fails.** An honest-but-curious Issuer links with advantage ≈ 1 using about 310 SHAKE calls per (signature, session) pair (`lean/docs/zk.md` §4) | **Holds** (Thm B), with advantage `≤ ε_ZK^fix(Q_P = 2) + 2Q_X·2^{−256}`; [Lean] from G1, with (ZK-fix) as a hypothesis (`Privacy/PomFRIT.lean`) | §8 |
 | No selective failure via `finalize_issue`'s check (`pomfrit.cpp:207`) | Holds: the abort event is a function of the Issuer's own view | Holds | §8.3 |
 | Message binding; no re-targeting of a signature | Holds (part of unforgeability; L8 §7) | Holds | §9.1 |
 | Third parties cannot maul a signature (strong SE) | Holds against parties who never saw the request `t` | Holds against everyone, the Issuer included | §9.2 |
@@ -445,11 +445,34 @@ abort pattern revealed per session:
 
   So the joint distribution does not depend on `b`. ∎
 
+**[Lean] `lean/VoleMole/Privacy/PomFRIT.lean`.** G1 → G3 on `Spec/PomFRIT.lean`'s `issueRequest`
+and `finalizeIssue`, with `XOF_seed`'s output drawn uniformly (`issueRequest_eq`):
+- (ZK-fix) is the hypothesis `ZeroKnowledge P S ε`: a two-phase simulator (`phase1` from the
+  binder, `phase2` from the instance `(pk, h)` chosen after phase 1) whose run is `ε`-close to the
+  real run for every prefix `r`, binder and continuation picking `(pk, h, s, b₂)` with
+  `P(s) = h ⊕ r`. The distinguisher may know `r` and `s`. **This hypothesis is false on `main`**:
+  `ZK.issuerGuess_eq`, `ZK.pomfrit_issuer_hits`, `ZK.pomfrit_attack_test` (`lean/docs/zk.md`
+  §4.1); it is what the label-row fix provides.
+- G1 → G2 per session: `sessionClose_real_sim` (whatever the Issuer answers). G3 exactly, with no
+  assumption: `simGame_eq` (the one-time pad `t = h ⊕ r`, then exchanging the two sessions'
+  simulator coins and refreshers).
+- `blindness`: `|Pr[A accepts | b = 0] − Pr[A accepts | b = 1]| ≤ 4ε`, i.e. `|Pr[b' = b] − 1/2| ≤ 2ε`,
+  for every Issuer (key, messages, responses). The signatures are revealed only if both sessions
+  complete; the Issuer computes the per-session abort pattern itself. The only other hypothesis is
+  that phase 1 outputs a `PROOF_BYTES` buffer (`Correct.voleGen_length`).
+- On paper: G0 → G1 (`2Q_X·2^{−256}`, Lemma DS) and (ZK-fix) itself.
+
 ### 8.3 Selective failure, the response `s`, and the check at `pomfrit.cpp:207`
 
 - **Abort.** `finalize_issue` returns `nullopt` iff `pk.eval(s) ≠ t`. The Issuer knows `pk`, `s`
-  and the `t` it received, so it can compute the outcome itself. Revealing per-session aborts
-  therefore leaks nothing, and Def. 2.4's "both ⊥" rule is not even needed.
+  and the `t` it received, so it can compute the outcome itself. Revealing per-session aborts, in
+  session order, therefore leaks nothing.
+  - **Correction (found while mechanizing Theorem B):** an earlier version of this note said that
+    Def. 2.4's "both ⊥" rule is then not needed. It is needed. Without it the Issuer answers one
+    session correctly and the other with garbage, and the single signature it receives is on
+    `µ_b` (it verifies only for its own message, §9.1), which reveals `b`. What leaks nothing is
+    the abort pattern in session order; the signatures must be withheld unless both sessions
+    complete, as in `Privacy/PomFRIT.lean`'s `outcome`.
   - Other aborts are not influenced by the Issuer, and their probability does not depend on `b`:
     - grinding overflow, `std::runtime_error`, probability `≈ (1−p)^{2^{32}}`, reproduced exactly
       by the simulator (`lean/docs/zk.md` `ε_abort = 0`);
@@ -614,3 +637,5 @@ dedicated to PomFRIT.
 | Disjoint `S, T` with `Σ_S ≤ Σ_T` ⇒ `Σ_S ≤ 57` | `minority_weight_le` |
 | Minority prefix group ⇒ `|A| ≤ 2^{57}` | `minority_card_le` |
 | `2^{57}/2^{128} ≤ 2^{−71}`; loss at `2^{50}`, `2^{64}` | `per_query_bound`, `loss_at_2_50`, `loss_at_2_64` |
+| Blindness (Thm B, from G1) under (ZK-fix) as a two-phase hypothesis: `≤ 4ε` between the worlds (`lean/VoleMole/Privacy/PomFRIT.lean`) | `blindness` |
+| G1 → G2 for one session; G3 exactly (one-time pad, then a swap of the sessions' simulator coins) | `sessionClose_real_sim`, `simGame_eq` |

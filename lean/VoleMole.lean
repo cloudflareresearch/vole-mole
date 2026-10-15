@@ -92,3 +92,7 @@ import VoleMole.ROM.Verifier
 import VoleMole.ROM.Accept
 import VoleMole.ROM.DomainSep
 import VoleMole.ROM.SingleOracle
+import VoleMole.Privacy.Basic
+import VoleMole.Privacy.PomFRIT
+import VoleMole.Privacy.Moussaka
+import VoleMole.Privacy.Ratatouille
