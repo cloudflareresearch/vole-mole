@@ -124,6 +124,8 @@ import VoleMole.Privacy.LeanProver
 import VoleMole.ZK.TwoPhase
 import VoleMole.ZK.TwoPhaseHops
 import VoleMole.ZK.HopsROM
+import VoleMole.ZK.HopsRead
+import VoleMole.ZK.HopsH6
 import VoleMole.ZK.Interp
 import VoleMole.Spec.PomFRITLayout
 import VoleMole.Privacy.PomFRITLean

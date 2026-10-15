@@ -17,7 +17,8 @@ assumption per hop, each a `Close` bound on a small explicit experiment, by the 
 * **Grinding** (`GrindHyp`, `ε_grind`; H2's freshness): the `H₂³` answers at the run's `2³²`
   grinding points (`realGrind`, at a prefix that is a function of the seed and `iv_pre`) are close
   to uniform and independent of them. In the ROM it holds with `ε = 0`, and programming the oracle
-  at the grinding points, as the simulator does, is perfect (`grind_rom`, `grind_rom_program`).
+  at the grinding points, as the simulator does, is perfect (`grind_rom`, `grind_rom_program`); the
+  prover's prefix does not read `H₂³` (`realPre_pendAt_congr`, `grind_rom_prover`).
 * **H4** (`HideHyp`, `ε_bavc`: BAVC hiding, `ε_hide` of zk.md §3): for any `iv` and `Δ`, the hidden
   part of a commitment from a uniform root seed (`hiddenOut`: the hidden leaves' commitments, the
   opened seeds, the small VOLEs' inputs `u^{(i)}` on all rows and the root PRG's `u_hi`) is close
@@ -27,7 +28,9 @@ assumption per hop, each a `Close` bound on a small explicit experiment, by the 
   (`Bridge.ctrBlock_ne_of_roles`). An assumption.
 * **H6** (`LabHyp`, `ε_lab`): on a uniform tape, filling in the `H₅` answers at the sibling labels
   the tape determines (`fillSib`) is close to leaving them uniform, through the ideal-tape prover.
-  In the ROM the gap is the probability that a sibling input is read (`lab_rom`).
+  In the ROM the gap is the probability that a sibling input is read (`lab_rom`), at most
+  `(q₅ + 1)·2⁻¹²⁸` against a distinguisher that reads `H₅` at `q₅` inputs (`lab_rom_hyp`,
+  `ZK/HopsH6.lean`).
 
 **`tape_close_of_hops`**: from the four hypotheses (`HopHyps`; and the deterministic `HashesWF`,
 `BAVCComplete`, label rows), the tape hypothesis holds with `ε_rho + ε_grind + ε_bavc + ε_lab`
