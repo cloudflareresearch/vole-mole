@@ -1,0 +1,178 @@
+Use separate VOLE rows for the CRT VOLE masks unless REUSE_CRT_WITNESS
+
+The CRT VOLE masks are derived from garbling-style gate labels, whose offset is the prover's VOLE
+input u on secpar_bits "label rows". The spec reuses the first witness rows, whose correction
+d = u + w is public, so the offset is d + w there. That lets a verifier check a guess for those
+witness bits, and with a correct guess, recover the masks. That is fine for FAEST, whose witness
+starts with its secret key, but not for generic relations.
+
+So by default, use secpar_bits separate rows after the witness. They are corrected and covered by
+the VOLE check like the witness rows, but get no d. This adds (tau - 1) * secpar_bits / 8 bytes per
+proof (256 for FAEST-EM-128f). OWFs whose witness starts with secpar_bits uniform secret bits may
+set OWF_CONSTANTS::REUSE_CRT_WITNESS to keep the spec's layout. FAEST's own OWFs do, so their
+signatures are unchanged.
+
+TODO Propose this change to the faest-arch-opt authors.
+
+diff --git a/constants.hpp b/constants.hpp
+index 91ce2fe..a4ac42d 100644
+--- a/constants.hpp
++++ b/constants.hpp
+@@ -154,6 +154,15 @@ template <secpar S, owf O> constexpr std::size_t compute_owf_num_constraints()
+     return num_constraints;
+ }
+ 
++// OC::REUSE_CRT_WITNESS, or false if unset.
++template <typename OC> constexpr bool owf_reuse_crt_witness()
++{
++    if constexpr (requires { OC::REUSE_CRT_WITNESS; })
++        return OC::REUSE_CRT_WITNESS;
++    else
++        return false;
++}
++
+ } // namespace detail
+ 
+ // Specialization: Constants for the AES-ECB one-way function
+@@ -209,6 +218,9 @@ struct OWF_CONSTANTS<S, O>
+             return 2;
+     }();
+ 
++    // The witness starts with the uniform secret key (see CONSTANTS::REUSE_CRT_WITNESS).
++    constexpr static bool REUSE_CRT_WITNESS = true;
++
+     using block_t = block128;
+ 
+     constexpr static bool valid = true;
+@@ -252,6 +264,9 @@ struct OWF_CONSTANTS<S, O>
+             return 2;
+     }();
+ 
++    // The witness starts with a uniform random prefix, such as an AES key (see CONSTANTS::REUSE_CRT_WITNESS).
++    constexpr static bool REUSE_CRT_WITNESS = true;
++
+     using block_t = block_secpar<S>;
+ 
+     constexpr static bool valid = true;
+@@ -387,11 +402,23 @@ template <typename P> struct CONSTANTS
+     constexpr static std::size_t CRT_NUM_MULT_BYTES = (CRT_NUM_MULT + 7) / 8;
+     constexpr static std::size_t CRT_CMULT_SIZE_BYTES = CRT_NUM_MASK * CRT_NUM_MULT_BYTES;
+ 
++    // The CRT VOLE masks are derived from secpar_bits "label rows". The spec reuses the first
++    // witness rows, which lets a verifier check a guess for those witness bits. So by default, we
++    // use separate corrected rows after the witness instead. Only OWFs whose witness starts with
++    // secpar_bits uniform secret bits should set REUSE_CRT_WITNESS.
++    constexpr static bool REUSE_CRT_WITNESS =
++        detail::owf_reuse_crt_witness<typename P::OWF_CONSTS>();
++    // - Number of separate label rows.
++    constexpr static std::size_t CRT_LABEL_ROWS =
++        P::use_crt_vole_masks && !REUSE_CRT_WITNESS ? P::secpar_bits : 0;
++    // - Index of the first label row.
++    constexpr static std::size_t CRT_LABEL_ROW_OFFSET = CRT_LABEL_ROWS ? QUICKSILVER_ROWS : 0;
++
+     // - Total number of VOLEs needed, including for the QuickSilver masks and the VOLE check.
+     constexpr static std::size_t VOLE_ROWS = []
+     {
+         if constexpr (P::use_crt_vole_masks)
+-            return QUICKSILVER_ROWS + CRT_NUM_MASK * VEC_COM::MAX_USED_K;
++            return QUICKSILVER_ROWS + CRT_LABEL_ROWS + CRT_NUM_MASK * VEC_COM::MAX_USED_K;
+         else
+             return QUICKSILVER_ROWS + VOLE_CHECK::HASH_BYTES * 8;
+     }();
+@@ -401,11 +428,11 @@ template <typename P> struct CONSTANTS
+     // - For version <= 2, we correct the small VOLEs to the same bit for all rows, and then compose
+     //   secpar rows into a VOLE over F_2^secpar for each masking term.
+     // - With the CRT method (for version >= 3), we will only correct VOLES corresponding to the
+-    //   witness bits, but not the additional rows for the masking terms.
++    //   witness bits and separate label rows, but not the additional rows for the masking terms.
+     constexpr static std::size_t VOLE_CORRECTION_ROWS = []
+     {
+         if constexpr (P::use_crt_vole_masks)
+-            return QUICKSILVER_ROWS;
++            return QUICKSILVER_ROWS + CRT_LABEL_ROWS;
+         else
+             return VOLE_ROWS;
+     }();
+@@ -468,6 +495,10 @@ template <typename P> struct CONSTANTS
+                   "VOLE_CORRECTION_ROWS needs to be divisible by 8.");
+     static_assert(VOLE_CORRECTION_ROWS <= VOLE_ROWS,
+                   "We cannot correct more VOLE rows than we have.");
++    static_assert(!P::use_crt_vole_masks ||
++                      CRT_LABEL_ROW_OFFSET + P::secpar_bits <= VOLE_CORRECTION_ROWS,
++                  "The CRT VOLE gate labels must be derived from corrected VOLE rows.");
++    static_assert(CRT_LABEL_ROW_OFFSET % 8 == 0, "The label rows must start at a byte boundary.");
+     static_assert(VOLE_ROWS_PADDED % (128 * VOLE_BLOCK) == 0,
+                   "VOLE_ROWS_PADDED should be padded to a muliple of `vole_block` size");
+     static_assert(VOLE_ROWS_PADDED % TRANSPOSE_BITS_ROWS == 0,
+diff --git a/faest.inc b/faest.inc
+index 1a0dbbd..2f1aaee 100644
+--- a/faest.inc
++++ b/faest.inc
+@@ -361,7 +361,7 @@ bool faest_verify(const uint8_t* pk_packed, const uint8_t* msg, size_t msg_len,
+         // Apply correction
+         const auto d = signature.correction();
+         const auto q = vole_com_data.q();
+-        for (size_t i = 0; i < CP::VOLE_CORRECTION_ROWS; ++i)
++        for (size_t i = 0; i < OC::WITNESS_BITS; ++i)
+         {
+             if ((d[i / 8] >> (i % 8)) & 1)
+                 q[i] = q[i] ^ delta;
+diff --git a/vole_commit.inc b/vole_commit.inc
+index ea392dd..e7d805a 100644
+--- a/vole_commit.inc
++++ b/vole_commit.inc
+@@ -336,6 +336,38 @@ void compute_r_tilde(const block_secpar<P::secpar_v>* __restrict__ vq,
+ 
+ template <typename P> constexpr auto PADDED_N_MULT = ((P::CONSTS::CRT_NUM_MULT + 15) / 16) * 16;
+ 
++// The offset between the two labels of each gate: u on the label rows.
++template <typename P>
++    requires(P::use_crt_vole_masks)
++block_secpar<P::secpar_v> crt_label_offset(const vole_block* __restrict__ u)
++{
++    return block_secpar<P::secpar_v>::load(reinterpret_cast<const uint8_t*>(u) +
++                                           P::CONSTS::CRT_LABEL_ROW_OFFSET / 8);
++}
++
++// The labels G * V or G * Q of the gates, from the label rows of the unlifted VOLE columns.
++template <typename P>
++    requires(P::use_crt_vole_masks)
++void crt_labels(block_secpar<P::secpar_v>* __restrict__ labels,
++                const vole_block* __restrict__ vq_columns)
++{
++    using CP = P::CONSTS;
++    if constexpr (CP::CRT_LABEL_ROW_OFFSET == 0)
++        G_lift_a<P>(labels, vq_columns, CP::VOLE_COL_BLOCKS);
++    else
++    {
++        // Gather the label rows of each column.
++        constexpr size_t STRIDE = (P::secpar_bytes + sizeof(vole_block) - 1) / sizeof(vole_block);
++        std::array<vole_block, P::delta_bits_v * STRIDE> label_columns;
++        for (size_t i = 0; i < P::delta_bits_v; ++i)
++            memcpy(&label_columns[i * STRIDE],
++                   reinterpret_cast<const uint8_t*>(vq_columns + i * CP::VOLE_COL_BLOCKS) +
++                       CP::CRT_LABEL_ROW_OFFSET / 8,
++                   P::secpar_bytes);
++        G_lift_a<P>(labels, label_columns.data(), STRIDE);
++    }
++}
++
+ template <typename P, bool VERIFIER>
+     requires(P::use_crt_vole_masks)
+ void lift_and_hash_vq(
+@@ -361,12 +393,12 @@ void lift_and_hash_vq(
+     [[maybe_unused]] block_secpar<S> u_prefix;
+     std::array<block_secpar<S>, 4> L1;
+     if constexpr (!VERIFIER)
+-        u_prefix = block_secpar<S>::load(u);
++        u_prefix = crt_label_offset<P>(u);
+ 
+     std::array<block_secpar<S>, N_MULT> L0;
+ 
+-    // multiply v or q prefix with G
+-    G_lift_a<P>(L0.data(), vq_columns, CP::VOLE_COL_BLOCKS);
++    // multiply the label rows of v or q with G
++    crt_labels<P>(L0.data(), vq_columns);
+ 
+     // hash the resulting matrix column-wise
+     hash_state_x4 hasher, hasher_copy;

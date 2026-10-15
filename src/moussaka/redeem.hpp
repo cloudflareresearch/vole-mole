@@ -138,6 +138,8 @@ template <>
 struct faest::OWF_CONSTANTS<faest::secpar::s128, vole_mole::moussaka::detail::OWF_MOUSSAKA_REDEEM> {
     constexpr static size_t WITNESS_BITS = vole_mole::moussaka::detail::REDEEM_WITNESS_BITS;
     constexpr static size_t QS_DEGREE = vole_mole::moussaka::detail::REDEEM_QS_DEGREE;
+    // The witness starts with the opening of the commitment, which the Client never reveals.
+    constexpr static bool REUSE_CRT_WITNESS = true;
     constexpr static bool valid = true;
 };
 
@@ -160,6 +162,9 @@ static_assert(RedeemParams::leaf_hash_v == EM128F::leaf_hash_v);
 static_assert(RedeemParams::use_crt_vole_masks == EM128F::use_crt_vole_masks);
 static_assert(RedeemParams::use_v3_hash_inputs == EM128F::use_v3_hash_inputs);
 static_assert(RedeemParams::use_grinding == EM128F::use_grinding);
+static_assert(RedeemParams::CONSTS::REUSE_CRT_WITNESS);
+static_assert(RedeemParams::CONSTS::CRT_LABEL_ROW_OFFSET == 0);
+static_assert(REDEEM_WIT_OFF_R == 0 && R_BYTES >= RedeemParams::secpar_bytes);
 } // namespace check
 
 struct RedeemRelation {

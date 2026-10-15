@@ -277,6 +277,8 @@ struct faest::OWF_CONSTANTS<faest::secpar::s128,
                             vole_mole::ratatouille::detail::OWF_RATATOUILLE_SPEND> {
     constexpr static size_t WITNESS_BITS = vole_mole::ratatouille::detail::SPEND_WITNESS_BITS;
     constexpr static size_t QS_DEGREE = vole_mole::ratatouille::detail::SPEND_QS_DEGREE;
+    // The witness starts with the opening of the commitment, which the Client never reveals.
+    constexpr static bool REUSE_CRT_WITNESS = true;
     constexpr static bool valid = true;
 };
 
@@ -299,6 +301,9 @@ static_assert(SpendParams::leaf_hash_v == EM128F::leaf_hash_v);
 static_assert(SpendParams::use_crt_vole_masks == EM128F::use_crt_vole_masks);
 static_assert(SpendParams::use_v3_hash_inputs == EM128F::use_v3_hash_inputs);
 static_assert(SpendParams::use_grinding == EM128F::use_grinding);
+static_assert(SpendParams::CONSTS::REUSE_CRT_WITNESS);
+static_assert(SpendParams::CONSTS::CRT_LABEL_ROW_OFFSET == 0);
+static_assert(SPEND_WIT_OFF_R == 0 && R_BYTES >= SpendParams::secpar_bytes);
 } // namespace check
 
 struct SpendRelation {

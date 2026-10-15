@@ -64,6 +64,11 @@ constexpr size_t SIG_BYTES = vole_mole::detail::PROOF_BYTES<FaestRelation>;
 constexpr size_t WITNESS_BYTES = vole_mole::detail::WITNESS_BYTES<FaestRelation>;
 static_assert(SIG_BYTES == faest::FAEST_SIGNATURE_BYTES<P>);
 
+// FAEST reuses the first secpar_bits witness bits (its key) for the CRT VOLE masks.
+static_assert(P::CONSTS::REUSE_CRT_WITNESS);
+static_assert(P::CONSTS::CRT_LABEL_ROW_OFFSET == 0);
+static_assert(P::CONSTS::VOLE_CORRECTION_ROWS == P::OWF_CONSTS::WITNESS_BITS);
+
 // The FAEST v3 known answer for FAEST-EM-128f, copied from:
 // faest-arch-opt/test/test_faest_v3_tvs.cpp
 

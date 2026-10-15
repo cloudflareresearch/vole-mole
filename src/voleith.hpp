@@ -1,7 +1,7 @@
 // The VOLE-in-the-Head proof system of FAEST v3. This implementation replaces the one-way function
 // constraints with an arbitrary relation consisting of an instance (analogous to the FAEST public
 // key), a witness (FAEST secret key), and a set of constraints. The proof itself is wire compatible
-// with FAEST. Additional features:
+// with FAEST, except for the CRT VOLE masks (see below). Additional features:
 //
 // 1. Delayed instance binding: Proof generation has two steps: VOLE generation, followed by a
 //    commit-and-prove step. In FAEST, the instance is bound at VOLE generation. In other
@@ -18,6 +18,12 @@
 //    challenge chal2, which is derived after the prover is committed to the entire witness. The
 //    relation may use it to derive public randomness, e.g., to replace a set of constraints by a
 //    random linear combination of them.
+//
+// CRT VOLE masks: FAEST v3 derives them from the first lambda witness bits, which lets a verifier
+// check a guess for those bits. Our patched faest-arch-opt uses separate VOLE rows instead, unless
+// OWF_CONSTANTS::REUSE_CRT_WITNESS is set. Separate rows add 256 bytes per proof, and break
+// compatibility with FAEST signatures. FAEST's own parameter sets, Moussaka, and Ratatouille set
+// the flag: their witnesses start with a uniform secret (the key, or commitment randomness r).
 //
 // This code was adapted from faest-arch-opt, which is distributed under the following license:
 //
@@ -449,11 +455,11 @@ bool voleith_verify_commit(const_proof_span<Relation> proof_bytes,
     hasher.update_byte(8 + 2); // domain separator for H_2^2
     hasher.finalize(chal2);
 
-    // Apply the correction d to the verifier's VOLE keys: q_i += d_i * Delta.
+    // Apply the correction d to the verifier's VOLE keys on the witness rows: q_i += d_i * Delta.
     {
         const auto d = proof.correction();
         const auto q = vole_com_data.q();
-        for (size_t i = 0; i < CP::VOLE_CORRECTION_ROWS; ++i) {
+        for (size_t i = 0; i < OC::WITNESS_BITS; ++i) {
             if ((d[i / 8] >> (i % 8)) & 1) {
                 q[i] = q[i] ^ delta;
             }
