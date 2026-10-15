@@ -39,3 +39,9 @@ root = "VoleMole.Spec.Kats"
 [[lean_exe]]
 name = "verifier_vectors"
 root = "VoleMole.Verifier.VectorsMain"
+
+# The executable Lean VOLEitH prover (Verifier/Prover.lean) against the C++: run from lean/ as
+# `lake exe prover_vectors` (reproduces every proof of tests/*/..._kat.txt byte for byte).
+[[lean_exe]]
+name = "prover_vectors"
+root = "VoleMole.Verifier.ProverMain"
