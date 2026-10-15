@@ -196,8 +196,14 @@ other domains fixed) and the BAVC's cipher a uniform table in a proof-only ciphe
 prover `proveE` (the executable prover at AES, `proveE_recOf_aes`), one proof is
 `q₃·2⁻¹²⁸ + 221·(4607 + q_E)·2⁻¹²⁸ + (q₅ + 1)·2⁻¹²⁸`-close to the simulator against a
 distinguisher reading `H₃`, `H₅` and the cipher at `q₃`, `q₅`, `q_E` keys; it does not read
-`H₂³` (programming the simulator's `H₂³` points is not linked to the prover's), and the public
-part of the commitment is recomputed with AES (`docs/zk.md` §10.1). PomFRIT's two-phase zero knowledge, with
+`H₂³`, and the public part of the commitment is recomputed with AES. With `H₂³` visible as well
+(`zk_rom_h23`, `ZK/HopsH23.lean`), for the executable prover with BAVC hiding for AES assumed: the
+simulator programs `H₂³` at the grinding points of the prefix it recomputes from its own proof as
+the verifier does (`simulateRO`'s points), and one proof is
+`q₃·2⁻¹²⁸ + Pr[GrindBad] + ε_bavc + (q₅ + 1)·2⁻¹²⁸`-close against a distinguisher that also reads
+`H₂³` without limit, `Pr[GrindBad] ≤ noHitProb + Pr[Δ' = 0]` (the recomputed points are the
+prover's otherwise: `hyb3_vPre`, `ZK/VerifyPre.lean`); it does not combine with the ideal-cipher
+H4, whose stand-in prover grinds at a prefix its proof does not determine (`docs/zk.md` §10.1). PomFRIT's two-phase zero knowledge, with
 the instance chosen after step 1, is derived the same way (`ZK/TwoPhase.lean`: step 1's fields
 are uniform and independent of the witness, step 2 stays uniform given them for every adaptive
 choice; `twoPhase_close` under the two-phase tape hypothesis `TapeHyp2`; `twoPhase_close_tables`;
@@ -450,9 +456,11 @@ What is **not** established, roughly in order of importance:
    (`ZK/HopsROM.lean`, `ZK/HopsRead.lean`, `ZK/HopsH6.lean`: H1 and grinding exact, H1
    `≤ q₃·2⁻¹²⁸` and H6 `≤ (q₅ + 1)·2⁻¹²⁸` with oracle access), and composed with H4 into one
    bound for one record of independent tables and an ideal cipher (`ZK/HopsJoint.lean`,
-   `zk_rom_ic`, for a proof-only cipher-parametric prover equal to the executable one at AES;
-   open there: distinguisher access to `H₂³`, which needs the simulator's programmed points
-   linked to the prover's; the public BAVC recomputation under the cipher; several proofs; the
+   `zk_rom_ic`, for a proof-only cipher-parametric prover equal to the executable one at AES,
+   with the distinguisher not reading `H₂³`; with `H₂³` visible, `zk_rom_h23`, for the executable
+   prover in the ROM with BAVC hiding for AES assumed, plus `Pr[GrindBad]`; open: the ideal-cipher
+   H4 with `H₂³` visible, which needs a fully cipher-parametric prover and verifier (the public
+   BAVC recomputation under the cipher); `Pr[Δ' = 0]` is not bounded in Lean; several proofs; the
    privacy corollaries, which still take the fixed-record hop hypotheses); H4 is proved with the cipher a uniform table of
    uniform-function rows (`ZK/HopsH4Ideal.lean`, `hide_rom_query`: the GGM, leaf-commitment and
    leaf-PRG hybrids, `≤ 221·(4607 + q)·2⁻¹²⁸`), leaving the PRP/PRF switching of the hidden

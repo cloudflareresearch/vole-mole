@@ -130,6 +130,8 @@ import VoleMole.ZK.IdealCipher
 import VoleMole.ZK.HopsH4
 import VoleMole.ZK.HopsH4Ideal
 import VoleMole.ZK.HopsJoint
+import VoleMole.ZK.VerifyPre
+import VoleMole.ZK.HopsH23
 import VoleMole.ZK.Interp
 import VoleMole.Spec.PomFRITLayout
 import VoleMole.Privacy.PomFRITLean

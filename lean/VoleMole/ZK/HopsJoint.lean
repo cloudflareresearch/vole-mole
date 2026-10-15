@@ -43,8 +43,9 @@ ideal-tape prover reads neither `H₃` nor `H₂³` (`proveIdeal_agreeOff`, `fil
 **Not covered.** The distinguisher does not read `H₂³`: with `H₂³` access the simulator must
 program `H₂³` at the proof's grinding points (`simulateRO`), and linking those points (computed
 from the output) to the prover's (`pre` of the coins), through the hybrids after H4, is not done
-here. The public part of the commitment is recomputed with AES, not `E` (a fully cipher-parametric
-prover would add those reads to `q_E`). One proof (no `ε_iv`, `rho`-collision or `ε_prog` terms);
+here; `ZK/HopsH23.lean` (`zk_rom_h23`) does it for the executable prover, with BAVC hiding for AES
+assumed. The public part of the commitment is recomputed with AES, not `E` (a fully
+cipher-parametric prover would add those reads to `q_E`). One proof (no `ε_iv`, `rho`-collision or `ε_prog` terms);
 the rows are functions, not permutations (the PRP/PRF switching term is on paper); SHAKE as a
 random oracle and AES as an ideal cipher are the modelling steps.
 -/
