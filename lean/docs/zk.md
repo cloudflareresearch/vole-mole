@@ -734,6 +734,17 @@ The patched-layout results are in `lean/VoleMole/ZK/LabelRows.lean`. The `main`-
 are in `Labels.lean` (sibling label, attack), `Main.lean` (the (PU) bound) and `Relations.lean`
 (per relation, PomFRIT), labelled as statements about the unpatched layout.
 
+The protocol privacy theorems (`lean/VoleMole/Privacy/`) use zero knowledge as a hypothesis on the
+abstract proof systems of `Spec/*`: `Privacy.ZeroKnowledge R prove sim ε` (per proof, the
+prover's output under uniform `rho` and the simulator's, from the instance alone, are `ε`-close
+for every valid witness, against distinguishers that may know it; `ε = 0` is equality of output
+distributions), and a two-phase, delayed-instance version for PomFRIT
+(`Privacy.PomFRIT.ZeroKnowledge`). This is the conclusion of §6's hybrids with the fix. On `main` no
+efficient simulator satisfies it, since the distinguisher may know `w[0..λ)` and run the test of
+Proposition 4.1 (§4). For PomFRIT it fails for every simulator: phase 1 sees no instance, so the
+simulated proof cannot depend on `r`, while the test for the real `r` accepts every real proof
+(`pomfrit_attack_test`); and the Issuer even learns `r` in the protocol (`pomfrit_issuer_hits`).
+
 **Proved only on paper:**
 - the random-oracle and lazy-sampling steps (H1, H2 programming, H6 identical-until-bad, and the
   reduction of adaptive H₅ queries to functions of a Θ-independent view). For the `main` layout,

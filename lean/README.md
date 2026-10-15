@@ -41,6 +41,8 @@ lean/
     Prob/                   uniform-probability layer: single-challenge bounds, per-chain theorem
     ROM/                    random-oracle model (VCVio): union bound over queries, per-chain terms,
                             the executable verifier against the oracle, domain separation
+    Privacy/                privacy games on the executable specs (blindness, issuer hiding,
+                            unlinkability), with zero knowledge and hiding as hypotheses
   vectors/                  test vectors dumped by the C++ for the Arith/ cross-check
   docs/
     sketch.md               the maintainer's original design note
@@ -185,6 +187,7 @@ limitation, not an attack) takes over. Strong simulation-extractability: 2⁻⁶
 | `ratatouille.md` | Balance (no inflation), no theft, unlinkability, correctness: proved. | Spends are not bound to a session, so a copied spend request can be redeemed first (medium). |
 | `domain-separation.md` | Every hash/XOF/permutation call lies in a disjoint domain, except below. [Lean] `Protocols/DomainSeparation.lean` | PomFRIT's `hash_to_target` overlaps four proof-system domains (no exploit found; fix: a final domain byte). |
 | `uov-assumptions.md` | Relates the protocol-specific UOV assumptions to each other and to standard UOV. [Lean] `Protocols/UOVAssumptions.lean` | Several reductions are unavailable; the note states why. |
+| Privacy on the specs ([Lean] `VoleMole/Privacy/`) | The privacy theorems as games on `Spec/*`, each hybrid hop mechanized: PomFRIT blindness (`Privacy.PomFRIT.blindness`, `≤ 4ε`), Moussaka issuer hiding and unlinkability against a Moderator colluding with all Anchors (`Privacy.Moussaka.anonymity`, `≤ 4εI + 4εR + 2εhide`), Ratatouille unlinkability of spends from issuances and from each other through change tokens (`Privacy.Ratatouille.unlinkability`, `≤ 4εI + 4εS + 2εhide`). Hypotheses: zero knowledge of the abstract proof systems (`Privacy.ZeroKnowledge`: a simulator from the instance alone, output `ε`-close to the prover's for every valid witness; `ε = 0` is equality of distributions), hiding of `Com` for the explicit reductions. The final hybrids are exact. On paper: the seed-XOF hop, and zero knowledge itself | The zero-knowledge hypothesis is false on `main` for PomFRIT (`ZK.pomfrit_issuer_hits`, `ZK.pomfrit_attack_test`); for Moussaka and Ratatouille no efficient simulator satisfies it per proof on `main`, and the joint (PU) hop replaces it (paper). PomFRIT note §8.3: the "both ⊥" rule is needed. Moussaka Thm 4(a) needs no `2⁻¹⁹²` term; Thm 4(b) misses an abort term. Ratatouille H3 needs the Client's validity check against the commitment it sent |
 
 **Cross-cutting finding (critical, deployment):** PomFRIT's Issuer signs arbitrary targets, and
 all protocols share the UOV key type. If one key serves PomFRIT and another protocol, anyone can
@@ -376,6 +379,13 @@ What is **not** established, roughly in order of importance:
    (`ZK/Main.lean`, `ZK/Relations.lean`), but the hybrid chaining around it (H1–H4, the H5/H6
    coupling, the reduction of an oracle adversary to query functions) is paper. The QROM ZK bound
    is loose (2⁻¹⁹ at 2³⁰) until the 256-bit `rho` and salt are added.
+   The protocol privacy theorems (`VoleMole/Privacy/`) take per-proof zero knowledge (the
+   simulator is a function of the instance; in the random-oracle model it also programs the
+   oracle, which the abstract specs do not expose) and hiding of `Com` (for the explicit
+   reductions) as hypotheses, so they apply to the label-row fix; on `main` the joint (PU) hop over
+   proofs sharing `r` replaces the per-proof hypothesis and is paper. The seed-XOF hop (the games
+   draw the XOF's outputs uniformly), Moussaka's non-colluding mode (Thm 4b) and the quantum
+   versions are not mechanized.
 8. **Open deployment issues** found by the analysis and not yet fixed in the code: cross-protocol
    key reuse, Ratatouille spend binding, PomFRIT's `hash_to_target` domain byte and signature
    multiplicity, Moussaka nullifier squatting.
