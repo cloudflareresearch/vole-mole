@@ -59,32 +59,32 @@ theorem map_constraintKeys_K (p : Params) (keys : Array GF128) (deltaL : GF128)
 
 /-- **`accept_hacc` at `gfK`: acceptance gives `EndToEnd`'s accepting equation, over the field
 GF(2¹²⁸), with no hypothesis on the field.** -/
-theorem accept_hacc_K (T : CrtTables) (st : Statement) (proof : ByteArray)
-    (h : (verify T st proof).accept = true)
+theorem accept_hacc_K (Hs : Hashes) (T : CrtTables) (st : Statement) (proof : ByteArray)
+    (h : (verify Hs T st proof).accept = true)
     (cs : ByteArray → ByteArray → System GF128.K)
-    (hvals : ∀ c1 c2 x, (st.values c1 c2 x).map gfK = (cs c1 c2).values (gfK ∘ x))
-    (hdeg : ∀ c1 c2, ∀ e ∈ cs c1 c2, e.degree ≤ st.params.qsDegree) :
+    (hvals : ∀ c1 lb x, (st.values c1 lb x).map gfK = (cs c1 lb).values (gfK ∘ x))
+    (hdeg : ∀ c1 lb, ∀ e ∈ cs c1 lb, e.degree ≤ st.params.qsDegree) :
     let pf : Proof := { params := st.params, bytes := proof }
-    let muI : ByteArray → ByteArray := fun c1 => mu (some (st.instEnc c1)) st.dst
-    let mu1 := if st.delayed then mu none st.dst else muI ByteArray.empty
-    let iv := ivOf pf mu1
+    let mu1 := st.mu1 Hs
+    let iv := ivOf Hs pf mu1
     ∃ leaves, BAVC.reconstruct iv pf.opening pf.delta = some leaves ∧
-      let c1 := chal1 pf mu1 (BAVC.check leaves.coms) st.binder1
-      let crt := crtReconstruct pf T iv (convertToVole pf iv leaves)
+      let c1 := chal1 Hs pf mu1 (BAVC.check (Hs.hash .h1) leaves.coms) st.binder1
+      let crt := crtReconstruct Hs pf T iv (convertToVole pf iv leaves)
       let deltaL := crt.deltaLifted.toGF
       let hV := voleHashReceiver st.params c1 crt.rows crt.qMask deltaL pf.voleCheck
-      let c2 := chal2 pf c1 hV (if st.delayed then muI c1 else ByteArray.empty) st.binder2
+      let c2 := chal2 Hs pf c1 hV (st.muDelayed Hs c1) st.binder2
+      let lb := st.combBytes Hs c2
       let check := qsCheck pf c2 (constraintKeys st.params (correctedKeys pf crt.rows deltaL) deltaL
-        (st.values c1 c2)) crt.qMask deltaL
-      gfK deltaL ≠ 0 ∧ chal3 pf c2 check = pf.delta ∧
-      EndToEnd.qsCheck (cs c1 c2) st.params.qsDegree
-          (Seed.zkCoeff (cs c1 c2).length (gfK (gfOfBytes c2 0)) (gfK (gfOfBytes c2 16))
+        (st.values c1 lb)) crt.qMask deltaL
+      gfK deltaL ≠ 0 ∧ chal3 Hs pf c2 check = pf.delta ∧
+      EndToEnd.qsCheck (cs c1 lb) st.params.qsDegree
+          (Seed.zkCoeff (cs c1 lb).length (gfK (gfOfBytes c2 0)) (gfK (gfOfBytes c2 16))
             (gfK (gfOfBytes c2 32)) (gfK ⟨W128.word c2 48, 0⟩))
           (extW fun j : Fin st.params.witnessBits =>
             gfK crt.rows[(j : ℕ)]!.toGF + SeedExtraction.bit (corrBit pf j) * gfK deltaL)
           (gfK deltaL) +
         (Seed.maskPoly st.params.qsDegree (fun i => gfK crt.qMask[i]!.toGF) 0
           (fun i => gfK (gfOfBytes pf.qsProof (16 * (i - 1)))) (gfK check)).eval (gfK deltaL) = 0 :=
-  accept_hacc gfK GF128.card_K T st proof h cs hvals hdeg
+  accept_hacc gfK GF128.card_K Hs T st proof h cs hvals hdeg
 
 end VoleMole.Verifier.Bridge

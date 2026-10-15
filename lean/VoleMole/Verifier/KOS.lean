@@ -20,7 +20,7 @@ derivation of `chal2` (`src/voleith.hpp:435-450`).
   `h_3 = q_mask[d+2] + P_t(x) + r_3·P_{s_0}(x)` (`combine_hashes`), then the verifier adds
   `Δ'·ũ_i` with `Δ'` the CRT-lifted `Δ` and `ũ` the prover's VOLEHash from the proof. There is no
   equality test: `ũ ‖ h` goes into `chal2`, so a wrong `h` only changes the challenges.
-* `chal2 = H(chal1 ‖ ũ ‖ h ‖ [mu] ‖ binder₂ ‖ d ‖ 10)` (56 bytes), with `mu` only for delayed
+* `chal2 = H₂²(chal1 ‖ ũ ‖ h ‖ [mu] ‖ binder₂ ‖ d ‖ 10)` (56 bytes), with `mu` only for delayed
   instance binding.
 
 This is `Seed/KOS.lean`'s model (`voleHashP`, `kosValue`) with `L = ℓ' + d − 1`.
@@ -54,10 +54,16 @@ def voleHashReceiver (p : Params) (chal1 : ByteArray) (rows qMask : Array W128) 
   return (Array.range 4).map fun i =>
     qMask[d - 1 + i]!.toGF + ys[i]! + y0 * r[i]! + deltaL * gfOfBytes uTilde (16 * i)
 
-/-- `chal2`; `muDelayed` is `mu` for delayed instance binding (else empty). -/
-def chal2 (pf : Proof) (chal1 : ByteArray) (h : Array GF128) (muDelayed binder2 : ByteArray) :
+/-- The `H₂²` input `chal1 ‖ ũ ‖ h ‖ [mu] ‖ binder₂ ‖ d ‖ 10`; `muDelayed` is `mu` for delayed
+instance binding (else empty). -/
+def chal2Input (pf : Proof) (chal1 : ByteArray) (h : Array GF128) (muDelayed binder2 : ByteArray) :
     ByteArray :=
   let hb := h.foldl (fun acc x => acc ++ gfToBytes x) ByteArray.empty
-  H ((chal1 ++ pf.voleCheck ++ hb ++ muDelayed ++ binder2 ++ pf.correction).push 10) 56
+  (chal1 ++ pf.voleCheck ++ hb ++ muDelayed ++ binder2 ++ pf.correction).push 10
+
+/-- `chal2 = H₂²(…)`. -/
+def chal2 (Hs : Hashes) (pf : Proof) (chal1 : ByteArray) (h : Array GF128)
+    (muDelayed binder2 : ByteArray) : ByteArray :=
+  Hs.hash .h22 (chal2Input pf chal1 h muDelayed binder2)
 
 end VoleMole.Verifier

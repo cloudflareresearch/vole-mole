@@ -27,7 +27,8 @@ QuickSilver ã (8 × 16) · opening (17 × 32 + 105 × 16 = 2224) · Δ (16) · 
 
 `voleith_verify` (`src/voleith.hpp:488-494`) = `voleith_vole_reconstruct` (`:354-409`) then
 `voleith_verify_commit` (`:420-481`). Hashes are `hash_state` = SHAKE128 here (`fao/hash.hpp:21-58`);
-the domain byte is appended last.
+the domain byte is appended last. The Lean verifier takes them as a record `Hs : Hashes`, one
+function per domain (milestone 9).
 
 | # | Step | Code | Lean model of the math | Primitives | Size |
 |---|---|---|---|---|---|
@@ -211,7 +212,7 @@ is part of milestone 6.
      relation, the statement's evaluator is `System.values` of the `Arith/*` system at
      `β := beta`, `K := GF256` and the verifier's instance data (`*_values`: the `Arith/*`
      `issueValues_eq`/`redeemValues_eq`/`issueSystem_values`/`spendSystem_values`, `betaFast_eq`;
-     the cached UOV coefficients `ofArr (combinationArr …)` are the system's `l`), and the degree
+     the cached UOV coefficients `ofArr (combinationOf …)` are the system's `l`), and the degree
      bounds are `EndToEnd/Degree`'s. Hence `moussakaIssue_accept`, `moussakaRedeem_accept`,
      `ratatouilleIssue_accept`, `ratatouilleSpend_accept`, `pomfritRedeem_accept`,
      `pomfritVerify_accept` (also the refresher check): acceptance gives `EndToEnd`'s accepting
@@ -235,8 +236,9 @@ is part of milestone 6.
        `convertToVoleAt_congr_key` and `crtReconstruct_eq_respAt` (a run whose opening
        reconstructs the committed keys off the hidden leaves is the committed response `respAt`).
      - `Chain.lean`: `Chain` (reference proof for `c_i`, `c_mult`, `iv_pre`, `ũ`, `d`, `ã`, `ctr`;
-       committed keys; `chal1`, `h_V`, `z`; `chal2` and the constraint evaluator `vals` as fields, equal
-       to the executable verifier's by hypotheses of `onChain_of_accept`), `OnChain` (the committed responses
+       committed keys; `iv` and the gate hash `h5`; `chal1`, `h_V`, `z`; `chal2` and the constraint
+       evaluator `vals` as fields, equal to the verifier's (for hashes `Hs`) by hypotheses of
+       `onChain_of_accept`), `OnChain` (the committed responses
        at `Δ'` give `Δ_lifted ≠ 0`, the chain's `h_V` and `z`), `vole_kosValue` (`KOSGood`'s
        `Q`, `D` are the committed hashed rows/masks, `X` = blocks), `chain_kos_affine`,
        `chain_tree_form`, `chain_claim4` (`Claim4Hyp` and the accepting equation on all of `A`
@@ -252,4 +254,22 @@ is part of milestone 6.
    in `onChain_of_accept`) (L1). `pomfritVerify`'s refresher check is not part of the chain
    theorem (its proof part is `pomfritRedeem`). `Prob/` (`docs/probabilistic-plan.md`, phase A)
    discharges `KOSGood`, `hQS`/`hcomb` and `hδ` for uniform independent `chal1`, `chal2`, `l`
-   (`*_chain_prob`).
+   (`*_chain_prob`), and `ROM/` (phase B) runs the verifier against the random oracle
+   (milestone 9).
+9. **Done: the hash record** (`Verifier/Hashes.lean`). The verifier takes `Hs : Hashes`, one
+   function `Hs.hash k` per domain `k : Kind` of `docs/extraction/L0-L2-commitments.md` §2.1 (the
+   argument is the whole SHAKE input, domain byte included; `Kind.outLen` the output length);
+   `Hashes.shake` is SHAKE128 in every domain. Changed: `mu`, `ivOf`, `chal1`, `chal2`, `chal3`,
+   `crtReconstruct` take `Hs`; `BAVC.check`, `gateHashes`, `crtReconstructAt` take the one function
+   they use (`H₁`, `H₅`); the hash inputs are definitions of their own (`chal1Input`, `chal2Input`,
+   `chal3Input`, `BAVC.leafHashInputs`/`comInput`, `gateInputs`; `crtReconstructWith` takes the
+   gate hashes); the UOV combination moved from the statement to the verifier (`Statement.comb =
+   some (M, dst)`, `Statement.combBytes`; `values` reads the combination bytes, decoded by
+   `combinationOf`); `Transcript.iv`. Hashes outside L0 stay SHAKE: `UovPk`'s digest and
+   expansion, PomFRIT's `hash_to_target` and refresher commitment. The runners pass
+   `Hashes.shake` and give the same output as before on both layouts (18 accepted, 51 rejected;
+   `spec_kats`, `arith_vectors` unchanged). The bridge theorems are generic in `Hs`
+   (`accept_iff`, `accept_hacc`, `AcceptEq`, `*_accept`, `crtReconstruct_eq_respAt`,
+   `onChain_of_accept`); none mentions SHAKE, so no `Hashes.shake` corollaries are needed.
+   `ROM/Verifier.lean` runs the same verifier with every hash a random-oracle query
+   (`verifyQ`, equal to `verify (Hashes.ofTable g)` against a complete table).

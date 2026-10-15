@@ -231,11 +231,12 @@ theorem convertToVoleAt_col (p : Params) (dbit : ℕ → Bool) (corr : ℕ → B
 
 /-! ## Rows -/
 
-theorem rows_toGF (p : Params) (dbit : ℕ → Bool) (cmult : ByteArray) (T : CrtTables)
-    (iv : ByteArray) (cols : Array (Array UInt64)) {r : ℕ} (hr : r < p.correctionRows) :
-    (crtReconstructAt p dbit cmult T iv cols).rows[r]!.toGF =
+theorem rows_toGF (h5 : ByteArray → ByteArray) (p : Params) (dbit : ℕ → Bool)
+    (cmult : ByteArray) (T : CrtTables) (iv : ByteArray) (cols : Array (Array UInt64)) {r : ℕ}
+    (hr : r < p.correctionRows) :
+    (crtReconstructAt h5 p dbit cmult T iv cols).rows[r]!.toGF =
       ∑ c ∈ range 120, if wbit cols[c]! r then liftCol T c else 0 := by
-  simp only [crtReconstructAt]
+  simp only [crtReconstructAt, crtReconstructWith]
   rw [getElem!_range_map _ _ hr, rowMul_toGF]
   rfl
 
@@ -256,13 +257,14 @@ def rowConst (T : CrtTables) (p : Params) (iv : ByteArray) (key : ℕ → ℕ �
 
 /-- **The lifted rows are affine per tree**:
 `row_r = C_r + Σ_i u^{(i)}[r] · e_i(Δ'_i)` with `Δ' = blocksOf dbit` and `e = lift T`. -/
-theorem resp_row (T : CrtTables) (p : Params) (dbit : ℕ → Bool) (corr : ℕ → ByteArray)
-    (cmult iv : ByteArray) (key : ℕ → ℕ → ByteArray) {r : ℕ} (hr : r < p.correctionRows) :
-    (crtReconstructAt p dbit cmult T iv (convertToVoleAt p dbit corr iv key)).rows[r]!.toGF =
+theorem resp_row (h5 : ByteArray → ByteArray) (T : CrtTables) (p : Params) (dbit : ℕ → Bool)
+    (corr : ℕ → ByteArray) (cmult iv : ByteArray) (key : ℕ → ℕ → ByteArray) {r : ℕ}
+    (hr : r < p.correctionRows) :
+    (crtReconstructAt h5 p dbit cmult T iv (convertToVoleAt p dbit corr iv key)).rows[r]!.toGF =
       rowConst T p iv key r + ∑ i : Fin BAVC.tau, SeedExtraction.bit (uBit p iv corr key i r) *
         SeedExtraction.blockLift (lift T) i (blocksOf dbit i) := by
   have hr' := lt_of_lt_of_le hr (correctionRows_lt p)
-  rw [rows_toGF _ _ _ _ _ _ hr, sum_range_120, rowConst, ← Finset.sum_add_distrib]
+  rw [rows_toGF _ _ _ _ _ _ _ hr, sum_range_120, rowConst, ← Finset.sum_add_distrib]
   refine Finset.sum_congr rfl fun i _ => ?_
   rw [blockLift_lift, Finset.mul_sum, ← Finset.sum_add_distrib]
   refine Finset.sum_congr rfl fun b _ => ?_
@@ -317,21 +319,23 @@ theorem deltaBit_eq_dbitOf (delta : ByteArray) :
     simp [BAVC.deltaBit, hc]
 
 /-- The committed response at the blocks `Δ'`: the CRT output computed from the commitments
-(`corrections`, `c_mult`, `iv`, the committed leaf keys `key`) alone. -/
-def respAt (T : CrtTables) (p : Params) (corrections cmult iv : ByteArray)
-    (key : ℕ → ℕ → ByteArray) (Δ : Blocks) : CrtOut :=
-  crtReconstructAt p (dbitOf Δ) cmult T iv
+(`corrections`, `c_mult`, `iv`, the committed leaf keys `key`) and the gate-hash function `h5`
+(`H₅`) alone. -/
+def respAt (h5 : ByteArray → ByteArray) (T : CrtTables) (p : Params)
+    (corrections cmult iv : ByteArray) (key : ℕ → ℕ → ByteArray) (Δ : Blocks) : CrtOut :=
+  crtReconstructAt h5 p (dbitOf Δ) cmult T iv
     (convertToVoleAt p (dbitOf Δ) (fun i => corrections.extract ((i - 1) * p.correctionBytes)
       (i * p.correctionBytes)) iv key)
 
 /-- **The verifier's CRT output at a proof is the committed response at its blocks**, if the
 opening reconstructs the committed keys off the hidden leaves (L1). -/
-theorem crtReconstruct_eq_respAt (T : CrtTables) (pf : Proof) (iv : ByteArray)
+theorem crtReconstruct_eq_respAt (Hs : Hashes) (T : CrtTables) (pf : Proof) (iv : ByteArray)
     (leaves : BAVC.Leaves) (key : ℕ → ℕ → ByteArray)
     (hbind : ∀ i < BAVC.tau, ∀ j < 2 ^ BAVC.kOf i, j ≠ BAVC.deltaIndex pf.delta i →
       leafKey leaves i j = key i j) :
-    crtReconstruct pf T iv (convertToVole pf iv leaves) =
-      respAt T pf.params pf.corrections pf.cmult iv key (blocksOf (BAVC.deltaBit pf.delta)) := by
+    crtReconstruct Hs pf T iv (convertToVole pf iv leaves) =
+      respAt (Hs.hash .h5) T pf.params pf.corrections pf.cmult iv key
+        (blocksOf (BAVC.deltaBit pf.delta)) := by
   unfold crtReconstruct convertToVole respAt
   rw [← deltaBit_eq_dbitOf, convertToVoleAt_congr_key _ _ _ _ hbind]
   rfl

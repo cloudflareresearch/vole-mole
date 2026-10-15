@@ -67,6 +67,7 @@ import VoleMole.Verifier.CrtGen
 import VoleMole.Verifier.CrtSearch
 import VoleMole.Verifier.Keygen
 import VoleMole.Verifier.VectorFile
+import VoleMole.Verifier.Hashes
 import VoleMole.Verifier.Bridge.CtrInput
 import VoleMole.Verifier.Bridge.Field
 import VoleMole.Verifier.Bridge.KOS
@@ -87,3 +88,7 @@ import VoleMole.ROM.UnionBound
 import VoleMole.ROM.Fresh
 import VoleMole.ROM.Chains
 import VoleMole.ROM.Comb
+import VoleMole.ROM.Verifier
+import VoleMole.ROM.Accept
+import VoleMole.ROM.DomainSep
+import VoleMole.ROM.SingleOracle

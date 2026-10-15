@@ -67,7 +67,7 @@ digests in `pks` (a key not in `pks` fails verification). Proving is not modelle
 def verifierRedeem (pks : List Verifier.UovPk) : Moussaka.NIZK Moussaka.RedeemInstance :=
   ⟨fun _ _ _ => [], fun pf x =>
     match x.anchors.mapM fun k => pks.find? (·.digest.toList == k.digest) with
-    | some ps => (Verifier.verify Verifier.CrtGen.tables
+    | some ps => (Verifier.verify Verifier.Hashes.shake Verifier.CrtGen.tables
         (Verifier.moussakaRedeem ps (Verifier.toBA x.nf) (Verifier.toBA x.ctxIss)
           (Verifier.toBA x.ctxRed) (Verifier.toBA x.challengeDigest)) (Verifier.toBA pf)).accept
     | none => false⟩

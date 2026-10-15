@@ -19,7 +19,7 @@ size `2⁶⁴` or more is enumerated: every cardinality is a product of `|UInt8|
   field elements and the low word at byte 128).
 * `chal2Equiv : Bytes 56 ≃ Chal2 = GF128 × GF128 × GF128 × shortKeys`, the arguments
   `gfOfBytes chal2 0/16/32`, `⟨W128.word chal2 48, 0⟩` that `*_extract_chain` passes to `zkCoeff`.
-* `combEquiv M : Bytes (16·M) ≃ (Fin M → GF128)` (`combDec`, as `combinationArr` decodes `l`).
+* `combEquiv M : Bytes (16·M) ≃ (Fin M → GF128)` (`combDec`, as `combinationOf` decodes `l`).
 * **`hδ`, deterministic** (L1 bookkeeping): `admissible` (the `2¹²⁰` values of `chal3` with zero
   grinding bits, those `check_format` accepts), `deltaBlocks x = blocksOf (deltaBit x)`,
   `deltaBlocks_injOn`, and `prU_accept_le`: if at most `N` admissible `chal3` are accepted, a
@@ -179,7 +179,7 @@ noncomputable def chal2Equiv : Bytes 56 ≃ Chal2 :=
 
 /-! ## The UOV combination `l` -/
 
-/-- `16·M` bytes decoded as `M` field elements, as `combinationArr` decodes `H(chal2 ‖ dst)`
+/-- `16·M` bytes decoded as `M` field elements, as `combinationOf` decodes `H_comb(chal2 ‖ dst)`
 (`gfOfBytes` at offsets `0, 16, 32, …`). -/
 def combDec {M : ℕ} (b : Bytes (16 * M)) : Fin M → GF128 := fun k => gfOfBytes b.ba (16 * k)
 

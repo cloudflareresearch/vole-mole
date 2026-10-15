@@ -26,7 +26,7 @@ final check, up to a `2⁻¹²⁸` chance; `verify` rejects `Δ = 0`.)
 in `add_constraint` order, `A = Σ c_k s^{n−1−k}`, `B = Σ c_k t^{n−1−k}` and the mask
 `q_mask[0] + Σ_{i=1}^{d−2} (ã_{i−1} + q_mask[i]) Δ^i + ã_{d−2} Δ^{d−1}` (`verify(q_mask, …)`), the
 check value is `mask + a₀ A + a₁ B` (`finalize_hashes`). Then
-`chal3 = H(chal2 ‖ check ‖ ã ‖ ctr ‖ 11)` (16 bytes), and the proof is accepted iff `chal3 = Δ`
+`chal3 = H₂³(chal2 ‖ check ‖ ã ‖ ctr ‖ 11)` (16 bytes), and the proof is accepted iff `chal3 = Δ`
 (the raw, unlifted `Δ` from the proof).
 -/
 
@@ -78,8 +78,12 @@ def qsCheck (pf : Proof) (chal2 : ByteArray) (cs : List GF128) (qMask : Array W1
     else 0
   mask + a0 * A + a1 * B
 
-/-- `chal3` (16 bytes). -/
-def chal3 (pf : Proof) (chal2 : ByteArray) (check : GF128) : ByteArray :=
-  H ((chal2 ++ gfToBytes check ++ pf.qsProof ++ pf.ctr).push 11) 16
+/-- The `H₂³` input `chal2 ‖ check ‖ ã ‖ ctr ‖ 11`. -/
+def chal3Input (pf : Proof) (chal2 : ByteArray) (check : GF128) : ByteArray :=
+  (chal2 ++ gfToBytes check ++ pf.qsProof ++ pf.ctr).push 11
+
+/-- `chal3 = H₂³(…)` (16 bytes). -/
+def chal3 (Hs : Hashes) (pf : Proof) (chal2 : ByteArray) (check : GF128) : ByteArray :=
+  Hs.hash .h23 (chal3Input pf chal2 check)
 
 end VoleMole.Verifier
