@@ -779,6 +779,7 @@ which the random-oracle ones are proved with the hashed domain a uniform table:
 |---|---|---|
 | The simulator: `(ctr, Δ)` as the first accepted `H₂³` answer of its own coins, the opening from sampled commitments and seeds, uniform `c_i`, `c_mult`, `ũ`, `d`, `ã`; `simulateRO` also returns the hash record with `H₂³` programmed at `chal2 ‖ qs_check ‖ ã ‖ c ‖ 11` (`c ≤ ctr`) | `Sim.simulate`, `Sim.simulateRO`, `Sim.program` | §5 |
 | The verifier with the programmed record accepts the simulated proof whenever its run reaches `chal3` (only `H₂³` changes, at points starting with the proof's `chal2`) | `verify_program_accept`, `simulateRO_accept` | §5, H8 |
+| **The simulated proof is accepted under the programmed record, unconditionally except for `Δ = 0`** (faest-arch-opt's tables, any CTR PRG, any hash record): every simulated proof passes `check_format` (size `proofBytes`, grinding byte of the accepted `Δ` zero) and its opening reconstructs for every `iv`; `Δ' = Δ·W_CRT ≠ 0` unless `Δ = 0` (`tDL_eq_zero`). Over the simulator's coins, the simulation fails or its proof is rejected with probability `≤ noHitProb + 1/\|A\| ≤ 2^{−2¹⁵} + 2⁻¹¹¹ ≤ 2⁻¹¹⁰` (no grinding hit, or the first hit is `Δ = 0`: the event `GrindBad`, as for the real prover) | `simulate_checkFormat`, `simulate_reconstruct`, `simulate_reaches`, `simulateRO_accept'`, `pr_simulateRO_reject`, `pr_simulateRO_reject_num`, `pr_simulateRO_reject_110` (`ZK/SimAcceptFull.lean`) | §5, H8 |
 | The ideal-tape prover: the prover's code with its random sources (iv, opening, `(ctr, Δ)`, the small VOLEs' `u^{(i)}`, `u_hi`, the `H₅` answers at the sibling labels) read from a tape; its tags are the verifier's `q + Δ·u` | `Sim.proveIdeal`, `Sim.IdealTape` | H1–H4, H6 (as replaced) |
 | **The real prover is the ideal-tape prover at its own run's tape** (no probability) | `prove_eq_proveIdeal`, `Sim.tapeOf` | H3 |
 | **On a uniform tape, the ideal-tape prover's output is distributed exactly as the simulator's**: corrections and `d` (one-time pads), `c_mult` (sibling answers, `N_MASK ≤ 32`), the CRT masks (`u_mask` uniform from uniform pads: a kernel-checked certificate for faest-arch-opt's tables), `ũ`, `ã` (KOS/QuickSilver bijection, coefficients through `ũ` only), grinding (`IsFirstHit` law) | `proveIdeal_close`, `balanced_crtVal_tables`, `maskInvOk_tables`, `upush_cmult`, `upush_resp`, `qsProve_eq` | H2, H5–H7, §7.4 |
@@ -818,7 +819,9 @@ which the random-oracle ones are proved with the hashed domain a uniform table:
 equation `prove = proveIdeal ∘ tapeOf` (all pass), the simulator with the programmed oracle
 (accepted; rejected without programming), and the ideal-tape prover on a pseudorandom tape with
 `H₂³` programmed at its grinding points (accepted; not run for PomFRIT, whose instance depends on
-`chal1`). About 15–60 s per run.
+`chal1`). About 15–60 s per run. The simulator's acceptance check is implied by
+`simulateRO_accept'` (`ZK/SimAcceptFull.lean`) whenever the run's `Δ ≠ 0`, so it is redundant
+as a check of the theorem's conditions and kept as a smoke test of the executable code.
 
 **What remains assumed.**
 - **The hop hypotheses** (`HopHyps`, `ZK/Hops.lean`), from which the tape hypothesis
@@ -947,9 +950,15 @@ equation `prove = proveIdeal ∘ tapeOf` (all pass), the simulator with the prog
   each proof's error is the sum of the named terms); Moussaka's
   zero-knowledge hypotheses are needed only for well-formed instances (`IssueRelW`, `RedeemRelW`:
   the lengths the C++ types fix, at most 64 Anchors).
-- `simulateRO_accept` assumes the simulated proof's run reaches `chal3` (checked by `zk_sim`);
-  of its three conditions the reconstruction of the simulated opening is proved
-  (`reconstruct_openingOf`), the format check and `Δ' ≠ 0` are not.
+- `simulateRO_accept` assumes the simulated proof's run reaches `chal3`; all three conditions
+  are now proved (`ZK/SimAcceptFull.lean`): the format check and the reconstruction always
+  (`simulate_checkFormat`, `simulate_reconstruct`), `Δ' ≠ 0` unless the simulator's `Δ` is `0`
+  (`simulate_reaches`). So `simulateRO_accept'` assumes only `¬ HitZero`, and the simulated proof
+  is accepted except with probability `≤ noHitProb + 1/|A| ≤ 2⁻¹¹⁰` (`pr_simulateRO_reject*`).
+  `zk_sim`'s check that the programmed verifier accepts the simulated proof is therefore implied
+  by these theorems on every run whose `Δ ≠ 0` (it stays in the executable as a smoke test; its
+  other checks, `proveIdeal (tapeOf …) = prove` on the KAT inputs, the unprogrammed rejection and
+  the ideal-tape proof's acceptance on a pseudorandom tape, are not instances of these theorems).
 - **PomFRIT** (two-phase, delayed instance `h = hash_to_target(…, chal1, …)`):
   `Privacy.PomFRIT.ZeroKnowledge` is derived for the Lean prover with label rows
   (`lean_zeroKnowledge`) from the two-phase tape hypothesis `TapeHyp2` (`ZK/TwoPhase.lean`: the

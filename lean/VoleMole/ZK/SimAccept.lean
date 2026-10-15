@@ -16,8 +16,9 @@ proof's grinding points (`Sim.program`, `Sim.programPoints`). Here:
   is the programmed `Δ`.
 * `simulateRO_accept`: the same for `simulateRO`'s proof and record. That a simulated proof's
   run reaches `chal3` (`check_format` passes, the sampled opening reconstructs: `BAVC.reconstruct`
-  reads exactly `openCount Δ` seeds and zero padding) is checked by `lake exe zk_sim`, not proved;
-  `Δ' ≠ 0` fails with probability `2⁻¹²⁰` for the real prover as well.
+  reads exactly `openCount Δ` seeds and zero padding; `Δ' ≠ 0`) is proved in
+  `ZK/SimAcceptFull.lean` for faest-arch-opt's tables, except for `Δ = 0`
+  (`simulate_reaches`, `simulateRO_accept'`, `pr_simulateRO_reject_110`).
 -/
 
 namespace VoleMole.ZK.Sim
