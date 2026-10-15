@@ -30,7 +30,9 @@ the verifier's `chal1` (`simPhase1`); its step 2 uniform `d[|r|..)` and `ã`.
 * **`realRun2_eq`** (no probability): the real run is the ideal-tape run at its own tape, from
   `proveCommit_eq_proveIdeal` (step 2) and `idealPhase1_real` (step 1).
 * **`proveIdeal2_close`**: on a uniform tape the ideal run is distributed exactly as the simulated
-  one, for every continuation. The proof is that of `proveIdeal_close`, with the instance, the
+  one, for every continuation (`proveIdeal2_close_at`: for every fallback block and shared tape;
+  `upush_fieldsAdθ`: the adaptive fields and the label-row pad `Θ` are uniform and independent,
+  for `ZK/TwoPhaseRO.lean`'s H6). The proof is that of `proveIdeal_close`, with the instance, the
   witness suffix and hence `d[|r|..)` and `ã` chosen from step 1's output: `ã` is a bijection of the
   QuickSilver masks for every value of `ũ` and of the instance (`upush_respAd`, from `upush_resp`),
   and `(c_i, d)` a bijection of the row pads for every choice of the suffix that depends on
@@ -51,6 +53,10 @@ open Finset
 namespace VoleMole.ZK.Sim
 
 open VoleMole.Verifier VoleMole.Verifier.Bridge VoleMole.Arith VoleMole.ZK VoleMole.Privacy
+
+-- The statements hold for any CTR PRG (`HasPrg`, `Verifier/Prg.lean`), AES included.
+variable [VoleMole.Verifier.HasPrg]
+set_option linter.unusedSectionVars false
 
 /-! ## Statements with the instance chosen after step 1 -/
 
@@ -556,6 +562,27 @@ theorem upush_fieldsAd (hT : maskInvOk T = true) (hnm : st.params.nMask ≤ 32)
     ((h1.comp h2).comp ((upush_equiv R).comp upush_fst))
   exact h3.congr fun _ => rfl
 
+/-- **The ideal run's adaptive fields and the label-row pad `Θ` are uniform and independent** (as
+`upush_fieldsAd`, keeping `Θ`). -/
+theorem upush_fieldsAdθ (hT : maskInvOk T = true) (hnm : st.params.nMask ≤ 32)
+    (hn : r.size ≤ st.params.witnessBytes) :
+    UPush (fun t : Pads st.params => (fieldsAd Hs T st r k s ctr delta t, t.2.1)) := by
+  have h1 := upush_shear (α := RowPads st.params) fun a =>
+    upush_innerAd Hs T st r k s ctr delta hT hnm a
+  have h2 := upush_shear' (β := Bytes (st.params.nMask * st.params.nMultBytes) ×
+    (Bytes 64 × Bytes (16 * (st.params.qsDegree - 1)))) fun y =>
+    upush_rowsAd Hs st r k s ctr delta hn y
+  let R : (Bytes (16 * st.params.correctionBytes) × Bytes st.params.witnessBytes ×
+      Bytes (labelBytes st.params)) × (Bytes (st.params.nMask * st.params.nMultBytes) ×
+      (Bytes 64 × Bytes (16 * (st.params.qsDegree - 1)))) ≃
+      SimFields st.params × Bytes (labelBytes st.params) :=
+    { toFun := fun x => ((x.1.1, x.2.1, x.2.2.1, x.1.2.1, x.2.2.2), x.1.2.2)
+      invFun := fun y => ((y.1.1, y.1.2.2.2.1, y.2), (y.1.2.1, y.1.2.2.1, y.1.2.2.2.2))
+      left_inv := fun _ => rfl
+      right_inv := fun _ => rfl }
+  have h3 := (upush_equiv (padsE st.params)).comp ((h1.comp h2).comp (upush_equiv R))
+  exact h3.congr fun _ => rfl
+
 end Adaptive
 
 /-! ## Zero knowledge -/
@@ -570,6 +597,58 @@ section Close
 
 variable (Hs : Hashes) (T : CrtTables) (st : Statement) (r : ByteArray) (k : Cont2)
 
+/-- The grinding outcome of a shared tape (`(0, 0)` if no answer is accepted). -/
+def hit2 (s : Shared) : ℕ × Bytes 16 := (firstHit s.2.1).getD (0, fun _ => 0)
+
+/-- **For every fallback block and shared tape, the ideal two-phase run on uniform pads is
+distributed exactly as the simulated run on uniform fields** (`proveIdeal2_close` averages this
+over both): `simRun2` at the adaptive fields `fieldsAd` (`proveIdeal2_eq_simRun2`), which are
+uniform (`upush_fieldsAd`). -/
+theorem proveIdeal2_eq_simRun2
+    (hk : ∀ o x sfx, k o = some (x, sfx) → ZKHypQ (withInst st x) (r ++ sfx) x.sys)
+    (hr : r.size ≤ st.params.witnessBytes) (fb : Fallback st.params) (s : Shared)
+    (t : Pads st.params) :
+    proveIdeal2 Hs T st r k ((s, t), fb) =
+      simRun2 Hs st r.size k ((s, fieldsAd Hs T st r k s (hit2 s).1 (hit2 s).2 t), fb) := by
+  rcases hf : firstHit s.2.1 with _ | ⟨ctr, delta⟩
+  · simp only [proveIdeal2, simRun2, hf]
+  · have hh : hit2 s = (ctr, delta) := by simp only [hit2, hf, Option.getD_some]
+    rw [hh]
+    have hp1 := idealPhase1_eq Hs T (st1 st) r s ctr delta hr t
+    have hp2 : simPhase1 Hs (st1 st) r.size s ctr delta (fieldsAd Hs T st r k s ctr delta t) =
+        idealPhase1 Hs T (st1 st) r s ctr delta t :=
+      (phase1Of_congr Hs (st1 st) s ctr delta hr _ _ _ fun j hj => dB_append_pre r _ t j hj).trans
+        hp1.symm
+    simp only [proveIdeal2, simRun2, hf]
+    rw [hp2]
+    refine Prod.ext rfl (Prod.ext rfl (map_congr_of fun x hko => ?_))
+    obtain ⟨x, sfx⟩ := x
+    have hz := hk _ _ _ hko
+    have hpick : pick Hs st r k s ctr delta (corrB t) (cmB Hs T (st1 st) s delta t)
+        (utOf Hs T st s ctr delta t) (dB r t) = (x, sfx) := by
+      have e := congrArg (fun o => (k o).getD ((default : Inst2), ByteArray.empty)) hp1
+      simp only [hko] at e
+      exact e.symm
+    refine (idealCore_fields Hs T (withInst st x) (r ++ sfx) x.sys hz.hvals hz.hdeg hz.hd hz.hd'
+      hz.hI hz.hsat s ctr delta t).trans ?_
+    have hfa : fieldsAd Hs T st r k s ctr delta t =
+        (fieldsOf Hs T (withInst st x) (r ++ sfx) x.sys s ctr delta t).1 := by
+      simp only [fieldsAd]
+      rw [hpick]
+    rw [hfa]
+
+/-- **The ideal two-phase run and the simulated one, for every fallback block and shared
+tape** (exact). -/
+theorem proveIdeal2_close_at
+    (hk : ∀ o x sfx, k o = some (x, sfx) → ZKHypQ (withInst st x) (r ++ sfx) x.sys)
+    (hr : r.size ≤ st.params.witnessBytes) (hnm : st.params.nMask ≤ 32)
+    (hT : maskInvOk T = true) (fb : Fallback st.params) (s : Shared) :
+    Close 0 (fun t : Pads st.params => proveIdeal2 Hs T st r k ((s, t), fb))
+      (fun f : SimFields st.params => simRun2 Hs st r.size k ((s, f), fb)) :=
+  ((upush_fieldsAd Hs T st r k s (hit2 s).1 (hit2 s).2 hT hnm hr).close
+    fun f => simRun2 Hs st r.size k ((s, f), fb)).congr
+    (fun t => proveIdeal2_eq_simRun2 Hs T st r k hk hr fb s t) fun _ => rfl
+
 /-- **On a uniform tape, the ideal two-phase run is distributed exactly as the simulated one**
 (hybrids H2, H5–H7 with the instance chosen after step 1), for every continuation whose instances
 and suffixes the witness satisfies. -/
@@ -578,62 +657,17 @@ theorem proveIdeal2_close
     (hr : r.size ≤ st.params.witnessBytes) (hnm : st.params.nMask ≤ 32)
     (hT : maskInvOk T = true) :
     Close 0 (proveIdeal2 Hs T st r k) (simRun2 Hs st r.size k) := by
-  suffices hs : ∀ fb s, Close 0 (fun t : Pads st.params => proveIdeal2 Hs T st r k ((s, t), fb))
-      (fun f : SimFields st.params => simRun2 Hs st r.size k ((s, f), fb)) by
-    -- Average over the fallback block, then over the shared part (`convert`: the products'
-    -- `Fintype` instances are found along different paths).
-    have h1 : ∀ fb, Close 0 (fun t : IdealTape st.params => proveIdeal2 Hs T st r k (t, fb))
-        (fun c : SimCoins st.params => simRun2 Hs st r.size k (c, fb)) := fun fb => by
-      convert Close.prod_right
-        (X := fun s (t : Pads st.params) => proveIdeal2 Hs T st r k ((s, t), fb))
-        (Y := fun s (f : SimFields st.params) => simRun2 Hs st r.size k ((s, f), fb)) (hs fb)
-    convert Close.prod_left
-      (X := fun (t : IdealTape st.params) fb => proveIdeal2 Hs T st r k (t, fb))
-      (Y := fun (c : SimCoins st.params) fb => simRun2 Hs st r.size k (c, fb)) h1
-  intro fb s
-  rcases hf : firstHit s.2.1 with _ | ⟨ctr, delta⟩
-  · -- No accepted grinding answer: step 1 from the fallback block, step 2 fails.
-    have e1 : ∀ t : Pads st.params, proveIdeal2 Hs T st r k ((s, t), fb) =
-        (ba fb.1, ba fb.2, (k (ba fb.1, ba fb.2)).map fun _ => .error "grinding failed") :=
-      fun t => by simp only [proveIdeal2, hf]
-    have e2 : ∀ f : SimFields st.params, simRun2 Hs st r.size k ((s, f), fb) =
-        (ba fb.1, ba fb.2, (k (ba fb.1, ba fb.2)).map fun _ => .error "grinding failed") :=
-      fun f => by simp only [simRun2, hf]
-    exact (close_const le_rfl _).congr e1 e2
-  · -- The grinding outcome `(ctr, Δ)`; then the adaptive fields.
-    let Φ : SimFields st.params → Out2 := fun f =>
-      ((simPhase1 Hs (st1 st) r.size s ctr delta f).1,
-        (simPhase1 Hs (st1 st) r.size s ctr delta f).2,
-        (k (simPhase1 Hs (st1 st) r.size s ctr delta f)).map fun _ =>
-          .ok (simAssemble st.params s ctr delta f))
-    have e1 : ∀ t : Pads st.params, proveIdeal2 Hs T st r k ((s, t), fb) =
-        Φ (fieldsAd Hs T st r k s ctr delta t) := by
-      intro t
-      have hp1 := idealPhase1_eq Hs T (st1 st) r s ctr delta hr t
-      have hp2 : simPhase1 Hs (st1 st) r.size s ctr delta (fieldsAd Hs T st r k s ctr delta t) =
-          idealPhase1 Hs T (st1 st) r s ctr delta t :=
-        (phase1Of_congr Hs (st1 st) s ctr delta hr _ _ _ fun j hj => dB_append_pre r _ t j hj).trans
-          hp1.symm
-      simp only [proveIdeal2, hf, Φ]
-      rw [hp2]
-      refine Prod.ext rfl (Prod.ext rfl (map_congr_of fun x hko => ?_))
-      obtain ⟨x, sfx⟩ := x
-      have hz := hk _ _ _ hko
-      have hpick : pick Hs st r k s ctr delta (corrB t) (cmB Hs T (st1 st) s delta t)
-          (utOf Hs T st s ctr delta t) (dB r t) = (x, sfx) := by
-        have e := congrArg (fun o => (k o).getD ((default : Inst2), ByteArray.empty)) hp1
-        simp only [hko] at e
-        exact e.symm
-      refine (idealCore_fields Hs T (withInst st x) (r ++ sfx) x.sys hz.hvals hz.hdeg hz.hd hz.hd'
-        hz.hI hz.hsat s ctr delta t).trans ?_
-      have hfa : fieldsAd Hs T st r k s ctr delta t =
-          (fieldsOf Hs T (withInst st x) (r ++ sfx) x.sys s ctr delta t).1 := by
-        simp only [fieldsAd]
-        rw [hpick]
-      rw [hfa]
-    have e2 : ∀ f : SimFields st.params, simRun2 Hs st r.size k ((s, f), fb) = Φ f := fun f => by
-      simp only [simRun2, hf, Φ]
-    exact ((upush_fieldsAd Hs T st r k s ctr delta hT hnm hr).close Φ).congr e1 e2
+  have hs := proveIdeal2_close_at Hs T st r k hk hr hnm hT
+  -- Average over the fallback block, then over the shared part (`convert`: the products'
+  -- `Fintype` instances are found along different paths).
+  have h1 : ∀ fb, Close 0 (fun t : IdealTape st.params => proveIdeal2 Hs T st r k (t, fb))
+      (fun c : SimCoins st.params => simRun2 Hs st r.size k (c, fb)) := fun fb => by
+    convert Close.prod_right
+      (X := fun s (t : Pads st.params) => proveIdeal2 Hs T st r k ((s, t), fb))
+      (Y := fun s (f : SimFields st.params) => simRun2 Hs st r.size k ((s, f), fb)) (hs fb)
+  convert Close.prod_left
+    (X := fun (t : IdealTape st.params) fb => proveIdeal2 Hs T st r k (t, fb))
+    (Y := fun (c : SimCoins st.params) fb => simRun2 Hs st r.size k (c, fb)) h1
 
 end Close
 

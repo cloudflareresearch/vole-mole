@@ -31,7 +31,7 @@ Line references are to the working tree at commit `6d7113e`.
 |---|---|---|---|
 | One-more unforgeability (paper Def. 2.5), classical ROM + ideal cipher | **Holds.** Tight under a τ-shift variant of UOV one-more preimage resistance (Thm U2). Under the paper's standard assumption (Def. 3.1) the reduction loses an extra `(Q₃+ℓ+1)·2^{−71}` (Thm U1) | Same (ZK is not used) | §5–§6 |
 | One-more unforgeability, QROM | **Open.** The reduction needs a first-phase extractor *during* the run; Q2 extracts only after the run | Same | §7 |
-| Blindness against a malicious Issuer (paper Def. 2.4: malicious key, selective-failure form) | **Fails.** An honest-but-curious Issuer links with advantage ≈ 1 using about 310 SHAKE calls per (signature, session) pair (`lean/docs/zk.md` §4) | **Holds** (Thm B), with advantage `≤ ε_ZK^fix(Q_P = 2) + 2Q_X·2^{−256}`; [Lean] from G1, with (ZK-fix) as a hypothesis (`Privacy/PomFRIT.lean`), and with (ZK-fix) derived for the executable Lean prover with label rows down to its tape hypothesis (`Privacy/PomFRITLean.lean`, `blindness_lean`) | §8 |
+| Blindness against a malicious Issuer (paper Def. 2.4: malicious key, selective-failure form) | **Fails.** An honest-but-curious Issuer links with advantage ≈ 1 using about 310 SHAKE calls per (signature, session) pair (`lean/docs/zk.md` §4) | **Holds** (Thm B), with advantage `≤ ε_ZK^fix(Q_P = 2) + 2Q_X·2^{−256}`; [Lean] from G1, with (ZK-fix) as a hypothesis (`Privacy/PomFRIT.lean`), and with (ZK-fix) derived for the executable Lean prover with label rows down to its tape hypothesis (`Privacy/PomFRITLean.lean`, `blindness_lean`); in the ROM and ideal-cipher model with the Issuer seeing the tables, for the Lean prover, `≤ 4·εRO(q₃, q₅ + 1248, q_E + 18428) + δ(A) + δ(A.swap)` (`Privacy/PomFRITRO.lean`, `blindnessRO_lean`; the collision terms `δ` explicit, bounded on paper) | §8 |
 | No selective failure via `finalize_issue`'s check (`pomfrit.cpp:207`) | Holds: the abort event is a function of the Issuer's own view | Holds | §8.3 |
 | Message binding; no re-targeting of a signature | Holds (part of unforgeability; L8 §7) | Holds | §9.1 |
 | Third parties cannot maul a signature (strong SE) | Holds against parties who never saw the request `t` | Holds against everyone, the Issuer included | §9.2 |
@@ -478,14 +478,34 @@ and `d` at 3075 and 3139; at `Layout.main` the definitions are the spec's, by `r
   so the simulator outputs them before the instance exists. `blindness_lean` is Theorem B (from
   G1) for this prover: `≤ 4ε`. On `main` the statement is false (`ZK/Relations.lean`).
   `pomfritVerify_complete_tables`: the final signature passes `verify`.
-- **Not done: blindness in the random-oracle and ideal-cipher model.** Moussaka and Ratatouille
-  have it (`lean/docs/zk.md` §10.2: the adversary sees the tables, the proofs share them). For
-  PomFRIT the missing piece is a random-oracle and ideal-cipher zero-knowledge theorem for the
-  two-phase prover (the chain of `zk_rom_ic_h23` for `tapeOf2`, with the simulator programming
-  `H₂³` at the prefix recomputed for the instance the Client picks after step 1, and the
-  fallback block); `ZK/TwoPhaseHops.lean` has only the fixed-record hop hypotheses. The game-level
-  layer (`Privacy.ZeroKnowledgeRO`, `hop_ro`, the read bounds of `ZK/ReadsRO.lean`) would then
-  apply as for the other two protocols.
+- **[Lean] Blindness in the random-oracle and ideal-cipher model** (`lean/VoleMole/Privacy/PomFRITRO.lean`,
+  `ZK/TwoPhaseRO.lean`, `ZK/TwoPhaseIC.lean`, `ZK/TwoPhaseReadsRO.lean`; `lean/docs/zk.md` §10.2).
+  Both sessions run the Lean prover on the same random tables (`H₂³` on every grinding point,
+  `H₅` on every 37-byte input, the cipher of the BAVC and VOLE expansion; each session its own
+  `H₃` slice), and the Issuer's guess sees all of them, reading `q₃` keys of each slice, `q₅` of
+  `H₅`, `q_E` of the cipher and `H₂³` freely; its key, messages and responses do not read the
+  tables; `hash_to_target`, `XOF_seed` (drawn uniformly, G1) and the refresher commitment stay
+  SHAKE. The game is the spec's (`realSession` on `Layout.labelRows`).
+  - The two-phase zero-knowledge theorem behind it (`zk2_rom_ic_h23_num`): the single-proof bound
+    `q₃·2⁻¹²⁸ + 2⁻¹¹⁰ + 221·(4607 + q_E + 4607)·2⁻¹²⁸ + (q₅ + 1)·2⁻¹²⁸` holds for the two-phase run,
+    with the simulator programming `H₂³` at the prefix it recomputes for the instance `(pk, h)`
+    the Client picks after step 1, the fallback block (no accepted grinding answer) inside
+    `Pr[GrindBad]`, and a continuation that may itself read `H₅` and the cipher (the Issuer
+    answers after seeing both requests, and the other session's request reads the tables): its
+    reads are added to `q₅`, `q_E`.
+  - The hybrids: session 0 simulated (`hop0`), then session 1 (`hop1`, plus the collision term
+    `δ(A)`: session 1, run for real, reads `H₂³` at a point session 0's simulator programmed);
+    a session's step 2 is run only when both responses are valid (the signatures are revealed
+    only then), so the simulators program symmetrically and the fully simulated games of the two
+    worlds are equal (`G2_swap`: the requests are one-time pads, swapped between the positions).
+    World 1 is world 0 for the Issuer with the sessions' roles exchanged (`realGameRO_true`).
+  - **`blindnessRO_lean`**: `|Pr[A accepts | b = 0] − Pr[A accepts | b = 1]| ≤
+    4·εRO(q₃, q₅ + 1248, q_E + 18428) + δ(A) + δ(A.swap)`, about `2⁻¹⁰³·⁴ +
+    4·(q₃ + q₅ + 221·q_E)·2⁻¹²⁸ + δ(A) + δ(A.swap)`. On paper `δ ≲ 2⁻¹²⁸ + 2⁻¹¹⁰` (session 1's
+    grinding prefix does not depend on session 0's simulated `ã₀`, the last field of the prefix
+    session 0 programs at). Remaining modelling steps: SHAKE as a random oracle, AES as an ideal
+    cipher (the cipher's rows are uniform functions: the PRP/PRF switching term is on paper),
+    the two slices independent (distinct `r`), G0 → G1.
 
 ### 8.3 Selective failure, the response `s`, and the check at `pomfrit.cpp:207`
 
@@ -629,6 +649,7 @@ dedicated to PomFRIT.
 | QROM one-more unforgeability | open | open |
 | Blindness, honest-but-curious Issuer | ✗ (practical linking) | ✓ (Thm B) |
 | Blindness, malicious Issuer, malicious key, selective failure | ✗ | ✓ (Thm B, §8.3) |
+| Blindness in the ROM + ideal cipher, Issuer seeing the tables (Lean prover) | ✗ | ✓ (`blindnessRO_lean`, collision terms on paper) |
 | Blindness in the QROM | ✗ | open (`lean/docs/zk-qrom.md`) |
 | Strong SE / no third-party mauling | ✓ against parties without `t` | ✓ against all |
 | Owner re-randomization (§9.3) | present | present |
@@ -665,3 +686,5 @@ dedicated to PomFRIT.
 | Blindness (Thm B, from G1) under (ZK-fix) as a two-phase hypothesis: `≤ 4ε` between the worlds, for either proof layout (`lean/VoleMole/Privacy/PomFRIT.lean`) | `blindness` |
 | (ZK-fix) for the executable Lean prover with label rows, from the two-phase tape hypothesis; blindness with that prover; completeness of `verify` on the final signature (`lean/VoleMole/Privacy/PomFRITLean.lean`) | `lean_zeroKnowledge`, `blindness_lean`, `pomfritVerify_complete` |
 | G1 → G2 for one session; G3 exactly (one-time pad, then a swap of the sessions' simulator coins) | `sessionClose_real_sim`, `simGame_eq` |
+| Two-phase zero knowledge in the ROM and ideal-cipher model with `H₂³` visible, the continuation reading the tables (`lean/VoleMole/ZK/TwoPhaseRO.lean`, `ZK/TwoPhaseIC.lean`, `ZK/TwoPhaseReadsRO.lean`) | `zk2_rom_ic_h23`, `zk2_rom_ic_h23_num`, `zk2_ro`, `lean_zeroKnowledgeROS2` |
+| Blindness in the ROM and ideal-cipher model, both sessions on shared tables, the Issuer's guess seeing them (`lean/VoleMole/Privacy/PomFRITRO.lean`) | `blindnessRO`, `blindnessRO_lean`, `hop0`, `hop1`, `G2_swap`, `realGameRO_iff` |

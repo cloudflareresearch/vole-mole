@@ -16,6 +16,10 @@ two-phase run, `LabHyp2`), the two-phase tape hypothesis `TapeHyp2` holds with
 probability that none of the `2³²` uniform grinding answers is accepted: only then does the ideal
 run read the fallback block, which is real in the real run and uniform on the ideal tape (exact
 value `(|Aᶜ|/2¹²⁸)^{2³²}` by `Grinding.card_noHit`).
+
+`ZK/TwoPhaseRO.lean` and `ZK/TwoPhaseIC.lean` run the same hybrids in the random-oracle and
+ideal-cipher model with the tables visible (`zk2_rom_ic_h23_num`), where the abort term is inside
+`Pr[GrindBad]`.
 -/
 
 open Finset
@@ -23,6 +27,10 @@ open Finset
 namespace VoleMole.ZK.Sim
 
 open VoleMole.Verifier VoleMole.Verifier.Bridge VoleMole.Arith VoleMole.ZK VoleMole.Privacy
+
+-- The statements hold for any CTR PRG (`HasPrg`, `Verifier/Prg.lean`), AES included.
+variable [VoleMole.Verifier.HasPrg]
+set_option linter.unusedSectionVars false
 
 /-- **The abort term**: the probability that no uniform grinding answer is accepted. -/
 noncomputable def noHitProb : ℝ := pr Grind (fun g => firstHit g = none)
