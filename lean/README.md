@@ -75,7 +75,9 @@ of `VoleMole/ROM/` compiles the part of VCVio, PolyFun and cslib it imports (abo
 (`lake` prints `info: … native backend disabled`); nothing here calls them.
 
 The prover is checked against the KAT proofs with `lake exe prover_vectors` (from `lean/`; `lake exe
-prover_vectors DIR/tests labelrows` for the KAT files of a `voleith-label-rows` build).
+prover_vectors DIR/tests labelrows` for the KAT files of a `voleith-label-rows` build), and the
+zero-knowledge simulator with `lake exe zk_sim [DIR/tests [main|labelrows [FILTER]]]` (about 10
+minutes per layout; `FILTER` is a label prefix such as `moussaka` or `ratatouille 0`).
 
 The C++ side of the cross-checks runs with the normal test suite:
 
@@ -160,6 +162,21 @@ adaptive-reprogramming loss and has no known matching attack. A 128-bit `rho` do
 multi-target Grover attack around 2⁵⁰ queries. Both are removed by a 256-bit `rho` and a salt in
 chal1/chal2 (recommended, not implemented).
 
+**Statement (executable prover, with the fix, `docs/zk.md` §10.1).** [Lean] `ZK/Sim.lean` …
+`ZK/Exec.lean`: an executable simulator (`Sim.simulate`; `Sim.simulateRO` also programs `H₂³`,
+and the verifier accepts its proofs under the programmed oracle, `simulateRO_accept`). The
+executable Lean prover equals an ideal-tape prover at its own run's tape (`prove_eq_proveIdeal`),
+and on a uniform tape the ideal-tape prover's output is distributed exactly as the simulator's
+(`proveIdeal_close`; with label rows Θ is moreover uniform and independent of the proof,
+`prove_guess_theta`). So the zero-knowledge advantage of any distinguisher equals its advantage
+on the tape (`zk_reduction`), and `Privacy.ZeroKnowledge` holds with error `ε` for statement
+families with dedicated label rows (`labelRows_zeroKnowledge`) under the **tape hypothesis**
+`TapeHyp … ε` (H1, H4, H6 and the grinding answers: the run's tape is `ε`-close to uniform) and
+deterministic hypotheses (the witness satisfies the system for every `chal1`, `N_MASK ≤ 32`,
+correct interpolation, and the two assumptions of the completeness theorem). Not PomFRIT's
+two-phase ZK. `lake exe zk_sim` checks the tape equation, the simulator and the ideal-tape
+prover on all 18 KAT runs of each layout.
+
 The analysis also found a gap in the FAEST v3 specification's own ZK proof (between games G8 and
 G9).
 
@@ -190,7 +207,7 @@ limitation, not an attack) takes over. Strong simulation-extractability: 2⁻⁶
 | `ratatouille.md` | Balance (no inflation), no theft, unlinkability, correctness: proved. | Spends are not bound to a session, so a copied spend request can be redeemed first (medium). |
 | `domain-separation.md` | Every hash/XOF/permutation call lies in a disjoint domain, except below. [Lean] `Protocols/DomainSeparation.lean` | PomFRIT's `hash_to_target` overlaps four proof-system domains (no exploit found; fix: a final domain byte). |
 | `uov-assumptions.md` | Relates the protocol-specific UOV assumptions to each other and to standard UOV. [Lean] `Protocols/UOVAssumptions.lean` | Several reductions are unavailable; the note states why. |
-| Privacy on the specs ([Lean] `VoleMole/Privacy/`) | The privacy theorems as games on `Spec/*`, each hybrid hop mechanized: PomFRIT blindness (`Privacy.PomFRIT.blindness`, `≤ 4ε`), Moussaka issuer hiding and unlinkability against a Moderator colluding with all Anchors (`Privacy.Moussaka.anonymity`, `≤ 4εI + 4εR + 2εhide`), Ratatouille unlinkability of spends from issuances and from each other through change tokens (`Privacy.Ratatouille.unlinkability`, `≤ 4εI + 4εS + 2εhide`). Hypotheses: zero knowledge of the abstract proof systems (`Privacy.ZeroKnowledge`: a simulator from the instance alone, output `ε`-close to the prover's for every valid witness; `ε = 0` is equality of distributions), hiding of `Com` for the explicit reductions. The final hybrids are exact. On paper: the seed-XOF hop, and zero knowledge itself | The zero-knowledge hypothesis is false on `main` for PomFRIT (`ZK.pomfrit_issuer_hits`, `ZK.pomfrit_attack_test`); for Moussaka and Ratatouille no efficient simulator satisfies it per proof on `main`, and the joint (PU) hop replaces it (paper). PomFRIT note §8.3: the "both ⊥" rule is needed. Moussaka Thm 4(a) needs no `2⁻¹⁹²` term; Thm 4(b) misses an abort term. Ratatouille H3 needs the Client's validity check against the commitment it sent |
+| Privacy on the specs ([Lean] `VoleMole/Privacy/`) | The privacy theorems as games on `Spec/*`, each hybrid hop mechanized: PomFRIT blindness (`Privacy.PomFRIT.blindness`, `≤ 4ε`), Moussaka issuer hiding and unlinkability against a Moderator colluding with all Anchors (`Privacy.Moussaka.anonymity`, `≤ 4εI + 4εR + 2εhide`), Ratatouille unlinkability of spends from issuances and from each other through change tokens (`Privacy.Ratatouille.unlinkability`, `≤ 4εI + 4εS + 2εhide`). Hypotheses: zero knowledge of the abstract proof systems (`Privacy.ZeroKnowledge`: a simulator from the instance alone, output `ε`-close to the prover's for every valid witness; `ε = 0` is equality of distributions), hiding of `Com` for the explicit reductions. The final hybrids are exact. With the executable Lean prover (label rows) as the proof system, zero knowledge is reduced to the tape hypothesis (`Privacy.Moussaka.anonymity_lean`, `Privacy.Ratatouille.unlinkability_lean`, `Privacy/LeanProver.lean`; `docs/zk.md` §10.1). On paper: the seed-XOF hop, the tape hypothesis, PomFRIT's two-phase zero knowledge | The zero-knowledge hypothesis is false on `main` for PomFRIT (`ZK.pomfrit_issuer_hits`, `ZK.pomfrit_attack_test`); for Moussaka and Ratatouille no efficient simulator satisfies it per proof on `main`, and the joint (PU) hop replaces it (paper). PomFRIT note §8.3: the "both ⊥" rule is needed. Moussaka Thm 4(a) needs no `2⁻¹⁹²` term; Thm 4(b) misses an abort term. Ratatouille H3 needs the Client's validity check against the commitment it sent |
 
 **Cross-cutting finding (critical, deployment):** PomFRIT's Issuer signs arbitrary targets, and
 all protocols share the UOV key type. If one key serves PomFRIT and another protocol, anyone can
@@ -283,6 +300,7 @@ prover_vectors` against the KAT files.
 | Bridge theorems (`Verifier/Bridge/*`) | partly: proved that the executable CTR blocks are `Seed.Commitments.ctrInput` (and its role separation applies to the verifier's tweaks), that the VOLE check is `Seed.kosValue`, that the QuickSilver check value is `EndToEnd.qsCheck` + `Seed.maskPoly` (including the `Δ^d·f(q/Δ)` shortcut), and that acceptance gives `EndToEnd`'s accepting equation at that transcript. The field embedding is constructed (`Bridge/Concrete.lean`, from `Arith/GFField.lean`) and the theorems that assumed one (`accept_hacc`, `map_constraintKeys`, `map_gfInv`, `map_voleHashReceiver`) are restated at it without that hypothesis. Per relation (`Bridge/Relations.lean`): with `GF128` itself as the field, each relation's evaluator is `System.values` of its `Arith/*` system (`betaFast = beta`, cached UOV coefficients unchanged, the array-based UOV evaluation of `UovEval.lean` equal to the generator's), so acceptance by the executable `verify` gives `EndToEnd`'s accepting equation for that system over GF(2¹²⁸) with no hypothesis (`moussakaIssue_accept`, …, `pomfritVerify_accept`), i.e. `hacc` of `*_extract_gf128` at that Δ. |
 | Bridge across Δ (`Bridge/Lift.lean`, `Columns.lean`, `Chain.lean`, `ChainRelations.lean`) | done, modulo the probabilistic steps: ConvertToVOLE and the CRT step are read as functions of the challenge blocks with the commitments fixed (the steps take `Δ` as bits and the commitments as arguments: `convertToVoleAt`, `crtReconstructAt`). Proved: each column is `V_{i,b} + Δ_{i,b}·u^{(i)}` with `u^{(i)} = c_i + Σ_j PRG(K_{i,j})` (the hidden leaf's key never read), so each lifted witness row is `C_r + Σ_i u^{(i)}_r·e_i(Δ_i)` (`resp_row`); the executable lift `Δ ↦ Σ Δ_c W_CRT[c]` is additive and injective (`lift_injective`, an explicit left inverse checked by `decide +kernel`); an opening that reconstructs the committed keys makes the run equal to the committed response (`crtReconstruct_eq_respAt`). On a chain (fixed `iv`, `H₅`, `chal1`, `h_V`, `z`; `chal2` determined before Δ), `chain_claim4` gives `Claim4Hyp` and the accepting equation on all of `A` with one remainder `maskPoly d a b ã z` (masks affine by L3); `onChain_of_accept` puts every accepted proof of the chain in `A` with `Δ = chal3`; `*_extract_chain` (five relations) apply `*_extract_gf128`. Assumed: `KOSGood` for `chal1` (L3), `IsFixed` for dead-leaf trees (L2), `hQS`/`hcomb` (L4), `hδ`/`hclaim1` and binding of the leaf commitments (L1). §9 discharges L3, L4 and `hδ` for uniform independent `chal1`, `chal2`, `l` |
 | Prover (`Prover.lean`, `ProverKats.lean`) | done: `voleith_vole_gen` + `voleith_prove_commit` with the C++'s seed derivation (`H₃(w_prefix ‖ mu₁ ‖ rho ‖ 3)`, `rho` from the `Spec/*` seed expanders). Each sender step is the verifier's step function at `Δ = 0` (tag columns, gate hashes, lifted rows, masks, VOLEHash), plus the prover-only `u`, `u_mask` (`M_tree`·PRG), the second gate labels and `c_mult`; QuickSilver's `ã` and check value are the coefficients of the verifier's check value as a polynomial in `Δ'`, obtained by evaluating it at `d + 1` points and interpolating (no coefficient decomposition of the constraints); grinding and the BAVC opening as `grind_and_open`. `lake exe prover_vectors` reproduces all 18 KAT proofs byte for byte on `main`, and all 18 of the label-rows KATs with `labelrows`; the Lean verifier accepts every Lean proof, also on random statements of all five relations (issuers' UOV preimages from a test-only oil-space sampler); a non-satisfying witness is refused. About 44 s per layout |
+| Zero-knowledge simulator (`ZK/Sim.lean`, `ZK/SimKats.lean`, `docs/zk.md` §10.1) | done: the simulator, `H₂³` programming, the ideal-tape prover and the real run's tape (`tapeOf`), executable. `lake exe zk_sim` checks on all 18 KAT runs of each layout that `proveIdeal (tapeOf …) = prove`, that the verifier accepts the simulated proof with the programmed oracle and rejects it without, and (except PomFRIT) that it accepts the ideal-tape prover's proof on a pseudorandom tape with programmed grinding answers. About 10 minutes per layout |
 | Completeness (`Bridge/Prover.lean`) | proved: the VOLE correlation of the prover's output for every `Δ` on columns and lifted rows (`prover_column`, `prover_row`), the VOLE check identity (`voleHash_complete`), QuickSilver completeness for every `Δ' ≠ 0` (`qsProve_complete`, via `EndToEnd.sysCheckPoly` and Lagrange uniqueness), and **completeness of `verify` on the prover's output** (`verify_proveCommit`, `verify_prove`, `*_complete` for the five relations), for any hash record with the right output lengths (SHAKE: `hashesWF_shake`). Assumed: BAVC opening correctness (`BAVCComplete`), the CRT masks' VOLE correlation for the prover's commitment (`CrtComplete`), `Δ' ≠ 0` (probability `2⁻¹²⁰`); `prover_vectors` checks the first two on every proof |
 
 ### 9. Probabilistic layer — `VoleMole/Prob/` (single challenges) and `VoleMole/ROM/` (random oracle)
@@ -389,9 +407,14 @@ What is **not** established, roughly in order of importance:
    simulator is a function of the instance; in the random-oracle model it also programs the
    oracle, which the abstract specs do not expose) and hiding of `Com` (for the explicit
    reductions) as hypotheses, so they apply to the label-row fix; on `main` the joint (PU) hop over
-   proofs sharing `r` replaces the per-proof hypothesis and is paper. The executable Lean prover (§8),
-   which reproduces the C++ proofs, is the prover such a hypothesis would be stated for; instantiating
-   it with the `ZK/*` results is not done. The seed-XOF hop (the games
+   proofs sharing `r` replaces the per-proof hypothesis and is paper. For the executable Lean prover
+   (§8) with dedicated label rows the hypothesis is discharged (`ZK/Exec.lean`,
+   `Privacy/LeanProver.lean`, `docs/zk.md` §10.1) except for the **tape hypothesis** (`TapeHyp`: the
+   real run's tape is `ε`-close to uniform, which is H1, H4, H6 and the grinding answers: the
+   random-oracle, PRG and ideal-cipher steps) and deterministic side conditions (the witness
+   satisfies the system for every `chal1` and combination, `InterpOk`, `BAVCComplete`,
+   `CrtComplete`; the per-relation statement builders are parameters); PomFRIT's two-phase zero
+   knowledge is not covered. The seed-XOF hop (the games
    draw the XOF's outputs uniformly), Moussaka's non-colluding mode (Thm 4b) and the quantum
    versions are not mechanized.
 8. **Open deployment issues** found by the analysis and not yet fixed in the code: cross-protocol
