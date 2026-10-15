@@ -113,26 +113,26 @@ def moussaka (c : Ctx) (path : String) : IO Bool := do
     let t := req.extract 0 45
     let proof := req.extract 45 req.size
     ok := (← run c s!"moussaka {i} issue" true proof fun _ =>
-      verify c.T (moussakaIssue t ctxIss c.labelRows) proof) && ok
+      verify Hashes.shake c.T (moussakaIssue t ctxIss c.labelRows) proof) && ok
     if i == 0 then
       for (k, off) in mutations (moussakaIssue t ctxIss c.labelRows).params do
         ok := (← run c s!"moussaka {i} issue, mutated {k}" false proof fun _ =>
-          verify c.T (moussakaIssue t ctxIss c.labelRows) (flip proof off)) && ok
+          verify Hashes.shake c.T (moussakaIssue t ctxIss c.labelRows) (flip proof off)) && ok
       ok := (← run c s!"moussaka {i} issue, wrong ctx_iss" false proof fun _ =>
-        verify c.T (moussakaIssue t (flip ctxIss 0) c.labelRows) proof) && ok
+        verify Hashes.shake c.T (moussakaIssue t (flip ctxIss 0) c.labelRows) proof) && ok
     let anchors ← IO.ofExcept ((getAll r "anchor_sk").toList.mapM c.pk)
     let rreq := unhex (get r "redeem_request")
     let nf := rreq.extract 0 24
     let rproof := rreq.extract 24 rreq.size
     let st := moussakaRedeem anchors nf ctxIss ctxRed cd c.labelRows
     ok := (← run c s!"moussaka {i} redeem ({anchors.length} anchors)" true rproof fun _ =>
-      verify c.T st rproof) && ok
+      verify Hashes.shake c.T st rproof) && ok
     if i == 0 then
       for (k, off) in mutations st.params do
         ok := (← run c s!"moussaka {i} redeem, mutated {k}" false rproof fun _ =>
-          verify c.T st (flip rproof off)) && ok
+          verify Hashes.shake c.T st (flip rproof off)) && ok
       ok := (← run c s!"moussaka {i} redeem, wrong challenge_digest" false rproof fun _ =>
-        verify c.T (moussakaRedeem anchors nf ctxIss ctxRed (flip cd 0) c.labelRows) rproof) && ok
+        verify Hashes.shake c.T (moussakaRedeem anchors nf ctxIss ctxRed (flip cd 0) c.labelRows) rproof) && ok
   return ok
 
 def ratatouille (c : Ctx) (path : String) : IO Bool := do
@@ -147,13 +147,13 @@ def ratatouille (c : Ctx) (path : String) : IO Bool := do
     let cc := req.extract 0 32
     let proof := req.extract 32 req.size
     ok := (← run c s!"ratatouille {i} issue" true proof fun _ =>
-      verify c.T (ratatouilleIssue cc tInit ctxIss c.labelRows) proof) && ok
+      verify Hashes.shake c.T (ratatouilleIssue cc tInit ctxIss c.labelRows) proof) && ok
     if i == 0 then
       for (k, off) in mutations (ratatouilleIssue cc tInit ctxIss c.labelRows).params do
         ok := (← run c s!"ratatouille {i} issue, mutated {k}" false proof fun _ =>
-          verify c.T (ratatouilleIssue cc tInit ctxIss c.labelRows) (flip proof off)) && ok
+          verify Hashes.shake c.T (ratatouilleIssue cc tInit ctxIss c.labelRows) (flip proof off)) && ok
       ok := (← run c s!"ratatouille {i} issue, wrong t_init" false proof fun _ =>
-        verify c.T (ratatouilleIssue cc (tInit + 1) ctxIss c.labelRows) proof) && ok
+        verify Hashes.shake c.T (ratatouilleIssue cc (tInit + 1) ctxIss c.labelRows) proof) && ok
     let spends := getAll r "spend_request"
     for j in [0:spends.size] do
       let sreq := unhex spends[j]!
@@ -162,13 +162,13 @@ def ratatouille (c : Ctx) (path : String) : IO Bool := do
       let cNext := sreq.extract 32 64
       let sproof := sreq.extract 64 sreq.size
       let st := ratatouilleSpend pk nf d cNext ctxIss c.labelRows
-      ok := (← run c s!"ratatouille {i} spend {j}" true sproof fun _ => verify c.T st sproof) && ok
+      ok := (← run c s!"ratatouille {i} spend {j}" true sproof fun _ => verify Hashes.shake c.T st sproof) && ok
       if i == 0 && j == 0 then
         for (k, off) in mutations st.params do
           ok := (← run c s!"ratatouille {i} spend {j}, mutated {k}" false sproof fun _ =>
-            verify c.T st (flip sproof off)) && ok
+            verify Hashes.shake c.T st (flip sproof off)) && ok
         ok := (← run c s!"ratatouille {i} spend {j}, wrong d" false sproof fun _ =>
-          verify c.T (ratatouilleSpend pk nf (d + 1) cNext ctxIss c.labelRows) sproof) && ok
+          verify Hashes.shake c.T (ratatouilleSpend pk nf (d + 1) cNext ctxIss c.labelRows) sproof) && ok
   return ok
 
 def pomfrit (c : Ctx) (path : String) : IO Bool := do
@@ -181,15 +181,15 @@ def pomfrit (c : Ctx) (path : String) : IO Bool := do
     let sig := unhex (get r "signature")
     let msg := unhex (get r "msg")
     let proof := sig.extract 0 (pomfritParams c.labelRows).proofBytes
-    ok := (← run c s!"pomfrit {i}" true proof fun _ => pomfritVerify c.T pk sig msg c.labelRows) && ok
+    ok := (← run c s!"pomfrit {i}" true proof fun _ => pomfritVerify Hashes.shake c.T pk sig msg c.labelRows) && ok
     if i == 0 then
       for (k, off) in mutations (pomfritParams c.labelRows) do
         ok := (← run c s!"pomfrit {i}, mutated {k}" false proof fun _ =>
-          pomfritVerify c.T pk (flip sig off) msg c.labelRows) && ok
+          pomfritVerify Hashes.shake c.T pk (flip sig off) msg c.labelRows) && ok
       ok := (← run c s!"pomfrit {i}, mutated refresher" false proof fun _ =>
-        pomfritVerify c.T pk (flip sig (sig.size - 1)) msg c.labelRows) && ok
+        pomfritVerify Hashes.shake c.T pk (flip sig (sig.size - 1)) msg c.labelRows) && ok
       ok := (← run c s!"pomfrit {i}, wrong msg" false proof fun _ =>
-        pomfritVerify c.T pk sig (msg.push 0) c.labelRows) && ok
+        pomfritVerify Hashes.shake c.T pk sig (msg.push 0) c.labelRows) && ok
   return ok
 
 /-- Run everything; `dir` is the vector directory, `tests` the repository's `tests/`. -/

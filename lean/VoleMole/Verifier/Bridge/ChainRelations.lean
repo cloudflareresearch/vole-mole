@@ -13,9 +13,10 @@ small-VOLE value `u^{(i)} + d` encodes a witness of the relation, or at most `ma
 
 The chain's constraint evaluator is the relation's system (`hvals`); for the combined relations at
 a combination vector `l`, and for PomFRIT at a target computed from some `c1`. For a chain of the
-executable verifier (`Chain.vals = st.values chal1 chal2`, `onChain_of_accept`) `hvals` is
-`*_values`, with `l = Combination(chal2)` (`*Sys = *SysL … (ofArr (combinationArr …))`, by
-definition) and `c1 = chal1`; `Prob/ChainRelations.lean` samples `l` independently instead.
+verifier (`Chain.vals = st.values chal1 (st.combBytes Hs chal2)`, `onChain_of_accept`) `hvals`
+is `*_values`, with `l` decoded from `H_comb(chal2 ‖ dst)` (`*Sys = *SysL … (ofArr
+(combinationOf …))`, by definition) and `c1 = chal1`; `Prob/ChainRelations.lean` samples `l`
+independently instead.
 
 Remaining hypotheses (all probabilistic or random-oracle; see `Bridge/Chain.lean`):
 * `hkos`: `chal1` is KOS-good for the committed responses on `S ⊇ A` (L3);

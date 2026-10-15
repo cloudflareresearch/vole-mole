@@ -14,12 +14,13 @@ Phase B of `docs/probabilistic-plan.md` (M4). Only `VoleMole/ROM/` imports VCVio
 * **Samplers**: `Bytes n` and `GF128` get (noncomputable) uniform samplers; they are used for
   proofs only, never run.
 * **The hash oracles** (`spec`): one VCVio oracle specification `OracleSpec.ofFn` indexed by
-  `Dom = Kind × ByteArray`, a domain of `L0-L2-commitments.md` §2.1 and the input string. Each
-  domain answers with a fixed number of bytes (`Kind.outLen`). Under `randomOracle` each cell
-  `(k, x)` is an independent uniform answer: L0's disjointness of the domains (final byte, and the
-  lengths of the three `H₁` shapes; `Protocols/DomainSeparation.lean`) is what justifies splitting
-  SHAKE128 into these independent oracles. That step is a modelling assumption here (the plan's
-  "domain separation ⇒ independent oracles" lemma is not formalized).
+  `Dom = Kind × ByteArray`, a domain of `L0-L2-commitments.md` §2.1 (`Kind`, defined with the
+  verifier's hash record in `Verifier/Hashes.lean`) and the input string. Each domain answers with
+  a fixed number of bytes (`Kind.outLen`). Under `randomOracle` each cell `(k, x)` is an
+  independent uniform answer: L0's disjointness of the domains (final byte, and the lengths of the
+  three `H₁` shapes; `Protocols/DomainSeparation.lean`) is what justifies splitting SHAKE128 into
+  these independent oracles (`ROM/DomainSep.lean`: one oracle with a domain rule is equivalent;
+  `ROM/SingleOracle.lean`: L0's rule and the verifier).
 * `Table`: a complete answer table, the object VCVio's eager-sampling bounds quantify over
   (`prEvent_randomOracle_le_of_bad_queries`).
 -/
@@ -53,40 +54,11 @@ theorem prEvent_uniformSample_le {α : Type} [SampleableType α] [Fintype α] {P
 
 /-! ## The hash oracles -/
 
-/-- The SHAKE128 domains of `L0-L2-commitments.md` §2.1 (rows 1–12). `comb M` is the UOV
-combination `l = H(chal₂ ‖ dst)` of a relation combining `M` equations (row 12). -/
-inductive Kind
-  /-- `H₁`: leaf hashes and `com` (rows 1–3, told apart by their lengths). -/
-  | h1
-  /-- `H₂⁰`: `mu` with an instance (row 4). -/
-  | mu
-  /-- `H₂⁴`: `mu` for delayed instance binding (row 5). -/
-  | muDelayed
-  /-- `H₃`: the prover's root seed (row 6). -/
-  | h3
-  /-- `H₄`: `iv = H₄(iv_pre ‖ mu ‖ 4)` (row 7). -/
-  | h4
-  /-- `H₅`: the gate hash (row 8). -/
-  | h5
-  /-- `H₂¹`: `chal1` (row 9). -/
-  | h21
-  /-- `H₂²`: `chal2` (row 10). -/
-  | h22
-  /-- `H₂³`: `chal3` (row 11). -/
-  | h23
-  /-- The UOV combination `l` of `M` field elements (row 12). -/
-  | comb (M : ℕ)
-  deriving DecidableEq
+/-! The domains `Kind` and their output lengths `Kind.outLen` are `Verifier/Hashes.lean`'s: the
+verifier is parametrised by one hash function per domain, and here each domain is answered by the
+random oracle. -/
 
-/-- The number of output bytes of each domain (the "Output" column of L0 §2.1). -/
-def Kind.outLen : Kind → ℕ
-  | .h1 | .mu | .muDelayed | .h3 => 32
-  | .h4 => 16
-  | .h5 => 4
-  | .h21 => 136
-  | .h22 => 56
-  | .h23 => 16
-  | .comb M => 16 * M
+export VoleMole.Verifier (Kind)
 
 /-- An oracle query: the domain and the input string. -/
 abbrev Dom := Kind × ByteArray

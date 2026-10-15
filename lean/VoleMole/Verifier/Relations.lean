@@ -28,8 +28,9 @@ for the three UOV relations with the UOV term computed directly over arrays,
   (`= System.values` of `Arith.PomFRIT.pomfritRedeemSystem`).
 * `labelRows` (default `false`, `main`'s layout) selects the dedicated-label-row layout of branch
   `voleith-label-rows` (`Params.labelRows`), which all five relations use there.
-* The UOV combinations: `l = H(chal2 ‖ COMBINE_DST)`, 45 field elements
-  (`uov::detail::Combination`, `src/uov/circuit.hpp:56-69`).
+* The UOV combinations: `l = H_comb(chal2 ‖ COMBINE_DST)`, 45 field elements
+  (`uov::detail::Combination`, `src/uov/circuit.hpp:56-69`): the statement names `(45, dst)`
+  (`Statement.comb`), the verifier hashes, and `values` decodes the bytes (`combinationOf`).
 * UOV public keys: `UovPk.ofCompressed` expands a compressed public key as pqov's `expand_pk`
   (`subprojects/pqov/src/ov_keypair.c:66-76`): `P1 ‖ P2` is AES-128-CTR under the 16-byte
   `pk_seed` (zero 12-byte nonce, 32-bit big-endian block counter from 0;
@@ -74,9 +75,8 @@ def toSpec (pk : UovPk) : UOVKey := ⟨toL pk.digest, pk.map⟩
 
 end UovPk
 
-/-- The coefficients of `Combination(chal2, dst)`. -/
-def combinationArr (n : ℕ) (chal2 dst : ByteArray) : Array GF128 :=
-  let b := H (chal2 ++ dst) (16 * n)
+/-- The coefficients of `Combination(chal2, dst)`, from the bytes `b = H_comb(chal2 ‖ dst)`. -/
+def combinationOf (n : ℕ) (b : ByteArray) : Array GF128 :=
   (Array.range n).map fun k => gfOfBytes b (16 * k)
 
 /-- `encode_credits`: 8 bytes little-endian. -/
@@ -96,9 +96,10 @@ def moussakaRedeem (anchors : List UovPk) (nf ctxIss ctxRed challengeDigest : By
   dst := toBA (makeDst "mous" 0 'r' '0')
   instEnc := fun _ => toBA (Moussaka.RedeemInstance.encode
     ⟨anchors.map UovPk.toSpec, toL nf, toL ctxIss, toL ctxRed, toL challengeDigest⟩)
-  values := fun _ c2 w =>
+  comb := some (Moussaka.M, toBA (makeDst "mous" 0 'l' '0'))
+  values := fun _ lb w =>
     UovEval.moussakaRedeemValues (anchors.map UovPk.map) (fnOf nf) (fnOf ctxIss) (fnOf ctxRed)
-      (combinationArr Moussaka.M c2 (toBA (makeDst "mous" 0 'l' '0'))) w
+      (combinationOf Moussaka.M lb) w
 
 /-! ## Ratatouille -/
 
@@ -114,9 +115,10 @@ def ratatouilleSpend (pk : UovPk) (nf : ByteArray) (d : ℕ) (cNext ctxIss : Byt
   params := { witnessBytes := 847, qsDegree := 9, labelRows }
   dst := toBA (makeDst "rata" 0 'p' '0')
   instEnc := fun _ => pk.digest ++ nf ++ le64 d ++ cNext ++ ctxIss
-  values := fun _ c2 w =>
+  comb := some (Ratatouille.uovM, toBA (makeDst "rata" 0 'l' '0'))
+  values := fun _ lb w =>
     UovEval.ratatouilleSpendValues pk.map (fnOf nf) d (fnOf cNext) (fnOf ctxIss)
-      (combinationArr Ratatouille.uovM c2 (toBA (makeDst "rata" 0 'l' '0'))) w
+      (combinationOf Ratatouille.uovM lb) w
 
 /-! ## PomFRIT -/
 
@@ -146,18 +148,20 @@ def pomfritRedeem (pk : UovPk) (sig msg : ByteArray) (labelRows := false) : Stat
     binder1 := sig.extract n (n + 32)
     binder2 := sig.extract (n + 32) (n + 64)
     instEnc := fun c1 => pk.digest ++ h c1
-    values := fun c1 c2 w =>
+    comb := some (45, toBA (makeDst "pomf" 0 'l' '0'))
+    values := fun c1 lb w =>
       let hb := h c1
       UovEval.pomfritRedeemValues 119 45 pk.map (fun k => ⟨fnOf hb k.val⟩)
-        (combinationArr 45 c2 (toBA (makeDst "pomf" 0 'l' '0'))) w }
+        (combinationOf 45 lb) w }
 
-/-- PomFRIT's `verify` (`pomfrit.cpp:219-237`): the refresher commitment, then the proof. -/
-def pomfritVerify (T : CrtTables) (pk : UovPk) (sig msg : ByteArray) (labelRows := false) :
-    Transcript :=
+/-- PomFRIT's `verify` (`pomfrit.cpp:219-237`): the refresher commitment (an application-level
+hash, SHAKE128 here), then the proof. -/
+def pomfritVerify (Hs : Hashes) (T : CrtTables) (pk : UovPk) (sig msg : ByteArray)
+    (labelRows := false) : Transcript :=
   let n := (pomfritParams labelRows).proofBytes
   let refresher := sig.extract (n + 32) (n + 64)
   let com := sig.extract n (n + 32)
   if toBA (PomFRIT.commitRefresher (toL refresher)) != com then { error := "refresher_com" }
-  else verify T (pomfritRedeem pk sig msg labelRows) (sig.extract 0 n)
+  else verify Hs T (pomfritRedeem pk sig msg labelRows) (sig.extract 0 n)
 
 end VoleMole.Verifier

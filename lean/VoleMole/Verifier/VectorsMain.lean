@@ -74,7 +74,7 @@ def checkBavc (rs : Array Record) : IO Bool := do
   ok := (← check "bavc commit tree" (tree.foldl (· ++ ·) ByteArray.empty == c.bytes "tree")) && ok
   ok := (← check "bavc commit leaves" (lv.keys == c.bytes "leaves")) && ok
   ok := (← check "bavc commit hashed_leaves" (lv.coms == c.bytes "hashed_leaves")) && ok
-  ok := (← check "bavc commit check" (BAVC.check lv.coms == c.bytes "check")) && ok
+  ok := (← check "bavc commit check" (BAVC.check (Hashes.shake.hash .h1) lv.coms == c.bytes "check")) && ok
   let opening := o.bytes "opening"
   let delta := o.bytes "delta"
   match BAVC.reconstruct iv opening delta with
@@ -82,7 +82,7 @@ def checkBavc (rs : Array Record) : IO Bool := do
   | some v =>
     ok := (← check "bavc open leaves" (v.keys == o.bytes "leaves")) && ok
     ok := (← check "bavc open hashed_leaves" (v.coms == o.bytes "hashed_leaves")) && ok
-    ok := (← check "bavc open check" (BAVC.check v.coms == o.bytes "check")) && ok
+    ok := (← check "bavc open check" (BAVC.check (Hashes.shake.hash .h1) v.coms == o.bytes "check")) && ok
   -- Mutations: a nonzero trailing byte is rejected; a flipped seed byte changes the check value.
   let last := opening.size - 1
   let bad := opening.set! last (opening.get! last ^^^ 1)
@@ -91,7 +91,7 @@ def checkBavc (rs : Array Record) : IO Bool := do
   let seedByte := BAVC.tau * BAVC.hashLen
   let bad2 := opening.set! seedByte (opening.get! seedByte ^^^ 1)
   ok := (← check "bavc mutated seed changes check"
-    ((BAVC.reconstruct iv bad2 delta).map (BAVC.check ·.coms) != some (o.bytes "check"))) && ok
+    ((BAVC.reconstruct iv bad2 delta).map (BAVC.check (Hashes.shake.hash .h1) ·.coms) != some (o.bytes "check"))) && ok
   return ok
 
 def w128s (b : ByteArray) (stride : Nat) : Array W128 :=
@@ -130,19 +130,19 @@ def checkKatRecord (T : CrtTables) (r : Record) : IO Bool := do
   let inst := r.bytes "inst_enc"
   let dst := r.bytes "dst"
   let delayed := r.get "delayed" == "1"
-  let mu := Verifier.mu (some inst) dst
-  let mu1 := if delayed then Verifier.mu none dst else mu
+  let mu := Verifier.mu Hashes.shake (some inst) dst
+  let mu1 := if delayed then Verifier.mu Hashes.shake none dst else mu
   ok := (← check s!"{label} mu" (mu == r.bytes "mu" && mu1 == r.bytes "mu1")) && ok
-  let iv := ivOf pf mu1
+  let iv := ivOf Hashes.shake pf mu1
   ok := (← check s!"{label} iv" (iv == r.bytes "iv")) && ok
   let t0 ← IO.monoMsNow
   let some leaves := BAVC.reconstruct iv pf.opening pf.delta
     | check s!"{label} bavc accepted" false
-  let check1 := BAVC.check leaves.coms
+  let check1 := BAVC.check (Hashes.shake.hash .h1) leaves.coms
   ok := (← check s!"{label} leaves" (leaves.keys == r.bytes "leaves" &&
     leaves.coms == r.bytes "hashed_leaves")) && ok
   ok := (← check s!"{label} vole_commit_check" (check1 == r.bytes "vole_commit_check")) && ok
-  let c1 := chal1 pf mu1 check1 (r.bytes "binder1")
+  let c1 := chal1 Hashes.shake pf mu1 check1 (r.bytes "binder1")
   ok := (← check s!"{label} chal1" (c1 == r.bytes "chal1")) && ok
   let t1 ← IO.monoMsNow
   -- Milestone 3: ConvertToVOLE.
@@ -150,7 +150,7 @@ def checkKatRecord (T : CrtTables) (r : Record) : IO Bool := do
   ok := (← check s!"{label} q_columns" (columnsBytes cols == r.bytes "q_columns")) && ok
   let t2 ← IO.monoMsNow
   -- Milestone 4: CRT.
-  let crt := crtReconstruct pf T iv cols
+  let crt := crtReconstruct Hashes.shake pf T iv cols
   ok := (← check s!"{label} gate_hashes" (u32Bytes crt.hashes == r.bytes "gate_hashes")) && ok
   ok := (← check s!"{label} r_tilde" (w128Bytes crt.rTilde == r.bytes "r_tilde")) && ok
   ok := (← check s!"{label} q_rows" (w128Bytes crt.rows == r.bytes "q_rows")) && ok
@@ -159,15 +159,15 @@ def checkKatRecord (T : CrtTables) (r : Record) : IO Bool := do
   let t3 ← IO.monoMsNow
   -- Milestone 5: VOLE check and chal2.
   let hV := voleHashReceiver p c1 crt.rows crt.qMask crt.deltaLifted.toGF pf.voleCheck
-  let c2 := chal2 pf c1 hV (if delayed then mu else ByteArray.empty) (r.bytes "binder2")
+  let c2 := chal2 Hashes.shake pf c1 hV (if delayed then mu else ByteArray.empty) (r.bytes "binder2")
   ok := (← check s!"{label} chal2" (c2 == r.bytes "chal2")) && ok
   let t4 ← IO.monoMsNow
   -- Mutations: each changes chal1 (or is rejected).
   let flip (off : Nat) : Proof := { pf with bytes := pf.bytes.set! off (pf.bytes.get! off ^^^ 1) }
   let chal1Of (q : Proof) : Option ByteArray := do
     if !q.checkFormat then none
-    let l ← BAVC.reconstruct (ivOf q mu1) q.opening q.delta
-    some (chal1 q mu1 (BAVC.check l.coms) (r.bytes "binder1"))
+    let l ← BAVC.reconstruct (ivOf Hashes.shake q mu1) q.opening q.delta
+    some (chal1 Hashes.shake q mu1 (BAVC.check (Hashes.shake.hash .h1) l.coms) (r.bytes "binder1"))
   for (k, _) in p.fieldSizes do
     if k == "corrections" || k == "cmult" || k == "open" || k == "iv_pre" then
       let some (off, n) := p.field? k | pure ()

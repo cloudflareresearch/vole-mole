@@ -49,7 +49,8 @@ What `htrace` needs per chain: if a chain's `H₂¹` and `H₂²` queries are no
 gives extraction or at most `N` accepted admissible `chal3` (`chain_prob`'s case analysis, per
 table), and in the second case an accepted `H₂³` answer is a bad query (`chainBad_h23_of_accept`).
 What is left of `htrace` is the identification of the accepted proof's chain in the log, with its
-committed data, L2 and `hclaim1` ("same chain", binding: L1, M6).
+committed data, L2 and `hclaim1` ("same chain", binding: L1, M6). `ROM/Accept.lean` proves `htrace`
+for the executable verifier run against the oracle, from exactly these (`SameChain`, binding, L2).
 -/
 
 open Finset ENNReal

@@ -1,4 +1,5 @@
 import VoleMole.Verifier.BAVC
+import VoleMole.Verifier.Hashes
 
 /-!
 # Proof layout, `check_format`, `mu`, `iv` and `chal1` (executable)
@@ -30,13 +31,14 @@ relations, which differ only in the witness length `ℓ` (bytes `ℓ/8`) and the
 * `chal1 = H(mu₁ ‖ vole_commit_check ‖ c₁ ‖ … ‖ c₁₆ ‖ c_mult ‖ iv_pre ‖ binder₁ ‖ 9)` (136 bytes,
   `src/voleith.hpp:396-405`).
 
-`H` is SHAKE128 (`hash_state` at `s128`). Checked by `lake exe verifier_vectors` on one KAT proof
+`H` is SHAKE128 (`hash_state` at `s128`), in the domain of each call (`Hashes.lean`): `mu` is
+`H₂⁰`/`H₂⁴`, `iv` is `H₄`, `chal1` is `H₂¹`. The steps take the hash functions `Hs : Hashes` as an
+argument (`Hashes.shake` for SHAKE128). Checked by `lake exe verifier_vectors` on one KAT proof
 per relation (`lean/vectors/verifier_kat.txt`).
 -/
 
 namespace VoleMole.Verifier
 
-open Spec.SHAKE
 
 /-- The relation-dependent parameters. -/
 structure Params where
@@ -114,21 +116,23 @@ def checkFormat : Bool := pf.bytes.size == pf.params.proofBytes && pf.delta.get!
 
 end Proof
 
-/-- `H(input)` to `n` bytes. -/
-def H (input : ByteArray) (n : Nat) : ByteArray := shake128 input n
-
-/-- `hash_mu`: `H(inst ‖ DST ‖ 8)`, or `H(DST ‖ 12)` without an instance. -/
-def mu (inst : Option ByteArray) (dst : ByteArray) : ByteArray :=
+/-- `hash_mu`: `H₂⁰(inst ‖ DST ‖ 8)`, or `H₂⁴(DST ‖ 12)` without an instance. -/
+def mu (Hs : Hashes) (inst : Option ByteArray) (dst : ByteArray) : ByteArray :=
   match inst with
-  | some i => H ((i ++ dst).push 8) 32
-  | none => H (dst.push 12) 32
+  | some i => Hs.hash .mu ((i ++ dst).push 8)
+  | none => Hs.hash .muDelayed (dst.push 12)
 
-/-- `iv = H(iv_pre ‖ mu₁ ‖ 4)`. -/
-def ivOf (pf : Proof) (mu1 : ByteArray) : ByteArray := H ((pf.ivPre ++ mu1).push 4) 16
+/-- `iv = H₄(iv_pre ‖ mu₁ ‖ 4)`. -/
+def ivOf (Hs : Hashes) (pf : Proof) (mu1 : ByteArray) : ByteArray :=
+  Hs.hash .h4 ((pf.ivPre ++ mu1).push 4)
 
-/-- `chal1`. -/
-def chal1 (pf : Proof) (mu1 voleCommitCheck binder1 : ByteArray) : ByteArray :=
-  H ((mu1 ++ voleCommitCheck ++ pf.corrections ++ pf.cmult ++ pf.ivPre ++ binder1).push 9) 136
+/-- The `H₂¹` input `mu₁ ‖ vole_commit_check ‖ c₁ ‖ … ‖ c₁₆ ‖ c_mult ‖ iv_pre ‖ binder₁ ‖ 9`. -/
+def chal1Input (pf : Proof) (mu1 voleCommitCheck binder1 : ByteArray) : ByteArray :=
+  (mu1 ++ voleCommitCheck ++ pf.corrections ++ pf.cmult ++ pf.ivPre ++ binder1).push 9
+
+/-- `chal1 = H₂¹(…)`. -/
+def chal1 (Hs : Hashes) (pf : Proof) (mu1 voleCommitCheck binder1 : ByteArray) : ByteArray :=
+  Hs.hash .h21 (chal1Input pf mu1 voleCommitCheck binder1)
 
 #guard ({ witnessBytes := 256, qsDegree := 9 } : Params).proofBytes == 7272
 #guard ({ witnessBytes := 164, qsDegree := 2 } : Params).proofBytes == 5323

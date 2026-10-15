@@ -1,5 +1,4 @@
 import VoleMole.Verifier.AES
-import VoleMole.Spec.SHAKE
 
 /-!
 # The one-tree BAVC of FAEST-EM-128f (executable): commit and verifier-side reconstruction
@@ -31,7 +30,8 @@ vole-mole's relations (`IssueParams` etc.: `s128`, `τ = 17`, `delta_bits = 120`
   paths is derived top-down. The verifier's leaves are the leaf keys with the hidden ones zero,
   and its commitments are the computed ones with the hidden ones taken from the opening.
 * `check` (`hash_hashed_leaves`) is `H(H(c_0 ‖ 1) ‖ … ‖ H(c_16 ‖ 1) ‖ 1)` with `c_i` the
-  concatenated commitments of vector `i` and `H` = SHAKE128 to 32 bytes.
+  concatenated commitments of vector `i` and `H` = `H₁` (SHAKE128 to 32 bytes; `check` takes it as
+  an argument, `Hashes.hash .h1` in `Verify.lean`).
 
 Checked by `lake exe verifier_vectors` against `lean/vectors/verifier_bavc.txt` (commit and open
 for a fixed seed) and `verifier_kat.txt` (the first Moussaka issuance KAT proof).
@@ -162,13 +162,17 @@ def reconstruct (iv opening delta : ByteArray) : Option Leaves := Id.run do
   return some (leavesOf iv t (fun i => some (deltaIndex delta i))
     (fun i => opening.extract (hashLen * i) (hashLen * i + hashLen)))
 
-/-- `hash_hashed_leaves`: the VOLE commitment check value (32 bytes). -/
-def check (coms : ByteArray) : ByteArray := Id.run do
-  let mut outer := ByteArray.empty
-  for i in [0:tau] do
-    let c := coms.extract (hashLen * leafOffset i) (hashLen * (leafOffset i + 2 ^ kOf i))
-    outer := outer ++ Spec.SHAKE.shake128 (c.push 1) 32
-  return Spec.SHAKE.shake128 (outer.push 1) 32
+/-- The inputs `c_i ‖ 1` of the 17 leaf hashes of `hash_hashed_leaves`. -/
+def leafHashInputs (coms : ByteArray) : List ByteArray :=
+  (List.range tau).map fun i =>
+    (coms.extract (hashLen * leafOffset i) (hashLen * (leafOffset i + 2 ^ kOf i))).push 1
+
+/-- The input `h_0 ‖ … ‖ h_16 ‖ 1` of the outer hash, from the leaf hashes `h_i`. -/
+def comInput (hs : List ByteArray) : ByteArray := (hs.foldl (· ++ ·) ByteArray.empty).push 1
+
+/-- `hash_hashed_leaves`: the VOLE commitment check value (32 bytes), with `h1` = `H₁`. -/
+def check (h1 : ByteArray → ByteArray) (coms : ByteArray) : ByteArray :=
+  h1 (comInput ((leafHashInputs coms).map h1))
 
 #guard treePos 16 0 == numLeaves - 1 + 16 && treePos 0 255 == numNodes - 1
 #guard leafOffset tau == numLeaves && bitOffset tau == 120

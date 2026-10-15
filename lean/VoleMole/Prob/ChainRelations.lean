@@ -20,16 +20,16 @@ the event:
   binding of the leaf commitments and the RO "same chain" step (L1);
 * the random-oracle steps: that the verifier's `chal1`, `chal2` are fresh uniform answers on this
   chain, and that `l = H(chal2 ‖ dst)` is uniform and independent of `chal2` (`chal2`, `l` and
-  `vals` are `Chain` fields; `onChain_of_accept` ties them to SHAKE), and the union over the
-  queries (plan M5).
+  `vals` are `Chain` fields; `onChain_of_accept` ties them to the verifier's hash functions), and
+  the union over the queries (plan M5, `ROM/`).
 
 ## The chain family
 
 The samples are `ω = (b₁, b₂, l) : Bytes 136 × Bytes 56 × Λ`. The chain is `ch ω`; what it may
 depend on is stated by hypotheses, not by construction (`proof` is one byte string holding data from
 all three rounds):
-* `Chain.SamePrefix st pre (mid b₁)`: the leaf keys and the proof's `c_i`, `c_mult`, `iv_pre` are
-  `pre`'s (fixed before `chal1`); `(mid b₁).chal1 = b₁`;
+* `Chain.SamePrefix st pre (mid b₁)`: the leaf keys, the proof's `c_i`, `c_mult`, and `iv` and the
+  gate hash are `pre`'s (fixed before `chal1`); `(mid b₁).chal1 = b₁`;
 * `Chain.SameMid st (mid ω.1) (ch ω)`: additionally `chal1`, `ũ`, `d` and `h_V` are those of
   `mid b₁`, a function of `b₁` alone (fixed before `chal2`); `(ch ω).chal2 = b₂`;
 * `hvals`: the chain's constraint evaluator is the relation's system at `b₁` and `l`.
@@ -58,11 +58,12 @@ open VoleMole.Arith VoleMole.Verifier
 
 variable (st : Statement) (T : CrtTables)
 
-/-- `ch` has `pre`'s commitments: the leaf keys and the proof's `c_i`, `c_mult` and `iv_pre` (the
-`H₂¹` input apart from the leaf commitments, which the keys determine). -/
+/-- `ch` has `pre`'s commitments: the leaf keys, the proof's `c_i` and `c_mult` (the `H₂¹` input
+apart from the leaf commitments, which the keys determine, and `iv_pre`), `iv` (a function of
+`iv_pre` and `mu₁`) and the gate hash `H₅`. -/
 def SamePrefix (pre ch : Chain) : Prop :=
   ch.keys = pre.keys ∧ (ch.pf st).corrections = (pre.pf st).corrections ∧
-    (ch.pf st).cmult = (pre.pf st).cmult ∧ (ch.pf st).ivPre = (pre.pf st).ivPre
+    (ch.pf st).cmult = (pre.pf st).cmult ∧ ch.iv = pre.iv ∧ ch.h5 = pre.h5
 
 /-- `ch'` has `ch`'s data up to `chal2`: the commitments, `chal1`, `ũ`, `d` and `h_V`. -/
 def SameMid (ch ch' : Chain) : Prop :=
@@ -72,9 +73,9 @@ def SameMid (ch ch' : Chain) : Prop :=
 variable {st T} {pre ch ch' : Chain}
 
 lemma SamePrefix.resp_eq (h : SamePrefix st pre ch) : ch.resp st T = pre.resp st T := by
-  obtain ⟨hk, hc, hm, hi⟩ := h
+  obtain ⟨hk, hc, hm, hi, h5⟩ := h
   funext Δ
-  simp only [resp, iv, ivOf, hk, hc, hm, hi]
+  simp only [resp, hk, hc, hm, hi, h5]
 
 lemma SamePrefix.kosQ_eq (h : SamePrefix st pre ch) : ch.kosQ st T = pre.kosQ st T := by
   funext Δ k; simp only [kosQ, h.resp_eq]
@@ -86,14 +87,18 @@ lemma SamePrefix.Qw_eq (h : SamePrefix st pre ch) : ch.Qw st T = pre.Qw st T := 
   funext j Δ; simp only [Qw, h.resp_eq]
 
 lemma SamePrefix.u_eq (h : SamePrefix st pre ch) : ch.u st = pre.u st := by
-  obtain ⟨hk, hc, -, hi⟩ := h
+  obtain ⟨hk, hc, -, hi, -⟩ := h
   have hcorr : ch.corr st = pre.corr st := by funext i; simp only [corr, hc]
   funext i j
-  simp only [u, iv, ivOf, hcorr, hk, hi]
+  simp only [u, hcorr, hk, hi]
 
 lemma SamePrefix.trans {ch'' : Chain} (h : SamePrefix st pre ch) (h' : SamePrefix st ch ch'') :
     SamePrefix st pre ch'' :=
-  ⟨h'.1.trans h.1, h'.2.1.trans h.2.1, h'.2.2.1.trans h.2.2.1, h'.2.2.2.trans h.2.2.2⟩
+  ⟨h'.1.trans h.1, h'.2.1.trans h.2.1, h'.2.2.1.trans h.2.2.1, h'.2.2.2.1.trans h.2.2.2.1,
+    h'.2.2.2.2.trans h.2.2.2.2⟩
+
+lemma SamePrefix.symm (h : SamePrefix st pre ch) : SamePrefix st ch pre :=
+  ⟨h.1.symm, h.2.1.symm, h.2.2.1.symm, h.2.2.2.1.symm, h.2.2.2.2.symm⟩
 
 lemma SameMid.kosCh_eq (h : SameMid st ch ch') : ch'.kosCh = ch.kosCh := by
   simp only [kosCh, h.2.1]

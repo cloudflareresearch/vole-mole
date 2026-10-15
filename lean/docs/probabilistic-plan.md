@@ -1,8 +1,9 @@
 # Plan: mechanizing the classical probabilistic steps
 
 Status: **phase A (M1–M3) implemented** in `VoleMole/Prob/` (Mathlib only, no new dependency), with
-the deviations listed in §2a. **Phase B: M4 done, M5 done** in `VoleMole/ROM/` (VCVio) except the
-items listed at the end of §2b; M6 not started. Scope: the classical (ROM + ideal cipher) proof of knowledge
+the deviations listed in §2a. **Phase B: M4 done, M5 done** in `VoleMole/ROM/` (VCVio), including
+the run of the executable verifier against the oracle (§2c); what remains is listed at the end of
+§2c. M6 not started. Scope: the classical (ROM + ideal cipher) proof of knowledge
 of `docs/extraction/README.md`. The ZK hybrids (`docs/zk.md` §10, "proved only on paper") and the
 QROM documents (Q1–Q7) are out of scope here. Notes on ZK are at the end.
 
@@ -251,10 +252,10 @@ Files: `ROM/Basic.lean` (M4), `ROM/UnionBound.lean`, `ROM/Fresh.lean`, `ROM/Chai
   native-backend stubs; all runners pass unchanged.
 - **The oracle specification** is `OracleSpec.ofFn Ans` over `Dom = Kind × ByteArray`, with
   `Ans (k, x) = Bytes k.outLen`: every domain answers bytes, and `l` is decoded by
-  `combEquiv M : Bytes (16·M) ≃ (Fin M → GF128)` (as `combinationArr` decodes it), so the range is
+  `combEquiv M : Bytes (16·M) ≃ (Fin M → GF128)` (as `combinationOf` decodes it), so the range is
   not `Fin 45 → GF128`. `comb M` is indexed by the number of combined equations; `H₁`'s three
-  shapes are one kind. The "domain separation ⇒ independent oracles" lemma is not done: splitting
-  SHAKE into these oracles is a modelling step.
+  shapes are one kind. The "domain separation ⇒ independent oracles" lemma was not done in M5; it
+  is now (§2c).
 - **The bridge** is `SampleableType.prEvent_uniformSample` (an event of `$ᵗ α` is a count) against
   `prU_eq_card`, not `evalDist_selectElem_eq_uniform` and `PMF.toMeasure`.
 - **The union bound exists in VCVio**: `prEvent_randomOracle_le_of_bad_queries[_weighted]`
@@ -286,11 +287,97 @@ Files: `ROM/Basic.lean` (M4), `ROM/UnionBound.lean`, `ROM/Fresh.lean`, `ROM/Chai
   has at most `N` accepted `chal3`, and then an accepted `H₂³` answer is a bad query
   (`chainBad_h23_of_accept`).
 
-Not done in M5: the rest of `htrace` (the accepted proof's chain is in the log with these committed
-data, L2 and `hclaim1`: the "same chain" step of M6); the hash-record refactor of the verifier
-(§3), so the executable verifier is not yet run against the oracle and the event is abstract;
-statement binding before `chall₂` (`(q²+q)·2⁻²⁵⁶`); `*_good_of_not_bad` for Moussaka redemption and
-Ratatouille spend (the generic `comb_good_of_not_bad` applies).
+Not done in M5 as first implemented, and done since (§2c): the hash-record refactor, the run of the
+executable verifier against the oracle (the event concrete, `htrace` proved), `*_good_of_not_bad`
+for Moussaka redemption and Ratatouille spend, and "domain separation ⇒ independent oracles".
+
+### 2c. The executable verifier against the oracle (M5, continued), and deviations
+
+Files: `Verifier/Hashes.lean` (the hash record), `ROM/Verifier.lean`, `ROM/Accept.lean`,
+`ROM/DomainSep.lean`, `ROM/SingleOracle.lean`; the verifier, the KAT runners and the bridge files
+changed as below. `#print axioms` of the main results: `propext`, `Classical.choice`,
+`Quot.sound`.
+
+- **The hash record** (`Verifier/Hashes.lean`). `Kind` and `Kind.outLen` moved here from
+  `ROM/Basic.lean` (re-exported there). `Hashes` is one structure with one field
+  `hash : Kind → ByteArray → ByteArray` (a function per L0 domain, indexed by `Kind` rather than
+  one named field per domain, so that `Hashes.ofTable g := ⟨fun k x => (g (k, x)).ba⟩` is one
+  line); the argument is the whole SHAKE input, domain byte included. `Hashes.shake` is SHAKE128
+  in every domain. The steps take `Hs`: `mu Hs`, `ivOf Hs`, `chal1 Hs`, `chal2 Hs`, `chal3 Hs`,
+  `crtReconstruct Hs`; the lower-level `BAVC.check h1`, `gateHashes h5`, `crtReconstructAt h5`
+  take the one function they use (so a chain's response depends only on `H₅`). The inputs are
+  separate definitions (`chal1Input`, `chal2Input`, `chal3Input`, `BAVC.leafHashInputs`,
+  `BAVC.comInput`, `gateInputs`), and `crtReconstructWith` takes the gate hashes, so that the
+  oracle version can query them. `verify Hs T st proof`; the runners use `Hashes.shake` and are
+  unchanged (18 accepted / 51 rejected on both layouts, `spec_kats`, `arith_vectors`; the
+  `@[csimp]` fast paths untouched).
+- **The combination is hashed by the verifier.** `Statement` has a field `comb : Option (ℕ ×
+  ByteArray)` (`M` and the combine DST) and `values chal1 lb` now takes the combination *bytes*
+  `lb = H_comb(chal2 ‖ dst)` (`Statement.combBytes`) instead of `chal2`; `combinationArr` became
+  `combinationOf n lb` (decoding only). Otherwise the verifier's queries would be hidden inside
+  `values`. `Bridge/Relations.lean`'s `*Sys` take `lb` (`ofArr_combinationOf`).
+- **Hashes outside L0 stay SHAKE**: the UOV key digests and expansion (computed by `UovPk` before
+  verification), PomFRIT's `hash_to_target` (part of the statement, `instEnc`/`values`) and the
+  refresher commitment (`pomfritVerify`). They are application-level hashes (L0 §2.5).
+- **Chain**: `iv` and the gate hash `h5` are fields (were `Chain.iv`, computed with SHAKE), with
+  `iv = ivOf Hs …`, `h5 = Hs.hash .h5` hypotheses of `onChain_of_accept` (generic in `Hs`);
+  `Chain.SamePrefix` compares `iv`, `h5` instead of `iv_pre`. `Transcript` has an `iv` field.
+- **The verifier as an oracle computation** (`ROM/Verifier.lean`): `verifyQ` makes the verifier's
+  queries in order (`mu₁`, `iv`, 17 leaf hashes, `com`, `chal1`, 312 gate hashes, PomFRIT's `mu`,
+  `chal2`, the combination, `chal3`); against a complete table it is `verify (Hashes.ofTable g)`
+  (`evalWithAnswerFn_verifyQ`), its accepted `H₂¹`, `H₂²`, `H₂³` queries are in its log at the
+  run's inputs (`inLog_verifyQ`, `runX`, `runY`, `runZ`, `runChain`), and it makes at most one
+  query to each of them, 337 in total (`isKindQueryBound_verifyQ`, `isTotalQueryBound_verifyQ`).
+  `game T st oa`: the prover, then `verifyQ` on its proof.
+- **The extractor's data are part of the prover's output** (`ExtData β`: the committed leaf keys it
+  recovered, the known trees, and an arbitrary `aux`, e.g. a log for the failure events to read).
+  The ideal cipher is not modelled, so the keys cannot be computed from the oracle log: the
+  statement holds for any key recovery, whose quality enters only through the assumptions below
+  (read `oa` as the prover together with the straight-line extractor).
+- **The event** is `accept ∧ ¬Extracted`, with `Extracted` the candidate of `*_extract_chain`
+  computed from the extractor's keys, the proof and the verifier's `iv` (and `chal1` for PomFRIT's
+  target). `htrace` is proved (`chainBad_of_accept`, `combBad_of_accept`): the accepted proof is on
+  its run's chain at its `Δ` (`onChain_of_accept`, from binding), `*_good_of_not_bad` gives
+  extraction or few accepted `chal3`, and then the verifier's own `H₂³` query is bad.
+- **What remains assumed**, explicitly:
+  - binding (L1, `ε_bind`): a bound on the concrete output event `bindFail` (accepted, and the
+    opening's leaves at the verifier's `iv` differ from the extractor's keys at a non-hidden leaf);
+  - the "same chain" step (`hsame`, outside an output event `chainFail` with `Pr ≤ ε_chain`, a new
+    term): `SameChain`, i.e. the data `C` commits at the verifier's own `H₂¹`/`H₂²`/`H₂³` inputs are
+    the accepted proof's chain (`pre`, `mid`), and the `chal3` accepted at the `H₂³` input are those
+    on the chain (`acc`; this is where `hclaim1` went). With complete tables over an infinite domain
+    the identification of the earlier queries by their answers can only be made through the log,
+    so it is not derivable inside VCVio's all-table formulation;
+  - L2 (`hL2`, outside `chainFail` and an output event `deadFail` with `Pr ≤ ε_dead`).
+- **The bounds** (`prEvent_accept_le_chain_terms`, `prEvent_accept_le_comb_terms`;
+  `moussakaIssue_accept_le`, `ratatouilleIssue_accept_le`, `moussakaRedeem_accept_le`,
+  `ratatouilleSpend_accept_le`, `pomfritRedeem_accept_le`): as in §2b with the verifier's queries
+  added, `(q₁+1)·2⁻¹⁵⁰ + (q₂+1)·(ε_QS(n') [+ 2⁻¹²⁸ + (n+337)·2⁻⁴⁴⁸]) + (Q+1)·N·2⁻¹²⁸ + ε_bind +
+  ε_dead + ε_chain`, `q` and `n` the prover's counts.
+- **Domain separation ⇒ independent oracles** (`ROM/DomainSep.lean`, not via the plan's
+  "restriction of one lazy RO"): one random oracle on byte strings `spec₁ κ`, answering `x` with
+  `(κ x).outLen` bytes for a domain rule `κ`; `route κ` asks `(k, x)` at `x`. If every query of
+  `oa` satisfies `κ x = k`, both lazy oracles give every event the same probability
+  (`prEvent_route_eq`: finite restriction, eager tables, and the bijection `(k, x) ↦ x` between
+  the uniform tables). Every single-oracle adversary is such a computation (`unroute`,
+  `prEvent_unroute_eq`, with its per-domain counts, `isKindQueryBound_unroute`). VCVio's
+  `Routing.lean` has the non-dependent finite version only. `ROM/SingleOracle.lean`: L0's rule
+  `l0Kind` (the final byte), the verifier's queries respect it (`allQueriesSatisfy_verifyQ`, for
+  statements whose combination is 45 equations with a DST ending in `'0'`: all five), and the game
+  against one SHAKE oracle `game₁` has the per-domain game's probabilities (`prEvent_game₁_eq`), so
+  the bounds above hold for single-oracle provers. Remaining modelling: SHAKE128 as a random oracle
+  with a fixed output length per input.
+- **`*_good_of_not_bad`** for Moussaka redemption and Ratatouille spend (`ROM/Comb.lean`), as
+  PomFRIT's.
+- **Not done: the statement-binding term `(q²+q)·2⁻²⁵⁶`** (L4 (H-stmt)). VCVio's birthday lemmas
+  (`prEvent_cacheCollision_le_birthday*`, `QueryTracking/Birthday.lean`) bound a collision anywhere
+  in a `cachingOracle` cache with one range size (the smallest; here `H₅`'s 4 bytes), not a
+  collision among `H₂⁰` answers, and the event ("μ's preimage was queried before `y`") is again an
+  ordering fact about the log; it belongs with the "same chain" step.
+
+Still open after §2c: the "same chain" step (`hsame`, `ε_chain`), L2 (`ε_dead`) and binding
+(`ε_bind`) as named assumptions (M6: ideal cipher, query ordering), and the statement-binding
+term.
 
 ### M4 — Mathlib bump and VCVio dependency (Phase B, ~1–3 days, mostly waiting on builds) — done
 
@@ -345,9 +432,9 @@ and `ε_dead` as named hypotheses about the cipher.
 
 ## 3. Risks
 
-- **The executable verifier hard-codes SHAKE.** `Verifier.chal1`, `chal2`, `chal3`, `ivOf` and
-  `Combination` call the concrete `H`, and `Chain.chal2` was a def, not a field (resolved for
-  phase A: §2a, first item).
+- **The executable verifier hard-codes SHAKE** (resolved: §2a for `chal2`/`l` as chain fields,
+  §2c for the hash record). `Verifier.chal1`, `chal2`, `chal3`, `ivOf` and
+  `Combination` called the concrete `H`, and `Chain.chal2` was a def, not a field.
   - For M2/M3: add `chal2` (and `l`) as chain fields, with `chal2 = Verifier.chal2 …` as an explicit
     hypothesis where `onChain_of_accept` needs it.
   - For M5+: parametrise the verifier by a hash record `Hs` (`verify (Hs := shakeHashes)` stays
@@ -366,9 +453,8 @@ and `ε_dead` as named hypotheses about the cipher.
   VCVio adds about 100k lines to build locally. Respect the one-worker / `MemoryMax` rule.
 - **Modelling gap.** The ROM statement is about the *model* (independent oracles per L0 domain,
   ideal cipher). L0's disjointness (`Seed/Commitments.lean`, `Protocols/DomainSeparation.lean`)
-  justifies splitting one SHAKE into independent oracles only informally. A formal "domain
-  separation ⇒ independent oracles" lemma is easy in VCVio (restriction of one lazy RO to disjoint
-  domains), and is worth doing in M4.
+  justifies splitting one SHAKE into independent oracles; this is now a lemma (§2c,
+  `ROM/DomainSep.lean`, `ROM/SingleOracle.lean`). The ideal cipher remains.
 
 ## 4. ZK (for later)
 

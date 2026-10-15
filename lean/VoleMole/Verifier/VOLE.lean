@@ -32,7 +32,7 @@ commitments fixed.
 * Gate labels and hashes (`lift_and_hash_vq`, `vole_commit.inc:339-432`): `L_e = Σ_{c < 120}
   G[c][e] · q_c[o..o+128)` for `e < N_MULT` (the 128 label rows of each column, as a block; `o` is
   `Params.labelRowOffset`: `0` on `main`, `ℓ` with dedicated label rows, patch 0005's
-  `crt_labels`), and `h_e` = the first 4 bytes of `H(iv ‖ e (u32 LE) ‖ L_e ‖ 5)`.
+  `crt_labels`), and `h_e` = the first 4 bytes of `H₅(iv ‖ e (u32 LE) ‖ L_e ‖ 5)`.
 * Rows: row `r` of the key matrix is the 128-bit vector whose bit `c` is bit `r` of column `c`. The
   first `ℓ'` rows are CRT-lifted, `q_r = row_r · W_CRT` (`crt_lift_q`; a row vector times a
   120 × 128 matrix over GF(2)); the mask rows `ℓ' + 8m + t` are used unlifted.
@@ -191,18 +191,22 @@ def polyMod (x m : UInt64) : UInt64 := Id.run do
     if b ≥ deg && (x >>> b.toUInt64) &&& 1 == 1 then x := x ^^^ (m <<< (b - deg).toUInt64)
   return x
 
-/-- The gate hashes `h_e` (as 32-bit words). -/
-def gateHashes (p : Params) (T : CrtTables) (iv : ByteArray) (cols : Array (Array UInt64)) :
-    Array UInt32 := Id.run do
+/-- The inputs `iv ‖ e (u32 LE) ‖ L_e ‖ 5` of the gate hashes, `e < N_MULT`. -/
+def gateInputs (p : Params) (T : CrtTables) (iv : ByteArray) (cols : Array (Array UInt64)) :
+    List ByteArray :=
   -- The 128 label rows of each column, as a block.
   let o := p.labelRowOffset
   let tops : Array W128 := (Array.range 120).map fun c => ⟨wordAt cols[c]! o, wordAt cols[c]! (o + 64)⟩
-  let mut out : Array UInt32 := #[]
-  for e in [0:p.nMult] do
-    let L := W128.rowMul (fun c => wbit T.g[c]! e) 120 tops
-    let h := H ((AES.pushLE32 iv e.toUInt32 ++ L.toBytes).push 5) 4
-    out := out.push (AES.getLE32 h 0)
-  return out
+  (List.range p.nMult).map fun e =>
+    (AES.pushLE32 iv e.toUInt32 ++ (W128.rowMul (fun c => wbit T.g[c]! e) 120 tops).toBytes).push 5
+
+/-- The gate hashes `h_e` (as 32-bit words), from the `H₅` answers to `gateInputs`. -/
+def gateWords (hs : List ByteArray) : Array UInt32 := (hs.map fun h => AES.getLE32 h 0).toArray
+
+/-- The gate hashes `h_e` (as 32-bit words), with `h5` = `H₅`. -/
+def gateHashes (h5 : ByteArray → ByteArray) (p : Params) (T : CrtTables) (iv : ByteArray)
+    (cols : Array (Array UInt64)) : Array UInt32 :=
+  gateWords ((gateInputs p T iv cols).map h5)
 
 /-- Output of the CRT reconstruction. -/
 structure CrtOut where
@@ -238,12 +242,12 @@ def rTildeOf (T : CrtTables) (src : Array W128) : W128 := Id.run do
           else { rt with hi := rt.hi ||| ((1 : UInt64) <<< (pos - 64).toUInt64) }
   return rt
 
-/-- `crt_vole_reconstruct` after the plain reconstruction, and `crt_lift_delta`, from the bits
-`dbit c` (`c < 120`) of `Δ` and `c_mult`. Lifted row `r` is `Σ_{c < 120} q_c[r] · W_CRT[c]`. -/
-def crtReconstructAt (p : Params) (dbit : Nat → Bool) (cmult : ByteArray) (T : CrtTables)
-    (iv : ByteArray) (cols : Array (Array UInt64)) : CrtOut :=
+/-- `crt_vole_reconstruct` after the plain reconstruction and the gate hashes, and
+`crt_lift_delta`, from the gate hashes `hashes`, the bits `dbit c` (`c < 120`) of `Δ` and `c_mult`.
+Lifted row `r` is `Σ_{c < 120} q_c[r] · W_CRT[c]`. -/
+def crtReconstructWith (hashes : Array UInt32) (p : Params) (dbit : Nat → Bool)
+    (cmult : ByteArray) (T : CrtTables) (cols : Array (Array UInt64)) : CrtOut :=
   let ell := p.correctionRows
-  let hashes := gateHashes p T iv cols
   let rows : Array W128 := (Array.range ell).map fun r =>
     W128.rowMul (fun c => wbit cols[c]! r) 120 T.wCrt
   let gamma := gammaOf T dbit
@@ -257,9 +261,15 @@ def crtReconstructAt (p : Params) (dbit : Nat → Bool) (cmult : ByteArray) (T :
     (W128.rowMul rTilde[m]!.bit 120 T.wTree).xor (W128.rowMul gateRow p.nMult T.wGate)
   { hashes, rTilde, rows, qMask, deltaLifted := W128.rowMul dbit 120 T.wCrt }
 
+/-- `crt_vole_reconstruct` after the plain reconstruction, and `crt_lift_delta`, from the bits
+`dbit c` (`c < 120`) of `Δ` and `c_mult`, with `h5` = `H₅` for the gate hashes. -/
+def crtReconstructAt (h5 : ByteArray → ByteArray) (p : Params) (dbit : Nat → Bool)
+    (cmult : ByteArray) (T : CrtTables) (iv : ByteArray) (cols : Array (Array UInt64)) : CrtOut :=
+  crtReconstructWith (gateHashes h5 p T iv cols) p dbit cmult T cols
+
 /-- `crt_vole_reconstruct` after the plain reconstruction, and `crt_lift_delta`. -/
-def crtReconstruct (pf : Proof) (T : CrtTables) (iv : ByteArray) (cols : Array (Array UInt64)) :
-    CrtOut :=
-  crtReconstructAt pf.params (BAVC.deltaBit pf.delta) pf.cmult T iv cols
+def crtReconstruct (Hs : Hashes) (pf : Proof) (T : CrtTables) (iv : ByteArray)
+    (cols : Array (Array UInt64)) : CrtOut :=
+  crtReconstructAt (Hs.hash .h5) pf.params (BAVC.deltaBit pf.delta) pf.cmult T iv cols
 
 end VoleMole.Verifier

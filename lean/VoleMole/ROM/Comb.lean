@@ -424,6 +424,86 @@ theorem ratatouilleSpend_prEvent_le {α : Type} (pk : UovPk) (nf : ByteArray) (d
   · exact epsKOS_chal3Blocks_le _ (by norm_num [ratatouilleSpend]) (by norm_num [ratatouilleSpend])
   · norm_num
 
+-- Elaborating the combination cell `g (combKey Moussaka.M …)` needs a deeper recursion.
+set_option maxRecDepth 4000 in
+/-- **Moussaka redemption at one chain of the random-oracle game**: outside L2 and `hclaim1`, a
+chain whose `H₂¹` and `H₂²` queries are not bad (with `l` read from the table at
+`chal2 ‖ MOUSSAKA_REDEEM_COMBINE_DST`) yields a redemption witness or has at most 9 accepted
+admissible `chal3`. -/
+theorem moussakaRedeem_good_of_not_bad (anchors : List UovPk)
+    (nf ctxIss ctxRed challengeDigest : ByteArray) (labelRows : Bool)
+    (preOf midOf : ByteArray → Table → Chain) (accOf : ByteArray → Table → Bytes 16 → Prop)
+    {x y : ByteArray} {g : Table} {ch : Chain}
+    (hpre : Chain.SamePrefix (moussakaRedeem anchors nf ctxIss ctxRed challengeDigest labelRows)
+      (preOf x g) (midOf y g))
+    (hc1 : (midOf y g).chal1 = (g (.h21, x) : Bytes 136).ba)
+    (hmid : Chain.SameMid (moussakaRedeem anchors nf ctxIss ctxRed challengeDigest labelRows)
+      (midOf y g) ch)
+    (hc2 : ch.chal2 = (g (.h22, y) : Bytes 56).ba)
+    (hvals : ∀ w, ch.vals w = (moussakaRedeemSysL anchors nf ctxIss ctxRed
+      (combDec (g (combKey Moussaka.M (toBA (VoleMole.Spec.makeDst "mous" 0 'l' '0'))
+        (g (.h22, y)))))).values w)
+    (known : Finset (Fin BAVC.tau)) (acc : Bytes 16 → Prop) [DecidablePred acc]
+    (h1 : ¬combBad (CombData.ofSys
+        (st := moussakaRedeem anchors nf ctxIss ctxRed challengeDigest labelRows) preOf midOf
+        (moussakaRedeemSysL anchors nf ctxIss ctxRed)
+        (moussakaRedeemWit GF256.ofBits (anchors.map UovPk.map) (fnOf nf) (fnOf ctxIss)
+          (fnOf ctxRed)) accOf (toBA (VoleMole.Spec.makeDst "mous" 0 'l' '0')))
+      CrtGen.tables chal3Blocks 9 (.h21, x) g)
+    (h2 : ¬combBad (CombData.ofSys
+        (st := moussakaRedeem anchors nf ctxIss ctxRed challengeDigest labelRows) preOf midOf
+        (moussakaRedeemSysL anchors nf ctxIss ctxRed)
+        (moussakaRedeemWit GF256.ofBits (anchors.map UovPk.map) (fnOf nf) (fnOf ctxIss)
+          (fnOf ctxRed)) accOf (toBA (VoleMole.Spec.makeDst "mous" 0 'l' '0')))
+      CrtGen.tables chal3Blocks 9 (.h22, y) g)
+    (hhyp : ChainHyps (onSet (moussakaRedeem anchors nf ctxIss ctxRed challengeDigest labelRows)
+      CrtGen.tables ch chal3Blocks) known acc) :
+    (∃ i ∈ known, moussakaRedeemWit GF256.ofBits (anchors.map UovPk.map) (fnOf nf) (fnOf ctxIss)
+        (fnOf ctxRed) (candidate (F := GF128)
+          (ch.u (moussakaRedeem anchors nf ctxIss ctxRed challengeDigest labelRows))
+          (ch.dc (moussakaRedeem anchors nf ctxIss ctxRed challengeDigest labelRows)) i)) ∨
+      #{x ∈ admissible | acc x} ≤ 9 :=
+  comb_good_of_not_bad liftInvOk_tables _ chal3Blocks 9 hpre hc1 hmid hc2
+    (fun A => ChainHyps A known acc) _
+    (fun _A hA hAS hkos hQS hcomb hP => moussakaRedeem_extract_chain anchors nf ctxIss ctxRed
+      challengeDigest labelRows ch _ hvals hA hAS hkos hP.1 hQS hcomb admissible deltaBlocks
+      deltaBlocks_injOn _ hP.2) h1 h2 hhyp
+
+set_option maxRecDepth 8000 in
+/-- **Ratatouille spend at one chain of the random-oracle game** (as
+`moussakaRedeem_good_of_not_bad`, `l` at `chal2 ‖ RATATOUILLE_SPEND_COMBINE_DST`). -/
+theorem ratatouilleSpend_good_of_not_bad (pk : UovPk) (nf : ByteArray) (d : ℕ)
+    (cNext ctxIss : ByteArray) (labelRows : Bool) (preOf midOf : ByteArray → Table → Chain)
+    (accOf : ByteArray → Table → Bytes 16 → Prop) {x y : ByteArray} {g : Table} {ch : Chain}
+    (hpre : Chain.SamePrefix (ratatouilleSpend pk nf d cNext ctxIss labelRows) (preOf x g)
+      (midOf y g))
+    (hc1 : (midOf y g).chal1 = (g (.h21, x) : Bytes 136).ba)
+    (hmid : Chain.SameMid (ratatouilleSpend pk nf d cNext ctxIss labelRows) (midOf y g) ch)
+    (hc2 : ch.chal2 = (g (.h22, y) : Bytes 56).ba)
+    (hvals : ∀ w, ch.vals w = (ratatouilleSpendSysL pk nf d cNext ctxIss
+      (combDec (g (combKey Ratatouille.uovM (toBA (VoleMole.Spec.makeDst "rata" 0 'l' '0'))
+        (g (.h22, y)))))).values w)
+    (known : Finset (Fin BAVC.tau)) (acc : Bytes 16 → Prop) [DecidablePred acc]
+    (h1 : ¬combBad (CombData.ofSys (st := ratatouilleSpend pk nf d cNext ctxIss labelRows) preOf
+        midOf (ratatouilleSpendSysL pk nf d cNext ctxIss)
+        (ratatouilleSpendWit GF256.ofBits pk.map (fnOf nf) d (fnOf cNext) (fnOf ctxIss)) accOf
+        (toBA (VoleMole.Spec.makeDst "rata" 0 'l' '0'))) CrtGen.tables chal3Blocks 9 (.h21, x) g)
+    (h2 : ¬combBad (CombData.ofSys (st := ratatouilleSpend pk nf d cNext ctxIss labelRows) preOf
+        midOf (ratatouilleSpendSysL pk nf d cNext ctxIss)
+        (ratatouilleSpendWit GF256.ofBits pk.map (fnOf nf) d (fnOf cNext) (fnOf ctxIss)) accOf
+        (toBA (VoleMole.Spec.makeDst "rata" 0 'l' '0'))) CrtGen.tables chal3Blocks 9 (.h22, y) g)
+    (hhyp : ChainHyps (onSet (ratatouilleSpend pk nf d cNext ctxIss labelRows) CrtGen.tables ch
+      chal3Blocks) known acc) :
+    (∃ i ∈ known, ratatouilleSpendWit GF256.ofBits pk.map (fnOf nf) d (fnOf cNext) (fnOf ctxIss)
+        (candidate (F := GF128) (ch.u (ratatouilleSpend pk nf d cNext ctxIss labelRows))
+          (ch.dc (ratatouilleSpend pk nf d cNext ctxIss labelRows)) i)) ∨
+      #{x ∈ admissible | acc x} ≤ 9 :=
+  comb_good_of_not_bad liftInvOk_tables _ chal3Blocks 9 hpre hc1 hmid hc2
+    (fun A => ChainHyps A known acc) _
+    (fun _A hA hAS hkos hQS hcomb hP => ratatouilleSpend_extract_chain pk nf d cNext ctxIss
+      labelRows ch _ hvals hA hAS hkos hP.1 hQS hcomb admissible deltaBlocks deltaBlocks_injOn _
+      hP.2) h1 h2 hhyp
+
 /-! ## PomFRIT -/
 
 /-- PomFRIT's combined-relation data: the system and the relation at the chain's `chal1` (the
