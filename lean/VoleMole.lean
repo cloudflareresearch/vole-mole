@@ -115,3 +115,9 @@ import VoleMole.ZK.TapeLemmas
 import VoleMole.ZK.TapeOf
 import VoleMole.ZK.Exec
 import VoleMole.Privacy.LeanProver
+import VoleMole.ZK.TwoPhase
+import VoleMole.ZK.Interp
+import VoleMole.Spec.PomFRITLayout
+import VoleMole.Privacy.PomFRITLean
+import VoleMole.Privacy.MoussakaLean
+import VoleMole.Privacy.RatatouilleLean

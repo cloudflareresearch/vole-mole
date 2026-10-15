@@ -31,7 +31,7 @@ Line references are to the working tree at commit `6d7113e`.
 |---|---|---|---|
 | One-more unforgeability (paper Def. 2.5), classical ROM + ideal cipher | **Holds.** Tight under a τ-shift variant of UOV one-more preimage resistance (Thm U2). Under the paper's standard assumption (Def. 3.1) the reduction loses an extra `(Q₃+ℓ+1)·2^{−71}` (Thm U1) | Same (ZK is not used) | §5–§6 |
 | One-more unforgeability, QROM | **Open.** The reduction needs a first-phase extractor *during* the run; Q2 extracts only after the run | Same | §7 |
-| Blindness against a malicious Issuer (paper Def. 2.4: malicious key, selective-failure form) | **Fails.** An honest-but-curious Issuer links with advantage ≈ 1 using about 310 SHAKE calls per (signature, session) pair (`lean/docs/zk.md` §4) | **Holds** (Thm B), with advantage `≤ ε_ZK^fix(Q_P = 2) + 2Q_X·2^{−256}`; [Lean] from G1, with (ZK-fix) as a hypothesis (`Privacy/PomFRIT.lean`) | §8 |
+| Blindness against a malicious Issuer (paper Def. 2.4: malicious key, selective-failure form) | **Fails.** An honest-but-curious Issuer links with advantage ≈ 1 using about 310 SHAKE calls per (signature, session) pair (`lean/docs/zk.md` §4) | **Holds** (Thm B), with advantage `≤ ε_ZK^fix(Q_P = 2) + 2Q_X·2^{−256}`; [Lean] from G1, with (ZK-fix) as a hypothesis (`Privacy/PomFRIT.lean`), and with (ZK-fix) derived for the executable Lean prover with label rows down to its tape hypothesis (`Privacy/PomFRITLean.lean`, `blindness_lean`) | §8 |
 | No selective failure via `finalize_issue`'s check (`pomfrit.cpp:207`) | Holds: the abort event is a function of the Issuer's own view | Holds | §8.3 |
 | Message binding; no re-targeting of a signature | Holds (part of unforgeability; L8 §7) | Holds | §9.1 |
 | Third parties cannot maul a signature (strong SE) | Holds against parties who never saw the request `t` | Holds against everyone, the Issuer included | §9.2 |
@@ -446,7 +446,9 @@ abort pattern revealed per session:
   So the joint distribution does not depend on `b`. ∎
 
 **[Lean] `lean/VoleMole/Privacy/PomFRIT.lean`.** G1 → G3 on `Spec/PomFRIT.lean`'s `issueRequest`
-and `finalizeIssue`, with `XOF_seed`'s output drawn uniformly (`issueRequest_eq`):
+and `finalizeIssue`, with `XOF_seed`'s output drawn uniformly (`issueRequest_eq`), for either proof
+layout (`Spec/PomFRITLayout.lean`: `main`'s, and the label-row layout's 5579-byte proofs with `ũ`
+and `d` at 3075 and 3139; at `Layout.main` the definitions are the spec's, by `rfl`):
 - (ZK-fix) is the hypothesis `ZeroKnowledge P S ε`: a two-phase simulator (`phase1` from the
   binder, `phase2` from the instance `(pk, h)` chosen after phase 1) whose run is `ε`-close to the
   real run for every prefix `r`, binder and continuation picking `(pk, h, s, b₂)` with
@@ -460,7 +462,18 @@ and `finalizeIssue`, with `XOF_seed`'s output drawn uniformly (`issueRequest_eq`
   for every Issuer (key, messages, responses). The signatures are revealed only if both sessions
   complete; the Issuer computes the per-session abort pattern itself. The only other hypothesis is
   that phase 1 outputs a `PROOF_BYTES` buffer (`Correct.voleGen_length`).
-- On paper: G0 → G1 (`2Q_X·2^{−256}`, Lemma DS) and (ZK-fix) itself.
+- On paper: G0 → G1 (`2Q_X·2^{−256}`, Lemma DS) and, for an abstract prover, (ZK-fix) itself.
+- **[Lean] (ZK-fix) for the executable prover** (`lean/VoleMole/Privacy/PomFRITLean.lean`,
+  `ZK/TwoPhase.lean`, `lean/docs/zk.md` §10.1). The Lean prover with dedicated label rows, run as
+  `issue_request_with_seed` / `finalize_issue` run it (`leanProver`: step 1 with `r` and
+  `refresher_com`, step 2 for the instance `(pk, h)` and `s` the Client picks after step 1), is
+  two-phase zero-knowledge against the simulator `leanSim` (`lean_zeroKnowledge`), under the
+  two-phase tape hypothesis `TapeHyp2` (hybrids H1, H4, H6 and the grinding answers) and the
+  completeness assumptions `BAVCComplete`, `CrtComplete`. Step 1 reveals `c_i`, `c_mult`, `ũ`,
+  `d[0..M)` and `chal1`; with label rows these are uniform and independent of `r` (one-time pads),
+  so the simulator outputs them before the instance exists. `blindness_lean` is Theorem B (from
+  G1) for this prover: `≤ 4ε`. On `main` the statement is false (`ZK/Relations.lean`).
+  `pomfritVerify_complete`: the final signature passes `verify`.
 
 ### 8.3 Selective failure, the response `s`, and the check at `pomfrit.cpp:207`
 
@@ -637,5 +650,6 @@ dedicated to PomFRIT.
 | Disjoint `S, T` with `Σ_S ≤ Σ_T` ⇒ `Σ_S ≤ 57` | `minority_weight_le` |
 | Minority prefix group ⇒ `|A| ≤ 2^{57}` | `minority_card_le` |
 | `2^{57}/2^{128} ≤ 2^{−71}`; loss at `2^{50}`, `2^{64}` | `per_query_bound`, `loss_at_2_50`, `loss_at_2_64` |
-| Blindness (Thm B, from G1) under (ZK-fix) as a two-phase hypothesis: `≤ 4ε` between the worlds (`lean/VoleMole/Privacy/PomFRIT.lean`) | `blindness` |
+| Blindness (Thm B, from G1) under (ZK-fix) as a two-phase hypothesis: `≤ 4ε` between the worlds, for either proof layout (`lean/VoleMole/Privacy/PomFRIT.lean`) | `blindness` |
+| (ZK-fix) for the executable Lean prover with label rows, from the two-phase tape hypothesis; blindness with that prover; completeness of `verify` on the final signature (`lean/VoleMole/Privacy/PomFRITLean.lean`) | `lean_zeroKnowledge`, `blindness_lean`, `pomfritVerify_complete` |
 | G1 → G2 for one session; G3 exactly (one-time pad, then a swap of the sessions' simulator coins) | `sessionClose_real_sim`, `simGame_eq` |

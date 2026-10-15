@@ -36,7 +36,7 @@ Contents:
 | One-more unforgeability, per issuance context (Thm 1) | **Yes** | `ε_ext^iss + ε_ext^red + ε_dig + Adv^bind_Com + K·Adv^ct-uf_UOV,Com` | PoK (extraction README), binding of `Com`, chosen-target unforgeability of UOV on `Com`-images (implied by one-more-UOV, heuristically) |
 | One nullifier per signed commitment; double-spend detection (Cor 2) | **Yes**, if the Moderator keeps one record per `(ctx_iss, ctx_red)` across all Anchor Sets (`moussaka.hpp:141-146`) | as Thm 1 | as Thm 1 |
 | Redemption non-malleability: no redirect to another `challenge_digest`, Anchor Set or `ctx_red` (Thm 3) | **Yes** | `ε_SE^red + Adv^bind + K·Adv^ct-uf + U·Adv^ow-r + ZK hops` | weak SE (L8), plus the above, plus one-wayness in `r` |
-| Issuer hiding and unlinkability vs a Moderator **colluding with all Anchors**, with adversarial keys (Thm 4a) | **Yes, computationally**; [Lean] from uniform seed outputs (`Privacy/Moussaka.lean`, `anonymity`) | `2·ε_ZK^joint + 2·Adv^hide_Com` (the `2^{−192}` is not needed, §6) | ZK (lean/docs/zk.md), hiding of `Com` |
+| Issuer hiding and unlinkability vs a Moderator **colluding with all Anchors**, with adversarial keys (Thm 4a) | **Yes, computationally**; [Lean] from uniform seed outputs (`Privacy/Moussaka.lean`, `anonymity`); with the executable Lean prover (label rows) down to its tape hypothesis (`Privacy/MoussakaLean.lean`, `anonymity_label_rows`) | `2·ε_ZK^joint + 2·Adv^hide_Com` (the `2^{−192}` is not needed, §6) | ZK (lean/docs/zk.md), hiding of `Com` |
 | The same vs a Moderator that sees no issuance (Thm 4b) | **Yes**, with no Keccak assumption | `2·Σ ε_ZK^red` with `Pred = 2^{−128}` | ZK only |
 | Issuer hiding under a Moderator-chosen Anchor Set | **Only relative to the Anchors in the set that are honest and in common use** (§7) | n/a | Anchor-Set consistency outside the library |
 
@@ -489,7 +489,9 @@ Client-side index rule `idx`, and the refusal rule above (`allOk`).
   satisfies this per-proof hypothesis** (a distinguisher that knows `r = w[0..16)` computes Θ and
   runs the test of `lean/docs/zk.md` Prop. 4.1); there the joint (PU) hop over the four proofs
   replaces it and stays on paper. With the label-row
-  fix it is `lean/docs/zk.md`'s theorem.
+  fix it is `lean/docs/zk.md`'s theorem. The hypothesis is needed only for well-formed instances
+  (`IssueRelW`, `RedeemRelW`: contexts of 16 bytes, `nf` of 24, an Anchor Set of at most 64 keys,
+  as the C++ types and the Anchor Set's validation enforce).
 - Steps 2–3: `simGame_iff`: with all proofs simulated, the view is a function `hview` of
   `t₀, t₁`, the nullifiers and the simulator coins; `r` enters nothing else.
 - Step 4: `hiding_hop`, with `Adv^hide_Com` as the hypothesis `hidingAdv ≤ εhide` for the explicit
@@ -746,3 +748,11 @@ demo2: adversary token with squatted nf ACCEPTED; honest token then REJECTED (do
 from per-proof zero knowledge and the hiding of `Com` for the explicit reduction), with the hops
 `issue_close`, `redeem_close`, `simGame_iff`, `hiding_hop`, `idealGame_eq`. `#print axioms`:
 `propext`, `Classical.choice`, `Quot.sound`.
+
+`lean/VoleMole/Privacy/MoussakaLean.lean`: `anonymity_label_rows`, Theorem 4(a) with both proof
+systems the executable Lean prover with dedicated label rows (the statements of
+`Verifier/Relations.lean`), assuming only the tape hypotheses (`TapeHyp`, `lean/docs/zk.md`
+§10.1), the hiding of `Com`, `BAVCComplete` and `CrtComplete`: the witness encodings satisfy the
+issuance and redemption systems for every combination (`issue_holds`, `redeem_holds`, from the
+`Arith/Moussaka.lean` completeness theorems), and the other deterministic hypotheses are proved
+(`zkHypI`, `zkHypR`).

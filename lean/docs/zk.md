@@ -620,7 +620,10 @@ abort count. The probability `(1−p)^{2³²}` with `p ≈ 2⁻⁸·Pr[open succ
   `h = H(…, chal1, ũ, d_pre, …)`) may depend adaptively on π₁. The instance enters only `chal2`
   (`voleith.hpp:287-290`). The H6 bound no longer involves the witness, so the adaptive choice of
   `(x, w_suf)` after π₁ is covered by §2's notion. On `main`, this is exactly where PomFRIT failed:
-  `t` related `x = h` to `w_pre = r`.
+  `t` related `x = h` to `w_pre = r`. [Lean] `ZK/TwoPhase.lean` (§10.1) for the executable
+  prover: the simulator samples `(ctr, Δ)` from its own coins first and outputs π₁ (uniform
+  fields, the verifier's `chal1`) before any instance exists; the ideal prover's step 2 is
+  uniform given π₁ for every adaptive choice of `(x, w_suf)` (`proveIdeal2_close`).
 
 ### 7.6 BAVC opening and leaf commitments
 
@@ -705,8 +708,9 @@ really is perfect, and the label offset is handled in H6 at cost `(Q₅ + n_mult
 
 ## 10. What is formalized in Lean
 
-All files are under `lean/VoleMole/ZK/` (and `Privacy/LeanProver.lean`, §10.1). There is no
-`sorry` and no `axiom`. `#print axioms` lists only `propext`, `Classical.choice` and `Quot.sound`.
+All files are under `lean/VoleMole/ZK/` (and `Privacy/LeanProver.lean`, `Privacy/PomFRITLean.lean`,
+`Privacy/MoussakaLean.lean`, `Privacy/RatatouilleLean.lean`, §10.1). There is no `sorry` and no `axiom`. `#print axioms` lists
+only `propext`, `Classical.choice` and `Quot.sound`.
 
 | Statement | Lean | Used in |
 |---|---|---|
@@ -739,7 +743,8 @@ abstract proof systems of `Spec/*`: `Privacy.ZeroKnowledge R prove sim ε` (per 
 prover's output under uniform `rho` and the simulator's, from the instance alone, are `ε`-close
 for every valid witness, against distinguishers that may know it; `ε = 0` is equality of output
 distributions), and a two-phase, delayed-instance version for PomFRIT
-(`Privacy.PomFRIT.ZeroKnowledge`). This is the conclusion of §6's hybrids with the fix. On `main` no
+(`Privacy.PomFRIT.ZeroKnowledge`, derived for the Lean prover in §10.1). This is the conclusion of
+§6's hybrids with the fix. On `main` no
 efficient simulator satisfies it, since the distinguisher may know `w[0..λ)` and run the test of
 Proposition 4.1 (§4). For PomFRIT it fails for every simulator: phase 1 sees no instance, so the
 simulated proof cannot depend on `r`, while the test for the real `r` accepts every real proof
@@ -757,7 +762,7 @@ simulated proof cannot depend on `r`, while the test for the real `r` accepts ev
 - the claim that `rank F ≤ λ < n_mult` makes the attack's test sound on `main`. `n_mult` is
   inferred from the proof sizes, not computed from the generated tables.
 
-### 10.1 The executable prover (`ZK/Sim.lean` … `ZK/Exec.lean`, `Privacy/LeanProver.lean`)
+### 10.1 The executable prover (`ZK/Sim.lean` … `ZK/Exec.lean`, `ZK/TwoPhase.lean`, `Privacy/*Lean.lean`)
 
 The statements above are about models of the views. For the executable Lean prover
 (`Verifier/Prover.lean`, which reproduces the C++ proofs byte for byte, README §8) the hybrids are
@@ -775,6 +780,11 @@ simulator:
 | **Reduction:** every distinguisher's advantage, real vs. simulated proofs, *equals* its advantage, real tape vs. uniform tape, seen through the ideal-tape prover | `zk_reduction` | — |
 | **Zero knowledge** from the tape hypothesis `TapeHyp … ε`: `Close ε (prove … ∘ rho) (simulate p)`; in the form of `Privacy.ZeroKnowledge` for a statement family with dedicated label rows | `prove_close`, `labelRows_zeroKnowledge` | all |
 | The privacy theorems with the Lean prover: Moussaka issuer hiding/unlinkability, Ratatouille unlinkability | `Privacy.Moussaka.anonymity_lean`, `Privacy.Ratatouille.unlinkability_lean` (`Privacy/LeanProver.lean`) | — |
+| **Newton interpolation is correct**: `InterpOk d` for `d + 1 < 2⁶⁴` (the code's divided-difference table is the recurrence `D(a, m)`; the Newton form interpolates its window, by Neville's identity; Horner's rule builds it) | `Interp.interpOk`, `interpOk_two`, `interpOk_nine`, `interpolate_correct`, `newton_interp` (`ZK/Interp.lean`) | H3 |
+| **Two phases, delayed instance** (PomFRIT): with the instance and the witness suffix chosen by any continuation from step 1's output (buffer and `chal1`), the real run is the ideal-tape run at its own tape (step 2: `proveCommit_eq_proveIdeal` for any split of the witness; step 1: `step1_real`); on a uniform tape the ideal run is distributed as the simulated one: step 1's `c_i`, `c_mult`, `ũ`, `d[0..|r|)` are uniform (so the simulator outputs them, and the verifier's `chal1`, before the instance exists), and `d[|r|..)` and `ã` stay uniform given them for every instance and suffix picked (`ã` is a bijection of the QuickSilver masks for every value of `ũ` and of the instance; `(c_i, d)` a bijection of the row pads for every suffix choice that reads `d[0..|r|)` only) | `realRun2_eq`, `idealPhase1_real`, `proveIdeal2_close`, `upush_respAd`, `upush_rowsAd`, `upush_fieldsAd` (`ZK/TwoPhase.lean`) | H2, H5–H7 |
+| **Two-phase zero knowledge** from the two-phase tape hypothesis `TapeHyp2`, and for PomFRIT's Lean prover (`leanProver`: `issue_request_with_seed`, then `finalize_issue` for the instance `(pk, h)` and `s`) in the form of `Privacy.PomFRIT.ZeroKnowledge`, with every deterministic hypothesis proved for valid continuations (`P(s) = h ⊕ r`); blindness with the Lean prover on the label-row layout; completeness of `pomfritVerify` on the final signature | `twoPhase_close`, `Privacy.PomFRIT.lean_zeroKnowledge`, `runHyp2_lean`, `blindness_lean`, `pomfritVerify_complete` (`Privacy/PomFRITLean.lean`) | all |
+| **Ratatouille, assembled**: the issuance and spend statements with label rows, the spec's witness encodings (`encode_issue_witness`, `encode_spend_witness`, with the committed Keccak states and the carries), the primitives `leanPrim` (proofs as the spec's label-row-sized vectors, `Spec.Ratatouille.Sizes.labelRows`); `ZKHyp` for every instance and witness; Theorem 2 with only the tape hypotheses, hiding, `BAVCComplete` and `CrtComplete` left | `Privacy.Ratatouille.issue_holds`, `spend_holds`, `carries_testBit`, `zkHypI`, `zkHypS`, `unlinkability_label_rows` (`Privacy/RatatouilleLean.lean`) | — |
+| **Moussaka, assembled**: the issuance and redemption statements of `Verifier/Relations.lean` with label rows, `ZKHyp` for every well-formed instance (the spec's witness encodings satisfy the `Arith` systems for every combination); Theorem 4(a) with only the tape hypotheses, hiding, `BAVCComplete` and `CrtComplete` left | `Privacy.Moussaka.issue_holds`, `redeem_holds`, `zkHypI`, `zkHypR`, `anonymity_label_rows` (`Privacy/MoussakaLean.lean`) | — |
 
 `lake exe zk_sim [TESTS [main\|labelrows [FILTER]]]` runs, on all 18 KAT runs of each layout: the
 equation `prove = proveIdeal ∘ tapeOf` (all pass), the simulator with the programmed oracle
@@ -797,14 +807,24 @@ equation `prove = proveIdeal ∘ tapeOf` (all pass), the simulator with the prog
   part fails (§4).
 - **Deterministic hypotheses**, per statement and witness (`ZKHyp`, `RunHyp`): the statement's
   evaluator is a system of degree `≤ d`, `1 ≤ d`, that the witness satisfies for every `chal1` and
-  combination (so not PomFRIT, below); `N_MASK ≤ 32`; `maskInvOk T` (proved for `CrtGen.tables`,
-  `maskInvOk_tables`); correct interpolation `InterpOk d`; `BAVCComplete` and `CrtComplete` (the
-  two assumptions of the completeness theorem, checked by `prover_vectors` on every proof).
-  For the privacy corollaries the statement builders and their `ZKHyp` are parameters; the
-  per-relation instances (`Bridge/Relations.lean` gives `hvals`) are not assembled.
+  combination (for PomFRIT, for every instance the continuation picks: `RunHyp2`); `N_MASK ≤ 32`;
+  `maskInvOk T` (proved for `CrtGen.tables`, `maskInvOk_tables`); correct interpolation
+  `InterpOk d` (proved, `Interp.interpOk`); `BAVCComplete` and `CrtComplete` (the two assumptions
+  of the completeness theorem, checked by `prover_vectors` on every proof). For Moussaka
+  (`anonymity_label_rows`), Ratatouille (`unlinkability_label_rows`) and PomFRIT
+  (`blindness_lean`) all of them except `BAVCComplete` and `CrtComplete` are proved; Moussaka's
+  zero-knowledge hypotheses are needed only for well-formed instances (`IssueRelW`, `RedeemRelW`:
+  the lengths the C++ types fix, at most 64 Anchors).
 - `simulateRO_accept` assumes the simulated proof's run reaches `chal3` (checked by `zk_sim`).
 - **PomFRIT** (two-phase, delayed instance `h = hash_to_target(…, chal1, …)`):
-  `Privacy.PomFRIT.ZeroKnowledge` is not derived; the ideal-tape step needs the witness to satisfy
-  the system for every `chal1`, which a delayed instance violates.
-- **Ratatouille:** `Spec.Ratatouille` fixes `main`'s proof sizes, so `unlinkability_lean` takes the
-  encoding of the (256 bytes longer) label-row proofs into the spec's proof type as a parameter.
+  `Privacy.PomFRIT.ZeroKnowledge` is derived for the Lean prover with label rows
+  (`lean_zeroKnowledge`) from the two-phase tape hypothesis `TapeHyp2` (`ZK/TwoPhase.lean`: the
+  tape of a two-phase run, with step 1's output as a fallback block used only if no grinding
+  answer is accepted). Once picked, the instance `(pk, h)` is fixed, so the witness `r ‖ s`
+  satisfies its system for every `chal1` and combination. `Spec/PomFRITLayout.lean` states the
+  protocol on the label-row layout (5579-byte proofs; `hash_to_target` reads `ũ` and `d` at its
+  offsets), and `Privacy.PomFRIT.blindness` holds for either layout.
+- **Ratatouille:** `Spec.Ratatouille`'s proof sizes are a parameter (`Sizes.main`,
+  `Sizes.labelRows`); `unlinkability_label_rows` is on the label-row layout. The spend statement
+  has no key digest in its instance encoding (the spec's key is its public map), unlike
+  `hash_instance`; zero knowledge does not depend on the encoding.
