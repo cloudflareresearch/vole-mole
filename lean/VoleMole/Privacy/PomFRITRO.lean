@@ -37,8 +37,8 @@ then, `realGameRO_iff`), and the simulators then program symmetrically.
   and applying its programming with session `1`'s output (`312` `H₅` keys, `3·4607` cipher keys),
   the continuation reading the simulated session `0`'s step 1 (`4607` cipher keys), **plus the
   collision term** `δ = Pr[session 1, run for real, reads H₂³ differently on the tables session 0
-  programmed]` (`deltaRO`, an explicit probability of the game; on paper it is the probability
-  that session `1`'s grinding points meet session `0`'s, `lean/docs/zk.md` §10.2): `hop1`.
+  programmed]` (`deltaRO`, an explicit probability of the game, `≤ noHitProb + 2⁻¹²⁸` by
+  `deltaRO_le`, `Privacy/PomFRITDelta.lean`): `hop1`.
 * `G2` for `A` and for `A.swap` coincide (`G2_swap`): the requests are one-time pads
   (`h ⊕ r`, re-parametrized by `r`) and the simulated sessions, their programming and the
   signatures depend on the responses only through `bothOK`, which is symmetric.

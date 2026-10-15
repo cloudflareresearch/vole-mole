@@ -26,7 +26,7 @@ share them. The structure is `Privacy/MoussakaRO.lean`'s:
   coins and the tables fixed.
 * **The hops** (`hopI0R`, `hopI1R`, `hopS1R`, `hopS2R`, `Privacy.hop_ro`): each costs the
   zero-knowledge error at its reduction's budget and, except the first, a programming collision
-  term (`deltaI1R`, `deltaS1R`, `deltaS2R`).
+  term (`deltaI1R`, `deltaS1R`, `deltaS2R`; bounded in `Privacy/RatatouilleDelta.lean`).
 
 **`unlinkabilityRO`** (any proof systems) and **`unlinkabilityRO_lean`** (the Lean prover, SHAKE):
 

@@ -31,7 +31,7 @@ Line references are to the working tree at commit `6d7113e`.
 |---|---|---|---|
 | One-more unforgeability (paper Def. 2.5), classical ROM + ideal cipher | **Holds.** Tight under a τ-shift variant of UOV one-more preimage resistance (Thm U2). Under the paper's standard assumption (Def. 3.1) the reduction loses an extra `(Q₃+ℓ+1)·2^{−71}` (Thm U1) | Same (ZK is not used) | §5–§6 |
 | One-more unforgeability, QROM | **Open.** The reduction needs a first-phase extractor *during* the run; Q2 extracts only after the run | Same | §7 |
-| Blindness against a malicious Issuer (paper Def. 2.4: malicious key, selective-failure form) | **Fails.** An honest-but-curious Issuer links with advantage ≈ 1 using about 310 SHAKE calls per (signature, session) pair (`lean/docs/zk.md` §4) | **Holds** (Thm B), with advantage `≤ ε_ZK^fix(Q_P = 2) + 2Q_X·2^{−256}`; [Lean] from G1, with (ZK-fix) as a hypothesis (`Privacy/PomFRIT.lean`), and with (ZK-fix) derived for the executable Lean prover with label rows down to its tape hypothesis (`Privacy/PomFRITLean.lean`, `blindness_lean`); in the ROM and ideal-cipher model with the Issuer seeing the tables, for the Lean prover, `≤ 4·εRO(q₃, q₅ + 1248, q_E + 18428) + δ(A) + δ(A.swap)` (`Privacy/PomFRITRO.lean`, `blindnessRO_lean`; the collision terms `δ` explicit, bounded on paper) | §8 |
+| Blindness against a malicious Issuer (paper Def. 2.4: malicious key, selective-failure form) | **Fails.** An honest-but-curious Issuer links with advantage ≈ 1 using about 310 SHAKE calls per (signature, session) pair (`lean/docs/zk.md` §4) | **Holds** (Thm B), with advantage `≤ ε_ZK^fix(Q_P = 2) + 2Q_X·2^{−256}`; [Lean] from G1, with (ZK-fix) as a hypothesis (`Privacy/PomFRIT.lean`), and with (ZK-fix) derived for the executable Lean prover with label rows down to its tape hypothesis (`Privacy/PomFRITLean.lean`, `blindness_lean`); in the ROM and ideal-cipher model with the Issuer seeing the tables, for the Lean prover, `≤ 4·εRO(q₃, q₅ + 1248, q_E + 18428) + 2·noHitProb + 2·2⁻¹²⁸` (`Privacy/PomFRITRO.lean`, `blindnessRO_lean`; the collision terms bounded in `Privacy/PomFRITDelta.lean`, `blindnessRO_lean_num`) | §8 |
 | No selective failure via `finalize_issue`'s check (`pomfrit.cpp:207`) | Holds: the abort event is a function of the Issuer's own view | Holds | §8.3 |
 | Message binding; no re-targeting of a signature | Holds (part of unforgeability; L8 §7) | Holds | §9.1 |
 | Third parties cannot maul a signature (strong SE) | Holds against parties who never saw the request `t` | Holds against everyone, the Issuer included | §9.2 |
@@ -501,9 +501,12 @@ and `d` at 3075 and 3139; at `Layout.main` the definitions are the spec's, by `r
     World 1 is world 0 for the Issuer with the sessions' roles exchanged (`realGameRO_true`).
   - **`blindnessRO_lean`**: `|Pr[A accepts | b = 0] − Pr[A accepts | b = 1]| ≤
     4·εRO(q₃, q₅ + 1248, q_E + 18428) + δ(A) + δ(A.swap)`, about `2⁻¹⁰³·⁴ +
-    4·(q₃ + q₅ + 221·q_E)·2⁻¹²⁸ + δ(A) + δ(A.swap)`. On paper `δ ≲ 2⁻¹²⁸ + 2⁻¹¹⁰` (session 1's
-    grinding prefix does not depend on session 0's simulated `ã₀`, the last field of the prefix
-    session 0 programs at). Remaining modelling steps: SHAKE as a random oracle, AES as an ideal
+    4·(q₃ + q₅ + 221·q_E)·2⁻¹²⁸ + δ(A) + δ(A.swap)`. In Lean (`Privacy/PomFRITDelta.lean`,
+    `deltaRO_le`) `δ(A) ≤ noHitProb + 2⁻¹²⁸`: session 1's grinding prefix does not depend on
+    session 0's simulated `ã₀` (`16` bytes, the last field of the prefix session 0 programs at),
+    and if session 1 continues then so does session 0 (`bothOK` is symmetric). So
+    **`blindnessRO_lean_num`**: `≤ 4·εRO(q₃, q₅ + 1248, q_E + 18428) + 2·noHitProb + 2·2⁻¹²⁸`.
+    Remaining modelling steps: SHAKE as a random oracle, AES as an ideal
     cipher (the cipher's rows are uniform functions: the PRP/PRF switching term is on paper),
     the two slices independent (distinct `r`), G0 → G1.
 
@@ -649,7 +652,7 @@ dedicated to PomFRIT.
 | QROM one-more unforgeability | open | open |
 | Blindness, honest-but-curious Issuer | ✗ (practical linking) | ✓ (Thm B) |
 | Blindness, malicious Issuer, malicious key, selective failure | ✗ | ✓ (Thm B, §8.3) |
-| Blindness in the ROM + ideal cipher, Issuer seeing the tables (Lean prover) | ✗ | ✓ (`blindnessRO_lean`, collision terms on paper) |
+| Blindness in the ROM + ideal cipher, Issuer seeing the tables (Lean prover) | ✗ | ✓ (`blindnessRO_lean_num`, every term explicit) |
 | Blindness in the QROM | ✗ | open (`lean/docs/zk-qrom.md`) |
 | Strong SE / no third-party mauling | ✓ against parties without `t` | ✓ against all |
 | Owner re-randomization (§9.3) | present | present |
@@ -687,4 +690,4 @@ dedicated to PomFRIT.
 | (ZK-fix) for the executable Lean prover with label rows, from the two-phase tape hypothesis; blindness with that prover; completeness of `verify` on the final signature (`lean/VoleMole/Privacy/PomFRITLean.lean`) | `lean_zeroKnowledge`, `blindness_lean`, `pomfritVerify_complete` |
 | G1 → G2 for one session; G3 exactly (one-time pad, then a swap of the sessions' simulator coins) | `sessionClose_real_sim`, `simGame_eq` |
 | Two-phase zero knowledge in the ROM and ideal-cipher model with `H₂³` visible, the continuation reading the tables (`lean/VoleMole/ZK/TwoPhaseRO.lean`, `ZK/TwoPhaseIC.lean`, `ZK/TwoPhaseReadsRO.lean`) | `zk2_rom_ic_h23`, `zk2_rom_ic_h23_num`, `zk2_ro`, `lean_zeroKnowledgeROS2` |
-| Blindness in the ROM and ideal-cipher model, both sessions on shared tables, the Issuer's guess seeing them (`lean/VoleMole/Privacy/PomFRITRO.lean`) | `blindnessRO`, `blindnessRO_lean`, `hop0`, `hop1`, `G2_swap`, `realGameRO_iff` |
+| Blindness in the ROM and ideal-cipher model, both sessions on shared tables, the Issuer's guess seeing them (`lean/VoleMole/Privacy/PomFRITRO.lean`) | `blindnessRO`, `blindnessRO_lean`, `hop0`, `hop1`, `G2_swap`, `realGameRO_iff`; the collision term: `deltaRO_le`, `blindnessRO_lean_num` (`Privacy/PomFRITDelta.lean`) |

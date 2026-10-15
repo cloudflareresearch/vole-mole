@@ -811,6 +811,8 @@ which the random-oracle ones are proved with the hashed domain a uniform table:
 | **Two-phase zero knowledge in the ROM and ideal-cipher model with `H₂³` visible** (PomFRIT's flow, label rows, faest-arch-opt's tables, `SmallParams`): the record `recH Hb (st1 st) r G3 G2 G5` (`H₃` at step 1's seed inputs `r ‖ μ₁ ‖ ρ ‖ 3`), the cipher a uniform table `E`; the real world is the executable two-phase run `realRun2` (`voleGen`, then `proveCommit` for the instance and suffix the continuation picks from step 1's output) with `icPrg E`; **the continuation `K G5 E` may read `H₅` and the cipher** at `q_k5`, `q_kE` keys (not `H₃`, `H₂³`): in a game it is the rest of the game up to this proof's instance. The simulator outputs `simRun2 Hb` (its coins, and the cipher for the verifier's `chal1`) and programs `H₂³` (`simTab2`) at the grinding points of the prefix it recomputes from its final proof for the instance picked from its step-1 output (`outPre2`; at the empty prefix if the continuation stops). Advantage `≤ q₃·2⁻¹²⁸ + Pr[GrindBad] + 221·(4607 + (q_E + q_kE) + 4607)·2⁻¹²⁸ + ((q₅ + q_k5) + 1)·2⁻¹²⁸`, and with `2⁻¹¹⁰` for `Pr[GrindBad]`: the single-phase bound at the budget plus the continuation's reads. The hybrids of `zk_rom_ic_h23` for `proveIdeal2`: the real run is `hyb2'` at `H₃`'s answer and the table's answers at `preP` (the instance's prefix, or the empty one if the continuation stops: then no grinding answer is read, `hyb2'_none`); H1, programming (exact), and in one hop the programmed points switched to the recomputed ones **and the fallback block to a uniform one** (`≤ Pr[GrindBad]`: outside it an answer is accepted, so the fallback block is unread, and the run is a real two-phase run for a record built for it, `realRun2_recAt2`, on which `vPre` recomputes `pre2`, `hyb2'_vPre`), so the abort term `noHitProb` of `tapeHyp2_of_hops` is inside `Pr[GrindBad]`; H4 jointly over the root seed and `E` (the two-phase view reads `E` at the reconstruction's `≤ 4607` nodes, `hyb3'_ic_congr`, `viewIC2_congr`, plus the continuation's reads); the tape; H6 (`lab2_hyp`, `pr_bad2`: the queries' guesses of `u_pre` are functions of the shared tape and the adaptive fields `fieldsAd`, independent of `Θ`, `upush_fieldsAdθ`; the continuation's `H₅` reads are guesses too); the simulator (`proveIdeal2_close_at`) | `zk2_rom_ic_h23`, `zk2_rom_ic_h23_num`, `zk2_pre_h4`, `zk2_post_h4`, `joint3_h4_2`, `zk2_h1`, `zk2_prog`, `zk2_keys`, `zk2_tape`, `zk2_h6`, `zk2_sim`, `real_form`, `hyb2'_vPre`, `realRun2_recAt2`, `proveIdeal2_h5_congr`, `vIn5_proveIdeal2`, `Hyp2` (`ZK/TwoPhaseRO.lean`, `ZK/TwoPhaseIC.lean`); `proveIdeal2_close_at`, `upush_fieldsAdθ` (`ZK/TwoPhase.lean`) | §10.2 |
 | **The two-phase prover as `ZeroKnowledgeROS`** (zero knowledge with tables whose simulator may read the tables it does not program: here the cipher, for `chal1`, and the continuation's reads): instances `(b, K)` (binder, table-reading continuation, `Hyp2RO`), error `εRO q₃ (q₅ + q_k5) (q_E + q_kE)`; the reads: step 1 reads `H₅` at `624`, the cipher at `4607` keys and not `H₂³`; the real run what step 1 and the continuation read (step 2 neither); the simulated run the cipher at `4607` keys plus the continuation's reads; its programming `H₅` at `312`, the cipher at `2·4607` keys plus the continuation's | `ZeroKnowledgeROS` (`Privacy/ZeroKnowledgeRO.lean`); `zk2_ro`, `lean_zeroKnowledgeROS2`, `realRO2`, `simRO2`, `progRO2`, `Hyp2RO`, `step1_rd5`, `step1_rdE`, `step1_agreeOff_h23`, `realRO2_rd5`, `realRO2_rdE`, `simRO2_rd5`, `simRO2_rdE`, `progRO2_isProg` (`ZK/TwoPhaseReadsRO.lean`) | §10.2 |
 | **PomFRIT blindness in the ROM and ideal-cipher model** (two sessions on the same tables, each with its `H₃` slice; the Issuer's guess sees all tables with a budget, its responses do not read them): the spec's protocol (`realSession`, `Layout.labelRows`) with the Lean prover on the tables (`leanProverRO`); `≤ 4·εRO(q₃, q₅ + 1248, q_E + 18428) + δ(A) + δ(A.swap)` with the collision term `δ` explicit | `blindnessRO`, `blindnessRO'`, `blindnessRO_lean`, `realGameRO`, `realGameRO_iff`, `realGameRO_true`, `AdversaryRO.swap`, `hop0`, `hop1`, `G1_G1'`, `deltaRO`, `G2_swap`, `G2c_swap`, `swapS` (`Privacy/PomFRITRO.lean`) | §10.2 |
+| **The programming-collision terms, bounded**: the real prover reads `H₂³` only at its own grinding prefix (`prove_recH_eq`), so a programming at prefix blocks (`ProgAt`) changes it only if its block is programmed; the simulated opening reconstructs and the programmed block ends with the simulator's uniform `ã` (`16·(d − 1)` bytes, at `72 …` of the `72 + 16·(d − 1)`-byte prefix); completeness of the recomputation on real proofs outside `GrindBad`; with a second application of zero knowledge (distinguisher `TailIn`, budget `(0, 312, 4607)`), `Pr[collision] ≤ 2⁻¹¹⁰ + εRO(0, 312, 4607) + noHitProb + |T|·2^{−8·16(d−1)}` for programmed tails in a fixed set `T` | `prove_recH_eq`, `realRO_progAt`, `realRO_vPre`, `realRO_ne_tail`, `ProgAt`, `progRO_progAt`, `reconstruct_openingOf`, `vPre_simAssemble`, `preTail`, `simTail`, `preTail_outPre`, `pr_simTail_mem`, `pr_collide_zk` (`ZK/CollideRO.lean`); two phases: `realRun2_h23_congr`, `realRun2_out1`, `preTail_outPre2`, `pr_simCoins_tail_le` (`ZK/CollideRO2.lean`) | §10.2 |
+| **The privacy theorems in the ROM and ideal-cipher model with every term explicit**: Moussaka `δI₁ ≤ noHitProb + 2⁻¹⁰²⁴`, `δL ≤ 2⁻¹¹⁰ + εRO(0, 312, 4607) + noHitProb + 2·2⁻¹⁰²⁴`, `δR ≤ … + 3·2⁻¹⁰²⁴`, so `≤ 8·εRO(q₃, q₅ + 1872, q_E + 13821) + 4·(2⁻¹¹⁰ + εRO(0, 312, 4607)) + 6·noHitProb + 12·2⁻¹⁰²⁴ + 2·εhide`; Ratatouille the same; PomFRIT `δ(A) ≤ noHitProb + 2⁻¹²⁸`, so `≤ 4·εRO(q₃, q₅ + 1248, q_E + 18428) + 2·noHitProb + 2·2⁻¹²⁸` | `deltaI1_le`, `deltaL_le`, `deltaR_le`, `anonymityRO_lean_num` (`Privacy/MoussakaDelta.lean`); `deltaI1R_le`, `deltaS1R_le`, `deltaS2R_le`, `unlinkabilityRO_lean_num` (`Privacy/RatatouilleDelta.lean`); `deltaRO_le`, `blindnessRO_lean_num` (`Privacy/PomFRITDelta.lean`) | §10.2 |
 
 `lake exe zk_sim [TESTS [main\|labelrows [FILTER]]]` runs, on all 18 KAT runs of each layout: the
 equation `prove = proveIdeal ∘ tapeOf` (all pass), the simulator with the programmed oracle
@@ -918,14 +920,16 @@ equation `prove = proveIdeal ∘ tapeOf` (all pass), the simulator with the prog
       on `A`. The paper's `2⁻¹²⁰` is `1/|A|` with `|A| ≈ 2¹²⁰`; the proved `2⁻¹¹¹` reflects the
       proved lower bound on `|A|`.
 
-    Left open: (b) the multi-proof terms, now isolated: with several proofs on shared tables
-    (§10.2) each hybrid step costs a programming collision term `δ` (an explicit probability of
-    the game, bounded on paper in §10.2, not in Lean), and `ε_iv` (two proofs sharing an `H₃`
-    slice) is a modelling step of the per-proof slices; (c) the privacy corollaries in the ROM and
-    ideal-cipher model are proved for Moussaka, Ratatouille and PomFRIT (§10.2: `anonymityRO_lean`,
-    `unlinkabilityRO_lean`, `blindnessRO_lean`, with the `δ` terms, for adversaries whose
-    interaction does not read the tables; for PomFRIT on the two-phase theorem
-    `zk2_rom_ic_h23_num`, whose continuation may read the tables); the `*_shake` theorems with the
+    Left open: (b) the multi-proof terms: with several proofs on shared tables (§10.2) each
+    hybrid step costs a programming collision term `δ`, now bounded in Lean (`pr_collide_zk`,
+    `deltaI1_le`, `deltaRO_le`, …: `≤ 2⁻¹¹⁰ + εRO(0, 312, 4607) + noHitProb + 3·2⁻¹⁰²⁴` for a
+    redemption or spend, `≤ noHitProb + 2⁻¹⁰²⁴` for the second issuance, `≤ noHitProb + 2⁻¹²⁸` for
+    PomFRIT); `ε_iv` (two proofs sharing an `H₃` slice) is a modelling step of the per-proof
+    slices; (c) the privacy corollaries in the ROM and ideal-cipher model are proved for Moussaka,
+    Ratatouille and PomFRIT with every term explicit (§10.2: `anonymityRO_lean_num`,
+    `unlinkabilityRO_lean_num`, `blindnessRO_lean_num`, for adversaries whose interaction does not
+    read the tables; for PomFRIT on the two-phase theorem `zk2_rom_ic_h23_num`, whose continuation
+    may read the tables); the `*_shake` theorems with the
     fixed-record `HopHyps` remain. The PRP/PRF switching term and the
     modelling steps (SHAKE as a random oracle, AES as an ideal cipher) remain.
 - **Deterministic hypotheses**, per statement and witness (`ZKHyp`, `RunHyp`): the statement's
@@ -943,15 +947,17 @@ equation `prove = proveIdeal ∘ tapeOf` (all pass), the simulator with the prog
   each proof's error is the sum of the named terms); Moussaka's
   zero-knowledge hypotheses are needed only for well-formed instances (`IssueRelW`, `RedeemRelW`:
   the lengths the C++ types fix, at most 64 Anchors).
-- `simulateRO_accept` assumes the simulated proof's run reaches `chal3` (checked by `zk_sim`).
+- `simulateRO_accept` assumes the simulated proof's run reaches `chal3` (checked by `zk_sim`);
+  of its three conditions the reconstruction of the simulated opening is proved
+  (`reconstruct_openingOf`), the format check and `Δ' ≠ 0` are not.
 - **PomFRIT** (two-phase, delayed instance `h = hash_to_target(…, chal1, …)`):
   `Privacy.PomFRIT.ZeroKnowledge` is derived for the Lean prover with label rows
   (`lean_zeroKnowledge`) from the two-phase tape hypothesis `TapeHyp2` (`ZK/TwoPhase.lean`: the
   tape of a two-phase run, with step 1's output as a fallback block used only if no grinding
   answer is accepted), itself from the hop hypotheses `HopHyps2` (`ZK/TwoPhaseHops.lean`;
   `blindness_lean_shake`: `≤ 4(ε_rho + ε_grind + ε_abort + ε_bavc + ε_lab)`). In the ROM and
-  ideal-cipher model (§10.2, `blindnessRO_lean`) no tape or hop hypothesis is left, only the
-  collision terms `δ`. Once picked, the instance `(pk, h)` is fixed, so the witness `r ‖ s`
+  ideal-cipher model (§10.2, `blindnessRO_lean_num`) no tape or hop hypothesis is left, and the
+  collision terms are bounded (`δ(A) ≤ noHitProb + 2⁻¹²⁸`, `deltaRO_le`). Once picked, the instance `(pk, h)` is fixed, so the witness `r ‖ s`
   satisfies its system for every `chal1` and combination. `Spec/PomFRITLayout.lean` states the
   protocol on the label-row layout (5579-byte proofs; `hash_to_target` reads `ũ` and `d` at its
   offsets), and `Privacy.PomFRIT.blindness` holds for either layout.
@@ -961,7 +967,7 @@ equation `prove = proveIdeal ∘ tapeOf` (all pass), the simulator with the prog
   `hash_instance`; zero knowledge does not depend on the encoding.
 
 
-### 10.2 Privacy in the random-oracle and ideal-cipher model (`Privacy/ZeroKnowledgeRO.lean`, `ZK/ReadsRO.lean`, `Privacy/MoussakaRO.lean`, `Privacy/RatatouilleRO.lean`, `ZK/TwoPhaseRO.lean`, `ZK/TwoPhaseIC.lean`, `ZK/TwoPhaseReadsRO.lean`, `Privacy/PomFRITRO.lean`)
+### 10.2 Privacy in the random-oracle and ideal-cipher model (`Privacy/ZeroKnowledgeRO.lean`, `ZK/ReadsRO.lean`, `Privacy/MoussakaRO.lean`, `Privacy/RatatouilleRO.lean`, `ZK/TwoPhaseRO.lean`, `ZK/TwoPhaseIC.lean`, `ZK/TwoPhaseReadsRO.lean`, `Privacy/PomFRITRO.lean`, `ZK/CollideRO.lean`, `ZK/CollideRO2.lean`, `Privacy/*Delta.lean`)
 
 The `*_shake` privacy theorems go through `Privacy.ZeroKnowledge`, whose distinguishers see the
 proof only, so they take the fixed-record hop hypotheses. Here the privacy adversary sees the
@@ -1023,24 +1029,58 @@ the Issuer `A.at (Vtab …) sl` and `simGame_iff`, `stage_ideal`, `idealGame_iff
 `8·εRO(q₃, q₅ + 1872, q_E + 13821) = 8·(2⁻¹¹⁰ + 221·(23035 + q_E)·2⁻¹²⁸ +
 (q₃ + q₅ + 1873)·2⁻¹²⁸)`, about `2⁻¹⁰²·⁶` plus `8·(q₃ + q₅ + 221·q_E)·2⁻¹²⁸`.
 
-**The collision terms, on paper.** The real proof `j` reads `H₂³` only at its grinding points
-`pre_j ‖ c ‖ 11` (`pre_j = chal2 ‖ qs_check ‖ ã`, computed without `H₂³`), and an earlier
-simulation `i` programs exactly the points `outPre_i ‖ c ‖ 11`; so `δ_j ≤ Pr[pre_j ∈ {outPre_i}]`
-(as `200`-byte prefixes). A simulated prefix ends with the simulator's uniform `ã_i`
-(`128` bytes). *Issuance `1` against issuance `0`* (`δI₁`): `pre₁` does not depend on issuance
-`0`'s coins, so `δI₁ ≤ 2⁻¹⁰²⁴ + noHitProb` (the second term: the simulation produced no proof).
-*Redemptions and spends*: their statements are chosen after the adversary saw the simulated
-requests, so `pre_j` may depend on `ã_i`. If the real proof's grinding succeeds, `pre_j` is the
-prefix the verifier recomputes from its proof (`vPre_proveCommit`), and
-"`vPre(o_j) ∈ {outPre_i}`" is a distinguisher of `o_j` and the tables reading `H₅` and the cipher
-at `(j−1)·312` and `(j−1)·4607` more keys; by zero knowledge of proof `j` its probability is at
-most the simulated one plus `εRO` at that budget, and for the simulated proof the last `128`
-bytes are its own uniform `ã_j`, independent of the `outPre_i`; if the real grinding fails (no
-accepted answer among the `2³²` original answers at `pre_j`, uniform since `pre_j` does not read
-`H₂³`), `≤ noHitProb`. So `δ_j ≤ εRO(0, j·312, j·4607) + (j−1)·2⁻¹⁰²⁴ + 2·noHitProb`, and the
-total is about `14·εRO`. These steps (the completeness of the recomputation on real proofs, the
-reconstruction of a simulated opening, the `ã` field's position in `vPre`, the second application
-of zero knowledge) are not mechanized.
+**The collision terms, in Lean** (`ZK/CollideRO.lean`, `Privacy/MoussakaDelta.lean`,
+`Privacy/RatatouilleDelta.lean`). The real proof `j` reads `H₂³` only at its grinding points
+`pre_j ‖ c ‖ 11` (`pre_j = chal2 ‖ qs_check ‖ ã`, computed without `H₂³`: `prove_recH_eq`, the
+executable prover is hybrid H2's run at its slice's seed and `iv_pre` and the table's answers at
+`pre_j`), and an earlier simulation `i` programs exactly the keys of the prefix block
+`blk(outPre_i)` (`progRO_progAt`, `ProgAt`); so a collision needs `blk(pre_j)` to be a programmed
+block (`realRO_progAt`, `realRO_ne_tail`). **The layout:** `preLen = 56 + 16 + 16·(d − 1) =
+72 + 16·(d − 1)`, `200` bytes for `d = 9`, with `ã` in bytes `72 … 199`; the simulated opening
+reconstructs (`reconstruct_openingOf`: right size, at most `T_OPEN` seeds, zero padding), so the
+prefix recomputed from a simulated proof is `chal2 ‖ qs_check ‖ ã` with `|chal2 ‖ qs_check| = 72`
+(`vPre_simAssemble`), and the last `16·(d − 1) = 128` bytes of the programmed block (`preTail`)
+are the simulator's uniform `ã_i` — or, if the simulation produced no proof, the tail of the empty
+prefix's block, a constant (`simTail`, `preTail_simBlk`). This is where the `2⁻¹⁰²⁴` comes from: a
+`128`-byte uniform field.
+
+*Issuance `1` against issuance `0`* (`deltaI1_le`, `deltaI1R_le`): `pre₁` does not depend on
+issuance `0`'s coins, so `δI₁ ≤ noHitProb + 2⁻¹⁰²⁴` (`pr_simTail_eq_le`), as on paper (`0` for
+Ratatouille with `T_init = 0`).
+
+*Redemptions and spends* (`deltaL_le`, `deltaR_le`, `deltaS1R_le`, `deltaS2R_le`): their
+statements are chosen after the adversary saw the simulated requests, so `pre_j` may depend on the
+`ã_i`; but given the context, the earlier simulations' tails form a fixed set `T` of `n` values
+(`n = 2` for the first redemption or spend, `3` for the second). **`pr_collide_zk`**: if
+`blk(pre_j)` is programmed, then `preTail(blk(pre_j)) ∈ T`; unless the grinding outcome at `pre_j`
+is bad (`GrindBad`, `≤ 2⁻¹¹⁰`: the answers at `pre_j` are uniform, `pr_grindBad_preRO`), the real
+proof is produced and the verifier recomputes `pre_j` from it (`realRO_vPre`, from `hyb3_vPre`:
+completeness of the recomputation on real proofs, which needs `Δ' ≠ 0` as well as a hit), so
+`TailIn T` — "the tail of the prefix recomputed from the output is in `T`", reading `H₅` at `312`
+and the cipher at `4607` keys and nothing of `H₃` — holds for the real proof; by zero knowledge
+(`zk_ro`, a second application, at budget `(0, 312, 4607)`) its probability is at most the
+simulated one plus `εRO(0, 312, 4607)`, and for the simulated proof the tail is its own uniform
+`ã_j` (`≤ noHitProb + n·2⁻¹⁰²⁴`, `pr_simTail_mem`). So
+
+    δ_j ≤ 2⁻¹¹⁰ + εRO(0, 312, 4607) + noHitProb + n·2⁻¹⁰²⁴,   n = 2, 3,
+
+and `0` where the Client's check fails and no proof is computed. **Corrections to the paper
+bound** `εRO(0, j·312, j·4607) + (j−1)·2⁻¹⁰²⁴ + 2·noHitProb`: (i) the completeness of the
+recomputation needs `¬GrindBad` (no hit, *or* a zero lifted `Δ'`), so the grinding term is
+`Pr[GrindBad] ≤ 2⁻¹¹⁰`, not `noHitProb` (the paper's argument misses the `Δ' = 0` event,
+`≤ 2⁻¹¹¹`); (ii) the simulated `ã_j` must avoid all `n` earlier tails, `n·2⁻¹⁰²⁴` (the paper's
+`(j − 1)` undercounts by one); (iii) the distinguisher compares tails with the fixed `T`, so it
+need not recompute the earlier prefixes: the budget is `(0, 312, 4607)` for every `j`; (iv) an
+earlier simulation without a proof needs no extra `noHitProb`: its fixed tail is in `T`. All
+differences are below `2⁻¹⁰⁰`.
+
+    Moussaka (anonymityRO_lean_num):     |Pr[W₀] − Pr[W₁]| ≤ 8·εRO(q₃, q₅ + 1872, q_E + 13821)
+        + 4·(2⁻¹¹⁰ + εRO(0, 312, 4607)) + 6·noHitProb + 12·2⁻¹⁰²⁴ + 2·εhide
+    Ratatouille (unlinkabilityRO_lean_num): the same bound for any two worlds.
+
+`εRO(0, 312, 4607) = 2⁻¹¹⁰ + (221·13821 + 313)·2⁻¹²⁸ ≈ 2⁻¹¹⁰ + 2⁻¹⁰⁶·⁵`, so the collision terms add
+about `2⁻¹⁰⁴·²` (`noHitProb ≤ 2^{−2¹⁵}`, `noHitProb_le`); the total is about `2⁻¹⁰²` plus
+`8·(q₃ + q₅ + 221·q_E)·2⁻¹²⁸` (`εhide` aside).
 
 **PomFRIT.** The two-phase prover first needs its own theorem (`ZK/TwoPhaseRO.lean`,
 `ZK/TwoPhaseIC.lean`, `zk2_rom_ic_h23_num`): the chain of `zk_rom_ic_h23` for `proveIdeal2`, the
@@ -1084,11 +1124,23 @@ symmetric in the two sessions. Hybrids of world `false`:
                                    + δ(A) + δ(A.swap)
 
 (`blindnessRO`: the four errors at their own budgets.) `4·εRO(q₃, q₅ + 1248, q_E + 18428)` is about
-`2⁻¹⁰³·⁴` plus `4·(q₃ + q₅ + 221·q_E)·2⁻¹²⁸`. *The collision term, on paper*: session `1`'s real
-run reads `H₂³` only at its grinding points `pre₁ ‖ c ‖ 11`, computed without `H₂³` from its coins,
-its instance and the Issuer's response, which depends on session `0`'s request only (step 1's
-fields and `chal1`), not on session `0`'s simulated `ã₀` (`16` bytes for PomFRIT's `d = 2`), the
-last field of the prefix session `0`'s simulator programs at; so `δ ≤ 2⁻¹²⁸ +
-Pr[session 0's recomputation stops early] ≲ 2⁻¹²⁸ + 2⁻¹¹⁰` (not mechanized). The two sessions'
+`2⁻¹⁰³·⁴` plus `4·(q₃ + q₅ + 221·q_E)·2⁻¹²⁸`. *The collision term, in Lean*
+(`ZK/CollideRO2.lean`, `Privacy/PomFRITDelta.lean`, `deltaRO_le`): `δ(A) ≤ noHitProb + 2⁻¹²⁸`.
+Session `1`'s real run reads `H₂³` only at the grinding points of its instance's prefix `pre2`,
+and none if its continuation stops (`realRun2_h23_congr`, from `real_form` and `hyb2'_none`). If
+it continues, both responses passed the Clients' checks (`bothOK`, symmetric), so session `0`'s
+continuation continues too (`kOf_isSome`, `realRun2_out1`: session `1`'s step-1 output is the one
+its request was computed from); if session `0`'s grinding succeeded, the block it programs ends
+with its uniform `ã₀` (`16` bytes for PomFRIT's `d = 2`, `preLen = 88`; `preTail_outPre2`).
+Session `1`'s prefix is computed from its coins, the tables and session `0`'s *request*, which does
+not read `ã₀` (`s1C_tail`), so the collision has probability `≤ 2⁻¹²⁸` and the failed grinding
+`noHitProb` (`pr_simCoins_tail_le`). The paper's `≲ 2⁻¹²⁸ + 2⁻¹¹⁰` holds, with the second term
+`noHitProb ≤ 2^{−2¹⁵}`: "the recomputation stops early" happens only if session `0`'s grinding
+failed, since a stopping continuation of session `0` means session `1` stops too.
+
+    PomFRIT (blindnessRO_lean_num):  |Pr[W₀] − Pr[W₁]| ≤ 4·εRO(q₃, q₅ + 1248, q_E + 18428)
+                                       + 2·noHitProb + 2·2⁻¹²⁸
+
+The two sessions'
 `H₃` slices are independent tables when their `r` differ (`2⁻³⁶⁰` otherwise), as in the other two
 games.
