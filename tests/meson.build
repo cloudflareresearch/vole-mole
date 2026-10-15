@@ -6,10 +6,14 @@ if get_option('tests')
 
   tests = [
     ['keccak', 'keccak/test_keccak.cpp'],
+    ['mldsa', 'mldsa/test_mldsa.cpp'],
     ['mlkem', 'mlkem/test_mlkem.cpp'],
     ['mlkem-pop', 'mlkem_pop/test_mlkem_pop.cpp'],
     ['mlkem-pop-binary', 'mlkem_pop/test_mlkem_pop_binary.cpp'],
     ['mlkem-pop-prg', 'mlkem_pop/test_mlkem_pop_prg.cpp'],
+    ['mldsa-pok', 'mldsa_pok/test_mldsa_pok.cpp'],
+    ['mldsa-pok-sample-in-ball', 'mldsa_pok/test_sample_in_ball.cpp'],
+    ['mldsa-pok-shake', 'mldsa_pok/test_shake_relation.cpp'],
     ['moussaka-issue', 'moussaka/test_issue.cpp'],
     ['moussaka-redeem', 'moussaka/test_redeem.cpp'],
     ['moussaka', 'moussaka/test_moussaka.cpp'],
@@ -56,6 +60,8 @@ if get_option('benchmarks')
   ).as_system()
 
   benchmarks = [
+    ['mldsa_pok', 'mldsa_pok/bench_mldsa_pok.cpp'],
+    ['mldsa_pok_shake', 'mldsa_pok/bench_shake_relation.cpp'],
     ['mlkem_pop', 'mlkem_pop/bench_mlkem_pop.cpp'],
     ['mlkem_pop_binary', 'mlkem_pop/bench_mlkem_pop_binary.cpp'],
     ['mlkem_pop_prg', 'mlkem_pop/bench_mlkem_pop_prg.cpp'],
