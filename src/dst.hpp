@@ -56,6 +56,16 @@ constexpr Dst ECDSA_RR_LINK_DST = make_dst("ecrr", ecdsa_pok::VERSION, 'l', '0')
 constexpr Dst ECDSA_RR_SEED_DST = make_dst("ecrr", ecdsa_pok::VERSION, 's', '0');
 constexpr Dst ECDSA_RR_STATEMENT_DST = make_dst("ecrr", ecdsa_pok::VERSION, 'x', '0');
 
+// mdoc proof (experimental, src/ecdsa_pok/mdoc_relation.hpp)
+constexpr Dst ECDSA_MDOC_BINARY_DST = make_dst("ecmd", ecdsa_pok::VERSION, 'b', '0');
+constexpr Dst ECDSA_MDOC_SELECT_DST = make_dst("ecmd", ecdsa_pok::VERSION, 'c', '0'); // coeffs
+constexpr Dst ECDSA_MDOC_BINDER_DST = make_dst("ecmd", ecdsa_pok::VERSION, 'f', '0');
+constexpr Dst ECDSA_MDOC_OFFSET_DST = make_dst("ecmd", ecdsa_pok::VERSION, 'h', '0');
+constexpr Dst ECDSA_MDOC_BINARY_PRG_DST = make_dst("ecmd", ecdsa_pok::VERSION, 'q', '0');
+constexpr Dst ECDSA_MDOC_LINK_DST = make_dst("ecmd", ecdsa_pok::VERSION, 'l', '0');
+constexpr Dst ECDSA_MDOC_SEED_DST = make_dst("ecmd", ecdsa_pok::VERSION, 's', '0');
+constexpr Dst ECDSA_MDOC_STATEMENT_DST = make_dst("ecmd", ecdsa_pok::VERSION, 'x', '0');
+
 // Moussaka
 constexpr Dst MOUSSAKA_COM_DST = make_dst("mous", moussaka::VERSION, 'c', '0');
 constexpr Dst MOUSSAKA_ISSUE_PRG_DST = make_dst("mous", moussaka::VERSION, 'q', '0'); // witness PRG
@@ -110,6 +120,14 @@ constexpr bool dsts_are_distinct() {
         ECDSA_RR_LINK_DST,
         ECDSA_RR_SEED_DST,
         ECDSA_RR_STATEMENT_DST,
+        ECDSA_MDOC_BINARY_DST,
+        ECDSA_MDOC_SELECT_DST,
+        ECDSA_MDOC_BINDER_DST,
+        ECDSA_MDOC_OFFSET_DST,
+        ECDSA_MDOC_BINARY_PRG_DST,
+        ECDSA_MDOC_LINK_DST,
+        ECDSA_MDOC_SEED_DST,
+        ECDSA_MDOC_STATEMENT_DST,
         MOUSSAKA_COM_DST,
         MOUSSAKA_ISSUE_PRG_DST,
         MOUSSAKA_ISSUE_PROOF_DST,

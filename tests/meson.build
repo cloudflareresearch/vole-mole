@@ -1,5 +1,8 @@
 test_deps = [vole_mole_dep, faest_dep]
 test_inc = include_directories('.', '../src')
+# Test data files (e.g., known answers) are read from the source tree; see `data_path` in
+# keccak/test_keccak.cpp, moussaka/test_moussaka.cpp, and ratatouille/test_ratatouille.cpp.
+test_data_arg = '-DVOLE_MOLE_TEST_DATA_DIR="@0@"'.format(meson.current_source_dir())
 
 if get_option('tests')
   gtest_dep = dependency('gtest_main', default_options : ['warning_level=0']).as_system()
@@ -9,6 +12,7 @@ if get_option('tests')
     ['ecdsa-pok-hk', 'ecdsa_pok/test_ecdsa_pok_hk.cpp'],
     ['ecdsa-pok-rr', 'ecdsa_pok/test_ecdsa_pok_rr.cpp'],
     ['ecdsa-pok-sha256', 'ecdsa_pok/test_sha256_circuit.cpp'],
+    ['ecdsa-pok-mdoc', 'ecdsa_pok/test_mdoc.cpp'],
     ['keccak', 'keccak/test_keccak.cpp'],
     ['moussaka-issue', 'moussaka/test_issue.cpp'],
     ['moussaka-redeem', 'moussaka/test_redeem.cpp'],
@@ -26,10 +30,6 @@ if get_option('tests')
     ['voleith-derived', 'voleith/test_derived_witness.cpp'],
     ['voleith-p256', 'voleith_p256/test_voleith_p256.cpp'],
   ]
-
-  # Test data files (e.g., known answers) are read from the source tree; see `data_path` in
-  # keccak/test_keccak.cpp, moussaka/test_moussaka.cpp, and ratatouille/test_ratatouille.cpp.
-  test_data_arg = '-DVOLE_MOLE_TEST_DATA_DIR="@0@"'.format(meson.current_source_dir())
 
   foreach t : tests
     exe = executable('test_' + t[0].replace('-', '_'), t[1],
@@ -60,6 +60,7 @@ if get_option('benchmarks')
     ['ecdsa_pok', 'ecdsa_pok/bench_ecdsa_pok.cpp'],
     ['ecdsa_pok_hk', 'ecdsa_pok/bench_ecdsa_pok_hk.cpp'],
     ['ecdsa_pok_rr', 'ecdsa_pok/bench_ecdsa_pok_rr.cpp'],
+    ['ecdsa_pok_mdoc', 'ecdsa_pok/bench_ecdsa_pok_mdoc.cpp'],
     ['moussaka', 'moussaka/bench_moussaka.cpp'],
     ['mq', 'mq/bench_mq.cpp'],
     ['pomfrit', 'pomfrit/bench_pomfrit.cpp'],
@@ -72,7 +73,8 @@ if get_option('benchmarks')
       include_directories : test_inc,
       dependencies : test_deps + [benchmark_dep],
       # The BENCHMARK() macro uses __COUNTER__, which clang flags as an extension under -Wpedantic.
-      cpp_args : meson.get_compiler('cpp').get_supported_arguments('-Wno-c2y-extensions'),
+      cpp_args : [test_data_arg]
+        + meson.get_compiler('cpp').get_supported_arguments('-Wno-c2y-extensions'),
     )
     benchmark(b[0], exe, timeout : 600)
   endforeach
