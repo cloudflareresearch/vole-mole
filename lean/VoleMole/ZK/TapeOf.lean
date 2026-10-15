@@ -7,7 +7,10 @@ import VoleMole.ZK.CMult
 
 **`prove_eq_proveIdeal`**: `Prover.prove Hs T st w rho = proveIdeal Hs T st w (tapeOf Hs T st w rho)`
 for every hash record with the domains' output lengths, every `rho` and every witness satisfying
-the statement's system. So the real prover's output distribution is the ideal-tape prover's under
+the statement's system. More generally (`proveCommit_eq_proveIdeal`), step 2 of a run whose step 1
+had the witness prefix `wPrefix` is the ideal-tape prover at the run's tape (`tapeAt`) for any
+suffix, and the ideal run's step-1 values at that tape are the real ones at every accepted `Δ`
+(`step1_real`); `ZK/TwoPhase.lean` uses both for PomFRIT's two steps. So the real prover's output distribution is the ideal-tape prover's under
 the distribution of `tapeOf … rho`, and the random-oracle and PRG/ideal-cipher hops H1–H4 and H6
 are exactly the claim that this tape is close to uniform (`ZK/Exec.lean`).
 
@@ -68,14 +71,15 @@ lemma voleGen_more (Hs : Hashes) (T : CrtTables) (p : Params) (mu1 wPrefix rho b
   refine ⟨rfl, rfl, rfl, rfl, rfl, rfl, rfl⟩
 
 /-- The real `proveCommit`, once QuickSilver has succeeded. -/
-lemma proveCommit_eq (Hs : Hashes) (st : Statement) (s : Prover.Pending) (w : ByteArray)
-    (hp : s.params = st.params) (hw : s.wPrefix = w) (hws : w.size = st.params.witnessBytes)
+lemma proveCommit_eq (Hs : Hashes) (st : Statement) (s : Prover.Pending) (wSuffix w : ByteArray)
+    (hp : s.params = st.params) (hw : s.wPrefix ++ wSuffix = w)
+    (hws : w.size = st.params.witnessBytes)
     {check : GF128} {aT : Array GF128}
     (hq : Prover.qsProve
       { params := st.params, bytes := Prover.assemble st.params (realF1 st.params s w) }
       (realC2 Hs st s w) (st.values s.chal1 (st.combBytes Hs (realC2 Hs st s w)))
       s.vRows s.vMask s.uMask w = .ok (check, aT)) :
-    Prover.proveCommit Hs st ByteArray.empty s =
+    Prover.proveCommit Hs st wSuffix s =
       match Prover.findFirst (Prover.grindStep Hs s
           (realC2 Hs st s w ++ gfToBytes check ++ Prover.gfsToBytes aT)) (2 ^ 32) 0 with
       | none => .error "grinding failed"
@@ -84,7 +88,7 @@ lemma proveCommit_eq (Hs : Hashes) (st : Statement) (s : Prover.Pending) (w : By
             qsProof := Prover.gfsToBytes aT, opening := opening, delta := delta,
             ctr := AES.pushLE32 ByteArray.empty ctr.toUInt32 }) := by
   unfold Prover.proveCommit
-  simp only [hp, hw, ByteArray.append_empty, hws, bne_self_eq_false, Bool.false_eq_true, ↓reduceIte]
+  simp only [hp, hw, hws, bne_self_eq_false, Bool.false_eq_true, ↓reduceIte]
   simp only [realF1, realC2, realCorr] at hq ⊢
   rw [hq]
   simp only [bind, Except.bind]
@@ -284,31 +288,179 @@ lemma gateHashesIdeal_real (Hs : Hashes) (hHs : HashesWF Hs) (gamma : Array UInt
 
 end Values
 
-/-! ## The main theorem -/
+/-! ## The tape of a step-1 state -/
 
-theorem prove_eq_proveIdeal (Hs : Hashes) (T : CrtTables) (st : Statement) (w rho : ByteArray)
-    (cs : ByteArray → ByteArray → System GF128) (h : ZKHypQ st w cs)
+/-- The tape of a real step 1 `s` with the grinding answers `g`: `iv_pre`, `g`, the hidden
+commitments and the opened seeds at the first accepted `Δ` of `g` (zero if there is none), and
+`realPads`. `tapeOf` is this at the run's own grinding answers. -/
+def tapeAt (Hs : Hashes) (T : CrtTables) (p : Params) (s : Prover.Pending)
+    (g : Fin nGrind → Bytes 16) : IdealTape p :=
+  let delta := ba ((firstHit g).map (·.2) |>.getD fun _ => 0)
+  ((blk 16 s.ivPre, g, comsOf s.leaves.coms delta, seedsOf s.tree delta), realPads Hs T p s delta)
+
+lemma tapeOf_eq_tapeAt (Hs : Hashes) (T : CrtTables) (st : Statement) (w rho : ByteArray)
+    (k : ℕ) :
+    tapeOf Hs T st w rho k = tapeAt Hs T st.params
+      (Prover.voleGen Hs T st.params (st.mu1 Hs) (w.extract 0 k) rho st.binder1)
+      (realGrind Hs (realPre Hs st
+        (Prover.voleGen Hs T st.params (st.mu1 Hs) (w.extract 0 k) rho st.binder1) w)) := rfl
+
+/-! ## Step 1 -/
+
+/-- **The ideal run's step-1 values at the tape of a real step 1**, at any `Δ` whose opening fits
+(`BAVC.openAt` succeeds): the pads are the small VOLEs' inputs, the public values (`iv`, the
+opening) and the verifier's key columns are the real ones, and so are `c_mult`, `chal1` and the
+VOLE check `ũ`. -/
+theorem step1_real (Hs : Hashes) (T : CrtTables) (st : Statement) (s : Prover.Pending)
+    {wPrefix rho : ByteArray}
+    (hs : Prover.voleGen Hs T st.params (st.mu1 Hs) wPrefix rho st.binder1 = s)
     (hHs : HashesWF Hs) (hbavc : BAVCComplete)
-    (hcrt : CrtComplete (Hs.hash .h5) T (Prover.voleGen Hs T st.params (st.mu1 Hs)
-      (w.extract 0 st.params.witnessBytes) rho st.binder1))
-    (hlab : st.params.labelRowOffset + 128 ≤ st.params.correctionRows) :
-    Prover.prove Hs T st w rho = proveIdeal Hs T st w (tapeOf Hs T st w rho) := by
-  have hpre : w.extract 0 st.params.witnessBytes = w := by
-    rw [← h.hw, ByteArray.extract_zero_size]
-  have hsuf : w.extract st.params.witnessBytes w.size = ByteArray.empty := by
-    rw [h.hw, ByteArray.extract_eq_empty_iff]; omega
-  unfold Prover.prove proveIdeal tapeOf
-  rw [hsuf]
-  dsimp only
-  have spec := voleGen_spec Hs T st.params (st.mu1 Hs) (w.extract 0 st.params.witnessBytes) rho
-    st.binder1
-  have more := voleGen_more Hs T st.params (st.mu1 Hs) (w.extract 0 st.params.witnessBytes) rho
-    st.binder1
-  generalize Prover.voleGen Hs T st.params (st.mu1 Hs) (w.extract 0 st.params.witnessBytes) rho
-    st.binder1 = s at spec more hcrt ⊢
+    (hlab : st.params.labelRowOffset + 128 ≤ st.params.correctionRows)
+    (g : Fin nGrind → Bytes 16) (ctr : ℕ) {delta opening : ByteArray} (hd16 : delta.size = 16)
+    (hopen : BAVC.openAt s.tree s.leaves.coms delta = some opening) :
+    let sh : Shared := (blk 16 s.ivPre, g, comsOf s.leaves.coms delta, seedsOf s.tree delta)
+    let t := realPads Hs T st.params s delta
+    let P := pubOf Hs st sh (blk 16 delta)
+    let key := leafKey s.leaves
+    let qcols := convertToVoleAt st.params (BAVC.deltaBit delta) (proverCorr st.params s.iv key)
+      s.iv key
+    usOf st.params t = realUsW st.params s ∧ (realUsW st.params s)[0]! = s.u ∧
+    correctionsOf st.params (realUsW st.params s) = s.fields.corrections ∧
+    uMaskOfHi st.params T (ba t.2.2.2.2.2.1) (realUsW st.params s) = s.uMask ∧
+    P.iv = s.iv ∧ P.opening = opening ∧
+    qcolsOf st P (blk 16 delta) s.fields.corrections = qcols ∧
+    cmultIdeal Hs T st P (blk 16 delta) qcols s.u s.uMask t.2.2.2.2.2.2 = s.fields.cmult ∧
+    tC1 Hs st sh ctr (blk 16 delta) s.fields.corrections s.fields.cmult = s.chal1 ∧
+    tUt Hs st sh ctr (blk 16 delta) s.fields.corrections s.fields.cmult
+        ((Array.range st.params.correctionRows).map (wbit s.u)) s.uMask =
+      voleHashReceiver st.params s.chal1 ((Array.range st.params.correctionRows).map fun r =>
+        if wbit s.u r then (⟨1, 0⟩ : W128) else W128.zero) s.uMask 0 (Prover.zeros 64) := by
+  intro sh t P key qcols
+  have spec := voleGen_spec Hs T st.params (st.mu1 Hs) wPrefix rho st.binder1
+  have more := voleGen_more Hs T st.params (st.mu1 Hs) wPrefix rho st.binder1
+  rw [hs] at spec more
   obtain ⟨hsp, hsw, hsiv, hsivp, hstree, hsleaves, hsu, hscorr, hsfiv, hsqs, hsvrows, hsvs, hsvm,
     hsum, hsc1, hsvc, hshv⟩ := spec
   obtain ⟨hseed, huMask, hcm, hsop, hsdl, hsct, hsu0⟩ := more
+  have hivs : s.ivPre.size = 16 := by rw [hsivp, ByteArray.size_extract, hHs]; rfl
+  have hseeds : s.seed.size = 16 := by rw [hseed, ByteArray.size_extract, hHs]; rfl
+  have hcs : s.leaves.coms.size = BAVC.hashLen * BAVC.numLeaves := by
+    rw [hsleaves]; exact commit_coms_size _ _
+  have htree : ∀ k < BAVC.numNodes, (s.tree[k]!).size = 16 := by
+    rw [hstree]; exact (expandTree_spec _ _ hseeds).2
+  have hopen' : openingOf delta (comsOf s.leaves.coms delta) (seedsOf s.tree delta) = opening := by
+    have := openingOf_eq s.tree s.leaves.coms delta hd16 hcs htree hopen
+    rwa [ba_blk_of_size hd16] at this
+  have hcount : openCount delta ≤ 105 := by
+    have ho := openAt_isSome s.tree s.leaves.coms delta
+    rw [hopen] at ho; simpa using ho
+  have hosz : opening.size = BAVC.openSize := by
+    rw [← hopen']; exact openingOf_size _ _ _ hcount
+  obtain ⟨leavesR, hrec, hcoms, hkeys⟩ := hbavc s.seed s.iv delta opening
+    (by rw [← hstree, ← hsleaves]; exact hopen)
+  rw [fit_of_size hosz] at hrec
+  rw [← hsleaves] at hcoms hkeys
+  -- The public values.
+  have hPiv : P.iv = s.iv := by
+    simp only [P, pubOf, sh, ba_blk_of_size hivs]; exact hsiv.symm
+  have hPop : P.opening = opening := by
+    simp only [P, pubOf, sh, ba_blk_of_size hd16]; exact hopen'
+  have hPleaves : P.leaves = leavesR := by
+    have : P.leaves = (BAVC.reconstruct P.iv P.opening (ba (blk 16 delta))).getD ⟨.empty, .empty⟩ :=
+      rfl
+    rw [this, hPiv, hPop, ba_blk_of_size hd16, hrec]; rfl
+  have hPcheck : P.check = BAVC.check (Hs.hash .h1) s.leaves.coms := by
+    have : P.check = BAVC.check (Hs.hash .h1) P.leaves.coms := rfl
+    rw [this, hPleaves, hcoms]
+  have hPmu : P.mu1 = st.mu1 Hs := rfl
+  -- The verifier's key columns.
+  have hcsz : ∀ i, (proverCorr st.params s.iv key i).size = st.params.correctionBytes := fun i =>
+    correctionOf_size _ _ _ (by rw [proverU, smallVoleUWords_size])
+  have hqcols : qcolsOf st P (blk 16 delta) s.fields.corrections = qcols := by
+    unfold qcolsOf
+    rw [hPiv, hPleaves, ba_blk_of_size hd16,
+      convertToVoleAt_congr_key st.params _ _ s.iv (key' := key)
+        fun i hi j hj hjd => hkeys i hi j hj hjd]
+    refine convertToVoleAt_congr_corr st.params _ s.iv key fun i hi1 hi => ?_
+    rw [hscorr]
+    exact correctionOf_concat st.params (proverCorr st.params s.iv key) hcsz hi1 hi
+  -- `c_mult`.
+  have hcmI : cmultIdeal Hs T st P (blk 16 delta) qcols s.u s.uMask t.2.2.2.2.2.2 =
+      s.fields.cmult := by
+    unfold cmultIdeal
+    dsimp only
+    rw [ba_blk_of_size hd16, hPiv]
+    have hcongr : ∀ off, Prover.gateInputsOff st.params T s.iv
+        (tagCols (BAVC.deltaBit delta) qcols s.u) off =
+        Prover.gateInputsOff st.params T s.iv (Prover.senderColumns st.params s.iv key) off :=
+      fun off => gateInputsOff_congr _ _ _ off fun c hc k hk => by
+        rw [hsu]; exact wbit_tagCols _ _ _ _ hc (by omega)
+    rw [hcongr, hcongr]
+    have hf := gateHashesIdeal_real Hs hHs (gammaOf T (BAVC.deltaBit delta))
+      (Prover.gateInputsOff st.params T s.iv (Prover.senderColumns st.params s.iv key) W128.zero)
+      (Prover.gateInputsOff st.params T s.iv (Prover.senderColumns st.params s.iv key)
+        ⟨wordAt s.u st.params.labelRowOffset, wordAt s.u (st.params.labelRowOffset + 64)⟩)
+      (gateInputsOff_length _ _ _ _ _) (gateInputsOff_length _ _ _ _ _)
+    have hf0 := hf false
+    have hf1 := hf true
+    simp only [Bool.false_eq_true, ↓reduceIte] at hf0 hf1
+    have hsib : t.2.2.2.2.2.2 = fun e =>
+        blk 4 (sibAnswers Hs (gammaOf T (BAVC.deltaBit delta))
+          (Prover.gateInputsOff st.params T s.iv (Prover.senderColumns st.params s.iv key) W128.zero)
+          (Prover.gateInputsOff st.params T s.iv (Prover.senderColumns st.params s.iv key)
+            ⟨wordAt s.u st.params.labelRowOffset, wordAt s.u (st.params.labelRowOffset + 64)⟩))[e.val]! :=
+      rfl
+    rw [hsib, hf0, hf1, hcm]
+  -- `chal1` and `ũ`.
+  have hF0 : tF0 sh ctr (blk 16 delta) s.fields.corrections s.fields.cmult =
+      { s.fields with voleCheck := .empty, correction := .empty } := by
+    simp only [tF0, publicFields, sh, ba_blk_of_size hivs, hsqs, hsop, hsdl, hsct, hsfiv]
+  have h1 : tC1 Hs st sh ctr (blk 16 delta) s.fields.corrections s.fields.cmult = s.chal1 := by
+    unfold tC1
+    dsimp only
+    rw [show pubOf Hs st sh (blk 16 delta) = P from rfl, hPcheck, hF0, hsc1, hPmu]
+    rfl
+  have h4 : tUt Hs st sh ctr (blk 16 delta) s.fields.corrections s.fields.cmult
+      ((Array.range st.params.correctionRows).map (wbit s.u)) s.uMask =
+      voleHashReceiver st.params s.chal1 ((Array.range st.params.correctionRows).map fun r =>
+        if wbit s.u r then (⟨1, 0⟩ : W128) else W128.zero) s.uMask 0 (Prover.zeros 64) := by
+    have hur : tURows st ((Array.range st.params.correctionRows).map (wbit s.u)) =
+        (Array.range st.params.correctionRows).map fun r =>
+          if wbit s.u r then (⟨1, 0⟩ : W128) else W128.zero :=
+      Array.map_congr_left fun r hr => by rw [getElem!_range_map _ _ (Array.mem_range.1 hr)]
+    unfold tUt
+    rw [h1, hur]
+  have hhi : t.2.2.2.2.2.1 = blk st.params.nMask
+      (AES.prg s.seed s.iv (((1 : UInt32) <<< 31) - 1) 0 ((8 * st.params.nMask + 127) / 128)) :=
+    rfl
+  refine ⟨usOf_realPads Hs T s _ _, realUsW_zero s _ hsu, correctionsOf_real s _ hscorr, ?_, hPiv,
+    hPop, hqcols, hcmI, h1, h4⟩
+  rw [hhi]
+  exact uMask_real T s _ _ huMask
+
+/-! ## The main theorem -/
+
+/-- **Step 2 of a real run is the ideal-tape prover at the run's tape**, for any split of the
+witness `wPrefix ++ wSuffix` between the steps (`Prover.prove` passes the whole witness to step 1;
+PomFRIT passes `r`). -/
+theorem proveCommit_eq_proveIdeal (Hs : Hashes) (T : CrtTables) (st : Statement)
+    (wPrefix wSuffix rho : ByteArray)
+    (cs : ByteArray → ByteArray → System GF128) (h : ZKHypQ st (wPrefix ++ wSuffix) cs)
+    (hHs : HashesWF Hs) (hbavc : BAVCComplete)
+    (hcrt : CrtComplete (Hs.hash .h5) T (Prover.voleGen Hs T st.params (st.mu1 Hs) wPrefix rho
+      st.binder1))
+    (hlab : st.params.labelRowOffset + 128 ≤ st.params.correctionRows) :
+    let s := Prover.voleGen Hs T st.params (st.mu1 Hs) wPrefix rho st.binder1
+    Prover.proveCommit Hs st wSuffix s = proveIdeal Hs T st (wPrefix ++ wSuffix)
+      (tapeAt Hs T st.params s (realGrind Hs (realPre Hs st s (wPrefix ++ wSuffix)))) := by
+  intro s
+  have hs : Prover.voleGen Hs T st.params (st.mu1 Hs) wPrefix rho st.binder1 = s := rfl
+  set w := wPrefix ++ wSuffix with hwdef
+  have spec := voleGen_spec Hs T st.params (st.mu1 Hs) wPrefix rho st.binder1
+  rw [hs] at spec hcrt
+  clear_value s
+  obtain ⟨hsp, hsw, hsiv, hsivp, hstree, hsleaves, hsu, hscorr, hsfiv, hsqs, hsvrows, hsvs, hsvm,
+    hsum, hsc1, hsvc, hshv⟩ := spec
   -- QuickSilver succeeds.
   have h0 : ∀ i, gfOfBytes (Proof.mk st.params (Prover.assemble st.params
       (realF1 st.params s w))).qsProof (16 * i) = 0 := by
@@ -320,7 +472,7 @@ theorem prove_eq_proveIdeal (Hs : Hashes) (T : CrtTables) (st : Statement) (w rh
     (realC2 Hs st s w) (st.values s.chal1 (st.combBytes Hs (realC2 Hs st s w))) s.vRows s.vMask
     s.uMask w (cs s.chal1 (st.combBytes Hs (realC2 Hs st s w))) (h.hvals _ _) (h.hdeg _ _) h.hd
     h.hd' h0 h.hI (h.hsat _ _)
-  rw [proveCommit_eq Hs st s w hsp (hsw.trans hpre) h.hw hq]
+  rw [proveCommit_eq Hs st s wSuffix w hsp (by rw [hsw]) h.hw hq]
   have hpreq : realPre Hs st s w = realC2 Hs st s w ++
       gfToBytes ((qsPoly st.params (realC2 Hs st s w)
         (cs s.chal1 (st.combBytes Hs (realC2 Hs st s w))) s.vRows s.vMask s.uMask w).coeff 0) ++
@@ -329,6 +481,7 @@ theorem prove_eq_proveIdeal (Hs : Hashes) (T : CrtTables) (st : Statement) (w rh
           s.vRows s.vMask s.uMask w).coeff (i + 1)) := by
     rw [realPre, hq]
   rw [hpreq]
+  unfold proveIdeal tapeAt
   simp only [h.hw, bne_self_eq_false, Bool.false_eq_true, ↓reduceIte]
   generalize realC2 Hs st s w ++ _ ++ _ = pre
   have hfh : (firstHit (realGrind Hs pre)).map (fun x => (x.1, ba x.2)) =
@@ -350,98 +503,21 @@ theorem prove_eq_proveIdeal (Hs : Hashes) (T : CrtTables) (st : Statement) (w rh
     subst hd''
     rw [hfd]
     simp only [Option.map_some, Option.getD_some, ba_blk_of_size hd16]
-    -- The real run's commitments and tree.
+    obtain ⟨hus, hu0, hcorr, huM, hPiv, hPop, hqcols, hcmI, h1, h4⟩ :=
+      step1_real Hs T st s hs hHs hbavc hlab (realGrind Hs pre) ctr' hd16 hopen
     set key := leafKey s.leaves with hkey
-    have hivs : s.ivPre.size = 16 := by rw [hsivp, ByteArray.size_extract, hHs]; rfl
-    have hseeds : s.seed.size = 16 := by rw [hseed, ByteArray.size_extract, hHs]; rfl
-    have hcs : s.leaves.coms.size = BAVC.hashLen * BAVC.numLeaves := by
-      rw [hsleaves]; exact commit_coms_size _ _
-    have htree : ∀ k < BAVC.numNodes, (s.tree[k]!).size = 16 := by
-      rw [hstree]; exact (expandTree_spec _ _ hseeds).2
-    have hopen' : openingOf delta (comsOf s.leaves.coms delta) (seedsOf s.tree delta) = opening := by
-      have := openingOf_eq s.tree s.leaves.coms delta hd16 hcs htree hopen
-      rwa [ba_blk_of_size hd16] at this
-    have hcount : openCount delta ≤ 105 := by
-      have ho := openAt_isSome s.tree s.leaves.coms delta
-      rw [hopen] at ho; simpa using ho
-    have hosz : opening.size = BAVC.openSize := by
-      rw [← hopen']; exact openingOf_size _ _ _ hcount
-    obtain ⟨leavesR, hrec, hcoms, hkeys⟩ := hbavc s.seed s.iv delta opening
-      (by rw [← hstree, ← hsleaves]; exact hopen)
-    rw [fit_of_size hosz] at hrec
-    rw [← hsleaves] at hcoms hkeys
-    -- The public values.
     set sh : Shared := (blk 16 s.ivPre, realGrind Hs pre, comsOf s.leaves.coms delta,
       seedsOf s.tree delta) with hsh
-    have hPiv : (pubOf Hs st sh (blk 16 delta)).iv = s.iv := by
-      simp only [pubOf, hsh, ba_blk_of_size hivs]; exact hsiv.symm
-    have hPop : (pubOf Hs st sh (blk 16 delta)).opening = opening := by
-      simp only [pubOf, hsh, ba_blk_of_size hd16]; exact hopen'
-    have hPleaves : (pubOf Hs st sh (blk 16 delta)).leaves = leavesR := by
-      have : (pubOf Hs st sh (blk 16 delta)).leaves = (BAVC.reconstruct
-          (pubOf Hs st sh (blk 16 delta)).iv (pubOf Hs st sh (blk 16 delta)).opening
-          (ba (blk 16 delta))).getD ⟨.empty, .empty⟩ := rfl
-      rw [this, hPiv, hPop, ba_blk_of_size hd16, hrec]; rfl
-    have hPcheck : (pubOf Hs st sh (blk 16 delta)).check = BAVC.check (Hs.hash .h1) s.leaves.coms := by
-      have : (pubOf Hs st sh (blk 16 delta)).check =
-          BAVC.check (Hs.hash .h1) (pubOf Hs st sh (blk 16 delta)).leaves.coms := rfl
-      rw [this, hPleaves, hcoms]
-    have hPmu : (pubOf Hs st sh (blk 16 delta)).mu1 = st.mu1 Hs := rfl
-    -- The verifier's key columns.
-    have hcsz : ∀ i, (proverCorr st.params s.iv key i).size = st.params.correctionBytes := fun i =>
-      correctionOf_size _ _ _ (by rw [proverU, smallVoleUWords_size])
-    have hqcols : qcolsOf st (pubOf Hs st sh (blk 16 delta)) (blk 16 delta) s.fields.corrections =
-        convertToVoleAt st.params (BAVC.deltaBit delta) (proverCorr st.params s.iv key) s.iv key := by
-      unfold qcolsOf
-      rw [hPiv, hPleaves, ba_blk_of_size hd16,
-        convertToVoleAt_congr_key st.params _ _ s.iv (key' := key)
-          fun i hi j hj hjd => hkeys i hi j hj hjd]
-      refine convertToVoleAt_congr_corr st.params _ s.iv key fun i hi1 hi => ?_
-      rw [hscorr]
-      exact correctionOf_concat st.params (proverCorr st.params s.iv key) hcsz hi1 hi
     -- The ideal run's inputs are the real ones.
     unfold idealCore
     dsimp only
-    rw [usOf_realPads, realUsW_zero s _ hsu, correctionsOf_real s _ hscorr]
-    have hhi : (realPads Hs T st.params s delta).2.2.2.2.2.1 = blk st.params.nMask
-        (AES.prg s.seed s.iv (((1 : UInt32) <<< 31) - 1) 0 ((8 * st.params.nMask + 127) / 128)) :=
-      rfl
-    rw [hhi, uMask_real T s _ _ huMask, hqcols]
-    -- `c_mult`.
-    have hcmI : cmultIdeal Hs T st (pubOf Hs st sh (blk 16 delta)) (blk 16 delta)
-        (convertToVoleAt st.params (BAVC.deltaBit delta) (proverCorr st.params s.iv key) s.iv key)
-        s.u s.uMask (realPads Hs T st.params s delta).2.2.2.2.2.2 = s.fields.cmult := by
-      unfold cmultIdeal
-      dsimp only
-      rw [ba_blk_of_size hd16, hPiv]
-      have hcongr : ∀ off, Prover.gateInputsOff st.params T s.iv (tagCols (BAVC.deltaBit delta)
-          (convertToVoleAt st.params (BAVC.deltaBit delta) (proverCorr st.params s.iv key) s.iv key)
-          s.u) off = Prover.gateInputsOff st.params T s.iv (Prover.senderColumns st.params s.iv key)
-            off := fun off =>
-        gateInputsOff_congr _ _ _ off fun c hc k hk => by
-          rw [hsu]; exact wbit_tagCols _ _ _ _ hc (by omega)
-      rw [hcongr, hcongr]
-      have hf := gateHashesIdeal_real Hs hHs (gammaOf T (BAVC.deltaBit delta))
-        (Prover.gateInputsOff st.params T s.iv (Prover.senderColumns st.params s.iv key) W128.zero)
-        (Prover.gateInputsOff st.params T s.iv (Prover.senderColumns st.params s.iv key)
-          ⟨wordAt s.u st.params.labelRowOffset, wordAt s.u (st.params.labelRowOffset + 64)⟩)
-        (gateInputsOff_length _ _ _ _ _) (gateInputsOff_length _ _ _ _ _)
-      have hf0 := hf false
-      have hf1 := hf true
-      simp only [Bool.false_eq_true, ↓reduceIte] at hf0 hf1
-      have hsib : (realPads Hs T st.params s delta).2.2.2.2.2.2 = fun e =>
-          blk 4 (sibAnswers Hs (gammaOf T (BAVC.deltaBit delta))
-            (Prover.gateInputsOff st.params T s.iv (Prover.senderColumns st.params s.iv key) W128.zero)
-            (Prover.gateInputsOff st.params T s.iv (Prover.senderColumns st.params s.iv key)
-              ⟨wordAt s.u st.params.labelRowOffset, wordAt s.u (st.params.labelRowOffset + 64)⟩))[e.val]! :=
-        rfl
-      rw [hsib, hf0, hf1, hcm]
-    rw [hcmI]
+    rw [hus, hu0, hcorr, huM, hqcols, hcmI]
     -- The verifier's recomputation is the real run's.
     have hcrtE : tCrt Hs T st sh (blk 16 delta) s.fields.corrections s.fields.cmult =
         crtReconstructAt (Hs.hash .h5) st.params (BAVC.deltaBit delta)
           (Prover.fit s.fields.cmult (st.params.nMask * st.params.nMultBytes)) T s.iv
-          (convertToVoleAt st.params (BAVC.deltaBit delta) (proverCorr st.params s.iv key) s.iv key) := by
+          (convertToVoleAt st.params (BAVC.deltaBit delta) (proverCorr st.params s.iv key) s.iv
+            key) := by
       unfold tCrt
       rw [ba_blk_of_size hd16, hPiv, hqcols]
     have hdl : tDL T (blk 16 delta) = (W128.rowMul (BAVC.deltaBit delta) 120 T.wCrt).toGF := by
@@ -449,12 +525,11 @@ theorem prove_eq_proveIdeal (Hs : Hashes) (T : CrtTables) (st : Statement) (w rh
     have h2c : ∀ y : GF128, y + y = 0 := fun y => CharTwo.add_self_eq_zero y
     have hF0 : tF0 sh ctr' (blk 16 delta) s.fields.corrections s.fields.cmult =
         { s.fields with voleCheck := .empty, correction := .empty } := by
+      have hivs : s.ivPre.size = 16 := by rw [hsivp, ByteArray.size_extract, hHs]; rfl
+      have more := voleGen_more Hs T st.params (st.mu1 Hs) wPrefix rho st.binder1
+      rw [hs] at more
+      obtain ⟨-, -, -, hsop, hsdl, hsct, -⟩ := more
       simp only [tF0, publicFields, hsh, ba_blk_of_size hivs, hsqs, hsop, hsdl, hsct, hsfiv]
-    have h1 : tC1 Hs st sh ctr' (blk 16 delta) s.fields.corrections s.fields.cmult = s.chal1 := by
-      unfold tC1
-      dsimp only
-      rw [hPcheck, hF0, hsc1, hPmu]
-      rfl
     have h2 : tVRows Hs T st sh (blk 16 delta) s.fields.corrections s.fields.cmult
         ((Array.range st.params.correctionRows).map (wbit s.u)) = s.vRows := by
       unfold tVRows
@@ -486,16 +561,6 @@ theorem prove_eq_proveIdeal (Hs : Hashes) (T : CrtTables) (st : Statement) (w rh
       rw [hsp, ← hkey] at hc
       rw [hc, add_assoc, h2c, add_zero]
       rfl
-    have h4 : tUt Hs st sh ctr' (blk 16 delta) s.fields.corrections s.fields.cmult
-        ((Array.range st.params.correctionRows).map (wbit s.u)) s.uMask =
-        voleHashReceiver st.params s.chal1 ((Array.range st.params.correctionRows).map fun r =>
-          if wbit s.u r then (⟨1, 0⟩ : W128) else W128.zero) s.uMask 0 (Prover.zeros 64) := by
-      have hur : tURows st ((Array.range st.params.correctionRows).map (wbit s.u)) =
-          (Array.range st.params.correctionRows).map fun r =>
-            if wbit s.u r then (⟨1, 0⟩ : W128) else W128.zero :=
-        Array.map_congr_left fun r hr => by rw [getElem!_range_map _ _ (Array.mem_range.1 hr)]
-      unfold tUt
-      rw [h1, hur]
     have h6 : tF1 sh ctr' (blk 16 delta) s.fields.corrections s.fields.cmult
         (voleHashReceiver st.params s.chal1 ((Array.range st.params.correctionRows).map fun r =>
           if wbit s.u r then (⟨1, 0⟩ : W128) else W128.zero) s.uMask 0 (Prover.zeros 64))
@@ -514,5 +579,23 @@ theorem prove_eq_proveIdeal (Hs : Hashes) (T : CrtTables) (st : Statement) (w rh
     rw [idealTail_of Hs T st w sh ctr' (blk 16 delta) _ _ _ _ _ h1 h2 h3 h4 hshv.symm h6 hq',
       hPop, ba_blk_of_size hd16]
     rfl
+
+theorem prove_eq_proveIdeal (Hs : Hashes) (T : CrtTables) (st : Statement) (w rho : ByteArray)
+    (cs : ByteArray → ByteArray → System GF128) (h : ZKHypQ st w cs)
+    (hHs : HashesWF Hs) (hbavc : BAVCComplete)
+    (hcrt : CrtComplete (Hs.hash .h5) T (Prover.voleGen Hs T st.params (st.mu1 Hs)
+      (w.extract 0 st.params.witnessBytes) rho st.binder1))
+    (hlab : st.params.labelRowOffset + 128 ≤ st.params.correctionRows) :
+    Prover.prove Hs T st w rho = proveIdeal Hs T st w (tapeOf Hs T st w rho) := by
+  have hpre : w.extract 0 st.params.witnessBytes = w := by
+    rw [← h.hw, ByteArray.extract_zero_size]
+  have hsuf : w.extract st.params.witnessBytes w.size = ByteArray.empty := by
+    rw [h.hw, ByteArray.extract_eq_empty_iff]; omega
+  have hw : w.extract 0 st.params.witnessBytes ++ w.extract st.params.witnessBytes w.size = w := by
+    rw [hpre, hsuf, ByteArray.append_empty]
+  have e := proveCommit_eq_proveIdeal Hs T st (w.extract 0 st.params.witnessBytes)
+    (w.extract st.params.witnessBytes w.size) rho cs (by rw [hw]; exact h) hHs hbavc hcrt hlab
+  rw [hw] at e
+  exact e
 
 end VoleMole.ZK.Sim

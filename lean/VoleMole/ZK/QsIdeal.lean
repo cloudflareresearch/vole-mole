@@ -10,9 +10,8 @@ import VoleMole.Verifier.Bridge.Prover
 QuickSilver response of `ZK/Masking.lean`, unit-bidiagonal in the masks.
 
 * `InterpOk d`: Newton interpolation at the sample points `1, …, d + 1` returns the coefficients
-  of every polynomial of degree `≤ d`. **This is a hypothesis** (a deterministic fact about
-  `Prover.interpolate`; the prover itself checks its output on every proof, and
-  `lake exe prover_vectors` runs it on all KAT proofs).
+  of every polynomial of degree `≤ d` (a deterministic fact about `Prover.interpolate`, proved for
+  `d + 1 < 2⁶⁴` in `ZK/Interp.lean`, `Interp.interpOk`).
 * `qsProve_eq`: for a witness that satisfies the system (`hsat`), `qsProve` succeeds with
   `(P₀[0], (P₀[k + 1])_{k < d − 1})`.
 -/

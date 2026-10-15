@@ -48,8 +48,8 @@ def credits (r : Rec) (k : String) : Except String Credits := do
 def pkOf (b : ByteArray) : PublicKey := fun i => if h : i < b.size then ⟨b[i]⟩ else 0
 
 /-- Primitives that return the given proofs and signature and accept every proof. -/
-def katPrim (pk : PublicKey) (pfIss : IssueProof) (pfSpend : SpendProof) (sig : Preimage) :
-    Prim Unit where
+def katPrim (pk : PublicKey) (pfIss : IssueProof Sizes.main) (pfSpend : SpendProof Sizes.main)
+    (sig : Preimage) : Prim Sizes.main Unit where
   pk _ := pk
   derive _ _ := some sig
   proveIssue _ _ _ := some pfIss
@@ -131,7 +131,7 @@ def checkSpend (pk : PublicKey) (ctx : Context) (τ : TokenS) (r : Rec) :
     (clientCheck τ.t τ.x d == some t')
   errs := errs ++ chkL "spend_witness"
     (encodeSpendWitness τ.nf ⟨τ.t, τ.r, τ.x, τ.s, nf', t', r'⟩ d ctx) wit
-  let q := SpendReq.parse req
+  let q := SpendReq.parse (Z := Sizes.main) req
   let P := katPrim pk (Vector.replicate 7000 0) q.proof (respSig resp)
   match spendRequestWithSeed P pk (some τ) d ctx seed with
   | (some _, _) => throw "spendRequestWithSeed did not consume the token"

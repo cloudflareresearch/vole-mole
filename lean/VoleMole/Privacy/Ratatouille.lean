@@ -64,27 +64,27 @@ namespace VoleMole.Privacy.Ratatouille
 
 open VoleMole.Spec.Ratatouille
 
-variable {SK : Type}
+variable {Z : Sizes} {SK : Type}
 
 /-! ## The spec with the seed expansion's output given -/
 
 /-- `issue_request_with_seed` with `(nf, r, ρ) = expand_seed(…)` as arguments. -/
-def issueOf (P : Prim SK) (tInit : Credits) (ctx : Context) (nf : Nullifier) (r : Opening)
-    (ρ : Rho) : Except Error (PendingTokenS × IssueRequest) :=
+def issueOf (P : Prim Z SK) (tInit : Credits) (ctx : Context) (nf : Nullifier) (r : Opening)
+    (ρ : Rho) : Except Error (PendingTokenS × IssueRequest Z) :=
   if tInit = 0 then .error .invalidArgument else
   match P.proveIssue ⟨com nf ctx tInit r, tInit, ctx⟩ ⟨nf, r⟩ ρ with
   | none => .error .runtime
   | some pf => .ok (⟨nf, r, tInit, com nf ctx tInit r⟩, issueReqBytes (com nf ctx tInit r) pf)
 
-theorem issueRequestWithSeed_eq (P : Prim SK) (tInit : Credits) (ctx : Context) (seed : Seed) :
+theorem issueRequestWithSeed_eq (P : Prim Z SK) (tInit : Credits) (ctx : Context) (seed : Seed) :
     issueRequestWithSeed P tInit ctx seed =
       issueOf P tInit ctx (expandSeed issueSeedDst seed).1 (expandSeed issueSeedDst seed).2.1
         (expandSeed issueSeedDst seed).2.2 := rfl
 
 /-- `spend_request_with_seed` with `(nf', r', ρ) = expand_seed(…)` as arguments. -/
-def spendOf (P : Prim SK) (pk : PublicKey) (tok : Option TokenS) (d : Credits) (ctx : Context)
+def spendOf (P : Prim Z SK) (pk : PublicKey) (tok : Option TokenS) (d : Credits) (ctx : Context)
     (nf' : Nullifier) (r' : Opening) (ρ : Rho) :
-    Option TokenS × Except Error (PendingSpendS × SpendRequest) :=
+    Option TokenS × Except Error (PendingSpendS × SpendRequest Z) :=
   match tok with
   | none => (none, .error .logic)
   | some τ =>
@@ -97,7 +97,7 @@ def spendOf (P : Prim SK) (pk : PublicKey) (tok : Option TokenS) (d : Credits) (
       | some pf => (none, .ok (⟨nf', t', r', com nf' ctx t' r'⟩,
           SpendReq.toBytes ⟨τ.nf, d, com nf' ctx t' r', pf⟩))
 
-theorem spendRequestWithSeed_eq (P : Prim SK) (pk : PublicKey) (tok : Option TokenS) (d : Credits)
+theorem spendRequestWithSeed_eq (P : Prim Z SK) (pk : PublicKey) (tok : Option TokenS) (d : Credits)
     (ctx : Context) (seed : Seed) :
     spendRequestWithSeed P pk tok d ctx seed =
       spendOf P pk tok d ctx (expandSeed spendSeedDst seed).1 (expandSeed spendSeedDst seed).2.1
@@ -107,28 +107,28 @@ theorem spendRequestWithSeed_eq (P : Prim SK) (pk : PublicKey) (tok : Option Tok
 
 /-- An issuance as the Issuer meets it: the request (or the Client's error) and the Client's
 finalization of a response. -/
-structure IssOut (Tok : Type) where
-  req : Except Error IssueRequest
+structure IssOut (Z : Sizes) (Tok : Type) where
+  req : Except Error (IssueRequest Z)
   fin : Preimage → Option Tok
 
 /-- A spend: the request (or error) and the Client's finalization of the response. -/
-structure SpOut (Tok : Type) where
-  req : Except Error SpendRequest
+structure SpOut (Z : Sizes) (Tok : Type) where
+  req : Except Error (SpendRequest Z)
   fin : SpendResponse → Option Tok
 
 /-- The two issuance requests, in Client order. -/
-abbrev IssTr := Except Error IssueRequest × Except Error IssueRequest
+abbrev IssTr (Z : Sizes) := Except Error (IssueRequest Z) × Except Error (IssueRequest Z)
 
 /-- The malicious Issuer. -/
-structure Adversary where
+structure Adversary (Z : Sizes) where
   pk : PublicKey
   ctx : Context
   tInit : Credits
-  respondIss : IssTr → Bool → Preimage
-  d₁ : IssTr → Credits
-  respond₁ : IssTr → Except Error SpendRequest → SpendResponse
-  d₂ : IssTr → Except Error SpendRequest → Credits
-  guess : IssTr → Option (Except Error SpendRequest × Option (Except Error SpendRequest)) → Prop
+  respondIss : IssTr Z → Bool → Preimage
+  d₁ : IssTr Z → Credits
+  respond₁ : IssTr Z → Except Error (SpendRequest Z) → SpendResponse
+  d₂ : IssTr Z → Except Error (SpendRequest Z) → Credits
+  guess : IssTr Z → Option (Except Error (SpendRequest Z) × Option (Except Error (SpendRequest Z))) → Prop
 
 /-- What the game needs to know about tokens: the refusal test ("valid and affords `d`") and a
 dummy token (used where a token is missing; nothing is revealed then). -/
@@ -136,18 +136,18 @@ structure Iface (Tok : Type) where
   ok : Tok → Credits → Bool
   dflt : Tok
 
-variable (A : Adversary) {Tok : Type} (I : Iface Tok)
+variable (A : Adversary Z) {Tok : Type} (I : Iface Tok)
 
 /-- Client `c`'s token, or the dummy. -/
 def tokD (tk₀ tk₁ : Option Tok) (c : Bool) : Tok := (bif c then tk₁ else tk₀).getD I.dflt
 
 /-- Round 1 runs: both tokens exist, and both are valid and afford `d₁`. -/
-def ok₁ (tr : IssTr) (tk₀ tk₁ : Option Tok) : Bool :=
+def ok₁ (tr : IssTr Z) (tk₀ tk₁ : Option Tok) : Bool :=
   tk₀.isSome && tk₁.isSome && I.ok (tokD I tk₀ tk₁ false) (A.d₁ tr) &&
     I.ok (tokD I tk₀ tk₁ true) (A.d₁ tr)
 
 /-- Round 2 runs: the change token exists, and both current tokens are valid and afford `d₂`. -/
-def ok₂ (b₁ : Bool) (tr : IssTr) (tk₀ tk₁ : Option Tok) (rq : Except Error SpendRequest)
+def ok₂ (b₁ : Bool) (tr : IssTr Z) (tk₀ tk₁ : Option Tok) (rq : Except Error (SpendRequest Z))
     (ch : Option Tok) : Bool :=
   ch.isSome && I.ok (ch.getD I.dflt) (A.d₂ tr rq) && I.ok (tokD I tk₀ tk₁ (!b₁)) (A.d₂ tr rq)
 
@@ -157,46 +157,46 @@ def cur₂ (b₁ b₂ : Bool) (tk₀ tk₁ : Option Tok) (ch : Option Tok) : Tok
 
 /-- The guess, from the issuance transcript, round 1's request and change token, and round 2's
 request. -/
-def stage₃ (b₁ : Bool) (tr : IssTr) (tk₀ tk₁ : Option Tok) (rq : Except Error SpendRequest)
-    (ch : Option Tok) (y : Except Error SpendRequest) : Prop :=
+def stage₃ (b₁ : Bool) (tr : IssTr Z) (tk₀ tk₁ : Option Tok) (rq : Except Error (SpendRequest Z))
+    (ch : Option Tok) (y : Except Error (SpendRequest Z)) : Prop :=
   A.guess tr (bif ok₁ A I tr tk₀ tk₁ then
     some (rq, bif ok₂ A I b₁ tr tk₀ tk₁ rq ch then some y else none) else none)
 
 /-- After round 1. -/
-def stage₂ (b₁ b₂ : Bool) (tr : IssTr) (tk₀ tk₁ : Option Tok) (rq : Except Error SpendRequest)
-    (ch : Option Tok) (s₂ : Tok → Credits → SpOut Tok) : Prop :=
+def stage₂ (b₁ b₂ : Bool) (tr : IssTr Z) (tk₀ tk₁ : Option Tok) (rq : Except Error (SpendRequest Z))
+    (ch : Option Tok) (s₂ : Tok → Credits → SpOut Z Tok) : Prop :=
   stage₃ A I b₁ tr tk₀ tk₁ rq ch (s₂ (cur₂ I b₁ b₂ tk₀ tk₁ ch) (A.d₂ tr rq)).req
 
 /-- After issuance. -/
-def stage₁ (b₁ b₂ : Bool) (tr : IssTr) (tk₀ tk₁ : Option Tok) (s₁ s₂ : Tok → Credits → SpOut Tok) :
+def stage₁ (b₁ b₂ : Bool) (tr : IssTr Z) (tk₀ tk₁ : Option Tok) (s₁ s₂ : Tok → Credits → SpOut Z Tok) :
     Prop :=
   stage₂ A I b₁ b₂ tr tk₀ tk₁ (s₁ (tokD I tk₀ tk₁ b₁) (A.d₁ tr)).req
     ((s₁ (tokD I tk₀ tk₁ b₁) (A.d₁ tr)).fin (A.respond₁ tr (s₁ (tokD I tk₀ tk₁ b₁) (A.d₁ tr)).req))
     s₂
 
 /-- **The view in world `(b₁, b₂)`.** -/
-def view (b₁ b₂ : Bool) (i₀ i₁ : IssOut Tok) (s₁ s₂ : Tok → Credits → SpOut Tok) : Prop :=
+def view (b₁ b₂ : Bool) (i₀ i₁ : IssOut Z Tok) (s₁ s₂ : Tok → Credits → SpOut Z Tok) : Prop :=
   stage₁ A I b₁ b₂ (i₀.req, i₁.req) (i₀.fin (A.respondIss (i₀.req, i₁.req) false))
     (i₁.fin (A.respondIss (i₀.req, i₁.req) true)) s₁ s₂
 
 /-- The game with the four slots drawn from their parts of the tape. -/
-def game {T₀ T₁ T₂ T₃ : Type} (b₁ b₂ : Bool) (g₀ : T₀ → IssOut Tok) (g₁ : T₁ → IssOut Tok)
-    (h₁ : T₂ → Tok → Credits → SpOut Tok) (h₂ : T₃ → Tok → Credits → SpOut Tok)
+def game {T₀ T₁ T₂ T₃ : Type} (b₁ b₂ : Bool) (g₀ : T₀ → IssOut Z Tok) (g₁ : T₁ → IssOut Z Tok)
+    (h₁ : T₂ → Tok → Credits → SpOut Z Tok) (h₂ : T₃ → Tok → Credits → SpOut Z Tok)
     (x : (T₀ × T₁) × (T₂ × T₃)) : Prop :=
   view A I b₁ b₂ (g₀ x.1.1) (g₁ x.1.2) (h₁ x.2.1) (h₂ x.2.2)
 
 /-! ## Hops on one slot -/
 
 /-- Two issuance samplers are `ε`-close for every response strategy. -/
-def IssClose {T T' : Type} [Fintype T] [Fintype T'] (ε : ℝ) (g : T → IssOut Tok)
-    (g' : T' → IssOut Tok) : Prop :=
-  ∀ f : Except Error IssueRequest → Preimage, Close ε (fun x => ((g x).req, (g x).fin (f (g x).req)))
+def IssClose {T T' : Type} [Fintype T] [Fintype T'] (ε : ℝ) (g : T → IssOut Z Tok)
+    (g' : T' → IssOut Z Tok) : Prop :=
+  ∀ f : Except Error (IssueRequest Z) → Preimage, Close ε (fun x => ((g x).req, (g x).fin (f (g x).req)))
     (fun x => ((g' x).req, (g' x).fin (f (g' x).req)))
 
 /-- Two spend samplers are `ε`-close at every token and amount, for every response strategy. -/
-def SpClose {T T' : Type} [Fintype T] [Fintype T'] (ε : ℝ) (h : T → Tok → Credits → SpOut Tok)
-    (h' : T' → Tok → Credits → SpOut Tok) : Prop :=
-  ∀ τ d (f : Except Error SpendRequest → SpendResponse),
+def SpClose {T T' : Type} [Fintype T] [Fintype T'] (ε : ℝ) (h : T → Tok → Credits → SpOut Z Tok)
+    (h' : T' → Tok → Credits → SpOut Z Tok) : Prop :=
+  ∀ τ d (f : Except Error (SpendRequest Z) → SpendResponse),
     Close ε (fun x => ((h x τ d).req, (h x τ d).fin (f (h x τ d).req)))
       (fun x => ((h' x τ d).req, (h' x τ d).fin (f (h' x τ d).req)))
 
@@ -204,8 +204,8 @@ variable {T₀ T₁ T₂ T₃ T₀' T₁' T₂' T₃' : Type} [Fintype T₀] [Fi
   [Fintype T₀'] [Fintype T₁'] [Fintype T₂'] [Fintype T₃']
 
 theorem game_hop₀ [Nonempty T₁] [Nonempty T₂] [Nonempty T₃] (b₁ b₂ : Bool) {ε : ℝ}
-    {g₀ : T₀ → IssOut Tok} {g₀' : T₀' → IssOut Tok} (g₁ : T₁ → IssOut Tok)
-    (h₁ : T₂ → Tok → Credits → SpOut Tok) (h₂ : T₃ → Tok → Credits → SpOut Tok)
+    {g₀ : T₀ → IssOut Z Tok} {g₀' : T₀' → IssOut Z Tok} (g₁ : T₁ → IssOut Z Tok)
+    (h₁ : T₂ → Tok → Credits → SpOut Z Tok) (h₂ : T₃ → Tok → Credits → SpOut Z Tok)
     (h : IssClose ε g₀ g₀') :
     |pr _ (game A I b₁ b₂ g₀ g₁ h₁ h₂) - pr _ (game A I b₁ b₂ g₀' g₁ h₁ h₂)| ≤ ε :=
   abs_pr_prod_sub_le' _ _ fun y => abs_pr_prod_sub_le' _ _ fun x₁ =>
@@ -214,8 +214,8 @@ theorem game_hop₀ [Nonempty T₁] [Nonempty T₂] [Nonempty T₃] (b₁ b₂ :
         (h₁ y.1) (h₂ y.2))
 
 theorem game_hop₁ [Nonempty T₀] [Nonempty T₂] [Nonempty T₃] (b₁ b₂ : Bool) {ε : ℝ}
-    (g₀ : T₀ → IssOut Tok) {g₁ : T₁ → IssOut Tok} {g₁' : T₁' → IssOut Tok}
-    (h₁ : T₂ → Tok → Credits → SpOut Tok) (h₂ : T₃ → Tok → Credits → SpOut Tok)
+    (g₀ : T₀ → IssOut Z Tok) {g₁ : T₁ → IssOut Z Tok} {g₁' : T₁' → IssOut Z Tok}
+    (h₁ : T₂ → Tok → Credits → SpOut Z Tok) (h₂ : T₃ → Tok → Credits → SpOut Z Tok)
     (h : IssClose ε g₁ g₁') :
     |pr _ (game A I b₁ b₂ g₀ g₁ h₁ h₂) - pr _ (game A I b₁ b₂ g₀ g₁' h₁ h₂)| ≤ ε :=
   abs_pr_prod_sub_le' _ _ fun y => abs_pr_prod_sub_le _ _ fun x₀ =>
@@ -224,24 +224,24 @@ theorem game_hop₁ [Nonempty T₀] [Nonempty T₂] [Nonempty T₃] (b₁ b₂ :
         (h₁ y.1) (h₂ y.2))
 
 theorem game_hop₂ [Nonempty T₀] [Nonempty T₁] [Nonempty T₃] (b₁ b₂ : Bool) {ε : ℝ}
-    (g₀ : T₀ → IssOut Tok) (g₁ : T₁ → IssOut Tok) {h₁ : T₂ → Tok → Credits → SpOut Tok}
-    {h₁' : T₂' → Tok → Credits → SpOut Tok} (h₂ : T₃ → Tok → Credits → SpOut Tok)
+    (g₀ : T₀ → IssOut Z Tok) (g₁ : T₁ → IssOut Z Tok) {h₁ : T₂ → Tok → Credits → SpOut Z Tok}
+    {h₁' : T₂' → Tok → Credits → SpOut Z Tok} (h₂ : T₃ → Tok → Credits → SpOut Z Tok)
     (h : SpClose ε h₁ h₁') :
     |pr _ (game A I b₁ b₂ g₀ g₁ h₁ h₂) - pr _ (game A I b₁ b₂ g₀ g₁ h₁' h₂)| ≤ ε :=
   abs_pr_prod_sub_le _ _ fun x => abs_pr_prod_sub_le' _ _ fun y₂ =>
-    let tr : IssTr := ((g₀ x.1).req, (g₁ x.2).req)
+    let tr : IssTr Z := ((g₀ x.1).req, (g₁ x.2).req)
     let tk₀ := (g₀ x.1).fin (A.respondIss tr false)
     let tk₁ := (g₁ x.2).fin (A.respondIss tr true)
     h (tokD I tk₀ tk₁ b₁) (A.d₁ tr) (A.respond₁ tr)
       (fun p => stage₂ A I b₁ b₂ tr tk₀ tk₁ p.1 p.2 (h₂ y₂))
 
 theorem game_hop₃ [Nonempty T₀] [Nonempty T₁] [Nonempty T₂] (b₁ b₂ : Bool) {ε : ℝ}
-    (g₀ : T₀ → IssOut Tok) (g₁ : T₁ → IssOut Tok) (h₁ : T₂ → Tok → Credits → SpOut Tok)
-    {h₂ : T₃ → Tok → Credits → SpOut Tok} {h₂' : T₃' → Tok → Credits → SpOut Tok}
+    (g₀ : T₀ → IssOut Z Tok) (g₁ : T₁ → IssOut Z Tok) (h₁ : T₂ → Tok → Credits → SpOut Z Tok)
+    {h₂ : T₃ → Tok → Credits → SpOut Z Tok} {h₂' : T₃' → Tok → Credits → SpOut Z Tok}
     (h : SpClose ε h₂ h₂') :
     |pr _ (game A I b₁ b₂ g₀ g₁ h₁ h₂) - pr _ (game A I b₁ b₂ g₀ g₁ h₁ h₂')| ≤ ε :=
   abs_pr_prod_sub_le _ _ fun x => abs_pr_prod_sub_le _ _ fun y₁ =>
-    let tr : IssTr := ((g₀ x.1).req, (g₁ x.2).req)
+    let tr : IssTr Z := ((g₀ x.1).req, (g₁ x.2).req)
     let tk₀ := (g₀ x.1).fin (A.respondIss tr false)
     let tk₁ := (g₁ x.2).fin (A.respondIss tr true)
     let o := h₁ y₁ (tokD I tk₀ tk₁ b₁) (A.d₁ tr)
@@ -260,7 +260,7 @@ def tokIface : Iface TokenS :=
   ⟨fun τ d => decide (τ.Valid A.pk A.ctx) && (clientCheck τ.t τ.x d).isSome, dfltTok⟩
 
 /-- An issuance slot from the spec's `issue_request_with_seed` output and `finalize_issue`. -/
-def issOutOf (r : Except Error (PendingTokenS × IssueRequest)) : IssOut TokenS where
+def issOutOf (r : Except Error (PendingTokenS × IssueRequest Z)) : IssOut Z TokenS where
   req := match r with
     | .ok q => .ok q.2
     | .error e => .error e
@@ -271,7 +271,7 @@ def issOutOf (r : Except Error (PendingTokenS × IssueRequest)) : IssOut TokenS 
     | .error _ => none
 
 /-- A spend slot from the spec's `spend_request_with_seed` output and `finalize_spend`. -/
-def spOutOf (r : Except Error (PendingSpendS × SpendRequest)) : SpOut TokenS where
+def spOutOf (r : Except Error (PendingSpendS × SpendRequest Z)) : SpOut Z TokenS where
   req := match r with
     | .ok q => .ok q.2
     | .error e => .error e
@@ -285,24 +285,24 @@ def spOutOf (r : Except Error (PendingSpendS × SpendRequest)) : SpOut TokenS wh
 abbrev vec {n : ℕ} (c : Coins n) : Bytes n := Vector.ofFn c
 
 /-- A real issuance from `(nf, r, ρ)`. -/
-def issReal (P : Prim SK) (x : Coins 24 × Coins 16 × Coins 16) : IssOut TokenS :=
+def issReal (P : Prim Z SK) (x : Coins 24 × Coins 16 × Coins 16) : IssOut Z TokenS :=
   issOutOf A (issueOf P A.tInit A.ctx (vec x.1) (vec x.2.1) (vec x.2.2))
 
 /-- A real spend from `(nf', r', ρ)`. -/
-def spReal (P : Prim SK) (x : Coins 24 × Coins 16 × Coins 16) (τ : TokenS) (d : Credits) :
-    SpOut TokenS :=
+def spReal (P : Prim Z SK) (x : Coins 24 × Coins 16 × Coins 16) (τ : TokenS) (d : Credits) :
+    SpOut Z TokenS :=
   spOutOf A (spendOf P A.pk (some τ) d A.ctx (vec x.1) (vec x.2.1) (vec x.2.2)).2
 
 /-- **The real game** in world `(b₁, b₂)`. -/
-def realGame (P : Prim SK) (b₁ b₂ : Bool) :=
+def realGame (P : Prim Z SK) (b₁ b₂ : Bool) :=
   game A (tokIface A) b₁ b₂ (issReal A P) (issReal A P) (spReal A P) (spReal A P)
 
-variable {CI CS : Type} (simI : IssueInstance → CI → Option IssueProof)
-  (simS : SpendInstance → CS → Option SpendProof)
+variable {CI CS : Type} (simI : IssueInstance → CI → Option (IssueProof Z))
+  (simS : SpendInstance → CS → Option (SpendProof Z))
 
 /-- `issueOf` with a simulated proof. -/
 def issueSim (tInit : Credits) (ctx : Context) (nf : Nullifier) (r : Opening) (c : CI) :
-    Except Error (PendingTokenS × IssueRequest) :=
+    Except Error (PendingTokenS × IssueRequest Z) :=
   if tInit = 0 then .error .invalidArgument else
   match simI ⟨com nf ctx tInit r, tInit, ctx⟩ c with
   | none => .error .runtime
@@ -310,7 +310,7 @@ def issueSim (tInit : Credits) (ctx : Context) (nf : Nullifier) (r : Opening) (c
 
 /-- `spendOf` with a simulated proof (the Client's checks unchanged). -/
 def spendSim (pk : PublicKey) (τ : TokenS) (d : Credits) (ctx : Context) (nf' : Nullifier)
-    (r' : Opening) (c : CS) : Except Error (PendingSpendS × SpendRequest) :=
+    (r' : Opening) (c : CS) : Except Error (PendingSpendS × SpendRequest Z) :=
   if ¬ τ.Valid pk ctx then .error .invalidArgument else
   match clientCheck τ.t τ.x d with
   | none => .error .invalidArgument
@@ -319,22 +319,22 @@ def spendSim (pk : PublicKey) (τ : TokenS) (d : Credits) (ctx : Context) (nf' :
     | none => .error .runtime
     | some pf => .ok (⟨nf', t', r', com nf' ctx t' r'⟩, SpendReq.toBytes ⟨τ.nf, d, com nf' ctx t' r', pf⟩)
 
-def issSim (x : Coins 24 × Coins 16 × CI) : IssOut TokenS :=
+def issSim (x : Coins 24 × Coins 16 × CI) : IssOut Z TokenS :=
   issOutOf A (issueSim simI A.tInit A.ctx (vec x.1) (vec x.2.1) x.2.2)
 
-def spSim (x : Coins 24 × Coins 16 × CS) (τ : TokenS) (d : Credits) : SpOut TokenS :=
+def spSim (x : Coins 24 × Coins 16 × CS) (τ : TokenS) (d : Credits) : SpOut Z TokenS :=
   spOutOf A (spendSim simS A.pk τ d A.ctx (vec x.1) (vec x.2.1) x.2.2)
 
 /-- The issuance prover with uniform `ρ`. -/
-def proveI (P : Prim SK) (x : IssueInstance) (w : IssueWitness) (ρ : Coins 16) : Option IssueProof :=
+def proveI (P : Prim Z SK) (x : IssueInstance) (w : IssueWitness) (ρ : Coins 16) : Option (IssueProof Z) :=
   P.proveIssue x w (vec ρ)
 
 /-- The spend prover with uniform `ρ`. -/
-def proveS (P : Prim SK) (x : SpendInstance) (w : SpendWitness) (ρ : Coins 16) : Option SpendProof :=
+def proveS (P : Prim Z SK) (x : SpendInstance) (w : SpendWitness) (ρ : Coins 16) : Option (SpendProof Z) :=
   P.proveSpend x w (vec ρ)
 
 /-- **One issuance proof (H2).** -/
-theorem issue_close [Fintype CI] [Nonempty CI] (P : Prim SK) {εI : ℝ} (hε : 0 ≤ εI)
+theorem issue_close [Fintype CI] [Nonempty CI] (P : Prim Z SK) {εI : ℝ} (hε : 0 ≤ εI)
     (hI : ZeroKnowledge IssueRel (proveI P) simI εI) : IssClose εI (issReal A P) (issSim A simI) := by
   intro f
   refine Close.congr (Close.prod_right (X := fun nf y => let o := issReal A P (nf, y); (o.req, o.fin (f o.req)))
@@ -347,7 +347,7 @@ theorem issue_close [Fintype CI] [Nonempty CI] (P : Prim SK) {εI : ℝ} (hε : 
     exact close_const hε _
   · simp only [issReal, issSim, issueOf, issueSim, hT, ↓reduceIte]
     exact (hI ⟨com (vec nf) A.ctx A.tInit (vec r), A.tInit, A.ctx⟩ ⟨vec nf, vec r⟩ rfl).map
-      fun (o : Option IssueProof) =>
+      fun (o : Option (IssueProof Z)) =>
         let q := issOutOf A (match o with
           | none => .error .runtime
           | some pf => .ok (⟨vec nf, vec r, A.tInit, com (vec nf) A.ctx A.tInit (vec r)⟩,
@@ -357,7 +357,7 @@ theorem issue_close [Fintype CI] [Nonempty CI] (P : Prim SK) {εI : ℝ} (hε : 
 /-- **One spend proof (H2).** At every token and amount: if the Client's checks fail both sides
 throw alike; otherwise the witness satisfies `SpendRel` (V1 is the validity check, V2 holds by
 construction, V3 is `clientCheck_eq`). -/
-theorem spend_close [Fintype CS] [Nonempty CS] (P : Prim SK) {εS : ℝ} (hε : 0 ≤ εS)
+theorem spend_close [Fintype CS] [Nonempty CS] (P : Prim Z SK) {εS : ℝ} (hε : 0 ≤ εS)
     (hS : ZeroKnowledge SpendRel (proveS P) simS εS) : SpClose εS (spReal A P) (spSim A simS) := by
   intro τ d f
   refine Close.congr (Close.prod_right
@@ -376,14 +376,14 @@ theorem spend_close [Fintype CS] [Nonempty CS] (P : Prim SK) {εS : ℝ} (hε : 
       have hrel : SpendRel ⟨A.pk, τ.nf, d, com (vec nf) A.ctx t' (vec r), A.ctx⟩
           ⟨τ.t, τ.r, τ.x, τ.s, vec nf, t', vec r⟩ :=
         ⟨hv, rfl, by have := clientCheck_eq hc; simp only at this ⊢; omega⟩
-      let Φr : Option SpendProof → Except Error SpendRequest × Option TokenS := fun o =>
+      let Φr : Option (SpendProof Z) → Except Error (SpendRequest Z) × Option TokenS := fun o =>
         let q := spOutOf A (match o with
           | none => ((none : Option TokenS),
-              (Except.error .runtime : Except Error (PendingSpendS × SpendRequest)))
+              (Except.error .runtime : Except Error (PendingSpendS × SpendRequest Z)))
           | some pf => (none, Except.ok (⟨vec nf, t', vec r, com (vec nf) A.ctx t' (vec r)⟩,
               SpendReq.toBytes ⟨τ.nf, d, com (vec nf) A.ctx t' (vec r), pf⟩))).2
         (q.req, q.fin (f q.req))
-      let Φs : Option SpendProof → Except Error SpendRequest × Option TokenS := fun o =>
+      let Φs : Option (SpendProof Z) → Except Error (SpendRequest Z) × Option TokenS := fun o =>
         let q := spOutOf A (match o with
           | none => .error .runtime
           | some pf => .ok (⟨vec nf, t', vec r, com (vec nf) A.ctx t' (vec r)⟩,
@@ -404,12 +404,12 @@ theorem tokD_map (hd : π I.dflt = I'.dflt) (tk₀ tk₁ : Option Tok) (c : Bool
     tokD I' (tk₀.map π) (tk₁.map π) c = π (tokD I tk₀ tk₁ c) := by
   cases c <;> simp [tokD, ← hd, Option.getD_map]
 
-theorem ok₁_map (hd : π I.dflt = I'.dflt) (hok : ∀ τ d, I'.ok (π τ) d = I.ok τ d) (tr : IssTr)
+theorem ok₁_map (hd : π I.dflt = I'.dflt) (hok : ∀ τ d, I'.ok (π τ) d = I.ok τ d) (tr : IssTr Z)
     (tk₀ tk₁ : Option Tok) : ok₁ A I' tr (tk₀.map π) (tk₁.map π) = ok₁ A I tr tk₀ tk₁ := by
   simp [ok₁, tokD_map I I' π hd, hok]
 
 theorem ok₂_map (hd : π I.dflt = I'.dflt) (hok : ∀ τ d, I'.ok (π τ) d = I.ok τ d) (b₁ : Bool)
-    (tr : IssTr) (tk₀ tk₁ : Option Tok) (rq : Except Error SpendRequest) (ch : Option Tok) :
+    (tr : IssTr Z) (tk₀ tk₁ : Option Tok) (rq : Except Error (SpendRequest Z)) (ch : Option Tok) :
     ok₂ A I' b₁ tr (tk₀.map π) (tk₁.map π) rq (ch.map π) = ok₂ A I b₁ tr tk₀ tk₁ rq ch := by
   simp [ok₂, tokD_map I I' π hd, hok, ← hd, Option.getD_map]
 
@@ -420,10 +420,10 @@ theorem cur₂_map (hd : π I.dflt = I'.dflt) (b₁ b₂ : Bool) (tk₀ tk₁ ch
 
 /-- **A token map that commutes with the slots and the refusal test preserves the view.** -/
 theorem view_map (hd : π I.dflt = I'.dflt) (hok : ∀ τ d, I'.ok (π τ) d = I.ok τ d)
-    (b₁ b₂ : Bool) {i₀ i₁ : IssOut Tok} {i₀' i₁' : IssOut Tok'}
+    (b₁ b₂ : Bool) {i₀ i₁ : IssOut Z Tok} {i₀' i₁' : IssOut Z Tok'}
     (hr₀ : i₀'.req = i₀.req) (hf₀ : ∀ s, i₀'.fin s = (i₀.fin s).map π)
     (hr₁ : i₁'.req = i₁.req) (hf₁ : ∀ s, i₁'.fin s = (i₁.fin s).map π)
-    {s₁ s₂ : Tok → Credits → SpOut Tok} {s₁' s₂' : Tok' → Credits → SpOut Tok'}
+    {s₁ s₂ : Tok → Credits → SpOut Z Tok} {s₁' s₂' : Tok' → Credits → SpOut Z Tok'}
     (hs₁r : ∀ τ d, (s₁' (π τ) d).req = (s₁ τ d).req)
     (hs₁f : ∀ τ d r, (s₁' (π τ) d).fin r = ((s₁ τ d).fin r).map π)
     (hs₂r : ∀ τ d, (s₂' (π τ) d).req = (s₂ τ d).req) :
@@ -451,7 +451,7 @@ def pubIface : Iface PubTok :=
     pubOf A dfltTok⟩
 
 /-- A simulated issuance in the public world, with commitment `cf T_init`. -/
-def pubIss (cf : Credits → Commitment) (nf : Nullifier) (c : CI) : IssOut PubTok :=
+def pubIss (cf : Credits → Commitment) (nf : Nullifier) (c : CI) : IssOut Z PubTok :=
   if A.tInit = 0 then ⟨.error .invalidArgument, fun _ => none⟩ else
   match simI ⟨cf A.tInit, A.tInit, A.ctx⟩ c with
   | none => ⟨.error .runtime, fun _ => none⟩
@@ -460,7 +460,7 @@ def pubIss (cf : Credits → Commitment) (nf : Nullifier) (c : CI) : IssOut PubT
 
 /-- A simulated spend in the public world, with new commitment `cf t'`. -/
 def pubSp (cf : Credits → Commitment) (nf' : Nullifier) (c : CS) (τ : PubTok) (d : Credits) :
-    SpOut PubTok :=
+    SpOut Z PubTok :=
   if ¬ uovEval A.pk τ.s = tag τ.c τ.x then ⟨.error .invalidArgument, fun _ => none⟩ else
   match clientCheck τ.t τ.x d with
   | none => ⟨.error .invalidArgument, fun _ => none⟩
@@ -605,7 +605,7 @@ theorem hiding_hop [Fintype CI] [Nonempty CI] [Fintype CS] [Nonempty CS] (b₁ b
 /-! ## The ideal world: the four worlds coincide -/
 
 /-- A simulated spend request revealing `n`, with new commitment `u`. -/
-def reqS (n : Nullifier) (d : Credits) (u : Commitment) (c : CS) : Except Error SpendRequest :=
+def reqS (n : Nullifier) (d : Credits) (u : Commitment) (c : CS) : Except Error (SpendRequest Z) :=
   match simS ⟨A.pk, n, d, u, A.ctx⟩ c with
   | none => .error .runtime
   | some pf => .ok (SpendReq.toBytes ⟨n, d, u, pf⟩)
@@ -618,7 +618,7 @@ round 2: no other nullifier, and neither `b₁` nor `b₂`, appears. -/
 def idealW (X Y : Nullifier) (u₀ u₁ u₂ u₃ : Commitment) (co : (CI × CI) × (CS × CS)) : Prop :=
   let i₀ := pubIss A simI (fun _ => u₀) nf0 co.1.1
   let i₁ := pubIss A simI (fun _ => u₁) nf0 co.1.2
-  let tr : IssTr := (i₀.req, i₁.req)
+  let tr : IssTr Z := (i₀.req, i₁.req)
   let d₁ := A.d₁ tr
   let ok₁ := (i₀.fin (A.respondIss tr false)).isSome && (i₁.fin (A.respondIss tr true)).isSome &&
     (clientCheck A.tInit 0 d₁).isSome
@@ -696,7 +696,7 @@ theorem tokD_issTok (N₀ N₁ : Nullifier) (S₀ S₁ : Preimage) (U₀ U₁ : 
 
 /-- **The stages of the ideal world**: with valid issued tokens and constant commitments, the view
 reveals the spent tokens' nullifiers and nothing else about the tokens. -/
-theorem stage_ideal (b₁ b₂ : Bool) (tr : IssTr) (e₀ e₁ : Bool) (N₀ N₁ : Nullifier) (S₀ S₁ : Preimage)
+theorem stage_ideal (b₁ b₂ : Bool) (tr : IssTr Z) (e₀ e₁ : Bool) (N₀ N₁ : Nullifier) (S₀ S₁ : Preimage)
     (U₀ U₁ : Commitment) (hv₀ : e₀ = true → uovEval A.pk S₀ = tag U₀ 0)
     (hv₁ : e₁ = true → uovEval A.pk S₁ = tag U₁ 0) (m₁ m₂ : Nullifier) (v₁ v₂ : Commitment)
     (c₁ c₂ : CS) :
@@ -835,7 +835,7 @@ probabilities of any two worlds `(b₁, b₂)`, `(b₁', b₂')` differ by at mo
 `4εI + 4εS + 2εhide`: neither which Client spends in round 1 (spend–issuance linking) nor whether
 round 2's spender is round 1's (spend–spend linking, through the change token) is
 distinguishable. -/
-theorem unlinkability [Fintype CI] [Nonempty CI] [Fintype CS] [Nonempty CS] (P : Prim SK)
+theorem unlinkability [Fintype CI] [Nonempty CI] [Fintype CS] [Nonempty CS] (P : Prim Z SK)
     {εI εS εhide : ℝ} (hεI : 0 ≤ εI) (hεS : 0 ≤ εS)
     (hI : ZeroKnowledge IssueRel (proveI P) simI εI)
     (hS : ZeroKnowledge SpendRel (proveS P) simS εS)

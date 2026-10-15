@@ -21,13 +21,14 @@ answers at the grinding points) and the deterministic ones (`ZKHyp`, `BAVCComple
   issuance and redemption proofs.
 * **`Ratatouille.unlinkability_lean`**: the same for `Privacy.Ratatouille.unlinkability`, for
   primitives whose provers are the Lean prover followed by any fixed encoding of its output into
-  the spec's proof type (`Spec.Ratatouille` fixes the proof sizes of `main`; with dedicated label
-  rows the proofs are 256 bytes longer, so the encoding is the caller's choice).
+  the spec's proof type (of the sizes `Z`; `Spec.Ratatouille.Sizes.labelRows` for label rows).
 
-PomFRIT's blindness (`Privacy.PomFRIT.blindness`) needs two-phase zero knowledge with a delayed,
-adaptively chosen instance (`Privacy.PomFRIT.ZeroKnowledge`); `labelRows_zeroKnowledge` is for a
-fixed statement whose constraints the witness satisfies for every `chal1`, which PomFRIT's
-instance `h = hash_to_target(…, chal1, …)` violates. That case remains on paper (zk.md §7.5).
+The statement builders and their `ZKHyp` are parameters here. They are assembled in
+`Privacy/MoussakaLean.lean` (`anonymity_label_rows`) and `Privacy/RatatouilleLean.lean`
+(`unlinkability_label_rows`); PomFRIT's two-phase zero knowledge with a
+delayed instance (`Privacy.PomFRIT.ZeroKnowledge`) is derived in `Privacy/PomFRITLean.lean`
+(`blindness_lean`), from `ZK/TwoPhase.lean`. The bytes-and-bits lemmas below (`toL_eq`,
+`witByte_bitOf`, `wSlope_eq`, …) are shared by both.
 -/
 
 open Finset
@@ -43,6 +44,114 @@ theorem ZeroKnowledge.transfer {I I' W W' ρ C O O' : Type*} [Fintype ρ] [Finty
   fun x w hxw => (h _ _ (hR x w hxw)).map φ
 
 open VoleMole.Verifier VoleMole.Verifier.Bridge VoleMole.ZK.Sim VoleMole.Arith
+
+/-! ## Bytes and bits -/
+
+lemma toList_loop (bs : ByteArray) (i : ℕ) (r : List UInt8) :
+    ByteArray.toList.loop bs i r = r.reverse ++ bs.data.toList.drop i := by
+  induction h : bs.size - i generalizing i r with
+  | zero =>
+    rw [ByteArray.toList.loop]
+    have hi : ¬ i < bs.size := by omega
+    have hd : bs.data.toList.drop i = [] :=
+      List.drop_eq_nil_of_le (by simp only [Array.length_toList]; exact Nat.le_of_not_lt hi)
+    rw [ite_eq_right hi, hd, List.append_nil]
+  | succ n ih =>
+    rw [ByteArray.toList.loop]
+    have hi : i < bs.size := by omega
+    rw [ite_eq_left hi, ih (i + 1) _ (by omega), List.reverse_cons, List.append_assoc]
+    congr 1
+    have hi' : i < bs.data.toList.length := by simpa using hi
+    rw [List.drop_eq_getElem_cons hi', byteArray_get!_eq, Array.getElem?_eq_getElem hi,
+      Option.getD_some, List.singleton_append]
+    rfl
+
+lemma toL_eq (b : ByteArray) : toL b = b.data.toList := by
+  rw [toL, ByteArray.toList, toList_loop]; simp
+
+lemma length_toL (b : ByteArray) : (toL b).length = b.size := by
+  rw [toL_eq, Array.length_toList]; rfl
+
+lemma toBA_get! (l : Spec.Bytes) (i : ℕ) : (toBA l).get! i = l.getD i 0 := by
+  rw [byteArray_get!_eq]
+  simp only [toBA, List.getElem?_toArray, List.getD_eq_getElem?_getD]
+  rfl
+
+lemma size_toBA (l : Spec.Bytes) : (toBA l).size = l.length := by simp [toBA, ByteArray.size]
+
+/-- The witness bytes are the bytes of its bits (`Prover.bitOf`). -/
+lemma witByte_bitOf (w : ByteArray) (b : ℕ) : Keccak.witByte (Prover.bitOf w) b = w.get! b := by
+  refine Arith.Ratatouille.uint8_ext fun j hj => ?_
+  rw [Arith.Ratatouille.witByte_bit _ _ _ hj, Prover.bitOf,
+    show (8 * b + j) / 8 = b by omega, show (8 * b + j) % 8 = j by omega, u8_bit _ _ hj]
+  rfl
+
+/-- `wSlope` is the bit vector of the witness. -/
+lemma wSlope_eq (p : Params) (w : ByteArray) (hw : w.size = p.witnessBytes) :
+    ZK.wSlope p w = ofBits (Prover.bitOf w) := by
+  funext j
+  simp only [ZK.wSlope, ofBits, bitF]
+  by_cases hj : j < p.witnessBits
+  · simp [hj]
+  · have : Prover.bitOf w j = false := by
+      rw [Prover.bitOf, get!_of_le (by simp only [Params.witnessBits] at hj; omega)]
+      simp
+    simp [hj, this]
+
+lemma getD_app (a b : Spec.Bytes) (i : ℕ) :
+    (a ++ b).getD i 0 = if i < a.length then a.getD i 0 else b.getD (i - a.length) 0 := by
+  split_ifs with h
+  · rw [List.getD_append _ _ _ _ h]
+  · rw [List.getD_append_right _ _ _ _ (by omega)]
+
+lemma getD_replicate_zero (n i : ℕ) : (List.replicate n (0 : UInt8)).getD i 0 = 0 := by
+  rw [List.getD_eq_getElem?_getD, List.getElem?_replicate]
+  split_ifs <;> rfl
+
+lemma fnOf_toBA (l : Spec.Bytes) (i : ℕ) : fnOf (toBA l) i = l.getD i 0 := by
+  rw [fnOf, List.getD_eq_getElem?_getD]
+  split_ifs with h
+  · rw [size_toBA] at h
+    rw [List.getElem?_eq_getElem h, Option.getD_some]
+    show l.toArray[i] = l[i]
+    simp
+  · rw [size_toBA] at h
+    rw [List.getElem?_eq_none (by omega)]
+    rfl
+
+lemma bitOf_toBA (l : Spec.Bytes) (j : ℕ) :
+    Prover.bitOf (toBA l) j = (l.getD (j / 8) 0).toNat.testBit (j % 8) := by
+  rw [Prover.bitOf, u8_bit _ _ (Nat.mod_lt _ (by norm_num)), toBA_get!]
+
+lemma stateBit_testBit (s : Keccak.State) {i : ℕ} (hi : i < 800) :
+    Keccak.stateBit s i = (s[i / 8]'(by omega)).toNat.testBit (i % 8) := by
+  simp only [Keccak.stateBit, show i / 8 < 100 by omega, ↓reduceDIte]
+  rfl
+
+lemma getD_toList (s : Keccak.State) {m : ℕ} (hm : m < 100) : s.toList.getD m 0 = s[m] := by
+  rw [List.getD_eq_getElem _ _ (by simp [hm])]
+  simp
+
+/-- The committed state after round 9 is rounds `5 … 8` of the state after round 5. -/
+lemma stateBit_rounds9 (S : Keccak.State) (i : ℕ) :
+    Keccak.stateBit (Keccak.keccakP800Rounds 0 9 S) i =
+      Keccak.stateBit (Keccak.keccakP800Rounds 5 4 (Keccak.keccakP800Rounds 0 5 S)) i := by
+  have h : Keccak.stateBits (Keccak.keccakP800Rounds 0 9 S) =
+      Keccak.stateBits (Keccak.keccakP800Rounds 5 4 (Keccak.keccakP800Rounds 0 5 S)) := by
+    rw [Keccak.stateBits_keccakP800Rounds, Keccak.stateBits_keccakP800Rounds,
+      Keccak.stateBits_keccakP800Rounds, show (9 : ℕ) = 5 + 4 from rfl, Keccak.rounds_add]
+  by_cases hi : i < 800
+  · have := congrArg (fun v => v[i]) h
+    simpa [Keccak.stateBits] using this
+  · simp [Keccak.stateBit, show ¬ i / 8 < 100 by omega]
+
+lemma publicMap_congr {N M : ℕ} (pk : ℕ → GF256) {σ σ' : ℕ → GF256} (h : ∀ i < N, σ i = σ' i)
+    (k : Fin M) : UOV.publicMap N M pk σ k = UOV.publicMap N M pk σ' k := by
+  unfold UOV.publicMap
+  congr 1
+  refine List.map_congr_left fun m hm => ?_
+  obtain ⟨hij, hj⟩ := UOV.mem_forEachMonomial hm
+  rw [h m.i (by omega), h m.j hj]
 
 /-- The tape of `ρ`, as the spec passes it. -/
 lemma toBA_ofFn (ρ : Coins 16) : toBA (List.ofFn ρ) = ba ρ := by
@@ -111,26 +220,26 @@ theorem anonymity_lean (A : Adversary) (idx : AnchorSet → UOVKey → ℕ) (Hs 
     (hlrI : pI.labelRows = true) (hlrR : pR.labelRows = true)
     (csI : IssueInstance → ByteArray → ByteArray → System GF128)
     (csR : RedeemInstance → ByteArray → ByteArray → System GF128)
-    (hI : ∀ x w, IssueRel x w → ZKHyp T (stI x) (toBA w) (csI x))
-    (hR : ∀ x w, RedeemRel x w → ZKHyp T (stR x) (toBA w) (csR x))
+    (hI : ∀ x w, IssueRelW x w → ZKHyp T (stI x) (toBA w) (csI x))
+    (hR : ∀ x w, RedeemRelW x w → ZKHyp T (stR x) (toBA w) (csR x))
     (hHs : HashesWF Hs) (hbavc : BAVCComplete)
-    (hcrtI : ∀ x w, IssueRel x w → ∀ rho : ByteArray, CrtComplete (Hs.hash .h5) T
+    (hcrtI : ∀ x w, IssueRelW x w → ∀ rho : ByteArray, CrtComplete (Hs.hash .h5) T
       (Prover.voleGen Hs T (stI x).params ((stI x).mu1 Hs)
         ((toBA w).extract 0 (stI x).params.witnessBytes) rho (stI x).binder1))
-    (hcrtR : ∀ x w, RedeemRel x w → ∀ rho : ByteArray, CrtComplete (Hs.hash .h5) T
+    (hcrtR : ∀ x w, RedeemRelW x w → ∀ rho : ByteArray, CrtComplete (Hs.hash .h5) T
       (Prover.voleGen Hs T (stR x).params ((stR x).mu1 Hs)
         ((toBA w).extract 0 (stR x).params.witnessBytes) rho (stR x).binder1))
     {εI εR εhide : ℝ} (hεR : 0 ≤ εR)
-    (htI : ∀ x w, IssueRel x w → TapeHyp Hs T (stI x) (toBA w) εI)
-    (htR : ∀ x w, RedeemRel x w → TapeHyp Hs T (stR x) (toBA w) εR)
+    (htI : ∀ x w, IssueRelW x w → TapeHyp Hs T (stI x) (toBA w) εI)
+    (htR : ∀ x w, RedeemRelW x w → TapeHyp Hs T (stR x) (toBA w) εR)
     (hhide : ∀ b c, hidingAdv A.ci A.cr
       (reduction A idx (leanSim pI) (leanSim pR) b c) ≤ εhide) :
     |pr _ (realGame A idx (leanNIZK Hs T stI) (leanNIZK Hs T stR) false) -
         pr _ (realGame A idx (leanNIZK Hs T stI) (leanNIZK Hs T stR) true)| ≤
       4 * εI + 4 * εR + 2 * εhide :=
   anonymity A idx (leanSim pI) (leanSim pR) (leanNIZK Hs T stI) (leanNIZK Hs T stR) hεR
-    (leanNIZK_zeroKnowledge Hs T stI pI hpI hlrI IssueRel csI hI hHs hbavc hcrtI htI)
-    (leanNIZK_zeroKnowledge Hs T stR pR hpR hlrR RedeemRel csR hR hHs hbavc hcrtR htR) hhide
+    (leanNIZK_zeroKnowledge Hs T stI pI hpI hlrI IssueRelW csI hI hHs hbavc hcrtI htI)
+    (leanNIZK_zeroKnowledge Hs T stR pR hpR hlrR RedeemRelW csR hR hHs hbavc hcrtR htR) hhide
 
 end Moussaka
 
@@ -140,20 +249,20 @@ namespace Ratatouille
 
 open VoleMole.Spec.Ratatouille
 
-variable {SK : Type}
+variable {Z : Sizes} {SK : Type}
 
 /-- **Ratatouille unlinkability with the Lean prover** (Theorem 2): for primitives whose provers
 are the Lean prover on statements `stI`, `stS` with dedicated label rows, followed by fixed
 encodings `φI`, `φS` of its output into the spec's proof types (`hPI`, `hPS`), the worlds differ by
 at most `4εI + 4εS + 2εhide` with `εI`, `εS` the tape hypotheses' errors. -/
-theorem unlinkability_lean (A : Adversary) (P : Prim SK) (Hs : Hashes) (T : CrtTables)
+theorem unlinkability_lean (A : Adversary Z) (P : Prim Z SK) (Hs : Hashes) (T : CrtTables)
     (stI : IssueInstance → Statement) (stS : SpendInstance → Statement) (pI pS : Params)
     (hpI : ∀ x, (stI x).params = pI) (hpS : ∀ x, (stS x).params = pS)
     (hlrI : pI.labelRows = true) (hlrS : pS.labelRows = true)
     (encI : IssueInstance → IssueWitness → ByteArray)
     (encS : SpendInstance → SpendWitness → ByteArray)
-    (φI : Except String ByteArray → Option IssueProof)
-    (φS : Except String ByteArray → Option SpendProof)
+    (φI : Except String ByteArray → Option (IssueProof Z))
+    (φS : Except String ByteArray → Option (SpendProof Z))
     (hPI : ∀ x w (ρ : Coins 16), P.proveIssue x w (vec ρ) =
       φI (Prover.prove Hs T (stI x) (encI x w) (ba ρ)))
     (hPS : ∀ x w (ρ : Coins 16), P.proveSpend x w (vec ρ) =

@@ -23,8 +23,10 @@ is a random-oracle step that stays on paper, as in the note.
 
 ## Assumptions
 
-* Zero knowledge of both proof systems (`Privacy.ZeroKnowledge` for `IssueRel` and `RedeemRel`,
-  with errors `εI`, `εR`), against distinguishers that may know the witness. With the label-row
+* Zero knowledge of both proof systems (`Privacy.ZeroKnowledge` for `IssueRel` and `RedeemRel`
+  on well-formed instances, `IssueRelW`, `RedeemRelW`: the lengths the C++ types fix and an Anchor
+  Set of at most 64 keys; with errors `εI`, `εR`), against distinguishers that may know the
+  witness. With the label-row
   fix this is `lean/docs/zk.md`'s theorem. **On `main` no efficient simulator satisfies it**: a
   distinguisher that knows `r = w[0..16)` computes the label offset and runs the test of
   `lean/docs/zk.md` Prop. 4.1. There the note's joint (PU) hop over the four proofs
@@ -211,9 +213,10 @@ theorem game_hop₁ [Nonempty T₀] [Nonempty TL] [Nonempty TR] (b : Bool) {ε :
   abs_pr_prod_sub_le' _ _ fun y => abs_pr_prod_sub_le _ _ fun x₀ =>
     h (fun o => view A idx b (g₀ x₀) o (gL y.1) (gR y.2))
 
-/-- Issuance outputs whose pending tokens have a 16-byte `r` (so the dummy-or-real tokens of the
-view are well formed). -/
-def WellFormed {T : Type} (g : T → PendingToken × Bytes) : Prop := ∀ x, (g x).1.r.length = rBytes
+/-- Issuance outputs whose pending tokens have a 16-byte `r` and a 24-byte `nf` (so the
+dummy-or-real tokens of the view are well formed). -/
+def WellFormed {T : Type} (g : T → PendingToken × Bytes) : Prop :=
+  ∀ x, (g x).1.r.length = rBytes ∧ (g x).1.nf.length = nfBytes
 
 theorem getD_finalizeIssue (pk : UOVKey) (p : PendingToken) (s : Bytes) (d : Token) :
     (finalizeIssue pk p s).getD d = d ∨ (finalizeIssue pk p s).getD d = ⟨p.nf, p.r, s⟩ := by
@@ -222,25 +225,28 @@ theorem getD_finalizeIssue (pk : UOVKey) (p : PendingToken) (s : Bytes) (d : Tok
   · exact Or.inr rfl
   · exact Or.inl rfl
 
-theorem tokD_wf {i₀ i₁ : PendingToken × Bytes} (h₀ : i₀.1.r.length = rBytes)
-    (h₁ : i₁.1.r.length = rBytes) (c : Bool) :
-    (tokD A i₀ i₁ c).r.length = rBytes ∧ (tokD A i₀ i₁ c).s.length = uovN := by
+theorem tokD_wf {i₀ i₁ : PendingToken × Bytes}
+    (h₀ : i₀.1.r.length = rBytes ∧ i₀.1.nf.length = nfBytes)
+    (h₁ : i₁.1.r.length = rBytes ∧ i₁.1.nf.length = nfBytes) (c : Bool) :
+    (tokD A i₀ i₁ c).r.length = rBytes ∧ (tokD A i₀ i₁ c).s.length = uovN ∧
+      (tokD A i₀ i₁ c).nf.length = nfBytes := by
   rcases getD_finalizeIssue (A.pk c) (bif c then i₁ else i₀).1 (List.ofFn (A.respond i₀.2 i₁.2 c))
     ⟨List.replicate nfBytes 0, List.replicate rBytes 0, List.replicate uovN 0⟩ with h | h <;>
     rw [tokD, tok, h]
-  · exact ⟨List.length_replicate, List.length_replicate⟩
-  · exact ⟨by cases c <;> assumption, List.length_ofFn⟩
+  · exact ⟨List.length_replicate, List.length_replicate, List.length_replicate⟩
+  · exact ⟨by cases c <;> exact (by assumption : _ ∧ _).1, List.length_ofFn,
+      by cases c <;> exact (by assumption : _ ∧ _).2⟩
 
 theorem game_hopL [Nonempty T₀] [Nonempty T₁] [Nonempty TR] (b : Bool) {ε : ℝ}
     {g₀ : T₀ → PendingToken × Bytes} {g₁ : T₁ → PendingToken × Bytes} (h₀ : WellFormed g₀)
     (h₁ : WellFormed g₁) {gL : TL → RedeemPt → Except Error Bytes}
     {gL' : TL' → RedeemPt → Except Error Bytes} (gR : TR → RedeemPt → Except Error Bytes)
     (h : ∀ p : RedeemPt, p.tok.r.length = rBytes → p.tok.s.length = uovN →
-      Close ε (fun t => gL t p) (fun t => gL' t p)) :
+      p.tok.nf.length = nfBytes → Close ε (fun t => gL t p) (fun t => gL' t p)) :
     |pr _ (game A idx b g₀ g₁ gL gR) - pr _ (game A idx b g₀ g₁ gL' gR)| ≤ ε :=
   abs_pr_prod_sub_le _ _ fun x => abs_pr_prod_sub_le' _ _ fun xR =>
     h (pt A idx b (g₀ x.1) (g₁ x.2) false) (tokD_wf A (h₀ _) (h₁ _) _).1
-      (tokD_wf A (h₀ _) (h₁ _) _).2
+      (tokD_wf A (h₀ _) (h₁ _) _).2.1 (tokD_wf A (h₀ _) (h₁ _) _).2.2
       (fun y => post A idx (g₀ x.1) (g₁ x.2) y (gR xR (pt A idx b (g₀ x.1) (g₁ x.2) true)))
 
 theorem game_hopR [Nonempty T₀] [Nonempty T₁] [Nonempty TL] (b : Bool) {ε : ℝ}
@@ -248,29 +254,41 @@ theorem game_hopR [Nonempty T₀] [Nonempty T₁] [Nonempty TL] (b : Bool) {ε :
     (h₁ : WellFormed g₁) (gL : TL → RedeemPt → Except Error Bytes)
     {gR : TR → RedeemPt → Except Error Bytes} {gR' : TR' → RedeemPt → Except Error Bytes}
     (h : ∀ p : RedeemPt, p.tok.r.length = rBytes → p.tok.s.length = uovN →
-      Close ε (fun t => gR t p) (fun t => gR' t p)) :
+      p.tok.nf.length = nfBytes → Close ε (fun t => gR t p) (fun t => gR' t p)) :
     |pr _ (game A idx b g₀ g₁ gL gR) - pr _ (game A idx b g₀ g₁ gL gR')| ≤ ε :=
   abs_pr_prod_sub_le _ _ fun x => abs_pr_prod_sub_le _ _ fun xL =>
     h (pt A idx b (g₀ x.1) (g₁ x.2) true) (tokD_wf A (h₀ _) (h₁ _) _).1
-      (tokD_wf A (h₀ _) (h₁ _) _).2
+      (tokD_wf A (h₀ _) (h₁ _) _).2.1 (tokD_wf A (h₀ _) (h₁ _) _).2.2
       (fun y => post A idx (g₀ x.1) (g₁ x.2) (gL xL (pt A idx b (g₀ x.1) (g₁ x.2) false)) y)
 
 theorem issReal_wf (PI : NIZK IssueInstance) : WellFormed (issReal A PI) := fun x => by
-  simp [issReal, issueRequestOf, rBytes]
+  simp [issReal, issueRequestOf, rBytes, nfBytes]
 
-theorem issSim_wf : WellFormed (issSim A simI) := fun x => by simp [issSim, rBytes]
+theorem issSim_wf : WellFormed (issSim A simI) := fun x => by simp [issSim, rBytes, nfBytes]
+
+/-- The issuance relation on well-formed instances (`ctx_iss` of 16 bytes, as the C++
+`std::array` type has it). -/
+def IssueRelW (x : IssueInstance) (w : Bytes) : Prop := IssueRel x w ∧ x.ctxIss.length = ctxBytes
+
+/-- The redemption relation on well-formed instances: a validated Anchor Set (at most 64 keys),
+`nf` of 24 bytes, contexts of 16. -/
+def RedeemRelW (x : RedeemInstance) (w : Bytes) : Prop :=
+  RedeemRel x w ∧ x.anchors.length ≤ maxAnchors ∧ x.nf.length = nfBytes ∧
+    x.ctxIss.length = ctxBytes ∧ x.ctxRed.length = ctxBytes
 
 /-- **One issuance proof.** A real and a simulated issuance are `εI`-close. -/
 theorem issue_close [Fintype CI] (PI : NIZK IssueInstance) {εI : ℝ}
-    (hI : ZeroKnowledge IssueRel (proveR PI) simI εI) : Close εI (issReal A PI) (issSim A simI) := by
+    (hI : ZeroKnowledge IssueRelW (proveR PI) simI εI) :
+    Close εI (issReal A PI) (issSim A simI) := by
   refine Close.congr (Close.prod_right (X := fun nf y => issReal A PI (nf, y))
     (Y := fun nf y => issSim A simI (nf, y)) fun nf => Close.congr
       (Close.prod_right (X := fun r ρ => issReal A PI (nf, r, ρ))
         (Y := fun r c => issSim A simI (nf, r, c)) fun r => ?_) (fun _ => rfl) (fun _ => rfl))
     (fun _ => rfl) (fun _ => rfl)
-  have hrel : IssueRel ⟨com (List.ofFn nf) A.ci A.cr (List.ofFn r), A.ci⟩
+  have hrel : IssueRelW ⟨com (List.ofFn nf) A.ci A.cr (List.ofFn r), A.ci⟩
       (encodeIssueWitness (List.ofFn nf) A.ci A.cr (List.ofFn r)) :=
-    ⟨_, _, _, by simp [nfBytes], by simp [rBytes], by simp [Adversary.cr, ctxBytes], rfl, rfl⟩
+    ⟨⟨_, _, _, by simp [nfBytes], by simp [rBytes], by simp [Adversary.cr, ctxBytes], rfl, rfl⟩,
+      by simp [Adversary.ci, ctxBytes]⟩
   exact (hI _ _ hrel).map fun π =>
     ((⟨List.ofFn nf, List.ofFn r, A.ci, A.cr, com (List.ofFn nf) A.ci A.cr (List.ofFn r)⟩ :
       PendingToken), com (List.ofFn nf) A.ci A.cr (List.ofFn r) ++ π)
@@ -279,8 +297,8 @@ theorem issue_close [Fintype CI] (PI : NIZK IssueInstance) {εI : ℝ}
 simulated redemption are `εR`-close: if the Client's check fails both refuse alike, otherwise the
 witness satisfies `RedeemRel` and zero knowledge applies. -/
 theorem redeem_close [Fintype CR] [Nonempty CR] (PR : NIZK RedeemInstance) {εR : ℝ} (hε : 0 ≤ εR)
-    (hR : ZeroKnowledge RedeemRel (proveR PR) simR εR) (p : RedeemPt)
-    (hr : p.tok.r.length = rBytes) (hs : p.tok.s.length = uovN) :
+    (hR : ZeroKnowledge RedeemRelW (proveR PR) simR εR) (p : RedeemPt)
+    (hr : p.tok.r.length = rBytes) (hs : p.tok.s.length = uovN) (hn : p.tok.nf.length = nfBytes) :
     Close εR (fun ρ => redReal A PR ρ p) (fun c => redSim A simR c p) := by
   intro D
   unfold redReal redSim redeemRequestOf
@@ -288,9 +306,10 @@ theorem redeem_close [Fintype CR] [Nonempty CR] (PR : NIZK RedeemInstance) {εR 
   | none => exact close_const hε _ D
   | some pk =>
     by_cases he : pk.eval p.tok.s = com p.tok.nf A.ci A.cr p.tok.r
-    · have hrel : RedeemRel ⟨p.anchors.keys, p.tok.nf, A.ci, A.cr, p.cd⟩
+    · have hrel : RedeemRelW ⟨p.anchors.keys, p.tok.nf, A.ci, A.cr, p.cd⟩
           (encodeRedeemWitness p.tok.nf A.ci A.cr p.tok.r p.tok.s p.i) :=
-        ⟨_, _, _, pk, hr, hs, hk, rfl, he⟩
+        ⟨⟨_, _, _, pk, hr, hs, hk, rfl, he⟩, p.anchors.valid.2.1, hn,
+          by simp [Adversary.ci, ctxBytes], by simp [Adversary.cr, ctxBytes]⟩
       simp only [he, ite_true]
       exact (hR _ _ hrel).map (fun π => (Except.ok (p.tok.nf ++ π) : Except Error Bytes)) D
     · simp only [he, ite_false]
@@ -486,13 +505,13 @@ adversary playing all Anchors and the Moderator, with any keys, Anchor Sets and 
 acceptance probabilities in the two worlds differ by at most `4εI + 4εR + 2εhide`. -/
 theorem anonymity [Fintype CI] [Nonempty CI] [Fintype CR] [Nonempty CR] (PI : NIZK IssueInstance)
     (PR : NIZK RedeemInstance) {εI εR εhide : ℝ} (hεR : 0 ≤ εR)
-    (hI : ZeroKnowledge IssueRel (proveR PI) simI εI)
-    (hR : ZeroKnowledge RedeemRel (proveR PR) simR εR)
+    (hI : ZeroKnowledge IssueRelW (proveR PI) simI εI)
+    (hR : ZeroKnowledge RedeemRelW (proveR PR) simR εR)
     (hhide : ∀ b c, hidingAdv A.ci A.cr (reduction A idx simI simR b c) ≤ εhide) :
     |pr _ (realGame A idx PI PR false) - pr _ (realGame A idx PI PR true)| ≤
       4 * εI + 4 * εR + 2 * εhide := by
   have hiss := issue_close A simI PI hI
-  have hred := fun p hr hs => redeem_close A simR PR hεR hR p hr hs
+  have hred := fun p hr hs hn => redeem_close A simR PR hεR hR p hr hs hn
   have hw (b : Bool) : |pr _ (realGame A idx PI PR b) - pr _ (idealGame A idx simI simR b)| ≤
       2 * εI + 2 * εR + εhide := by
     set p0 := pr _ (realGame A idx PI PR b)

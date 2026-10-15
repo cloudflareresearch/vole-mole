@@ -33,9 +33,9 @@ sibling label (`LabelRows.query_hits_sibling_iff_labelRows`), is right with prob
 `2⁻¹²⁸` (`prove_guess_theta`).
 
 Hypotheses (deterministic): the statement's evaluator is a system of degree `≤ d`, `1 ≤ d`, that
-the witness satisfies (`hsat`) for every `chal1` and combination (so not PomFRIT, whose instance
-depends on `chal1`); `N_MASK ≤ 32`; the CRT certificate `maskInvOk T` (proved for `CrtGen.tables`);
-correct interpolation (`InterpOk d`).
+the witness satisfies (`hsat`) for every `chal1` and combination (PomFRIT, whose instance depends
+on `chal1`: `ZK/TwoPhase.lean`); `N_MASK ≤ 32`; the CRT certificate `maskInvOk T` (proved for
+`CrtGen.tables`); correct interpolation (`InterpOk d`, proved in `ZK/Interp.lean`).
 -/
 
 open Finset Polynomial

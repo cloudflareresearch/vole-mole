@@ -32,10 +32,10 @@ against the simulator `Sim.simulate` (`ZK/Sim.lean`):
   `Sim.simulateRO`, accepts the simulated proof whenever its run reaches `chal3`.
 
 Deterministic hypotheses (`ZKHyp`, `BAVCComplete`, `CrtComplete`): the statement's evaluator is a
-system of degree `≤ d` that the witness satisfies for every `chal1` and combination (not PomFRIT,
-whose instance depends on `chal1`: its two-phase zero knowledge `Privacy.PomFRIT.ZeroKnowledge`
-is not covered); `N_MASK ≤ 32`; the CRT certificate (`maskInvOk_tables`); correct
-interpolation (`InterpOk d`); and the two correctness facts the completeness theorem assumes.
+system of degree `≤ d` that the witness satisfies for every `chal1` and combination (PomFRIT,
+whose instance depends on `chal1`, is the two-phase case of `ZK/TwoPhase.lean`); `N_MASK ≤ 32`;
+the CRT certificate (`maskInvOk_tables`); correct interpolation (`InterpOk d`, proved in
+`ZK/Interp.lean`); and the two correctness facts the completeness theorem assumes.
 -/
 
 open Finset
