@@ -20,6 +20,10 @@ namespace VoleMole.ZK.Sim
 
 open VoleMole.Verifier VoleMole.Verifier.Bridge VoleMole.Arith
 
+-- The statements about the BAVC hold for any CTR PRG (`HasPrg`, `Verifier/Prg.lean`).
+variable [HasPrg]
+set_option linter.unusedSectionVars false
+
 /-! ## AES -/
 
 lemma size_id_bind {α : Type} (m : Id α) (f : α → ByteArray) {n : ℕ} (h : ∀ a, (f a).size = n) :
@@ -48,13 +52,13 @@ lemma prg_size (key iv : ByteArray) (t c : UInt32) (n : ℕ) : (AES.prg key iv t
   simp
 
 lemma children_size (iv node : ByteArray) (n : ℕ) : (BAVC.children iv node n).size = 32 := by
-  rw [BAVC.children, prg_size]
+  rw [BAVC.children, HasPrg.prg_size]
 
 lemma block_size (b : ByteArray) (k : ℕ) (h : 16 * k + 16 ≤ b.size) : (BAVC.block b k).size = 16 := by
   rw [BAVC.block, ByteArray.size_extract]; omega
 
 lemma leafCom_size (iv key : ByteArray) (i : ℕ) : (BAVC.leafCom iv key i).size = 32 := by
-  rw [BAVC.leafCom, prg_size]
+  rw [BAVC.leafCom, HasPrg.prg_size]
 
 lemma zeroBlock_size : BAVC.zeroBlock.size = 16 := rfl
 

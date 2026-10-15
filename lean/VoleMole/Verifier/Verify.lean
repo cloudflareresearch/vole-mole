@@ -24,6 +24,9 @@ namespace VoleMole.Verifier
 
 open VoleMole.Arith
 
+-- The CTR PRG (`HasPrg`; AES for the executable code, `Verifier/Prg.lean`).
+variable [HasPrg]
+
 /-- What the verifier needs to know about a relation and its instance. -/
 structure Statement where
   params : Params

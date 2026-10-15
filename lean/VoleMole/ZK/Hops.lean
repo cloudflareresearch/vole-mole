@@ -55,6 +55,10 @@ open Finset
 
 namespace VoleMole.ZK.Sim
 
+-- The statements hold for any CTR PRG (`HasPrg`, `Verifier/Prg.lean`), AES included.
+variable [VoleMole.Verifier.HasPrg]
+set_option linter.unusedSectionVars false
+
 open VoleMole.Verifier VoleMole.Verifier.Bridge VoleMole.Arith VoleMole.ZK VoleMole.Privacy
 
 lemma firstHit_accepts {g : Fin nGrind → Bytes 16} {ctr : ℕ} {d : Bytes 16}
@@ -101,7 +105,7 @@ def hiddenOut (p : Params) (iv delta : ByteArray) (seed : Bytes 16) : Hidden p :
   let us : Array ByteArray := (Array.range BAVC.tau).map fun i =>
     bytesOfWords (Prover.smallVoleUWords p iv i (leafKey tl.2 i))
   (comsOf tl.2.coms delta, seedsOf tl.1 delta, dropSib (padsOfArrays p us
-    (AES.prg (ba seed) iv (((1 : UInt32) <<< 31) - 1) 0 ((8 * p.nMask + 127) / 128)) #[]))
+    (HasPrg.prg (ba seed) iv (((1 : UInt32) <<< 31) - 1) 0 ((8 * p.nMask + 127) / 128)) #[]))
 
 /-- The seed slots past the `openCount Δ` opened seeds, zeroed (as `seedsOf` leaves them). -/
 def zeroTail (delta : ByteArray) (sd : Fin 105 → Bytes 16) : Fin 105 → Bytes 16 :=

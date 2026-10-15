@@ -48,6 +48,10 @@ open Finset
 
 namespace VoleMole.Verifier.Bridge
 
+-- The statements hold for any CTR PRG (`HasPrg`, `Verifier/Prg.lean`), AES included.
+variable [VoleMole.Verifier.HasPrg]
+set_option linter.unusedSectionVars false
+
 open VoleMole.Arith VoleMole.Verifier
 
 noncomputable section

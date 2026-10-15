@@ -66,6 +66,10 @@ simulator's proof uses none.
 
 namespace VoleMole.ZK.Sim
 
+-- The statements hold for any CTR PRG (`HasPrg`, `Verifier/Prg.lean`), AES included.
+variable [VoleMole.Verifier.HasPrg]
+set_option linter.unusedSectionVars false
+
 open VoleMole.Verifier VoleMole.Arith
 
 /-! ## Byte blocks -/
@@ -438,7 +442,7 @@ def realPads (Hs : Hashes) (T : CrtTables) (p : Params) (s : Prover.Pending) (de
   let cols := Prover.senderColumns p s.iv (leafKey s.leaves)
   let uPre : W128 := ⟨wordAt s.u p.labelRowOffset, wordAt s.u (p.labelRowOffset + 64)⟩
   padsOfArrays p (realUs p s)
-    (AES.prg s.seed s.iv (((1 : UInt32) <<< 31) - 1) 0 ((8 * p.nMask + 127) / 128))
+    (HasPrg.prg s.seed s.iv (((1 : UInt32) <<< 31) - 1) 0 ((8 * p.nMask + 127) / 128))
     (sibAnswers Hs (gammaOf T (BAVC.deltaBit delta)) (Prover.gateInputsOff p T s.iv cols W128.zero)
       (Prover.gateInputsOff p T s.iv cols uPre))
 

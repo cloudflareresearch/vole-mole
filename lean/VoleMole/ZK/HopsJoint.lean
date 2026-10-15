@@ -21,9 +21,12 @@ independently and a distinguisher that reads them.
   cipher as a parameter is the proof-only `proveE`: the hidden part of the commitment (the hidden
   leaves' commitments, the opened seeds, all `u^{(i)}` and `u_hi`) is `hiddenOutE E`; the rest of
   the proof is computed from it as by the executable prover (`hyb3`: the ideal-tape prover, which
-  recomputes the public part, the opened subtrees, with AES); the grinding prefix is a parameter
-  `pre`, which may depend on `G5` and `E`. **`proveE_aes`**, **`proveE_recOf_aes`**: at
-  `E = AES` with the executable prefix (`preReal`) it is the executable prover with the record.
+  recomputes the public part, the opened subtrees, with the PRG `HasPrg`); the grinding prefix is
+  a parameter `pre`, which may depend on `G5` and `E`. **`proveE_rows`**: for a PRG that is `E`'s
+  CTR PRG on 16-byte keys (AES with `aesTable`, `proveE_aes`; the ideal-cipher PRG `icPrg E`), at
+  the executable prefix it is the executable prover; **`proveE_recOf_aes`** with the record.
+  `proveP`/`runP`: the run with the commitment's hidden part computed by the executable code
+  (`proveP_prove`, for any PRG).
 
 **`zk_rom_ic`.** For a statement with dedicated label rows and a witness satisfying the
 deterministic hypotheses (`ZKHyp`), parameters with fewer than `2³²` blocks per PRG call
@@ -43,9 +46,9 @@ ideal-tape prover reads neither `H₃` nor `H₂³` (`proveIdeal_agreeOff`, `fil
 **Not covered.** The distinguisher does not read `H₂³`: with `H₂³` access the simulator must
 program `H₂³` at the proof's grinding points (`simulateRO`), and linking those points (computed
 from the output) to the prover's (`pre` of the coins), through the hybrids after H4, is not done
-here; `ZK/HopsH23.lean` (`zk_rom_h23`) does it for the executable prover, with BAVC hiding for AES
-assumed. The public part of the commitment is recomputed with AES, not `E` (a fully
-cipher-parametric prover would add those reads to `q_E`). One proof (no `ε_iv`, `rho`-collision or `ε_prog` terms);
+here; `ZK/HopsH23.lean` (`zk_rom_h23`) does it for any PRG with BAVC hiding assumed, and
+`ZK/HopsIC.lean` (`zk_rom_ic_h23`) with the ideal cipher in the whole prover and verifier, its
+reads by the honest recomputation counted. One proof (no `ε_iv`, `rho`-collision or `ε_prog` terms);
 the rows are functions, not permutations (the PRP/PRF switching term is on paper); SHAKE as a
 random oracle and AES as an ideal cipher are the modelling steps.
 -/
@@ -57,11 +60,16 @@ set_option synthInstance.maxSize 1024
 
 namespace VoleMole.ZK.Sim
 
+set_option linter.unusedSectionVars false
+
 open VoleMole.Verifier VoleMole.Verifier.Bridge VoleMole.Arith VoleMole.ZK VoleMole.Privacy
 
 /-! ## Records that differ in a domain the prover does not read -/
 
 section Congr
+
+-- Any CTR PRG (`HasPrg`, `Verifier/Prg.lean`), AES included.
+variable [HasPrg]
 
 lemma _root_.VoleMole.Verifier.Hashes.AgreeOff.symm {k : Kind} {Hs Hs' : Hashes}
     (h : Hs.AgreeOff k Hs') : Hs'.AgreeOff k Hs := fun k' hk => (h k' hk).symm
@@ -158,6 +166,9 @@ end Congr
 
 section ProveE
 
+-- Any CTR PRG (`HasPrg`, `Verifier/Prg.lean`), AES included.
+variable [HasPrg]
+
 variable (Hs : Hashes) (T : CrtTables) (st : Statement) (w : ByteArray)
 
 /-- `iv = H₄(iv_pre ‖ mu ‖ 4)`. -/
@@ -180,10 +191,40 @@ noncomputable def proveE (E : Cipher) (pre : Bytes 16 × Bytes 16 → ByteArray)
     Except String ByteArray :=
   runE Hs T st w E pre (h3Seed Hs (st.mu1 Hs) (w.extract 0 st.params.witnessBytes) (ba ρ))
 
-/-- **The bridge: `proveE` at AES is the executable prover.** -/
-theorem proveE_aes {cs : ByteArray → ByteArray → System GF128} (h : RunHyp Hs T st w cs)
-    (ρ : Bytes 16) :
-    proveE Hs T st w aesTable (prePrefix Hs T st w) ρ = Prover.prove Hs T st w (ba ρ) := by
+/-- **The real run with the PRG `HasPrg`** (the cipher of the whole commitment, hidden and public
+part): `runE` with the hidden part computed by the executable commitment (`hiddenOut`). With the
+ideal-cipher PRG `icPrg E` it is `runE` with `E` (`runP_ic`). -/
+noncomputable def runP (pre : Bytes 16 × Bytes 16 → ByteArray) (x : Bytes 16 × Bytes 16) :
+    Except String ByteArray :=
+  hyb3 Hs T st w (x.2, realGrind Hs (pre x))
+    (hiddenOut st.params (ivOfPre Hs st x.2) (ba (deltaOf (realGrind Hs (pre x)))) x.1)
+
+/-- `runP` from `rho`. -/
+noncomputable def proveP (pre : Bytes 16 × Bytes 16 → ByteArray) (ρ : Bytes 16) :
+    Except String ByteArray :=
+  runP Hs T st w pre (h3Seed Hs (st.mu1 Hs) (w.extract 0 st.params.witnessBytes) (ba ρ))
+
+/-- **The bridge: `proveP` at the prover's grinding prefix is the executable prover**, for any
+PRG. -/
+theorem proveP_prove {cs : ByteArray → ByteArray → System GF128} (h : RunHyp Hs T st w cs)
+    (ρ : Bytes 16) : proveP Hs T st w (prePrefix Hs T st w) ρ = Prover.prove Hs T st w (ba ρ) := by
+  let wP := w.extract 0 st.params.witnessBytes
+  rw [prove_eq_proveIdeal Hs T st w (ba ρ) cs h.zk.q h.hHs h.hbavc (h.hcrt _) h.hlab,
+    tapeOf_eq_tape1 Hs T st w h.hHs]
+  rw [proveP]
+  generalize h3Seed Hs (st.mu1 Hs) (w.extract 0 st.params.witnessBytes) (ba ρ) = y
+  rw [← real_fillSib Hs T st w h.hHs h.hbavc h.hlab (pendAt Hs T st wP (y.1, y.2)) rfl
+    (size_ba _) (size_ba _), fillSib_tapeAt Hs T st wP y.1 y.2, pendAt_iv]
+  simp only [runP, hyb3, prePrefix, ivOfPre]
+
+/-- **The bridge: `proveE` is the executable prover**, for a PRG that is `prgR` of the table's row
+at every 16-byte key (`hE`: AES with `aesTable`, `proveE_aes`; the ideal-cipher PRG `icPrg E`
+with `E`). -/
+theorem proveE_rows (E : Cipher)
+    (hE : ∀ (k : Blk) (iv : ByteArray) (t c : UInt32) (n : ℕ),
+      HasPrg.prg (ba k) iv t c n = prgR (E k) iv t c n)
+    {cs : ByteArray → ByteArray → System GF128} (h : RunHyp Hs T st w cs) (ρ : Bytes 16) :
+    proveE Hs T st w E (prePrefix Hs T st w) ρ = Prover.prove Hs T st w (ba ρ) := by
   let wP := w.extract 0 st.params.witnessBytes
   rw [prove_eq_proveIdeal Hs T st w (ba ρ) cs h.zk.q h.hHs h.hbavc (h.hcrt _) h.hlab,
     tapeOf_eq_tape1 Hs T st w h.hHs]
@@ -191,13 +232,16 @@ theorem proveE_aes {cs : ByteArray → ByteArray → System GF128} (h : RunHyp H
   generalize h3Seed Hs (st.mu1 Hs) (w.extract 0 st.params.witnessBytes) (ba ρ) = y
   rw [← real_fillSib Hs T st w h.hHs h.hbavc h.hlab (pendAt Hs T st wP (y.1, y.2)) rfl
     (size_ba _) (size_ba _), fillSib_tapeAt Hs T st wP y.1 y.2, pendAt_iv]
-  simp only [runE, hyb3, prePrefix, ivOfPre, hiddenOut_eq]
+  simp only [runE, hyb3, prePrefix, ivOfPre, hiddenOut_rows E hE]
 
 end ProveE
 
 /-! ## The record with the three random-oracle tables -/
 
 section Record
+
+-- Any CTR PRG (`HasPrg`, `Verifier/Prg.lean`), AES included.
+variable [HasPrg]
 
 variable (Hb : Hashes) (T : CrtTables) (st : Statement) (w : ByteArray)
 
@@ -294,6 +338,9 @@ lemma abs_pr_vis_le {M M' V O : Type*} [Fintype M] [Fintype M'] [Fintype V] [Non
 
 section Chain
 
+-- Any CTR PRG (`HasPrg`, `Verifier/Prg.lean`), AES included.
+variable [HasPrg]
+
 variable (Hb : Hashes) (T : CrtTables) (st : Statement) (w : ByteArray)
 
 /-- **The tables the distinguisher reads**: `H₃`, `H₅` and the cipher. -/
@@ -319,6 +366,12 @@ lemma runE_agreeOff_h3 {Hs Hs' : Hashes} (h : Hs.AgreeOff .h3 Hs') :
     runE Hs T st w = runE Hs' T st w := by
   funext E pre x
   simp only [runE, hyb3_agreeOff unread_h3 h, ivOfPre_agreeOff unread_h3 h,
+    realGrind_congr (h .h23 (by decide))]
+
+lemma runP_agreeOff_h3 {Hs Hs' : Hashes} (h : Hs.AgreeOff .h3 Hs') :
+    runP Hs T st w = runP Hs' T st w := by
+  funext pre x
+  simp only [runP, hyb3_agreeOff unread_h3 h, ivOfPre_agreeOff unread_h3 h,
     realGrind_congr (h .h23 (by decide))]
 
 /-- `recP` is the `H₅` table on top of a record (`HopsH6.H5`), for `lab_rom_hyp`. -/
@@ -583,6 +636,12 @@ theorem zk_rom_ic {cs : ByteArray → ByteArray → System GF128} (hlr : st.para
 end Chain
 
 /-! ## The executable prover -/
+
+/-- **The bridge: `proveE` at AES is the executable prover.** -/
+theorem proveE_aes (Hs : Hashes) (T : CrtTables) (st : Statement) (w : ByteArray)
+    {cs : ByteArray → ByteArray → System GF128} (h : RunHyp Hs T st w cs) (ρ : Bytes 16) :
+    proveE Hs T st w aesTable (prePrefix Hs T st w) ρ = Prover.prove Hs T st w (ba ρ) :=
+  proveE_rows Hs T st w aesTable prg_eq_prgR h ρ
 
 section Exec
 

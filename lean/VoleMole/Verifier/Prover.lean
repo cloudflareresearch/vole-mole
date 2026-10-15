@@ -71,6 +71,9 @@ namespace VoleMole.Verifier
 
 open VoleMole.Arith
 
+-- The CTR PRG (`HasPrg`; AES for the executable code, `Verifier/Prg.lean`).
+variable [HasPrg]
+
 namespace BAVC
 
 /-- The seeds an opening at `Δ` reveals (`openNodes`): nodes of the tree `t`. -/
@@ -162,7 +165,7 @@ def gateInputsOff (p : Params) (T : CrtTables) (iv : ByteArray) (cols : Array (A
 def uMaskOf (p : Params) (T : CrtTables) (seed iv : ByteArray) (us : Array (Array UInt64)) :
     Array W128 :=
   let ell := p.correctionRows
-  let hi := AES.prg seed iv (((1 : UInt32) <<< 31) - 1) 0 ((8 * p.nMask + 127) / 128)
+  let hi := HasPrg.prg seed iv (((1 : UInt32) <<< 31) - 1) 0 ((8 * p.nMask + 127) / 128)
   (Array.range p.nMask).map fun m =>
     let low : Nat → Bool := fun c =>
       let i := BAVC.treeOf c

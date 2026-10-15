@@ -28,6 +28,10 @@ prover's off the hidden leaves. The executable walks are folds (`BAVC.markStep`,
 
 namespace VoleMole.Verifier.Bridge
 
+-- The statements hold for any CTR PRG (`HasPrg`, `Verifier/Prg.lean`), AES included.
+variable [VoleMole.Verifier.HasPrg]
+set_option linter.unusedSectionVars false
+
 open VoleMole.Verifier VoleMole.ZK.Sim
 
 /-! ## The tree -/

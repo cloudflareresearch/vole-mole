@@ -36,6 +36,10 @@ namespace VoleMole.Verifier.Bridge
 
 open VoleMole.Arith VoleMole.Verifier
 
+-- The statements hold for any CTR PRG (`HasPrg`, `Verifier/Prg.lean`), AES included.
+variable [HasPrg]
+set_option linter.unusedSectionVars false
+
 /-! ## Bits of blocks and words -/
 
 lemma W128.bit_eq (a : W128) {j : ℕ} (hj : j < 128) :
@@ -879,7 +883,7 @@ theorem crtComplete (Hs : Hashes) (p : Params) (mu1 wPrefix rho binder1 : ByteAr
   rw [hu0] at hcm
   simp only [hp]
   rw [hcm, hvm]
-  set hi := AES.prg s.seed iv (((1 : UInt32) <<< 31) - 1) 0 ((8 * p.nMask + 127) / 128)
+  set hi := HasPrg.prg s.seed iv (((1 : UInt32) <<< 31) - 1) 0 ((8 * p.nMask + 127) / 128)
   have hmask : s.uMask[m]! = (W128.rowMul (fun c => wbit us[BAVC.treeOf c]!
       (p.correctionRows + 8 * m + (c - BAVC.bitOffset (BAVC.treeOf c)))) 120 T.wCrt).xor
       (CrtGen.w128OfNat (CrtGen.pmul (hi.get! m).toNat Prover.mTree)) := by
