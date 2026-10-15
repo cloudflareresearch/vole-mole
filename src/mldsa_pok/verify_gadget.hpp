@@ -148,7 +148,7 @@ using Ctilde = ShakeShape<Kf1600Deg9, MU_BYTES, 32 * K * W1_BITS, 32>; // H(mu |
 using SibPerm = Kf1600Deg9;
 using Sib = SampleInBall<P::TAU, 80, /* COMMIT_EQ */ true>;
 // Counters of degree 8, or 4 (COUNTER_LOG = 2): the latter needs about 1.8 times as many committed
-// bits, so the proof is 1.6 times larger, but proving takes about a third of the time.
+// bits, so the proof is 1.5 times larger, but proving is 2.3 times faster.
 constexpr size_t COUNTER_LOG = 3;
 static_assert(COUNTER_LOG == 2 || COUNTER_LOG == 3);
 using HintCols = Columns<COUNTER_LOG>;
@@ -194,7 +194,7 @@ struct ModQSpec {
     static constexpr size_t DIGIT_EXPS = 96;
     static constexpr size_t COUNTER_LOG = detail::COUNTER_LOG;
     // About the mean + 13 sd (see test_mldsa_pok.cpp).
-    static constexpr size_t CARRY_BUDGET = COUNTER_LOG == 3 ? 328048 : 575408;
+    static constexpr size_t CARRY_BUDGET = COUNTER_LOG == 3 ? 328048 : 600616;
 };
 using MlDsaModQ = ModQ<ModQSpec>;
 using Weights = MlDsaModQ::Weights;
