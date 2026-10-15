@@ -186,7 +186,11 @@ H1 and grinding hold with `ε = 0`, H1 with `≤ q₃·2⁻¹²⁸` against a di
 provably does not read `H₂³`, `ZK/HopsRead.lean`), and H6 costs `≤ (q₅ + 1)·2⁻¹²⁸` against a
 distinguisher reading `H₅` at `q₅` inputs (`lab_rom_hyp`, `ZK/HopsH6.lean`: the prover reads
 `H₅` only at the active labels, and each query is a guess of the label offset `Θ`, which is
-independent of the proof); H4 stays an assumption. PomFRIT's two-phase zero knowledge, with
+independent of the proof). H4 is proved in the ideal-cipher model (`ZK/HopsH4Ideal.lean`: the
+BAVC rebuilt with the cipher a uniform table, equal to the executable one at AES, `hiddenOut_eq`;
+a GGM hybrid over the `≤ 221` hidden-path nodes gives `≤ 221·(4607 + q)·2⁻¹²⁸` against a
+distinguisher reading the table at `q` keys, `hide_rom_query`), with the rows uniform functions
+(the PRP/PRF switching term is on paper). PomFRIT's two-phase zero knowledge, with
 the instance chosen after step 1, is derived the same way (`ZK/TwoPhase.lean`: step 1's fields
 are uniform and independent of the witness, step 2 stays uniform given them for every adaptive
 choice; `twoPhase_close` under the two-phase tape hypothesis `TapeHyp2`; `twoPhase_close_tables`;
@@ -438,9 +442,11 @@ What is **not** established, roughly in order of importance:
    `Privacy/Basic.lean`. With the hashed domain a uniform table the random-oracle ones are proved
    (`ZK/HopsROM.lean`, `ZK/HopsRead.lean`, `ZK/HopsH6.lean`: H1 and grinding exact, H1
    `≤ q₃·2⁻¹²⁸` and H6 `≤ (q₅ + 1)·2⁻¹²⁸` with oracle access; each hop with its own table, their
-   composition for one random record on paper); H4, AES as
-   an ideal cipher/PRP with the GGM and leaf-PRG hybrids, is assumed; and that SHAKE is a random
-   oracle remains the modelling step. Every other side condition is proved (the witness encodings satisfy the
+   composition for one random record on paper); H4 is proved with the cipher a uniform table of
+   uniform-function rows (`ZK/HopsH4Ideal.lean`, `hide_rom_query`: the GGM, leaf-commitment and
+   leaf-PRG hybrids, `≤ 221·(4607 + q)·2⁻¹²⁸`), leaving the PRP/PRF switching of the hidden
+   paths' rows and AES as an ideal cipher; and that SHAKE is a random oracle remains the
+   modelling step. Every other side condition is proved (the witness encodings satisfy the
    systems, interpolation, `N_MASK`, the CRT certificate, BAVC and CRT completeness:
    `Privacy/MoussakaLean.lean`, `Privacy/RatatouilleLean.lean`, `Privacy/PomFRITLean.lean`,
    `Verifier/Bridge/BAVCComplete.lean`, `Verifier/Bridge/CrtComplete.lean`). The seed-XOF hop (the games
