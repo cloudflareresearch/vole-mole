@@ -45,3 +45,9 @@ root = "VoleMole.Verifier.VectorsMain"
 [[lean_exe]]
 name = "prover_vectors"
 root = "VoleMole.Verifier.ProverMain"
+
+# The zero-knowledge simulator and the ideal-tape prover (ZK/Sim.lean) on the KAT runs: run from
+# lean/ as `lake exe zk_sim [TESTS_DIR [main|labelrows]]`.
+[[lean_exe]]
+name = "zk_sim"
+root = "VoleMole.ZK.SimMain"

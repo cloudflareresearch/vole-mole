@@ -705,8 +705,8 @@ really is perfect, and the label offset is handled in H6 at cost `(Q₅ + n_mult
 
 ## 10. What is formalized in Lean
 
-All files are under `lean/VoleMole/ZK/`. There is no `sorry` and no `axiom`. `#print axioms`
-lists only `propext`, `Classical.choice` and `Quot.sound`.
+All files are under `lean/VoleMole/ZK/` (and `Privacy/LeanProver.lean`, §10.1). There is no
+`sorry` and no `axiom`. `#print axioms` lists only `propext`, `Classical.choice` and `Quot.sound`.
 
 | Statement | Lean | Used in |
 |---|---|---|
@@ -745,14 +745,66 @@ Proposition 4.1 (§4). For PomFRIT it fails for every simulator: phase 1 sees no
 simulated proof cannot depend on `r`, while the test for the real `r` accepts every real proof
 (`pomfrit_attack_test`); and the Issuer even learns `r` in the protocol (`pomfrit_issuer_hits`).
 
-**Proved only on paper:**
+**Proved only on paper** (for the executable prover, §10.1 reduces these to the tape hypothesis):
 - the random-oracle and lazy-sampling steps (H1, H2 programming, H6 identical-until-bad, and the
   reduction of adaptive H₅ queries to functions of a Θ-independent view). For the `main` layout,
   the probability bound that follows (union over `q` queries, each a function of the view, aux
   and independent coins) is in Lean (§4.1); for the patched layout, the per-query count is
   (`card_query_hits_sibling_responses`) and the union is on paper;
 - the PRP/GGM hiding (H4/H8, imported from spec Lemma 10.24);
-- the completeness identities (H3);
+- the completeness identities (H3) for the models (for the executable prover: §10.1);
 - the identification of the Lean model with the C++ (§7.1, by inspection);
 - the claim that `rank F ≤ λ < n_mult` makes the attack's test sound on `main`. `n_mult` is
   inferred from the proof sizes, not computed from the generated tables.
+
+### 10.1 The executable prover (`ZK/Sim.lean` … `ZK/Exec.lean`, `Privacy/LeanProver.lean`)
+
+The statements above are about models of the views. For the executable Lean prover
+(`Verifier/Prover.lean`, which reproduces the C++ proofs byte for byte, README §8) the hybrids are
+mechanized down to one probabilistic hypothesis on the prover's tape, with an executable
+simulator:
+
+| Statement | Lean | Hybrids |
+|---|---|---|
+| The simulator: `(ctr, Δ)` as the first accepted `H₂³` answer of its own coins, the opening from sampled commitments and seeds, uniform `c_i`, `c_mult`, `ũ`, `d`, `ã`; `simulateRO` also returns the hash record with `H₂³` programmed at `chal2 ‖ qs_check ‖ ã ‖ c ‖ 11` (`c ≤ ctr`) | `Sim.simulate`, `Sim.simulateRO`, `Sim.program` | §5 |
+| The verifier with the programmed record accepts the simulated proof whenever its run reaches `chal3` (only `H₂³` changes, at points starting with the proof's `chal2`) | `verify_program_accept`, `simulateRO_accept` | §5, H8 |
+| The ideal-tape prover: the prover's code with its random sources (iv, opening, `(ctr, Δ)`, the small VOLEs' `u^{(i)}`, `u_hi`, the `H₅` answers at the sibling labels) read from a tape; its tags are the verifier's `q + Δ·u` | `Sim.proveIdeal`, `Sim.IdealTape` | H1–H4, H6 (as replaced) |
+| **The real prover is the ideal-tape prover at its own run's tape** (no probability) | `prove_eq_proveIdeal`, `Sim.tapeOf` | H3 |
+| **On a uniform tape, the ideal-tape prover's output is distributed exactly as the simulator's**: corrections and `d` (one-time pads), `c_mult` (sibling answers, `N_MASK ≤ 32`), the CRT masks (`u_mask` uniform from uniform pads: a kernel-checked certificate for faest-arch-opt's tables), `ũ`, `ã` (KOS/QuickSilver bijection, coefficients through `ũ` only), grinding (`IsFirstHit` law) | `proveIdeal_close`, `balanced_crtVal_tables`, `maskInvOk_tables`, `upush_cmult`, `upush_resp`, `qsProve_eq` | H2, H5–H7, §7.4 |
+| **Label rows:** with the tape uniform, Θ is uniform and independent of the proof; a guess of Θ from the proof is right with probability exactly `2^{−8·labelBytes}` | `proveIdeal_theta_close`, `prove_guess_theta` | H6 |
+| **Reduction:** every distinguisher's advantage, real vs. simulated proofs, *equals* its advantage, real tape vs. uniform tape, seen through the ideal-tape prover | `zk_reduction` | — |
+| **Zero knowledge** from the tape hypothesis `TapeHyp … ε`: `Close ε (prove … ∘ rho) (simulate p)`; in the form of `Privacy.ZeroKnowledge` for a statement family with dedicated label rows | `prove_close`, `labelRows_zeroKnowledge` | all |
+| The privacy theorems with the Lean prover: Moussaka issuer hiding/unlinkability, Ratatouille unlinkability | `Privacy.Moussaka.anonymity_lean`, `Privacy.Ratatouille.unlinkability_lean` (`Privacy/LeanProver.lean`) | — |
+
+`lake exe zk_sim [TESTS [main\|labelrows [FILTER]]]` runs, on all 18 KAT runs of each layout: the
+equation `prove = proveIdeal ∘ tapeOf` (all pass), the simulator with the programmed oracle
+(accepted; rejected without programming), and the ideal-tape prover on a pseudorandom tape with
+`H₂³` programmed at its grinding points (accepted; not run for PomFRIT, whose instance depends on
+`chal1`). About 15–60 s per run.
+
+**What remains assumed.**
+- **The tape hypothesis** `TapeHyp Hs T st w ε` (`ZK/Exec.lean`): the real run's tape,
+  `tapeOf … rho` for uniform `rho`, is `ε`-close to a uniform ideal tape against distinguishers
+  that see it through the ideal-tape prover (implied by the tape alone being `ε`-close,
+  `tapeHyp_of_close`). This is exactly H1 (seed and `iv_pre` from `H₃`), H4 (the hidden leaves'
+  PRG outputs, the root's `u_hi`, the hidden commitments and the opened seeds: AES as PRP, GGM),
+  H6 (the `H₅` answers at the sibling labels, identical until a query hits one: by
+  `prove_guess_theta`, the per-query probability is `2⁻¹²⁸` with label rows) and the
+  random-oracle answers at the grinding points (H2's freshness of `chal2`). With a fixed hash
+  record this is an idealization (it can hold only against distinguishers that cannot invert AES
+  or find the sibling labels), as every statement against all distinguishers in
+  `Privacy/Basic.lean`; on paper `ε = ε_rho + ε_prog + 2·ε_hide + ε_lab` (§3). On `main` the H6
+  part fails (§4).
+- **Deterministic hypotheses**, per statement and witness (`ZKHyp`, `RunHyp`): the statement's
+  evaluator is a system of degree `≤ d`, `1 ≤ d`, that the witness satisfies for every `chal1` and
+  combination (so not PomFRIT, below); `N_MASK ≤ 32`; `maskInvOk T` (proved for `CrtGen.tables`,
+  `maskInvOk_tables`); correct interpolation `InterpOk d`; `BAVCComplete` and `CrtComplete` (the
+  two assumptions of the completeness theorem, checked by `prover_vectors` on every proof).
+  For the privacy corollaries the statement builders and their `ZKHyp` are parameters; the
+  per-relation instances (`Bridge/Relations.lean` gives `hvals`) are not assembled.
+- `simulateRO_accept` assumes the simulated proof's run reaches `chal3` (checked by `zk_sim`).
+- **PomFRIT** (two-phase, delayed instance `h = hash_to_target(…, chal1, …)`):
+  `Privacy.PomFRIT.ZeroKnowledge` is not derived; the ideal-tape step needs the witness to satisfy
+  the system for every `chal1`, which a delayed instance violates.
+- **Ratatouille:** `Spec.Ratatouille` fixes `main`'s proof sizes, so `unlinkability_lean` takes the
+  encoding of the (256 bytes longer) label-row proofs into the spec's proof type as a parameter.
