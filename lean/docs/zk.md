@@ -710,7 +710,8 @@ really is perfect, and the label offset is handled in H6 at cost `(Q₅ + n_mult
 
 All files are under `lean/VoleMole/ZK/` (and `Privacy/LeanProver.lean`, `Privacy/PomFRITLean.lean`,
 `Privacy/MoussakaLean.lean`, `Privacy/RatatouilleLean.lean`, §10.1; `Privacy/ZeroKnowledgeRO.lean`,
-`Privacy/MoussakaRO.lean`, `Privacy/RatatouilleRO.lean`, §10.2). There is no `sorry` and no `axiom`. `#print axioms` lists
+`Privacy/MoussakaRO.lean`, `Privacy/RatatouilleRO.lean`, `ZK/TwoPhaseRO.lean`, `ZK/TwoPhaseIC.lean`,
+`ZK/TwoPhaseReadsRO.lean`, `Privacy/PomFRITRO.lean`, §10.2). There is no `sorry` and no `axiom`. `#print axioms` lists
 only `propext`, `Classical.choice` and `Quot.sound`.
 
 | Statement | Lean | Used in |
@@ -807,6 +808,9 @@ which the random-oracle ones are proved with the hashed domain a uniform table:
 | **`zk_rom_ic_h23_num` as `ZeroKnowledgeRO`**: the executable prover with the ideal cipher (`realRO`) and the programming simulator (`simulate`, `progRO`) for every statement family with dedicated label rows, against the distinguishers with budgets `(q₃, q₅, q_E)` (`Budget`), error `εRO q₃ q₅ q_E = q₃·2⁻¹²⁸ + 2⁻¹¹⁰ + 221·(4607 + q_E + 4607)·2⁻¹²⁸ + (q₅ + 1)·2⁻¹²⁸` | `zk_ro`, `lean_zeroKnowledgeRO`, `Budget`, `εRO`, `εRO_mono` (`ZK/ReadsRO.lean`); `leanPI_zkRO`, `leanPR_zkRO` (`Privacy/MoussakaRO.lean`), `leanPIR_zkRO`, `leanPSR_zkRO` (`Privacy/RatatouilleRO.lean`) | §10.2 |
 | **Moussaka issuer hiding and unlinkability in the ROM and ideal-cipher model** (four proofs sharing the tables, the adversary's guess sees all tables): `≤ 8·εRO(q₃, q₅ + 1872, q_E + 13821) + 2·δI₁ + Σ_b (δL b + δR b) + 2·εhide` for the Lean prover with SHAKE (generic: the four zero-knowledge errors at the reductions' budgets) | `anonymityRO`, `anonymityRO_lean`, `realGameRO`, `viewRO`, `hop0RO`, `hop1RO`, `hopLRO`, `hopRRO`, `deltaI1`, `deltaL`, `deltaR`, `simGameRO_iff`, `hiding_hopRO`, `idealGameRO_eq` (`Privacy/MoussakaRO.lean`) | §10.2 |
 | **Ratatouille unlinkability in the ROM and ideal-cipher model**: the same structure and bound (`2·δI₁ + Σ_w (δS₁ w + δS₂ w)`); the simulated world is `Ratatouille.view` for the Issuer that also sees the tables programmed as a function of the requests (`Vtab`), so `simGame_iff`, `stage_ideal`, `idealGame_iff` apply verbatim | `unlinkabilityRO`, `unlinkabilityRO_lean`, `realGameR`, `viewR`, `hopI0R`, `hopI1R`, `hopS1R`, `hopS2R`, `deltaI1R`, `deltaS1R`, `deltaS2R`, `Vtab`, `viewR_tab`, `simGameR_iff`, `hiding_hopR`, `idealGameR_eq` (`Privacy/RatatouilleRO.lean`) | §10.2 |
+| **Two-phase zero knowledge in the ROM and ideal-cipher model with `H₂³` visible** (PomFRIT's flow, label rows, faest-arch-opt's tables, `SmallParams`): the record `recH Hb (st1 st) r G3 G2 G5` (`H₃` at step 1's seed inputs `r ‖ μ₁ ‖ ρ ‖ 3`), the cipher a uniform table `E`; the real world is the executable two-phase run `realRun2` (`voleGen`, then `proveCommit` for the instance and suffix the continuation picks from step 1's output) with `icPrg E`; **the continuation `K G5 E` may read `H₅` and the cipher** at `q_k5`, `q_kE` keys (not `H₃`, `H₂³`): in a game it is the rest of the game up to this proof's instance. The simulator outputs `simRun2 Hb` (its coins, and the cipher for the verifier's `chal1`) and programs `H₂³` (`simTab2`) at the grinding points of the prefix it recomputes from its final proof for the instance picked from its step-1 output (`outPre2`; at the empty prefix if the continuation stops). Advantage `≤ q₃·2⁻¹²⁸ + Pr[GrindBad] + 221·(4607 + (q_E + q_kE) + 4607)·2⁻¹²⁸ + ((q₅ + q_k5) + 1)·2⁻¹²⁸`, and with `2⁻¹¹⁰` for `Pr[GrindBad]`: the single-phase bound at the budget plus the continuation's reads. The hybrids of `zk_rom_ic_h23` for `proveIdeal2`: the real run is `hyb2'` at `H₃`'s answer and the table's answers at `preP` (the instance's prefix, or the empty one if the continuation stops: then no grinding answer is read, `hyb2'_none`); H1, programming (exact), and in one hop the programmed points switched to the recomputed ones **and the fallback block to a uniform one** (`≤ Pr[GrindBad]`: outside it an answer is accepted, so the fallback block is unread, and the run is a real two-phase run for a record built for it, `realRun2_recAt2`, on which `vPre` recomputes `pre2`, `hyb2'_vPre`), so the abort term `noHitProb` of `tapeHyp2_of_hops` is inside `Pr[GrindBad]`; H4 jointly over the root seed and `E` (the two-phase view reads `E` at the reconstruction's `≤ 4607` nodes, `hyb3'_ic_congr`, `viewIC2_congr`, plus the continuation's reads); the tape; H6 (`lab2_hyp`, `pr_bad2`: the queries' guesses of `u_pre` are functions of the shared tape and the adaptive fields `fieldsAd`, independent of `Θ`, `upush_fieldsAdθ`; the continuation's `H₅` reads are guesses too); the simulator (`proveIdeal2_close_at`) | `zk2_rom_ic_h23`, `zk2_rom_ic_h23_num`, `zk2_pre_h4`, `zk2_post_h4`, `joint3_h4_2`, `zk2_h1`, `zk2_prog`, `zk2_keys`, `zk2_tape`, `zk2_h6`, `zk2_sim`, `real_form`, `hyb2'_vPre`, `realRun2_recAt2`, `proveIdeal2_h5_congr`, `vIn5_proveIdeal2`, `Hyp2` (`ZK/TwoPhaseRO.lean`, `ZK/TwoPhaseIC.lean`); `proveIdeal2_close_at`, `upush_fieldsAdθ` (`ZK/TwoPhase.lean`) | §10.2 |
+| **The two-phase prover as `ZeroKnowledgeROS`** (zero knowledge with tables whose simulator may read the tables it does not program: here the cipher, for `chal1`, and the continuation's reads): instances `(b, K)` (binder, table-reading continuation, `Hyp2RO`), error `εRO q₃ (q₅ + q_k5) (q_E + q_kE)`; the reads: step 1 reads `H₅` at `624`, the cipher at `4607` keys and not `H₂³`; the real run what step 1 and the continuation read (step 2 neither); the simulated run the cipher at `4607` keys plus the continuation's reads; its programming `H₅` at `312`, the cipher at `2·4607` keys plus the continuation's | `ZeroKnowledgeROS` (`Privacy/ZeroKnowledgeRO.lean`); `zk2_ro`, `lean_zeroKnowledgeROS2`, `realRO2`, `simRO2`, `progRO2`, `Hyp2RO`, `step1_rd5`, `step1_rdE`, `step1_agreeOff_h23`, `realRO2_rd5`, `realRO2_rdE`, `simRO2_rd5`, `simRO2_rdE`, `progRO2_isProg` (`ZK/TwoPhaseReadsRO.lean`) | §10.2 |
+| **PomFRIT blindness in the ROM and ideal-cipher model** (two sessions on the same tables, each with its `H₃` slice; the Issuer's guess sees all tables with a budget, its responses do not read them): the spec's protocol (`realSession`, `Layout.labelRows`) with the Lean prover on the tables (`leanProverRO`); `≤ 4·εRO(q₃, q₅ + 1248, q_E + 18428) + δ(A) + δ(A.swap)` with the collision term `δ` explicit | `blindnessRO`, `blindnessRO'`, `blindnessRO_lean`, `realGameRO`, `realGameRO_iff`, `realGameRO_true`, `AdversaryRO.swap`, `hop0`, `hop1`, `G1_G1'`, `deltaRO`, `G2_swap`, `G2c_swap`, `swapS` (`Privacy/PomFRITRO.lean`) | §10.2 |
 
 `lake exe zk_sim [TESTS [main\|labelrows [FILTER]]]` runs, on all 18 KAT runs of each layout: the
 equation `prove = proveIdeal ∘ tapeOf` (all pass), the simulator with the programmed oracle
@@ -918,10 +922,11 @@ equation `prove = proveIdeal ∘ tapeOf` (all pass), the simulator with the prog
     (§10.2) each hybrid step costs a programming collision term `δ` (an explicit probability of
     the game, bounded on paper in §10.2, not in Lean), and `ε_iv` (two proofs sharing an `H₃`
     slice) is a modelling step of the per-proof slices; (c) the privacy corollaries in the ROM and
-    ideal-cipher model are proved for Moussaka and Ratatouille (§10.2: `anonymityRO_lean`,
-    `unlinkabilityRO_lean`, with the `δ` terms, for adversaries whose interaction does not read the
-    tables); the `*_shake` theorems with the fixed-record `HopHyps` remain, and PomFRIT's
-    two-phase prover is not composed in the ROM (§10.2). The PRP/PRF switching term and the
+    ideal-cipher model are proved for Moussaka, Ratatouille and PomFRIT (§10.2: `anonymityRO_lean`,
+    `unlinkabilityRO_lean`, `blindnessRO_lean`, with the `δ` terms, for adversaries whose
+    interaction does not read the tables; for PomFRIT on the two-phase theorem
+    `zk2_rom_ic_h23_num`, whose continuation may read the tables); the `*_shake` theorems with the
+    fixed-record `HopHyps` remain. The PRP/PRF switching term and the
     modelling steps (SHAKE as a random oracle, AES as an ideal cipher) remain.
 - **Deterministic hypotheses**, per statement and witness (`ZKHyp`, `RunHyp`): the statement's
   evaluator is a system of degree `≤ d`, `1 ≤ d`, that the witness satisfies for every `chal1` and
@@ -944,7 +949,9 @@ equation `prove = proveIdeal ∘ tapeOf` (all pass), the simulator with the prog
   (`lean_zeroKnowledge`) from the two-phase tape hypothesis `TapeHyp2` (`ZK/TwoPhase.lean`: the
   tape of a two-phase run, with step 1's output as a fallback block used only if no grinding
   answer is accepted), itself from the hop hypotheses `HopHyps2` (`ZK/TwoPhaseHops.lean`;
-  `blindness_lean_shake`: `≤ 4(ε_rho + ε_grind + ε_abort + ε_bavc + ε_lab)`). Once picked, the instance `(pk, h)` is fixed, so the witness `r ‖ s`
+  `blindness_lean_shake`: `≤ 4(ε_rho + ε_grind + ε_abort + ε_bavc + ε_lab)`). In the ROM and
+  ideal-cipher model (§10.2, `blindnessRO_lean`) no tape or hop hypothesis is left, only the
+  collision terms `δ`. Once picked, the instance `(pk, h)` is fixed, so the witness `r ‖ s`
   satisfies its system for every `chal1` and combination. `Spec/PomFRITLayout.lean` states the
   protocol on the label-row layout (5579-byte proofs; `hash_to_target` reads `ũ` and `d` at its
   offsets), and `Privacy.PomFRIT.blindness` holds for either layout.
@@ -954,7 +961,7 @@ equation `prove = proveIdeal ∘ tapeOf` (all pass), the simulator with the prog
   `hash_instance`; zero knowledge does not depend on the encoding.
 
 
-### 10.2 Privacy in the random-oracle and ideal-cipher model (`Privacy/ZeroKnowledgeRO.lean`, `ZK/ReadsRO.lean`, `Privacy/MoussakaRO.lean`, `Privacy/RatatouilleRO.lean`)
+### 10.2 Privacy in the random-oracle and ideal-cipher model (`Privacy/ZeroKnowledgeRO.lean`, `ZK/ReadsRO.lean`, `Privacy/MoussakaRO.lean`, `Privacy/RatatouilleRO.lean`, `ZK/TwoPhaseRO.lean`, `ZK/TwoPhaseIC.lean`, `ZK/TwoPhaseReadsRO.lean`, `Privacy/PomFRITRO.lean`)
 
 The `*_shake` privacy theorems go through `Privacy.ZeroKnowledge`, whose distinguishers see the
 proof only, so they take the fixed-record hop hypotheses. Here the privacy adversary sees the
@@ -1035,10 +1042,53 @@ total is about `14·εRO`. These steps (the completeness of the recomputation on
 reconstruction of a simulated opening, the `ã` field's position in `vPre`, the second application
 of zero knowledge) are not mechanized.
 
-**PomFRIT.** Not composed: there is no random-oracle and ideal-cipher theorem for the two-phase
-prover (`ZK/TwoPhaseHops.lean` has only the fixed-record `HopHyps2`). It needs the chain of
-`zk_rom_ic_h23` for `tapeOf2`/`proveIdeal2`, where the simulator programs `H₂³` at the prefix it
-recomputes with the instance the continuation picks after step 1 (`h = hash_to_target(…, chal1, …)`,
-with `chal1` from step 1's output), the fallback block, and the continuation's dependence on the
-tables (the Client's step 2 is adaptive in step 1's output, which the tables determine). The
-generic layer (`ZeroKnowledgeRO`, `hop_ro`, the read algebra) applies once that theorem exists.
+**PomFRIT.** The two-phase prover first needs its own theorem (`ZK/TwoPhaseRO.lean`,
+`ZK/TwoPhaseIC.lean`, `zk2_rom_ic_h23_num`): the chain of `zk_rom_ic_h23` for `proveIdeal2`, the
+simulator programming `H₂³` at the prefix it recomputes for the instance the continuation picks
+from its step-1 output, and the fallback block switched to a uniform one in the hop that switches
+the programmed points (both are needed only outside `GrindBad`), so the error is the single-phase
+one. In a game, the instance of a session is chosen after the Issuer has seen **both** requests,
+and the other session's request depends on the tables (its step 1 reads `H₅` and the cipher; a
+simulated one reads the cipher for `chal1`): the theorem therefore lets the continuation read `H₅`
+and the cipher at a bounded number of keys (not `H₃` of this proof, not `H₂³`), and these reads are
+paid as the distinguisher's in the H4 and H6 hops. As a notion, `ZeroKnowledgeROS` (the simulator
+may read the tables it does not program; `zk2_ro`, `lean_zeroKnowledgeROS2`), with the reads of
+`ZK/TwoPhaseReadsRO.lean`.
+
+*The game* (`Privacy/PomFRITRO.lean`). `realGameRO`: the spec's protocol on `Layout.labelRows`
+(`realSession`, `issueRequestOf`, `finalizeIssue`) with the Lean prover on the shared tables and
+each session's `H₃` slice (`leanProverRO`); `hash_to_target`, `XOF_seed` (the games draw its
+outputs) and the refresher commitment stay SHAKE, and the Issuer's key, messages and responses do
+not read the tables, its guess sees all of them. World `true` is world `false` for the Issuer with
+the sessions' roles exchanged (`A.swap`, `realGameRO_true`). Rewritten (`realGameRO_iff`, no
+probability): a session's step 2 runs only if **both** responses pass the Clients' checks
+(`bothOK`), since only then are the signatures revealed; this makes the simulators' programming
+symmetric in the two sessions. Hybrids of world `false`:
+
+* `G0 → G1` (`hop0`): `zk2_ro` for session `0`; the reduction runs session `1` for real (`624`
+  `H₅`, `4607` cipher keys), and session `0`'s continuation reads session `1`'s step 1 (the same):
+  `εRO(q₃, q₅ + 1248, q_E + 9214)`. No collision term: nothing was programmed before.
+* `G1 → G2` (`hop1`): `zk2_ro` for session `1`; the reduction simulates session `0` and applies
+  its programming, computed from session `1`'s output (`312` `H₅` keys, `3·4607` cipher keys), and
+  session `1`'s continuation reads the simulated session `0`'s `chal1` (`4607` cipher keys):
+  `εRO(q₃, q₅ + 312, q_E + 18428)`; plus the collision term
+  `δ(A) = Pr[session 1, run for real, reads H₂³ differently on the tables session 0 programmed]`
+  (`deltaRO`, `G1_G1'`). Session `0`'s programming depends on session `1`'s request (through
+  `bothOK`), which the reduction reads off session `1`'s output.
+* `G2` for `A` and for `A.swap` are equal (`G2_swap`): the requests `h ⊕ r` are re-parametrized as
+  one-time pads and exchanged between the positions, with the slices (`swapS`, an involution); the
+  simulated sessions, their signatures and their programming depend on the responses only through
+  `bothOK`, which is symmetric (`bothOK_swap`, `simRun2_kcongr`, `progK_kcongr`).
+
+    PomFRIT (blindnessRO_lean):  |Pr[W₀] − Pr[W₁]| ≤ 4·εRO(q₃, q₅ + 1248, q_E + 18428)
+                                   + δ(A) + δ(A.swap)
+
+(`blindnessRO`: the four errors at their own budgets.) `4·εRO(q₃, q₅ + 1248, q_E + 18428)` is about
+`2⁻¹⁰³·⁴` plus `4·(q₃ + q₅ + 221·q_E)·2⁻¹²⁸`. *The collision term, on paper*: session `1`'s real
+run reads `H₂³` only at its grinding points `pre₁ ‖ c ‖ 11`, computed without `H₂³` from its coins,
+its instance and the Issuer's response, which depends on session `0`'s request only (step 1's
+fields and `chal1`), not on session `0`'s simulated `ã₀` (`16` bytes for PomFRIT's `d = 2`), the
+last field of the prefix session `0`'s simulator programs at; so `δ ≤ 2⁻¹²⁸ +
+Pr[session 0's recomputation stops early] ≲ 2⁻¹²⁸ + 2⁻¹¹⁰` (not mechanized). The two sessions'
+`H₃` slices are independent tables when their `r` differ (`2⁻³⁶⁰` otherwise), as in the other two
+games.

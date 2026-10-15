@@ -145,3 +145,7 @@ import VoleMole.Privacy.ZeroKnowledgeRO
 import VoleMole.ZK.ReadsRO
 import VoleMole.Privacy.MoussakaRO
 import VoleMole.Privacy.RatatouilleRO
+import VoleMole.ZK.TwoPhaseRO
+import VoleMole.ZK.TwoPhaseIC
+import VoleMole.ZK.TwoPhaseReadsRO
+import VoleMole.Privacy.PomFRITRO

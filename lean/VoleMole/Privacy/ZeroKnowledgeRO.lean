@@ -20,6 +20,11 @@ simulator *programs* some of them. This file is the abstract layer of that notio
   The simulated proof is a function of the coins only: everything it owes to the tables is in the
   programming.
 
+* **`ZeroKnowledgeROS`**: the same with a simulator that may read the shared tables (those the
+  programming does not change): the two-phase prover's simulator recomputes `chal1` as the
+  verifier does, with the cipher, and its instance's continuation may read the tables
+  (`ZK/TwoPhaseReadsRO.lean`).
+
 * **`hop_ro`**: the hybrid step of a game with several proofs that share the tables. The context
   `γ` (every other part of the game's tape) is fixed; the proofs simulated before have already
   programmed the tables (`L γ`), the real proof of this step reads the programmed tables, and the
@@ -100,6 +105,28 @@ theorem hop_ro {Γ : Type*} [Fintype Γ] [Nonempty Γ] (P : Γ → ρ → G → 
     (pr (Γ × ((C × G) × S)) fun z =>
       F z.1 (Sm z.1 z.2.1.1) z.2.1.2 (L z.1 (prog z.1 z.2.1.1 z.2.2)))
   linarith
+
+/-- **Zero knowledge with random tables, the simulator reading them**: as `ZeroKnowledgeRO`, but
+the simulated output may read the shared tables `s` (those the programming leaves alone: for the
+two-phase prover, the cipher for the verifier's `chal1` and the tables the instance's continuation
+reads). -/
+def ZeroKnowledgeROS (R : I → W → Prop) (prove : I → W → ρ → G → S → O) (sim : I → C → S → O)
+    (prog : I → C → S → S) (Adm : (O → G → S → Prop) → Prop) (ε : ℝ) : Prop :=
+  ∀ x w, R x w → ∀ D, Adm D →
+    |pr ((ρ × G) × S) (fun a => D (prove x w a.1.1 a.1.2 a.2) a.1.2 a.2) -
+      pr ((C × G) × S) (fun a => D (sim x a.1.1 a.2) a.1.2 (prog x a.1.1 a.2))| ≤ ε
+
+/-- A simulator that does not read the tables is one that may. -/
+theorem ZeroKnowledgeRO.toS {R : I → W → Prop} {prove : I → W → ρ → G → S → O} {sim : I → C → O}
+    {prog : I → C → S → S} {Adm : (O → G → S → Prop) → Prop} {ε : ℝ}
+    (h : ZeroKnowledgeRO R prove sim prog Adm ε) :
+    ZeroKnowledgeROS R prove (fun x c _ => sim x c) prog Adm ε := h
+
+theorem ZeroKnowledgeROS.mono {R : I → W → Prop} {prove : I → W → ρ → G → S → O}
+    {sim : I → C → S → O} {prog : I → C → S → S} {Adm Adm' : (O → G → S → Prop) → Prop}
+    {ε ε' : ℝ} (h : ZeroKnowledgeROS R prove sim prog Adm ε) (hA : ∀ D, Adm' D → Adm D)
+    (hε : ε ≤ ε') : ZeroKnowledgeROS R prove sim prog Adm' ε' :=
+  fun x w hxw D hD => le_trans (h x w hxw D (hA D hD)) hε
 
 /-- A step where this proof does not run (its output is not read): the two sides are equal. -/
 theorem hop_ro_unused [Nonempty ρ] [Nonempty C] (F : G → S → Prop) :
