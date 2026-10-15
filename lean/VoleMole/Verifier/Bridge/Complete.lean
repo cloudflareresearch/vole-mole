@@ -23,6 +23,10 @@ faest-arch-opt's tables `CrtGen.tables` and every statement whose label rows are
 
 namespace VoleMole.Verifier.Bridge
 
+-- The statements hold for any CTR PRG (`HasPrg`, `Verifier/Prg.lean`), AES included.
+variable [VoleMole.Verifier.HasPrg]
+set_option linter.unusedSectionVars false
+
 open VoleMole.Arith VoleMole.Verifier
 
 /-- The label rows are corrected rows when the witness has at least 16 bytes (both layouts). -/

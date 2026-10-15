@@ -38,6 +38,10 @@ open Polynomial
 
 namespace VoleMole.Verifier.Bridge
 
+-- The statements hold for any CTR PRG (`HasPrg`, `Verifier/Prg.lean`), AES included.
+variable [VoleMole.Verifier.HasPrg]
+set_option linter.unusedSectionVars false
+
 open VoleMole.Arith VoleMole.Verifier VoleMole.EndToEnd VoleMole.EndToEnd.QSExprMac
 
 lemma byteArray_beq_iff (a b : ByteArray) : (a == b) = true ↔ a = b := by

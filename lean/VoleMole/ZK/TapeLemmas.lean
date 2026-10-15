@@ -16,6 +16,10 @@ For `ZK/TapeOf.lean` (`prove = proveIdeal ∘ tapeOf`):
 
 namespace VoleMole.ZK.Sim
 
+-- The statements hold for any CTR PRG (`HasPrg`, `Verifier/Prg.lean`), AES included.
+variable [VoleMole.Verifier.HasPrg]
+set_option linter.unusedSectionVars false
+
 open VoleMole.Verifier VoleMole.Verifier.Bridge VoleMole.Arith
 
 /-! ## `findFirst` -/

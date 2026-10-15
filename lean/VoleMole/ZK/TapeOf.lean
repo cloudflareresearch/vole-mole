@@ -38,6 +38,10 @@ all KAT runs.
 
 namespace VoleMole.ZK.Sim
 
+-- The statements hold for any CTR PRG (`HasPrg`, `Verifier/Prg.lean`), AES included.
+variable [VoleMole.Verifier.HasPrg]
+set_option linter.unusedSectionVars false
+
 open VoleMole.Verifier VoleMole.Verifier.Bridge VoleMole.Arith VoleMole.EndToEnd
 
 /-- The hypotheses under which `Prover.qsProve` succeeds (part of `ZK/IdealSim.lean`'s `ZKHyp`). -/
@@ -62,7 +66,7 @@ lemma voleGen_more (Hs : Hashes) (T : CrtTables) (p : Params) (mu1 wPrefix rho b
     let cols := Prover.senderColumns p s.iv key
     let uPre : W128 := ⟨wordAt s.u p.labelRowOffset, wordAt s.u (p.labelRowOffset + 64)⟩
     s.seed = (Hs.hash .h3 ((wPrefix ++ mu1 ++ rho).push 3)).extract 0 16 ∧
-    s.uMask = uMaskOfHi p T (AES.prg s.seed s.iv (((1 : UInt32) <<< 31) - 1) 0
+    s.uMask = uMaskOfHi p T (HasPrg.prg s.seed s.iv (((1 : UInt32) <<< 31) - 1) 0
       ((8 * p.nMask + 127) / 128)) us ∧
     s.fields.cmult = Prover.cMultOf p
       (gateWords ((Prover.gateInputsOff p T s.iv cols W128.zero).map (Hs.hash .h5)))
@@ -133,7 +137,7 @@ lemma voleGenAt_spec (Hs : Hashes) (T : CrtTables) (p : Params)
       ((Array.range p.correctionRows).map fun r =>
         if wbit s.u r then (⟨1, 0⟩ : W128) else W128.zero)
       s.uMask 0 (Prover.zeros 64)) ∧
-    s.uMask = uMaskOfHi p T (AES.prg s.seed s.iv (((1 : UInt32) <<< 31) - 1) 0
+    s.uMask = uMaskOfHi p T (HasPrg.prg s.seed s.iv (((1 : UInt32) <<< 31) - 1) 0
       ((8 * p.nMask + 127) / 128)) ((Array.range BAVC.tau).map fun i =>
         Prover.smallVoleUWords p s.iv i (key i)) ∧
     s.fields.cmult = Prover.cMultOf p
@@ -518,7 +522,7 @@ theorem step1_realAt (Hs : Hashes) (T : CrtTables) (st : Statement) (s : Prover.
     unfold tUt
     rw [h1, hur]
   have hhi : t.2.2.2.2.2.1 = blk st.params.nMask
-      (AES.prg s.seed s.iv (((1 : UInt32) <<< 31) - 1) 0 ((8 * st.params.nMask + 127) / 128)) :=
+      (HasPrg.prg s.seed s.iv (((1 : UInt32) <<< 31) - 1) 0 ((8 * st.params.nMask + 127) / 128)) :=
     rfl
   refine ⟨usOf_realPads Hs T s _ _, realUsW_zero s _ hsu, correctionsOf_real s _ hscorr, ?_, hPiv,
     hPop, hqcols, hcmI, h1, h4⟩

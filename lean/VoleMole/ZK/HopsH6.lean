@@ -28,6 +28,10 @@ open Finset
 
 namespace VoleMole.ZK.Sim
 
+-- The statements hold for any CTR PRG (`HasPrg`, `Verifier/Prg.lean`), AES included.
+variable [VoleMole.Verifier.HasPrg]
+set_option linter.unusedSectionVars false
+
 open VoleMole.Verifier VoleMole.Verifier.Bridge VoleMole.Arith VoleMole.ZK VoleMole.Privacy
 
 /-! ## `u_pre` is the label-row pad -/
@@ -424,5 +428,199 @@ theorem lab_rom_hyp (hlr : st.params.labelRows = true) (h : ZKHyp T st w cs)
   exact lab_rom_query Hs T st w cs QD hlr h D hQD hq
 
 end Query
+
+/-! ## H6 for any table layout of `H₅`
+
+The same argument for a table on any key type `K` with inputs `enc`, given the key `sk c e` of
+the sibling input of gate `e` of every tape `c` (`hsk`, and `keyOf enc` fixing it, `hkey`): the
+layout of the sections above (keys a tape and a gate, `sEnc`) and a table on every `37`-byte
+input (`ZK/HopsH23.lean`) are instances. -/
+
+section QueryG
+
+variable (Hs : Hashes) (T : CrtTables) (st : Statement) (w : ByteArray)
+  (cs : ByteArray → ByteArray → System GF128)
+  {K : Type} [Fintype K] [DecidableEq K] (enc : K → ByteArray)
+  (sk : Shared × PadsU st.params → Fin 312 → K)
+
+lemma skG_injective
+    (hsk : ∀ c e, enc (sk c e) = sibInput Hs T st c.1 (withSib c.2 fun _ => fun _ => 0) e)
+    (c : Shared × PadsU st.params) : Function.Injective (sk c) := by
+  intro e e' h
+  have h1 := congrArg enc h
+  rw [hsk, hsk] at h1
+  have h2 := congrArg (fun b => AES.getLE32 b (pubOf Hs st c.1 (deltaOf c.1.2.1)).iv.size) h1
+  simp only [getLE32_sibInput] at h2
+  have h3 := congrArg UInt32.toNat h2
+  rw [toNat_toUInt32 (by have := e.isLt; omega), toNat_toUInt32 (by have := e'.isLt; omega)] at h3
+  exact Fin.ext h3
+
+lemma fillSib_withTableG
+    (hsk : ∀ c e, enc (sk c e) = sibInput Hs T st c.1 (withSib c.2 fun _ => fun _ => 0) e)
+    (hkey : ∀ c e, keyOf enc (sk c e) = sk c e) (G : K → Bytes 4) (c : Shared × PadsU st.params)
+    (z : Sib) :
+    fillSib (Hs.withTable .h5 enc G) T st (c.1, withSib c.2 z) = (c.1, withSib c.2 (G ∘ sk c)) := by
+  have e1 : fillSib (Hs.withTable .h5 enc G) T st (c.1, withSib c.2 z) =
+      (c.1, withSib c.2 (sibOf (Hs.withTable .h5 enc G) T st c.1 (withSib c.2 z))) := rfl
+  rw [e1, sibOf_withSib' _ T st c.1 c.2 z fun _ => fun _ => 0, sibOf_withTable]
+  congr 2
+  funext e
+  have h := Hashes.withTable_enc Hs .h5 enc G (sk c e)
+  rw [← hsk c e, h, hkey]
+  exact blk_ba (n := 4) _
+
+set_option synthInstance.maxSize 1024 in
+/-- `lab_rom` for any layout. -/
+theorem lab_romG
+    (hsk : ∀ c e, enc (sk c e) = sibInput Hs T st c.1 (withSib c.2 fun _ => fun _ => 0) e)
+    (hkey : ∀ c e, keyOf enc (sk c e) = sk c e)
+    (A : IdealTape st.params → (K → Bytes 4) → Prop)
+    (Q : IdealTape st.params → (K → Bytes 4) → Finset K)
+    (hQ : ∀ t G G', (∀ k ∈ Q t G, G k = G' k) → (A t G ↔ A t G')) :
+    |pr ((Shared × PadsU st.params) × (K → Bytes 4)) (fun x =>
+        A (fillSib (Hs.withTable .h5 enc x.2) T st
+          (x.1.1, withSib x.1.2 fun _ => fun _ => 0)) x.2) -
+      pr ((Shared × PadsU st.params) × ((K → Bytes 4) × Sib))
+        (fun x => A (x.1.1, withSib x.1.2 x.2.2) x.2.1)| ≤
+      pr ((Shared × PadsU st.params) × ((K → Bytes 4) × Sib))
+        (fun x => ∃ e, sk x.1 e ∈ Q (x.1.1, withSib x.1.2 x.2.2) x.2.1) := by
+  simp only [fillSib_withTableG Hs T st enc sk hsk hkey]
+  exact abs_pr_hidden_le (skG_injective Hs T st enc sk hsk) (fun c u G => A (c.1, withSib c.2 u) G)
+    (fun c u G => Q (c.1, withSib c.2 u) G) fun c u G G' h => hQ _ G G' h
+
+/-- **The prover's `H₅` reads, as table keys** (any layout). -/
+@[irreducible] noncomputable def proverKeysG (x : IdealTape st.params) : Finset K :=
+  haveI := Classical.decPred fun k : K => enc k ∈ actInputs Hs T st x.1 x.2
+  univ.filter fun k => enc k ∈ actInputs Hs T st x.1 x.2
+
+lemma mem_proverKeysG {x : IdealTape st.params} {k : K} :
+    k ∈ proverKeysG Hs T st enc x ↔ enc k ∈ actInputs Hs T st x.1 x.2 := by
+  unfold proverKeysG; simp
+
+lemma actInputs_withTable_h5G (G : K → Bytes 4) (s : Shared) (t : Pads st.params) :
+    actInputs (Hs.withTable .h5 enc G) T st s t = actInputs Hs T st s t := by
+  simp only [actInputs, qcolsTape, pubOf_withTable_h5]
+
+/-- With `H₅` a table, the ideal-tape prover reads the table only at `proverKeysG`. -/
+lemma proveIdeal_table_congrG (hlab : st.params.labelRowOffset + 128 ≤ st.params.correctionRows)
+    (x : IdealTape st.params) (G G' : K → Bytes 4)
+    (h : ∀ k ∈ proverKeysG Hs T st enc x, G k = G' k) :
+    proveIdeal (Hs.withTable .h5 enc G) T st w x = proveIdeal (Hs.withTable .h5 enc G') T st w x := by
+  refine proveIdeal_h5_congr T st w hlab (fun k hk =>
+    ((Hs.agreeOff_withTable .h5 _ G k hk).symm.trans (Hs.agreeOff_withTable .h5 _ G' k hk))) x
+    fun y hy => ?_
+  rw [actInputs_withTable_h5G] at hy
+  simp only [Hashes.withTable, ↓reduceIte]
+  split
+  · rename_i hy'
+    have hk : hy'.choose ∈ proverKeysG Hs T st enc x := by
+      rw [mem_proverKeysG, hy'.choose_spec]; exact hy
+    exact congrArg ba (h _ hk)
+  · rfl
+
+/-- The guess of a query (any layout). -/
+noncomputable def guessOfG (s : Shared) (f : SimFields st.params) (k : K) : Finset W128 :=
+  haveI := Classical.propDecidable
+  if h : ∃ v : W128, ∃ e : Fin 312, enc k = (Prover.gateInputsOff st.params T
+      (pubOf Hs st s (deltaOf s.2.1)).iv (qcolsF Hs st s f) v).getD e .empty then {h.choose}
+  else ∅
+
+lemma card_guessOfG_le (s : Shared) (f : SimFields st.params) (k : K) :
+    (guessOfG Hs T st enc s f k).card ≤ 1 := by
+  unfold guessOfG; split <;> simp
+
+lemma mem_guessOfG {s : Shared} {f : SimFields st.params} {k : K} {v : W128}
+    {e : Fin 312} (h : enc k = (Prover.gateInputsOff st.params T
+      (pubOf Hs st s (deltaOf s.2.1)).iv (qcolsF Hs st s f) v).getD e .empty) :
+    v ∈ guessOfG Hs T st enc s f k := by
+  have hex : ∃ v : W128, ∃ e : Fin 312, enc k = (Prover.gateInputsOff st.params T
+      (pubOf Hs st s (deltaOf s.2.1)).iv (qcolsF Hs st s f) v).getD e .empty := ⟨v, e, h⟩
+  unfold guessOfG
+  rw [dite_eq_left_of_eq_true (eq_true hex), Finset.mem_singleton]
+  obtain ⟨e', he'⟩ := hex.choose_spec
+  exact (gateInputsOff_getD_inj st.params T _ _ (h.symm.trans he')).2
+
+variable (QD : Except String ByteArray → (K → Bytes 4) → Finset K)
+
+/-- The candidates for `u_pre` (any layout). -/
+noncomputable def guessesG (G : K → Bytes 4) (s : Shared) (f : SimFields st.params) :
+    Finset W128 :=
+  insert W128.zero ((QD (outOf st s f) G).biUnion (guessOfG Hs T st enc s f))
+
+lemma card_guessesG_le {q : ℕ} (hq : ∀ o G, (QD o G).card ≤ q) (G : K → Bytes 4)
+    (s : Shared) (f : SimFields st.params) : (guessesG Hs T st enc QD G s f).card ≤ q + 1 := by
+  unfold guessesG
+  refine (Finset.card_insert_le _ _).trans (Nat.succ_le_succ ?_)
+  refine Finset.card_biUnion_le.trans ?_
+  calc ∑ k ∈ QD (outOf st s f) G, (guessOfG Hs T st enc s f k).card
+      ≤ ∑ _k ∈ QD (outOf st s f) G, 1 :=
+        Finset.sum_le_sum fun k _ => card_guessOfG_le Hs T st enc s f k
+    _ ≤ q := by rw [Finset.sum_const, smul_eq_mul, mul_one]; exact hq _ _
+
+lemma bad_mem_guessesG
+    (hsk : ∀ c e, enc (sk c e) = sibInput Hs T st c.1 (withSib c.2 fun _ => fun _ => 0) e)
+    (hlab : st.params.labelRowOffset + 128 ≤ st.params.correctionRows)
+    (h : ZKHyp T st w cs) (G : K → Bytes 4) (s : Shared) (t : Pads st.params)
+    (hbad : ∃ e, sk (s, dropSib t) e ∈ proverKeysG Hs T st enc (s, t) ∪
+      QD (proveIdeal (Hs.withTable .h5 enc G) T st w (s, t)) G) :
+    uPreOf st.params (usOf st.params t)[0]! ∈ guessesG Hs T st enc QD G s
+      (fieldsOf (Hs.withTable .h5 enc G) T st w cs s (hitOf s).1 (hitOf s).2 t).1 := by
+  obtain ⟨e, he⟩ := hbad
+  have hsib : enc (sk (s, dropSib t) e) = sibInput Hs T st s t e := by
+    rw [hsk]; rfl
+  rw [Finset.mem_union] at he
+  unfold guessesG
+  rw [Finset.mem_insert]
+  rcases he with he | he
+  · left
+    rw [mem_proverKeysG, hsib] at he
+    exact uPre_zero_of_sib_mem Hs T st hlab s t e he
+  · right
+    rw [Finset.mem_biUnion]
+    refine ⟨_, by rw [← proveIdeal_eq_outOf T st w cs _ h]; exact he,
+      mem_guessOfG Hs T st enc (e := e) ?_⟩
+    rw [hsib, sibInput_eq Hs T st hlab, qcolsTape_eq_qcolsF]
+
+set_option synthInstance.maxSize 1024 in
+/-- `pr_bad_le` for any layout. -/
+theorem pr_bad_leG
+    (hsk : ∀ c e, enc (sk c e) = sibInput Hs T st c.1 (withSib c.2 fun _ => fun _ => 0) e)
+    (hlr : st.params.labelRows = true) (h : ZKHyp T st w cs) {q : ℕ}
+    (hq : ∀ o G, (QD o G).card ≤ q) (G : K → Bytes 4) (s : Shared) :
+    pr (Pads st.params) (fun t => ∃ e, sk (s, dropSib t) e ∈
+      proverKeysG Hs T st enc (s, t) ∪ QD (proveIdeal (Hs.withTable .h5 enc G) T st w (s, t)) G) ≤
+      (q + 1) / 2 ^ 128 := by
+  obtain ⟨h1, -, hlb, h2⟩ := labelRows_sizes hlr
+  have hlab : st.params.labelRowOffset + 128 ≤ st.params.correctionRows := by omega
+  let F := fieldsOf (Hs.withTable .h5 enc G) T st w cs s (hitOf s).1 (hitOf s).2
+  let S := guessesG Hs T st enc QD G s
+  have e1 : pr (Pads st.params) (fun t => ∃ e, sk (s, dropSib t) e ∈
+      proverKeysG Hs T st enc (s, t) ∪ QD (proveIdeal (Hs.withTable .h5 enc G) T st w (s, t)) G) ≤
+      pr (Pads st.params) (fun t => thetaW st.params (F t).2 ∈ S (F t).1) :=
+    pr_mono fun t ht => by
+      have hm := bad_mem_guessesG Hs T st w cs enc sk QD hsk hlab h G s t ht
+      rw [uPre_eq_thetaW hlr] at hm
+      rw [fieldsOf_theta]
+      exact hm
+  have e2 : pr (Pads st.params) (fun t => thetaW st.params (F t).2 ∈ S (F t).1) =
+      pr (SimFields st.params × Bytes (labelBytes st.params))
+        (fun y => thetaW st.params y.2 ∈ S y.1) := by
+    have := (upush_fieldsOf (Hs.withTable .h5 enc G) T st w cs s (hitOf s).1 (hitOf s).2 h.hT
+      h.hnm) (fun y => thetaW st.params y.2 ∈ S y.1)
+    rw [abs_nonpos_iff, sub_eq_zero] at this
+    exact this
+  have e3 : pr (SimFields st.params × Bytes (labelBytes st.params))
+      (fun y => thetaW st.params y.2 ∈ S y.1) ≤
+      ((q + 1 : ℕ) : ℝ) / Fintype.card (Bytes (labelBytes st.params)) := by
+    rw [← pr_equiv (Equiv.prodComm (Bytes (labelBytes st.params)) (SimFields st.params))]
+    exact pr_mem_indep_le (thetaW st.params) (thetaW_injective hlr) S
+      (card_guessesG_le Hs T st enc QD hq G s)
+  have hc : ((2 ^ (8 * labelBytes st.params) : ℕ) : ℝ) = 2 ^ 128 := by rw [hlb]; norm_num
+  rw [Prob.card_bytes, hc] at e3
+  refine (e1.trans (e2.le.trans e3)).trans (le_of_eq ?_)
+  push_cast
+  norm_num
+
+end QueryG
 
 end VoleMole.ZK.Sim

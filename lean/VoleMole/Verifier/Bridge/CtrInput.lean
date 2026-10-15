@@ -24,6 +24,10 @@ Nothing is assumed here: these are statements about the executable definitions.
 
 namespace VoleMole.Verifier.Bridge
 
+-- The statements hold for any CTR PRG (`HasPrg`, `Verifier/Prg.lean`), AES included.
+variable [VoleMole.Verifier.HasPrg]
+set_option linter.unusedSectionVars false
+
 open VoleMole.Verifier VoleMole.Verifier.AES VoleMole.Seed.Commitments
 
 /-- A 16-byte block as four little-endian 32-bit lanes. -/
@@ -147,7 +151,7 @@ lemma numLeaves_eq : BAVC.numLeaves = L := by decide
 
 /-- GGM node `n` (`BAVC.children`, `n < L − 1`) uses tweak `n`, in the GGM range. -/
 theorem children_tweak (iv node : ByteArray) {n : ℕ} (hn : n < BAVC.numLeaves - 1) :
-    BAVC.children iv node n = prg node iv n.toUInt32 0 2 ∧
+    BAVC.children iv node n = HasPrg.prg node iv n.toUInt32 0 2 ∧
       n.toUInt32.toNat ∈ tweaks .ggm := by
   refine ⟨rfl, ?_⟩
   rw [numLeaves_eq] at hn
@@ -157,7 +161,7 @@ theorem children_tweak (iv node : ByteArray) {n : ℕ} (hn : n < BAVC.numLeaves 
 /-- The leaf commitments of vector `i < τ` (`BAVC.leafCom`) use tweak `i + L − 1`, in the leaf
 range. -/
 theorem leafCom_tweak (iv key : ByteArray) {i : ℕ} (hi : i < BAVC.tau) :
-    BAVC.leafCom iv key i = prg key iv (i + BAVC.numLeaves - 1).toUInt32 0 2 ∧
+    BAVC.leafCom iv key i = HasPrg.prg key iv (i + BAVC.numLeaves - 1).toUInt32 0 2 ∧
       (i + BAVC.numLeaves - 1).toUInt32.toNat ∈ tweaks .leaf := by
   refine ⟨rfl, ?_⟩
   simp only [BAVC.tau] at hi

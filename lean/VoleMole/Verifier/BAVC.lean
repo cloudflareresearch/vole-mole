@@ -1,4 +1,4 @@
-import VoleMole.Verifier.AES
+import VoleMole.Verifier.Prg
 
 /-!
 # The one-tree BAVC of FAEST-EM-128f (executable): commit and verifier-side reconstruction
@@ -42,6 +42,9 @@ namespace VoleMole.Verifier.BAVC
 
 open VoleMole.Verifier.AES
 
+-- The CTR PRG (`HasPrg`; AES for the executable code, `Verifier/Prg.lean`).
+variable [HasPrg]
+
 def tau : Nat := 17
 def numLeaves : Nat := 2304
 def numNodes : Nat := 2 * numLeaves - 1
@@ -69,11 +72,11 @@ def treePos (i j : Nat) : Nat :=
 def zeroBlock : ByteArray := ⟨Array.replicate 16 0⟩
 
 /-- The two children of a node with index `n`: `PRG(node, iv, n)`, 2 blocks. -/
-def children (iv node : ByteArray) (n : Nat) : ByteArray := prg node iv n.toUInt32 0 2
+def children (iv node : ByteArray) (n : Nat) : ByteArray := HasPrg.prg node iv n.toUInt32 0 2
 
 /-- The commitment of leaf key `key` of vector `i`. -/
 def leafCom (iv key : ByteArray) (i : Nat) : ByteArray :=
-  prg key iv (i + numLeaves - 1).toUInt32 0 2
+  HasPrg.prg key iv (i + numLeaves - 1).toUInt32 0 2
 
 /-- The prover's tree (all `numNodes` nodes). -/
 def expandTree (seed iv : ByteArray) : Array ByteArray := Id.run do

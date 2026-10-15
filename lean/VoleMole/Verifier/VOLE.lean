@@ -93,6 +93,9 @@ def rowMul (x : Nat → Bool) (n : Nat) (M : Array W128) : W128 := Id.run do
 
 end W128
 
+-- The CTR PRG (`HasPrg`; AES for the executable code, `Verifier/Prg.lean`).
+variable [HasPrg]
+
 /-- The generated CRT tables. -/
 structure CrtTables where
   /-- `M_i`, `i < 17` (bit `j` = coefficient of `X^j`). -/
@@ -133,7 +136,7 @@ def corrWords (p : Params) (i : Nat) (corr : ByteArray) : Array UInt64 :=
 
 /-- `R = PRG(key, iv, 2³¹ + i)`, `VOLE_COL_BLOCKS` blocks, as a column. -/
 def prgWords (p : Params) (iv : ByteArray) (i : Nat) (key : ByteArray) : Array UInt64 :=
-  wordsOf (AES.prg key iv (((1 : UInt32) <<< 31) + i.toUInt32) 0 p.voleColBlocks)
+  wordsOf (HasPrg.prg key iv (((1 : UInt32) <<< 31) + i.toUInt32) 0 p.voleColBlocks)
 
 /-- `R_j` for the leaves `j < 2^{k_i}` of small VOLE `i`, except the hidden one `dI` (zero). -/
 def prgOuts (p : Params) (iv : ByteArray) (i dI : Nat) (key : Nat → ByteArray) :

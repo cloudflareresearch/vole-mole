@@ -31,6 +31,10 @@ set_option synthInstance.maxSize 1024
 
 namespace VoleMole.ZK.Sim
 
+-- The statements hold for any CTR PRG (`HasPrg`, `Verifier/Prg.lean`), AES included.
+variable [VoleMole.Verifier.HasPrg]
+set_option linter.unusedSectionVars false
+
 open VoleMole.Verifier VoleMole.Verifier.Bridge VoleMole.ZK VoleMole.Privacy VoleMole.ZK.IC
 
 /-! ## Bytes of the PRG and of XOR folds -/

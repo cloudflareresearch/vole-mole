@@ -4,20 +4,26 @@ import VoleMole.ZK.IdealCipher
 /-!
 # The BAVC commitment with the cipher as a parameter (hop H4, ideal-cipher model)
 
-The executable BAVC (`Verifier/BAVC.lean`) calls AES-128 (`AES.prg`) directly. For the
-ideal-cipher version of `HideHyp` the hidden part of a commitment (`Sim.hiddenOut`) is rebuilt
-here, proof-only, from a cipher table `E : Bytes 16 → Bytes 16 → Bytes 16` (key ↦ row):
+The executable BAVC (`Verifier/BAVC.lean`) calls its CTR PRG through `HasPrg` (`Verifier/Prg.lean`;
+AES-128, `AES.prg`, for the executable code). For the ideal-cipher version of `HideHyp` the hidden
+part of a commitment (`Sim.hiddenOut`) is rebuilt here, proof-only, from a cipher table
+`E : Bytes 16 → Bytes 16 → Bytes 16` (key ↦ row):
 
 * `prgR r iv t c n`: the CTR PRG with the row `r` (block `j` is `r` at `ctrBlock iv (c + j) t`);
   `prg_eq_prgR`: `AES.prg` is `prgR` with the row of `aesTable` (AES-128 as a table);
+* **`icPrg E`**: the `HasPrg` instance of the table `E` (`prgR` of `E`'s row at a 16-byte key,
+  `icPrg_prg`); with it the whole executable prover and verifier run with the ideal cipher, and
+  `icPrg aesTable` is the executable instance (`icPrg_aes`);
 * `xIn iv`: the input of GGM node `c ≥ 1` under its parent's key (`ctrBlock iv (c − 1) % 2`, tweak
   the parent's index), the inputs of `IC.rowAt`; the tree's node values are `IC.keyAt`
-  (`keyAt_aes`: for `aesTable`, the executable tree `Bridge.treeNode`);
+  (`keyAt_rows`: for a PRG that is `prgR` of the table's rows, the executable tree
+  `Bridge.treeNode`; `keyAt_aes`, `keyAt_ic`);
 * `hidOfRows`: the hidden part as a function of the nodes' rows (the hidden leaves' commitments,
   the opened seeds, all small VOLEs' inputs `u^{(i)}`, the root's `u_hi`), and
   `hiddenOutE E = hidOfRows ∘ IC.rowAt ∅ E` the cipher-parametric hidden part;
-* **`hiddenOut_eq`**: `Sim.hiddenOut p iv Δ seed = hiddenOutE aesTable p iv Δ seed` (by unfolding
-  the executable folds: `Bridge.expandTree_get`, `Bridge.leavesOf_eq`, `BavcLemmas.openSeeds_eq`).
+* **`hiddenOut_rows`**: `Sim.hiddenOut p iv Δ seed = hiddenOutE E p iv Δ seed` for such a PRG (by
+  unfolding the executable folds: `Bridge.expandTree_get`, `Bridge.leavesOf_eq`,
+  `BavcLemmas.openSeeds_eq`): `hiddenOut_eq` (AES), `hiddenOut_ic` (`icPrg E`).
 
 The side conditions of the GGM hybrid `IC.puncture` for the hidden paths `Bridge.hid Δ`:
 `xIn_sib` (siblings have different inputs: `Bridge.ctrBlock_inj`), `hidOfRows_point` (the hidden
@@ -134,22 +140,65 @@ lemma xIn_succ (iv : ByteArray) (m : ℕ) :
     xIn iv (m + 1) = blk 16 (AES.ctrBlock iv (0 + (m % 2).toUInt32) (m / 2).toUInt32) := by
   simp only [xIn, Nat.add_sub_cancel]
 
-/-- **With AES, the nodes are the executable tree's.** -/
-theorem keyAt_aes (iv : ByteArray) (R : Fin nN → Blk → Blk) (seed : Blk) :
-    ∀ n, ba (keyAt (xIn iv) nN ∅ aesTable R seed n) = treeNode (ba seed) iv n := by
+/-! ## The CTR PRG of a cipher table -/
+
+/-- **The CTR PRG of the cipher table `E`**: on a 16-byte key `k`, `prgR` with `E`'s row at `k`
+(block `j` is `E_k(ctrBlock iv (c + j) t)`). The protocol only uses 16-byte keys; a key of any
+other length is answered by AES, so that the PRG of `aesTable` is `AES.prg` itself (`icPrg_aes`). -/
+def icPrgF (E : Cipher) (key iv : ByteArray) (t c : UInt32) (n : ℕ) : ByteArray :=
+  if key.size = 16 then prgR (E (blk 16 key)) iv t c n else AES.prg key iv t c n
+
+/-- **The ideal-cipher PRG**: the `HasPrg` instance of the cipher table `E`. With it, the
+executable BAVC, VOLE expansion, prover and verifier (all written against `HasPrg`) run with the
+cipher `E` in place of AES. -/
+@[reducible] def icPrg (E : Cipher) : HasPrg where
+  prg := icPrgF E
+  prg_size key iv t c n := by
+    unfold icPrgF
+    split_ifs
+    · exact prgR_size _ _ _ _ _
+    · exact AES.prg_size_aes _ _ _ _ _
+
+/-- On a 16-byte key, the ideal-cipher PRG reads the table at that key only. -/
+lemma icPrg_prg (E : Cipher) (k : Blk) (iv : ByteArray) (t c : UInt32) (n : ℕ) :
+    @HasPrg.prg (icPrg E) (ba k) iv t c n = prgR (E k) iv t c n := by
+  show icPrgF E (ba k) iv t c n = _
+  simp only [icPrgF, size_ba, ↓reduceIte, blk_ba]
+
+/-- **The ideal-cipher PRG of AES is the executable PRG**: `icPrg aesTable` is the instance
+`aesPrg` of the executable code. -/
+theorem icPrg_aes : icPrg aesTable = aesPrg := by
+  have h : icPrgF aesTable = AES.prg := by
+    funext key iv t c n
+    unfold icPrgF
+    split_ifs with hk
+    · rw [← prg_eq_prgR, ba_blk_of_size hk]
+    · rfl
+  show HasPrg.mk (icPrgF aesTable) _ = HasPrg.mk AES.prg _
+  congr
+
+/-! ## The bridge to the executable commitment, for any PRG -/
+
+section Generic
+
+variable [HasPrg]
+
+/-- **The nodes of `IC.keyAt` are the executable tree's**, for a PRG that is `prgR` of the table's
+row at every 16-byte key (`hE`: AES with `aesTable`, `icPrg E` with `E`). -/
+theorem keyAt_rows (E : Cipher)
+    (hE : ∀ (k : Blk) (iv : ByteArray) (t c : UInt32) (n : ℕ),
+      HasPrg.prg (ba k) iv t c n = prgR (E k) iv t c n)
+    (iv : ByteArray) (R : Fin nN → Blk → Blk) (seed : Blk) :
+    ∀ n, ba (keyAt (xIn iv) nN ∅ E R seed n) = treeNode (ba seed) iv n := by
   intro n
   induction n using Nat.strong_induction_on with
   | _ n ih =>
     rcases n with _ | m
     · rw [keyAt_zero, treeNode]
     · have h := ih (m / 2) (by omega)
-      show ba (rowAt (xIn iv) nN ∅ aesTable R seed (m / 2) (xIn iv (m + 1))) = _
+      show ba (rowAt (xIn iv) nN ∅ E R seed (m / 2) (xIn iv (m + 1))) = _
       rw [rowAt_of_not_mem (Finset.notMem_empty _), treeNode, BAVC.block, BAVC.children, ← h,
-        prg_eq_prgR, prgR_block _ _ _ _ (Nat.mod_lt _ (by norm_num)), xIn_succ]
-
-lemma rowAt_aes (iv : ByteArray) (R : Fin nN → Blk → Blk) (seed : Blk) (n : ℕ) :
-    rowAt (xIn iv) nN ∅ aesTable R seed n = aesTable (keyAt (xIn iv) nN ∅ aesTable R seed n) :=
-  rowAt_of_not_mem (Finset.notMem_empty _)
+        hE, prgR_block _ _ _ _ (Nat.mod_lt _ (by norm_num)), xIn_succ]
 
 lemma treeNode_size' (seed iv : ByteArray) (hs : seed.size = 16) (n : ℕ) :
     (treeNode seed iv n).size = 16 := by
@@ -157,6 +206,7 @@ lemma treeNode_size' (seed iv : ByteArray) (hs : seed.size = 16) (n : ℕ) :
   · rw [treeNode]; exact hs
   · exact treeNode_size _ _ h
 
+omit [HasPrg] in
 lemma hnone_eq (j : ℕ) : ((none : Option ℕ) == some j) = false := rfl
 
 /-- The leaf keys of the executable commitment are the tree's leaves. -/
@@ -203,15 +253,19 @@ lemma seedsOf_commit (seed iv delta : ByteArray) (k : Fin 105) :
     rw [Array.getD_eq_getD_getElem?, Array.getElem?_map, Array.getElem?_eq_none (by omega)]
     rfl
 
-/-- **The bridge: the executable hidden part is `hiddenOutE` with AES.** -/
-theorem hiddenOut_eq (p : Params) (iv delta : ByteArray) (seed : Blk) :
-    hiddenOut p iv delta seed = hiddenOutE aesTable p iv delta seed := by
+/-- **The hidden part is `hiddenOutE`** for a PRG that is `prgR` of the table's row at every
+16-byte key (`hE`). -/
+theorem hiddenOut_rows (E : Cipher)
+    (hE : ∀ (k : Blk) (iv : ByteArray) (t c : UInt32) (n : ℕ),
+      HasPrg.prg (ba k) iv t c n = prgR (E k) iv t c n)
+    (p : Params) (iv delta : ByteArray) (seed : Blk) :
+    hiddenOut p iv delta seed = hiddenOutE E p iv delta seed := by
   have hs : (ba seed).size = 16 := size_ba _
   set R : Fin nN → Blk → Blk := fun _ _ => seed
-  have hrow : ∀ n t c m, prgR (rowAt (xIn iv) nN ∅ aesTable R seed n) iv t c m =
-      AES.prg (treeNode (ba seed) iv n) iv t c m := fun n t c m => by
-    rw [rowAt_aes, ← prg_eq_prgR, keyAt_aes]
-  set ρ := rowAt (xIn iv) nN ∅ aesTable R seed
+  have hrow : ∀ n t c m, prgR (rowAt (xIn iv) nN ∅ E R seed n) iv t c m =
+      HasPrg.prg (treeNode (ba seed) iv n) iv t c m := fun n t c m => by
+    rw [rowAt_of_not_mem (Finset.notMem_empty _), ← hE, keyAt_rows E hE]
+  set ρ := rowAt (xIn iv) nN ∅ E R seed
   have hus : ((Array.range BAVC.tau).map fun i =>
       bytesOfWords (Prover.smallVoleUWords p iv i (leafKey (BAVC.commit (ba seed) iv).2 i))) =
       usR p iv ρ := by
@@ -234,17 +288,44 @@ theorem hiddenOut_eq (p : Params) (iv delta : ByteArray) (seed : Blk) :
     split_ifs with hk
     · have hk' : k.val < (BAVC.openNodes delta).size := by rw [openNodes_size]; exact hk
       have h1 := (openNodes_get delta hk').1
-      rw [← keyAt_aes iv R seed, blk_ba, keyAt_pos (by rw [oNode]; omega)]
+      rw [← keyAt_rows E hE iv R seed, blk_ba, keyAt_pos (by rw [oNode]; omega)]
     · rfl
   have e1 : hiddenOut p iv delta seed = (comsOf (BAVC.commit (ba seed) iv).2.coms delta,
       seedsOf (BAVC.commit (ba seed) iv).1 delta, dropSib (padsOfArrays p ((Array.range BAVC.tau).map
         fun i => bytesOfWords (Prover.smallVoleUWords p iv i (leafKey (BAVC.commit (ba seed) iv).2 i)))
-        (AES.prg (ba seed) iv (((1 : UInt32) <<< 31) - 1) 0 ((8 * p.nMask + 127) / 128)) #[])) := rfl
-  have e2 : hiddenOutE aesTable p iv delta seed = hidOfRows p iv delta ρ := rfl
-  have hhi : AES.prg (ba seed) iv (((1 : UInt32) <<< 31) - 1) 0 ((8 * p.nMask + 127) / 128) =
+        (HasPrg.prg (ba seed) iv (((1 : UInt32) <<< 31) - 1) 0 ((8 * p.nMask + 127) / 128)) #[])) := rfl
+  have e2 : hiddenOutE E p iv delta seed = hidOfRows p iv delta ρ := rfl
+  have hhi : HasPrg.prg (ba seed) iv (((1 : UInt32) <<< 31) - 1) 0 ((8 * p.nMask + 127) / 128) =
       prgR (ρ 0) iv (((1 : UInt32) <<< 31) - 1) 0 ((8 * p.nMask + 127) / 128) := by
     rw [hrow 0, treeNode]
   rw [e1, e2, hus, hcoms, hseeds, hhi, hidOfRows]
+
+end Generic
+
+/-- **With AES, the nodes are the executable tree's.** -/
+theorem keyAt_aes (iv : ByteArray) (R : Fin nN → Blk → Blk) (seed : Blk) :
+    ∀ n, ba (keyAt (xIn iv) nN ∅ aesTable R seed n) = treeNode (ba seed) iv n :=
+  keyAt_rows aesTable prg_eq_prgR iv R seed
+
+/-- **With the ideal-cipher PRG of `E`, the nodes are the tree of `IC.keyAt`.** -/
+theorem keyAt_ic (E : Cipher) (iv : ByteArray) (R : Fin nN → Blk → Blk) (seed : Blk) :
+    ∀ n, ba (keyAt (xIn iv) nN ∅ E R seed n) = @treeNode (icPrg E) (ba seed) iv n :=
+  @keyAt_rows (icPrg E) E (icPrg_prg E) iv R seed
+
+lemma rowAt_aes (iv : ByteArray) (R : Fin nN → Blk → Blk) (seed : Blk) (n : ℕ) :
+    rowAt (xIn iv) nN ∅ aesTable R seed n = aesTable (keyAt (xIn iv) nN ∅ aesTable R seed n) :=
+  rowAt_of_not_mem (Finset.notMem_empty _)
+
+/-- **The bridge: the executable hidden part is `hiddenOutE` with AES.** -/
+theorem hiddenOut_eq (p : Params) (iv delta : ByteArray) (seed : Blk) :
+    hiddenOut p iv delta seed = hiddenOutE aesTable p iv delta seed :=
+  hiddenOut_rows aesTable prg_eq_prgR p iv delta seed
+
+/-- **With the ideal-cipher PRG of `E`, the hidden part is `hiddenOutE E`**: the commitment's
+hidden part computed by the executable code with the cipher `E` is the one of the GGM hybrid. -/
+theorem hiddenOut_ic (E : Cipher) (p : Params) (iv delta : ByteArray) (seed : Blk) :
+    @hiddenOut (icPrg E) p iv delta seed = hiddenOutE E p iv delta seed :=
+  @hiddenOut_rows (icPrg E) E (icPrg_prg E) p iv delta seed
 
 /-! ## The side conditions of the hybrid -/
 

@@ -53,6 +53,7 @@ import VoleMole.Spec.Kats
 import VoleMole.Spec.Ratatouille
 import VoleMole.Spec.RatatouilleKats
 import VoleMole.Verifier.AES
+import VoleMole.Verifier.Prg
 import VoleMole.Verifier.BAVC
 import VoleMole.Verifier.Proof
 import VoleMole.Verifier.VOLE
@@ -132,6 +133,7 @@ import VoleMole.ZK.HopsH4Ideal
 import VoleMole.ZK.HopsJoint
 import VoleMole.ZK.VerifyPre
 import VoleMole.ZK.HopsH23
+import VoleMole.ZK.HopsIC
 import VoleMole.ZK.Interp
 import VoleMole.Spec.PomFRITLayout
 import VoleMole.Privacy.PomFRITLean
