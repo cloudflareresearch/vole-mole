@@ -449,7 +449,9 @@ and affords the amount, else it is refused for both (feasibility is leakage).
   `unlinkability_label_rows`, the same bound with the executable Lean prover and verifier as the
   primitives (`leanPrim`, label rows), assuming only the tape hypotheses (`TapeHyp`,
   `lean/docs/zk.md` §10.1), hiding and the hash record's output lengths (proved for SHAKE,
-  `unlinkability_label_rows_shake`; BAVC and CRT completeness are proved): the C++ witness encodings
+  `unlinkability_label_rows_shake`, which also derives the tape hypotheses from one hypothesis per
+  hop, `ZK/Hops.lean`, so `εI`, `εS` are sums `ε_rho + ε_grind + ε_bavc + ε_lab`; BAVC and CRT
+  completeness are proved): the C++ witness encodings
   (`encodeIssueWitness`, `encodeSpendWitness`) satisfy the issuance and spend systems for every
   combination (`issue_holds`, `spend_holds`: committed Keccak states, the carries of `t + x` and
   `t' + d` as `carries` computes them, `carries_testBit`, and `R_iss`, `R_spend`).

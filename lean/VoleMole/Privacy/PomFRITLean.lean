@@ -1,4 +1,4 @@
-import VoleMole.ZK.TwoPhase
+import VoleMole.ZK.TwoPhaseHops
 import VoleMole.ZK.Interp
 import VoleMole.Privacy.PomFRIT
 import VoleMole.Privacy.LeanProver
@@ -28,7 +28,9 @@ Signer's response `s` and the binder `refresher`. Its two-phase zero knowledge i
 * **`lean_zeroKnowledge`**: `Privacy.PomFRIT.ZeroKnowledge (leanProver Hs T) (leanSim Hs) ε` from
   the two-phase tape hypothesis `TapeHyp2` (`ε`) for every prefix, binder and valid continuation.
 * **`blindness_lean`**: the blindness game on the label-row layout (`Spec.PomFRIT.Layout.labelRows`)
-  with the Lean prover and faest-arch-opt's tables: `≤ 4ε` (`blindness_lean_shake` with SHAKE).
+  with the Lean prover and faest-arch-opt's tables: `≤ 4ε`; `blindness_lean_shake` with SHAKE and
+  the tape hypothesis from the hop hypotheses (`HopHyps2`, `ZK/TwoPhaseHops.lean`):
+  `≤ 4(ε_rho + ε_grind + ε_abort + ε_bavc + ε_lab)`.
 * `pomfritVerify_complete`: `pomfritVerify` accepts the final signature
   `proof ‖ refresher_com ‖ refresher` (step 2 keeps `ũ` and `d[0..M)`, so the verifier's target is
   the Client's; `Bridge.pomfritRedeem_complete`); `pomfritVerify_complete_tables` for
@@ -44,7 +46,7 @@ Remaining hypotheses of `lean_zeroKnowledge` (any tables `T`): the tape hypothes
 `BAVCComplete` and `CrtComplete` for step 1, `HashesWF Hs`, and the CRT certificate `maskInvOk T`.
 For faest-arch-opt's tables all but the tape hypothesis and `HashesWF` are theorems
 (`Bridge.bavcComplete`, `Bridge.crtComplete`, `ZK.maskInvOk_tables`), so `blindness_lean` assumes
-only those (and with SHAKE only the tape hypothesis).
+only those (and with SHAKE only the hop hypotheses, `blindness_lean_shake`).
 -/
 
 open Finset
@@ -246,13 +248,20 @@ theorem blindness_lean (A : Adversary) (Hs : Hashes) (hHs : HashesWF Hs)
     (lean_zeroKnowledge Hs CrtGen.tables hHs bavcComplete maskInvOk_tables
       (fun _ _ rho => crtComplete Hs _ _ _ rho _ (hlab_of (show 16 ≤ 164 by decide))) ht)
 
-/-- **PomFRIT blindness with the Lean prover and SHAKE**: only the tape hypothesis is assumed. -/
-theorem blindness_lean_shake (A : Adversary)
-    {ε : ℝ} (ht : ∀ r b k, r.length = uovM → Cont.Valid r k →
-      TapeHyp2 Hashes.shake CrtGen.tables (leanBase (toBA b)) (toBA r) (contOf k) ε) :
+/-- **PomFRIT blindness with the Lean prover and SHAKE**, with the two-phase tape hypothesis from
+the hop hypotheses (`HopHyps2`, `ZK/TwoPhaseHops.lean`): the per-session error is the sum
+`ε_rho + ε_grind + ε_abort + ε_bavc + ε_lab` of the named terms (H1, the grinding answers, no
+accepted grinding answer `noHitProb`, BAVC hiding, H6). Only the hop hypotheses are assumed. -/
+theorem blindness_lean_shake (A : Adversary) {εrho εgrind εbavc εlab : ℝ}
+    (ht : ∀ r b k, r.length = uovM → Cont.Valid r k →
+      HopHyps2 Hashes.shake CrtGen.tables (leanBase (toBA b)) (toBA r) (contOf k)
+        εrho εgrind εbavc εlab) :
     |pr _ (realGame Layout.labelRows A (leanProver Hashes.shake CrtGen.tables) false) -
-        pr _ (realGame Layout.labelRows A (leanProver Hashes.shake CrtGen.tables) true)| ≤ 4 * ε :=
-  blindness_lean A Hashes.shake hashesWF_shake ht
+        pr _ (realGame Layout.labelRows A (leanProver Hashes.shake CrtGen.tables) true)| ≤
+      4 * (εrho + εgrind + noHitProb + εbavc + εlab) :=
+  blindness_lean A Hashes.shake hashesWF_shake fun r b k hr hk =>
+    tapeHyp2_of_hops _ _ _ _ _ hashesWF_shake bavcComplete (hlab_of (show 16 ≤ 164 by decide))
+      (ht r b k hr hk)
 
 /-! ## Completeness on the final signature -/
 

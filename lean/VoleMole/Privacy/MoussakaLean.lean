@@ -21,7 +21,8 @@ they are built and proved for the executable statements with dedicated label row
 * **`anonymity_label_rows`**: Theorem 4(a) with the Lean prover, `≤ 4εI + 4εR + 2εhide`, assuming
   only the tape hypotheses (`TapeHyp`), hiding and `HashesWF` (BAVC and CRT completeness are
   theorems, `Bridge.bavcComplete`, `Bridge.crtComplete`); `anonymity_label_rows_shake` drops
-  `HashesWF` for SHAKE.
+  `HashesWF` for SHAKE and takes the tape hypotheses from the hop hypotheses (`HopHyps`,
+  `ZK/Hops.lean`), so each error is the sum `ε_rho + ε_grind + ε_bavc + ε_lab` of the named terms.
 -/
 
 open Finset
@@ -333,19 +334,29 @@ theorem anonymity_label_rows (A : Adversary) (idx : AnchorSet → UOVKey → ℕ
     (fun _ _ _ rho => crtComplete Hs _ _ _ rho _ (hlab_of (show 16 ≤ 343 by decide)))
     hεR htI htR hhide
 
-/-- **Moussaka issuer hiding and unlinkability with the Lean prover and SHAKE**: only the tape
-hypotheses and hiding are assumed. -/
+/-- **Moussaka issuer hiding and unlinkability with the Lean prover and SHAKE**, with the tape
+hypotheses from the hop hypotheses (`HopHyps`, `ZK/Hops.lean`): the issuance and redemption
+errors are the sums `ε_rho + ε_grind + ε_bavc + ε_lab` of the named terms (H1, the grinding
+answers, BAVC hiding, H6). Only the hop hypotheses and hiding are assumed. -/
 theorem anonymity_label_rows_shake (A : Adversary) (idx : AnchorSet → UOVKey → ℕ)
-    {εI εR εhide : ℝ} (hεR : 0 ≤ εR)
-    (htI : ∀ x w, IssueRelW x w → TapeHyp Hashes.shake CrtGen.tables (stI x) (toBA w) εI)
-    (htR : ∀ x w, RedeemRelW x w → TapeHyp Hashes.shake CrtGen.tables (stR x) (toBA w) εR)
+    {εrhoI εgrindI εbavcI εlabI εrhoR εgrindR εbavcR εlabR εhide : ℝ}
+    (hεR : 0 ≤ εrhoR + εgrindR + εbavcR + εlabR)
+    (htI : ∀ x w, IssueRelW x w →
+      HopHyps Hashes.shake CrtGen.tables (stI x) (toBA w) εrhoI εgrindI εbavcI εlabI)
+    (htR : ∀ x w, RedeemRelW x w →
+      HopHyps Hashes.shake CrtGen.tables (stR x) (toBA w) εrhoR εgrindR εbavcR εlabR)
     (hhide : ∀ b c, hidingAdv A.ci A.cr
       (reduction A idx (leanSim pI) (leanSim pR) b c) ≤ εhide) :
     |pr _ (realGame A idx (leanNIZK Hashes.shake CrtGen.tables stI)
           (leanNIZK Hashes.shake CrtGen.tables stR) false) -
         pr _ (realGame A idx (leanNIZK Hashes.shake CrtGen.tables stI)
           (leanNIZK Hashes.shake CrtGen.tables stR) true)| ≤
-      4 * εI + 4 * εR + 2 * εhide :=
-  anonymity_label_rows A idx Hashes.shake hashesWF_shake hεR htI htR hhide
+      4 * (εrhoI + εgrindI + εbavcI + εlabI) + 4 * (εrhoR + εgrindR + εbavcR + εlabR) +
+        2 * εhide :=
+  anonymity_label_rows A idx Hashes.shake hashesWF_shake hεR
+    (fun x w h => tapeHyp_of_hops _ _ _ _ hashesWF_shake bavcComplete
+      (hlab_of (show 16 ≤ 256 by decide)) (htI x w h))
+    (fun x w h => tapeHyp_of_hops _ _ _ _ hashesWF_shake bavcComplete
+      (hlab_of (show 16 ≤ 343 by decide)) (htR x w h)) hhide
 
 end VoleMole.Privacy.Moussaka
