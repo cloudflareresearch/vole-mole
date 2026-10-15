@@ -69,7 +69,7 @@ namespace vole_mole::pomfrit::detail {
 
 using namespace vole_mole::detail;
 
-// Same as faest::v3::faest_em_128_f.
+// Same as faest::v3::faest_em_128_f, except for the OWF.
 using RedeemParams =
     faest::parameter_set<faest::secpar::s128, /* TAU */ 17, OWF_REDEEM, faest::prg::aes_ctr,
                          faest::prg::aes_ctr, faest::leaf_hash::aes_ctr, /* W_GRIND */ 8,
@@ -86,6 +86,10 @@ static_assert(RedeemParams::leaf_hash_v == EM128F::leaf_hash_v);
 static_assert(RedeemParams::use_crt_vole_masks == EM128F::use_crt_vole_masks);
 static_assert(RedeemParams::use_v3_hash_inputs == EM128F::use_v3_hash_inputs);
 static_assert(RedeemParams::use_grinding == EM128F::use_grinding);
+// The witness begins with the target mask (r), which the issuer can derive once it knows the target
+// (h). Reusing the witness VOLEs for the CRT masks would allow the attacker to link the
+// presentation to issuance.
+static_assert(!RedeemParams::CONSTS::REUSE_CRT_WITNESS && EM128F::CONSTS::REUSE_CRT_WITNESS);
 } // namespace check
 
 struct RedeemRelation {
