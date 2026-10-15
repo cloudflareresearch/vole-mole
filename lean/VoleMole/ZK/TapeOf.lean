@@ -25,10 +25,12 @@ The pieces (all at the real run's values):
   (`Bridge.prover_column`), so the gate inputs and hence `c_mult` are the real ones; the tape's
   sibling answers are the `H₅` answers the real run reads;
 * the tags as the verifier recomputes them are the real ones: rows by `Bridge.prover_row`, masks
-  by the CRT VOLE's correlation `Bridge.CrtComplete` (assumed, as for completeness);
+  by the CRT VOLE's correlation `Bridge.CrtComplete` (a hypothesis here, as for completeness;
+  proved for `CrtGen.tables`, `Bridge.crtComplete`);
 * the first accepted `H₂³` answer of the tape is the real grinding outcome (`firstHit_grind`).
 
-Assumed (deterministic): `BAVCComplete`, `CrtComplete` for this run (the two assumptions of
+Hypotheses (deterministic): `BAVCComplete`, `CrtComplete` for this run (proved:
+`Bridge.bavcComplete`, and `Bridge.crtComplete` for `CrtGen.tables`; the two hypotheses of
 `Bridge.verify_proveCommit`, checked by `lake exe prover_vectors`), and the hypotheses of
 `qsProve_eq` (so that `Prover.qsProve` succeeds). `lake exe zk_sim` checks the equation itself on
 all KAT runs.

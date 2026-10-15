@@ -1,4 +1,5 @@
 import VoleMole.Privacy.LeanProver
+import VoleMole.Verifier.Bridge.Complete
 import VoleMole.ZK.Interp
 
 /-!
@@ -18,7 +19,9 @@ they are built and proved for the executable statements with dedicated label row
   states are the `Arith` ones); `N_MASK = 12 ≤ 32`, the CRT certificate (`maskInvOk_tables`) and
   interpolation (`ZK.Interp.interpOk_nine`).
 * **`anonymity_label_rows`**: Theorem 4(a) with the Lean prover, `≤ 4εI + 4εR + 2εhide`, assuming
-  only the tape hypotheses (`TapeHyp`), hiding, `BAVCComplete`, `CrtComplete` and `HashesWF`.
+  only the tape hypotheses (`TapeHyp`), hiding and `HashesWF` (BAVC and CRT completeness are
+  theorems, `Bridge.bavcComplete`, `Bridge.crtComplete`); `anonymity_label_rows_shake` drops
+  `HashesWF` for SHAKE.
 -/
 
 open Finset
@@ -311,17 +314,11 @@ theorem zkHypR (x : RedeemInstance) (w : Spec.Bytes) (h : RedeemRelW x w) :
 statements of `Verifier/Relations.lean` (dedicated label rows) and faest-arch-opt's CRT tables:
 if the issuance and redemption runs' tapes are `εI`- and `εR`-close to uniform (`TapeHyp`) and
 the hiding reductions have advantage `≤ εhide`, the two worlds differ by at most
-`4εI + 4εR + 2εhide`. Also assumed: `BAVCComplete` and `CrtComplete` (checked by
-`prover_vectors` on every proof) and the hash record's output lengths. -/
+`4εI + 4εR + 2εhide`. Also assumed: the hash record's output lengths (`anonymity_label_rows_shake`:
+none with SHAKE); BAVC and CRT completeness are theorems (`Bridge.bavcComplete`,
+`Bridge.crtComplete`). -/
 theorem anonymity_label_rows (A : Adversary) (idx : AnchorSet → UOVKey → ℕ) (Hs : Hashes)
-    (hHs : HashesWF Hs) (hbavc : BAVCComplete)
-    (hcrtI : ∀ x w, IssueRelW x w → ∀ rho : ByteArray, CrtComplete (Hs.hash .h5) CrtGen.tables
-      (Prover.voleGen Hs CrtGen.tables (stI x).params ((stI x).mu1 Hs)
-        ((toBA w).extract 0 (stI x).params.witnessBytes) rho (stI x).binder1))
-    (hcrtR : ∀ x w, RedeemRelW x w → ∀ rho : ByteArray, CrtComplete (Hs.hash .h5) CrtGen.tables
-      (Prover.voleGen Hs CrtGen.tables (stR x).params ((stR x).mu1 Hs)
-        ((toBA w).extract 0 (stR x).params.witnessBytes) rho (stR x).binder1))
-    {εI εR εhide : ℝ} (hεR : 0 ≤ εR)
+    (hHs : HashesWF Hs) {εI εR εhide : ℝ} (hεR : 0 ≤ εR)
     (htI : ∀ x w, IssueRelW x w → TapeHyp Hs CrtGen.tables (stI x) (toBA w) εI)
     (htR : ∀ x w, RedeemRelW x w → TapeHyp Hs CrtGen.tables (stR x) (toBA w) εR)
     (hhide : ∀ b c, hidingAdv A.ci A.cr
@@ -331,6 +328,24 @@ theorem anonymity_label_rows (A : Adversary) (idx : AnchorSet → UOVKey → ℕ
           true)| ≤
       4 * εI + 4 * εR + 2 * εhide :=
   anonymity_lean A idx Hs CrtGen.tables stI stR pI pR (fun _ => rfl) (fun _ => rfl) rfl rfl csI csR
-    zkHypI zkHypR hHs hbavc hcrtI hcrtR hεR htI htR hhide
+    zkHypI zkHypR hHs bavcComplete
+    (fun _ _ _ rho => crtComplete Hs _ _ _ rho _ (hlab_of (show 16 ≤ 256 by decide)))
+    (fun _ _ _ rho => crtComplete Hs _ _ _ rho _ (hlab_of (show 16 ≤ 343 by decide)))
+    hεR htI htR hhide
+
+/-- **Moussaka issuer hiding and unlinkability with the Lean prover and SHAKE**: only the tape
+hypotheses and hiding are assumed. -/
+theorem anonymity_label_rows_shake (A : Adversary) (idx : AnchorSet → UOVKey → ℕ)
+    {εI εR εhide : ℝ} (hεR : 0 ≤ εR)
+    (htI : ∀ x w, IssueRelW x w → TapeHyp Hashes.shake CrtGen.tables (stI x) (toBA w) εI)
+    (htR : ∀ x w, RedeemRelW x w → TapeHyp Hashes.shake CrtGen.tables (stR x) (toBA w) εR)
+    (hhide : ∀ b c, hidingAdv A.ci A.cr
+      (reduction A idx (leanSim pI) (leanSim pR) b c) ≤ εhide) :
+    |pr _ (realGame A idx (leanNIZK Hashes.shake CrtGen.tables stI)
+          (leanNIZK Hashes.shake CrtGen.tables stR) false) -
+        pr _ (realGame A idx (leanNIZK Hashes.shake CrtGen.tables stI)
+          (leanNIZK Hashes.shake CrtGen.tables stR) true)| ≤
+      4 * εI + 4 * εR + 2 * εhide :=
+  anonymity_label_rows A idx Hashes.shake hashesWF_shake hεR htI htR hhide
 
 end VoleMole.Privacy.Moussaka

@@ -310,9 +310,9 @@ is part of milestone 6.
    Lean verifier, including random statements of all five relations (seeds, contexts and credits
    from SHAKE of a label; issuers' UOV preimages from a test-only oil-space sampler, `sample`) and
    KAT witnesses with a random `rho`; a flipped witness bit or a wrong Signer response makes the
-   prover refuse. For every Lean proof the harness also checks the two facts the completeness
-   theorem assumes (the opening reconstructs the prover's keys and commitments; the verifier's
-   rows and masks are `v + u·Δ'`). About 44 s per layout (34 s of proving and verifying, 5 s of
+   prover refuse. For every Lean proof the harness also checks the two correctness facts of the
+   completeness theorem (the opening reconstructs the prover's keys and commitments; the
+   verifier's rows and masks are `v + u·Δ'`), now proved (below). About 44 s per layout (34 s of proving and verifying, 5 s of
    UOV key generation); a proof takes 0.2–1.1 s, the 64-anchor redemption 6.5 s (10 evaluations
    of its constraints).
    Proved (`Bridge/Prover.lean`, no `sorry`, axioms `propext`, `Classical.choice`, `Quot.sound`):
@@ -323,9 +323,32 @@ is part of milestone 6.
    the whole verifier on the prover's output (`verify_proveCommit`, `verify_prove`,
    `moussakaIssue_complete`, `moussakaRedeem_complete`, `ratatouilleIssue_complete`,
    `ratatouilleSpend_complete`, `pomfritRedeem_complete`), assuming `HashesWF` (discharged for
-   SHAKE, `hashesWF_shake`), `BAVCComplete` (the tree opening; an imperative walk over the 4607
-   nodes) and `CrtComplete` (the CRT masks are a VOLE: garbled labels plus the tables' bilinear
-   identity), and `Δ' ≠ 0` (probability `2⁻¹²⁰`; not tested by the C++ either). Not done: the
-   PomFRIT theorem is for the statement built from step 1's signature, not yet restated for
-   `pomfritVerify` on the final signature; the abstract `ZeroKnowledge` hypothesis of
-   `Privacy/Basic.lean` is not yet instantiated with this prover.
+   SHAKE, `hashesWF_shake`), `BAVCComplete` (the tree opening), `CrtComplete` (the CRT masks are a
+   VOLE) and `Δ' ≠ 0` (probability `2⁻¹²⁰`; not tested by the C++ either).
+   **Both correctness facts are proved** (no `sorry`, same axioms):
+   * `Bridge/BAVCComplete.lean`, `bavcComplete`: for every seed, `iv` and `Δ`. The verifier's
+     reconstruction and the prover's `openSeeds` share one walk (`BAVC.openNodes`, a fold of
+     `markStep`; the top-down derivation is a fold of `deriveStep`; `reconstruct` restructured
+     accordingly, same outputs). The tree is `treeNode` (structural recursion on the node index,
+     `expandTree_get`); the marks after the walk are `hid` (hidden leaf or ancestor, `walk_spec`),
+     so every node off the hidden paths with a parent on one is opened (`mem_openNodes`) and the
+     root is on one; the opening's layout (`opening_spec`), the placement and the derivation
+     (`placed_spec`, `derive_spec`: by induction over the walk, every known seed is the tree's
+     node and every node off the hidden paths becomes known) and the leaves as concatenations of
+     fixed-size pieces (`leavesOf_eq`, `extract_pieces`) finish it.
+   * `Bridge/CrtComplete.lean`, `crtComplete`: for `CrtGen.tables`, every `Δ` and every statement
+     whose label rows are corrected rows (`hlab_of`: witnesses of ≥ 16 bytes; all five relations,
+     both layouts). The verifier's gate labels are `L^{γ_e}_e` (`gateInputs_eq`), it reads back
+     `c_mult` (`cmult_bit`), `r̃` is bilinear (`polyMod` and `rTildeOf` are folds; `polyMod_xor`,
+     `zb_polyMod_rTildeIn`; the mask rows are uncorrected, `prover_column_mask`), so the masks'
+     difference is `Σ_c Δ_c L_c(u_mask)` (`crt_core`) with `L_c` of `Bridge/CrtCheck.lean`, where
+     `Lc_eq : L_c(a) = a · W_crt[c]` is the tables' bilinear identity, checked on all
+     `120 · 128` basis pairs by `decide +kernel` (`crtCheck_eq`: per `c` the 128 values are packed
+     into one `2¹⁶³⁸⁴`-bit number as XORs of outer products `w · spread v`; ≈ 1 min, ≈ 4 GB; the
+     tables are hex literals in `CrtData`, so the kernel parses no strings).
+   * `Bridge/Complete.lean`: `verify_proveCommit_tables`, `verify_prove_tables`,
+     `*_complete_tables` (five relations), `*_complete_shake`: completeness at `CrtGen.tables`
+     assuming only `HashesWF` (none with SHAKE) and `Δ' ≠ 0`. For PomFRIT also on the final
+     signature (`Privacy.PomFRIT.pomfritVerify_complete_tables`). The `ZeroKnowledge` hypotheses
+     of `Privacy/Basic.lean` are instantiated with this prover in `Privacy/*Lean.lean`
+     (`docs/zk.md` §10.1).

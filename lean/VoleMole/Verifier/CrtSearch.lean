@@ -608,7 +608,7 @@ def generate : Tables := Id.run do
 /-- The regenerated tables equal `CrtData`'s (tree moduli, field modulus, `F`, `G`, `W_tree`,
 `W_gate`). -/
 def regenOk (T : Tables) : Bool :=
-  treeModuli == moduli && fieldModulus == hexNat CrtData.modulusHex &&
+  treeModuli == moduli && fieldModulus == CrtData.modulusHex &&
     T.F == CrtGen.F && T.G == CrtGen.G && T.wTree == CrtGen.wTree && T.wGate == CrtGen.wGate
 
 end VoleMole.Verifier.CrtSearch

@@ -161,8 +161,8 @@ theorem openingOf_eq (t : Array ByteArray) (coms delta : ByteArray) (hd : delta.
     have hk := List.mem_range.1 hk
     have hk' : k < 105 := by omega
     have hsz : ((BAVC.openSeeds t delta)[k]!).size = 16 := by
-      have hpos := openPos_lt delta
-      have hk2 : k < (openPos delta).size := by rw [openSeeds_eq] at hk; simpa using hk
+      have hpos := openNodes_lt delta
+      have hk2 : k < (BAVC.openNodes delta).size := by rw [openSeeds_eq] at hk; simpa using hk
       rw [getElem!_pos (BAVC.openSeeds t delta) k hk]
       simp only [openSeeds_eq, Array.getElem_map]
       exact htree _ (hpos _ (Array.getElem_mem hk2))

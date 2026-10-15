@@ -82,6 +82,10 @@ import VoleMole.Verifier.Bridge.Columns
 import VoleMole.Verifier.Bridge.Chain
 import VoleMole.Verifier.Bridge.ChainRelations
 import VoleMole.Verifier.Bridge.Prover
+import VoleMole.Verifier.Bridge.BAVCComplete
+import VoleMole.Verifier.Bridge.CrtCheck
+import VoleMole.Verifier.Bridge.CrtComplete
+import VoleMole.Verifier.Bridge.Complete
 import VoleMole.Prob.Uniform
 import VoleMole.Prob.Bytes
 import VoleMole.Prob.Challenges

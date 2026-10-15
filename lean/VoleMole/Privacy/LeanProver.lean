@@ -10,7 +10,8 @@ is the executable Lean prover (`Verifier/Prover.lean`) with dedicated label rows
 hypothesis is discharged by `ZK.Sim.labelRows_zeroKnowledge` (`ZK/Exec.lean`) down to its
 remaining hypotheses: the tape hypothesis `TapeHyp` (hybrids H1, H4, H6 and the random-oracle
 answers at the grinding points) and the deterministic ones (`ZKHyp`, `BAVCComplete`,
-`CrtComplete`).
+`CrtComplete`; the last two are theorems for faest-arch-opt's tables, `Bridge.bavcComplete`,
+`Bridge.crtComplete`, used by the per-protocol files).
 
 * `ZeroKnowledge.transfer`: zero knowledge moves along instance, witness and output maps.
 * `leanNIZK Hs T stOf`: the Lean prover and verifier as a `Spec.Moussaka.NIZK`, for any

@@ -468,12 +468,13 @@ and `d` at 3075 and 3139; at `Layout.main` the definitions are the spec's, by `r
   `issue_request_with_seed` / `finalize_issue` run it (`leanProver`: step 1 with `r` and
   `refresher_com`, step 2 for the instance `(pk, h)` and `s` the Client picks after step 1), is
   two-phase zero-knowledge against the simulator `leanSim` (`lean_zeroKnowledge`), under the
-  two-phase tape hypothesis `TapeHyp2` (hybrids H1, H4, H6 and the grinding answers) and the
-  completeness assumptions `BAVCComplete`, `CrtComplete`. Step 1 reveals `c_i`, `c_mult`, `ũ`,
+  two-phase tape hypothesis `TapeHyp2` (hybrids H1, H4, H6 and the grinding answers); the
+  completeness facts `BAVCComplete`, `CrtComplete` are proved for faest-arch-opt's tables
+  (`blindness_lean`, `blindness_lean_shake`). Step 1 reveals `c_i`, `c_mult`, `ũ`,
   `d[0..M)` and `chal1`; with label rows these are uniform and independent of `r` (one-time pads),
   so the simulator outputs them before the instance exists. `blindness_lean` is Theorem B (from
   G1) for this prover: `≤ 4ε`. On `main` the statement is false (`ZK/Relations.lean`).
-  `pomfritVerify_complete`: the final signature passes `verify`.
+  `pomfritVerify_complete_tables`: the final signature passes `verify`.
 
 ### 8.3 Selective failure, the response `s`, and the check at `pomfrit.cpp:207`
 

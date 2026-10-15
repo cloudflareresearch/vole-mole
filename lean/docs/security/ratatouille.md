@@ -448,7 +448,8 @@ and affords the amount, else it is refused for both (feasibility is leakage).
   layout's 256 bytes longer proofs). **[Lean] `lean/VoleMole/Privacy/RatatouilleLean.lean`**:
   `unlinkability_label_rows`, the same bound with the executable Lean prover and verifier as the
   primitives (`leanPrim`, label rows), assuming only the tape hypotheses (`TapeHyp`,
-  `lean/docs/zk.md` §10.1), hiding, `BAVCComplete` and `CrtComplete`: the C++ witness encodings
+  `lean/docs/zk.md` §10.1), hiding and the hash record's output lengths (proved for SHAKE,
+  `unlinkability_label_rows_shake`; BAVC and CRT completeness are proved): the C++ witness encodings
   (`encodeIssueWitness`, `encodeSpendWitness`) satisfy the issuance and spend systems for every
   combination (`issue_holds`, `spend_holds`: committed Keccak states, the carries of `t + x` and
   `t' + d` as `carries` computes them, `carries_testBit`, and `R_iss`, `R_spend`).

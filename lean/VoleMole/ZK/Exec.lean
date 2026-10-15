@@ -1,5 +1,7 @@
 import VoleMole.ZK.IdealSim
 import VoleMole.ZK.TapeOf
+import VoleMole.Verifier.Bridge.BAVCComplete
+import VoleMole.Verifier.Bridge.CrtComplete
 
 /-!
 # Zero knowledge of the executable prover (`lean/docs/zk.md` §§5–6, §10)
@@ -28,6 +30,8 @@ against the simulator `Sim.simulate` (`ZK/Sim.lean`):
   hold; on `main` it fails (`ZK.pomfrit_attack_test`).
 * **`labelRows_zeroKnowledge`**: `Privacy.ZeroKnowledge` for a family of statements with dedicated
   label rows, from `TapeHyp` and the deterministic hypotheses.
+* **`labelRows_zeroKnowledge_tables`**: the same for faest-arch-opt's tables (`CrtGen.tables`),
+  with `BAVCComplete` and `CrtComplete` proved (`Bridge.bavcComplete`, `Bridge.crtComplete`).
 * `simulateRO_accept` (`ZK/SimAccept.lean`): the verifier, with `H₂³` programmed by
   `Sim.simulateRO`, accepts the simulated proof whenever its run reaches `chal3`.
 
@@ -35,7 +39,8 @@ Deterministic hypotheses (`ZKHyp`, `BAVCComplete`, `CrtComplete`): the statement
 system of degree `≤ d` that the witness satisfies for every `chal1` and combination (PomFRIT,
 whose instance depends on `chal1`, is the two-phase case of `ZK/TwoPhase.lean`); `N_MASK ≤ 32`;
 the CRT certificate (`maskInvOk_tables`); correct interpolation (`InterpOk d`, proved in
-`ZK/Interp.lean`); and the two correctness facts the completeness theorem assumes.
+`ZK/Interp.lean`); and the two correctness facts the completeness theorem assumes (theorems for
+`CrtGen.tables`: `labelRows_zeroKnowledge_tables`).
 -/
 
 open Finset
@@ -122,5 +127,19 @@ theorem labelRows_zeroKnowledge {I : Type*} (stOf : I → Statement) (p : Params
     rw [hp x]; simp [Params.labelRowOffset, Params.correctionRows, hlr]
   exact close_params (hp x)
     (prove_close Hs T (stOf x) w ⟨h x w hxw, hHs, hbavc, hcrt x w hxw, hlab⟩ (ht x w hxw))
+
+/-- **Zero knowledge of the executable prover with faest-arch-opt's tables**: as
+`labelRows_zeroKnowledge`, with BAVC and CRT completeness proved. Assumed: the statements'
+deterministic hypotheses (`ZKHyp`), the hash record's output lengths and the tape hypothesis. -/
+theorem labelRows_zeroKnowledge_tables {I : Type*} (stOf : I → Statement) (p : Params)
+    (hp : ∀ x, (stOf x).params = p) (hlr : p.labelRows = true) (R : I → ByteArray → Prop)
+    (cs : I → ByteArray → ByteArray → System GF128)
+    (h : ∀ x w, R x w → ZKHyp CrtGen.tables (stOf x) w (cs x)) (hHs : HashesWF Hs)
+    {ε : ℝ} (ht : ∀ x w, R x w → TapeHyp Hs CrtGen.tables (stOf x) w ε) :
+    ZeroKnowledge R (fun x w (ρ : Bytes 16) => Prover.prove Hs CrtGen.tables (stOf x) w (ba ρ))
+      (fun _ c => simulate p c) ε :=
+  labelRows_zeroKnowledge Hs CrtGen.tables stOf p hp hlr R cs h hHs bavcComplete
+    (fun x _ _ rho => crtComplete Hs _ _ _ rho _ (by
+      rw [hp x]; simp [Params.labelRowOffset, Params.correctionRows, hlr])) ht
 
 end VoleMole.ZK.Sim

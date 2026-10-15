@@ -25,9 +25,10 @@ vole-mole's relations (`IssueParams` etc.: `s128`, `τ = 17`, `delta_bits = 120`
   `vector_com.inc:880-893`).
 * Verification (`one_tree_bavc::verify`, `vector_com.inc:855-979`): mark the hidden leaves and
   their ancestors; walking `n = L − 2, …, 0`, whenever exactly one child of `n` is hidden, read the
-  other child's seed from the opening (after the `τ` commitments of the hidden leaves); reject if
-  the opening runs out or any unused trailing byte is nonzero. Every other node outside the hidden
-  paths is derived top-down. The verifier's leaves are the leaf keys with the hidden ones zero,
+  other child's seed from the opening (after the `τ` commitments of the hidden leaves; `openNodes`,
+  the walk the prover's `openSeeds` also uses); reject if the opening runs out or any unused
+  trailing byte is nonzero. Every other node outside the hidden paths is derived top-down. The
+  imperative loops of the C++ are folds here (`markStep`, `deriveStep`). The verifier's leaves are the leaf keys with the hidden ones zero,
   and its commitments are the computed ones with the hidden ones taken from the opening.
 * `check` (`hash_hashed_leaves`) is `H(H(c_0 ‖ 1) ‖ … ‖ H(c_16 ‖ 1) ‖ 1)` with `c_i` the
   concatenated commitments of vector `i` and `H` = `H₁` (SHAKE128 to 32 bytes; `check` takes it as
@@ -128,39 +129,51 @@ def hiddenIndex (dbit : Nat → Bool) (i : Nat) : Nat :=
 /-- `Δ_i` from the 16-byte `delta`. -/
 def deltaIndex (delta : ByteArray) (i : Nat) : Nat := hiddenIndex (deltaBit delta) i
 
-/-- `one_tree_bavc::verify`: the verifier's leaves, or `none` if the opening is malformed. -/
-def reconstruct (iv opening delta : ByteArray) : Option Leaves := Id.run do
-  if opening.size != openSize then return none
-  -- Hidden leaves and their ancestors.
-  let mut hidden : Array Bool := Array.replicate numNodes false
-  for i in [0:tau] do
-    hidden := hidden.set! (treePos i (deltaIndex delta i)) true
-  -- Place the opened seeds.
-  let mut known : Array (Option ByteArray) := Array.replicate numNodes none
-  let mut pos := tau * hashLen
-  for m in [0:numLeaves - 1] do
-    let n := numLeaves - 2 - m
-    let l := hidden[2 * n + 1]!
-    let r := hidden[2 * n + 2]!
-    hidden := hidden.set! n (l || r)
-    if l != r then
-      if pos ≥ openSize then return none
-      let child := if l then 2 * n + 2 else 2 * n + 1
-      known := known.set! child (some (opening.extract pos (pos + 16)))
-      pos := pos + 16
-  for p in [pos:openSize] do
-    if opening.get! p != 0 then return none
-  -- Derive the rest top-down.
-  for n in [0:numLeaves - 1] do
-    match known[n]! with
-    | some node =>
-      let c := children iv node n
-      known := known.set! (2 * n + 1) (some (block c 0))
-      known := known.set! (2 * n + 2) (some (block c 1))
-    | none => pure ()
-  let t := known.map (·.getD zeroBlock)
-  return some (leavesOf iv t (fun i => some (deltaIndex delta i))
-    (fun i => opening.extract (hashLen * i) (hashLen * i + hashLen)))
+/-- The hidden leaves of `Δ`, marked (the start of the walk of `openNodes`). -/
+def hiddenLeafMarks (delta : ByteArray) : Array Bool :=
+  (List.range tau).foldl (fun h i => h.set! (treePos i (deltaIndex delta i)) true)
+    (Array.replicate numNodes false)
+
+/-- Step `m` of the bottom-up walk, at node `n = L − 2 − m`: mark `n` if a child is marked, and
+record the unmarked child if exactly one is. -/
+def markStep (x : Array Bool × Array Nat) (m : Nat) : Array Bool × Array Nat :=
+  let n := numLeaves - 2 - m
+  let l := x.1[2 * n + 1]!
+  let r := x.1[2 * n + 2]!
+  (x.1.set! n (l || r), if l != r then x.2.push (if l then 2 * n + 2 else 2 * n + 1) else x.2)
+
+/-- The nodes whose seeds an opening at `Δ` reveals, in the order `verify` reads them: with the
+hidden leaves and their ancestors marked, walking `n = L − 2, …, 0`, the unmarked child of every
+node with exactly one marked child. -/
+def openNodes (delta : ByteArray) : Array Nat :=
+  ((List.range (numLeaves - 1)).foldl markStep (hiddenLeafMarks delta, #[])).2
+
+/-- Top-down derivation at node `n`: if its seed is known, so are its children's. -/
+def deriveStep (iv : ByteArray) (known : Array (Option ByteArray)) (n : Nat) :
+    Array (Option ByteArray) :=
+  match known[n]! with
+  | some node =>
+    let c := children iv node n
+    (known.set! (2 * n + 1) (some (block c 0))).set! (2 * n + 2) (some (block c 1))
+  | none => known
+
+/-- `one_tree_bavc::verify`: the verifier's leaves, or `none` if the opening is malformed (wrong
+size, more than `T_OPEN` seeds, or a nonzero byte after the seeds). -/
+def reconstruct (iv opening delta : ByteArray) : Option Leaves :=
+  let nodes := openNodes delta
+  -- The opening: the `τ` hidden commitments, the seeds of `nodes`, zero padding.
+  let seedsEnd := tau * hashLen + 16 * nodes.size
+  if opening.size != openSize || seedsEnd > openSize ||
+      (List.range (openSize - seedsEnd)).any fun k => opening.get! (seedsEnd + k) != 0 then none
+  else
+    -- Place the opened seeds, then derive the rest top-down.
+    let placed := (List.range nodes.size).foldl (fun known k =>
+        known.set! nodes[k]! (some (opening.extract (tau * hashLen + 16 * k)
+          (tau * hashLen + 16 * k + 16))))
+      (Array.replicate numNodes none)
+    let t := ((List.range (numLeaves - 1)).foldl (deriveStep iv) placed).map (·.getD zeroBlock)
+    some (leavesOf iv t (fun i => some (deltaIndex delta i))
+      (fun i => opening.extract (hashLen * i) (hashLen * i + hashLen)))
 
 /-- The inputs `c_i ‖ 1` of the 17 leaf hashes of `hash_hashed_leaves`. -/
 def leafHashInputs (coms : ByteArray) : List ByteArray :=
