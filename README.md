@@ -211,11 +211,11 @@ signature stay hidden. It combines two VOLEitH proofs:
   derived from a short key with the (experimental) local PRG, see
   [above](#deriving-the-witness-with-a-prg);
 - a prime-field proof over F_p and F_n, which proves that `R = u1 G + u2 Q`
-  using a radix-16 fixed-base comb on precomputed tables (only the slopes are
-  committed). It also proves `u1 X = u2 e` and `u2 X != 0` over F_n (so
+  using two interleaved radix-16 fixed-base combs on precomputed tables of `G`
+  and `Q` (only the slopes are committed), with constraints of degree 16. It also proves `u1 X = u2 e` and `u2 X != 0` over F_n (so
   `r = X mod n`), and that the digits of `u1` and `u2` match their values over
-  F_n. With the local PRG, its F_p witness (196 elements) is also derived from
-  a key of 108 elements, with an (experimental) local quadratic PRG over F_p
+  F_n. With the local PRG, its F_p witness (260 elements) is also derived from
+  a key of 124 elements, with an (experimental) local quadratic PRG over F_p
   ([`src/voleith_p256/prg.hpp`](src/voleith_p256/prg.hpp)), which doubles the
   QuickSilver degree.
 
@@ -225,20 +225,21 @@ proofs commit, tie `e` and `X` across the two proofs. See
 
 | Parameters | Message   | Proof     | Prove   | Verify  |
 |:-----------|:----------|----------:|--------:|--------:|
-| fast       | ≤ 55 B    | 114448 B  | 23.2 ms | 12.4 ms |
-| fast       | 56–119 B  | 117229 B  | 24.1 ms | 12.8 ms |
-| medium     | ≤ 55 B    | 96426 B   | 30.9 ms | 19.9 ms |
-| medium     | 56–119 B  | 99207 B   | 31.5 ms | 20.4 ms |
-| small      | ≤ 55 B    | 83322 B   | 58.5 ms | 47.7 ms |
-| small      | 56–119 B  | 85965 B   | 59.8 ms | 48.1 ms |
+| fast       | ≤ 55 B    | 109328 B  | 10.6 ms | 5.8 ms  |
+| fast       | 56–119 B  | 112109 B  | 11.2 ms | 6.1 ms  |
+| medium     | ≤ 55 B    | 92650 B   | 18.0 ms | 13.2 ms |
+| medium     | 56–119 B  | 95431 B   | 18.7 ms | 13.6 ms |
+| small      | ≤ 55 B    | 80442 B   | 45.9 ms | 40.8 ms |
+| small      | 56–119 B  | 83085 B   | 47.0 ms | 41.1 ms |
 
 Without deriving the witnesses (`WitnessPrg::none`), proofs are
-187082 B (fast), 163588 B (medium) and 127942 B (small) for messages of up to
-55 bytes, and proving takes up to 20% longer. With the MQ PRG (`WitnessPrg::mq`),
-only the binary witness is derived: proofs are 138210 B (fast), 114716 B
-(medium) and 97664 B (small), and proving takes about 0.55 s. Computing the comb tables for a
-public key takes another 6 ms. Prover and verifier both do this. Measured with
-Apple clang 21, release build.
+212170 B (fast), 183972 B (medium) and 145190 B (small) for messages of up to
+55 bytes, and proving takes up to 50% longer. With the MQ PRG (`WitnessPrg::mq`),
+only the binary witness is derived: proofs are 163298 B (fast), 135100 B
+(medium) and 114912 B (small), and proving takes about 0.55 s. The times include
+computing the comb tables of the public key (0.4 ms; the tables of `G` are
+computed once), which prover and verifier both do. Measured with Apple clang 21,
+release build.
 
 ## License
 
