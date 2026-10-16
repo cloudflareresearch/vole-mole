@@ -78,7 +78,7 @@ template <Vole V, BinPrg PRG> struct Scheme {
 // The public values derived from the statement and R.
 struct Public {
     Digest mu;
-    Tables tables;
+    JointTables tables;
 };
 
 inline Digest statement_digest(std::span<const uint8_t> msg, std::span<const uint8_t> ctx,
@@ -181,7 +181,7 @@ inline Digest arith_binder(const LinkChallenge& chal, std::span<const uint8_t> z
     return d;
 }
 
-inline ArithInstance arith_instance(const Tables* tables, const LinkChallenge& chal,
+inline ArithInstance arith_instance(const JointTables* tables, const LinkChallenge& chal,
                                     std::span<const uint8_t, Z_BYTES> zp) {
     return {tables, LinkChallenge::weight<Fp>(chal.xn_pos), LinkChallenge::weight<Fp>(chal.xp_pos),
             reduce_le<Fp>(zp)};
@@ -209,7 +209,7 @@ inline Affine nonce_point(const Affine& q, std::span<const uint8_t> msg,
 // probability).
 inline Witness make_witness(const Affine& q, const p256::Signature& sig, const Public& pub,
                             std::span<const uint8_t, 32> seed) {
-    const Tables& tab = pub.tables;
+    const JointTables& tab = pub.tables;
     const p256::Limbs s = Fn::from_bytes(sig.s)->canonical();
     Witness wit;
     wit.wp.assign(LP, Fp::zero());

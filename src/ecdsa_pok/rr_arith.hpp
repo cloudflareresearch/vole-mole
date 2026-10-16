@@ -60,10 +60,11 @@ constexpr size_t DP = 2 * (RADIX - 1) + 1; // 31, as in arith.hpp
 constexpr size_t DN = 2;                   // the minimum of voleith_p256 (no constraints)
 
 // The comb tables of T with offset H, and the start H_0 and last addend P* = U - (H_0 + 32 H), in
-// the layout of arith.hpp's Tables (with b = a'). Throws std::runtime_error if a table entry or P*
-// is the identity (which happens with negligible probability).
-inline Tables make_tables(const Affine& t, const Affine& u, const Affine& h0, const Affine& h) {
-    Tables out;
+// the layout of arith.hpp's JointTables (with b = a'). Throws std::runtime_error if a table entry
+// or P* is the identity (which happens with negligible probability).
+inline JointTables make_tables(const Affine& t, const Affine& u, const Affine& h0,
+                               const Affine& h) {
+    JointTables out;
     std::vector<Jacobian> pts;
     pts.reserve(COMB_STEPS * RADIX * RADIX);
     Jacobian b1 = Jacobian::from(t);
@@ -117,7 +118,7 @@ inline Tables make_tables(const Affine& t, const Affine& u, const Affine& h0, co
 }
 
 struct ArithInstance {
-    const Tables* tables;
+    const JointTables* tables;
     Fp cx, cy; // link weights for x_Q and y_Q
     Fp zp;     // Z_p mod p
 };
@@ -128,7 +129,7 @@ struct RrArithRelation {
 
     template <typename Ctx> static void constraints(Ctx& ctx, const instance& x) {
         using PV = typename Ctx::PV;
-        const Tables& tab = *x.tables;
+        const JointTables& tab = *x.tables;
         auto add = [&](PV& ax, PV& ay, const PV& tx, const PV& ty, const PV& lambda) {
             ctx.add_p(lambda * (tx - ax) - (ty - ay));
             const PV nx = lambda * lambda - ax - tx;

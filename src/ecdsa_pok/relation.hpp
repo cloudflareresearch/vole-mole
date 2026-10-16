@@ -253,17 +253,16 @@ inline Witness make_witness(const Affine& q, const Tables& tables, std::span<con
         return static_cast<size_t>((u[(4 * k) / 64] >> ((4 * k) % 64)) & 0xf);
     };
 
-    // The comb.
+    // The combs.
     std::vector<p256::ChainStep> steps;
     steps.reserve(NUM_STEPS);
-    for (size_t k = 0; k < NUM_STEPS; ++k) {
-        steps.push_back(
-            {false, k < NUM_DIGITS ? tables.at(k, digit(u1, k), digit(u2, k)) : tables.pstar});
-        if (k < NUM_DIGITS) {
-            wit.wp[WP_A + k] = Fp::from_u64(digit(u1, k));
-            wit.wp[WP_B + k] = Fp::from_u64(digit(u2, k));
-        }
+    for (size_t k = 0; k < NUM_DIGITS; ++k) {
+        steps.push_back({false, tables.g->at(k, digit(u1, k))});
+        steps.push_back({false, tables.q.at(k, digit(u2, k))});
+        wit.wp[WP_A + k] = Fp::from_u64(digit(u1, k));
+        wit.wp[WP_B + k] = Fp::from_u64(digit(u2, k));
     }
+    steps.push_back({false, tables.pstar});
     const p256::Chain chain = p256::slope_chain(tables.h0, steps);
     std::copy(chain.slopes.begin(), chain.slopes.end(), wit.wp.begin() + WP_LAMBDA);
     const Fp ax = chain.points.back().x;

@@ -180,10 +180,10 @@ inline bool offsets_are_sound() {
 }
 
 // The comb tables of G: T_j[a][a'] = (a + 16 a') 256^j G + H_2 for j < 32, with Newton
-// coefficients as in arith.hpp's Tables (with b = a').
-inline const Tables& comb_tables() {
-    static const Tables out = [] {
-        Tables t;
+// coefficients as in arith.hpp's JointTables (with b = a').
+inline const JointTables& comb_tables() {
+    static const JointTables out = [] {
+        JointTables t;
         std::vector<Jacobian> pts;
         pts.reserve(COMB_STEPS * RADIX * RADIX);
         Jacobian b1 = Jacobian::from(p256::GENERATOR);
@@ -283,7 +283,7 @@ struct HkArithRelation {
         using PV = typename Ctx::PV;
         using NV = typename Ctx::NV;
         const Offsets& off = offsets();
-        const Tables& tab = comb_tables();
+        const JointTables& tab = comb_tables();
         const Fp three = Fp::from_u64(3);
 
         // A + T: commit to the slope, and update A.

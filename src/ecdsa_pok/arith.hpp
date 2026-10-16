@@ -8,27 +8,32 @@
 //   Witness over F_n: the 64-bit limbs of u1 and u2, e, X, the inverse of u2 X, the mask rho_n,
 //             and the masks sigma_1, sigma_2 (reduced modulo n)
 //
-// Fixed-base scalar multiplication, R = u1 G + u2 Q. Both bases are public, so we use a joint
-// comb with public tables: for k < 64, T_k[a][b] = a 16^k G + b 16^k Q + H, and
+// Fixed-base scalar multiplication, R = u1 G + u2 Q. Both bases are public, so we use two combs
+// with public tables: for k < 64, TG_k[a] = a 16^k G + H and TQ_k[b] = b 16^k Q + H, and
 //
-//   A_0 = H_0,  A_{k+1} = A_k + T_k[a_k][b_k] (k < 64),  R = A_64 + P*,
+//   A_0 = H_0,  A_{2k+1} = A_{2k} + TG_k[a_k],  A_{2k+2} = A_{2k+1} + TQ_k[b_k] (k < 64),
+//   R = A_128 + P*,
 //
-// where P* = -(H_0 + 64 H), and H_0, H are points of unknown discrete logarithm. The coordinates of
-// T_k[a_k][b_k] are polynomials of degree 15 + 15 in the committed digits, by interpolation on
-// [0, 16)^2 (in Newton form, see Tables). Each addition A + T commits only to the slope lambda,
-// constrained by lambda (x_T - x_A) = y_T - y_A, and the coordinates of the sum are expressions in
-// lambda and the inputs: x' = lambda^2 - x_A - x_T and y' = lambda (x_A - x') - y_A. They're linear
-// in x_A and y_A, so the coordinates of every A_k have degree at most 31, without committing to
-// them, and so does the constraint. Each digit d is constrained by prod_{m < 16} (d - m) = 0, of
-// degree 16.
+// where P* = -(H_0 + 128 H), and H_0, H are points of unknown discrete logarithm. The coordinates
+// of TG_k[a_k] are polynomials of degree 15 in the committed digit, by interpolation on [0, 16) (in
+// Newton form, see Comb), and likewise for TQ_k[b_k]. Each addition A + T commits only to the slope
+// lambda, constrained by lambda (x_T - x_A) = y_T - y_A, and the coordinates of the sum are
+// expressions in lambda and the inputs: x' = lambda^2 - x_A - x_T and y' = lambda (x_A - x') - y_A.
+// They're linear in x_A and y_A, so the coordinates of every A_k have degree at most 15 (x) and 16
+// (y), without committing to them, and the constraint has degree 16. Each digit d is constrained by
+// prod_{m < 16} (d - m) = 0, also of degree 16. (A joint comb on T_k[a][b] = a 16^k G + b 16^k Q +
+// H would take half the additions, but its table coordinates would have degree 15 + 15, and so the
+// constraints degree 31, which costs more than the 64 extra slopes, in proof size with a derived
+// witness and in proving time.)
 //
-// The incomplete addition formula is wrong only if x_T = x_A, i.e., A_k = +-T_k[a_k][b_k]. If
-// A_k = -T, then the constraint can't hold (y_T - y_A = 2 y_T != 0, since P-256 has no points of
-// order 2). If A_k = T, then lambda is unconstrained. But then H_0 + (k - 1) H = alpha G + beta Q
-// for known alpha, beta, so the prover found a discrete-logarithm relation between H_0, H, G, and
-// Q, which is infeasible even for a prover who knows the discrete logarithm of Q. Likewise for the
-// last step (A_64 = P* means 2 H_0 + 128 H = -(u1 G + u2 Q)). So R = u1 G + u2 Q, where u1, u2 are
-// the integers of the digits. (An honest prover fails with negligible probability.)
+// The incomplete addition formula is wrong only if x_T = x_A, i.e., A_j = +-T. If A_j = -T, then
+// the constraint can't hold (y_T - y_A = 2 y_T != 0, since P-256 has no points of order 2). If
+// A_j = T, then lambda is unconstrained. But A_j = H_0 + i H + alpha G + beta Q and T = H + gamma G
+// (or H + gamma Q) for known i, alpha, beta, gamma, so H_0 + (i - 1) H = alpha' G + beta' Q: the
+// prover found a discrete-logarithm relation between H_0, H, G, and Q, which is infeasible even
+// for a prover who knows the discrete logarithm of Q. Likewise for the last step (A_128 = P* means
+// 2 H_0 + 256 H = -(u1 G + u2 Q)). So R = u1 G + u2 Q, where u1, u2 are the integers of the
+// digits. (An honest prover fails with negligible probability.)
 //
 // The scalar equation, over F_n: u1 X = u2 e and (u2 X) inv = 1, where u1 and u2 are the
 // combinations of their limbs.
@@ -64,7 +69,7 @@ using p256::Jacobian;
 constexpr size_t DIGIT_BITS = 4;
 constexpr size_t RADIX = size_t{1} << DIGIT_BITS; // 16
 constexpr size_t NUM_DIGITS = 256 / DIGIT_BITS;   // 64 per scalar
-constexpr size_t NUM_STEPS = NUM_DIGITS + 1;      // the comb, then P*
+constexpr size_t NUM_STEPS = 2 * NUM_DIGITS + 1;  // the combs (interleaved), then P*
 
 // F_p witness layout.
 constexpr size_t WP_A = 0;                      // digits of u1
@@ -85,7 +90,7 @@ constexpr size_t WN_SIGMA = WN_RHO + 1;
 constexpr size_t LN = WN_SIGMA + NUM_Y_CHECKS;
 
 // The QuickSilver degrees.
-constexpr size_t DP = 2 * (RADIX - 1) + 1; // 31
+constexpr size_t DP = RADIX; // 16
 constexpr size_t DN = 3;
 
 // Y_i < Y_BOUND = 2^255 + 2^132. The weighted limbs sum to less than 8 2^64 2^64 = 2^131, and
@@ -105,8 +110,8 @@ inline const Affine& offset_h() {
     return p;
 }
 
-// The comb tables for a public key, and the coordinates of T_k in Newton form: with the falling
-// factorials F_i(z) = z (z - 1) ... (z - i + 1),
+// Joint comb tables (hk_arith.hpp) on two digits, and the coordinates of T_k in Newton form: with
+// the falling factorials F_i(z) = z (z - 1) ... (z - i + 1),
 //
 //   x(T_k[a][b]) = sum_{i, j < 16} nx_k[i][j] F_i(a) F_j(b)  for a, b in [0, 16),
 //
@@ -114,7 +119,7 @@ inline const Affine& offset_h() {
 // (Newton's forward difference formula, in each variable), and likewise for y. The differences
 // take only subtractions, and evaluating the Newton form on committed digits takes about a third
 // of the multiplications that the Lagrange form takes.
-struct Tables {
+struct JointTables {
     std::vector<Affine> t;  // t[256 k + 16 a + b] = T_k[a][b]
     std::vector<Fp> nx, ny; // nx[256 k + 16 i + j] = nx_k[i][j]
     Affine h0, pstar;
@@ -170,29 +175,54 @@ inline void newton_form(std::span<Fp, RADIX * RADIX> m) {
     }
 }
 
-// Throws std::runtime_error if a table entry is the identity (which happens with negligible
-// probability).
-inline Tables make_tables(const Affine& q) {
-    Tables out;
-    std::vector<Jacobian> pts;
-    pts.reserve(NUM_DIGITS * RADIX * RADIX);
-    Jacobian gk = Jacobian::from(p256::GENERATOR), qk = Jacobian::from(q);
-    const Jacobian h = Jacobian::from(offset_h());
-    for (size_t k = 0; k < NUM_DIGITS; ++k) {
-        Jacobian row = h; // a G_k + H
-        for (size_t a = 0; a < RADIX; ++a) {
-            Jacobian e = row;
-            for (size_t b = 0; b < RADIX; ++b) {
-                pts.push_back(e);
-                e = e.add(qk);
-            }
-            row = row.add(gk);
-        }
-        for (size_t i = 0; i < DIGIT_BITS; ++i) {
-            gk = gk.dbl();
-            qk = qk.dbl();
+// In place, the Newton coefficients of a function on [0, 16): n_i = (D^i f)(0) / i!.
+inline void newton_form_1d(std::span<Fp, RADIX> m) {
+    for (size_t i = 1; i < RADIX; ++i) {
+        for (size_t a = RADIX - 1; a >= i; --a) {
+            m[a] -= m[a - 1];
         }
     }
+    const auto& inv_fact = inv_factorials();
+    for (size_t a = 0; a < RADIX; ++a) {
+        m[a] *= inv_fact[a];
+    }
+}
+
+// The comb tables of a base B with offset H, T_k[a] = a 16^k B + H for k < 64 and a < 16, and the
+// coordinates of T_k in Newton form:
+//
+//   x(T_k[a]) = sum_{i < 16} nx_k[i] F_i(a)  for a in [0, 16),
+//
+// where nx_k[i] = (D^i x(T_k))(0) / i! for the forward difference D, and likewise for y. The
+// differences take only subtractions, and evaluating the Newton form on a committed digit takes
+// about a third of the multiplications that the Lagrange form takes.
+struct Comb {
+    std::vector<Affine> t;  // t[16 k + a] = T_k[a]
+    std::vector<Fp> nx, ny; // nx[16 k + i] = nx_k[i]
+
+    const Affine& at(size_t k, size_t a) const { return t[RADIX * k + a]; }
+    const Fp& newton_x(size_t k, size_t i) const { return nx[RADIX * k + i]; }
+    const Fp& newton_y(size_t k, size_t i) const { return ny[RADIX * k + i]; }
+};
+
+// Throws std::runtime_error if a table entry is the identity (which happens with negligible
+// probability).
+inline Comb make_comb(const Affine& base, const Affine& offset) {
+    std::vector<Jacobian> pts;
+    pts.reserve(NUM_DIGITS * RADIX);
+    Jacobian bk = Jacobian::from(base);
+    const Jacobian h = Jacobian::from(offset);
+    for (size_t k = 0; k < NUM_DIGITS; ++k) {
+        Jacobian e = h; // a 16^k B + H
+        for (size_t a = 0; a < RADIX; ++a) {
+            pts.push_back(e);
+            e = e.add(bk);
+        }
+        for (size_t i = 0; i < DIGIT_BITS; ++i) {
+            bk = bk.dbl();
+        }
+    }
+    Comb out;
     out.t = p256::batch_to_affine(pts);
     out.nx.resize(out.t.size());
     out.ny.resize(out.t.size());
@@ -204,12 +234,33 @@ inline Tables make_tables(const Affine& q) {
         out.ny[i] = out.t[i].y;
     }
     for (size_t k = 0; k < NUM_DIGITS; ++k) {
-        newton_form(std::span<Fp, RADIX * RADIX>(&out.nx[RADIX * RADIX * k], RADIX * RADIX));
-        newton_form(std::span<Fp, RADIX * RADIX>(&out.ny[RADIX * RADIX * k], RADIX * RADIX));
+        newton_form_1d(std::span<Fp, RADIX>(&out.nx[RADIX * k], RADIX));
+        newton_form_1d(std::span<Fp, RADIX>(&out.ny[RADIX * k], RADIX));
     }
+    return out;
+}
+
+// The comb tables of G, which don't depend on the key.
+inline const Comb& comb_g() {
+    static const Comb c = make_comb(p256::GENERATOR, offset_h());
+    return c;
+}
+
+// The tables for a public key Q: the combs of G and Q, H_0 and P*.
+struct Tables {
+    const Comb* g = nullptr;
+    Comb q;
+    Affine h0, pstar;
+};
+
+inline Tables make_tables(const Affine& q) {
+    Tables out;
+    out.g = &comb_g();
+    out.q = make_comb(q, offset_h());
     out.h0 = offset_h0();
     Jacobian s = Jacobian::from(out.h0);
-    for (size_t k = 0; k < NUM_DIGITS; ++k) {
+    const Jacobian h = Jacobian::from(offset_h());
+    for (size_t k = 0; k < 2 * NUM_DIGITS; ++k) {
         s = s.add(h);
     }
     out.pstar = s.to_affine().neg();
@@ -275,37 +326,38 @@ struct ArithRelation {
         return acc;
     }
 
+    // sum_i n(i) F_i(a), for fa = F_0(a), ..., F_16(a).
+    template <typename V, typename N>
+    static V newton_eval_1d(const std::array<V, RADIX + 1>& fa, N&& n) {
+        return V::lincomb(std::span<const V>(fa.data(), RADIX), [&](size_t i) { return Fp(n(i)); });
+    }
+
     template <typename Ctx> static void constraints(Ctx& ctx, const instance& x) {
         using PV = typename Ctx::PV;
         using NV = typename Ctx::NV;
         const Tables& tab = *x.tables;
 
-        // The comb.
+        // The combs.
         PV ax = ctx.cp(tab.h0.x), ay = ctx.cp(tab.h0.y);
-        for (size_t k = 0; k < NUM_STEPS; ++k) {
-            PV tx, ty;
-            if (k < NUM_DIGITS) {
-                const PV bk = ctx.wp(WP_B + k);
-                const auto fa = falling(ctx, ctx.wp(WP_A + k));
-                const auto fb = falling(ctx, bk);
-                ctx.add_p(fa[RADIX]);
-                ctx.add_p(fb[RADIX]);
-                // The coordinates of T_k[a_k][b_k], in Newton form.
-                tx = newton_eval(ctx, fa, bk,
-                                 [&](size_t i, size_t j) { return tab.newton_x(k, i, j); });
-                ty = newton_eval(ctx, fa, bk,
-                                 [&](size_t i, size_t j) { return tab.newton_y(k, i, j); });
-            } else {
-                tx = ctx.cp(tab.pstar.x);
-                ty = ctx.cp(tab.pstar.y);
-            }
-            const PV lambda = ctx.wp(WP_LAMBDA + k);
+        auto add = [&](const PV& tx, const PV& ty, const PV& lambda) {
             ctx.add_p(lambda * (tx - ax) - (ty - ay));
             const PV nx = lambda * lambda - ax - tx;
             const PV ny = lambda * (ax - nx) - ay;
             ax = nx;
             ay = ny;
+        };
+        for (size_t k = 0; k < NUM_DIGITS; ++k) {
+            for (size_t s = 0; s < 2; ++s) {
+                const Comb& c = s == 0 ? *tab.g : tab.q;
+                const auto f = falling(ctx, ctx.wp((s == 0 ? WP_A : WP_B) + k));
+                ctx.add_p(f[RADIX]);
+                // The coordinates of T_k[d], in Newton form.
+                add(newton_eval_1d(f, [&](size_t i) { return c.newton_x(k, i); }),
+                    newton_eval_1d(f, [&](size_t i) { return c.newton_y(k, i); }),
+                    ctx.wp(WP_LAMBDA + 2 * k + s));
+            }
         }
+        add(ctx.cp(tab.pstar.x), ctx.cp(tab.pstar.y), ctx.wp(WP_LAMBDA + 2 * NUM_DIGITS));
 
         // Z_p = c_3 x_R + rho_p.
         ctx.add_p(ax * x.c3 + ctx.wp(WP_RHO) - x.zp);

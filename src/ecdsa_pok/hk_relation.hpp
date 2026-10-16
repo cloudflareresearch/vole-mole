@@ -163,7 +163,7 @@ inline Witness make_witness(const Affine& q, std::span<const uint8_t> msg,
         throw std::invalid_argument("ecdsa_pok: invalid signature");
     }
     const Offsets& off = offsets();
-    const Tables& tab = comb_tables();
+    const JointTables& tab = comb_tables();
     const Fn r = *Fn::from_bytes(sig.r);
     const Fn s = *Fn::from_bytes(sig.s);
     const Fn e = Fn::reduce_32(sha256::hash(msg));
