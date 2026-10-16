@@ -905,7 +905,9 @@ time, to "the recomputed prefix's last `128` bytes are among the earlier simulat
 
 about `2⁻¹⁰²·²` plus `8·(q₃ + q₅ + 221·q_E)·2⁻¹²⁸` and `2·εhide` (`noHitProb ≤ 2^{−2¹⁵}`). The
 earlier paper bound for a redemption (`εRO + 2⁻¹⁰²³ + 2·noHitProb`) missed the `Δ' = 0` part of
-the grinding failure (`Pr[GrindBad] ≤ 2⁻¹¹⁰` instead of `noHitProb`). Restrictions of the model: the
+the grinding failure (`Pr[GrindBad] ≤ 2⁻¹¹⁰` instead of `noHitProb`; `≤ 2⁻¹¹³` with the
+second-moment bound on the acceptance set, `grindBad_le_113`, which the theorems here do not use
+yet). Restrictions of the model: the
 adversary's interaction (contexts, keys, responses, Anchor Sets, digests) does not read the
 tables, only its guess does (the zero-knowledge theorem is for statements fixed before the
 tables; lifted below); the four `H₃` slices are independent (exact unless two proofs share `(μ₁, wPrefix)`,
