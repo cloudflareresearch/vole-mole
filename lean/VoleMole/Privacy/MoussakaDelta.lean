@@ -14,16 +14,16 @@ from the proof on the original tables. Here they are bounded (`ZK/CollideRO.lean
   72 + 16·(9 − 1)`) is the simulation's tail (`simTail`: its uniform `ã`, unless it produced no
   proof). Issuance `1`'s prefix does not depend on issuance `0`'s coins, so this is
   `≤ noHitProb + 2^(−8·128)` (`pr_simTail_eq_le`).
-* **`deltaL_le`, `deltaR_le`**: `δL b ≤ 2⁻¹¹⁰ + εRO(0, 312, 4607) + noHitProb + 2·2⁻¹⁰²⁴` and
+* **`deltaL_le`, `deltaR_le`**: `δL b ≤ 2⁻¹¹³ + εRO(0, 312, 4607) + noHitProb + 2·2⁻¹⁰²⁴` and
   `δR b ≤ … + 3·2⁻¹⁰²⁴`. A redemption's statement is the adversary's choice after it saw the
   simulated requests, so its prefix may depend on their `ã`; the bound is `pr_collide_zk` (a second
   application of zero knowledge, to the distinguisher "the recomputed prefix's tail is among the
   earlier simulations' tails"; the grinding outcome at the real prefix is bad with probability
-  `≤ 2⁻¹¹⁰`). If the Client's check at the redemption point fails, no proof is computed and the
+  `≤ 2⁻¹¹³`). If the Client's check at the redemption point fails, no proof is computed and the
   term is `0`.
 * **`anonymityRO_lean_num`**: `anonymityRO_lean` with these bounds: the two worlds differ by at most
 
-      8·εRO(q₃, q₅ + 1872, q_E + 13821) + 4·(2⁻¹¹⁰ + εRO(0, 312, 4607)) + 6·noHitProb
+      8·εRO(q₃, q₅ + 1872, q_E + 13821) + 4·(2⁻¹¹³ + εRO(0, 312, 4607)) + 6·noHitProb
         + 12·2⁻¹⁰²⁴ + 2·εhide,
 
   and `noHitProb ≤ 2^(−2¹⁵)` (`noHitProb_le`).
@@ -125,13 +125,13 @@ lemma tails_PIOf {α : Type} (γ : (TIs (SimCoins pI) × TIs (SimCoins pI)) × �
   · exact Finset.mem_insert.2 (Or.inl (preTail_simBlk hashesWF_shake rfl _ _))
   · exact Finset.mem_insert.2 (Or.inr (Finset.mem_singleton.2 (preTail_simBlk hashesWF_shake rfl _ _)))
 
-/-- **The collision term of hop L**: `δL b ≤ 2⁻¹¹⁰ + εRO(0, 312, 4607) + noHitProb + 2·2⁻¹⁰²⁴`. -/
+/-- **The collision term of hop L**: `δL b ≤ 2⁻¹¹³ + εRO(0, 312, 4607) + noHitProb + 2·2⁻¹⁰²⁴`. -/
 theorem deltaL_le [ZKRow R] (b : Bool) : deltaL A idx (leanSim pI) leanProgI leanPR b ≤
-    1 / 2 ^ 110 + ZKRow.εz R pR 0 312 4607 + (noHitProb + 2 / 2 ^ 1024) := by
+    1 / 2 ^ 113 + ZKRow.εz R pR 0 312 4607 + (noHitProb + 2 / 2 ^ 1024) := by
   unfold deltaL
   refine pr_le_of_fst fun γ => ?_
   set p := pt A.base idx b (i₀Of A (leanSim pI) γ) (i₁Of A (leanSim pI) γ) false with hp
-  have hnn : 0 ≤ 1 / 2 ^ 110 + ZKRow.εz R pR 0 312 4607 + (noHitProb + 2 / 2 ^ 1024 : ℝ) := by
+  have hnn : 0 ≤ 1 / 2 ^ 113 + ZKRow.εz R pR 0 312 4607 + (noHitProb + 2 / 2 ^ 1024 : ℝ) := by
     have := pr_nonneg (α := Grind) (fun g => firstHit g = none)
     have := ZKRow.εz_nonneg (R := R) pR 0 312 4607
     unfold noHitProb; positivity
@@ -158,14 +158,14 @@ theorem deltaL_le [ZKRow R] (b : Bool) : deltaL A idx (leanSim pI) leanProgI lea
       rw [show (stR (xROf A p)).params = pR from rfl, tail_pR]
       gcongr
 
-/-- **The collision term of hop R**: `δR b ≤ 2⁻¹¹⁰ + εRO(0, 312, 4607) + noHitProb + 3·2⁻¹⁰²⁴`. -/
+/-- **The collision term of hop R**: `δR b ≤ 2⁻¹¹³ + εRO(0, 312, 4607) + noHitProb + 3·2⁻¹⁰²⁴`. -/
 theorem deltaR_le [ZKRow R] (b : Bool) :
     deltaR A idx (leanSim pI) leanProgI leanProgR leanPR b ≤
-      1 / 2 ^ 110 + ZKRow.εz R pR 0 312 4607 + (noHitProb + 3 / 2 ^ 1024) := by
+      1 / 2 ^ 113 + ZKRow.εz R pR 0 312 4607 + (noHitProb + 3 / 2 ^ 1024) := by
   unfold deltaR
   refine pr_le_of_fst fun γ => ?_
   set p := pt A.base idx b (i₀Of A (leanSim pI) γ) (i₁Of A (leanSim pI) γ) true with hp
-  have hnn : 0 ≤ 1 / 2 ^ 110 + ZKRow.εz R pR 0 312 4607 + (noHitProb + 3 / 2 ^ 1024 : ℝ) := by
+  have hnn : 0 ≤ 1 / 2 ^ 113 + ZKRow.εz R pR 0 312 4607 + (noHitProb + 3 / 2 ^ 1024 : ℝ) := by
     have := pr_nonneg (α := Grind) (fun g => firstHit g = none)
     have := ZKRow.εz_nonneg (R := R) pR 0 312 4607
     unfold noHitProb; positivity
@@ -218,7 +218,7 @@ theorem deltaR_le [ZKRow R] (b : Bool) :
 (`ZKRow R`): as `anonymityRO_leanG` with the collision terms bounded,
 
     4·εz(pI; q₃, q₅ + 1872, q_E + 13821) + 4·εz(pR; q₃, q₅ + 1872, q_E + 13821)
-      + 4·(2⁻¹¹⁰ + εz(pR; 0, 312, 4607)) + 6·noHitProb + 12·2⁻¹⁰²⁴ + 2·εhide. -/
+      + 4·(2⁻¹¹³ + εz(pR; 0, 312, 4607)) + 6·noHitProb + 12·2⁻¹⁰²⁴ + 2·εhide. -/
 theorem anonymityRO_lean_numG [ZKRow R] (A : AdversaryRO R) (idx : AnchorSet → UOVKey → ℕ)
     {q3 q5 qE : ℕ} {εhide : ℝ} (hA : A.Budget q3 q5 qE)
     (hhide : ∀ b c, hidingAdv A.base.ci A.base.cr
@@ -226,7 +226,7 @@ theorem anonymityRO_lean_numG [ZKRow R] (A : AdversaryRO R) (idx : AnchorSet →
     |pr _ (realGameRO A idx leanPI leanPR false) - pr _ (realGameRO A idx leanPI leanPR true)| ≤
       4 * ZKRow.εz R pI q3 (q5 + 1872) (qE + 13821) +
         4 * ZKRow.εz R pR q3 (q5 + 1872) (qE + 13821) +
-        4 * (1 / 2 ^ 110 + ZKRow.εz R pR 0 312 4607) +
+        4 * (1 / 2 ^ 113 + ZKRow.εz R pR 0 312 4607) +
         6 * noHitProb + 12 / 2 ^ 1024 + 2 * εhide := by
   refine (anonymityRO_leanG A idx hA hhide).trans (le_trans (add_le_add (add_le_add (add_le_add
     (add_le_add le_rfl (mul_le_mul_of_nonneg_left (deltaI1_le A) (by norm_num)))
@@ -239,17 +239,17 @@ theorem anonymityRO_lean_numG [ZKRow R] (A : AdversaryRO R) (idx : AnchorSet →
 term explicit.** As `anonymityRO_lean`, with the programming-collision terms bounded: the two
 worlds differ by at most
 
-    8·εRO(q₃, q₅ + 1872, q_E + 13821) + 4·(2⁻¹¹⁰ + εRO(0, 312, 4607)) + 6·noHitProb
+    8·εRO(q₃, q₅ + 1872, q_E + 13821) + 4·(2⁻¹¹³ + εRO(0, 312, 4607)) + 6·noHitProb
       + 12·2⁻¹⁰²⁴ + 2·εhide,
 
-`εRO q₃ q₅ q_E = q₃·2⁻¹²⁸ + 2⁻¹¹⁰ + 221·(4607 + q_E + 4607)·2⁻¹²⁸ + (q₅ + 1)·2⁻¹²⁸` and
+`εRO q₃ q₅ q_E = q₃·2⁻¹²⁸ + 2⁻¹¹³ + 221·(4607 + q_E + 4607)·2⁻¹²⁸ + (q₅ + 1)·2⁻¹²⁸` and
 `noHitProb ≤ 2^(−2¹⁵)` (`noHitProb_le`). (`anonymityRO_lean_numG` at function rows.) -/
 theorem anonymityRO_lean_num (A : AdversaryRO (Blk → Blk)) (idx : AnchorSet → UOVKey → ℕ)
     {q3 q5 qE : ℕ} {εhide : ℝ} (hA : A.Budget q3 q5 qE)
     (hhide : ∀ b c, hidingAdv A.base.ci A.base.cr
       (reductionRO A idx (leanSim pI) (leanSim pR) leanProgI leanProgR b c) ≤ εhide) :
     |pr _ (realGameRO A idx leanPI leanPR false) - pr _ (realGameRO A idx leanPI leanPR true)| ≤
-      8 * εRO q3 (q5 + 1872) (qE + 13821) + 4 * (1 / 2 ^ 110 + εRO 0 312 4607) +
+      8 * εRO q3 (q5 + 1872) (qE + 13821) + 4 * (1 / 2 ^ 113 + εRO 0 312 4607) +
         6 * noHitProb + 12 / 2 ^ 1024 + 2 * εhide :=
   (anonymityRO_lean_numG A idx hA hhide).trans (le_of_eq (by
     rw [ZKRow.εz_fn, ZKRow.εz_fn]

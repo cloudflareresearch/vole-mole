@@ -18,12 +18,13 @@ CRT tables (`CrtGen.tables`):
   the simulation succeeds and its `Δ` is not `0` (`¬ HitZero`), with no other assumption.
 * `pr_simulateRO_reject`: **the simulation fails or its proof is rejected with probability
   `≤ noHitProb + 1/|A| ≤ 2^{−2¹⁵} + 2⁻¹¹¹`** over the simulator's coins (`pr_hitZero_le`,
-  `noHitProb_le`), and `≤ 2⁻¹¹⁰` (`pr_simulateRO_reject_110`). This is the same event `GrindBad`
-  as for the real prover.
+  `noHitProb_le`); with the second-moment bound `|A| ≥ 2¹¹⁴`, `≤ 2^{−2¹⁵} + 2⁻¹¹⁴ ≤ 2⁻¹¹³`
+  (`pr_simulateRO_reject_114`, `pr_simulateRO_reject_113`; `pr_simulateRO_reject_110` is the
+  weaker `2⁻¹¹⁰`). This is the same event `GrindBad` as for the real prover.
 
 So `zk_sim`'s run-time checks of `check_format`, of the reconstruction and of `Δ' ≠ 0` on the
 simulated proofs are implied (the last except for `Δ = 0`, which grinding reaches with probability
-`≤ 2⁻¹¹¹`).
+`≤ 2⁻¹¹⁴`).
 -/
 
 open Finset
@@ -173,17 +174,31 @@ theorem pr_simulateRO_reject_num (Hs : Hashes) (st : Statement) :
     (by positivity), one_mul, one_mul]
   exact_mod_cast Accept.card_accSet_ge
 
-/-- **`pr_simulateRO_reject`: `≤ 2⁻¹¹⁰`.** -/
+/-- **`pr_simulateRO_reject` with the second-moment bound: `≤ 2^{−2¹⁵} + 2⁻¹¹⁴`.** -/
+theorem pr_simulateRO_reject_114 (Hs : Hashes) (st : Statement) :
+    pr (SimCoins st.params) (fun c => ¬ ∃ proof Hs',
+        simulateRO Hs CrtGen.tables st c = .ok (proof, Hs') ∧
+        (verify Hs' CrtGen.tables st proof).accept = true) ≤
+      (1 / 2) ^ (2 ^ 15) + 1 / 2 ^ 114 := by
+  refine (pr_mono fun c hc => simulateRO_bad Hs st c hc).trans ((pr_or_le _ _).trans ?_)
+  rw [pr_simCoins_grind (fun g => firstHit g = none), pr_simCoins_grind HitZero]
+  exact add_le_add noHitProb_le pr_hitZero_le_114
+
+/-- **`pr_simulateRO_reject`: `≤ 2⁻¹¹³`.** -/
+theorem pr_simulateRO_reject_113 (Hs : Hashes) (st : Statement) :
+    pr (SimCoins st.params) (fun c => ¬ ∃ proof Hs',
+        simulateRO Hs CrtGen.tables st c = .ok (proof, Hs') ∧
+        (verify Hs' CrtGen.tables st proof).accept = true) ≤ 1 / 2 ^ 113 := by
+  refine (pr_simulateRO_reject_114 Hs st).trans ?_
+  calc ((1 : ℝ) / 2) ^ (2 ^ 15) + 1 / 2 ^ 114 ≤ 1 / 2 ^ 114 + 1 / 2 ^ 114 :=
+        add_le_add half_pow_le_114 le_rfl
+    _ = 1 / 2 ^ 113 := by norm_num
+
+/-- **`pr_simulateRO_reject`: `≤ 2⁻¹¹⁰`** (implied by `pr_simulateRO_reject_113`). -/
 theorem pr_simulateRO_reject_110 (Hs : Hashes) (st : Statement) :
     pr (SimCoins st.params) (fun c => ¬ ∃ proof Hs',
         simulateRO Hs CrtGen.tables st c = .ok (proof, Hs') ∧
-        (verify Hs' CrtGen.tables st proof).accept = true) ≤ 1 / 2 ^ 110 := by
-  refine (pr_simulateRO_reject_num Hs st).trans ?_
-  have : ((1 : ℝ) / 2) ^ (2 ^ 15) ≤ 1 / 2 ^ 111 := by
-    rw [div_pow, one_pow]
-    exact one_div_le_one_div_of_le (by positivity)
-      (pow_le_pow_right₀ (by norm_num) (by norm_num))
-  calc ((1 : ℝ) / 2) ^ (2 ^ 15) + 1 / 2 ^ 111 ≤ 1 / 2 ^ 111 + 1 / 2 ^ 111 := add_le_add this le_rfl
-    _ = 1 / 2 ^ 110 := by norm_num
+        (verify Hs' CrtGen.tables st proof).accept = true) ≤ 1 / 2 ^ 110 :=
+  (pr_simulateRO_reject_113 Hs st).trans (by norm_num)
 
 end VoleMole.ZK.Sim

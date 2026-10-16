@@ -13,7 +13,9 @@ faest-arch-opt's tables `CrtGen.tables` and every statement whose label rows are
 `CrtGen.tables` without them:
 
 * `verify_proveCommit_tables`, `verify_prove_tables`: any statement whose evaluator is a system of
-  degree `≤ d`; assumed only `HashesWF Hs` and `Δ' ≠ 0` for the ground `Δ` (probability `2⁻¹²⁰`).
+  degree `≤ d`; assumed only `HashesWF Hs` and `Δ' ≠ 0` for the ground `Δ` (`Δ' = 0` has
+  probability `≤ 2⁻¹¹⁴` over the grinding answers, `ZK.Sim.pr_hitZero_le_114`, `≈ 2⁻¹¹⁸·⁷` in
+  truth; discharged in the random-oracle model by `ZK/CompleteRO.lean`, `complete_rom`).
 * `moussakaIssue_complete_tables`, `moussakaRedeem_complete_tables`,
   `ratatouilleIssue_complete_tables`, `ratatouilleSpend_complete_tables`,
   `pomfritRedeem_complete_tables`: the five relations, either layout (`ProveOkT`: the prover

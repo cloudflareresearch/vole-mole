@@ -992,7 +992,7 @@ at most
 
     8·εRO(q₃, q₅ + 3·624, q_E + 3·4607) + 2·δI₁ + Σ_b (δL b + δR b) + 2·εhide,
 
-`εRO q₃ q₅ q_E = q₃·2⁻¹²⁸ + 2⁻¹¹⁰ + 221·(4607 + q_E + 4607)·2⁻¹²⁸ + (q₅ + 1)·2⁻¹²⁸`, the `δ` the
+`εRO q₃ q₅ q_E = q₃·2⁻¹²⁸ + 2⁻¹¹³ + 221·(4607 + q_E + 4607)·2⁻¹²⁸ + (q₅ + 1)·2⁻¹²⁸`, the `δ` the
 explicit programming-collision probabilities of the hybrids and `εhide` the hiding advantage of
 the reductions (simulator coins and tables fixed). (`anonymityRO_leanG` at function rows.) -/
 theorem anonymityRO_lean (A : AdversaryRO (Blk → Blk)) (idx : AnchorSet → UOVKey → ℕ)

@@ -750,7 +750,7 @@ theorem zk_rom_ic_h23P {cs : ByteArray → ByteArray → System GF128} (hlr : st
   refine (abs_sub_le _ _ _).trans ((add_le_add hA ((abs_sub_le _ _ _).trans
     (add_le_add hB hC))).trans (le_of_eq (by ring)))
 
-/-- **`zk_rom_ic_h23P` with the grinding term numeric** (`grindBad_le_110`). -/
+/-- **`zk_rom_ic_h23P` with the grinding term numeric** (`grindBad_le_113`). -/
 theorem zk_rom_ic_h23P_num {cs : ByteArray → ByteArray → System GF128}
     (hlr : st.params.labelRows = true)
     (hzk : ZKHyp CrtGen.tables st w cs) (hHb : HashesWF Hb) (hp : SmallParams st.params)
@@ -778,10 +778,10 @@ theorem zk_rom_ic_h23P_num {cs : ByteArray → ByteArray → System GF128}
           (@simTab (icPrg (patchT PE WE c.2)) Hb CrtGen.tables st (patchT P5 W5 c.1.2.2.2)
             (simulate st.params c.1.1) c.1.1.1.2.1 c.1.2.2.1) (patchT P5 W5 c.1.2.2.2)
           (patchT PE WE c.2))| ≤
-      q3 / 2 ^ 128 + 1 / 2 ^ 110 + 221 * (4607 + (qE + 4607) + PE.card) / 2 ^ 128 +
+      q3 / 2 ^ 128 + 1 / 2 ^ 113 + 221 * (4607 + (qE + 4607) + PE.card) / 2 ^ 128 +
         ((q5 + 1) / 2 ^ 128 + (P5.card + 1) / 2 ^ 128) :=
   (zk_rom_ic_h23P Hb st w hlr hzk hHb hp D Q3 hQ3 hq3 Q5 hQ5 hq5 QE hQE hqE P5 W5 PE WE).trans
-    (add_le_add (add_le_add (add_le_add le_rfl grindBad_le_110) le_rfl) le_rfl)
+    (add_le_add (add_le_add (add_le_add le_rfl grindBad_le_113) le_rfl) le_rfl)
 
 end ICP
 

@@ -263,7 +263,7 @@ theorem zk2_rom_ic_h23_perm (hh : ∀ G5 π, Hyp2 st r (K G5 π)) (hHb : HashesW
   refine (abs_sub_le _ _ _).trans ((add_le_add hA ((abs_sub_le _ _ _).trans
     (add_le_add hB hC))).trans (le_of_eq (by push_cast; ring)))
 
-/-- **`zk2_rom_ic_h23_perm` with `Pr[GrindBad] ≤ 2⁻¹¹⁰`**: the two-phase error with AES as random
+/-- **`zk2_rom_ic_h23_perm` with `Pr[GrindBad] ≤ 2⁻¹¹³`**: the two-phase error with AES as random
 permutations is the single-phase one, `εROPm p q₃ (q₅ + q_k5) (q_E + q_kE)`. -/
 theorem zk2_rom_ic_h23_num_perm (hh : ∀ G5 π, Hyp2 st r (K G5 π)) (hHb : HashesWF Hb)
     (hp : SmallParams st.params)
@@ -298,7 +298,7 @@ theorem zk2_rom_ic_h23_num_perm (hh : ∀ G5 π, Hyp2 st r (K G5 π)) (hHb : Has
       εROPm st.params q3 (q5 + qk5) (qE + qkE) := by
   refine (zk2_rom_ic_h23_perm Hb st r K hh hHb hp QK5 hQK5 hqk5 QKE hQKE hqkE D Q3 hQ3 hq3 Q5 hQ5
     hq5 QE hQE hqE).trans ?_
-  have := grindBad_le_110
+  have := grindBad_le_113
   unfold εROPm
   push_cast
   linarith
@@ -585,7 +585,7 @@ theorem zk2_rom_ic_h23A_perm (hh : ∀ G3 G5 π, Hyp2 st r (K G3 G5 π)) (hHb : 
   refine (abs_sub_le _ _ _).trans ((add_le_add hA ((abs_sub_le _ _ _).trans
     (add_le_add hB hC))).trans (le_of_eq (by push_cast; ring)))
 
-/-- **`zk2_rom_ic_h23A_perm` with `Pr[GrindBad] ≤ 2⁻¹¹⁰`**: the error is
+/-- **`zk2_rom_ic_h23A_perm` with `Pr[GrindBad] ≤ 2⁻¹¹³`**: the error is
 `εROPm p (q₃ + q_k3) (q₅ + q_k5) (q_E + q_kE)`. -/
 theorem zk2_rom_ic_h23A_num_perm (hh : ∀ G3 G5 π, Hyp2 st r (K G3 G5 π)) (hHb : HashesWF Hb)
     (hp : SmallParams st.params)
@@ -626,7 +626,7 @@ theorem zk2_rom_ic_h23A_num_perm (hh : ∀ G3 G5 π, Hyp2 st r (K G3 G5 π)) (hH
       εROPm st.params (q3 + qk3) (q5 + qk5) (qE + qkE) := by
   refine (zk2_rom_ic_h23A_perm Hb st r K hh hHb hp QK3 hQK3 hqk3 QK5 hQK5 hqk5 QKE hQKE hqkE D Q3
     hQ3 hq3 Q5 hQ5 hq5 QE hQE hqE).trans ?_
-  have := grindBad_le_110
+  have := grindBad_le_113
   unfold εROPm
   push_cast
   linarith

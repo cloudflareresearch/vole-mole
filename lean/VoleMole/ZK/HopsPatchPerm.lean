@@ -22,7 +22,7 @@ elsewhere), read by the distinguisher as whole permutations.
   adaptive-statement theorems and the games with a table-reading adversary hold with permutation
   rows.
 
-    εROPmP p q₃ q₅ q_E n₅ n_E = q₃·2⁻¹²⁸ + 2⁻¹¹⁰ + 221·(4607 + q_E + 4607 + n_E)/(2¹²⁸ − (nHi + 1))
+    εROPmP p q₃ q₅ q_E n₅ n_E = q₃·2⁻¹²⁸ + 2⁻¹¹³ + 221·(4607 + q_E + 4607 + n_E)/(2¹²⁸ − (nHi + 1))
                                  + switchEps p + (q₅ + 1)·2⁻¹²⁸ + (n₅ + 1)·2⁻¹²⁸.
 -/
 
@@ -261,7 +261,7 @@ section ZKPPm
 /-- **The error of `zk_roP_perm`**: `εROPm` with `|PE|` added to the hops' candidates, plus the
 `H₅` patch's `(|P5| + 1)·2⁻¹²⁸`. -/
 noncomputable def εROPmP (p : Params) (q3 q5 qE n5 nE : ℕ) : ℝ :=
-  q3 / 2 ^ 128 + 1 / 2 ^ 110 +
+  q3 / 2 ^ 128 + 1 / 2 ^ 113 +
     (221 * (4607 + (qE + 4607) + nE) / ((2 ^ 128 - (nHi p + 1) : ℕ) : ℝ) + switchEps p) +
       ((q5 + 1) / 2 ^ 128 + (n5 + 1) / 2 ^ 128)
 
@@ -323,7 +323,7 @@ theorem zk_roP_perm {cs : ByteArray → ByteArray → System GF128} (hlr : st.pa
       right_inv := fun _ => rfl }
   rw [← pr_equiv e1, ← pr_equiv e2]
   refine key.trans ?_
-  have := grindBad_le_110
+  have := grindBad_le_113
   unfold εROPmP
   linarith
 
@@ -338,7 +338,7 @@ noncomputable instance ZKPRow.perm : ZKPRow (Equiv.Perm Blk) where
 /-- **The `H₂³` term with AES as random permutations** (`h23G` at permutation rows). -/
 noncomputable def h23Pm (p : Params) (d n5 nE n2 : ℕ) : ℝ :=
   if n2 = 0 then 0 else
-    1 / 2 ^ 110 + εROPmP p 0 312 4607 n5 nE + 2 * (noHitProb + n2 / 2 ^ (8 * (16 * (d - 1))))
+    1 / 2 ^ 113 + εROPmP p 0 312 4607 n5 nE + 2 * (noHitProb + n2 / 2 ^ (8 * (16 * (d - 1))))
 
 /-- **The error of `zk_adaptive` with AES as random permutations** (`εAdG` at permutation rows):
 `εROPmP p q₃ q₅ q_E s₅ s_E + s₃·2⁻¹²⁸ + h23Pm p d s₅ s_E s₂`. -/

@@ -144,7 +144,7 @@ theorem anonymityOC_lean_num (A : AdversaryOC (Blk → Blk)) (idx : AnchorSet �
         pr _ (realGameRA A.toRA idx leanPI leanPR true)| ≤
       4 * εRO (i3 + q3) (q5 + i5 + 1872) (qE + iE + 13821) +
         4 * εAd 9 q3 (q5 + 1248) (qE + 13821) i3 i2 (i5 + 624) (iE + 9214) +
-        4 * (i3 / 2 ^ 128 + 1 / 2 ^ 110 + εROP 0 312 4607 (i5 + 624) (iE + 9214)) +
+        4 * (i3 / 2 ^ 128 + 1 / 2 ^ 113 + εROP 0 312 4607 (i5 + 624) (iE + 9214)) +
         6 * noHitProb + 12 / 2 ^ 1024 + 2 * εhide :=
   anonymityRA_lean_num (A := A.toRA) (idx := idx) hA (AdversaryOC.iBudget hI) hhide
 
@@ -159,7 +159,7 @@ theorem anonymityOC_lean_num_perm (A : AdversaryOC (Equiv.Perm Blk))
         pr _ (realGameRA A.toRA idx leanPI leanPR true)| ≤
       4 * εROPm pI (i3 + q3) (q5 + i5 + 1872) (qE + iE + 13821) +
         4 * εAdPm pR 9 q3 (q5 + 1248) (qE + 13821) i3 i2 (i5 + 624) (iE + 9214) +
-        4 * (i3 / 2 ^ 128 + 1 / 2 ^ 110 + εROPmP pR 0 312 4607 (i5 + 624) (iE + 9214)) +
+        4 * (i3 / 2 ^ 128 + 1 / 2 ^ 113 + εROPmP pR 0 312 4607 (i5 + 624) (iE + 9214)) +
         6 * noHitProb + 12 / 2 ^ 1024 + 2 * εhide :=
   anonymityRA_lean_num_perm (A := A.toRA) (idx := idx) hA (AdversaryOC.iBudget hI) hhide
 
@@ -245,7 +245,7 @@ theorem unlinkabilityOC_lean_num (A : AdversaryOC (Blk → Blk) Sizes.labelRows)
       4 * εRO (2 * i3 + q3) (q5 + 2 * i5 + 1872) (qE + 2 * iE + 13821) +
         2 * εAd 9 (i3 + q3) (q5 + i5 + 1248) (qE + iE + 13821) i3 i2 (i5 + 624) (iE + 9214) +
         2 * εAd 9 q3 (q5 + 936) (qE + 13821) (2 * i3) (2 * i2) (2 * i5 + 1560) (2 * iE + 23035) +
-        6 * (i3 / 2 ^ 128) + 4 * (1 / 2 ^ 110 + εROP 0 312 4607 (2 * i5 + 1560) (2 * iE + 23035)) +
+        6 * (i3 / 2 ^ 128) + 4 * (1 / 2 ^ 113 + εROP 0 312 4607 (2 * i5 + 1560) (2 * iE + 23035)) +
         6 * noHitProb + 12 / 2 ^ 1024 + 2 * εhide :=
   unlinkabilityRA_lean_num (A := A.toRA) hA (AdversaryOC.iBudget h1 h2) hhide b₁ b₂ b₁' b₂'
 
@@ -264,7 +264,7 @@ theorem unlinkabilityOC_lean_num_perm (A : AdversaryOC (Equiv.Perm Blk) Sizes.la
         2 * εAdPm pS 9 q3 (q5 + 936) (qE + 13821) (2 * i3) (2 * i2) (2 * i5 + 1560)
           (2 * iE + 23035) +
         6 * (i3 / 2 ^ 128) +
-        4 * (1 / 2 ^ 110 + εROPmP pS 0 312 4607 (2 * i5 + 1560) (2 * iE + 23035)) +
+        4 * (1 / 2 ^ 113 + εROPmP pS 0 312 4607 (2 * i5 + 1560) (2 * iE + 23035)) +
         6 * noHitProb + 12 / 2 ^ 1024 + 2 * εhide :=
   unlinkabilityRA_lean_num_perm (A := A.toRA) hA (AdversaryOC.iBudget h1 h2) hhide b₁ b₂ b₁' b₂'
 
@@ -380,7 +380,7 @@ theorem blindnessOCH_lean_num (A : AdversaryOC (Blk → Blk)) {q3 q5 qE i3 i2 i5
       4 * εRO (q3 + 6 * i3) (q5 + 6 * i5 + 1872) (qE + 6 * iE + 23035) + 2 * noHitProb +
         2 / 2 ^ 128 +
         (if i2 = 0 then 0 else
-          4 * (1 / 2 ^ 110 + εRO (6 * i3) (6 * i5 + 2184) (6 * iE + 18428) +
+          4 * (1 / 2 ^ 113 + εRO (6 * i3) (6 * i5 + 2184) (6 * iE + 18428) +
             (i2 + i2 : ℕ) / 2 ^ 128)) :=
   blindnessRAH_lean_num A.toRA hA (AdversaryOC.iBudgetH hk hr)
 
@@ -394,7 +394,7 @@ theorem blindnessOCH_lean_num_perm (A : AdversaryOC (Equiv.Perm Blk)) {q3 q5 qE 
       4 * εROPm pP (q3 + 6 * i3) (q5 + 6 * i5 + 1872) (qE + 6 * iE + 23035) + 2 * noHitProb +
         2 / 2 ^ 128 +
         (if i2 = 0 then 0 else
-          4 * (1 / 2 ^ 110 + εROPm pP (6 * i3) (6 * i5 + 2184) (6 * iE + 18428) +
+          4 * (1 / 2 ^ 113 + εROPm pP (6 * i3) (6 * i5 + 2184) (6 * iE + 18428) +
             (i2 + i2 : ℕ) / 2 ^ 128)) :=
   blindnessRAH_lean_num_perm A.toRA hA (AdversaryOC.iBudgetH hk hr)
 

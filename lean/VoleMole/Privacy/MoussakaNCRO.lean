@@ -1298,7 +1298,7 @@ most
 
     4·εRO(q₃, q₅ + 2496, q_E + 23035) + 2·(noHitProb + 2⁻¹⁰²⁴) + 2·(φ₀ + φ₁) + 4·q₃·2⁻¹²⁸,
 
-`εRO q₃ q₅ q_E = q₃·2⁻¹²⁸ + 2⁻¹¹⁰ + 221·(4607 + q_E + 4607)·2⁻¹²⁸ + (q₅ + 1)·2⁻¹²⁸`, about
+`εRO q₃ q₅ q_E = q₃·2⁻¹²⁸ + 2⁻¹¹³ + 221·(4607 + q_E + 4607)·2⁻¹²⁸ + (q₅ + 1)·2⁻¹²⁸`, about
 `2⁻¹⁰³·²` plus the budget terms and the abort term. -/
 theorem anonymityNCRO_lean_num (A : AdversaryNCRO (Blk → Blk)) (idx : AnchorSet → UOVKey → ℕ)
     (sk : Bool → Signer) (hsk : ∀ c, (sk c).Correct (A.pk c)) (hidx : IdxSound idx)

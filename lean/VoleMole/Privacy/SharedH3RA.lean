@@ -28,7 +28,7 @@ only,
 
     4·εz(pI; q_E + i_E + 13824, q₅ + i₅ + 1872, q_E + i_E + 13824)
       + 4·εAdG(pR; 9; q_E + 13822, q₅ + 1248, q_E + 13822; 0, i₂, i₅ + 624, i_E + 9214)
-      + 4·(2⁻¹¹⁰ + εP(pR; 0, 312, 4607; i₅ + 624, i_E + 9214)) + 8·(i_E + 9214)·2⁻¹²⁸
+      + 4·(2⁻¹¹³ + εP(pR; 0, 312, 4607; i₅ + 624, i_E + 9214)) + 8·(i_E + 9214)·2⁻¹²⁸
       + 6·noHitProb + 12·2⁻¹⁰²⁴ + 2·εhide.
 
 **`unlinkabilityRASh_numG`** (Ratatouille): see its statement. Function rows (`_num`) and
@@ -198,7 +198,7 @@ Then the two worlds differ by at most
 
     4·εz(pI; q_E + i_E + 13824, q₅ + i₅ + 1872, q_E + i_E + 13824)
       + 4·εAdG(pR; 9; q_E + 13822, q₅ + 1248, q_E + 13822; 0, i₂, i₅ + 624, i_E + 9214)
-      + 4·(2⁻¹¹⁰ + εP(pR; 0, 312, 4607; i₅ + 624, i_E + 9214)) + 8·(i_E + 9214)·2⁻¹²⁸
+      + 4·(2⁻¹¹³ + εP(pR; 0, 312, 4607; i₅ + 624, i_E + 9214)) + 8·(i_E + 9214)·2⁻¹²⁸
       + 6·noHitProb + 12·2⁻¹⁰²⁴ + 2·εhide. -/
 theorem anonymityRASh_numG [ZKRow R] [ZKPRow R] {q5 qE i2 i5 iE : ℕ} {εhide : ℝ}
     (hA : A.GBudget 0 q5 qE) (hI : A.IBudget 0 i2 i5 iE)
@@ -207,7 +207,7 @@ theorem anonymityRASh_numG [ZKRow R] [ZKPRow R] {q5 qE i2 i5 iE : ℕ} {εhide :
     |pr _ (realGameRASh A idx false) - pr _ (realGameRASh A idx true)| ≤
       4 * ZKRow.εz R pI (qE + iE + 13824) (q5 + i5 + 1872) (qE + iE + 13824) +
         4 * εAdG R pR 9 (qE + 13822) (q5 + 1248) (qE + 13822) 0 i2 (i5 + 624) (iE + 9214) +
-        4 * (1 / 2 ^ 110 + ZKPRow.εP R pR 0 312 4607 (i5 + 624) (iE + 9214)) +
+        4 * (1 / 2 ^ 113 + ZKPRow.εP R pR 0 312 4607 (i5 + 624) (iE + 9214)) +
         8 * ((iE + 9214 : ℕ) / 2 ^ 128) + 6 * noHitProb + 12 / 2 ^ 1024 + 2 * εhide := by
   have h := anonymityRA (A := A) (idx := idx) (PI := leanPISh) (PR := leanPRSh) (simI := leanSim pI)
     (simR := leanSim pR) (progI := leanProgI) (progR := leanProgR)
@@ -272,7 +272,7 @@ theorem anonymityRASh_num (A : AdversaryRA (RowH (Blk → Blk))) (idx : AnchorSe
     |pr _ (realGameRASh A idx false) - pr _ (realGameRASh A idx true)| ≤
       4 * εRO (qE + iE + 13824) (q5 + i5 + 1872) (qE + iE + 13824) +
         4 * εAd 9 (qE + 13822) (q5 + 1248) (qE + 13822) 0 i2 (i5 + 624) (iE + 9214) +
-        4 * (1 / 2 ^ 110 + εROP 0 312 4607 (i5 + 624) (iE + 9214)) +
+        4 * (1 / 2 ^ 113 + εROP 0 312 4607 (i5 + 624) (iE + 9214)) +
         8 * ((iE + 9214 : ℕ) / 2 ^ 128) + 6 * noHitProb + 12 / 2 ^ 1024 + 2 * εhide :=
   anonymityRASh_numG A idx hA hI hhide
 
@@ -286,7 +286,7 @@ theorem anonymityRASh_num_perm (A : AdversaryRA (RowH (Equiv.Perm Blk)))
     |pr _ (realGameRASh A idx false) - pr _ (realGameRASh A idx true)| ≤
       4 * εROPm pI (qE + iE + 13824) (q5 + i5 + 1872) (qE + iE + 13824) +
         4 * εAdPm pR 9 (qE + 13822) (q5 + 1248) (qE + 13822) 0 i2 (i5 + 624) (iE + 9214) +
-        4 * (1 / 2 ^ 110 + εROPmP pR 0 312 4607 (i5 + 624) (iE + 9214)) +
+        4 * (1 / 2 ^ 113 + εROPmP pR 0 312 4607 (i5 + 624) (iE + 9214)) +
         8 * ((iE + 9214 : ℕ) / 2 ^ 128) + 6 * noHitProb + 12 / 2 ^ 1024 + 2 * εhide :=
   anonymityRASh_numG A idx hA hI hhide
 
@@ -462,7 +462,7 @@ the tables (rows: the cipher and `H₃`) and no slot slice. Any two worlds diffe
     4·εz(pI; q_E + 2i_E + 13824, q₅ + 2i₅ + 1872, q_E + 2i_E + 13824)
       + 2·εAdG(pS; 9; q_E + i_E + 13822, q₅ + i₅ + 1248, q_E + i_E + 13822; 0, i₂, i₅ + 624, i_E + 9214)
       + 2·εAdG(pS; 9; q_E + 13821, q₅ + 936, q_E + 13821; 0, 2i₂, 2i₅ + 1560, 2i_E + 23035)
-      + 4·(2⁻¹¹⁰ + εP(pS; 0, 312, 4607; 2i₅ + 1560, 2i_E + 23035))
+      + 4·(2⁻¹¹³ + εP(pS; 0, 312, 4607; 2i₅ + 1560, 2i_E + 23035))
       + 4·(i_E + 9214)·2⁻¹²⁸ + 4·(2i_E + 23035)·2⁻¹²⁸ + 6·noHitProb + 12·2⁻¹⁰²⁴ + 2·εhide. -/
 theorem unlinkabilityRASh_numG [ZKRow R] [ZKPRow R] {q5 qE i2 i5 iE : ℕ} {εhide : ℝ}
     (hA : A.GBudget 0 q5 qE) (hI : A.IBudget 0 i2 i5 iE)
@@ -475,7 +475,7 @@ theorem unlinkabilityRASh_numG [ZKRow R] [ZKPRow R] {q5 qE i2 i5 iE : ℕ} {εhi
           (iE + 9214) +
         2 * εAdG R pS 9 (qE + 13821) (q5 + 936) (qE + 13821) 0 (2 * i2) (2 * i5 + 1560)
           (2 * iE + 23035) +
-        4 * (1 / 2 ^ 110 + ZKPRow.εP R pS 0 312 4607 (2 * i5 + 1560) (2 * iE + 23035)) +
+        4 * (1 / 2 ^ 113 + ZKPRow.εP R pS 0 312 4607 (2 * i5 + 1560) (2 * iE + 23035)) +
         4 * ((iE + 9214 : ℕ) / 2 ^ 128) + 4 * ((2 * iE + 23035 : ℕ) / 2 ^ 128) +
         6 * noHitProb + 12 / 2 ^ 1024 + 2 * εhide := by
   have hS2 : ∀ b (γ : ΓS2 (SimCoins pI) (SimCoins pS)),
@@ -558,7 +558,7 @@ theorem unlinkabilityRASh_num (A : AdversaryRA (RowH (Blk → Blk)) Sizes.labelR
       4 * εRO (qE + 2 * iE + 13824) (q5 + 2 * i5 + 1872) (qE + 2 * iE + 13824) +
         2 * εAd 9 (qE + iE + 13822) (q5 + i5 + 1248) (qE + iE + 13822) 0 i2 (i5 + 624) (iE + 9214) +
         2 * εAd 9 (qE + 13821) (q5 + 936) (qE + 13821) 0 (2 * i2) (2 * i5 + 1560) (2 * iE + 23035) +
-        4 * (1 / 2 ^ 110 + εROP 0 312 4607 (2 * i5 + 1560) (2 * iE + 23035)) +
+        4 * (1 / 2 ^ 113 + εROP 0 312 4607 (2 * i5 + 1560) (2 * iE + 23035)) +
         4 * ((iE + 9214 : ℕ) / 2 ^ 128) + 4 * ((2 * iE + 23035 : ℕ) / 2 ^ 128) +
         6 * noHitProb + 12 / 2 ^ 1024 + 2 * εhide :=
   unlinkabilityRASh_numG A hA hI hhide b₁ b₂ b₁' b₂'
@@ -576,7 +576,7 @@ theorem unlinkabilityRASh_num_perm (A : AdversaryRA (RowH (Equiv.Perm Blk)) Size
           (iE + 9214) +
         2 * εAdPm pS 9 (qE + 13821) (q5 + 936) (qE + 13821) 0 (2 * i2) (2 * i5 + 1560)
           (2 * iE + 23035) +
-        4 * (1 / 2 ^ 110 + εROPmP pS 0 312 4607 (2 * i5 + 1560) (2 * iE + 23035)) +
+        4 * (1 / 2 ^ 113 + εROPmP pS 0 312 4607 (2 * i5 + 1560) (2 * iE + 23035)) +
         4 * ((iE + 9214 : ℕ) / 2 ^ 128) + 4 * ((2 * iE + 23035 : ℕ) / 2 ^ 128) +
         6 * noHitProb + 12 / 2 ^ 1024 + 2 * εhide :=
   unlinkabilityRASh_numG A hA hI hhide b₁ b₂ b₁' b₂'

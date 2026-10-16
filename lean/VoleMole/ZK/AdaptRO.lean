@@ -29,13 +29,13 @@ fresh uniform table **patched** with `a` on `Q a` (`mixT`). For a fixed statemen
   blocks with probability `≤ noHitProb + s₂·2^(−8·16(d−1))`; the real prover's block, by a second
   application of zero knowledge (`pr_preBlk_mem`, as `pr_collide_zk`: unless the grinding outcome
   is bad, the block is the one recomputed from the proof, a distinguisher reading `H₅` and the
-  cipher at `312`, `4607` keys), with probability `≤ 2⁻¹¹⁰ + εROP(0, 312, 4607) + noHitProb +
+  cipher at `312`, `4607` keys), with probability `≤ 2⁻¹¹³ + εROP(0, 312, 4607) + noHitProb +
   s₂·2^(−8·16(d−1))`. Without `H₂³` reads (`s₂ = 0`) the term vanishes.
 
 **`zk_adaptive`**: the advantage is at most
 
     εAd = εRO(q₃, q₅, q_E) + (221·s_E + s₅ + 1)·2⁻¹²⁸ + s₃·2⁻¹²⁸
-          + [s₂ > 0]·(2⁻¹¹⁰ + εRO(0, 312, 4607) + (221·s_E + s₅ + 1)·2⁻¹²⁸
+          + [s₂ > 0]·(2⁻¹¹³ + εRO(0, 312, 4607) + (221·s_E + s₅ + 1)·2⁻¹²⁸
                       + 2·noHitProb + 2·s₂·2^(−8·16(d−1))).
 
 Everything but `zk_roP` is stated for any type of cipher rows (`ShG R p`, `Tb R p`) with
@@ -43,7 +43,7 @@ Everything but `zk_roP` is stated for any type of cipher rows (`ShG R p`, `Tb R 
 `εAdG`, `h23G` the errors above with it). Instances: `ZKPRow.fn` (`εROP`; `εAdG (Blk → Blk) p =
 εAd`) and `ZKPRow.perm` (`εROPmP`, `ZK/HopsPatchPerm.lean`; `εAdG (Equiv.Perm Blk) p = εAdPm p`).
 
-For `d = 9` the `H₂³` term is about `2⁻¹⁰⁶·²` (the second zero-knowledge error) plus
+For `d = 9` the `H₂³` term is about `2⁻¹⁰⁶·⁴` (the second zero-knowledge error) plus
 `2·s₂·2⁻¹⁰²⁴`: the price of `S` reading `H₂³` is a second application of the theorem, not a
 function of `s₂` beyond the `2⁻¹⁰²⁴`.
 -/
@@ -254,14 +254,14 @@ patched. -/
 theorem pr_grindBad_preRO5E (P5 : Finset (Bytes 37)) (W5 : Tab5F) (PE : Finset Blk) (WE : Blk → R) :
     pr ((Bytes 16 × Tab3) × ShG R st.params) (fun a =>
       GrindBad CrtGen.tables (a.2.1 ∘ key2 st.params
-        (preRO Hb st w a.1.1 a.1.2 (patch5E P5 W5 PE WE a.2)))) ≤ 1 / 2 ^ 110 := by
+        (preRO Hb st w a.1.1 a.1.2 (patch5E P5 W5 PE WE a.2)))) ≤ 1 / 2 ^ 113 := by
   refine pr_le_of_fst fun x => pr_le_of_snd fun r => ?_
   have h := close_restrict (R := Bytes 16)
     (key2_injective st.params (@preR (icPrg (rowFn (patchT PE WE r.2))) Hb CrtGen.tables st w
       (patchT P5 W5 r.1) (splitSeed (x.2 x.1))))
     (GrindBad CrtGen.tables)
   rw [abs_nonpos_iff, sub_eq_zero] at h
-  exact (le_of_eq h).trans grindBad_le_110
+  exact (le_of_eq h).trans grindBad_le_113
 
 /-- **A simulated proof's programmed block is in a fixed set** `B` with probability
 `≤ noHitProb + |B|·2^(−8·16(d−1))`, for every table. -/
@@ -277,7 +277,7 @@ theorem pr_simBlk_mem (hHb : HashesWF Hb) (s : ShG R st.params) (B : Finset (Byt
     gcongr
 
 /-- **The tail of the real prover's grinding block is in a fixed set** `T`, with `H₅` and the
-cipher patched, with probability `≤ 2⁻¹¹⁰ + εROP(0, 312, 4607) + noHitProb + |T|·2^(−8·16(d−1))`:
+cipher patched, with probability `≤ 2⁻¹¹³ + εROP(0, 312, 4607) + noHitProb + |T|·2^(−8·16(d−1))`:
 unless the grinding outcome is bad, it is the block recomputed from the proof (`realRO_vPre`); by
 zero knowledge (`zk_roP`) the recomputed tail is in `T` with the simulated proof's probability, and
 the simulated tail is uniform. -/
@@ -286,7 +286,7 @@ theorem pr_preTail_mem [ZKPRow R] (hlr : st.params.labelRows = true) (hzk : ZKHy
     (PE : Finset Blk) (WE : Blk → R) (T : Finset ByteArray) :
     pr ((Bytes 16 × Tab3) × ShG R st.params) (fun a =>
         preTail (blk (preLen st.params) (preRO Hb st w a.1.1 a.1.2 (patch5E P5 W5 PE WE a.2))) ∈ T) ≤
-      1 / 2 ^ 110 + ZKPRow.εP R st.params 0 312 4607 P5.card PE.card +
+      1 / 2 ^ 113 + ZKPRow.εP R st.params 0 312 4607 P5.card PE.card +
         (noHitProb + T.card / 2 ^ (8 * (16 * (st.params.qsDegree - 1)))) := by
   classical
   obtain ⟨hl1, -, -, hl2⟩ := labelRows_sizes hlr
@@ -349,7 +349,7 @@ theorem pr_preBlk_mem [ZKPRow R] (hlr : st.params.labelRows = true) (hzk : ZKHyp
     (PE : Finset Blk) (WE : Blk → R) (B : Finset (Bytes (preLen st.params))) :
     pr ((Bytes 16 × Tab3) × ShG R st.params) (fun a =>
         blk (preLen st.params) (preRO Hb st w a.1.1 a.1.2 (patch5E P5 W5 PE WE a.2)) ∈ B) ≤
-      1 / 2 ^ 110 + ZKPRow.εP R st.params 0 312 4607 P5.card PE.card +
+      1 / 2 ^ 113 + ZKPRow.εP R st.params 0 312 4607 P5.card PE.card +
         (noHitProb + B.card / 2 ^ (8 * (16 * (st.params.qsDegree - 1)))) := by
   classical
   refine (pr_mono fun a h => Finset.mem_image_of_mem preTail h).trans
@@ -374,7 +374,7 @@ lemma progRO_patch2 {p : Params} (c : SimCoins p) (s : ShG R p) (P2 : Finset (K2
 block in the patched blocks. -/
 noncomputable def h23Term (d n5 nE n2 : ℕ) : ℝ :=
   if n2 = 0 then 0 else
-    1 / 2 ^ 110 + εROP 0 312 4607 n5 nE + 2 * (noHitProb + n2 / 2 ^ (8 * (16 * (d - 1))))
+    1 / 2 ^ 113 + εROP 0 312 4607 n5 nE + 2 * (noHitProb + n2 / 2 ^ (8 * (16 * (d - 1))))
 
 lemma h23Term_nonneg (d n5 nE n2 : ℕ) : 0 ≤ h23Term d n5 nE n2 := by
   unfold h23Term
@@ -401,7 +401,7 @@ lemma h23Term_mono {d n5 nE n2 n5' nE' n2' : ℕ} (h5 : n5 ≤ n5') (hE : nE ≤
 noncomputable def h23G (R : Type) [Fintype R] [CipherRow R] [ZKPRow R] (p : Params)
     (d n5 nE n2 : ℕ) : ℝ :=
   if n2 = 0 then 0 else
-    1 / 2 ^ 110 + ZKPRow.εP R p 0 312 4607 n5 nE + 2 * (noHitProb + n2 / 2 ^ (8 * (16 * (d - 1))))
+    1 / 2 ^ 113 + ZKPRow.εP R p 0 312 4607 n5 nE + 2 * (noHitProb + n2 / 2 ^ (8 * (16 * (d - 1))))
 
 @[simp] lemma h23G_fn (p : Params) : h23G (Blk → Blk) p = h23Term := rfl
 
@@ -763,7 +763,7 @@ programming `L x` at prefix blocks whose tails lie in a fixed set `T` changes th
 (of the statement `stw (S t)` chosen by a table reader `S` with budgets `(s₃, s₂, s₅, s_E)`) with
 probability at most
 
-    s₃·2⁻¹²⁸ + 2⁻¹¹⁰ + εROP(0, 312, 4607, s₅, s_E) + noHitProb + |T|·2^(−8·16(d−1)). -/
+    s₃·2⁻¹²⁸ + 2⁻¹¹³ + εROP(0, 312, 4607, s₅, s_E) + noHitProb + |T|·2^(−8·16(d−1)). -/
 theorem pr_collide_adaptive [ZKPRow R] {X : Type*} (p : Params) (hlr : p.labelRows = true)
     (hsp : SmallParams p) (hHb : HashesWF Hb) (stw : X → Option (Statement × ByteArray))
     (cs : X → ByteArray → ByteArray → System GF128)
@@ -773,7 +773,7 @@ theorem pr_collide_adaptive [ZKPRow R] {X : Type*} (p : Params) (hlr : p.labelRo
     (T : Finset ByteArray) (hT : ∀ x s, ∀ b ∈ B x s, preTail b ∈ T) :
     pr (Bytes 16 × Tb R p) (fun z => (stw (S z.2)).elim False fun sw =>
         realRO p Hb sw.1 sw.2 z.1 z.2.1 (L (S z.2) z.2.2) ≠ realRO p Hb sw.1 sw.2 z.1 z.2.1 z.2.2) ≤
-      s3 / 2 ^ 128 + (1 / 2 ^ 110 + ZKPRow.εP R p 0 312 4607 s5 sE +
+      s3 / 2 ^ 128 + (1 / 2 ^ 113 + ZKPRow.εP R p 0 312 4607 s5 sE +
         (noHitProb + T.card / 2 ^ (8 * (16 * (p.qsDegree - 1))))) := by
   classical
   obtain ⟨Q, hQ, hc⟩ := hS
@@ -781,14 +781,14 @@ theorem pr_collide_adaptive [ZKPRow R] {X : Type*} (p : Params) (hlr : p.labelRo
     (fun ρ x t => (stw x).elim False fun sw =>
       realRO p Hb sw.1 sw.2 ρ t.1 (L x t.2) ≠ realRO p Hb sw.1 sw.2 ρ t.1 t.2) fun a => ?_
   obtain ⟨c3, c2, c5, cE⟩ := hc a
-  have hnn : 0 ≤ s3 / 2 ^ 128 + (1 / 2 ^ 110 + ZKPRow.εP R p 0 312 4607 s5 sE +
+  have hnn : 0 ≤ s3 / 2 ^ 128 + (1 / 2 ^ 113 + ZKPRow.εP R p 0 312 4607 s5 sE +
       (noHitProb + T.card / 2 ^ (8 * (16 * (p.qsDegree - 1))))) := by
     have a1 := ZKPRow.εP_nonneg (R := R) p 0 312 4607 s5 sE
     have a2 : 0 ≤ noHitProb := pr_nonneg _
     have a3 : (0 : ℝ) ≤ s3 / 2 ^ 128 := div_nonneg (Nat.cast_nonneg _) (by norm_num)
     have a4 : (0 : ℝ) ≤ T.card / 2 ^ (8 * (16 * (p.qsDegree - 1))) :=
       div_nonneg (Nat.cast_nonneg _) (pow_nonneg (by norm_num) _)
-    have a5 : (0 : ℝ) ≤ 1 / 2 ^ 110 := by norm_num
+    have a5 : (0 : ℝ) ≤ 1 / 2 ^ 113 := by norm_num
     linarith
   rcases hx : stw (S a) with _ | ⟨st, w⟩
   · simp only [Option.elim]
@@ -828,7 +828,7 @@ theorem pr_collide_adaptive [ZKPRow R] {X : Type*} (p : Params) (hlr : p.labelRo
     have hm := ZKPRow.εP_mono (R := R) st.params (le_refl 0) (le_refl 312) (le_refl 4607) c5 cE
     have ht' : pr (Bytes 16 × Tb R st.params) (fun z => preTail (blk (preLen st.params)
         (preRO Hb st w z.1 z.2.1 (patch5E r.2.2.1 a.2.2.1 r.2.2.2 a.2.2.2 z.2.2))) ∈ T) ≤
-        1 / 2 ^ 110 + ZKPRow.εP R st.params 0 312 4607 s5 sE +
+        1 / 2 ^ 113 + ZKPRow.εP R st.params 0 312 4607 s5 sE +
           (noHitProb + T.card / 2 ^ (8 * (16 * (st.params.qsDegree - 1)))) := by
       rw [← pr_equiv (Equiv.prodAssoc (Bytes 16) Tab3 (ShG R st.params))]
       refine ht.trans ?_

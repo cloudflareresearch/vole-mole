@@ -48,7 +48,7 @@ then, `realGameRO_iff`), and the simulators then program symmetrically.
     |Pr[A accepts in world 0] − Pr[A accepts in world 1]| ≤ 4·εRO(q₃, q₅ + 1248, q_E + 18428)
       + δ(A) + δ(A.swap),
 
-`εRO q₃ q₅ q_E = q₃·2⁻¹²⁸ + 2⁻¹¹⁰ + 221·(4607 + q_E + 4607)·2⁻¹²⁸ + (q₅ + 1)·2⁻¹²⁸`.
+`εRO q₃ q₅ q_E = q₃·2⁻¹²⁸ + 2⁻¹¹³ + 221·(4607 + q_E + 4607)·2⁻¹²⁸ + (q₅ + 1)·2⁻¹²⁸`.
 **`blindnessRO_lean`**: the same with SHAKE.
 
 **Cipher rows.** Everything here is stated for every type of cipher rows `R` (the shared

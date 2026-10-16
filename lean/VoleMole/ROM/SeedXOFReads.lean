@@ -34,7 +34,7 @@ theorem anonymityOC_lean_num_seed (A : XofM → AdversaryOC (Blk → Blk))
         pr _ (seedGameRA idx (fun g => (A g).toRA) true)| ≤
       4 * εRO (i3 + q3) (q5 + i5 + 1872) (qE + iE + 13821) +
         4 * εAd 9 q3 (q5 + 1248) (qE + 13821) i3 i2 (i5 + 624) (iE + 9214) +
-        4 * (i3 / 2 ^ 128 + 1 / 2 ^ 110 + εROP 0 312 4607 (i5 + 624) (iE + 9214)) +
+        4 * (i3 / 2 ^ 128 + 1 / 2 ^ 113 + εROP 0 312 4607 (i5 + 624) (iE + 9214)) +
         6 * noHitProb + 12 / 2 ^ 1024 + 2 * εhide + 2 * ((2 * qg + 2 : ℕ) / 2 ^ 256) :=
   anonymityRA_lean_num_seed idx (fun g => (A g).toRA) hA (fun g => AdversaryOC.iBudget (hI g))
     hhide hg
@@ -50,7 +50,7 @@ theorem anonymityOC_lean_num_perm_seed (A : XofM → AdversaryOC (Equiv.Perm Blk
         pr _ (seedGameRA idx (fun g => (A g).toRA) true)| ≤
       4 * εROPm pI (i3 + q3) (q5 + i5 + 1872) (qE + iE + 13821) +
         4 * εAdPm pR 9 q3 (q5 + 1248) (qE + 13821) i3 i2 (i5 + 624) (iE + 9214) +
-        4 * (i3 / 2 ^ 128 + 1 / 2 ^ 110 + εROPmP pR 0 312 4607 (i5 + 624) (iE + 9214)) +
+        4 * (i3 / 2 ^ 128 + 1 / 2 ^ 113 + εROPmP pR 0 312 4607 (i5 + 624) (iE + 9214)) +
         6 * noHitProb + 12 / 2 ^ 1024 + 2 * εhide + 2 * ((2 * qg + 2 : ℕ) / 2 ^ 256) :=
   anonymityRA_lean_num_perm_seed idx (fun g => (A g).toRA) hA
     (fun g => AdversaryOC.iBudget (hI g)) hhide hg
@@ -66,7 +66,7 @@ theorem anonymityOCSh_num_seed (A : XofM → AdversaryOC (RowH (Blk → Blk)))
         pr _ (seedGameRASh idx (fun g => (A g).toRA) true)| ≤
       4 * εRO (qE + iE + 13824) (q5 + i5 + 1872) (qE + iE + 13824) +
         4 * εAd 9 (qE + 13822) (q5 + 1248) (qE + 13822) 0 i2 (i5 + 624) (iE + 9214) +
-        4 * (1 / 2 ^ 110 + εROP 0 312 4607 (i5 + 624) (iE + 9214)) +
+        4 * (1 / 2 ^ 113 + εROP 0 312 4607 (i5 + 624) (iE + 9214)) +
         8 * ((iE + 9214 : ℕ) / 2 ^ 128) + 6 * noHitProb + 12 / 2 ^ 1024 + 2 * εhide +
         2 * ((2 * qg + 2 : ℕ) / 2 ^ 256) :=
   anonymityRASh_num_seed idx (fun g => (A g).toRA) hA (fun g => AdversaryOC.iBudget (hI g))
@@ -83,7 +83,7 @@ theorem anonymityOCSh_num_perm_seed (A : XofM → AdversaryOC (RowH (Equiv.Perm 
         pr _ (seedGameRASh idx (fun g => (A g).toRA) true)| ≤
       4 * εROPm pI (qE + iE + 13824) (q5 + i5 + 1872) (qE + iE + 13824) +
         4 * εAdPm pR 9 (qE + 13822) (q5 + 1248) (qE + 13822) 0 i2 (i5 + 624) (iE + 9214) +
-        4 * (1 / 2 ^ 110 + εROPmP pR 0 312 4607 (i5 + 624) (iE + 9214)) +
+        4 * (1 / 2 ^ 113 + εROPmP pR 0 312 4607 (i5 + 624) (iE + 9214)) +
         8 * ((iE + 9214 : ℕ) / 2 ^ 128) + 6 * noHitProb + 12 / 2 ^ 1024 + 2 * εhide +
         2 * ((2 * qg + 2 : ℕ) / 2 ^ 256) :=
   anonymityRASh_num_perm_seed idx (fun g => (A g).toRA) hA (fun g => AdversaryOC.iBudget (hI g))
@@ -109,7 +109,7 @@ theorem unlinkabilityOC_lean_num_seed (A : XofR → AdversaryOC (Blk → Blk) Si
       4 * εRO (2 * i3 + q3) (q5 + 2 * i5 + 1872) (qE + 2 * iE + 13821) +
         2 * εAd 9 (i3 + q3) (q5 + i5 + 1248) (qE + iE + 13821) i3 i2 (i5 + 624) (iE + 9214) +
         2 * εAd 9 q3 (q5 + 936) (qE + 13821) (2 * i3) (2 * i2) (2 * i5 + 1560) (2 * iE + 23035) +
-        6 * (i3 / 2 ^ 128) + 4 * (1 / 2 ^ 110 + εROP 0 312 4607 (2 * i5 + 1560) (2 * iE + 23035)) +
+        6 * (i3 / 2 ^ 128) + 4 * (1 / 2 ^ 113 + εROP 0 312 4607 (2 * i5 + 1560) (2 * iE + 23035)) +
         6 * noHitProb + 12 / 2 ^ 1024 + 2 * εhide + 2 * ((2 * qg + 2 : ℕ) / 2 ^ 256) :=
   unlinkabilityRA_lean_num_seed (fun g => (A g).toRA) hA
     (fun g => AdversaryOC.iBudget (h1 g) (h2 g)) hhide hg b₁ b₂ b₁' b₂'
@@ -131,7 +131,7 @@ theorem unlinkabilityOC_lean_num_perm_seed
         2 * εAdPm pS 9 q3 (q5 + 936) (qE + 13821) (2 * i3) (2 * i2) (2 * i5 + 1560)
           (2 * iE + 23035) +
         6 * (i3 / 2 ^ 128) +
-        4 * (1 / 2 ^ 110 + εROPmP pS 0 312 4607 (2 * i5 + 1560) (2 * iE + 23035)) +
+        4 * (1 / 2 ^ 113 + εROPmP pS 0 312 4607 (2 * i5 + 1560) (2 * iE + 23035)) +
         6 * noHitProb + 12 / 2 ^ 1024 + 2 * εhide + 2 * ((2 * qg + 2 : ℕ) / 2 ^ 256) :=
   unlinkabilityRA_lean_num_perm_seed (fun g => (A g).toRA) hA
     (fun g => AdversaryOC.iBudget (h1 g) (h2 g)) hhide hg b₁ b₂ b₁' b₂'
@@ -149,7 +149,7 @@ theorem unlinkabilityOCSh_num_seed (A : XofR → AdversaryOC (RowH (Blk → Blk)
       4 * εRO (qE + 2 * iE + 13824) (q5 + 2 * i5 + 1872) (qE + 2 * iE + 13824) +
         2 * εAd 9 (qE + iE + 13822) (q5 + i5 + 1248) (qE + iE + 13822) 0 i2 (i5 + 624) (iE + 9214) +
         2 * εAd 9 (qE + 13821) (q5 + 936) (qE + 13821) 0 (2 * i2) (2 * i5 + 1560) (2 * iE + 23035) +
-        4 * (1 / 2 ^ 110 + εROP 0 312 4607 (2 * i5 + 1560) (2 * iE + 23035)) +
+        4 * (1 / 2 ^ 113 + εROP 0 312 4607 (2 * i5 + 1560) (2 * iE + 23035)) +
         4 * ((iE + 9214 : ℕ) / 2 ^ 128) + 4 * ((2 * iE + 23035 : ℕ) / 2 ^ 128) +
         6 * noHitProb + 12 / 2 ^ 1024 + 2 * εhide + 2 * ((2 * qg + 2 : ℕ) / 2 ^ 256) :=
   unlinkabilityRASh_num_seed (fun g => (A g).toRA) hA
@@ -171,7 +171,7 @@ theorem unlinkabilityOCSh_num_perm_seed
           (iE + 9214) +
         2 * εAdPm pS 9 (qE + 13821) (q5 + 936) (qE + 13821) 0 (2 * i2) (2 * i5 + 1560)
           (2 * iE + 23035) +
-        4 * (1 / 2 ^ 110 + εROPmP pS 0 312 4607 (2 * i5 + 1560) (2 * iE + 23035)) +
+        4 * (1 / 2 ^ 113 + εROPmP pS 0 312 4607 (2 * i5 + 1560) (2 * iE + 23035)) +
         4 * ((iE + 9214 : ℕ) / 2 ^ 128) + 4 * ((2 * iE + 23035 : ℕ) / 2 ^ 128) +
         6 * noHitProb + 12 / 2 ^ 1024 + 2 * εhide + 2 * ((2 * qg + 2 : ℕ) / 2 ^ 256) :=
   unlinkabilityRASh_num_perm_seed (fun g => (A g).toRA) hA
@@ -226,7 +226,7 @@ theorem blindnessOCH_lean_num_seed (A : XofP Ctx → AdversaryOC (Blk → Blk))
       4 * εRO (q3 + 6 * i3) (q5 + 6 * i5 + 1872) (qE + 6 * iE + 23035) + 2 * noHitProb +
         2 / 2 ^ 128 +
         (if i2 = 0 then 0 else
-          4 * (1 / 2 ^ 110 + εRO (6 * i3) (6 * i5 + 2184) (6 * iE + 18428) +
+          4 * (1 / 2 ^ 113 + εRO (6 * i3) (6 * i5 + 2184) (6 * iE + 18428) +
             (i2 + i2 : ℕ) / 2 ^ 128)) + 2 * ((2 * (qk + qg) + 1 : ℕ) / 2 ^ 256) :=
   blindnessRAH_lean_num_seed enc (fun g => (A g).toRA) hA
     (fun g => AdversaryOC.iBudgetH (hk g) (hr g)) hkx hg
@@ -243,7 +243,7 @@ theorem blindnessOCH_lean_num_perm_seed (A : XofP Ctx → AdversaryOC (Equiv.Per
       4 * εROPm pP (q3 + 6 * i3) (q5 + 6 * i5 + 1872) (qE + 6 * iE + 23035) + 2 * noHitProb +
         2 / 2 ^ 128 +
         (if i2 = 0 then 0 else
-          4 * (1 / 2 ^ 110 + εROPm pP (6 * i3) (6 * i5 + 2184) (6 * iE + 18428) +
+          4 * (1 / 2 ^ 113 + εROPm pP (6 * i3) (6 * i5 + 2184) (6 * iE + 18428) +
             (i2 + i2 : ℕ) / 2 ^ 128)) + 2 * ((2 * (qk + qg) + 1 : ℕ) / 2 ^ 256) :=
   blindnessRAH_lean_num_perm_seed enc (fun g => (A g).toRA) hA
     (fun g => AdversaryOC.iBudgetH (hk g) (hr g)) hkx hg

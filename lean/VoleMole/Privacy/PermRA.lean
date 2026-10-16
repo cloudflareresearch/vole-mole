@@ -21,7 +21,7 @@ that reads the tables after step 1 (`ZK.Sim.ZK2ARow`). With **permutation rows**
 
       4·εROPm(pI; i₃ + q₃, q₅ + i₅ + 1872, q_E + i_E + 13821)
         + 4·εAdPm(pR; 9; q₃, q₅ + 1248, q_E + 13821; i₃, i₂, i₅ + 624, i_E + 9214)
-        + 4·(i₃·2⁻¹²⁸ + 2⁻¹¹⁰ + εROPmP(pR; 0, 312, 4607; i₅ + 624, i_E + 9214))
+        + 4·(i₃·2⁻¹²⁸ + 2⁻¹¹³ + εROPmP(pR; 0, 312, 4607; i₅ + 624, i_E + 9214))
         + 6·noHitProb + 12·2⁻¹⁰²⁴ + 2·εhide.
 
 * **`unlinkabilityRA_lean_num_perm`** (Ratatouille):
@@ -29,7 +29,7 @@ that reads the tables after step 1 (`ZK.Sim.ZK2ARow`). With **permutation rows**
       4·εROPm(pI; 2i₃ + q₃, q₅ + 2i₅ + 1872, q_E + 2i_E + 13821)
         + 2·εAdPm(pS; 9; i₃ + q₃, q₅ + i₅ + 1248, q_E + i_E + 13821; i₃, i₂, i₅ + 624, i_E + 9214)
         + 2·εAdPm(pS; 9; q₃, q₅ + 936, q_E + 13821; 2i₃, 2i₂, 2i₅ + 1560, 2i_E + 23035)
-        + 6·i₃·2⁻¹²⁸ + 4·(2⁻¹¹⁰ + εROPmP(pS; 0, 312, 4607; 2i₅ + 1560, 2i_E + 23035))
+        + 6·i₃·2⁻¹²⁸ + 4·(2⁻¹¹³ + εROPmP(pS; 0, 312, 4607; 2i₅ + 1560, 2i_E + 23035))
         + 6·noHitProb + 12·2⁻¹⁰²⁴ + 2·εhide.
 
 * **`blindnessRA_lean_num_perm`** (PomFRIT, no `H₂³` reads by the interaction):
@@ -40,7 +40,7 @@ that reads the tables after step 1 (`ZK.Sim.ZK2ARow`). With **permutation rows**
   `IBudgetH`, `Privacy/PomFRITRAH.lean`):
 
       4·εROPm(pP; q₃ + 6i₃, q₅ + 6i₅ + 1872, q_E + 6i_E + 23035) + 2·noHitProb + 2·2⁻¹²⁸
-        + [i₂ > 0]·4·(2⁻¹¹⁰ + εROPm(pP; 6i₃, 6i₅ + 2184, 6i_E + 18428) + 2i₂·2⁻¹²⁸).
+        + [i₂ > 0]·4·(2⁻¹¹³ + εROPm(pP; 6i₃, 6i₅ + 2184, 6i_E + 18428) + 2i₂·2⁻¹²⁸).
 -/
 
 open Finset
@@ -70,7 +70,7 @@ theorem anonymityRA_lean_num_perm (A : AdversaryRA (Equiv.Perm Blk))
     |pr _ (realGameRA A idx leanPI leanPR false) - pr _ (realGameRA A idx leanPI leanPR true)| ≤
       4 * εROPm pI (i3 + q3) (q5 + i5 + 1872) (qE + iE + 13821) +
         4 * εAdPm pR 9 q3 (q5 + 1248) (qE + 13821) i3 i2 (i5 + 624) (iE + 9214) +
-        4 * (i3 / 2 ^ 128 + 1 / 2 ^ 110 + εROPmP pR 0 312 4607 (i5 + 624) (iE + 9214)) +
+        4 * (i3 / 2 ^ 128 + 1 / 2 ^ 113 + εROPmP pR 0 312 4607 (i5 + 624) (iE + 9214)) +
         6 * noHitProb + 12 / 2 ^ 1024 + 2 * εhide :=
   anonymityRA_lean_numG A idx hA hI hhide
 
@@ -94,7 +94,7 @@ theorem unlinkabilityRA_lean_num_perm (A : AdversaryRA (Equiv.Perm Blk) Sizes.la
         2 * εAdPm pS 9 q3 (q5 + 936) (qE + 13821) (2 * i3) (2 * i2) (2 * i5 + 1560)
           (2 * iE + 23035) +
         6 * (i3 / 2 ^ 128) +
-        4 * (1 / 2 ^ 110 + εROPmP pS 0 312 4607 (2 * i5 + 1560) (2 * iE + 23035)) +
+        4 * (1 / 2 ^ 113 + εROPmP pS 0 312 4607 (2 * i5 + 1560) (2 * iE + 23035)) +
         6 * noHitProb + 12 / 2 ^ 1024 + 2 * εhide :=
   unlinkabilityRA_lean_numG A hA hI hhide b₁ b₂ b₁' b₂'
 
@@ -125,7 +125,7 @@ theorem blindnessRAH_lean_num_perm (A : AdversaryRA (Equiv.Perm Blk)) {q3 q5 qE 
       4 * εROPm pP (q3 + 6 * i3) (q5 + 6 * i5 + 1872) (qE + 6 * iE + 23035) + 2 * noHitProb +
         2 / 2 ^ 128 +
         (if i2 = 0 then 0 else
-          4 * (1 / 2 ^ 110 + εROPm pP (6 * i3) (6 * i5 + 2184) (6 * iE + 18428) +
+          4 * (1 / 2 ^ 113 + εROPm pP (6 * i3) (6 * i5 + 2184) (6 * iE + 18428) +
             (i2 + i2 : ℕ) / 2 ^ 128)) :=
   blindnessRAH_lean_numG A hA hI
 

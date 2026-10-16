@@ -23,9 +23,9 @@ proof on the original tables. Here are the facts that bound it (`lean/docs/zk.md
   real proof whose statement may depend on the earlier simulations, and a programming `L` whose
   programmed prefix blocks have their tails in a fixed set `T`,
 
-      Pr[ realRO(L s) ≠ realRO(s) ] ≤ 2⁻¹¹⁰ + εRO(0, 312, 4607) + noHitProb + |T|·2^(−8·16(d−1)).
+      Pr[ realRO(L s) ≠ realRO(s) ] ≤ 2⁻¹¹³ + εRO(0, 312, 4607) + noHitProb + |T|·2^(−8·16(d−1)).
 
-  A collision needs the real prefix's tail in `T`; unless the grinding outcome is bad (`≤ 2⁻¹¹⁰`,
+  A collision needs the real prefix's tail in `T`; unless the grinding outcome is bad (`≤ 2⁻¹¹³`,
   the answers at the real prefix are uniform: the prefix does not read `H₂³`) that tail is the one
   the verifier recomputes from the proof, a distinguisher of the proof and the tables reading `H₅`
   and the cipher at `312`, `4607` keys; by zero knowledge (`zk_ro`) its probability is that for the
@@ -438,13 +438,13 @@ variable {Hb : Hashes} {st : Statement} {w : ByteArray} {cs : ByteArray → Byte
 theorem pr_grindBad_preRO :
     pr ((Bytes 16 × Tab3) × ShG R st.params) (fun a =>
       GrindBad CrtGen.tables (a.2.1 ∘ key2 st.params (preRO Hb st w a.1.1 a.1.2 a.2))) ≤
-      1 / 2 ^ 110 := by
+      1 / 2 ^ 113 := by
   refine pr_le_of_fst fun x => pr_le_of_snd fun r => ?_
   have h := close_restrict (R := Bytes 16)
     (key2_injective st.params (@preR (icPrg (rowFn r.2)) Hb CrtGen.tables st w r.1 (splitSeed (x.2 x.1))))
     (GrindBad CrtGen.tables)
   rw [abs_nonpos_iff, sub_eq_zero] at h
-  exact (le_of_eq h).trans grindBad_le_110
+  exact (le_of_eq h).trans grindBad_le_113
 
 /-- **A collision puts the real prefix's tail among the programmed tails.** -/
 theorem realRO_ne_tail (hzk : ZKHyp CrtGen.tables st w cs) (hHb : HashesWF Hb)
@@ -480,14 +480,14 @@ def TailIn {p : Params} (Hb : Hashes) (st : Statement) (T : Finset ByteArray)
 earlier simulations: a programming `L` at prefix blocks whose tails lie in a fixed set `T` changes
 the real proof with probability at most
 
-    2⁻¹¹⁰ + εRO(0, 312, 4607) + noHitProb + |T|·2^(−8·16(d−1)). -/
+    2⁻¹¹³ + εRO(0, 312, 4607) + noHitProb + |T|·2^(−8·16(d−1)). -/
 theorem pr_collide_zk [ZKRow R] (hlr : st.params.labelRows = true) (hzk : ZKHyp CrtGen.tables st w cs)
     (hHb : HashesWF Hb) (hp : SmallParams st.params) {L : ShG R st.params → ShG R st.params}
     {B : ShG R st.params → Finset (Bytes (preLen st.params))} (hL : ProgAt L B)
     (T : Finset ByteArray) (hT : ∀ s, ∀ b ∈ B s, preTail b ∈ T) :
     pr ((Bytes 16 × Tab3) × ShG R st.params) (fun a =>
         realRO st.params Hb st w a.1.1 a.1.2 (L a.2) ≠ realRO st.params Hb st w a.1.1 a.1.2 a.2) ≤
-      1 / 2 ^ 110 + ZKRow.εz R st.params 0 312 4607 +
+      1 / 2 ^ 113 + ZKRow.εz R st.params 0 312 4607 +
         (noHitProb + T.card / 2 ^ (8 * (16 * (st.params.qsDegree - 1)))) := by
   obtain ⟨hl1, -, -, hl2⟩ := labelRows_sizes hlr
   have hlab : st.params.labelRowOffset + 128 ≤ st.params.correctionRows := by omega
