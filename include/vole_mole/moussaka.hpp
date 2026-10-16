@@ -70,16 +70,16 @@ class Token {
     Token& operator=(Token&&) noexcept;
     ~Token();
 
-    // Consume the token and generate a redemption request for it, where the token was issued by
-    // anchors[i] for the given issuance and redemption context. challenge_digest binds the
-    // challenge that triggered redemption to the proof; the Moderator must verify with the same
-    // digest. The challenge digest is determined at redemption time and isn't in the commitment.
+    // Consume the token and generate a redemption request for the issuing Anchor in the given
+    // Anchor Set and issuance and redemption contexts. challenge_digest binds the challenge that
+    // triggered redemption to the proof; the Moderator must verify with the same digest. The
+    // challenge digest is determined at redemption time and isn't in the commitment.
     //
-    // Throws std::logic_error if the token was already consumed, std::invalid_argument if i is out
-    // of range or the token wasn't issued by anchors[i] for ctx_iss and ctx_red, std::bad_alloc if
-    // memory allocation fails, and std::runtime_error if the operating system's random number
-    // generator fails or proof generation fails (which happens with negligible probability).
-    RedeemRequest redeem_request(const AnchorSet& anchors, size_t i, const Context& ctx_iss,
+    // Throws std::logic_error if the token was already consumed, std::invalid_argument if no Anchor
+    // issued the token for ctx_iss and ctx_red, std::bad_alloc if memory allocation fails, and
+    // std::runtime_error if the operating system's random number generator fails or proof
+    // generation fails (which happens with negligible probability).
+    RedeemRequest redeem_request(const AnchorSet& anchors, const Context& ctx_iss,
                                  const Context& ctx_red,
                                  const ChallengeDigest& challenge_digest) &&;
 
