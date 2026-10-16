@@ -209,6 +209,14 @@ below are evidence for these assumptions. They are not part of any reduction.
   - Generic: `≲ 2(q+1)/2^{128}`.
   - This is the hiding notion needed when the opening `r` is the only secret and `nf`, the
     contexts and `t` are all known to a colluding party.
+  - [Lean] `lean/VoleMole/Privacy/ComHide.lean` (`lean/docs/zk.md` §10.9). With `Com`'s cells a
+    random-function table read at `q` cells, the advantage is `≤ (4q + 2)·2^{−128}`
+    (`hidingAdvRO_num`), the generic estimate above for forward queries. Against unbounded
+    distinguishers the advantage is `1 − p` (`ComHide.Moussaka.hidingAdv_bruteForce`: search all
+    `2^{128}` openings, `p` the chance that a fresh `nf` admits one, `≈ 2^{−192}` heuristically).
+    This assumption cannot be discharged in the ROM. `Com` is evaluated inside the issuance and
+    redemption relations, so it is not a table of the privacy games, and their reductions compute
+    it. `2·Adv^hide_Com` in Thm 4(a) stays a computational term.
 
 All three margins are generic. Keccak-p[800,12] has 12 of 22 rounds. Structural attacks on a
 12-round inverse with 224 fixed input bits, or on 360-bit output truncation, are outside this note.

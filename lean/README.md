@@ -41,7 +41,8 @@ scope.
   Anchors), Ratatouille unlinkability, as games on the executable specs with the Lean prover, in
   the random-oracle and ideal-cipher model with the adversary seeing the tables, every
   zero-knowledge and collision term explicit (between about `2⁻¹⁰¹·²` and `2⁻¹⁰³·⁴` plus budget terms and, for
-  Moussaka and Ratatouille, `2·εhide`), also with interactions that read the tables (PomFRIT's
+  Moussaka and Ratatouille, `2·εhide`, the hiding advantage of `Com` = Keccak-p[800,12], which is
+  computational: brute force over the opening wins it, so no random-oracle bound replaces it, §3), also with interactions that read the tables (PomFRIT's
   Issuer `H₂³` included), one shared `H₃`, and the real Clients' seeds, in each combination;
   Moussaka's non-colluding mode (Thm 4(b), corrected) from per-proof zero knowledge, and in the
   random-oracle and ideal-cipher model with the honest Anchors running the Lean verifier on the
@@ -78,7 +79,8 @@ protocols and adaptive schedules for PomFRIT, §3), a bound linear in `N` for `N
 `main` beyond the bad-event bound.
 
 **Modelling assumptions**: SHAKE128/256 are random oracles, AES-128 is an ideal cipher (classical
-and quantum); Keccak-p[800,12] one-wayness and binding/hiding of `Com`; the protocol-specific UOV
+and quantum); Keccak-p[800,12] one-wayness and binding/hiding of `Com` (computational: `Com` is
+evaluated inside the proofs, so no random-oracle bound applies to it, §3); the protocol-specific UOV
 assumptions (§5, Gap 5); the Lean models are tied to the C++ by tests, not proofs (Gap 2).
 
 **Findings and corrections** (each with its section or note):
@@ -637,7 +639,16 @@ runs of each layout.
   cipher. The PRP/PRF switching term is not a gap: zero knowledge and every privacy game are also
   proved with the cipher's rows uniform permutations read forward and backward (`*_perm`).
 - *Hiding of `Com`* (Moussaka 4(a), Ratatouille): an assumption, the hypothesis `εhide` on
-  explicit reductions.
+  explicit reductions. It is computational and cannot be discharged in the random-oracle model
+  (`docs/zk.md` §10.9, `Privacy/ComHide.lean`). `Com` is one Keccak-p[800,12] call, not SHAKE,
+  and the proved relations evaluate it, so it is not a table of the games. Brute force over the
+  128-bit opening wins the hiding experiment against the games' unbounded reductions: advantage
+  `1 − p` for Moussaka (`ComHide.Moussaka.hidingAdv_bruteForce`), `≥ 1 − 2⁻¹²⁸` for Ratatouille
+  (`ComHide.Ratatouille.hidingAdv_bruteForce_ge`). This is a `2¹²⁸`-work linking attack.
+  Heuristically, with `Com` a random function in the standalone experiment, `εhide ≤ (4q + 2)·2⁻¹²⁸`
+  (Moussaka, `hidingAdvRO_num`) and `≤ (4q + 16)·2⁻¹²⁸` (Ratatouille, `hidingAdvColRO_num`) for `q`
+  reads of the `Com` table. These are not corollaries of the privacy theorems, whose reductions
+  read no such table.
 - *Lemma DS (c)*: the independence of PomFRIT's seed XOF from the proof-system domains it
   overlaps (F-DS2) is on paper. (For Moussaka and Ratatouille the seed domains are disjoint from
   every other, part (a), checked in Lean by `clean_pairwise`.)
