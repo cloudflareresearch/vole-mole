@@ -100,6 +100,9 @@ import VoleMole.ROM.Verifier
 import VoleMole.ROM.Accept
 import VoleMole.ROM.DomainSep
 import VoleMole.ROM.SingleOracle
+import VoleMole.ROM.FreshCache
+import VoleMole.ROM.CipherBind
+import VoleMole.ROM.CipherGame
 import VoleMole.Privacy.Basic
 import VoleMole.Privacy.PomFRIT
 import VoleMole.Privacy.Moussaka

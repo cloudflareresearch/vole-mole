@@ -558,4 +558,10 @@ any realistic budget.
   are not proved disjoint (O2).
 - The verifier's query count q_{E,V} is left symbolic: it depends on ℓ through COL_LEN.
 - The counting lemmas C1–C3 and the binding argument are paper proofs. The Lean file checks only
-  the AES input injectivity, the tweak-range disjointness and the domain-tag table.
+  the AES input injectivity, the tweak-range disjointness and the domain-tag table. Since then the
+  cipher part of binding is in Lean in the PRF view without inverse queries
+  (`lean/VoleMole/ROM/CipherBind.lean`, `ROM/CipherGame.lean`; `lean/docs/probabilistic-plan.md`
+  §2d): a C2-type double collision among the prover's cipher queries, `≤ 2·q_E²·2⁻²⁵⁶`, unique
+  logged keys per leaf commitment (L1.2, Definition B extraction of §6), and the executable
+  reconstruction's keys equal to the extracted ones unless a leaf whose key was never queried is
+  opened; the `H₁` linking (L1.4) and L2 remain on paper.

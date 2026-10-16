@@ -31,10 +31,14 @@ open Finset
 
 namespace VoleMole.Verifier.Bridge
 
+-- The statements hold for any CTR PRG (`HasPrg`, `Verifier/Prg.lean`), AES included.
+variable [VoleMole.Verifier.HasPrg]
+
 open VoleMole.Arith VoleMole.Verifier VoleMole.EndToEnd VoleMole.SeedExtraction
 
 noncomputable section
 
+omit [VoleMole.Verifier.HasPrg] in
 /-- With at most one challenge on the chain, at most one admissible `chal3` is accepted. -/
 lemma few_of_card_le_one {Ch : Type*} {A : Finset Blocks} (hA1 : A.card ≤ 1) (Z : Finset Ch)
     (δ : Ch → Blocks) (hδ : Set.InjOn δ Z) (acc : Ch → Prop) [DecidablePred acc]

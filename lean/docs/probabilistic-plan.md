@@ -3,7 +3,8 @@
 Status: **phase A (M1–M3) implemented** in `VoleMole/Prob/` (Mathlib only, no new dependency), with
 the deviations listed in §2a. **Phase B: M4 done, M5 done** in `VoleMole/ROM/` (VCVio), including
 the run of the executable verifier against the oracle (§2c); what remains is listed at the end of
-§2c. M6 not started. Scope: the classical (ROM + ideal cipher) proof of knowledge
+§2c. **M6: binding (`ε_bind`) done in the ideal-cipher model, PRF view** (§2d); `ε_chain`, `ε_dead`
+and the residual `ε_open` of §2d still open. Scope: the classical (ROM + ideal cipher) proof of knowledge
 of `docs/extraction/README.md`. The ZK hybrids (`docs/zk.md` §10, "proved only on paper") and the
 QROM documents (Q1–Q7) are out of scope here. Notes on ZK are at the end.
 
@@ -377,7 +378,109 @@ changed as below. `#print axioms` of the main results: `propext`, `Classical.cho
 
 Still open after §2c: the "same chain" step (`hsame`, `ε_chain`), L2 (`ε_dead`) and binding
 (`ε_bind`) as named assumptions (M6: ideal cipher, query ordering), and the statement-binding
-term.
+term. §2d replaces `ε_bind` by an explicit term and a smaller residual.
+
+### 2d. M6, first part: binding in the ideal-cipher model, as implemented
+
+Files: `ROM/FreshCache.lean`, `ROM/CipherBind.lean`, `ROM/CipherGame.lean`; and the ROM layer made
+cipher-generic: `variable [HasPrg]` in `Verifier/Bridge/ChainRelations.lean`,
+`Prob/Challenges.lean`, `Prob/ChainRelations.lean`, `ROM/Chains.lean`, `ROM/Comb.lean`,
+`ROM/Verifier.lean`, `ROM/Accept.lean`, `ROM/SingleOracle.lean` (proofs unchanged; `omit` where a
+lemma does not use the PRG). So every bound of §2b/§2c holds for every CTR PRG, in particular for
+`icPrg E` (the CTR PRG of a cipher table `E`, `ZK/HopsH4.lean`), and at `aesPrg` it is the
+statement as before. No executable definition changed. `#print axioms` of the main results:
+`propext`, `Classical.choice`, `Quot.sound`.
+
+- **The model: PRF view, forward queries.** The cipher is a random oracle on cells
+  `(k, z) ↦ E_k(z)` (`cspec`, `CTable = Blk × Blk → Blk`), every row a uniform function, as on
+  the ZK side (`ZK/IdealCipher.lean`, `icPrg E`). The prover queries cells; the verifier and the
+  extractor *read* the table (the verifier through `icPrg E.cipher`), so their evaluations are not
+  counted. A lazy random permutation per key with inverse queries (the plan's sketch) was not
+  built: VCVio has none, and the cache-based argument below would have to be redone for a lazy
+  permutation. **PRP/PRF:** the switching lemma costs `q_E²/2¹²⁹`, much more than the bound below,
+  so it is not the route; in the permutation model the same argument runs with `2⁻¹²⁸` per fresh
+  answer replaced by `p = 1/(2¹²⁸ − q_E)` (a fresh forward or inverse answer is uniform over at
+  least `2¹²⁸ − q_E` values; L0-L2 §3.1), giving `2·q_E²·p²`. That version, and inverse queries
+  generally, are on paper only.
+- **The union bound with a cache-reading bad event** (`ROM/FreshCache.lean`). VCVio's
+  `freshBadQuery` tests a fresh query with a predicate of the table only; a collision bound needs
+  to know which cells were queried before. `freshBadC oa c g bad`: some log entry, at a cell not in
+  the cache `c` nor earlier in the log, is bad for the cache of the earlier log
+  (`cacheOfLog c pre`). `prEvent_freshBadC_le_of_cached` (VCVio's proof with the cache passed
+  along): if a fresh query is bad with probability `≤ ε` over the uncached cells for every cache of
+  fewer than `N` cells, an `n`-query computation meets one with probability `≤ n·ε`
+  (`prEvent_le_of_freshBadC`, eager form, finite key type).
+- **The collision event** (`ROM/CipherBind.lean`, C2 of L0-L2 §4 in a log-local form):
+  `collBad (k, w) c E` — for a neighbour `w'` of `w` (`adj w = {w ⊞ e₀, w ⊟ e₀}`, `nxt`, `prv`;
+  the two points of a leaf commitment are `x₀` and `x₁ = x₀ ⊞ e₀`, `nxt_lp`, `prv_lp`) with
+  `(k, w')` not yet queried, a key `κ ≠ k` with a cached cell at `w` or `w'` has
+  `E_κ(w) = E_k(w)` and `E_κ(w') = E_k(w')`. Charged at the first query of the *second* key, so
+  both of `k`'s cells are fresh: `pr_two_cells_le` (two fresh cells hitting two values,
+  `≤ 2⁻²⁵⁶`, by an injection of the tables) and at most `2·|cache|` pairs (`card_collPairs_le`)
+  give `pr_collBad_le ≤ 2N·2⁻²⁵⁶`, and **`prEvent_coll_le`: `≤ 2·q_E²·2⁻²⁵⁶ = q_E²·2⁻²⁵⁵`** for a
+  `q_E`-query prover. `freshBadC_of_two_keys`: two different keys, each queried at one of a leaf's
+  two points, with equal blocks at both, make a fresh query bad. This is the doc's C2 with the
+  pair's four cells all charged to the log; the doc's 10 `q_E²p²` also covers inverse queries and
+  determinations the verifier makes. C1 (`E[N_coll] ≤ q_E²p`) is not needed here, and C3 (for L2)
+  is not done.
+- **Straight-line key extraction from the query log.** `extractKey log E iv i a`: the key of the
+  first entry of the prover's cipher log at one of tree `i`'s two leaf points whose key has
+  commitment `a = E_κ(x₀) ‖ E_κ(x₁)` (the second block read from the table: L0-L2 §6, the
+  extractor evaluates the partner block, Definition B). `keysOf`: these keys for the commitments
+  that the reconstruction from the opening computes (the opened ones at the hidden leaves);
+  `knownOf`: the trees whose hidden leaf has such a key. These replace `ExtData`'s keys and known
+  set (`proverIC`, below). `extractKey_eq_of_wit`: outside the collision event every logged
+  witness of a commitment is the extracted key (L1.2; at a hidden leaf, L2(c) without "before
+  `chal1`").
+- **Binding** (`binds_or_coll_or_dead`, deterministic, any `iv`, opening and `Δ`): if the
+  reconstruction's key at a non-hidden leaf differs from the extracted key, the log has a fresh
+  `collBad` query or a **dead leaf is opened** (`DeadOpen`: the reconstruction's key at a
+  non-hidden leaf was queried by the prover at neither of that leaf's points). Uses
+  `comAt_reconstruct` (a non-hidden leaf's commitment is its key's `leafCom`) and `leafCom_ic`
+  (under `icPrg E` that is the key's row at the two points). **`prEvent_not_binds_le`**:
+  `Pr_E[¬BindsIC] ≤ q_E²·2⁻²⁵⁵ + Pr_E[DeadOpen]`, for any cipher-only prover.
+- **The joint game and the bridge** (`ROM/CipherGame.lean`). The prover is
+  `P : OracleComp specIC _`, one random oracle on `Dom ⊕ Cell` (hashes and cipher), with
+  `IsQueryBoundP P Sum.isRight q_E` and per-domain hash counts `IsKindQueryBoundIC P q`.
+  `proverIC st E P`: `P` with the cipher answered by `E` (`runE`, which also returns its cipher
+  log), then the extractor (queries `mu₁` and `iv`, two more hash queries, and sets `keys`, `known`
+  from the log, `E` and the proof; the log goes into `aux`). `gameIC T st P E`: `game` at the
+  instance `icPrg E.cipher`. The experiment draws `E` uniformly, then runs `gameIC … E` against the
+  lazy hash oracle. `runH h P` is `P` with the hashes answered by a fixed table (a cipher-only
+  prover); `evalWithAnswerFn_runE` ties the two. **`prEvent_joint_le_add`**: if for every complete
+  hash table an event has cipher probability `≤ c +` that of another, the same holds in the joint
+  experiment (the lazy oracle becomes a uniform table on the finite set of all games' possible
+  queries, `prEvent_randomOracle_eq_eager`, and the two draws are swapped). Hence
+  **`prEvent_joint_bindFail_le`**: `Pr[bindFail] ≤ 2·q_E²·2⁻²⁵⁶ + Pr[DeadOpenOut]`
+  (`DeadOpenOut`: an accepted proof with a dead opened leaf), and
+  **`prEvent_joint_le_of_bindFail`**: any bound of §2c taken at each cipher table with
+  `ε_bind := Pr[bindFail]` holds in the joint experiment with that term replaced.
+- **Plugged in: `moussakaIssue_accept_le_ic`**: in the joint experiment,
+  `Pr[accept ∧ ¬Extracted] ≤ (q₁+1)·2⁻¹⁵⁰ + (q₂+1)·ε_QS(4008) + (Q+1)·9·2⁻¹²⁸ +
+  (2·q_E²·2⁻²⁵⁶ + ε_open) + ε_dead + ε_chain`, with `q_E` the prover's cipher queries, `ε_open` a
+  bound on `DeadOpenOut`, and `hsame`, `hL2`, `hdead`, `hchain` as in `moussakaIssue_accept_le`
+  for every cipher table (the committed chain data may depend on it). The other four relations go
+  through `prEvent_joint_le_of_bindFail` the same way; not stated (the combined relations also
+  need `P`'s total hash count transferred to `proverIC`, `+2`).
+
+**What `ε_bind` became, and what is left.** L0-L2's `ε_bind` has four parts: `Coll₁`, `Hit₁` (the
+`H₁` linking of L1.4), `Coll_E` (C2) and `Cross` (Definition B). `Coll_E` and `Cross` are covered
+by `2·q_E²·2⁻²⁵⁶` (in the PRF view, forward queries; a second committed key whose blocks match as
+cipher values is a second logged witness). What remains is `ε_open = Pr[DeadOpenOut]`: an
+accepted proof opens a leaf whose key the prover never evaluated at either of the leaf's points.
+Bounding it is L1.4 (the leaf commitments the verifier recomputes are the `H₁` preimages
+committed before the chain's `H₂¹` query: `Coll₁`, `Hit₁`) together with L2(a) (C3, `Post`): an
+ordering argument over the hash and cipher logs, the same kind as the "same chain" step. Note also
+that the extracted keys are logged keys, but "logged before `chal1`" (committed by the chain) is
+not part of binding here: it is in `hsame` (`SameChain.pre` compares the keys committed at the
+chain's `H₂¹` input with the extractor's).
+
+**For `ε_chain` and `ε_dead`.** The joint game is the place for both: the committed data of a chain
+can now be computed from the cipher table and the query log (`extractKey` on the commitments
+committed at the `H₂¹` input), and L2's `Post` event is a `collBad`-style fresh-query event of the
+cipher log charged against the half-targets of earlier chains (C3), for which
+`prEvent_freshBadC_le_of_cached` is the union bound (with a bad event that reads the log of the
+hash queries too; the combined oracle `specIC` puts both in one log).
 
 ### M4 — Mathlib bump and VCVio dependency (Phase B, ~1–3 days, mostly waiting on builds) — done
 
@@ -414,7 +517,7 @@ Subtlety: the "parse a prefix from `x`" functions must be total functions of the
 the RO cache *before* the query). This is where L1's "committed data" enters. In M5 take it as
 given via a hypothesis that the committed keys are a function of the prior log.
 
-### M6 — Ideal cipher, L1/L2, the "same chain" step (Phase B, ~3–6 weeks, optional)
+### M6 — Ideal cipher, L1/L2, the "same chain" step (Phase B, ~3–6 weeks, optional) — binding done (PRF view), see §2d
 
 - Model AES as an ideal cipher: a lazy random *permutation* per key, with forward and inverse
   queries. VCVio has no ready-made ideal cipher that I could find; build it as a stateful

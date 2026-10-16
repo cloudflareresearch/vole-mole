@@ -45,6 +45,9 @@ open Finset ENNReal
 
 namespace VoleMole.Prob
 
+-- The statements hold for any CTR PRG (`HasPrg`, `Verifier/Prg.lean`), AES included.
+variable [VoleMole.Verifier.HasPrg]
+
 open VoleMole.Arith VoleMole.Verifier VoleMole.Verifier.Bridge VoleMole.EndToEnd
 open VoleMole.SeedExtraction
 
@@ -52,6 +55,7 @@ instance : Nonempty shortKeys := ⟨⟨_, mem_shortKeys 0⟩⟩
 
 /-! ## L3 -/
 
+omit [VoleMole.Verifier.HasPrg] in
 /-- **L3, probability form.** For response functions `(Q, D)` fixed before the challenge, a
 uniform VOLEHash challenge is bad with probability `≤ |S|³(|F|⁴|T| + (L−1)⁵|F|⁴)/(|F|⁸|T|)`. -/
 theorem prU_not_kosGood {F X : Type*} [Field F] [Fintype F] [DecidableEq F] (T' : Finset F)
@@ -68,6 +72,7 @@ noncomputable def epsKOS (s L : ℕ) : ℝ≥0∞ :=
   ((s ^ 3 * ((2 ^ 128) ^ 4 * 2 ^ 64 + (L - 1) ^ 5 * (2 ^ 128) ^ 4) : ℕ) : ℝ≥0∞) /
     ((2 ^ (8 * 136) : ℕ) : ℝ≥0∞)
 
+omit [VoleMole.Verifier.HasPrg] in
 lemma epsKOS_mono {s s' L : ℕ} (h : s ≤ s') : epsKOS s L ≤ epsKOS s' L := by
   unfold epsKOS
   gcongr
@@ -86,6 +91,9 @@ end VoleMole.Prob
 
 namespace VoleMole.Verifier.Bridge.Chain
 
+-- The statements hold for any CTR PRG (`HasPrg`, `Verifier/Prg.lean`), AES included.
+variable [VoleMole.Verifier.HasPrg]
+
 open VoleMole.Prob
 
 /-- The chain with `chal1` replaced. -/
@@ -103,6 +111,9 @@ end VoleMole.Verifier.Bridge.Chain
 
 namespace VoleMole.Prob
 
+-- The statements hold for any CTR PRG (`HasPrg`, `Verifier/Prg.lean`), AES included.
+variable [VoleMole.Verifier.HasPrg]
+
 open VoleMole.Arith VoleMole.Verifier VoleMole.Verifier.Bridge VoleMole.EndToEnd
 open VoleMole.SeedExtraction
 
@@ -116,6 +127,7 @@ theorem chain_kos_bad_le {T : CrtTables} (hT : liftInvOk T = true) (st : Stateme
   simp only [Chain.kosQ_withChal1, Chain.kosD_withChal1, Chain.kosCh_withChal1]
   exact prU_kos_bad_le hT S (ch.kosQ st T) (ch.kosD st T)
 
+omit [VoleMole.Verifier.HasPrg] in
 set_option exponentiation.threshold 1100 in
 /-- **`ε_KOS ≤ 2⁻¹⁵⁰`** for at most `2¹²⁰` challenges and `L ≤ 2¹³` hashed rows. -/
 theorem epsKOS_le {s L : ℕ} (hs : s ≤ 2 ^ 120) (hL : L ≤ 2 ^ 13) :
@@ -135,6 +147,9 @@ theorem epsKOS_le {s L : ℕ} (hs : s ≤ 2 ^ 120) (hL : L ≤ 2 ^ 13) :
 end VoleMole.Prob
 
 namespace VoleMole.Verifier.Bridge.Chain
+
+-- The statements hold for any CTR PRG (`HasPrg`, `Verifier/Prg.lean`), AES included.
+variable [VoleMole.Verifier.HasPrg]
 
 open VoleMole.Arith VoleMole.Verifier VoleMole.EndToEnd
 
@@ -230,11 +245,15 @@ end VoleMole.Verifier.Bridge.Chain
 
 namespace VoleMole.Prob
 
+-- The statements hold for any CTR PRG (`HasPrg`, `Verifier/Prg.lean`), AES included.
+variable [VoleMole.Verifier.HasPrg]
+
 open VoleMole.Arith VoleMole.Verifier VoleMole.Verifier.Bridge VoleMole.EndToEnd
 open VoleMole.SeedExtraction
 
 /-! ## L4 -/
 
+omit [VoleMole.Verifier.HasPrg] in
 /-- The `zkCoeff` arguments of `*_extract_chain` at `chal2 = b`. -/
 lemma ch2Dec_coe (b : Bytes 56) :
     ((ch2Dec b).1, (ch2Dec b).2.1, (ch2Dec b).2.2.1, ((ch2Dec b).2.2.2 : GF128)) =
@@ -300,6 +319,7 @@ theorem prU_qs_comb_bad_le {Λ : Type*} [Fintype Λ] [Nonempty Λ] (cs : Λ → 
     (prU_prod_le_left _ fun l => (prU_qs_bad_le (cs l) w).trans_eq (by rw [hn l]))
     (prU_snd_le (fun l => (cs l).Holds w ∧ ¬Wit) hεc))
 
+omit [VoleMole.Verifier.HasPrg] in
 /-- `ε_QS(n) ≤ 2⁻¹²⁷` for `n ≤ 2³²` constraints. -/
 theorem epsQS_le {n : ℕ} (hn : n ≤ 2 ^ 32) : Seed.epsQS (2 ^ 128) (2 ^ 64) n ≤ 2 / 2 ^ 128 := by
   have h1 : ((n : ℝ) - 1) ^ 2 ≤ (2 ^ 64 : ℝ) := by
@@ -314,6 +334,7 @@ theorem epsQS_le {n : ℕ} (hn : n ≤ 2 ^ 32) : Seed.epsQS (2 ^ 128) (2 ^ 64) n
     div_le_div_iff₀ (by positivity) (by positivity)]
   nlinarith
 
+omit [VoleMole.Verifier.HasPrg] in
 /-- **L4 (`hcomb`), probability form.** If at most a `2⁻¹²⁸` fraction of the `l` make the system
 hold at `w` without the relation (`*_comb_bad_gf128`), a uniform `l` does so with probability
 `≤ 2⁻¹²⁸`. -/
