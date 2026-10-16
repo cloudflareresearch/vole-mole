@@ -36,8 +36,8 @@ Contents:
 | One-more unforgeability, per issuance context (Thm 1) | **Yes** | `ε_ext^iss + ε_ext^red + ε_dig + Adv^bind_Com + K·Adv^ct-uf_UOV,Com` | PoK (extraction README), binding of `Com`, chosen-target unforgeability of UOV on `Com`-images (implied by one-more-UOV, heuristically) |
 | One nullifier per signed commitment; double-spend detection (Cor 2) | **Yes**, if the Moderator keeps one record per `(ctx_iss, ctx_red)` across all Anchor Sets (`moussaka.hpp:141-146`) | as Thm 1 | as Thm 1 |
 | Redemption non-malleability: no redirect to another `challenge_digest`, Anchor Set or `ctx_red` (Thm 3) | **Yes** | `ε_SE^red + Adv^bind + K·Adv^ct-uf + U·Adv^ow-r + ZK hops` | weak SE (L8), plus the above, plus one-wayness in `r` |
-| Issuer hiding and unlinkability vs a Moderator **colluding with all Anchors**, with adversarial keys (Thm 4a) | **Yes, computationally**; [Lean] from uniform seed outputs (`Privacy/Moussaka.lean`, `anonymity`); with the executable Lean prover (label rows) down to its tape hypothesis (`Privacy/MoussakaLean.lean`, `anonymity_label_rows`); for the Lean prover in the ROM and ideal-cipher model with every zero-knowledge term explicit, `≈ 2⁻¹⁰²·³` plus budget terms and `2·Adv^hide_Com` (`anonymityRO_lean_num`), and `≈ 2⁻¹⁰¹·⁹` with a table-reading interaction (`anonymityRA_lean_num`; Appendix B); also with AES as random permutations (`_perm`) and with one shared `H₃` (`anonymitySh_num`, `anonymityRASh_num`); from the real Clients' OS seeds and seed XOF, each `+ 2·(2q_X + 2)·2⁻²⁵⁶` (`anonymity*_seed`, `lean/docs/zk.md` §10.6) | `2·ε_ZK^joint + 2·Adv^hide_Com` (the `2^{−192}` is not needed, §6) | ZK (lean/docs/zk.md), hiding of `Com` |
-| The same vs a Moderator that sees no issuance (Thm 4b) | **Yes**, with no Keccak assumption, up to an abort term the note missed (§6); [Lean] from uniform seed outputs (`Privacy/MoussakaNC.lean`, `anonymityNC`, `unlinkabilityNC`), with the vinegar hash a random oracle (`anonymityNC_vinegarRO`), and with the executable Lean prover down to its tape or hop hypotheses (`anonymityNC_label_rows`, `_shake`); in the ROM and ideal-cipher model with every proof and the honest Anchors' Lean verifier on the shared tables, `≈ 2⁻¹⁰³·²` plus budget terms and `2·(φ₀ + φ₁)` (`anonymityNCRO_lean_num`, `unlinkabilityNCRO_lean_num`, also `_perm`; Appendix B) | `2·Σ ε_ZK^red + 2·(φ₀ + φ₁)`, `φ_c ≤ δ_c^{256} ≈ 2^{−2046}` on average over the vinegar random oracle (`0` for one Anchor; no `2^{−192}`) | ZK of the redemption proofs only; the Client takes its index from `S` |
+| Issuer hiding and unlinkability vs a Moderator **colluding with all Anchors**, with adversarial keys (Thm 4a) | **Yes, computationally**; [Lean] from uniform seed outputs (`Privacy/Moussaka.lean`, `anonymity`); with the executable Lean prover (label rows) down to its tape hypothesis (`Privacy/MoussakaLean.lean`, `anonymity_label_rows`); for the Lean prover in the ROM and ideal-cipher model with every zero-knowledge term explicit, `≈ 2⁻¹⁰²·³` plus budget terms and `2·Adv^hide_Com` (`anonymityRO_lean_num`), and `≈ 2⁻¹⁰¹·⁹` with a table-reading interaction (`anonymityRA_lean_num`; Appendix B); also with AES as random permutations (`_perm`) and with one shared `H₃` (`anonymitySh_num`, `anonymityRASh_num`); from the real Clients' OS seeds and seed XOF, each `+ 2·(2q_X + 2)·2⁻²⁵⁶` (`anonymity*_seed`, `lean/docs/zk.md` §10.6); with any number `n` of further honest Clients, `≤ n·2⁻¹⁰²` plus budget terms and `2·Adv^hide_Com` (`anonymityN_lean_num`), and with `N` challenge pairs (`anonymityP_lean_num`; `lean/docs/zk.md` §10.8; §11 item 5) | `2·ε_ZK^joint + 2·Adv^hide_Com` (the `2^{−192}` is not needed, §6) | ZK (lean/docs/zk.md), hiding of `Com` |
+| The same vs a Moderator that sees no issuance (Thm 4b) | **Yes**, with no Keccak assumption, up to an abort term the note missed (§6); [Lean] from uniform seed outputs (`Privacy/MoussakaNC.lean`, `anonymityNC`, `unlinkabilityNC`), with the vinegar hash a random oracle (`anonymityNC_vinegarRO`), and with the executable Lean prover down to its tape or hop hypotheses (`anonymityNC_label_rows`, `_shake`); in the ROM and ideal-cipher model with every proof and the honest Anchors' Lean verifier on the shared tables, `≈ 2⁻¹⁰³·²` plus budget terms and `2·(φ₀ + φ₁)` (`anonymityNCRO_lean_num`, `unlinkabilityNCRO_lean_num`, also `_perm`), also with one shared `H₃` (`anonymityNCSh_num`) and from the real Clients' seeds (`*NC*_seed`; Appendix B) | `2·Σ ε_ZK^red + 2·(φ₀ + φ₁)`, `φ_c ≤ δ_c^{256} ≈ 2^{−2046}` on average over the vinegar random oracle (`0` for one Anchor; no `2^{−192}`) | ZK of the redemption proofs only; the Client takes its index from `S` |
 | Issuer hiding under a Moderator-chosen Anchor Set | **Only relative to the Anchors in the set that are honest and in common use** (§7) | n/a | Anchor-Set consistency outside the library |
 
 Main findings (§9):
@@ -816,36 +816,34 @@ harmless.
    (`lean/docs/zk-qrom.md`), and Theorem 4 is not restated with it; multi-output extraction and
    Theorem 1 are in `lean/docs/extraction/Q7-qrom-multi-extraction.md` (paper). `ε_multi` caps Q2
    at about `2^{40}` cipher queries.
-5. Theorem 4(a) is mechanized for a fixed-size game (two Clients, one redemption per side,
-   Appendix B), and with any number of further honest Clients on the same tables, issued with the
-   challenge Clients and redeeming at Anchor Sets chosen after every issuance request
-   (`anonymityN_lean_num`, `≤ n·2⁻¹⁰² + 2·εhide` plus budget terms for `n` Clients in all;
-   `lean/docs/zk.md` §10.8), and with `N` challenge pairs (the left-or-right game, a hybrid over
-   the pairs, `anonymityP_lean_num`, `≤ N·(2N·2⁻¹⁰² + 2·εhide)` plus budget terms: `2⁻⁶³` at
-   `2²⁰` Clients, `2⁻³⁹` at `2³²`; quadratic by an artifact of the proof, `lean/docs/zk.md`
-   §10.8; the lazy-sampling reduction that removes the per-session charge for PomFRIT with `H₄`
-   a table, `Privacy/PomFRITLin.lean`, does not apply as it stands, since the further Clients'
-   redemption statements are chosen after the challenge requests); adaptive schedules (Clients started after earlier outcomes) are not: Clients before
-   the challenge would have to influence the challenge keys, which the table-reading game keeps
-   fixed. In the ROM and ideal-cipher model, what remains is: SHAKE as a random oracle, AES
-   as an ideal cipher (with its rows uniform functions, `anonymityRO_lean_num`,
-   `anonymityRA_lean_num`, or uniform permutations read forward and inverse, the PRP/PRF switching
-   term included, `anonymityRO_lean_num_perm`, `anonymityRA_lean_num_perm`, `lean/docs/zk.md`
-   §10.4), the consistency of a table-reading
-   interaction given as a function of the tables (a hypothesis; a theorem for one written as an
-   oracle computation, `anonymityOC_lean_num`), and the hiding of `Com` (an assumption). The
-   seed-XOF hop is mechanized (`anonymityRO_lean_num_seed`, `anonymityRA_lean_num_seed`,
-   `anonymitySh_num_seed`, `anonymityRASh_num_seed`, the `OC` versions and `_perm`: the XOF a
-   uniform table keyed by `(DST, seed)`, `+ 2·(2q_X + 2)·2^{−256}`; `lean/docs/zk.md` §10.6).
-   Theorem 4(b), corrected to (b') with the abort term `2·(φ₀ + φ₁)`, is mechanized for the
-   same fixed-size game from per-proof zero knowledge of the redemption proofs, with the Lean
-   prover down to its tape and hop hypotheses, and with the abort term bounded by
-   `2·(δ₀^{256} + δ₁^{256})` in the vinegar random-oracle model (`Privacy/MoussakaNC.lean`), and in
-   the random-oracle and ideal-cipher model with the Anchors' Lean verifier on the shared tables
-   (`anonymityNCRO_lean_num`, `_perm`, `anonymityNCRO_vinegarRO`, `Privacy/MoussakaNCRO.lean`).
-   also with one shared `H₃` (`anonymityNCSh_num`, `Privacy/MoussakaNCSh.lean`) and with the real
-   Clients' seeds (`*NC*_seed`, `Privacy/SeedXOFNC.lean`). What remains there: the adversary's
-   choices do not read the tables (§6).
+5. Privacy in Lean (Appendix B; `lean/docs/zk.md` §10).
+   - *Theorem 4(a)* is mechanized for a fixed-size game (two Clients, one redemption per side),
+     in the ROM and ideal-cipher model with every zero-knowledge term explicit
+     (`anonymityRO_lean_num`), with a table-reading interaction (`anonymityRA_lean_num`; as oracle
+     computations, `anonymityOC_lean_num`), with AES's rows uniform permutations read forward and
+     inverse (`_perm`), with one shared `H₃` (`anonymitySh_num`, `anonymityRASh_num`) and from the
+     real Clients' seeds (`anonymity*_seed`, `+ 2·(2q_X + 2)·2⁻²⁵⁶`); and with many Clients
+     (`lean/docs/zk.md` §10.8): any number of further honest Clients on the same tables, issued
+     with the challenge Clients and redeeming at Anchor Sets chosen after every issuance request
+     (`anonymityN_lean_num`, `≤ n·2⁻¹⁰²` plus budget terms and `2·εhide` for `n` Clients in all),
+     and `N` challenge pairs (`anonymityP_lean_num`, `≤ N·(2N·2⁻¹⁰² + 2·εhide)` plus budget terms:
+     `2⁻⁶³` at `2²⁰` Clients, `2⁻³⁹` at `2³²`; quadratic by an artifact of the proof).
+   - *Theorem 4(b)*, corrected to (b′) with the abort term `2·(φ₀ + φ₁)`, is mechanized for the
+     same game from per-proof zero knowledge of the redemption proofs (with the Lean prover down to
+     its tape and hop hypotheses; the abort term `≤ 2·(δ₀^{256} + δ₁^{256})` in the vinegar
+     random-oracle model, `Privacy/MoussakaNC.lean`), and in the ROM and ideal-cipher model with
+     the honest Anchors' Lean verifier on the shared tables (`anonymityNCRO_lean_num`), with one
+     shared `H₃` (`anonymityNCSh_num`) and from the real Clients' seeds (`*NC*_seed`), each with
+     `_perm`.
+   - *What remains*: SHAKE as a random oracle and AES as an ideal cipher; the hiding of `Com` for
+     4(a) (computational, §3.2); the consistency of a table-reading interaction given as a bare
+     function of the tables (a theorem for oracle computations); for 4(b), adversary choices that
+     read the tables (no `RA`/`OC` version); adaptive schedules (Clients started after earlier
+     outcomes: Clients before the challenge would have to influence the challenge keys, which the
+     table-reading game keeps fixed); a bound linear in `N` (the lazy-sampling reduction that
+     gives one for PomFRIT with `H₄` a table does not apply as it stands, since the further
+     Clients' redemption statements are chosen after the challenge requests); further Clients in
+     the shared-`H₃`, seed-XOF and non-colluding games.
 6. Whether lean/docs/zk.md's `Pred` product can be made additive on `main`. It is moot with the fix.
 7. Timing side channels beyond the index check (OS RNG, allocation) are out of scope.
 

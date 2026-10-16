@@ -24,7 +24,8 @@ sense** (§2). The theorem (§3) puts no condition on the witness. The distingui
 witness itself, and the bound is statistical in `w`. It relies only on the random-oracle,
 AES-PRP/GGM and fresh-`rho` assumptions that FAEST's own ZK proof uses. For the executable Lean
 prover with label rows, the single-proof bound and the privacy theorems of all three protocols are
-mechanized in the random-oracle and ideal-cipher model (§10.1–10.6).
+mechanized in the random-oracle and ideal-cipher model (§10.1–10.8), with the hiding of `Com` a
+computational hypothesis (§10.9).
 
 **On `main`, it was not** (§4). FAEST v3's CRT masks come from garbling-style gate labels
 `L⁰_e`, `L¹_e = L⁰_e ⊕ Θ`, and the verifier learns one label per gate. The other label is what
@@ -769,9 +770,9 @@ simulated proof cannot depend on `r`, while the test for the real `r` accepts ev
 (`pomfrit_attack_test`); and the Issuer even learns `r` in the protocol (`pomfrit_issuer_hits`).
 
 **Proved only on paper for the view models above** (for the executable prover, §10.1 mechanizes the
-hybrids in the random-oracle and ideal-cipher model, and §10.2–10.6 the multi-proof games; what
+hybrids in the random-oracle and ideal-cipher model, and §10.2–10.8 the multi-proof games; what
 remains there is listed in §10.1, "What remains assumed", §10.3, §10.5, §10.7 and §10.8,
-"Open", and §10.6, "What remains"):
+"Open", §10.6, "What remains", and §10.9):
 - the random-oracle and lazy-sampling steps (H1, H2 programming, H6 identical-until-bad, and the
   reduction of adaptive H₅ queries to functions of a Θ-independent view). For the `main` layout,
   the probability bound that follows (union over `q` queries, each a function of the view, aux
@@ -1010,10 +1011,12 @@ as a check of the theorem's conditions and kept as a smoke test of the executabl
     real Clients is mechanized for all of them (§10.6). Moussaka's non-colluding mode is
     mechanized with the honest Anchors running the Lean verifier on the same tables, with
     per-proof slices and with one shared `H₃`, and with the real Clients' seeds
-    (`anonymityNCRO_lean_num`, `anonymityNCSh_num`, `unlinkability*`, `*_seed`, §10.7). Left
+    (`anonymityNCRO_lean_num`, `anonymityNCSh_num`, `unlinkability*`, `*_seed`, §10.7). Any number
+    of further honest sessions, `N` challenge pairs and (for PomFRIT) adaptive schedules are
+    mechanized by reductions to these games (§10.8). Left
     open: the modelling steps (SHAKE as a random oracle, AES as an ideal cipher), the hiding of
     `Com` (a computational assumption on Keccak-p[800,12] that no random-oracle step discharges,
-    §10.9), and the game-specific items of §10.3, §10.5 and §10.7 ("Open") and §10.6 ("What
+    §10.9), and the game-specific items of §10.3, §10.5, §10.7 and §10.8 ("Open") and §10.6 ("What
     remains"). The PRP/PRF switching term is proved in the games as well:
     every privacy theorem above also holds with the cipher's rows uniform permutations read
     forward and backward (§10.4, `Privacy/PermRO.lean`, `Privacy/PermRA.lean`). The `*_shake` theorems, which take
@@ -1552,10 +1555,8 @@ Moussaka's and Ratatouille's `H₂³` terms (`h23Term` in `εAd`): a second zero
 application and `2⁻¹¹³` for the real prefix, the read count times `2^(−8·|ã|)` for the simulated
 one; it uses no `noHitProb` because the event requires a produced proof.
 
-**Open.** (Done since earlier versions of this list: a PomFRIT interaction that reads `H₂³`,
-above, under the joint budget; consistency for interactions written as oracle computations, above;
-AES as random permutations, §10.4; one shared `H₃`, §10.5, the Issuer that reads `H₂³`
-included.)
+**Open.** (A PomFRIT interaction that reads `H₂³` under the joint budget, interactions written as
+oracle computations, AES as random permutations (§10.4) and one shared `H₃` (§10.5) are done.)
 - *`H₂³` reads under per-slice budgets* (PomFRIT, `IBudget` with `i₂ > 0`): not covered; the
   substituted Issuer's guess must recompute the interaction's `H₂³` reads jointly (`IBudgetH`).
 - *A two-phase zero-knowledge theorem with a continuation that reads `H₂³`* (`zk2_adaptive`
@@ -1818,11 +1819,10 @@ same prefix, the adversary, or an interaction that read a future proof's prefix)
 already inside the slice-model bounds' `q₃·2⁻¹²⁸` term (and `i₃·2⁻¹²⁸` in §10.3) once those reads
 are counted. The slice-model theorems are unchanged; the shared-model ones are new theorems.
 
-**Open.** (Done since earlier versions of this list: PomFRIT with an Issuer that reads `H₂³`,
-above.) The model counts the adversary's `H₃`
-reads with its cipher queries (`q_E`), so the bounds charge `221·2⁻¹²⁸` per `H₃` read where `2⁻¹²⁸`
-would do; a separate `H₃` budget would need the shared tables to carry `H₃` as a separate
-component (not possible with the games' `ShG R p` shape) and changes nothing beyond that factor.
+**Open.** The model counts the adversary's `H₃` reads with its cipher queries (`q_E`), so the
+bounds charge `221·2⁻¹²⁸` per `H₃` read where `2⁻¹²⁸` would do; a separate `H₃` budget would
+need the shared tables to carry `H₃` as a separate component (not possible with the games'
+`ShG R p` shape) and changes nothing beyond that factor.
 
 ### 10.6 The seed-XOF hop (`Privacy/SeedXOF.lean`, `Privacy/SeedXOFGames.lean`, `ROM/SeedXOFReads.lean`, `Privacy/SeedXOFNC.lean`)
 
@@ -2360,7 +2360,9 @@ adversary (the further sessions' tapes fixed, a non-uniform reduction).
 - *A prefix count in the `RAH` collision term*, for adaptive PomFRIT `≈ n·2⁻¹⁰¹` instead of
   `n·2⁻⁹²`.
 - *Other games.* Further sessions in the shared-`H₃` games (§10.5: the prover reading its column),
-  the seed-XOF games (§10.6: their XOF reads in `q_X`), the non-colluding games (§10.7).
+  the seed-XOF games (§10.6: their XOF reads in `q_X`), the non-colluding games (§10.7); the
+  `H₄`-table games (`blindnessNH_lean`, `blindnessPH_lean`) with permutation rows (the lazy
+  sampling patches single points of a row, above).
 - *Interactions that read the tables* in the many-session games (the `RA` form): the composed
   adversary's interaction is `SReads` by `SReads.bind` with the adversary's own reads; not stated.
 

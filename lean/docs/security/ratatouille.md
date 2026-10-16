@@ -24,7 +24,7 @@ Line references are `file:line` at `6d7113e`.
 | **Balance** (no inflation): accepted spends ≤ issued + refunded, against adaptive malicious clients, honest clients present | **Proved** (Thm 1), classical | `ε_ext + Adv^{uf-tag} + q_K²·2^{−257}` |
 | **No theft**: an adversary cannot spend an honest client's credits through a request it did not copy verbatim | **Proved** (Thm 3), using weak SE and a ZK hop | `ε_ZK + ε_SE + q_K·2^{−127}` |
 | **No theft by copying** (hijack): anyone who obtains a spend request can redeem it first | **Fails** (F2). Nothing binds a spend to a session, unlike {{ACT}}'s `ctx_spend` and Moussaka's `challenge_digest` | — |
-| **Unlinkability/anonymity** against a malicious Issuer: spends and issuances leak only `(pk, ctx_iss, T_init, d)` and whether the client could afford the spend | **Proved** (Thm 2). On `main` it relies on Keccak one-wayness in `r`; with the fix it is standard NIZK. [Lean] a two-round left/right form, from ZK and hiding hypotheses (`Privacy/Ratatouille.lean`); with the executable Lean prover (label rows) down to its tape hypothesis (`Privacy/RatatouilleLean.lean`, `unlinkability_label_rows`); for the Lean prover in the ROM and ideal-cipher model with every zero-knowledge term explicit, `≈ 2⁻¹⁰²·³` plus budget terms and `2·ε_hide` (`unlinkabilityRO_lean_num`), and `≈ 2⁻¹⁰¹·⁶` with a table-reading Issuer (`unlinkabilityRA_lean_num`; §6); also with AES as random permutations (`_perm`) and with one shared `H₃` (`unlinkabilitySh_num`, `unlinkabilityRASh_num`); from the real Clients' OS seeds and seed XOF, each `+ 2·(2q_H + 2)·2⁻²⁵⁶` with `q_H` the Issuer's XOF queries (`unlinkability*_seed`, `lean/docs/zk.md` §10.6; the note's H1 does not charge seed collisions) | `ε_ZK + q_K·2^{−127}` |
+| **Unlinkability/anonymity** against a malicious Issuer: spends and issuances leak only `(pk, ctx_iss, T_init, d)` and whether the client could afford the spend | **Proved** (Thm 2). On `main` it relies on Keccak one-wayness in `r`; with the fix it is standard NIZK. [Lean] a two-round left/right form, from ZK and hiding hypotheses (`Privacy/Ratatouille.lean`); with the executable Lean prover (label rows) down to its tape hypothesis (`Privacy/RatatouilleLean.lean`, `unlinkability_label_rows`); for the Lean prover in the ROM and ideal-cipher model with every zero-knowledge term explicit, `≈ 2⁻¹⁰²·³` plus budget terms and `2·ε_hide` (`unlinkabilityRO_lean_num`), and `≈ 2⁻¹⁰¹·⁶` with a table-reading Issuer (`unlinkabilityRA_lean_num`; §6); also with AES as random permutations (`_perm`) and with one shared `H₃` (`unlinkabilitySh_num`, `unlinkabilityRASh_num`); from the real Clients' OS seeds and seed XOF, each `+ 2·(2q_H + 2)·2⁻²⁵⁶` with `q_H` the Issuer's XOF queries (`unlinkability*_seed`, `lean/docs/zk.md` §10.6; the note's H1 does not charge seed collisions); with any number `n` of further honest Clients, `≤ n·2⁻¹⁰¹` plus budget terms and `2·ε_hide` (`unlinkabilityN_lean_num`), and with `N` challenge pairs (`unlinkabilityP_lean_num`; `lean/docs/zk.md` §10.8, §11) | `ε_ZK + q_K·2^{−127}` |
 | **Correctness** of issuance, spends, refunds and the 64-bit edge cases | **Proved** (Thm 4); arithmetic checked in Lean | prover abort `≤ (1−p)^{2³²}` |
 | **Refund integrity**: refunds are bound to their state and cannot be moved or altered | Proved, as part of Thm 1 and Thm 3 | — |
 | **Key separation across protocols** | **Fails if a key is shared with PomFRIT**: unbounded minting (F1, demonstrated) | — |
@@ -732,7 +732,8 @@ and determinism of `Tag`. The witness satisfies V3 by `change_correct`. ∎
 
 - A-OMPI is a protocol-specific assumption. There is no reduction to UOV inversion (§2.3); R1
   would give a reduction to standard salted UOV EUF-CMA.
-- KP800 as an ideal permutation is a model. Commitment binding and hiding inherit it.
+- KP800 as an ideal permutation is a model. Commitment binding and hiding inherit it. In the Lean
+  privacy theorems hiding stays a computational hypothesis (`ε_hide`, §2.2).
 - Lemma DS is proved on paper, with the separation table checked in Lean
   (`lean/docs/security/domain-separation.md`, `Protocols/DomainSeparation.lean`); SHAKE as a
   random oracle remains the modelling step.
@@ -741,39 +742,37 @@ and determinism of `Tag`. The witness satisfies V3 by `change_correct`. ∎
 - Thm 3 uses SE in the classical model only. N2b (copying) is not provided at all (F2).
 - The UF-Tag reduction counts `q_T ≤ q_K` Tag inputs. Issuer aborts in `DerivePreimage` are
   treated as negligible.
-- Unlinkability (N3) is mechanized as a two-round game in `lean/VoleMole/Privacy/Ratatouille.lean`
-  (§6), with zero knowledge and hiding as hypotheses; for the executable Lean prover zero
-  knowledge is proved in the ROM and ideal-cipher model (`unlinkabilityRO_lean_num`,
-  `unlinkabilityRA_lean_num`; with AES's rows uniform permutations read forward and inverse, the
-  PRP/PRF switching term included, `unlinkabilityRO_lean_num_perm`, `unlinkabilityRA_lean_num_perm`,
-  `lean/docs/zk.md` §10.4), leaving SHAKE as a random oracle, AES as an ideal cipher, the
-  consistency of a
-  table-reading Issuer given as a function of the tables (a hypothesis; a theorem for one written
-  as oracle computations, `unlinkabilityOC_lean_num`) and hiding. The per-proof `H₃` slices are not
-  an assumption: with one shared `H₃(wPrefix ‖ μ₁ ‖ ρ ‖ 3)`, each proof reading its column of the
-  shared tables at its prefix, the game is proved again with no prefix-collision term
-  (`unlinkabilitySh_num`: `8·εRO(q_E + 13824, q₅ + 1872, q_E + 13824) + 4·(2⁻¹¹³ + εRO(0, 312,
-  4607)) + 6·noHitProb + 12·2⁻¹⁰²⁴ + 2·εhide`; `unlinkabilityRASh_num`, with
-  `4·(i_E + 9214)·2⁻¹²⁸ + 4·(2i_E + 23035)·2⁻¹²⁸` for spends whose fresh `ρ` meets a row the Issuer
-  read; `unlinkabilityOCSh_num`; `_perm`; `lean/docs/zk.md` §10.5). H1 (the seed XOF) is mechanized for
-  these games (`lean/docs/zk.md` §10.6: the XOF a uniform table keyed by `(DST, seed)`, uniform
-  seeds, the Issuer reading at most `q_g` cells; `unlinkabilityRO_lean_num_seed`,
-  `unlinkabilityRA_lean_num_seed`, `unlinkabilitySh_num_seed`, `unlinkabilityRASh_num_seed`, the
-  `OC` versions and `_perm`, each `+ 2·(2q_g + 2)·2⁻²⁵⁶`). Lemma DS for the seed domains (part (a))
-  is the same modelling step as for the other tables. With any number of further honest Clients
-  on the same tables, each issued with the challenge Clients and spending once with round 1 (their
-  spend requests seen by the Issuer's stage 2), the game is mechanized as a reduction to the
-  table-reading game (`unlinkabilityN_lean_num`, `≤ n·2⁻¹⁰¹ + 8·(q₃ + q₅ + 221·q_E)·2⁻¹²⁸ +
-  2·εhide` for `n` Clients in all: `2⁻⁸¹` at `2²⁰`, `2⁻⁶⁹` at `2³²`; `unlinkabilityN_lean_le`,
-  `Privacy/RatatouilleMany.lean`, `lean/docs/zk.md` §10.8). With `N` challenge pairs (each with its
-  own two rounds, the Issuer's stages seeing every pair, round 1's requests only where §6's rule
-  runs round 1), a hybrid over the pairs, each step a reduction to the table-reading game whose
-  Issuer runs the other pairs (`unlinkabilityP_lean_num`, `≤ N·(N·2⁻¹⁰¹ + 2·εhide)` plus budget
-  terms: `2⁻⁶³` at `2²⁰` Clients, `2⁻³⁹` at `2³²`; quadratic by an artifact of the proof; the
-  lazy-sampling reduction of PomFRIT with `H₄` a table, `Privacy/PomFRITLin.lean`, does not apply
-  as it stands, since the further Clients' spend statements are chosen by the Issuer). The
-  general adaptive schedule (more spends per Client, sessions started after earlier outcomes) is
-  on paper: sessions before the challenge would have to influence the Issuer's key, context and
-  balance, which the table-reading game keeps fixed.
+- Unlinkability (N3) in Lean (§6; `lean/docs/zk.md` §10):
+  - mechanized as a two-round game in `lean/VoleMole/Privacy/Ratatouille.lean`, with zero
+    knowledge and hiding as hypotheses; for the executable Lean prover in the ROM and ideal-cipher
+    model with every zero-knowledge term explicit (`unlinkabilityRO_lean_num`), with a
+    table-reading Issuer (`unlinkabilityRA_lean_num`; as oracle computations,
+    `unlinkabilityOC_lean_num`), with AES's rows uniform permutations read forward and inverse
+    (`_perm`), with one shared `H₃(wPrefix ‖ μ₁ ‖ ρ ‖ 3)` and no prefix-collision term
+    (`unlinkabilitySh_num`: `8·εRO(q_E + 13824, q₅ + 1872, q_E + 13824) + 4·(2⁻¹¹³ + εRO(0, 312,
+    4607)) + 6·noHitProb + 12·2⁻¹⁰²⁴ + 2·εhide`; `unlinkabilityRASh_num`, with
+    `4·(i_E + 9214)·2⁻¹²⁸ + 4·(2i_E + 23035)·2⁻¹²⁸` for spends whose fresh `ρ` meets a row the
+    Issuer read; `unlinkabilityOCSh_num`), and with H1 (the seed XOF) mechanized: the XOF a
+    uniform table keyed by `(DST, seed)`, uniform seeds, the Issuer reading at most `q_g` cells
+    (`unlinkability*_seed`, each `+ 2·(2q_g + 2)·2⁻²⁵⁶`). Lemma DS for the seed domains (part (a))
+    is the same modelling step as for the other tables.
+  - with many Clients (`Privacy/RatatouilleMany.lean`, `lean/docs/zk.md` §10.8): any number of
+    further honest Clients on the same tables, each issued with the challenge Clients and spending
+    once with round 1 (their spend requests seen by the Issuer's stage 2), as a reduction to the
+    table-reading game (`unlinkabilityN_lean_num`, `≤ n·2⁻¹⁰¹ + 8·(q₃ + q₅ + 221·q_E)·2⁻¹²⁸ +
+    2·εhide` for `n` Clients in all: `2⁻⁸¹` at `2²⁰`, `2⁻⁶⁹` at `2³²`); `N` challenge pairs (each
+    with its own two rounds, the Issuer's stages seeing every pair, round 1's requests only where
+    §6's rule runs round 1), a hybrid over the pairs, each step a reduction to the table-reading
+    game whose Issuer runs the other pairs (`unlinkabilityP_lean_num`, `≤ N·(N·2⁻¹⁰¹ + 2·εhide)`
+    plus budget terms: `2⁻⁶³` at `2²⁰` Clients, `2⁻³⁹` at `2³²`; quadratic by an artifact of the
+    proof).
+  - what remains: SHAKE as a random oracle, AES as an ideal cipher, the consistency of a
+    table-reading Issuer given as a bare function of the tables, and hiding (computational); a
+    bound linear in `N` (the lazy-sampling reduction of PomFRIT with `H₄` a table,
+    `Privacy/PomFRITLin.lean`, does not apply as it stands, since the further Clients' spend
+    statements are chosen by the Issuer); the general adaptive schedule (more spends per Client,
+    sessions started after earlier outcomes: sessions before the challenge would have to influence
+    the Issuer's key, context and balance, which the table-reading game keeps fixed); further
+    Clients in the shared-`H₃` and seed-XOF games.
 - The Lean file covers the accounting and the 64-bit arithmetic only. Extraction, binding and
   forgery are paper arguments.
