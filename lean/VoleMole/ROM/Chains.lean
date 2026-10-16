@@ -212,6 +212,71 @@ theorem prEvent_le_chain_terms {α : Type} {T : CrtTables} (hT : liftInvOk T = t
         rw [← add_assoc]
         exact add_le_add (add_le_add hgood hbind) hdead
 
+/-- The kinds of the chain's own queries (`H₁`, `H₂¹`, `H₂²`, `H₂³`), to which the failures of the
+"same chain" identification (`ROM/Accept.lean`'s `hit`) are charged. -/
+def hitKinds : Finset Kind := {.h1, .h21, .h22, .h23}
+
+omit [VoleMole.Verifier.HasPrg] in
+lemma chainKinds_subset_hitKinds : chainKinds ⊆ hitKinds := by
+  intro k hk
+  simp only [chainKinds, hitKinds, Finset.mem_insert, Finset.mem_singleton] at hk ⊢
+  tauto
+
+/-- The charge of the hits: `q k · εh k` over the chain's kinds. -/
+noncomputable def hitSum (q : Kind → ℕ) (εh : Kind → ℝ≥0∞) : ℝ≥0∞ :=
+  q .h1 * εh .h1 + q .h21 * εh .h21 + q .h22 * εh .h22 + q .h23 * εh .h23
+
+/-- **The per-chain terms over all queries, with a second family of bad queries** (`hit`, e.g. the
+failures of the identification of the accepted chain in the log, `ROM/Accept.lean`): if outside
+the binding and dead-leaf failures the event implies a bad query or a hit for every complete answer
+table, and each hit has probability `≤ εh k` when its cell alone is resampled, then the bound of
+`prEvent_le_chain_terms` holds with `Σ_k q k · εh k` added. -/
+theorem prEvent_le_chain_terms_hit {α : Type} {T : CrtTables} (hT : liftInvOk T = true)
+    {st : Statement} (C : ChainData st) (hC : C.Committed) (S : Finset Blocks) {n : ℕ}
+    (hn : ∀ y g, (C.csOf y g).length = n) (N : ℕ) (oa : OracleComp spec α) (q : Kind → ℕ)
+    (hq : IsKindQueryBound oa q) (event bindFail deadFail : α → Prop) {εb εd : ℝ≥0∞}
+    (hbind : Pr{let r ← (simulateQ randomOracle oa).run' ∅}[bindFail r] ≤ εb)
+    (hdead : Pr{let r ← (simulateQ randomOracle oa).run' ∅}[deadFail r] ≤ εd)
+    (hit : Dom → Table → Prop) (εh : Kind → ℝ≥0∞) (hεh : ∀ k ∉ hitKinds, εh k = 0)
+    (hhit : ∀ t g, Pr{let u ← $ᵗ (Ans t)}[hit t (Function.update g t u)] ≤ εh t.1)
+    (htrace : ∀ g : Table, let r := evalWithAnswerFn (QueryImpl.ofFn g) oa;
+      event r → ¬bindFail r → ¬deadFail r →
+        ∃ e ∈ tableQueryLog oa g, chainBad C T S N e.1 g ∨ hit e.1 g) :
+    Pr{let r ← (simulateQ randomOracle oa).run' ∅}[event r] ≤
+      q .h21 * epsKOS #S (Chain.kosL st) +
+        q .h22 * ENNReal.ofReal (Seed.epsQS (2 ^ 128) (2 ^ 64) n) +
+        q .h23 * ((N : ℝ≥0∞) / 2 ^ 128) + εb + εd + hitSum q εh := by
+  let mx := (simulateQ randomOracle oa).run' ∅
+  have hgood : Pr{let r ← mx}[event r ∧ ¬bindFail r ∧ ¬deadFail r] ≤
+      q .h21 * epsKOS #S (Chain.kosL st) +
+        q .h22 * ENNReal.ofReal (Seed.epsQS (2 ^ 128) (2 ^ 64) n) +
+        q .h23 * ((N : ℝ≥0∞) / 2 ^ 128) + hitSum q εh := by
+    refine (prEvent_exists_bad_query_le oa q hq _ (fun t g => chainBad C T S N t g ∨ hit t g)
+      hitKinds (fun k => chainEps st S n N k + εh k)
+      (fun k hk => by
+        rw [chainEps_eq_zero st S n N k fun h => hk (chainKinds_subset_hitKinds h), hεh k hk,
+          add_zero])
+      (fun t g => (prEvent_or_le _ _ _).trans
+        (add_le_add (prEvent_chainBad_update_le hT C hC S hn N t g) (hhit t g)))
+      fun g h => htrace g h.1 h.2.1 h.2.2).trans_eq ?_
+    simp only [hitKinds, chainEps, hitSum]
+    rw [Finset.sum_insert (by decide), Finset.sum_insert (by decide),
+      Finset.sum_insert (by decide), Finset.sum_singleton]
+    simp only [zero_add, mul_add]
+    ring
+  calc Pr{let r ← mx}[event r]
+      ≤ Pr{let r ← mx}[(event r ∧ ¬bindFail r ∧ ¬deadFail r) ∨ (bindFail r ∨ deadFail r)] :=
+        prEvent_mono mx _ _ fun r h => by tauto
+    _ ≤ Pr{let r ← mx}[event r ∧ ¬bindFail r ∧ ¬deadFail r] +
+          (Pr{let r ← mx}[bindFail r] + Pr{let r ← mx}[deadFail r]) :=
+        (prEvent_or_le mx _ _).trans (add_le_add le_rfl (prEvent_or_le mx _ _))
+    _ ≤ _ := by
+        calc _ ≤ (q .h21 * epsKOS #S (Chain.kosL st) +
+                q .h22 * ENNReal.ofReal (Seed.epsQS (2 ^ 128) (2 ^ 64) n) +
+                q .h23 * ((N : ℝ≥0∞) / 2 ^ 128) + hitSum q εh) + (εb + εd) :=
+              add_le_add hgood (add_le_add hbind hdead)
+          _ = _ := by ring
+
 /-! ## The deterministic step at one chain -/
 
 /-- **A chain whose `H₂¹` and `H₂²` queries are not bad satisfies the extraction theorem's
@@ -219,7 +284,9 @@ conclusion.** For a chain `ch` with the prefix committed at its `H₂¹` query `
 `chal2` committed at its `H₂²` query `y` (`chal1 = g(H₂¹, x)`, `chal2 = g(H₂², y)`), and a
 deterministic theorem `hdet` of the shape of the issue relations' `*_extract_chain`: not KOS-bad
 gives `hkos`, and not QS-bad at the canonical witness gives `hQS` for every slope on
-`A ⊆ A_V` (`forall_slope_of_uCanon`). This is `chain_prob`'s case analysis, per table. -/
+`A ⊆ A_V` (`forall_slope_of_uCanon`). This is `chain_prob`'s case analysis, per table. The
+accepting set `A` is any subset of the challenges on the chain (`onSet`): `ROM/Accept.lean` takes
+the ones that also hide every committed dead leaf (L2). -/
 theorem chain_good_of_not_bad {T : CrtTables} (hT : liftInvOk T = true) {st : Statement}
     (C : ChainData st) (S : Finset Blocks) (N : ℕ) {x y : ByteArray} {g : Table} {ch : Chain}
     (hpre : Chain.SamePrefix st (C.preOf x g) (C.midOf y g))
@@ -235,7 +302,7 @@ theorem chain_good_of_not_bad {T : CrtTables} (hT : liftInvOk T = true) {st : St
           ⟨W128.word ch.chal2 48, 0⟩ (valVec (C.csOf y g) (wStar uStar (ch.dc st))) ≠ 0) →
       P A → Good)
     (h1 : ¬chainBad C T S N (.h21, x) g) (h2 : ¬chainBad C T S N (.h22, y) g)
-    (hP : P (onSet st T ch S)) : Good := by
+    (A : Finset Blocks) (hAon : A ⊆ onSet st T ch S) (hP : P A) : Good := by
   simp only [chainBad, not_not, not_and] at h1 h2
   have hkM : Seed.KOSGood (C.midOf y g).kosCh (S : Set Blocks) (lift T)
       ((C.midOf y g).kosQ st T) ((C.midOf y g).kosD st T) := by
@@ -243,9 +310,9 @@ theorem chain_good_of_not_bad {T : CrtTables} (hT : liftInvOk T = true) {st : St
     exact h1
   have hk : Seed.KOSGood ch.kosCh (S : Set Blocks) (lift T) (ch.kosQ st T) (ch.kosD st T) := by
     rw [hmid.kosCh_eq, hmid.1.kosQ_eq, hmid.1.kosD_eq]; exact hkM
-  have hA : ∀ Δ ∈ onSet st T ch S, ch.OnChain st T Δ := fun Δ h => (mem_onSet.1 h).2
-  have hAS : onSet st T ch S ⊆ S := fun Δ h => (mem_onSet.1 h).1
-  have hAV : onSet st T ch S ⊆ (C.midOf y g).AV st T S := fun Δ h => by
+  have hA : ∀ Δ ∈ A, ch.OnChain st T Δ := fun Δ h => (mem_onSet.1 (hAon h)).2
+  have hAS : A ⊆ S := fun Δ h => (mem_onSet.1 (hAon h)).1
+  have hAV : A ⊆ (C.midOf y g).AV st T S := fun Δ h => by
     rw [← hmid.AV_eq]; exact Chain.mem_AV_of_onChain st T _ (hA Δ h) (hAS h)
   refine hdet _ hA (Finset.coe_subset.2 hAS) hk (fun h2' uStar hs hnot => ?_) hP
   rw [Chain.slope_eq_uCanon hT hkM hAV h2' (hmid.isSlope_iff.1 hs), hmid.dc_eq] at hnot ⊢
@@ -275,7 +342,8 @@ theorem moussakaIssue_good_of_not_bad (t ctxIss : ByteArray) (labelRows : Bool)
   chain_good_of_not_bad liftInvOk_tables C chal3Blocks N hpre hc1 hmid hc2
     (fun A => ChainHyps A known acc) _
     (fun A hA hAS hkos hQS hP => moussakaIssue_extract_chain t ctxIss labelRows ch hvals hA hAS
-      hkos hP.1 (by rwa [hcs] at hQS) admissible deltaBlocks deltaBlocks_injOn _ hP.2) h1 h2 hhyp
+      hkos hP.1 (by rwa [hcs] at hQS) admissible deltaBlocks deltaBlocks_injOn _ hP.2) h1 h2 _
+    subset_rfl hhyp
 
 /-- **Ratatouille issuance at one chain of the random-oracle game** (as
 `moussakaIssue_good_of_not_bad`). -/
@@ -302,7 +370,7 @@ theorem ratatouilleIssue_good_of_not_bad (c : ByteArray) (tInit : ℕ) (ctxIss :
     (fun A => ChainHyps A known acc) _
     (fun A hA hAS hkos hQS hP => ratatouilleIssue_extract_chain c tInit ctxIss labelRows ch hvals
       hA hAS hkos hP.1 (by rwa [hcs] at hQS) admissible deltaBlocks deltaBlocks_injOn _ hP.2)
-    h1 h2 hhyp
+    h1 h2 _ subset_rfl hhyp
 
 -- Elaborating `g (.h23, z) ∈ admissible` against `chainBad`'s match needs a deeper recursion.
 set_option maxRecDepth 4000 in

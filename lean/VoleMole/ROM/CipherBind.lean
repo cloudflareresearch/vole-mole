@@ -462,14 +462,35 @@ def comAt (coms : ByteArray) (i j : ℕ) : ByteArray :=
 
 /-- **The extractor's leaf keys** for an opening: the extracted keys of the commitments that the
 reconstruction (with the ideal cipher `E`) computes from the opening, the opened ones at the hidden
-leaves; zero where no key is found. Computed from the proof, the prover's cipher log and the
-table. -/
+leaves; zero where no key is found, and outside the leaf indices `i < τ`, `j < 2^{k_i}`. Computed
+from the proof, the prover's cipher log and the table. -/
 def keysOf (log : QueryLog cspec) (E : CTable) (iv opening delta : ByteArray) :
     ℕ → ℕ → ByteArray :=
   match @BAVC.reconstruct (icPrg E.cipher) iv opening delta with
   | some leaves => fun i j =>
-      ((extractKey log E iv i (comAt leaves.coms i j)).map ba).getD BAVC.zeroBlock
+      if i < BAVC.tau ∧ j < 2 ^ BAVC.kOf i then
+        ((extractKey log E iv i (comAt leaves.coms i j)).map ba).getD BAVC.zeroBlock
+      else BAVC.zeroBlock
   | none => fun _ _ => BAVC.zeroBlock
+
+/-- The extractor's key at a leaf index. -/
+lemma keysOf_of_reconstruct {log : QueryLog cspec} {E : CTable} {iv opening delta : ByteArray}
+    {leaves : BAVC.Leaves} (hr : @BAVC.reconstruct (icPrg E.cipher) iv opening delta = some leaves)
+    {i j : ℕ} (hi : i < BAVC.tau) (hj : j < 2 ^ BAVC.kOf i) :
+    keysOf log E iv opening delta i j =
+      ((extractKey log E iv i (comAt leaves.coms i j)).map ba).getD BAVC.zeroBlock := by
+  unfold keysOf
+  rw [hr]
+  exact ite_eq_left ⟨hi, hj⟩
+
+/-- The extractor's keys vanish outside the leaf indices. -/
+lemma keysOf_of_not_valid (log : QueryLog cspec) (E : CTable) (iv opening delta : ByteArray)
+    {i j : ℕ} (h : ¬(i < BAVC.tau ∧ j < 2 ^ BAVC.kOf i)) :
+    keysOf log E iv opening delta i j = BAVC.zeroBlock := by
+  unfold keysOf
+  cases @BAVC.reconstruct (icPrg E.cipher) iv opening delta with
+  | some leaves => exact ite_eq_right h
+  | none => rfl
 
 /-- **Outside the collision event, a logged witness is the extracted key**: if `κ` was queried at
 one of tree `i`'s leaf points and has commitment `a`, the extractor returns `κ` (L1.2, unique
@@ -584,11 +605,7 @@ theorem binds_or_coll_or_dead {α : Type} (oa : OracleComp cspec α) (E : CTable
     rfl
   have hk := extractKey_eq_of_wit oa E hcoll iv i hlive
   rw [← hcom] at hk
-  unfold keysOf
-  rw [hr]
-  show leafKey leaves i j =
-    ((extractKey (tableQueryLog oa E) E iv i (comAt leaves.coms i j)).map ba).getD BAVC.zeroBlock
-  rw [hk]
+  rw [keysOf_of_reconstruct hr hi hj, hk]
   exact (ba_blk_of_size hsz).symm
 
 /-- **The binding bound in the ideal-cipher model.** For a prover `oa` making at most `n` cipher

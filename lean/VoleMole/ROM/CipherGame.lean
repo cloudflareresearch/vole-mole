@@ -38,8 +38,10 @@ the cipher and a *fixed* hash table. Here the two are joined.
 
 `ε_open` is bounded in `ROM/CipherOpen.lean` (`prEvent_joint_deadOpen_le`, with
 `moussakaIssue_accept_le_ic'`), and the other four relations are in `ROM/CipherRelations.lean`.
-`hsame` (the keys committed at the chain's `H₂¹` input are the extractor's) and `hL2` stay as in
-`ROM/Accept.lean`.
+`hsame`, `hL2` (and the hits) are as in `ROM/Accept.lean`, for every cipher table; `ε_dead` and
+`ε_chain` bound the *joint* probabilities of `deadFail` and `chainFail`, which may be events of the
+cipher table small only on average (`prEvent_joint_le_of_fails`, `prEvent_avg_le_add3`; Post of
+`ROM/CipherChain.lean` is one). `ROM/CipherFull.lean` discharges all of them.
 -/
 
 open Finset OracleComp OracleSpec
@@ -323,6 +325,33 @@ theorem prEvent_avg_le_add (m : CTable → ProbComp X) (ev ev' : CTable → X �
         rw [lintegral_add_left measurable_const, lintegral_const]
     _ ≤ _ := add_le_add (mul_le_of_le_one_right' (evalDist_apply_univ_le_one _)) le_rfl
 
+/-- **Averaging over the cipher table, three error terms**: a per-table bound by `c` plus three
+probabilities holds on average with the three joint probabilities. -/
+theorem prEvent_avg_le_add3 (m : CTable → ProbComp X) (ev e₁ e₂ e₃ : CTable → X → Prop)
+    (c : ℝ≥0∞) (h : ∀ E, Pr{let r ← m E}[ev E r] ≤
+      c + Pr{let r ← m E}[e₁ E r] + Pr{let r ← m E}[e₂ E r] + Pr{let r ← m E}[e₃ E r]) :
+    Pr{let E ← $ᵗ CTable; let r ← m E}[ev E r] ≤
+      c + Pr{let E ← $ᵗ CTable; let r ← m E}[e₁ E r] + Pr{let E ← $ᵗ CTable; let r ← m E}[e₂ E r] +
+        Pr{let E ← $ᵗ CTable; let r ← m E}[e₃ E r] := by
+  let : MeasurableSpace CTable := ⊤
+  rw [prEvent_bind_of_discrete, prEvent_bind_of_discrete, prEvent_bind_of_discrete,
+    prEvent_bind_of_discrete]
+  calc ∫⁻ E, Pr{let r ← m E}[ev E r] ∂𝒟[$ᵗ CTable]
+      ≤ ∫⁻ E, (c + Pr{let r ← m E}[e₁ E r] + Pr{let r ← m E}[e₂ E r] + Pr{let r ← m E}[e₃ E r])
+          ∂𝒟[$ᵗ CTable] := lintegral_mono h
+    _ = ∫⁻ E, (c + Pr{let r ← m E}[e₁ E r] + Pr{let r ← m E}[e₂ E r]) ∂𝒟[$ᵗ CTable] +
+          ∫⁻ E, Pr{let r ← m E}[e₃ E r] ∂𝒟[$ᵗ CTable] := lintegral_add_left measurable_from_top _
+    _ = ∫⁻ E, (c + Pr{let r ← m E}[e₁ E r]) ∂𝒟[$ᵗ CTable] +
+          ∫⁻ E, Pr{let r ← m E}[e₂ E r] ∂𝒟[$ᵗ CTable] +
+          ∫⁻ E, Pr{let r ← m E}[e₃ E r] ∂𝒟[$ᵗ CTable] := by
+        rw [lintegral_add_left measurable_from_top _]
+    _ = c * 𝒟[$ᵗ CTable] Set.univ + ∫⁻ E, Pr{let r ← m E}[e₁ E r] ∂𝒟[$ᵗ CTable] +
+          ∫⁻ E, Pr{let r ← m E}[e₂ E r] ∂𝒟[$ᵗ CTable] +
+          ∫⁻ E, Pr{let r ← m E}[e₃ E r] ∂𝒟[$ᵗ CTable] := by
+        rw [lintegral_add_left measurable_const, lintegral_const]
+    _ ≤ _ := add_le_add (add_le_add (add_le_add
+        (mul_le_of_le_one_right' (evalDist_apply_univ_le_one _)) le_rfl) le_rfl) le_rfl
+
 end Eager
 
 /-! ## The prover with the straight-line extractor, and the game -/
@@ -475,6 +504,36 @@ theorem prEvent_joint_le_of_bindFail (T : CrtTables) (st : Statement)
   (prEvent_avg_le_add _ _ _ _ h).trans
     (add_le_add le_rfl (prEvent_joint_bindFail_le T st P qE hqE))
 
+/-- **Per-table bounds with `ε_bind`, `ε_dead`, `ε_chain` the game's own probabilities, in the
+joint experiment**: `Pr[ev] ≤ c + (2·q_E²·2⁻²⁵⁶ + Pr[DeadOpenOut]) + Pr[deadFail] + Pr[chainFail]`,
+all joint. (`deadFail` and `chainFail` may be events of the cipher table, such as `ROM/CipherChain.lean`'s
+`PostOut`, whose probability is small only on average over `E`.) -/
+theorem prEvent_joint_le_of_fails (T : CrtTables) (st : Statement)
+    (P : OracleComp specIC (ByteArray × β)) (qE : ℕ)
+    (hqE : IsQueryBoundP P (fun t => t.isRight = true) qE)
+    (ev deadFail chainFail : CTable → Out (β × QueryLog specIC) → Prop) (c : ℝ≥0∞)
+    (h : ∀ E, Pr{let r ← (simulateQ randomOracle (gameIC T st P E)).run' ∅}[ev E r] ≤
+      c + Pr{let r ← (simulateQ randomOracle (gameIC T st P E)).run' ∅}[
+          @bindFail (icPrg E.cipher) _ st r] +
+        Pr{let r ← (simulateQ randomOracle (gameIC T st P E)).run' ∅}[deadFail E r] +
+        Pr{let r ← (simulateQ randomOracle (gameIC T st P E)).run' ∅}[chainFail E r]) :
+    Pr{let E ← $ᵗ CTable; let r ← (simulateQ randomOracle (gameIC T st P E)).run' ∅}[ev E r] ≤
+      c + (2 * qE ^ 2 * (2 ^ 256)⁻¹ +
+        Pr{let E ← $ᵗ CTable; let r ← (simulateQ randomOracle (gameIC T st P E)).run' ∅}[
+          DeadOpenOut st E r]) +
+        Pr{let E ← $ᵗ CTable; let r ← (simulateQ randomOracle (gameIC T st P E)).run' ∅}[
+          deadFail E r] +
+        Pr{let E ← $ᵗ CTable; let r ← (simulateQ randomOracle (gameIC T st P E)).run' ∅}[
+          chainFail E r] :=
+  (prEvent_avg_le_add3 _ _ _ _ _ _ h).trans
+    (add_le_add (add_le_add (add_le_add le_rfl (prEvent_joint_bindFail_le T st P qE hqE)) le_rfl)
+      le_rfl)
+
+/-- The extractor makes no queries of the chain's kinds. -/
+lemma hitSum_add_extractorQueries (q : Kind → ℕ) (εh : Kind → ℝ≥0∞) :
+    hitSum (q + extractorQueries + verifierQueries) εh = hitSum (q + verifierQueries) εh := by
+  simp [hitSum, extractorQueries]
+
 /-! ## Moussaka issuance in the ideal-cipher model -/
 
 /-- **Moussaka issuance in the random-oracle and ideal-cipher model**: the cipher table `E` drawn
@@ -482,12 +541,14 @@ uniformly, the prover `P` (at most `q_E` cipher queries, `q k` queries to each h
 the straight-line extractor of `proverIC`, the executable verifier with the ideal cipher; the
 verifier accepts and the extractor's candidate is not an issuance witness with probability
 
-    ≤ (q₁+1)·2⁻¹⁵⁰ + (q₂+1)·ε_QS(4008) + (Q+1)·9·2⁻¹²⁸ + 2·q_E²·2⁻²⁵⁶ + ε_open + ε_dead + ε_chain,
+    ≤ (q₁+1)·2⁻¹⁵⁰ + (q₂+1)·ε_QS(4008) + (Q+1)·9·2⁻¹²⁸ + 2·q_E²·2⁻²⁵⁶ + ε_open + ε_dead + ε_chain
+      + Σ_k q'_k·εh_k,
 
 `moussakaIssue_accept_le` with `ε_bind` replaced by `2·q_E²·2⁻²⁵⁶ + ε_open`, where `ε_open` bounds
 `DeadOpenOut` (an accepted proof opening a leaf whose key `P` never queried at that leaf's
-points). The other assumptions are those of `moussakaIssue_accept_le`, for every cipher table
-(the committed chain data may depend on it). -/
+points), and `ε_dead`, `ε_chain` bounds on the joint probabilities of `deadFail`, `chainFail`. The
+"same chain" and L2 hypotheses are those of `moussakaIssue_accept_le`, for every cipher table (the
+committed chain data may depend on it); the hits `hit E` have per-query probability `≤ εh`. -/
 theorem moussakaIssue_accept_le_ic (t ctxIss : ByteArray) (labelRows : Bool)
     (preOf midOf : CTable → ByteArray → Table → Chain)
     (accOf : CTable → ByteArray → Table → Prob.Bytes 16 → Prop)
@@ -500,57 +561,57 @@ theorem moussakaIssue_accept_le_ic (t ctxIss : ByteArray) (labelRows : Bool)
     (hopen : Pr{let E ← $ᵗ CTable; let r ← (simulateQ randomOracle
       (gameIC CrtGen.tables (moussakaIssue t ctxIss labelRows) P E)).run' ∅}[
         DeadOpenOut (moussakaIssue t ctxIss labelRows) E r] ≤ εo)
-    (hdead : ∀ E, Pr{let r ← (simulateQ randomOracle
+    (hdead : Pr{let E ← $ᵗ CTable; let r ← (simulateQ randomOracle
       (gameIC CrtGen.tables (moussakaIssue t ctxIss labelRows) P E)).run' ∅}[deadFail E r] ≤ εd)
-    (hchain : ∀ E, Pr{let r ← (simulateQ randomOracle
+    (hchain : Pr{let E ← $ᵗ CTable; let r ← (simulateQ randomOracle
       (gameIC CrtGen.tables (moussakaIssue t ctxIss labelRows) P E)).run' ∅}[chainFail E r] ≤ εs)
-    (hsame : ∀ (E : CTable) (g : Table), let _ : HasPrg := icPrg E.cipher
-      let st := moussakaIssue t ctxIss labelRows
-      let r := evalWithAnswerFn (QueryImpl.ofFn g) (gameIC CrtGen.tables st P E)
-      r.2.2.accept = true → ¬chainFail E r → ∀ leaves, BAVC.reconstruct r.2.2.iv
-        (Proof.opening ⟨st.params, r.1⟩) (Proof.delta ⟨st.params, r.1⟩) = some leaves →
-      let ch := runChain (Hashes.ofTable g) CrtGen.tables st r.1 leaves r.2.1.keys
-      SameChain st CrtGen.tables (preOf E) (midOf E) (accOf E) g ch
-        (runX (Hashes.ofTable g) st r.1 leaves) (runY (Hashes.ofTable g) st ch) (runZ st ch))
-    (hL2 : ∀ (E : CTable) (g : Table), let _ : HasPrg := icPrg E.cipher
-      let st := moussakaIssue t ctxIss labelRows
-      let r := evalWithAnswerFn (QueryImpl.ofFn g) (gameIC CrtGen.tables st P E)
-      r.2.2.accept = true → ¬chainFail E r → ¬deadFail E r → ∀ leaves, BAVC.reconstruct r.2.2.iv
-        (Proof.opening ⟨st.params, r.1⟩) (Proof.delta ⟨st.params, r.1⟩) = some leaves →
-      ∀ i ∉ r.2.1.known, IsFixed ((onSet st CrtGen.tables (runChain (Hashes.ofTable g)
-        CrtGen.tables st r.1 leaves r.2.1.keys) chal3Blocks : Finset Blocks) : Set Blocks) i) :
+    (deadOf : CTable → Table → Fin BAVC.tau → Finset ℕ) (hit : CTable → Dom → Table → Prop)
+    (εh : Kind → ℝ≥0∞) (hεh : ∀ k ∉ hitKinds, εh k = 0)
+    (hhit : ∀ E t g, Pr{let u ← $ᵗ (Ans t)}[hit E t (Function.update g t u)] ≤ εh t.1)
+    (hsame : ∀ E : CTable, @SameChainHyp (icPrg E.cipher) _ CrtGen.tables
+      (moussakaIssue t ctxIss labelRows) (proverIC (moussakaIssue t ctxIss labelRows) E P)
+      (preOf E) (midOf E) (accOf E) (deadOf E) (hit E) (chainFail E))
+    (hL2 : ∀ E : CTable, @DeadHiddenHyp (icPrg E.cipher) _ CrtGen.tables
+      (moussakaIssue t ctxIss labelRows) (proverIC (moussakaIssue t ctxIss labelRows) E P)
+      (deadOf E) (hit E) (chainFail E) (deadFail E)) :
     Pr{let E ← $ᵗ CTable; let r ← (simulateQ randomOracle
       (gameIC CrtGen.tables (moussakaIssue t ctxIss labelRows) P E)).run' ∅}[
         r.2.2.accept = true ∧ ¬@Extracted (icPrg E.cipher) _ (moussakaIssue t ctxIss labelRows)
           (fun _ => moussakaIssueWit (fun k => fnOf t k.val) (fnOf ctxIss)) r] ≤
       (q .h21 + 1) * (2 ^ 150 : ℝ≥0∞)⁻¹ +
         (q .h22 + 1) * ENNReal.ofReal (Seed.epsQS (2 ^ 128) (2 ^ 64) 4008) +
-        (q .h23 + 1) * ((9 : ℝ≥0∞) / 2 ^ 128) + (2 * qE ^ 2 * (2 ^ 256)⁻¹ + εo) + εd + εs := by
+        (q .h23 + 1) * ((9 : ℝ≥0∞) / 2 ^ 128) + (2 * qE ^ 2 * (2 ^ 256)⁻¹ + εo) + εd + εs +
+        hitSum (q + verifierQueries) εh := by
   classical
   set A : ℝ≥0∞ := (q .h21 + 1) * (2 ^ 150 : ℝ≥0∞)⁻¹ +
     (q .h22 + 1) * ENNReal.ofReal (Seed.epsQS (2 ^ 128) (2 ^ 64) 4008) +
-    (q .h23 + 1) * ((9 : ℝ≥0∞) / 2 ^ 128)
-  -- For each cipher table, `moussakaIssue_accept_le` with `ε_bind` the game's own `Pr[bindFail]`.
+    (q .h23 + 1) * ((9 : ℝ≥0∞) / 2 ^ 128) + hitSum (q + verifierQueries) εh
+  -- For each cipher table, `moussakaIssue_accept_le` with the game's own failure probabilities.
   have hE : ∀ E : CTable, Pr{let r ← (simulateQ randomOracle
       (gameIC CrtGen.tables (moussakaIssue t ctxIss labelRows) P E)).run' ∅}[
       r.2.2.accept = true ∧ ¬@Extracted (icPrg E.cipher) _ (moussakaIssue t ctxIss labelRows)
         (fun _ => moussakaIssueWit (fun k => fnOf t k.val) (fnOf ctxIss)) r] ≤
-      (A + εd + εs) + Pr{let r ← (simulateQ randomOracle
+      A + Pr{let r ← (simulateQ randomOracle
         (gameIC CrtGen.tables (moussakaIssue t ctxIss labelRows) P E)).run' ∅}[
-        @bindFail (icPrg E.cipher) _ (moussakaIssue t ctxIss labelRows) r] := by
+        @bindFail (icPrg E.cipher) _ (moussakaIssue t ctxIss labelRows) r] +
+      Pr{let r ← (simulateQ randomOracle
+        (gameIC CrtGen.tables (moussakaIssue t ctxIss labelRows) P E)).run' ∅}[deadFail E r] +
+      Pr{let r ← (simulateQ randomOracle
+        (gameIC CrtGen.tables (moussakaIssue t ctxIss labelRows) P E)).run' ∅}[chainFail E r] := by
     intro E
     have h := @moussakaIssue_accept_le (icPrg E.cipher) _ t ctxIss labelRows (preOf E) (midOf E)
       (accOf E) (hC E) (proverIC (moussakaIssue t ctxIss labelRows) E P) (q + extractorQueries)
-      (isKindQueryBound_proverIC _ E hq) (chainFail E) (deadFail E) _ _ _ le_rfl (hdead E)
-      (hchain E) (hsame E) (hL2 E)
+      (isKindQueryBound_proverIC _ E hq) (chainFail E) (deadFail E) _ _ _ le_rfl le_rfl le_rfl
+      (deadOf E) (hit E) εh hεh (hhit E) (hsame E) (hL2 E)
     simp only [gameIC]
     refine h.trans (le_of_eq ?_)
+    rw [hitSum_add_extractorQueries]
     simp only [Pi.add_apply, extractorQueries, A, reduceCtorEq, or_self, ite_false, add_zero]
     ring
-  calc _ ≤ _ := prEvent_joint_le_of_bindFail CrtGen.tables _ P qE hqE _ _ hE
-    _ ≤ (A + εd + εs) + (2 * qE ^ 2 * (2 ^ 256)⁻¹ + εo) :=
-        add_le_add le_rfl (add_le_add le_rfl hopen)
-    _ = _ := by ring
+  calc _ ≤ _ := prEvent_joint_le_of_fails CrtGen.tables _ P qE hqE _ _ _ A hE
+    _ ≤ A + (2 * qE ^ 2 * (2 ^ 256)⁻¹ + εo) + εd + εs :=
+        add_le_add (add_le_add (add_le_add le_rfl (add_le_add le_rfl hopen)) hdead) hchain
+    _ = _ := by simp only [A]; ring
 
 end Game
 

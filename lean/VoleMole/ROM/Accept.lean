@@ -29,24 +29,35 @@ the ideal cipher, the extractor computing the keys from the prover's cipher log,
 * **Binding** (L1, `ε_bind`): `bindFail st r` = accepted, and the opening's leaves (at the verifier's
   `iv`) differ from the extractor's keys at a non-hidden leaf. A concrete event of the output; its
   probability is a hypothesis (`hbind`).
-* **The "same chain" step** (`hsame`, `ε_chain`): outside an event `chainFail` of the output, the
-  data committed at the verifier's own `H₂¹`, `H₂²`, `H₂³` queries (`runX`, `runY`, `runZ`) are
-  those of the accepted proof's chain (`runChain`, with the extractor's keys): `SameChain`. This is
-  the identification of the earlier queries by their answers (`chal1` in the `H₂²` input,
-  `chal2` in the `H₂³` input) and of the keys committed in the `H₂¹` input; `hclaim1` is part of it
-  (`SameChain.acc`: the chal3 accepted at `z` are those on the chain).
-* **L2** (`hL2`, `ε_dead`): outside `chainFail` and an event `deadFail`, the trees outside `known`
-  have a fixed block on the chain's challenges.
+* **The "same chain" step and L2(c)** (`hsame : SameChainHyp …`): outside an event `chainFail` of
+  the output and the **hits** (`NoHit`: no query of the game's log is a `hit`, a family of bad
+  queries with per-query probability `≤ εh` when the cell alone is resampled, charged by the union
+  bound), the data committed at the verifier's own `H₂¹`, `H₂²`, `H₂³` queries (`runX`, `runY`,
+  `runZ`) are those of the accepted proof's chain (`runChain`, with the extractor's keys) and of its
+  **committed dead leaves** `deadOf g` (`SameChain`; `SameChain.acc`: the `chal3` accepted at `z` are
+  the challenges on the chain hiding every committed dead leaf, `hideSet`), and every tree outside
+  `known` has a committed dead leaf (L2(c)).
+* **L2(a)** (`hL2 : DeadHiddenHyp …`): outside `chainFail`, `deadFail` and the hits, the accepted
+  `Δ` hides every committed dead leaf.
+* For the combined relations, **the combination cell is fresh** (`hcombFresh : CombFreshHyp …`): the
+  cell `chal2 ‖ dst` of the verifier's `H₂²` answer is outside the cells `C.pre y` the chain data at
+  `y` may read.
 
-Everything else of `htrace` is proved (`chainBad_of_accept`, `combBad_of_accept`): the verifier's
-queries are in the log (`inLog_verifyQ`), an accepted proof is on its chain at its `Δ`
+L2 is used as in the paper: a tree with a committed dead leaf has a fixed block on the accepting set
+`hideSet` (`isFixed_hideSet`). (An earlier version asked for a fixed block on `onSet`, the challenges
+on the chain computed with the extractor's keys; that cannot hold with a small `ε_dead`, plan §2e
+F2.) Everything else of `htrace` is proved (`chainBad_of_accept`, `combBad_of_accept`): the
+verifier's queries are in the log (`inLog_verifyQ`), an accepted proof is on its chain at its `Δ`
 (`onChain_of_accept`, from binding), and the per-chain step of `*_good_of_not_bad`.
+`ROM/CipherChain.lean`, `ROM/CipherSame.lean` discharge `hsame`, `hL2`, `hcombFresh` for the joint
+hash and ideal-cipher game.
 
 ## Results
 
 * `prEvent_accept_le_chain_terms` (issue relations), `prEvent_accept_le_comb_terms` (combined):
-  `Pr[accept ∧ ¬Extracted] ≤ (q₁+1)·ε_KOS + (q₂+1)·ε₂ + (Q+1)·N·2⁻¹²⁸ + ε_bind + ε_dead + ε_chain`
-  for a prover with `q₁`, `q₂`, `Q` queries to `H₂¹`, `H₂²`, `H₂³` (the `+1` are the verifier's), and
+  `Pr[accept ∧ ¬Extracted] ≤ (q₁+1)·ε_KOS + (q₂+1)·ε₂ + (Q+1)·N·2⁻¹²⁸ + ε_bind + ε_dead + ε_chain
+  + Σ_k (q_k + q^V_k)·εh_k` for a prover with `q₁`, `q₂`, `Q` queries to `H₂¹`, `H₂²`, `H₂³` (the `+1`
+  and `q^V` are the verifier's), and
   for the combined relations `ε₂ = ε_QS(n') + ε_c + (n+337)·2⁻⁴⁴⁸` with `n` the prover's total.
 * Numerically, per relation: `moussakaIssue_accept_le`, `ratatouilleIssue_accept_le`,
   `moussakaRedeem_accept_le`, `ratatouilleSpend_accept_le`, `pomfritRedeem_accept_le`.
@@ -110,15 +121,72 @@ def Binds (st : Statement) (r : Out β) : Prop :=
 extractor's keys. -/
 def bindFail (st : Statement) (r : Out β) : Prop := r.2.2.accept = true ∧ ¬Binds st r
 
+/-- **The accepting set of a chain with committed dead leaves** `dead i` (L2): the challenges of
+`chal3Blocks` on the chain that hide every dead leaf (`Δ'_i = j` for every `j ∈ dead i`). A tree
+with a dead leaf has a fixed block on it (`isFixed_hideSet`). -/
+noncomputable def hideSet (st : Statement) (T : CrtTables) (ch : Chain)
+    (dead : Fin BAVC.tau → Finset ℕ) : Finset Blocks := by
+  classical
+  exact (onSet st T ch chal3Blocks).filter fun Δ =>
+    ∀ i : Fin BAVC.tau, ∀ j ∈ dead i, BAVC.hiddenIndex (dbitOf Δ) i = j
+
+lemma mem_hideSet {st : Statement} {T : CrtTables} {ch : Chain} {dead : Fin BAVC.tau → Finset ℕ}
+    {Δ : Blocks} : Δ ∈ hideSet st T ch dead ↔ Δ ∈ onSet st T ch chal3Blocks ∧
+      ∀ i : Fin BAVC.tau, ∀ j ∈ dead i, BAVC.hiddenIndex (dbitOf Δ) i = j := by
+  classical
+  unfold hideSet
+  rw [Finset.mem_filter]
+
+set_option maxRecDepth 4000 in
+lemma hideSet_subset (st : Statement) (T : CrtTables) (ch : Chain)
+    (dead : Fin BAVC.tau → Finset ℕ) : hideSet st T ch dead ⊆ onSet st T ch chal3Blocks :=
+  fun _ h => (mem_hideSet.1 h).1
+
+omit [VoleMole.Verifier.HasPrg] in
+/-- Block `i` of `Δ` is determined by `Δ_i` (`hiddenIndex`). -/
+lemma block_eq_of_hiddenIndex_eq {Δ Δ' : Blocks} {i : Fin BAVC.tau}
+    (h : BAVC.hiddenIndex (dbitOf Δ) i = BAVC.hiddenIndex (dbitOf Δ') i) : Δ i = Δ' i := by
+  rw [← blocksOf_dbitOf Δ, ← blocksOf_dbitOf Δ']
+  funext b
+  simp only [blocksOf]
+  rw [← testBit_hiddenIndex (dbitOf Δ) i b.isLt, ← testBit_hiddenIndex (dbitOf Δ') i b.isLt, h]
+
+set_option maxRecDepth 4000 in
+/-- **A tree with a committed dead leaf has a fixed block on `hideSet`** (L2(b): the accepting
+set hides the dead leaf). -/
+lemma isFixed_hideSet {st : Statement} {T : CrtTables} {ch : Chain}
+    {dead : Fin BAVC.tau → Finset ℕ} {i : Fin BAVC.tau} (h : (dead i).Nonempty) :
+    IsFixed ((hideSet st T ch dead : Finset Blocks) : Set Blocks) i := by
+  obtain ⟨j, hj⟩ := h
+  intro Δ hΔ Δ' hΔ'
+  exact block_eq_of_hiddenIndex_eq (((mem_hideSet.1 hΔ).2 i j hj).trans
+    ((mem_hideSet.1 hΔ').2 i j hj).symm)
+
+omit [VoleMole.Verifier.HasPrg] in
+/-- `Δ_i` of an accepted `chal3` read through its blocks is the proof's `deltaIndex`. -/
+lemma hiddenIndex_deltaBlocks {b : Bytes 16} {delta : ByteArray} (hb : b.ba = delta)
+    (i : Fin BAVC.tau) :
+    BAVC.hiddenIndex (dbitOf (deltaBlocks b)) i = BAVC.deltaIndex delta i := by
+  apply Nat.eq_of_testBit_eq
+  intro c
+  by_cases hc : c < BAVC.kOf i
+  · rw [testBit_hiddenIndex _ _ hc, BAVC.deltaIndex, testBit_hiddenIndex _ _ hc, deltaBlocks,
+      dbitOf_blocksOf _ (by have := pos_lt i.isLt hc; omega), hb]
+  · have h1 := hiddenIndex_lt (dbitOf (deltaBlocks b)) i
+    have h2 := hiddenIndex_lt (BAVC.deltaBit delta) i
+    have hk : 2 ^ BAVC.kOf i ≤ 2 ^ c := Nat.pow_le_pow_right (by norm_num) (by omega)
+    rw [BAVC.deltaIndex, Nat.testBit_lt_two_pow (h1.trans_le hk),
+      Nat.testBit_lt_two_pow (h2.trans_le hk)]
+
 /-- **The "same chain" step at a table** `g`: the data committed at the `H₂¹` input `x`, the `H₂²`
 input `y` and the `H₂³` input `z` are those of the chain `ch`, and the `chal3` accepted at `z` are
-those on the chain. -/
+those of the chain's accepting set with the committed dead leaves `dead` (`hideSet`). -/
 structure SameChain (st : Statement) (T : CrtTables) (preOf midOf : ByteArray → Table → Chain)
-    (accOf : ByteArray → Table → Bytes 16 → Prop) (g : Table) (ch : Chain) (x y z : ByteArray) :
-    Prop where
+    (accOf : ByteArray → Table → Bytes 16 → Prop) (dead : Fin BAVC.tau → Finset ℕ) (g : Table)
+    (ch : Chain) (x y z : ByteArray) : Prop where
   pre : Chain.SamePrefix st (preOf x g) ch
   mid : Chain.SameMid st (midOf y g) ch
-  acc : ∀ b, accOf z g b ↔ deltaBlocks b ∈ onSet st T ch chal3Blocks
+  acc : ∀ b, accOf z g b ↔ deltaBlocks b ∈ hideSet st T ch dead
 
 /-! ## The deterministic step -/
 
@@ -160,13 +228,15 @@ theorem chainBad_of_accept {T : CrtTables} (hT : liftInvOk T = true) {st : State
       (Proof.delta ⟨st.params, proof⟩) = some leaves)
     (hbind : ∀ i < BAVC.tau, ∀ j < 2 ^ BAVC.kOf i,
       j ≠ BAVC.deltaIndex (Proof.delta ⟨st.params, proof⟩) i → leafKey leaves i j = e.keys i j)
-    (hsame : SameChain st T C.preOf C.midOf C.accOf g
+    {dead : Fin BAVC.tau → Finset ℕ}
+    (hsame : SameChain st T C.preOf C.midOf C.accOf dead g
       (runChain (Hashes.ofTable g) T st proof leaves e.keys)
       (runX (Hashes.ofTable g) st proof leaves)
       (runY (Hashes.ofTable g) st (runChain (Hashes.ofTable g) T st proof leaves e.keys))
       (runZ st (runChain (Hashes.ofTable g) T st proof leaves e.keys)))
-    (hL2 : ∀ i ∉ e.known, IsFixed ((onSet st T (runChain (Hashes.ofTable g) T st proof leaves
-      e.keys) chal3Blocks : Finset Blocks) : Set Blocks) i)
+    (hL2c : ∀ i ∉ e.known, (dead i).Nonempty)
+    (hL2a : ∀ i : Fin BAVC.tau, ∀ j ∈ dead i,
+      BAVC.deltaIndex (Proof.delta ⟨st.params, proof⟩) i = j)
     (hnot : ¬∃ i ∈ e.known, Wit (runChain (Hashes.ofTable g) T st proof leaves e.keys).chal1
       (candidate (F := GF128) ((runChain (Hashes.ofTable g) T st proof leaves e.keys).u st)
         ((runChain (Hashes.ofTable g) T st proof leaves e.keys).dc st) i)) :
@@ -196,8 +266,9 @@ theorem chainBad_of_accept {T : CrtTables} (hT : liftInvOk T = true) {st : State
   have hgood := chain_good_of_not_bad hT C chal3Blocks N hpre hc1 hsame.mid rfl
     (fun A => ChainHyps A e.known (C.accOf z g)) _
     (fun A hA hAS hkos hQS hP => hdet y g ch e.known (C.accOf z g)
-      (fun w => hvals y g _ _ w) A hA hAS hkos hQS hP) h1 h2
-    ⟨hL2, fun b _ hb => (hsame.acc b).1 hb⟩
+      (fun w => hvals y g _ _ w) A hA hAS hkos hQS hP) h1 h2 (hideSet st T ch dead)
+    (hideSet_subset st T ch dead) ⟨fun i hi => isFixed_hideSet (hL2c i hi),
+      fun b _ hb => (hsame.acc b).1 hb⟩
   have hd : (g (.h23, z)).ba = Proof.delta ⟨st.params, proof⟩ := hon.2
   have hadm : g (.h23, z) ∈ admissible := by
     have h15 : (Proof.delta ⟨st.params, proof⟩).get! 15 = 0 := by
@@ -208,9 +279,11 @@ theorem chainBad_of_accept {T : CrtTables} (hT : liftInvOk T = true) {st : State
   rcases hgood with hex | hfew
   · exact hnot hex
   · refine h3 (chainBad_h23_of_accept C T chal3Blocks N hfew hadm ((hsame.acc _).2 ?_))
-    refine mem_onSet.2 ⟨Finset.mem_image_of_mem _ hadm, ?_⟩
-    rw [deltaBlocks, show (g.chal3 z).ba = _ from hd]
-    exact hon.1
+    refine mem_hideSet.2 ⟨mem_onSet.2 ⟨Finset.mem_image_of_mem _ hadm, ?_⟩, fun i j hj => ?_⟩
+    · rw [deltaBlocks, show (g.chal3 z).ba = _ from hd]
+      exact hon.1
+    · rw [hiddenIndex_deltaBlocks hd i]
+      exact hL2a i j hj
 
 omit [VoleMole.Verifier.HasPrg] in
 /-- `InLog` as a log entry. -/
@@ -218,14 +291,63 @@ lemma exists_of_inLog {α : Type} {oa : OracleComp spec α} {g : Table} {t : Dom
     (h : InLog oa g t) : ∃ e ∈ tableQueryLog oa g, e.1 = t := by
   simpa [InLog, List.mem_map] using h
 
+/-! ## The hypotheses of the "same chain" step and of L2 -/
+
+/-- **No hit**: no query of the game's log against `g` is a hit (`hit`, the failures of the
+identification of the accepted chain in the log, charged by the union bound). -/
+def NoHit {α : Type} (oa : OracleComp spec α) (hit : Dom → Table → Prop) (g : Table) : Prop :=
+  ∀ e ∈ tableQueryLog oa g, ¬hit e.1 g
+
+/-- **The "same chain" step and L2(c)** (`hsame`): at every table `g` on which the verifier accepts,
+outside `chainFail` and the hits, the data committed at the verifier's `H₂¹`, `H₂²`, `H₂³` inputs are
+those of the accepted proof's chain with the committed dead leaves `deadOf g` (`SameChain`), and
+every tree outside `known` has a committed dead leaf (L2(c)). -/
+def SameChainHyp (T : CrtTables) (st : Statement) (oa : OracleComp spec (ByteArray × ExtData β))
+    (preOf midOf : ByteArray → Table → Chain) (accOf : ByteArray → Table → Bytes 16 → Prop)
+    (deadOf : Table → Fin BAVC.tau → Finset ℕ) (hit : Dom → Table → Prop)
+    (chainFail : Out β → Prop) : Prop :=
+  ∀ g : Table, let r := evalWithAnswerFn (QueryImpl.ofFn g) (game T st oa)
+    r.2.2.accept = true → ¬chainFail r → NoHit (game T st oa) hit g → ∀ leaves,
+    BAVC.reconstruct r.2.2.iv (Proof.opening ⟨st.params, r.1⟩) (Proof.delta ⟨st.params, r.1⟩) =
+      some leaves →
+    let ch := runChain (Hashes.ofTable g) T st r.1 leaves r.2.1.keys
+    SameChain st T preOf midOf accOf (deadOf g) g ch (runX (Hashes.ofTable g) st r.1 leaves)
+        (runY (Hashes.ofTable g) st ch) (runZ st ch) ∧
+      ∀ i ∉ r.2.1.known, (deadOf g i).Nonempty
+
+/-- **L2(a)** (`hL2`): at every table on which the verifier accepts, outside `chainFail`,
+`deadFail` and the hits, the accepted `Δ` hides every committed dead leaf. -/
+def DeadHiddenHyp (T : CrtTables) (st : Statement) (oa : OracleComp spec (ByteArray × ExtData β))
+    (deadOf : Table → Fin BAVC.tau → Finset ℕ) (hit : Dom → Table → Prop)
+    (chainFail deadFail : Out β → Prop) : Prop :=
+  ∀ g : Table, let r := evalWithAnswerFn (QueryImpl.ofFn g) (game T st oa)
+    r.2.2.accept = true → ¬chainFail r → ¬deadFail r → NoHit (game T st oa) hit g →
+    ∀ i : Fin BAVC.tau, ∀ j ∈ deadOf g i, BAVC.deltaIndex (Proof.delta ⟨st.params, r.1⟩) i = j
+
+/-- **The combination cell of the accepted chain is fresh** (combined relations, `hcombFresh`): at
+every table on which the verifier accepts, outside `chainFail` and the hits, the combination cell
+`chal2 ‖ dst` of the verifier's `H₂²` answer is not among the cells `C.pre y` the chain data at the
+verifier's `H₂²` input `y` may read. -/
+def CombFreshHyp {M : ℕ} (T : CrtTables) (st : Statement) (C : CombData st M)
+    (oa : OracleComp spec (ByteArray × ExtData β)) (hit : Dom → Table → Prop)
+    (chainFail : Out β → Prop) : Prop :=
+  ∀ g : Table, let r := evalWithAnswerFn (QueryImpl.ofFn g) (game T st oa)
+    r.2.2.accept = true → ¬chainFail r → NoHit (game T st oa) hit g → ∀ leaves,
+    BAVC.reconstruct r.2.2.iv (Proof.opening ⟨st.params, r.1⟩) (Proof.delta ⟨st.params, r.1⟩) =
+      some leaves →
+    let y := runY (Hashes.ofTable g) st (runChain (Hashes.ofTable g) T st r.1 leaves r.2.1.keys)
+    combKey M C.dst (g (.h22, y)) ∉ C.pre y g
+
 /-! ## The issue relations -/
 
 /-- **The issue relations against the random oracle: the executable verifier accepts and
-extraction fails** with probability `≤ (q₁+1)·ε_KOS + (q₂+1)·ε_QS(n) + (Q+1)·N·2⁻¹²⁸ + ε_bind +
-ε_dead + ε_chain`, for a prover `oa` making at most `q k` queries to each domain, chain data `C`
-committed as in `ChainData.Committed`, and a deterministic per-chain theorem `hdet`. Assumed:
-binding (`hbind`, a bound on the concrete `bindFail`), "same chain" (`hsame` outside `chainFail`),
-L2 (`hL2` outside `chainFail` and `deadFail`). -/
+extraction fails** with probability
+`≤ (q₁+1)·ε_KOS + (q₂+1)·ε_QS(n) + (Q+1)·N·2⁻¹²⁸ + ε_bind + ε_dead + ε_chain + Σ_k q'_k·εh_k`, for a
+prover `oa` making at most `q k` queries to each domain (`q' = q + verifierQueries`), chain data
+`C` committed as in `ChainData.Committed`, and a deterministic per-chain theorem `hdet`. Assumed:
+binding (`hbind`, a bound on the concrete `bindFail`), "same chain" and L2(c) (`hsame` outside
+`chainFail` and the hits `hit`, whose per-query probability is `≤ εh`), L2(a) (`hL2` outside
+`chainFail`, `deadFail` and the hits). -/
 theorem prEvent_accept_le_chain_terms {T : CrtTables} (hT : liftInvOk T = true) {st : Statement}
     (C : ChainData st) (hC : C.Committed) {n : ℕ} (hn : ∀ y g, (C.csOf y g).length = n) (N : ℕ)
     (Wit : ByteArray → (ℕ → GF128) → Prop)
@@ -247,37 +369,31 @@ theorem prEvent_accept_le_chain_terms {T : CrtTables} (hT : liftInvOk T = true) 
     (hbind : Pr{let r ← (simulateQ randomOracle (game T st oa)).run' ∅}[bindFail st r] ≤ εb)
     (hdead : Pr{let r ← (simulateQ randomOracle (game T st oa)).run' ∅}[deadFail r] ≤ εd)
     (hchain : Pr{let r ← (simulateQ randomOracle (game T st oa)).run' ∅}[chainFail r] ≤ εs)
-    (hsame : ∀ g : Table, let r := evalWithAnswerFn (QueryImpl.ofFn g) (game T st oa);
-      r.2.2.accept = true → ¬chainFail r → ∀ leaves, BAVC.reconstruct r.2.2.iv
-        (Proof.opening ⟨st.params, r.1⟩) (Proof.delta ⟨st.params, r.1⟩) = some leaves →
-      SameChain st T C.preOf C.midOf C.accOf g
-        (runChain (Hashes.ofTable g) T st r.1 leaves r.2.1.keys)
-        (runX (Hashes.ofTable g) st r.1 leaves)
-        (runY (Hashes.ofTable g) st (runChain (Hashes.ofTable g) T st r.1 leaves r.2.1.keys))
-        (runZ st (runChain (Hashes.ofTable g) T st r.1 leaves r.2.1.keys)))
-    (hL2 : ∀ g : Table, let r := evalWithAnswerFn (QueryImpl.ofFn g) (game T st oa);
-      r.2.2.accept = true → ¬chainFail r → ¬deadFail r → ∀ leaves, BAVC.reconstruct r.2.2.iv
-        (Proof.opening ⟨st.params, r.1⟩) (Proof.delta ⟨st.params, r.1⟩) = some leaves →
-      ∀ i ∉ r.2.1.known, IsFixed ((onSet st T (runChain (Hashes.ofTable g) T st r.1 leaves
-        r.2.1.keys) chal3Blocks : Finset Blocks) : Set Blocks) i) :
+    (deadOf : Table → Fin BAVC.tau → Finset ℕ) (hit : Dom → Table → Prop) (εh : Kind → ℝ≥0∞)
+    (hεh : ∀ k ∉ hitKinds, εh k = 0)
+    (hhit : ∀ t g, Pr{let u ← $ᵗ (Ans t)}[hit t (Function.update g t u)] ≤ εh t.1)
+    (hsame : SameChainHyp T st oa C.preOf C.midOf C.accOf deadOf hit chainFail)
+    (hL2 : DeadHiddenHyp T st oa deadOf hit chainFail deadFail) :
     Pr{let r ← (simulateQ randomOracle (game T st oa)).run' ∅}[
         r.2.2.accept = true ∧ ¬Extracted st Wit r] ≤
       (q .h21 + 1) * epsKOS #chal3Blocks (Chain.kosL st) +
         (q .h22 + 1) * ENNReal.ofReal (Seed.epsQS (2 ^ 128) (2 ^ 64) n) +
-        (q .h23 + 1) * ((N : ℝ≥0∞) / 2 ^ 128) + εb + εd + εs := by
+        (q .h23 + 1) * ((N : ℝ≥0∞) / 2 ^ 128) + εb + εd + εs +
+        hitSum (q + verifierQueries) εh := by
   let mx := (simulateQ randomOracle (game T st oa)).run' ∅
-  have hmain := prEvent_le_chain_terms hT C hC chal3Blocks hn N (game T st oa)
+  have hmain := prEvent_le_chain_terms_hit hT C hC chal3Blocks hn N (game T st oa)
     (q + verifierQueries) (isKindQueryBound_game T st hq)
     (fun r => (r.2.2.accept = true ∧ ¬Extracted st Wit r) ∧ ¬chainFail r) (bindFail st) deadFail
-    hbind hdead ?_
+    hbind hdead hit εh hεh hhit ?_
   · calc Pr{let r ← mx}[r.2.2.accept = true ∧ ¬Extracted st Wit r]
         ≤ Pr{let r ← mx}[((r.2.2.accept = true ∧ ¬Extracted st Wit r) ∧ ¬chainFail r) ∨
             chainFail r] := prEvent_mono mx _ _ fun r h => by tauto
       _ ≤ Pr{let r ← mx}[(r.2.2.accept = true ∧ ¬Extracted st Wit r) ∧ ¬chainFail r] +
             Pr{let r ← mx}[chainFail r] := prEvent_or_le mx _ _
       _ ≤ _ := by
-          refine add_le_add (hmain.trans_eq ?_) hchain
-          simp [verifierQueries]
+          refine (add_le_add hmain hchain).trans_eq ?_
+          simp only [Pi.add_apply, verifierQueries, Nat.cast_add, Nat.cast_one]
+          ring
   intro g
   have hs := hsame g
   have hl := hL2 g
@@ -285,6 +401,11 @@ theorem prEvent_accept_le_chain_terms {T : CrtTables} (hT : liftInvOk T = true) 
   set π := (evalWithAnswerFn (QueryImpl.ofFn g) oa).1
   set e := (evalWithAnswerFn (QueryImpl.ofFn g) oa).2
   rintro ⟨⟨hacc, hnex⟩, hnc⟩ hnb hnd
+  by_cases hh : NoHit (game T st oa) hit g
+  swap
+  · simp only [NoHit, not_forall, not_not] at hh
+    obtain ⟨x, hx, hx1⟩ := hh
+    exact ⟨x, hx, Or.inr hx1⟩
   obtain ⟨-, leaves, hr, -⟩ := (accept_iff _ T st π).1 hacc
   obtain ⟨hiv, hc1⟩ := verify_iv_chal1 _ T st π hacc hr
   have hr' : BAVC.reconstruct (verify (Hashes.ofTable g) T st π).iv (Proof.opening ⟨st.params, π⟩)
@@ -293,9 +414,9 @@ theorem prEvent_accept_le_chain_terms {T : CrtTables} (hT : liftInvOk T = true) 
     by_contra hb; exact hnb ⟨hacc, hb⟩
   have huc := outChain_u_dc (Hashes.ofTable g) T st (π, e, verify (Hashes.ofTable g) T st π) leaves
     hiv
+  obtain ⟨hsc, hL2c⟩ := hs hacc hnc hh leaves hr'
   have hbad := chainBad_of_accept hT C N Wit hvals hdet hacc hr
-    (fun i hi j hj hji => hbinds leaves hr' i hi j hj hji) (hs hacc hnc leaves hr')
-    (hl hacc hnc hnd leaves hr')
+    (fun i hi j hj hji => hbinds leaves hr' i hi j hj hji) hsc hL2c (hl hacc hnc hnd hh)
     (by
       rintro ⟨i, hi, hw⟩
       refine hnex ⟨i, hi, ?_⟩
@@ -304,11 +425,11 @@ theorem prEvent_accept_le_chain_terms {T : CrtTables} (hT : liftInvOk T = true) 
   have hlog := inLog_verifyQ g T st π hacc hr e.keys
   rcases hbad with hb | hb | hb
   · obtain ⟨x, hx, hx1⟩ := exists_of_inLog (inLog_game hlog.1)
-    exact ⟨x, hx, hx1 ▸ hb⟩
+    exact ⟨x, hx, Or.inl (hx1 ▸ hb)⟩
   · obtain ⟨x, hx, hx1⟩ := exists_of_inLog (inLog_game hlog.2.1)
-    exact ⟨x, hx, hx1 ▸ hb⟩
+    exact ⟨x, hx, Or.inl (hx1 ▸ hb)⟩
   · obtain ⟨x, hx, hx1⟩ := exists_of_inLog (inLog_game hlog.2.2)
-    exact ⟨x, hx, hx1 ▸ hb⟩
+    exact ⟨x, hx, Or.inl (hx1 ▸ hb)⟩
 
 /-- **Moussaka issuance against the random oracle**: the executable verifier accepts and the
 extractor's candidate is not an issuance witness with probability
@@ -326,26 +447,21 @@ theorem moussakaIssue_accept_le (t ctxIss : ByteArray) (labelRows : Bool)
       (game CrtGen.tables (moussakaIssue t ctxIss labelRows) oa)).run' ∅}[deadFail r] ≤ εd)
     (hchain : Pr{let r ← (simulateQ randomOracle
       (game CrtGen.tables (moussakaIssue t ctxIss labelRows) oa)).run' ∅}[chainFail r] ≤ εs)
-    (hsame : ∀ g : Table, let st := moussakaIssue t ctxIss labelRows
-      let r := evalWithAnswerFn (QueryImpl.ofFn g) (game CrtGen.tables st oa)
-      r.2.2.accept = true → ¬chainFail r → ∀ leaves, BAVC.reconstruct r.2.2.iv
-        (Proof.opening ⟨st.params, r.1⟩) (Proof.delta ⟨st.params, r.1⟩) = some leaves →
-      let ch := runChain (Hashes.ofTable g) CrtGen.tables st r.1 leaves r.2.1.keys
-      SameChain st CrtGen.tables preOf midOf accOf g ch (runX (Hashes.ofTable g) st r.1 leaves)
-        (runY (Hashes.ofTable g) st ch) (runZ st ch))
-    (hL2 : ∀ g : Table, let st := moussakaIssue t ctxIss labelRows
-      let r := evalWithAnswerFn (QueryImpl.ofFn g) (game CrtGen.tables st oa)
-      r.2.2.accept = true → ¬chainFail r → ¬deadFail r → ∀ leaves, BAVC.reconstruct r.2.2.iv
-        (Proof.opening ⟨st.params, r.1⟩) (Proof.delta ⟨st.params, r.1⟩) = some leaves →
-      ∀ i ∉ r.2.1.known, IsFixed ((onSet st CrtGen.tables (runChain (Hashes.ofTable g)
-        CrtGen.tables st r.1 leaves r.2.1.keys) chal3Blocks : Finset Blocks) : Set Blocks) i) :
+    (deadOf : Table → Fin BAVC.tau → Finset ℕ) (hit : Dom → Table → Prop) (εh : Kind → ℝ≥0∞)
+    (hεh : ∀ k ∉ hitKinds, εh k = 0)
+    (hhit : ∀ t g, Pr{let u ← $ᵗ (Ans t)}[hit t (Function.update g t u)] ≤ εh t.1)
+    (hsame : SameChainHyp CrtGen.tables (moussakaIssue t ctxIss labelRows) oa preOf midOf accOf
+      deadOf hit chainFail)
+    (hL2 : DeadHiddenHyp CrtGen.tables (moussakaIssue t ctxIss labelRows) oa deadOf hit chainFail
+      deadFail) :
     Pr{let r ← (simulateQ randomOracle
       (game CrtGen.tables (moussakaIssue t ctxIss labelRows) oa)).run' ∅}[
         r.2.2.accept = true ∧ ¬Extracted (moussakaIssue t ctxIss labelRows)
           (fun _ => moussakaIssueWit (fun k => fnOf t k.val) (fnOf ctxIss)) r] ≤
       (q .h21 + 1) * (2 ^ 150 : ℝ≥0∞)⁻¹ +
         (q .h22 + 1) * ENNReal.ofReal (Seed.epsQS (2 ^ 128) (2 ^ 64) 4008) +
-        (q .h23 + 1) * ((9 : ℝ≥0∞) / 2 ^ 128) + εb + εd + εs := by
+        (q .h23 + 1) * ((9 : ℝ≥0∞) / 2 ^ 128) + εb + εd + εs +
+        hitSum (q + verifierQueries) εh := by
   classical
   refine (prEvent_accept_le_chain_terms liftInvOk_tables _ hC
     (fun _ _ => Moussaka.issueSystem_length _ _) 9 _
@@ -353,7 +469,7 @@ theorem moussakaIssue_accept_le (t ctxIss : ByteArray) (labelRows : Bool)
     (fun y g ch known acc hv A hA hAS hkos hQS hP =>
       moussakaIssue_extract_chain t ctxIss labelRows ch hv hA hAS hkos hP.1 hQS admissible
         deltaBlocks deltaBlocks_injOn acc hP.2)
-    oa q hq chainFail deadFail hbind hdead hchain hsame hL2).trans ?_
+    oa q hq chainFail deadFail hbind hdead hchain deadOf hit εh hεh hhit hsame hL2).trans ?_
   gcongr
   · exact epsKOS_chal3Blocks_le _ (by norm_num [moussakaIssue]) (by norm_num [moussakaIssue])
   · norm_num
@@ -377,26 +493,21 @@ theorem ratatouilleIssue_accept_le (c : ByteArray) (tInit : ℕ) (ctxIss : ByteA
     (hchain : Pr{let r ← (simulateQ randomOracle
       (game CrtGen.tables (ratatouilleIssue c tInit ctxIss labelRows) oa)).run' ∅}[chainFail r] ≤
         εs)
-    (hsame : ∀ g : Table, let st := ratatouilleIssue c tInit ctxIss labelRows
-      let r := evalWithAnswerFn (QueryImpl.ofFn g) (game CrtGen.tables st oa)
-      r.2.2.accept = true → ¬chainFail r → ∀ leaves, BAVC.reconstruct r.2.2.iv
-        (Proof.opening ⟨st.params, r.1⟩) (Proof.delta ⟨st.params, r.1⟩) = some leaves →
-      let ch := runChain (Hashes.ofTable g) CrtGen.tables st r.1 leaves r.2.1.keys
-      SameChain st CrtGen.tables preOf midOf accOf g ch (runX (Hashes.ofTable g) st r.1 leaves)
-        (runY (Hashes.ofTable g) st ch) (runZ st ch))
-    (hL2 : ∀ g : Table, let st := ratatouilleIssue c tInit ctxIss labelRows
-      let r := evalWithAnswerFn (QueryImpl.ofFn g) (game CrtGen.tables st oa)
-      r.2.2.accept = true → ¬chainFail r → ¬deadFail r → ∀ leaves, BAVC.reconstruct r.2.2.iv
-        (Proof.opening ⟨st.params, r.1⟩) (Proof.delta ⟨st.params, r.1⟩) = some leaves →
-      ∀ i ∉ r.2.1.known, IsFixed ((onSet st CrtGen.tables (runChain (Hashes.ofTable g)
-        CrtGen.tables st r.1 leaves r.2.1.keys) chal3Blocks : Finset Blocks) : Set Blocks) i) :
+    (deadOf : Table → Fin BAVC.tau → Finset ℕ) (hit : Dom → Table → Prop) (εh : Kind → ℝ≥0∞)
+    (hεh : ∀ k ∉ hitKinds, εh k = 0)
+    (hhit : ∀ t g, Pr{let u ← $ᵗ (Ans t)}[hit t (Function.update g t u)] ≤ εh t.1)
+    (hsame : SameChainHyp CrtGen.tables (ratatouilleIssue c tInit ctxIss labelRows) oa preOf midOf accOf
+      deadOf hit chainFail)
+    (hL2 : DeadHiddenHyp CrtGen.tables (ratatouilleIssue c tInit ctxIss labelRows) oa deadOf hit chainFail
+      deadFail) :
     Pr{let r ← (simulateQ randomOracle
       (game CrtGen.tables (ratatouilleIssue c tInit ctxIss labelRows) oa)).run' ∅}[
         r.2.2.accept = true ∧ ¬Extracted (ratatouilleIssue c tInit ctxIss labelRows)
           (fun _ => ratatouilleIssueWit (fnOf c) tInit (fnOf ctxIss)) r] ≤
       (q .h21 + 1) * (2 ^ 150 : ℝ≥0∞)⁻¹ +
         (q .h22 + 1) * ENNReal.ofReal (Seed.epsQS (2 ^ 128) (2 ^ 64) 3776) +
-        (q .h23 + 1) * ((9 : ℝ≥0∞) / 2 ^ 128) + εb + εd + εs := by
+        (q .h23 + 1) * ((9 : ℝ≥0∞) / 2 ^ 128) + εb + εd + εs +
+        hitSum (q + verifierQueries) εh := by
   classical
   refine (prEvent_accept_le_chain_terms liftInvOk_tables _ hC
     (fun _ _ => Ratatouille.issueSystem_length _ _ _) 9 _
@@ -404,7 +515,7 @@ theorem ratatouilleIssue_accept_le (c : ByteArray) (tInit : ℕ) (ctxIss : ByteA
     (fun y g ch known acc hv A hA hAS hkos hQS hP =>
       ratatouilleIssue_extract_chain c tInit ctxIss labelRows ch hv hA hAS hkos hP.1 hQS
         admissible deltaBlocks deltaBlocks_injOn acc hP.2)
-    oa q hq chainFail deadFail hbind hdead hchain hsame hL2).trans ?_
+    oa q hq chainFail deadFail hbind hdead hchain deadOf hit εh hεh hhit hsame hL2).trans ?_
   gcongr
   · exact epsKOS_chal3Blocks_le _ (by norm_num [ratatouilleIssue])
       (by norm_num [ratatouilleIssue])
@@ -452,13 +563,18 @@ theorem combBad_of_accept {T : CrtTables} (hT : liftInvOk T = true) {st : Statem
       (Proof.delta ⟨st.params, proof⟩) = some leaves)
     (hbind : ∀ i < BAVC.tau, ∀ j < 2 ^ BAVC.kOf i,
       j ≠ BAVC.deltaIndex (Proof.delta ⟨st.params, proof⟩) i → leafKey leaves i j = e.keys i j)
-    (hsame : SameChain st T C.preOf C.midOf C.accOf g
+    {dead : Fin BAVC.tau → Finset ℕ}
+    (hsame : SameChain st T C.preOf C.midOf C.accOf dead g
       (runChain (Hashes.ofTable g) T st proof leaves e.keys)
       (runX (Hashes.ofTable g) st proof leaves)
       (runY (Hashes.ofTable g) st (runChain (Hashes.ofTable g) T st proof leaves e.keys))
       (runZ st (runChain (Hashes.ofTable g) T st proof leaves e.keys)))
-    (hL2 : ∀ i ∉ e.known, IsFixed ((onSet st T (runChain (Hashes.ofTable g) T st proof leaves
-      e.keys) chal3Blocks : Finset Blocks) : Set Blocks) i)
+    (hL2c : ∀ i ∉ e.known, (dead i).Nonempty)
+    (hL2a : ∀ i : Fin BAVC.tau, ∀ j ∈ dead i,
+      BAVC.deltaIndex (Proof.delta ⟨st.params, proof⟩) i = j)
+    (hfresh : combKey M C.dst (g (.h22, runY (Hashes.ofTable g) st
+      (runChain (Hashes.ofTable g) T st proof leaves e.keys))) ∉
+        C.pre (runY (Hashes.ofTable g) st (runChain (Hashes.ofTable g) T st proof leaves e.keys)) g)
     (hnot : ¬∃ i ∈ e.known, Wit (runChain (Hashes.ofTable g) T st proof leaves e.keys).chal1
       (candidate (F := GF128) ((runChain (Hashes.ofTable g) T st proof leaves e.keys).u st)
         ((runChain (Hashes.ofTable g) T st proof leaves e.keys).dc st) i)) :
@@ -494,8 +610,8 @@ theorem combBad_of_accept {T : CrtTables} (hT : liftInvOk T = true) {st : Statem
   have hgood := comb_good_of_not_bad hT C chal3Blocks N hpre hc1 hsame.mid hc2
     (fun A => ChainHyps A e.known (C.accOf z g)) _
     (fun A hA hAS hkos hQS hcb hP => hdet y g ch e.known (C.accOf z g) _ hch1 hv A hA hAS hkos
-      hQS hcb hP) h1 h2
-    ⟨hL2, fun b _ hb => (hsame.acc b).1 hb⟩
+      hQS hcb hP) h1 h2 hfresh (hideSet st T ch dead) (hideSet_subset st T ch dead)
+    ⟨fun i hi => isFixed_hideSet (hL2c i hi), fun b _ hb => (hsame.acc b).1 hb⟩
   have hd : (g (.h23, z)).ba = Proof.delta ⟨st.params, proof⟩ := hon.2
   have hadm : g (.h23, z) ∈ admissible := by
     have h15 : (Proof.delta ⟨st.params, proof⟩).get! 15 = 0 := by
@@ -508,9 +624,11 @@ theorem combBad_of_accept {T : CrtTables} (hT : liftInvOk T = true) {st : Statem
   · refine h3 ?_
     simp only [combBad, reduceCtorEq, ite_false]
     refine chainBad_h23_of_accept C.toChainData T chal3Blocks N hfew hadm ((hsame.acc _).2 ?_)
-    refine mem_onSet.2 ⟨Finset.mem_image_of_mem _ hadm, ?_⟩
-    rw [deltaBlocks, show (g.chal3 z).ba = _ from hd]
-    exact hon.1
+    refine mem_hideSet.2 ⟨mem_onSet.2 ⟨Finset.mem_image_of_mem _ hadm, ?_⟩, fun i j hj => ?_⟩
+    · rw [deltaBlocks, show (g.chal3 z).ba = _ from hd]
+      exact hon.1
+    · rw [hiddenIndex_deltaBlocks hd i]
+      exact hL2a i j hj
 
 set_option exponentiation.threshold 500 in
 -- `Finset.univ : Finset (Bytes 56)` (the combination cells) needs a deeper recursion to elaborate.
@@ -549,46 +667,48 @@ theorem prEvent_accept_le_comb_terms {T : CrtTables} (hT : liftInvOk T = true) {
     (hbind : Pr{let r ← (simulateQ randomOracle (game T st oa)).run' ∅}[bindFail st r] ≤ εb)
     (hdead : Pr{let r ← (simulateQ randomOracle (game T st oa)).run' ∅}[deadFail r] ≤ εd)
     (hchain : Pr{let r ← (simulateQ randomOracle (game T st oa)).run' ∅}[chainFail r] ≤ εs)
-    (hsame : ∀ g : Table, let r := evalWithAnswerFn (QueryImpl.ofFn g) (game T st oa);
-      r.2.2.accept = true → ¬chainFail r → ∀ leaves, BAVC.reconstruct r.2.2.iv
-        (Proof.opening ⟨st.params, r.1⟩) (Proof.delta ⟨st.params, r.1⟩) = some leaves →
-      SameChain st T C.preOf C.midOf C.accOf g
-        (runChain (Hashes.ofTable g) T st r.1 leaves r.2.1.keys)
-        (runX (Hashes.ofTable g) st r.1 leaves)
-        (runY (Hashes.ofTable g) st (runChain (Hashes.ofTable g) T st r.1 leaves r.2.1.keys))
-        (runZ st (runChain (Hashes.ofTable g) T st r.1 leaves r.2.1.keys)))
-    (hL2 : ∀ g : Table, let r := evalWithAnswerFn (QueryImpl.ofFn g) (game T st oa);
-      r.2.2.accept = true → ¬chainFail r → ¬deadFail r → ∀ leaves, BAVC.reconstruct r.2.2.iv
-        (Proof.opening ⟨st.params, r.1⟩) (Proof.delta ⟨st.params, r.1⟩) = some leaves →
-      ∀ i ∉ r.2.1.known, IsFixed ((onSet st T (runChain (Hashes.ofTable g) T st r.1 leaves
-        r.2.1.keys) chal3Blocks : Finset Blocks) : Set Blocks) i) :
+    (deadOf : Table → Fin BAVC.tau → Finset ℕ) (hit : Dom → Table → Prop) (εh : Kind → ℝ≥0∞)
+    (hεh : ∀ k ∉ hitKinds, εh k = 0)
+    (hhit : ∀ t g, Pr{let u ← $ᵗ (Ans t)}[hit t (Function.update g t u)] ≤ εh t.1)
+    (hsame : SameChainHyp T st oa C.preOf C.midOf C.accOf deadOf hit chainFail)
+    (hL2 : DeadHiddenHyp T st oa deadOf hit chainFail deadFail)
+    (hcombFresh : CombFreshHyp T st C oa hit chainFail) :
     Pr{let r ← (simulateQ randomOracle (game T st oa)).run' ∅}[
         r.2.2.accept = true ∧ ¬Extracted st Wit r] ≤
       (q .h21 + 1) * epsKOS #chal3Blocks (Chain.kosL st) +
         (q .h22 + 1) * (ENNReal.ofReal (Seed.epsQS (2 ^ 128) (2 ^ 64) n') + εc +
           ((n + verifierTotal : ℕ) : ℝ≥0∞) / 2 ^ 448) +
-        (q .h23 + 1) * ((N : ℝ≥0∞) / 2 ^ 128) + εb + εd + εs := by
+        (q .h23 + 1) * ((N : ℝ≥0∞) / 2 ^ 128) + εb + εd + εs +
+        hitSum (q + verifierQueries) εh := by
   let mx := (simulateQ randomOracle (game T st oa)).run' ∅
-  have hmain := prEvent_le_comb_terms hT C hC chal3Blocks hn' hεc N (game T st oa)
+  have hmain := prEvent_le_comb_terms_hit hT C hC chal3Blocks hn' hεc N (game T st oa)
     (n + verifierTotal) (isTotalQueryBound_game T st hn) (q + verifierQueries)
     (isKindQueryBound_game T st hq)
     (fun r => (r.2.2.accept = true ∧ ¬Extracted st Wit r) ∧ ¬chainFail r) (bindFail st) deadFail
-    hbind hdead ?_
+    hbind hdead hit εh hεh hhit ?_
   · calc Pr{let r ← mx}[r.2.2.accept = true ∧ ¬Extracted st Wit r]
         ≤ Pr{let r ← mx}[((r.2.2.accept = true ∧ ¬Extracted st Wit r) ∧ ¬chainFail r) ∨
             chainFail r] := prEvent_mono mx _ _ fun r h => by tauto
       _ ≤ Pr{let r ← mx}[(r.2.2.accept = true ∧ ¬Extracted st Wit r) ∧ ¬chainFail r] +
             Pr{let r ← mx}[chainFail r] := prEvent_or_le mx _ _
       _ ≤ _ := by
-          refine add_le_add (hmain.trans_eq ?_) hchain
-          simp [verifierQueries]
+          refine (add_le_add hmain hchain).trans_eq ?_
+          simp only [Pi.add_apply, verifierQueries, Nat.cast_add, Nat.cast_one]
+          ring
   intro g
   have hs := hsame g
   have hl := hL2 g
+  have hcf := hcombFresh g
   simp only [evalWithAnswerFn_game] at hs hl ⊢
+  rw [evalWithAnswerFn_game] at hcf
   set π := (evalWithAnswerFn (QueryImpl.ofFn g) oa).1
   set e := (evalWithAnswerFn (QueryImpl.ofFn g) oa).2
   rintro ⟨⟨hacc, hnex⟩, hnc⟩ hnb hnd
+  by_cases hh : NoHit (game T st oa) hit g
+  swap
+  · simp only [NoHit, not_forall, not_not] at hh
+    obtain ⟨x, hx, hx1⟩ := hh
+    exact ⟨x, hx, Or.inr hx1⟩
   obtain ⟨-, leaves, hr, -⟩ := (accept_iff _ T st π).1 hacc
   obtain ⟨hiv, hc1⟩ := verify_iv_chal1 _ T st π hacc hr
   have hr' : BAVC.reconstruct (verify (Hashes.ofTable g) T st π).iv (Proof.opening ⟨st.params, π⟩)
@@ -597,9 +717,10 @@ theorem prEvent_accept_le_comb_terms {T : CrtTables} (hT : liftInvOk T = true) {
     by_contra hb; exact hnb ⟨hacc, hb⟩
   have huc := outChain_u_dc (Hashes.ofTable g) T st (π, e, verify (Hashes.ofTable g) T st π) leaves
     hiv
+  obtain ⟨hsc, hL2c⟩ := hs hacc hnc hh leaves hr'
   have hbad := combBad_of_accept hT C N Wit hcomb hvals hdet hacc hr
-    (fun i hi j hj hji => hbinds leaves hr' i hi j hj hji) (hs hacc hnc leaves hr')
-    (hl hacc hnc hnd leaves hr')
+    (fun i hi j hj hji => hbinds leaves hr' i hi j hj hji) hsc hL2c (hl hacc hnc hnd hh)
+    (hcf hacc hnc hh leaves hr')
     (by
       rintro ⟨i, hi, hw⟩
       refine hnex ⟨i, hi, ?_⟩
@@ -608,11 +729,11 @@ theorem prEvent_accept_le_comb_terms {T : CrtTables} (hT : liftInvOk T = true) {
   have hlog := inLog_verifyQ g T st π hacc hr e.keys
   rcases hbad with hb | hb | hb
   · obtain ⟨x, hx, hx1⟩ := exists_of_inLog (inLog_game hlog.1)
-    exact ⟨x, hx, hx1 ▸ hb⟩
+    exact ⟨x, hx, Or.inl (hx1 ▸ hb)⟩
   · obtain ⟨x, hx, hx1⟩ := exists_of_inLog (inLog_game hlog.2.1)
-    exact ⟨x, hx, hx1 ▸ hb⟩
+    exact ⟨x, hx, Or.inl (hx1 ▸ hb)⟩
   · obtain ⟨x, hx, hx1⟩ := exists_of_inLog (inLog_game hlog.2.2)
-    exact ⟨x, hx, hx1 ▸ hb⟩
+    exact ⟨x, hx, Or.inl (hx1 ▸ hb)⟩
 
 /-! ### Per relation, numerically -/
 
@@ -630,10 +751,11 @@ verifier accepts and the extractor's candidate is not a redemption witness with 
 theorem moussakaRedeem_accept_le (anchors : List UovPk) (hn64 : anchors.length ≤ 64)
     (nf ctxIss ctxRed challengeDigest : ByteArray) (labelRows : Bool)
     (preOf midOf : ByteArray → Table → Chain) (accOf : ByteArray → Table → Bytes 16 → Prop)
+    (pre : ByteArray → Table → List Dom)
     (hC : (CombData.ofSys (st := moussakaRedeem anchors nf ctxIss ctxRed challengeDigest labelRows)
       preOf midOf (moussakaRedeemSysL anchors nf ctxIss ctxRed)
       (moussakaRedeemWit GF256.ofBits (anchors.map UovPk.map) (fnOf nf) (fnOf ctxIss)
-        (fnOf ctxRed)) accOf (toBA (VoleMole.Spec.makeDst "mous" 0 'l' '0'))).Committed)
+        (fnOf ctxRed)) accOf (toBA (VoleMole.Spec.makeDst "mous" 0 'l' '0')) pre).Committed)
     (oa : OracleComp spec (ByteArray × ExtData β)) (n : ℕ) (hn : IsTotalQueryBound oa n)
     (q : Kind → ℕ) (hq : IsKindQueryBound oa q)
     (chainFail deadFail : Out β → Prop) {εb εd εs : ℝ≥0∞}
@@ -643,17 +765,17 @@ theorem moussakaRedeem_accept_le (anchors : List UovPk) (hn64 : anchors.length �
       deadFail r] ≤ εd)
     (hchain : Pr{let r ← (simulateQ randomOracle (game CrtGen.tables (moussakaRedeem anchors nf ctxIss ctxRed challengeDigest labelRows) oa)).run' ∅}[
       chainFail r] ≤ εs)
-    (hsame : ∀ g : Table, let r := evalWithAnswerFn (QueryImpl.ofFn g) (game CrtGen.tables (moussakaRedeem anchors nf ctxIss ctxRed challengeDigest labelRows) oa)
-      r.2.2.accept = true → ¬chainFail r → ∀ leaves, BAVC.reconstruct r.2.2.iv
-        (Proof.opening ⟨(moussakaRedeem anchors nf ctxIss ctxRed challengeDigest labelRows).params, r.1⟩) (Proof.delta ⟨(moussakaRedeem anchors nf ctxIss ctxRed challengeDigest labelRows).params, r.1⟩) = some leaves →
-      let ch := runChain (Hashes.ofTable g) CrtGen.tables (moussakaRedeem anchors nf ctxIss ctxRed challengeDigest labelRows) r.1 leaves r.2.1.keys
-      SameChain (moussakaRedeem anchors nf ctxIss ctxRed challengeDigest labelRows) CrtGen.tables preOf midOf accOf g ch (runX (Hashes.ofTable g) (moussakaRedeem anchors nf ctxIss ctxRed challengeDigest labelRows) r.1 leaves)
-        (runY (Hashes.ofTable g) (moussakaRedeem anchors nf ctxIss ctxRed challengeDigest labelRows) ch) (runZ (moussakaRedeem anchors nf ctxIss ctxRed challengeDigest labelRows) ch))
-    (hL2 : ∀ g : Table, let r := evalWithAnswerFn (QueryImpl.ofFn g) (game CrtGen.tables (moussakaRedeem anchors nf ctxIss ctxRed challengeDigest labelRows) oa)
-      r.2.2.accept = true → ¬chainFail r → ¬deadFail r → ∀ leaves, BAVC.reconstruct r.2.2.iv
-        (Proof.opening ⟨(moussakaRedeem anchors nf ctxIss ctxRed challengeDigest labelRows).params, r.1⟩) (Proof.delta ⟨(moussakaRedeem anchors nf ctxIss ctxRed challengeDigest labelRows).params, r.1⟩) = some leaves →
-      ∀ i ∉ r.2.1.known, IsFixed ((onSet (moussakaRedeem anchors nf ctxIss ctxRed challengeDigest labelRows) CrtGen.tables (runChain (Hashes.ofTable g)
-        CrtGen.tables (moussakaRedeem anchors nf ctxIss ctxRed challengeDigest labelRows) r.1 leaves r.2.1.keys) chal3Blocks : Finset Blocks) : Set Blocks) i) :
+    (deadOf : Table → Fin BAVC.tau → Finset ℕ) (hit : Dom → Table → Prop) (εh : Kind → ℝ≥0∞)
+    (hεh : ∀ k ∉ hitKinds, εh k = 0)
+    (hhit : ∀ t g, Pr{let u ← $ᵗ (Ans t)}[hit t (Function.update g t u)] ≤ εh t.1)
+    (hsame : SameChainHyp CrtGen.tables (moussakaRedeem anchors nf ctxIss ctxRed challengeDigest labelRows) oa preOf midOf accOf
+      deadOf hit chainFail)
+    (hL2 : DeadHiddenHyp CrtGen.tables (moussakaRedeem anchors nf ctxIss ctxRed challengeDigest labelRows) oa deadOf hit chainFail
+      deadFail)
+    (hcombFresh : CombFreshHyp CrtGen.tables _ (CombData.ofSys (st := moussakaRedeem anchors nf ctxIss ctxRed challengeDigest labelRows)
+      preOf midOf (moussakaRedeemSysL anchors nf ctxIss ctxRed)
+      (moussakaRedeemWit GF256.ofBits (anchors.map UovPk.map) (fnOf nf) (fnOf ctxIss)
+        (fnOf ctxRed)) accOf (toBA (VoleMole.Spec.makeDst "mous" 0 'l' '0')) pre) oa hit chainFail) :
     Pr{let r ← (simulateQ randomOracle (game CrtGen.tables
       (moussakaRedeem anchors nf ctxIss ctxRed challengeDigest labelRows) oa)).run' ∅}[
         r.2.2.accept = true ∧ ¬Extracted
@@ -663,7 +785,8 @@ theorem moussakaRedeem_accept_le (anchors : List UovPk) (hn64 : anchors.length �
       (q .h21 + 1) * (2 ^ 150 : ℝ≥0∞)⁻¹ +
         (q .h22 + 1) * (ENNReal.ofReal (Seed.epsQS (2 ^ 128) (2 ^ 64) 4409) +
           (2 ^ 128 : ℝ≥0∞)⁻¹ + ((n + verifierTotal : ℕ) : ℝ≥0∞) / 2 ^ 448) +
-        (q .h23 + 1) * ((9 : ℝ≥0∞) / 2 ^ 128) + εb + εd + εs := by
+        (q .h23 + 1) * ((9 : ℝ≥0∞) / 2 ^ 128) + εb + εd + εs +
+        hitSum (q + verifierQueries) εh := by
   classical
   refine (prEvent_accept_le_comb_terms liftInvOk_tables _ hC
     (fun _ _ _ => Moussaka.redeemSystem_length _ _ _ _ _ _ _)
@@ -674,7 +797,7 @@ theorem moussakaRedeem_accept_le (anchors : List UovPk) (hn64 : anchors.length �
     (fun y g ch known acc l _ hv A hA hAS hkos hQS hcb hP =>
       moussakaRedeem_extract_chain anchors nf ctxIss ctxRed challengeDigest labelRows ch l hv hA
         hAS hkos hP.1 hQS hcb admissible deltaBlocks deltaBlocks_injOn acc hP.2)
-    oa n hn q hq chainFail deadFail hbind hdead hchain hsame hL2).trans ?_
+    oa n hn q hq chainFail deadFail hbind hdead hchain deadOf hit εh hεh hhit hsame hL2 hcombFresh).trans ?_
   gcongr
   · exact epsKOS_chal3Blocks_le _ (by norm_num [moussakaRedeem]) (by norm_num [moussakaRedeem])
   · norm_num
@@ -687,10 +810,11 @@ set_option maxRecDepth 8000 in
 theorem ratatouilleSpend_accept_le (pk : UovPk) (nf : ByteArray) (d : ℕ) (hd : d < 2 ^ 64)
     (cNext ctxIss : ByteArray) (labelRows : Bool)
     (preOf midOf : ByteArray → Table → Chain) (accOf : ByteArray → Table → Bytes 16 → Prop)
+    (pre : ByteArray → Table → List Dom)
     (hC : (CombData.ofSys (st := ratatouilleSpend pk nf d cNext ctxIss labelRows)
       preOf midOf (ratatouilleSpendSysL pk nf d cNext ctxIss)
       (ratatouilleSpendWit GF256.ofBits pk.map (fnOf nf) d (fnOf cNext) (fnOf ctxIss)) accOf
-      (toBA (VoleMole.Spec.makeDst "rata" 0 'l' '0'))).Committed)
+      (toBA (VoleMole.Spec.makeDst "rata" 0 'l' '0')) pre).Committed)
     (oa : OracleComp spec (ByteArray × ExtData β)) (n : ℕ) (hn : IsTotalQueryBound oa n)
     (q : Kind → ℕ) (hq : IsKindQueryBound oa q)
     (chainFail deadFail : Out β → Prop) {εb εd εs : ℝ≥0∞}
@@ -700,17 +824,17 @@ theorem ratatouilleSpend_accept_le (pk : UovPk) (nf : ByteArray) (d : ℕ) (hd :
       deadFail r] ≤ εd)
     (hchain : Pr{let r ← (simulateQ randomOracle (game CrtGen.tables (ratatouilleSpend pk nf d cNext ctxIss labelRows) oa)).run' ∅}[
       chainFail r] ≤ εs)
-    (hsame : ∀ g : Table, let r := evalWithAnswerFn (QueryImpl.ofFn g) (game CrtGen.tables (ratatouilleSpend pk nf d cNext ctxIss labelRows) oa)
-      r.2.2.accept = true → ¬chainFail r → ∀ leaves, BAVC.reconstruct r.2.2.iv
-        (Proof.opening ⟨(ratatouilleSpend pk nf d cNext ctxIss labelRows).params, r.1⟩) (Proof.delta ⟨(ratatouilleSpend pk nf d cNext ctxIss labelRows).params, r.1⟩) = some leaves →
-      let ch := runChain (Hashes.ofTable g) CrtGen.tables (ratatouilleSpend pk nf d cNext ctxIss labelRows) r.1 leaves r.2.1.keys
-      SameChain (ratatouilleSpend pk nf d cNext ctxIss labelRows) CrtGen.tables preOf midOf accOf g ch (runX (Hashes.ofTable g) (ratatouilleSpend pk nf d cNext ctxIss labelRows) r.1 leaves)
-        (runY (Hashes.ofTable g) (ratatouilleSpend pk nf d cNext ctxIss labelRows) ch) (runZ (ratatouilleSpend pk nf d cNext ctxIss labelRows) ch))
-    (hL2 : ∀ g : Table, let r := evalWithAnswerFn (QueryImpl.ofFn g) (game CrtGen.tables (ratatouilleSpend pk nf d cNext ctxIss labelRows) oa)
-      r.2.2.accept = true → ¬chainFail r → ¬deadFail r → ∀ leaves, BAVC.reconstruct r.2.2.iv
-        (Proof.opening ⟨(ratatouilleSpend pk nf d cNext ctxIss labelRows).params, r.1⟩) (Proof.delta ⟨(ratatouilleSpend pk nf d cNext ctxIss labelRows).params, r.1⟩) = some leaves →
-      ∀ i ∉ r.2.1.known, IsFixed ((onSet (ratatouilleSpend pk nf d cNext ctxIss labelRows) CrtGen.tables (runChain (Hashes.ofTable g)
-        CrtGen.tables (ratatouilleSpend pk nf d cNext ctxIss labelRows) r.1 leaves r.2.1.keys) chal3Blocks : Finset Blocks) : Set Blocks) i) :
+    (deadOf : Table → Fin BAVC.tau → Finset ℕ) (hit : Dom → Table → Prop) (εh : Kind → ℝ≥0∞)
+    (hεh : ∀ k ∉ hitKinds, εh k = 0)
+    (hhit : ∀ t g, Pr{let u ← $ᵗ (Ans t)}[hit t (Function.update g t u)] ≤ εh t.1)
+    (hsame : SameChainHyp CrtGen.tables (ratatouilleSpend pk nf d cNext ctxIss labelRows) oa preOf midOf accOf
+      deadOf hit chainFail)
+    (hL2 : DeadHiddenHyp CrtGen.tables (ratatouilleSpend pk nf d cNext ctxIss labelRows) oa deadOf hit chainFail
+      deadFail)
+    (hcombFresh : CombFreshHyp CrtGen.tables _ (CombData.ofSys (st := ratatouilleSpend pk nf d cNext ctxIss labelRows)
+      preOf midOf (ratatouilleSpendSysL pk nf d cNext ctxIss)
+      (ratatouilleSpendWit GF256.ofBits pk.map (fnOf nf) d (fnOf cNext) (fnOf ctxIss)) accOf
+      (toBA (VoleMole.Spec.makeDst "rata" 0 'l' '0')) pre) oa hit chainFail) :
     Pr{let r ← (simulateQ randomOracle (game CrtGen.tables
       (ratatouilleSpend pk nf d cNext ctxIss labelRows) oa)).run' ∅}[
         r.2.2.accept = true ∧ ¬Extracted (ratatouilleSpend pk nf d cNext ctxIss labelRows)
@@ -719,7 +843,8 @@ theorem ratatouilleSpend_accept_le (pk : UovPk) (nf : ByteArray) (d : ℕ) (hd :
       (q .h21 + 1) * (2 ^ 150 : ℝ≥0∞)⁻¹ +
         (q .h22 + 1) * (ENNReal.ofReal (Seed.epsQS (2 ^ 128) (2 ^ 64) 12282) +
           (2 ^ 128 : ℝ≥0∞)⁻¹ + ((n + verifierTotal : ℕ) : ℝ≥0∞) / 2 ^ 448) +
-        (q .h23 + 1) * ((9 : ℝ≥0∞) / 2 ^ 128) + εb + εd + εs := by
+        (q .h23 + 1) * ((9 : ℝ≥0∞) / 2 ^ 128) + εb + εd + εs +
+        hitSum (q + verifierQueries) εh := by
   classical
   refine (prEvent_accept_le_comb_terms liftInvOk_tables _ hC
     (fun _ _ _ => Ratatouille.spendSystem_length _ _ _ _ _ _ _ _)
@@ -730,7 +855,7 @@ theorem ratatouilleSpend_accept_le (pk : UovPk) (nf : ByteArray) (d : ℕ) (hd :
     (fun y g ch known acc l _ hv A hA hAS hkos hQS hcb hP =>
       ratatouilleSpend_extract_chain pk nf d cNext ctxIss labelRows ch l hv hA hAS hkos hP.1 hQS
         hcb admissible deltaBlocks deltaBlocks_injOn acc hP.2)
-    oa n hn q hq chainFail deadFail hbind hdead hchain hsame hL2).trans ?_
+    oa n hn q hq chainFail deadFail hbind hdead hchain deadOf hit εh hεh hhit hsame hL2 hcombFresh).trans ?_
   gcongr
   · exact epsKOS_chal3Blocks_le _ (by norm_num [ratatouilleSpend])
       (by norm_num [ratatouilleSpend])
@@ -744,7 +869,8 @@ probability `≤ (q₁+1)·2⁻¹⁵⁰ + (q₂+1)·(ε_QS(1313) + 2⁻¹²⁸ +
 ε_dead + ε_chain`. -/
 theorem pomfritRedeem_accept_le (pk : UovPk) (sig msg : ByteArray) (labelRows : Bool)
     (preOf midOf : ByteArray → Table → Chain) (accOf : ByteArray → Table → Bytes 16 → Prop)
-    (hC : (pomfritData pk sig msg labelRows preOf midOf accOf).Committed)
+    (pre : ByteArray → Table → List Dom)
+    (hC : (pomfritData pk sig msg labelRows preOf midOf accOf pre).Committed)
     (oa : OracleComp spec (ByteArray × ExtData β)) (n : ℕ) (hn : IsTotalQueryBound oa n)
     (q : Kind → ℕ) (hq : IsKindQueryBound oa q)
     (chainFail deadFail : Out β → Prop) {εb εd εs : ℝ≥0∞}
@@ -754,17 +880,14 @@ theorem pomfritRedeem_accept_le (pk : UovPk) (sig msg : ByteArray) (labelRows : 
       deadFail r] ≤ εd)
     (hchain : Pr{let r ← (simulateQ randomOracle (game CrtGen.tables (pomfritRedeem pk sig msg labelRows) oa)).run' ∅}[
       chainFail r] ≤ εs)
-    (hsame : ∀ g : Table, let r := evalWithAnswerFn (QueryImpl.ofFn g) (game CrtGen.tables (pomfritRedeem pk sig msg labelRows) oa)
-      r.2.2.accept = true → ¬chainFail r → ∀ leaves, BAVC.reconstruct r.2.2.iv
-        (Proof.opening ⟨(pomfritRedeem pk sig msg labelRows).params, r.1⟩) (Proof.delta ⟨(pomfritRedeem pk sig msg labelRows).params, r.1⟩) = some leaves →
-      let ch := runChain (Hashes.ofTable g) CrtGen.tables (pomfritRedeem pk sig msg labelRows) r.1 leaves r.2.1.keys
-      SameChain (pomfritRedeem pk sig msg labelRows) CrtGen.tables preOf midOf accOf g ch (runX (Hashes.ofTable g) (pomfritRedeem pk sig msg labelRows) r.1 leaves)
-        (runY (Hashes.ofTable g) (pomfritRedeem pk sig msg labelRows) ch) (runZ (pomfritRedeem pk sig msg labelRows) ch))
-    (hL2 : ∀ g : Table, let r := evalWithAnswerFn (QueryImpl.ofFn g) (game CrtGen.tables (pomfritRedeem pk sig msg labelRows) oa)
-      r.2.2.accept = true → ¬chainFail r → ¬deadFail r → ∀ leaves, BAVC.reconstruct r.2.2.iv
-        (Proof.opening ⟨(pomfritRedeem pk sig msg labelRows).params, r.1⟩) (Proof.delta ⟨(pomfritRedeem pk sig msg labelRows).params, r.1⟩) = some leaves →
-      ∀ i ∉ r.2.1.known, IsFixed ((onSet (pomfritRedeem pk sig msg labelRows) CrtGen.tables (runChain (Hashes.ofTable g)
-        CrtGen.tables (pomfritRedeem pk sig msg labelRows) r.1 leaves r.2.1.keys) chal3Blocks : Finset Blocks) : Set Blocks) i) :
+    (deadOf : Table → Fin BAVC.tau → Finset ℕ) (hit : Dom → Table → Prop) (εh : Kind → ℝ≥0∞)
+    (hεh : ∀ k ∉ hitKinds, εh k = 0)
+    (hhit : ∀ t g, Pr{let u ← $ᵗ (Ans t)}[hit t (Function.update g t u)] ≤ εh t.1)
+    (hsame : SameChainHyp CrtGen.tables (pomfritRedeem pk sig msg labelRows) oa preOf midOf accOf
+      deadOf hit chainFail)
+    (hL2 : DeadHiddenHyp CrtGen.tables (pomfritRedeem pk sig msg labelRows) oa deadOf hit chainFail
+      deadFail)
+    (hcombFresh : CombFreshHyp CrtGen.tables _ (pomfritData pk sig msg labelRows preOf midOf accOf pre) oa hit chainFail) :
     Pr{let r ← (simulateQ randomOracle (game CrtGen.tables
       (pomfritRedeem pk sig msg labelRows) oa)).run' ∅}[
         r.2.2.accept = true ∧ ¬Extracted (pomfritRedeem pk sig msg labelRows)
@@ -774,7 +897,8 @@ theorem pomfritRedeem_accept_le (pk : UovPk) (sig msg : ByteArray) (labelRows : 
       (q .h21 + 1) * (2 ^ 150 : ℝ≥0∞)⁻¹ +
         (q .h22 + 1) * (ENNReal.ofReal (Seed.epsQS (2 ^ 128) (2 ^ 64) 1313) +
           (2 ^ 128 : ℝ≥0∞)⁻¹ + ((n + verifierTotal : ℕ) : ℝ≥0∞) / 2 ^ 448) +
-        (q .h23 + 1) * ((2 : ℝ≥0∞) / 2 ^ 128) + εb + εd + εs := by
+        (q .h23 + 1) * ((2 : ℝ≥0∞) / 2 ^ 128) + εb + εd + εs +
+        hitSum (q + verifierQueries) εh := by
   classical
   refine (prEvent_accept_le_comb_terms liftInvOk_tables _ hC
     (fun _ _ _ => PomFRIT.pomfritRedeemSystem_length _ _ _ _ _ _ _)
@@ -785,7 +909,7 @@ theorem pomfritRedeem_accept_le (pk : UovPk) (sig msg : ByteArray) (labelRows : 
       rw [hch1]
       exact pomfritRedeem_extract_chain pk sig msg labelRows ch _ l hv hA hAS hkos hP.1 hQS hcb
         admissible deltaBlocks deltaBlocks_injOn acc hP.2)
-    oa n hn q hq chainFail deadFail hbind hdead hchain hsame hL2).trans ?_
+    oa n hn q hq chainFail deadFail hbind hdead hchain deadOf hit εh hεh hhit hsame hL2 hcombFresh).trans ?_
   gcongr
   · exact epsKOS_chal3Blocks_le _ (by norm_num [pomfritRedeem, pomfritParams])
       (by norm_num [pomfritRedeem, pomfritParams])
