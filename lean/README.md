@@ -50,8 +50,8 @@ scope.
     sessions in one concurrent schedule, linear (`n·2⁻¹⁰³`, `n·2⁻¹⁰²`, `n·2⁻¹⁰¹`: about
     `2⁻⁸³`–`2⁻⁸¹` at `n = 2²⁰`, `2⁻⁷¹`–`2⁻⁶⁹` at `2³²`); `N` challenge pairs, quadratic (`2⁻⁶⁴`
     to `2⁻⁶³` at `2²⁰` sessions, `2⁻⁴⁰` to `2⁻³⁹` at `2³²`; an artifact of the key-level
-    tree-hiding hop, not an attack); for PomFRIT also adaptive schedules (`n·2⁻⁹²`: `2⁻⁷²` at
-    `2²⁰`, `2⁻⁶⁰` at `2³²`) and, with `H₄` a random-oracle table, `N` pairs at
+    tree-hiding hop, not an attack); for PomFRIT also adaptive schedules (`n·2⁻¹⁰²`: `2⁻⁸²` at
+    `2²⁰`, `2⁻⁷⁰` at `2³²`) and, with `H₄` a random-oracle table, `N` pairs at
     `N·2⁻¹⁰³ + 32·N²·2⁻¹²⁸` (`2⁻⁸³` at `2²⁰`, `2⁻⁶⁰` at `2³²`; the quadratic part is the birthday
     bound of the 128-bit `iv`s and seeds), all plus budget terms;
   - Moussaka 4(a) and Ratatouille also carry `2·εhide`, the hiding advantage of `Com`
@@ -395,7 +395,7 @@ chal1/chal2 (recommended, not implemented).
 `ZK/HopsPatch.lean`, `ZK/IdealCipherP.lean`, `ZK/AdaptRO.lean`, `Privacy/AdaptiveRO.lean`,
 `ZK/TwoPhaseAd.lean`, `Privacy/MoussakaRA.lean`, `Privacy/RatatouilleRA.lean`,
 `Privacy/PomFRITRA.lean`, `Privacy/PomFRITRAGame.lean`, `ZK/CollideAd2.lean`,
-`Privacy/PomFRITRAH.lean`). In §10.2's games only the adversary's
+`Privacy/PomFRITRAH.lean`, `Privacy/PomFRITRAHPfx.lean`). In §10.2's games only the adversary's
 guess reads the tables. Here its interaction does too.
 - `zk_adaptive` covers an adversary that reads the tables (the proof's `H₃` slice, `H₂³`, `H₅`,
   the cipher, at `s₃`, `s₂`, `s₅`, `s_E` keys, adaptively and consistently) before it picks the
@@ -426,6 +426,12 @@ guess reads the tables. Here its interaction does too.
   session's grinding block meets the interaction's reads) is a second application of two-phase
   zero knowledge, after which the block's tail is the simulator's uniform 16-byte `ã`
   (`ZK.Sim.pr_tail2A`).
+- The same with the collision term **counting prefixes** (`Privacy/PomFRITRAHPfx.lean`): the
+  block is all `2³²` keys of one prefix, so the event depends on the read set only through its
+  prefixes (`ZK.Sim.pr_tail2A_pfx`: `pr_tail2A` applied to one key per prefix). With the budget
+  `IBudgetHB i₃ b₂ i₅ i_E` (the `H₂³` read sets of at most `b₂` prefixes, any number of keys;
+  `IBudgetH.toB` gives it with `b₂ = i₂`): `blindnessRAH_lean_num_pfx` (`_numG_pfx`,
+  `_num_perm_pfx`), the bound above with `b₂` in place of `i₂` (`pr_bad0H_pfx`, `pr_bad1H_pfx`).
 - **With AES as random permutations** (`docs/zk.md` §10.4; `Privacy/PermRA.lean`,
   `ZK/IdealCipherPermP.lean`, `ZK/HopsPatchPerm.lean`, `ZK/TwoPhasePerm.lean`): the adaptive
   layer is stated for every row type with `ZKPRow R` (zero knowledge with the `H₅` and cipher
@@ -520,6 +526,7 @@ with the Lean redemption prover `anonymityNC_label_rows`, `_shake`, `unlinkabili
 
 *Many sessions* (`docs/zk.md` §10.8; `ZK/ReadsMany.lean`, `Privacy/PomFRITMany.lean`,
 `Privacy/MoussakaMany.lean`, `Privacy/RatatouilleMany.lean`, `Privacy/PomFRITAdaptive.lean`,
+`Privacy/PomFRITAdaptivePfx.lean`,
 `ZK/ReadsPoint.lean`, `Privacy/PomFRITLin.lean`). The
 games above have the challenge sessions only. Here the adversary also serves `m` further honest
 sessions on the same tables (each with its own randomness and `H₃` slices), concurrently with the
@@ -602,11 +609,18 @@ by the stages after them (Ratatouille's stage 2 sees the further Clients' spends
   passes the Client's checks; `sigR_h23`, `preX_cons`, `sigR_tables`), sequential sessions compose
   (`runSeq_sreads`), and `blindnessRAH_lean_numG` applies: `blindnessAd_lean_num`, numerically
   `≤ n·2⁻⁹² + 4·(q₃ + q₅ + 221·q_E)·2⁻¹²⁸` for `n` sessions in all (`blindnessAd_lean_le`):
-  `2⁻⁷²` at `2²⁰`, `2⁻⁶⁰` at `2³²`. The per-session `≈ 2⁻⁹³` is the `RAH` collision term charging
-  each of a session's `2³²` grinding keys separately (all have one prefix); a prefix count would
-  give `≈ n·2⁻¹⁰¹`.
+  `2⁻⁷²` at `2²⁰`, `2⁻⁶⁰` at `2³²`. There the per-session `≈ 2⁻⁹³` is the `RAH` collision term
+  charging each of a session's `2³²` grinding keys separately. **Counting prefixes**
+  (`Privacy/PomFRITAdaptivePfx.lean`): a whole session's `H₂³` reads have one prefix
+  (`fullX_sreadsB`, `runSeq_sreadsB`, `red_iBudgetHB`: `IBudgetHB 0 (m₁ + m₂) …`), and
+  `blindnessRAH_lean_numG_pfx` gives `blindnessAd_lean_num_pfx`, numerically
+  `≤ n·2⁻¹⁰² + 4·(q₃ + q₅ + 221·q_E)·2⁻¹²⁸` (`blindnessAd_lean_le_pfx`; per session
+  `≈ 2⁻¹⁰²·³`, the session's `H₅` and cipher reads in the main and the collision term):
+  `2⁻⁸²` at `2²⁰`, `2⁻⁷⁰` at `2³²` (`blindnessAd_lean_2pow20_pfx`, `_2pow32_pfx`), within a
+  factor 2 of the non-adaptive schedule.
 - All with AES as random permutations (`*N_lean_num_perm`, `blindnessP_lean_num_perm`,
-  `anonymityP_lean_num_perm`, `unlinkabilityP_lean_num_perm`, `blindnessAd_lean_num_perm`), and for
+  `anonymityP_lean_num_perm`, `unlinkabilityP_lean_num_perm`, `blindnessAd_lean_num_perm`,
+  `blindnessAd_lean_num_perm_pfx`), and for
   every row type with `ZKRow` (`*_numG`). Hiding of `Com` is assumed for the reductions of every
   composed adversary (the further sessions' tapes fixed).
 
@@ -663,10 +677,8 @@ runs of each layout.
 - *Not gaps, but artifacts of the proofs*: the second `4607` in `εRO` (the honest recomputation's
   cipher reads, `docs/zk.md` §10.1); `Pr[Δ' = 0]` proved `≤ 2⁻¹¹⁴` (second moment) where it is
   `≈ 2⁻¹¹⁸·⁷` (an exact count of the accepted set is out of the kernel's reach), so every bound
-  carries `Pr[GrindBad] ≤ 2⁻¹¹³`; with one shared `H₃`, the charge of `221·2⁻¹²⁸` per `H₃` read
-  where `2⁻¹²⁸` would do; and, for adaptive PomFRIT, the `RAH` collision term's charge per `H₂³`
-  key rather than per prefix (`n·2⁻⁹²` where a prefix count would give `≈ n·2⁻¹⁰¹`). The
-  fixed-record `*_shake` theorems keep the hop hypotheses (`HopHyps`, `HopHyps2`), each an idealization (`Privacy/Basic.lean`); the random-oracle theorems
+  carries `Pr[GrindBad] ≤ 2⁻¹¹³`; and, with one shared `H₃`, the charge of `221·2⁻¹²⁸` per `H₃`
+  read where `2⁻¹²⁸` would do. The fixed-record `*_shake` theorems keep the hop hypotheses (`HopHyps`, `HopHyps2`), each an idealization (`Privacy/Basic.lean`); the random-oracle theorems
   supersede rather than discharge them.
 
 The analysis also found a gap in the FAEST v3 specification's own ZK proof (between games G8 and

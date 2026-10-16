@@ -224,6 +224,8 @@ import VoleMole.Privacy.SeedXOFNC
 import VoleMole.ZK.ReadsMany
 import VoleMole.Privacy.PomFRITMany
 import VoleMole.Privacy.PomFRITAdaptive
+import VoleMole.Privacy.PomFRITRAHPfx
+import VoleMole.Privacy.PomFRITAdaptivePfx
 import VoleMole.ZK.ReadsPoint
 import VoleMole.Privacy.PomFRITLin
 import VoleMole.Privacy.MoussakaMany

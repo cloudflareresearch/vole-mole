@@ -42,8 +42,9 @@ whose interaction reads every table, `H₂³` included (`Privacy/PomFRITRAH.lean
 (`blindnessAd_lean_le`) `≤ n·2⁻⁹² + 4·(q₃ + q₅ + 221·q_E)·2⁻¹²⁸` for `n = m₁ + m₂ + m₃ + 2` sessions
 in all: `≤ 2⁻⁷²` for `n ≤ 2²⁰` (`blindnessAd_lean_2pow20`), `≤ 2⁻⁶⁰` for `n ≤ 2³²`
 (`blindnessAd_lean_2pow32`). The per-session term (`≈ 2⁻⁹³`) is the `RAH` collision term's charge
-per `H₂³` key the interaction reads, `2³²` per session run inside it; counting the reads' prefixes
-instead of their keys would make it `≈ 2⁻¹²⁵`, not done (`lean/docs/zk.md` §10.8).
+per `H₂³` key the interaction reads, `2³²` per session run inside it. Counting the reads' prefixes
+instead of their keys (one per session) gives `n·2⁻¹⁰²`: `Privacy/PomFRITAdaptivePfx.lean`
+(`blindnessAd_lean_le_pfx`; `lean/docs/zk.md` §10.8).
 -/
 
 open Finset
