@@ -276,6 +276,40 @@ theorem blindnessOCSh_num_perm_seed (A : XofP Ctx → AdversaryOC (RowH (Equiv.P
   blindnessRASh_num_perm_seed enc (fun g => (A g).toRA) hA
     (fun g => AdversaryOC.iBudget (hk g) (hr g)) hkx hg
 
+/-- **`blindnessOCHSh_num` (one shared `H₃`, queries to `H₂³`) with the seed XOF.** -/
+theorem blindnessOCHSh_num_seed (A : XofP Ctx → AdversaryOC (RowH (Blk → Blk)))
+    {q5 qE i2 i5 iE qk qg : ℕ} (hA : ∀ g, (A g).toRA.GBudget 0 q5 qE)
+    (hk : ∀ g, QBudget (A g).keyOf 0 i2 i5 iE)
+    (hr : ∀ g t₀ t₁, QBudget ((A g).respOf t₀ t₁) 0 i2 i5 iE)
+    (hkx : ∀ sl s, RdX (fun g => (A g).toRA.keyOf sl s) qk)
+    (hg : ∀ b z, RdX (fun g => realGameRASh Hashes.shake (A g).toRA b z) qg) :
+    |pr _ (seedGameRASh enc (fun g => (A g).toRA) false) -
+        pr _ (seedGameRASh enc (fun g => (A g).toRA) true)| ≤
+      4 * εRO (qE + 6 * iE + 23035) (q5 + 6 * i5 + 1872) (qE + 6 * iE + 23035) +
+        2 * noHitProb + 2 / 2 ^ 128 +
+        (if i2 = 0 then 0 else
+          4 * (1 / 2 ^ 113 + εRO (6 * iE + 13824) (6 * i5 + 2184) (6 * iE + 18431) +
+            (i2 + i2 : ℕ) / 2 ^ 128)) + 2 * ((2 * (qk + qg) + 1 : ℕ) / 2 ^ 256) :=
+  blindnessRAHSh_num_seed enc (fun g => (A g).toRA) hA
+    (fun g => AdversaryOC.iBudgetH (hk g) (hr g)) hkx hg
+
+/-- **`blindnessOCHSh_num_perm` with the seed XOF.** -/
+theorem blindnessOCHSh_num_perm_seed (A : XofP Ctx → AdversaryOC (RowH (Equiv.Perm Blk)))
+    {q5 qE i2 i5 iE qk qg : ℕ} (hA : ∀ g, (A g).toRA.GBudget 0 q5 qE)
+    (hk : ∀ g, QBudget (A g).keyOf 0 i2 i5 iE)
+    (hr : ∀ g t₀ t₁, QBudget ((A g).respOf t₀ t₁) 0 i2 i5 iE)
+    (hkx : ∀ sl s, RdX (fun g => (A g).toRA.keyOf sl s) qk)
+    (hg : ∀ b z, RdX (fun g => realGameRASh Hashes.shake (A g).toRA b z) qg) :
+    |pr _ (seedGameRASh enc (fun g => (A g).toRA) false) -
+        pr _ (seedGameRASh enc (fun g => (A g).toRA) true)| ≤
+      4 * εROPm pP (qE + 6 * iE + 23035) (q5 + 6 * i5 + 1872) (qE + 6 * iE + 23035) +
+        2 * noHitProb + 2 / 2 ^ 128 +
+        (if i2 = 0 then 0 else
+          4 * (1 / 2 ^ 113 + εROPm pP (6 * iE + 13824) (6 * i5 + 2184) (6 * iE + 18431) +
+            (i2 + i2 : ℕ) / 2 ^ 128)) + 2 * ((2 * (qk + qg) + 1 : ℕ) / 2 ^ 256) :=
+  blindnessRAHSh_num_perm_seed enc (fun g => (A g).toRA) hA
+    (fun g => AdversaryOC.iBudgetH (hk g) (hr g)) hkx hg
+
 end PomFRIT
 
 end VoleMole.Privacy

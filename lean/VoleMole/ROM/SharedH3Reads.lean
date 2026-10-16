@@ -1,6 +1,7 @@
 import VoleMole.ROM.PrivacyReads
 import VoleMole.Privacy.SharedH3RA
 import VoleMole.Privacy.SharedH3PomFRITRA
+import VoleMole.Privacy.SharedH3PomFRITRAH
 
 /-!
 # One shared `H₃`, the interaction an oracle computation over the tables
@@ -9,7 +10,10 @@ import VoleMole.Privacy.SharedH3PomFRITRA
 (`ROM/PrivacyReads.lean`): the interaction queries the shared tables, whose rows carry `H₃`'s
 columns (`ZK.Sim.RowH`), and no slot slice (`QBudget … 0 i₂ i₅ i_E`: zero slice queries). Its
 consistency is a theorem (`AdversaryOC.iBudget`); the bounds are those of
-`anonymityRASh_num`, `unlinkabilityRASh_num`, `blindnessRASh_num` and their `_perm` versions.
+`anonymityRASh_num`, `unlinkabilityRASh_num`, `blindnessRASh_num` and their `_perm` versions;
+for a PomFRIT Issuer that also queries `H₂³`, `blindnessOCHSh_num(_perm)` (`blindnessRAHSh_num`,
+`Privacy/SharedH3PomFRITRAH.lean`, with the joint budget `IBudgetH` from `QBudget` by
+`AdversaryOC.iBudgetH`).
 -/
 
 set_option synthInstance.maxSize 1024
@@ -117,6 +121,34 @@ theorem blindnessOCSh_num_perm (A : AdversaryOC (RowH (Equiv.Perm Blk))) {q5 qE 
       4 * εROPm pP (qE + 4 * iE + 23035) (q5 + 4 * i5 + 1872) (qE + 4 * iE + 23035) +
         2 * noHitProb + 2 / 2 ^ 128 :=
   blindnessRASh_num_perm A.toRA hA (AdversaryOC.iBudget hk hr)
+
+/-- **PomFRIT blindness with one shared `H₃` and an Issuer whose interaction is an oracle
+computation over the tables, `H₂³` queries included** (no slice query; function rows;
+`blindnessRAHSh_num` for `A.toRA`). -/
+theorem blindnessOCHSh_num (A : AdversaryOC (RowH (Blk → Blk))) {q5 qE i2 i5 iE : ℕ}
+    (hA : A.toRA.GBudget 0 q5 qE) (hk : QBudget A.keyOf 0 i2 i5 iE)
+    (hr : ∀ t₀ t₁, QBudget (A.respOf t₀ t₁) 0 i2 i5 iE) :
+    |pr ((XR × XR) × ShP (RowH (Blk → Blk))) (realGameRASh Hashes.shake A.toRA false) -
+        pr ((XR × XR) × ShP (RowH (Blk → Blk))) (realGameRASh Hashes.shake A.toRA true)| ≤
+      4 * εRO (qE + 6 * iE + 23035) (q5 + 6 * i5 + 1872) (qE + 6 * iE + 23035) +
+        2 * noHitProb + 2 / 2 ^ 128 +
+        (if i2 = 0 then 0 else
+          4 * (1 / 2 ^ 113 + εRO (6 * iE + 13824) (6 * i5 + 2184) (6 * iE + 18431) +
+            (i2 + i2 : ℕ) / 2 ^ 128)) :=
+  blindnessRAHSh_num A.toRA hA (AdversaryOC.iBudgetH hk hr)
+
+/-- **`blindnessOCHSh_num` with AES as uniformly random permutations.** -/
+theorem blindnessOCHSh_num_perm (A : AdversaryOC (RowH (Equiv.Perm Blk))) {q5 qE i2 i5 iE : ℕ}
+    (hA : A.toRA.GBudget 0 q5 qE) (hk : QBudget A.keyOf 0 i2 i5 iE)
+    (hr : ∀ t₀ t₁, QBudget (A.respOf t₀ t₁) 0 i2 i5 iE) :
+    |pr ((XR × XR) × ShP (RowH (Equiv.Perm Blk))) (realGameRASh Hashes.shake A.toRA false) -
+        pr ((XR × XR) × ShP (RowH (Equiv.Perm Blk))) (realGameRASh Hashes.shake A.toRA true)| ≤
+      4 * εROPm pP (qE + 6 * iE + 23035) (q5 + 6 * i5 + 1872) (qE + 6 * iE + 23035) +
+        2 * noHitProb + 2 / 2 ^ 128 +
+        (if i2 = 0 then 0 else
+          4 * (1 / 2 ^ 113 + εROPm pP (6 * iE + 13824) (6 * i5 + 2184) (6 * iE + 18431) +
+            (i2 + i2 : ℕ) / 2 ^ 128)) :=
+  blindnessRAHSh_num_perm A.toRA hA (AdversaryOC.iBudgetH hk hr)
 
 end PomFRIT
 

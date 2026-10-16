@@ -595,7 +595,13 @@ only the two redemption requests or the refusal. The refusal rule is that of 4(a
   game), so it is part of the reduction. `anonymityNCRO_lean_num`: `≤ 4·εRO(q₃, q₅ + 2496,
   q_E + 23035) + 2·(noHitProb + 2⁻¹⁰²⁴) + 2·(φ₀ + φ₁) + 4·q₃·2⁻¹²⁸`, about `2⁻¹⁰³·²` plus the budget
   terms and the abort term; the `4·q₃·2⁻¹²⁸` lets the guess see the issuance slices (the swap
-  exchanges the Clients' tapes). The seed-XOF hop (`*_seed`) is not applied to this game.
+  exchanges the Clients' tapes). With one shared `H₃`, as in the scheme
+  (`lean/VoleMole/Privacy/MoussakaNCSh.lean`): `anonymityNCSh_num`, `≤ 4·εRO(q_E + 23038,
+  q₅ + 2496, q_E + 23038) + 2·(noHitProb + 2⁻¹⁰²⁴) + 2·(φ₀ + φ₁)`, also about `2⁻¹⁰³·²`; the slice
+  term disappears (the issuance proofs read the shared tables, which the swap does not exchange),
+  and the guess's `H₃` reads are row reads inside the zero-knowledge error. With the real Clients'
+  seeds (`Privacy/SeedXOFNC.lean`): `anonymityNCRO_lean_num_seed`, `anonymityNCSh_num_seed`
+  (and the unlinkability and `_perm` versions), `+ 2·(2q_X + 2)·2⁻²⁵⁶`.
 - `Spec.Moussaka.finalizeIssue` accepts a response of any length (in C++, `s` is a 119-byte
   `std::array`), so the spec admits tokens with `|s| ≠ 119`, for which `redeemRequest` would prove
   a witness outside `RedeemRel`. The game types the adversary's responses as 119 bytes, as the C++
@@ -819,8 +825,9 @@ harmless.
    `2·(δ₀^{256} + δ₁^{256})` in the vinegar random-oracle model (`Privacy/MoussakaNC.lean`), and in
    the random-oracle and ideal-cipher model with the Anchors' Lean verifier on the shared tables
    (`anonymityNCRO_lean_num`, `_perm`, `anonymityNCRO_vinegarRO`, `Privacy/MoussakaNCRO.lean`).
-   What remains there: the adversary's choices do not read the tables, the `H₃` slices are per
-   proof (no shared-`H₃` version), and the seed-XOF hop is not applied (§6).
+   also with one shared `H₃` (`anonymityNCSh_num`, `Privacy/MoussakaNCSh.lean`) and with the real
+   Clients' seeds (`*NC*_seed`, `Privacy/SeedXOFNC.lean`). What remains there: the adversary's
+   choices do not read the tables (§6).
 6. Whether lean/docs/zk.md's `Pred` product can be made additive on `main`. It is moot with the fix.
 7. Timing side channels beyond the index check (OS RNG, allocation) are out of scope.
 
@@ -973,8 +980,8 @@ random-oracle theorems above holds with `+ 2·(2q_X + 2)·2⁻²⁵⁶`: `anonym
 `anonymityRA_lean_num_seed`, `anonymitySh_num_seed`, `anonymityRASh_num_seed`,
 `anonymityOC_lean_num_seed`, `anonymityOCSh_num_seed`, each with `_perm_seed`. Theorem 4 has no
 term for this hop (D7); the cost covers an XOF query at a Client's seed and two seeds of one domain
-colliding. The non-colluding games (`Privacy/MoussakaNC.lean`, `Privacy/MoussakaNCRO.lean`) keep
-uniform seed outputs.
+colliding. The abstract non-colluding game (`Privacy/MoussakaNC.lean`) keeps uniform seed
+outputs; the random-oracle ones get the hop below (`Privacy/SeedXOFNC.lean`).
 
 **Theorem 4(b′) in the random-oracle and ideal-cipher model** (`lean/VoleMole/Privacy/MoussakaNCRO.lean`,
 `lean/VoleMole/ZK/VerifyReadsRO.lean`, zk.md §10.7). The non-colluding game on the spec
@@ -1008,3 +1015,20 @@ redemptions or the refusal, the four `H₃` slices and the tables, with read bud
   tables); **`unlinkabilityNCRO_lean_num`**, `_perm`: one Anchor, any index rule, without the
   abort term; the generic `anonymityNCRO`, `unlinkabilityNCRO` for any proof systems with read
   budgets. `#print axioms`: `propext`, `Classical.choice`, `Quot.sound`.
+- **With one shared `H₃`** (`lean/VoleMole/Privacy/MoussakaNCSh.lean`, zk.md §10.7): the issuance
+  and redemption proofs read `H₃` at their prefixes off the shared tables (`realGameNCSh`), the
+  guess reads `H₃` through the rows. For an issuance prover that ignores its slot slice the slice
+  hop is an exact relabelling (`pr_slice_free`, `sim_fresh_NC_free`; `anonymityNCRO_free`), and
+  the redemption hops use `ZeroKnowledgeRO.shared` at the row budget (`q_E + 23038`: each shared
+  proof reads its row `ρ` too). **`anonymityNCSh_num`**:
+
+      |Pr[W₀] − Pr[W₁]| ≤ 4·εRO(q_E + 23038, q₅ + 2496, q_E + 23038) + 2·(noHitProb + 2⁻¹⁰²⁴)
+                          + 2·(φ₀ + φ₁),
+
+  about `2⁻¹⁰³·²` plus the budget terms and the abort term; `_perm`, `anonymityNCSh_vinegarRO`,
+  `unlinkabilityNCSh_num` (`_perm`).
+- **With the real Clients' seeds** (`lean/VoleMole/Privacy/SeedXOFNC.lean`, zk.md §10.6): each of
+  `anonymityNCRO_lean_num`, `unlinkabilityNCRO_lean_num`, `anonymityNCSh_num`,
+  `unlinkabilityNCSh_num` (and `_perm`) with `+ 2·(2q_X + 2)·2⁻²⁵⁶` (`*_seed`; the abort term
+  bounded uniformly in the XOF table). Theorem 4(b′) has no seed-XOF term either (D7); as for
+  4(a), the hop is not free.
