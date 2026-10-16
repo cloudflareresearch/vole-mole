@@ -539,8 +539,10 @@ and `d` at 3075 and 3139; at `Layout.main` the definitions are the spec's, by `r
     uses the adaptive two-phase theorem, since session `0`'s continuation runs session `1`'s step 1,
     which reads session `0`'s column when the prefixes coincide); with the table-reading Issuer
     below, **`blindnessRASh_num`** (`4·εRO(q_E + 4i_E + 23035, q₅ + 4i₅ + 1872, q_E + 4i_E + 23035)
-    + 2·noHitProb + 2·2⁻¹²⁸`), `blindnessOCSh_num`, `_perm` (`lean/docs/zk.md` §10.5). Not done in
-    the shared model: the Issuer that reads `H₂³` (`blindnessRAH_lean_num` below).
+    + 2·noHitProb + 2·2⁻¹²⁸`), `blindnessOCSh_num`, `_perm` (`lean/docs/zk.md` §10.5); with the
+    Issuer that also reads `H₂³` (below), **`blindnessRAHSh_num`**, `blindnessOCHSh_num`, `_perm`
+    (`Privacy/SharedH3PomFRITRAH.lean`), and with the seeds `blindnessRAHSh_num_seed`,
+    `blindnessOCHSh_num_seed`.
 - **[Lean] Blindness with an Issuer whose key, messages and responses read the tables**
   (`lean/VoleMole/ZK/TwoPhaseAd.lean`, `Privacy/PomFRITRA.lean`, `Privacy/PomFRITRAGame.lean`;
   `lean/docs/zk.md` §10.3). The Issuer (`AdversaryRA`) picks its key and both messages as functions
@@ -598,6 +600,13 @@ and `d` at 3075 and 3139; at `Layout.main` the definitions are the spec's, by `r
     [i₂ > 0]·4·(2⁻¹¹³ + εRO(6i₃, 6i₅ + 2184, 6i_E + 18428) + 2i₂·2⁻¹²⁸)`, about `2⁻¹⁰²·³` plus the
     budget terms; `blindnessRAH_lean_num_perm` with `εROPm`; for an Issuer written as oracle
     computations, `blindnessOCH_lean_num` (`_perm`), the budget from `QBudget` (`sReadsP_runT`).
+  - *With one shared `H₃`* (`Privacy/SharedH3PomFRITRAH.lean`, `ZK/SharedH3Tail.lean`; the Issuer
+    reads `H₃` through the rows and no slot slice): the same proof on the shared tables, the
+    collision term by `ZK.Sim.pr_tail2Sh` (the session's column re-sampled, then `pr_tail2A`).
+    **`blindnessRAHSh_num`**: `≤ 4·εRO(q_E + 6i_E + 23035, q₅ + 6i₅ + 1872, q_E + 6i_E + 23035) +
+    2·noHitProb + 2·2⁻¹²⁸ + [i₂ > 0]·4·(2⁻¹¹³ + εRO(6i_E + 13824, 6i₅ + 2184, 6i_E + 18431) +
+    2i₂·2⁻¹²⁸)`, also about `2⁻¹⁰²·³`; `_perm`, `blindnessOCHSh_num` (`_perm`), and with the seed
+    XOF `+ 2·(2Q_X + 1)·2⁻²⁵⁶` (`*_seed`).
   - Not covered: `H₂³` reads under the per-slice budget `IBudget` (the substituted Issuer's guess
     must recompute the reads jointly); a two-phase zero-knowledge theorem whose continuation reads
     `H₂³` (not needed for the game).
@@ -804,5 +813,5 @@ dedicated to PomFRIT.
 | Blindness with the Issuer's key, messages and responses reading the tables except `H₂³` (`lean/VoleMole/Privacy/PomFRITRA.lean`, `Privacy/PomFRITRAGame.lean`) | `AdversaryRA`, `IBudget`, `hyp2RA_R`, `hyp2RA_S`, `budget_D0A`, `budget_D1A`, `hop0RA`, `hop1RA`, `G2RA_swap`, `deltaRA_le`, `blindnessRA`, `blindnessRA_lean_num`; for an Issuer written as oracle computations over the tables (no consistency hypothesis, `ROM/PrivacyReads.lean`): `AdversaryOC`, `blindnessOC_lean_num`, `blindnessOC_lean_num_perm` |
 | Blindness with the Issuer's interaction reading `H₂³` too (`lean/VoleMole/Privacy/PomFRITRAH.lean`, `ZK/CollideAd2.lean`) | `SReadsP`, `IBudgetH`, `AdversaryRA.subst`, `pr_resampleC`, `pr_G0RA_resample`, `G0_at_iff_subst`, `K1R`, `hyp2RA_R1`, `pr_tail2A`, `pr_bad0H`, `pr_bad1H`, `G0RA_subst_close`, `blindnessRAH_lean_numG`, `blindnessRAH_lean_num`; `blindnessRAH_lean_num_perm` (`Privacy/PermRA.lean`); `blindnessOCH_lean_num`, `blindnessOCH_lean_num_perm` (`ROM/PrivacyReads.lean`) |
 | Blindness with AES as random permutations (`lean/VoleMole/Privacy/PermRO.lean`, `Privacy/PermRA.lean`, `ZK/TwoPhasePerm.lean`; `lean/docs/zk.md` §10.4) | `zk2_rom_ic_h23_num_perm`, `zk2_adaptive_perm`, `blindnessRO_lean_num_perm`, `blindnessRA_lean_num_perm` |
-| Blindness with one shared `H₃` (`lean/VoleMole/ZK/SharedH3Two.lean`, `Privacy/SharedH3PomFRIT.lean`, `Privacy/SharedH3PomFRITRA.lean`, `ROM/SharedH3Reads.lean`; `lean/docs/zk.md` §10.5) | `zk2_sharedA`, `zk2_shared`, `deltaRO_sh`, `deltaSh_le`, `blindnessSh_num`, `blindnessRASh_num`, `blindnessOCSh_num`, with `_perm` |
-| G0 → G1, the seed-XOF hop (`lean/VoleMole/Privacy/SeedXOF.lean`, `Privacy/SeedXOFGames.lean`, `ROM/SeedXOFReads.lean`; `lean/docs/zk.md` §10.6) | `abs_pr_seed_le`, `abs_pr_seedGame_sub_le`, `blindnessRO_lean_num_seed`, `blindnessRA_lean_num_seed`, `blindnessRAH_lean_num_seed`, `blindnessSh_num_seed`, `blindnessRASh_num_seed`, `blindnessOC_lean_num_seed`, `blindnessOCH_lean_num_seed`, `blindnessOCSh_num_seed`, with `_perm_seed` |
+| Blindness with one shared `H₃` (`lean/VoleMole/ZK/SharedH3Two.lean`, `Privacy/SharedH3PomFRIT.lean`, `Privacy/SharedH3PomFRITRA.lean`, `Privacy/SharedH3PomFRITRAH.lean`, `ZK/SharedH3Tail.lean`, `ROM/SharedH3Reads.lean`; `lean/docs/zk.md` §10.5) | `zk2_sharedA`, `zk2_shared`, `deltaRO_sh`, `deltaSh_le`, `blindnessSh_num`, `blindnessRASh_num`, `blindnessOCSh_num`, `pr_tail2Sh`, `pr_G0RASh_resample`, `pr_bad0HSh`, `pr_bad1HSh`, `blindnessRAHSh_num`, `blindnessOCHSh_num`, with `_perm` |
+| G0 → G1, the seed-XOF hop (`lean/VoleMole/Privacy/SeedXOF.lean`, `Privacy/SeedXOFGames.lean`, `ROM/SeedXOFReads.lean`; `lean/docs/zk.md` §10.6) | `abs_pr_seed_le`, `abs_pr_seedGame_sub_le`, `blindnessRO_lean_num_seed`, `blindnessRA_lean_num_seed`, `blindnessRAH_lean_num_seed`, `blindnessSh_num_seed`, `blindnessRASh_num_seed`, `blindnessOC_lean_num_seed`, `blindnessOCH_lean_num_seed`, `blindnessOCSh_num_seed`, `blindnessRAHSh_num_seed`, `blindnessOCHSh_num_seed`, with `_perm_seed` |

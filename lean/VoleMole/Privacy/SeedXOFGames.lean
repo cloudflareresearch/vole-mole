@@ -1,6 +1,7 @@
 import VoleMole.Privacy.SeedXOF
 import VoleMole.Privacy.SharedH3RA
 import VoleMole.Privacy.SharedH3PomFRITRA
+import VoleMole.Privacy.SharedH3PomFRITRAH
 import VoleMole.Privacy.PermRO
 import VoleMole.Prob.Bytes
 
@@ -319,6 +320,39 @@ theorem blindnessRASh_num_perm_seed (A : XofP Ctx → AdversaryRA (RowH (Equiv.P
     (fun g b t => ctxK enc ((A g).keyOf t.1 t.2) b)
     (fun b t => (hk t.1 t.2).map (fun k => ctxK enc k b)) hg fun g =>
     blindnessRASh_num_perm (A g) (hA g) (hI g)
+
+/-- **`blindnessRAHSh_num` (one shared `H₃`, an Issuer whose interaction also reads `H₂³`) with
+the seed XOF.** -/
+theorem blindnessRAHSh_num_seed (A : XofP Ctx → AdversaryRA (RowH (Blk → Blk)))
+    {q5 qE i2 i5 iE qk qg : ℕ} (hA : ∀ g, (A g).GBudget 0 q5 qE)
+    (hI : ∀ g, (A g).IBudgetH 0 i2 i5 iE) (hk : ∀ sl s, RdX (fun g => (A g).keyOf sl s) qk)
+    (hg : ∀ b z, RdX (fun g => realGameRASh Hashes.shake (A g) b z) qg) :
+    |pr _ (seedGameRASh enc A false) - pr _ (seedGameRASh enc A true)| ≤
+      4 * εRO (qE + 6 * iE + 23035) (q5 + 6 * i5 + 1872) (qE + 6 * iE + 23035) +
+        2 * noHitProb + 2 / 2 ^ 128 +
+        (if i2 = 0 then 0 else
+          4 * (1 / 2 ^ 113 + εRO (6 * iE + 13824) (6 * i5 + 2184) (6 * iE + 18431) +
+            (i2 + i2 : ℕ) / 2 ^ 128)) + 2 * ((2 * (qk + qg) + 1 : ℕ) / 2 ^ 256) :=
+  abs_seedGameP_sub_le (fun g => realGameRASh Hashes.shake (A g))
+    (fun g b t => ctxK enc ((A g).keyOf t.1 t.2) b)
+    (fun b t => (hk t.1 t.2).map (fun k => ctxK enc k b)) hg fun g =>
+    blindnessRAHSh_num (A g) (hA g) (hI g)
+
+/-- **`blindnessRAHSh_num_perm` with the seed XOF.** -/
+theorem blindnessRAHSh_num_perm_seed (A : XofP Ctx → AdversaryRA (RowH (Equiv.Perm Blk)))
+    {q5 qE i2 i5 iE qk qg : ℕ} (hA : ∀ g, (A g).GBudget 0 q5 qE)
+    (hI : ∀ g, (A g).IBudgetH 0 i2 i5 iE) (hk : ∀ sl s, RdX (fun g => (A g).keyOf sl s) qk)
+    (hg : ∀ b z, RdX (fun g => realGameRASh Hashes.shake (A g) b z) qg) :
+    |pr _ (seedGameRASh enc A false) - pr _ (seedGameRASh enc A true)| ≤
+      4 * εROPm pP (qE + 6 * iE + 23035) (q5 + 6 * i5 + 1872) (qE + 6 * iE + 23035) +
+        2 * noHitProb + 2 / 2 ^ 128 +
+        (if i2 = 0 then 0 else
+          4 * (1 / 2 ^ 113 + εROPm pP (6 * iE + 13824) (6 * i5 + 2184) (6 * iE + 18431) +
+            (i2 + i2 : ℕ) / 2 ^ 128)) + 2 * ((2 * (qk + qg) + 1 : ℕ) / 2 ^ 256) :=
+  abs_seedGameP_sub_le (fun g => realGameRASh Hashes.shake (A g))
+    (fun g b t => ctxK enc ((A g).keyOf t.1 t.2) b)
+    (fun b t => (hk t.1 t.2).map (fun k => ctxK enc k b)) hg fun g =>
+    blindnessRAHSh_num_perm (A g) (hA g) (hI g)
 
 end Blind
 

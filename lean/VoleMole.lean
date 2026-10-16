@@ -210,6 +210,8 @@ import VoleMole.Privacy.SharedH3PomFRIT
 import VoleMole.ZK.SharedH3RA
 import VoleMole.Privacy.SharedH3RA
 import VoleMole.Privacy.SharedH3PomFRITRA
+import VoleMole.ZK.SharedH3Tail
+import VoleMole.Privacy.SharedH3PomFRITRAH
 import VoleMole.ROM.SharedH3Reads
 import VoleMole.Privacy.SeedXOF
 import VoleMole.Privacy.SeedXOFGames
@@ -217,6 +219,8 @@ import VoleMole.ROM.SeedXOFReads
 import VoleMole.Privacy.MoussakaNC
 import VoleMole.ZK.VerifyReadsRO
 import VoleMole.Privacy.MoussakaNCRO
+import VoleMole.Privacy.MoussakaNCSh
+import VoleMole.Privacy.SeedXOFNC
 import VoleMole.ZK.AcceptVarData
 import VoleMole.ZK.AcceptVar
 import VoleMole.ZK.CompleteRO
