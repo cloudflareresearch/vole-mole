@@ -57,6 +57,13 @@ TEST(Mdoc, Counts) {
                         md::proof_bytes(na, {Vole::small, prg}));
         }
     }
+    md::dispatch(1, {}, []<size_t NA, Vole V, vole_mole::ecdsa_pok::detail::BinPrg PRG>() {
+        using S = md::Scheme<NA, V, PRG>;
+        std::printf("default, 1 attribute: binary %zu, F_p/F_n %zu (key %zu), links %zu\n",
+                    S::BIN_BYTES, S::ARITH_BYTES, S::AR::KP,
+                    S::PROOF_BYTES - S::BIN_BYTES - S::ARITH_BYTES);
+        return 0;
+    });
 }
 
 // The witness of each vector satisfies the binary circuit.
