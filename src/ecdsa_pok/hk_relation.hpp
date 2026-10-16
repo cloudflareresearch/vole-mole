@@ -177,59 +177,35 @@ inline Witness make_witness(const Affine& q, std::span<const uint8_t> msg,
     auto digit = [](const p256::Limbs& u, size_t k) {
         return static_cast<size_t>((u[(4 * k) / 64] >> ((4 * k) % 64)) & 0xf);
     };
-    const Fp three = Fp::from_u64(3);
-    auto add = [](Fp& ax, Fp& ay, const Fp& tx, const Fp& ty) {
-        if (tx == ax) {
-            throw std::runtime_error("ecdsa_pok: degenerate addition");
-        }
-        const Fp lambda = (ty - ay) * (tx - ax).inv();
-        const Fp nx = lambda.square() - ax - tx;
-        ay = lambda * (ax - nx) - ay;
-        ax = nx;
-        return lambda;
-    };
-    auto dbl = [&](Fp& ax, Fp& ay) {
-        if (ay.is_zero()) {
-            throw std::runtime_error("ecdsa_pok: degenerate doubling");
-        }
-        const Fp lambda = (ax.square() * three - three) * (ay + ay).inv();
-        const Fp nx = lambda.square() - ax - ax;
-        ay = lambda * (ax - nx) - ay;
-        ax = nx;
-        return lambda;
-    };
-
     wit.wp[WP_Q] = q.x;
     wit.wp[WP_Q + 1] = q.y;
-    std::array<Affine, RADIX> table;
-    table[0] = off.h1;
-    for (size_t b = 1; b < RADIX; ++b) {
-        Fp ax = table[b - 1].x, ay = table[b - 1].y;
-        wit.wp[WP_TABLE + b - 1] = add(ax, ay, q.x, q.y);
-        table[b] = {ax, ay, false};
-    }
+    // The table P_b = P_(b - 1) + Q, then the ladder, the comb and the last step.
+    std::vector<p256::ChainStep> steps(RADIX - 1, p256::ChainStep{false, q});
+    const p256::Chain tc = p256::slope_chain(off.h1, steps);
+    std::copy(tc.slopes.begin(), tc.slopes.end(), wit.wp.begin() + WP_TABLE);
+    const std::vector<Affine>& table = tc.points;
 
-    Fp ax = off.h0.x, ay = off.h0.y;
-    size_t si = WP_LADDER;
+    steps.clear();
     for (size_t wi = 0; wi < NUM_WINDOWS; ++wi) {
         if (wi > 0) {
-            for (size_t i = 0; i < DIGIT_BITS; ++i) {
-                wit.wp[si++] = dbl(ax, ay);
-            }
+            steps.insert(steps.end(), DIGIT_BITS, p256::ChainStep{true, {}});
         }
         const size_t k = NUM_WINDOWS - 1 - wi;
         const size_t d = digit(u2, k);
         wit.wp[WP_B + k] = Fp::from_u64(d);
-        wit.wp[si++] = add(ax, ay, table[d].x, table[d].y);
+        steps.push_back({false, table[d]});
     }
     for (size_t k = 0; k < NUM_DIGITS; ++k) {
         wit.wp[WP_A + k] = Fp::from_u64(digit(u1, k));
     }
     for (size_t j = 0; j < COMB_STEPS; ++j) {
-        const Affine& t = tab.at(j, digit(u1, 2 * j), digit(u1, 2 * j + 1));
-        wit.wp[WP_COMB + j] = add(ax, ay, t.x, t.y);
+        steps.push_back({false, tab.at(j, digit(u1, 2 * j), digit(u1, 2 * j + 1))});
     }
-    wit.wp[WP_FINAL] = add(ax, ay, off.pstar.x, off.pstar.y);
+    steps.push_back({false, off.pstar});
+    const p256::Chain lc = p256::slope_chain(off.h0, steps);
+    static_assert(WP_COMB == WP_LADDER + LADDER_STEPS && WP_FINAL == WP_COMB + COMB_STEPS);
+    std::copy(lc.slopes.begin(), lc.slopes.end(), wit.wp.begin() + WP_LADDER);
+    const Fp ax = lc.points.back().x;
     if (!(Fn::reduce_32(ax.to_bytes()) == r)) {
         throw std::logic_error("ecdsa_pok: x(R) != r");
     }

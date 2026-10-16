@@ -253,24 +253,20 @@ inline Witness make_witness(const Affine& q, const Tables& tables, std::span<con
         return static_cast<size_t>((u[(4 * k) / 64] >> ((4 * k) % 64)) & 0xf);
     };
 
-    // The comb, in affine coordinates.
-    Fp ax = tables.h0.x, ay = tables.h0.y;
+    // The comb.
+    std::vector<p256::ChainStep> steps;
+    steps.reserve(NUM_STEPS);
     for (size_t k = 0; k < NUM_STEPS; ++k) {
-        const Affine& t = k < NUM_DIGITS ? tables.at(k, digit(u1, k), digit(u2, k)) : tables.pstar;
-        if (t.x == ax) {
-            throw std::runtime_error("ecdsa_pok: degenerate addition");
-        }
-        const Fp lambda = (t.y - ay) * (t.x - ax).inv();
-        const Fp nx = lambda.square() - ax - t.x;
-        const Fp ny = lambda * (ax - nx) - ay;
-        ax = nx;
-        ay = ny;
-        wit.wp[WP_LAMBDA + k] = lambda;
+        steps.push_back(
+            {false, k < NUM_DIGITS ? tables.at(k, digit(u1, k), digit(u2, k)) : tables.pstar});
         if (k < NUM_DIGITS) {
             wit.wp[WP_A + k] = Fp::from_u64(digit(u1, k));
             wit.wp[WP_B + k] = Fp::from_u64(digit(u2, k));
         }
     }
+    const p256::Chain chain = p256::slope_chain(tables.h0, steps);
+    std::copy(chain.slopes.begin(), chain.slopes.end(), wit.wp.begin() + WP_LAMBDA);
+    const Fp ax = chain.points.back().x;
     const p256::Limbs x_limbs = ax.canonical();
     if (!(Fn::reduce_32(ax.to_bytes()) == r)) {
         throw std::logic_error("ecdsa_pok: x(R) != r");

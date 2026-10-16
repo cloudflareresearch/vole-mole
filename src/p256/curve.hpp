@@ -15,6 +15,7 @@
 #include <cstdint>
 #include <optional>
 #include <span>
+#include <stdexcept>
 #include <vector>
 
 namespace vole_mole::p256 {
@@ -131,6 +132,63 @@ inline std::vector<Affine> batch_to_affine(std::span<const Jacobian> pts) {
         inv *= pts[i].z;
         const Fp zi2 = zi.square();
         out[i] = {pts[i].x * zi2, pts[i].y * zi2 * zi, false};
+    }
+    return out;
+}
+
+// Invert the nonzero elements x in place, with one inversion (Montgomery's trick).
+inline void batch_inv(std::span<Fp> x) {
+    std::vector<Fp> prefix(x.size());
+    Fp acc = Fp::one();
+    for (size_t i = 0; i < x.size(); ++i) {
+        prefix[i] = acc;
+        acc *= x[i];
+    }
+    Fp inv = acc.inv();
+    for (size_t i = x.size(); i-- > 0;) {
+        const Fp xi = x[i];
+        x[i] = inv * prefix[i];
+        inv *= xi;
+    }
+}
+
+// A chain of incomplete affine additions A + T (of public or witness points T) and doublings 2 A,
+// from a start point, as the arithmetic relations commit to them: for each step, its slope
+// lambda = (y_T - y_A) / (x_T - x_A) or (3 x_A^2 - 3) / (2 y_A). The chain is computed in Jacobian
+// coordinates, and then all the points and slopes with two inversions, rather than one per step.
+struct ChainStep {
+    bool dbl;
+    Affine t; // unused for doublings
+};
+struct Chain {
+    std::vector<Fp> slopes;
+    std::vector<Affine> points; // the start point, then the point after each step
+};
+// Throws std::runtime_error if a step is degenerate (x_T = x_A, or y_A = 0 for a doubling).
+inline Chain slope_chain(const Affine& start, std::span<const ChainStep> steps) {
+    std::vector<Jacobian> pts;
+    pts.reserve(steps.size() + 1);
+    pts.push_back(Jacobian::from(start));
+    for (const ChainStep& st : steps) {
+        pts.push_back(st.dbl ? pts.back().dbl() : pts.back().add(Jacobian::from(st.t)));
+    }
+    Chain out;
+    out.points = batch_to_affine(pts);
+    std::vector<Fp> den(steps.size());
+    for (size_t i = 0; i < steps.size(); ++i) {
+        const Affine& a = out.points[i];
+        if (a.inf || (!steps[i].dbl && steps[i].t.x == a.x) || (steps[i].dbl && a.y.is_zero())) {
+            throw std::runtime_error("p256: degenerate step in a chain of additions");
+        }
+        den[i] = steps[i].dbl ? a.y + a.y : steps[i].t.x - a.x;
+    }
+    batch_inv(den);
+    const Fp three = Fp::from_u64(3);
+    out.slopes.resize(steps.size());
+    for (size_t i = 0; i < steps.size(); ++i) {
+        const Affine& a = out.points[i];
+        const Fp num = steps[i].dbl ? a.x.square() * three - three : steps[i].t.y - a.y;
+        out.slopes[i] = num * den[i];
     }
     return out;
 }

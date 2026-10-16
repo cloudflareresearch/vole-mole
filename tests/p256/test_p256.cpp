@@ -9,6 +9,7 @@
 #include <cstdint>
 #include <optional>
 #include <random>
+#include <stdexcept>
 #include <string>
 #include <string_view>
 #include <vector>
@@ -150,6 +151,34 @@ TEST(Curve, HashToPoint) {
 }
 
 // RFC 6979, A.2.5 (P-256, SHA-256).
+// slope_chain agrees with incomplete affine additions and doublings, one inversion per step.
+TEST(Curve, SlopeChain) {
+    using namespace vole_mole::p256;
+    const Fp three = Fp::from_u64(3);
+    std::vector<ChainStep> steps;
+    for (uint64_t i = 0; i < 40; ++i) {
+        const bool dbl = i % 3 == 1;
+        steps.push_back(
+            {dbl, dbl ? Affine{} : scalar_mul(GENERATOR, Limbs{1000 + i, 7, 0, 0}).to_affine()});
+    }
+    const Affine start = scalar_mul(GENERATOR, Limbs{5, 0, 0, 0}).to_affine();
+    const Chain c = slope_chain(start, steps);
+    Fp ax = start.x, ay = start.y;
+    for (size_t i = 0; i < steps.size(); ++i) {
+        const Affine& t = steps[i].t;
+        const Fp lambda = steps[i].dbl ? (ax.square() * three - three) * (ay + ay).inv()
+                                       : (t.y - ay) * (t.x - ax).inv();
+        const Fp nx = lambda.square() - ax - (steps[i].dbl ? ax : t.x);
+        ay = lambda * (ax - nx) - ay;
+        ax = nx;
+        EXPECT_EQ(c.slopes[i], lambda) << i;
+        EXPECT_EQ(c.points[i + 1], (Affine{ax, ay, false})) << i;
+    }
+    // A degenerate addition (T = A) throws.
+    const std::vector<ChainStep> bad = {{false, start}};
+    EXPECT_THROW(slope_chain(start, bad), std::runtime_error);
+}
+
 TEST(Ecdsa, Rfc6979) {
     const Fn d =
         Fn::reduce_32(b32("c9afa9d845ba75166b5c215767b1d6934e50c3db36e89b127b8a622b120f6721"));

@@ -216,24 +216,17 @@ inline Witness make_witness(const Affine& q, const p256::Signature& sig, const P
     auto digit = [&](size_t k) {
         return static_cast<size_t>((s[(4 * k) / 64] >> ((4 * k) % 64)) & 0xf);
     };
-    auto add = [](Fp& ax, Fp& ay, const Affine& t) {
-        if (t.x == ax) {
-            throw std::runtime_error("ecdsa_pok: degenerate addition");
-        }
-        const Fp lambda = (t.y - ay) * (t.x - ax).inv();
-        const Fp nx = lambda.square() - ax - t.x;
-        ay = lambda * (ax - nx) - ay;
-        ax = nx;
-        return lambda;
-    };
-    Fp ax = tab.h0.x, ay = tab.h0.y;
+    std::vector<p256::ChainStep> steps;
     for (size_t k = 0; k < NUM_DIGITS; ++k) {
         wit.wp[WP_S + k] = Fp::from_u64(digit(k));
     }
     for (size_t j = 0; j < COMB_STEPS; ++j) {
-        wit.wp[WP_LAMBDA + j] = add(ax, ay, tab.at(j, digit(2 * j), digit(2 * j + 1)));
+        steps.push_back({false, tab.at(j, digit(2 * j), digit(2 * j + 1))});
     }
-    wit.wp[WP_LAMBDA + COMB_STEPS] = add(ax, ay, tab.pstar);
+    steps.push_back({false, tab.pstar});
+    const p256::Chain chain = p256::slope_chain(tab.h0, steps);
+    std::copy(chain.slopes.begin(), chain.slopes.end(), wit.wp.begin() + WP_LAMBDA);
+    const Fp ax = chain.points.back().x, ay = chain.points.back().y;
     if (!(ax == q.x && ay == q.y)) {
         throw std::logic_error("ecdsa_pok: s T + U != Q");
     }
