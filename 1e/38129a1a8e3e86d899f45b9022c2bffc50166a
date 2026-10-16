@@ -1,0 +1,41 @@
+src/ecdsa_pok/bin_ops.hpp
+  s_45ee28f7dc1e9b::t_e6f3c3b87235d1 22-29,69,71-73,88,99-101,107,112-117,125-130,145,150-169
+src/ecdsa_pok/binary.hpp
+  s_45ee28f7dc1e9b::t_dc218de3f8e637 63-69,71-72,78-79,92-93,95-96,98,100,147-148,273-274,281,359,386
+src/ecdsa_pok/hk_binary.hpp
+  s_45ee28f7dc1e9b::t_dc2d2679c380a0 167,252
+src/ecdsa_pok/hk_relation.hpp
+  s_45ee28f7dc1e9b::t_6d1be0568f5637 313
+src/ecdsa_pok/mdoc_binary.hpp
+  s_45ee28f7dc1e9b::t_1c5bfd625049bd 157-164,343,349,523,530,671-672,680,683,688,749,773
+src/ecdsa_pok/mdoc_relation.hpp
+  s_45ee28f7dc1e9b::t_3d2112e69ffc47 581
+src/ecdsa_pok/relation.hpp
+  s_45ee28f7dc1e9b::t_c88760d4caacb7 363
+src/ecdsa_pok/rr_binary.hpp
+  s_45ee28f7dc1e9b::t_f30f0749456643 166,249
+src/ecdsa_pok/rr_relation.hpp
+  s_45ee28f7dc1e9b::t_9f5da5405c269c 284
+src/ecdsa_pok/sha256_circuit.hpp
+  s_45ee28f7dc1e9b::t_32f422ed0ed06a 3-5,7-13,15,17,19-21,33,39,45-56,58,60,76-86,112-184,186-187,195,207-211,218,224-225,231
+tests/ecdsa_pok/test_ecdsa_pok.cpp
+  s_45ee28f7dc1e9b::t_73b445d7033aae 74,77
+tests/ecdsa_pok/test_sha256_circuit.cpp
+  s_45ee28f7dc1e9b::t_126e31cfdf8404 26,35-36,52-53,55,57-58,60-61,65,68-69,74,81,85,88,92-93,95-100,104,106-112
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.10",
+  "base_commit_sha": "1e38129a1a8e3e86d899f45b9022c2bffc50166a",
+  "prompts": {},
+  "sessions": {
+    "s_45ee28f7dc1e9b": {
+      "agent_id": {
+        "tool": "opencode",
+        "id": "ses_ebfe7e377ffe00JYcsmgH2SCOu",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Bas Westerbaan <bas@cloudflare.com>"
+    }
+  }
+}
