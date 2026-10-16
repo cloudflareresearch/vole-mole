@@ -40,11 +40,12 @@ constexpr size_t MAX_MESSAGE_BYTES = 64 * MAX_BLOCKS - 9;
 // fields of P-256, which dominates the proof size.
 enum class Vole : uint8_t { fast = 0, medium = 1, small = 2 };
 
-// How the witness of the binary proof is committed: directly (`none`), or derived from a short key
-// with a PRG, which makes the proof much smaller (see "Derived witnesses" in src/voleith.hpp):
-// `local` is the local PRG with 2 products per output, whose security assumption is less studied
-// and whose key length is a rough estimate (experimental); `mq` is the dense MQ PRG (2 instances),
-// which is slower.
+// How the witnesses are committed: directly (`none`), or derived from a short key with a PRG, which
+// makes the proof much smaller (see "Derived witnesses" in src/voleith.hpp and step 6 in
+// src/voleith_p256/voleith.hpp): `local` derives the binary witness with the local PRG with 2
+// products per output, and the F_p witness with a local quadratic PRG over F_p, whose security
+// assumptions are less studied and whose key lengths are rough estimates (experimental); `mq`
+// derives only the binary witness, with the dense MQ PRG (2 instances), which is much slower.
 enum class WitnessPrg : uint8_t { none = 0, local = 1, mq = 2 };
 
 struct Params {

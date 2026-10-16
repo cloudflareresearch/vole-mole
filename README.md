@@ -214,7 +214,10 @@ signature stay hidden. It combines two VOLEitH proofs:
   using a radix-16 fixed-base comb on precomputed tables (only the slopes are
   committed). It also proves `u1 X = u2 e` and `u2 X != 0` over F_n (so
   `r = X mod n`), and that the digits of `u1` and `u2` match their values over
-  F_n.
+  F_n. With the local PRG, its F_p witness (196 elements) is also derived from
+  a key of 108 elements, with an (experimental) local quadratic PRG over F_p
+  ([`src/voleith_p256/prg.hpp`](src/voleith_p256/prg.hpp)), which doubles the
+  QuickSilver degree.
 
 The same masked linear combinations, with a challenge derived after both
 proofs commit, tie `e` and `X` across the two proofs. See
@@ -222,16 +225,18 @@ proofs commit, tie `e` and `X` across the two proofs. See
 
 | Parameters | Message   | Proof     | Prove   | Verify  |
 |:-----------|:----------|----------:|--------:|--------:|
-| fast       | ≤ 55 B    | 138549 B  | 22.6 ms | 13.4 ms |
-| fast       | 56–119 B  | 142470 B  | 26.1 ms | 14.5 ms |
-| medium     | ≤ 55 B    | 115055 B  | 31.6 ms | 22.6 ms |
-| medium     | 56–119 B  | 118976 B  | 35.6 ms | 24.2 ms |
-| small      | ≤ 55 B    | 98243 B   | 64.6 ms | 56.0 ms |
-| small      | 56–119 B  | 101990 B  | 69.0 ms | 57.8 ms |
+| fast       | ≤ 55 B    | 115637 B  | 26.8 ms | 13.6 ms |
+| fast       | 56–119 B  | 119558 B  | 30.2 ms | 14.6 ms |
+| medium     | ≤ 55 B    | 97615 B   | 34.4 ms | 21.4 ms |
+| medium     | 56–119 B  | 101536 B  | 37.9 ms | 22.3 ms |
+| small      | ≤ 55 B    | 84451 B   | 62.9 ms | 49.3 ms |
+| small      | 56–119 B  | 88198 B   | 66.1 ms | 50.4 ms |
 
-Without deriving the binary witness (`WitnessPrg::none`), proofs are
+Without deriving the witnesses (`WitnessPrg::none`), proofs are
 192505 B (fast), 169011 B (medium) and 131451 B (small) for messages of up to
-55 bytes, and proving takes 15–25% longer. Computing the comb tables for a
+55 bytes, and proving takes up to 20% longer. With the MQ PRG (`WitnessPrg::mq`),
+only the binary witness is derived: proofs are 139569 B (fast), 116075 B
+(medium) and 98903 B (small), and proving takes about 0.8 s. Computing the comb tables for a
 public key takes another 6 ms. Prover and verifier both do this. Measured with
 Apple clang 21, release build.
 

@@ -90,7 +90,7 @@ template <size_t NA, Vole V, BinPrg PRG> struct Scheme {
     using Bin = BinRelation<NA, V == Vole::small, PRG>;
     using VP = std::conditional_t<V == Vole::small, vp::Small,
                                   std::conditional_t<V == Vole::medium, vp::Medium, vp::Fast>>;
-    using AR = ArithRelation<PRG != BinPrg::none>;
+    using AR = ArithRelation<PRG == BinPrg::local>;
     using Arith = vp::Layout<AR, VP>;
 
     static constexpr size_t BIN_BYTES = vole_mole::detail::PROOF_BYTES<Bin>;

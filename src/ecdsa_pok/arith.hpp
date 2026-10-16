@@ -45,6 +45,7 @@
 #include "ecdsa_pok/link.hpp"
 #include "p256/curve.hpp"
 #include "p256/field.hpp"
+#include "voleith_p256/prg.hpp"
 
 #include <array>
 #include <cstddef>
@@ -348,6 +349,15 @@ struct ArithRelation {
             ctx.add_n(yn);
         }
     }
+};
+
+// R, with its F_p witness derived from a key with the local PRG over F_p if DERIVED (see
+// voleith_p256/voleith.hpp, step 6). Each witness element then costs one field element of proof
+// instead of TAU, the key prg_key_len(R::LP) elements, TAU each, and the QuickSilver degree over
+// F_p doubles; it's worth it for large witnesses (e.g., 196 elements, but not 98).
+template <typename R, bool DERIVED> struct WithDerivedWitness : R {
+    static constexpr size_t KP = DERIVED ? voleith_p256::prg_key_len(R::LP) : 0;
+    static_assert(!DERIVED || (KP > 0 && KP < R::LP));
 };
 
 } // namespace vole_mole::ecdsa_pok::detail

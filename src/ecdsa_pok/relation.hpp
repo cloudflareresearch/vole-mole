@@ -111,7 +111,10 @@ template <size_t NB, Vole V, BinPrg PRG> struct Scheme {
     using Bin = BinRelation<NB, V == Vole::small, PRG>;
     using VP = std::conditional_t<V == Vole::small, vp::Small,
                                   std::conditional_t<V == Vole::medium, vp::Medium, vp::Fast>>;
-    using Arith = vp::Layout<ArithRelation, VP>;
+    // With the local PRG, the F_p witness is derived too (with the MQ PRG, it isn't: the local PRG
+    // over F_p is an experimental assumption).
+    using AR = WithDerivedWitness<ArithRelation, PRG == BinPrg::local>;
+    using Arith = vp::Layout<AR, VP>;
 
     static constexpr size_t BIN_BYTES = vole_mole::detail::PROOF_BYTES<Bin>;
     static constexpr size_t ARITH_BYTES = Arith::PROOF_BYTES;
@@ -352,7 +355,7 @@ void prove_with_witness(std::span<uint8_t, Scheme<NB, V, PRG>::PROOF_BYTES> proo
     }
 
     // Commit to the witness over F_p and F_n.
-    auto arith_state = vp::prove_commit<ArithRelation, VP>(
+    auto arith_state = vp::prove_commit<typename S::AR, VP>(
         ar, mu, std::span<const Fp, LP>(wit.wp), std::span<const Fn, LN>(wit.wn), rho_arith);
 
     // The binary witness prefix, and its commitment.
@@ -389,7 +392,7 @@ void prove_with_witness(std::span<uint8_t, Scheme<NB, V, PRG>::PROOF_BYTES> proo
     // Finish the proof over F_p and F_n.
     const ArithInstance ar_inst = arith_instance(&tables, chal, zn, zp, y);
     const Digest binder = arith_binder(chal, proof.subspan(S::OFF_ZN));
-    vp::prove_finish<ArithRelation, VP>(ar, arith_state, ar_inst, binder);
+    vp::prove_finish<typename S::AR, VP>(ar, arith_state, ar_inst, binder);
 }
 
 template <size_t NB, Vole V, BinPrg PRG>
@@ -426,7 +429,7 @@ bool verify_proof(std::span<const uint8_t, Scheme<NB, V, PRG>::PROOF_BYTES> proo
     if (!pending) {
         return false;
     }
-    const auto arith_state = vp::verify_commit<ArithRelation, VP>(ar, mu);
+    const auto arith_state = vp::verify_commit<typename S::AR, VP>(ar, mu);
     if (!arith_state) {
         return false;
     }
@@ -442,7 +445,7 @@ bool verify_proof(std::span<const uint8_t, Scheme<NB, V, PRG>::PROOF_BYTES> proo
 
     const ArithInstance ar_inst = arith_instance(&tables, chal, zn, zp, y);
     const Digest binder = arith_binder(chal, proof.subspan(S::OFF_ZN));
-    return vp::verify_finish<ArithRelation, VP>(ar, *arith_state, ar_inst, binder);
+    return vp::verify_finish<typename S::AR, VP>(ar, *arith_state, ar_inst, binder);
 }
 
 } // namespace vole_mole::ecdsa_pok::detail

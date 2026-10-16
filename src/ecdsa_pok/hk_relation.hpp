@@ -62,7 +62,10 @@ template <Vole V, BinPrg PRG> struct Scheme {
     using Bin = BinRelation<V == Vole::small, PRG>;
     using VP = std::conditional_t<V == Vole::small, vp::Small,
                                   std::conditional_t<V == Vole::medium, vp::Medium, vp::Fast>>;
-    using Arith = vp::Layout<HkArithRelation, VP>;
+    // With the local PRG, the F_p witness is derived too (with the MQ PRG, it isn't: the local PRG
+    // over F_p is an experimental assumption).
+    using AR = WithDerivedWitness<HkArithRelation, PRG == BinPrg::local>;
+    using Arith = vp::Layout<AR, VP>;
 
     static constexpr size_t BIN_BYTES = vole_mole::detail::PROOF_BYTES<Bin>;
     static constexpr size_t ARITH_BYTES = Arith::PROOF_BYTES;
@@ -302,7 +305,7 @@ void prove_with_witness(std::span<uint8_t, Scheme<V, PRG>::PROOF_BYTES> proof, c
         std::memcpy(rho_bin.data(), b.data() + rho_arith.size(), rho_bin.size());
     }
 
-    auto arith_state = vp::prove_commit<HkArithRelation, VP>(
+    auto arith_state = vp::prove_commit<typename S::AR, VP>(
         ar, mu, std::span<const Fp, LP>(wit.wp), std::span<const Fn, LN>(wit.wn), rho_arith);
 
     std::vector<uint8_t> bin_witness(Bin::RELATION_WITNESS_BITS / 8, 0);
@@ -334,7 +337,7 @@ void prove_with_witness(std::span<uint8_t, Scheme<V, PRG>::PROOF_BYTES> proof, c
 
     const ArithInstance ar_inst = hk::arith_instance(e, chal, zn, zp, y);
     const Digest binder = hk::arith_binder(chal, proof.subspan(S::OFF_ZN));
-    vp::prove_finish<HkArithRelation, VP>(ar, arith_state, ar_inst, binder);
+    vp::prove_finish<typename S::AR, VP>(ar, arith_state, ar_inst, binder);
 }
 
 template <Vole V, BinPrg PRG>
@@ -367,7 +370,7 @@ bool verify_proof(std::span<const uint8_t, Scheme<V, PRG>::PROOF_BYTES> proof, c
     if (!pending) {
         return false;
     }
-    const auto arith_state = vp::verify_commit<HkArithRelation, VP>(ar, mu);
+    const auto arith_state = vp::verify_commit<typename S::AR, VP>(ar, mu);
     if (!arith_state) {
         return false;
     }
@@ -382,7 +385,7 @@ bool verify_proof(std::span<const uint8_t, Scheme<V, PRG>::PROOF_BYTES> proof, c
 
     const ArithInstance ar_inst = hk::arith_instance(e, chal, zn, zp, y);
     const Digest binder = hk::arith_binder(chal, proof.subspan(S::OFF_ZN));
-    return vp::verify_finish<HkArithRelation, VP>(ar, *arith_state, ar_inst, binder);
+    return vp::verify_finish<typename S::AR, VP>(ar, *arith_state, ar_inst, binder);
 }
 
 // Call f.template operator()<V, PRG>() for the parameters.
