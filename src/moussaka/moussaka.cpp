@@ -181,7 +181,7 @@ std::optional<Token> PendingToken::finalize_issue(const uov::PublicKey& pk,
     return Token(std::make_unique<Token::Impl>(Token::Impl{impl->nf, impl->r, response}));
 }
 
-RedeemRequest detail::redeem_request_with_seed(Token&& token, const AnchorSet& anchors, size_t i,
+RedeemRequest detail::redeem_request_with_seed(Token&& token, const AnchorSet& anchors,
                                                const Context& ctx_iss, const Context& ctx_red,
                                                const ChallengeDigest& challenge_digest,
                                                const Seed& seed) {
@@ -189,24 +189,22 @@ RedeemRequest detail::redeem_request_with_seed(Token&& token, const AnchorSet& a
     const Opening& r = TokenAccess::r(token);
     const uov::Preimage& s = TokenAccess::s(token);
 
-    if (i >= anchors.size()) {
-        throw std::invalid_argument("Moussaka: Anchor index is out of range");
-    }
-
-    // Check that the token was issued by the indicated Anchor, in constant time so that this method
-    // doesn't leak the index of the Anchor.
-    uint64_t ok = 0;
-    auto t = commit(nf, ctx_iss, ctx_red, r);
+    // Find the issuing Anchor in constant time so that this method doesn't leak its index.
+    size_t i = 0;
+    uint64_t found = 0;
+    const auto t = commit(nf, ctx_iss, ctx_red, r);
     for (size_t u = 0; u < anchors.size(); ++u) {
-        auto t_u = anchors[u].eval(s);
+        const auto t_u = anchors[u].eval(s);
         uint64_t diff = 0;
         for (size_t j = 0; j < uov::M; ++j) {
             diff |= t[j] ^ t_u[j];
         }
 
-        ok |= vole_mole::detail::ct_eq_mask(u, i) & vole_mole::detail::ct_is_zero_mask(diff);
+        const auto matches = static_cast<size_t>(vole_mole::detail::ct_is_zero_mask(diff));
+        i = (i & ~matches) | (u & matches);
+        found |= matches;
     }
-    if (!ok) {
+    if (!found) {
         throw std::invalid_argument("Moussaka: invalid token");
     }
 
@@ -220,13 +218,13 @@ RedeemRequest detail::redeem_request_with_seed(Token&& token, const AnchorSet& a
     return request;
 }
 
-RedeemRequest Token::redeem_request(const AnchorSet& anchors, size_t i, const Context& ctx_iss,
+RedeemRequest Token::redeem_request(const AnchorSet& anchors, const Context& ctx_iss,
                                     const Context& ctx_red,
                                     const ChallengeDigest& challenge_digest) && {
     if (!impl_) {
         throw std::logic_error("Moussaka: token was moved from");
     }
-    return detail::redeem_request_with_seed(std::move(*this), anchors, i, ctx_iss, ctx_red,
+    return detail::redeem_request_with_seed(std::move(*this), anchors, ctx_iss, ctx_red,
                                             challenge_digest, random_bytes<SEED_BYTES>());
 }
 

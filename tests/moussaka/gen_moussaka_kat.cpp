@@ -98,7 +98,7 @@ int main(int argc, char** argv) {
         const auto redeem_witness =
             detail::encode_redeem_witness(nf, ctx_iss, ctx_red, r, *response, issuer);
         const auto redeem_request = redeem_request_with_seed(
-            std::move(*token), anchors, issuer, ctx_iss, ctx_red, challenge_digest, redeem_seed);
+            std::move(*token), anchors, ctx_iss, ctx_red, challenge_digest, redeem_seed);
         const auto redeemed_nf =
             finalize_redeem(anchors, redeem_request, ctx_iss, ctx_red, challenge_digest);
         if (!redeemed_nf || *redeemed_nf != nf) {
