@@ -242,6 +242,17 @@ chal1/chal2 (recommended, not implemented).
   single-proof error is thus
   `εRO(q₃, q₅, q_E) = q₃·2⁻¹²⁸ + 2⁻¹¹⁰ + 221·(4607 + q_E + 4607)·2⁻¹²⁸ + (q₅ + 1)·2⁻¹²⁸`, about
   `2⁻¹⁰⁶·⁹` at zero budgets.
+- **AES as random permutations** (`ZK/IdealCipherPerm.lean`, `ZK/HopsH4Perm.lean`,
+  `ZK/HopsICPerm.lean`, `ZK/ReadsROPerm.lean`): with the cipher a table of independent uniform
+  permutations, read by the distinguisher as whole permutations (forward and inverse queries),
+  H4 costs `≤ 221·(4607 + q)/(2¹²⁸ − (nHi + 1)) + switchEps` (`hide_rom_query_perm`): the GGM
+  hybrid with permutation rows (a hidden node's value is fresh in its parent's permutation, read
+  elsewhere at `≤ nHi + 1` inputs) plus the PRP/PRF switching term
+  `switchEps = (17·C(2 + VOLE_COL_BLOCKS, 2) + C(nHi + 1, 2))·2⁻¹²⁸` of the hidden leaves' and the
+  root's rows (samples without replacement against uniform values; every other hidden row is read
+  at most once), `≤ 2⁻¹¹³·²` for the relations' parameters (`nHi = 1`). The headline follows
+  (`zk_rom_ic_h23_num_perm`, and as `ZeroKnowledgeRO` on `ShPm p`, `lean_zeroKnowledgeRO_perm`):
+  `q₃·2⁻¹²⁸ + 2⁻¹¹⁰ + 221·(4607 + q_E + 4607)/(2¹²⁸ − (nHi + 1)) + switchEps + (q₅ + 1)·2⁻¹²⁸`.
 - **Two phases** (`zk2_rom_ic_h23_num`, `ZK/TwoPhaseRO.lean`, `ZK/TwoPhaseIC.lean`): the same
   single-proof bound holds for PomFRIT's two-phase prover. The simulator programs `H₂³` at the
   prefix it recomputes for the instance picked after step 1; the fallback block is inside
@@ -310,11 +321,11 @@ runs of each layout.
 "What remains assumed", and §10.3, "Open"):
 - *Modelling steps.* SHAKE128 is a random oracle (a single oracle with L0's domain rule is proved
   equivalent to independent per-domain oracles, `ROM/DomainSep.lean`); AES-128 is an ideal
-  cipher; the cipher's rows are uniform functions, not permutations (the PRP/PRF switching term
-  for the hidden paths' rows is on paper). Soundness no longer has this gap: it is proved with
-  random permutations and inverse queries (§9, plan §2h); the ZK hybrid lets the distinguisher
-  read whole rows, so there the hidden paths' rows would have to become permutations
-  (`ZK/IdealCipher.lean`).
+  cipher. Single-proof zero knowledge is proved with the cipher's rows uniform permutations read
+  forward and backward, the PRP/PRF switching term included (`zk_rom_ic_h23_num_perm`,
+  `lean_zeroKnowledgeRO_perm`; soundness likewise, §9, plan §2h). The multi-proof privacy games
+  are still stated with uniform-function rows (`Sh p`); restating them on the permutation tables
+  `ShPm p` is a mechanical port of their read algebra (`docs/zk.md` §10.3, "Open").
 - *Per-proof `H₃` slices.* The games give each proof its own independent slice; this is exact
   unless two proofs share `(μ₁, wPrefix)` (Moussaka, Ratatouille: `≤ 2⁻¹⁹²`; PomFRIT: two sessions
   with equal `r`), a modelling step on paper (the `ε_iv`-type term).
@@ -619,8 +630,9 @@ What is **not** established, roughly in order of importance:
    With the fix, zero knowledge of the executable Lean prover and the three protocol privacy
    theorems are mechanized in the classical random-oracle and ideal-cipher model, with every
    zero-knowledge and collision term explicit (§3). What remains is listed at the end of §3: the
-   modelling steps (SHAKE as a random oracle, AES as an ideal cipher with the PRP/PRF switching
-   term on paper), independent per-proof `H₃` slices, the seed-XOF hop, the hiding of `Com`, the
+   modelling steps (SHAKE as a random oracle, AES as an ideal cipher; the PRP/PRF switching term
+   is proved for one proof, `zk_rom_ic_h23_num_perm`, the games are stated with function rows),
+   independent per-proof `H₃` slices, the seed-XOF hop, the hiding of `Com`, the
    consistency of a table-reading interaction, a PomFRIT interaction that reads `H₂³` (open),
    Moussaka's non-colluding mode (Thm 4b), the general game schedule and the quantum versions.
    The abstract privacy theorems (`VoleMole/Privacy/`) take per-proof zero knowledge and hiding of

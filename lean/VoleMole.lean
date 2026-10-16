@@ -167,6 +167,10 @@ import VoleMole.Privacy.MoussakaLean
 import VoleMole.Privacy.RatatouilleLean
 import VoleMole.Privacy.ZeroKnowledgeRO
 import VoleMole.ZK.ReadsRO
+import VoleMole.ZK.IdealCipherPerm
+import VoleMole.ZK.HopsH4Perm
+import VoleMole.ZK.HopsICPerm
+import VoleMole.ZK.ReadsROPerm
 import VoleMole.Privacy.MoussakaRO
 import VoleMole.Privacy.RatatouilleRO
 import VoleMole.ZK.TwoPhaseRO
