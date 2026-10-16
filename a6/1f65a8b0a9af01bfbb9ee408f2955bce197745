@@ -1,0 +1,29 @@
+src/voleith_p256/prg.hpp
+  s_45ee28f7dc1e9b::t_39a1ee373547f1 1-170
+src/voleith_p256/prg_key_len.hpp
+  s_45ee28f7dc1e9b::t_07448290d6094b 1-43
+src/voleith_p256/qs.hpp
+  s_45ee28f7dc1e9b::t_a57ae83b675fa6 52-61,153-157,261
+src/voleith_p256/voleith.hpp
+  s_45ee28f7dc1e9b::t_ac0c7dabfe3d21 57-66,73-75,87,164,425-443,447-450,452,454-456,464-466,477,488,506-507,538-562,673,675-676,681-684,755-756,763-774,788-789,824,873,875,878,892-899,1016,1019,1033,1060-1071,1082-1083
+tests/voleith_p256/test_voleith_p256.cpp
+  s_45ee28f7dc1e9b::t_8dcaad5437c3d7 113-251
+tools/fp_prg_key_len.py
+  s_45ee28f7dc1e9b::t_09ebad39fec8dc 1-101
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.10",
+  "base_commit_sha": "a61f65a8b0a9af01bfbb9ee408f2955bce197745",
+  "prompts": {},
+  "sessions": {
+    "s_45ee28f7dc1e9b": {
+      "agent_id": {
+        "tool": "opencode",
+        "id": "ses_ebfe7e377ffe00JYcsmgH2SCOu",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Bas Westerbaan <bas@cloudflare.com>"
+    }
+  }
+}
