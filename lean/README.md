@@ -40,7 +40,9 @@ scope.
   zero-knowledge and collision term explicit (between about `2⁻¹⁰¹` and `2⁻¹⁰³·⁴` plus budget terms and, for
   Moussaka and Ratatouille, `2·εhide`), also with interactions that read the tables, one shared
   `H₃`, and the real Clients' seeds; Moussaka's non-colluding mode (Thm 4(b), corrected) from
-  per-proof zero knowledge (§3, §5).
+  per-proof zero knowledge, and in the random-oracle and ideal-cipher model with the honest
+  Anchors running the Lean verifier on the shared tables (about `2⁻¹⁰³·²` plus budget terms and
+  the abort term; §3, §5).
 - *`main` is not zero-knowledge.* The PomFRIT Issuer's attack test, and the (PU) bound for the
   others (§3).
 - Deterministic cores of the protocol notes (Lemma P, the domain-separation table, UOV-assumption
@@ -319,7 +321,9 @@ chal1/chal2 (recommended, not implemented).
   the two-phase theorem is `ZeroKnowledgeROS` (`lean_zeroKnowledgeROS2`: a simulator that may read
   the tables it does not program). The executable prover reads the cipher at `≤ 4607` and `H₅` at
   `≤ 624` keys, the simulator's programming at `≤ 4607` and `≤ 312` (`realRO_rdE`, `realRO_rd5`,
-  `progRO_isProg`), which bounds what a reduction that runs the other proofs itself reads.
+  `progRO_isProg`), and the executable verifier at `≤ 4607` and `≤ 312` (`verRO_rdE`,
+  `verRO_rd5`, `ZK/VerifyReadsRO.lean`), which bounds what a reduction that runs the other proofs
+  (or verifications) itself reads.
   `hop_ro` is the hybrid step for proofs sharing the tables; each step after the first costs an
   explicit programming-collision term `δ`.
 - Moussaka anonymity and Ratatouille unlinkability, with the adversary's guess seeing all tables
@@ -447,9 +451,20 @@ of the issuance proofs or of `Com`. `anonymityNC`: `≤ 4εR + 2·(φ₀ + φ₁
 that Anchor `c`'s `derive_preimage` fails on a uniform Client's commitment, for a Client that takes
 its index from the Anchor Set; `anonymityNC_vinegarRO`: `≤ 4εR + 2·(δ₀²⁵⁶ + δ₁²⁵⁶)` on average
 over a random-oracle vinegar hash; `unlinkabilityNC`: `≤ 4εR` for one Anchor and any index rule;
-with the Lean redemption prover `anonymityNC_label_rows`, `_shake`, `unlinkabilityNC_label_rows`.
-This is at the level of per-proof zero knowledge (and the tape or hop hypotheses), not in the
-random-oracle and ideal-cipher model.
+with the Lean redemption prover `anonymityNC_label_rows`, `_shake`, `unlinkabilityNC_label_rows`
+(per-proof zero knowledge, down to the tape or hop hypotheses).
+- **In the random-oracle and ideal-cipher model** (`Privacy/MoussakaNCRO.lean`,
+  `ZK/VerifyReadsRO.lean`, `docs/zk.md` §10.7): the issuance proofs, the honest Anchors' Lean
+  **verifier** of them and the redemption proofs all run on the shared tables, which the guess
+  sees. The executable verifier reads `H₅` at `≤ 312` keys and the cipher at `≤ 4607`
+  (`verRO_rd5`, `verRO_rdE`; `H₂³` at one point, no `H₃`), so each redemption hop's reduction runs
+  both issuances and verifications itself (`+ 2496` `H₅`, `+ 23035` cipher reads); running them on
+  the tables after the redemptions' programming needs no collision term for them, and the right
+  hop's (`deltaNC`) is `≤ noHitProb + 2⁻¹⁰²⁴`. `anonymityNCRO_lean_num`: `≤ 4·εRO(q₃, q₅ + 2496,
+  q_E + 23035) + 2·(noHitProb + 2⁻¹⁰²⁴) + 2·(φ₀ + φ₁) + 4·q₃·2⁻¹²⁸` (about `2⁻¹⁰³·²` plus the
+  budget terms and the abort term; `4·q₃·2⁻¹²⁸` for the issuance slices the guess sees),
+  `unlinkabilityNCRO_lean_num` the same without the abort term, both with `_perm`, and
+  `anonymityNCRO_vinegarRO`.
 
 `lake exe zk_sim` checks the tape equation, the simulator and the ideal-tape prover on all 18 KAT
 runs of each layout.
@@ -474,9 +489,10 @@ runs of each layout.
   with per-slice budgets (`IBudget` with `i₂ > 0`), and not yet with one shared `H₃`; the two-phase
   zero-knowledge theorem with a continuation that reads `H₂³` is not stated (the game does not
   need it).
-- *Moussaka's non-colluding mode* is not in the random-oracle and ideal-cipher model (the honest
-  Anchors' verification of the issuance proofs reads the shared tables, and the Lean verifier's
-  read budgets are not proved), and the seed-XOF hop is not applied to it.
+- *Moussaka's non-colluding mode* in the random-oracle and ideal-cipher model
+  (`anonymityNCRO_lean_num`) has a table-oblivious adversary interaction (no `RA`/`OC` version),
+  per-proof `H₃` slices (no shared-`H₃` version) and uniform seed outputs (the seed-XOF hop is not
+  applied to it).
 - *Scope of the games.* Fixed sizes (two sessions, two Clients, the stated rounds); PomFRIT's
   contexts in a finite type (the seed-XOF model); the general schedule and every quantum statement
   (`docs/zk-qrom.md`) are on paper.
@@ -775,7 +791,8 @@ What is **not** established, roughly in order of importance:
    random oracle and AES as an ideal cipher, Lemma DS (c) for PomFRIT's seed XOF, hiding of
    `Com`, consistency of interactions given as bare functions of the tables, PomFRIT's
    `H₂³`-reading Issuer under per-slice budgets or one shared `H₃`, Moussaka's non-colluding mode
-   in the random-oracle model, the general game schedule and the quantum versions.
+   with table-reading choices, one shared `H₃` or the real Clients' seeds, the general game
+   schedule and the quantum versions.
    The abstract privacy theorems (`VoleMole/Privacy/`) take per-proof zero knowledge and hiding of
    `Com` as hypotheses, so they apply to any proof system with the label-row fix; on `main` the
    joint (PU) hop over proofs sharing `r` replaces the per-proof hypothesis and is paper. Every
