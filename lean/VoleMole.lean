@@ -223,6 +223,7 @@ import VoleMole.Privacy.MoussakaNCSh
 import VoleMole.Privacy.SeedXOFNC
 import VoleMole.ZK.ReadsMany
 import VoleMole.Privacy.PomFRITMany
+import VoleMole.Privacy.PomFRITAdaptive
 import VoleMole.Privacy.MoussakaMany
 import VoleMole.Privacy.RatatouilleMany
 import VoleMole.ZK.AcceptVarData

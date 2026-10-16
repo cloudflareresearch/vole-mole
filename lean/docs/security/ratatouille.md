@@ -755,7 +755,13 @@ and determinism of `Tag`. The witness satisfies V3 by `change_correct`. ∎
   spend requests seen by the Issuer's stage 2), the game is mechanized as a reduction to the
   table-reading game (`unlinkabilityN_lean_num`, `≤ n·2⁻¹⁰¹ + 8·(q₃ + q₅ + 221·q_E)·2⁻¹²⁸ +
   2·εhide` for `n` Clients in all: `2⁻⁸¹` at `2²⁰`, `2⁻⁶⁹` at `2³²`; `unlinkabilityN_lean_le`,
-  `Privacy/RatatouilleMany.lean`, `lean/docs/zk.md` §10.8). The general adaptive schedule (more
-  spends per Client, sessions started after earlier outcomes) is on paper.
+  `Privacy/RatatouilleMany.lean`, `lean/docs/zk.md` §10.8). With `N` challenge pairs (each with its
+  own two rounds, the Issuer's stages seeing every pair, round 1's requests only where §6's rule
+  runs round 1), a hybrid over the pairs, each step a reduction to the table-reading game whose
+  Issuer runs the other pairs (`unlinkabilityP_lean_num`, `≤ N·(N·2⁻¹⁰¹ + 2·εhide)` plus budget
+  terms: `2⁻⁶³` at `2²⁰` Clients, `2⁻³⁹` at `2³²`; quadratic by an artifact of the proof). The
+  general adaptive schedule (more spends per Client, sessions started after earlier outcomes) is
+  on paper: sessions before the challenge would have to influence the Issuer's key, context and
+  balance, which the table-reading game keeps fixed.
 - The Lean file covers the accounting and the 64-bit arithmetic only. Extraction, binding and
   forgery are paper arguments.
