@@ -32,6 +32,12 @@ share them. The structure is `Privacy/MoussakaRO.lean`'s:
 
     |Pr[world (b₁, b₂)] − Pr[world (b₁', b₂')]| ≤ 8·εRO(q₃, q₅ + 3·624, q_E + 3·4607)
       + Σ over both worlds (δI₁ + δS₁ + δS₂) + 2·εhide.
+
+**Cipher rows.** Everything here is stated for every type of cipher rows `R` (the shared
+tables `ZK.Sim.ShG R p`, `ZK/ReadsRO.lean`) with `ZKRow R`; `unlinkabilityRO_leanG` is the generic
+Lean-prover bound and `unlinkabilityRO_lean` its instance at function rows (`Blk → Blk`, the PRF
+view); `Privacy/PermRO.lean` instantiates it at permutation rows (AES as uniformly random
+permutations, the adversary reading whole rows: forward and inverse queries).
 -/
 
 open Finset
@@ -39,16 +45,18 @@ open Finset
 -- (The coin types are large products: their `Fintype` instances exceed the default size.)
 set_option synthInstance.maxSize 1024
 
+set_option linter.unusedSectionVars false
+
 namespace VoleMole.Privacy.Ratatouille
 
 open VoleMole.Spec.Ratatouille VoleMole.ZK.Sim
 
-variable {Z : Sizes}
+variable {Z : Sizes} {R : Type} [Fintype R] [Nonempty R]
 
 /-! ## The model -/
 
 /-- **The tables the four proofs share.** -/
-abbrev ShR := Sh pI
+abbrev ShR (R : Type) := ShG R pI
 
 /-- The four proofs' `H₃` slices: issuance `0`, `1`; spend `1`, `2`. -/
 abbrev SlicesR := Quad Tab3
@@ -59,7 +67,7 @@ abbrev Rounds (Z : Sizes) :=
 
 /-- **The malicious Issuer in the random-oracle model**: `Adversary`'s interaction, which does not
 read the tables, and a guess that sees all of them. -/
-structure AdversaryRO (Z : Sizes) where
+structure AdversaryRO (R : Type) (Z : Sizes) where
   pk : PublicKey
   ctx : Context
   tInit : Credits
@@ -67,19 +75,19 @@ structure AdversaryRO (Z : Sizes) where
   d₁ : IssTr Z → Credits
   respond₁ : IssTr Z → Except Error (SpendRequest Z) → SpendResponse
   d₂ : IssTr Z → Except Error (SpendRequest Z) → Credits
-  guess : IssTr Z → Rounds Z → SlicesR → ShR → Prop
+  guess : IssTr Z → Rounds Z → SlicesR → ShR R → Prop
 
 /-- The interaction as an `Adversary` (its guess is not used). -/
-def AdversaryRO.base (A : AdversaryRO Z) : Adversary Z :=
+def AdversaryRO.base (A : AdversaryRO R Z) : Adversary Z :=
   ⟨A.pk, A.ctx, A.tInit, A.respondIss, A.d₁, A.respond₁, A.d₂, fun _ _ => True⟩
 
 /-- **The adversary as an `Adversary` that sees the tables `V tr y` and the slices `sl`.** -/
-def AdversaryRO.at (A : AdversaryRO Z) (V : IssTr Z → Rounds Z → ShR) (sl : SlicesR) : Adversary Z :=
+def AdversaryRO.at (A : AdversaryRO R Z) (V : IssTr Z → Rounds Z → ShR R) (sl : SlicesR) : Adversary Z :=
   ⟨A.pk, A.ctx, A.tInit, A.respondIss, A.d₁, A.respond₁, A.d₂, fun tr y => A.guess tr y sl (V tr y)⟩
 
 /-- **The Issuer's budget**: its guess reads each `H₃` slice at `q3` keys, `H₅` at `q5` and the
 cipher at `qE` keys (each with everything else fixed), and `H₂³` freely. -/
-structure AdversaryRO.Budget (A : AdversaryRO Z) (q3 q5 qE : ℕ) : Prop where
+structure AdversaryRO.Budget (A : AdversaryRO R Z) (q3 q5 qE : ℕ) : Prop where
   h30 : ∀ tr y (g₁ g₂ g₃ : Tab3) s, Rd3 (fun g => A.guess tr y ((g, g₁), (g₂, g₃)) s) q3
   h31 : ∀ tr y (g₀ g₂ g₃ : Tab3) s, Rd3 (fun g => A.guess tr y ((g₀, g), (g₂, g₃)) s) q3
   h32 : ∀ tr y (g₀ g₁ g₃ : Tab3) s, Rd3 (fun g => A.guess tr y ((g₀, g₁), (g, g₃)) s) q3
@@ -87,26 +95,26 @@ structure AdversaryRO.Budget (A : AdversaryRO Z) (q3 q5 qE : ℕ) : Prop where
   h5 : ∀ tr y sl, Rd5 (A.guess tr y sl) q5
   hE : ∀ tr y sl, RdE (A.guess tr y sl) qE
 
-variable (A : AdversaryRO Z)
+variable (A : AdversaryRO R Z)
 
 /-- An issuance slot: its output on the tables, its programming, its `H₃` slice. -/
-structure IssSlotR (Z : Sizes) where
-  out : ShR → IssOut Z TokenS
-  prog : ShR → ShR
+structure IssSlotR (R : Type) (Z : Sizes) where
+  out : ShR R → IssOut Z TokenS
+  prog : ShR R → ShR R
   slice : Tab3
 
 /-- A spend slot: its output at a token and an amount on the tables, its programming (given
 whether its round runs), its `H₃` slice. -/
-structure SpSlotR (Z : Sizes) where
-  out : TokenS → Credits → ShR → SpOut Z TokenS
-  prog : Bool → TokenS → Credits → ShR → ShR
+structure SpSlotR (R : Type) (Z : Sizes) where
+  out : TokenS → Credits → ShR R → SpOut Z TokenS
+  prog : Bool → TokenS → Credits → ShR R → ShR R
   slice : Tab3
 
 /-- **The view in world `(b₁, b₂)`** from four slots and the tables `t`: the issuances on `t`
 programmed by the issuance slots; round 1 (and round 2) at `t` programmed by all slots, a spend
 slot programming only if its round runs (decided on a provisional round 1 on the issuance tables:
 a simulated round 1 does not read the tables). -/
-def viewR (b₁ b₂ : Bool) (s₀ s₁ : IssSlotR Z) (h₁ h₂ : SpSlotR Z) (t : ShR) : Prop :=
+def viewR (b₁ b₂ : Bool) (s₀ s₁ : IssSlotR R Z) (h₁ h₂ : SpSlotR R Z) (t : ShR R) : Prop :=
   let u := s₀.prog (s₁.prog t)
   let i₀ := s₀.out u
   let i₁ := s₁.out u
@@ -129,26 +137,26 @@ def viewR (b₁ b₂ : Bool) (s₀ s₁ : IssSlotR Z) (h₁ h₂ : SpSlotR Z) (t
     ((s₀.slice, s₁.slice), (h₁.slice, h₂.slice)) v
 
 /-- The game with the slots drawn from their parts of the tape. -/
-def gameR {T₀ T₁ T₂ T₃ : Type} (b₁ b₂ : Bool) (g₀ : T₀ → IssSlotR Z) (g₁ : T₁ → IssSlotR Z)
-    (k₁ : T₂ → SpSlotR Z) (k₂ : T₃ → SpSlotR Z) (x : ((T₀ × T₁) × (T₂ × T₃)) × ShR) : Prop :=
+def gameR {T₀ T₁ T₂ T₃ : Type} (b₁ b₂ : Bool) (g₀ : T₀ → IssSlotR R Z) (g₁ : T₁ → IssSlotR R Z)
+    (k₁ : T₂ → SpSlotR R Z) (k₂ : T₃ → SpSlotR R Z) (x : ((T₀ × T₁) × (T₂ × T₃)) × ShR R) : Prop :=
   viewR A b₁ b₂ (g₀ x.1.1.1) (g₁ x.1.1.2) (k₁ x.1.2.1) (k₂ x.1.2.2) x.2
 
 /-! ## The slots -/
 
 /-- An issuance prover of the random-oracle model: the proof (or `none`) of `w` for `x` with
 randomness `ρ`, the proof's `H₃` slice and the shared tables. -/
-abbrev ProverI (Z : Sizes) := IssueInstance → IssueWitness → Rho → Tab3 → ShR → Option (IssueProof Z)
+abbrev ProverI (R : Type) (Z : Sizes) := IssueInstance → IssueWitness → Rho → Tab3 → ShR R → Option (IssueProof Z)
 
 /-- A spend prover of the random-oracle model. -/
-abbrev ProverS (Z : Sizes) := SpendInstance → SpendWitness → Rho → Tab3 → ShR → Option (SpendProof Z)
+abbrev ProverS (R : Type) (Z : Sizes) := SpendInstance → SpendWitness → Rho → Tab3 → ShR R → Option (SpendProof Z)
 
 /-- The issuance prover with the tables fixed, as the spec's primitives (the rest unused). -/
-def primI (PI : ProverI Z) (g : Tab3) (s : ShR) : Prim Z Empty :=
+def primI (PI : ProverI R Z) (g : Tab3) (s : ShR R) : Prim Z Empty :=
   ⟨fun e => e.elim, fun e => e.elim, fun x w ρ => PI x w ρ g s, fun _ _ => true,
     fun _ _ _ => none, fun _ _ => true⟩
 
 /-- The spend prover with the tables fixed, as the spec's primitives. -/
-def primS (PS : ProverS Z) (g : Tab3) (s : ShR) : Prim Z Empty :=
+def primS (PS : ProverS R Z) (g : Tab3) (s : ShR R) : Prim Z Empty :=
   ⟨fun e => e.elim, fun e => e.elim, fun _ _ _ => none, fun _ _ => true,
     fun x w ρ => PS x w ρ g s, fun _ _ => true⟩
 
@@ -159,23 +167,23 @@ abbrev NRR := Coins 24 × Coins 16
 abbrev TRe := NRR × (Coins 16 × Tab3)
 
 /-- **A real issuance**: the spec's `issue_request_with_seed` with the prover on the tables. -/
-def issRealR (PI : ProverI Z) (x : TRe) : IssSlotR Z :=
+def issRealR (PI : ProverI R Z) (x : TRe) : IssSlotR R Z :=
   ⟨fun s => issOutOf A.base (issueOf (primI PI x.2.2 s) A.tInit A.ctx (vec x.1.1) (vec x.1.2)
     (vec x.2.1)), fun s => s, x.2.2⟩
 
 /-- **A real spend**: the spec's `spend_request_with_seed` with the prover on the tables. -/
-def spRealR (PS : ProverS Z) (x : TRe) : SpSlotR Z :=
+def spRealR (PS : ProverS R Z) (x : TRe) : SpSlotR R Z :=
   ⟨fun τ d s => spOutOf A.base (spendOf (primS PS x.2.2 s) A.pk (some τ) d A.ctx (vec x.1.1)
     (vec x.1.2) (vec x.2.1)).2, fun _ _ _ s => s, x.2.2⟩
 
 /-- **The real game in the random-oracle model.** -/
-def realGameR (PI : ProverI Z) (PS : ProverS Z) (b₁ b₂ : Bool) :
-    ((TRe × TRe) × (TRe × TRe)) × ShR → Prop :=
+def realGameR (PI : ProverI R Z) (PS : ProverS R Z) (b₁ b₂ : Bool) :
+    ((TRe × TRe) × (TRe × TRe)) × ShR R → Prop :=
   gameR A b₁ b₂ (issRealR A PI) (issRealR A PI) (spRealR A PS) (spRealR A PS)
 
 variable {CI CS : Type} (simI : IssueInstance → CI → Option (IssueProof Z))
   (simS : SpendInstance → CS → Option (SpendProof Z))
-  (progI : IssueInstance → CI → ShR → ShR) (progS : SpendInstance → CS → ShR → ShR)
+  (progI : IssueInstance → CI → ShR R → ShR R) (progS : SpendInstance → CS → ShR R → ShR R)
 
 /-- The issuance instance of the coins `(nf, r)`. -/
 def xIOf (n : NRR) : IssueInstance := ⟨com (vec n.1) A.ctx A.tInit (vec n.2), A.tInit, A.ctx⟩
@@ -187,13 +195,13 @@ def xSOf (n : NRR) (τ : TokenS) (d : Credits) : SpendInstance :=
 
 /-- **A simulated issuance**: the simulated request, and the programming (none if `T_init = 0`:
 nothing is proved). -/
-def issSimR (x : NRR × (CI × Tab3)) : IssSlotR Z :=
+def issSimR (x : NRR × (CI × Tab3)) : IssSlotR R Z :=
   ⟨fun _ => issSim A.base simI (x.1.1, x.1.2, x.2.1),
     fun s => if A.tInit = 0 then s else progI (xIOf A x.1) x.2.1 s, x.2.2⟩
 
 /-- **A simulated spend**: the Client's checks and a simulated proof, and the programming if its
 round runs. -/
-def spSimR (x : NRR × (CS × Tab3)) : SpSlotR Z :=
+def spSimR (x : NRR × (CS × Tab3)) : SpSlotR R Z :=
   ⟨fun τ d _ => spSim A.base simS (x.1.1, x.1.2, x.2.1) τ d,
     fun ok τ d s => if ok = true then progS (xSOf A x.1 τ d) x.2.1 s else s, x.2.2⟩
 
@@ -202,7 +210,7 @@ abbrev TIsR (CI : Type) := NRR × (CI × Tab3)
 abbrev TSsR (CS : Type) := NRR × (CS × Tab3)
 
 /-- The game with all four proofs simulated. -/
-def simGameR (b₁ b₂ : Bool) : ((TIsR CI × TIsR CI) × (TSsR CS × TSsR CS)) × ShR → Prop :=
+def simGameR (b₁ b₂ : Bool) : ((TIsR CI × TIsR CI) × (TSsR CS × TSsR CS)) × ShR R → Prop :=
   gameR A b₁ b₂ (issSimR A simI progI) (issSimR A simI progI) (spSimR A simS progS)
     (spSimR A simS progS)
 
@@ -214,14 +222,14 @@ def dummyC : Commitment := Vector.ofFn fun _ => 0
 /-- **An issuance simulation's programming from its request**: the instance's commitment is the
 request's (a simulation that produced no proof programs independently of the instance,
 `hprogI`). -/
-def progIm (c : CI) (req : Except Error (IssueRequest Z)) (s : ShR) : ShR :=
+def progIm (c : CI) (req : Except Error (IssueRequest Z)) (s : ShR R) : ShR R :=
   if A.tInit = 0 then s else match req with
     | .ok q => progI ⟨issueReqC q, A.tInit, A.ctx⟩ c s
     | .error _ => progI ⟨dummyC, A.tInit, A.ctx⟩ c s
 
 /-- **A spend simulation's programming from its request** (the instance is the request's
 nullifier, amount and new commitment). -/
-def progSm (c : CS) (rq : Except Error (SpendRequest Z)) (s : ShR) : ShR :=
+def progSm (c : CS) (rq : Except Error (SpendRequest Z)) (s : ShR R) : ShR R :=
   match rq with
   | .ok q => progS ⟨A.pk, (SpendReq.parse q).nf, (SpendReq.parse q).d, (SpendReq.parse q).cNext,
       A.ctx⟩ c s
@@ -230,7 +238,7 @@ def progSm (c : CS) (rq : Except Error (SpendRequest Z)) (s : ShR) : ShR :=
 /-- **The programmed tables as a function of what the Issuer sees** (the requests and the rounds)
 and of the simulator coins: the issuances' programming, round 1's if it runs, round 2's if it
 runs. -/
-def Vtab (co : (CI × CI) × (CS × CS)) (t : ShR) (tr : IssTr Z) (y : Rounds Z) : ShR :=
+def Vtab (co : (CI × CI) × (CS × CS)) (t : ShR R) (tr : IssTr Z) (y : Rounds Z) : ShR R :=
   progIm A progI co.1.1 tr.1 (progIm A progI co.1.2 tr.2 (match y with
     | none => t
     | some (rq, y₂) => progSm A progS co.2.1 rq (match y₂ with
@@ -259,9 +267,9 @@ lemma ok_of_ok₂ {B : Adversary Z} {tr : IssTr Z} {tk₀ tk₁ ch : Option Toke
 
 /-- **The view's tables are `Vtab` of what the Issuer sees**, for slots whose outputs do not read
 the tables and whose programming is the one of their requests. -/
-theorem viewR_tab (b₁ b₂ : Bool) (i₀ i₁ : IssOut Z TokenS) (P₀ P₁ : ShR → ShR)
-    (o₁ o₂ : TokenS → Credits → SpOut Z TokenS) (Q₁ Q₂ : Bool → TokenS → Credits → ShR → ShR)
-    (co : (CI × CI) × (CS × CS)) (t : ShR)
+theorem viewR_tab (b₁ b₂ : Bool) (i₀ i₁ : IssOut Z TokenS) (P₀ P₁ : ShR R → ShR R)
+    (o₁ o₂ : TokenS → Credits → SpOut Z TokenS) (Q₁ Q₂ : Bool → TokenS → Credits → ShR R → ShR R)
+    (co : (CI × CI) × (CS × CS)) (t : ShR R)
     (hP₀ : ∀ s, P₀ s = progIm A progI co.1.1 i₀.req s)
     (hP₁ : ∀ s, P₁ s = progIm A progI co.1.2 i₁.req s)
     (hQ₁ : ∀ τ d s, (tokIface A.base).ok τ d = true →
@@ -300,9 +308,9 @@ theorem viewR_tab (b₁ b₂ : Bool) (i₀ i₁ : IssOut Z TokenS) (P₀ P₁ : 
 
 /-- **The simulated view is `Ratatouille.view` for the adversary that sees `V` and `sl`**, when
 `V` of what the Issuer sees is the view's tables. -/
-theorem viewR_eq_view (b₁ b₂ : Bool) (i₀ i₁ : IssOut Z TokenS) (P₀ P₁ : ShR → ShR) (g₀ g₁ g₂ g₃ : Tab3)
-    (o₁ o₂ : TokenS → Credits → SpOut Z TokenS) (Q₁ Q₂ : Bool → TokenS → Credits → ShR → ShR)
-    (t : ShR) (V : IssTr Z → Rounds Z → ShR)
+theorem viewR_eq_view (b₁ b₂ : Bool) (i₀ i₁ : IssOut Z TokenS) (P₀ P₁ : ShR R → ShR R) (g₀ g₁ g₂ g₃ : Tab3)
+    (o₁ o₂ : TokenS → Credits → SpOut Z TokenS) (Q₁ Q₂ : Bool → TokenS → Credits → ShR R → ShR R)
+    (t : ShR R) (V : IssTr Z → Rounds Z → ShR R)
     (hV : let tr : IssTr Z := (i₀.req, i₁.req)
       let tk₀ := i₀.fin (A.respondIss tr false)
       let tk₁ := i₁.fin (A.respondIss tr true)
@@ -324,7 +332,7 @@ theorem viewR_eq_view (b₁ b₂ : Bool) (i₀ i₁ : IssOut Z TokenS) (P₀ P�
 
 variable {A simI simS progI progS} in
 lemma issSim_prog (hprogI : ∀ x x' c, simI x c = none → progI x c = progI x' c) (n : NRR) (c : CI)
-    (s : ShR) : (if A.tInit = 0 then s else progI (xIOf A n) c s) =
+    (s : ShR R) : (if A.tInit = 0 then s else progI (xIOf A n) c s) =
       progIm A progI c (issSim A.base simI (n.1, n.2, c)).req s := by
   unfold progIm
   by_cases hT : A.tInit = 0
@@ -339,7 +347,7 @@ lemma issSim_prog (hprogI : ∀ x x' c, simI x c = none → progI x c = progI x'
 
 variable {A simI simS progI progS} in
 lemma spSim_prog (hprogS : ∀ x x' c, simS x c = none → progS x c = progS x' c) (n : NRR) (c : CS)
-    (τ : TokenS) (d : Credits) (hok : (tokIface A.base).ok τ d = true) (s : ShR) :
+    (τ : TokenS) (d : Credits) (hok : (tokIface A.base).ok τ d = true) (s : ShR R) :
     progS (xSOf A n τ d) c s = progSm A progS c (spSim A.base simS (n.1, n.2, c) τ d).req s := by
   simp only [tokIface, Bool.and_eq_true, decide_eq_true_eq] at hok
   obtain ⟨hv, hc⟩ := hok
@@ -354,21 +362,21 @@ lemma spSim_prog (hprogS : ∀ x x' c, simS x c = none → progS x c = progS x' 
   | some pf => simp only [parse_toBytes]; rfl
 
 /-- The simulated tape, regrouped as `Ratatouille`'s, the coins, the slices and the tables. -/
-def tapeOfR (x : ((TIsR CI × TIsR CI) × (TSsR CS × TSsR CS)) × ShR) : SimTape CI CS :=
+def tapeOfR (x : ((TIsR CI × TIsR CI) × (TSsR CS × TSsR CS)) × ShR R) : SimTape CI CS :=
   (((x.1.1.1.1.1, x.1.1.1.1.2, x.1.1.1.2.1), (x.1.1.2.1.1, x.1.1.2.1.2, x.1.1.2.2.1)),
     ((x.1.2.1.1.1, x.1.2.1.1.2, x.1.2.1.2.1), (x.1.2.2.1.1, x.1.2.2.1.2, x.1.2.2.2.1)))
 
-def coinsOfR (x : ((TIsR CI × TIsR CI) × (TSsR CS × TSsR CS)) × ShR) : (CI × CI) × (CS × CS) :=
+def coinsOfR (x : ((TIsR CI × TIsR CI) × (TSsR CS × TSsR CS)) × ShR R) : (CI × CI) × (CS × CS) :=
   ((x.1.1.1.2.1, x.1.1.2.2.1), (x.1.2.1.2.1, x.1.2.2.2.1))
 
-def slicesOfR (x : ((TIsR CI × TIsR CI) × (TSsR CS × TSsR CS)) × ShR) : SlicesR :=
+def slicesOfR (x : ((TIsR CI × TIsR CI) × (TSsR CS × TSsR CS)) × ShR R) : SlicesR :=
   ((x.1.1.1.2.2, x.1.1.2.2.2), (x.1.2.1.2.2, x.1.2.2.2.2))
 
 /-- **The simulated game is `Ratatouille.simGame` for the adversary that sees the programmed
 tables** (`Vtab` of the coins and the tables). -/
 theorem simGameR_iff (hprogI : ∀ x x' c, simI x c = none → progI x c = progI x' c)
     (hprogS : ∀ x x' c, simS x c = none → progS x c = progS x' c) (b₁ b₂ : Bool)
-    (x : ((TIsR CI × TIsR CI) × (TSsR CS × TSsR CS)) × ShR) :
+    (x : ((TIsR CI × TIsR CI) × (TSsR CS × TSsR CS)) × ShR R) :
     simGameR A simI simS progI progS b₁ b₂ x ↔
       simGame (A.at (Vtab A progI progS (coinsOfR x) x.2) (slicesOfR x)) simI simS b₁ b₂
         (tapeOfR x) :=
@@ -395,19 +403,19 @@ theorem simGameR_iff (hprogI : ∀ x x' c, simI x c = none → progI x c = progI
 /-! ## The hiding hop and the ideal world -/
 
 /-- The simulator coins, the slices and the tables, fixed in the reductions. -/
-abbrev KR (CI CS : Type) := ((CI × CI) × (CS × CS)) × (SlicesR × ShR)
+abbrev KR (R : Type) (CI CS : Type) := ((CI × CI) × (CS × CS)) × (SlicesR × ShR R)
 
 /-- **The reduction to hiding**: `Ratatouille.reduction` for the Issuer that sees the tables
 programmed with the coins `K.1` on the tables `K.2.2`, and the slices `K.2.1`. -/
-def reductionR (b₁ b₂ : Bool) (K : KR CI CS) : Quad Nullifier → Quad (Credits → Commitment) → Prop :=
+def reductionR (b₁ b₂ : Bool) (K : KR R CI CS) : Quad Nullifier → Quad (Credits → Commitment) → Prop :=
   reduction (A.at (Vtab A progI progS K.1 K.2.2) K.2.1) simI simS b₁ b₂ K.1
 
 /-- The ideal world: uniform commitments. -/
-def idealGameR (b₁ b₂ : Bool) (y : UTape × KR CI CS) : Prop :=
+def idealGameR (b₁ b₂ : Bool) (y : UTape × KR R CI CS) : Prop :=
   reductionR A simI simS progI progS b₁ b₂ y.2 (hideIdeal y.1).1 (hideIdeal y.1).2
 
 /-- Regroup the simulated tape as the hiding tape and the rest. -/
-def regroupR : ((TIsR CI × TIsR CI) × (TSsR CS × TSsR CS)) × ShR ≃ HTape × KR CI CS where
+def regroupR : ((TIsR CI × TIsR CI) × (TSsR CS × TSsR CS)) × ShR R ≃ HTape × KR R CI CS where
   toFun x := (((x.1.1.1.1, x.1.1.2.1), (x.1.2.1.1, x.1.2.2.1)), (coinsOfR x, (slicesOfR x, x.2)))
   invFun y := ((((y.1.1.1, (y.2.1.1.1, y.2.2.1.1.1)), (y.1.1.2, (y.2.1.1.2, y.2.2.1.1.2))),
     ((y.1.2.1, (y.2.1.2.1, y.2.2.1.2.1)), (y.1.2.2, (y.2.1.2.2, y.2.2.1.2.2)))), y.2.2.2)
@@ -442,7 +450,7 @@ tables (`Ratatouille.idealGame_eq`, with the coins and the tables fixed). -/
 theorem idealGameR_eq [Fintype CI] [Nonempty CI] [Fintype CS] [Nonempty CS] (b₁ b₂ : Bool) :
     pr _ (idealGameR A simI simS progI progS b₁ b₂) =
       pr _ (idealGameR A simI simS progI progS false false) := by
-  have key : ∀ K : KR CI CS, pr UTape (fun u => idealGameR A simI simS progI progS b₁ b₂ (u, K)) =
+  have key : ∀ K : KR R CI CS, pr UTape (fun u => idealGameR A simI simS progI progS b₁ b₂ (u, K)) =
       pr UTape (fun u => idealGameR A simI simS progI progS false false (u, K)) := by
     intro K
     set A' := A.at (Vtab A progI progS K.1 K.2.2) K.2.1
@@ -470,8 +478,8 @@ theorem idealGameR_eq [Fintype CI] [Nonempty CI] [Fintype CS] [Nonempty CS] (b�
         (fun u => idealW A' simI simS (vec u.1.1.1) (vec u.2.1.1) (vec u.1.1.2) (vec u.1.2.2)
           (vec u.2.1.2) (vec u.2.2.2) K.1)]
       exact pr_congr fun _ => Iff.rfl
-  have h := abs_pr_prod_sub_le' (fun y : UTape × KR CI CS => idealGameR A simI simS progI progS b₁ b₂ y)
-    (fun y : UTape × KR CI CS => idealGameR A simI simS progI progS false false y) (ε := 0)
+  have h := abs_pr_prod_sub_le' (fun y : UTape × KR R CI CS => idealGameR A simI simS progI progS b₁ b₂ y)
+    (fun y : UTape × KR R CI CS => idealGameR A simI simS progI progS false false y) (ε := 0)
     fun K => by rw [key K, sub_self, abs_zero]
   rw [abs_nonpos_iff, sub_eq_zero] at h
   exact h
@@ -516,7 +524,7 @@ section GameReads
 variable {A} {q3 q5 qE r5 rE : ℕ}
 
 /-- A real issuance's output reads what its prover reads. -/
-lemma rd5_issRealR {PI : ProverI Z} (hPI : ∀ x w ρ g, Rd5 (PI x w ρ g) r5) (x : TRe) :
+lemma rd5_issRealR {PI : ProverI R Z} (hPI : ∀ x w ρ g, Rd5 (PI x w ρ g) r5) (x : TRe) :
     Rd5 (issRealR A PI x).out r5 := by
   by_cases hT : A.tInit = 0
   · have : (issRealR A PI x).out = fun _ => issOutOf A.base (.error .invalidArgument) := by
@@ -539,7 +547,7 @@ lemma rd5_issRealR {PI : ProverI Z} (hPI : ∀ x w ρ g, Rd5 (PI x w ρ g) r5) (
         | some pf => .ok (⟨vec x.1.1, vec x.1.2, A.tInit, com (vec x.1.1) A.ctx A.tInit (vec x.1.2)⟩,
             issueReqBytes (com (vec x.1.1) A.ctx A.tInit (vec x.1.2)) pf))
 
-lemma rdE_issRealR {PI : ProverI Z} (hPI : ∀ x w ρ g, RdE (PI x w ρ g) rE) (x : TRe) :
+lemma rdE_issRealR {PI : ProverI R Z} (hPI : ∀ x w ρ g, RdE (PI x w ρ g) rE) (x : TRe) :
     RdE (issRealR A PI x).out rE := by
   by_cases hT : A.tInit = 0
   · have : (issRealR A PI x).out = fun _ => issOutOf A.base (.error .invalidArgument) := by
@@ -564,7 +572,7 @@ lemma rdE_issRealR {PI : ProverI Z} (hPI : ∀ x w ρ g, RdE (PI x w ρ g) rE) (
 
 /-- **A real spend's output**: an error if the Client's checks fail, else `spOfProof` of the
 prover's proof. -/
-lemma spRealR_out (PS : ProverS Z) (x : TRe) (τ : TokenS) (d : Credits) (s : ShR) :
+lemma spRealR_out (PS : ProverS R Z) (x : TRe) (τ : TokenS) (d : Credits) (s : ShR R) :
     (spRealR A PS x).out τ d s = if τ.Valid A.pk A.ctx then
       (match clientCheck τ.t τ.x d with
         | none => spOutOf A.base (.error .invalidArgument)
@@ -583,7 +591,7 @@ lemma spRealR_out (PS : ProverS Z) (x : TRe) (τ : TokenS) (d : Credits) (s : Sh
         ⟨τ.t, τ.r, τ.x, τ.s, vec x.1.1, t', vec x.1.2⟩ (vec x.2.1) x.2.2 s <;> rfl
   · simp only [not_false_eq_true, ↓reduceIte, hv]
 
-lemma rd5_spRealR {PS : ProverS Z} (hPS : ∀ x w ρ g, Rd5 (PS x w ρ g) r5) (x : TRe) (τ : TokenS)
+lemma rd5_spRealR {PS : ProverS R Z} (hPS : ∀ x w ρ g, Rd5 (PS x w ρ g) r5) (x : TRe) (τ : TokenS)
     (d : Credits) : Rd5 ((spRealR A PS x).out τ d) r5 := by
   have e : (spRealR A PS x).out τ d = fun s => _ := funext (spRealR_out (A := A) PS x τ d)
   rw [e]
@@ -593,7 +601,7 @@ lemma rd5_spRealR {PS : ProverS Z} (hPS : ∀ x w ρ g, Rd5 (PS x w ρ g) r5) (x
     · exact (hPS _ _ _ _).map _
   · exact (Rd5.const _).mono (Nat.zero_le _)
 
-lemma rdE_spRealR {PS : ProverS Z} (hPS : ∀ x w ρ g, RdE (PS x w ρ g) rE) (x : TRe) (τ : TokenS)
+lemma rdE_spRealR {PS : ProverS R Z} (hPS : ∀ x w ρ g, RdE (PS x w ρ g) rE) (x : TRe) (τ : TokenS)
     (d : Credits) : RdE ((spRealR A PS x).out τ d) rE := by
   have e : (spRealR A PS x).out τ d = fun s => _ := funext (spRealR_out (A := A) PS x τ d)
   rw [e]
@@ -603,8 +611,8 @@ lemma rdE_spRealR {PS : ProverS Z} (hPS : ∀ x w ρ g, RdE (PS x w ρ g) rE) (x
     · exact (hPS _ _ _ _).map _
   · exact (RdE.const _).mono (Nat.zero_le _)
 
-lemma Rd5.bind4 {p : VoleMole.Verifier.Params} {Y₀ Y₁ Y₂ Y₃ X : Sort*} {m₀ : Sh p → Y₀} {m₁ : Sh p → Y₁}
-    {m₂ : Y₀ → Y₁ → Sh p → Y₂} {m₃ : Y₀ → Y₁ → Y₂ → Sh p → Y₃} {f : Y₀ → Y₁ → Y₂ → Y₃ → Sh p → X}
+lemma Rd5.bind4 {p : VoleMole.Verifier.Params} {Y₀ Y₁ Y₂ Y₃ X : Sort*} {m₀ : ShG R p → Y₀} {m₁ : ShG R p → Y₁}
+    {m₂ : Y₀ → Y₁ → ShG R p → Y₂} {m₃ : Y₀ → Y₁ → Y₂ → ShG R p → Y₃} {f : Y₀ → Y₁ → Y₂ → Y₃ → ShG R p → X}
     {a₀ a₁ a₂ a₃ b : ℕ} (h₀ : Rd5 m₀ a₀) (h₁ : Rd5 m₁ a₁) (h₂ : ∀ y₀ y₁, Rd5 (m₂ y₀ y₁) a₂)
     (h₃ : ∀ y₀ y₁ y₂, Rd5 (m₃ y₀ y₁ y₂) a₃) (hf : ∀ y₀ y₁ y₂ y₃, Rd5 (f y₀ y₁ y₂ y₃) b) :
     Rd5 (fun s => f (m₀ s) (m₁ s) (m₂ (m₀ s) (m₁ s) s) (m₃ (m₀ s) (m₁ s) (m₂ (m₀ s) (m₁ s) s) s) s)
@@ -613,8 +621,8 @@ lemma Rd5.bind4 {p : VoleMole.Verifier.Params} {Y₀ Y₁ Y₂ Y₃ X : Sort*} {
     fun y₁ => (h₂ y₀ y₁).bind (f := fun y₂ s => f y₀ y₁ y₂ (m₃ y₀ y₁ y₂ s) s)
       fun y₂ => (h₃ y₀ y₁ y₂).bind (f := fun y₃ s => f y₀ y₁ y₂ y₃ s) fun y₃ => hf y₀ y₁ y₂ y₃
 
-lemma RdE.bind4 {p : VoleMole.Verifier.Params} {Y₀ Y₁ Y₂ Y₃ X : Sort*} {m₀ : Sh p → Y₀} {m₁ : Sh p → Y₁}
-    {m₂ : Y₀ → Y₁ → Sh p → Y₂} {m₃ : Y₀ → Y₁ → Y₂ → Sh p → Y₃} {f : Y₀ → Y₁ → Y₂ → Y₃ → Sh p → X}
+lemma RdE.bind4 {p : VoleMole.Verifier.Params} {Y₀ Y₁ Y₂ Y₃ X : Sort*} {m₀ : ShG R p → Y₀} {m₁ : ShG R p → Y₁}
+    {m₂ : Y₀ → Y₁ → ShG R p → Y₂} {m₃ : Y₀ → Y₁ → Y₂ → ShG R p → Y₃} {f : Y₀ → Y₁ → Y₂ → Y₃ → ShG R p → X}
     {a₀ a₁ a₂ a₃ b : ℕ} (h₀ : RdE m₀ a₀) (h₁ : RdE m₁ a₁) (h₂ : ∀ y₀ y₁, RdE (m₂ y₀ y₁) a₂)
     (h₃ : ∀ y₀ y₁ y₂, RdE (m₃ y₀ y₁ y₂) a₃) (hf : ∀ y₀ y₁ y₂ y₃, RdE (f y₀ y₁ y₂ y₃) b) :
     RdE (fun s => f (m₀ s) (m₁ s) (m₂ (m₀ s) (m₁ s) s) (m₃ (m₀ s) (m₁ s) (m₂ (m₀ s) (m₁ s) s) s) s)
@@ -624,8 +632,8 @@ lemma RdE.bind4 {p : VoleMole.Verifier.Params} {Y₀ Y₁ Y₂ Y₃ X : Sort*} {
       fun y₂ => (h₃ y₀ y₁ y₂).bind (f := fun y₃ s => f y₀ y₁ y₂ y₃ s) fun y₃ => hf y₀ y₁ y₂ y₃
 
 /-- **The view, with slots that do not program, reads what its slots and the guess read.** -/
-lemma rd5_viewR (hA : A.Budget q3 q5 qE) (b₁ b₂ : Bool) (o₀ o₁ : ShR → IssOut Z TokenS)
-    (g₀ g₁ g₂ g₃ : Tab3) (k₁ k₂ : TokenS → Credits → ShR → SpOut Z TokenS) {a₀ a₁ c₁ c₂ : ℕ}
+lemma rd5_viewR (hA : A.Budget q3 q5 qE) (b₁ b₂ : Bool) (o₀ o₁ : ShR R → IssOut Z TokenS)
+    (g₀ g₁ g₂ g₃ : Tab3) (k₁ k₂ : TokenS → Credits → ShR R → SpOut Z TokenS) {a₀ a₁ c₁ c₂ : ℕ}
     (h₀ : Rd5 o₀ a₀) (h₁ : Rd5 o₁ a₁) (hk₁ : ∀ τ d, Rd5 (k₁ τ d) c₁)
     (hk₂ : ∀ τ d, Rd5 (k₂ τ d) c₂) :
     Rd5 (fun u => viewR A b₁ b₂ ⟨o₀, fun t => t, g₀⟩ ⟨o₁, fun t => t, g₁⟩
@@ -636,8 +644,8 @@ lemma rd5_viewR (hA : A.Budget q3 q5 qE) (b₁ b₂ : Bool) (o₀ o₁ : ShR →
       ((g₀, g₁), (g₂, g₃)) u)
     h₀ h₁ (fun _ _ => hk₁ _ _) (fun _ _ _ => hk₂ _ _) fun _ _ _ _ => hA.h5 _ _ _
 
-lemma rdE_viewR (hA : A.Budget q3 q5 qE) (b₁ b₂ : Bool) (o₀ o₁ : ShR → IssOut Z TokenS)
-    (g₀ g₁ g₂ g₃ : Tab3) (k₁ k₂ : TokenS → Credits → ShR → SpOut Z TokenS) {a₀ a₁ c₁ c₂ : ℕ}
+lemma rdE_viewR (hA : A.Budget q3 q5 qE) (b₁ b₂ : Bool) (o₀ o₁ : ShR R → IssOut Z TokenS)
+    (g₀ g₁ g₂ g₃ : Tab3) (k₁ k₂ : TokenS → Credits → ShR R → SpOut Z TokenS) {a₀ a₁ c₁ c₂ : ℕ}
     (h₀ : RdE o₀ a₀) (h₁ : RdE o₁ a₁) (hk₁ : ∀ τ d, RdE (k₁ τ d) c₁)
     (hk₂ : ∀ τ d, RdE (k₂ τ d) c₂) :
     RdE (fun u => viewR A b₁ b₂ ⟨o₀, fun t => t, g₀⟩ ⟨o₁, fun t => t, g₁⟩
@@ -648,25 +656,25 @@ lemma rdE_viewR (hA : A.Budget q3 q5 qE) (b₁ b₂ : Bool) (o₀ o₁ : ShR →
       ((g₀, g₁), (g₂, g₃)) u)
     h₀ h₁ (fun _ _ => hk₁ _ _) (fun _ _ _ => hk₂ _ _) fun _ _ _ _ => hA.hE _ _ _
 
-lemma rd3_viewR0 (hA : A.Budget q3 q5 qE) (b₁ b₂ : Bool) (o₀ : ShR → IssOut Z TokenS)
-    (P₀ : ShR → ShR) (s₁ : IssSlotR Z) (h₁ h₂ : SpSlotR Z) (u : ShR) :
+lemma rd3_viewR0 (hA : A.Budget q3 q5 qE) (b₁ b₂ : Bool) (o₀ : ShR R → IssOut Z TokenS)
+    (P₀ : ShR R → ShR R) (s₁ : IssSlotR R Z) (h₁ h₂ : SpSlotR R Z) (u : ShR R) :
     Rd3 (fun g => viewR A b₁ b₂ ⟨o₀, P₀, g⟩ s₁ h₁ h₂ u) q3 := by
   simp only [viewR]; exact hA.h30 _ _ _ _ _ _
 
-lemma rd3_viewR1 (hA : A.Budget q3 q5 qE) (b₁ b₂ : Bool) (s₀ : IssSlotR Z)
-    (o₁ : ShR → IssOut Z TokenS) (P₁ : ShR → ShR) (h₁ h₂ : SpSlotR Z) (u : ShR) :
+lemma rd3_viewR1 (hA : A.Budget q3 q5 qE) (b₁ b₂ : Bool) (s₀ : IssSlotR R Z)
+    (o₁ : ShR R → IssOut Z TokenS) (P₁ : ShR R → ShR R) (h₁ h₂ : SpSlotR R Z) (u : ShR R) :
     Rd3 (fun g => viewR A b₁ b₂ s₀ ⟨o₁, P₁, g⟩ h₁ h₂ u) q3 := by
   simp only [viewR]; exact hA.h31 _ _ _ _ _ _
 
-lemma rd3_viewR2 (hA : A.Budget q3 q5 qE) (b₁ b₂ : Bool) (s₀ s₁ : IssSlotR Z)
-    (k₁ : TokenS → Credits → ShR → SpOut Z TokenS) (Q₁ : Bool → TokenS → Credits → ShR → ShR)
-    (h₂ : SpSlotR Z) (u : ShR) :
+lemma rd3_viewR2 (hA : A.Budget q3 q5 qE) (b₁ b₂ : Bool) (s₀ s₁ : IssSlotR R Z)
+    (k₁ : TokenS → Credits → ShR R → SpOut Z TokenS) (Q₁ : Bool → TokenS → Credits → ShR R → ShR R)
+    (h₂ : SpSlotR R Z) (u : ShR R) :
     Rd3 (fun g => viewR A b₁ b₂ s₀ s₁ ⟨k₁, Q₁, g⟩ h₂ u) q3 := by
   simp only [viewR]; exact hA.h32 _ _ _ _ _ _
 
-lemma rd3_viewR3 (hA : A.Budget q3 q5 qE) (b₁ b₂ : Bool) (s₀ s₁ : IssSlotR Z) (h₁ : SpSlotR Z)
-    (k₂ : TokenS → Credits → ShR → SpOut Z TokenS) (Q₂ : Bool → TokenS → Credits → ShR → ShR)
-    (u : ShR) :
+lemma rd3_viewR3 (hA : A.Budget q3 q5 qE) (b₁ b₂ : Bool) (s₀ s₁ : IssSlotR R Z) (h₁ : SpSlotR R Z)
+    (k₂ : TokenS → Credits → ShR R → SpOut Z TokenS) (Q₂ : Bool → TokenS → Credits → ShR R → ShR R)
+    (u : ShR R) :
     Rd3 (fun g => viewR A b₁ b₂ s₀ s₁ h₁ ⟨k₂, Q₂, g⟩ u) q3 := by
   simp only [viewR]; exact hA.h33 _ _ _ _ _ _
 
@@ -682,7 +690,7 @@ def ΦI (n : NRR) (o : Option (IssueProof Z)) : IssOut Z TokenS :=
         issueReqBytes (com (vec n.1) A.ctx A.tInit (vec n.2)) pf))
 
 variable {A} in
-lemma issRealR_out_zero {PI : ProverI Z} (hT : A.tInit = 0) (x : TRe) (s : ShR) :
+lemma issRealR_out_zero {PI : ProverI R Z} (hT : A.tInit = 0) (x : TRe) (s : ShR R) :
     (issRealR A PI x).out s = issOutOf A.base (.error .invalidArgument) := by
   simp [issRealR, issueOf, hT]
 
@@ -693,7 +701,7 @@ lemma issSim_zero (hT : A.tInit = 0) (n : NRR) (c : CI) :
   simp [issSim, issueSim, hT']
 
 variable {A} in
-lemma issRealR_out_ne {PI : ProverI Z} (hT : A.tInit ≠ 0) (x : TRe) (s : ShR) :
+lemma issRealR_out_ne {PI : ProverI R Z} (hT : A.tInit ≠ 0) (x : TRe) (s : ShR R) :
     (issRealR A PI x).out s = ΦI A x.1 (PI (xIOf A x.1) ⟨vec x.1.1, vec x.1.2⟩ (vec x.2.1) x.2.2 s) := by
   simp only [issRealR, issueOf, hT, ↓reduceIte]
   rfl
@@ -706,8 +714,8 @@ lemma issSim_ne (hT : A.tInit ≠ 0) (n : NRR) (c : CI) :
   rfl
 
 variable {A} in
-lemma spRealR_out_ok {PS : ProverS Z} (x : TRe) {τ : TokenS} {d t' : Credits}
-    (hv : τ.Valid A.pk A.ctx) (hc : clientCheck τ.t τ.x d = some t') (s : ShR) :
+lemma spRealR_out_ok {PS : ProverS R Z} (x : TRe) {τ : TokenS} {d t' : Credits}
+    (hv : τ.Valid A.pk A.ctx) (hc : clientCheck τ.t τ.x d = some t') (s : ShR R) :
     (spRealR A PS x).out τ d s =
       spOfProof A x.1 τ d t' (PS (xSOf A x.1 τ d) (wSOf x.1 τ t') (vec x.2.1) x.2.2 s) := by
   rw [spRealR_out]
@@ -738,18 +746,18 @@ lemma spendRel_of (n : NRR) {τ : TokenS} {d t' : Credits} (hv : τ.Valid A.pk A
 /-! ## The hybrids' contexts -/
 
 /-- A slot with a fixed output and no programming. -/
-def fakeI (o : IssOut Z TokenS) (g : Tab3) : IssSlotR Z := ⟨fun _ => o, fun t => t, g⟩
-def fakeS (o : SpOut Z TokenS) (g : Tab3) : SpSlotR Z := ⟨fun _ _ _ => o, fun _ _ _ t => t, g⟩
+def fakeI (o : IssOut Z TokenS) (g : Tab3) : IssSlotR R Z := ⟨fun _ => o, fun t => t, g⟩
+def fakeS (o : SpOut Z TokenS) (g : Tab3) : SpSlotR R Z := ⟨fun _ _ _ => o, fun _ _ _ t => t, g⟩
 
 /-- A simulated slot whose programming is already applied. -/
-def noProgI (x : TIsR CI) : IssSlotR Z := ⟨fun _ => issSim A.base simI (x.1.1, x.1.2, x.2.1), fun t => t, x.2.2⟩
-def noProgS (x : TSsR CS) : SpSlotR Z :=
+def noProgI (x : TIsR CI) : IssSlotR R Z := ⟨fun _ => issSim A.base simI (x.1.1, x.1.2, x.2.1), fun t => t, x.2.2⟩
+def noProgS (x : TSsR CS) : SpSlotR R Z :=
   ⟨fun τ d _ => spSim A.base simS (x.1.1, x.1.2, x.2.1) τ d, fun _ _ _ t => t, x.2.2⟩
 
 /-- An issuance slot's programming. -/
-abbrev PIR (n : NRR) (c : CI) (s : ShR) : ShR := if A.tInit = 0 then s else progI (xIOf A n) c s
+abbrev PIR (n : NRR) (c : CI) (s : ShR R) : ShR R := if A.tInit = 0 then s else progI (xIOf A n) c s
 
-variable (PI : ProverI Z) (PS : ProverS Z)
+variable (PI : ProverI R Z) (PS : ProverS R Z)
 
 /-- The tape regroupings around each slot. -/
 def eqv0R {N Q T₁ T₂ S : Type} : (N × (T₁ × T₂)) × (Q × S) ≃ (((N × Q) × T₁) × T₂) × S where
@@ -777,19 +785,19 @@ def eqv3R {T₀₁ T₂ N Q S : Type} : ((T₀₁ × T₂) × N) × (Q × S) ≃
   right_inv _ := rfl
 
 /-- The rest of the game around issuance `0`'s output. -/
-def F0R (b₁ b₂ : Bool) (γ : NRR × (TRe × (TRe × TRe))) (o : IssOut Z TokenS) (g : Tab3) (u : ShR) :
+def F0R (b₁ b₂ : Bool) (γ : NRR × (TRe × (TRe × TRe))) (o : IssOut Z TokenS) (g : Tab3) (u : ShR R) :
     Prop :=
   viewR A b₁ b₂ (fakeI o g) (issRealR A PI γ.2.1) (spRealR A PS γ.2.2.1) (spRealR A PS γ.2.2.2) u
 
 /-- The rest of the game around issuance `1`'s output. -/
-def F1R (b₁ b₂ : Bool) (γ : TIsR CI × (NRR × (TRe × TRe))) (o : IssOut Z TokenS) (g : Tab3) (u : ShR) :
+def F1R (b₁ b₂ : Bool) (γ : TIsR CI × (NRR × (TRe × TRe))) (o : IssOut Z TokenS) (g : Tab3) (u : ShR R) :
     Prop :=
   viewR A b₁ b₂ (noProgI A simI γ.1) (fakeI o g) (spRealR A PS γ.2.2.1) (spRealR A PS γ.2.2.2) u
 
 /-- **The collision term of hop 1**: issuance `1`'s real proof on the tables programmed by
 issuance `0`'s simulation differs from the one on the original tables. -/
 noncomputable def deltaI1R [Fintype CI] : ℝ :=
-  pr ((TIsR CI × (NRR × (TRe × TRe))) × ((Coins 16 × Tab3) × ShR)) fun z =>
+  pr ((TIsR CI × (NRR × (TRe × TRe))) × ((Coins 16 × Tab3) × ShR R)) fun z =>
     (issRealR A PI (z.1.2.1, z.2.1)).out (PIR A progI z.1.1.1 z.1.1.2.1 z.2.2) ≠
       (issRealR A PI (z.1.2.1, z.2.1)).out z.2.2
 
@@ -806,18 +814,18 @@ abbrev ok1R {α : Type} (γ : (TIsR CI × TIsR CI) × α) : Bool :=
     ((i₁R A simI γ).fin (A.respondIss ((i₀R A simI γ).req, (i₁R A simI γ).req) true))
 
 /-- The issuance programming of a spend hop's context. -/
-abbrev PI2R {α : Type} (γ : (TIsR CI × TIsR CI) × α) (s : ShR) : ShR :=
+abbrev PI2R {α : Type} (γ : (TIsR CI × TIsR CI) × α) (s : ShR R) : ShR R :=
   PIR A progI γ.1.1.1 γ.1.1.2.1 (PIR A progI γ.1.2.1 γ.1.2.2.1 s)
 
 /-- The rest of the game around round 1's output: issuances simulated, round 2 real. -/
 def FS1R (b₁ b₂ : Bool) (γ : ((TIsR CI × TIsR CI) × NRR) × TRe) (o : SpOut Z TokenS) (g : Tab3)
-    (u : ShR) : Prop :=
+    (u : ShR R) : Prop :=
   viewR A b₁ b₂ (noProgI A simI γ.1.1.1) (noProgI A simI γ.1.1.2) (fakeS o g) (spRealR A PS γ.2) u
 
 /-- **The collision term of hop S1**: round 1's real proof on the tables programmed by the
 issuance simulations differs from the one on the original tables. -/
 noncomputable def deltaS1R [Fintype CI] (b₁ : Bool) : ℝ :=
-  pr ((((TIsR CI × TIsR CI) × NRR) × TRe) × ((Coins 16 × Tab3) × ShR)) fun z =>
+  pr ((((TIsR CI × TIsR CI) × NRR) × TRe) × ((Coins 16 × Tab3) × ShR R)) fun z =>
     (spRealR A PS (z.1.1.2, z.2.1)).out (τ₁Of A b₁ (i₀R A simI z.1.1) (i₁R A simI z.1.1))
         (A.d₁ ((i₀R A simI z.1.1).req, (i₁R A simI z.1.1).req)) (PI2R A progI z.1.1 z.2.2) ≠
       (spRealR A PS (z.1.1.2, z.2.1)).out (τ₁Of A b₁ (i₀R A simI z.1.1) (i₁R A simI z.1.1))
@@ -837,7 +845,7 @@ abbrev ok2R (b₁ : Bool) (γ : ((TIsR CI × TIsR CI) × TSsR CS) × NRR) : Bool
       (A.respond₁ ((i₀R A simI γ.1).req, (i₁R A simI γ.1).req) (O₁R A simI simS b₁ γ).req))
 
 /-- The programming before round 2's: the issuances and round 1. -/
-def LS2R (b₁ : Bool) (γ : ((TIsR CI × TIsR CI) × TSsR CS) × NRR) (s : ShR) : ShR :=
+def LS2R (b₁ : Bool) (γ : ((TIsR CI × TIsR CI) × TSsR CS) × NRR) (s : ShR R) : ShR R :=
   PI2R A progI γ.1 (if ok1R A simI γ.1 = true then
     progS (xSOf A γ.1.2.1 (τ₁Of A b₁ (i₀R A simI γ.1) (i₁R A simI γ.1))
       (A.d₁ ((i₀R A simI γ.1).req, (i₁R A simI γ.1).req))) γ.1.2.2.1 s else s)
@@ -850,13 +858,13 @@ abbrev d₂R (b₁ : Bool) (γ : ((TIsR CI × TIsR CI) × TSsR CS) × NRR) : Cre
 
 /-- The rest of the game around round 2's output: everything else simulated. -/
 def FS2R (b₁ b₂ : Bool) (γ : ((TIsR CI × TIsR CI) × TSsR CS) × NRR) (o : SpOut Z TokenS) (g : Tab3)
-    (u : ShR) : Prop :=
+    (u : ShR R) : Prop :=
   viewR A b₁ b₂ (noProgI A simI γ.1.1.1) (noProgI A simI γ.1.1.2) (noProgS A simS γ.1.2) (fakeS o g) u
 
 /-- **The collision term of hop S2**: round 2's real proof on the tables programmed by the other
 three simulations differs from the one on the original tables. -/
 noncomputable def deltaS2R [Fintype CI] [Fintype CS] (b₁ b₂ : Bool) : ℝ :=
-  pr ((((TIsR CI × TIsR CI) × TSsR CS) × NRR) × ((Coins 16 × Tab3) × ShR)) fun z =>
+  pr ((((TIsR CI × TIsR CI) × TSsR CS) × NRR) × ((Coins 16 × Tab3) × ShR R)) fun z =>
     (spRealR A PS (z.1.2, z.2.1)).out (τ₂R A simI simS b₁ b₂ z.1) (d₂R A simI simS b₁ z.1)
         (LS2R A simI progI progS b₁ z.1 z.2.2) ≠
       (spRealR A PS (z.1.2, z.2.1)).out (τ₂R A simI simS b₁ b₂ z.1) (d₂R A simI simS b₁ z.1) z.2.2
@@ -876,11 +884,11 @@ theorem hopI0R [Fintype CI] [Nonempty CI] (hA : A.Budget q3 q5 qE)
     |pr _ (gameR A b₁ b₂ (issRealR A PI) (issRealR A PI) (spRealR A PS) (spRealR A PS)) -
       pr _ (gameR A b₁ b₂ (issSimR A simI progI) (issRealR A PI) (spRealR A PS) (spRealR A PS))| ≤
       ε := by
-  have h := hop_ro (Γ := NRR × (TRe × (TRe × TRe))) (ρ := Coins 16) (G := Tab3) (C := CI) (S := ShR)
+  have h := hop_ro (Γ := NRR × (TRe × (TRe × TRe))) (ρ := Coins 16) (G := Tab3) (C := CI) (S := ShR R)
     (fun γ ρ g s => (issRealR A PI (γ.1, (ρ, g))).out s)
     (fun γ c => issSim A.base simI (γ.1.1, γ.1.2, c)) (fun γ c s => PIR A progI γ.1 c s)
     (fun _ s => s) (F0R A PI PS b₁ b₂) (ε := ε) fun γ => ?_
-  · have hδ : pr ((NRR × (TRe × (TRe × TRe))) × ((Coins 16 × Tab3) × ShR)) (fun z =>
+  · have hδ : pr ((NRR × (TRe × (TRe × TRe))) × ((Coins 16 × Tab3) × ShR R)) (fun z =>
         (issRealR A PI (z.1.1, (z.2.1.1, z.2.1.2))).out z.2.2 ≠
           (issRealR A PI (z.1.1, (z.2.1.1, z.2.1.2))).out z.2.2) = 0 := by
       rw [pr_congr (Q := fun _ => False) fun z => by simp, pr_const]
@@ -921,7 +929,7 @@ theorem hopI1R [Fintype CI] [Nonempty CI] (hA : A.Budget q3 q5 qE)
       pr _ (gameR A b₁ b₂ (issSimR A simI progI) (issSimR A simI progI) (spRealR A PS)
         (spRealR A PS))| ≤ ε + deltaI1R A progI PI := by
   have h := hop_ro (Γ := TIsR CI × (NRR × (TRe × TRe))) (ρ := Coins 16) (G := Tab3) (C := CI)
-    (S := ShR) (fun γ ρ g s => (issRealR A PI (γ.2.1, (ρ, g))).out s)
+    (S := ShR R) (fun γ ρ g s => (issRealR A PI (γ.2.1, (ρ, g))).out s)
     (fun γ c => issSim A.base simI (γ.2.1.1, γ.2.1.2, c)) (fun γ c s => PIR A progI γ.2.1 c s)
     (fun γ s => PIR A progI γ.1.1 γ.1.2.1 s) (F1R A simI PS b₁ b₂) (ε := ε) fun γ => ?_
   · rw [← pr_equiv eqv1R (gameR A b₁ b₂ (issSimR A simI progI) (issRealR A PI) (spRealR A PS)
@@ -957,7 +965,7 @@ theorem hopS1R [Fintype CI] [Nonempty CI] [Fintype CS] [Nonempty CS] (hA : A.Bud
       pr _ (gameR A b₁ b₂ (issSimR A simI progI) (issSimR A simI progI) (spSimR A simS progS)
         (spRealR A PS))| ≤ ε + deltaS1R A simI progI PS b₁ := by
   have h := hop_ro (Γ := ((TIsR CI × TIsR CI) × NRR) × TRe) (ρ := Coins 16) (G := Tab3) (C := CS)
-    (S := ShR)
+    (S := ShR R)
     (fun γ ρ g s => (spRealR A PS (γ.1.2, (ρ, g))).out (τ₁Of A b₁ (i₀R A simI γ.1) (i₁R A simI γ.1))
       (A.d₁ ((i₀R A simI γ.1).req, (i₁R A simI γ.1).req)) s)
     (fun γ c => spSim A.base simS (γ.1.2.1, γ.1.2.2, c) (τ₁Of A b₁ (i₀R A simI γ.1) (i₁R A simI γ.1))
@@ -1009,7 +1017,7 @@ theorem hopS2R [Fintype CI] [Nonempty CI] [Fintype CS] [Nonempty CS] (hA : A.Bud
       pr _ (simGameR A simI simS progI progS b₁ b₂)| ≤
       ε + deltaS2R A simI simS progI progS PS b₁ b₂ := by
   have h := hop_ro (Γ := ((TIsR CI × TIsR CI) × TSsR CS) × NRR) (ρ := Coins 16) (G := Tab3)
-    (C := CS) (S := ShR)
+    (C := CS) (S := ShR R)
     (fun γ ρ g s => (spRealR A PS (γ.2, (ρ, g))).out (τ₂R A simI simS b₁ b₂ γ)
       (d₂R A simI simS b₁ γ) s)
     (fun γ c => spSim A.base simS (γ.2.1, γ.2.2, c) (τ₂R A simI simS b₁ b₂ γ) (d₂R A simI simS b₁ γ))
@@ -1139,13 +1147,15 @@ section Lean
 
 open VoleMole.Verifier VoleMole.Verifier.Bridge
 
+variable [CipherRow R]
+
 /-- **The Lean issuance prover in the random-oracle model** (`ZK.Sim.realROb` with SHAKE for the
 hashes that are not tables), as the spec's proof. -/
-noncomputable def leanPIR : ProverI Sizes.labelRows := fun x w ρ g s =>
+noncomputable def leanPIR : ProverI R Sizes.labelRows := fun x w ρ g s =>
   vecOf _ (realROb pI Hashes.shake (stI x) (encI x w) (bOf ρ) g s)
 
 /-- The Lean spend prover in the random-oracle model. -/
-noncomputable def leanPSR : ProverS Sizes.labelRows := fun x w ρ g s =>
+noncomputable def leanPSR : ProverS R Sizes.labelRows := fun x w ρ g s =>
   vecOf _ (realROb pS Hashes.shake (stS x) (encS x w) (bOf ρ) g s)
 
 /-- The simulators, as the spec's proofs. -/
@@ -1155,9 +1165,9 @@ def leanSimSR (_ : SpendInstance) (c : SimCoins pS) : Option (SpendProof Sizes.l
   vecOf _ (simulate pS c)
 
 /-- The simulators' programmings (`ZK.Sim.progRO`). -/
-noncomputable def leanProgIR (x : IssueInstance) (c : SimCoins pI) : ShR → ShR :=
+noncomputable def leanProgIR (x : IssueInstance) (c : SimCoins pI) : ShR R → ShR R :=
   progRO pI Hashes.shake (stI x) c
-noncomputable def leanProgSR (x : SpendInstance) (c : SimCoins pS) : ShR → ShR :=
+noncomputable def leanProgSR (x : SpendInstance) (c : SimCoins pS) : ShR R → ShR R :=
   progRO pS Hashes.shake (stS x) c
 
 lemma vecOf_none_simulate {p : Params} {n : ℕ} (hn : p.proofBytes = n) {c : SimCoins p}
@@ -1169,24 +1179,25 @@ lemma vecOf_none_simulate {p : Params} {n : ℕ} (hn : p.proofBytes = n) {c : Si
     simp only [vecOf, simulate_ok_size hs, hn, ↓reduceDIte, reduceCtorEq] at h
 
 lemma leanProgIR_none (x x' : IssueInstance) (c : SimCoins pI) (h : leanSimIR x c = none) :
-    leanProgIR x c = leanProgIR x' c := by
+    leanProgIR (R := R) x c = leanProgIR x' c := by
   obtain ⟨e, he⟩ := vecOf_none_simulate (by decide) h
-  exact progRO_of_error _ he _ _
+  exact progRO_of_error (R := R) _ he _ _
 
 lemma leanProgSR_none (x x' : SpendInstance) (c : SimCoins pS) (h : leanSimSR x c = none) :
-    leanProgSR x c = leanProgSR x' c := by
+    leanProgSR (R := R) x c = leanProgSR x' c := by
   obtain ⟨e, he⟩ := vecOf_none_simulate (by decide) h
-  exact progRO_of_error _ he _ _
+  exact progRO_of_error (R := R) _ he _ _
 
-/-- **Zero knowledge of the Lean issuance prover in the random-oracle model.** -/
-theorem leanPIR_zkRO (q3 q5 qE : ℕ) : ZeroKnowledgeRO IssueRel
-    (fun x w (ρ : Coins 16) g s => leanPIR x w (vec ρ) g s) leanSimIR leanProgIR
-    (Budget pI q3 q5 qE) (εRO q3 q5 qE) := by
-  have h := (lean_zeroKnowledgeRO Hashes.shake pI stI (fun _ => rfl) rfl encI IssueRel csI zkHypI
-    hashesWF_shake (smallParams_of_le (by decide) (by decide)) q3 q5 qE).transfer
+/-- **Zero knowledge of the Lean issuance prover in the random-oracle model** (cipher rows `R`,
+error `ZKRow.εz R pI`). -/
+theorem leanPIR_zkRO [ZKRow R] (q3 q5 qE : ℕ) : ZeroKnowledgeRO IssueRel
+    (fun x w (ρ : Coins 16) g (s : ShR R) => leanPIR x w (vec ρ) g s) leanSimIR leanProgIR
+    (Budget pI q3 q5 qE) (ZKRow.εz R pI q3 q5 qE) := by
+  have h := (lean_zeroKnowledgeROG (R := R) Hashes.shake pI stI (fun _ => rfl) rfl encI IssueRel
+    csI zkHypI hashesWF_shake (smallParams_of_le (by decide) (by decide)) q3 q5 qE).transfer
     id (fun _ w => w) (fun _ _ h => h) (vecOf Sizes.labelRows.issue)
     (Adm' := Budget pI q3 q5 qE) (fun D hD => Budget.comp _ hD)
-  have e : (fun x w (ρ : Coins 16) g s => leanPIR x w (vec ρ) g s) =
+  have e : (fun x w (ρ : Coins 16) g (s : ShR R) => leanPIR x w (vec ρ) g s) =
       fun x w r g s => vecOf _ (realRO pI Hashes.shake (stI (id x)) (encI (id x) w) r g s) := by
     funext x w ρ g s
     simp only [leanPIR, realRO, bOf_vec, id]
@@ -1194,19 +1205,63 @@ theorem leanPIR_zkRO (q3 q5 qE : ℕ) : ZeroKnowledgeRO IssueRel
   exact h
 
 /-- **Zero knowledge of the Lean spend prover in the random-oracle model.** -/
-theorem leanPSR_zkRO (q3 q5 qE : ℕ) : ZeroKnowledgeRO SpendRel
-    (fun x w (ρ : Coins 16) g s => leanPSR x w (vec ρ) g s) leanSimSR leanProgSR
-    (Budget pS q3 q5 qE) (εRO q3 q5 qE) := by
-  have h := (lean_zeroKnowledgeRO Hashes.shake pS stS (fun _ => rfl) rfl encS SpendRel csS zkHypS
-    hashesWF_shake (smallParams_of_le (by decide) (by decide)) q3 q5 qE).transfer
+theorem leanPSR_zkRO [ZKRow R] (q3 q5 qE : ℕ) : ZeroKnowledgeRO SpendRel
+    (fun x w (ρ : Coins 16) g (s : ShR R) => leanPSR x w (vec ρ) g s) leanSimSR leanProgSR
+    (Budget pS q3 q5 qE) (ZKRow.εz R pS q3 q5 qE) := by
+  have h := (lean_zeroKnowledgeROG (R := R) Hashes.shake pS stS (fun _ => rfl) rfl encS SpendRel
+    csS zkHypS hashesWF_shake (smallParams_of_le (by decide) (by decide)) q3 q5 qE).transfer
     id (fun _ w => w) (fun _ _ h => h) (vecOf Sizes.labelRows.spend)
     (Adm' := Budget pS q3 q5 qE) (fun D hD => Budget.comp _ hD)
-  have e : (fun x w (ρ : Coins 16) g s => leanPSR x w (vec ρ) g s) =
+  have e : (fun x w (ρ : Coins 16) g (s : ShR R) => leanPSR x w (vec ρ) g s) =
       fun x w r g s => vecOf _ (realRO pS Hashes.shake (stS (id x)) (encS (id x) w) r g s) := by
     funext x w ρ g s
     simp only [leanPSR, realRO, bOf_vec, id]
   rw [e]
   exact h
+
+/-- **Theorem 2 with the Lean prover, for every type of cipher rows** (`ZKRow R`): any two
+worlds differ by at most
+
+    4·εz(pI; q₃, q₅ + 3·624, q_E + 3·4607) + 4·εz(pS; q₃, q₅ + 3·624, q_E + 3·4607)
+      + 2·δI₁ + Σ_w (δS₁ w + δS₂ w) + 2·εhide. -/
+theorem unlinkabilityRO_leanG [ZKRow R] (A : AdversaryRO R Sizes.labelRows) {q3 q5 qE : ℕ}
+    {εhide : ℝ} (hA : A.Budget q3 q5 qE)
+    (hhide : ∀ b₁ b₂ K, hidingAdv A.ctx
+      (reductionR A leanSimIR leanSimSR leanProgIR leanProgSR b₁ b₂ K) ≤ εhide)
+    (b₁ b₂ b₁' b₂' : Bool) :
+    |pr _ (realGameR A leanPIR leanPSR b₁ b₂) - pr _ (realGameR A leanPIR leanPSR b₁' b₂')| ≤
+      4 * ZKRow.εz R pI q3 (q5 + 1872) (qE + 13821) +
+        4 * ZKRow.εz R pS q3 (q5 + 1872) (qE + 13821) + 2 * deltaI1R A leanProgIR leanPIR +
+        (deltaS1R A leanSimIR leanProgIR leanPSR b₁ + deltaS1R A leanSimIR leanProgIR leanPSR b₁') +
+        (deltaS2R A leanSimIR leanSimSR leanProgIR leanProgSR leanPSR b₁ b₂ +
+          deltaS2R A leanSimIR leanSimSR leanProgIR leanProgSR leanPSR b₁' b₂') +
+        2 * εhide := by
+  have hPI5 : ∀ x w ρ g, Rd5 (leanPIR (R := R) x w ρ g) 624 := fun x w ρ g =>
+    (realROb_rd5 (p := pI) (Hb := Hashes.shake) (st := stI x) (w := encI x w) (bOf ρ) g).map (vecOf Sizes.labelRows.issue)
+  have hPIE : ∀ x w ρ g, RdE (leanPIR (R := R) x w ρ g) 4607 := fun x w ρ g =>
+    (realROb_rdE (p := pI) (st := stI x) (w := encI x w) hashesWF_shake (bOf ρ) g).map (vecOf Sizes.labelRows.issue)
+  have hPS5 : ∀ x w ρ g, Rd5 (leanPSR (R := R) x w ρ g) 624 := fun x w ρ g =>
+    (realROb_rd5 (p := pS) (Hb := Hashes.shake) (st := stS x) (w := encS x w) (bOf ρ) g).map (vecOf Sizes.labelRows.spend)
+  have hPSE : ∀ x w ρ g, RdE (leanPSR (R := R) x w ρ g) 4607 := fun x w ρ g =>
+    (realROb_rdE (p := pS) (st := stS x) (w := encS x w) hashesWF_shake (bOf ρ) g).map (vecOf Sizes.labelRows.spend)
+  have h := unlinkabilityRO (A := A) (PI := leanPIR) (PS := leanPSR) (simI := leanSimIR)
+    (simS := leanSimSR) (progI := leanProgIR) (progS := leanProgSR) (εI := ZKRow.εz R pI)
+    (εS := ZKRow.εz R pS)
+    hA hPI5 hPIE hPS5 hPSE (fun x c => progRO_isProg c) (fun x c => progRO_isProg c)
+    leanProgIR_none leanProgSR_none (fun a c => leanPIR_zkRO q3 a c) (fun a c => leanPSR_zkRO q3 a c)
+    (fun a c => ZKRow.εz_nonneg _ _ _ _) (fun a c => ZKRow.εz_nonneg _ _ _ _) hhide b₁ b₂ b₁' b₂'
+  have m : ∀ (p : Params) a c, a ≤ q5 + 1872 → c ≤ qE + 13821 →
+      ZKRow.εz R p q3 a c ≤ ZKRow.εz R p q3 (q5 + 1872) (qE + 13821) :=
+    fun p a c ha hc => ZKRow.εz_mono p le_rfl ha hc
+  have m1 := m pI (0 + (624 + (624 + (624 + q5)))) (0 + (4607 + (4607 + (4607 + qE)))) (by omega)
+    (by omega)
+  have m2 := m pI (0 + (0 + (624 + (624 + q5))) + 312) (0 + (0 + (4607 + (4607 + qE))) + 4607)
+    (by omega) (by omega)
+  have m3 := m pS (0 + (0 + (0 + (624 + q5))) + (312 + 312))
+    (0 + (0 + (0 + (4607 + qE))) + (4607 + 4607)) (by omega) (by omega)
+  have m4 := m pS (0 + (0 + (0 + (0 + q5))) + (312 + (312 + 312)))
+    (0 + (0 + (0 + (0 + qE))) + (4607 + (4607 + 4607))) (by omega) (by omega)
+  linarith
 
 /-- **Theorem 2 with the Lean prover, in the random-oracle and ideal-cipher model.** The real
 game runs the spec with the Lean prover (dedicated label rows), `H₃`, `H₂³`, `H₅` uniform tables,
@@ -1214,9 +1269,11 @@ the cipher a uniform table, SHAKE for the other hashes; the Issuer's guess sees 
 reading each `H₃` slice at `q₃` keys, `H₅` at `q₅`, the cipher at `q_E` keys and `H₂³` freely (its
 interaction does not read them). Any two worlds differ by at most
 
-    8·εRO(q₃, q₅ + 3·624, q_E + 3·4607) + 2·δI₁ + Σ_w (δS₁ w + δS₂ w) + 2·εhide. -/
-theorem unlinkabilityRO_lean (A : AdversaryRO Sizes.labelRows) {q3 q5 qE : ℕ} {εhide : ℝ}
-    (hA : A.Budget q3 q5 qE)
+    8·εRO(q₃, q₅ + 3·624, q_E + 3·4607) + 2·δI₁ + Σ_w (δS₁ w + δS₂ w) + 2·εhide.
+
+(`unlinkabilityRO_leanG` at function rows.) -/
+theorem unlinkabilityRO_lean (A : AdversaryRO (Blk → Blk) Sizes.labelRows) {q3 q5 qE : ℕ}
+    {εhide : ℝ} (hA : A.Budget q3 q5 qE)
     (hhide : ∀ b₁ b₂ K, hidingAdv A.ctx
       (reductionR A leanSimIR leanSimSR leanProgIR leanProgSR b₁ b₂ K) ≤ εhide)
     (b₁ b₂ b₁' b₂' : Bool) :
@@ -1225,31 +1282,10 @@ theorem unlinkabilityRO_lean (A : AdversaryRO Sizes.labelRows) {q3 q5 qE : ℕ} 
         (deltaS1R A leanSimIR leanProgIR leanPSR b₁ + deltaS1R A leanSimIR leanProgIR leanPSR b₁') +
         (deltaS2R A leanSimIR leanSimSR leanProgIR leanProgSR leanPSR b₁ b₂ +
           deltaS2R A leanSimIR leanSimSR leanProgIR leanProgSR leanPSR b₁' b₂') +
-        2 * εhide := by
-  have hPI5 : ∀ x w ρ g, Rd5 (leanPIR x w ρ g) 624 := fun x w ρ g =>
-    (realROb_rd5 (p := pI) (Hb := Hashes.shake) (st := stI x) (w := encI x w) (bOf ρ) g).map (vecOf Sizes.labelRows.issue)
-  have hPIE : ∀ x w ρ g, RdE (leanPIR x w ρ g) 4607 := fun x w ρ g =>
-    (realROb_rdE (p := pI) (st := stI x) (w := encI x w) hashesWF_shake (bOf ρ) g).map (vecOf Sizes.labelRows.issue)
-  have hPS5 : ∀ x w ρ g, Rd5 (leanPSR x w ρ g) 624 := fun x w ρ g =>
-    (realROb_rd5 (p := pS) (Hb := Hashes.shake) (st := stS x) (w := encS x w) (bOf ρ) g).map (vecOf Sizes.labelRows.spend)
-  have hPSE : ∀ x w ρ g, RdE (leanPSR x w ρ g) 4607 := fun x w ρ g =>
-    (realROb_rdE (p := pS) (st := stS x) (w := encS x w) hashesWF_shake (bOf ρ) g).map (vecOf Sizes.labelRows.spend)
-  have h := unlinkabilityRO (A := A) (PI := leanPIR) (PS := leanPSR) (simI := leanSimIR)
-    (simS := leanSimSR) (progI := leanProgIR) (progS := leanProgSR) (εI := εRO) (εS := εRO)
-    hA hPI5 hPIE hPS5 hPSE (fun x c => progRO_isProg c) (fun x c => progRO_isProg c)
-    leanProgIR_none leanProgSR_none (fun a c => leanPIR_zkRO q3 a c) (fun a c => leanPSR_zkRO q3 a c)
-    (fun a c => εRO_nonneg' _ _ _) (fun a c => εRO_nonneg' _ _ _) hhide b₁ b₂ b₁' b₂'
-  have m : ∀ a c, a ≤ q5 + 1872 → c ≤ qE + 13821 → εRO q3 a c ≤ εRO q3 (q5 + 1872) (qE + 13821) :=
-    fun a c ha hc => εRO_mono le_rfl ha hc
-  have m1 := m (0 + (624 + (624 + (624 + q5)))) (0 + (4607 + (4607 + (4607 + qE)))) (by omega)
-    (by omega)
-  have m2 := m (0 + (0 + (624 + (624 + q5))) + 312) (0 + (0 + (4607 + (4607 + qE))) + 4607)
-    (by omega) (by omega)
-  have m3 := m (0 + (0 + (0 + (624 + q5))) + (312 + 312)) (0 + (0 + (0 + (4607 + qE))) + (4607 + 4607))
-    (by omega) (by omega)
-  have m4 := m (0 + (0 + (0 + (0 + q5))) + (312 + (312 + 312)))
-    (0 + (0 + (0 + (0 + qE))) + (4607 + (4607 + 4607))) (by omega) (by omega)
-  linarith
+        2 * εhide :=
+  (unlinkabilityRO_leanG A hA hhide b₁ b₂ b₁' b₂').trans (le_of_eq (by
+    rw [ZKRow.εz_fn, ZKRow.εz_fn]
+    ring))
 
 end Lean
 

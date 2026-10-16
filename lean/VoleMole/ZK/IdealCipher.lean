@@ -8,8 +8,8 @@ secret nodes (the hidden paths) by independent uniform rows, one node at a time,
 style of `Privacy/Hybrid.lean`.
 
 **The model.** The cipher is a table `E : K → X → K`: for every key, a row `X → K` (a uniform
-table is the ideal cipher with the rows uniform functions; the PRP/PRF switching term for
-permutation rows is not part of this file). The tree is a heap: node `n + 1` has parent `n / 2`,
+table is the ideal cipher with the rows uniform functions, the PRF view; permutation rows, with
+their switching term, are `ZK/IdealCipherPerm.lean`). The tree is a heap: node `n + 1` has parent `n / 2`,
 and its value is the parent's row at the input `x (n + 1)` (the node's CTR block). Node `0` is the
 root seed. Every node `n` has a row, `rowAt rep E R seed n`: for the *replaced* nodes `n ∈ rep`
 (with `n < N`) the independent row `R n`, otherwise `E` at the node's value `keyAt … n`. The real

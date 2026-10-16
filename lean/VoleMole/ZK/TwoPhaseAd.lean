@@ -25,6 +25,9 @@ output** `o₁`, so its reads depend on `o₁`; it also reads the session's own 
   games (`zk2_adaptive`, `Hyp2RA`): the continuation `K : Tab3 → Sh p → Cont2` reads the slice and
   the shared tables, not `H₂³`, error `εRO (q₃ + q_k3) (q₅ + q_k5) (q_E + q_kE)`.
 
+`Hyp2RA` is stated for any type of cipher rows; **`ZK2ARow R`** is the class of row types with
+`zk2_adaptive` (instances `ZK2ARow.fn`, and `ZK2ARow.perm` in `ZK/TwoPhasePerm.lean`).
+
 A continuation that reads `H₂³` is not covered. The simulator programs `H₂³` at the block of the
 prefix it recomputes for the continuation's instance, and at the zero-prefix block when the
 continuation stops (`simTab2` at `outPre2 = ∅`): a continuation whose decision to stop depends on
@@ -987,16 +990,17 @@ end Main
 value, the deterministic hypotheses hold; `|r| = n`; `K` does not read `H₂³`; at each step-1
 output `o₁`, `K · · o₁` reads the slice at `qk3` keys, `H₅` at `qk5` and the cipher at `qkE` keys
 (each with the other tables fixed). -/
-structure Hyp2RA (st : Statement) (r : ByteArray) (n : ℕ) (K : Tab3 → Sh st.params → Cont2)
+structure Hyp2RA {R : Type} (st : Statement) (r : ByteArray) (n : ℕ) (K : Tab3 → ShG R st.params → Cont2)
     (qk3 qk5 qkE : ℕ) : Prop where
   hyp : ∀ g s, Hyp2 st r (K g s)
   size : r.size = n
-  h2 : ∀ g (s : Sh st.params) (G2 : Tab2G st.params), K g (G2, s.2) = K g s
-  h3 : ∀ o1 (s : Sh st.params), Rd3 (fun g => K g s o1) qk3
+  h2 : ∀ g (s : ShG R st.params) (G2 : Tab2G st.params), K g (G2, s.2) = K g s
+  h3 : ∀ o1 (s : ShG R st.params), Rd3 (fun g => K g s o1) qk3
   h5 : ∀ o1 g, Rd5 (fun s => K g s o1) qk5
   hE : ∀ o1 g, RdE (fun s => K g s o1) qkE
 
-lemma Hyp2RA.mono {st : Statement} {r : ByteArray} {n : ℕ} {K : Tab3 → Sh st.params → Cont2}
+lemma Hyp2RA.mono {R : Type} {st : Statement} {r : ByteArray} {n : ℕ}
+    {K : Tab3 → ShG R st.params → Cont2}
     {qk3 qk5 qkE qk3' qk5' qkE' : ℕ} (h : Hyp2RA st r n K qk3 qk5 qkE) (h3 : qk3 ≤ qk3')
     (h5 : qk5 ≤ qk5') (hE : qkE ≤ qkE') : Hyp2RA st r n K qk3' qk5' qkE' :=
   ⟨h.hyp, h.size, h.h2, fun o1 s => (h.h3 o1 s).mono h3, fun o1 g => (h.h5 o1 g).mono h5,
@@ -1066,5 +1070,27 @@ theorem zk2_adaptive {qk3 qk5 qkE : ℕ} (hh : Hyp2RA st r n K qk3 qk5 qkE) (hHb
   exact key
 
 end ZKA
+
+/-! ## For a type of cipher rows -/
+
+/-- **Two-phase zero knowledge with a continuation that reads the tables after step 1, for a type
+of cipher rows**: `zk2_adaptive` for the shared tables `ShG R p`, error `ZKRow.εz` at the
+distinguisher's budget plus the continuation's reads. Function rows: `zk2_adaptive`
+(`ZK2ARow.fn`); permutation rows: `ZK/TwoPhasePerm.lean`. -/
+class ZK2ARow (R : Type) [Fintype R] [CipherRow R] [ZKRow R] where
+  /-- `zk2_adaptive` with this row type. -/
+  zk2A : ∀ (Hb : Hashes) (st : Statement) (r : ByteArray) (n : ℕ)
+    (K : Tab3 → ShG R st.params → Cont2) {qk3 qk5 qkE : ℕ}, Hyp2RA st r n K qk3 qk5 qkE →
+    HashesWF Hb → SmallParams st.params → ∀ {q3 q5 qE : ℕ}
+    (D : Out2 → Tab3 → ShG R st.params → Prop), Budget st.params q3 q5 qE D →
+    |pr ((Bytes 16 × Tab3) × ShG R st.params) (fun a =>
+        D (realRO2 Hb st r (K a.1.2) a.1.1 a.1.2 a.2) a.1.2 a.2) -
+      pr ((SimCoins2 st.params × Tab3) × ShG R st.params) (fun a =>
+        D (simRO2 Hb st n (K a.1.2) a.1.1 a.2) a.1.2 (progRO2 Hb st n (K a.1.2) a.1.1 a.2))| ≤
+      ZKRow.εz R st.params (q3 + qk3) (q5 + qk5) (qE + qkE)
+
+/-- **Function rows**: `zk2_adaptive`. -/
+instance ZK2ARow.fn : ZK2ARow (Blk → Blk) where
+  zk2A Hb st r n K _ _ _ hh hHb hp _ _ _ D hD := zk2_adaptive Hb st r n K hh hHb hp D hD
 
 end VoleMole.ZK.Sim

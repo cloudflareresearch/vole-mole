@@ -720,7 +720,10 @@ harmless.
    at about `2^{40}` cipher queries.
 5. Theorem 4(a) is mechanized for a fixed-size game (two Clients, one redemption per side,
    Appendix B). In the ROM and ideal-cipher model, what remains is: SHAKE as a random oracle, AES
-   as an ideal cipher (with the PRP/PRF switching term on paper), the four `H₃` slices independent
+   as an ideal cipher (with its rows uniform functions, `anonymityRO_lean_num`,
+   `anonymityRA_lean_num`, or uniform permutations read forward and inverse, the PRP/PRF switching
+   term included, `anonymityRO_lean_num_perm`, `anonymityRA_lean_num_perm`, `lean/docs/zk.md`
+   §10.4), the four `H₃` slices independent
    (`≤ 2⁻¹⁹²`), the seed-XOF hop (outputs drawn uniformly), the consistency of a table-reading
    interaction (a hypothesis), and the hiding of `Com` (an assumption). Theorem 4(b) is not
    mechanized.
@@ -826,3 +829,10 @@ bounded the same way (`pr_collide_adaptive`). **`anonymityRA_lean_num`**:
 about `2⁻¹⁰¹·⁹` without budgets (`2⁻¹⁰¹·⁵` if the interaction reads `H₂³` at all). So the
 restriction to a table-oblivious interaction is not needed: there is no attack, and the cost is
 of the same order.
+
+**AES as random permutations** (`lean/docs/zk.md` §10.4, `Privacy/PermRO.lean`,
+`Privacy/PermRA.lean`). Both theorems also hold with the cipher's rows uniform permutations that
+the adversary reads forward and inverse: `anonymityRO_lean_num_perm`, `anonymityRA_lean_num_perm`,
+the same bounds with every `εRO` (`εROP`, `εAd`) replaced by its permutation counterpart `εROPm`
+(`εROPmP`, `εAdPm`), whose hop denominators are `2¹²⁸ − (nHi + 1)` and which carry the PRP/PRF
+switching term `switchEps ≤ 2⁻¹¹³·²`; numerically the same to two decimals.
