@@ -32,7 +32,7 @@ int main() {
     //
     // Key generation.
     const uov::SecretKey sk(uov::generate_secret_key_bytes());
-    const uov::PublicKey pk(sk.public_key());
+    const uov::PublicKey pk(sk.public_key_bytes());
 
     // The Issuer (in particular, a MOLE Moderator) remembers the nullifier of every token that's
     // spent, for as long as it accepts tokens for the given key and issuance context.

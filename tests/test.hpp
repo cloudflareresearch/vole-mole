@@ -68,7 +68,7 @@ inline const uov::PublicKey& distinct_uov_public_key(size_t i) {
         uov::SecretKeyBytes sk_bytes = filled<uov::SECRET_KEY_BYTES>(0x80);
         sk_bytes[0] = static_cast<uint8_t>(keys.size());
         sk_bytes[1] = static_cast<uint8_t>(keys.size() >> 8);
-        keys.emplace_back(uov::SecretKey(sk_bytes).public_key());
+        keys.emplace_back(uov::SecretKey(sk_bytes).public_key_bytes());
     }
     return keys[i];
 }

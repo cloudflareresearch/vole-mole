@@ -30,7 +30,7 @@ void BM_UovExpandSecretKey(benchmark::State& state) {
 BENCHMARK(BM_UovExpandSecretKey)->Unit(benchmark::kMicrosecond);
 
 void BM_UovExpandPublicKey(benchmark::State& state) {
-    const uov::PublicKeyBytes& bytes = test::uov_key_pair().sk.public_key();
+    const uov::PublicKeyBytes& bytes = test::uov_key_pair().sk.public_key_bytes();
     for (auto _ : state) {
         uov::PublicKey pk(bytes);
         benchmark::DoNotOptimize(pk);

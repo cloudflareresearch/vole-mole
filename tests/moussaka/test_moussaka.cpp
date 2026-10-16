@@ -470,9 +470,9 @@ TEST(Redeem, VerifiesLargestAnchorSet) {
 // the container must not be modified while the Anchor Set is in use.)
 TEST(Redeem, AnchorSetFromOwnedKeys) {
     std::vector<uov::PublicKey> keys;
-    keys.emplace_back(anchors().a.sk.public_key());
-    keys.emplace_back(uov_key_pair().sk.public_key()); // the issuer, at index ISSUER
-    keys.emplace_back(anchors().c.sk.public_key());
+    keys.emplace_back(anchors().a.sk.public_key_bytes());
+    keys.emplace_back(uov_key_pair().sk.public_key_bytes()); // the issuer, at index ISSUER
+    keys.emplace_back(anchors().c.sk.public_key_bytes());
 
     const AnchorSet anchor_set(keys);
     const auto req =
@@ -703,8 +703,8 @@ TEST(AnchorSet, RejectsRepeatedKey) {
 
     // Distinct copies of the same key.
     std::vector<uov::PublicKey> copies;
-    copies.emplace_back(anchors().a.sk.public_key());
-    copies.emplace_back(anchors().a.sk.public_key());
+    copies.emplace_back(anchors().a.sk.public_key_bytes());
+    copies.emplace_back(anchors().a.sk.public_key_bytes());
     EXPECT_THROW((void)AnchorSet(copies), std::invalid_argument);
     EXPECT_THROW(AnchorSet({b, copies[0], a}), std::invalid_argument);
 }

@@ -20,7 +20,7 @@ int main() {
     const uov::SecretKey sk(sk_bytes);
 
     // The UOV public key, encoded in 46,591 bytes. Believe it or not, this is the compact form.
-    const uov::PublicKeyBytes pk_bytes = sk.public_key();
+    const uov::PublicKeyBytes pk_bytes = sk.public_key_bytes();
     std::println("Public key: {} bytes", pk_bytes.size());
 
     // Before the public key can be used, it must first be expanded. Again, this step is relatively

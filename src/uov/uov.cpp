@@ -66,7 +66,7 @@ SecretKey::SecretKey(SecretKey&&) noexcept = default;
 SecretKey& SecretKey::operator=(SecretKey&&) noexcept = default;
 SecretKey::~SecretKey() = default;
 
-const PublicKeyBytes& SecretKey::public_key() const { return impl_->public_key; }
+const PublicKeyBytes& SecretKey::public_key_bytes() const { return impl_->public_key; }
 
 const PublicKey& SecretKey::expanded_public_key() const { return *impl_->expanded_public_key; }
 
