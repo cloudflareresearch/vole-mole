@@ -264,11 +264,8 @@ struct ArithRelation {
     static V newton_eval(const Ctx& ctx, const std::array<V, RADIX + 1>& fa, const V& b, N&& n) {
         const auto& c = small_constants();
         auto q = [&](size_t j) {
-            V acc = fa[0] * n(0, j);
-            for (size_t i = 1; i < RADIX; ++i) {
-                acc += fa[i] * n(i, j);
-            }
-            return acc;
+            return V::lincomb(std::span<const V>(fa.data(), RADIX),
+                              [&](size_t i) { return Fp(n(i, j)); });
         };
         V acc = q(RADIX - 1);
         for (size_t j = RADIX - 1; j-- > 0;) {

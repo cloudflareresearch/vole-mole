@@ -81,6 +81,41 @@ template <typename F> void field_laws() {
     EXPECT_EQ(F::reduce_be(wide), (two64 - F::one()) * r256 + (r256 - F::one()));
 }
 
+// Sums of products with lazy reduction match the field's, including at the maximum (128 products
+// of M - 1, doubled).
+template <typename F> void lazy_reduction() {
+    std::mt19937_64 rng(7);
+    auto random = [&] { return F::from_canonical(Limbs{rng(), rng(), rng(), rng() >> 1}); };
+    for (const size_t n : {1, 2, 5, 69, 128}) {
+        typename F::Wide acc{};
+        F expect = F::zero();
+        for (size_t i = 0; i < n; ++i) {
+            const F a = random(), b = random();
+            F::mul_add_wide(acc, a, b);
+            expect += a * b;
+        }
+        EXPECT_EQ(F::reduce_wide(acc), expect) << n;
+        F::double_wide(acc);
+        EXPECT_EQ(F::reduce_wide(acc), expect + expect) << n;
+    }
+    const F max = F::zero() - F::one();
+    // Representations near M: from_mont of M - 1.
+    Limbs m1 = F::M;
+    m1[0] -= 1;
+    const F rmax = F::from_mont(m1);
+    for (const F x : {max, rmax}) {
+        typename F::Wide acc{};
+        for (size_t i = 0; i < 128; ++i) {
+            F::mul_add_wide(acc, x, x);
+        }
+        F::double_wide(acc);
+        EXPECT_EQ(F::reduce_wide(acc), x * x * F::from_u64(256));
+    }
+}
+
+TEST(Field, FpLazyReduction) { lazy_reduction<Fp>(); }
+TEST(Field, FnLazyReduction) { lazy_reduction<Fn>(); }
+
 TEST(Field, FpLaws) { field_laws<Fp>(); }
 TEST(Field, FnLaws) { field_laws<Fn>(); }
 

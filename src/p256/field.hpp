@@ -228,6 +228,84 @@ template <typename Params> class Field {
         return f;
     }
 
+    // Sums of products with lazy reduction: acc += a b, for the Montgomery representations as
+    // integers, and reduce_wide(acc) is the element whose representation is acc R^-1 mod M, i.e.,
+    // the sum of the products a b. acc must stay below 2^520 (e.g., at most 256 products, or 128
+    // products doubled).
+    using Wide = std::array<u64, 9>;
+    static constexpr void mul_add_wide(Wide& acc, const Field& a, const Field& b) {
+        u64 p[8] = {};
+        for (size_t i = 0; i < 4; ++i) {
+            u64 carry = 0;
+            for (size_t j = 0; j < 4; ++j) {
+                const u128 s = u128{a.v_[i]} * b.v_[j] + p[i + j] + carry;
+                p[i + j] = static_cast<u64>(s);
+                carry = static_cast<u64>(s >> 64);
+            }
+            p[i + 4] = carry;
+        }
+        u64 c = 0;
+        for (size_t i = 0; i < 8; ++i) {
+            const u128 s = u128{acc[i]} + p[i] + c;
+            acc[i] = static_cast<u64>(s);
+            c = static_cast<u64>(s >> 64);
+        }
+        acc[8] += c;
+    }
+    // acc *= 2.
+    static constexpr void double_wide(Wide& acc) {
+        for (size_t i = 9; i-- > 1;) {
+            acc[i] = (acc[i] << 1) | (acc[i - 1] >> 63);
+        }
+        acc[0] <<= 1;
+    }
+    static constexpr Field reduce_wide(const Wide& acc) {
+        // acc = hi 2^512 + lo. Montgomery reduction of lo (REDC, 4 rounds): t = (lo + m M) / R,
+        // with t < 2^512 / R + M < 3 M.
+        u64 t[9] = {acc[0], acc[1], acc[2], acc[3], acc[4], acc[5], acc[6], acc[7], 0};
+        for (size_t i = 0; i < 4; ++i) {
+            const u64 m = t[i] * M_INV;
+            u64 carry = 0;
+            for (size_t j = 0; j < 4; ++j) {
+                const u128 s = u128{m} * M[j] + t[i + j] + carry;
+                t[i + j] = static_cast<u64>(s);
+                carry = static_cast<u64>(s >> 64);
+            }
+            for (size_t j = i + 4; j < 9; ++j) {
+                const u128 s = u128{t[j]} + carry;
+                t[j] = static_cast<u64>(s);
+                carry = static_cast<u64>(s >> 64);
+            }
+        }
+        // r = t[4..9) < 3 M < 2^258; subtract M while r >= M (at most twice, in constant time).
+        u64 r[5] = {t[4], t[5], t[6], t[7], t[8]};
+        for (int k = 0; k < 2; ++k) {
+            u64 d[5];
+            u64 borrow = 0;
+            for (size_t i = 0; i < 5; ++i) {
+                const u64 mi = i < 4 ? M[i] : 0;
+                const u128 s = u128{r[i]} - mi - borrow;
+                d[i] = static_cast<u64>(s);
+                borrow = static_cast<u64>(s >> 64) & 1;
+            }
+            const u64 mask = borrow - 1; // all ones if r >= M
+            for (size_t i = 0; i < 5; ++i) {
+                r[i] = (d[i] & mask) | (r[i] & ~mask);
+            }
+        }
+        // hi 2^512 R^-1 = hi R is the representation of the element hi, i.e., hi (R mod M), which
+        // is less than M since hi < 2^8 and R mod M < 2^248.
+        static_assert(R1[3] < (u64{1} << 56));
+        Limbs h{};
+        u64 carry = 0;
+        for (size_t i = 0; i < 4; ++i) {
+            const u128 v = u128{R1[i]} * acc[8] + carry;
+            h[i] = static_cast<u64>(v);
+            carry = static_cast<u64>(v >> 64);
+        }
+        return from_mont(Limbs{r[0], r[1], r[2], r[3]}) + from_mont(h);
+    }
+
   private:
     // Montgomery multiplication (CIOS): v_ o R^-1 mod M.
     constexpr Field mul_raw(const Limbs& o) const {

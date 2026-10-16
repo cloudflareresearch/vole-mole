@@ -21,6 +21,7 @@
 
 #include <array>
 #include <cstddef>
+#include <span>
 #include <stdexcept>
 
 namespace vole_mole::voleith_p256 {
@@ -106,6 +107,34 @@ template <typename F, size_t MAXD> class Val<F, false, MAXD> {
         Val out;
         out.deg_ = a.deg_ + b.deg_;
         check(out.deg_);
+        if constexpr (requires(typename F::Wide w) { F::mul_add_wide(w, F{}, F{}); }) {
+            // Each coefficient is a sum of products, reduced once (lazy reduction); a square adds
+            // each cross term once, doubled.
+            static_assert(MAXD < 128);
+            if (a.deg_ > 0 && b.deg_ > 0) {
+                const bool square = &a == &b;
+                for (size_t k = 0; k <= out.deg_; ++k) {
+                    typename F::Wide acc{};
+                    const size_t lo = k > b.deg_ ? k - b.deg_ : 0;
+                    const size_t hi = k < a.deg_ ? k : a.deg_;
+                    if (square) {
+                        for (size_t i = lo; 2 * i < k; ++i) {
+                            F::mul_add_wide(acc, a.c_[i], a.c_[k - i]);
+                        }
+                        F::double_wide(acc);
+                        if (k % 2 == 0) {
+                            F::mul_add_wide(acc, a.c_[k / 2], a.c_[k / 2]);
+                        }
+                    } else {
+                        for (size_t i = lo; i <= hi; ++i) {
+                            F::mul_add_wide(acc, a.c_[i], b.c_[k - i]);
+                        }
+                    }
+                    out.c_[k] = F::reduce_wide(acc);
+                }
+                return out;
+            }
+        }
         for (size_t i = 0; i <= a.deg_; ++i) {
             if (a.c_[i].is_zero()) {
                 continue;
@@ -113,6 +142,35 @@ template <typename F, size_t MAXD> class Val<F, false, MAXD> {
             for (size_t j = 0; j <= b.deg_; ++j) {
                 out.c_[i + j] += a.c_[i] * b.c_[j];
             }
+        }
+        return out;
+    }
+
+    // sum_i s(i) v[i]: as the sum of the products, but each coefficient is reduced once.
+    template <typename S> static Val lincomb(std::span<const Val> v, S&& s) {
+        Val out;
+        for (const Val& x : v) {
+            out.deg_ = x.deg_ > out.deg_ ? x.deg_ : out.deg_;
+        }
+        if constexpr (requires(typename F::Wide w) { F::mul_add_wide(w, F{}, F{}); }) {
+            if (v.size() <= 256) {
+                std::array<typename F::Wide, MAXD + 1> acc{};
+                for (size_t i = 0; i < v.size(); ++i) {
+                    const F si = s(i);
+                    const size_t k = out.deg_ - v[i].deg_;
+                    for (size_t t = 0; t <= v[i].deg_; ++t) {
+                        F::mul_add_wide(acc[t + k], v[i].c_[t], si);
+                    }
+                }
+                for (size_t t = 0; t <= out.deg_; ++t) {
+                    out.c_[t] = F::reduce_wide(acc[t]);
+                }
+                return out;
+            }
+        }
+        out = Val();
+        for (size_t i = 0; i < v.size(); ++i) {
+            out += v[i] * s(i);
         }
         return out;
     }
@@ -180,6 +238,14 @@ template <typename F, size_t MAXD> class Val<F, true, MAXD> {
     friend Val operator*(const Val& a, const Val& b) {
         const Val out(a.k_ * b.k_, a.deg_ + b.deg_, a.pw_ ? a.pw_ : b.pw_);
         check(out.deg_);
+        return out;
+    }
+
+    template <typename S> static Val lincomb(std::span<const Val> v, S&& s) {
+        Val out;
+        for (size_t i = 0; i < v.size(); ++i) {
+            out += v[i] * s(i);
+        }
         return out;
     }
 
