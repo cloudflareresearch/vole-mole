@@ -721,7 +721,8 @@ All files are under `lean/VoleMole/ZK/` (and `Privacy/LeanProver.lean`, `Privacy
 `ZK/IdealCipherPermP.lean`, `ZK/HopsPatchPerm.lean`, `Privacy/PermRO.lean`, `Privacy/PermRA.lean`,
 §10.4; `ZK/SharedH3.lean`, `ZK/SharedH3Two.lean`, `ZK/SharedH3RA.lean`, `ZK/SharedH3One.lean`,
 `Privacy/SharedH3RO.lean`, `Privacy/SharedH3PomFRIT.lean`, `Privacy/SharedH3RA.lean`,
-`Privacy/SharedH3PomFRITRA.lean`, `ROM/SharedH3Reads.lean`, §10.5). There is no `sorry` and no `axiom`. `#print axioms` lists
+`Privacy/SharedH3PomFRITRA.lean`, `ROM/SharedH3Reads.lean`, §10.5; `Privacy/SeedXOF.lean`,
+`Privacy/SeedXOFGames.lean`, `ROM/SeedXOFReads.lean`, §10.6). There is no `sorry` and no `axiom`. `#print axioms` lists
 only `propext`, `Classical.choice` and `Quot.sound`.
 
 | Statement | Lean | Used in |
@@ -1151,7 +1152,7 @@ may read the tables it does not program; `zk2_ro`, `lean_zeroKnowledgeROS2`), wi
 *The game* (`Privacy/PomFRITRO.lean`). `realGameRO`: the spec's protocol on `Layout.labelRows`
 (`realSession`, `issueRequestOf`, `finalizeIssue`) with the Lean prover on the shared tables and
 each session's `H₃` slice (`leanProverRO`); `hash_to_target`, `XOF_seed` (the games draw its
-outputs) and the refresher commitment stay SHAKE, and the Issuer's key, messages and responses do
+outputs; §10.6 adds the seeds and the XOF) and the refresher commitment stay SHAKE, and the Issuer's key, messages and responses do
 not read the tables (§10.3 lifts this, `H₂³` included), its guess sees all of them. World `true` is world `false` for the Issuer with
 the sessions' roles exchanged (`A.swap`, `realGameRO_true`). Rewritten (`realGameRO_iff`, no
 probability): a session's step 2 runs only if **both** responses pass the Clients' checks
@@ -1414,7 +1415,7 @@ special case of key sets independent of `o₁`.
   (`keyOf`) and the response stage at every pair of requests (`respOf`) are consistent table
   readers (`SReads`) of each slice (the other fixed) and the shared tables, at most `i₃`, `i₅`,
   `i_E` keys and **no `H₂³` key**; so the Issuer at programmed tables is the Issuer at the original
-  ones (`IBudget.at_h23`). `hash_to_target`, `XOF_seed` (drawn by the games) and the refresher
+  ones (`IBudget.at_h23`). `hash_to_target`, `XOF_seed` (drawn by the games; §10.6) and the refresher
   commitment stay SHAKE, outside the tables.
 - *The game* (`realGameRA`): `realGameRO` for the Issuer at the game's slices and tables. *The
   hybrids*: `G0`, `G1`, `G1'`, `G2` of §10.2 at the Issuer at the original tables (`G0RA`, …).
@@ -1745,3 +1746,111 @@ have to be redone on the shared tables (no new idea needed). The model counts th
 reads with its cipher queries (`q_E`), so the bounds charge `221·2⁻¹²⁸` per `H₃` read where `2⁻¹²⁸`
 would do; a separate `H₃` budget would need the shared tables to carry `H₃` as a separate
 component (not possible with the games' `ShG R p` shape) and changes nothing beyond that factor.
+
+### 10.6 The seed-XOF hop (`Privacy/SeedXOF.lean`, `Privacy/SeedXOFGames.lean`, `ROM/SeedXOFReads.lean`)
+
+**What the hop is.** Every honest request draws 32 fresh OS bytes and expands them with a
+domain-separated SHAKE128 XOF into its randomness:
+- PomFRIT: `(ρ, refresher, r) = XOF_seed(POMFRIT_SEED_DST ‖ seed ‖ dig(pk) ‖ msg)`
+  (`pomfrit.cpp:150-161`, `Spec.PomFRIT.expandSeed`);
+- Moussaka: `nf ‖ r ‖ ρ_iss = SHAKE128(ISSUE_SEED_DST ‖ seed)`, `ρ_red =
+  SHAKE128(REDEEM_SEED_DST ‖ seed')` (`moussaka.cpp:58-85`, `expandIssueSeed`,
+  `expandRedeemSeed`);
+- Ratatouille: `(nf, r, ρ) = SHAKE128(DST ‖ seed)`, with the issue and the spend DST
+  (`ratatouille.cpp:63-84`, `Spec.Ratatouille.expandSeed`).
+
+The VOLEitH prover takes `ρ` as an input (`ProveSeed`, `voleith.hpp:75, 152`), and zero knowledge
+is a statement about the prover with uniform `ρ`. So **no zero-knowledge theorem assumes the hop**;
+only the protocol games do. The games of §10.2–§10.5 (and `Privacy/*.lean`) draw the XOF's
+outputs uniformly (`issueRequest_eq`, `redeemRequest_eq`, `issueRequestWithSeed_eq`,
+`spendRequestWithSeed_eq`). The hop replaces the real Clients (G0: uniform seeds, the outputs the
+random-oracle XOF at the seeds, the adversary querying the XOF) by these games (G1: uniform
+outputs). The notes argue it on paper: PomFRIT's G0 → G1 (`security/pomfrit.md` §8.2,
+`2·Q_X·2⁻²⁵⁶`), Ratatouille's H1 (`security/ratatouille.md` §6, `q_H·Q_P·2⁻²⁵⁶`), and Moussaka's
+deviation D7 ("none in the ROM", `security/moussaka.md` §2; Theorem 4 has no term for it).
+
+**The model.**
+- *The XOF table* `g : K → R`, uniform, one cell per key. A cell holds everything the XOF answers
+  at inputs starting with the key. For PomFRIT the key is the seed and the cell is the column of
+  answers at every context `dig(pk) ‖ msg`, in a finite context type `Ctx` with an encoding
+  `enc : Bytes → Ctx` (`XofP Ctx = Coins 32 → Ctx → XOut`; with `Ctx` the byte strings up to a
+  length bound and `enc` the inclusion, the XOF on every input of that length, as `H₃` is modelled
+  on `|x| < 1024`). For Moussaka and Ratatouille the key is `(domain, seed)` and the cell the output
+  (`XofM`, `XofR`; a Moussaka redemption reads the `16`-byte component of its cell).
+- *Reads*: `RdX f q`, `f` reads at most `q` cells, adaptively (the shape of `Rd3`, `Rd5`, `RdE`).
+  An adversary's query reads the cell of the query's key.
+- *The adversary at table `g`* is `A g`, an adversary of the existing game. Its run in the game,
+  at every fixed tape, reads at most `q_g` cells (`hg`); for PomFRIT its key and messages, which
+  fix the sessions' contexts, at most `q_k` (`hk`). Every hypothesis of the existing theorem is
+  required of `A g` for every `g`.
+- *The game with the seeds* (`seedGame`; `seedGameP`, `seedGameM`, `seedGameR`, and per game
+  `seedGameRO`, `seedGameSh`, `seedGameRA`, `seedGameRASh`): the tape is the seeds, the rest of
+  the game's tape and the XOF table; request `i` reads its cell `g (x c i)` (at its context), and
+  the game's tape is built from those cells (`insP`, `insM`, `insR`).
+
+**The hop.** `abs_pr_seed_le`: the run with the real cells `g ∘ x c` and the run with independent
+uniform cells (the table untouched) are `Pr[x c not injective] + δ` apart, where `δ` bounds
+`Pr_c[∃ i, x c i ∈ F]` for a fixed set `F` of `q` keys. For injective keys, programming the table
+at them is perfect, and the runs differ only if the adversary reads a programmed cell
+(`abs_pr_hidden_le`), at a key set that depends on the table, the cells and the rest of the tape
+but not on the seeds; then average over the seeds. `abs_pr_seedGame_sub_le` lifts it into a
+two-world game: if uniform cells give the uniform tape (`hinsP`, `hinsM`, `hinsR`, with
+`pr_cols` for PomFRIT's columns read at the Issuer's contexts), the game with uniform cells is the
+original game averaged over the XOF table, and every existing privacy theorem holds at every
+table. The seed counting: `pr_bool_exists_mem_le`, `pr_bool_not_injective_le` (two seeds, one key
+each), `pr_dom_exists_mem_le`, `pr_dom_not_injective_le` (two seeds in each of two domains: a key
+lies in one domain, where it can hit one of two seeds).
+
+**The theorems** (each the existing theorem's bound plus twice the per-world hop):
+
+    PomFRIT:               + 2·(2·(q_k + q_g) + 1)·2⁻²⁵⁶
+    Moussaka, Ratatouille: + 2·(2·q_g + 2)·2⁻²⁵⁶
+
+- PomFRIT: `blindnessRO_lean_num_seed`, `blindnessRA_lean_num_seed`,
+  `blindnessRAH_lean_num_seed`, `blindnessSh_num_seed`, `blindnessRASh_num_seed`, and for an
+  interaction written as an oracle computation `blindnessOC_lean_num_seed`,
+  `blindnessOCH_lean_num_seed`, `blindnessOCSh_num_seed` (`ROM/SeedXOFReads.lean`).
+- Moussaka: `anonymityRO_lean_num_seed`, `anonymityRA_lean_num_seed`, `anonymitySh_num_seed`,
+  `anonymityRASh_num_seed`, `anonymityOC_lean_num_seed`, `anonymityOCSh_num_seed`.
+- Ratatouille: `unlinkabilityRO_lean_num_seed`, `unlinkabilityRA_lean_num_seed`,
+  `unlinkabilitySh_num_seed`, `unlinkabilityRASh_num_seed`, `unlinkabilityOC_lean_num_seed`,
+  `unlinkabilityOCSh_num_seed`.
+- Each with a `_perm_seed` version (AES as random permutations): 40 theorems. The existing
+  theorems are unchanged.
+
+**On the notes' bounds.**
+- *PomFRIT.* The note's `|Pr[b' = b] − 1/2|` is half the left/right difference, so its hop costs
+  `(2Q_X + 1)·2⁻²⁵⁶` in the Lean bound's terms (`Q_X = q_k + q_g`), against the note's
+  `2Q_X·2⁻²⁵⁶`. The note names the seed collision but does not charge it. In the full random-oracle
+  model its bound is still right: for `µ₀ ≠ µ₁` the two inputs differ even when the seeds collide,
+  and for `µ₀ = µ₁` the two worlds are the same. The `2⁻²⁵⁶` comes from the model, which keys the
+  table by the seed alone. Lemma DS (c) (`n_seed·Q·2⁻²⁵⁶`, the overlap F-DS2) is a separate
+  step.
+- *Ratatouille.* `q_H·Q_P·2⁻²⁵⁶` over-counts the query term (a query hits one seed of its own
+  domain: `2q`, not `4q`, in the four-proof game) but **misses the seed collisions**. Two
+  issuances, or two spends, with equal seeds have equal `(nf, r, ρ)`, while H1 gives them
+  independent values, so the two games differ there. The hop costs `(2q_g + 2)·2⁻²⁵⁶` per world; in general
+  `(Σ_d n_d·q_d + Σ_d C(n_d, 2))·2⁻²⁵⁶` for `n_d` requests in domain `d`, read `q_d` times
+  (`abs_pr_seed_le` is stated for any number of requests).
+- *Moussaka.* Theorem 4 has no term for the hop (D7: "none in the ROM"). An adversary that
+  queries the XOF at a seed recovers that Client's `nf`, so the hop is not free: `(2q_g + 2)·2⁻²⁵⁶`
+  per world, as for Ratatouille.
+
+All are negligible next to the zero-knowledge terms (`≈ 2⁻¹⁰²`).
+
+**What remains.**
+- *Independence of the seed XOFs from the proof system's oracles.* The tables are independent by
+  construction. For Moussaka and Ratatouille this is Lemma DS part (a): the domains A4–A7 are
+  disjoint from every other (`Protocols/DomainSeparation.lean`, `clean_pairwise`), and one oracle
+  with disjoint domains is the per-domain oracles (`ROM/DomainSep.lean`). This is the same
+  modelling step as for every other table of the games. For PomFRIT's seed XOF the domain
+  overlaps proof-system domains (finding F-DS2), and its independence is part (c), on paper
+  (`n_seed·Q·2⁻²⁵⁶`). The proposed `APP_TAG` byte would make it part (a).
+- *The adversary's XOF access* is a semantic read budget on its run in the game (`RdX`, as the
+  guess's `Rd3`, `Rd5`, `RdE`), not a VCVio oracle computation. Its consistency is not needed (it
+  is only an upper bound on reads).
+- *PomFRIT's contexts* lie in a finite type: messages beyond the length bound of `Ctx` (with
+  `enc` injective) are not covered.
+- *Fixed sizes*: two (PomFRIT) or four (Moussaka, Ratatouille) requests, as in the games. The hop
+  lemma itself is general.
+- SHAKE128 as a random oracle remains a modelling step, as everywhere.

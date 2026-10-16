@@ -36,7 +36,7 @@ Contents:
 | One-more unforgeability, per issuance context (Thm 1) | **Yes** | `ε_ext^iss + ε_ext^red + ε_dig + Adv^bind_Com + K·Adv^ct-uf_UOV,Com` | PoK (extraction README), binding of `Com`, chosen-target unforgeability of UOV on `Com`-images (implied by one-more-UOV, heuristically) |
 | One nullifier per signed commitment; double-spend detection (Cor 2) | **Yes**, if the Moderator keeps one record per `(ctx_iss, ctx_red)` across all Anchor Sets (`moussaka.hpp:141-146`) | as Thm 1 | as Thm 1 |
 | Redemption non-malleability: no redirect to another `challenge_digest`, Anchor Set or `ctx_red` (Thm 3) | **Yes** | `ε_SE^red + Adv^bind + K·Adv^ct-uf + U·Adv^ow-r + ZK hops` | weak SE (L8), plus the above, plus one-wayness in `r` |
-| Issuer hiding and unlinkability vs a Moderator **colluding with all Anchors**, with adversarial keys (Thm 4a) | **Yes, computationally**; [Lean] from uniform seed outputs (`Privacy/Moussaka.lean`, `anonymity`); with the executable Lean prover (label rows) down to its tape hypothesis (`Privacy/MoussakaLean.lean`, `anonymity_label_rows`); for the Lean prover in the ROM and ideal-cipher model with every zero-knowledge term explicit, `≈ 2⁻¹⁰²·²` plus budget terms and `2·Adv^hide_Com` (`anonymityRO_lean_num`), and `≈ 2⁻¹⁰¹·⁹` with a table-reading interaction (`anonymityRA_lean_num`; Appendix B) | `2·ε_ZK^joint + 2·Adv^hide_Com` (the `2^{−192}` is not needed, §6) | ZK (lean/docs/zk.md), hiding of `Com` |
+| Issuer hiding and unlinkability vs a Moderator **colluding with all Anchors**, with adversarial keys (Thm 4a) | **Yes, computationally**; [Lean] from uniform seed outputs (`Privacy/Moussaka.lean`, `anonymity`); with the executable Lean prover (label rows) down to its tape hypothesis (`Privacy/MoussakaLean.lean`, `anonymity_label_rows`); for the Lean prover in the ROM and ideal-cipher model with every zero-knowledge term explicit, `≈ 2⁻¹⁰²·²` plus budget terms and `2·Adv^hide_Com` (`anonymityRO_lean_num`), and `≈ 2⁻¹⁰¹·⁹` with a table-reading interaction (`anonymityRA_lean_num`; Appendix B); from the real Clients' OS seeds and seed XOF, each `+ 2·(2q_X + 2)·2⁻²⁵⁶` (`anonymity*_seed`, `lean/docs/zk.md` §10.6) | `2·ε_ZK^joint + 2·Adv^hide_Com` (the `2^{−192}` is not needed, §6) | ZK (lean/docs/zk.md), hiding of `Com` |
 | The same vs a Moderator that sees no issuance (Thm 4b) | **Yes**, with no Keccak assumption | `2·Σ ε_ZK^red` with `Pred = 2^{−128}` | ZK only |
 | Issuer hiding under a Moderator-chosen Anchor Set | **Only relative to the Anchors in the set that are honest and in common use** (§7) | n/a | Anchor-Set consistency outside the library |
 
@@ -134,7 +134,7 @@ string below (`commit.hpp:33-48`, `moussaka.cpp:89-96`):
 | D4 | `Com` circuit unspecified (TODO) | Two committed intermediate states, after 5 and 9 rounds (`issue.hpp:5-20`) | Covered by L7 (Keccak segments) |
 | D5 | Anchor Set: `0 < N ≤ MAX_ANCHORS` | Also rejects duplicate keys by digest (`moussaka.cpp:138-151`) | Hygiene only (§7) |
 | D6 | `RedeemRequest` does not check the token | The Client checks validity for index `i` in constant time (`moussaka.cpp:196-211`) | Better: no proof is made for a false statement. No leak of `i` |
-| D7 | `nf`, `r` sampled directly | Derived with `ρ_iss` from one OS seed through SHAKE128 (`moussaka.cpp:58-71`) | None in the ROM. This needs the application-hash vs proof-hash disjointness (Lemma DS, §3.1) |
+| D7 | `nf`, `r` sampled directly | Derived with `ρ_iss` from one OS seed through SHAKE128 (`moussaka.cpp:58-71`) | None in the ROM up to the seed-XOF hop: `(2q_X + 2)·2^{−256}` per world in Theorem 4's game (an XOF query at a Client's seed gives its `nf`; two seeds of one domain collide), which Theorem 4 does not charge; [Lean] `anonymity*_seed`, `lean/docs/zk.md` §10.6. This needs the application-hash vs proof-hash disjointness (Lemma DS, §3.1) |
 | D8 | "samples a solution `s`" (older text) / "DerivePreimage" | Deterministic in `(sk, t)` | Needed: two preimages of one target from different vinegars are not known to be harmful, but determinism makes the UOV oracle a function (§3.3) |
 | D9 | Security claim: one-more-UOV (PoMFRIT Def. 8) | — | This note uses a weaker assumption, CT-UF (§3.3), which follows from one-more-UOV heuristically |
 | D10 | DST template "as in Ratatouille" | DST is *appended* to the instance in `mu` (`voleith.hpp:118`). Application hashes *prepend* DSTs | Covered by Lemma DS (§3.1) |
@@ -483,7 +483,8 @@ independent uniform strings in both worlds. No Keccak assumption is used. ∎
 **[Lean] `lean/VoleMole/Privacy/Moussaka.lean`, Theorem 4(a).** The game above on
 `Spec/Moussaka.lean`'s `issueRequest`, `finalizeIssue` and `redeemRequest`, with the seed XOF's
 outputs `(nf, r, ρ_iss)` and `ρ_red` drawn uniformly (`issueRequest_eq`, `redeemRequest_eq`), any
-Client-side index rule `idx`, and the refusal rule above (`allOk`).
+Client-side index rule `idx`, and the refusal rule above (`allOk`). The seed-XOF hop to the real
+Clients is mechanized for the random-oracle games of Appendix B (`lean/docs/zk.md` §10.6).
 - Step 1, one proof at a time: `issue_close`, `redeem_close`, from zero knowledge as the hypothesis
   `Privacy.ZeroKnowledge` (simulator from the statement; `ε`-close for every statement and valid
   witness, against distinguishers that may know the witness). **On `main` no efficient simulator
@@ -723,10 +724,13 @@ harmless.
    as an ideal cipher (with its rows uniform functions, `anonymityRO_lean_num`,
    `anonymityRA_lean_num`, or uniform permutations read forward and inverse, the PRP/PRF switching
    term included, `anonymityRO_lean_num_perm`, `anonymityRA_lean_num_perm`, `lean/docs/zk.md`
-   §10.4), the seed-XOF hop (outputs drawn uniformly), the consistency of a table-reading
+   §10.4), the consistency of a table-reading
    interaction given as a function of the tables (a hypothesis; a theorem for one written as an
-   oracle computation, `anonymityOC_lean_num`), and the hiding of `Com` (an assumption). Theorem 4(b) is not
-   mechanized.
+   oracle computation, `anonymityOC_lean_num`), and the hiding of `Com` (an assumption). The
+   seed-XOF hop is mechanized (`anonymityRO_lean_num_seed`, `anonymityRA_lean_num_seed`,
+   `anonymitySh_num_seed`, `anonymityRASh_num_seed`, the `OC` versions and `_perm`: the XOF a
+   uniform table keyed by `(DST, seed)`, `+ 2·(2q_X + 2)·2^{−256}`; `lean/docs/zk.md` §10.6).
+   Theorem 4(b) is not mechanized.
 6. Whether lean/docs/zk.md's `Pred` product can be made additive on `main`. It is moot with the fix.
 7. Timing side channels beyond the index check (OS RNG, allocation) are out of scope.
 

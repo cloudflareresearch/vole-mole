@@ -24,7 +24,7 @@ Line references are `file:line` at `6d7113e`.
 | **Balance** (no inflation): accepted spends ≤ issued + refunded, against adaptive malicious clients, honest clients present | **Proved** (Thm 1), classical | `ε_ext + Adv^{uf-tag} + q_K²·2^{−257}` |
 | **No theft**: an adversary cannot spend an honest client's credits through a request it did not copy verbatim | **Proved** (Thm 3), using weak SE and a ZK hop | `ε_ZK + ε_SE + q_K·2^{−127}` |
 | **No theft by copying** (hijack): anyone who obtains a spend request can redeem it first | **Fails** (F2). Nothing binds a spend to a session, unlike {{ACT}}'s `ctx_spend` and Moussaka's `challenge_digest` | — |
-| **Unlinkability/anonymity** against a malicious Issuer: spends and issuances leak only `(pk, ctx_iss, T_init, d)` and whether the client could afford the spend | **Proved** (Thm 2). On `main` it relies on Keccak one-wayness in `r`; with the fix it is standard NIZK. [Lean] a two-round left/right form, from ZK and hiding hypotheses (`Privacy/Ratatouille.lean`); with the executable Lean prover (label rows) down to its tape hypothesis (`Privacy/RatatouilleLean.lean`, `unlinkability_label_rows`); for the Lean prover in the ROM and ideal-cipher model with every zero-knowledge term explicit, `≈ 2⁻¹⁰²·²` plus budget terms and `2·ε_hide` (`unlinkabilityRO_lean_num`), and `≈ 2⁻¹⁰¹·⁵` with a table-reading Issuer (`unlinkabilityRA_lean_num`; §6) | `ε_ZK + q_K·2^{−127}` |
+| **Unlinkability/anonymity** against a malicious Issuer: spends and issuances leak only `(pk, ctx_iss, T_init, d)` and whether the client could afford the spend | **Proved** (Thm 2). On `main` it relies on Keccak one-wayness in `r`; with the fix it is standard NIZK. [Lean] a two-round left/right form, from ZK and hiding hypotheses (`Privacy/Ratatouille.lean`); with the executable Lean prover (label rows) down to its tape hypothesis (`Privacy/RatatouilleLean.lean`, `unlinkability_label_rows`); for the Lean prover in the ROM and ideal-cipher model with every zero-knowledge term explicit, `≈ 2⁻¹⁰²·²` plus budget terms and `2·ε_hide` (`unlinkabilityRO_lean_num`), and `≈ 2⁻¹⁰¹·⁵` with a table-reading Issuer (`unlinkabilityRA_lean_num`; §6); from the real Clients' OS seeds and seed XOF, each `+ 2·(2q_H + 2)·2⁻²⁵⁶` (`unlinkability*_seed`, `lean/docs/zk.md` §10.6; the note's H1 does not charge seed collisions) | `ε_ZK + q_K·2^{−127}` |
 | **Correctness** of issuance, spends, refunds and the 64-bit edge cases | **Proved** (Thm 4); arithmetic checked in Lean | prover abort `≤ (1−p)^{2³²}` |
 | **Refund integrity**: refunds are bound to their state and cannot be moved or altered | Proved, as part of Thm 1 and Thm 3 | — |
 | **Key separation across protocols** | **Fails if a key is shared with PomFRIT**: unbounded minting (F1, demonstrated) | — |
@@ -408,6 +408,13 @@ every classical malicious Issuer:
 1. **H1: derived randomness.** `(nf, r, ρ)` from the seed XOF are replaced by uniform values. The
    cost is the event that the adversary queries `DST ‖ seed` (`q_H·Q_P·2^{−256}`), plus Lemma DS
    for independence from the proof-system oracles.
+   - **Correction.** The cost must also include the event that two seeds of one domain collide.
+     Two issuances, or two spends, with equal seeds get equal `(nf, r, ρ)`, while H1 gives them
+     independent values, so the two games differ there. The correct cost is
+     `(Σ_d n_d·q_d + Σ_d C(n_d, 2))·2^{−256}` for `n_d` requests in domain `d` (issue, spend)
+     and `q_d` XOF queries in that domain. This is at most `(q_H·Q_P + Q_P²/2)·2^{−256}`.
+     **[Lean]** (`lean/docs/zk.md` §10.6): `(2q_H + 2)·2^{−256}` per world in the four-request
+     game, `unlinkability*_seed`.
 2. **H2: simulated proofs.** Every honest proof is replaced by a simulated one (`ε_ZK`, adaptive
    statements, `lean/docs/zk.md` §2). This is valid for a malformed `pk`: ZK needs only that the honest
    witness satisfies the relation for the given `pk`, and the client guarantees that by checking
@@ -423,8 +430,8 @@ adversary only as witnesses of simulated proofs. So H3 is the ideal world. ∎
 
 **[Lean] `lean/VoleMole/Privacy/Ratatouille.lean`.** A left/right form of N3 on
 `Spec/Ratatouille.lean`'s `issueRequestWithSeed`, `finalizeIssue`, `spendRequestWithSeed` and
-`finalizeSpend`, with the seed XOF's outputs drawn uniformly (H1 is on paper;
-`issueRequestWithSeed_eq`, `spendRequestWithSeed_eq`). A malicious Issuer (any key, context,
+`finalizeSpend`, with the seed XOF's outputs drawn uniformly (`issueRequestWithSeed_eq`,
+`spendRequestWithSeed_eq`; H1 for the random-oracle games below: `lean/docs/zk.md` §10.6). A malicious Issuer (any key, context,
 responses, refunds and amounts) issues a token worth `T_init` to each of two Clients; in round 1
 Client `b₁` spends `d₁` and finalizes its change token; in round 2 Client `b₂` spends `d₂` from its
 current token (the change token if `b₂ = b₁`). A round runs only if every candidate token is valid
@@ -733,7 +740,12 @@ and determinism of `Tag`. The witness satisfies V3 by `change_correct`. ∎
   (`unlinkabilitySh_num`: `8·εRO(q_E + 13824, q₅ + 1872, q_E + 13824) + 4·(2⁻¹¹⁰ + εRO(0, 312,
   4607)) + 6·noHitProb + 12·2⁻¹⁰²⁴ + 2·εhide`; `unlinkabilityRASh_num`, with
   `4·(i_E + 9214)·2⁻¹²⁸ + 4·(2i_E + 23035)·2⁻¹²⁸` for spends whose fresh `ρ` meets a row the Issuer
-  read; `unlinkabilityOCSh_num`; `_perm`; `lean/docs/zk.md` §10.5). H1 (the seed XOF) and the general
-  adaptive schedule (any number of Clients and spends) are on paper.
+  read; `unlinkabilityOCSh_num`; `_perm`; `lean/docs/zk.md` §10.5). H1 (the seed XOF) is mechanized for
+  these games (`lean/docs/zk.md` §10.6: the XOF a uniform table keyed by `(DST, seed)`, uniform
+  seeds, the Issuer reading at most `q_g` cells; `unlinkabilityRO_lean_num_seed`,
+  `unlinkabilityRA_lean_num_seed`, `unlinkabilitySh_num_seed`, `unlinkabilityRASh_num_seed`, the
+  `OC` versions and `_perm`, each `+ 2·(2q_g + 2)·2⁻²⁵⁶`). Lemma DS for the seed domains (part (a))
+  is the same modelling step as for the other tables. The general adaptive schedule (any number
+  of Clients and spends) is on paper.
 - The Lean file covers the accounting and the 64-bit arithmetic only. Extraction, binding and
   forgery are paper arguments.
