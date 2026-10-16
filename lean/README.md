@@ -33,10 +33,13 @@ scope.
   function of the prover's query counts, with no hypothesis beyond the query bounds and
   well-formed instances (at most 64 Anchors, `d < 2⁶⁴`), for fixed and adaptively chosen
   statements (adaptive Moussaka and Ratatouille: an instance family with injective encodings,
-  `hinj`; PomFRIT: any family), with AES's rows uniform functions or uniform permutations with
-  inverse queries (§9). "Extraction" is to the arithmetized relations (`EndToEnd/Relations.lean`,
-  e.g. `t = Com(…)` on the first 45 bytes of `t`), which the spec relations imply; the converse is
-  not stated in Lean.
+  `hinj`, proved for families with fixed-length fields injective on the hashed fields; PomFRIT:
+  any family), with AES's rows uniform functions or uniform permutations with inverse queries
+  (§9). The headline theorems extract to the arithmetized relations (`EndToEnd/Relations.lean`,
+  e.g. `t = Com(…)` on the first 45 bytes of `t`); for well-formed instances (the C++ field
+  lengths) an arithmetized witness decodes to a witness of the spec relation
+  (`EndToEnd/SpecRelations.lean`), so each bound also holds for the spec relation and the decoded
+  witness (`ROM/SpecSound.lean`, `*_spec`, all five relations).
 - *Zero knowledge, with the label-row fix.* For the executable Lean prover, one proof, in the
   random-oracle and ideal-cipher model (`H₃`'s seed slice, `H₂³`, `H₅` and the cipher uniform
   tables, the other domains a fixed hash record such as SHAKE; witnesses in the relation), about
@@ -85,8 +88,9 @@ scope.
     adversary with a constant guess satisfies it with `εhide = 0` (`Audit/Nonvacuous.lean`).
     Moussaka 4(b) needs nothing of `Com`.
 - *Non-vacuity.* `VoleMole/Audit/Nonvacuous.lean` instantiates the headline theorems' adversary
-  and parameter hypotheses: the trivial prover and one-element (or fixed-length injective)
-  instance families for soundness, a concrete issuance witness for completeness and zero
+  and parameter hypotheses: the trivial prover and one-element instance families for soundness,
+  and families with many instances satisfying `hinj` for all four relations that need it (with
+  the spec-relation versions), a concrete issuance witness for completeness and zero
   knowledge, budget-0 adversaries for the privacy games, a non-degenerate sound index rule for
   Moussaka 4(b).
 - *`main` is not zero-knowledge.* The PomFRIT Issuer's attack test, and the (PU) bound for the
@@ -892,6 +896,7 @@ pins down the constraint polynomials, not just their values on bits) and compare
 | `Arith/Moussaka.lean`: Moussaka issue (commitment opening) and redeem (one-hot selector, UOV preimage under the selected anchor key, Keccak commitment) | done: generators, completeness, soundness, 1/\|F\| bound; cross-checked |
 | `Arith/Pqov.lean`, `Arith/Concrete.lean`: pqov's `ov_publicmap` equals the model; the relations read as the C++ byte checks on concrete GF(256) | done; cross-checked |
 | `Arith/Ratatouille.lean`: Ratatouille issue (commitment opening) and spend (two commitments, tag, conservation `t + x = t' + d` over ℕ with 64-bit ranges, UOV preimage of the tag) | done: generators, completeness, soundness, 1/\|F\| bound; cross-checked |
+| `EndToEnd/SpecRelations.lean`: the arithmetized relations back to the spec relations | done for all five: a witness of the arithmetized relation (`EndToEnd/Relations.lean`) decodes to a witness of the spec relation, for well-formed instances (`issueRelW_of_wit`: `\|t\| = 45`, `\|ctx_iss\| = 16`; `redeemRelW_of_wit`: `\|nf\| = 24`, contexts 16, at most 64 Anchors; `issueRel_of_witB`, `spendRel_of_witB`: `t_init, d < 2⁶⁴`; `pomRel_of_wit`: none). The converse of `Privacy/*Lean.lean`'s spec → arithmetized. For Moussaka the spec witness is the re-encoding of the decoded fields (the committed Keccak states recomputed); also the `hinj` lemmas (§9) |
 
 The UOV gadget's hypothesis, that the embedding GF(256) → GF(2¹²⁸) given by the β constants is an
 injective ring homomorphism, is discharged in the kernel for the concrete constants
@@ -1018,6 +1023,7 @@ used here add nothing).
 | `ROM/PermOpen.lean` | done: the permutation game `gameP`, the bridge `prEvent_jointP_le_add`; binding `≤ 2·q_E²·p² + ε_open`; the opened dead leaf `≤ q₁·p'²`, `p' = 1/(2¹²⁸−q_E−4607)` (`prEvent_perm_deadQueried_le_g`); `ε_open ≤ openHashEps q + q₁·p'²` |
 | `ROM/PermPost.lean` | done: finding F3 (the PRF view's Post is not small with inverse queries); the point-tied Post `PostP` (half-targets of the chains, with their `iv` from N1), `≤ q_E·4608·q₂₁·p²` (`prEvent_perm_postP_le`); outside it the committed keys are found before the chain (`keysPre_of_not_postP_gen`) |
 | `ROM/PermFull.lean`, `ROM/PermAdapt.lean` | done: **all five relations in the permutation model with inverse queries**, fixed statements (`*_accept_le_perm`) and adaptively chosen ones (`*_accept_le_adaptive_perm`): the PRF-view bounds with `2⁻¹²⁸` per fresh cipher value replaced by `p` (`p'` for the dead-leaf guess) and Post by `q_E·4608·q₂₁·p²`; combined relations' hash count `n + q₂₁` (plan §2h) |
+| `ROM/SpecSound.lean` | done: **the 20 headline theorems for the spec relations** (`X_spec` for each `*_accept_le_full`, `*_accept_le_perm`, `*_accept_le_adaptive`, `*_accept_le_adaptive_perm`): the same bound for "the decoded witness of no known tree is in the spec relation", with only well-formedness of the instance added (`EndToEnd/SpecRelations.lean`; plan §2i) |
 | `ROM/TableReads.lean`, `ROM/PrivacyReads.lean`, `ROM/SharedH3Reads.lean`, `ROM/SeedXOFReads.lean` | done (privacy side, §3; in `ROM/` because they import VCVio): **table-reading interactions as oracle computations**: an `OracleComp` over the tables (`TSpec`), run on them (`runT`), is a consistent table reader (`SReads`) with its syntactic query budget (`QBudget`, VCVio's `IsQueryBoundP`): `sReads_runT` (consistency by construction, `runT_congr`), `sReadsP_runT` for joint reads; a budget cannot be dropped (`not_sReads_slice`); `zk_adaptive_oc`, `lean_zeroKnowledgeROA_oc`; the games' adversaries `AdversaryOC` and the `*OC_lean_num`, `blindnessOCH_lean_num`, `*OCSh_num`, `blindnessOCHSh_num` theorems and their `_perm`, `_seed` versions (`docs/zk.md` §10.3, §10.5, §10.6) |
 
 The phase-B theorems of `ROM/Accept.lean` hold for every CTR PRG (`[HasPrg]`) and take as
@@ -1040,8 +1046,12 @@ runs on the log at that statement), the same bound plus the statement-binding te
 `stmtBindEps q = (q₀+3)(q₂₁+q₀+4)·2⁻²⁵⁶` holds for all five relations
 (`*_accept_le_adaptive`, `ROM/AdaptFull.lean`, `ROM/AdaptComb.lean`, `ROM/AdaptPomfrit.lean`; plan
 §2g): for Moussaka issuance and redemption and Ratatouille issuance and spend for instance
-families with injective encodings, for PomFRIT (delayed binding, `(q₀+3)(q₂₂+q₀+4)·2⁻²⁵⁶`) for
-any family of signatures and messages. **The permutation model with inverse queries** (plan §2h):
+families with injective encodings (`hinj`; `EndToEnd/SpecRelations.lean` proves it for families
+with fixed-length fields that are injective on what the encoding hashes: `hinj_moussakaIssue_of`,
+`hinj_moussakaRedeem`, `hinj_ratatouilleIssue`, `hinj_ratatouilleSpend`; for redemption and spend
+the encoding hashes the keys' digests, so the family must determine its keys from their digests,
+e.g. fixed keys), for PomFRIT (delayed binding, `(q₀+3)(q₂₂+q₀+4)·2⁻²⁵⁶`) for any family of
+signatures and messages. **The permutation model with inverse queries** (plan §2h):
 AES an ideal cipher as uniform random permutations, the prover making forward and inverse
 queries, the extractor reading their records (`L0-L2` §3.1, §6): the same five fixed-statement and
 five adaptive theorems hold (`*_accept_le_perm`, `*_accept_le_adaptive_perm`), e.g. for Moussaka
@@ -1080,10 +1090,11 @@ What is **not** established, roughly in order of importance:
    have a bound with no hypothesis beyond the query bounds and well-formed instances
    (`ROM/CipherFull.lean`, plan §2f), and for adaptively chosen statements with the
    statement-binding term `(q₀+3)(q₂₁+q₀+4)·2⁻²⁵⁶` added (`*_accept_le_adaptive`, plan §2g;
-   Moussaka and Ratatouille for instance families with injective encodings, `hinj`, which
-   `Audit/Nonvacuous.lean` derives for Moussaka issuance with fixed-length `t`); both also with AES as random permutations and inverse
-   cipher queries (`*_accept_le_perm`, `*_accept_le_adaptive_perm`, plan §2h; no PRP/PRF
-   switching term).
+   Moussaka and Ratatouille for instance families with injective encodings, `hinj`, proved for
+   families with fixed-length fields injective on the hashed fields, `EndToEnd/SpecRelations.lean`);
+   both also with AES as random permutations and inverse cipher queries (`*_accept_le_perm`,
+   `*_accept_le_adaptive_perm`, plan §2h; no PRP/PRF switching term), and all of them also for the
+   spec relations (`*_spec`, `ROM/SpecSound.lean`, plan §2i).
 2. **Code ↔ model is tested, not proved.** Each Lean model was written by reading the C++ and is
    tied to it by tests in `tests/voleith/test_lean_models.cpp` (and, when finished, the `Arith`
    cross-check). Compiler behaviour, memory safety and constant-time execution are out of scope.

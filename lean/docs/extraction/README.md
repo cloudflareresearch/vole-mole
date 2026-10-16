@@ -183,7 +183,9 @@ This must account for:
   `ROM/StmtBind.lean`), and for PomFRIT, whose μ is in the `H₂²` input, `(q₀+3)(q₂₂+q₀+4)·2^{−256}`
   (`ROM/AdaptPomfrit.lean`); `*_accept_le_adaptive`. The charge sits with the `H₂⁰` queries. The
   four non-delayed relations need injective instance encodings on the statement family (they
-  contain UOV key digests; Moussaka's issuance encoding `t ‖ ctx_iss` needs `t` of fixed length);
+  contain UOV key digests; the issuance encodings need `t`, `c` of fixed length); Lean proves this
+  for families with fixed-length fields injective on the hashed fields
+  (`EndToEnd/SpecRelations.lean`, `hinj_*`);
   PomFRIT needs nothing (the μ preimage determines the target, which is all the relation reads).
 - Lean: `claim3_of_circuit` and `bits_of_bit_constraints` give `hclaim3` and `hbits` for
   `extraction_cases`.
@@ -233,8 +235,13 @@ Now mechanized in `lean/VoleMole/Arith/`: executable models of all five constrai
 completeness, soundness for arbitrary field-valued committed values, and the `1/|F|` combination
 bound, cross-checked against the C++ by `lake exe arith_vectors`. pqov's key layout is proved too:
 the model of `ov_publicmap` equals the `for_each_monomial` layout (`Arith/Pqov.lean`). What remains
-outside Lean: the step from the abstract field `F` to `GF128` (no `Field` instance), and
-`ov_publicmap_ct` (agreement with `ov_publicmap` is tested).
+outside Lean: `ov_publicmap_ct` (agreement with `ov_publicmap` is tested); the step from the
+abstract field `F` to `GF128` is done (`Arith/GFField.lean`, `Arith/ConcreteField.lean`). The
+`Arith` relations are stated on byte functions; `lean/VoleMole/EndToEnd/SpecRelations.lean` proves
+that, for well-formed instances (the C++ field lengths), a witness of them decodes to a witness of
+the byte-level spec relations of `lean/VoleMole/Spec/` (`R(x, Dec(w))` with the spec's `R`), and
+`lean/VoleMole/ROM/SpecSound.lean` states the random-oracle soundness bounds for the spec
+relations (`*_spec`).
 
 The original requirements:
 

@@ -7,6 +7,7 @@ import VoleMole.Privacy.PomFRITInterleaveOC
 import VoleMole.Privacy.RatatouilleInterleaveOC
 import VoleMole.Privacy.PomFRITLin
 import VoleMole.Privacy.SeedXOFNC
+import VoleMole.ROM.SpecSound
 
 /-!
 # Non-vacuity checks for the headline theorems
@@ -16,11 +17,18 @@ parameters with a concrete choice (a trivial adversary, a one-element instance f
 parameters), so that the theorem is not vacuous for that choice. This does not show the bound is
 tight or that the event is meaningful; it rules out unsatisfiable hypotheses.
 
+The soundness section also instantiates the spec-relation corollaries (`ROM/SpecSound.lean`,
+`*_spec`: the decoded witness in the spec relation, not only in the arithmetized one) and
+`hinj` for families with more than one instance: any injective Ratatouille issuance family with
+fixed-length `c`, Moussaka redemption with the challenge digest chosen by the prover, Ratatouille
+spends with the nullifier and amount chosen by the prover (`EndToEnd/SpecRelations.lean`).
+
 What is not exhibited here: a redemption or spend witness (it needs a UOV preimage; the KAT
 vectors give instances, checked by `lake exe verifier_vectors`, not by a theorem); `hinj` for a
-redemption, spend or Ratatouille issuance family with more than one instance; a concrete signer
-with small abort term `φ` for Moussaka 4(b); completeness of the honest Anchors' verifier in the
-4(b) games.
+redemption or spend family with two keys of the same digest (false: the encoding hashes digests
+only; for keys from `UovPk.ofCompressed`, distinct digests is SHAKE256 collision freedom, not a
+theorem); a concrete signer with small abort term `φ` for Moussaka 4(b); completeness of the honest
+Anchors' verifier in the 4(b) games.
 -/
 
 open OracleComp OracleSpec
@@ -114,6 +122,61 @@ example (pk : UovPk) (nf cn ci pf : ByteArray) (d : ℕ) (hd : d < 2 ^ 64) (lr :
 example (pk : UovPk) (sig msg pf : ByteArray) (lr : Bool) :=
   pomfritRedeem_accept_le_adaptive_perm (ι := Unit) (β := Unit) pk (fun _ => sig) (fun _ => msg)
     lr (pure (pf, ((), ()))) 0 trivial 0 trivial 0 trivial
+
+/-! ## `hinj` for redemption, spend and Ratatouille issuance families
+
+Families with more than one instance (`EndToEnd/SpecRelations.lean`), each with the spec-relation
+corollary (`ROM/SpecSound.lean`). -/
+
+/-- The spec-relation bound for Moussaka issuance (`moussakaIssue_accept_le_full_spec`) at
+well-formed byte arrays (`|t| = 45`, `|ctx_iss| = 16`), for the trivial prover. -/
+example (lr : Bool) (pf : ByteArray) :=
+  moussakaIssue_accept_le_full_spec (β := Unit) (toBA (List.replicate 45 0))
+    (toBA (List.replicate 16 0)) (by rw [Privacy.size_toBA, List.length_replicate])
+    (by rw [Privacy.size_toBA, List.length_replicate]) lr (pure (pf, ())) 0 trivial 0 trivial
+
+/-- Any injective Ratatouille issuance family with fixed-length `c` and `t_init < 2⁶⁴`. -/
+example {ι β : Type} (inst : ι → ByteArray × ℕ × ByteArray) (lr : Bool) (n : ℕ)
+    (hc : ∀ s, (inst s).1.size = n) (ht : ∀ s, (inst s).2.1 < 2 ^ 64)
+    (hi : Function.Injective inst) (P : OracleComp specIC (ByteArray × (ι × β))) (qE : ℕ)
+    (hqE : IsQueryBoundP P (fun t => t.isRight = true) qE) (q : Kind → ℕ)
+    (hq : IsKindQueryBoundIC P q) :=
+  ratatouilleIssue_accept_le_adaptive_spec inst ht lr
+    (EndToEnd.SpecRel.hinj_ratatouilleIssue inst lr n hc ht hi) P qE hqE q hq
+
+/-- Moussaka redemption with the challenge digest chosen by the prover (fixed Anchors with 32-byte
+digests, `nf` and contexts): the index is the challenge digest itself. -/
+example {β : Type} (A : List UovPk) (hA : A.length ≤ 64) (hdig : ∀ pk ∈ A, pk.digest.size = 32)
+    (nf ci cr : ByteArray) (hnf : nf.size = 24) (hci : ci.size = 16) (hcr : cr.size = 16)
+    (lr : Bool) (P : OracleComp specIC (ByteArray × (ByteArray × β))) (qE : ℕ)
+    (hqE : IsQueryBoundP P (fun t => t.isRight = true) qE) (n : ℕ)
+    (hn : IsQueryBoundP P (fun t => t.isLeft = true) n) (q : Kind → ℕ)
+    (hq : IsKindQueryBoundIC P q) :=
+  moussakaRedeem_accept_le_adaptive_spec (fun _ => A) (fun _ => hA) (fun _ => nf) (fun _ => ci)
+    (fun _ => cr) id (fun _ => hnf) (fun _ => hci) (fun _ => hcr) lr
+    (EndToEnd.SpecRel.hinj_moussakaRedeem _ _ _ _ id lr (fun _ => hdig) (fun _ => by omega)
+      24 16 16 (fun _ => hnf) (fun _ => hci) (fun _ => hcr) (fun s s' h => by simpa using h))
+    P qE hqE n hn q hq
+
+/-- Ratatouille spends under a fixed key (32-byte digest), `c_next` and context, with the nullifier
+and the amount chosen by the prover. -/
+example {β : Type} (pk : UovPk) (hdig : pk.digest.size = 32) (cn ctx : ByteArray) (lr : Bool)
+    (P : OracleComp specIC
+      (ByteArray × ((Spec.Ratatouille.Nullifier × Spec.Ratatouille.Credits) × β)))
+    (qE : ℕ) (hqE : IsQueryBoundP P (fun t => t.isRight = true) qE) (n : ℕ)
+    (hn : IsQueryBoundP P (fun t => t.isLeft = true) n) (q : Kind → ℕ)
+    (hq : IsKindQueryBoundIC P q) :=
+  have hi := EndToEnd.SpecRel.hinj_ratatouilleSpend (fun _ => pk)
+    (fun s : Spec.Ratatouille.Nullifier × Spec.Ratatouille.Credits => Privacy.Ratatouille.bOf s.1)
+    (fun s => s.2.toNat) (fun _ => cn) (fun _ => ctx) lr 32 24 cn.size (fun _ => hdig)
+    (fun s => by simp [Privacy.Ratatouille.bOf, Privacy.size_toBA]) (fun s => s.2.toNat_lt)
+    (fun _ => rfl) (fun s s' h => by
+      simp only [Prod.mk.injEq, true_and, and_true] at h
+      exact Prod.ext (EndToEnd.SpecRel.bOf_inj h.1) (UInt64.toNat_inj.1 h.2))
+  ratatouilleSpend_accept_le_adaptive_spec (fun _ => pk)
+    (fun s : Spec.Ratatouille.Nullifier × Spec.Ratatouille.Credits => Privacy.Ratatouille.bOf s.1)
+    (fun s => s.2.toNat) (fun s => s.2.toNat_lt) (fun _ => cn) (fun _ => ctx) lr hi
+    P qE hqE n hn q hq
 
 /-! ## A Moussaka issuance instance and witness in the relation
 

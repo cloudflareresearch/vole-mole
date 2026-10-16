@@ -205,7 +205,11 @@ trigger verifications and query all oracles.
   - The case τ = 1 is A-OMPR. We know no reduction between the two with loss better than
     `τ^{q+1}` (guessing), and no attack that uses the choice of shift (§6.3).
 - **(PoK)** The README's classical extraction theorem, with simultaneous extraction (L8 §9.1), and
-  L7 for the relation.
+  L7 for the relation. [Lean] for one proof, classical, in the random-oracle and ideal-cipher
+  model, for any family of signatures and messages: the decoded `(r, s)` satisfy `P(s) = h ⊕ r` on
+  bytes for the target `h` at the verifier's `chal1` except with the bounds of
+  `lean/VoleMole/ROM/SpecSound.lean` (`pomfritRedeem_accept_le_full_spec`,
+  `pomfritRedeem_accept_le_adaptive_spec`, …).
 - **(ZK-fix)** `lean/docs/zk.md`'s theorem with the label-row fix, as standard adaptive two-phase NIZK
   (the distinguisher may know the whole witness):
 
