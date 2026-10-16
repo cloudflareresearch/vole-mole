@@ -766,9 +766,10 @@ remains there is listed in §10.1, "What remains assumed"):
   and independent coins) is in Lean (§4.1); for the patched layout, the per-query count is
   (`card_query_hits_sibling_responses`), and for the executable prover the union over adaptive
   `H₅` queries is mechanized with `H₅` a uniform table (§10.1, `lab_rom_query`);
-- the PRP/GGM hiding of H8 (spec Lemma 10.24), and for H4 the PRP/PRF switching of the hidden
-  paths' rows and the step from AES to an ideal cipher (H4 itself is mechanized in the
-  ideal-cipher model with uniform-function rows, §10.1, `hide_rom_query`);
+- the PRP/GGM hiding of H8 (spec Lemma 10.24), and for H4 the step from AES to an ideal cipher
+  (H4 itself is mechanized in the ideal-cipher model, with uniform-function rows,
+  `hide_rom_query`, and with uniform-permutation rows read forward and backward, the PRP/PRF
+  switching term included, `hide_rom_query_perm`; §10.1);
 - the completeness identities (H3) for the models (for the executable prover they are proved,
   §10.1);
 - the identification of the Lean model with the C++ (§7.1, by inspection);
@@ -804,6 +805,8 @@ which the random-oracle ones are proved with the hashed domain a uniform table:
 | **The cipher as a parameter of the executable code**: the BAVC (`children`, `leafCom`, commit and `reconstruct`), the VOLE expansion (`prgWords`, `convertToVoleAt`), the prover (`smallVoleUWords`, `uMaskOf`, `voleGen`, `prove`) and the verifier call the CTR PRG through the class `HasPrg`, whose only global instance is AES (the executables are unchanged); every lemma from the bridge theorems to `zk_rom_h23`'s chain is stated for any instance. `icPrg E`: the CTR PRG of a cipher table `E` (on 16-byte keys); `icPrg aesTable` is the executable instance, so the prover, the reconstruction, the VOLE expansion, the verifier and `vPre` with `icPrg aesTable` are the executable ones; the commitment's hidden part with `icPrg E` is `hiddenOutE E` | `HasPrg`, `aesPrg` (`Verifier/Prg.lean`); `icPrg`, `icPrg_aes`, `hiddenOut_rows`, `hiddenOut_ic`, `keyAt_rows` (`ZK/HopsH4.lean`); `prove_icPrg_aes`, `reconstruct_icPrg_aes`, `convertToVoleAt_icPrg_aes`, `verify_icPrg_aes`, `vPre_icPrg_aes` (`ZK/HopsIC.lean`) | H4 |
 | **The hops composed in the random-oracle and ideal-cipher model with `H₂³` visible** (one proof, label rows, faest-arch-opt's tables, `SmallParams`): the record `recH Hb … G3 G2 G5` of the row above (`H₅` on every 37-byte input, a table that does not depend on the cipher) and the cipher a uniform table `E`, independent; the real world is the **executable prover run with the ideal cipher** (`Prover.prove` at `icPrg E`: the cipher in the whole commitment, hidden and opened part, and the VOLE expansion); the simulator outputs `simulate` and `H₂³` programmed at the grinding points of the prefix it recomputes from its proof with the verifier's recomputation at `icPrg E`. Against a distinguisher that sees the proof, the three tables and `E`, reads `H₃`, `H₅`, `E` adaptively at `q₃`, `q₅`, `q_E` keys and `H₂³` without limit: advantage `≤ q₃·2⁻¹²⁸ + Pr[GrindBad] + 221·(4607 + q_E + 4607)·2⁻¹²⁸ + (q₅ + 1)·2⁻¹²⁸`. The chain of `zk_rom_h23` for each fixed `E` before and after H4 (its completeness step holds for every cipher: prover and verifier use the same PRG), and H4 jointly over the root seed and `E` (`hide_rom_query`), with the honest recomputation's reads counted: after H4 the view is a function of the hidden part and `E`, and the prover's public part and the simulator's recomputation read `E` only at the nodes `BAVC.reconstruct` rebuilds from the opening (at most `2L − 1 = 4607`; the proof's opening, `Δ` and `iv_pre` are the tape's) | `zk_rom_ic_h23`, `zk_pre_h4`, `zk_post_h4`, `joint3_h4`, `viewIC`, `viewKeys`, `viewIC_congr`, `rdKeys`, `rdKeys_card`, `reconstruct_ic_congr`, `convertToVoleAt_ic_congr`, `leafKey_reconstruct`, `hyb3_ic_congr`, `vPre_ic_congr`, `hyb3_ok_fields` (`ZK/HopsIC.lean`) | H1, H2, H4, H6 |
 | **The grinding term numerically** (faest-arch-opt's tables, `2³²` uniform grinding answers): the accepted set has `|A| ≥ 2¹¹¹` (Markov on the box `[0, 120)¹⁷` of hidden-index tuples, whose summed open count the kernel evaluates in one pass over the tree; the open count is the number of internal nodes with exactly one child on a hidden path); `noHitProb = (1 − |A|/2¹²⁸)^{2³²} ≤ 2^{−2¹⁵}`; an accepted `Δ` with `Δ' = 0` is `0` (`W_CRT` injective), and the first accepted answer is `0` with probability `≤ 1/|A| ≤ 2⁻¹¹¹`; so `Pr[GrindBad] ≤ 2^{−2¹⁵} + 2⁻¹¹¹ ≤ 2⁻¹¹⁰`, and the two headline bounds hold with `2⁻¹¹⁰` for `Pr[GrindBad]` | `card_accSet_ge`, `openCount_eq_sum`, `hid_iff`, `enc`, `deltaIndex_enc`, `sum_openCount`, `go_val`, `markov` (`ZK/AcceptCount.lean`); `noHitProb_eq`, `noHitProb_le`, `firstHit_some`, `pr_firstHit_le`, `pr_hitZero_le`, `tDL_eq_zero`, `grindBad_num`, `grindBad_le_110`, `zk_rom_ic_h23_num`, `zk_rom_h23_num` (`ZK/GrindNum.lean`) | H2 |
+| **H4 with AES as uniformly random permutations** (the cipher a table `π : Blk → Perm Blk` of independent uniform permutations, `PCipher`; the BAVC computed with its rows, `hiddenOutE (cf π)`; the distinguisher reads whole permutations at `q` keys, so forward and inverse queries). (i) *The GGM hybrid* replaces the rows of the `≤ 221` hidden-path nodes by independent uniform permutations, one node at a time in heap order. The node's value is its parent's (already replaced) permutation at the node's input, and the rest of the experiment reads that permutation only at the sibling's input and, for the root, at the `nHi` `u_hi` blocks (`rdH`, `hidOfRows_rd`); a fresh value of a uniform permutation given its values on `S` is one of `q` candidates with probability `≤ q/(2¹²⁸ − \|S\|)` (double counting with the neighbours `swap(σ x₀, b)·σ`, `b ∉ σ(S)`). Each hop costs `(4607 + q)/(2¹²⁸ − (nHi + 1))`. (ii) *The switching term*: after the hybrid the hidden part reads the replaced permutations at the same distinct points as in the PRF view; within each row these are samples without replacement, which are `Pr[collision]`-close to independent uniform values (exactly: all collision-free value tuples have equally many permutation preimages, `Perm.exists_extending_pair`). A hidden internal node's row is read at most once (its opened child; two opened nodes never share a parent, `oPar_inj`), so only the `τ = 17` hidden leaves (2 commitment + `VOLE_COL_BLOCKS` VOLE blocks) and the root (`nHi` `u_hi` blocks + at most one opened child) contribute: `switchEps = (17·C(2 + VOLE_COL_BLOCKS, 2) + C(nHi + 1, 2))·2⁻¹²⁸`. **Bound** `221·(4607 + q)/(2¹²⁸ − (nHi + 1)) + switchEps`. For the relations' parameters `nHi = 1` and `switchEps` is `1548·2⁻¹²⁸` (PomFRIT), `3231·2⁻¹²⁸` (Moussaka and Ratatouille issuance), `5526·2⁻¹²⁸` (Moussaka redemption), `28102·2⁻¹²⁸ ≈ 2⁻¹¹³·²` (Ratatouille spend), far below the hybrid's `≈ 2⁻¹²⁰·²·(4607 + q)` | `hide_rom_query_perm`, `hide_puncture_perm`, `hidOfRows_rd`, `rdH`, `oPar_inj`, `grpH`, `grpH_cov`, `grpH_sum`, `switchEps`, `restr_closePm`, `exper_finalPm` (`ZK/HopsH4Perm.lean`); `IC.pr_perm_fresh_le`, `IC.pr_perm_reset_le`, `IC.rowAt_congr_par`, `IC.hopPm`, `IC.puncturePm`, `IC.experPm_empty`, `IC.experPm_close`, `IC.close_evalPts`, `IC.card_fiber_eq`, `IC.pr_not_injOn_le`, `IC.pr_not_injPts_le` (`ZK/IdealCipherPerm.lean`) | H4 |
+| **The headline with AES as random permutations**: `zk_rom_ic_h23` with the cipher of the whole BAVC and VOLE expansion the rows of a uniform permutation table `π` (the executable prover at `icPrg (cf π)`, the simulator's recomputation with the same rows), the distinguisher seeing `π` and reading it at `q_E` keys (whole permutations). The hops before and after H4 hold for every cipher, so for the rows of every `π`; H4 is `hide_rom_query_perm` with the honest recomputation's `≤ 4607` reads counted. Advantage `≤ q₃·2⁻¹²⁸ + 2⁻¹¹⁰ + 221·(4607 + q_E + 4607)/(2¹²⁸ − (nHi + 1)) + switchEps + (q₅ + 1)·2⁻¹²⁸`; as `ZeroKnowledgeRO` on the shared tables `ShPm p = Tab2G p × Tab5F × PCipher` with budgets `BudgetPm` (error `εROPm`) | `zk_rom_ic_h23_perm`, `zk_rom_ic_h23_num_perm`, `joint3_h4_perm`, `viewICPm`, `viewKeysPm`, `viewICPm_congr` (`ZK/HopsICPerm.lean`); `zk_ro_perm`, `lean_zeroKnowledgeRO_perm`, `ShPm`, `BudgetPm`, `realROPm`, `progROPm`, `εROPm` (`ZK/ReadsROPerm.lean`) | H1, H2, H4, H6 |
 | **BAVC completeness**: the prover's opening at any `Δ` reconstructs its leaf keys off the hidden leaves and its commitments (the walks as folds over the node index; opened nodes, placement, top-down derivation) | `Bridge.bavcComplete` (`Verifier/Bridge/BAVCComplete.lean`) | H3 |
 | **CRT completeness**: the verifier's CRT masks are `ṽ_mask + u_mask·Δ'` for every `Δ` (gate labels `L^{γ_e}`, `c_mult` read back, `r̃` bilinear, and the tables' bilinear identity `L_c(a) = a·W_crt[c]`, checked in the kernel on all `120 · 128` basis pairs) | `Bridge.crtComplete`, `Bridge.crt_core`, `CrtCheck.Lc_eq`, `CrtCheck.crtCheck_eq` (`Verifier/Bridge/CrtComplete.lean`, `CrtCheck.lean`) | H3 |
 | The privacy theorems with the Lean prover: Moussaka issuer hiding/unlinkability, Ratatouille unlinkability | `Privacy.Moussaka.anonymity_lean`, `Privacy.Ratatouille.unlinkability_lean` (`Privacy/LeanProver.lean`) | — |
@@ -861,10 +864,14 @@ as a check of the theorem's conditions and kept as a smoke test of the executabl
     reads the table at `q` keys (`hide_rom_query`), for parameters with fewer than `2³²` blocks
     per PRG call (`SmallParams`, `smallParams_of_le`). The BAVC is rebuilt proof-only with the
     cipher as a parameter (`hiddenOutE`), and is the executable commitment at `E = AES`
-    (`hiddenOut_eq`). Modelling steps left: AES is an ideal cipher; its rows are permutations,
-    not functions (the PRP/PRF switching term for the hidden paths' rows, about
-    `221·B²·2⁻¹²⁹` with `B` the blocks read per row, at most `2 + VOLE_COL_BLOCKS`, is on paper;
-    so are inverse queries). `tape_close_of_hops` composes `HideHyp` for the fixed AES; the
+    (`hiddenOut_eq`). **With the rows uniform permutations** and the distinguisher reading whole
+    permutation rows (forward and inverse queries), `≤ 221·(4607 + q)/(2¹²⁸ − (nHi + 1)) +
+    switchEps` (`hide_rom_query_perm`, `ZK/HopsH4Perm.lean`): the GGM hybrid with permutation rows
+    and the PRP/PRF switching term `switchEps = (17·C(2 + VOLE_COL_BLOCKS, 2) + C(nHi + 1, 2))·2⁻¹²⁸`
+    of the hidden leaves' and the root's rows (every other hidden row is read at most once; the
+    earlier paper estimate `221·B²·2⁻¹²⁹` over all hidden rows overcounted), `≤ 2⁻¹¹³·²` for the
+    relations' parameters. Modelling step left: AES is an ideal cipher (a uniform permutation per
+    key). `tape_close_of_hops` composes `HideHyp` for the fixed AES; the
     ideal-cipher version is plugged in through the proof-only cipher-parametric prover `proveE`
     (`zk_rom_ic`, below) and, with the cipher in the whole executable prover and verifier
     (`HasPrg`, `icPrg E`), through `zk_rom_ic_h23` (below).
@@ -945,8 +952,12 @@ as a check of the theorem's conditions and kept as a smoke test of the executabl
     tables (`zk_adaptive`, `zk2_adaptive`; `anonymityRA_lean_num`, `unlinkabilityRA_lean_num`,
     and `blindnessRA_lean_num` for an Issuer that reads every table but `H₂³`). Left open: a
     PomFRIT interaction that reads `H₂³` (§10.3, "Open"); `ε_iv` (two proofs sharing an `H₃`
-    slice), a modelling step of the per-proof slices; the PRP/PRF switching term; the modelling
-    steps (SHAKE as a random oracle, AES as an ideal cipher). The `*_shake` theorems, which take
+    slice), a modelling step of the per-proof slices; the PRP/PRF switching term in the games
+    (proved for one proof, `zk_ro_perm`, `lean_zeroKnowledgeRO_perm`; the games and their
+    reductions are stated on `Sh p` with function rows, and restating them on `ShPm p` needs the
+    read predicates `Rd5`, `RdE`, `IsProg` and the prover's read lemmas for `ShPm`, a mechanical
+    port, see §10.3 "Open"); the modelling steps (SHAKE as a random oracle, AES as an ideal
+    cipher). The `*_shake` theorems, which take
     the fixed-record `HopHyps`, are unchanged: the random-oracle results replace them rather than
     discharge them.
 - **Deterministic hypotheses**, per statement and witness (`ZKHyp`, `RunHyp`): the statement's
@@ -1393,3 +1404,15 @@ hop 1 `εRO(q₃ + 4i₃, q₅ + 4i₅ + 312, q_E + 4i_E + 23035)`.
 - An adaptive base statement or witness prefix in `zk2_adaptive` (not needed for PomFRIT).
 - The consistency of the interaction (`SReads`) is a hypothesis on the adversary (true of every
   deterministic query algorithm; a randomized one is a mixture of deterministic ones).
+- *The privacy games with AES as random permutations.* The single-proof theorem is proved with
+  permutation rows (`lean_zeroKnowledgeRO_perm`, error `εROPm p q₃ q₅ q_E`, `ZK/ReadsROPerm.lean`).
+  The games (`Privacy/MoussakaRO.lean`, `RatatouilleRO.lean`, `PomFRITRO.lean`, their `*RA`
+  adaptive versions, `ZK/TwoPhase*.lean`, `ZK/AdaptRO.lean`) are built on `Sh p` (function
+  rows): their reductions use `zk_ro`/`lean_zeroKnowledgeRO` and the read algebra of `Sh`. They
+  follow with `εRO` replaced by `εROPm` once that algebra (`Rd5`, `RdE`, `IsProg`, `realRO_rdE`,
+  `progRO_isProg`, the two-phase `zk2_rom_ic_h23` and the patched `hide_rom_queryP`) is restated
+  for `ShPm p`. Nothing in those arguments uses that the cipher's rows are functions except H4:
+  the reads are key sets, and whole-row reads of a permutation table are such key sets. For the
+  adaptive versions the patched table (`IC.patchT`: rows fixed at the keys `PE` an earlier reader
+  saw) is again a table of independent rows, so a patched `IC.hopPm` (the candidates extended by
+  `PE`, as in `IC.hopP`) would cost `(4607 + q + |PE|)/(2¹²⁸ − (nHi + 1))` per hop; not done.
