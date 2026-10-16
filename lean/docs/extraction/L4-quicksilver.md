@@ -298,7 +298,15 @@ the two issue relations. The `q_c·2^{−448}` term is omitted.
    `u*` (§5). L3 as written in `L3-kos.md` ("for every `A ⊆ S` on which the KOS check passes")
    supports this.
 4. **The statement must be bound before chall₂ (H-stmt).** This adds a `(q²+q)·2^{−256}` term for
-   L0/L1.
+   L0/L1. Mechanized (classical, ROM + ideal cipher; `lean/docs/probabilistic-plan.md` §2g) for the
+   five relations: the statement committed at an `H₂¹` input is the decoded first `H₂⁰` preimage
+   of its `mu₁` field in the log before it, and it is the verifier's unless an `H₂⁰` answer equals
+   the `mu₁` field of an earlier `H₂¹` input or an earlier `H₂⁰` answer, `≤
+   (q₀+3)(q₂₁+q₀+4)·2^{−256}` in all (`ROM/StmtBind.lean`, `*_accept_le_adaptive`); the
+   instance encodings must be injective on the statement family (they contain UOV key digests, an
+   application-level hash). For PomFRIT's delayed μ (in the `H₂²` input) the same with `H₂²` in
+   place of `H₂¹`, `(q₀+3)(q₂₂+q₀+4)·2^{−256}`, and no injectivity: the μ preimage binds the target
+   `h(chal1)`, which is all the relation reads (`ROM/AdaptPomfrit.lean`).
 5. The top coefficient is exactly `Σ_k χ_k f_k(w*)` with `χ_k = r₀ s^{n−1−k} + r₁ t^{n−1−k}`. There
    is no sign, since the characteristic is 2, and no scaling, since `add_constraint` raises every
    constraint to degree `d` by multiplying by `Δ^{d−e}`, which multiplies the top coefficient by 1.

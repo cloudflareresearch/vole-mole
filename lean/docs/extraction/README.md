@@ -176,7 +176,15 @@ This must account for:
 - The code's χ is `r₀ s^{n−1−k} + r₁ t^{n−1−k}`, which gives
   `ε_QS = 2^{−128} + (n−1)²·2^{−192}` per H₂² query.
 - The chall₂-combination is handled by a joint counting argument, adding `2^{−128} + q_c·2^{−448}`.
-- The statement must be bound before chall₂, costing `(q²+q)·2^{−256}`.
+- The statement must be bound before chall₂, costing `(q²+q)·2^{−256}`. Lean (classical, ROM +
+  ideal cipher, `lean/docs/probabilistic-plan.md` §2g): for all five relations with an adaptively
+  chosen statement, `(q₀+3)(q₂₁+q₀+4)·2^{−256}` (`q₀`, `q₂₁` the prover's `H₂⁰`, `H₂¹` queries;
+  `2^{−256}` per pair of an `H₂⁰` answer and an earlier `mu₁` field or `H₂⁰` answer;
+  `ROM/StmtBind.lean`), and for PomFRIT, whose μ is in the `H₂²` input, `(q₀+3)(q₂₂+q₀+4)·2^{−256}`
+  (`ROM/AdaptPomfrit.lean`); `*_accept_le_adaptive`. The charge sits with the `H₂⁰` queries. The
+  four non-delayed relations need injective instance encodings on the statement family (they
+  contain UOV key digests; Moussaka's issuance encoding `t ‖ ctx_iss` needs `t` of fixed length);
+  PomFRIT needs nothing (the μ preimage determines the target, which is all the relation reads).
 - Lean: `claim3_of_circuit` and `bits_of_bit_constraints` give `hclaim3` and `hbits` for
   `extraction_cases`.
 

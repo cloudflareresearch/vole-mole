@@ -7,7 +7,10 @@ the run of the executable verifier against the oracle (§2c); what remains is li
 ideal-cipher model, PRF view (§2d), its residual `ε_open` (§2e), and now the "same chain" step
 (`ε_chain`) and L2 (`ε_dead`) after correcting the L2 interface (§2f, finding F2): for all five
 relations, `Pr[accept ∧ ¬Extracted]` is bounded by an explicit function of the prover's query counts
-alone (`ROM/CipherFull.lean`, `*_accept_le_full`). Scope: the classical (ROM + ideal cipher) proof of knowledge
+alone (`ROM/CipherFull.lean`, `*_accept_le_full`). **Adaptively chosen statements (§2g)**: for the
+five relations the prover may output the statement with its proof; the bound is the `_full` one
+plus the statement-binding term `(q₀+3)(q₂₁+q₀+4)·2⁻²⁵⁶` (`(q₀+3)(q₂₂+q₀+4)·2⁻²⁵⁶` for PomFRIT's
+delayed binding; `*_accept_le_adaptive`). Scope: the classical (ROM + ideal cipher) proof of knowledge
 of `docs/extraction/README.md`. The ZK hybrids (`docs/zk.md` §10, "proved only on paper") and the
 QROM documents (Q1–Q7) are out of scope here. Notes on ZK are at the end.
 
@@ -373,11 +376,12 @@ changed as below. `#print axioms` of the main results: `propext`, `Classical.cho
   with a fixed output length per input.
 - **`*_good_of_not_bad`** for Moussaka redemption and Ratatouille spend (`ROM/Comb.lean`), as
   PomFRIT's.
-- **Not done: the statement-binding term `(q²+q)·2⁻²⁵⁶`** (L4 (H-stmt)). VCVio's birthday lemmas
-  (`prEvent_cacheCollision_le_birthday*`, `QueryTracking/Birthday.lean`) bound a collision anywhere
-  in a `cachingOracle` cache with one range size (the smallest; here `H₅`'s 4 bytes), not a
-  collision among `H₂⁰` answers, and the event ("μ's preimage was queried before `y`") is again an
-  ordering fact about the log; it belongs with the "same chain" step.
+- **The statement-binding term `(q²+q)·2⁻²⁵⁶`** (L4 (H-stmt)): not done here, done in §2g for all
+  five relations. VCVio's birthday lemmas (`prEvent_cacheCollision_le_birthday*`,
+  `QueryTracking/Birthday.lean`) bound a collision anywhere in a `cachingOracle` cache with one
+  range size (the smallest; here `H₅`'s 4 bytes), not a collision among `H₂⁰` answers, and the
+  event ("μ's preimage was queried before `y`") is again an ordering fact about the log; §2g
+  charges both to the `H₂⁰` queries, as the chain hits of §2f.
 
 Still open after §2c: the "same chain" step (`hsame`, `ε_chain`), L2 (`ε_dead`) and binding
 (`ε_bind`) as named assumptions (M6: ideal cipher, query ordering), and the statement-binding
@@ -668,9 +672,122 @@ the combination cell of the answer outside `pre y g`, and `prEvent_accept_le_com
 for the verifier's own query (`hcombFresh : CombFreshHyp`), discharged by the hit on earlier
 combination inputs (`combFreshHyp_ic`, `preCells`, `midOf_comb`).
 
-**Not covered.** The statement is fixed in these games, so statement binding (`(q²+q)·2⁻²⁵⁶`,
-adaptively chosen statements) is not part of them. The cipher is a random function (PRF view) with
-forward queries only; the permutation model with inverse queries (`p = 1/(2¹²⁸−q_E)`) is on paper.
+**Not covered.** The statement is fixed in these games; adaptively chosen statements are §2g. The
+cipher is a random function (PRF view) with forward queries only; the permutation model with
+inverse queries (`p = 1/(2¹²⁸−q_E)`) is on paper.
+
+### 2g. M6, fourth part: adaptively chosen statements (statement binding), as implemented
+
+Files: `ROM/AdaptGame.lean`, `ROM/StmtBind.lean`, `ROM/AdaptChain.lean`, `ROM/AdaptFull.lean`,
+`ROM/AdaptComb.lean`, `ROM/AdaptPomfrit.lean` (new; nothing existing changed). No executable
+definition changed. `#print axioms` of the five `*_accept_le_adaptive`: `propext`,
+`Classical.choice`, `Quot.sound`.
+
+**The game** (`gameA T stF P E`). A family of statements `stF : ι → Statement`; the prover
+`P : OracleComp specIC (ByteArray × (ι × β))` outputs its proof and the index `s` of the statement
+it proves. The straight-line extractor runs on `P`'s log at `stF s` (`proverA`, with
+`extractIC st E` the part of `proverIC` after `P`: `proverIC_eq_bind`), then the verifier at
+`stF s`. The event is `accept(stF s) ∧ ¬Extracted(stF s, Wit s)` at the output's `s` (`stOut r`).
+
+**Per table, the adaptive game is the fixed game at the chosen statement**
+(`evalWithAnswerFn_gameA`, `tableQueryLog_gameA`): output and log are those of
+`gameIC T (stF (sA g P E)) P E`, `sA g P E` being `P`'s choice against the tables `g`, `E`. So every
+deterministic lemma of §2c–§2f (`sameChainHyp_ic`, `deadHiddenHyp_ic`, `combFreshHyp_ic`,
+`chain_ident`, `ladder_walk`, `binds_or_coll_or_dead`, `deadQueried_of_deadOpen`, …) applies at
+`stF (sA g P E)`; what has to be redone are the union bounds, whose per-query predicates must not
+depend on the statement chosen at the end.
+
+**Statement binding** (`ROM/StmtBind.lean`). For a non-delayed statement the verifier's `H₂¹` input
+begins with `mu₁ = H₂⁰(inst ‖ DST ‖ 8)` (32 bytes, `xMu`; `muIn st` is the `H₂⁰` input). *The
+statement committed at a chain query* (`stmtAt dec L t`) is read off the log before the query only:
+at an `H₂¹` input `x`, the decoding (`dec`) of the first `H₂⁰` input in the log before `x` whose
+answer is `xMu x`; at an `H₂²` input, that at the first `H₂¹` preimage of its `chal1`; at an `H₂³`
+input, that at the first `H₂²` preimage of its `chal2` (`sX`, `sY`, `sZ`; committed:
+`stmtAt_update`). *Statement hits* (`stmtHit`): an `H₂⁰` answer equal to the `mu₁` field of an
+earlier `H₂¹` input ("μ's preimage queried after the chain's first query") or to an earlier `H₂⁰`
+answer (a collision): per `H₂⁰` query `≤ (n₂₁ + n₀)·2⁻²⁵⁶` (`prEvent_stmtHit_le`; 32-byte
+answers, so `2⁻²⁵⁶` per pair, as the paper says). *Identification* (`stmtAt_ident`): in the fixed
+game at a non-delayed `st` with `dec (muIn st) = some s`, on an accepted proof without chain hits
+and statement hits, the statement committed at each of the verifier's `H₂¹`, `H₂²`, `H₂³` inputs is
+`s`. The extractor queries `muIn st` (`mu_mem_gLog`), whose answer is `xMu x`; it precedes `x` (else
+a statement hit), it is the only `H₂⁰` input before `x` with that answer (`mu_cell_eq`, else a
+collision), and `y`, `z` lead back to `x` by `chain_ident`.
+
+**The union bound** (`prEvent_accept_le_adaptive_E`, `prEvent_accept_le_adaptive_comb_E`, per
+cipher table). The charge of a chain query is the bad event of the chain data of *the statement
+committed there* (`chainBadA`, `combBadA`: `∃ s, stmtAt … t = some s ∧ chainBad (C s) t g`); it is
+committed, so `prEvent_chainBad_update_le` (`prEvent_chainBadA_le`) and the two-cell bound of
+`ROM/Comb.lean` (`prEvent_combBadA_h22_le`) apply unchanged, with the per-statement constants equal
+across the family (common `params`, `chainEps_congr`, common system length). The chain hits are
+`ROM/CipherChain.lean`'s against the adaptive log (`chainHitL`), plus the statement hits, over
+`adaptKinds = {H₁, H₂¹, H₂², H₂³, H₂⁰}`. The deterministic step: at a table, in the fixed game at
+`stF (sA g P E)`, either a chain hit, or a statement hit, or (`chainBad_trace_ic`,
+`combBad_trace_ic`: the `htrace` of `prEvent_accept_le_chain_terms`/`_comb_terms` for the joint
+game) the verifier's `H₂¹`, `H₂²` or `H₂³` query is bad for that statement's data, and by
+`stmtAt_ident` that statement is the one committed there. For the combined relations the chain data
+of every statement are read off the *adaptive* game's log (`preOfA`, `midOfA`, `accOfA`,
+`preCellsA`, `combDataA`; at the chosen statement they are the fixed game's, `preOfA_eq`, …,
+`combBad_congr`), so that "the combination cell is outside the log before `y`" is one condition for
+the data and for the committed statement (`stmtAt_two_updates`).
+
+**The failure events** (`ROM/AdaptGame.lean`): Post (`prEvent_joint_postOut_le_A`, reads `P`'s log
+only), binding (`pr_bindFail_le_table_A` with `bindFail_imp`, the pointwise step of
+`pr_bindFail_le_table`), an opened dead leaf (`prEvent_joint_deadOpen_le_A`: the hash ladder
+`prEvent_leafUnqueried_z_le_A`, whose bad answers read `P`'s log and `Δ` only; the fresh `H₂³`
+answer `prEvent_zUnqueried_le_A`; two fresh cipher cells `prEvent_deadQueried_le_A`, where setting
+the dead leaf's cells changes neither `P`'s run nor its statement): the fixed-statement bounds.
+
+**The result** (`prEvent_accept_le_adaptive`, `prEvent_accept_le_adaptive_comb`, and per relation
+`moussakaIssue_accept_le_adaptive`, `ratatouilleIssue_accept_le_adaptive`,
+`moussakaRedeem_accept_le_adaptive`, `ratatouilleSpend_accept_le_adaptive`; PomFRIT below): for a
+family of instances `inst : ι → …` (one `labelRows`) with injective instance encodings (`hinj`,
+e.g. `t` of fixed length, `Spec.Moussaka.issueEncode_inj`, `redeemEncode_inj`):
+
+    Pr[accept(stF s) ∧ ¬Extracted(stF s)] ≤ (the `_full` bound) + stmtBindEps q,
+    stmtBindEps q = (q₀+3)·(q₂₁+1 + q₀+3)·2⁻²⁵⁶,
+
+`q₀` the prover's `H₂⁰` queries (`+3`: the extractor's and the verifier's two, as the union bound
+counts them), so `≤ (q+3)(q+4)·2⁻²⁵⁶` for `q` hash queries in all: the paper's `(q²+q)·2⁻²⁵⁶` up to
+the verifier's and extractor's queries. Injectivity is what the model cannot supply: the instance
+encodings of the redemption and spend relations contain UOV key *digests* (`dig(pk)`, SHAKE256,
+application-level hashes outside L0), so `hinj` there means the family determines its keys from
+their digests (e.g. fixed anchors or a fixed key; adversarial `nf`, contexts, challenge digest,
+`d`, `c_next`). The issuance encodings concatenate variable-length fields without lengths
+(`t ‖ ctx_iss`, `c ‖ le64(t_init) ‖ ctx_iss`), so `hinj` needs fixed lengths there (as in the
+protocol); without it two instances with one encoding but different relations would both be
+"bound", which is a real limit of statement binding, not of the proof. (A finding: the decoded
+statement only has to have the same *data* at the chain as the chosen one, not to be it; this is
+what PomFRIT uses below, and with it injectivity could be weakened to "equal encodings give equal
+values and relations".)
+
+**PomFRIT** (delayed binding, `ROM/AdaptPomfrit.lean`, `pomfritRedeem_accept_le_adaptive`). Its
+`μ = H₂⁰(dig(pk) ‖ h(chal1) ‖ DST ‖ 8)` sits in the `H₂²` input (bytes `264 … 296`, after
+`chal1 ‖ ũ ‖ h_V`; `yMu`, `yMu_chal2Input`) and is queried by the verifier only
+(`inLog_verifyQ_muD`). So the statement is committed at `H₂²` (`stmtAtD`: the decoding at `y`'s
+`chal1` of the first `H₂⁰` preimage of `yMu y` before `y`; at `H₂³` through the `H₂²` preimage of
+`chal2`; at `H₂¹`, where nothing depends on the instance, a fixed reference statement), the
+statement hits are an `H₂⁰` answer equal to the `μ` field of an earlier `H₂²` input or to an
+earlier `H₂⁰` answer (`stmtHitD`, `≤ (n₂₂+n₀)·2⁻²⁵⁶`), and the identification is
+`stmtAtD_ident`. Two points needed more than the non-delayed case:
+1. *The μ preimage determines the target `h(chal1)`, not `(sig, msg)`* (the relation reads only the
+   target; distinct `(sig, msg)` or binders with one target are distinct statements). The
+   decoding (`decP`) returns *some* statement whose `H₂⁰` input at that `chal1` is the preimage, so
+   with the same target (`pomfritTarget_eq_of_muInD`), hence the same system, relation and values
+   at the chain's `chal1`. No injectivity hypothesis is needed (with the issuer's `pk` fixed).
+2. *Statements as indices.* The chain-level functions (`Chain.kosQ st T : Blocks → Fin (kosL st) →
+   GF128`, `kosD`, `uCanon`, `dc`, `OnChain`, …) take the statement as an index although they read
+   only `params`; `Iff.rfl` between two `pomfritRedeem` statements hits the recursion limit (it
+   unfolds the binders' `extract`s). Destructuring the two statements and substituting the equal
+   `params` makes it `Iff.rfl` (`chainBad_transport`, `combBad_transport`, `hideSet_transport`);
+   with the chain data's congruences for delayed statements (`preCore_congrD`, `midCore_congrD`,
+   `tailCore_congrD`, the latter at equal values at the chain's `chal1`) the fixed game's bad events
+   at the chosen statement become those of the committed one (`pomfrit_convX`, `_convY`,
+   `_convZ`). The data with a chain-dependent system are `combDataD` (adaptive log) and
+   `combDataFixD` (fixed log, `combBad_trace_icD`); the per-query bounds `prEvent_combBadF_h22_le`,
+   `prEvent_combBadF_cell_le` hold for any committed choice of statement.
+
+The bound: the bound of `pomfritRedeem_accept_le_full` plus
+`stmtBindEpsD q = (q₀+3)·(q₂₂+1 + q₀+3)·2⁻²⁵⁶`, for any family `(sigF s, msgF s)`.
 
 ### M4 — Mathlib bump and VCVio dependency (Phase B, ~1–3 days, mostly waiting on builds) — done
 
@@ -701,13 +818,14 @@ Instances:
   cache), giving `q₂·(ε_QS + 2⁻¹²⁸)`;
 - freshness of `chal2 ‖ dst` in `H_comb` (`q_c·2⁻⁴⁴⁸`, `Unpredictability` / birthday lemmas);
 - `bad₃ := acc` on doomed chains, giving `Q·max(d,1)·2⁻¹²⁸`;
-- statement binding before `chall₂`, `(q²+q)·2⁻²⁵⁶`: `prEvent_cacheCollision_le_birthday`.
+- statement binding before `chall₂`, `(q²+q)·2⁻²⁵⁶`: `prEvent_cacheCollision_le_birthday` (as
+  implemented: per-`H₂⁰`-query statement hits, §2g).
 
 Subtlety: the "parse a prefix from `x`" functions must be total functions of the query input (and
 the RO cache *before* the query). This is where L1's "committed data" enters. In M5 take it as
 given via a hypothesis that the committed keys are a function of the prior log.
 
-### M6 — Ideal cipher, L1/L2, the "same chain" step (Phase B, ~3–6 weeks, optional) — done (PRF view, fixed statement), see §2d, §2e, §2f
+### M6 — Ideal cipher, L1/L2, the "same chain" step (Phase B, ~3–6 weeks, optional) — done (PRF view; adaptive statements), see §2d, §2e, §2f, §2g
 
 - Model AES as an ideal cipher: a lazy random *permutation* per key, with forward and inverse
   queries. VCVio has no ready-made ideal cipher that I could find; build it as a stateful
