@@ -162,3 +162,6 @@ import VoleMole.Privacy.AdaptiveRO
 import VoleMole.ZK.AdaptRO
 import VoleMole.Privacy.MoussakaRA
 import VoleMole.Privacy.RatatouilleRA
+import VoleMole.ZK.TwoPhaseAd
+import VoleMole.Privacy.PomFRITRA
+import VoleMole.Privacy.PomFRITRAGame

@@ -713,7 +713,8 @@ All files are under `lean/VoleMole/ZK/` (and `Privacy/LeanProver.lean`, `Privacy
 `Privacy/MoussakaRO.lean`, `Privacy/RatatouilleRO.lean`, `ZK/TwoPhaseRO.lean`, `ZK/TwoPhaseIC.lean`,
 `ZK/TwoPhaseReadsRO.lean`, `Privacy/PomFRITRO.lean`, §10.2; `Privacy/Resample.lean`,
 `ZK/IdealCipherP.lean`, `ZK/HopsPatch.lean`, `ZK/AdaptRO.lean`, `Privacy/AdaptiveRO.lean`,
-`Privacy/MoussakaRA.lean`, §10.3). There is no `sorry` and no `axiom`. `#print axioms` lists
+`Privacy/MoussakaRA.lean`, `Privacy/RatatouilleRA.lean`, `ZK/TwoPhaseAd.lean`,
+`Privacy/PomFRITRA.lean`, `Privacy/PomFRITRAGame.lean`, §10.3). There is no `sorry` and no `axiom`. `#print axioms` lists
 only `propext`, `Classical.choice` and `Quot.sound`.
 
 | Statement | Lean | Used in |
@@ -1010,7 +1011,8 @@ adversary's guess sees all tables, with a budget `(q₃, q₅, q_E)`; **its inte
 Anchor Sets, digests, amounts) does not read the tables**: the zero-knowledge theorem is for a
 statement fixed before the tables are drawn, and the redemption and spend statements are the
 adversary's choices. (§10.3 lifts this for Moussaka and Ratatouille, with a zero-knowledge theorem
-for statements chosen from the tables.) Each slot of the game has an output on the tables the game runs on, an
+for statements chosen from the tables, and for PomFRIT, with a two-phase theorem for a continuation
+that reads the tables after step 1, except `H₂³`.) Each slot of the game has an output on the tables the game runs on, an
 `H₂³` programming (identity for a real proof) and its slice; real proofs run on the tables
 programmed by the slots simulated so far; a redemption or spend programs only if its round runs
 (§6's rule), so that no programmed point depends on a world's hidden choice.
@@ -1117,7 +1119,7 @@ may read the tables it does not program; `zk2_ro`, `lean_zeroKnowledgeROS2`), wi
 (`realSession`, `issueRequestOf`, `finalizeIssue`) with the Lean prover on the shared tables and
 each session's `H₃` slice (`leanProverRO`); `hash_to_target`, `XOF_seed` (the games draw its
 outputs) and the refresher commitment stay SHAKE, and the Issuer's key, messages and responses do
-not read the tables, its guess sees all of them. World `true` is world `false` for the Issuer with
+not read the tables (§10.3 lifts this, except for `H₂³`), its guess sees all of them. World `true` is world `false` for the Issuer with
 the sessions' roles exchanged (`A.swap`, `realGameRO_true`). Rewritten (`realGameRO_iff`, no
 probability): a session's step 2 runs only if **both** responses pass the Clients' checks
 (`bothOK`), since only then are the signatures revealed; this makes the simulators' programming
@@ -1163,7 +1165,7 @@ The two sessions'
 `H₃` slices are independent tables when their `r` differ (`2⁻³⁶⁰` otherwise), as in the other two
 games.
 
-### 10.3 Statements chosen from the tables (`Privacy/Resample.lean`, `ZK/IdealCipherP.lean`, `ZK/HopsPatch.lean`, `ZK/AdaptRO.lean`, `Privacy/AdaptiveRO.lean`, `Privacy/MoussakaRA.lean`, `Privacy/RatatouilleRA.lean`)
+### 10.3 Statements chosen from the tables (`Privacy/Resample.lean`, `ZK/IdealCipherP.lean`, `ZK/HopsPatch.lean`, `ZK/AdaptRO.lean`, `Privacy/AdaptiveRO.lean`, `Privacy/MoussakaRA.lean`, `Privacy/RatatouilleRA.lean`, `ZK/TwoPhaseAd.lean`, `Privacy/PomFRITRA.lean`, `Privacy/PomFRITRAGame.lean`)
 
 §10.2's games assume that the adversary's interaction does not read the tables, because `zk_ro`
 is for a statement fixed before the tables are drawn. Here the statement and witness are chosen by
@@ -1310,9 +1312,79 @@ The bound:
 This is about `2⁻¹⁰¹·⁵` without budgets (`2⁻¹⁰¹·²` if the interaction reads `H₂³`), against
 `2⁻¹⁰²·²` for the table-oblivious interaction (`unlinkabilityRO_lean_num`).
 
+**Two-phase: a continuation that reads the tables after step 1** (`ZK/TwoPhaseAd.lean`). In
+PomFRIT the instance of a session is picked by the Issuer's response, which sees the request
+computed from the session's step-1 output `o₁`; an Issuer that reads the tables reads them at keys
+that depend on `o₁`. So the two-phase statement is not "fixed, then patched" as in `zk_adaptive`:
+the base statement and the witness prefix `r` are fixed (in PomFRIT they are the Client's), and
+the continuation `K G3 G5 E : Cont2` reads, at each `o₁`, the proof's `H₃` slice at `q_k3` keys,
+`H₅` at `q_k5` and the cipher at `q_kE` keys (`QK3 o₁ …`, …; each with the other tables fixed), and
+not `H₂³`. A continuation that reads before step 1 (a statement chosen from the tables) is the
+special case of key sets independent of `o₁`.
+
+- *The runs read the continuation only at their step-1 output* (`proveIdeal2_kcongr`,
+  `hyb2'_kcongr`, `hyb3'_kcongr`, `simRun2_kcongr'`, `outPre2_kcongr'`), which two tables agreeing
+  on the keys read give the same: no resampling is needed.
+- *H1* (`zk2_h1A`): `A v G3` (the hybrid-H2 run at the uniform seed `v`, the continuation at the
+  slice `G3`) reads the slice at the distinguisher's keys and the continuation's keys at `out1 v`:
+  `≤ (q₃ + q_k3)·2⁻¹²⁸` by `h3_rom_query`, whose reads may depend on `v`.
+- *Programming, the recomputed points, the tape, the simulator* (`zk2_progA`, `zk2_keysA`,
+  `zk2_tapeA`, `zk2_simA`): pointwise in the tables, so they hold for a continuation depending on
+  them.
+- *H6* (`zk2_h6A`, from `lab2_hyp`) and *H4* (`joint3_h4_2A`, from `hide_rom_query`, with
+  `viewKeys2A`): the hops' query sets may depend on the output, so the continuation's keys at the
+  output's step 1 are added to the distinguisher's.
+- *Assembly*: `zk2_rom_ic_h23A`, `zk2_rom_ic_h23A_num`:
+  `εRO(q₃ + q_k3, q₅ + q_k5, q_E + q_kE)`. In the games' form, **`zk2_adaptive`** (`Hyp2RA`: the
+  continuation `K : Tab3 → Sh p → Cont2` at the slice and the unprogrammed shared tables, not
+  reading `H₂³`, `Rd3`/`Rd5`/`RdE` at each `o₁`; `realRO2`, `simRO2`, `progRO2` with `K g`).
+
+**PomFRIT with a table-reading Issuer** (`Privacy/PomFRITRA.lean`, `Privacy/PomFRITRAGame.lean`).
+- *The Issuer* (`AdversaryRA`): `pk sl s`, `msg b sl s`, `respond t₀ t₁ i sl s` and the guess
+  (`sl` the two slices, `s` the shared tables). At fixed tables it is an `AdversaryRO`
+  (`AdversaryRA.at`). *The interaction's budget* (`IBudget i₃ i₅ i_E`): the key-and-messages stage
+  (`keyOf`) and the response stage at every pair of requests (`respOf`) are consistent table
+  readers (`SReads`) of each slice (the other fixed) and the shared tables, at most `i₃`, `i₅`,
+  `i_E` keys and **no `H₂³` key**; so the Issuer at programmed tables is the Issuer at the original
+  ones (`IBudget.at_h23`). `hash_to_target`, `XOF_seed` (drawn by the games) and the refresher
+  commitment stay SHAKE, outside the tables.
+- *The game* (`realGameRA`): `realGameRO` for the Issuer at the game's slices and tables. *The
+  hybrids*: `G0`, `G1`, `G1'`, `G2` of §10.2 at the Issuer at the original tables (`G0RA`, …).
+- *Reads*: a function of the Issuer reads it only at its key and messages and at its responses to
+  the requests the function computes (`kOf_congr`, `view2_congr`, `D0_congr`, `D1_congr`; with
+  them fixed, `AdversaryRA.fix`: `kOf_fixR`, `kOf_fixS`, `D0_fix`, `D1_fix`). Session `0`'s
+  continuation in hop 0 (`K0`) reads its slice at `2i₃`, `H₅` at `2i₅ + 624`, the cipher at
+  `2i_E + 4607` keys (the key stage, session `1`'s step 1 for its request, the response stage:
+  `hyp2RA_R`); session `1`'s in hop 1 (`K1`) at `2i₃`, `2i₅`, `2i_E + 4607` (`hyp2RA_S`); the
+  reductions (`budget_D0A`, `budget_D1A`) add the same stages to `budget_D0`, `budget_D1`. The
+  interaction is thus counted twice per hop, as the continuation's reads and as the reduction's,
+  and the other session's step 1 once more than needed.
+- *The hops*: `hop0RA`, `hop1RA` (`zk2_adaptive`); the collision term `deltaRA` (`deltaRO`'s
+  event at the Issuer at the tables) `≤ noHitProb + 2⁻¹²⁸` (`deltaRA_le`, from `deltaRO_event'`:
+  session `1`'s prefix is computed from the Issuer at the tables and session `0`'s request, neither
+  of which reads session `0`'s `ã₀`); `G2RA_swap` (`swapS` at the Issuer at the tables, inverted
+  by the one of the exchanged Issuer).
+
+The bound:
+
+    PomFRIT (blindnessRA_lean_num):  |Pr[W₀] − Pr[W₁]| ≤
+        4·εRO(q₃ + 4i₃, q₅ + 4i₅ + 1872, q_E + 4i_E + 23035) + 2·noHitProb + 2·2⁻¹²⁸.
+
+This is about `2⁻¹⁰³·²` without budgets, against `2⁻¹⁰³·⁴` for the table-oblivious interaction
+(`blindnessRO_lean_num`); hop 0 alone is `εRO(q₃ + 4i₃, q₅ + 4i₅ + 1872, q_E + 4i_E + 13821)`,
+hop 1 `εRO(q₃ + 4i₃, q₅ + 4i₅ + 312, q_E + 4i_E + 23035)`.
+
 **Open.**
-- *PomFRIT*: needs the two-phase analogue of `zk_adaptive`. That means the patched versions of
-  `zk2_pre_h4`, `zk2_post_h4` (with `lab2_hyp`) and `joint3_h4_2`, by the technique of
-  `ZK/HopsPatch.lean`, then `PomFRITRO`'s game restated. Not done.
+- *An interaction that reads `H₂³`* (PomFRIT). Two obstacles. (1) The two-phase simulator programs
+  `H₂³` at the zero-prefix block whenever the continuation stops (`simTab2` at `outPre2 = ∅`): an
+  Issuer whose decision to answer validly depends on `H₂³` there distinguishes the hybrid, so the
+  simulator would have to program nothing in that case; and the programming hop (`zk2_progA`, exact
+  by `pr_program_eq` for points independent of `H₂³`) would need a collision term for a
+  continuation that read the block it later programs, bounded by a second application of the
+  theorem with the real prefix's tail `ã` hidden from a reader that has seen step 1 (as
+  `pr_preBlk_mem`). (2) A reduction sees only the tables programmed by the simulated session; it
+  would compute the other session's responses on them, so each hop needs a collision term for
+  the responses reading a programmed block (the simulator's uniform `ã`).
+- An adaptive base statement or witness prefix in `zk2_adaptive` (not needed for PomFRIT).
 - The consistency of the interaction (`SReads`) is a hypothesis on the adversary (true of every
   deterministic query algorithm; a randomized one is a mixture of deterministic ones).
