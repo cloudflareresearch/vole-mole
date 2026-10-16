@@ -49,6 +49,16 @@ template <typename F, size_t MAXD> class Val<F, false, MAXD> {
         v.c_[1] = value;
         return v;
     }
+    // An expression of degree 2 with coefficients c_0, c_1, c_2 (e.g., a derived witness value).
+    static Val quadratic(const std::array<F, 3>& c) {
+        check(2);
+        Val v;
+        v.deg_ = 2;
+        v.c_[0] = c[0];
+        v.c_[1] = c[1];
+        v.c_[2] = c[2];
+        return v;
+    }
 
     size_t degree() const { return deg_; }
     // The value of the expression.
@@ -140,6 +150,11 @@ template <typename F, size_t MAXD> class Val<F, true, MAXD> {
 
     static Val constant(const F& x, const Powers* pw) { return Val(x, 0, pw); }
     static Val committed(const F& mac, const Powers* pw) { return Val(mac, 1, pw); }
+    // An expression of degree `deg` with homogeneous evaluation k.
+    static Val homogeneous(const F& k, size_t deg, const Powers* pw) {
+        check(deg);
+        return Val(k, deg, pw);
+    }
 
     size_t degree() const { return deg_; }
     const F& eval() const { return k_; }
@@ -243,6 +258,7 @@ template <typename F, size_t D> class QsField<F, true, D> {
 
     V constant(const F& x) const { return V::constant(x, &pw_); }
     V committed(const F& mac) const { return V::committed(mac, &pw_); }
+    V homogeneous(const F& k, size_t deg) const { return V::homogeneous(k, deg, &pw_); }
 
     void add(const V& f) {
         sum_ += chi_ * f.lift(D).eval();

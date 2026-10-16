@@ -54,15 +54,25 @@
 //    recomputed by the verifier, as in FAEST. The prover opens all leaves of tree t but leaf
 //    Delta_t.
 //
+// 6. Derived witnesses (EXPERIMENTAL). If the relation declares a key length KP > 0, the F_p
+//    witness w in F_p^LP is derived from a key K in F_p^KP with the local PRG G of prg.hpp: the
+//    VOLE commits to K (with d = K - u), and the proof carries the public vector e = w - G(K) after
+//    d. Both parties evaluate w_i = e_i + G(K)_i as expressions of degree 2 in the committed key,
+//    and the relation's constraints on them unchanged, so the QuickSilver degree doubles (qs_dp).
+//    Each witness element then costs one field element of proof (e_i) instead of TAU, at the cost
+//    of KP committed key elements. The prover derives K <- H(w || mu || rho). Soundness is
+//    unaffected (K and e determine w), except that the QuickSilver check's degree doubles; zero
+//    knowledge additionally requires G to be a PRG. The F_n witness is always committed directly.
+//
 // The proof is split in two steps, so that challenges of another proof can be derived from the
 // commitment to the witness (see ecdsa_pok/): prove_commit produces the VOLE and witness commitment
 // and chal2, a digest that binds it, and prove_finish produces the rest. The caller binds data
 // (`binder`) to the QuickSilver challenges.
 //
 // Soundness. For each field, the QuickSilver check fails with probability at least
-// 1 - D / N^TAU over Delta (Schwartz-Zippel, with Delta uniform in a set of size N^TAU). The other
-// challenges are uniform in F_p or F_n and contribute negligibly. There's no grinding, so a prover
-// making 2^k hash queries succeeds with probability about 2^k D / N^TAU.
+// 1 - D / N^TAU over Delta (D the QuickSilver degree) (Schwartz-Zippel, with Delta uniform in a set
+// of size N^TAU). The other challenges are uniform in F_p or F_n and contribute negligibly. There's
+// no grinding, so a prover making 2^k hash queries succeeds with probability about 2^k D / N^TAU.
 //
 // Zero knowledge. Corrections, d, u-tilde, and the A_i are masked by the (uniform) contribution of
 // the unopened leaves. Leaf vectors are sampled from AES-CTR by rejection sampling (accepting
@@ -74,6 +84,7 @@
 #define VOLE_MOLE_VOLEITH_P256_VOLEITH_HPP
 
 #include "p256/field.hpp"
+#include "voleith_p256/prg.hpp"
 #include "voleith_p256/qs.hpp"
 
 #include "aes.hpp"        // from faest-arch-opt
@@ -150,6 +161,7 @@ enum : uint8_t {
     DS_QS_CHI_N = 10,
     DS_CHAL3_SEED = 11,
     DS_CHAL3 = 12,
+    DS_PRG_KEY = 13,
 };
 
 using Prg = faest::aes_ctr_prg<faest::secpar::s128>;
@@ -410,14 +422,38 @@ template <typename F> class VoleHash {
 
 } // namespace detail
 
+// The key length of R's derived F_p witness (R::KP), or 0 if it's committed directly.
+template <typename R> constexpr size_t key_p() {
+    if constexpr (requires { R::KP; }) {
+        return R::KP;
+    } else {
+        return 0;
+    }
+}
+// The QuickSilver degree over F_p: R::DP, doubled for a derived witness.
+template <typename R> constexpr size_t qs_dp() { return key_p<R>() > 0 ? 2 * R::DP : R::DP; }
+
+constexpr uint8_t PRG_TAG_P = 'p';
+
+// The PRG of R's derived F_p witness.
+template <typename R> const LocalPrg<Fp>& witness_prg() {
+    static const LocalPrg<Fp> g(PRG_TAG_P, key_p<R>(), R::LP);
+    return g;
+}
+
 // Layout of the VOLE and of the proof for relation R and VOLE parameters P.
 template <typename R, typename P> struct Layout {
     static constexpr size_t TAU = P::TAU;
-    static constexpr size_t LP = R::LP, LN = R::LN, DP = R::DP, DN = R::DN;
+    static constexpr size_t LP = R::LP, LN = R::LN, DN = R::DN;
+    static constexpr size_t KP = key_p<R>();
+    static constexpr bool DERIVED = KP > 0;
+    static constexpr size_t DP = qs_dp<R>(); // the QuickSilver degree over F_p
     static_assert(DP >= 2 && DN >= 2);
+    static_assert(!DERIVED || (KP < LP && KP >= 8));
 
-    // The VOLE rows of each field: witness, QuickSilver masks, VOLE check mask.
-    static constexpr size_t LHAT_P = LP + DP;
+    // The VOLE rows of each field: witness (or key), QuickSilver masks, VOLE check mask.
+    static constexpr size_t WP_ROWS = DERIVED ? KP : LP;
+    static constexpr size_t LHAT_P = WP_ROWS + DP;
     static constexpr size_t LHAT_N = LN + DN;
 
     static constexpr size_t OFF_IV = 0;
@@ -425,7 +461,9 @@ template <typename R, typename P> struct Layout {
     static constexpr size_t CORR_BYTES = (TAU - 1) * (LHAT_P + LHAT_N) * ELEM_BYTES;
     static constexpr size_t OFF_UTILDE = OFF_CORR + CORR_BYTES; // u-tilde_p, u-tilde_n
     static constexpr size_t OFF_D = OFF_UTILDE + 2 * ELEM_BYTES;
-    static constexpr size_t D_BYTES = (LP + LN) * ELEM_BYTES;
+    // d for the F_p rows, then the F_n rows, then e for a derived witness.
+    static constexpr size_t OFF_E = OFF_D + (WP_ROWS + LN) * ELEM_BYTES;
+    static constexpr size_t D_BYTES = (WP_ROWS + LN + (DERIVED ? LP : 0)) * ELEM_BYTES;
     static constexpr size_t OFF_QS = OFF_D + D_BYTES; // A_1, ..., A_{D - 1} for F_p, then F_n
     static constexpr size_t QS_BYTES = (DP - 1 + DN - 1) * ELEM_BYTES;
     static constexpr size_t OFF_DELTA = OFF_QS + QS_BYTES;
@@ -436,7 +474,7 @@ template <typename R, typename P> struct Layout {
 // The constraint context passed to R::constraints.
 template <typename R, bool IsVerifier> class Context {
   public:
-    using PV = Val<Fp, IsVerifier, R::DP>;
+    using PV = Val<Fp, IsVerifier, qs_dp<R>()>;
     using NV = Val<Fn, IsVerifier, R::DN>;
     static constexpr bool is_verifier = IsVerifier;
 
@@ -447,7 +485,7 @@ template <typename R, bool IsVerifier> class Context {
     void add_p(const PV& f) { qp_.add(f); }
     void add_n(const NV& f) { qn_.add(f); }
 
-    QsField<Fp, IsVerifier, R::DP> qp_;
+    QsField<Fp, IsVerifier, qs_dp<R>()> qp_;
     QsField<Fn, IsVerifier, R::DN> qn_;
     std::vector<PV> wp_;
     std::vector<NV> wn_;
@@ -465,7 +503,8 @@ template <typename F> F field_pow2(size_t e) {
 // The prover's state between prove_commit and prove_finish.
 template <typename R, typename P> struct ProverState {
     Digest chal2;
-    std::vector<Fp> up, wp, vp; // u, the witness, and V = sum_t N^t v_t (F_p rows)
+    std::vector<Fp> up, wp, vp; // u, the witness (or key), and V = sum_t N^t v_t (F_p rows)
+    std::vector<Fp> ep;         // e, for a derived witness
     std::vector<Fn> un, wn, vn; // (F_n rows)
     std::vector<detail::Tree<P>> trees;
     std::vector<std::array<uint8_t, COM_BYTES>> coms;
@@ -484,7 +523,6 @@ ProverState<R, P> prove_commit(std::span<uint8_t, Layout<R, P>::PROOF_BYTES> pro
     constexpr size_t LHAT_P = Lay::LHAT_P, LHAT_N = Lay::LHAT_N;
 
     ProverState<R, P> st;
-    st.wp.assign(wp.begin(), wp.end());
     st.wn.assign(wn.begin(), wn.end());
 
     // (seed, iv) <- H(w || mu || rho)
@@ -496,6 +534,31 @@ ProverState<R, P> prove_commit(std::span<uint8_t, Layout<R, P>::PROOF_BYTES> pro
         h.update(mu);
         h.update(rho);
         seed_iv = finalize<SEED_BYTES + IV_BYTES>(h, DS_PROVER_SEED);
+    }
+    if constexpr (Lay::DERIVED) {
+        // K <- H(w || mu || rho), and e = w - G(K).
+        auto h = new_hasher();
+        hash_elems<Fp>(h, wp);
+        h.update(mu);
+        h.update(rho);
+        h.update_byte(DS_PRG_KEY);
+        Keccak_HashFinal(&h.ctx, nullptr);
+        st.wp.reserve(Lay::KP);
+        while (st.wp.size() < Lay::KP) {
+            std::array<uint8_t, 32> b;
+            Keccak_HashSqueeze(&h.ctx, b.data(), 8 * b.size());
+            Fp k;
+            if (accept(b.data(), k)) {
+                st.wp.push_back(k);
+            }
+        }
+        const LocalPrg<Fp>& g = witness_prg<R>();
+        st.ep.resize(R::LP);
+        for (size_t i = 0; i < R::LP; ++i) {
+            st.ep[i] = wp[i] - g.eval(i, st.wp);
+        }
+    } else {
+        st.wp.assign(wp.begin(), wp.end());
     }
     const auto iv = proof.template subspan<Lay::OFF_IV, IV_BYTES>();
     std::ranges::copy(std::span(seed_iv).template last<IV_BYTES>(), iv.begin());
@@ -607,13 +670,17 @@ ProverState<R, P> prove_commit(std::span<uint8_t, Layout<R, P>::PROOF_BYTES> pro
     store(proof.data() + Lay::OFF_UTILDE, hash_p(st.up));
     store(proof.data() + Lay::OFF_UTILDE + ELEM_BYTES, hash_n(st.un));
 
-    // 3. Witness commitment: d = w - u.
+    // 3. Witness commitment: d = w - u (or K - u, and e).
     uint8_t* d = proof.data() + Lay::OFF_D;
-    for (size_t j = 0; j < R::LP; ++j, d += ELEM_BYTES) {
-        store(d, wp[j] - st.up[j]);
+    for (size_t j = 0; j < Lay::WP_ROWS; ++j, d += ELEM_BYTES) {
+        store(d, st.wp[j] - st.up[j]);
     }
     for (size_t j = 0; j < R::LN; ++j, d += ELEM_BYTES) {
         store(d, wn[j] - st.un[j]);
+    }
+    for (const Fp& e : st.ep) {
+        store(d, e);
+        d += ELEM_BYTES;
     }
 
     // chal2 <- H(chal1 || u-tilde || h_0 || ... || h_{TAU - 1} || d)
@@ -685,15 +752,26 @@ void prove_finish(std::span<uint8_t, Layout<R, P>::PROOF_BYTES> proof, ProverSta
                   size_t* failed = nullptr) {
     using namespace detail;
     using Lay = Layout<R, P>;
-    constexpr size_t DP = R::DP, DN = R::DN;
+    constexpr size_t DP = Lay::DP, DN = R::DN;
+    using PV = typename Context<R, false>::PV;
 
     const Digest seed = chal3_seed(st.chal2, binder);
     Context<R, false> ctx;
     ctx.qp_ = QsField<Fp, false, DP>(sample<Fp>(seed, DS_QS_CHI_P));
     ctx.qn_ = QsField<Fn, false, DN>(sample<Fn>(seed, DS_QS_CHI_N));
     ctx.wp_.reserve(R::LP);
-    for (size_t j = 0; j < R::LP; ++j) {
-        ctx.wp_.push_back(Context<R, false>::PV::committed(st.vp[j], st.wp[j]));
+    if constexpr (Lay::DERIVED) {
+        const LocalPrg<Fp>& g = witness_prg<R>();
+        const std::span<const Fp> kv(st.vp.data(), Lay::KP), kk(st.wp.data(), Lay::KP);
+        for (size_t i = 0; i < R::LP; ++i) {
+            auto c = g.eval_prover(i, kv, kk);
+            c[2] += st.ep[i];
+            ctx.wp_.push_back(PV::quadratic(c));
+        }
+    } else {
+        for (size_t j = 0; j < R::LP; ++j) {
+            ctx.wp_.push_back(PV::committed(st.vp[j], st.wp[j]));
+        }
     }
     ctx.wn_.reserve(R::LN);
     for (size_t j = 0; j < R::LN; ++j) {
@@ -707,8 +785,8 @@ void prove_finish(std::span<uint8_t, Layout<R, P>::PROOF_BYTES> proof, ProverSta
     // Add the masks sum_{i = 1}^{D - 1} K_{r_i} Delta^(i - 1), where K_{r_i} = V_i + u_i Delta.
     auto& cp = ctx.qp_.coeffs();
     for (size_t i = 1; i < DP; ++i) {
-        cp[i - 1] += st.vp[R::LP + i - 1];
-        cp[i] += st.up[R::LP + i - 1];
+        cp[i - 1] += st.vp[Lay::WP_ROWS + i - 1];
+        cp[i] += st.up[Lay::WP_ROWS + i - 1];
     }
     auto& cn = ctx.qn_.coeffs();
     for (size_t i = 1; i < DN; ++i) {
@@ -743,6 +821,7 @@ template <typename R, typename P> struct VerifierState {
     Digest chal2;
     std::vector<Fp> kp; // the MACs Q_j of all F_p rows, with d applied to the witness rows
     std::vector<Fn> kn;
+    std::vector<Fp> ep; // e, for a derived witness
     Fp delta_p;
     Fn delta_n;
 };
@@ -791,11 +870,12 @@ verify_commit(std::span<const uint8_t, Layout<R, P>::PROOF_BYTES> proof, const D
     if (!ut_p || !ut_n) {
         return std::nullopt;
     }
-    std::vector<Fp> dp(R::LP);
+    std::vector<Fp> dp(Lay::WP_ROWS);
     std::vector<Fn> dn(R::LN);
+    std::vector<Fp> ep(Lay::DERIVED ? R::LP : 0);
     {
         const uint8_t* d = proof.data() + Lay::OFF_D;
-        for (size_t j = 0; j < R::LP; ++j, d += ELEM_BYTES) {
+        for (size_t j = 0; j < Lay::WP_ROWS; ++j, d += ELEM_BYTES) {
             const auto v = load<Fp>(d);
             if (!v) {
                 return std::nullopt;
@@ -808,6 +888,14 @@ verify_commit(std::span<const uint8_t, Layout<R, P>::PROOF_BYTES> proof, const D
                 return std::nullopt;
             }
             dn[j] = *v;
+        }
+        for (Fp& e : ep) {
+            const auto v = load<Fp>(d);
+            if (!v) {
+                return std::nullopt;
+            }
+            e = *v;
+            d += ELEM_BYTES;
         }
     }
     const faest::block128 iv_block = faest::block128::load(iv.data());
@@ -925,9 +1013,10 @@ verify_commit(std::span<const uint8_t, Layout<R, P>::PROOF_BYTES> proof, const D
             scale_n *= nn;
         }
     }
-    for (size_t j = 0; j < R::LP; ++j) {
+    for (size_t j = 0; j < Lay::WP_ROWS; ++j) {
         st.kp[j] += dp[j] * st.delta_p;
     }
+    st.ep = std::move(ep);
     for (size_t j = 0; j < R::LN; ++j) {
         st.kn[j] += dn[j] * st.delta_n;
     }
@@ -941,7 +1030,7 @@ bool verify_finish(std::span<const uint8_t, Layout<R, P>::PROOF_BYTES> proof,
                    std::span<const uint8_t> binder) {
     using namespace detail;
     using Lay = Layout<R, P>;
-    constexpr size_t DP = R::DP, DN = R::DN;
+    constexpr size_t DP = Lay::DP, DN = R::DN;
 
     std::array<Fp, DP> ap{};
     std::array<Fn, DN> an{};
@@ -968,8 +1057,18 @@ bool verify_finish(std::span<const uint8_t, Layout<R, P>::PROOF_BYTES> proof,
     ctx.qp_ = QsField<Fp, true, DP>(sample<Fp>(seed, DS_QS_CHI_P), st.delta_p);
     ctx.qn_ = QsField<Fn, true, DN>(sample<Fn>(seed, DS_QS_CHI_N), st.delta_n);
     ctx.wp_.reserve(R::LP);
-    for (size_t j = 0; j < R::LP; ++j) {
-        ctx.wp_.push_back(ctx.qp_.committed(st.kp[j]));
+    if constexpr (Lay::DERIVED) {
+        const LocalPrg<Fp>& g = witness_prg<R>();
+        const std::span<const Fp> km(st.kp.data(), Lay::KP);
+        const Fp delta2 = ctx.qp_.delta_pow(2);
+        for (size_t i = 0; i < R::LP; ++i) {
+            ctx.wp_.push_back(
+                ctx.qp_.homogeneous(g.eval_verifier(i, km, st.delta_p) + st.ep[i] * delta2, 2));
+        }
+    } else {
+        for (size_t j = 0; j < R::LP; ++j) {
+            ctx.wp_.push_back(ctx.qp_.committed(st.kp[j]));
+        }
     }
     ctx.wn_.reserve(R::LN);
     for (size_t j = 0; j < R::LN; ++j) {
@@ -980,7 +1079,8 @@ bool verify_finish(std::span<const uint8_t, Layout<R, P>::PROOF_BYTES> proof,
     // A_0 = sum + sum_i K_{r_i} Delta^(i - 1) - sum_{i >= 1} A_i Delta^i.
     Fp a0p = ctx.qp_.sum();
     for (size_t i = 1; i < DP; ++i) {
-        a0p += st.kp[R::LP + i - 1] * ctx.qp_.delta_pow(i - 1) - ap[i] * ctx.qp_.delta_pow(i);
+        a0p +=
+            st.kp[Lay::WP_ROWS + i - 1] * ctx.qp_.delta_pow(i - 1) - ap[i] * ctx.qp_.delta_pow(i);
     }
     Fn a0n = ctx.qn_.sum();
     for (size_t i = 1; i < DN; ++i) {
