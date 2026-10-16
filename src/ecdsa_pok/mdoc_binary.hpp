@@ -346,7 +346,7 @@ Wires<Ops> item_circuit(Ops& ops, std::span<const uint8_t> ei, std::span<const u
         h[i] = Word<Ops>::constant(sha256::IV[i]);
     }
     for (size_t b = 0; b < 2; ++b) {
-        h = sha.compress(h, std::span<const Wire, 512>(buf.data() + 512 * b, 512));
+        sha.compress(h, std::span<const Wire, 512>(buf.data() + 512 * b, 512));
     }
     Wires<Ops> digest;
     push_be256(digest, digest_int(h));
@@ -527,7 +527,7 @@ MdocWires<Ops> prefix_circuit(Ops& ops, const BinPublic& pub, const MdocValues* 
     }
     std::vector<Wires<Ops>> chain;
     for (size_t b = 0; b < MAX_BLOCKS; ++b) {
-        h = sha.compress(h, std::span<const Wire, 512>(msg.data() + 512 * b, 512));
+        sha.compress(h, std::span<const Wire, 512>(msg.data() + 512 * b, 512));
         chain.push_back(digest_int(h));
     }
     out.t_bit = ops.next;
