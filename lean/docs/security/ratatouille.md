@@ -759,7 +759,9 @@ and determinism of `Tag`. The witness satisfies V3 by `change_correct`. ∎
   own two rounds, the Issuer's stages seeing every pair, round 1's requests only where §6's rule
   runs round 1), a hybrid over the pairs, each step a reduction to the table-reading game whose
   Issuer runs the other pairs (`unlinkabilityP_lean_num`, `≤ N·(N·2⁻¹⁰¹ + 2·εhide)` plus budget
-  terms: `2⁻⁶³` at `2²⁰` Clients, `2⁻³⁹` at `2³²`; quadratic by an artifact of the proof). The
+  terms: `2⁻⁶³` at `2²⁰` Clients, `2⁻³⁹` at `2³²`; quadratic by an artifact of the proof; the
+  lazy-sampling reduction of PomFRIT with `H₄` a table, `Privacy/PomFRITLin.lean`, does not apply
+  as it stands, since the further Clients' spend statements are chosen by the Issuer). The
   general adaptive schedule (more spends per Client, sessions started after earlier outcomes) is
   on paper: sessions before the challenge would have to influence the Issuer's key, context and
   balance, which the table-reading game keeps fixed.

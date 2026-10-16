@@ -726,7 +726,8 @@ All files are under `lean/VoleMole/ZK/` (and `Privacy/LeanProver.lean`, `Privacy
 `ROM/SeedXOFReads.lean`, `Privacy/SeedXOFNC.lean`, §10.6; `ZK/VerifyReadsRO.lean`,
 `Privacy/MoussakaNCRO.lean`, `Privacy/MoussakaNCSh.lean`, §10.7; `ZK/ReadsMany.lean`,
 `Privacy/PomFRITMany.lean`, `Privacy/MoussakaMany.lean`, `Privacy/RatatouilleMany.lean`,
-`Privacy/PomFRITAdaptive.lean`, §10.8). There is no `sorry` and no `axiom`. `#print axioms` lists
+`Privacy/PomFRITAdaptive.lean`, `ZK/ReadsPoint.lean`, `Privacy/PomFRITLin.lean`, §10.8). There is
+no `sorry` and no `axiom`. `#print axioms` lists
 only `propext`, `Classical.choice` and `Quot.sound`.
 
 | Statement | Lean | Used in |
@@ -2048,7 +2049,7 @@ and the Anchors' signers `sk g` may depend on the XOF table; `anonymityNCRO_lean
 **Open.** The adversary's choices (contexts, keys, Anchor Sets, digests) do not read the tables
 (no `RA`/`OC` version).
 
-### 10.8 Many sessions (`ZK/ReadsMany.lean`, `Privacy/PomFRITMany.lean`, `Privacy/MoussakaMany.lean`, `Privacy/RatatouilleMany.lean`, `Privacy/PomFRITAdaptive.lean`)
+### 10.8 Many sessions (`ZK/ReadsMany.lean`, `Privacy/PomFRITMany.lean`, `Privacy/MoussakaMany.lean`, `Privacy/RatatouilleMany.lean`, `Privacy/PomFRITAdaptive.lean`, `ZK/ReadsPoint.lean`, `Privacy/PomFRITLin.lean`)
 
 Every game above has the challenge sessions only: two (PomFRIT) or four (Moussaka, Ratatouille)
 requests. A deployment has many sessions on the same random oracle and cipher, and the adversary
@@ -2236,13 +2237,73 @@ with a modelling choice. Precisely:
    `≈ (n·221)²·2⁻¹²⁸` up to the positions' factor — an `n²` advantage, but bought with `q_E ∝ n`
    queries, i.e. the multi-target term `q_E·n·221·2⁻¹²⁸` of a key-level bound. The per-proof iv is
    what removes it.
-4. *Why Lean cannot state the linear bound yet.* (a) In the Lean model `H₄` is the concrete SHAKE
+4. *What the Lean model needs.* (a) In the games above `H₄` is the concrete SHAKE
    (`Hashes.shake`; only `H₃`, `H₂³`, `H₅` and the cipher are tables), so distinct sessions' ivs
-   are not known to differ; a linear bound needs `H₄` as a table of the game (or a hypothesis
-   that the sessions' ivs differ). (b) H4 would have to puncture the cipher at the points `pts`
-   instead of whole rows, and (c) the hybrid would have to replace all `2N` proofs with one bad
-   event over all hidden points. The key-level `N`-pair bounds above are the best this proof
-   structure gives up to a constant.
+   are not known to differ; any bound without the per-session charge needs `H₄` as a table of the
+   game. (b) The paper route would then puncture the cipher at the points `pts` instead of whole
+   rows and (c) replace all `2N` proofs in one hybrid with one bad event over all hidden points.
+   The key-level `N`-pair bounds above are the best the per-pair hybrid with key-level charging
+   gives up to a constant. For PomFRIT, Lean now takes a different route that needs neither (b)
+   nor (c): with `H₄` a table, the other sessions are moved to private tables by lazy sampling, and
+   the per-pair hybrid's steps no longer contain them (next paragraph).
+
+**With `H₄` a table: no per-session charge (PomFRIT; `ZK/ReadsPoint.lean`,
+`Privacy/PomFRITLin.lean`).** The games `realGameNH`, `realGamePH` are `realGameN`, `realGameP`
+with the base record `hb4 G4`: SHAKE with `H₄` answered by a uniform table `G4` on every `49`-byte
+input `iv_pre ‖ µ₁ ‖ 4`, so each session's executable prover takes its `iv` from the table
+(`step1Iv_hb4`); the Issuer is a family indexed by `G4` (it may read all of `H₄`), and the cipher
+has function rows.
+
+- *Step 1 reads points* (`step1_consP`, from `treeNode_ic_congrP`, `commit_ic_congrP`,
+  `voleGenAt_ic_congrP`, `vgIn5_ic_congrP`, all through `icPrg_congrP`): every PRG call of step 1
+  uses the proof's `iv`, so step 1 reads the cipher only at its tree's nodes on the CTR blocks
+  `ctrBlock iv c t` (`PtsAgree`), and a table that agrees there and on the `624` `H₅` keys has the
+  same step-1 state and reads. A session's reads are `rdX` (`rdX_cons`); step 2 reads neither `H₅`
+  nor the cipher (`sessOf_tables`); the further sessions together read `QX` (`QX_cons`).
+- *Lazy sampling instead of charging* (`red_close_redP`, by `Privacy.pr_resample`): in the step for
+  pair `k`, with the other sessions' tapes `c` fixed, the game's `(H₅, cipher)` pair is resampled
+  as `mixR (QX c t₁) t₁ t₂`: the other sessions' view `t₁` on their reads, a fresh `t₂` elsewhere.
+  Unless a challenge session's reads on `t₂` meet `QX c t₁` (`badQ`), the challenge sessions see
+  `t₂` (`realGameRA_patch_iff`), and the game is the two-session table-reading game of the
+  reduction `A.redP c t₁`: its interaction computes the other sessions' requests from the private
+  `t₁` and reads **no** table (`redP_iBudget`: `IBudget 0 0 0`), its guess reads the tables patched
+  with `t₁` with the Issuer's own budget (`redP_gBudget`). `blindnessRA` gives, per `t₁`,
+  `εPair0 = 4·εRO(q₃, q₅ + 1872, q_E + 23035) + 2·noHitProb + 2·2⁻¹²⁸` (`red_step`).
+- *The bad event* (`pr_badQ_le`, `pr_Bp_le`; per pair of a challenge and a further session,
+  `Bp_cases`): a common `H₅` key means equal `iv`s (the `H₅` keys begin with the `iv`, `k5X_iv`);
+  a common cipher point means a common tree node and equal second lanes `getLE32 iv 4` of the
+  `iv`s (`lane1_of_ctrBlock_eq`: a CTR block keeps the `iv`'s middle lanes). With `iv = G4(iv_pre ‖
+  µ₁ ‖ 4)` (`ivX_hb4`) and the seed and `iv_pre` the two halves of a uniform slice answer, this is
+  `≤ 2⁻¹²⁸` (equal `iv_pre`s) `+ 2⁻¹²⁸` (an `H₄` collision) `+ 2⁻¹²⁸` (equal root seeds)
+  `+ 2⁻³²·4607²·2⁻¹²⁸` (equal lanes, `pr_fn_lane_le`, times a collision of two nodes not both
+  roots: a non-root node on a uniform cipher is uniform, `pr_treeNode_eq_le`, since its parent's
+  value reads the cipher only at other inputs, `keyAt_congr_cols`, `xIn_inj`) `≤ 4·2⁻¹²⁸`.
+
+The bounds (Lean, function rows; `#print axioms`: `propext`, `Classical.choice`, `Quot.sound`):
+
+    one pair, m further sessions (blindnessNH_lean):  ≤ εPair0(q₃, q₅, q_E) + 16·m·2⁻¹²⁸
+    N pairs (blindnessPH_lean):                        ≤ N·(εPair0(q₃, q₅, q_E) + 32(N − 1)·2⁻¹²⁸)
+
+with `εPair0 ≤ 2⁻¹⁰³ + 4·(q₃ + q₅ + 221·q_E)·2⁻¹²⁸` (`εPair0_le`). In numbers:
+
+| | bound | `2²⁰` sessions | `2³²` sessions | key-level (above) | Lean |
+|---|---|---|---|---|---|
+| one pair + `m` further | `2⁻¹⁰³ + 16m·2⁻¹²⁸` | `2⁻¹⁰²` | `2⁻⁹¹` | `2⁻⁸³`, `2⁻⁷¹` | `blindnessNH_lean_le`, `_2pow20`, `_2pow32` |
+| `N` pairs, `n = 2N` | `N·2⁻¹⁰³ + 32N²·2⁻¹²⁸` `= n·2⁻¹⁰⁴ + n²·2⁻¹²⁵` | `2⁻⁸³` | `2⁻⁶⁰` | `2⁻⁶⁴`, `2⁻⁴⁰` | `blindnessPH_lean_le`, `_2pow20`, `_2pow32` |
+
+each plus the guess's budget terms `4·(q₃ + q₅ + 221·q_E)·2⁻¹²⁸`, `N` times for `N` pairs.
+
+What this does and does not give. The per-session cost of order `2⁻¹⁰³` is gone: each step costs
+the two-session bound plus `2⁻¹²⁴` per other session. What is still quadratic is `n²·2⁻¹²⁵`, the
+birthday bound of the 128-bit `iv`s and root seeds: the bad event counts two sessions with equal
+`iv`s as colliding in `H₅`, although their `H₅` inputs `iv ‖ e ‖ label ‖ 5` also differ in the
+gate labels unless those collide too; bounding that needs the labels' distribution across
+sessions (not done). It dominates at `n = 2³²` (`2⁻⁶¹` against the linear `2⁻⁷²`). The budget
+terms are still charged once per pair, not once in all (that needs one bad event over all
+proofs, the paper's joint hybrid). The point-level H4 hop (item 2 above) is not needed for this
+route and is not formalized; the further sessions are simply no longer part of the hops'
+distinguisher. Permutation rows are not covered (the lazy sampling patches single points of a
+row).
 
 **Adaptive schedules** (`Privacy/PomFRITAdaptive.lean`; PomFRIT). A session run inside the
 interaction must be a consistent reader of `H₂³` too: **step 2 of the two-phase prover is**.
@@ -2285,8 +2346,16 @@ adversary (the further sessions' tapes fixed, a non-uniform reduction).
   the challenge cannot influence the challenge keys, contexts and balance: those are constants of
   the `RA` adversaries (`AdversaryRA.pk`, `ctxIss`, `ctxRed`; `pk`, `ctx`, `tInit`). The missing
   piece is an `RA` game whose key stage reads the tables (as PomFRIT's does), and its proof.
-- *A linear bound for `N` challenge pairs* (the paragraph above): `H₄` as a table of the game,
-  point-level puncturing in H4, and one joint hybrid over all proofs.
+- *A linear bound for `N` challenge pairs.* For PomFRIT with `H₄` a table, done up to the `iv`
+  birthday term `n²·2⁻¹²⁵` and with the budget terms charged per pair (`blindnessPH_lean`, above);
+  removing the birthday term needs the gate labels' distribution (an `H₅` collision needs equal
+  labels, not only equal `iv`s), charging the budget once needs one bad event over all proofs.
+  For Moussaka and Ratatouille the same reduction does not apply as it stands: their further
+  Clients' redemptions (Ratatouille: spends) are proved for statements the adversary chooses
+  after seeing the challenge requests, so their reads depend on tables the challenge sessions read
+  and are not a reader of the private tables alone (`pr_resample` needs that); the lazy sampling
+  would have to be interleaved with the adversary's choices (sample the further issuances, then
+  the challenge sessions, then the further redemptions, with a bad event at each stage).
 - *A prefix count in the `RAH` collision term*, for adaptive PomFRIT `≈ n·2⁻¹⁰¹` instead of
   `n·2⁻⁹²`.
 - *Other games.* Further sessions in the shared-`H₃` games (§10.5: the prover reading its column),
