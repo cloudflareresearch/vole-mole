@@ -107,7 +107,7 @@ cipher.
 | Lemma | Content | Status |
 |---|---|---|
 | L0 | All hash domains are disjoint; AES inputs of different roles never collide | [paper] + [Lean] `Seed/Commitments.lean` |
-| L1 | Committed data (commitment preimages, leaf keys) is well defined and binding | [paper] + [Lean] unique leaf keys and straight-line key extraction from the cipher log (PRF view, forward queries) `ROM/CipherBind.lean`, `ROM/CipherGame.lean` |
+| L1 | Committed data (commitment preimages, leaf keys) is well defined and binding | [paper] + [Lean] unique leaf keys and straight-line key extraction from the cipher log (PRF view, forward queries), binding with explicit `ε_bind` `ROM/CipherBind.lean`, `ROM/CipherOpen.lean`; the ordering half of the `H₁` linking on paper |
 | L2 | A leaf the prover cannot open is always the hidden one | [paper] |
 | L3 | KOS consistency check forces affine VOLE correlations (ε_KOS ≈ 2⁻¹⁵⁴) | [paper] + [Lean] `Seed/KOS.lean` + [test] |
 | L4 | QuickSilver with challenge-dependent constraints: either the constraints hold or few challenges accept | [paper] + [Lean] `Seed/QuickSilver.lean` + [test] |
@@ -501,7 +501,11 @@ used here add nothing).
 | `ROM/SingleOracle.lean` | done: L0's rule (`l0Kind`, the final byte); the verifier's queries respect it (`allQueriesSatisfy_verifyQ`, all five relations: `combOk_*`); the game against one SHAKE oracle has the per-domain game's probabilities (`prEvent_game₁_eq`) |
 | `ROM/FreshCache.lean` | done: the union bound when a fresh query's bad event reads the cache of the earlier queries (`freshBadC`, `prEvent_freshBadC_le_of_cached`: `n·ε` for a bound `ε` over every cache of fewer than `N` cells) |
 | `ROM/CipherBind.lean` | done (M6, PRF view): **binding of the leaf commitments in the ideal-cipher model**. The cipher a random oracle on cells, the prover querying it, the verifier and the extractor reading it. Collision event `collBad` (two keys with equal blocks at both points of a leaf, charged at the first query of the second key): `prEvent_coll_le`, `≤ 2·q_E²·2⁻²⁵⁶`. Straight-line extraction of the leaf keys from the prover's cipher log (`extractKey`, `keysOf`, `knownOf`); `binds_or_coll_or_dead`: the executable reconstruction's keys off the hidden leaves are the extracted ones, unless a collision or a dead leaf is opened; `prEvent_not_binds_le` |
-| `ROM/CipherGame.lean` | done (M6): the joint game (prover on hashes and cipher, `specIC`; the extractor `proverIC`; the verifier with `icPrg E`); the bridge from a fixed hash table to the lazy oracle (`prEvent_joint_le_add`); `prEvent_joint_bindFail_le`: `Pr[bindFail] ≤ 2·q_E²·2⁻²⁵⁶ + Pr[DeadOpenOut]`; **`moussakaIssue_accept_le_ic`**: Moussaka issuance with `ε_bind` replaced by `2·q_E²·2⁻²⁵⁶ + ε_open` (the other relations via `prEvent_joint_le_of_bindFail`, not stated) |
+| `ROM/CipherGame.lean` | done (M6): the joint game (prover on hashes and cipher, `specIC`; `runE` returns the prover's joint log, `cipherLog`/`hashLog` its parts; the extractor `proverIC`; the verifier with `icPrg E`); the bridge from a fixed hash table to the lazy oracle (`prEvent_joint_le_add`); `prEvent_joint_bindFail_le`: `Pr[bindFail] ≤ 2·q_E²·2⁻²⁵⁶ + Pr[DeadOpenOut]`; `moussakaIssue_accept_le_ic`: Moussaka issuance with `ε_bind` replaced by `2·q_E²·2⁻²⁵⁶ + ε_open` |
+| `ROM/Queried.lean` | done (M6): **the verifier's chain queries were the prover's**. Log facts (`tableQueryLog_congr`, `mem_tableQueryLog_congr`); the hash ladder `w_i → cw → x → y → z` (`ladder_walk`): an accepted proof with a leaf-hash input the prover did not query makes a verifier query a hit (`Hit₁` and its `H₂¹`, `H₂²` analogues) or leaves `z` unqueried; `prEvent_accept_leafUnqueried_z_le` `≤ (q₁+18)(17q₁+q₂₁)·2⁻²⁵⁶ + (q₂₁+1)q₂₂·2⁻¹⁰⁸⁸ + (q₂₂+1)q₂₃·2⁻⁴⁴⁸` |
+| `ROM/FreshGuess.lean` | done (M6): abstract class counting (`card_finOf_mul_le`); **one fresh answer guessed** against the lazy oracle, `K·2^{-8·outLen}` and not charged to every query (`prEvent_fresh_guess_le`); the verifier's fresh `H₂³` answer is `Δ` with probability `≤ 2⁻¹²⁸` (`prEvent_accept_zUnqueried_le`) |
+| `ROM/CipherOpen.lean` | done (M6): **`ε_open` bounded**: two fresh cipher cells guessed (`prEvent_two_cells_le`; the GGM derivation reads only points of tweak `< L−1`, `recTree_ic_congr_cells`), the dead leaf whose leaf hash the prover queried (`prEvent_deadQueried_le`, `≤ q₁·2⁻²⁵⁶`); **`prEvent_joint_deadOpen_le`**: `Pr[DeadOpenOut] ≤ (q₁+18)(17q₁+q₂₁)·2⁻²⁵⁶ + (q₂₁+1)q₂₂·2⁻¹⁰⁸⁸ + (q₂₂+1)q₂₃·2⁻⁴⁴⁸ + 2⁻¹²⁸ + q₁·2⁻²⁵⁶`; **`moussakaIssue_accept_le_ic'`**: Moussaka issuance with `ε_bind` explicit |
+| `ROM/CipherRelations.lean` | done (M6): the other four relations with `ε_bind` explicit (`ratatouilleIssue_accept_le_ic`, `moussakaRedeem_accept_le_ic`, `ratatouilleSpend_accept_le_ic`, `pomfritRedeem_accept_le_ic`; total hash count `n + 2` for the combined ones) |
 
 Still hypotheses of the phase-B theorems (`ROM/Accept.lean`): the "same chain" step (`hsame`: the
 data committed at the verifier's own `H₂¹`, `H₂²`, `H₂³` inputs are the accepted proof's chain, and
@@ -509,11 +513,13 @@ the `chal3` accepted at its `H₂³` input are those on the chain; outside an ev
 `ε_chain`), the binding failure `ε_bind` (a bound on the concrete `bindFail`) and the dead-leaf
 failure `ε_dead` (L2) (ideal cipher, query ordering: plan M6). The `ROM/` theorems hold for every
 CTR PRG (`[HasPrg]`), so also with the ideal cipher `icPrg E`. In the joint random-oracle and
-ideal-cipher game (`ROM/CipherGame.lean`, plan §2d), `ε_bind` is replaced by
-`2·q_E²·2⁻²⁵⁶ + ε_open` (`q_E` the prover's cipher queries; PRF view, forward queries only), with
-`ε_open` the probability that an accepted proof opens a leaf whose key the prover never queried
-at that leaf's points: what remains of L1 is its `H₁` linking (L1.4) and, with L2(a), the ordering
-argument for `ε_open`; stated for Moussaka issuance (`moussakaIssue_accept_le_ic`). Not done: the
+ideal-cipher game (`ROM/CipherGame.lean`, `ROM/CipherOpen.lean`, `ROM/CipherRelations.lean`,
+plan §2d, §2e), `ε_bind` is explicit for all five relations: `2·q_E²·2⁻²⁵⁶ + ε_open` with
+`ε_open ≤ (q₁+18)(17q₁+q₂₁)·2⁻²⁵⁶ + (q₂₁+1)q₂₂·2⁻¹⁰⁸⁸ + (q₂₂+1)q₂₃·2⁻⁴⁴⁸ + 2⁻¹²⁸ + q₁·2⁻²⁵⁶`
+(`q_E` the prover's cipher queries, PRF view, forward queries only; `q` its hash queries).
+`hsame` (`ε_chain`) and `hL2` (`ε_dead`) remain hypotheses; as formulated, `hL2` cannot be
+discharged with a small `ε_dead` (plan §2e, F2: the accepting set must exclude the `Δ` that open a
+committed dead leaf), so its interface needs the correction described there. Not done: the
 statement-binding term `(q²+q)·2⁻²⁵⁶` (VCVio's birthday lemmas do not fit; plan §2c).
 
 ## Gaps
@@ -538,11 +544,12 @@ What is **not** established, roughly in order of importance:
    (q₂+1)·(ε_QS(n) + 2⁻¹²⁸ + (n+337)·2⁻⁴⁴⁸) + (Q+1)·max(d,1)·2⁻¹²⁸ + ε_bind + ε_dead + ε_chain`,
    also against one SHAKE oracle with L0's domain rule. Still on paper: the "same chain" step
    (`SameChain`, `ε_chain`: the data committed at the verifier's own queries are the accepted
-   proof's chain; this includes `hclaim1`), L2 (`IsFixed`, ideal cipher, `ε_dead`), the `H₁`
-   linking part of binding (`ε_open`: an opened leaf whose key the prover never queried; the
-   cipher part of `ε_bind` is mechanized as `2·q_E²·2⁻²⁵⁶` in the PRF view without inverse
-   queries, `ROM/CipherBind.lean`, `ROM/CipherGame.lean`, for Moussaka issuance), and statement
-   binding (`(q²+q)·2⁻²⁵⁶`).
+   proof's chain; this includes `hclaim1`: it needs the committed data read off the log before
+   the chain's `H₂¹` query, the ordering half of L1.4, `Coll₁` and `Post`; plan §2e), L2
+   (`IsFixed`, ideal cipher, `ε_dead`; the Lean hypothesis `hL2` must first be corrected, plan §2e
+   F2), and statement binding (`(q²+q)·2⁻²⁵⁶`). Binding (`ε_bind`) is mechanized for all five
+   relations in the PRF view without inverse queries, `2·q_E²·2⁻²⁵⁶ + ε_open` with `ε_open`
+   explicit (`ROM/CipherBind.lean`, `ROM/CipherOpen.lean`, `ROM/CipherRelations.lean`).
 2. **Code ↔ model is tested, not proved.** Each Lean model was written by reading the C++ and is
    tied to it by tests in `tests/voleith/test_lean_models.cpp` (and, when finished, the `Arith`
    cross-check). Compiler behaviour, memory safety and constant-time execution are out of scope.

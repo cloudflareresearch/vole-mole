@@ -564,4 +564,16 @@ any realistic budget.
   §2d): a C2-type double collision among the prover's cipher queries, `≤ 2·q_E²·2⁻²⁵⁶`, unique
   logged keys per leaf commitment (L1.2, Definition B extraction of §6), and the executable
   reconstruction's keys equal to the extracted ones unless a leaf whose key was never queried is
-  opened; the `H₁` linking (L1.4) and L2 remain on paper.
+  opened. That residual is now bounded too (`ROM/CipherOpen.lean`, `ROM/Queried.lean`,
+  `ROM/FreshGuess.lean`; plan §2e): an accepted proof opening a leaf whose key the prover never
+  evaluated has probability `≤ (q₁+18)(17q₁+q₂₁)·2⁻²⁵⁶ + (q₂₁+1)q₂₂·2⁻¹⁰⁸⁸ + (q₂₂+1)q₂₃·2⁻⁴⁴⁸ +
+  2⁻¹²⁸ + q₁·2⁻²⁵⁶`: either some leaf hash of the verifier was never queried by the prover (then
+  `Hit₁` or its `H₂¹`, `H₂²` analogues up the chain, or the verifier's fresh `H₂³` answer is `Δ`:
+  the "linking" half of L1.4, without the ordering), or the prover's `H₁` input contains the
+  commitment of two cipher cells it never queried (a two-cell guess; the GGM derivation reads no
+  leaf-commitment point). Still on paper: the ordering half of L1.4 (preimages queried *before*
+  `Θ`), `Coll₁`, and L2 with `Post` (C3). Note for the Lean interface (plan §2e, F2): the formal L2
+  hypothesis takes the "accepting set" to be the `chal3` on the committed chain computed with the
+  extractor's keys, garbage at dead leaves; a prover that uses the garbage key itself at a hidden
+  dead leaf makes that set all of `chal3`, so the formal hypothesis fails although L2 of §5.2 holds.
+  The accepting set must exclude the `Δ` that open a committed dead leaf, as in §6.
