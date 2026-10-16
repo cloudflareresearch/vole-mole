@@ -14,13 +14,15 @@ lives in:
 
 | Layer | What it means |
 |---|---|
-| **[Lean]** | Machine-checked in `VoleMole/`. No `sorry`, no `axiom`, no `native_decide`; `#print axioms` shows only `propext`, `Classical.choice` and `Quot.sound`. Covers the deterministic steps: linear algebra, counting, polynomial degrees, combinatorics, numeric bounds. |
-| **[paper]** | A written proof in `docs/`. Covers the probabilistic steps: random-oracle and ideal-cipher arguments, quantum oracle arguments, union bounds, reductions. |
+| **[Lean]** | Machine-checked in `VoleMole/`. No `sorry`, no `axiom`, no `native_decide`; `#print axioms` shows only `propext`, `Classical.choice` and `Quot.sound`. Covers the deterministic steps (linear algebra, counting, polynomial degrees, combinatorics, numeric bounds) and some probabilistic ones: the single-challenge and random-oracle bounds for extraction (§9), and zero knowledge and the protocol privacy theorems in the classical random-oracle and ideal-cipher model (§3). |
+| **[paper]** | A written proof in `docs/`. Covers the other probabilistic steps: random-oracle and ideal-cipher arguments, quantum oracle arguments, union bounds, reductions. |
 | **[test]** | A Lean model or a deterministic fact checked against the C++ by a test in `tests/` (exhaustively where the domain is small). This is how the Lean models are tied to the code. |
 
-**Partial** means: no end-to-end statement is machine-checked. The Lean results are the
-deterministic cores that the paper proofs call. The C++ is tested against the Lean models, never
-proved equal to them, and constant-time behaviour and side channels are out of scope.
+**Partial** means: no end-to-end statement about the C++ is machine-checked. Most Lean results
+are the deterministic cores that the paper proofs call; the probabilistic Lean results are about
+the Lean models (the executable verifier, prover and specs). The C++ is tested against the Lean
+models, never proved equal to them, and constant-time behaviour and side channels are out of
+scope.
 
 ## Layout
 
@@ -42,7 +44,8 @@ lean/
     ROM/                    random-oracle model (VCVio): union bound over queries, per-chain terms,
                             the executable verifier against the oracle, domain separation
     Privacy/                privacy games on the executable specs (blindness, issuer hiding,
-                            unlinkability), with zero knowledge and hiding as hypotheses
+                            unlinkability): with zero knowledge and hiding as hypotheses, and
+                            for the Lean prover in the random-oracle and ideal-cipher model
   vectors/                  test vectors dumped by the C++ for the Arith/ cross-check
   docs/
     sketch.md               the maintainer's original design note
@@ -162,130 +165,172 @@ adaptive-reprogramming loss and has no known matching attack. A 128-bit `rho` do
 multi-target Grover attack around 2⁵⁰ queries. Both are removed by a 256-bit `rho` and a salt in
 chal1/chal2 (recommended, not implemented).
 
-**Statement (executable prover, with the fix, `docs/zk.md` §10.1).** [Lean] `ZK/Sim.lean` …
-`ZK/Exec.lean`: an executable simulator (`Sim.simulate`; `Sim.simulateRO` also programs `H₂³`,
-and the verifier accepts its proofs under the programmed oracle, `simulateRO_accept'`: with no
-assumption beyond `Δ ≠ 0`, i.e. except with probability `≤ noHitProb + 2⁻¹¹¹ ≤ 2⁻¹¹⁰` over the
-simulator's coins, `pr_simulateRO_reject_110`). The
-executable Lean prover equals an ideal-tape prover at its own run's tape (`prove_eq_proveIdeal`),
-and on a uniform tape the ideal-tape prover's output is distributed exactly as the simulator's
-(`proveIdeal_close`; with label rows Θ is moreover uniform and independent of the proof,
-`prove_guess_theta`). So the zero-knowledge advantage of any distinguisher equals its advantage
-on the tape (`zk_reduction`), and `Privacy.ZeroKnowledge` holds with error `ε` for statement
-families with dedicated label rows (`labelRows_zeroKnowledge`) under the **tape hypothesis**
-`TapeHyp … ε` (H1, H4, H6 and the grinding answers: the run's tape is `ε`-close to uniform) and
-deterministic hypotheses (the witness satisfies the system for every `chal1`, `N_MASK ≤ 32`, and
-the two correctness facts of the completeness theorem, proved for faest-arch-opt's tables;
-correct interpolation is proved, `ZK/Interp.lean`). The tape hypothesis is in turn **derived from
-one hypothesis per hop** by a proved hybrid argument (`ZK/Hops.lean`, `HopHyps`,
-`tapeHyp_of_hops`), so `labelRows_zeroKnowledge_tables` has error
-`ε_rho + ε_grind + ε_bavc + ε_lab`: `H₃`'s answer at the seed input is close to uniform (H1),
-the `H₂³` answers at the grinding points are (grinding), the hidden part of a commitment from a
-uniform root seed is (H4, BAVC hiding: AES), and the `H₅` answers at the sibling labels are,
-through the ideal-tape prover (H6). With the hashed domain a uniform table (`ZK/HopsROM.lean`),
-H1 and grinding hold with `ε = 0`, H1 with `≤ q₃·2⁻¹²⁸` against a distinguisher reading `H₃` at
-`q₃` inputs, programming `H₂³` at the grinding points is perfect (the prover's grinding prefix
-provably does not read `H₂³`, `ZK/HopsRead.lean`), and H6 costs `≤ (q₅ + 1)·2⁻¹²⁸` against a
-distinguisher reading `H₅` at `q₅` inputs (`lab_rom_hyp`, `ZK/HopsH6.lean`: the prover reads
-`H₅` only at the active labels, and each query is a guess of the label offset `Θ`, which is
-independent of the proof). H4 is proved in the ideal-cipher model (`ZK/HopsH4Ideal.lean`: the
-BAVC rebuilt with the cipher a uniform table, equal to the executable one at AES, `hiddenOut_eq`;
-a GGM hybrid over the `≤ 221` hidden-path nodes gives `≤ 221·(4607 + q)·2⁻¹²⁸` against a
-distinguisher reading the table at `q` keys, `hide_rom_query`), with the rows uniform functions
-(the PRP/PRF switching term is on paper). The hops are composed into one experiment
-(`zk_rom_ic`, `ZK/HopsJoint.lean`): with `H₃`, `H₂³`, `H₅` independent uniform tables (the
-other domains fixed) and the BAVC's cipher a uniform table in a proof-only cipher-parametric
-prover `proveE` (the executable prover at AES, `proveE_recOf_aes`), one proof is
-`q₃·2⁻¹²⁸ + 221·(4607 + q_E)·2⁻¹²⁸ + (q₅ + 1)·2⁻¹²⁸`-close to the simulator against a
-distinguisher reading `H₃`, `H₅` and the cipher at `q₃`, `q₅`, `q_E` keys; it does not read
-`H₂³`, and only the hidden part of the commitment uses `E`. With `H₂³` visible as well
-(`zk_rom_h23`, `ZK/HopsH23.lean`, with `H₅` a table on every 37-byte input), for the executable
-prover with BAVC hiding assumed: the
-simulator programs `H₂³` at the grinding points of the prefix it recomputes from its own proof as
-the verifier does (`simulateRO`'s points), and one proof is
-`q₃·2⁻¹²⁸ + Pr[GrindBad] + ε_bavc + (q₅ + 1)·2⁻¹²⁸`-close against a distinguisher that also reads
-`H₂³` without limit, `Pr[GrindBad] ≤ noHitProb + Pr[Δ' = 0]` (the recomputed points are the
-prover's otherwise: `hyb3_vPre`, `ZK/VerifyPre.lean`). Both at once (`zk_rom_ic_h23`,
-`ZK/HopsIC.lean`): the executable BAVC, VOLE expansion, prover and verifier call their CTR PRG
-through a class (`HasPrg`, `Verifier/Prg.lean`; AES for the executables, which are unchanged), so
-they run with the cipher a uniform table `E` (`icPrg E`, the executable code at `E = aesTable`)
-and `zk_rom_h23`'s chain holds for every cipher; with `H₅` a table on every 37-byte input and the
-honest recomputation's reads of `E` (the reconstructed tree, at most `4607` keys) counted, the
-executable prover with the ideal cipher is
-`q₃·2⁻¹²⁸ + Pr[GrindBad] + 221·(4607 + q_E + 4607)·2⁻¹²⁸ + (q₅ + 1)·2⁻¹²⁸`-close to the
-programming simulator against a distinguisher reading `H₃`, `H₅`, `E` at `q₃`, `q₅`, `q_E` keys
-and `H₂³` freely (`docs/zk.md` §10.1). The grinding term is numeric (`ZK/AcceptCount.lean`,
-`ZK/GrindNum.lean`): the accepted set has `|A| ≥ 2¹¹¹` of the `2¹²⁸` values of `Δ` (a Markov
-bound on a box of hidden-index tuples, with the summed open count evaluated by the kernel), so no
-grinding answer is accepted with probability `≤ 2^{−2¹⁵}`; `W_CRT` is injective, so `Δ' = 0` only
-at `Δ = 0`, which is the first accepted answer with probability `≤ 1/|A|`; hence
-`Pr[GrindBad] ≤ 2⁻¹¹⁰` and `zk_rom_ic_h23_num`, `zk_rom_h23_num` state both bounds with `2⁻¹¹⁰` in
-its place. PomFRIT's two-phase zero knowledge, with
-the instance chosen after step 1, is derived the same way (`ZK/TwoPhase.lean`: step 1's fields
-are uniform and independent of the witness, step 2 stays uniform given them for every adaptive
-choice; `twoPhase_close` under the two-phase tape hypothesis `TapeHyp2`; `twoPhase_close_tables`;
-`TapeHyp2` from the hops, with one more term, the abort probability `noHitProb`:
-`ZK/TwoPhaseHops.lean`, `≤ 2^{−2¹⁵}` by `noHitProb_le`). For all three protocols the per-relation statements are assembled and
-every deterministic hypothesis is proved (`Privacy/MoussakaLean.lean`,
-`Privacy/RatatouilleLean.lean`, `Privacy/PomFRITLean.lean`; with SHAKE, `*_shake`, only the hop
-hypotheses and hiding remain, each proof's error the sum of the named terms). `lake exe zk_sim`
-checks the tape equation, the simulator and the ideal-tape prover on all 18 KAT runs of each
-layout.
+**Mechanized for the executable prover, with the fix** ([Lean] `ZK/`, `Privacy/`; `docs/zk.md`
+§10). The list at the end of this section says what remains assumed.
 
-**Privacy in the random-oracle and ideal-cipher model** ([Lean] `Privacy/ZeroKnowledgeRO.lean`,
-`ZK/ReadsRO.lean`, `Privacy/MoussakaRO.lean`, `Privacy/RatatouilleRO.lean`, `ZK/TwoPhaseRO.lean`,
-`ZK/TwoPhaseIC.lean`, `ZK/TwoPhaseReadsRO.lean`, `Privacy/PomFRITRO.lean`, `ZK/CollideRO.lean`,
-`ZK/CollideRO2.lean`, `Privacy/MoussakaDelta.lean`, `Privacy/RatatouilleDelta.lean`,
-`Privacy/PomFRITDelta.lean`; `docs/zk.md` §10.2).
-`ZeroKnowledgeRO` is zero knowledge against distinguishers that also see (and read, with budgets)
-the random tables; `zk_rom_ic_h23_num` instantiates it (`lean_zeroKnowledgeRO`). The executable
-prover reads the cipher at `≤ 4607` and `H₅` at `≤ 624` keys, the simulator's programming at
-`≤ 4607` and `≤ 312` (`realRO_rdE`, `realRO_rd5`, `progRO_isProg`), which bounds what a reduction
-that runs the other proofs itself reads. `hop_ro` is the hybrid step for proofs sharing the tables;
-each step after the first costs an explicit programming-collision term `δ`. Moussaka anonymity and
-Ratatouille unlinkability, with the adversary's guess seeing all tables and all four proofs on the
-same tables: `≤ 8·εRO(q₃, q₅ + 1872, q_E + 13821) + (collision terms of both worlds) + 2·εhide`
-(`anonymityRO_lean`, `unlinkabilityRO_lean`), `εRO` the single-proof bound. For PomFRIT's
-two-phase prover the same single-proof bound holds (`zk2_rom_ic_h23_num`: the simulator programs
-`H₂³` at the prefix it recomputes for the instance picked after step 1; the fallback block is
-inside `Pr[GrindBad]`), for a continuation that may itself read `H₅` and the cipher (its reads
-are added to the budget): the Issuer answers after seeing both requests, which read the tables.
-It is `ZeroKnowledgeROS` (`lean_zeroKnowledgeROS2`, a simulator that may read the tables it does
-not program), and PomFRIT blindness with both sessions on the same tables is
-`≤ 4·εRO(q₃, q₅ + 1248, q_E + 18428) + δ(A) + δ(A.swap)` (`blindnessRO_lean`). **The collision
-terms are bounded in Lean** (`ZK/CollideRO.lean`, `pr_collide_zk`): the real prover reads `H₂³`
-only at its own grinding prefix `chal2 ‖ qs_check ‖ ã` (`72 + 16·(d − 1)` bytes), a simulator
-programs one prefix block, whose last `16·(d − 1)` bytes are its uniform `ã` (the simulated opening
-reconstructs, `reconstruct_openingOf`); for the second issuance `δI₁ ≤ noHitProb + 2⁻¹⁰²⁴`, for a
-redemption or spend (whose statement may depend on the earlier `ã`), with a second application of
-zero knowledge, `δ ≤ 2⁻¹¹⁰ + εRO(0, 312, 4607) + noHitProb + 3·2⁻¹⁰²⁴`, and for PomFRIT
-`δ(A) ≤ noHitProb + 2⁻¹²⁸`. So `anonymityRO_lean_num`, `unlinkabilityRO_lean_num`:
-`≤ 8·εRO(q₃, q₅ + 1872, q_E + 13821) + 4·(2⁻¹¹⁰ + εRO(0, 312, 4607)) + 6·noHitProb + 12·2⁻¹⁰²⁴ +
-2·εhide` (about `2⁻¹⁰²` plus the budget terms), and `blindnessRO_lean_num`:
-`≤ 4·εRO(q₃, q₅ + 1248, q_E + 18428) + 2·noHitProb + 2·2⁻¹²⁸` (`noHitProb ≤ 2^{−2¹⁵}`). The paper
-bound for redemptions and spends (`docs/zk.md` §10.2) missed the `Δ' = 0` part of `GrindBad` and
-undercounted the earlier `ã` by one; both negligible. **Statements chosen from the tables**
-(`docs/zk.md` §10.3, `ZK/AdaptRO.lean`). `zk_adaptive` covers an adversary that reads the tables
-(the proof's `H₃` slice, `H₂³`, `H₅`, the cipher, at `s₃`, `s₂`, `s₅`, `s_E` keys, adaptively and
-consistently) before it picks the statement and witness. The bound is
-`εRO(q₃, q₅, q_E) + (s₃ + s₅ + 1 + 221·s_E)·2⁻¹²⁸`, plus, if it reads `H₂³`, a second
-zero-knowledge application and `2·s₂·2⁻¹⁰²⁴` (`ρ` is 16 bytes; the simulated block's 128-byte `ã`
-is uniform). The proof samples the reader's view lazily (`Privacy/Resample.lean`) and runs the
-chain with the tables patched at its queries (`ZK/HopsPatch.lean`, `ZK/IdealCipherP.lean`).
-Moussaka anonymity is restated with an interaction (responses, Anchor Sets, digests) that reads
-every table: `anonymityRA_lean_num` (`Privacy/MoussakaRA.lean`), about `2⁻¹⁰¹·⁹` plus the budget
-terms. So is Ratatouille unlinkability, with an Issuer whose two message stages (issuance
-responses and `d₁`; round 1's response and `d₂`, which reads spend 1's proof) read every table:
-`unlinkabilityRA_lean_num` (`Privacy/RatatouilleRA.lean`), about `2⁻¹⁰¹·⁵` plus the budget terms.
-PomFRIT blindness is restated with an Issuer whose key, messages and responses read every table
-but `H₂³` (`Privacy/PomFRITRA.lean`, `Privacy/PomFRITRAGame.lean`, `blindnessRA_lean_num`:
-`≤ 4·εRO(q₃ + 4i₃, q₅ + 4i₅ + 1872, q_E + 4i_E + 23035) + 2·noHitProb + 2·2⁻¹²⁸`, about `2⁻¹⁰³·²`
-plus the budget terms), from the two-phase `zk2_adaptive` (`ZK/TwoPhaseAd.lean`): the
-continuation, the Issuer's response to the request computed from step 1's output, reads the
-slice, `H₅` and the cipher at keys depending on that output, and these reads are added to the
-budget of the H1, H4 and H6 hops (`εRO(q₃ + q_k3, q₅ + q_k5, q_E + q_kE)`). Left open: a PomFRIT
-interaction that reads `H₂³` (the two-phase simulator programs the zero-prefix block when the
-continuation stops, and the reductions see only programmed tables; `docs/zk.md` §10.3).
+*One proof, reduced to per-hop hypotheses* (`docs/zk.md` §10.1; `ZK/Sim.lean` … `ZK/Exec.lean`).
+- An executable simulator (`Sim.simulate`; `Sim.simulateRO` also programs `H₂³`). The verifier
+  accepts its proofs under the programmed oracle with no assumption beyond `Δ ≠ 0`
+  (`simulateRO_accept'`), i.e. except with probability `≤ noHitProb + 2⁻¹¹¹ ≤ 2⁻¹¹⁰` over the
+  simulator's coins (`pr_simulateRO_reject_110`).
+- The executable Lean prover equals an ideal-tape prover at its own run's tape
+  (`prove_eq_proveIdeal`), and on a uniform tape the ideal-tape prover's output is distributed
+  exactly as the simulator's (`proveIdeal_close`; with label rows Θ is moreover uniform and
+  independent of the proof, `prove_guess_theta`). So the zero-knowledge advantage of any
+  distinguisher equals its advantage on the tape (`zk_reduction`), and `Privacy.ZeroKnowledge`
+  holds with error `ε` for statement families with dedicated label rows
+  (`labelRows_zeroKnowledge`) under the **tape hypothesis** `TapeHyp … ε` (H1, H4, H6 and the
+  grinding answers: the run's tape is `ε`-close to uniform) and deterministic hypotheses (the
+  witness satisfies the system for every `chal1`, `N_MASK ≤ 32`, and the two correctness facts of
+  the completeness theorem, proved for faest-arch-opt's tables; correct interpolation is proved,
+  `ZK/Interp.lean`).
+- The tape hypothesis is **derived from one hypothesis per hop** by a proved hybrid argument
+  (`ZK/Hops.lean`, `HopHyps`, `tapeHyp_of_hops`), so `labelRows_zeroKnowledge_tables` has error
+  `ε_rho + ε_grind + ε_bavc + ε_lab`: `H₃`'s answer at the seed input is close to uniform (H1),
+  the `H₂³` answers at the grinding points are (grinding), the hidden part of a commitment from a
+  uniform root seed is (H4, BAVC hiding: AES), and the `H₅` answers at the sibling labels are,
+  through the ideal-tape prover (H6).
+- PomFRIT's two-phase zero knowledge, with the instance chosen after step 1, is derived the same
+  way (`ZK/TwoPhase.lean`: step 1's fields are uniform and independent of the witness, step 2
+  stays uniform given them for every adaptive choice; `twoPhase_close` under the two-phase tape
+  hypothesis `TapeHyp2`; `twoPhase_close_tables`; `TapeHyp2` from the hops, with one more term,
+  the abort probability `noHitProb`: `ZK/TwoPhaseHops.lean`, `≤ 2^{−2¹⁵}` by `noHitProb_le`).
+- For all three protocols the per-relation statements are assembled and every deterministic
+  hypothesis is proved (`Privacy/MoussakaLean.lean`, `Privacy/RatatouilleLean.lean`,
+  `Privacy/PomFRITLean.lean`); with SHAKE (`*_shake`) only the hop hypotheses and hiding remain,
+  each proof's error the sum of the named terms. The hop hypotheses are `Close` bounds for a fixed
+  hash record, an idealization; the random-oracle theorems below replace them.
+
+*One proof, in the random-oracle and ideal-cipher model* (`docs/zk.md` §10.1).
+- **The hops.** With the hashed domain a uniform table (`ZK/HopsROM.lean`), H1 and grinding hold
+  with `ε = 0`, H1 with `≤ q₃·2⁻¹²⁸` against a distinguisher reading `H₃` at `q₃` inputs,
+  programming `H₂³` at the grinding points is perfect (the prover's grinding prefix provably does
+  not read `H₂³`, `ZK/HopsRead.lean`), and H6 costs `≤ (q₅ + 1)·2⁻¹²⁸` against a distinguisher
+  reading `H₅` at `q₅` inputs (`lab_rom_hyp`, `ZK/HopsH6.lean`: the prover reads `H₅` only at the
+  active labels, and each query is a guess of the label offset `Θ`, which is independent of the
+  proof). H4 is proved in the ideal-cipher model (`ZK/HopsH4Ideal.lean`: the BAVC rebuilt with the
+  cipher a uniform table, equal to the executable one at AES, `hiddenOut_eq`; a GGM hybrid over the
+  `≤ 221` hidden-path nodes gives `≤ 221·(4607 + q)·2⁻¹²⁸` against a distinguisher reading the
+  table at `q` keys, `hide_rom_query`), with the rows uniform functions.
+- **Composed** (`zk_rom_ic`, `ZK/HopsJoint.lean`): with `H₃`, `H₂³`, `H₅` independent uniform
+  tables (the other domains fixed) and the BAVC's cipher a uniform table in a proof-only
+  cipher-parametric prover `proveE` (the executable prover at AES, `proveE_recOf_aes`), one proof
+  is `q₃·2⁻¹²⁸ + 221·(4607 + q_E)·2⁻¹²⁸ + (q₅ + 1)·2⁻¹²⁸`-close to the simulator against a
+  distinguisher reading `H₃`, `H₅` and the cipher at `q₃`, `q₅`, `q_E` keys; it does not read
+  `H₂³`, and only the hidden part of the commitment uses `E`. With `H₂³` visible as well
+  (`zk_rom_h23`, `ZK/HopsH23.lean`, with `H₅` a table on every 37-byte input), for the executable
+  prover with BAVC hiding assumed: the simulator programs `H₂³` at the grinding points of the
+  prefix it recomputes from its own proof as the verifier does (`simulateRO`'s points), and one
+  proof is `q₃·2⁻¹²⁸ + Pr[GrindBad] + ε_bavc + (q₅ + 1)·2⁻¹²⁸`-close against a distinguisher that
+  also reads `H₂³` without limit, `Pr[GrindBad] ≤ noHitProb + Pr[Δ' = 0]` (the recomputed points
+  are the prover's otherwise: `hyb3_vPre`, `ZK/VerifyPre.lean`).
+- **Both at once** (`zk_rom_ic_h23`, `ZK/HopsIC.lean`): the executable BAVC, VOLE expansion,
+  prover and verifier call their CTR PRG through a class (`HasPrg`, `Verifier/Prg.lean`; AES for
+  the executables, which are unchanged), so they run with the cipher a uniform table `E`
+  (`icPrg E`, the executable code at `E = aesTable`) and `zk_rom_h23`'s chain holds for every
+  cipher; with `H₅` a table on every 37-byte input and the honest recomputation's reads of `E`
+  (the reconstructed tree, at most `4607` keys) counted, the executable prover with the ideal
+  cipher is `q₃·2⁻¹²⁸ + Pr[GrindBad] + 221·(4607 + q_E + 4607)·2⁻¹²⁸ + (q₅ + 1)·2⁻¹²⁸`-close to
+  the programming simulator against a distinguisher reading `H₃`, `H₅`, `E` at `q₃`, `q₅`, `q_E`
+  keys and `H₂³` freely.
+- **The grinding term is numeric** (`ZK/AcceptCount.lean`, `ZK/GrindNum.lean`): the accepted set
+  has `|A| ≥ 2¹¹¹` of the `2¹²⁸` values of `Δ` (a Markov bound on a box of hidden-index tuples,
+  with the summed open count evaluated by the kernel), so no grinding answer is accepted with
+  probability `≤ 2^{−2¹⁵}`; `W_CRT` is injective, so `Δ' = 0` only at `Δ = 0`, which is the first
+  accepted answer with probability `≤ 1/|A|`; hence `Pr[GrindBad] ≤ 2⁻¹¹⁰`, and
+  `zk_rom_ic_h23_num`, `zk_rom_h23_num` state both bounds with `2⁻¹¹⁰` in its place. The
+  single-proof error is thus
+  `εRO(q₃, q₅, q_E) = q₃·2⁻¹²⁸ + 2⁻¹¹⁰ + 221·(4607 + q_E + 4607)·2⁻¹²⁸ + (q₅ + 1)·2⁻¹²⁸`, about
+  `2⁻¹⁰⁶·⁹` at zero budgets.
+- **Two phases** (`zk2_rom_ic_h23_num`, `ZK/TwoPhaseRO.lean`, `ZK/TwoPhaseIC.lean`): the same
+  single-proof bound holds for PomFRIT's two-phase prover. The simulator programs `H₂³` at the
+  prefix it recomputes for the instance picked after step 1; the fallback block is inside
+  `Pr[GrindBad]`; the continuation may itself read `H₅` and the cipher, and its reads are added to
+  the budget (the Issuer answers after seeing both requests, which read the tables).
+
+*Several proofs on shared tables: the privacy theorems* (`docs/zk.md` §10.2;
+`Privacy/ZeroKnowledgeRO.lean`, `ZK/ReadsRO.lean`, `Privacy/MoussakaRO.lean`,
+`Privacy/RatatouilleRO.lean`, `ZK/TwoPhaseReadsRO.lean`, `Privacy/PomFRITRO.lean`,
+`ZK/CollideRO.lean`, `ZK/CollideRO2.lean`, `Privacy/*Delta.lean`).
+- `ZeroKnowledgeRO` is zero knowledge against distinguishers that also see (and read, with
+  budgets) the random tables; `zk_rom_ic_h23_num` instantiates it (`lean_zeroKnowledgeRO`), and
+  the two-phase theorem is `ZeroKnowledgeROS` (`lean_zeroKnowledgeROS2`: a simulator that may read
+  the tables it does not program). The executable prover reads the cipher at `≤ 4607` and `H₅` at
+  `≤ 624` keys, the simulator's programming at `≤ 4607` and `≤ 312` (`realRO_rdE`, `realRO_rd5`,
+  `progRO_isProg`), which bounds what a reduction that runs the other proofs itself reads.
+  `hop_ro` is the hybrid step for proofs sharing the tables; each step after the first costs an
+  explicit programming-collision term `δ`.
+- Moussaka anonymity and Ratatouille unlinkability, with the adversary's guess seeing all tables
+  and all four proofs on the same tables: `≤ 8·εRO(q₃, q₅ + 1872, q_E + 13821) + (collision terms
+  of both worlds) + 2·εhide` (`anonymityRO_lean`, `unlinkabilityRO_lean`). PomFRIT blindness with
+  both sessions on the same tables: `≤ 4·εRO(q₃, q₅ + 1248, q_E + 18428) + δ(A) + δ(A.swap)`
+  (`blindnessRO_lean`).
+- **The collision terms are bounded in Lean** (`ZK/CollideRO.lean`, `pr_collide_zk`): the real
+  prover reads `H₂³` only at its own grinding prefix `chal2 ‖ qs_check ‖ ã` (`72 + 16·(d − 1)`
+  bytes), a simulator programs one prefix block, whose last `16·(d − 1)` bytes are its uniform `ã`
+  (the simulated opening reconstructs, `reconstruct_openingOf`); for the second issuance
+  `δI₁ ≤ noHitProb + 2⁻¹⁰²⁴`, for a redemption or spend (whose statement may depend on the earlier
+  `ã`), with a second application of zero knowledge, `δ ≤ 2⁻¹¹⁰ + εRO(0, 312, 4607) + noHitProb +
+  3·2⁻¹⁰²⁴`, and for PomFRIT `δ(A) ≤ noHitProb + 2⁻¹²⁸`. So `anonymityRO_lean_num`,
+  `unlinkabilityRO_lean_num`: `≤ 8·εRO(q₃, q₅ + 1872, q_E + 13821) + 4·(2⁻¹¹⁰ + εRO(0, 312,
+  4607)) + 6·noHitProb + 12·2⁻¹⁰²⁴ + 2·εhide` (about `2⁻¹⁰²·²` plus the budget terms), and
+  `blindnessRO_lean_num`: `≤ 4·εRO(q₃, q₅ + 1248, q_E + 18428) + 2·noHitProb + 2·2⁻¹²⁸` (about
+  `2⁻¹⁰³·⁴` plus the budget terms; `noHitProb ≤ 2^{−2¹⁵}`). The paper bound for redemptions and
+  spends (`docs/zk.md` §10.2) missed the `Δ' = 0` part of `GrindBad` and undercounted the earlier
+  `ã` by one; both negligible.
+
+*Statements and interactions that read the tables* (`docs/zk.md` §10.3; `Privacy/Resample.lean`,
+`ZK/HopsPatch.lean`, `ZK/IdealCipherP.lean`, `ZK/AdaptRO.lean`, `Privacy/AdaptiveRO.lean`,
+`ZK/TwoPhaseAd.lean`, `Privacy/MoussakaRA.lean`, `Privacy/RatatouilleRA.lean`,
+`Privacy/PomFRITRA.lean`, `Privacy/PomFRITRAGame.lean`). In §10.2's games only the adversary's
+guess reads the tables. Here its interaction does too.
+- `zk_adaptive` covers an adversary that reads the tables (the proof's `H₃` slice, `H₂³`, `H₅`,
+  the cipher, at `s₃`, `s₂`, `s₅`, `s_E` keys, adaptively and consistently) before it picks the
+  statement and witness. The bound is `εRO(q₃, q₅, q_E) + (s₃ + s₅ + 1 + 221·s_E)·2⁻¹²⁸`, plus, if
+  it reads `H₂³`, a second zero-knowledge application and `2·s₂·2⁻¹⁰²⁴` (`ρ` is 16 bytes; the
+  simulated block's 128-byte `ã` is uniform). The proof samples the reader's view lazily
+  (`Privacy/Resample.lean`) and runs the chain with the tables patched at its queries
+  (`ZK/HopsPatch.lean`, `ZK/IdealCipherP.lean`).
+- Moussaka anonymity with an interaction (responses, Anchor Sets, digests) that reads every table:
+  `anonymityRA_lean_num`, about `2⁻¹⁰¹·⁹` plus the budget terms. Ratatouille unlinkability with an
+  Issuer whose two message stages (issuance responses and `d₁`; round 1's response and `d₂`, which
+  reads spend 1's proof) read every table: `unlinkabilityRA_lean_num`, about `2⁻¹⁰¹·⁵` plus the
+  budget terms.
+- PomFRIT blindness with an Issuer whose key, messages and responses read every table but `H₂³`:
+  `blindnessRA_lean_num`, `≤ 4·εRO(q₃ + 4i₃, q₅ + 4i₅ + 1872, q_E + 4i_E + 23035) + 2·noHitProb +
+  2·2⁻¹²⁸`, about `2⁻¹⁰³·²` plus the budget terms, from the two-phase `zk2_adaptive`: the
+  continuation, the Issuer's response to the request computed from step 1's output, reads the
+  slice, `H₅` and the cipher at keys depending on that output, and these reads are added to the
+  budget of the H1, H4 and H6 hops (`εRO(q₃ + q_k3, q₅ + q_k5, q_E + q_kE)`).
+
+`lake exe zk_sim` checks the tape equation, the simulator and the ideal-tape prover on all 18 KAT
+runs of each layout.
+
+**What remains assumed or open** for zero knowledge and privacy with the fix (`docs/zk.md` §10.1,
+"What remains assumed", and §10.3, "Open"):
+- *Modelling steps.* SHAKE128 is a random oracle (a single oracle with L0's domain rule is proved
+  equivalent to independent per-domain oracles, `ROM/DomainSep.lean`); AES-128 is an ideal
+  cipher; the cipher's rows are uniform functions, not permutations (the PRP/PRF switching term
+  for the hidden paths' rows is on paper).
+- *Per-proof `H₃` slices.* The games give each proof its own independent slice; this is exact
+  unless two proofs share `(μ₁, wPrefix)` (Moussaka, Ratatouille: `≤ 2⁻¹⁹²`; PomFRIT: two sessions
+  with equal `r`), a modelling step on paper (the `ε_iv`-type term).
+- *The seed-XOF hop.* The games draw the seed XOF's outputs uniformly (PomFRIT's G0 → G1,
+  Ratatouille's H1, Moussaka's `issueRequest_eq`); this hop is on paper.
+- *Hiding of `Com`* (Moussaka, Ratatouille): an assumption, the hypothesis `εhide` on explicit
+  reductions.
+- *Table-reading interactions* must be consistent readers (`SReads`; true of every deterministic
+  query algorithm). A PomFRIT Issuer whose interaction reads `H₂³` is **open**: the two-phase
+  simulator programs `H₂³` at the zero-prefix block when the continuation stops, and the
+  reductions see only programmed tables (`docs/zk.md` §10.3).
+- *Scope of the games.* Fixed sizes (two sessions, two Clients, the stated rounds); the general
+  schedule, Moussaka's non-colluding mode (Thm 4b) and every quantum statement (`docs/zk-qrom.md`)
+  are on paper.
+- The fixed-record `*_shake` theorems keep the hop hypotheses (`HopHyps`; for PomFRIT `HopHyps2`,
+  `ZK/TwoPhaseHops.lean`), each a `Close` bound for a fixed hash record and, as every statement
+  against all distinguishers in `Privacy/Basic.lean`, an idealization; they are superseded by, not
+  derived from, the random-oracle theorems. The second `4607` in `εRO` (the honest
+  recomputation's cipher reads) is an artifact of the proof (`docs/zk.md` §10.1).
 
 The analysis also found a gap in the FAEST v3 specification's own ZK proof (between games G8 and
 G9).
@@ -317,7 +362,7 @@ limitation, not an attack) takes over. Strong simulation-extractability: 2⁻⁶
 | `ratatouille.md` | Balance (no inflation), no theft, unlinkability, correctness: proved. | Spends are not bound to a session, so a copied spend request can be redeemed first (medium). |
 | `domain-separation.md` | Every hash/XOF/permutation call lies in a disjoint domain, except below. [Lean] `Protocols/DomainSeparation.lean` | PomFRIT's `hash_to_target` overlaps four proof-system domains (no exploit found; fix: a final domain byte). |
 | `uov-assumptions.md` | Relates the protocol-specific UOV assumptions to each other and to standard UOV. [Lean] `Protocols/UOVAssumptions.lean` | Several reductions are unavailable; the note states why. |
-| Privacy on the specs ([Lean] `VoleMole/Privacy/`) | The privacy theorems as games on `Spec/*`, each hybrid hop mechanized: PomFRIT blindness (`Privacy.PomFRIT.blindness`, `≤ 4ε`), Moussaka issuer hiding and unlinkability against a Moderator colluding with all Anchors (`Privacy.Moussaka.anonymity`, `≤ 4εI + 4εR + 2εhide`), Ratatouille unlinkability of spends from issuances and from each other through change tokens (`Privacy.Ratatouille.unlinkability`, `≤ 4εI + 4εS + 2εhide`). Hypotheses: zero knowledge of the abstract proof systems (`Privacy.ZeroKnowledge`: a simulator from the instance alone, output `ε`-close to the prover's for every valid witness; `ε = 0` is equality of distributions), hiding of `Com` for the explicit reductions. The final hybrids are exact. With the executable Lean prover (label rows) as the proof system, zero knowledge is reduced to the tape hypothesis (`Privacy/LeanProver.lean`; `docs/zk.md` §10.1): with every other hypothesis proved (`Privacy.Moussaka.anonymity_label_rows`, `Privacy.Ratatouille.unlinkability_label_rows`, `Privacy.PomFRIT.blindness_lean`, assuming the hash record's output lengths; `*_shake` with SHAKE and the tape hypothesis from the hop hypotheses, so each proof's error is `ε_rho + ε_grind + ε_bavc + ε_lab` (PomFRIT: `+ ε_abort`); the latter two on the label-row layout, `Spec.Ratatouille.Sizes.labelRows` and `Spec/PomFRITLayout.lean`). On paper: the seed-XOF hop, the hop hypotheses (H4 for AES; the random-oracle hops are proved for the hashed domain as a uniform table, `ZK/HopsROM.lean`, `ZK/HopsH6.lean`). In the random-oracle and ideal-cipher model with the adversary seeing the tables, from `zk_rom_ic_h23_num` (`Privacy.ZeroKnowledgeRO`, `hop_ro`): Moussaka (`Privacy.Moussaka.anonymityRO_lean`) and Ratatouille (`Privacy.Ratatouille.unlinkabilityRO_lean`), `≤ 8·εRO(q₃, q₅ + 1872, q_E + 13821) + δ's + 2εhide`, and PomFRIT (`Privacy.PomFRIT.blindnessRO_lean`, from the two-phase `zk2_rom_ic_h23_num`), `≤ 4·εRO(q₃, q₅ + 1248, q_E + 18428) + δ(A) + δ(A.swap)`, with the programming-collision terms `δ` bounded in Lean (`*_lean_num`: `≤ 8·εRO(…) + 4·(2⁻¹¹⁰ + εRO(0, 312, 4607)) + 6·noHitProb + 12·2⁻¹⁰²⁴ + 2εhide`; PomFRIT `≤ 4·εRO(…) + 2·noHitProb + 2·2⁻¹²⁸`), the adversary's interaction table-oblivious; for Moussaka and Ratatouille also with a table-reading interaction (`Privacy.Moussaka.anonymityRA_lean_num`, `Privacy.Ratatouille.unlinkabilityRA_lean_num`, from the adaptive-statement `ZK.Sim.zk_adaptive`, `docs/zk.md` §10.3), and PomFRIT with an Issuer whose key, messages and responses read every table but `H₂³` (`Privacy.PomFRIT.blindnessRA_lean_num`, `≤ 4·εRO(q₃ + 4i₃, q₅ + 4i₅ + 1872, q_E + 4i_E + 23035) + 2·noHitProb + 2·2⁻¹²⁸`, from the two-phase `ZK.Sim.zk2_adaptive`) | The zero-knowledge hypothesis is false on `main` for PomFRIT (`ZK.pomfrit_issuer_hits`, `ZK.pomfrit_attack_test`); for Moussaka and Ratatouille no efficient simulator satisfies it per proof on `main`, and the joint (PU) hop replaces it (paper). PomFRIT note §8.3: the "both ⊥" rule is needed. Moussaka Thm 4(a) needs no `2⁻¹⁹²` term; Thm 4(b) misses an abort term. Ratatouille H3 needs the Client's validity check against the commitment it sent |
+| Privacy on the specs ([Lean] `VoleMole/Privacy/`) | The privacy theorems as games on `Spec/*`, each hybrid hop mechanized: PomFRIT blindness (`Privacy.PomFRIT.blindness`, `≤ 4ε`), Moussaka issuer hiding and unlinkability against a Moderator colluding with all Anchors (`Privacy.Moussaka.anonymity`, `≤ 4εI + 4εR + 2εhide`), Ratatouille unlinkability of spends from issuances and from each other through change tokens (`Privacy.Ratatouille.unlinkability`, `≤ 4εI + 4εS + 2εhide`). Hypotheses: zero knowledge of the abstract proof systems (`Privacy.ZeroKnowledge`: a simulator from the instance alone, output `ε`-close to the prover's for every valid witness; `ε = 0` is equality of distributions), hiding of `Com` for the explicit reductions. The final hybrids are exact. With the executable Lean prover (label rows; `Spec.Ratatouille.Sizes.labelRows`, `Spec/PomFRITLayout.lean`): down to the tape hypothesis (`Privacy/LeanProver.lean`; `Privacy.Moussaka.anonymity_label_rows`, `Privacy.Ratatouille.unlinkability_label_rows`, `Privacy.PomFRIT.blindness_lean`; `*_shake` with the hop hypotheses); in the random-oracle and ideal-cipher model with the adversary seeing the tables and every zero-knowledge term explicit (`Privacy.Moussaka.anonymityRO_lean_num`, `Privacy.Ratatouille.unlinkabilityRO_lean_num`, `Privacy.PomFRIT.blindnessRO_lean_num`); and with an interaction that reads the tables (`Privacy.Moussaka.anonymityRA_lean_num`, `Privacy.Ratatouille.unlinkabilityRA_lean_num`; `Privacy.PomFRIT.blindnessRA_lean_num` for an Issuer that does not read `H₂³`). Bounds and remaining assumptions: §3 | The zero-knowledge hypothesis is false on `main` for PomFRIT (`ZK.pomfrit_issuer_hits`, `ZK.pomfrit_attack_test`); for Moussaka and Ratatouille no efficient simulator satisfies it per proof on `main`, and the joint (PU) hop replaces it (paper). PomFRIT note §8.3: the "both ⊥" rule is needed. Moussaka Thm 4(a) needs no `2⁻¹⁹²` term; Thm 4(b) misses an abort term. Ratatouille H3 needs the Client's validity check against the commitment it sent |
 
 **Cross-cutting finding (critical, deployment):** PomFRIT's Issuer signs arbitrary targets, and
 all protocols share the UOV key type. If one key serves PomFRIT and another protocol, anyone can
@@ -466,10 +511,12 @@ failure `ε_dead` (L2) (ideal cipher, query ordering: plan M6). Not done: the st
 
 What is **not** established, roughly in order of importance:
 
-1. **The probabilistic arguments are not machine-checked.** All random-oracle, ideal-cipher and
-   quantum-oracle steps, and all reductions, are paper proofs. Mechanizing the classical ones (e.g.
-   with VCVio or EasyCrypt) is possible but a large project; the quantum ones are beyond current
-   tools.
+1. **Most probabilistic arguments for extraction are not machine-checked.** The random-oracle,
+   ideal-cipher and quantum-oracle steps of the extraction proofs, and the protocol reductions
+   for unforgeability, balance and non-malleability, are paper proofs, except for the parts §9
+   mechanizes (below). For zero knowledge and privacy with the fix, the classical random-oracle
+   and ideal-cipher arguments are mechanized (§3, Gap 7). The quantum arguments are paper proofs;
+   mechanizing them is beyond current tools.
    For the Lean verifier (§8), what the end-to-end extraction theorems still assume about the
    executable verifier is exactly these steps: a good `chal1` (L3's `KOSGood`), fixed blocks for
    dead-leaf trees (L2), good `chal2`/`l` (L4's `hQS`, `hcomb`), and binding of the leaf
@@ -513,52 +560,24 @@ What is **not** established, roughly in order of importance:
    (`ZK/Main.lean`, `ZK/Relations.lean`), but the hybrid chaining around it (H1–H4, the H5/H6
    coupling, the reduction of an oracle adversary to query functions) is paper. The QROM ZK bound
    is loose (2⁻¹⁹ at 2³⁰) until the 256-bit `rho` and salt are added.
-   The protocol privacy theorems (`VoleMole/Privacy/`) take per-proof zero knowledge (the
-   simulator is a function of the instance; in the random-oracle model it also programs the
-   oracle, which the abstract specs do not expose) and hiding of `Com` (for the explicit
-   reductions) as hypotheses, so they apply to the label-row fix; on `main` the joint (PU) hop over
-   proofs sharing `r` replaces the per-proof hypothesis and is paper. For the executable Lean prover
-   (§8) with dedicated label rows the hypothesis is discharged (`ZK/Exec.lean`,
-   `Privacy/LeanProver.lean`, `docs/zk.md` §10.1) except for the **hop hypotheses** (`HopHyps`,
-   `ZK/Hops.lean`, from which the tape hypothesis `TapeHyp` is proved: H1 `ε_rho`, the grinding
-   answers `ε_grind`, BAVC hiding `ε_bavc`, H6 `ε_lab`; for PomFRIT `HopHyps2` and `TapeHyp2`,
-   `ZK/TwoPhaseHops.lean`, plus the abort term). Each is a `Close` bound on a small experiment
-   for a fixed hash record, an idealization as every statement against all distinguishers in
-   `Privacy/Basic.lean`. With the hashed domain a uniform table the random-oracle ones are proved
-   (`ZK/HopsROM.lean`, `ZK/HopsRead.lean`, `ZK/HopsH6.lean`: H1 and grinding exact, H1
-   `≤ q₃·2⁻¹²⁸` and H6 `≤ (q₅ + 1)·2⁻¹²⁸` with oracle access), and composed with H4 into one
-   bound for one record of independent tables and an ideal cipher (`ZK/HopsJoint.lean`,
-   `zk_rom_ic`, for a proof-only cipher-parametric prover equal to the executable one at AES,
-   with the distinguisher not reading `H₂³`; with `H₂³` visible, `zk_rom_h23`, for the executable
-   prover in the ROM with BAVC hiding assumed, plus `Pr[GrindBad]`; and `zk_rom_ic_h23`,
-   `ZK/HopsIC.lean`, with `H₂³` visible and the ideal cipher in the whole executable prover and
-   verifier, plus `Pr[GrindBad]` and the honest recomputation's `≤ 4607` reads of the cipher;
-   `Pr[GrindBad] ≤ 2⁻¹¹⁰` for the real tables and grinding parameters, `ZK/GrindNum.lean`,
-   `zk_rom_ic_h23_num`, `zk_rom_h23_num`; several proofs and the privacy corollaries for
-   Moussaka, Ratatouille and PomFRIT in this model: `Privacy/MoussakaRO.lean`,
-   `Privacy/RatatouilleRO.lean`, `Privacy/PomFRITRO.lean` (the last on the two-phase
-   `zk2_rom_ic_h23_num`, `ZK/TwoPhaseIC.lean`), with the programming-collision terms bounded in
-   Lean, `ZK/CollideRO.lean`, `Privacy/*Delta.lean`, `*_lean_num`, and an adversary whose
-   interaction does not read the tables; for Moussaka and Ratatouille also with an interaction
-   that reads them, from zero knowledge for statements chosen from the tables, `ZK/AdaptRO.lean`,
-   `zk_adaptive`, `Privacy/MoussakaRA.lean`, `anonymityRA_lean_num`,
-   `Privacy/RatatouilleRA.lean`, `unlinkabilityRA_lean_num`, and for PomFRIT with an interaction
-   that reads every table but `H₂³`, from the two-phase `zk2_adaptive`, `ZK/TwoPhaseAd.lean`,
-   `Privacy/PomFRITRAGame.lean`, `blindnessRA_lean_num`); H4 is proved with the cipher a uniform table of
-   uniform-function rows (`ZK/HopsH4Ideal.lean`, `hide_rom_query`: the GGM, leaf-commitment and
-   leaf-PRG hybrids, `≤ 221·(4607 + q)·2⁻¹²⁸`), leaving the PRP/PRF switching of the hidden
-   paths' rows and AES as an ideal cipher; and that SHAKE is a random oracle remains the
-   modelling step. Every other side condition is proved (the witness encodings satisfy the
+   With the fix, zero knowledge of the executable Lean prover and the three protocol privacy
+   theorems are mechanized in the classical random-oracle and ideal-cipher model, with every
+   zero-knowledge and collision term explicit (§3). What remains is listed at the end of §3: the
+   modelling steps (SHAKE as a random oracle, AES as an ideal cipher with the PRP/PRF switching
+   term on paper), independent per-proof `H₃` slices, the seed-XOF hop, the hiding of `Com`, the
+   consistency of a table-reading interaction, a PomFRIT interaction that reads `H₂³` (open),
+   Moussaka's non-colluding mode (Thm 4b), the general game schedule and the quantum versions.
+   The abstract privacy theorems (`VoleMole/Privacy/`) take per-proof zero knowledge and hiding of
+   `Com` as hypotheses, so they apply to any proof system with the label-row fix; on `main` the
+   joint (PU) hop over proofs sharing `r` replaces the per-proof hypothesis and is paper. Every
+   deterministic side condition for the Lean prover is proved (the witness encodings satisfy the
    systems, interpolation, `N_MASK`, the CRT certificate, BAVC and CRT completeness:
    `Privacy/MoussakaLean.lean`, `Privacy/RatatouilleLean.lean`, `Privacy/PomFRITLean.lean`,
-   `Verifier/Bridge/BAVCComplete.lean`, `Verifier/Bridge/CrtComplete.lean`). The seed-XOF hop (the games
-   draw the XOF's outputs uniformly), Moussaka's non-colluding mode (Thm 4b) and the quantum
-   versions are not mechanized.
+   `Verifier/Bridge/BAVCComplete.lean`, `Verifier/Bridge/CrtComplete.lean`).
 8. **Open deployment issues** found by the analysis and not yet fixed in the code: cross-protocol
    key reuse, Ratatouille spend binding, PomFRIT's `hash_to_target` domain byte and signature
    multiplicity, Moussaka nullifier squatting.
 
 Some notes in `docs/` were written at different times and may contain status lines that later
-notes superseded (for example, `security/pomfrit.md` lists quantum unforgeability as open, which
-`extraction/Q7-qrom-multi-extraction.md` later addressed). Where they disagree, `extraction/README.md`
-and this file are the most recent.
+notes superseded. Where they disagree, `extraction/README.md` and this file are the most recent;
+for zero knowledge and privacy, `docs/zk.md` §10 is the detailed reference.

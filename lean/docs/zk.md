@@ -22,7 +22,9 @@ marked `main:`. "Spec" means the FAEST v3.0 specification (faest.info/faest-spec
 **With patch 0005, the proof system is zero-knowledge in the standard (adaptive, multi-proof)
 sense** (§2). The theorem (§3) puts no condition on the witness. The distinguisher may choose the
 witness itself, and the bound is statistical in `w`. It relies only on the random-oracle,
-AES-PRP/GGM and fresh-`rho` assumptions that FAEST's own ZK proof uses.
+AES-PRP/GGM and fresh-`rho` assumptions that FAEST's own ZK proof uses. For the executable Lean
+prover with label rows, the single-proof bound and the privacy theorems of all three protocols are
+mechanized in the random-oracle and ideal-cipher model (§10.1–10.3).
 
 **On `main`, it was not** (§4). FAEST v3's CRT masks come from garbling-style gate labels
 `L⁰_e`, `L¹_e = L⁰_e ⊕ Θ`, and the verifier learns one label per gate. The other label is what
@@ -755,7 +757,9 @@ Proposition 4.1 (§4). For PomFRIT it fails for every simulator: phase 1 sees no
 simulated proof cannot depend on `r`, while the test for the real `r` accepts every real proof
 (`pomfrit_attack_test`); and the Issuer even learns `r` in the protocol (`pomfrit_issuer_hits`).
 
-**Proved only on paper** (for the executable prover, §10.1 reduces these to the tape hypothesis):
+**Proved only on paper for the view models above** (for the executable prover, §10.1 mechanizes the
+hybrids in the random-oracle and ideal-cipher model, and §10.2–10.3 the multi-proof games; what
+remains there is listed in §10.1, "What remains assumed"):
 - the random-oracle and lazy-sampling steps (H1, H2 programming, H6 identical-until-bad, and the
   reduction of adaptive H₅ queries to functions of a Θ-independent view). For the `main` layout,
   the probability bound that follows (union over `q` queries, each a function of the view, aux
@@ -765,7 +769,8 @@ simulated proof cannot depend on `r`, while the test for the real `r` accepts ev
 - the PRP/GGM hiding of H8 (spec Lemma 10.24), and for H4 the PRP/PRF switching of the hidden
   paths' rows and the step from AES to an ideal cipher (H4 itself is mechanized in the
   ideal-cipher model with uniform-function rows, §10.1, `hide_rom_query`);
-- the completeness identities (H3) for the models (for the executable prover: §10.1);
+- the completeness identities (H3) for the models (for the executable prover they are proved,
+  §10.1);
 - the identification of the Lean model with the C++ (§7.1, by inspection);
 - the claim that `rank F ≤ λ < n_mult` makes the attack's test sound on `main`. `n_mult` is
   inferred from the proof sizes, not computed from the generated tables.
@@ -929,21 +934,21 @@ as a check of the theorem's conditions and kept as a smoke test of the executabl
       on `A`. The paper's `2⁻¹²⁰` is `1/|A|` with `|A| ≈ 2¹²⁰`; the proved `2⁻¹¹¹` reflects the
       proved lower bound on `|A|`.
 
-    Left open: (b) the multi-proof terms: with several proofs on shared tables (§10.2) each
-    hybrid step costs a programming collision term `δ`, now bounded in Lean (`pr_collide_zk`,
-    `deltaI1_le`, `deltaRO_le`, …: `≤ 2⁻¹¹⁰ + εRO(0, 312, 4607) + noHitProb + 3·2⁻¹⁰²⁴` for a
-    redemption or spend, `≤ noHitProb + 2⁻¹⁰²⁴` for the second issuance, `≤ noHitProb + 2⁻¹²⁸` for
-    PomFRIT); `ε_iv` (two proofs sharing an `H₃` slice) is a modelling step of the per-proof
-    slices; (c) the privacy corollaries in the ROM and ideal-cipher model are proved for Moussaka,
-    Ratatouille and PomFRIT with every term explicit (§10.2: `anonymityRO_lean_num`,
-    `unlinkabilityRO_lean_num`, `blindnessRO_lean_num`, for adversaries whose interaction does not
-    read the tables; for PomFRIT on the two-phase theorem `zk2_rom_ic_h23_num`, whose continuation
-    may read the tables), and for Moussaka and Ratatouille also with an interaction that reads
-    every table (§10.3: `zk_adaptive`, the single-proof theorem for statements chosen from the
-    tables, `anonymityRA_lean_num` and `unlinkabilityRA_lean_num`; PomFRIT with a table-reading
-    interaction is not restated); the `*_shake` theorems with the
-    fixed-record `HopHyps` remain. The PRP/PRF switching term and the
-    modelling steps (SHAKE as a random oracle, AES as an ideal cipher) remain.
+    Beyond one proof (§10.2, §10.3): with several proofs on shared tables each hybrid step
+    costs a programming-collision term `δ`, bounded in Lean (`pr_collide_zk`, `deltaI1_le`,
+    `deltaRO_le`, …: `≤ 2⁻¹¹⁰ + εRO(0, 312, 4607) + noHitProb + 3·2⁻¹⁰²⁴` for a redemption or
+    spend, `≤ noHitProb + 2⁻¹⁰²⁴` for the second issuance, `≤ noHitProb + 2⁻¹²⁸` for PomFRIT); the
+    privacy corollaries are proved for Moussaka, Ratatouille and PomFRIT with every term explicit
+    (`anonymityRO_lean_num`, `unlinkabilityRO_lean_num`, `blindnessRO_lean_num`, for adversaries
+    whose interaction does not read the tables; PomFRIT on the two-phase `zk2_rom_ic_h23_num`,
+    whose continuation may read `H₅` and the cipher), and with an interaction that reads the
+    tables (`zk_adaptive`, `zk2_adaptive`; `anonymityRA_lean_num`, `unlinkabilityRA_lean_num`,
+    and `blindnessRA_lean_num` for an Issuer that reads every table but `H₂³`). Left open: a
+    PomFRIT interaction that reads `H₂³` (§10.3, "Open"); `ε_iv` (two proofs sharing an `H₃`
+    slice), a modelling step of the per-proof slices; the PRP/PRF switching term; the modelling
+    steps (SHAKE as a random oracle, AES as an ideal cipher). The `*_shake` theorems, which take
+    the fixed-record `HopHyps`, are unchanged: the random-oracle results replace them rather than
+    discharge them.
 - **Deterministic hypotheses**, per statement and witness (`ZKHyp`, `RunHyp`): the statement's
   evaluator is a system of degree `≤ d`, `1 ≤ d`, that the witness satisfies for every `chal1` and
   combination (for PomFRIT, for every instance the continuation picks: `RunHyp2`); `N_MASK ≤ 32`;
@@ -959,8 +964,8 @@ as a check of the theorem's conditions and kept as a smoke test of the executabl
   each proof's error is the sum of the named terms); Moussaka's
   zero-knowledge hypotheses are needed only for well-formed instances (`IssueRelW`, `RedeemRelW`:
   the lengths the C++ types fix, at most 64 Anchors).
-- `simulateRO_accept` assumes the simulated proof's run reaches `chal3`; all three conditions
-  are now proved (`ZK/SimAcceptFull.lean`): the format check and the reconstruction always
+- *Discharged:* `simulateRO_accept` assumes the simulated proof's run reaches `chal3`; all three
+  conditions are proved (`ZK/SimAcceptFull.lean`): the format check and the reconstruction always
   (`simulate_checkFormat`, `simulate_reconstruct`), `Δ' ≠ 0` unless the simulator's `Δ` is `0`
   (`simulate_reaches`). So `simulateRO_accept'` assumes only `¬ HitZero`, and the simulated proof
   is accepted except with probability `≤ noHitProb + 1/|A| ≤ 2⁻¹¹⁰` (`pr_simulateRO_reject*`).
@@ -1099,7 +1104,7 @@ differences are below `2⁻¹⁰⁰`.
     Ratatouille (unlinkabilityRO_lean_num): the same bound for any two worlds.
 
 `εRO(0, 312, 4607) = 2⁻¹¹⁰ + (221·13821 + 313)·2⁻¹²⁸ ≈ 2⁻¹¹⁰ + 2⁻¹⁰⁶·⁵`, so the collision terms add
-about `2⁻¹⁰⁴·²` (`noHitProb ≤ 2^{−2¹⁵}`, `noHitProb_le`); the total is about `2⁻¹⁰²` plus
+about `2⁻¹⁰⁴·²` (`noHitProb ≤ 2^{−2¹⁵}`, `noHitProb_le`); the total is about `2⁻¹⁰²·²` plus
 `8·(q₃ + q₅ + 221·q_E)·2⁻¹²⁸` (`εhide` aside).
 
 **PomFRIT.** The two-phase prover first needs its own theorem (`ZK/TwoPhaseRO.lean`,

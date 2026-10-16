@@ -10,7 +10,8 @@ Sources used:
   `draft-authors-mole-vole-act.md`, which returns 404);
 - the generic ACT draft `draft-authors-mole-act.md`, cited as {{ACT}};
 - `lean/docs/extraction/` (PoK, L7, L8, Q2) and `lean/docs/zk.md` (ZK);
-- `lean/docs/security/domain-separation.md`, which is not yet written. It is used as Lemma DS below.
+- `lean/docs/security/domain-separation.md`, which proves Lemma DS (its §7: part (a) for every SHAKE
+  call Ratatouille makes, part (b) for `Com` and `Tag`).
 
 Both drafts were fetched on 2026-10-14 into the session scratchpad (`papers/act/`).
 
@@ -23,7 +24,7 @@ Line references are `file:line` at `6d7113e`.
 | **Balance** (no inflation): accepted spends ≤ issued + refunded, against adaptive malicious clients, honest clients present | **Proved** (Thm 1), classical | `ε_ext + Adv^{uf-tag} + q_K²·2^{−257}` |
 | **No theft**: an adversary cannot spend an honest client's credits through a request it did not copy verbatim | **Proved** (Thm 3), using weak SE and a ZK hop | `ε_ZK + ε_SE + q_K·2^{−127}` |
 | **No theft by copying** (hijack): anyone who obtains a spend request can redeem it first | **Fails** (F2). Nothing binds a spend to a session, unlike {{ACT}}'s `ctx_spend` and Moussaka's `challenge_digest` | — |
-| **Unlinkability/anonymity** against a malicious Issuer: spends and issuances leak only `(pk, ctx_iss, T_init, d)` and whether the client could afford the spend | **Proved** (Thm 2). On `main` it relies on Keccak one-wayness in `r`; with the fix it is standard NIZK. [Lean] a two-round left/right form, from ZK and hiding hypotheses (`Privacy/Ratatouille.lean`); with the executable Lean prover (label rows) down to its tape hypothesis (`Privacy/RatatouilleLean.lean`, `unlinkability_label_rows`) | `ε_ZK + q_K·2^{−127}` |
+| **Unlinkability/anonymity** against a malicious Issuer: spends and issuances leak only `(pk, ctx_iss, T_init, d)` and whether the client could afford the spend | **Proved** (Thm 2). On `main` it relies on Keccak one-wayness in `r`; with the fix it is standard NIZK. [Lean] a two-round left/right form, from ZK and hiding hypotheses (`Privacy/Ratatouille.lean`); with the executable Lean prover (label rows) down to its tape hypothesis (`Privacy/RatatouilleLean.lean`, `unlinkability_label_rows`); for the Lean prover in the ROM and ideal-cipher model with every zero-knowledge term explicit, `≈ 2⁻¹⁰²·²` plus budget terms and `2·ε_hide` (`unlinkabilityRO_lean_num`), and `≈ 2⁻¹⁰¹·⁵` with a table-reading Issuer (`unlinkabilityRA_lean_num`; §6) | `ε_ZK + q_K·2^{−127}` |
 | **Correctness** of issuance, spends, refunds and the 64-bit edge cases | **Proved** (Thm 4); arithmetic checked in Lean | prover abort `≤ (1−p)^{2³²}` |
 | **Refund integrity**: refunds are bound to their state and cannot be moved or altered | Proved, as part of Thm 1 and Thm 3 | — |
 | **Key separation across protocols** | **Fails if a key is shared with PomFRIT**: unbounded minting (F1, demonstrated) | — |
@@ -465,13 +466,13 @@ and affords the amount, else it is refused for both (feasibility is leakage).
   zk.md §10.2): `δI₁ ≤ noHitProb + 2⁻¹⁰²⁴`, `δS₁ ≤ 2⁻¹¹⁰ + εRO(0, 312, 4607) + noHitProb +
   2·2⁻¹⁰²⁴`, `δS₂ ≤ … + 3·2⁻¹⁰²⁴`, so **`unlinkabilityRO_lean_num`**: any two worlds differ by at
   most `8·εRO(q₃, q₅ + 1872, q_E + 13821) + 4·(2⁻¹¹⁰ + εRO(0, 312, 4607)) + 6·noHitProb +
-  12·2⁻¹⁰²⁴ + 2·εhide` (about `2⁻¹⁰²` plus the budget terms). The simulated world is
+  12·2⁻¹⁰²⁴ + 2·εhide` (about `2⁻¹⁰²·²` plus the budget terms). The simulated world is
   `Ratatouille.view` for an Issuer that also sees the tables, programmed as a function of the
   requests it sees and the simulator coins (`Vtab`, `simGameR_iff`), so `simGame_iff`,
   `stage_ideal` and `idealGame_iff` are reused unchanged, with the coins and tables fixed in the
   hiding reduction and in the exchange of the nullifiers (`idealGameR_eq`). A spend programs
   `H₂³` only if its round runs. Here the Issuer's choices of responses and amounts do not read the
-  tables (only its guess does).
+  tables (only its guess does); the next item lifts this.
 - **[Lean] With an Issuer whose interaction reads the tables**
   (`lean/VoleMole/Privacy/RatatouilleRA.lean`, zk.md §10.3). Each of the Issuer's two message
   stages reads the four slices and the shared tables, consistently, with a budget per stage
@@ -674,9 +675,9 @@ and determinism of `Tag`. The witness satisfies V3 by `change_correct`. ∎
 - **Balance.** Q2's Theorem 7.1 replaces `ε_ext` by `Σ² + ε_multi + ε_rec`, with
   `Σ² ≈ 200·q²·2^{−128}`. This is meaningful only for `q ≲ 2⁵⁵` hash queries and `q_E ≲ 2³⁷`
   cipher queries (the `ε_multi` cap).
-  - **Simultaneous extraction.** Q2 proves extraction for one output. The bad events are per
-    query (as in L8 §9.1), and E measures the database only after the run, so simultaneous
-    extraction from all `N_I + N_S` proofs should carry over. This is **not written**.
+  - **Simultaneous extraction.** Q2 proves extraction for one output. Extraction from all
+    `N_I + N_S` proofs at once is Theorem M of `lean/docs/extraction/Q7-qrom-multi-extraction.md`,
+    and Q7 §5 states Theorem 1 in the QROM with it (paper).
   - The signing oracle is classical, and its answers do not depend on extracted witnesses, so the
     reduction is compatible with measuring at the end.
 - **Binding.** BHT/Zhandry give `O(q_K³·2^{−256})` and `O(q_K³·2^{−360})`, assuming the quantum
@@ -689,7 +690,9 @@ and determinism of `Tag`. The witness satisfies V3 by `change_correct`. ∎
   the Kosuge–Xagawa-style QROM proof of salted hash-and-sign UOV.
 - **Theft (N2a).** This needs SE in the QROM, which is open (Q2 §11 gap 3).
 - **Unlinkability.**
-  - ZK in the QROM is open (`lean/docs/zk-qrom.md` is absent).
+  - ZK in the QROM is proved on paper with the label-row fix (`lean/docs/zk-qrom.md`, about
+    `2⁻¹⁹` at `2³⁰` queries and proofs); Theorem 2 is not restated with it, and nothing of it is
+    mechanized.
   - Hiding degrades to `O(q_K²·Q_c·2^{−128})` (multi-target Grover).
   - On `main`, the (PU) condition degrades the same way; the fix removes that term.
   - The unlinkability adversary is the Issuer, so store-now-decrypt-later linking of
@@ -700,14 +703,20 @@ and determinism of `Tag`. The witness satisfies V3 by `change_correct`. ∎
 - A-OMPI is a protocol-specific assumption. There is no reduction to UOV inversion (§2.3); R1
   would give a reduction to standard salted UOV EUF-CMA.
 - KP800 as an ideal permutation is a model. Commitment binding and hiding inherit it.
-- Lemma DS (`lean/docs/security/domain-separation.md`) is assumed, not proved.
-- In the QROM: simultaneous extraction is not written; SE and ZK are open; there is no quantum
-  tool for an invertible permutation.
+- Lemma DS is proved on paper, with the separation table checked in Lean
+  (`lean/docs/security/domain-separation.md`, `Protocols/DomainSeparation.lean`); SHAKE as a
+  random oracle remains the modelling step.
+- In the QROM: simultaneous extraction (Q7) and ZK (`lean/docs/zk-qrom.md`) are on paper only;
+  SE for Theorem 3 is open; there is no quantum tool for an invertible permutation.
 - Thm 3 uses SE in the classical model only. N2b (copying) is not provided at all (F2).
 - The UF-Tag reduction counts `q_T ≤ q_K` Tag inputs. Issuer aborts in `DerivePreimage` are
   treated as negligible.
 - Unlinkability (N3) is mechanized as a two-round game in `lean/VoleMole/Privacy/Ratatouille.lean`
-  (§6), with zero knowledge and hiding as hypotheses; H1 and the general adaptive schedule (any
-  number of Clients and spends) are on paper.
+  (§6), with zero knowledge and hiding as hypotheses; for the executable Lean prover zero
+  knowledge is proved in the ROM and ideal-cipher model (`unlinkabilityRO_lean_num`,
+  `unlinkabilityRA_lean_num`), leaving SHAKE as a random oracle, AES as an ideal cipher (with the
+  PRP/PRF switching term on paper), the independence of the four `H₃` slices, the consistency of a
+  table-reading Issuer (a hypothesis) and hiding. H1 (the seed XOF) and the general adaptive
+  schedule (any number of Clients and spends) are on paper.
 - The Lean file covers the accounting and the 64-bit arithmetic only. Extraction, binding and
   forgery are paper arguments.
