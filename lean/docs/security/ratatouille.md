@@ -24,7 +24,7 @@ Line references are `file:line` at `6d7113e`.
 | **Balance** (no inflation): accepted spends ≤ issued + refunded, against adaptive malicious clients, honest clients present | **Proved** (Thm 1), classical | `ε_ext + Adv^{uf-tag} + q_K²·2^{−257}` |
 | **No theft**: an adversary cannot spend an honest client's credits through a request it did not copy verbatim | **Proved** (Thm 3), using weak SE and a ZK hop | `ε_ZK + ε_SE + q_K·2^{−127}` |
 | **No theft by copying** (hijack): anyone who obtains a spend request can redeem it first | **Fails** (F2). Nothing binds a spend to a session, unlike {{ACT}}'s `ctx_spend` and Moussaka's `challenge_digest` | — |
-| **Unlinkability/anonymity** against a malicious Issuer: spends and issuances leak only `(pk, ctx_iss, T_init, d)` and whether the client could afford the spend | **Proved** (Thm 2). On `main` it relies on Keccak one-wayness in `r`; with the fix it is standard NIZK. [Lean] a two-round left/right form, from ZK and hiding hypotheses (`Privacy/Ratatouille.lean`); with the executable Lean prover (label rows) down to its tape hypothesis (`Privacy/RatatouilleLean.lean`, `unlinkability_label_rows`); for the Lean prover in the ROM and ideal-cipher model with every zero-knowledge term explicit, `≈ 2⁻¹⁰²·²` plus budget terms and `2·ε_hide` (`unlinkabilityRO_lean_num`), and `≈ 2⁻¹⁰¹·⁵` with a table-reading Issuer (`unlinkabilityRA_lean_num`; §6); from the real Clients' OS seeds and seed XOF, each `+ 2·(2q_H + 2)·2⁻²⁵⁶` (`unlinkability*_seed`, `lean/docs/zk.md` §10.6; the note's H1 does not charge seed collisions) | `ε_ZK + q_K·2^{−127}` |
+| **Unlinkability/anonymity** against a malicious Issuer: spends and issuances leak only `(pk, ctx_iss, T_init, d)` and whether the client could afford the spend | **Proved** (Thm 2). On `main` it relies on Keccak one-wayness in `r`; with the fix it is standard NIZK. [Lean] a two-round left/right form, from ZK and hiding hypotheses (`Privacy/Ratatouille.lean`); with the executable Lean prover (label rows) down to its tape hypothesis (`Privacy/RatatouilleLean.lean`, `unlinkability_label_rows`); for the Lean prover in the ROM and ideal-cipher model with every zero-knowledge term explicit, `≈ 2⁻¹⁰²·²` plus budget terms and `2·ε_hide` (`unlinkabilityRO_lean_num`), and `≈ 2⁻¹⁰¹·⁵` with a table-reading Issuer (`unlinkabilityRA_lean_num`; §6); also with AES as random permutations (`_perm`) and with one shared `H₃` (`unlinkabilitySh_num`, `unlinkabilityRASh_num`); from the real Clients' OS seeds and seed XOF, each `+ 2·(2q_H + 2)·2⁻²⁵⁶` with `q_H` the Issuer's XOF queries (`unlinkability*_seed`, `lean/docs/zk.md` §10.6; the note's H1 does not charge seed collisions) | `ε_ZK + q_K·2^{−127}` |
 | **Correctness** of issuance, spends, refunds and the 64-bit edge cases | **Proved** (Thm 4); arithmetic checked in Lean | prover abort `≤ (1−p)^{2³²}` |
 | **Refund integrity**: refunds are bound to their state and cannot be moved or altered | Proved, as part of Thm 1 and Thm 3 | — |
 | **Key separation across protocols** | **Fails if a key is shared with PomFRIT**: unbounded minting (F1, demonstrated) | — |
@@ -517,6 +517,11 @@ and affords the amount, else it is refused for both (feasibility is leakage).
   the tables (`AdversaryOC`, `lean/VoleMole/ROM/PrivacyReads.lean`), `IBudget` is a theorem from
   the syntactic query bound (`QBudget`): `unlinkabilityOC_lean_num`,
   `unlinkabilityOC_lean_num_perm`, the same bounds with no consistency hypothesis.
+- **[Lean] With one shared `H₃` and with the real seeds.** The games are also proved with one
+  `H₃(wPrefix ‖ μ₁ ‖ ρ ‖ 3)` in the shared tables instead of per-proof slices, with no
+  prefix-collision term (`unlinkabilitySh_num`, `unlinkabilityRASh_num`, `unlinkabilityOCSh_num`,
+  `_perm`; zk.md §10.5; bounds in §11), and H1 is mechanized for all of them
+  (`unlinkability*_seed`, `+ 2·(2q_g + 2)·2⁻²⁵⁶`, `q_g` the Issuer's XOF reads; zk.md §10.6).
 
 **A precision found while mechanizing H3.** "The client still finalizes against the commitment
 string it sent" is not enough on its own: before its next spend the Client checks its token with

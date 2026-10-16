@@ -36,8 +36,8 @@ Contents:
 | One-more unforgeability, per issuance context (Thm 1) | **Yes** | `ε_ext^iss + ε_ext^red + ε_dig + Adv^bind_Com + K·Adv^ct-uf_UOV,Com` | PoK (extraction README), binding of `Com`, chosen-target unforgeability of UOV on `Com`-images (implied by one-more-UOV, heuristically) |
 | One nullifier per signed commitment; double-spend detection (Cor 2) | **Yes**, if the Moderator keeps one record per `(ctx_iss, ctx_red)` across all Anchor Sets (`moussaka.hpp:141-146`) | as Thm 1 | as Thm 1 |
 | Redemption non-malleability: no redirect to another `challenge_digest`, Anchor Set or `ctx_red` (Thm 3) | **Yes** | `ε_SE^red + Adv^bind + K·Adv^ct-uf + U·Adv^ow-r + ZK hops` | weak SE (L8), plus the above, plus one-wayness in `r` |
-| Issuer hiding and unlinkability vs a Moderator **colluding with all Anchors**, with adversarial keys (Thm 4a) | **Yes, computationally**; [Lean] from uniform seed outputs (`Privacy/Moussaka.lean`, `anonymity`); with the executable Lean prover (label rows) down to its tape hypothesis (`Privacy/MoussakaLean.lean`, `anonymity_label_rows`); for the Lean prover in the ROM and ideal-cipher model with every zero-knowledge term explicit, `≈ 2⁻¹⁰²·²` plus budget terms and `2·Adv^hide_Com` (`anonymityRO_lean_num`), and `≈ 2⁻¹⁰¹·⁹` with a table-reading interaction (`anonymityRA_lean_num`; Appendix B); from the real Clients' OS seeds and seed XOF, each `+ 2·(2q_X + 2)·2⁻²⁵⁶` (`anonymity*_seed`, `lean/docs/zk.md` §10.6) | `2·ε_ZK^joint + 2·Adv^hide_Com` (the `2^{−192}` is not needed, §6) | ZK (lean/docs/zk.md), hiding of `Com` |
-| The same vs a Moderator that sees no issuance (Thm 4b) | **Yes**, with no Keccak assumption, up to an abort term the note missed (§6); [Lean] from uniform seed outputs (`Privacy/MoussakaNC.lean`, `anonymityNC`, `unlinkabilityNC`), with the vinegar hash a random oracle (`anonymityNC_vinegarRO`), and with the executable Lean prover down to its tape or hop hypotheses (`anonymityNC_label_rows`, `_shake`); not in the ROM and ideal-cipher layer | `2·Σ ε_ZK^red + 2·(φ₀ + φ₁)`, `φ_c ≤ δ_c^{256} ≈ 2^{−2046}` (`0` for one Anchor; no `2^{−192}`) | ZK of the redemption proofs only; the Client takes its index from `S` |
+| Issuer hiding and unlinkability vs a Moderator **colluding with all Anchors**, with adversarial keys (Thm 4a) | **Yes, computationally**; [Lean] from uniform seed outputs (`Privacy/Moussaka.lean`, `anonymity`); with the executable Lean prover (label rows) down to its tape hypothesis (`Privacy/MoussakaLean.lean`, `anonymity_label_rows`); for the Lean prover in the ROM and ideal-cipher model with every zero-knowledge term explicit, `≈ 2⁻¹⁰²·²` plus budget terms and `2·Adv^hide_Com` (`anonymityRO_lean_num`), and `≈ 2⁻¹⁰¹·⁹` with a table-reading interaction (`anonymityRA_lean_num`; Appendix B); also with AES as random permutations (`_perm`) and with one shared `H₃` (`anonymitySh_num`, `anonymityRASh_num`); from the real Clients' OS seeds and seed XOF, each `+ 2·(2q_X + 2)·2⁻²⁵⁶` (`anonymity*_seed`, `lean/docs/zk.md` §10.6) | `2·ε_ZK^joint + 2·Adv^hide_Com` (the `2^{−192}` is not needed, §6) | ZK (lean/docs/zk.md), hiding of `Com` |
+| The same vs a Moderator that sees no issuance (Thm 4b) | **Yes**, with no Keccak assumption, up to an abort term the note missed (§6); [Lean] from uniform seed outputs (`Privacy/MoussakaNC.lean`, `anonymityNC`, `unlinkabilityNC`), with the vinegar hash a random oracle (`anonymityNC_vinegarRO`), and with the executable Lean prover down to its tape or hop hypotheses (`anonymityNC_label_rows`, `_shake`); not in the ROM and ideal-cipher layer | `2·Σ ε_ZK^red + 2·(φ₀ + φ₁)`, `φ_c ≤ δ_c^{256} ≈ 2^{−2046}` on average over the vinegar random oracle (`0` for one Anchor; no `2^{−192}`) | ZK of the redemption proofs only; the Client takes its index from `S` |
 | Issuer hiding under a Moderator-chosen Anchor Set | **Only relative to the Anchors in the set that are honest and in common use** (§7) | n/a | Anchor-Set consistency outside the library |
 
 Main findings (§9):
@@ -904,28 +904,9 @@ the grinding failure (`Pr[GrindBad] ≤ 2⁻¹¹⁰` instead of `noHitProb`). Re
 adversary's interaction (contexts, keys, responses, Anchor Sets, digests) does not read the
 tables, only its guess does (the zero-knowledge theorem is for statements fixed before the
 tables; lifted below); the four `H₃` slices are independent (exact unless two proofs share `(μ₁, wPrefix)`,
-`≤ 2⁻¹⁹²`; lifted below: with one shared `H₃` no such term); hiding is for the reduction with the
+`≤ 2⁻¹⁹²`; lifted below: with one shared `H₃` no such term); the seed XOF's outputs are uniform
+(lifted at the end of this appendix); hiding is for the reduction with the
 simulator coins and the tables fixed.
-
-**With one shared `H₃`** (`lean/VoleMole/Privacy/SharedH3RO.lean`, `SharedH3RA.lean`,
-`lean/VoleMole/ROM/SharedH3Reads.lean`, zk.md §10.5). In the scheme the four proofs hash with one
-`H₃(wPrefix ‖ μ₁ ‖ ρ ‖ 3)`; the four slices are its restrictions to the four prefixes. The games are
-proved again with `H₃` in the shared tables (each row carries `H₃`'s column at that `ρ`) and each
-proof reading the column at its prefix, computed from the witness and instance it proves (the
-redemption prefixes through the adversary's Anchor Sets and digests). No prefix-collision term is
-needed: in each hop the replaced proof's column is re-sampled, and another proof with the same
-prefix reads it at its own `ρ` (one row, inside `εRO`'s slice-read term).
-**`anonymitySh_num`**: `8·εRO(q_E + 13824, q₅ + 1872, q_E + 13824) + 4·(2⁻¹¹⁰ + εRO(0, 312, 4607))
-+ 6·noHitProb + 12·2⁻¹⁰²⁴ + 2·εhide` (the adversary's `H₃` reads count in `q_E`); with a
-table-reading interaction (which may read `H₃` at a redemption's prefix before choosing it),
-**`anonymityRASh_num`**: `4·εRO(q_E + i_E + 13824, q₅ + i₅ + 1872, q_E + i_E + 13824) +
-4·εAd(9; q_E + 13822, q₅ + 1248, q_E + 13822; 0, i₂, i₅ + 624, i_E + 9214) + 4·(2⁻¹¹⁰ +
-εROP(0, 312, 4607; i₅ + 624, i_E + 9214)) + 8·(i_E + 9214)·2⁻¹²⁸ + 6·noHitProb + 12·2⁻¹⁰²⁴ +
-2·εhide` (the `RA` bound below with no slice reads, the row budgets in the slice-read slots, and
-`8·(i_E + 9214)·2⁻¹²⁸` for a redemption's fresh `ρ` meeting a row the interaction read);
-`anonymityOCSh_num` and `_perm` likewise. So the `≤ 2⁻¹⁹²` step is not needed; it is not wrong as
-a bound on the prefix collision, but "independent slices up to `2⁻¹⁹²`" is not a black-box reduction
-from one `H₃` (the slices' locations involve the Clients' secret `r`, `nf`).
 
 **With an interaction that reads the tables** (`lean/VoleMole/Privacy/MoussakaRA.lean`, zk.md
 §10.3). Here the responses, Anchor Sets and digests are functions of the two requests, the four
@@ -952,9 +933,38 @@ of the same order. For an interaction written as a VCVio oracle computation over
 the syntactic query bound (`QBudget`): `anonymityOC_lean_num`, `anonymityOC_lean_num_perm`, the
 same bounds with no consistency hypothesis.
 
+**With one shared `H₃`** (`lean/VoleMole/Privacy/SharedH3RO.lean`, `SharedH3RA.lean`,
+`lean/VoleMole/ROM/SharedH3Reads.lean`, zk.md §10.5). In the scheme the four proofs hash with one
+`H₃(wPrefix ‖ μ₁ ‖ ρ ‖ 3)`; the four slices are its restrictions to the four prefixes. The games are
+proved again with `H₃` in the shared tables (each row carries `H₃`'s column at that `ρ`) and each
+proof reading the column at its prefix, computed from the witness and instance it proves (the
+redemption prefixes through the adversary's Anchor Sets and digests). No prefix-collision term is
+needed: in each hop the replaced proof's column is re-sampled, and another proof with the same
+prefix reads it at its own `ρ` (one row, inside `εRO`'s slice-read term).
+**`anonymitySh_num`**: `8·εRO(q_E + 13824, q₅ + 1872, q_E + 13824) + 4·(2⁻¹¹⁰ + εRO(0, 312, 4607))
++ 6·noHitProb + 12·2⁻¹⁰²⁴ + 2·εhide` (the adversary's `H₃` reads count in `q_E`); with a
+table-reading interaction (which may read `H₃` at a redemption's prefix before choosing it),
+**`anonymityRASh_num`**: `4·εRO(q_E + i_E + 13824, q₅ + i₅ + 1872, q_E + i_E + 13824) +
+4·εAd(9; q_E + 13822, q₅ + 1248, q_E + 13822; 0, i₂, i₅ + 624, i_E + 9214) + 4·(2⁻¹¹⁰ +
+εROP(0, 312, 4607; i₅ + 624, i_E + 9214)) + 8·(i_E + 9214)·2⁻¹²⁸ + 6·noHitProb + 12·2⁻¹⁰²⁴ +
+2·εhide` (the `RA` bound above with no slice reads, the row budgets in the slice-read slots, and
+`8·(i_E + 9214)·2⁻¹²⁸` for a redemption's fresh `ρ` meeting a row the interaction read);
+`anonymityOCSh_num` and `_perm` likewise. So the `≤ 2⁻¹⁹²` step is not needed; it is not wrong as
+a bound on the prefix collision, but "independent slices up to `2⁻¹⁹²`" is not a black-box reduction
+from one `H₃` (the slices' locations involve the Clients' secret `r`, `nf`).
+
 **AES as random permutations** (`lean/docs/zk.md` §10.4, `Privacy/PermRO.lean`,
-`Privacy/PermRA.lean`). Both theorems also hold with the cipher's rows uniform permutations that
+`Privacy/PermRA.lean`). The `RO` and `RA` theorems also hold with the cipher's rows uniform permutations that
 the adversary reads forward and inverse: `anonymityRO_lean_num_perm`, `anonymityRA_lean_num_perm`,
 the same bounds with every `εRO` (`εROP`, `εAd`) replaced by its permutation counterpart `εROPm`
 (`εROPmP`, `εAdPm`), whose hop denominators are `2¹²⁸ − (nHi + 1)` and which carry the PRP/PRF
 switching term `switchEps ≤ 2⁻¹¹³·²`; numerically the same to two decimals.
+
+**The seed-XOF hop** (`lean/VoleMole/Privacy/SeedXOF.lean`, `Privacy/SeedXOFGames.lean`,
+`ROM/SeedXOFReads.lean`, zk.md §10.6). With the real Clients (uniform 32-byte OS seeds, the seed
+XOF a uniform table keyed by `(DST, seed)`, the adversary reading at most `q_X` cells), each of the
+random-oracle theorems above holds with `+ 2·(2q_X + 2)·2⁻²⁵⁶`: `anonymityRO_lean_num_seed`,
+`anonymityRA_lean_num_seed`, `anonymitySh_num_seed`, `anonymityRASh_num_seed`,
+`anonymityOC_lean_num_seed`, `anonymityOCSh_num_seed`, each with `_perm_seed`. Theorem 4 has no
+term for this hop (D7); the cost covers an XOF query at a Client's seed and two seeds of one domain
+colliding. The non-colluding game (`Privacy/MoussakaNC.lean`) keeps uniform seed outputs.

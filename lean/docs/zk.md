@@ -24,7 +24,7 @@ sense** (§2). The theorem (§3) puts no condition on the witness. The distingui
 witness itself, and the bound is statistical in `w`. It relies only on the random-oracle,
 AES-PRP/GGM and fresh-`rho` assumptions that FAEST's own ZK proof uses. For the executable Lean
 prover with label rows, the single-proof bound and the privacy theorems of all three protocols are
-mechanized in the random-oracle and ideal-cipher model (§10.1–10.3).
+mechanized in the random-oracle and ideal-cipher model (§10.1–10.6).
 
 **On `main`, it was not** (§4). FAEST v3's CRT masks come from garbling-style gate labels
 `L⁰_e`, `L¹_e = L⁰_e ⊕ Θ`, and the verifier learns one label per gate. The other label is what
@@ -764,8 +764,9 @@ simulated proof cannot depend on `r`, while the test for the real `r` accepts ev
 (`pomfrit_attack_test`); and the Issuer even learns `r` in the protocol (`pomfrit_issuer_hits`).
 
 **Proved only on paper for the view models above** (for the executable prover, §10.1 mechanizes the
-hybrids in the random-oracle and ideal-cipher model, and §10.2–10.3 the multi-proof games; what
-remains there is listed in §10.1, "What remains assumed"):
+hybrids in the random-oracle and ideal-cipher model, and §10.2–10.6 the multi-proof games; what
+remains there is listed in §10.1, "What remains assumed", §10.3 and §10.5, "Open", and §10.6,
+"What remains"):
 - the random-oracle and lazy-sampling steps (H1, H2 programming, H6 identical-until-bad, and the
   reduction of adaptive H₅ queries to functions of a Θ-independent view). For the `main` layout,
   the probability bound that follows (union over `q` queries, each a function of the view, aux
@@ -970,9 +971,11 @@ as a check of the theorem's conditions and kept as a smoke test of the executabl
     and `blindnessRA_lean_num` for an Issuer that reads every table but `H₂³`;
     `blindnessRAH_lean_num` for one that reads `H₂³` too, with explicit collision terms, §10.3).
     The per-proof `H₃` slices of these games are not a modelling step any more: with one shared
-    `H₃`, as in the scheme, every game is mechanized again with no prefix-collision (`ε_iv`-type)
-    term (§10.5). Left open: the modelling steps (SHAKE as a random
-    oracle, AES as an ideal cipher). The PRP/PRF switching term is proved in the games as well:
+    `H₃`, as in the scheme, every game but the PomFRIT Issuer that reads `H₂³` is mechanized again
+    with no prefix-collision (`ε_iv`-type) term (§10.5), and the seed-XOF hop to the real Clients
+    is mechanized for all of them (§10.6). Left open: the modelling steps (SHAKE as a random
+    oracle, AES as an ideal cipher), the hiding of `Com`, and the game-specific items of §10.3
+    and §10.5 ("Open") and §10.6 ("What remains"). The PRP/PRF switching term is proved in the games as well:
     every privacy theorem above also holds with the cipher's rows uniform permutations read
     forward and backward (§10.4, `Privacy/PermRO.lean`, `Privacy/PermRA.lean`). The `*_shake` theorems, which take
     the fixed-record `HopHyps`, are unchanged: the random-oracle results replace them rather than
@@ -1490,7 +1493,9 @@ to an Issuer that does not read `H₂³`.
   session `0` with its continuation `K0` and to session `1` with `K1R` (session `0` real,
   `hyp2RA_R1`), both at the substituted Issuer, with the read sets `qf0`, `qf1`:
 
-      εcol = 2⁻¹¹⁰ + εz(pP; 6i₃, 6i₅ + 2184, 6i_E + 18428) + 2i₂·2⁻¹²⁸   per session and world.
+      εcol = 2⁻¹¹⁰ + εRO(6i₃, 6i₅ + 2184, 6i_E + 18428) + 2i₂·2⁻¹²⁸   per session and world
+
+(`εRO` for function rows; for a general row type the error `εz` of §10.4).
 
 The bound (`blindnessRAH_lean_num`; `blindnessRAH_lean_numG` for every row type,
 `blindnessRAH_lean_num_perm` with `εROPm`):
@@ -1507,25 +1512,21 @@ Moussaka's and Ratatouille's `H₂³` terms (`h23Term` in `εAd`): a second zero
 application and `2⁻¹¹⁰` for the real prefix, the read count times `2^(−8·|ã|)` for the simulated
 one; it uses no `noHitProb` because the event requires a produced proof.
 
-**Open.**
-- *An interaction that reads `H₂³`* (PomFRIT): **done** above (`blindnessRAH_lean_num`, `_perm`,
-  `blindnessOCH_lean_num`, `_perm`), under the joint budget `IBudgetH`. The two-phase
-  zero-knowledge theorem with a continuation that reads `H₂³` (`zk2_adaptive` without `h2`) is
-  still not stated; it would need the simulator change and the collision terms listed above, and
-  the game does not need it. The per-slice form (`IBudget` with `i₂ > 0`) is not covered: the
-  substituted Issuer's guess must recompute the interaction's `H₂³` reads jointly.
+**Open.** (Done since earlier versions of this list: a PomFRIT interaction that reads `H₂³`,
+above, under the joint budget; consistency for interactions written as oracle computations, above;
+AES as random permutations, §10.4; one shared `H₃`, §10.5, except as noted there.)
+- *`H₂³` reads under per-slice budgets* (PomFRIT, `IBudget` with `i₂ > 0`): not covered; the
+  substituted Issuer's guess must recompute the interaction's `H₂³` reads jointly (`IBudgetH`).
+- *A two-phase zero-knowledge theorem with a continuation that reads `H₂³`* (`zk2_adaptive`
+  without `h2`): not stated; it would need the simulator change and the collision terms listed
+  above, and the game does not need it.
 - An adaptive base statement or witness prefix in `zk2_adaptive` (not needed for PomFRIT).
-- The consistency of the interaction (`SReads`): **done for interactions written as oracle
-  computations over the tables** (`ROM/TableReads.lean`, `ROM/PrivacyReads.lean`: consistency by
-  construction, the budget VCVio's syntactic query bound; `*OC_lean_num`, `*OC_lean_num_perm`).
-  For a bare function of the tables it stays a hypothesis, necessarily so for the budget
-  (`not_sReads_slice`). A randomized interaction is a mixture of deterministic ones (its coins
-  fixed, as the games' requests are). The guess's budget (`Rd3`, `Rd5`, `RdE`, `Budget`) is
-  still semantic; it needs no consistency (it is only an upper bound on reads, by query sets that
-  may depend on the tables).
-- *The privacy games with AES as random permutations*: done (§10.4).
-- *One shared `H₃`* (the slices determined by the proofs' prefixes): done (§10.5) for every game
-  above but `blindnessRAH` / `blindnessOCH` (a PomFRIT Issuer that reads `H₂³`).
+- *The consistency of an interaction given as a bare function of the tables* (`SReads`): a
+  hypothesis, necessarily so for the budget (`not_sReads_slice`); for one written as an oracle
+  computation it is a theorem (`*OC_lean_num`, `*OC_lean_num_perm`). A randomized interaction is
+  a mixture of deterministic ones (its coins fixed, as the games' requests are). The guess's
+  budget (`Rd3`, `Rd5`, `RdE`, `Budget`) is still semantic; it needs no consistency (it is only an
+  upper bound on reads, by query sets that may depend on the tables).
 
 ### 10.4 The privacy games with AES as random permutations (`ZK/ReadsRO.lean`, `ZK/ReadsROPerm.lean`, `ZK/TwoPhasePerm.lean`, `ZK/IdealCipherPermP.lean`, `ZK/HopsPatchPerm.lean`, `Privacy/PermRO.lean`, `Privacy/PermRA.lean`)
 
@@ -1741,8 +1742,8 @@ same prefix, the adversary, or an interaction that read a future proof's prefix)
 already inside the slice-model bounds' `q₃·2⁻¹²⁸` term (and `i₃·2⁻¹²⁸` in §10.3) once those reads
 are counted. The slice-model theorems are unchanged; the shared-model ones are new theorems.
 
-**Open.** PomFRIT with an Issuer that reads `H₂³` (`blindnessRAH`, `blindnessOCH`) in the shared
-model: its lazy sampling of `H₂³` and its second application of two-phase zero knowledge would
+**Open.** PomFRIT with an Issuer that reads `H₂³` (`blindnessRAH_lean_num`,
+`blindnessOCH_lean_num`) in the shared model: its lazy sampling of `H₂³` and its second application of two-phase zero knowledge would
 have to be redone on the shared tables (no new idea needed). The model counts the adversary's `H₃`
 reads with its cipher queries (`q_E`), so the bounds charge `221·2⁻¹²⁸` per `H₃` read where `2⁻¹²⁸`
 would do; a separate `H₃` budget would need the shared tables to carry `H₃` as a separate
@@ -1854,4 +1855,8 @@ All are negligible next to the zero-knowledge terms (`≈ 2⁻¹⁰²`).
   `enc` injective) are not covered.
 - *Fixed sizes*: two (PomFRIT) or four (Moussaka, Ratatouille) requests, as in the games. The hop
   lemma itself is general.
+- *Which games*: the hop is applied to the random-oracle games (the 20 games above, each with
+  `_perm`). The abstract games of `Privacy/{Moussaka,Ratatouille,PomFRIT}.lean`, their Lean-prover
+  versions (`*_label_rows`, `blindness_lean`, `*_shake`) and Moussaka's non-colluding game
+  (`Privacy/MoussakaNC.lean`) keep the uniform XOF outputs.
 - SHAKE128 as a random oracle remains a modelling step, as everywhere.
