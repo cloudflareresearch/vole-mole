@@ -311,7 +311,10 @@ runs of each layout.
 - *Modelling steps.* SHAKE128 is a random oracle (a single oracle with L0's domain rule is proved
   equivalent to independent per-domain oracles, `ROM/DomainSep.lean`); AES-128 is an ideal
   cipher; the cipher's rows are uniform functions, not permutations (the PRP/PRF switching term
-  for the hidden paths' rows is on paper).
+  for the hidden paths' rows is on paper). Soundness no longer has this gap: it is proved with
+  random permutations and inverse queries (§9, plan §2h); the ZK hybrid lets the distinguisher
+  read whole rows, so there the hidden paths' rows would have to become permutations
+  (`ZK/IdealCipher.lean`).
 - *Per-proof `H₃` slices.* The games give each proof its own independent slice; this is exact
   unless two proofs share `(μ₁, wPrefix)` (Moussaka, Ratatouille: `≤ 2⁻¹⁹²`; PomFRIT: two sessions
   with equal `r`), a modelling step on paper (the `ε_iv`-type term).
@@ -515,6 +518,12 @@ used here add nothing).
 | `ROM/StmtBind.lean` | done (M6): the statement committed at a chain query, read off the log before it (`stmtAt`: the decoded first `H₂⁰` preimage of the `mu₁` field of the `H₂¹` input, followed back from `H₂²`, `H₂³` inputs); statement hits (`stmtHit`, `≤ (n₂₁+n₀)·2⁻²⁵⁶` per `H₂⁰` query); the identification `stmtAt_ident` |
 | `ROM/AdaptChain.lean`, `ROM/AdaptFull.lean`, `ROM/AdaptComb.lean` | done (M6): the adaptive union bounds (`prEvent_accept_le_adaptive_E`, `…_comb_E`: each chain query charged at the statement committed there) and **the four non-delayed relations with adaptively chosen instances**: `moussakaIssue_accept_le_adaptive`, `ratatouilleIssue_accept_le_adaptive`, `moussakaRedeem_accept_le_adaptive`, `ratatouilleSpend_accept_le_adaptive`: the `_full` bound plus `stmtBindEps q = (q₀+3)(q₂₁+q₀+4)·2⁻²⁵⁶`, for instance families with injective encodings (plan §2g) |
 | `ROM/AdaptPomfrit.lean` | done (M6): PomFRIT's delayed binding (`μ` in the `H₂²` input, `stmtAtD`, `stmtHitD`, `stmtAtD_ident`); transport of the bad events between statements with equal parameters (`chainBad_transport`, `combBad_transport`); `pomfritRedeem_accept_le_adaptive`: the `_full` bound plus `(q₀+3)(q₂₂+q₀+4)·2⁻²⁵⁶`, for any family of signatures and messages (the `μ` preimage determines the target, which is all the relation reads) |
+| `ROM/PermModel.lean` | done (M6, permutation model): the ideal cipher as uniform random permutations (`PTable`), the prover with forward and inverse queries (`specP`); the normalized prover `normP` (inverse queries recorded as forward records, `L0-L2` N1's `H₄` query before each `H₂¹` query), its output (`evalWithAnswerFn_normP`), record congruences (`normP_prefix`, `normP_congr`) and query counts |
+| `ROM/PermCount.lean` | done: two fresh values of a uniform permutation table hit one of `K` targets with probability `≤ K/((2¹²⁸−r)(2¹²⁸−r−1))` (`prEvent_perm_two_le`; double counting over the neighbours `τ ∘ σ_k`, `card_sum_mul_le`) |
+| `ROM/PermBind.lean` | done: events charged at one record (`prEvent_perm_prefix_le`, forward or inverse); binding's collision event on the records, `≤ 2·q_E²·p²`, `p = 1/(2¹²⁸−q_E)` (`prEvent_perm_coll_le`) |
+| `ROM/PermOpen.lean` | done: the permutation game `gameP`, the bridge `prEvent_jointP_le_add`; binding `≤ 2·q_E²·p² + ε_open`; the opened dead leaf `≤ q₁·p'²`, `p' = 1/(2¹²⁸−q_E−4607)` (`prEvent_perm_deadQueried_le_g`); `ε_open ≤ openHashEps q + q₁·p'²` |
+| `ROM/PermPost.lean` | done: finding F3 (the PRF view's Post is not small with inverse queries); the point-tied Post `PostP` (half-targets of the chains, with their `iv` from N1), `≤ q_E·4608·q₂₁·p²` (`prEvent_perm_postP_le`); outside it the committed keys are found before the chain (`keysPre_of_not_postP_gen`) |
+| `ROM/PermFull.lean`, `ROM/PermAdapt.lean` | done: **all five relations in the permutation model with inverse queries**, fixed statements (`*_accept_le_perm`) and adaptively chosen ones (`*_accept_le_adaptive_perm`): the PRF-view bounds with `2⁻¹²⁸` per fresh cipher value replaced by `p` (`p'` for the dead-leaf guess) and Post by `q_E·4608·q₂₁·p²`; combined relations' hash count `n + q₂₁` (plan §2h) |
 
 The phase-B theorems of `ROM/Accept.lean` hold for every CTR PRG (`[HasPrg]`) and take as
 hypotheses binding (`ε_bind`), the "same chain" step with L2(c) (`hsame : SameChainHyp`), L2(a)
@@ -537,7 +546,17 @@ runs on the log at that statement), the same bound plus the statement-binding te
 (`*_accept_le_adaptive`, `ROM/AdaptFull.lean`, `ROM/AdaptComb.lean`, `ROM/AdaptPomfrit.lean`; plan
 §2g): for Moussaka issuance and redemption and Ratatouille issuance and spend for instance
 families with injective encodings, for PomFRIT (delayed binding, `(q₀+3)(q₂₂+q₀+4)·2⁻²⁵⁶`) for
-any family of signatures and messages. Not done: inverse cipher queries (permutation model).
+any family of signatures and messages. **The permutation model with inverse queries** (plan §2h):
+AES an ideal cipher as uniform random permutations, the prover making forward and inverse
+queries, the extractor reading their records (`L0-L2` §3.1, §6): the same five fixed-statement and
+five adaptive theorems hold (`*_accept_le_perm`, `*_accept_le_adaptive_perm`), e.g. for Moussaka
+issuance
+
+    (q₂₁+1)·2⁻¹⁵⁰ + (q₂₂+1)·ε_QS(4008) + (q₂₃+1)·9·2⁻¹²⁸ + 2·q_E²·p²
+      + 2·(openHashEps q + q₁·p'²) + q_E·4608·q₂₁·p² + chainHitEps q,
+
+`p = 1/(2¹²⁸ − q_E)`, `p' = 1/(2¹²⁸ − q_E − 4607)`, with no PRP/PRF switching term; Post had to be
+tied to the chains' points (finding F3: the PRF view's Post fails against inverse queries).
 
 ## Gaps
 
@@ -565,8 +584,9 @@ What is **not** established, roughly in order of importance:
    Post/C3) and L2 (`ε_dead`, with the corrected interface of plan §2e F2), so all five relations
    have a bound with no hypothesis left (`ROM/CipherFull.lean`, plan §2f), and for adaptively
    chosen statements with the statement-binding term `(q₀+3)(q₂₁+q₀+4)·2⁻²⁵⁶` added
-   (`*_accept_le_adaptive`, plan §2g). Still on paper: inverse cipher queries (the permutation
-   model).
+   (`*_accept_le_adaptive`, plan §2g); both also with AES as random permutations and inverse
+   cipher queries (`*_accept_le_perm`, `*_accept_le_adaptive_perm`, plan §2h; no PRP/PRF
+   switching term).
 2. **Code ↔ model is tested, not proved.** Each Lean model was written by reading the C++ and is
    tied to it by tests in `tests/voleith/test_lean_models.cpp` (and, when finished, the `Arith`
    cross-check). Compiler behaviour, memory safety and constant-time execution are out of scope.

@@ -631,9 +631,36 @@ lemma field_prefix (p : Params) (b : ByteArray) {N : ℕ} {k : String}
   · exact field_extract_zero p b (Params.field_voleCheck p) (by unfold Params.o₄ at hN; omega)
   · exact field_extract_zero p b (Params.field_correction p) (by unfold Params.o₄ at hN; omega)
 
+/-- **The keys of the commitments committed at an `H₂¹` input are found before it** (the
+consequence of no Post that the identification uses): for an `H₂¹` input `x` whose `μ` field is
+the statement's, and a commitment `a` committed at `x` (read off the hash log `G` before `x`) that
+is a block of an `H₁` input of `J` before `x` (if `x` is in `J`), the first key of the cipher log
+before `x` with commitment `a` (under `x`'s `iv`) is the first one of the whole cipher log. -/
+def KeysPre (st : Statement) (E : CTable) (J : QueryLog specIC) (G : QueryLog spec) (g : Table) :
+    Prop :=
+  ∀ x : ByteArray, x.extract 0 32 = st.mu1 (Hashes.ofTable g) →
+    ∀ i < BAVC.tau, ∀ j < 2 ^ BAVC.kOf i, ∀ a : ByteArray,
+    comPre (logBefore (.h21, x) G) x i j = some a →
+    ((.inl (.h21, x) : DomIC) ∈ J.map Sigma.fst →
+      ∃ wH ∈ kindIns .h1 (hashLog (logBefore (.inl (.h21, x)) J)), ∃ jj < 256,
+        a = wH.extract (32 * jj) (32 * jj + 32)) →
+    extractKey (cipherLog (logBefore (.inl (.h21, x)) J)) E (ivX st x g) i a =
+      extractKey (cipherLog J) E (ivX st x g) i a
+
+/-- Without Post (PRF view), the keys committed at every `H₂¹` input are found before it. -/
+lemma keysPre_of_not_postJ {st : Statement} {E : CTable} {J : QueryLog specIC} {G : QueryLog spec}
+    {g : Table} (hpost : ¬PostJ E J) : KeysPre st E J G g :=
+  fun x _ i _ _ _ a _ ha => extractKey_pre_eq E hpost (.h21, x) _ i a ha
+
+/-- The `μ` field of the verifier's `H₂¹` input. -/
+lemma extract_mu_chal1Input {pf : Proof} {mu1 com b1 : ByteArray} (hmu : mu1.size = 32) :
+    (chal1Input pf mu1 com b1).extract 0 32 = mu1 := by
+  simp only [chal1Input, ByteArray.append_assoc]
+  exact extract_zero_append_push _ _ _ hmu
+
 /-- **The "same chain" step and L2(c), from the identification facts** (`chain_ident`), for
 inputs `x`, `y`, `z` built by the verifier from the proof `π` and the chain `ch`. -/
-theorem sameChain_core (hpost : ¬PostJ E (jOf g P E)) {π : ByteArray}
+theorem sameChain_core (hkp : KeysPre st E (jOf g P E) (gLog T st P E g) g) {π : ByteArray}
     (hf : Proof.checkFormat ⟨st.params, π⟩ = true) {leaves : BAVC.Leaves}
     (hr : @BAVC.reconstruct (icPrg E.cipher) (ivE g st P E) (Proof.opening ⟨st.params, π⟩)
       (Proof.delta ⟨st.params, π⟩) = some leaves)
@@ -668,6 +695,8 @@ theorem sameChain_core (hpost : ¬PostJ E (jOf g P E)) {π : ByteArray}
   have hivX : ivX st x g = ivE g st P E := by
     simp only [ivX, ivE, ivOf]
     rw [hx, xIvPre_chal1Input hf hmu hcomsz, hπ]
+  have hxmu : x.extract 0 32 = st.mu1 (Hashes.ofTable g) := by
+    rw [hx]; exact extract_mu_chal1Input hmu
   have hkeys : keyPre E (logBefore (.h21, x) (gLog T st P E g))
       (logBefore (.inl (.h21, x)) (jOf g P E)) (ivX st x g) x = ch.keys := by
     rw [hchk]
@@ -677,8 +706,8 @@ theorem sameChain_core (hpost : ¬PostJ E (jOf g P E)) {π : ByteArray}
     split_ifs with hv
     · rw [hcom i hv.1 j hv.2]
       simp only
-      rw [keysOf_of_reconstruct hr hv.1 hv.2, extractKey_pre_eq E hpost (.h21, x) _ i _
-        (fun hxJ => hwH hxJ i hv.1 j hv.2)]
+      rw [keysOf_of_reconstruct hr hv.1 hv.2, ← hivX, hkp x hxmu i hv.1 j hv.2 _
+        (hcom i hv.1 j hv.2) (fun hxJ => hwH hxJ i hv.1 j hv.2)]
     · rw [keysOf_of_not_valid _ _ _ _ _ hv]
   have hxPre : xPre st.params x = π.extract 0 st.params.o₂ := by
     rw [hx]; exact xPre_chal1Input hf hmu hcomsz
@@ -790,54 +819,82 @@ theorem sameChain_core (hpost : ¬PostJ E (jOf g P E)) {π : ByteArray}
     refine ⟨Finset.mem_range.2 hj, ?_⟩
     rw [hcom i hiτ _ hj]
     simp only
-    rw [hivX, extractKey_pre_eq E hpost (.h21, x) _ i _ (fun hxJ => hwH hxJ i hiτ _ hj),
+    rw [hkp x hxmu i hiτ _ hj _ (hcom i hiτ _ hj) (fun hxJ => hwH hxJ i hiτ _ hj), hivX,
       @comAt_reconstruct_hidden (icPrg E.cipher) _ _ _ _ hr _ hiτ]
     simp only [knownOf, Finset.mem_filter, Finset.mem_univ, true_and] at hi
     simpa using hi
 
-/-- **`hsame` of `ROM/Accept.lean` for the joint game**, with the chain data of
-`ROM/CipherChain.lean`, the hits `chainHit` and the failure event Post (`PostOut`). -/
-theorem sameChainHyp_ic : @SameChainHyp (icPrg E.cipher) (β × QueryLog specIC) T st
+/-- **`hsame` of `ROM/Accept.lean` for the joint game, for any failure event that implies the
+keys committed at the `H₂¹` inputs are found before them** (`KeysPre`), with the chain data of
+`ROM/CipherChain.lean` and the hits `chainHit`. -/
+theorem sameChainHyp_ic_of (cf : Out (β × QueryLog specIC) → Prop)
+    (hcf : ∀ g, ¬cf (evalWithAnswerFn (QueryImpl.ofFn g) (gameIC T st P E)) →
+      KeysPre st E (jOf g P E) (gLog T st P E g) g) :
+    @SameChainHyp (icPrg E.cipher) (β × QueryLog specIC) T st
     (proverIC st E P) (preOf T st P E) (midOf T st P E) (accOf T st P E) (deadOf T st P E)
-    (chainHit T st P E) (PostOut E) := by
+    (chainHit T st P E) cf := by
   let _ : HasPrg := icPrg E.cipher
   intro g
   dsimp only
+  intro hacc hcfr
+  have hkp := hcf g hcfr
+  revert hacc
   have e1 := gameIC_fst T st P g E
   have etr := gameIC_tr T st P g E
   have ek := gameIC_keys T st P E g
   have ekn := gameIC_known T st P E g
-  have eaux := gameIC_aux T st P g E
-  simp only [gameIC] at e1 etr ek ekn eaux
-  unfold PostOut
-  rw [etr, ek, ekn, eaux, e1]
-  intro hacc hpost hh leaves hr
+  simp only [gameIC] at e1 etr ek ekn
+  rw [etr, ek, ekn, e1]
+  intro hacc hh leaves hr
   obtain ⟨hf, leaves', hr0, -⟩ := (accept_iff _ T st (πOf g P E)).1 hacc
   have hiv := (verify_iv_chal1 _ T st _ hacc hr0).1
   rw [hiv] at hr
   have hHs : ∀ k w, ((Hashes.ofTable g).hash k w).size = k.outLen := fun k w => by simp
   obtain ⟨hcom, hwH, hF3, hF4, hO3, hO4⟩ := chain_ident T st P E g hh _ hacc hr
-  exact sameChain_core T st P E g hpost hf hr rfl rfl rfl rfl rfl rfl rfl
+  exact sameChain_core T st P E g hkp hf hr rfl rfl rfl rfl rfl rfl rfl
     (size_mu1 _ hHs st) (hHs _ _) rfl (Prob.Bytes.size_ba _)
     (by show (voleHashReceiver _ _ _ _ _ _).size = 4; simp [voleHashReceiver]) rfl
     (Prob.Bytes.size_ba _) hcom hwH hF3 hF4 hO3 hO4 (by unfold deadOf ivE; rw [hr])
 
-/-- **`hL2` (L2(a)) of `ROM/Accept.lean` for the joint game**: outside Post and an opened dead
-leaf, the accepted `Δ` hides every committed dead leaf. A non-hidden committed dead leaf has the
-reconstruction's key `s'` as its key (binding of the commitment); either `P` queried `s'` at one of
-the leaf's points, after `x` (a Post), or never (an opened dead leaf). -/
-theorem deadHiddenHyp_ic : @DeadHiddenHyp (icPrg E.cipher) (β × QueryLog specIC) T st
-    (proverIC st E P) (deadOf T st P E) (chainHit T st P E) (PostOut E) (DeadOpenOut st E) := by
+/-- Outside Post (PRF view), the keys committed at the `H₂¹` inputs are found before them. -/
+theorem keysPre_of_not_postOut (g : Table)
+    (hpost : ¬PostOut E (evalWithAnswerFn (QueryImpl.ofFn g) (gameIC T st P E))) :
+    KeysPre st E (jOf g P E) (gLog T st P E g) g :=
+  keysPre_of_not_postJ (by
+    have eaux := gameIC_aux T st P g E
+    unfold PostOut at hpost
+    rwa [eaux] at hpost)
+
+/-- **`hsame` of `ROM/Accept.lean` for the joint game**, with the chain data of
+`ROM/CipherChain.lean`, the hits `chainHit` and the failure event Post (`PostOut`). -/
+theorem sameChainHyp_ic : @SameChainHyp (icPrg E.cipher) (β × QueryLog specIC) T st
+    (proverIC st E P) (preOf T st P E) (midOf T st P E) (accOf T st P E) (deadOf T st P E)
+    (chainHit T st P E) (PostOut E) :=
+  sameChainHyp_ic_of T st P E (PostOut E) (keysPre_of_not_postOut T st P E)
+
+/-- **`hL2` (L2(a)) of `ROM/Accept.lean` for the joint game, for any failure event that implies
+`KeysPre`**: outside it and an opened dead leaf, the accepted `Δ` hides every committed dead leaf.
+A non-hidden committed dead leaf has the reconstruction's key `s'` as its key (binding of the
+commitment); either `P` queried `s'` at one of the leaf's points, after `x` (excluded by
+`KeysPre`), or never (an opened dead leaf). -/
+theorem deadHiddenHyp_ic_of (cf : Out (β × QueryLog specIC) → Prop)
+    (hcf : ∀ g, ¬cf (evalWithAnswerFn (QueryImpl.ofFn g) (gameIC T st P E)) →
+      KeysPre st E (jOf g P E) (gLog T st P E g) g) :
+    @DeadHiddenHyp (icPrg E.cipher) (β × QueryLog specIC) T st
+    (proverIC st E P) (deadOf T st P E) (chainHit T st P E) cf (DeadOpenOut st E) := by
   let _ : HasPrg := icPrg E.cipher
   intro g
   dsimp only
+  intro hacc hcfr
+  have hkp := hcf g hcfr
+  revert hacc
   have e1 := gameIC_fst T st P g E
   have etr := gameIC_tr T st P g E
   have eaux := gameIC_aux T st P g E
   simp only [gameIC] at e1 etr eaux
-  unfold PostOut DeadOpenOut
+  unfold DeadOpenOut
   rw [etr, eaux, e1]
-  intro hacc hpost hdead hh i j hj
+  intro hacc hdead hh i j hj
   obtain ⟨hf, leaves, hr0, -⟩ := (accept_iff _ T st (πOf g P E)).1 hacc
   have hiv := (verify_iv_chal1 _ T st _ hacc hr0).1
   have hr : BAVC.reconstruct (ivE g st P E) (Proof.opening ⟨st.params, πOf g P E⟩)
@@ -850,14 +907,19 @@ theorem deadHiddenHyp_ic : @DeadHiddenHyp (icPrg E.cipher) (β × QueryLog specI
   have hivX : ivX st (runX (Hashes.ofTable g) st (πOf g P E) leaves) g = ivE g st P E := by
     simp only [ivX, ivE, ivOf, runX]
     rw [xIvPre_chal1Input hf (size_mu1 _ hHs st) (hHs _ _)]
+  have hxmu : (runX (Hashes.ofTable g) st (πOf g P E) leaves).extract 0 32 =
+      st.mu1 (Hashes.ofTable g) := by
+    simp only [runX]
+    exact extract_mu_chal1Input (size_mu1 _ hHs st)
   rw [hdeadOf] at hj
   unfold deadAtX deadPre at hj
   rw [Finset.mem_filter] at hj
   obtain ⟨hjr, hjd⟩ := hj
   have hjlt : j < 2 ^ BAVC.kOf i := Finset.mem_range.1 hjr
-  rw [hcom i i.isLt j hjlt, hivX] at hjd
+  rw [hcom i i.isLt j hjlt] at hjd
   simp only at hjd
-  rw [extractKey_pre_eq E hpost _ _ i _ (fun hxJ => hwH hxJ i i.isLt j hjlt)] at hjd
+  rw [hkp _ hxmu i i.isLt j hjlt _ (hcom i i.isLt j hjlt)
+    (fun hxJ => hwH hxJ i i.isLt j hjlt), hivX] at hjd
   by_contra hne
   have hne' : j ≠ BAVC.deltaIndex (Proof.delta ⟨st.params, πOf g P E⟩) i := Ne.symm hne
   have hsz := leafKey_size hr i.isLt hjlt hne'
@@ -877,6 +939,12 @@ theorem deadHiddenHyp_ic : @DeadHiddenHyp (icPrg E.cipher) (β × QueryLog specI
     refine ⟨hacc, leaves, ?_, i, i.isLt, j, hjlt, hne', ?_⟩
     · rw [hiv]; exact hr0
     · rw [hiv]; exact hc
+
+/-- **`hL2` (L2(a)) of `ROM/Accept.lean` for the joint game**: outside Post and an opened dead
+leaf, the accepted `Δ` hides every committed dead leaf. -/
+theorem deadHiddenHyp_ic : @DeadHiddenHyp (icPrg E.cipher) (β × QueryLog specIC) T st
+    (proverIC st E P) (deadOf T st P E) (chainHit T st P E) (PostOut E) (DeadOpenOut st E) :=
+  deadHiddenHyp_ic_of T st P E (PostOut E) (keysPre_of_not_postOut T st P E)
 
 end SameIC
 

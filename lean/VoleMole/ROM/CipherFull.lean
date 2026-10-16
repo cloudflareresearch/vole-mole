@@ -191,10 +191,11 @@ lemma preCells_comb (M : ℕ) (y : ByteArray) (g : Table) (x : ByteArray) (v : A
 /-- **The combination cell of the accepted chain is fresh, without hits** (`CombFreshHyp` for the
 joint game): a combination input `chal2 ‖ dst` queried before the verifier's `H₂²` input `y` would
 make the `H₂²` answer at `y` a hit. -/
-theorem combFreshHyp_ic {M : ℕ} {dst : ByteArray} (hcomb : st.comb = some (M, dst))
-    (C : CombData st M) (hpre : C.pre = preCells T st P E) (hdst : C.dst = dst) :
+theorem combFreshHyp_ic_of {M : ℕ} {dst : ByteArray} (hcomb : st.comb = some (M, dst))
+    (C : CombData st M) (hpre : C.pre = preCells T st P E) (hdst : C.dst = dst)
+    (cf : Out (β × QueryLog specIC) → Prop) :
     @CombFreshHyp (icPrg E.cipher) (β × QueryLog specIC) M T st C (proverIC st E P)
-      (chainHit T st P E) (PostOut E) := by
+      (chainHit T st P E) cf := by
   let _ : HasPrg := icPrg E.cipher
   intro g
   dsimp only
@@ -215,6 +216,13 @@ theorem combFreshHyp_ic {M : ℕ} {dst : ByteArray} (hcomb : st.comb = some (M, 
   simp only [hitTargets, List.mem_append, combTargets, hcomb]
   refine Or.inr (List.mem_map.2 ⟨(g (.h22, y)).ba ++ dst, mem_kindIns hmem, ?_⟩)
   exact ByteArray.extract_append_eq_left (Prob.Bytes.size_ba _).symm
+
+/-- `combFreshHyp_ic_of` with the failure event Post. -/
+theorem combFreshHyp_ic {M : ℕ} {dst : ByteArray} (hcomb : st.comb = some (M, dst))
+    (C : CombData st M) (hpre : C.pre = preCells T st P E) (hdst : C.dst = dst) :
+    @CombFreshHyp (icPrg E.cipher) (β × QueryLog specIC) M T st C (proverIC st E P)
+      (chainHit T st P E) (PostOut E) :=
+  combFreshHyp_ic_of T st P E hcomb C hpre hdst (PostOut E)
 
 /-- The hits of a combined relation: the issue relations' plus the earlier combination inputs. -/
 noncomputable def chainHitEpsComb (q : Kind → ℕ) (M : ℕ) : ℝ≥0∞ :=

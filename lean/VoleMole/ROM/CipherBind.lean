@@ -24,7 +24,9 @@ uniform table.
 * **PRP vs PRF.** The switching lemma would cost `q_E²/2¹²⁹`, far more than the bound below, so it
   is not the route: in the permutation model with inverse queries the same argument goes through
   with `2⁻¹²⁸` per fresh answer replaced by `p = 1/(2¹²⁸ − q_E)` (a fresh forward or inverse answer
-  is uniform over at least `2¹²⁸ − q_E` values; `L0-L2` §3.1). That version is not formalized.
+  is uniform over at least `2¹²⁸ − q_E` values; `L0-L2` §3.1). That version is
+  `ROM/PermBind.lean` (`prEvent_perm_coll_le`, `2·q_E²·p²`): the event `collBad` below is
+  unchanged, evaluated on the records of a prover with forward and inverse queries.
 
 ## The collision event and its bound
 

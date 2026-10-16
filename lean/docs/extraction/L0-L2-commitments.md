@@ -583,5 +583,24 @@ any realistic budget.
   committed chain with garbage keys at dead leaves, which a prover using the garbage key at a hidden
   dead leaf makes all of `chal3`; plan §2e F2). L2(c) is then deterministic, and L2(a) follows from
   Post and the opened-dead-leaf bound. The resulting soundness bounds for all five relations have
-  no remaining hypothesis (`*_accept_le_full`). Still paper only: inverse cipher queries and the
-  permutation model, and statement binding for adaptively chosen statements.
+  no remaining hypothesis (`*_accept_le_full`); with adaptively chosen statements, plus the
+  statement-binding term (`*_accept_le_adaptive`, plan §2g).
+- **The permutation model of §3.1 is now in Lean too** (`ROM/PermModel.lean` … `ROM/PermAdapt.lean`;
+  plan §2h): `E` a family of independent uniform permutations (drawn eagerly), the prover making
+  forward and inverse queries, the extractor reading the records `(k, z, E_k(z))` of both kinds
+  (§6), with N1 as a normalized prover (the `H₄` query of `iv` before each `H₂¹` query; N2 is not
+  needed, the verifier and the extractor read the table). The per-fresh-value factor is exactly
+  `p = 1/(2¹²⁸ − q_E)` (`q_E` the prover's queries; a record charged at index `n` has at most
+  `n < q_E` protected inputs), except for the opened dead leaf whose leaf hash the prover queried,
+  where the verifier's `2·2303` GGM points are protected too: `p' = 1/(2¹²⁸ − q_E − 4607)`. The
+  terms: `Coll_E` and Cross `≤ 2·q_E²·p²` (the C2-type event, charged at the second key's first
+  record, forward or inverse); the dead-leaf guess `≤ q₁·p'²`; C3(b)/Post `≤ q_E·4608·q₂₁·p²`
+  (`2L·q₂₁·q_E·p²`, below the paper's `8L·q₂·q_E·p²`), for all five relations, fixed and
+  adaptively chosen statements (`*_accept_le_perm`, `*_accept_le_adaptive_perm`). No PRP/PRF
+  switching term. **Finding F3**: the Lean PRF-view Post of plan §2f (a record first at both
+  points of a key whose values form a block of an earlier `H₁` input, at any points) is *not*
+  small with inverse queries (query `E_κ⁻¹(t₀)` for a target block `(t₀, t₁)` and hope for
+  `E_κ(E_κ⁻¹(t₀) ⊞ e₀) = t₁`: about `q_E·2⁻¹²⁸`); C3's half-targets must be tied to their points,
+  `x^Θ_{c,i}` of the chain `Θ` whose committed commitment they are, as in §4. The point-tied Post
+  (`PostP`) needs `iv_Θ` in the log at `Θ`, i.e. N1. Still paper: C1 (not needed), and the
+  verifier's and extractor's own evaluations counted in `q_E` (they are table reads here).

@@ -10,7 +10,11 @@ relations, `Pr[accept ∧ ¬Extracted]` is bounded by an explicit function of th
 alone (`ROM/CipherFull.lean`, `*_accept_le_full`). **Adaptively chosen statements (§2g)**: for the
 five relations the prover may output the statement with its proof; the bound is the `_full` one
 plus the statement-binding term `(q₀+3)(q₂₁+q₀+4)·2⁻²⁵⁶` (`(q₀+3)(q₂₂+q₀+4)·2⁻²⁵⁶` for PomFRIT's
-delayed binding; `*_accept_le_adaptive`). Scope: the classical (ROM + ideal cipher) proof of knowledge
+delayed binding; `*_accept_le_adaptive`). **The permutation model with inverse queries (§2h)**: the
+same results with AES an ideal cipher as random permutations, the prover making forward and
+inverse queries and the extractor reading the forward-and-inverse records (`*_accept_le_perm`,
+`*_accept_le_adaptive_perm`, all five relations), with `p = 1/(2¹²⁸ − q_E)` per fresh cipher value
+in place of `2⁻¹²⁸` and a point-tied Post (finding F3); no PRP/PRF switching term. Scope: the classical (ROM + ideal cipher) proof of knowledge
 of `docs/extraction/README.md`. The ZK hybrids (`docs/zk.md` §10, "proved only on paper") and the
 QROM documents (Q1–Q7) are out of scope here. Notes on ZK are at the end.
 
@@ -407,8 +411,8 @@ statement as before. No executable definition changed. `#print axioms` of the ma
   permutation. **PRP/PRF:** the switching lemma costs `q_E²/2¹²⁹`, much more than the bound below,
   so it is not the route; in the permutation model the same argument runs with `2⁻¹²⁸` per fresh
   answer replaced by `p = 1/(2¹²⁸ − q_E)` (a fresh forward or inverse answer is uniform over at
-  least `2¹²⁸ − q_E` values; L0-L2 §3.1), giving `2·q_E²·p²`. That version, and inverse queries
-  generally, are on paper only.
+  least `2¹²⁸ − q_E` values; L0-L2 §3.1), giving `2·q_E²·p²`. That version, with inverse
+  queries, is §2h (eager uniform permutations, no lazy permutation oracle needed).
 - **The union bound with a cache-reading bad event** (`ROM/FreshCache.lean`). VCVio's
   `freshBadQuery` tests a fresh query with a predicate of the table only; a collision bound needs
   to know which cells were queried before. `freshBadC oa c g bad`: some log entry, at a cell not in
@@ -674,7 +678,7 @@ combination inputs (`combFreshHyp_ic`, `preCells`, `midOf_comb`).
 
 **Not covered.** The statement is fixed in these games; adaptively chosen statements are §2g. The
 cipher is a random function (PRF view) with forward queries only; the permutation model with
-inverse queries (`p = 1/(2¹²⁸−q_E)`) is on paper.
+inverse queries (`p = 1/(2¹²⁸−q_E)`) is §2h.
 
 ### 2g. M6, fourth part: adaptively chosen statements (statement binding), as implemented
 
@@ -789,6 +793,107 @@ earlier `H₂⁰` answer (`stmtHitD`, `≤ (n₂₂+n₀)·2⁻²⁵⁶`), and t
 The bound: the bound of `pomfritRedeem_accept_le_full` plus
 `stmtBindEpsD q = (q₀+3)·(q₂₂+1 + q₀+3)·2⁻²⁵⁶`, for any family `(sigF s, msgF s)`.
 
+### 2h. M6, fifth part: the ideal cipher as random permutations, with inverse queries
+
+Files: `ROM/PermModel.lean`, `ROM/PermCount.lean`, `ROM/PermBind.lean`, `ROM/PermOpen.lean`,
+`ROM/PermPost.lean`, `ROM/PermFull.lean`, `ROM/PermAdapt.lean` (new); changed:
+`ROM/CipherSame.lean` (`KeysPre`; `sameChain_core` takes it in place of `¬PostJ`;
+`sameChainHyp_ic_of`, `deadHiddenHyp_ic_of` for any failure event implying it, the old theorems
+derived), `ROM/CipherFull.lean` (`combFreshHyp_ic_of`), `ROM/AdaptChain.lean`, `ROM/AdaptComb.lean`,
+`ROM/AdaptPomfrit.lean`, `ROM/AdaptFull.lean` (the per-table adaptive bounds take any such failure
+event; the PRF-view theorems pass `PostOut` and are unchanged). No executable definition changed.
+`#print axioms` of the ten new main results: `propext`, `Classical.choice`, `Quot.sound`.
+
+**The model** (`L0-L2` §3.1). `PTable = Blk → Perm Blk`, drawn uniformly (eagerly; its cardinality
+is never computed). The prover `P : OracleComp specP _` queries the hashes and the cipher forward,
+`(true, (k, z)) ↦ π_k(z)`, or inverse, `(false, (k, y)) ↦ π_k⁻¹(y)`. The game (`gameP`, adaptive:
+`gameA … (normP p π P) π.fwd`) runs the **normalized prover** `normP p π P`: a forward-only prover
+of the PRF-view spec that answers each inverse query by the forward query at its record
+`(k, π_k⁻¹(y))` and, before every `H₂¹` query `x`, queries `H₄(iv_pre ‖ μ ‖ 4)` parsed from `x`
+(`L0-L2` N1). Against `π.fwd` it outputs what `P` outputs against `π` (`evalWithAnswerFn_normP`),
+its cipher log is the list of records `(k, z, π_k(z))` (forward or inverse) that the straight-line
+extractor reads (`L0-L2` §6), and it makes `P`'s cipher queries and one more `H₄` query per
+`H₂¹` query (`isQueryBoundP_right_normP`, `isKindQueryBound_normP`, `isQueryBoundP_left_normP`).
+
+**The route** (A, direct, eager). Per permutation table the game is `gameIC` for a forward prover
+(`normP p π P`) at the table `π.fwd`, so every per-table lemma of §2c–§2g applies unchanged (all
+hash bounds, `binds_or_coll_or_dead`, `chain_ident`, the ladder, …). Only the three bounds averaged
+over the cipher are redone: binding (`collBad`), the opened dead leaf whose leaf hash the prover
+queried (`DeadQueried`), and Post. A generic transfer from the PRF-view theorems is not possible
+(they average over a uniform function table for a fixed prover; here the forward prover depends on
+`π`), and PRP/PRF switching (`q_E²/2¹²⁹`) is avoided. No lazy permutation oracle is built: the
+eager table with the record congruences of `normP` suffices.
+
+* **Records** (`ROM/PermModel.lean`). `normP_prefix`: a table agreeing with `σ` on the records of a
+  log prefix gives the same prefix, followed by a cipher query *under the same key* (an inverse
+  query's input may change); `normP_congr`: agreeing on all records gives the same run;
+  `normP_h4_mem`: N1.
+* **The counting core** (`ROM/PermCount.lean`, `prEvent_perm_two_le`): targets `j` naming two
+  inputs `z₁ ≠ z₂` of the key `k σ` outside a protected set `X σ` (`≤ r` inputs) and two values;
+  if changing `σ_{kσ}` off `X σ` keeps the key and the targets, then
+  `Pr[∃ j, σ_{kσ}(z₁) = y₁ ∧ σ_{kσ}(z₂) = y₂] ≤ K/((2¹²⁸−r)(2¹²⁸−r−1)) ≤ K·p_{r+1}²`. Proof by double
+  counting (`card_sum_mul_le`): each event table has the `(2¹²⁸−r)(2¹²⁸−r−1)` neighbours
+  `τ ∘ σ_{kσ}` (`tau`: two transpositions moving `y₁, y₂` to any distinct `a₁, a₂ ∉ σ_{kσ}(X σ)`),
+  each neighbour recovers `σ` from the target, and each table has at most `K` targets.
+* **Events charged at one record** (`ROM/PermBind.lean`, `prEvent_perm_prefix_le`): the `n`-th
+  record's key `κ` (prefix-determined, whether the query was forward or inverse) and a target of
+  the prefix with both inputs unrecorded under `κ`: protected set the prefix's inputs under `κ`
+  (`≤ n < q_E`), so `p = 1/(2¹²⁸ − q_E)` exactly as `L0-L2` §3.1.
+* **Binding** (`prEvent_perm_coll_le`): the PRF view's `collBad`, unchanged, on the records; its
+  targets at record `n` are four per earlier record of another key (`collT`; the neighbour
+  relation is symmetric, `prv_nxt`, `nxt_prv`, from the CTR byte layout), so
+  `Σ_{n<q_E} 4n·p² ≤ 2·q_E²·p²` (the PRF view's `2·q_E²·2⁻²⁵⁶`).
+* **`ε_open`** (`ROM/PermOpen.lean`): the dead leaf's two cells are a two-value guess for the dead
+  key with protected set its records and the `2·2303` GGM points (changing the dead key's
+  permutation there could change the verifier's tree): `prEvent_perm_deadQueried_le_g`
+  `≤ q₁·p'²`, `p' = 1/(2¹²⁸ − q_E − 4607)`; `prEvent_jointP_deadOpen_le`
+  `≤ openHashEps q + q₁·p'²` (the hash ladder per table, as before). The statement may depend on
+  the normalized prover's output (adaptive case).
+* **Finding F3 (the PRF view's Post fails with inverse queries).** `PostJ` (§2f) charges a record
+  that is the first one of its key at `w` and a neighbour `w'` and whose values form a block of an
+  earlier `H₁` input, at *any* points. A prover that picks a target block `(t₀, t₁)` and queries
+  `π_κ⁻¹(t₀)` for fresh keys `κ` wins whenever `π_κ(π_κ⁻¹(t₀) ⊞ e₀) = t₁`: probability about
+  `2⁻¹²⁸` per query, so `Pr[PostJ] ≈ q_E·2⁻¹²⁸` (not small). The extraction argument does not need
+  that event: only half-targets **tied to their points** (`L0-L2` C3). **`PostP`**
+  (`ROM/PermPost.lean`): for every `H₂¹` input `x` of the prefix, its `iv` (the `H₄` answer that
+  N1 put in the log before `x`), every leaf `(i, j)` of the commitments committed at `x`
+  (`comPre` on the prefix's hash entries), the points `lp iv i 0`, `lp iv i 1` and the two halves
+  in both orders (`halfT`, `≤ 4608` per `H₂¹` input); a record whose key maps both points of a
+  half-target, unrecorded before, to its values. `prEvent_perm_postP_le`:
+  `≤ q_E·4608·q₂₁·p²` (the paper's `8·L·q₂·q_E·p²`; quadratic, as the PRF view's
+  `1024·q_E·q₁·2⁻²⁵⁶`). `keysPre_of_not_postP_gen`: outside `PostP` the keys of the commitments
+  committed at an `H₂¹` input (whose `μ` field is the statement's) are found before it
+  (`KeysPre`), which is all `sameChain_core` and `deadHiddenHyp_ic` used of `¬PostJ`.
+* **Assembly** (`ROM/PermFull.lean`, `ROM/PermAdapt.lean`): per table the `ROM/Accept.lean` bound
+  (resp. `prEvent_accept_le_adaptive_E`, `_comb_E`, `_pomfrit_E`) for `normP p π P` with
+  `chainFail := PostPOut`, then the average over `π` with the three bounds above
+  (`prEvent_jointP_le_explicit`, `prEvent_avgP_le_add3`, the bridge `prEvent_jointP_le_add`).
+
+**The result.** For a prover with at most `q_E` cipher queries (forward or inverse), `q k` hash
+queries of kind `k` (total `n` for the combined relations), `p = 1/(2¹²⁸ − q_E)`,
+`p' = 1/(2¹²⁸ − q_E − 4607)`:
+
+    Pr[accept ∧ ¬Extracted] ≤ (q₂₁+1)·2⁻¹⁵⁰ + (q₂₂+1)·ε₂ + (q₂₃+1)·N·2⁻¹²⁸
+      + 2·q_E²·p² + 2·(openHashEps q + q₁·p'²) + q_E·4608·q₂₁·p² + chainHitEps q [+ comb]
+
+(`moussakaIssue_accept_le_perm`, `ratatouilleIssue_accept_le_perm`, `moussakaRedeem_accept_le_perm`,
+`ratatouilleSpend_accept_le_perm`, `pomfritRedeem_accept_le_perm`), with `ε₂`, `N`, `openHashEps`,
+`chainHitEps`, `chainHitEpsComb` as in §2f, except that the combined relations' total hash count is
+`n + q₂₁` (N1's `H₄` queries): `ε₂ = ε_QS(n') + 2⁻¹²⁸ + (n + q₂₁ + 339)·2⁻⁴⁴⁸`. With adaptively
+chosen statements, plus `stmtBindEps q` (`stmtBindEpsD q` for PomFRIT), under the hypotheses of §2g
+(`moussakaIssue_accept_le_adaptive_perm`, `ratatouilleIssue_accept_le_adaptive_perm`,
+`moussakaRedeem_accept_le_adaptive_perm`, `ratatouilleSpend_accept_le_adaptive_perm`,
+`pomfritRedeem_accept_le_adaptive_perm`; the normalized prover uses the family's common
+parameters). For `q ≤ 2⁶⁴`: `2·q_E²·p² ≈ 2⁻¹²⁷`, `q_E·4608·q₂₁·p² ≈ 2⁻¹¹⁵·⁸`, `q₁·p'² ≈ 2⁻¹⁹²`.
+
+**Compared with `L0-L2` §4–§5.** `Coll_E` (C2, `10·q_E²·p²`) and Cross (Definition B) are covered
+by `2·q_E²·p²` charged to the prover's records (the verifier's and extractor's evaluations are
+table reads, as in §2d, not counted in `q_E`; the GGM points enter `p'` instead); C3(b)/Post by
+`q_E·4608·q₂₁·p²`; C1 (`E[N_coll]`) is not needed. **Not covered:** the ZK side is still the PRF
+view (`docs/zk.md` §10.1): there the distinguisher reads whole rows, so the hidden paths' rows
+would have to become permutations in `ZK/IdealCipher.lean`'s hybrid, with the switching term for
+the honest evaluations of the hidden keys.
+
 ### M4 — Mathlib bump and VCVio dependency (Phase B, ~1–3 days, mostly waiting on builds) — done
 
 - Bump to `v4.34.0` (separate commit). Fix the breakage. Then `require VCVio` and add
@@ -825,7 +930,7 @@ Subtlety: the "parse a prefix from `x`" functions must be total functions of the
 the RO cache *before* the query). This is where L1's "committed data" enters. In M5 take it as
 given via a hypothesis that the committed keys are a function of the prior log.
 
-### M6 — Ideal cipher, L1/L2, the "same chain" step (Phase B, ~3–6 weeks, optional) — done (PRF view; adaptive statements), see §2d, §2e, §2f, §2g
+### M6 — Ideal cipher, L1/L2, the "same chain" step (Phase B, ~3–6 weeks, optional) — done (PRF view; adaptive statements; permutation model with inverse queries), see §2d, §2e, §2f, §2g, §2h
 
 - Model AES as an ideal cipher: a lazy random *permutation* per key, with forward and inverse
   queries. VCVio has no ready-made ideal cipher that I could find; build it as a stateful
