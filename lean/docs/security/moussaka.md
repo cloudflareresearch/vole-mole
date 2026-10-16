@@ -157,6 +157,12 @@ Let `q` be the adversary's total number of oracle queries, with the per-oracle c
   for per-oracle counts and simultaneity). `E` needs only the query log, with no rewinding and no
   programming. With L7, the extracted witness satisfies the **stated** relation: the Keccak
   opening, the one-hot selector, and `P_u(s) = Com(…)` in all 45 components.
+  [Lean] for one proof, classical, in the random-oracle and ideal-cipher model, with a fixed or
+  adaptively chosen statement: the decoded witness is in the spec relation (`IssueRelW`,
+  `RedeemRelW`) except with the bounds of `lean/VoleMole/ROM/SpecSound.lean`
+  (`moussakaIssue_accept_le_full_spec`, `moussakaRedeem_accept_le_adaptive_spec`, …; for `t` of 45
+  bytes, `nf` of 24, contexts of 16; adaptive families with injective encodings, proved for
+  fixed-length fields and fixed Anchors' digests, `EndToEnd/SpecRelations.lean`).
 - **Weak SE w.r.t. adaptively chosen statements** (L8, Theorem L8): `ε_SE^R = ε_ext^R + ε_prog +
   ε_hk + ε_H + ε_eq`.
 - **ZK** (lean/docs/zk.md §3). On `main`:

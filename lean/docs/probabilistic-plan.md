@@ -745,9 +745,15 @@ the dead leaf's cells changes neither `P`'s run nor its statement): the fixed-st
 `moussakaIssue_accept_le_adaptive`, `ratatouilleIssue_accept_le_adaptive`,
 `moussakaRedeem_accept_le_adaptive`, `ratatouilleSpend_accept_le_adaptive`; PomFRIT below): for a
 family of instances `inst : ι → …` (one `labelRows`) with injective instance encodings (`hinj`;
-for Moussaka issuance with `t` of fixed length it is `Audit.hinj_moussakaIssue`, from
-`Spec.Moussaka.issueEncode_inj`; for the other relations no family with more than one instance
-is shown to satisfy it in Lean, `redeemEncode_inj` being the corresponding spec-level fact):
+discharged for fixed-length families in `EndToEnd/SpecRelations.lean`: Moussaka issuance with `t`
+of fixed length, `hinj_moussakaIssue_of` (= `Audit.hinj_moussakaIssue`), from
+`Spec.Moussaka.issueEncode_inj`; Moussaka redemption with 32-byte key digests, fewer than 256
+Anchors, fixed-length `nf` and contexts and the family injective on `(digests, nf, ctx_iss,
+ctx_red, challenge_digest)`, `hinj_moussakaRedeem`, from `redeemEncode_inj`; Ratatouille issuance
+with fixed-length `c` and `t_init < 2⁶⁴`, `hinj_ratatouilleIssue` (with `le64_inj`); Ratatouille
+spend with fixed-length digest, `nf`, `c_next` and `d < 2⁶⁴`, injective on `(dig(pk), nf, d,
+c_next, ctx_iss)`, `hinj_ratatouilleSpend`; for spec-typed families `hinj_ratatouilleIssue_spec`,
+`hinj_ratatouilleSpend_spec`; examples with many instances in `Audit/Nonvacuous.lean`):
 
     Pr[accept(stF s) ∧ ¬Extracted(stF s)] ≤ (the `_full` bound) + stmtBindEps q,
     stmtBindEps q = (q₀+3)·(q₂₁+1 + q₀+3)·2⁻²⁵⁶,
@@ -896,6 +902,35 @@ view (`docs/zk.md` §10.1): there the distinguisher reads whole rows, so the hid
 would have to become permutations in `ZK/IdealCipher.lean`'s hybrid, with the switching term for
 the honest evaluations of the hidden keys.
 
+### 2i. Soundness for the spec relations, as implemented
+
+Files: `EndToEnd/SpecRelations.lean`, `ROM/SpecSound.lean`.
+
+Every bound above is for `¬Extracted st Wit`, `Wit` the *arithmetized* relation of
+`EndToEnd/Relations.lean` (`moussakaIssueWit`, …): bits on the witness rows whose decoded fields
+satisfy the `Arith/*` relation, stated on byte functions (`fnOf`, zero beyond the end; e.g.
+`t = Com(…)` on the first 45 bytes of `t`). `EndToEnd/SpecRelations.lean` proves the converse of
+the spec → arithmetized direction (`Privacy/*Lean.lean`): for well-formed instances an
+arithmetized witness *decodes* to a witness of the spec relation (`issueRelW_of_wit`,
+`redeemRelW_of_wit`, `issueRel_of_witB`, `spendRel_of_witB`, `pomRel_of_wit`; the decoded witness
+reads the candidate's bits `w i = 1` at the `Arith` layout, `bitsOf_eq` showing they are the
+relation's bits). For the relations whose spec witness contains the committed Keccak states
+(Moussaka's two), the spec witness is the encoding of the decoded fields with the states
+recomputed (`issueWitOf`, `redeemWitOf`): the arithmetized predicates do not record the states,
+although the systems force them (`Arith.Keccak.qsKeccak_holds_iff_bytes`). Keccak-p[800]
+soundness itself was already complete (`Arith.Keccak.qsKeccak_sound`: the outputs are
+Keccak-p[800,12] of the input); nothing about it is assumed.
+
+`ROM/SpecSound.lean` then has, for each of the 20 headline theorems `X` (`_full`, `_perm`,
+`_adaptive`, `_adaptive_perm` of the five relations), `X_spec` with the same bound for "the decoded
+witness of no known tree is in the spec relation" (monotonicity, `prEvent_bind_mono`,
+`extracted_mono`). Extra hypotheses: Moussaka issuance `|t| = 45`, `|ctx_iss| = 16`; Moussaka
+redemption `|nf| = 24`, contexts of 16 bytes; Ratatouille issuance `t_init < 2⁶⁴` (the spec
+instance `issueInstOf` reads `c`, `ctx_iss` as 32- and 16-byte vectors, `spendInstOf` likewise);
+none for spend and PomFRIT (the spec relation `PomRel`: `P(s) = h ⊕ r` with `h` the verifier's
+target `pomfritTarget` at its `chal1`, which is `Spec.PomFRIT.hashToTarget` in `main`'s layout).
+The adaptive versions keep `hinj` (above).
+
 ### M4 — Mathlib bump and VCVio dependency (Phase B, ~1–3 days, mostly waiting on builds) — done
 
 - Bump to `v4.34.0` (separate commit). Fix the breakage. Then `require VCVio` and add
@@ -932,7 +967,7 @@ Subtlety: the "parse a prefix from `x`" functions must be total functions of the
 the RO cache *before* the query). This is where L1's "committed data" enters. In M5 take it as
 given via a hypothesis that the committed keys are a function of the prior log.
 
-### M6 — Ideal cipher, L1/L2, the "same chain" step (Phase B, ~3–6 weeks, optional) — done (PRF view; adaptive statements; permutation model with inverse queries), see §2d, §2e, §2f, §2g, §2h
+### M6 — Ideal cipher, L1/L2, the "same chain" step (Phase B, ~3–6 weeks, optional) — done (PRF view; adaptive statements; permutation model with inverse queries; spec relations), see §2d, §2e, §2f, §2g, §2h, §2i
 
 - Model AES as an ideal cipher: a lazy random *permutation* per key, with forward and inverse
   queries. VCVio has no ready-made ideal cipher that I could find; build it as a stateful

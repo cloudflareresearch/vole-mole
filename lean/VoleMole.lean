@@ -43,6 +43,7 @@ import VoleMole.EndToEnd.Core
 import VoleMole.EndToEnd.Degree
 import VoleMole.EndToEnd.Relations
 import VoleMole.EndToEnd.Concrete
+import VoleMole.EndToEnd.SpecRelations
 import VoleMole.Arith.Pqov
 import VoleMole.Arith.Concrete
 import VoleMole.Arith.ConcreteField
@@ -124,6 +125,7 @@ import VoleMole.ROM.PermOpen
 import VoleMole.ROM.PermPost
 import VoleMole.ROM.PermFull
 import VoleMole.ROM.PermAdapt
+import VoleMole.ROM.SpecSound
 import VoleMole.ROM.TableReads
 import VoleMole.ROM.PrivacyReads
 import VoleMole.Privacy.Basic

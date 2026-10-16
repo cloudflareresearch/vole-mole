@@ -212,6 +212,12 @@ example of the latter is Moussaka, whose targets are KP800 outputs with DST "mou
   - At `q = 2⁶⁴`, `ε_ext ≈ 2^{−60.8}`.
   - Both Ratatouille relations have degree 9. Their chains are separated by the relation DSTs in
     `mu`, so one `ε_ext` with total query counts covers both.
+  - [Lean] for one proof, classical, in the random-oracle and ideal-cipher model, with a fixed or
+    adaptively chosen statement: the decoded witness is in `R_iss`, `R_spend`
+    (`Spec.Ratatouille.IssueRel`, `SpendRel`) except with the bounds of
+    `lean/VoleMole/ROM/SpecSound.lean` (`ratatouilleIssue_accept_le_full_spec`,
+    `ratatouilleSpend_accept_le_adaptive_spec`, …; adaptive families with injective encodings,
+    proved for fixed-length fields and a key fixed by its digest, `EndToEnd/SpecRelations.lean`).
 - **L7.** A satisfying witness satisfies V1–V4 exactly: `P(s) = Tag(Com(nf, ctx, t, r), x)`,
   `c' = Com(nf', ctx, t', r')`, and `t + x = t' + d` in ℤ with `t, x, t', d ∈ [0, 2⁶⁴)`. This
   holds because the 65-bit adder is exact (`L7-keccak.md` §4.4). The issue relation gives
