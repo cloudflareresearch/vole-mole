@@ -17,7 +17,7 @@ using namespace vole_mole;
 int main() {
     // Key generation.
     const uov::SecretKey sk(uov::generate_secret_key_bytes());
-    const uov::PublicKey pk(sk.public_key());
+    const uov::PublicKey pk(sk.public_key_bytes());
 
     // Issue.
     //

@@ -58,7 +58,7 @@ using namespace vole_mole;
 
 // Issuer: generate a key pair once and publish pk.
 const uov::SecretKey sk(uov::generate_secret_key_bytes());
-const uov::PublicKey pk(sk.public_key());
+const uov::PublicKey pk(sk.public_key_bytes());
 
 // Client: blind the message. The Issuer never sees msg.
 auto [pending, request] = pomfrit::issue_request(pk, msg);

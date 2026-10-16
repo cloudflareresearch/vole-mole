@@ -62,7 +62,7 @@ int main() {
     }
     std::vector<uov::PublicKey> anchor_pks;
     for (const uov::SecretKey& sk : anchor_sks) {
-        anchor_pks.emplace_back(sk.public_key());
+        anchor_pks.emplace_back(sk.public_key_bytes());
     }
 
     // The Moderator remembers the nullifier of every token it accepts, for as long as it accepts

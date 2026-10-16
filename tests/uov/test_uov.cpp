@@ -84,7 +84,7 @@ TEST(Uov, DerivePreimageIsDeterministic) {
 TEST(Uov, SecretKeyExpansionIsDeterministic) {
     const auto& [pk, sk] = uov_key_pair();
     const uov::SecretKey sk2(UOV_SK_BYTES);
-    EXPECT_EQ(to_hex(sk2.public_key()), to_hex(sk.public_key()));
+    EXPECT_EQ(to_hex(sk2.public_key_bytes()), to_hex(sk.public_key_bytes()));
     const moussaka::detail::Commitment t = moussaka::detail::commit(NF, CTX_ISS, CTX_RED, R);
     EXPECT_EQ(to_hex(sk2.derive_preimage(t)), to_hex(sk.derive_preimage(t)));
 }
@@ -93,11 +93,11 @@ TEST(Uov, SecretKeyExpansionIsDeterministic) {
 TEST(Uov, PublicKeyDigest) {
     using uov::detail::PublicKeyAccess;
     const auto& [pk, sk] = uov_key_pair();
-    EXPECT_EQ(to_hex(PublicKeyAccess::digest(uov::PublicKey(sk.public_key()))),
+    EXPECT_EQ(to_hex(PublicKeyAccess::digest(uov::PublicKey(sk.public_key_bytes()))),
               to_hex(PublicKeyAccess::digest(pk)));
 
     const uov::SecretKey other(filled<uov::SECRET_KEY_BYTES>(0x61));
-    EXPECT_NE(to_hex(PublicKeyAccess::digest(uov::PublicKey(other.public_key()))),
+    EXPECT_NE(to_hex(PublicKeyAccess::digest(uov::PublicKey(other.public_key_bytes()))),
               to_hex(PublicKeyAccess::digest(pk)));
 }
 
@@ -132,7 +132,7 @@ TEST(Uov, GenerateSecretKeyBytes) {
 
 TEST(Uov, KeysAreMovable) {
     uov::SecretKey sk(UOV_SK_BYTES);
-    const uov::PublicKeyBytes pk_bytes = sk.public_key();
+    const uov::PublicKeyBytes pk_bytes = sk.public_key_bytes();
     uov::SecretKey sk2 = std::move(sk);
     uov::PublicKey pk(pk_bytes);
     uov::PublicKey pk2 = std::move(pk);
@@ -143,7 +143,7 @@ TEST(Uov, KeysAreMovable) {
 TEST(Uov, RejectWrongKey) {
     const auto& [pk, sk] = uov_key_pair();
     const UovKeyPair other(uov::SecretKey{filled<uov::SECRET_KEY_BYTES>(0x61)});
-    EXPECT_NE(to_hex(other.sk.public_key()), to_hex(sk.public_key()));
+    EXPECT_NE(to_hex(other.sk.public_key_bytes()), to_hex(sk.public_key_bytes()));
     const moussaka::detail::Commitment t = moussaka::detail::commit(NF, CTX_ISS, CTX_RED, R);
     EXPECT_NE(to_hex(other.pk.eval(sk.derive_preimage(t))), to_hex(t));
 }
@@ -155,7 +155,7 @@ TEST(Uov, RejectTamperedPublicKey) {
 
     // Both the seed (first 16 bytes) and P3 (the rest) of the compressed key matter.
     for (const size_t i : {size_t{0}, size_t{15}, size_t{16}, uov::PUBLIC_KEY_BYTES - 1}) {
-        uov::PublicKeyBytes bad = sk.public_key();
+        uov::PublicKeyBytes bad = sk.public_key_bytes();
         bad[i] ^= 1;
         EXPECT_NE(to_hex(uov::PublicKey(bad).eval(w)), to_hex(t)) << "flipped a bit of byte " << i;
     }

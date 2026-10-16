@@ -49,13 +49,13 @@ class SecretKey {
     ~SecretKey();
 
     // The compressed public key bytes.
-    const PublicKeyBytes& public_key() const;
+    const PublicKeyBytes& public_key_bytes() const;
 
-    // The expanded public key, i.e., PublicKey(public_key()). It's expanded once when the secret
-    // key is constructed and owned by the key pair; it's not reference counted. The reference
-    // remains valid when the secret key is moved (it then belongs to the moved-to secret key), and
-    // is invalidated when the owning secret key is destroyed or assigned to. Must not be called on
-    // a moved-from secret key.
+    // The expanded public key, i.e., PublicKey(public_key_bytes()). It's expanded once when the
+    // secret key is constructed and owned by the key pair; it's not reference counted. The
+    // reference remains valid when the secret key is moved (it then belongs to the moved-to secret
+    // key), and is invalidated when the owning secret key is destroyed or assigned to. Must not be
+    // called on a moved-from secret key.
     const PublicKey& expanded_public_key() const;
 
     // Derive the preimage of the given target, i.e., P(preimage) = target, where P is the public
