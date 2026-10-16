@@ -36,6 +36,9 @@ continuation that read the block later programmed would need the programming hop
 exact by `pr_program_eq` because the programmed points do not depend on `H₂³`) to pay a collision
 term, bounded by a second application of the theorem (as `pr_preBlk_mem` for the single-phase
 prover), with the tail `ã` of the real prefix hidden from a reader that has seen step 1.
+PomFRIT's blindness game does not need that theorem: `Privacy/PomFRITRAH.lean` takes the Issuer's
+`H₂³` reads out of the game by lazy sampling before the hybrids and bounds the remaining collision
+with this file's theorem (`ZK/CollideAd2.lean`, `pr_tail2A`).
 -/
 
 open Finset

@@ -307,7 +307,8 @@ chal1/chal2 (recommended, not implemented).
 *Statements and interactions that read the tables* (`docs/zk.md` §10.3; `Privacy/Resample.lean`,
 `ZK/HopsPatch.lean`, `ZK/IdealCipherP.lean`, `ZK/AdaptRO.lean`, `Privacy/AdaptiveRO.lean`,
 `ZK/TwoPhaseAd.lean`, `Privacy/MoussakaRA.lean`, `Privacy/RatatouilleRA.lean`,
-`Privacy/PomFRITRA.lean`, `Privacy/PomFRITRAGame.lean`). In §10.2's games only the adversary's
+`Privacy/PomFRITRA.lean`, `Privacy/PomFRITRAGame.lean`, `ZK/CollideAd2.lean`,
+`Privacy/PomFRITRAH.lean`). In §10.2's games only the adversary's
 guess reads the tables. Here its interaction does too.
 - `zk_adaptive` covers an adversary that reads the tables (the proof's `H₃` slice, `H₂³`, `H₅`,
   the cipher, at `s₃`, `s₂`, `s₅`, `s_E` keys, adaptively and consistently) before it picks the
@@ -327,6 +328,17 @@ guess reads the tables. Here its interaction does too.
   continuation, the Issuer's response to the request computed from step 1's output, reads the
   slice, `H₅` and the cipher at keys depending on that output, and these reads are added to the
   budget of the H1, H4 and H6 hops (`εRO(q₃ + q_k3, q₅ + q_k5, q_E + q_kE)`).
+- PomFRIT blindness with an Issuer whose key, messages and responses read every table, **`H₂³`
+  included** (joint budget `IBudgetH i₃ i₂ i₅ i_E` over both slices and the shared tables):
+  `blindnessRAH_lean_num`, `≤ 4·εRO(q₃ + 6i₃, q₅ + 6i₅ + 1872, q_E + 6i_E + 23035) +
+  2·noHitProb + 2·2⁻¹²⁸ + [i₂ > 0]·4·(2⁻¹¹⁰ + εRO(6i₃, 6i₅ + 2184, 6i_E + 18428) + 2i₂·2⁻¹²⁸)`,
+  about `2⁻¹⁰²·³` plus the budget terms. No simulator change: the interaction's `H₂³` reads are
+  taken out by lazy sampling of `H₂³` before the hybrids (`pr_resampleC`), `blindnessRA` is
+  applied to the Issuer that reads an independent table in place of `H₂³` and whose guess patches
+  `H₂³` at the interaction's read set (`AdversaryRA.subst`), and the collision term (a real
+  session's grinding block meets the interaction's reads) is a second application of two-phase
+  zero knowledge, after which the block's tail is the simulator's uniform 16-byte `ã`
+  (`ZK.Sim.pr_tail2A`).
 - **With AES as random permutations** (`docs/zk.md` §10.4; `Privacy/PermRA.lean`,
   `ZK/IdealCipherPermP.lean`, `ZK/HopsPatchPerm.lean`, `ZK/TwoPhasePerm.lean`): the adaptive
   layer is stated for every row type with `ZKPRow R` (zero knowledge with the `H₅` and cipher
@@ -334,14 +346,16 @@ guess reads the tables. Here its interaction does too.
   independent uniform permutations off the patched keys, and the patched GGM hop costs
   `(4607 + q + |PE|)/(2¹²⁸ − (nHi + 1))` (`IC.hopPmP`, `hide_rom_query_permP`, `zk_roP_perm`,
   error `εROPmP`). `anonymityRA_lean_num_perm`, `unlinkabilityRA_lean_num_perm` (the bounds with
-  `εROPm`, `εAdPm`, `εROPmP`) and `blindnessRA_lean_num_perm` (`4·εROPm(pP; q₃ + 4i₃,
+  `εROPm`, `εAdPm`, `εROPmP`), `blindnessRAH_lean_num_perm` (the same with `εROPm`) and
+  `blindnessRA_lean_num_perm` (`4·εROPm(pP; q₃ + 4i₃,
   q₅ + 4i₅ + 1872, q_E + 4i_E + 23035) + 2·noHitProb + 2·2⁻¹²⁸`, from `zk2_adaptive_perm`); each is
   the function-row bound to within the switching terms (`switchEps ≤ 2⁻¹¹³·²` per error term).
 - **Interactions as oracle computations** (`ROM/TableReads.lean`, `ROM/PrivacyReads.lean`): an
   interaction written as a VCVio `OracleComp` over the tables (`TSpec`), run on them (`runT`), is
   a consistent table reader with its query budget (`QBudget`, VCVio's `IsQueryBoundP`):
   `sReads_runT`. So `IBudget` is derived (`AdversaryOC.iBudget`), and `anonymityOC_lean_num`,
-  `unlinkabilityOC_lean_num`, `blindnessOC_lean_num` (and `_perm`) state the `*RA` bounds with
+  `unlinkabilityOC_lean_num`, `blindnessOC_lean_num`, `blindnessOCH_lean_num` (with `H₂³`
+  queries; `sReadsP_runT`) (and `_perm`) state the `*RA` bounds with
   no consistency hypothesis; `zk_adaptive_oc`, `lean_zeroKnowledgeROA_oc` for one proof.
 
 `lake exe zk_sim` checks the tape equation, the simulator and the ideal-tape prover on all 18 KAT
@@ -368,9 +382,11 @@ runs of each layout.
   the budget is the syntactic query bound (`ROM/TableReads.lean`, `sReads_runT`;
   `ROM/PrivacyReads.lean`: `anonymityOC_lean_num`, `unlinkabilityOC_lean_num`,
   `blindnessOC_lean_num` and their `_perm` versions, the same bounds with no consistency
-  hypothesis). A budget is needed in either form (`not_sReads_slice`). A PomFRIT Issuer whose interaction reads `H₂³` is **open**: the two-phase
-  simulator programs `H₂³` at the zero-prefix block when the continuation stops, and the
-  reductions see only programmed tables (`docs/zk.md` §10.3).
+  hypothesis). A budget is needed in either form (`not_sReads_slice`). A PomFRIT Issuer whose
+  interaction reads `H₂³` is covered with a joint budget (`blindnessRAH_lean_num`,
+  `blindnessOCH_lean_num`); with per-slice budgets (`IBudget` with `i₂ > 0`) it is not, and the
+  two-phase zero-knowledge theorem with a continuation that reads `H₂³` is not stated (the game
+  does not need it; `docs/zk.md` §10.3).
 - *Scope of the games.* Fixed sizes (two sessions, two Clients, the stated rounds); the general
   schedule, Moussaka's non-colluding mode (Thm 4b) and every quantum statement (`docs/zk-qrom.md`)
   are on paper.
@@ -410,7 +426,7 @@ limitation, not an attack) takes over. Strong simulation-extractability: 2⁻⁶
 | `ratatouille.md` | Balance (no inflation), no theft, unlinkability, correctness: proved. | Spends are not bound to a session, so a copied spend request can be redeemed first (medium). |
 | `domain-separation.md` | Every hash/XOF/permutation call lies in a disjoint domain, except below. [Lean] `Protocols/DomainSeparation.lean` | PomFRIT's `hash_to_target` overlaps four proof-system domains (no exploit found; fix: a final domain byte). |
 | `uov-assumptions.md` | Relates the protocol-specific UOV assumptions to each other and to standard UOV. [Lean] `Protocols/UOVAssumptions.lean` | Several reductions are unavailable; the note states why. |
-| Privacy on the specs ([Lean] `VoleMole/Privacy/`) | The privacy theorems as games on `Spec/*`, each hybrid hop mechanized: PomFRIT blindness (`Privacy.PomFRIT.blindness`, `≤ 4ε`), Moussaka issuer hiding and unlinkability against a Moderator colluding with all Anchors (`Privacy.Moussaka.anonymity`, `≤ 4εI + 4εR + 2εhide`), Ratatouille unlinkability of spends from issuances and from each other through change tokens (`Privacy.Ratatouille.unlinkability`, `≤ 4εI + 4εS + 2εhide`). Hypotheses: zero knowledge of the abstract proof systems (`Privacy.ZeroKnowledge`: a simulator from the instance alone, output `ε`-close to the prover's for every valid witness; `ε = 0` is equality of distributions), hiding of `Com` for the explicit reductions. The final hybrids are exact. With the executable Lean prover (label rows; `Spec.Ratatouille.Sizes.labelRows`, `Spec/PomFRITLayout.lean`): down to the tape hypothesis (`Privacy/LeanProver.lean`; `Privacy.Moussaka.anonymity_label_rows`, `Privacy.Ratatouille.unlinkability_label_rows`, `Privacy.PomFRIT.blindness_lean`; `*_shake` with the hop hypotheses); in the random-oracle and ideal-cipher model with the adversary seeing the tables and every zero-knowledge term explicit (`Privacy.Moussaka.anonymityRO_lean_num`, `Privacy.Ratatouille.unlinkabilityRO_lean_num`, `Privacy.PomFRIT.blindnessRO_lean_num`); and with an interaction that reads the tables (`Privacy.Moussaka.anonymityRA_lean_num`, `Privacy.Ratatouille.unlinkabilityRA_lean_num`; `Privacy.PomFRIT.blindnessRA_lean_num` for an Issuer that does not read `H₂³`). Bounds and remaining assumptions: §3 | The zero-knowledge hypothesis is false on `main` for PomFRIT (`ZK.pomfrit_issuer_hits`, `ZK.pomfrit_attack_test`); for Moussaka and Ratatouille no efficient simulator satisfies it per proof on `main`, and the joint (PU) hop replaces it (paper). PomFRIT note §8.3: the "both ⊥" rule is needed. Moussaka Thm 4(a) needs no `2⁻¹⁹²` term; Thm 4(b) misses an abort term. Ratatouille H3 needs the Client's validity check against the commitment it sent |
+| Privacy on the specs ([Lean] `VoleMole/Privacy/`) | The privacy theorems as games on `Spec/*`, each hybrid hop mechanized: PomFRIT blindness (`Privacy.PomFRIT.blindness`, `≤ 4ε`), Moussaka issuer hiding and unlinkability against a Moderator colluding with all Anchors (`Privacy.Moussaka.anonymity`, `≤ 4εI + 4εR + 2εhide`), Ratatouille unlinkability of spends from issuances and from each other through change tokens (`Privacy.Ratatouille.unlinkability`, `≤ 4εI + 4εS + 2εhide`). Hypotheses: zero knowledge of the abstract proof systems (`Privacy.ZeroKnowledge`: a simulator from the instance alone, output `ε`-close to the prover's for every valid witness; `ε = 0` is equality of distributions), hiding of `Com` for the explicit reductions. The final hybrids are exact. With the executable Lean prover (label rows; `Spec.Ratatouille.Sizes.labelRows`, `Spec/PomFRITLayout.lean`): down to the tape hypothesis (`Privacy/LeanProver.lean`; `Privacy.Moussaka.anonymity_label_rows`, `Privacy.Ratatouille.unlinkability_label_rows`, `Privacy.PomFRIT.blindness_lean`; `*_shake` with the hop hypotheses); in the random-oracle and ideal-cipher model with the adversary seeing the tables and every zero-knowledge term explicit (`Privacy.Moussaka.anonymityRO_lean_num`, `Privacy.Ratatouille.unlinkabilityRO_lean_num`, `Privacy.PomFRIT.blindnessRO_lean_num`); and with an interaction that reads the tables (`Privacy.Moussaka.anonymityRA_lean_num`, `Privacy.Ratatouille.unlinkabilityRA_lean_num`; `Privacy.PomFRIT.blindnessRA_lean_num` for an Issuer that does not read `H₂³`, `Privacy.PomFRIT.blindnessRAH_lean_num` for one that does). Bounds and remaining assumptions: §3 | The zero-knowledge hypothesis is false on `main` for PomFRIT (`ZK.pomfrit_issuer_hits`, `ZK.pomfrit_attack_test`); for Moussaka and Ratatouille no efficient simulator satisfies it per proof on `main`, and the joint (PU) hop replaces it (paper). PomFRIT note §8.3: the "both ⊥" rule is needed. Moussaka Thm 4(a) needs no `2⁻¹⁹²` term; Thm 4(b) misses an abort term. Ratatouille H3 needs the Client's validity check against the commitment it sent |
 
 **Cross-cutting finding (critical, deployment):** PomFRIT's Issuer signs arbitrary targets, and
 all protocols share the UOV key type. If one key serves PomFRIT and another protocol, anyone can
@@ -570,6 +586,7 @@ used here add nothing).
 | `ROM/PermPost.lean` | done: finding F3 (the PRF view's Post is not small with inverse queries); the point-tied Post `PostP` (half-targets of the chains, with their `iv` from N1), `≤ q_E·4608·q₂₁·p²` (`prEvent_perm_postP_le`); outside it the committed keys are found before the chain (`keysPre_of_not_postP_gen`) |
 | `ROM/PermFull.lean`, `ROM/PermAdapt.lean` | done: **all five relations in the permutation model with inverse queries**, fixed statements (`*_accept_le_perm`) and adaptively chosen ones (`*_accept_le_adaptive_perm`): the PRF-view bounds with `2⁻¹²⁸` per fresh cipher value replaced by `p` (`p'` for the dead-leaf guess) and Post by `q_E·4608·q₂₁·p²`; combined relations' hash count `n + q₂₁` (plan §2h) |
 | `ROM/TableReads.lean`, `ROM/PrivacyReads.lean` | done: **table-reading interactions as oracle computations**: an `OracleComp` over the tables (`TSpec`), run on them (`runT`), is a consistent table reader (`SReads`) with its syntactic query budget (`QBudget`, VCVio's `IsQueryBoundP`): `sReads_runT` (consistency by construction, `runT_congr`); a budget cannot be dropped (`not_sReads_slice`); `zk_adaptive_oc`, `lean_zeroKnowledgeROA_oc`; the privacy games' adversaries `AdversaryOC` (`toRA`, `iBudget`) and `anonymityOC_lean_num`, `unlinkabilityOC_lean_num`, `blindnessOC_lean_num` with their `_perm` versions: the `*RA` bounds with no consistency hypothesis (`docs/zk.md` §10.3) |
+| `ZK/CollideAd2.lean`, `Privacy/PomFRITRAH.lean` | done: **PomFRIT blindness with an Issuer whose interaction reads `H₂³`** (joint budget `IBudgetH`): the interaction's `H₂³` reads taken out by lazy sampling (`pr_resampleC`, `pr_G0RA_resample`), `blindnessRA_lean_numG` applied to the substituted Issuer (`AdversaryRA.subst`, `IBudget.subst`, `GBudget.subst`), the collision term by `ZK.Sim.pr_tail2A` (a two-phase run's grinding block against a continuation's read set: `realRun2_outPre2`, `tailEv2`, a second application of `zk2_adaptive`, `pr_simCoins_tail_mem`) for both sessions (`K0`, `K1R`, `pr_bad0H`, `pr_bad1H`); `blindnessRAH_lean_numG`, `blindnessRAH_lean_num`, `blindnessRAH_lean_num_perm` (`Privacy/PermRA.lean`), `blindnessOCH_lean_num(_perm)` (`ROM/PrivacyReads.lean`, `sReadsP_runT`) |
 
 The phase-B theorems of `ROM/Accept.lean` hold for every CTR PRG (`[HasPrg]`) and take as
 hypotheses binding (`ε_bind`), the "same chain" step with L2(c) (`hsame : SameChainHyp`), L2(a)
@@ -670,7 +687,8 @@ What is **not** established, roughly in order of importance:
    independent per-proof `H₃` slices, the seed-XOF hop, the hiding of `Com`, the
    consistency of a table-reading interaction given as a function of the tables (automatic for
    one written as an oracle computation, `ROM/PrivacyReads.lean`), a PomFRIT interaction that
-   reads `H₂³` (open),
+   reads `H₂³` under per-slice budgets only (with a joint budget it is proved,
+   `Privacy/PomFRITRAH.lean`),
    Moussaka's non-colluding mode (Thm 4b), the general game schedule and the quantum versions.
    The abstract privacy theorems (`VoleMole/Privacy/`) take per-proof zero knowledge and hiding of
    `Com` as hypotheses, so they apply to any proof system with the label-row fix; on `main` the

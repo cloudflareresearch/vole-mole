@@ -31,7 +31,7 @@ Line references are to the working tree at commit `6d7113e`.
 |---|---|---|---|
 | One-more unforgeability (paper Def. 2.5), classical ROM + ideal cipher | **Holds.** Tight under a τ-shift variant of UOV one-more preimage resistance (Thm U2). Under the paper's standard assumption (Def. 3.1) the reduction loses an extra `(Q₃+ℓ+1)·2^{−71}` (Thm U1) | Same (ZK is not used) | §5–§6 |
 | One-more unforgeability, QROM | **On paper, under new quantum-oracle assumptions** (U1-Q, U2-Q of `lean/docs/extraction/Q7-qrom-multi-extraction.md` §4: database-controlled programming replaces the mid-run extractor). From the paper's A-OMPR with the classical reduction: open, since Q2 extracts only after the run | Same | §7 |
-| Blindness against a malicious Issuer (paper Def. 2.4: malicious key, selective-failure form) | **Fails.** An honest-but-curious Issuer links with advantage ≈ 1 using about 310 SHAKE calls per (signature, session) pair (`lean/docs/zk.md` §4) | **Holds** (Thm B), with advantage `≤ ε_ZK^fix(Q_P = 2) + 2Q_X·2^{−256}`; [Lean] from G1, with (ZK-fix) as a hypothesis (`Privacy/PomFRIT.lean`), and with (ZK-fix) derived for the executable Lean prover with label rows down to its tape hypothesis (`Privacy/PomFRITLean.lean`, `blindness_lean`); in the ROM and ideal-cipher model with the Issuer seeing the tables, for the Lean prover, `≤ 4·εRO(q₃, q₅ + 1248, q_E + 18428) + 2·noHitProb + 2·2⁻¹²⁸` (`Privacy/PomFRITRO.lean`, `blindnessRO_lean`; the collision terms bounded in `Privacy/PomFRITDelta.lean`, `blindnessRO_lean_num`), and with the Issuer's key, messages and responses also reading the tables (except `H₂³`), `≤ 4·εRO(q₃ + 4i₃, q₅ + 4i₅ + 1872, q_E + 4i_E + 23035) + 2·noHitProb + 2·2⁻¹²⁸` (`Privacy/PomFRITRAGame.lean`, `blindnessRA_lean_num`); both also with AES as random permutations (`εROPm` for `εRO`; `Privacy/PermRO.lean`, `Privacy/PermRA.lean`, `blindnessRO_lean_num_perm`, `blindnessRA_lean_num_perm`) | §8 |
+| Blindness against a malicious Issuer (paper Def. 2.4: malicious key, selective-failure form) | **Fails.** An honest-but-curious Issuer links with advantage ≈ 1 using about 310 SHAKE calls per (signature, session) pair (`lean/docs/zk.md` §4) | **Holds** (Thm B), with advantage `≤ ε_ZK^fix(Q_P = 2) + 2Q_X·2^{−256}`; [Lean] from G1, with (ZK-fix) as a hypothesis (`Privacy/PomFRIT.lean`), and with (ZK-fix) derived for the executable Lean prover with label rows down to its tape hypothesis (`Privacy/PomFRITLean.lean`, `blindness_lean`); in the ROM and ideal-cipher model with the Issuer seeing the tables, for the Lean prover, `≤ 4·εRO(q₃, q₅ + 1248, q_E + 18428) + 2·noHitProb + 2·2⁻¹²⁸` (`Privacy/PomFRITRO.lean`, `blindnessRO_lean`; the collision terms bounded in `Privacy/PomFRITDelta.lean`, `blindnessRO_lean_num`), and with the Issuer's key, messages and responses also reading the tables (except `H₂³`), `≤ 4·εRO(q₃ + 4i₃, q₅ + 4i₅ + 1872, q_E + 4i_E + 23035) + 2·noHitProb + 2·2⁻¹²⁸` (`Privacy/PomFRITRAGame.lean`, `blindnessRA_lean_num`), and reading `H₂³` too (joint budget), `≤ 4·εRO(q₃ + 6i₃, q₅ + 6i₅ + 1872, q_E + 6i_E + 23035) + 2·noHitProb + 2·2⁻¹²⁸ + [i₂ > 0]·4·(2⁻¹¹⁰ + εRO(6i₃, 6i₅ + 2184, 6i_E + 18428) + 2i₂·2⁻¹²⁸)` (`Privacy/PomFRITRAH.lean`, `blindnessRAH_lean_num`); both also with AES as random permutations (`εROPm` for `εRO`; `Privacy/PermRO.lean`, `Privacy/PermRA.lean`, `blindnessRO_lean_num_perm`, `blindnessRA_lean_num_perm`, `blindnessRAH_lean_num_perm`) | §8 |
 | No selective failure via `finalize_issue`'s check (`pomfrit.cpp:207`) | Holds: the abort event is a function of the Issuer's own view | Holds | §8.3 |
 | Message binding; no re-targeting of a signature | Holds (part of unforgeability; L8 §7) | Holds | §9.1 |
 | Third parties cannot maul a signature (strong SE) | Holds against parties who never saw the request `t` | Holds against everyone, the Issuer included | §9.2 |
@@ -546,13 +546,39 @@ and `d` at 3075 and 3139; at `Layout.main` the definitions are the spec's, by `r
   - **`blindnessRA_lean_num`**: `|Pr[A accepts | b = 0] − Pr[A accepts | b = 1]| ≤
     4·εRO(q₃ + 4i₃, q₅ + 4i₅ + 1872, q_E + 4i_E + 23035) + 2·noHitProb + 2·2⁻¹²⁸`, about `2⁻¹⁰³·²`
     plus `4·(q₃ + 4i₃ + q₅ + 4i₅ + 221·(q_E + 4i_E))·2⁻¹²⁸` (`2⁻¹⁰³·⁴` table-oblivious).
-  - Not covered: an interaction that reads `H₂³`. The two-phase simulator programs `H₂³` at the
-    zero-prefix block when the continuation stops (`simTab2` at `outPre2 = ∅`), so an Issuer whose
-    decision to answer validly depends on `H₂³` there would distinguish the hybrid; the simulator
-    would have to program nothing in that case, the programming hop would need a collision term
-    for a continuation that read the block it later programs (bounded by a second application of
-    the theorem, as `pr_preBlk_mem`), and each reduction, which sees only the programmed tables,
-    would need a collision term for the other session's responses.
+  - Why the interaction may not read `H₂³` there: the hybrids run the Issuer at the original
+    tables, which is the Issuer at the programmed ones only if it ignores `H₂³`. Otherwise the
+    two-phase simulator's programming at the zero-prefix block when its continuation stops
+    (`simTab2` at `outPre2 = ∅`), the programming hop (exact only for points independent of
+    `H₂³`) and the reductions (which see only programmed tables) would each need a change or a
+    collision term.
+- **An Issuer that also reads `H₂³`** (`lean/VoleMole/Privacy/PomFRITRAH.lean`,
+  `lean/VoleMole/ZK/CollideAd2.lean`; `lean/docs/zk.md` §10.3). The budget is joint
+  (`IBudgetH i₃ i₂ i₅ i_E`): the key stage and the response stage at every pair of requests are
+  consistent readers of both slices and the shared tables together, at most `i₃` keys of each
+  slice, `i₂` `H₂³` keys, `i₅` `H₅` keys, `i_E` cipher keys. The hybrids and the simulator are
+  unchanged: the interaction's `H₂³` reads are removed before them.
+  - *Lazy sampling of `H₂³`* (`pr_resampleC`, `pr_G0RA_resample`): with everything else fixed
+    the interaction reads `H₂³` at `≤ 2i₂` keys, consistently, so the game is the game in which it
+    reads an independent table `Γ` and the sessions and the guess see `H₂³` patched with `Γ` at
+    those keys.
+  - *The substituted Issuer* (`AdversaryRA.subst`): reads `Γ` in place of `H₂³`, its guess
+    patches `H₂³` at the interaction's read set (recomputed from the requests: `2i₃`, `2i₅`, `2i_E`
+    more guess reads). `blindnessRA_lean_numG` applies to it for every `Γ`. Its game differs from
+    the patched one only if a real session's grinding block meets the interaction's `H₂³` reads.
+  - *The collision term* (`ZK.Sim.pr_tail2A`, `pr_bad0H`, `pr_bad1H`): outside `GrindBad`
+    (`2⁻¹¹⁰`) the block is recomputed from the proof; by a second application of two-phase zero
+    knowledge it meets the reads with the simulated proof's probability, and the simulated block's
+    tail is the simulator's uniform 16-byte `ã`, which the reads (computed from step 1) do not
+    see: `2⁻¹¹⁰ + εRO(6i₃, 6i₅ + 2184, 6i_E + 18428) + 2i₂·2⁻¹²⁸` per session and world.
+  - **`blindnessRAH_lean_num`**: `|Pr[A accepts | b = 0] − Pr[A accepts | b = 1]| ≤
+    4·εRO(q₃ + 6i₃, q₅ + 6i₅ + 1872, q_E + 6i_E + 23035) + 2·noHitProb + 2·2⁻¹²⁸ +
+    [i₂ > 0]·4·(2⁻¹¹⁰ + εRO(6i₃, 6i₅ + 2184, 6i_E + 18428) + 2i₂·2⁻¹²⁸)`, about `2⁻¹⁰²·³` plus the
+    budget terms; `blindnessRAH_lean_num_perm` with `εROPm`; for an Issuer written as oracle
+    computations, `blindnessOCH_lean_num` (`_perm`), the budget from `QBudget` (`sReadsP_runT`).
+  - Not covered: `H₂³` reads under the per-slice budget `IBudget` (the substituted Issuer's guess
+    must recompute the reads jointly); a two-phase zero-knowledge theorem whose continuation reads
+    `H₂³` (not needed for the game).
 
 ### 8.3 Selective failure, the response `s`, and the check at `pomfrit.cpp:207`
 
@@ -703,7 +729,7 @@ dedicated to PomFRIT.
 | QROM one-more unforgeability | paper, new quantum UOV assumptions (Q7 §4) | same |
 | Blindness, honest-but-curious Issuer | ✗ (practical linking) | ✓ (Thm B) |
 | Blindness, malicious Issuer, malicious key, selective failure | ✗ | ✓ (Thm B, §8.3) |
-| Blindness in the ROM + ideal cipher, Issuer seeing the tables (Lean prover) | ✗ | ✓ (`blindnessRO_lean_num`, every term explicit; `blindnessRA_lean_num` with the key, messages and responses reading the tables except `H₂³`; `blindnessRO_lean_num_perm`, `blindnessRA_lean_num_perm` with AES as random permutations) |
+| Blindness in the ROM + ideal cipher, Issuer seeing the tables (Lean prover) | ✗ | ✓ (`blindnessRO_lean_num`, every term explicit; `blindnessRA_lean_num` with the key, messages and responses reading the tables except `H₂³`; `blindnessRAH_lean_num` with them reading `H₂³` too; `blindnessRO_lean_num_perm`, `blindnessRA_lean_num_perm` with AES as random permutations) |
 | Blindness in the QROM | ✗ | proof-system ZK on paper (`lean/docs/zk-qrom.md`); Theorem B not restated (§8.5) |
 | Strong SE / no third-party mauling | ✓ against parties without `t` | ✓ against all |
 | Owner re-randomization (§9.3) | present | present |
@@ -747,3 +773,4 @@ dedicated to PomFRIT.
 | Blindness in the ROM and ideal-cipher model, both sessions on shared tables, the Issuer's guess seeing them (`lean/VoleMole/Privacy/PomFRITRO.lean`) | `blindnessRO`, `blindnessRO_lean`, `hop0`, `hop1`, `G2_swap`, `realGameRO_iff`; the collision term: `deltaRO_le`, `blindnessRO_lean_num` (`Privacy/PomFRITDelta.lean`) |
 | Two-phase zero knowledge with a continuation that reads the slice, `H₅` and the cipher after step 1 (`lean/VoleMole/ZK/TwoPhaseAd.lean`) | `zk2_rom_ic_h23A`, `zk2_rom_ic_h23A_num`, `zk2_adaptive`, `Hyp2RA` |
 | Blindness with the Issuer's key, messages and responses reading the tables except `H₂³` (`lean/VoleMole/Privacy/PomFRITRA.lean`, `Privacy/PomFRITRAGame.lean`) | `AdversaryRA`, `IBudget`, `hyp2RA_R`, `hyp2RA_S`, `budget_D0A`, `budget_D1A`, `hop0RA`, `hop1RA`, `G2RA_swap`, `deltaRA_le`, `blindnessRA`, `blindnessRA_lean_num`; for an Issuer written as oracle computations over the tables (no consistency hypothesis, `ROM/PrivacyReads.lean`): `AdversaryOC`, `blindnessOC_lean_num`, `blindnessOC_lean_num_perm` |
+| Blindness with the Issuer's interaction reading `H₂³` too (`lean/VoleMole/Privacy/PomFRITRAH.lean`, `ZK/CollideAd2.lean`) | `SReadsP`, `IBudgetH`, `AdversaryRA.subst`, `pr_resampleC`, `pr_G0RA_resample`, `G0_at_iff_subst`, `K1R`, `hyp2RA_R1`, `pr_tail2A`, `pr_bad0H`, `pr_bad1H`, `G0RA_subst_close`, `blindnessRAH_lean_numG`, `blindnessRAH_lean_num`; `blindnessRAH_lean_num_perm` (`Privacy/PermRA.lean`); `blindnessOCH_lean_num`, `blindnessOCH_lean_num_perm` (`ROM/PrivacyReads.lean`) |

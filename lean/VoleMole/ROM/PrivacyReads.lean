@@ -15,7 +15,10 @@ slice and per shared table). `IBudget` is then a theorem (`AdversaryOC.iBudget`,
 
 * Moussaka: **`anonymityOC_lean_num`**, **`anonymityOC_lean_num_perm`**.
 * Ratatouille: **`unlinkabilityOC_lean_num`**, **`unlinkabilityOC_lean_num_perm`**.
-* PomFRIT: **`blindnessOC_lean_num`**, **`blindnessOC_lean_num_perm`**.
+* PomFRIT: **`blindnessOC_lean_num`**, **`blindnessOC_lean_num_perm`**; with `H₂³` queries,
+  **`blindnessOCH_lean_num`**, **`blindnessOCH_lean_num_perm`** (`blindnessRAH_lean_num(_perm)`,
+  `Privacy/PomFRITRAH.lean`, with the joint budget `IBudgetH` from `QBudget` by `sReadsP_runT`:
+  one computation reads both slices).
 
 Each is the corresponding `*RA_lean_num` (`*RA_lean_num_perm`) theorem for the adversary
 `A.toRA`, with the bound unchanged and the hypothesis `IBudget` replaced by `QBudget` of the
@@ -312,7 +315,88 @@ theorem iBudget {i3 i5 iE : ℕ} (hk : QBudget A.keyOf i3 0 i5 iE)
   r0 t₀ t₁ g₁ := sReads_of_eq (hr t₀ t₁) (sl2 (g₁, g₁)) false fun t => by rw [readAt, sl2_f]; rfl
   r1 t₀ t₁ g₀ := sReads_of_eq (hr t₀ t₁) (sl2 (g₀, g₀)) true fun t => by rw [readAt, sl2_t]; rfl
 
+/-- The read sets of a run over both slices and the shared tables. -/
+def rsOfP (l : List (TKey Bool (preLen pP))) : RSP :=
+  (((l.filterMap (TKey.get3 false)).toFinset, (l.filterMap (TKey.get3 true)).toFinset),
+    (l.filterMap TKey.get2).toFinset, (l.filterMap TKey.get5).toFinset,
+    (l.filterMap TKey.getE).toFinset)
+
+lemma readP_congr (t t' : TbP R) (l : List (TKey Bool (preLen pP))) (h : AgP (rsOfP l) t t') :
+    ∀ k ∈ l, TKey.read (m := preLen pP) (sl2 t.1) t.2 k = TKey.read (m := preLen pP) (sl2 t'.1) t'.2 k := by
+  obtain ⟨h0, h1, h2, h5, hE⟩ := h
+  intro k hk
+  cases k with
+  | h3 i x =>
+    cases i with
+    | false => exact h0 x (List.mem_toFinset.2 (List.mem_filterMap.2 ⟨_, hk, by simp [TKey.get3]⟩))
+    | true => exact h1 x (List.mem_toFinset.2 (List.mem_filterMap.2 ⟨_, hk, by simp [TKey.get3]⟩))
+  | h2 k => exact h2 k (List.mem_toFinset.2 (List.mem_filterMap.2 ⟨_, hk, rfl⟩))
+  | h5 x => exact h5 x (List.mem_toFinset.2 (List.mem_filterMap.2 ⟨_, hk, rfl⟩))
+  | ic x => exact hE x (List.mem_toFinset.2 (List.mem_filterMap.2 ⟨_, hk, rfl⟩))
+
+/-- **An oracle computation over both slices and the shared tables is a joint consistent table
+reader** (`SReadsP`) with its query budget: the read sets are the queries of the run. -/
+theorem sReadsP_runT {α : Type} {oa : OracleComp (TSpec Bool R (preLen pP)) α} {a3 a2 a5 aE : ℕ}
+    (h : QBudget oa a3 a2 a5 aE) :
+    SReadsP (fun t : TbP R => runT (TKey.read (m := preLen pP) (sl2 t.1) t.2) oa) a3 a2 a5 aE := by
+  classical
+  refine ⟨fun t => rsOfP (qlog (TKey.read (m := preLen pP) (sl2 t.1) t.2) oa), fun t t' ht => ?_,
+    fun t => ?_⟩
+  · obtain ⟨e1, e2⟩ := runT_congr oa _ _ (readP_congr t t' _ ht)
+    exact ⟨by simp only [e1], e2⟩
+  · have c := fun (P : TKey Bool (preLen pP) → Bool) {b : ℕ}
+        (hP : IsQueryBoundP oa (fun k => P k = true) b) =>
+      countP_qlog_le oa (TKey.read (m := preLen pP) (sl2 t.1) t.2) P hP
+    refine ⟨?_, ?_, ?_, ?_, ?_⟩
+    · refine (card_toFinset_filterMap_le _ _).trans ?_
+      simpa only [TKey.isSome_get3] using c _ (h.h3 false)
+    · refine (card_toFinset_filterMap_le _ _).trans ?_
+      simpa only [TKey.isSome_get3] using c _ (h.h3 true)
+    · refine (card_toFinset_filterMap_le _ _).trans ?_
+      simpa only [TKey.isSome_get2] using c _ h.h2
+    · refine (card_toFinset_filterMap_le _ _).trans ?_
+      simpa only [TKey.isSome_get5] using c _ h.h5
+    · refine (card_toFinset_filterMap_le _ _).trans ?_
+      simpa only [TKey.isSome_getE] using c _ h.hE
+
+/-- **The query budgets give the interaction's joint budget** (`IBudgetH`, `H₂³` queries
+allowed). -/
+theorem iBudgetH {i3 i2 i5 iE : ℕ} (hk : QBudget A.keyOf i3 i2 i5 iE)
+    (hr : ∀ t₀ t₁, QBudget (A.respOf t₀ t₁) i3 i2 i5 iE) : A.toRA.IBudgetH i3 i2 i5 iE where
+  k := sReadsP_runT hk
+  r t₀ t₁ := sReadsP_runT (hr t₀ t₁)
+
 end AdversaryOC
+
+/-- **PomFRIT blindness with an Issuer whose interaction is an oracle computation over the
+tables, `H₂³` queries included** (`blindnessRAH_lean_num` for `A.toRA`, function rows): each
+stage makes at most `i₃` queries to each slice, `i₂` to `H₂³`, `i₅` to `H₅` and `i_E` to the
+cipher (`QBudget`); no consistency hypothesis. -/
+theorem blindnessOCH_lean_num (A : AdversaryOC (Blk → Blk)) {q3 q5 qE i3 i2 i5 iE : ℕ}
+    (hA : A.toRA.GBudget q3 q5 qE) (hk : QBudget A.keyOf i3 i2 i5 iE)
+    (hr : ∀ t₀ t₁, QBudget (A.respOf t₀ t₁) i3 i2 i5 iE) :
+    |pr ((XR × XR) × ShP (Blk → Blk)) (realGameRA Hashes.shake A.toRA false) -
+        pr ((XR × XR) × ShP (Blk → Blk)) (realGameRA Hashes.shake A.toRA true)| ≤
+      4 * εRO (q3 + 6 * i3) (q5 + 6 * i5 + 1872) (qE + 6 * iE + 23035) + 2 * noHitProb +
+        2 / 2 ^ 128 +
+        (if i2 = 0 then 0 else
+          4 * (1 / 2 ^ 110 + εRO (6 * i3) (6 * i5 + 2184) (6 * iE + 18428) +
+            (i2 + i2 : ℕ) / 2 ^ 128)) :=
+  blindnessRAH_lean_num A.toRA hA (AdversaryOC.iBudgetH hk hr)
+
+/-- **`blindnessOCH_lean_num` with AES as uniformly random permutations**
+(`blindnessRAH_lean_num_perm` for `A.toRA`). -/
+theorem blindnessOCH_lean_num_perm (A : AdversaryOC (Equiv.Perm Blk)) {q3 q5 qE i3 i2 i5 iE : ℕ}
+    (hA : A.toRA.GBudget q3 q5 qE) (hk : QBudget A.keyOf i3 i2 i5 iE)
+    (hr : ∀ t₀ t₁, QBudget (A.respOf t₀ t₁) i3 i2 i5 iE) :
+    |pr ((XR × XR) × ShP (Equiv.Perm Blk)) (realGameRA Hashes.shake A.toRA false) -
+        pr ((XR × XR) × ShP (Equiv.Perm Blk)) (realGameRA Hashes.shake A.toRA true)| ≤
+      4 * εROPm pP (q3 + 6 * i3) (q5 + 6 * i5 + 1872) (qE + 6 * iE + 23035) + 2 * noHitProb +
+        2 / 2 ^ 128 +
+        (if i2 = 0 then 0 else
+          4 * (1 / 2 ^ 110 + εROPm pP (6 * i3) (6 * i5 + 2184) (6 * iE + 18428) +
+            (i2 + i2 : ℕ) / 2 ^ 128)) :=
+  blindnessRAH_lean_num_perm A.toRA hA (AdversaryOC.iBudgetH hk hr)
 
 /-- **PomFRIT blindness with an Issuer whose interaction is an oracle computation over the
 tables** (`blindnessRA_lean_num` for `A.toRA`, function rows): each stage makes at most `i₃`
