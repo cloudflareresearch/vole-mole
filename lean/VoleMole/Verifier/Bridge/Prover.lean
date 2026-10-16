@@ -40,7 +40,8 @@ satisfies, for every `Δ` the grinding may produce.
   - `CrtComplete`: the verifier's CRT masks are `ṽ_mask + u_mask·Δ'` for the prover's commitment
     (the garbled gate labels and the bilinear identity of the CRT tables; the rows are proved here,
     the masks for faest-arch-opt's tables in `Bridge/CrtComplete.lean`, `crtComplete`);
-  - `Δ' ≠ 0` for the ground `Δ` (probability `2⁻¹²⁰`; neither the C++ prover nor the Lean one
+  - `Δ' ≠ 0` for the ground `Δ` (`Δ' = 0` has probability `≤ 2⁻¹¹⁴` over the grinding answers,
+    `ZK.Sim.pr_hitZero_le_114`, `≈ 2⁻¹¹⁸·⁷` in truth; neither the C++ prover nor the Lean one
     tests it).
   `lake exe prover_vectors` also checks the two correctness facts on every proof it produces
   (`ProverKats.checkCorrelation`). `Bridge/Complete.lean` restates the theorems below for
@@ -1126,10 +1127,11 @@ returns a proof, the verifier accepts it, for any hash functions with the domain
 (`HashesWF`) and any statement whose evaluator is a system of degree `≤ d`, `1 ≤ d`
 (`Bridge/Relations.lean`: all five relations). Assumed: BAVC completeness (`BAVCComplete`), the
 CRT VOLE's mask correlation for this commitment (`CrtComplete`), and `Δ' ≠ 0` for the ground `Δ`
-(probability `2⁻¹²⁰`; the C++ does not test it either). Everything else is proved: the VOLE
-correlation of the rows (`prover_row`), the VOLE check (`voleHash_complete`, so the verifier
-recomputes `chal1` and `chal2`), QuickSilver (`qsProve_complete`: the check value is the
-prover's for every `Δ'`), and grinding (`chal3 = Δ`). -/
+(`Δ' = 0` has probability `≤ 2⁻¹¹⁴`, `ZK.Sim.pr_hitZero_le_114`; the C++ does not test it
+either; `ZK/CompleteRO.lean` drops this assumption in the random-oracle model). Everything else
+is proved: the VOLE correlation of the rows (`prover_row`), the VOLE check (`voleHash_complete`,
+so the verifier recomputes `chal1` and `chal2`), QuickSilver (`qsProve_complete`: the check value
+is the prover's for every `Δ'`), and grinding (`chal3 = Δ`). -/
 theorem verify_proveCommit (Hs : Hashes) (hHs : HashesWF Hs) (hbavc : BAVCComplete) (T : CrtTables)
     (st : Statement) (mu1 wPrefix rho binder1 wSuffix proof : ByteArray)
     (hmu : st.mu1 Hs = mu1) (hb1 : st.binder1 = binder1)

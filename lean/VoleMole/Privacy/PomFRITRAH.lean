@@ -50,7 +50,7 @@ rows):
 
     |Pr[W₀] − Pr[W₁]| ≤ 4·εz(pP; q₃ + 6i₃, q₅ + 6i₅ + 1872, q_E + 6i_E + 23035)
                          + 2·noHitProb + 2·2⁻¹²⁸ + h23H(i₃, i₂, i₅, i_E),
-    h23H = 0 if i₂ = 0, else 4·(2⁻¹¹⁰ + εz(pP; 6i₃, 6i₅ + 2184, 6i_E + 18428) + 2i₂·2⁻¹²⁸).
+    h23H = 0 if i₂ = 0, else 4·(2⁻¹¹³ + εz(pP; 6i₃, 6i₅ + 2184, 6i_E + 18428) + 2i₂·2⁻¹²⁸).
 
 The interaction's reads enter the main term six times per hop (twice in the guess of `A.subst Γ`,
 which recomputes them, and four times in `blindnessRA`'s hops); for `i₂ = 0`,
@@ -941,9 +941,9 @@ def eqB1 : (Tab2G pP × (XR × (Coins refresherBytes × Coins uovM))) × ((Bytes
   right_inv _ := rfl
 
 /-- **The collision error of one session**: `pr_tail2A` at the budgets of the continuation and the
-read set (`2⁻¹¹⁰ + εz(6i₃, 6i₅ + 2184, 6i_E + 18428) + 2i₂·2⁻¹²⁸`). -/
+read set (`2⁻¹¹³ + εz(6i₃, 6i₅ + 2184, 6i_E + 18428) + 2i₂·2⁻¹²⁸`). -/
 noncomputable def εcol (R : Type) [Fintype R] [CipherRow R] [ZKRow R] (i3 i2 i5 iE : ℕ) : ℝ :=
-  1 / 2 ^ 110 + ZKRow.εz R pP (6 * i3) (6 * i5 + 2184) (6 * iE + 18428) + (i2 + i2 : ℕ) / 2 ^ 128
+  1 / 2 ^ 113 + ZKRow.εz R pP (6 * i3) (6 * i5 + 2184) (6 * iE + 18428) + (i2 + i2 : ℕ) / 2 ^ 128
 
 variable {i3 i2 i5 iE : ℕ} (hHb : HashesWF Hb) (hk : ConsP Qk fun t : TbP R => A.keyOf t.1 t.2)
   (hck : CardP Qk i3 i2 i5 iE)
@@ -975,7 +975,7 @@ theorem pr_bad0H [ZKRow R] [ZK2ARow R] :
       (qE := iE + 4607 + iE + (iE + 4607 + iE) + 4607 + (iE + 4607 + iE)) (qE' := 6 * iE + 18428)
       (by omega) (by omega) (by omega)
     unfold εcol
-    show 1 / 2 ^ 110 + ZKRow.εz R pP _ _ _ + ((i2 + i2 : ℕ) : ℝ) / 2 ^ 128 ≤ _
+    show 1 / 2 ^ 113 + ZKRow.εz R pP _ _ _ + ((i2 + i2 : ℕ) : ℝ) / 2 ^ 128 ≤ _
     linarith
 
 /-- **Session `1`'s collision probability.** -/
@@ -1002,7 +1002,7 @@ theorem pr_bad1H [ZKRow R] [ZK2ARow R] :
       (qE := iE + 4607 + iE + (iE + 4607 + iE) + 4607 + (iE + 4607 + iE)) (qE' := 6 * iE + 18428)
       (by omega) (by omega) (by omega)
     unfold εcol
-    show 1 / 2 ^ 110 + ZKRow.εz R pP _ _ _ + ((i2 + i2 : ℕ) : ℝ) / 2 ^ 128 ≤ _
+    show 1 / 2 ^ 113 + ZKRow.εz R pP _ _ _ + ((i2 + i2 : ℕ) : ℝ) / 2 ^ 128 ≤ _
     linarith
 
 end BadPr
@@ -1080,7 +1080,7 @@ section Blind
 
 /-- **The collision term of the bound**: `0` if the interaction does not read `H₂³`, else four
 times `εcol` (two sessions, two worlds):
-`4·(2⁻¹¹⁰ + εz(pP; 6i₃, 6i₅ + 2184, 6i_E + 18428) + 2i₂·2⁻¹²⁸)`. -/
+`4·(2⁻¹¹³ + εz(pP; 6i₃, 6i₅ + 2184, 6i_E + 18428) + 2i₂·2⁻¹²⁸)`. -/
 noncomputable def h23H (R : Type) [Fintype R] [CipherRow R] [ZKRow R] (i3 i2 i5 iE : ℕ) : ℝ :=
   if i2 = 0 then 0 else 4 * εcol R i3 i2 i5 iE
 
@@ -1174,7 +1174,7 @@ theorem blindnessRAH_lean_numG [ZKRow R] [ZK2ARow R] (A : AdversaryRA R) {q3 q5 
 
     |Pr[W₀] − Pr[W₁]| ≤ 4·εRO(q₃ + 6i₃, q₅ + 6i₅ + 1872, q_E + 6i_E + 23035)
                          + 2·noHitProb + 2·2⁻¹²⁸
-                         + [i₂ > 0]·4·(2⁻¹¹⁰ + εRO(6i₃, 6i₅ + 2184, 6i_E + 18428) + 2i₂·2⁻¹²⁸). -/
+                         + [i₂ > 0]·4·(2⁻¹¹³ + εRO(6i₃, 6i₅ + 2184, 6i_E + 18428) + 2i₂·2⁻¹²⁸). -/
 theorem blindnessRAH_lean_num (A : AdversaryRA (Blk → Blk)) {q3 q5 qE i3 i2 i5 iE : ℕ}
     (hA : A.GBudget q3 q5 qE) (hI : A.IBudgetH i3 i2 i5 iE) :
     |pr ((XR × XR) × ShP (Blk → Blk)) (realGameRA Hashes.shake A false) -
@@ -1182,7 +1182,7 @@ theorem blindnessRAH_lean_num (A : AdversaryRA (Blk → Blk)) {q3 q5 qE i3 i2 i5
       4 * εRO (q3 + 6 * i3) (q5 + 6 * i5 + 1872) (qE + 6 * iE + 23035) + 2 * noHitProb +
         2 / 2 ^ 128 +
         (if i2 = 0 then 0 else
-          4 * (1 / 2 ^ 110 + εRO (6 * i3) (6 * i5 + 2184) (6 * iE + 18428) +
+          4 * (1 / 2 ^ 113 + εRO (6 * i3) (6 * i5 + 2184) (6 * iE + 18428) +
             (i2 + i2 : ℕ) / 2 ^ 128)) :=
   blindnessRAH_lean_numG A hA hI
 

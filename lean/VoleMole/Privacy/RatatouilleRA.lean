@@ -56,7 +56,7 @@ As in `unlinkabilityRO`: issuance `0`, issuance `1`, round 1, round 2.
     4·εRO(2i₃ + q₃, q₅ + 2i₅ + 1872, q_E + 2i_E + 13821)
       + 2·εAd(9; i₃ + q₃, q₅ + i₅ + 1248, q_E + i_E + 13821; i₃, i₂, i₅ + 624, i_E + 9214)
       + 2·εAd(9; q₃, q₅ + 936, q_E + 13821; 2i₃, 2i₂, 2i₅ + 1560, 2i_E + 23035)
-      + 6·i₃·2⁻¹²⁸ + 4·(2⁻¹¹⁰ + εROP(0, 312, 4607; 2i₅ + 1560, 2i_E + 23035))
+      + 6·i₃·2⁻¹²⁸ + 4·(2⁻¹¹³ + εROP(0, 312, 4607; 2i₅ + 1560, 2i_E + 23035))
       + 6·noHitProb + 12·2⁻¹⁰²⁴ + 2·εhide.
 
 **Cipher rows.** Everything here is stated for every type of cipher rows `R` (the shared
@@ -1258,10 +1258,10 @@ lemma PS1_ne (b₁ : Bool) (γ : ΓS1 (SimCoins pI)) (x : M₁) (ρ : Coins 16) 
   exact hne
 
 /-- **The collision term of hop S1**, with the statement read off the tables:
-`δS₁ ≤ i₃·2⁻¹²⁸ + 2⁻¹¹⁰ + εROP(0, 312, 4607; i₅ + 624, i_E + 9214) + noHitProb + 2·2⁻¹⁰²⁴`. -/
+`δS₁ ≤ i₃·2⁻¹²⁸ + 2⁻¹¹³ + εROP(0, 312, 4607; i₅ + 624, i_E + 9214) + noHitProb + 2·2⁻¹⁰²⁴`. -/
 theorem deltaS1A_le [ZKPRow R] {i3 i2 i5 iE : ℕ} (hI : A.IBudget i3 i2 i5 iE) (b₁ : Bool) :
     deltaS1A A leanSimIR leanProgIR leanPSR b₁ ≤
-      i3 / 2 ^ 128 + (1 / 2 ^ 110 + ZKPRow.εP R pS 0 312 4607 (i5 + 312 + 312) (iE + 4607 + 4607) +
+      i3 / 2 ^ 128 + (1 / 2 ^ 113 + ZKPRow.εP R pS 0 312 4607 (i5 + 312 + 312) (iE + 4607 + 4607) +
         (noHitProb + 2 / 2 ^ 1024)) := by
   unfold deltaS1A
   refine pr_le_of_fst fun γ => ?_
@@ -1342,10 +1342,10 @@ lemma PS2_ne (b₁ b₂ : Bool) (γ : ΓS2 (SimCoins pI) (SimCoins pS)) (x : Msg
   exact hne
 
 /-- **The collision term of hop S2**, with the statement read off the tables:
-`δS₂ ≤ 2i₃·2⁻¹²⁸ + 2⁻¹¹⁰ + εROP(0, 312, 4607; 2i₅ + 1560, 2i_E + 23035) + noHitProb + 3·2⁻¹⁰²⁴`. -/
+`δS₂ ≤ 2i₃·2⁻¹²⁸ + 2⁻¹¹³ + εROP(0, 312, 4607; 2i₅ + 1560, 2i_E + 23035) + noHitProb + 3·2⁻¹⁰²⁴`. -/
 theorem deltaS2A_le [ZKPRow R] {i3 i2 i5 iE : ℕ} (hI : A.IBudget i3 i2 i5 iE) (b₁ b₂ : Bool) :
     deltaS2A A leanSimIR leanSimSR leanProgIR leanProgSR leanPSR b₁ b₂ ≤
-      (2 * i3 : ℕ) / 2 ^ 128 + (1 / 2 ^ 110 + ZKPRow.εP R pS 0 312 4607 (2 * i5 + 1560) (2 * iE + 23035) +
+      (2 * i3 : ℕ) / 2 ^ 128 + (1 / 2 ^ 113 + ZKPRow.εP R pS 0 312 4607 (2 * i5 + 1560) (2 * iE + 23035) +
         (noHitProb + 3 / 2 ^ 1024)) := by
   unfold deltaS2A
   refine pr_le_of_fst fun γ => ?_
@@ -1377,7 +1377,7 @@ theorem unlinkabilityRA_lean_numG [ZKRow R] [ZKPRow R] {q3 q5 qE i3 i2 i5 iE : �
         2 * εAdG R pS 9 q3 (q5 + 936) (qE + 13821) (2 * i3) (2 * i2) (2 * i5 + 1560)
           (2 * iE + 23035) +
         6 * (i3 / 2 ^ 128) +
-        4 * (1 / 2 ^ 110 + ZKPRow.εP R pS 0 312 4607 (2 * i5 + 1560) (2 * iE + 23035)) +
+        4 * (1 / 2 ^ 113 + ZKPRow.εP R pS 0 312 4607 (2 * i5 + 1560) (2 * iE + 23035)) +
         6 * noHitProb + 12 / 2 ^ 1024 + 2 * εhide := by
   have hPI5 : ∀ x w ρ g, Rd5 (leanPIR (R := R) x w ρ g) 624 := fun x w ρ g =>
     (realROb_rd5 (p := pI) (Hb := Hashes.shake) (st := stI x) (w := encI x w) (bOf ρ) g).map
@@ -1446,7 +1446,7 @@ keys, consistently. Then any two worlds differ by at most
     4·εRO(2i₃ + q₃, q₅ + 2i₅ + 1872, q_E + 2i_E + 13821)
       + 2·εAd(9; i₃ + q₃, q₅ + i₅ + 1248, q_E + i_E + 13821; i₃, i₂, i₅ + 624, i_E + 9214)
       + 2·εAd(9; q₃, q₅ + 936, q_E + 13821; 2i₃, 2i₂, 2i₅ + 1560, 2i_E + 23035)
-      + 6·i₃·2⁻¹²⁸ + 4·(2⁻¹¹⁰ + εROP(0, 312, 4607; 2i₅ + 1560, 2i_E + 23035))
+      + 6·i₃·2⁻¹²⁸ + 4·(2⁻¹¹³ + εROP(0, 312, 4607; 2i₅ + 1560, 2i_E + 23035))
       + 6·noHitProb + 12·2⁻¹⁰²⁴ + 2·εhide.
 
 The issuance hops pay both stages' reads and the three real proofs (`3·624`, `3·4607`) as the
@@ -1466,7 +1466,7 @@ theorem unlinkabilityRA_lean_num (A : AdversaryRA (Blk → Blk) Sizes.labelRows)
       4 * εRO (2 * i3 + q3) (q5 + 2 * i5 + 1872) (qE + 2 * iE + 13821) +
         2 * εAd 9 (i3 + q3) (q5 + i5 + 1248) (qE + iE + 13821) i3 i2 (i5 + 624) (iE + 9214) +
         2 * εAd 9 q3 (q5 + 936) (qE + 13821) (2 * i3) (2 * i2) (2 * i5 + 1560) (2 * iE + 23035) +
-        6 * (i3 / 2 ^ 128) + 4 * (1 / 2 ^ 110 + εROP 0 312 4607 (2 * i5 + 1560) (2 * iE + 23035)) +
+        6 * (i3 / 2 ^ 128) + 4 * (1 / 2 ^ 113 + εROP 0 312 4607 (2 * i5 + 1560) (2 * iE + 23035)) +
         6 * noHitProb + 12 / 2 ^ 1024 + 2 * εhide :=
   unlinkabilityRA_lean_numG A hA hI hhide b₁ b₂ b₁' b₂'
 

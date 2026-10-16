@@ -10,7 +10,7 @@ with the cipher a table of uniform **permutations**: `ShPm p = Tab2G p × Tab5F 
 the distinguisher at most at `q_E` keys (whole permutations: forward and inverse queries;
 `RdEPm`), the prover and the simulator's programming running with the permutations' rows
 (`realROPm`, `progROPm`: `realRO`, `progRO` at the rows `cf π`). The error is
-`εROPm p q₃ q₅ q_E = q₃·2⁻¹²⁸ + 2⁻¹¹⁰ + 221·(4607 + q_E + 4607)/(2¹²⁸ − (nHi + 1)) + switchEps p +
+`εROPm p q₃ q₅ q_E = q₃·2⁻¹²⁸ + 2⁻¹¹³ + 221·(4607 + q_E + 4607)/(2¹²⁸ − (nHi + 1)) + switchEps p +
 (q₅ + 1)·2⁻¹²⁸` (`zk_rom_ic_h23_num_perm`).
 
 The shared tables, their reads and the prover are those of `ZK/ReadsRO.lean` at the row type
@@ -80,7 +80,7 @@ lemma progROPm_eq (c : SimCoins p) (s : ShPm p) :
 
 /-- **The error of `zk_rom_ic_h23_num_perm`** at budgets `q₃`, `q₅`, `q_E`. -/
 noncomputable def εROPm (q3 q5 qE : ℕ) : ℝ :=
-  q3 / 2 ^ 128 + 1 / 2 ^ 110 +
+  q3 / 2 ^ 128 + 1 / 2 ^ 113 +
     (221 * (4607 + (qE + 4607)) / ((2 ^ 128 - (nHi p + 1) : ℕ) : ℝ) + switchEps p) +
       (q5 + 1) / 2 ^ 128
 

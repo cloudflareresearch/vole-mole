@@ -32,7 +32,7 @@ theorem anonymityOCSh_num (A : AdversaryOC (RowH (Blk → Blk))) (idx : AnchorSe
     |pr _ (realGameRASh A.toRA idx false) - pr _ (realGameRASh A.toRA idx true)| ≤
       4 * εRO (qE + iE + 13824) (q5 + i5 + 1872) (qE + iE + 13824) +
         4 * εAd 9 (qE + 13822) (q5 + 1248) (qE + 13822) 0 i2 (i5 + 624) (iE + 9214) +
-        4 * (1 / 2 ^ 110 + εROP 0 312 4607 (i5 + 624) (iE + 9214)) +
+        4 * (1 / 2 ^ 113 + εROP 0 312 4607 (i5 + 624) (iE + 9214)) +
         8 * ((iE + 9214 : ℕ) / 2 ^ 128) + 6 * noHitProb + 12 / 2 ^ 1024 + 2 * εhide :=
   anonymityRASh_num A.toRA idx hA (AdversaryOC.iBudget hI) hhide
 
@@ -45,7 +45,7 @@ theorem anonymityOCSh_num_perm (A : AdversaryOC (RowH (Equiv.Perm Blk)))
     |pr _ (realGameRASh A.toRA idx false) - pr _ (realGameRASh A.toRA idx true)| ≤
       4 * εROPm pI (qE + iE + 13824) (q5 + i5 + 1872) (qE + iE + 13824) +
         4 * εAdPm pR 9 (qE + 13822) (q5 + 1248) (qE + 13822) 0 i2 (i5 + 624) (iE + 9214) +
-        4 * (1 / 2 ^ 110 + εROPmP pR 0 312 4607 (i5 + 624) (iE + 9214)) +
+        4 * (1 / 2 ^ 113 + εROPmP pR 0 312 4607 (i5 + 624) (iE + 9214)) +
         8 * ((iE + 9214 : ℕ) / 2 ^ 128) + 6 * noHitProb + 12 / 2 ^ 1024 + 2 * εhide :=
   anonymityRASh_num_perm A.toRA idx hA (AdversaryOC.iBudget hI) hhide
 
@@ -67,7 +67,7 @@ theorem unlinkabilityOCSh_num (A : AdversaryOC (RowH (Blk → Blk)) Sizes.labelR
       4 * εRO (qE + 2 * iE + 13824) (q5 + 2 * i5 + 1872) (qE + 2 * iE + 13824) +
         2 * εAd 9 (qE + iE + 13822) (q5 + i5 + 1248) (qE + iE + 13822) 0 i2 (i5 + 624) (iE + 9214) +
         2 * εAd 9 (qE + 13821) (q5 + 936) (qE + 13821) 0 (2 * i2) (2 * i5 + 1560) (2 * iE + 23035) +
-        4 * (1 / 2 ^ 110 + εROP 0 312 4607 (2 * i5 + 1560) (2 * iE + 23035)) +
+        4 * (1 / 2 ^ 113 + εROP 0 312 4607 (2 * i5 + 1560) (2 * iE + 23035)) +
         4 * ((iE + 9214 : ℕ) / 2 ^ 128) + 4 * ((2 * iE + 23035 : ℕ) / 2 ^ 128) +
         6 * noHitProb + 12 / 2 ^ 1024 + 2 * εhide :=
   unlinkabilityRASh_num A.toRA hA (AdversaryOC.iBudget h1 h2) hhide b₁ b₂ b₁' b₂'
@@ -85,7 +85,7 @@ theorem unlinkabilityOCSh_num_perm (A : AdversaryOC (RowH (Equiv.Perm Blk)) Size
           (iE + 9214) +
         2 * εAdPm pS 9 (qE + 13821) (q5 + 936) (qE + 13821) 0 (2 * i2) (2 * i5 + 1560)
           (2 * iE + 23035) +
-        4 * (1 / 2 ^ 110 + εROPmP pS 0 312 4607 (2 * i5 + 1560) (2 * iE + 23035)) +
+        4 * (1 / 2 ^ 113 + εROPmP pS 0 312 4607 (2 * i5 + 1560) (2 * iE + 23035)) +
         4 * ((iE + 9214 : ℕ) / 2 ^ 128) + 4 * ((2 * iE + 23035 : ℕ) / 2 ^ 128) +
         6 * noHitProb + 12 / 2 ^ 1024 + 2 * εhide :=
   unlinkabilityRASh_num_perm A.toRA hA (AdversaryOC.iBudget h1 h2) hhide b₁ b₂ b₁' b₂'

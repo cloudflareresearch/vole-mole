@@ -839,10 +839,10 @@ lemma PA_ne {α : Type} (b side : Bool) (γ : (TIs (SimCoins pI) × TIs (SimCoin
   · exact absurd rfl h
 
 /-- **The collision term of hop L**, with the statement read off the tables:
-`δL b ≤ i₃·2⁻¹²⁸ + 2⁻¹¹⁰ + εROP(0, 312, 4607, i₅ + 624, i_E + 9214) + noHitProb + 2·2⁻¹⁰²⁴`. -/
+`δL b ≤ i₃·2⁻¹²⁸ + 2⁻¹¹³ + εROP(0, 312, 4607, i₅ + 624, i_E + 9214) + noHitProb + 2·2⁻¹⁰²⁴`. -/
 theorem deltaLA_le [ZKPRow R] {i3 i2 i5 iE : ℕ} (hI : A.IBudget i3 i2 i5 iE) (b : Bool) :
     deltaLA (A := A) (idx := idx) (simI := leanSim pI) (progI := leanProgI) (PR := leanPR) b ≤
-      i3 / 2 ^ 128 + (1 / 2 ^ 110 + ZKPRow.εP R pR 0 312 4607 (i5 + 312 + 312) (iE + 4607 + 4607) +
+      i3 / 2 ^ 128 + (1 / 2 ^ 113 + ZKPRow.εP R pR 0 312 4607 (i5 + 312 + 312) (iE + 4607 + 4607) +
         (noHitProb + 2 / 2 ^ 1024)) := by
   unfold deltaLA
   refine pr_le_of_fst fun γ => ?_
@@ -858,12 +858,12 @@ theorem deltaLA_le [ZKPRow R] {i3 i2 i5 iE : ℕ} (hI : A.IBudget i3 i2 i5 iE) (
   rw [tail_pR]
   gcongr
 
-/-- **The collision term of hop R**: `δR b ≤ i₃·2⁻¹²⁸ + 2⁻¹¹⁰ + εROP(0, 312, 4607, i₅ + 624,
+/-- **The collision term of hop R**: `δR b ≤ i₃·2⁻¹²⁸ + 2⁻¹¹³ + εROP(0, 312, 4607, i₅ + 624,
 i_E + 9214) + noHitProb + 3·2⁻¹⁰²⁴`. -/
 theorem deltaRA_le [ZKPRow R] {i3 i2 i5 iE : ℕ} (hI : A.IBudget i3 i2 i5 iE) (b : Bool) :
     deltaRA (A := A) (idx := idx) (simI := leanSim pI) (progI := leanProgI) (progR := leanProgR)
         (PR := leanPR) b ≤
-      i3 / 2 ^ 128 + (1 / 2 ^ 110 + ZKPRow.εP R pR 0 312 4607 (i5 + 312 + 312) (iE + 4607 + 4607) +
+      i3 / 2 ^ 128 + (1 / 2 ^ 113 + ZKPRow.εP R pR 0 312 4607 (i5 + 312 + 312) (iE + 4607 + 4607) +
         (noHitProb + 3 / 2 ^ 1024)) := by
   unfold deltaRA
   refine pr_le_of_fst fun γ => ?_
@@ -912,7 +912,7 @@ the two worlds differ by at most
 
     4·εRO(i₃ + q₃, q₅ + i₅ + 1872, q_E + i_E + 13821)
       + 4·εAd(9; q₃, q₅ + 1248, q_E + 13821; i₃, i₂, i₅ + 624, i_E + 9214)
-      + 4·(i₃·2⁻¹²⁸ + 2⁻¹¹⁰ + εROP(0, 312, 4607; i₅ + 624, i_E + 9214))
+      + 4·(i₃·2⁻¹²⁸ + 2⁻¹¹³ + εROP(0, 312, 4607; i₅ + 624, i_E + 9214))
       + 6·noHitProb + 12·2⁻¹⁰²⁴ + 2·εhide.
 
 The issuance hops pay the interaction's reads as the distinguisher's (`εRO`); the redemption hops
@@ -926,7 +926,7 @@ theorem anonymityRA_lean_numG [ZKRow R] [ZKPRow R] {q3 q5 qE i3 i2 i5 iE : ℕ} 
     |pr _ (realGameRA A idx leanPI leanPR false) - pr _ (realGameRA A idx leanPI leanPR true)| ≤
       4 * ZKRow.εz R pI (i3 + q3) (q5 + i5 + 1872) (qE + iE + 13821) +
         4 * εAdG R pR 9 q3 (q5 + 1248) (qE + 13821) i3 i2 (i5 + 624) (iE + 9214) +
-        4 * (i3 / 2 ^ 128 + 1 / 2 ^ 110 + ZKPRow.εP R pR 0 312 4607 (i5 + 624) (iE + 9214)) +
+        4 * (i3 / 2 ^ 128 + 1 / 2 ^ 113 + ZKPRow.εP R pR 0 312 4607 (i5 + 624) (iE + 9214)) +
         6 * noHitProb + 12 / 2 ^ 1024 + 2 * εhide := by
   have hPI5 : ∀ w x rho g, Rd5 (leanPI (R := R) w x rho g) 624 := fun w x rho g =>
     (realROb_rd5 (p := pI) (Hb := Hashes.shake) (st := stI x) (w := toBA w) (toBA rho) g).map
@@ -986,7 +986,7 @@ the two worlds differ by at most
 
     4·εRO(i₃ + q₃, q₅ + i₅ + 1872, q_E + i_E + 13821)
       + 4·εAd(9; q₃, q₅ + 1248, q_E + 13821; i₃, i₂, i₅ + 624, i_E + 9214)
-      + 4·(i₃·2⁻¹²⁸ + 2⁻¹¹⁰ + εROP(0, 312, 4607; i₅ + 624, i_E + 9214))
+      + 4·(i₃·2⁻¹²⁸ + 2⁻¹¹³ + εROP(0, 312, 4607; i₅ + 624, i_E + 9214))
       + 6·noHitProb + 12·2⁻¹⁰²⁴ + 2·εhide.
 
 The issuance hops pay the interaction's reads as the distinguisher's (`εRO`); the redemption hops
@@ -1000,7 +1000,7 @@ theorem anonymityRA_lean_num (A : AdversaryRA (Blk → Blk)) {q3 q5 qE i3 i2 i5 
     |pr _ (realGameRA A idx leanPI leanPR false) - pr _ (realGameRA A idx leanPI leanPR true)| ≤
       4 * εRO (i3 + q3) (q5 + i5 + 1872) (qE + iE + 13821) +
         4 * εAd 9 q3 (q5 + 1248) (qE + 13821) i3 i2 (i5 + 624) (iE + 9214) +
-        4 * (i3 / 2 ^ 128 + 1 / 2 ^ 110 + εROP 0 312 4607 (i5 + 624) (iE + 9214)) +
+        4 * (i3 / 2 ^ 128 + 1 / 2 ^ 113 + εROP 0 312 4607 (i5 + 624) (iE + 9214)) +
         6 * noHitProb + 12 / 2 ^ 1024 + 2 * εhide :=
   anonymityRA_lean_numG A idx hA hI hhide
 

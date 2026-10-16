@@ -32,7 +32,7 @@ proofs on the same tables, and their reductions run the other proofs themselves.
   recomputation reads `H₅` at the verifier's gate inputs, `vIn5`, and the cipher at the
   reconstruction's nodes, `rdKeys`).
 * **`zk_ro`**: `zk_rom_ic_h23_num` in this form, with error `εRO q₃ q₅ q_E =
-  q₃·2⁻¹²⁸ + 2⁻¹¹⁰ + 221·(4607 + q_E + 4607)·2⁻¹²⁸ + (q₅ + 1)·2⁻¹²⁸`; `lean_zeroKnowledgeRO`: the
+  q₃·2⁻¹²⁸ + 2⁻¹¹³ + 221·(4607 + q_E + 4607)·2⁻¹²⁸ + (q₅ + 1)·2⁻¹²⁸`; `lean_zeroKnowledgeRO`: the
   Lean prover is `ZeroKnowledgeRO` for every relation whose statements have dedicated label rows,
   against the distinguishers with budgets `(q₃, q₅, q_E)` (`Budget`).
 * **`ZKRow R`**: the class of row types with `zk_ro` (an error `εz p q₃ q₅ q_E`); instances
@@ -678,7 +678,7 @@ section ZKRO
 
 /-- **The error of `zk_rom_ic_h23_num`** at budgets `q₃`, `q₅`, `q_E`. -/
 noncomputable def εRO (q3 q5 qE : ℕ) : ℝ :=
-  q3 / 2 ^ 128 + 1 / 2 ^ 110 + 221 * (4607 + (qE + 4607)) / 2 ^ 128 + (q5 + 1) / 2 ^ 128
+  q3 / 2 ^ 128 + 1 / 2 ^ 113 + 221 * (4607 + (qE + 4607)) / 2 ^ 128 + (q5 + 1) / 2 ^ 128
 
 lemma εRO_mono {q3 q5 qE q3' q5' qE' : ℕ} (h3 : q3 ≤ q3') (h5 : q5 ≤ q5') (hE : qE ≤ qE') :
     εRO q3 q5 qE ≤ εRO q3' q5' qE' := by

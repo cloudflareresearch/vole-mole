@@ -1,6 +1,7 @@
 import VoleMole.ZK.HopsIC
 import VoleMole.ZK.TwoPhaseHops
 import VoleMole.ZK.AcceptCount
+import VoleMole.ZK.AcceptVar
 
 /-!
 # The bad grinding outcomes, numerically (`lean/docs/zk.md` §10.1)
@@ -16,12 +17,22 @@ accepted one is zero. With the `2³²` answers uniform and `|A| ≥ 2¹¹¹` (`A
 * **`tDL_eq_zero`**: an accepted `Δ` with `Δ' = 0` is `0`: `W_CRT` is injective
   (`Bridge.lift_injective`, the kernel-checked left inverse `liftInvOk_tables`), so `Δ' = 0` forces
   the `120` bits of `Δ` to vanish, and acceptance forces the grinding byte to `0`.
-* **`grindBad_num`**: `Pr[GrindBad] ≤ 2^{−2¹⁵} + 2⁻¹¹¹ ≤ 2⁻¹¹⁰` (`grindBad_le_110`). So the
-  "first accepted answer" is the right conditioning: `Δ' = 0` happens only at `Δ = 0`, and `0`
-  is one point of `A`.
+* **`grindBad_num`**: `Pr[GrindBad] ≤ 2^{−2¹⁵} + 2⁻¹¹¹`. So the "first accepted answer" is the
+  right conditioning: `Δ' = 0` happens only at `Δ = 0`, and `0` is one point of `A`.
+* **`pr_hitZero_le_114`, `grindBad_num_114`, `grindBad_le_113`**: with the second-moment bound
+  `|A| ≥ 2¹¹⁴` (`Accept.card_accSet_ge_114`, `ZK/AcceptVar.lean`) in place of `2¹¹¹`,
+  `Pr[Δ' = 0] ≤ 2⁻¹¹⁴` and `Pr[GrindBad] ≤ 2^{−2¹⁵} + 2⁻¹¹⁴ ≤ 2⁻¹¹³`. (`grindBad_le_110`, the
+  Markov bound's `2⁻¹¹⁰`, is kept as a corollary.)
 
 **`zk_rom_ic_h23_num`, `zk_rom_h23_num`**: the headline bounds `zk_rom_ic_h23` and `zk_rom_h23`
-with `Pr[GrindBad]` replaced by `2⁻¹¹⁰`.
+with `Pr[GrindBad]` replaced by `2⁻¹¹³`; every numeric error term downstream (`εRO`, `εROP`,
+`εROPm`, `εROPmP`, `εAd*`, `h23*`) uses `grindBad_le_113`.
+
+`Pr[Δ' = 0]` is `Pr[some answer is accepted]/|A|` exactly (given a hit, the accepted `Δ` is
+uniform on `A`), and `|A| ≈ 0.397·2¹²⁰` by sampling, so its true value is `≈ 2⁻¹¹⁸·⁶⁷`, not the
+`2⁻¹²⁰` of a uniform `Δ'`: grinding conditions `Δ'` on acceptance, and `|A| ≤ 2¹²⁰` makes
+`2⁻¹²⁰` a lower bound, not an upper one. The proved `2⁻¹¹⁴` is the second-moment bound on `|A|`;
+the remaining `≈ 4.7` bits are the box and the slack of Chebyshev (`ZK/AcceptVar.lean`).
 -/
 
 open Finset
@@ -273,15 +284,37 @@ theorem grindBad_num : pr Grind (GrindBad CrtGen.tables) ≤ (1 / 2) ^ (2 ^ 15) 
     exact_mod_cast card_accSet_ge
   exact h1.trans (add_le_add noHitProb_le h2)
 
-/-- **`Pr[GrindBad] ≤ 2⁻¹¹⁰`.** -/
-theorem grindBad_le_110 : pr Grind (GrindBad CrtGen.tables) ≤ 1 / 2 ^ 110 := by
-  refine grindBad_num.trans ?_
-  have : ((1 : ℝ) / 2) ^ (2 ^ 15) ≤ 1 / 2 ^ 111 := by
-    rw [div_pow, one_pow]
-    exact one_div_le_one_div_of_le (by positivity)
-      (pow_le_pow_right₀ (by norm_num) (by norm_num))
-  calc ((1 : ℝ) / 2) ^ (2 ^ 15) + 1 / 2 ^ 111 ≤ 1 / 2 ^ 111 + 1 / 2 ^ 111 := add_le_add this le_rfl
-    _ = 1 / 2 ^ 110 := by norm_num
+/-! ## With the second-moment bound `|A| ≥ 2¹¹⁴` -/
+
+/-- **`Pr[the first accepted answer is 0] ≤ 2⁻¹¹⁴`** (`Accept.card_accSet_ge_114`). -/
+theorem pr_hitZero_le_114 : pr Grind HitZero ≤ 1 / 2 ^ 114 := by
+  refine pr_hitZero_le.trans ?_
+  rw [div_le_div_iff₀ (by exact_mod_cast lt_of_lt_of_le (by positivity) card_accSet_ge)
+    (by positivity), one_mul, one_mul]
+  exact_mod_cast card_accSet_ge_114
+
+/-- **`Pr[GrindBad] ≤ 2^{−2¹⁵} + 2⁻¹¹⁴`**, for faest-arch-opt's tables. -/
+theorem grindBad_num_114 :
+    pr Grind (GrindBad CrtGen.tables) ≤ (1 / 2) ^ (2 ^ 15) + 1 / 2 ^ 114 := by
+  have h1 : pr Grind (GrindBad CrtGen.tables) ≤
+      pr Grind (fun g => firstHit g = none) + pr Grind HitZero :=
+    (pr_mono fun _ hg => grindBad_imp hg).trans (pr_or_le _ _)
+  exact h1.trans (add_le_add noHitProb_le pr_hitZero_le_114)
+
+lemma half_pow_le_114 : ((1 : ℝ) / 2) ^ (2 ^ 15) ≤ 1 / 2 ^ 114 := by
+  rw [div_pow, one_pow]
+  exact one_div_le_one_div_of_le (by positivity) (pow_le_pow_right₀ (by norm_num) (by norm_num))
+
+/-- **`Pr[GrindBad] ≤ 2⁻¹¹³`.** The bound every numeric error term below uses. -/
+theorem grindBad_le_113 : pr Grind (GrindBad CrtGen.tables) ≤ 1 / 2 ^ 113 := by
+  refine grindBad_num_114.trans ?_
+  calc ((1 : ℝ) / 2) ^ (2 ^ 15) + 1 / 2 ^ 114 ≤ 1 / 2 ^ 114 + 1 / 2 ^ 114 :=
+        add_le_add half_pow_le_114 le_rfl
+    _ = 1 / 2 ^ 113 := by norm_num
+
+/-- **`Pr[GrindBad] ≤ 2⁻¹¹⁰`** (Markov's `|A| ≥ 2¹¹¹`; implied by `grindBad_le_113`). -/
+theorem grindBad_le_110 : pr Grind (GrindBad CrtGen.tables) ≤ 1 / 2 ^ 110 :=
+  grindBad_le_113.trans (by norm_num)
 
 /-! ## The headline bounds, numerically -/
 
@@ -296,7 +329,7 @@ variable (Hb : Hashes) (st : Statement) (w : ByteArray)
 tables) and the ideal-cipher model (the cipher of the whole BAVC and VOLE expansion a uniform
 table `E`), the executable prover is
 
-    q₃·2⁻¹²⁸ + 2⁻¹¹⁰ + 221·(4607 + q_E + 4607)·2⁻¹²⁸ + (q₅ + 1)·2⁻¹²⁸
+    q₃·2⁻¹²⁸ + 2⁻¹¹³ + 221·(4607 + q_E + 4607)·2⁻¹²⁸ + (q₅ + 1)·2⁻¹²⁸
 
 close to the programming simulator against a distinguisher that reads `H₃`, `H₅`, `E` at `q₃`,
 `q₅`, `q_E` keys and `H₂³` freely. -/
@@ -323,12 +356,12 @@ theorem zk_rom_ic_h23_num {cs : ByteArray → ByteArray → System GF128}
         D (simulate st.params c.1.1) c.1.2.1
           (@simTab (icPrg c.2) Hb CrtGen.tables st c.1.2.2.2 (simulate st.params c.1.1) c.1.1.1.2.1
             c.1.2.2.1) c.1.2.2.2 c.2)| ≤
-      q3 / 2 ^ 128 + 1 / 2 ^ 110 + 221 * (4607 + (qE + 4607)) / 2 ^ 128 + (q5 + 1) / 2 ^ 128 :=
+      q3 / 2 ^ 128 + 1 / 2 ^ 113 + 221 * (4607 + (qE + 4607)) / 2 ^ 128 + (q5 + 1) / 2 ^ 128 :=
   (zk_rom_ic_h23 Hb st w hlr hzk hHb hp D Q3 hQ3 hq3 Q5 hQ5 hq5 QE hQE hqE).trans
-    (add_le_add (add_le_add (add_le_add le_rfl grindBad_le_110) le_rfl) le_rfl)
+    (add_le_add (add_le_add (add_le_add le_rfl grindBad_le_113) le_rfl) le_rfl)
 
 /-- **`zk_rom_h23` with the grinding term numeric**: for any CTR PRG, with BAVC hiding assumed
-(`ε_bavc`), the executable prover is `q₃·2⁻¹²⁸ + 2⁻¹¹⁰ + ε_bavc + (q₅ + 1)·2⁻¹²⁸`-close to the
+(`ε_bavc`), the executable prover is `q₃·2⁻¹²⁸ + 2⁻¹¹³ + ε_bavc + (q₅ + 1)·2⁻¹²⁸`-close to the
 programming simulator against a distinguisher that reads `H₃`, `H₅` at `q₃`, `q₅` keys and `H₂³`
 freely. -/
 theorem zk_rom_h23_num [HasPrg] {cs : ByteArray → ByteArray → System GF128}
@@ -351,9 +384,9 @@ theorem zk_rom_h23_num [HasPrg] {cs : ByteArray → ByteArray → System GF128}
         D (simulate st.params c.1) c.2.1
           (simTab Hb CrtGen.tables st c.2.2.2 (simulate st.params c.1) c.1.1.2.1 c.2.2.1)
           c.2.2.2)| ≤
-      q3 / 2 ^ 128 + 1 / 2 ^ 110 + εb + (q5 + 1) / 2 ^ 128 :=
+      q3 / 2 ^ 128 + 1 / 2 ^ 113 + εb + (q5 + 1) / 2 ^ 128 :=
   (zk_rom_h23 Hb st w hlr hzk hHb hH D Q3 hQ3 hq3 Q5 hQ5 hq5).trans
-    (add_le_add (add_le_add (add_le_add le_rfl grindBad_le_110) le_rfl) le_rfl)
+    (add_le_add (add_le_add (add_le_add le_rfl grindBad_le_113) le_rfl) le_rfl)
 
 end Headline
 

@@ -26,7 +26,7 @@ are at most
 
 apart: the single-phase bound. The abort term `noHitProb` of `tapeHyp2_of_hops` is inside
 `Pr[GrindBad]` (the fallback block is switched to a uniform one in the same hop as the programmed
-points). **`zk2_rom_ic_h23_num`**: the same with `2⁻¹¹⁰` for `Pr[GrindBad]` (`grindBad_le_110`).
+points). **`zk2_rom_ic_h23_num`**: the same with `2⁻¹¹³` for `Pr[GrindBad]` (`grindBad_le_113`).
 -/
 
 open Finset
@@ -441,10 +441,10 @@ theorem zk2_rom_ic_h23 (hh : ∀ G5 E, Hyp2 st r (K G5 E)) (hHb : HashesWF Hb)
   refine (abs_sub_le _ _ _).trans ((add_le_add hA ((abs_sub_le _ _ _).trans
     (add_le_add hB hC))).trans (le_of_eq (by push_cast; ring)))
 
-/-- **`zk2_rom_ic_h23` with `Pr[GrindBad] ≤ 2⁻¹¹⁰`**: the two-phase prover's zero-knowledge error
+/-- **`zk2_rom_ic_h23` with `Pr[GrindBad] ≤ 2⁻¹¹³`**: the two-phase prover's zero-knowledge error
 in the ROM and ideal-cipher model is the single-phase one (`εRO`, `ZK/ReadsRO.lean`) at the
 distinguisher's budget plus the continuation's reads:
-`q₃·2⁻¹²⁸ + 2⁻¹¹⁰ + 221·(4607 + (q_E + q_kE) + 4607)·2⁻¹²⁸ + ((q₅ + q_k5) + 1)·2⁻¹²⁸`. -/
+`q₃·2⁻¹²⁸ + 2⁻¹¹³ + 221·(4607 + (q_E + q_kE) + 4607)·2⁻¹²⁸ + ((q₅ + q_k5) + 1)·2⁻¹²⁸`. -/
 theorem zk2_rom_ic_h23_num (hh : ∀ G5 E, Hyp2 st r (K G5 E)) (hHb : HashesWF Hb)
     (hp : SmallParams st.params)
     (QK5 : Tab5F → Cipher → Finset (Bytes 37))
@@ -474,10 +474,10 @@ theorem zk2_rom_ic_h23_num (hh : ∀ G5 E, Hyp2 st r (K G5 E)) (hHb : HashesWF H
           (@simTab2 (icPrg c.2) Hb CrtGen.tables st (K c.1.2.2.2 c.2) c.1.2.2.2
             (@simRun2 (icPrg c.2) Hb st r.size (K c.1.2.2.2 c.2) c.1.1) c.1.1.1.1.2.1 c.1.2.2.1)
           c.1.2.2.2 c.2)| ≤
-      q3 / 2 ^ 128 + 1 / 2 ^ 110 + 221 * (4607 + ((qE + qkE : ℕ) + 4607)) / 2 ^ 128 +
+      q3 / 2 ^ 128 + 1 / 2 ^ 113 + 221 * (4607 + ((qE + qkE : ℕ) + 4607)) / 2 ^ 128 +
         ((q5 + qk5 : ℕ) + 1) / 2 ^ 128 :=
   (zk2_rom_ic_h23 Hb st r K hh hHb hp QK5 hQK5 hqk5 QKE hQKE hqkE D Q3 hQ3 hq3 Q5 hQ5 hq5 QE hQE
-    hqE).trans (add_le_add (add_le_add (add_le_add le_rfl grindBad_le_110) le_rfl) le_rfl)
+    hqE).trans (add_le_add (add_le_add (add_le_add le_rfl grindBad_le_113) le_rfl) le_rfl)
 
 end Main
 

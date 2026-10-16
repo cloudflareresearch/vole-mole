@@ -24,7 +24,7 @@ output and the other tables. The real prover reads `H₂³` at the grinding poin
   `(a₃, a₅, a_E)` keys, not off `H₂³`),
 
       Pr[K continues ∧ Qf meets the real prefix's block]
-        ≤ 2⁻¹¹⁰ + εz(k₃ + a₃ + k₃, k₅ + a₅ + 312 + k₅, k_E + a_E + 4607 + k_E)
+        ≤ 2⁻¹¹³ + εz(k₃ + a₃ + k₃, k₅ + a₅ + 312 + k₅, k_E + a_E + 4607 + k_E)
           + m·2^(−8·16(d−1)).
 -/
 
@@ -345,7 +345,7 @@ theorem pr_tailEv2_sim (Hb : Hashes) (st : Statement) {r : ByteArray} (n : ℕ)
   exact pr_simEv2 Hb st n K hHb Qf hm s g fb
 
 /-- **A table-reading continuation's `H₂³` reads meet the real two-phase prover's grinding
-block** with probability `≤ 2⁻¹¹⁰ + εz(k₃ + a₃ + k₃, k₅ + a₅ + 312 + k₅, k_E + a_E + 4607 + k_E)
+block** with probability `≤ 2⁻¹¹³ + εz(k₃ + a₃ + k₃, k₅ + a₅ + 312 + k₅, k_E + a_E + 4607 + k_E)
 + m·2^(−8·16(d−1))`: unless the grinding outcome is bad, the block is the one recomputed from the
 proof (`realRun2_outPre2`); by two-phase zero knowledge (`ZK2ARow.zk2A`, the distinguisher
 `tailEv2`) the recomputed block meets the reads with the simulated proof's probability, and the
@@ -361,7 +361,7 @@ theorem pr_tail2A [ZKRow R] [ZK2ARow R] (Hb : Hashes) (st : Statement) (r : Byte
     pr ((Bytes 16 × Tab3) × ShG R st.params) (fun a =>
         (K a.1.2 a.2 (o1R2 Hb st r a)).isSome ∧
           ∃ κ ∈ Qf (o1R2 Hb st r a) a.1.2 a.2, κ.1 = blk (preLen st.params) (preR2 Hb st r K a)) ≤
-      1 / 2 ^ 110 + ZKRow.εz R st.params (k3 + a3 + k3) (k5 + a5 + 312 + k5) (kE + aE + 4607 + kE) +
+      1 / 2 ^ 113 + ZKRow.εz R st.params (k3 + a3 + k3) (k5 + a5 + 312 + k5) (kE + aE + 4607 + kE) +
         m / 2 ^ (8 * (16 * (st.params.qsDegree - 1))) := by
   classical
   let D := tailEv2 (R := R) Hb st K Qf
@@ -396,7 +396,7 @@ theorem pr_tail2A [ZKRow R] [ZK2ARow R] (Hb : Hashes) (st : Statement) (r : Byte
       exact hblk.trans (congrArg _ hpre.symm)
   -- The grinding answers at the real prefix are uniform.
   have hgrind : pr ((Bytes 16 × Tab3) × ShG R st.params) (fun a =>
-      GrindBad CrtGen.tables (a.2.1 ∘ key2 st.params (preR2 Hb st r K a))) ≤ 1 / 2 ^ 110 := by
+      GrindBad CrtGen.tables (a.2.1 ∘ key2 st.params (preR2 Hb st r K a))) ≤ 1 / 2 ^ 113 := by
     refine pr_le_of_fst fun x => pr_le_of_snd fun rr => ?_
     have e : ∀ G2 : Tab2G st.params, preR2 Hb st r K (x, (G2, rr)) =
         preR2 Hb st r K (x, (fun _ => 0, rr)) := fun G2 => by
@@ -405,7 +405,7 @@ theorem pr_tail2A [ZKRow R] [ZK2ARow R] (Hb : Hashes) (st : Statement) (r : Byte
     have h := close_restrict (R := Bytes 16) (key2_injective st.params
       (preR2 Hb st r K (x, (fun _ => 0, rr)))) (GrindBad CrtGen.tables)
     rw [abs_nonpos_iff, sub_eq_zero] at h
-    refine le_trans (le_of_eq ?_) ((le_of_eq h).trans grindBad_le_110)
+    refine le_trans (le_of_eq ?_) ((le_of_eq h).trans grindBad_le_113)
     exact pr_congr fun G2 => by rw [e G2]
   -- Zero knowledge for the event.
   have hz := ZK2ARow.zk2A Hb st r n K hh hHb hp D hD

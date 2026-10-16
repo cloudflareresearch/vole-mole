@@ -16,13 +16,13 @@ at `q_E` keys (whole rows). With **permutation rows** (`R = Equiv.Perm Blk`, `ZK
 the adversary reads whole permutations, so forward and inverse AES queries, and the
 zero-knowledge error is `εROPm` (`ZK/ReadsROPerm.lean`):
 
-    εROPm p q₃ q₅ q_E = q₃·2⁻¹²⁸ + 2⁻¹¹⁰ + 221·(4607 + q_E + 4607)/(2¹²⁸ − (nHi p + 1))
+    εROPm p q₃ q₅ q_E = q₃·2⁻¹²⁸ + 2⁻¹¹³ + 221·(4607 + q_E + 4607)/(2¹²⁸ − (nHi p + 1))
                           + switchEps p + (q₅ + 1)·2⁻¹²⁸.
 
 * **`anonymityRO_lean_num_perm`** (Moussaka, Theorem 4(a)):
 
       4·εROPm(pI; q₃, q₅ + 1872, q_E + 13821) + 4·εROPm(pR; q₃, q₅ + 1872, q_E + 13821)
-        + 4·(2⁻¹¹⁰ + εROPm(pR; 0, 312, 4607)) + 6·noHitProb + 12·2⁻¹⁰²⁴ + 2·εhide.
+        + 4·(2⁻¹¹³ + εROPm(pR; 0, 312, 4607)) + 6·noHitProb + 12·2⁻¹⁰²⁴ + 2·εhide.
 
 * **`unlinkabilityRO_lean_num_perm`** (Ratatouille, Theorem 2): the same with `pS` for `pR`.
 
@@ -56,14 +56,14 @@ keys (whole permutations: forward and inverse queries) and `H₂³` freely. Then
 differ by at most
 
     4·εROPm(pI; q₃, q₅ + 1872, q_E + 13821) + 4·εROPm(pR; q₃, q₅ + 1872, q_E + 13821)
-      + 4·(2⁻¹¹⁰ + εROPm(pR; 0, 312, 4607)) + 6·noHitProb + 12·2⁻¹⁰²⁴ + 2·εhide. -/
+      + 4·(2⁻¹¹³ + εROPm(pR; 0, 312, 4607)) + 6·noHitProb + 12·2⁻¹⁰²⁴ + 2·εhide. -/
 theorem anonymityRO_lean_num_perm (A : AdversaryRO (Equiv.Perm Blk))
     (idx : AnchorSet → UOVKey → ℕ) {q3 q5 qE : ℕ} {εhide : ℝ} (hA : A.Budget q3 q5 qE)
     (hhide : ∀ b c, hidingAdv A.base.ci A.base.cr
       (reductionRO A idx (leanSim pI) (leanSim pR) leanProgI leanProgR b c) ≤ εhide) :
     |pr _ (realGameRO A idx leanPI leanPR false) - pr _ (realGameRO A idx leanPI leanPR true)| ≤
       4 * εROPm pI q3 (q5 + 1872) (qE + 13821) + 4 * εROPm pR q3 (q5 + 1872) (qE + 13821) +
-        4 * (1 / 2 ^ 110 + εROPm pR 0 312 4607) + 6 * noHitProb + 12 / 2 ^ 1024 + 2 * εhide :=
+        4 * (1 / 2 ^ 113 + εROPm pR 0 312 4607) + 6 * noHitProb + 12 / 2 ^ 1024 + 2 * εhide :=
   anonymityRO_lean_numG A idx hA hhide
 
 end Moussaka
@@ -77,7 +77,7 @@ explicit.** As `unlinkabilityRO_lean_num`, the cipher a table of independent uni
 read by the Issuer's guess at `q_E` keys (whole permutations); any two worlds differ by at most
 
     4·εROPm(pI; q₃, q₅ + 1872, q_E + 13821) + 4·εROPm(pS; q₃, q₅ + 1872, q_E + 13821)
-      + 4·(2⁻¹¹⁰ + εROPm(pS; 0, 312, 4607)) + 6·noHitProb + 12·2⁻¹⁰²⁴ + 2·εhide. -/
+      + 4·(2⁻¹¹³ + εROPm(pS; 0, 312, 4607)) + 6·noHitProb + 12·2⁻¹⁰²⁴ + 2·εhide. -/
 theorem unlinkabilityRO_lean_num_perm (A : AdversaryRO (Equiv.Perm Blk) Sizes.labelRows)
     {q3 q5 qE : ℕ} {εhide : ℝ} (hA : A.Budget q3 q5 qE)
     (hhide : ∀ b₁ b₂ K, hidingAdv A.ctx
@@ -85,7 +85,7 @@ theorem unlinkabilityRO_lean_num_perm (A : AdversaryRO (Equiv.Perm Blk) Sizes.la
     (b₁ b₂ b₁' b₂' : Bool) :
     |pr _ (realGameR A leanPIR leanPSR b₁ b₂) - pr _ (realGameR A leanPIR leanPSR b₁' b₂')| ≤
       4 * εROPm pI q3 (q5 + 1872) (qE + 13821) + 4 * εROPm pS q3 (q5 + 1872) (qE + 13821) +
-        4 * (1 / 2 ^ 110 + εROPm pS 0 312 4607) + 6 * noHitProb + 12 / 2 ^ 1024 + 2 * εhide :=
+        4 * (1 / 2 ^ 113 + εROPm pS 0 312 4607) + 6 * noHitProb + 12 / 2 ^ 1024 + 2 * εhide :=
   unlinkabilityRO_lean_numG A hA hhide b₁ b₂ b₁' b₂'
 
 end Ratatouille

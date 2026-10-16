@@ -271,7 +271,7 @@ theorem blindnessRAH_lean_num_seed (A : XofP Ctx → AdversaryRA (Blk → Blk))
       4 * εRO (q3 + 6 * i3) (q5 + 6 * i5 + 1872) (qE + 6 * iE + 23035) + 2 * noHitProb +
         2 / 2 ^ 128 +
         (if i2 = 0 then 0 else
-          4 * (1 / 2 ^ 110 + εRO (6 * i3) (6 * i5 + 2184) (6 * iE + 18428) +
+          4 * (1 / 2 ^ 113 + εRO (6 * i3) (6 * i5 + 2184) (6 * iE + 18428) +
             (i2 + i2 : ℕ) / 2 ^ 128)) + 2 * ((2 * (qk + qg) + 1 : ℕ) / 2 ^ 256) :=
   abs_seedGameP_sub_le (fun g => realGameRA Hashes.shake (A g))
     (fun g b t => ctxK enc ((A g).keyOf t.1 t.2) b)
@@ -287,7 +287,7 @@ theorem blindnessRAH_lean_num_perm_seed (A : XofP Ctx → AdversaryRA (Equiv.Per
       4 * εROPm pP (q3 + 6 * i3) (q5 + 6 * i5 + 1872) (qE + 6 * iE + 23035) + 2 * noHitProb +
         2 / 2 ^ 128 +
         (if i2 = 0 then 0 else
-          4 * (1 / 2 ^ 110 + εROPm pP (6 * i3) (6 * i5 + 2184) (6 * iE + 18428) +
+          4 * (1 / 2 ^ 113 + εROPm pP (6 * i3) (6 * i5 + 2184) (6 * iE + 18428) +
             (i2 + i2 : ℕ) / 2 ^ 128)) + 2 * ((2 * (qk + qg) + 1 : ℕ) / 2 ^ 256) :=
   abs_seedGameP_sub_le (fun g => realGameRA Hashes.shake (A g))
     (fun g b t => ctxK enc ((A g).keyOf t.1 t.2) b)
@@ -440,7 +440,7 @@ theorem anonymityRO_lean_num_seed (A : XofM → AdversaryRO (Blk → Blk)) {q3 q
       (reductionRO (A g) idx (leanSim pI) (leanSim pR) leanProgI leanProgR b c) ≤ εhide)
     (hg : ∀ b z, RdX (fun g => realGameRO (A g) idx leanPI leanPR b z) qg) :
     |pr _ (seedGameRO idx A false) - pr _ (seedGameRO idx A true)| ≤
-      8 * εRO q3 (q5 + 1872) (qE + 13821) + 4 * (1 / 2 ^ 110 + εRO 0 312 4607) +
+      8 * εRO q3 (q5 + 1872) (qE + 13821) + 4 * (1 / 2 ^ 113 + εRO 0 312 4607) +
         6 * noHitProb + 12 / 2 ^ 1024 + 2 * εhide + 2 * ((2 * qg + 2 : ℕ) / 2 ^ 256) :=
   abs_seedGameM_sub_le (fun g => realGameRO (A g) idx leanPI leanPR) hg fun g =>
     anonymityRO_lean_num (A g) idx (hA g) (hhide g)
@@ -453,7 +453,7 @@ theorem anonymityRO_lean_num_perm_seed (A : XofM → AdversaryRO (Equiv.Perm Blk
     (hg : ∀ b z, RdX (fun g => realGameRO (A g) idx leanPI leanPR b z) qg) :
     |pr _ (seedGameRO idx A false) - pr _ (seedGameRO idx A true)| ≤
       4 * εROPm pI q3 (q5 + 1872) (qE + 13821) + 4 * εROPm pR q3 (q5 + 1872) (qE + 13821) +
-        4 * (1 / 2 ^ 110 + εROPm pR 0 312 4607) + 6 * noHitProb + 12 / 2 ^ 1024 + 2 * εhide +
+        4 * (1 / 2 ^ 113 + εROPm pR 0 312 4607) + 6 * noHitProb + 12 / 2 ^ 1024 + 2 * εhide +
         2 * ((2 * qg + 2 : ℕ) / 2 ^ 256) :=
   abs_seedGameM_sub_le (fun g => realGameRO (A g) idx leanPI leanPR) hg fun g =>
     anonymityRO_lean_num_perm (A g) idx (hA g) (hhide g)
@@ -465,7 +465,7 @@ theorem anonymitySh_num_seed (A : XofM → AdversaryRO (RowH (Blk → Blk))) {q3
       (reductionRO (A g) idx (leanSim pI) (leanSim pR) leanProgI leanProgR b c) ≤ εhide)
     (hg : ∀ b z, RdX (fun g => realGameSh (A g) idx b z) qg) :
     |pr _ (seedGameSh idx A false) - pr _ (seedGameSh idx A true)| ≤
-      8 * εRO (qE + 13824) (q5 + 1872) (qE + 13824) + 4 * (1 / 2 ^ 110 + εRO 0 312 4607) +
+      8 * εRO (qE + 13824) (q5 + 1872) (qE + 13824) + 4 * (1 / 2 ^ 113 + εRO 0 312 4607) +
         6 * noHitProb + 12 / 2 ^ 1024 + 2 * εhide + 2 * ((2 * qg + 2 : ℕ) / 2 ^ 256) :=
   abs_seedGameM_sub_le (fun g => realGameSh (A g) idx) hg fun g =>
     anonymitySh_num (A g) idx (hA g) (hhide g)
@@ -479,7 +479,7 @@ theorem anonymitySh_num_perm_seed (A : XofM → AdversaryRO (RowH (Equiv.Perm Bl
     |pr _ (seedGameSh idx A false) - pr _ (seedGameSh idx A true)| ≤
       4 * εROPm pI (qE + 13824) (q5 + 1872) (qE + 13824) +
         4 * εROPm pR (qE + 13824) (q5 + 1872) (qE + 13824) +
-        4 * (1 / 2 ^ 110 + εROPm pR 0 312 4607) + 6 * noHitProb + 12 / 2 ^ 1024 + 2 * εhide +
+        4 * (1 / 2 ^ 113 + εROPm pR 0 312 4607) + 6 * noHitProb + 12 / 2 ^ 1024 + 2 * εhide +
         2 * ((2 * qg + 2 : ℕ) / 2 ^ 256) :=
   abs_seedGameM_sub_le (fun g => realGameSh (A g) idx) hg fun g =>
     anonymitySh_num_perm (A g) idx (hA g) (hhide g)
@@ -494,7 +494,7 @@ theorem anonymityRA_lean_num_seed (A : XofM → AdversaryRA (Blk → Blk))
     |pr _ (seedGameRA idx A false) - pr _ (seedGameRA idx A true)| ≤
       4 * εRO (i3 + q3) (q5 + i5 + 1872) (qE + iE + 13821) +
         4 * εAd 9 q3 (q5 + 1248) (qE + 13821) i3 i2 (i5 + 624) (iE + 9214) +
-        4 * (i3 / 2 ^ 128 + 1 / 2 ^ 110 + εROP 0 312 4607 (i5 + 624) (iE + 9214)) +
+        4 * (i3 / 2 ^ 128 + 1 / 2 ^ 113 + εROP 0 312 4607 (i5 + 624) (iE + 9214)) +
         6 * noHitProb + 12 / 2 ^ 1024 + 2 * εhide + 2 * ((2 * qg + 2 : ℕ) / 2 ^ 256) :=
   abs_seedGameM_sub_le (fun g => realGameRA (A g) idx leanPI leanPR) hg fun g =>
     anonymityRA_lean_num (A := A g) (idx := idx) (hA g) (hI g) (hhide g)
@@ -509,7 +509,7 @@ theorem anonymityRA_lean_num_perm_seed (A : XofM → AdversaryRA (Equiv.Perm Blk
     |pr _ (seedGameRA idx A false) - pr _ (seedGameRA idx A true)| ≤
       4 * εROPm pI (i3 + q3) (q5 + i5 + 1872) (qE + iE + 13821) +
         4 * εAdPm pR 9 q3 (q5 + 1248) (qE + 13821) i3 i2 (i5 + 624) (iE + 9214) +
-        4 * (i3 / 2 ^ 128 + 1 / 2 ^ 110 + εROPmP pR 0 312 4607 (i5 + 624) (iE + 9214)) +
+        4 * (i3 / 2 ^ 128 + 1 / 2 ^ 113 + εROPmP pR 0 312 4607 (i5 + 624) (iE + 9214)) +
         6 * noHitProb + 12 / 2 ^ 1024 + 2 * εhide + 2 * ((2 * qg + 2 : ℕ) / 2 ^ 256) :=
   abs_seedGameM_sub_le (fun g => realGameRA (A g) idx leanPI leanPR) hg fun g =>
     anonymityRA_lean_num_perm (A := A g) (idx := idx) (hA g) (hI g) (hhide g)
@@ -524,7 +524,7 @@ theorem anonymityRASh_num_seed (A : XofM → AdversaryRA (RowH (Blk → Blk)))
     |pr _ (seedGameRASh idx A false) - pr _ (seedGameRASh idx A true)| ≤
       4 * εRO (qE + iE + 13824) (q5 + i5 + 1872) (qE + iE + 13824) +
         4 * εAd 9 (qE + 13822) (q5 + 1248) (qE + 13822) 0 i2 (i5 + 624) (iE + 9214) +
-        4 * (1 / 2 ^ 110 + εROP 0 312 4607 (i5 + 624) (iE + 9214)) +
+        4 * (1 / 2 ^ 113 + εROP 0 312 4607 (i5 + 624) (iE + 9214)) +
         8 * ((iE + 9214 : ℕ) / 2 ^ 128) + 6 * noHitProb + 12 / 2 ^ 1024 + 2 * εhide +
         2 * ((2 * qg + 2 : ℕ) / 2 ^ 256) :=
   abs_seedGameM_sub_le (fun g => realGameRASh (A g) idx) hg fun g =>
@@ -540,7 +540,7 @@ theorem anonymityRASh_num_perm_seed (A : XofM → AdversaryRA (RowH (Equiv.Perm 
     |pr _ (seedGameRASh idx A false) - pr _ (seedGameRASh idx A true)| ≤
       4 * εROPm pI (qE + iE + 13824) (q5 + i5 + 1872) (qE + iE + 13824) +
         4 * εAdPm pR 9 (qE + 13822) (q5 + 1248) (qE + 13822) 0 i2 (i5 + 624) (iE + 9214) +
-        4 * (1 / 2 ^ 110 + εROPmP pR 0 312 4607 (i5 + 624) (iE + 9214)) +
+        4 * (1 / 2 ^ 113 + εROPmP pR 0 312 4607 (i5 + 624) (iE + 9214)) +
         8 * ((iE + 9214 : ℕ) / 2 ^ 128) + 6 * noHitProb + 12 / 2 ^ 1024 + 2 * εhide +
         2 * ((2 * qg + 2 : ℕ) / 2 ^ 256) :=
   abs_seedGameM_sub_le (fun g => realGameRASh (A g) idx) hg fun g =>
@@ -655,7 +655,7 @@ theorem unlinkabilityRO_lean_num_seed (A : XofR → AdversaryRO (Blk → Blk) Si
     (hg : ∀ b₁ b₂ z, RdX (fun g => realGameR (A g) leanPIR leanPSR b₁ b₂ z) qg)
     (b₁ b₂ b₁' b₂' : Bool) :
     |pr _ (seedGameRO A b₁ b₂) - pr _ (seedGameRO A b₁' b₂')| ≤
-      8 * εRO q3 (q5 + 1872) (qE + 13821) + 4 * (1 / 2 ^ 110 + εRO 0 312 4607) +
+      8 * εRO q3 (q5 + 1872) (qE + 13821) + 4 * (1 / 2 ^ 113 + εRO 0 312 4607) +
         6 * noHitProb + 12 / 2 ^ 1024 + 2 * εhide + 2 * ((2 * qg + 2 : ℕ) / 2 ^ 256) :=
   abs_seedGameR_sub_le (fun g => realGameR (A g) leanPIR leanPSR) hg b₁ b₂ b₁' b₂' fun g =>
     unlinkabilityRO_lean_num (A g) (hA g) (hhide g) b₁ b₂ b₁' b₂'
@@ -670,7 +670,7 @@ theorem unlinkabilityRO_lean_num_perm_seed
     (b₁ b₂ b₁' b₂' : Bool) :
     |pr _ (seedGameRO A b₁ b₂) - pr _ (seedGameRO A b₁' b₂')| ≤
       4 * εROPm pI q3 (q5 + 1872) (qE + 13821) + 4 * εROPm pS q3 (q5 + 1872) (qE + 13821) +
-        4 * (1 / 2 ^ 110 + εROPm pS 0 312 4607) + 6 * noHitProb + 12 / 2 ^ 1024 + 2 * εhide +
+        4 * (1 / 2 ^ 113 + εROPm pS 0 312 4607) + 6 * noHitProb + 12 / 2 ^ 1024 + 2 * εhide +
         2 * ((2 * qg + 2 : ℕ) / 2 ^ 256) :=
   abs_seedGameR_sub_le (fun g => realGameR (A g) leanPIR leanPSR) hg b₁ b₂ b₁' b₂' fun g =>
     unlinkabilityRO_lean_num_perm (A g) (hA g) (hhide g) b₁ b₂ b₁' b₂'
@@ -682,7 +682,7 @@ theorem unlinkabilitySh_num_seed (A : XofR → AdversaryRO (RowH (Blk → Blk)) 
       (reductionR (A g) leanSimIR leanSimSR leanProgIR leanProgSR b₁ b₂ K) ≤ εhide)
     (hg : ∀ b₁ b₂ z, RdX (fun g => realGameSh (A g) b₁ b₂ z) qg) (b₁ b₂ b₁' b₂' : Bool) :
     |pr _ (seedGameSh A b₁ b₂) - pr _ (seedGameSh A b₁' b₂')| ≤
-      8 * εRO (qE + 13824) (q5 + 1872) (qE + 13824) + 4 * (1 / 2 ^ 110 + εRO 0 312 4607) +
+      8 * εRO (qE + 13824) (q5 + 1872) (qE + 13824) + 4 * (1 / 2 ^ 113 + εRO 0 312 4607) +
         6 * noHitProb + 12 / 2 ^ 1024 + 2 * εhide + 2 * ((2 * qg + 2 : ℕ) / 2 ^ 256) :=
   abs_seedGameR_sub_le (fun g => realGameSh (A g)) hg b₁ b₂ b₁' b₂' fun g =>
     unlinkabilitySh_num (A g) (hA g) (hhide g) b₁ b₂ b₁' b₂'
@@ -697,7 +697,7 @@ theorem unlinkabilitySh_num_perm_seed
     |pr _ (seedGameSh A b₁ b₂) - pr _ (seedGameSh A b₁' b₂')| ≤
       4 * εROPm pI (qE + 13824) (q5 + 1872) (qE + 13824) +
         4 * εROPm pS (qE + 13824) (q5 + 1872) (qE + 13824) +
-        4 * (1 / 2 ^ 110 + εROPm pS 0 312 4607) + 6 * noHitProb + 12 / 2 ^ 1024 + 2 * εhide +
+        4 * (1 / 2 ^ 113 + εROPm pS 0 312 4607) + 6 * noHitProb + 12 / 2 ^ 1024 + 2 * εhide +
         2 * ((2 * qg + 2 : ℕ) / 2 ^ 256) :=
   abs_seedGameR_sub_le (fun g => realGameSh (A g)) hg b₁ b₂ b₁' b₂' fun g =>
     unlinkabilitySh_num_perm (A g) (hA g) (hhide g) b₁ b₂ b₁' b₂'
@@ -714,7 +714,7 @@ theorem unlinkabilityRA_lean_num_seed (A : XofR → AdversaryRA (Blk → Blk) Si
       4 * εRO (2 * i3 + q3) (q5 + 2 * i5 + 1872) (qE + 2 * iE + 13821) +
         2 * εAd 9 (i3 + q3) (q5 + i5 + 1248) (qE + iE + 13821) i3 i2 (i5 + 624) (iE + 9214) +
         2 * εAd 9 q3 (q5 + 936) (qE + 13821) (2 * i3) (2 * i2) (2 * i5 + 1560) (2 * iE + 23035) +
-        6 * (i3 / 2 ^ 128) + 4 * (1 / 2 ^ 110 + εROP 0 312 4607 (2 * i5 + 1560) (2 * iE + 23035)) +
+        6 * (i3 / 2 ^ 128) + 4 * (1 / 2 ^ 113 + εROP 0 312 4607 (2 * i5 + 1560) (2 * iE + 23035)) +
         6 * noHitProb + 12 / 2 ^ 1024 + 2 * εhide + 2 * ((2 * qg + 2 : ℕ) / 2 ^ 256) :=
   abs_seedGameR_sub_le (fun g => realGameRA (A g) leanPIR leanPSR) hg b₁ b₂ b₁' b₂' fun g =>
     unlinkabilityRA_lean_num (A g) (hA g) (hI g) (hhide g) b₁ b₂ b₁' b₂'
@@ -733,7 +733,7 @@ theorem unlinkabilityRA_lean_num_perm_seed
         2 * εAdPm pS 9 q3 (q5 + 936) (qE + 13821) (2 * i3) (2 * i2) (2 * i5 + 1560)
           (2 * iE + 23035) +
         6 * (i3 / 2 ^ 128) +
-        4 * (1 / 2 ^ 110 + εROPmP pS 0 312 4607 (2 * i5 + 1560) (2 * iE + 23035)) +
+        4 * (1 / 2 ^ 113 + εROPmP pS 0 312 4607 (2 * i5 + 1560) (2 * iE + 23035)) +
         6 * noHitProb + 12 / 2 ^ 1024 + 2 * εhide + 2 * ((2 * qg + 2 : ℕ) / 2 ^ 256) :=
   abs_seedGameR_sub_le (fun g => realGameRA (A g) leanPIR leanPSR) hg b₁ b₂ b₁' b₂' fun g =>
     unlinkabilityRA_lean_num_perm (A g) (hA g) (hI g) (hhide g) b₁ b₂ b₁' b₂'
@@ -749,7 +749,7 @@ theorem unlinkabilityRASh_num_seed (A : XofR → AdversaryRA (RowH (Blk → Blk)
       4 * εRO (qE + 2 * iE + 13824) (q5 + 2 * i5 + 1872) (qE + 2 * iE + 13824) +
         2 * εAd 9 (qE + iE + 13822) (q5 + i5 + 1248) (qE + iE + 13822) 0 i2 (i5 + 624) (iE + 9214) +
         2 * εAd 9 (qE + 13821) (q5 + 936) (qE + 13821) 0 (2 * i2) (2 * i5 + 1560) (2 * iE + 23035) +
-        4 * (1 / 2 ^ 110 + εROP 0 312 4607 (2 * i5 + 1560) (2 * iE + 23035)) +
+        4 * (1 / 2 ^ 113 + εROP 0 312 4607 (2 * i5 + 1560) (2 * iE + 23035)) +
         4 * ((iE + 9214 : ℕ) / 2 ^ 128) + 4 * ((2 * iE + 23035 : ℕ) / 2 ^ 128) +
         6 * noHitProb + 12 / 2 ^ 1024 + 2 * εhide + 2 * ((2 * qg + 2 : ℕ) / 2 ^ 256) :=
   abs_seedGameR_sub_le (fun g => realGameRASh (A g)) hg b₁ b₂ b₁' b₂' fun g =>
@@ -768,7 +768,7 @@ theorem unlinkabilityRASh_num_perm_seed
           (iE + 9214) +
         2 * εAdPm pS 9 (qE + 13821) (q5 + 936) (qE + 13821) 0 (2 * i2) (2 * i5 + 1560)
           (2 * iE + 23035) +
-        4 * (1 / 2 ^ 110 + εROPmP pS 0 312 4607 (2 * i5 + 1560) (2 * iE + 23035)) +
+        4 * (1 / 2 ^ 113 + εROPmP pS 0 312 4607 (2 * i5 + 1560) (2 * iE + 23035)) +
         4 * ((iE + 9214 : ℕ) / 2 ^ 128) + 4 * ((2 * iE + 23035 : ℕ) / 2 ^ 128) +
         6 * noHitProb + 12 / 2 ^ 1024 + 2 * εhide + 2 * ((2 * qg + 2 : ℕ) / 2 ^ 256) :=
   abs_seedGameR_sub_le (fun g => realGameRASh (A g)) hg b₁ b₂ b₁' b₂' fun g =>

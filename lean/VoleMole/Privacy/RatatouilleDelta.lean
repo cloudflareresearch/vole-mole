@@ -9,12 +9,12 @@ import VoleMole.ZK.CollideRO
 
 * **`deltaI1R_le`**: `δI₁ ≤ noHitProb + 2⁻¹⁰²⁴` (issuance `1`'s prefix does not depend on
   issuance `0`'s simulated `ã`, the last `128` bytes of the `200`-byte prefix programmed);
-* **`deltaS1R_le`, `deltaS2R_le`**: `δS₁ ≤ 2⁻¹¹⁰ + εRO(0, 312, 4607) + noHitProb + 2·2⁻¹⁰²⁴`,
+* **`deltaS1R_le`, `deltaS2R_le`**: `δS₁ ≤ 2⁻¹¹³ + εRO(0, 312, 4607) + noHitProb + 2·2⁻¹⁰²⁴`,
   `δS₂ ≤ … + 3·2⁻¹⁰²⁴` (`pr_collide_zk`: the spend statements are the Issuer's choices after the
   simulated requests);
 * **`unlinkabilityRO_lean_num`**: any two worlds differ by at most
 
-      8·εRO(q₃, q₅ + 1872, q_E + 13821) + 4·(2⁻¹¹⁰ + εRO(0, 312, 4607)) + 6·noHitProb
+      8·εRO(q₃, q₅ + 1872, q_E + 13821) + 4·(2⁻¹¹³ + εRO(0, 312, 4607)) + 6·noHitProb
         + 12·2⁻¹⁰²⁴ + 2·εhide.
 
 **Cipher rows.** Everything here is stated for every type of cipher rows `R` (the shared
@@ -60,7 +60,7 @@ lemma leanPSR_vec (x : SpendInstance) (w : SpendWitness) (ρ : Coins 16) (g : Ta
   simp only [leanPSR, realRO, bOf_vec]
 
 lemma nonneg_bound [ZKRow R] (k : ℝ) (hk : 0 ≤ k) :
-    0 ≤ 1 / 2 ^ 110 + ZKRow.εz R pS 0 312 4607 + (noHitProb + k / 2 ^ 1024 : ℝ) := by
+    0 ≤ 1 / 2 ^ 113 + ZKRow.εz R pS 0 312 4607 + (noHitProb + k / 2 ^ 1024 : ℝ) := by
   have := pr_nonneg (α := Grind) (fun g => firstHit g = none)
   have := ZKRow.εz_nonneg (R := R) pS 0 312 4607
   unfold noHitProb; positivity
@@ -163,9 +163,9 @@ lemma spRealR_ne {x : TRe} {τ : TokenS} {d : Credits} {u u' : ShR R}
   · simp only [hv, ↓reduceIte] at h
     exact absurd rfl h
 
-/-- **The collision term of hop S1**: `δS₁ ≤ 2⁻¹¹⁰ + εRO(0, 312, 4607) + noHitProb + 2·2⁻¹⁰²⁴`. -/
+/-- **The collision term of hop S1**: `δS₁ ≤ 2⁻¹¹³ + εRO(0, 312, 4607) + noHitProb + 2·2⁻¹⁰²⁴`. -/
 theorem deltaS1R_le [ZKRow R] (b₁ : Bool) : deltaS1R A leanSimIR leanProgIR leanPSR b₁ ≤
-    1 / 2 ^ 110 + ZKRow.εz R pS 0 312 4607 + (noHitProb + 2 / 2 ^ 1024) := by
+    1 / 2 ^ 113 + ZKRow.εz R pS 0 312 4607 + (noHitProb + 2 / 2 ^ 1024) := by
   unfold deltaS1R
   refine pr_le_of_fst fun γ => ?_
   set τ := τ₁Of A b₁ (i₀R A leanSimIR γ.1) (i₁R A leanSimIR γ.1)
@@ -193,10 +193,10 @@ theorem deltaS1R_le [ZKRow R] (b₁ : Bool) : deltaS1R A leanSimIR leanProgIR le
       obtain ⟨h1, t', h2, -⟩ := spRealR_ne A h
       exact ⟨h1, t', h2⟩), False.elim⟩
 
-/-- **The collision term of hop S2**: `δS₂ ≤ 2⁻¹¹⁰ + εRO(0, 312, 4607) + noHitProb + 3·2⁻¹⁰²⁴`. -/
+/-- **The collision term of hop S2**: `δS₂ ≤ 2⁻¹¹³ + εRO(0, 312, 4607) + noHitProb + 3·2⁻¹⁰²⁴`. -/
 theorem deltaS2R_le [ZKRow R] (b₁ b₂ : Bool) :
     deltaS2R A leanSimIR leanSimSR leanProgIR leanProgSR leanPSR b₁ b₂ ≤
-      1 / 2 ^ 110 + ZKRow.εz R pS 0 312 4607 + (noHitProb + 3 / 2 ^ 1024) := by
+      1 / 2 ^ 113 + ZKRow.εz R pS 0 312 4607 + (noHitProb + 3 / 2 ^ 1024) := by
   unfold deltaS2R
   refine pr_le_of_fst fun γ => ?_
   set τ := τ₂R A leanSimIR leanSimSR b₁ b₂ γ
@@ -254,7 +254,7 @@ theorem deltaS2R_le [ZKRow R] (b₁ b₂ : Bool) :
 (`ZKRow R`): as `unlinkabilityRO_leanG` with the collision terms bounded,
 
     4·εz(pI; q₃, q₅ + 1872, q_E + 13821) + 4·εz(pS; q₃, q₅ + 1872, q_E + 13821)
-      + 4·(2⁻¹¹⁰ + εz(pS; 0, 312, 4607)) + 6·noHitProb + 12·2⁻¹⁰²⁴ + 2·εhide. -/
+      + 4·(2⁻¹¹³ + εz(pS; 0, 312, 4607)) + 6·noHitProb + 12·2⁻¹⁰²⁴ + 2·εhide. -/
 theorem unlinkabilityRO_lean_numG [ZKRow R] (A : AdversaryRO R Sizes.labelRows) {q3 q5 qE : ℕ}
     {εhide : ℝ} (hA : A.Budget q3 q5 qE)
     (hhide : ∀ b₁ b₂ K, hidingAdv A.ctx
@@ -263,7 +263,7 @@ theorem unlinkabilityRO_lean_numG [ZKRow R] (A : AdversaryRO R Sizes.labelRows) 
     |pr _ (realGameR A leanPIR leanPSR b₁ b₂) - pr _ (realGameR A leanPIR leanPSR b₁' b₂')| ≤
       4 * ZKRow.εz R pI q3 (q5 + 1872) (qE + 13821) +
         4 * ZKRow.εz R pS q3 (q5 + 1872) (qE + 13821) +
-        4 * (1 / 2 ^ 110 + ZKRow.εz R pS 0 312 4607) +
+        4 * (1 / 2 ^ 113 + ZKRow.εz R pS 0 312 4607) +
         6 * noHitProb + 12 / 2 ^ 1024 + 2 * εhide := by
   refine (unlinkabilityRO_leanG A hA hhide b₁ b₂ b₁' b₂').trans (le_trans (add_le_add (add_le_add
     (add_le_add (add_le_add le_rfl (mul_le_mul_of_nonneg_left (deltaI1R_le A) (by norm_num)))
@@ -276,7 +276,7 @@ theorem unlinkabilityRO_lean_numG [ZKRow R] (A : AdversaryRO R Sizes.labelRows) 
 term explicit.** As `unlinkabilityRO_lean`, with the programming-collision terms bounded: any two
 worlds differ by at most
 
-    8·εRO(q₃, q₅ + 1872, q_E + 13821) + 4·(2⁻¹¹⁰ + εRO(0, 312, 4607)) + 6·noHitProb
+    8·εRO(q₃, q₅ + 1872, q_E + 13821) + 4·(2⁻¹¹³ + εRO(0, 312, 4607)) + 6·noHitProb
       + 12·2⁻¹⁰²⁴ + 2·εhide.
 
 (`unlinkabilityRO_lean_numG` at function rows.) -/
@@ -286,7 +286,7 @@ theorem unlinkabilityRO_lean_num (A : AdversaryRO (Blk → Blk) Sizes.labelRows)
       (reductionR A leanSimIR leanSimSR leanProgIR leanProgSR b₁ b₂ K) ≤ εhide)
     (b₁ b₂ b₁' b₂' : Bool) :
     |pr _ (realGameR A leanPIR leanPSR b₁ b₂) - pr _ (realGameR A leanPIR leanPSR b₁' b₂')| ≤
-      8 * εRO q3 (q5 + 1872) (qE + 13821) + 4 * (1 / 2 ^ 110 + εRO 0 312 4607) +
+      8 * εRO q3 (q5 + 1872) (qE + 13821) + 4 * (1 / 2 ^ 113 + εRO 0 312 4607) +
         6 * noHitProb + 12 / 2 ^ 1024 + 2 * εhide :=
   (unlinkabilityRO_lean_numG A hA hhide b₁ b₂ b₁' b₂').trans (le_of_eq (by
     rw [ZKRow.εz_fn, ZKRow.εz_fn]

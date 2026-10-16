@@ -37,7 +37,7 @@ commitment) is covered: the slice it reads is the one the proof uses, as in the 
   adversary with budget `(q₃, q₅, q_E)` (`q₃`: reads of the unused slot slices, free),
 
       4·εz(pI; q_E + 13824, q₅ + 1872, q_E + 13824) + 4·εz(pR; q_E + 13824, q₅ + 1872, q_E + 13824)
-        + 4·(2⁻¹¹⁰ + εz(pR; 0, 312, 4607)) + 6·noHitProb + 12·2⁻¹⁰²⁴ + 2·εhide.
+        + 4·(2⁻¹¹³ + εz(pR; 0, 312, 4607)) + 6·noHitProb + 12·2⁻¹⁰²⁴ + 2·εhide.
 
 * **Ratatouille** (`unlinkabilitySh_numG`, `unlinkabilitySh_num`, `unlinkabilitySh_num_perm`): the
   same with `pS` for `pR`.
@@ -257,7 +257,7 @@ rows (the cipher and `H₃`) at `q_E` keys, `H₅` at `q₅`, `H₂³` freely (a
 `q₃`). Then the two worlds differ by at most
 
     4·εz(pI; q_E + 13824, q₅ + 1872, q_E + 13824) + 4·εz(pR; q_E + 13824, q₅ + 1872, q_E + 13824)
-      + 4·(2⁻¹¹⁰ + εz(pR; 0, 312, 4607)) + 6·noHitProb + 12·2⁻¹⁰²⁴ + 2·εhide,
+      + 4·(2⁻¹¹³ + εz(pR; 0, 312, 4607)) + 6·noHitProb + 12·2⁻¹⁰²⁴ + 2·εhide,
 
 with no term for proofs whose prefixes coincide. -/
 theorem anonymitySh_numG [ZKRow R] {q3 q5 qE : ℕ} {εhide : ℝ} (hA : A.Budget q3 q5 qE)
@@ -266,7 +266,7 @@ theorem anonymitySh_numG [ZKRow R] {q3 q5 qE : ℕ} {εhide : ℝ} (hA : A.Budge
     |pr _ (realGameSh A idx false) - pr _ (realGameSh A idx true)| ≤
       4 * ZKRow.εz R pI (qE + 13824) (q5 + 1872) (qE + 13824) +
         4 * ZKRow.εz R pR (qE + 13824) (q5 + 1872) (qE + 13824) +
-        4 * (1 / 2 ^ 110 + ZKRow.εz R pR 0 312 4607) +
+        4 * (1 / 2 ^ 113 + ZKRow.εz R pR 0 312 4607) +
         6 * noHitProb + 12 / 2 ^ 1024 + 2 * εhide := by
   have h := anonymityRO (A := A) (idx := idx) (PI := leanPISh) (PR := leanPRSh)
     (simI := leanSim pI) (simR := leanSim pR) (progI := leanProgI) (progR := leanProgR)
@@ -302,14 +302,14 @@ theorem anonymitySh_numG [ZKRow R] {q3 q5 qE : ℕ} {εhide : ℝ} (hA : A.Budge
 
 /-- **Theorem 4(a) with one shared `H₃`, function rows** (`anonymitySh_numG` at `Blk → Blk`):
 
-    8·εRO(q_E + 13824, q₅ + 1872, q_E + 13824) + 4·(2⁻¹¹⁰ + εRO(0, 312, 4607)) + 6·noHitProb
+    8·εRO(q_E + 13824, q₅ + 1872, q_E + 13824) + 4·(2⁻¹¹³ + εRO(0, 312, 4607)) + 6·noHitProb
       + 12·2⁻¹⁰²⁴ + 2·εhide. -/
 theorem anonymitySh_num (A : AdversaryRO (RowH (Blk → Blk))) (idx : AnchorSet → UOVKey → ℕ)
     {q3 q5 qE : ℕ} {εhide : ℝ} (hA : A.Budget q3 q5 qE)
     (hhide : ∀ b c, hidingAdv A.base.ci A.base.cr
       (reductionRO A idx (leanSim pI) (leanSim pR) leanProgI leanProgR b c) ≤ εhide) :
     |pr _ (realGameSh A idx false) - pr _ (realGameSh A idx true)| ≤
-      8 * εRO (qE + 13824) (q5 + 1872) (qE + 13824) + 4 * (1 / 2 ^ 110 + εRO 0 312 4607) +
+      8 * εRO (qE + 13824) (q5 + 1872) (qE + 13824) + 4 * (1 / 2 ^ 113 + εRO 0 312 4607) +
         6 * noHitProb + 12 / 2 ^ 1024 + 2 * εhide :=
   (anonymitySh_numG A idx hA hhide).trans (le_of_eq (by
     rw [ZKRow.εz_fn, ZKRow.εz_fn]
@@ -320,7 +320,7 @@ theorem anonymitySh_num (A : AdversaryRO (RowH (Blk → Blk))) (idx : AnchorSet 
 (`anonymitySh_numG` at `Equiv.Perm Blk`):
 
     4·εROPm(pI; q_E + 13824, q₅ + 1872, q_E + 13824) + 4·εROPm(pR; q_E + 13824, q₅ + 1872, q_E + 13824)
-      + 4·(2⁻¹¹⁰ + εROPm(pR; 0, 312, 4607)) + 6·noHitProb + 12·2⁻¹⁰²⁴ + 2·εhide. -/
+      + 4·(2⁻¹¹³ + εROPm(pR; 0, 312, 4607)) + 6·noHitProb + 12·2⁻¹⁰²⁴ + 2·εhide. -/
 theorem anonymitySh_num_perm (A : AdversaryRO (RowH (Equiv.Perm Blk)))
     (idx : AnchorSet → UOVKey → ℕ) {q3 q5 qE : ℕ} {εhide : ℝ} (hA : A.Budget q3 q5 qE)
     (hhide : ∀ b c, hidingAdv A.base.ci A.base.cr
@@ -328,7 +328,7 @@ theorem anonymitySh_num_perm (A : AdversaryRO (RowH (Equiv.Perm Blk)))
     |pr _ (realGameSh A idx false) - pr _ (realGameSh A idx true)| ≤
       4 * εROPm pI (qE + 13824) (q5 + 1872) (qE + 13824) +
         4 * εROPm pR (qE + 13824) (q5 + 1872) (qE + 13824) +
-        4 * (1 / 2 ^ 110 + εROPm pR 0 312 4607) + 6 * noHitProb + 12 / 2 ^ 1024 + 2 * εhide :=
+        4 * (1 / 2 ^ 113 + εROPm pR 0 312 4607) + 6 * noHitProb + 12 / 2 ^ 1024 + 2 * εhide :=
   anonymitySh_numG A idx hA hhide
 
 end Moussaka
@@ -595,7 +595,7 @@ theorem deltaS2R_sh (b₁ b₂ : Bool) :
 type of cipher rows** (`ZKRow R`): any two worlds differ by at most
 
     4·εz(pI; q_E + 13824, q₅ + 1872, q_E + 13824) + 4·εz(pS; q_E + 13824, q₅ + 1872, q_E + 13824)
-      + 4·(2⁻¹¹⁰ + εz(pS; 0, 312, 4607)) + 6·noHitProb + 12·2⁻¹⁰²⁴ + 2·εhide,
+      + 4·(2⁻¹¹³ + εz(pS; 0, 312, 4607)) + 6·noHitProb + 12·2⁻¹⁰²⁴ + 2·εhide,
 
 with no term for proofs whose prefixes coincide. -/
 theorem unlinkabilitySh_numG [ZKRow R] {q3 q5 qE : ℕ} {εhide : ℝ} (hA : A.Budget q3 q5 qE)
@@ -605,7 +605,7 @@ theorem unlinkabilitySh_numG [ZKRow R] {q3 q5 qE : ℕ} {εhide : ℝ} (hA : A.B
     |pr _ (realGameSh A b₁ b₂) - pr _ (realGameSh A b₁' b₂')| ≤
       4 * ZKRow.εz R pI (qE + 13824) (q5 + 1872) (qE + 13824) +
         4 * ZKRow.εz R pS (qE + 13824) (q5 + 1872) (qE + 13824) +
-        4 * (1 / 2 ^ 110 + ZKRow.εz R pS 0 312 4607) +
+        4 * (1 / 2 ^ 113 + ZKRow.εz R pS 0 312 4607) +
         6 * noHitProb + 12 / 2 ^ 1024 + 2 * εhide := by
   have h := unlinkabilityRO (A := A) (PI := leanPIRSh) (PS := leanPSRSh) (simI := leanSimIR)
     (simS := leanSimSR) (progI := leanProgIR) (progS := leanProgSR)
@@ -643,7 +643,7 @@ theorem unlinkabilitySh_numG [ZKRow R] {q3 q5 qE : ℕ} {εhide : ℝ} (hA : A.B
 
 /-- **Theorem 2 with one shared `H₃`, function rows**:
 
-    8·εRO(q_E + 13824, q₅ + 1872, q_E + 13824) + 4·(2⁻¹¹⁰ + εRO(0, 312, 4607)) + 6·noHitProb
+    8·εRO(q_E + 13824, q₅ + 1872, q_E + 13824) + 4·(2⁻¹¹³ + εRO(0, 312, 4607)) + 6·noHitProb
       + 12·2⁻¹⁰²⁴ + 2·εhide. -/
 theorem unlinkabilitySh_num (A : AdversaryRO (RowH (Blk → Blk)) Sizes.labelRows) {q3 q5 qE : ℕ}
     {εhide : ℝ} (hA : A.Budget q3 q5 qE)
@@ -651,7 +651,7 @@ theorem unlinkabilitySh_num (A : AdversaryRO (RowH (Blk → Blk)) Sizes.labelRow
       (reductionR A leanSimIR leanSimSR leanProgIR leanProgSR b₁ b₂ K) ≤ εhide)
     (b₁ b₂ b₁' b₂' : Bool) :
     |pr _ (realGameSh A b₁ b₂) - pr _ (realGameSh A b₁' b₂')| ≤
-      8 * εRO (qE + 13824) (q5 + 1872) (qE + 13824) + 4 * (1 / 2 ^ 110 + εRO 0 312 4607) +
+      8 * εRO (qE + 13824) (q5 + 1872) (qE + 13824) + 4 * (1 / 2 ^ 113 + εRO 0 312 4607) +
         6 * noHitProb + 12 / 2 ^ 1024 + 2 * εhide :=
   (unlinkabilitySh_numG A hA hhide b₁ b₂ b₁' b₂').trans (le_of_eq (by
     rw [ZKRow.εz_fn, ZKRow.εz_fn]
@@ -661,7 +661,7 @@ theorem unlinkabilitySh_num (A : AdversaryRO (RowH (Blk → Blk)) Sizes.labelRow
 /-- **Theorem 2 with one shared `H₃`, AES as uniformly random permutations**:
 
     4·εROPm(pI; q_E + 13824, q₅ + 1872, q_E + 13824) + 4·εROPm(pS; q_E + 13824, q₅ + 1872, q_E + 13824)
-      + 4·(2⁻¹¹⁰ + εROPm(pS; 0, 312, 4607)) + 6·noHitProb + 12·2⁻¹⁰²⁴ + 2·εhide. -/
+      + 4·(2⁻¹¹³ + εROPm(pS; 0, 312, 4607)) + 6·noHitProb + 12·2⁻¹⁰²⁴ + 2·εhide. -/
 theorem unlinkabilitySh_num_perm (A : AdversaryRO (RowH (Equiv.Perm Blk)) Sizes.labelRows)
     {q3 q5 qE : ℕ} {εhide : ℝ} (hA : A.Budget q3 q5 qE)
     (hhide : ∀ b₁ b₂ K, hidingAdv A.ctx
@@ -670,7 +670,7 @@ theorem unlinkabilitySh_num_perm (A : AdversaryRO (RowH (Equiv.Perm Blk)) Sizes.
     |pr _ (realGameSh A b₁ b₂) - pr _ (realGameSh A b₁' b₂')| ≤
       4 * εROPm pI (qE + 13824) (q5 + 1872) (qE + 13824) +
         4 * εROPm pS (qE + 13824) (q5 + 1872) (qE + 13824) +
-        4 * (1 / 2 ^ 110 + εROPm pS 0 312 4607) + 6 * noHitProb + 12 / 2 ^ 1024 + 2 * εhide :=
+        4 * (1 / 2 ^ 113 + εROPm pS 0 312 4607) + 6 * noHitProb + 12 / 2 ^ 1024 + 2 * εhide :=
   unlinkabilitySh_numG A hA hhide b₁ b₂ b₁' b₂'
 
 end Ratatouille

@@ -18,7 +18,7 @@ recomputation's reads (`viewICPm`, `viewKeysPm`, `joint3_h4_perm`).
 
 **`zk_rom_ic_h23_num_perm`**: the advantage is at most
 
-    q₃·2⁻¹²⁸ + 2⁻¹¹⁰ + 221·(4607 + q_E + 4607)/(2¹²⁸ − (nHi + 1)) + switchEps + (q₅ + 1)·2⁻¹²⁸,
+    q₃·2⁻¹²⁸ + 2⁻¹¹³ + 221·(4607 + q_E + 4607)/(2¹²⁸ − (nHi + 1)) + switchEps + (q₅ + 1)·2⁻¹²⁸,
 
 `switchEps = (17·C(2 + VOLE_COL_BLOCKS, 2) + C(nHi + 1, 2))·2⁻¹²⁸` the PRP/PRF switching term of the
 hidden leaves' and the root's rows.
@@ -222,7 +222,7 @@ theorem zk_rom_ic_h23_perm {cs : ByteArray → ByteArray → System GF128}
 /-- **`zk_rom_ic_h23_perm` with the grinding term numeric**: with AES as uniformly random
 permutations (whole permutation rows read by the distinguisher), the executable prover is
 
-    q₃·2⁻¹²⁸ + 2⁻¹¹⁰ + 221·(4607 + q_E + 4607)/(2¹²⁸ − (nHi + 1)) + switchEps + (q₅ + 1)·2⁻¹²⁸
+    q₃·2⁻¹²⁸ + 2⁻¹¹³ + 221·(4607 + q_E + 4607)/(2¹²⁸ − (nHi + 1)) + switchEps + (q₅ + 1)·2⁻¹²⁸
 
 close to the programming simulator. -/
 theorem zk_rom_ic_h23_num_perm {cs : ByteArray → ByteArray → System GF128}
@@ -248,11 +248,11 @@ theorem zk_rom_ic_h23_num_perm {cs : ByteArray → ByteArray → System GF128}
         D (simulate st.params c.1.1) c.1.2.1
           (@simTab (icPrg (cf c.2)) Hb CrtGen.tables st c.1.2.2.2 (simulate st.params c.1.1)
             c.1.1.1.2.1 c.1.2.2.1) c.1.2.2.2 c.2)| ≤
-      q3 / 2 ^ 128 + 1 / 2 ^ 110 +
+      q3 / 2 ^ 128 + 1 / 2 ^ 113 +
         (221 * (4607 + (qE + 4607)) / ((2 ^ 128 - (nHi st.params + 1) : ℕ) : ℝ) +
           switchEps st.params) + (q5 + 1) / 2 ^ 128 :=
   (zk_rom_ic_h23_perm Hb st w hlr hzk hHb hp D Q3 hQ3 hq3 Q5 hQ5 hq5 QE hQE hqE).trans
-    (add_le_add (add_le_add (add_le_add le_rfl grindBad_le_110) le_rfl) le_rfl)
+    (add_le_add (add_le_add (add_le_add le_rfl grindBad_le_113) le_rfl) le_rfl)
 
 end MainPerm
 

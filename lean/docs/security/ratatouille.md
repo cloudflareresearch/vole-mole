@@ -24,7 +24,7 @@ Line references are `file:line` at `6d7113e`.
 | **Balance** (no inflation): accepted spends ≤ issued + refunded, against adaptive malicious clients, honest clients present | **Proved** (Thm 1), classical | `ε_ext + Adv^{uf-tag} + q_K²·2^{−257}` |
 | **No theft**: an adversary cannot spend an honest client's credits through a request it did not copy verbatim | **Proved** (Thm 3), using weak SE and a ZK hop | `ε_ZK + ε_SE + q_K·2^{−127}` |
 | **No theft by copying** (hijack): anyone who obtains a spend request can redeem it first | **Fails** (F2). Nothing binds a spend to a session, unlike {{ACT}}'s `ctx_spend` and Moussaka's `challenge_digest` | — |
-| **Unlinkability/anonymity** against a malicious Issuer: spends and issuances leak only `(pk, ctx_iss, T_init, d)` and whether the client could afford the spend | **Proved** (Thm 2). On `main` it relies on Keccak one-wayness in `r`; with the fix it is standard NIZK. [Lean] a two-round left/right form, from ZK and hiding hypotheses (`Privacy/Ratatouille.lean`); with the executable Lean prover (label rows) down to its tape hypothesis (`Privacy/RatatouilleLean.lean`, `unlinkability_label_rows`); for the Lean prover in the ROM and ideal-cipher model with every zero-knowledge term explicit, `≈ 2⁻¹⁰²·²` plus budget terms and `2·ε_hide` (`unlinkabilityRO_lean_num`), and `≈ 2⁻¹⁰¹·⁵` with a table-reading Issuer (`unlinkabilityRA_lean_num`; §6); also with AES as random permutations (`_perm`) and with one shared `H₃` (`unlinkabilitySh_num`, `unlinkabilityRASh_num`); from the real Clients' OS seeds and seed XOF, each `+ 2·(2q_H + 2)·2⁻²⁵⁶` with `q_H` the Issuer's XOF queries (`unlinkability*_seed`, `lean/docs/zk.md` §10.6; the note's H1 does not charge seed collisions) | `ε_ZK + q_K·2^{−127}` |
+| **Unlinkability/anonymity** against a malicious Issuer: spends and issuances leak only `(pk, ctx_iss, T_init, d)` and whether the client could afford the spend | **Proved** (Thm 2). On `main` it relies on Keccak one-wayness in `r`; with the fix it is standard NIZK. [Lean] a two-round left/right form, from ZK and hiding hypotheses (`Privacy/Ratatouille.lean`); with the executable Lean prover (label rows) down to its tape hypothesis (`Privacy/RatatouilleLean.lean`, `unlinkability_label_rows`); for the Lean prover in the ROM and ideal-cipher model with every zero-knowledge term explicit, `≈ 2⁻¹⁰²·³` plus budget terms and `2·ε_hide` (`unlinkabilityRO_lean_num`), and `≈ 2⁻¹⁰¹·⁶` with a table-reading Issuer (`unlinkabilityRA_lean_num`; §6); also with AES as random permutations (`_perm`) and with one shared `H₃` (`unlinkabilitySh_num`, `unlinkabilityRASh_num`); from the real Clients' OS seeds and seed XOF, each `+ 2·(2q_H + 2)·2⁻²⁵⁶` with `q_H` the Issuer's XOF queries (`unlinkability*_seed`, `lean/docs/zk.md` §10.6; the note's H1 does not charge seed collisions) | `ε_ZK + q_K·2^{−127}` |
 | **Correctness** of issuance, spends, refunds and the 64-bit edge cases | **Proved** (Thm 4); arithmetic checked in Lean | prover abort `≤ (1−p)^{2³²}` |
 | **Refund integrity**: refunds are bound to their state and cannot be moved or altered | Proved, as part of Thm 1 and Thm 3 | — |
 | **Key separation across protocols** | **Fails if a key is shared with PomFRIT**: unbounded minting (F1, demonstrated) | — |
@@ -470,10 +470,10 @@ and affords the amount, else it is refused for both (feasibility is leakage).
   ideal cipher): any two worlds differ by at most
   `8·εRO(q₃, q₅ + 3·624, q_E + 3·4607) + 2·δI₁ + Σ_w (δS₁ w + δS₂ w) + 2·εhide`, with the explicit
   programming-collision terms `δ`, bounded in Lean (`lean/VoleMole/Privacy/RatatouilleDelta.lean`,
-  zk.md §10.2): `δI₁ ≤ noHitProb + 2⁻¹⁰²⁴`, `δS₁ ≤ 2⁻¹¹⁰ + εRO(0, 312, 4607) + noHitProb +
+  zk.md §10.2): `δI₁ ≤ noHitProb + 2⁻¹⁰²⁴`, `δS₁ ≤ 2⁻¹¹³ + εRO(0, 312, 4607) + noHitProb +
   2·2⁻¹⁰²⁴`, `δS₂ ≤ … + 3·2⁻¹⁰²⁴`, so **`unlinkabilityRO_lean_num`**: any two worlds differ by at
-  most `8·εRO(q₃, q₅ + 1872, q_E + 13821) + 4·(2⁻¹¹⁰ + εRO(0, 312, 4607)) + 6·noHitProb +
-  12·2⁻¹⁰²⁴ + 2·εhide` (about `2⁻¹⁰²·²` plus the budget terms). The simulated world is
+  most `8·εRO(q₃, q₅ + 1872, q_E + 13821) + 4·(2⁻¹¹³ + εRO(0, 312, 4607)) + 6·noHitProb +
+  12·2⁻¹⁰²⁴ + 2·εhide` (about `2⁻¹⁰²·³` plus the budget terms). The simulated world is
   `Ratatouille.view` for an Issuer that also sees the tables, programmed as a function of the
   requests it sees and the simulator coins (`Vtab`, `simGameR_iff`), so `simGame_iff`,
   `stage_ideal` and `idealGame_iff` are reused unchanged, with the coins and tables fixed in the
@@ -503,11 +503,11 @@ and affords the amount, else it is refused for both (feasibility is leakage).
       4·εRO(2i₃ + q₃, q₅ + 2i₅ + 1872, q_E + 2i_E + 13821)
         + 2·εAd(9; i₃ + q₃, q₅ + i₅ + 1248, q_E + i_E + 13821; i₃, i₂, i₅ + 624, i_E + 9214)
         + 2·εAd(9; q₃, q₅ + 936, q_E + 13821; 2i₃, 2i₂, 2i₅ + 1560, 2i_E + 23035)
-        + 6·i₃·2⁻¹²⁸ + 4·(2⁻¹¹⁰ + εROP(0, 312, 4607; 2i₅ + 1560, 2i_E + 23035))
+        + 6·i₃·2⁻¹²⁸ + 4·(2⁻¹¹³ + εROP(0, 312, 4607; 2i₅ + 1560, 2i_E + 23035))
         + 6·noHitProb + 12·2⁻¹⁰²⁴ + 2·εhide.
 
-  This is about `2⁻¹⁰¹·⁵` at zero budgets (`2⁻¹⁰¹·²` if the interaction reads `H₂³`), against
-  `2⁻¹⁰²·²` for `unlinkabilityRO_lean_num`. The difference is the simulations' programmings,
+  This is about `2⁻¹⁰¹·⁶` at zero budgets (`2⁻¹⁰¹·²` if the interaction reads `H₂³`), against
+  `2⁻¹⁰²·³` for `unlinkabilityRO_lean_num`. The difference is the simulations' programmings,
   which the spend hops count as the reader's reads.
   **With AES as random permutations** read forward and inverse (`lean/docs/zk.md` §10.4):
   `unlinkabilityRO_lean_num_perm`, `unlinkabilityRA_lean_num_perm`, the same bounds with `εROPm`,
@@ -742,7 +742,7 @@ and determinism of `Tag`. The witness satisfies V3 by `change_correct`. ∎
   as oracle computations, `unlinkabilityOC_lean_num`) and hiding. The per-proof `H₃` slices are not
   an assumption: with one shared `H₃(wPrefix ‖ μ₁ ‖ ρ ‖ 3)`, each proof reading its column of the
   shared tables at its prefix, the game is proved again with no prefix-collision term
-  (`unlinkabilitySh_num`: `8·εRO(q_E + 13824, q₅ + 1872, q_E + 13824) + 4·(2⁻¹¹⁰ + εRO(0, 312,
+  (`unlinkabilitySh_num`: `8·εRO(q_E + 13824, q₅ + 1872, q_E + 13824) + 4·(2⁻¹¹³ + εRO(0, 312,
   4607)) + 6·noHitProb + 12·2⁻¹⁰²⁴ + 2·εhide`; `unlinkabilityRASh_num`, with
   `4·(i_E + 9214)·2⁻¹²⁸ + 4·(2i_E + 23035)·2⁻¹²⁸` for spends whose fresh `ρ` meets a row the Issuer
   read; `unlinkabilityOCSh_num`; `_perm`; `lean/docs/zk.md` §10.5). H1 (the seed XOF) is mechanized for

@@ -40,7 +40,7 @@ scope.
 - *Privacy.* PomFRIT blindness, Moussaka issuer hiding and unlinkability (Thm 4(a), colluding
   Anchors), Ratatouille unlinkability, as games on the executable specs with the Lean prover, in
   the random-oracle and ideal-cipher model with the adversary seeing the tables, every
-  zero-knowledge and collision term explicit (between about `2⁻¹⁰¹` and `2⁻¹⁰³·⁴` plus budget terms and, for
+  zero-knowledge and collision term explicit (between about `2⁻¹⁰¹·²` and `2⁻¹⁰³·⁴` plus budget terms and, for
   Moussaka and Ratatouille, `2·εhide`), also with interactions that read the tables, one shared
   `H₃`, and the real Clients' seeds; Moussaka's non-colluding mode (Thm 4(b), corrected) from
   per-proof zero knowledge, and in the random-oracle and ideal-cipher model with the honest
@@ -230,7 +230,7 @@ chal1/chal2 (recommended, not implemented).
   accepts its proofs under the programmed oracle with no assumption beyond `Δ ≠ 0`
   (`simulateRO_accept'`), i.e. except with probability `≤ noHitProb + 1/|A| ≤ 2^{−2¹⁵} + 2⁻¹¹⁴
   ≤ 2⁻¹¹³` over the simulator's coins (`pr_simulateRO_reject_113`; `pr_simulateRO_reject_110`
-  with the first-moment bound).
+  is the weaker first-moment form).
 - The executable Lean prover equals an ideal-tape prover at its own run's tape
   (`prove_eq_proveIdeal`), and on a uniform tape the ideal-tape prover's output is distributed
   exactly as the simulator's (`proveIdeal_close`; with label rows Θ is moreover uniform and
@@ -295,21 +295,19 @@ chal1/chal2 (recommended, not implemented).
   has `|A| ≥ 2¹¹¹` of the `2¹²⁸` values of `Δ` (a Markov bound on a box of hidden-index tuples,
   with the summed open count evaluated by the kernel), so no grinding answer is accepted with
   probability `≤ 2^{−2¹⁵}`; `W_CRT` is injective, so `Δ' = 0` only at `Δ = 0`, which is the first
-  accepted answer with probability `≤ 1/|A|`; hence `Pr[GrindBad] ≤ 2⁻¹¹⁰`, and
-  `zk_rom_ic_h23_num`, `zk_rom_h23_num` state both bounds with `2⁻¹¹⁰` in its place. The
-  single-proof error is thus
-  `εRO(q₃, q₅, q_E) = q₃·2⁻¹²⁸ + 2⁻¹¹⁰ + 221·(4607 + q_E + 4607)·2⁻¹²⁸ + (q₅ + 1)·2⁻¹²⁸`, about
-  `2⁻¹⁰⁶·⁹` at zero budgets.
+  accepted answer with probability `≤ 1/|A|`; hence `Pr[GrindBad] ≤ 2⁻¹¹⁰` (`grindBad_le_110`),
+  and `≤ 2⁻¹¹³` with the second moment (next item). `zk_rom_ic_h23_num`, `zk_rom_h23_num` state
+  both bounds with `2⁻¹¹³` in its place. The single-proof error is thus
+  `εRO(q₃, q₅, q_E) = q₃·2⁻¹²⁸ + 2⁻¹¹³ + 221·(4607 + q_E + 4607)·2⁻¹²⁸ + (q₅ + 1)·2⁻¹²⁸`, about
+  `2⁻¹⁰⁷·⁰` at zero budgets.
 - **The grinding term by the second moment** (`ZK/AcceptVar.lean`, `ZK/AcceptVarData.lean`,
-  `ZK/GrindTight.lean`): Chebyshev's inequality on the same box, with the second moment of the
+  `ZK/GrindNum.lean`): Chebyshev's inequality on the same box, with the second moment of the
   open count evaluated by the kernel (pairs of tree nodes: related pairs on a pass over the tree,
   disjoint pairs through the histogram of the `136` distinct leaf-count vectors), gives
   `|A| ≥ 2¹¹⁴` (`card_accSet_ge_114`), so `Pr[Δ' = 0] ≤ 2⁻¹¹⁴` (`pr_hitZero_le_114`) and
-  `Pr[GrindBad] ≤ 2^{−2¹⁵} + 2⁻¹¹⁴ ≤ 2⁻¹¹³` (`grindBad_num_114`, `grindBad_le_113`). The headline
-  bounds with `2⁻¹¹³` in place of `2⁻¹¹⁰` are `zk_rom_ic_h23_num113`, `zk_rom_h23_num113`,
-  `zk_rom_ic_h23_num113_perm` and `zk2_rom_ic_h23_num113`: `εRO` at zero budgets is then about
-  `2⁻¹⁰⁷·⁰`. The privacy corollaries below are stated with the earlier `2⁻¹¹⁰` (swapping in
-  `grindBad_le_113` is mechanical). The true `Pr[Δ' = 0] = Pr[hit]/|A|` is `≈ 2⁻¹¹⁸·⁶⁷`
+  `Pr[GrindBad] ≤ 2^{−2¹⁵} + 2⁻¹¹⁴ ≤ 2⁻¹¹³` (`grindBad_num_114`, `grindBad_le_113`). Every numeric
+  error term (`εRO`, `εROP`, `εROPm`, `εROPmP`, `εAd*`, `h23*`) and every headline and privacy
+  bound below uses `2⁻¹¹³`. The true `Pr[Δ' = 0] = Pr[hit]/|A|` is `≈ 2⁻¹¹⁸·⁶⁷`
   (`|A| ≈ 0.397·2¹²⁰` by sampling); the paper's `2⁻¹²⁰` treats `Δ'` as uniform on all `2¹²⁰`
   values, but grinding makes the accepted `Δ` uniform on `A` only. The rest of the gap is the box
   (`120¹⁷ ≈ 2¹¹⁷·⁴`) and the slack of a second-moment bound near the mean; an exact count of `A`
@@ -324,7 +322,7 @@ chal1/chal2 (recommended, not implemented).
   root's rows (samples without replacement against uniform values; every other hidden row is read
   at most once), `≤ 2⁻¹¹³·²` for the relations' parameters (`nHi = 1`). The headline follows
   (`zk_rom_ic_h23_num_perm`, and as `ZeroKnowledgeRO` on `ShPm p`, `lean_zeroKnowledgeRO_perm`):
-  `q₃·2⁻¹²⁸ + 2⁻¹¹⁰ + 221·(4607 + q_E + 4607)/(2¹²⁸ − (nHi + 1)) + switchEps + (q₅ + 1)·2⁻¹²⁸`.
+  `q₃·2⁻¹²⁸ + 2⁻¹¹³ + 221·(4607 + q_E + 4607)/(2¹²⁸ − (nHi + 1)) + switchEps + (q₅ + 1)·2⁻¹²⁸`.
 - **Two phases** (`zk2_rom_ic_h23_num`, `ZK/TwoPhaseRO.lean`, `ZK/TwoPhaseIC.lean`): the same
   single-proof bound holds for PomFRIT's two-phase prover. The simulator programs `H₂³` at the
   prefix it recomputes for the instance picked after step 1; the fallback block is inside
@@ -355,10 +353,10 @@ chal1/chal2 (recommended, not implemented).
   bytes), a simulator programs one prefix block, whose last `16·(d − 1)` bytes are its uniform `ã`
   (the simulated opening reconstructs, `reconstruct_openingOf`); for the second issuance
   `δI₁ ≤ noHitProb + 2⁻¹⁰²⁴`, for a redemption or spend (whose statement may depend on the earlier
-  `ã`), with a second application of zero knowledge, `δ ≤ 2⁻¹¹⁰ + εRO(0, 312, 4607) + noHitProb +
+  `ã`), with a second application of zero knowledge, `δ ≤ 2⁻¹¹³ + εRO(0, 312, 4607) + noHitProb +
   3·2⁻¹⁰²⁴`, and for PomFRIT `δ(A) ≤ noHitProb + 2⁻¹²⁸`. So `anonymityRO_lean_num`,
-  `unlinkabilityRO_lean_num`: `≤ 8·εRO(q₃, q₅ + 1872, q_E + 13821) + 4·(2⁻¹¹⁰ + εRO(0, 312,
-  4607)) + 6·noHitProb + 12·2⁻¹⁰²⁴ + 2·εhide` (about `2⁻¹⁰²·²` plus the budget terms), and
+  `unlinkabilityRO_lean_num`: `≤ 8·εRO(q₃, q₅ + 1872, q_E + 13821) + 4·(2⁻¹¹³ + εRO(0, 312,
+  4607)) + 6·noHitProb + 12·2⁻¹⁰²⁴ + 2·εhide` (about `2⁻¹⁰²·³` plus the budget terms), and
   `blindnessRO_lean_num`: `≤ 4·εRO(q₃, q₅ + 1248, q_E + 18428) + 2·noHitProb + 2·2⁻¹²⁸` (about
   `2⁻¹⁰³·⁴` plus the budget terms; `noHitProb ≤ 2^{−2¹⁵}`). The paper bound for redemptions and
   spends (`docs/zk.md` §10.2) missed the `Δ' = 0` part of `GrindBad` and undercounted the earlier
@@ -370,10 +368,10 @@ chal1/chal2 (recommended, not implemented).
   also `ZK2Row R`), and instantiated twice: function rows (the PRF view, `Sh p`, the theorems
   above, unchanged) and permutation rows (`Equiv.Perm Blk`: the adversary reads whole
   permutations, forward and inverse). With permutation rows every `εRO` becomes
-  `εROPm p = q₃·2⁻¹²⁸ + 2⁻¹¹⁰ + 221·(4607 + q_E + 4607)/(2¹²⁸ − (nHi + 1)) + switchEps p +
+  `εROPm p = q₃·2⁻¹²⁸ + 2⁻¹¹³ + 221·(4607 + q_E + 4607)/(2¹²⁸ − (nHi + 1)) + switchEps p +
   (q₅ + 1)·2⁻¹²⁸`: `anonymityRO_lean_num_perm`, `unlinkabilityRO_lean_num_perm`
-  (`4·εROPm(pI; …) + 4·εROPm(pR or pS; …) + 4·(2⁻¹¹⁰ + εROPm(pR or pS; 0, 312, 4607)) +
-  6·noHitProb + 12·2⁻¹⁰²⁴ + 2·εhide`, about `2⁻¹⁰²·²` plus the budget terms) and
+  (`4·εROPm(pI; …) + 4·εROPm(pR or pS; …) + 4·(2⁻¹¹³ + εROPm(pR or pS; 0, 312, 4607)) +
+  6·noHitProb + 12·2⁻¹⁰²⁴ + 2·εhide`, about `2⁻¹⁰²·³` plus the budget terms) and
   `blindnessRO_lean_num_perm` (`4·εROPm(pP; q₃, q₅ + 1248, q_E + 18428) + 2·noHitProb +
   2·2⁻¹²⁸`, about `2⁻¹⁰³·⁴`); the two-phase theorem with permutation rows is
   `zk2_rom_ic_h23_num_perm`.
@@ -394,7 +392,7 @@ guess reads the tables. Here its interaction does too.
 - Moussaka anonymity with an interaction (responses, Anchor Sets, digests) that reads every table:
   `anonymityRA_lean_num`, about `2⁻¹⁰¹·⁹` plus the budget terms. Ratatouille unlinkability with an
   Issuer whose two message stages (issuance responses and `d₁`; round 1's response and `d₂`, which
-  reads spend 1's proof) read every table: `unlinkabilityRA_lean_num`, about `2⁻¹⁰¹·⁵` plus the
+  reads spend 1's proof) read every table: `unlinkabilityRA_lean_num`, about `2⁻¹⁰¹·⁶` plus the
   budget terms.
 - PomFRIT blindness with an Issuer whose key, messages and responses read every table but `H₂³`:
   `blindnessRA_lean_num`, `≤ 4·εRO(q₃ + 4i₃, q₅ + 4i₅ + 1872, q_E + 4i_E + 23035) + 2·noHitProb +
@@ -405,7 +403,7 @@ guess reads the tables. Here its interaction does too.
 - PomFRIT blindness with an Issuer whose key, messages and responses read every table, **`H₂³`
   included** (joint budget `IBudgetH i₃ i₂ i₅ i_E` over both slices and the shared tables):
   `blindnessRAH_lean_num`, `≤ 4·εRO(q₃ + 6i₃, q₅ + 6i₅ + 1872, q_E + 6i_E + 23035) +
-  2·noHitProb + 2·2⁻¹²⁸ + [i₂ > 0]·4·(2⁻¹¹⁰ + εRO(6i₃, 6i₅ + 2184, 6i_E + 18428) + 2i₂·2⁻¹²⁸)`,
+  2·noHitProb + 2·2⁻¹²⁸ + [i₂ > 0]·4·(2⁻¹¹³ + εRO(6i₃, 6i₅ + 2184, 6i_E + 18428) + 2i₂·2⁻¹²⁸)`,
   about `2⁻¹⁰²·³` plus the budget terms. No simulator change: the interaction's `H₂³` reads are
   taken out by lazy sampling of `H₂³` before the hybrids (`pr_resampleC`), `blindnessRA` is
   applied to the Issuer that reads an independent table in place of `H₂³` and whose guess patches
@@ -444,7 +442,7 @@ scheme has one `H₃(wPrefix ‖ μ₁ ‖ ρ ‖ 3)`.
   `ZeroKnowledgeROA.shared`, the column exchanged off the reader's rows, `+ s_E·2⁻¹²⁸`), with no
   hypothesis on the prefixes. The adversary's `H₃` reads count with its cipher queries.
 - The games: `anonymitySh_num`, `unlinkabilitySh_num` (`8·εRO(q_E + 13824, q₅ + 1872, q_E + 13824)
-  + 4·(2⁻¹¹⁰ + εRO(0, 312, 4607)) + 6·noHitProb + 12·2⁻¹⁰²⁴ + 2·εhide`), `blindnessSh_num`
+  + 4·(2⁻¹¹³ + εRO(0, 312, 4607)) + 6·noHitProb + 12·2⁻¹⁰²⁴ + 2·εhide`), `blindnessSh_num`
   (`4·εRO(q_E + 18428, q₅ + 1248, q_E + 18428) + 2·noHitProb + 2·2⁻¹²⁸`), the table-reading
   `anonymityRASh_num`, `unlinkabilityRASh_num`, `blindnessRASh_num` (an interaction that reads a
   later proof's prefix costs `(its rows)·2⁻¹²⁸` per adaptive hop), the oracle-computation
@@ -517,8 +515,8 @@ runs of each layout.
   (`docs/zk-qrom.md`) are on paper.
 - *Not gaps, but artifacts of the proofs*: the second `4607` in `εRO` (the honest recomputation's
   cipher reads, `docs/zk.md` §10.1); `Pr[Δ' = 0]` proved `≤ 2⁻¹¹⁴` (second moment) where it is
-  `≈ 2⁻¹¹⁸·⁷` (an exact count of the accepted set is out of the kernel's reach); the privacy
-  corollaries still quote `Pr[GrindBad] ≤ 2⁻¹¹⁰`; and, with one shared `H₃`, the charge of
+  `≈ 2⁻¹¹⁸·⁷` (an exact count of the accepted set is out of the kernel's reach), so every bound
+  carries `Pr[GrindBad] ≤ 2⁻¹¹³`; and, with one shared `H₃`, the charge of
   `221·2⁻¹²⁸` per `H₃` read where `2⁻¹²⁸` would do. The fixed-record `*_shake` theorems keep the hop hypotheses
   (`HopHyps`, `HopHyps2`), each an idealization (`Privacy/Basic.lean`); the random-oracle theorems
   supersede rather than discharge them.
