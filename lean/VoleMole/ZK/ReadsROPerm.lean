@@ -13,8 +13,11 @@ the distinguisher at most at `q_E` keys (whole permutations: forward and inverse
 `εROPm p q₃ q₅ q_E = q₃·2⁻¹²⁸ + 2⁻¹¹⁰ + 221·(4607 + q_E + 4607)/(2¹²⁸ − (nHi + 1)) + switchEps p +
 (q₅ + 1)·2⁻¹²⁸` (`zk_rom_ic_h23_num_perm`).
 
-The privacy games (`Privacy/MoussakaRO.lean`, `Privacy/RatatouilleRO.lean`, the adaptive and
-two-phase versions) are built on `Sh` and its read predicates; they are not restated here.
+The shared tables, their reads and the prover are those of `ZK/ReadsRO.lean` at the row type
+`Equiv.Perm Blk` (`CipherRow.perm`): `ShPm p = ShG (Equiv.Perm Blk) p`, and `Rd5Pm`, `RdEPm`,
+`BudgetPm`, `realROPm`, `progROPm` are `Rd5`, `RdE`, `Budget`, `realRO`, `progRO` there.
+**`ZKRow.perm`** packages `zk_ro_perm`; the privacy games, stated for any row type with `ZKRow`,
+instantiate with it (`Privacy/PermRO.lean`).
 -/
 
 open Finset
@@ -27,8 +30,13 @@ namespace VoleMole.ZK.Sim
 open VoleMole.Verifier VoleMole.Verifier.Bridge VoleMole.Arith VoleMole.ZK VoleMole.Privacy
   VoleMole.ZK.IC
 
+/-- **Permutation rows** (AES as uniformly random permutations, `IC.cf`). -/
+instance CipherRow.perm : CipherRow (Equiv.Perm Blk) := ⟨fun σ => ⇑σ⟩
+
+lemma rowFn_perm (π : PCipher) : rowFn π = cf π := rfl
+
 /-- **The shared tables with the cipher as random permutations.** -/
-abbrev ShPm (p : Params) := Tab2G p × Tab5F × PCipher
+abbrev ShPm (p : Params) := ShG (Equiv.Perm Blk) p
 
 /-- The shared tables with the permutations' rows as the cipher. -/
 def toSh {p : Params} (s : ShPm p) : Sh p := (s.1, s.2.1, cf s.2.2)
@@ -37,41 +45,55 @@ section Reads
 
 variable {p : Params} {X : Sort*}
 
-/-- `f` reads the `H₅` table at most at `q` keys. -/
-def Rd5Pm (f : ShPm p → X) (q : ℕ) : Prop :=
-  ∃ Q : ShPm p → Finset (Bytes 37), (∀ s, (Q s).card ≤ q) ∧
-    ∀ s (G5 : Tab5F), (∀ k ∈ Q s, s.2.1 k = G5 k) → f (s.1, G5, s.2.2) = f s
+/-- `f` reads the `H₅` table at most at `q` keys (`Rd5` with permutation rows). -/
+abbrev Rd5Pm (f : ShPm p → X) (q : ℕ) : Prop := Rd5 f q
 
-/-- `f` reads the permutation table at most at `q` keys (whole permutations). -/
-def RdEPm (f : ShPm p → X) (q : ℕ) : Prop :=
-  ∃ Q : ShPm p → Finset Blk, (∀ s, (Q s).card ≤ q) ∧
-    ∀ s (π : PCipher), (∀ k ∈ Q s, s.2.2 k = π k) → f (s.1, s.2.1, π) = f s
+/-- `f` reads the permutation table at most at `q` keys (whole permutations; `RdE` with
+permutation rows). -/
+abbrev RdEPm (f : ShPm p → X) (q : ℕ) : Prop := RdE f q
 
-/-- **The budget of a distinguisher** with the permutation table: it reads the `H₃` slice at `q3`,
-`H₅` at `q5` and the permutation table at `qE` keys, and `H₂³` freely. -/
-structure BudgetPm {O : Type*} (p : Params) (q3 q5 qE : ℕ) (D : O → Tab3 → ShPm p → Prop) :
-    Prop where
-  h3 : ∀ o s, Rd3 (fun G3 => D o G3 s) q3
-  h5 : ∀ o G3, Rd5Pm (D o G3) q5
-  hE : ∀ o G3, RdEPm (D o G3) qE
+/-- **The budget of a distinguisher** with the permutation table (`Budget` with permutation
+rows): it reads the `H₃` slice at `q3`, `H₅` at `q5` and the permutation table at `qE` keys, and
+`H₂³` freely. -/
+abbrev BudgetPm {O : Type*} (p : Params) (q3 q5 qE : ℕ) (D : O → Tab3 → ShPm p → Prop) : Prop :=
+  Budget p q3 q5 qE D
 
 end Reads
 
 variable (p : Params) (Hb : Hashes) (st : Statement) (w : ByteArray)
 
-/-- The executable prover with the CTR PRG of the permutations' rows. -/
-noncomputable def realROPm (ρ : Bytes 16) (G3 : Tab3) (s : ShPm p) : Except String ByteArray :=
-  realRO p Hb st w ρ G3 (toSh s)
+/-- The executable prover with the CTR PRG of the permutations' rows (`realRO` with permutation
+rows). -/
+noncomputable abbrev realROPm (ρ : Bytes 16) (G3 : Tab3) (s : ShPm p) : Except String ByteArray :=
+  realRO p Hb st w ρ G3 s
 
-/-- The simulator's programming of `H₂³`, recomputing the prefix with the permutations' rows. -/
-noncomputable def progROPm (c : SimCoins p) (s : ShPm p) : ShPm p :=
-  ((progRO p Hb st c (toSh s)).1, s.2)
+lemma realROPm_eq (ρ : Bytes 16) (G3 : Tab3) (s : ShPm p) :
+    realROPm p Hb st w ρ G3 s = realRO p Hb st w ρ G3 (toSh s) := rfl
+
+/-- The simulator's programming of `H₂³`, recomputing the prefix with the permutations' rows
+(`progRO` with permutation rows). -/
+noncomputable abbrev progROPm (c : SimCoins p) (s : ShPm p) : ShPm p :=
+  progRO p Hb st c s
+
+lemma progROPm_eq (c : SimCoins p) (s : ShPm p) :
+    progROPm p Hb st c s = ((progRO p Hb st c (toSh s)).1, s.2) := rfl
 
 /-- **The error of `zk_rom_ic_h23_num_perm`** at budgets `q₃`, `q₅`, `q_E`. -/
 noncomputable def εROPm (q3 q5 qE : ℕ) : ℝ :=
   q3 / 2 ^ 128 + 1 / 2 ^ 110 +
     (221 * (4607 + (qE + 4607)) / ((2 ^ 128 - (nHi p + 1) : ℕ) : ℝ) + switchEps p) +
       (q5 + 1) / 2 ^ 128
+
+lemma εROPm_mono {q3 q5 qE q3' q5' qE' : ℕ} (h3 : q3 ≤ q3') (h5 : q5 ≤ q5') (hE : qE ≤ qE') :
+    εROPm p q3 q5 qE ≤ εROPm p q3' q5' qE' := by
+  unfold εROPm
+  have h3' : (q3 : ℝ) ≤ q3' := by exact_mod_cast h3
+  have h5' : (q5 : ℝ) ≤ q5' := by exact_mod_cast h5
+  have hE' : (qE : ℝ) ≤ qE' := by exact_mod_cast hE
+  gcongr
+
+lemma εROPm_nonneg (q3 q5 qE : ℕ) : 0 ≤ εROPm p q3 q5 qE := by
+  unfold εROPm switchEps; positivity
 
 /-- **Zero knowledge in the ROM with AES as random permutations, with the tables visible**
 (`zk_rom_ic_h23_num_perm` for a distinguisher with a `BudgetPm`). -/
@@ -132,5 +154,13 @@ theorem lean_zeroKnowledgeRO_perm {I W : Type*} (stOf : I → Statement)
   generalize stOf x = st at hz hpx ⊢
   subst hpx
   exact zk_ro_perm Hb st (enc x w) hlr hz hHb hsp D hD
+
+/-- **Permutation rows have `ZKRow`**: `zk_ro_perm`, error `εROPm`. The privacy games, stated for
+every row type with `ZKRow`, hold with AES as uniformly random permutations. -/
+noncomputable instance ZKRow.perm : ZKRow (Equiv.Perm Blk) where
+  εz := εROPm
+  εz_mono p _ _ _ _ _ _ h3 h5 hE := εROPm_mono p h3 h5 hE
+  εz_nonneg := εROPm_nonneg
+  zk Hb st w _ hlr hzk hHb hp _ _ _ D hD := zk_ro_perm Hb st w hlr hzk hHb hp D hD
 
 end VoleMole.ZK.Sim

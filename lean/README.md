@@ -289,6 +289,20 @@ chal1/chal2 (recommended, not implemented).
   `2⁻¹⁰³·⁴` plus the budget terms; `noHitProb ≤ 2^{−2¹⁵}`). The paper bound for redemptions and
   spends (`docs/zk.md` §10.2) missed the `Δ' = 0` part of `GrindBad` and undercounted the earlier
   `ã` by one; both negligible.
+- **AES as random permutations in the games** (`docs/zk.md` §10.4; `Privacy/PermRO.lean`,
+  `ZK/TwoPhasePerm.lean`). The games, their read algebra and their collision bounds are stated
+  once, for every *type of cipher rows* `R` (`ShG R p = Tab2G p × Tab5F × (Blk → R)`, the rows
+  read as functions by `CipherRow.row`) with a zero-knowledge structure (`ZKRow R`; for PomFRIT
+  also `ZK2Row R`), and instantiated twice: function rows (the PRF view, `Sh p`, the theorems
+  above, unchanged) and permutation rows (`Equiv.Perm Blk`: the adversary reads whole
+  permutations, forward and inverse). With permutation rows every `εRO` becomes
+  `εROPm p = q₃·2⁻¹²⁸ + 2⁻¹¹⁰ + 221·(4607 + q_E + 4607)/(2¹²⁸ − (nHi + 1)) + switchEps p +
+  (q₅ + 1)·2⁻¹²⁸`: `anonymityRO_lean_num_perm`, `unlinkabilityRO_lean_num_perm`
+  (`4·εROPm(pI; …) + 4·εROPm(pR or pS; …) + 4·(2⁻¹¹⁰ + εROPm(pR or pS; 0, 312, 4607)) +
+  6·noHitProb + 12·2⁻¹⁰²⁴ + 2·εhide`, about `2⁻¹⁰²·²` plus the budget terms) and
+  `blindnessRO_lean_num_perm` (`4·εROPm(pP; q₃, q₅ + 1248, q_E + 18428) + 2·noHitProb +
+  2·2⁻¹²⁸`, about `2⁻¹⁰³·⁴`); the two-phase theorem with permutation rows is
+  `zk2_rom_ic_h23_num_perm`.
 
 *Statements and interactions that read the tables* (`docs/zk.md` §10.3; `Privacy/Resample.lean`,
 `ZK/HopsPatch.lean`, `ZK/IdealCipherP.lean`, `ZK/AdaptRO.lean`, `Privacy/AdaptiveRO.lean`,
@@ -313,6 +327,16 @@ guess reads the tables. Here its interaction does too.
   continuation, the Issuer's response to the request computed from step 1's output, reads the
   slice, `H₅` and the cipher at keys depending on that output, and these reads are added to the
   budget of the H1, H4 and H6 hops (`εRO(q₃ + q_k3, q₅ + q_k5, q_E + q_kE)`).
+- **With AES as random permutations** (`docs/zk.md` §10.4; `Privacy/PermRA.lean`,
+  `ZK/IdealCipherPermP.lean`, `ZK/HopsPatchPerm.lean`, `ZK/TwoPhasePerm.lean`): the adaptive
+  layer is stated for every row type with `ZKPRow R` (zero knowledge with the `H₅` and cipher
+  tables patched on the reader's keys); with permutation rows the patched table is again a table of
+  independent uniform permutations off the patched keys, and the patched GGM hop costs
+  `(4607 + q + |PE|)/(2¹²⁸ − (nHi + 1))` (`IC.hopPmP`, `hide_rom_query_permP`, `zk_roP_perm`,
+  error `εROPmP`). `anonymityRA_lean_num_perm`, `unlinkabilityRA_lean_num_perm` (the bounds with
+  `εROPm`, `εAdPm`, `εROPmP`) and `blindnessRA_lean_num_perm` (`4·εROPm(pP; q₃ + 4i₃,
+  q₅ + 4i₅ + 1872, q_E + 4i_E + 23035) + 2·noHitProb + 2·2⁻¹²⁸`, from `zk2_adaptive_perm`); each is
+  the function-row bound to within the switching terms (`switchEps ≤ 2⁻¹¹³·²` per error term).
 
 `lake exe zk_sim` checks the tape equation, the simulator and the ideal-tape prover on all 18 KAT
 runs of each layout.
@@ -321,11 +345,11 @@ runs of each layout.
 "What remains assumed", and §10.3, "Open"):
 - *Modelling steps.* SHAKE128 is a random oracle (a single oracle with L0's domain rule is proved
   equivalent to independent per-domain oracles, `ROM/DomainSep.lean`); AES-128 is an ideal
-  cipher. Single-proof zero knowledge is proved with the cipher's rows uniform permutations read
-  forward and backward, the PRP/PRF switching term included (`zk_rom_ic_h23_num_perm`,
-  `lean_zeroKnowledgeRO_perm`; soundness likewise, §9, plan §2h). The multi-proof privacy games
-  are still stated with uniform-function rows (`Sh p`); restating them on the permutation tables
-  `ShPm p` is a mechanical port of their read algebra (`docs/zk.md` §10.3, "Open").
+  cipher. Zero knowledge and every privacy theorem are proved with the cipher's rows uniform
+  permutations read forward and backward, the PRP/PRF switching term included
+  (`zk_rom_ic_h23_num_perm`, `lean_zeroKnowledgeRO_perm`, the `*_lean_num_perm` theorems of
+  `Privacy/PermRO.lean`, `Privacy/PermRA.lean`; soundness likewise, §9, plan §2h), as well as with
+  uniform-function rows.
 - *Per-proof `H₃` slices.* The games give each proof its own independent slice; this is exact
   unless two proofs share `(μ₁, wPrefix)` (Moussaka, Ratatouille: `≤ 2⁻¹⁹²`; PomFRIT: two sessions
   with equal `r`), a modelling step on paper (the `ε_iv`-type term).
@@ -631,7 +655,7 @@ What is **not** established, roughly in order of importance:
    theorems are mechanized in the classical random-oracle and ideal-cipher model, with every
    zero-knowledge and collision term explicit (§3). What remains is listed at the end of §3: the
    modelling steps (SHAKE as a random oracle, AES as an ideal cipher; the PRP/PRF switching term
-   is proved for one proof, `zk_rom_ic_h23_num_perm`, the games are stated with function rows),
+   is proved, for one proof and for every game, `Privacy/PermRO.lean`, `Privacy/PermRA.lean`),
    independent per-proof `H₃` slices, the seed-XOF hop, the hiding of `Com`, the
    consistency of a table-reading interaction, a PomFRIT interaction that reads `H₂³` (open),
    Moussaka's non-colluding mode (Thm 4b), the general game schedule and the quantum versions.

@@ -8,10 +8,14 @@ import VoleMole.Privacy.ZeroKnowledgeRO
 read sets. The privacy games (`Privacy/MoussakaRO.lean`, `Privacy/RatatouilleRO.lean`) run several
 proofs on the same tables, and their reductions run the other proofs themselves. Here:
 
-* **The shared tables** `Sh p = Tab2G p × Tab5F × Cipher` (`H₂³` on every grinding point, `H₅` on
-  every `37`-byte input, the cipher), and the private table of a proof: its `Tab3` (`H₃` at its own
-  seed inputs `wPrefix ‖ μ₁ ‖ ρ ‖ 3`, a slice of `H₃` that depends on the proof's witness and
-  instance).
+* **The shared tables** `ShG R p = Tab2G p × Tab5F × (Blk → R)` (`H₂³` on every grinding point,
+  `H₅` on every `37`-byte input, the cipher table with rows in `R`, read as functions by
+  `CipherRow.row`; `rowFn E` the table as a `Cipher`), and the private table of a proof: its `Tab3`
+  (`H₃` at its own seed inputs `wPrefix ‖ μ₁ ‖ ρ ‖ 3`, a slice of `H₃` that depends on the proof's
+  witness and instance). **Function rows** `Sh p = ShG (Blk → Blk) p` (`CipherRow.fn`) are the PRF
+  view; **permutation rows** `ShPm p = ShG (Equiv.Perm Blk) p` (`ZK/ReadsROPerm.lean`) are AES as
+  uniformly random permutations, the distinguisher reading whole permutations. Everything below
+  but `zk_ro` is stated for any row type.
 * **Reads.** `Rd5 f q`, `RdE f q`: `f` reads the `H₅` table, the cipher, at most at `q` keys
   (adaptively: the key set may depend on the tables; outside it the tables can change without
   changing `f`). `Rd3`: the same for an `H₃` slice. `IsProg L q5 qE`: `L` only reprograms `H₂³`,
@@ -31,6 +35,9 @@ proofs on the same tables, and their reductions run the other proofs themselves.
   q₃·2⁻¹²⁸ + 2⁻¹¹⁰ + 221·(4607 + q_E + 4607)·2⁻¹²⁸ + (q₅ + 1)·2⁻¹²⁸`; `lean_zeroKnowledgeRO`: the
   Lean prover is `ZeroKnowledgeRO` for every relation whose statements have dedicated label rows,
   against the distinguishers with budgets `(q₃, q₅, q_E)` (`Budget`).
+* **`ZKRow R`**: the class of row types with `zk_ro` (an error `εz p q₃ q₅ q_E`); instances
+  `ZKRow.fn` (`εRO`) and `ZKRow.perm` (`εROPm`, `ZK/ReadsROPerm.lean`). The privacy games are
+  stated for every `R` with `ZKRow R` (`lean_zeroKnowledgeROG`) and instantiated twice.
 -/
 
 open Finset
@@ -44,23 +51,49 @@ open VoleMole.Verifier VoleMole.Verifier.Bridge VoleMole.Arith VoleMole.ZK VoleM
 
 /-! ## The shared tables and their reads -/
 
-/-- **The tables the proofs of a game share**: `H₂³` on every grinding point of parameters `p`'s
-prefix length, `H₅` on every `37`-byte input, the cipher. -/
-abbrev Sh (p : Params) := Tab2G p × Tab5F × Cipher
+/-- **A type of cipher rows.** The shared cipher table is `Blk → R`, one row per key, and the
+prover, the verifier and the simulator's recomputation run with the CTR PRG of its rows read as
+functions of the blocks (`row`). The two instances: **function rows** `Blk → Blk` (the PRF view,
+`row = id`, the shared tables `Sh p`) and **permutation rows** `Equiv.Perm Blk` (AES as uniformly
+random permutations, read by the distinguisher forward and inverse; `ZK/ReadsROPerm.lean`). The
+read algebra below, and the privacy games, are stated for any row type. -/
+class CipherRow (R : Type) where
+  /-- A row as a function of the blocks. -/
+  row : R → Blk → Blk
+
+/-- **Function rows** (the cipher a table of uniform functions). -/
+instance CipherRow.fn : CipherRow (Blk → Blk) := ⟨id⟩
+
+/-- The cipher table `E` read as functions: the rows `row (E k)`. -/
+def rowFn {R : Type} [CipherRow R] (E : Blk → R) : Cipher := fun k => CipherRow.row (E k)
+
+@[simp] lemma rowFn_fn (E : Cipher) : rowFn E = E := rfl
+
+/-- Two tables that agree at a key have the same row there. -/
+lemma rowFn_congr {R : Type} [CipherRow R] {E E' : Blk → R} {k : Blk} (h : E k = E' k) :
+    rowFn E k = rowFn E' k := by
+  simp only [rowFn, h]
+
+/-- **The tables the proofs of a game share**, with cipher rows in `R`: `H₂³` on every grinding
+point of parameters `p`'s prefix length, `H₅` on every `37`-byte input, the cipher table. -/
+abbrev ShG (R : Type) (p : Params) := Tab2G p × Tab5F × (Blk → R)
+
+/-- **The shared tables with function rows** (`Tab2G p × Tab5F × Cipher`). -/
+abbrev Sh (p : Params) := ShG (Blk → Blk) p
 
 section Reads
 
-variable {p : Params} {X Y : Sort*}
+variable {R : Type} {p : Params} {X Y : Sort*}
 
 /-- `f` reads the `H₅` table at most at `q` keys: outside `Q s` the table can change. -/
-def Rd5 (f : Sh p → X) (q : ℕ) : Prop :=
-  ∃ Q : Sh p → Finset (Bytes 37), (∀ s, (Q s).card ≤ q) ∧
+def Rd5 (f : ShG R p → X) (q : ℕ) : Prop :=
+  ∃ Q : ShG R p → Finset (Bytes 37), (∀ s, (Q s).card ≤ q) ∧
     ∀ s (G5 : Tab5F), (∀ k ∈ Q s, s.2.1 k = G5 k) → f (s.1, G5, s.2.2) = f s
 
 /-- `f` reads the cipher at most at `q` keys. -/
-def RdE (f : Sh p → X) (q : ℕ) : Prop :=
-  ∃ Q : Sh p → Finset Blk, (∀ s, (Q s).card ≤ q) ∧
-    ∀ s (E : Cipher), (∀ k ∈ Q s, s.2.2 k = E k) → f (s.1, s.2.1, E) = f s
+def RdE (f : ShG R p → X) (q : ℕ) : Prop :=
+  ∃ Q : ShG R p → Finset Blk, (∀ s, (Q s).card ≤ q) ∧
+    ∀ s (E : Blk → R), (∀ k ∈ Q s, s.2.2 k = E k) → f (s.1, s.2.1, E) = f s
 
 /-- `f` reads an `H₃` slice at most at `q` keys. -/
 def Rd3 (f : Tab3 → X) (q : ℕ) : Prop :=
@@ -69,14 +102,14 @@ def Rd3 (f : Tab3 → X) (q : ℕ) : Prop :=
 
 /-- **A programming of `H₂³`**: `L` changes only the `H₂³` table, and the new table reads `H₅` and
 the cipher at most at `q5`, `qE` keys. -/
-def IsProg (L : Sh p → Sh p) (q5 qE : ℕ) : Prop :=
+def IsProg (L : ShG R p → ShG R p) (q5 qE : ℕ) : Prop :=
   (∀ s, (L s).2 = s.2) ∧ Rd5 (fun s => (L s).1) q5 ∧ RdE (fun s => (L s).1) qE
 
-lemma Rd5.mono {f : Sh p → X} {q q' : ℕ} (h : Rd5 f q) (hq : q ≤ q') : Rd5 f q' := by
+lemma Rd5.mono {f : ShG R p → X} {q q' : ℕ} (h : Rd5 f q) (hq : q ≤ q') : Rd5 f q' := by
   obtain ⟨Q, hQ, hf⟩ := h
   exact ⟨Q, fun s => (hQ s).trans hq, hf⟩
 
-lemma RdE.mono {f : Sh p → X} {q q' : ℕ} (h : RdE f q) (hq : q ≤ q') : RdE f q' := by
+lemma RdE.mono {f : ShG R p → X} {q q' : ℕ} (h : RdE f q) (hq : q ≤ q') : RdE f q' := by
   obtain ⟨Q, hQ, hf⟩ := h
   exact ⟨Q, fun s => (hQ s).trans hq, hf⟩
 
@@ -84,17 +117,17 @@ lemma Rd3.mono {f : Tab3 → X} {q q' : ℕ} (h : Rd3 f q) (hq : q ≤ q') : Rd3
   obtain ⟨Q, hQ, hf⟩ := h
   exact ⟨Q, fun s => (hQ s).trans hq, hf⟩
 
-lemma Rd5.const (x : X) : Rd5 (fun _ : Sh p => x) 0 :=
+lemma Rd5.const (x : X) : Rd5 (fun _ : ShG R p => x) 0 :=
   ⟨fun _ => ∅, fun _ => le_rfl, fun _ _ _ => rfl⟩
 
-lemma RdE.const (x : X) : RdE (fun _ : Sh p => x) 0 :=
+lemma RdE.const (x : X) : RdE (fun _ : ShG R p => x) 0 :=
   ⟨fun _ => ∅, fun _ => le_rfl, fun _ _ _ => rfl⟩
 
 lemma Rd3.const (x : X) : Rd3 (fun _ : Tab3 => x) 0 :=
   ⟨fun _ => ∅, fun _ => le_rfl, fun _ _ _ => rfl⟩
 
 /-- **Sequencing**: `f` run on `m`'s output reads what `m` reads and what `f` reads. -/
-lemma Rd5.bind {m : Sh p → Y} {f : Y → Sh p → X} {a b : ℕ} (hm : Rd5 m a)
+lemma Rd5.bind {m : ShG R p → Y} {f : Y → ShG R p → X} {a b : ℕ} (hm : Rd5 m a)
     (hf : ∀ y, Rd5 (f y) b) : Rd5 (fun s => f (m s) s) (a + b) := by
   classical
   obtain ⟨Qm, hQm, hm⟩ := hm
@@ -105,7 +138,7 @@ lemma Rd5.bind {m : Sh p → Y} {f : Y → Sh p → X} {a b : ℕ} (hm : Rd5 m a
   rw [hm s G5 fun k hk => h k (mem_union_left _ hk)]
   exact hf (m s) s G5 fun k hk => h k (mem_union_right _ hk)
 
-lemma RdE.bind {m : Sh p → Y} {f : Y → Sh p → X} {a b : ℕ} (hm : RdE m a)
+lemma RdE.bind {m : ShG R p → Y} {f : Y → ShG R p → X} {a b : ℕ} (hm : RdE m a)
     (hf : ∀ y, RdE (f y) b) : RdE (fun s => f (m s) s) (a + b) := by
   classical
   obtain ⟨Qm, hQm, hm⟩ := hm
@@ -127,10 +160,10 @@ lemma Rd3.bind {m : Tab3 → Y} {f : Y → Tab3 → X} {a b : ℕ} (hm : Rd3 m a
   rw [hm s g fun k hk => h k (mem_union_left _ hk)]
   exact hf (m s) s g fun k hk => h k (mem_union_right _ hk)
 
-lemma Rd5.map {m : Sh p → Y} {a : ℕ} (hm : Rd5 m a) (f : Y → X) : Rd5 (fun s => f (m s)) a := by
+lemma Rd5.map {m : ShG R p → Y} {a : ℕ} (hm : Rd5 m a) (f : Y → X) : Rd5 (fun s => f (m s)) a := by
   simpa using hm.bind (f := fun y _ => f y) fun y => Rd5.const (f y)
 
-lemma RdE.map {m : Sh p → Y} {a : ℕ} (hm : RdE m a) (f : Y → X) : RdE (fun s => f (m s)) a := by
+lemma RdE.map {m : ShG R p → Y} {a : ℕ} (hm : RdE m a) (f : Y → X) : RdE (fun s => f (m s)) a := by
   simpa using hm.bind (f := fun y _ => f y) fun y => RdE.const (f y)
 
 lemma Rd3.map {m : Tab3 → Y} {a : ℕ} (hm : Rd3 m a) (f : Y → X) : Rd3 (fun s => f (m s)) a := by
@@ -138,7 +171,7 @@ lemma Rd3.map {m : Tab3 → Y} {a : ℕ} (hm : Rd3 m a) (f : Y → X) : Rd3 (fun
 
 /-- **A reader after a programming** reads what it reads on the programmed tables and what the
 programming reads. -/
-lemma Rd5.comp_prog {f : Sh p → X} {L : Sh p → Sh p} {a b c : ℕ} (hf : Rd5 f a)
+lemma Rd5.comp_prog {f : ShG R p → X} {L : ShG R p → ShG R p} {a b c : ℕ} (hf : Rd5 f a)
     (hL : IsProg L b c) : Rd5 (fun s => f (L s)) (a + b) := by
   classical
   obtain ⟨Qf, hQf, hf⟩ := hf
@@ -157,7 +190,7 @@ lemma Rd5.comp_prog {f : Sh p → X} {L : Sh p → Sh p} {a b c : ℕ} (hf : Rd5
   rw [e3]
   exact h k (mem_union_left _ hk)
 
-lemma RdE.comp_prog {f : Sh p → X} {L : Sh p → Sh p} {a b c : ℕ} (hf : RdE f a)
+lemma RdE.comp_prog {f : ShG R p → X} {L : ShG R p → ShG R p} {a b c : ℕ} (hf : RdE f a)
     (hL : IsProg L b c) : RdE (fun s => f (L s)) (a + c) := by
   classical
   obtain ⟨Qf, hQf, hf⟩ := hf
@@ -176,20 +209,20 @@ lemma RdE.comp_prog {f : Sh p → X} {L : Sh p → Sh p} {a b c : ℕ} (hf : RdE
   rw [e3]
   exact h k (mem_union_left _ hk)
 
-lemma IsProg.id : IsProg (fun s : Sh p => s) 0 0 :=
+lemma IsProg.id : IsProg (fun s : ShG R p => s) 0 0 :=
   ⟨fun _ => rfl, ⟨fun _ => ∅, fun _ => le_rfl, fun _ _ _ => rfl⟩,
     ⟨fun _ => ∅, fun _ => le_rfl, fun _ _ _ => rfl⟩⟩
 
-lemma IsProg.comp {L L' : Sh p → Sh p} {a b a' b' : ℕ} (h : IsProg L a b) (h' : IsProg L' a' b') :
+lemma IsProg.comp {L L' : ShG R p → ShG R p} {a b a' b' : ℕ} (h : IsProg L a b) (h' : IsProg L' a' b') :
     IsProg (fun s => L (L' s)) (a + a') (b + b') :=
   ⟨fun s => by rw [h.1, h'.1], h.2.1.comp_prog h', h.2.2.comp_prog h'⟩
 
-lemma IsProg.mono {L : Sh p → Sh p} {a b a' b' : ℕ} (h : IsProg L a b) (ha : a ≤ a') (hb : b ≤ b') :
+lemma IsProg.mono {L : ShG R p → ShG R p} {a b a' b' : ℕ} (h : IsProg L a b) (ha : a ≤ a') (hb : b ≤ b') :
     IsProg L a' b' :=
   ⟨h.1, h.2.1.mono ha, h.2.2.mono hb⟩
 
 /-- A programming chosen by a test that does not read the tables. -/
-lemma IsProg.ite {L L' : Sh p → Sh p} {a b : ℕ} (c : Prop) [Decidable c] (h : IsProg L a b)
+lemma IsProg.ite {L L' : ShG R p → ShG R p} {a b : ℕ} (c : Prop) [Decidable c] (h : IsProg L a b)
     (h' : IsProg L' a b) : IsProg (fun s => if c then L s else L' s) a b := by
   by_cases hc : c
   · simpa only [hc, ite_true] using h
@@ -302,7 +335,7 @@ end ProverE
 
 section Real
 
-variable (p : Params) (Hb : Hashes) (st : Statement) (w : ByteArray)
+variable {R : Type} [CipherRow R] (p : Params) (Hb : Hashes) (st : Statement) (w : ByteArray)
 
 /-- **The record of the random-oracle model**, for `H₂³` tables of parameters `p` (`recH` at
 `p = st.params`). -/
@@ -315,30 +348,30 @@ lemma recHp_eq : recHp st.params Hb st w = recH Hb st w := rfl
 /-- **The real prover in the random-oracle and ideal-cipher model**: the executable prover with
 randomness `ρ`, the record `recHp` (its `H₃` slice `G3`, the shared `H₂³` and `H₅` tables) and
 the ideal-cipher PRG of the shared cipher table. -/
-noncomputable def realROb (rho : ByteArray) (G3 : Tab3) (s : Sh p) : Except String ByteArray :=
-  @Prover.prove (icPrg s.2.2) (recHp p Hb st w G3 s.1 s.2.1) CrtGen.tables st w rho
+noncomputable def realROb (rho : ByteArray) (G3 : Tab3) (s : ShG R p) : Except String ByteArray :=
+  @Prover.prove (icPrg (rowFn s.2.2)) (recHp p Hb st w G3 s.1 s.2.1) CrtGen.tables st w rho
     st.params.witnessBytes
 
 /-- `realROb` with a uniform 16-byte randomness `ρ`. -/
-noncomputable def realRO (ρ : Bytes 16) (G3 : Tab3) (s : Sh p) : Except String ByteArray :=
+noncomputable def realRO (ρ : Bytes 16) (G3 : Tab3) (s : ShG R p) : Except String ByteArray :=
   realROb p Hb st w (ba ρ) G3 s
 
 /-- **The simulator's programming**: `H₂³` programmed at the grinding points of the prefix
 recomputed from the simulated proof (`simTab`), answered by the coins' grinding answers. -/
-noncomputable def progRO (c : SimCoins p) (s : Sh p) : Sh p :=
-  (programAt (key2 p (@outPre (icPrg s.2.2) Hb CrtGen.tables st s.2.1 (simulate p c))) c.1.2.1 s.1,
+noncomputable def progRO (c : SimCoins p) (s : ShG R p) : ShG R p :=
+  (programAt (key2 p (@outPre (icPrg (rowFn s.2.2)) Hb CrtGen.tables st s.2.1 (simulate p c))) c.1.2.1 s.1,
     s.2)
 
-lemma progRO_eq (c : SimCoins st.params) (s : Sh st.params) :
+lemma progRO_eq (c : SimCoins st.params) (s : ShG R st.params) :
     progRO st.params Hb st c s =
-      (@simTab (icPrg s.2.2) Hb CrtGen.tables st s.2.1 (simulate st.params c) c.1.2.1 s.1, s.2) :=
+      (@simTab (icPrg (rowFn s.2.2)) Hb CrtGen.tables st s.2.1 (simulate st.params c) c.1.2.1 s.1, s.2) :=
   rfl
 
 end Real
 
 section RealReads
 
-variable {p : Params} {Hb : Hashes} {st : Statement} {w : ByteArray}
+variable {R : Type} [CipherRow R] {p : Params} {Hb : Hashes} {st : Statement} {w : ByteArray}
 
 lemma recHp_h3 (G3 : Tab3) (G2 : Tab2G p) (G5 : Tab5F) :
     (recHp p Hb st w G3 G2 G5).hash .h3 =
@@ -374,25 +407,25 @@ def rIv (Hs : Hashes) (st : Statement) (w : ByteArray) (rho : ByteArray) : ByteA
 
 /-- **The cipher keys the real prover reads**: the rows of its tree's `2L − 1` nodes. -/
 noncomputable def realKeysE (p : Params) (Hb : Hashes) (st : Statement) (w : ByteArray)
-    (rho : ByteArray) (G3 : Tab3) (s : Sh p) : Finset Blk :=
-  (range BAVC.numNodes).image fun n => blk 16 (@treeNode (icPrg s.2.2)
+    (rho : ByteArray) (G3 : Tab3) (s : ShG R p) : Finset Blk :=
+  (range BAVC.numNodes).image fun n => blk 16 (@treeNode (icPrg (rowFn s.2.2))
     (rSeed (recHp p Hb st w G3 s.1 s.2.1) st w rho) (rIv (recHp p Hb st w G3 s.1 s.2.1) st w rho) n)
 
 /-- **The real prover reads the cipher at most at `4607` keys** (the nodes of its tree). -/
 theorem realROb_rdE (hHb : HashesWF Hb) (rho : ByteArray) (G3 : Tab3) :
-    RdE (realROb p Hb st w rho G3) 4607 := by
+    RdE (realROb (R := R) p Hb st w rho G3) 4607 := by
   refine ⟨realKeysE p Hb st w rho G3, fun s => card_image_le.trans (le_of_eq (by
     rw [card_range]; rfl)), fun s E h => ?_⟩
   have hs : (rSeed (recHp p Hb st w G3 s.1 s.2.1) st w rho).size = 16 := by
     rw [rSeed, ByteArray.size_extract, recHp_wf hHb]; rfl
   unfold realROb Prover.prove
   dsimp only
-  rw [@voleGen_eq_voleGenAt (icPrg E), @voleGen_eq_voleGenAt (icPrg s.2.2)]
+  rw [@voleGen_eq_voleGenAt (icPrg (rowFn E)), @voleGen_eq_voleGenAt (icPrg (rowFn s.2.2))]
   refine congrArg _ (voleGenAt_ic_congr _ _ _ _ _ _ _ hs fun n hn _ => ?_).symm
-  exact h _ (mem_image.2 ⟨n, mem_range.2 hn, rfl⟩)
+  exact rowFn_congr (h _ (mem_image.2 ⟨n, mem_range.2 hn, rfl⟩))
 
 theorem realRO_rdE (hHb : HashesWF Hb) (ρ : Bytes 16) (G3 : Tab3) :
-    RdE (realRO p Hb st w ρ G3) 4607 :=
+    RdE (realRO (R := R) p Hb st w ρ G3) 4607 :=
   realROb_rdE hHb (ba ρ) G3
 
 end RealReads
@@ -532,7 +565,7 @@ end ProverH5
 
 section RealReads5
 
-variable {p : Params} {Hb : Hashes} {st : Statement} {w : ByteArray}
+variable {R : Type} [CipherRow R] {p : Params} {Hb : Hashes} {st : Statement} {w : ByteArray}
 
 lemma recHp_agreeOff_h5 (G3 : Tab3) (G2 : Tab2G p) (G5 G5' : Tab5F) :
     (recHp p Hb st w G3 G2 G5).AgreeOff .h5 (recHp p Hb st w G3 G2 G5') := by
@@ -542,30 +575,30 @@ lemma recHp_agreeOff_h5 (G3 : Tab3) (G2 : Tab2G p) (G5 G5' : Tab5F) :
 
 /-- **The `H₅` keys the real prover reads**: its `2·312` gate inputs. -/
 noncomputable def realKeys5 (p : Params) (Hb : Hashes) (st : Statement) (w : ByteArray)
-    (rho : ByteArray) (G3 : Tab3) (s : Sh p) : Finset (Bytes 37) :=
-  ((@vgIn5 (icPrg s.2.2) (recHp p Hb st w G3 s.1 s.2.1) CrtGen.tables st.params (st.mu1 Hb)
+    (rho : ByteArray) (G3 : Tab3) (s : ShG R p) : Finset (Bytes 37) :=
+  ((@vgIn5 (icPrg (rowFn s.2.2)) (recHp p Hb st w G3 s.1 s.2.1) CrtGen.tables st.params (st.mu1 Hb)
     (rSeed (recHp p Hb st w G3 s.1 s.2.1) st w rho)
     (((recHp p Hb st w G3 s.1 s.2.1).hash .h3 ((w.extract 0 st.params.witnessBytes ++ st.mu1 Hb ++
       rho).push 3)).extract 16 32)).toFinset).image (blk 37)
 
 /-- **The real prover reads `H₅` at most at `624` keys** (its gate inputs, both labels). -/
-theorem realROb_rd5 (rho : ByteArray) (G3 : Tab3) : Rd5 (realROb p Hb st w rho G3) 624 := by
+theorem realROb_rd5 (rho : ByteArray) (G3 : Tab3) : Rd5 (realROb (R := R) p Hb st w rho G3) 624 := by
   classical
   refine ⟨realKeys5 p Hb st w rho G3, fun s => ?_, fun s G5 h => ?_⟩
   · refine card_image_le.trans ((List.toFinset_card_le _).trans (le_of_eq ?_))
-    exact @vgIn5_length (icPrg s.2.2) _ _ _ _ _ _
+    exact @vgIn5_length (icPrg (rowFn s.2.2)) _ _ _ _ _ _
   have hA := recHp_agreeOff_h5 (Hb := Hb) (st := st) (w := w) G3 s.1 G5 s.2.1
   unfold realROb Prover.prove
   dsimp only
-  rw [@voleGen_eq_voleGenAt (icPrg s.2.2), @voleGen_eq_voleGenAt (icPrg s.2.2),
+  rw [@voleGen_eq_voleGenAt (icPrg (rowFn s.2.2)), @voleGen_eq_voleGenAt (icPrg (rowFn s.2.2)),
     proveCommit_agreeOff_h5 hA, recHp_mu1, recHp_mu1, recHp_h3, recHp_h3]
-  refine congrArg _ (@voleGenAt_h5_congr (icPrg s.2.2) _ _ hA _ _ _ _ _ _ _ fun x hx => ?_)
-  rw [@vgIn5_agreeOff (icPrg s.2.2) _ _ hA] at hx
+  refine congrArg _ (@voleGenAt_h5_congr (icPrg (rowFn s.2.2)) _ _ hA _ _ _ _ _ _ _ fun x hx => ?_)
+  rw [@vgIn5_agreeOff (icPrg (rowFn s.2.2)) _ _ hA] at hx
   refine withTable_h5_congr _ fun hs => (h _ (mem_image.2 ⟨x, ?_, rfl⟩)).symm
   rw [List.mem_toFinset]
   simpa only [realKeys5, rSeed, recHp_mu1, recHp_h3] using hx
 
-theorem realRO_rd5 (ρ : Bytes 16) (G3 : Tab3) : Rd5 (realRO p Hb st w ρ G3) 624 :=
+theorem realRO_rd5 (ρ : Bytes 16) (G3 : Tab3) : Rd5 (realRO (R := R) p Hb st w ρ G3) 624 :=
   realROb_rd5 (ba ρ) G3
 
 end RealReads5
@@ -578,36 +611,36 @@ lemma rec5_agree_ne {Hb : Hashes} {G5 : Tab5F} {k : Kind} (hk : k ≠ .h5) :
 
 section ProgReads
 
-variable {p : Params} {Hb : Hashes} {st : Statement}
+variable {R : Type} [CipherRow R] {p : Params} {Hb : Hashes} {st : Statement}
 
 /-- The `H₅` keys the recomputation of a proof's grinding prefix reads (the verifier's gate
 inputs, at most `312`). -/
-noncomputable def progKeys5 (Hb : Hashes) (st : Statement) (o : Except String ByteArray) (s : Sh p) :
+noncomputable def progKeys5 (Hb : Hashes) (st : Statement) (o : Except String ByteArray) (s : ShG R p) :
     Finset (Bytes 37) :=
   match o with
-  | .ok b => ((@vIn5 (icPrg s.2.2) (rec5 Hb s.2.1) CrtGen.tables st b).toFinset).image (blk 37)
+  | .ok b => ((@vIn5 (icPrg (rowFn s.2.2)) (rec5 Hb s.2.1) CrtGen.tables st b).toFinset).image (blk 37)
   | .error _ => ∅
 
 /-- The cipher keys the recomputation reads (the reconstruction's nodes, at most `4607`). -/
-noncomputable def progKeysE (Hb : Hashes) (st : Statement) (o : Except String ByteArray) (s : Sh p) :
+noncomputable def progKeysE (Hb : Hashes) (st : Statement) (o : Except String ByteArray) (s : ShG R p) :
     Finset Blk :=
   match o with
-  | .ok b => rdKeys s.2.2 (ivOf (rec5 Hb s.2.1) ⟨st.params, b⟩ (st.mu1 (rec5 Hb s.2.1)))
+  | .ok b => rdKeys (rowFn s.2.2) (ivOf (rec5 Hb s.2.1) ⟨st.params, b⟩ (st.mu1 (rec5 Hb s.2.1)))
       (⟨st.params, b⟩ : Proof).opening (⟨st.params, b⟩ : Proof).delta
   | .error _ => ∅
 
 /-- **The programming reads `H₅` at `312` and the cipher at `4607` keys.** -/
-theorem progRO_isProg (c : SimCoins p) : IsProg (progRO p Hb st c) 312 4607 := by
+theorem progRO_isProg (c : SimCoins p) : IsProg (progRO (R := R) p Hb st c) 312 4607 := by
   classical
   refine ⟨fun _ => rfl, ⟨progKeys5 Hb st (simulate p c), fun s => ?_, fun s G5 h => ?_⟩,
     ⟨progKeysE Hb st (simulate p c), fun s => ?_, fun s E h => ?_⟩⟩
   · unfold progKeys5
     split
     · exact card_image_le.trans ((List.toFinset_card_le _).trans
-        (@vIn5_length_le (icPrg s.2.2) _ _ _ _))
+        (@vIn5_length_le (icPrg (rowFn s.2.2)) _ _ _ _))
     · simp
-  · suffices e : @outPre (icPrg s.2.2) Hb CrtGen.tables st G5 (simulate p c) =
-        @outPre (icPrg s.2.2) Hb CrtGen.tables st s.2.1 (simulate p c) by
+  · suffices e : @outPre (icPrg (rowFn s.2.2)) Hb CrtGen.tables st G5 (simulate p c) =
+        @outPre (icPrg (rowFn s.2.2)) Hb CrtGen.tables st s.2.1 (simulate p c) by
       simp only [progRO, e]
     unfold progKeys5 at h
     unfold outPre
@@ -618,23 +651,23 @@ theorem progRO_isProg (c : SimCoins p) : IsProg (progRO p Hb st c) 312 4607 := b
       have h4 : (rec5 Hb G5).hash .h4 = (rec5 Hb s.2.1).hash .h4 := by rw [rec5_h4, rec5_h4]
       have hA : (rec5 Hb G5).AgreeOff .h5 (rec5 Hb s.2.1) := by
         intro k hk; rw [rec5_agree_ne hk, rec5_agree_ne hk]
-      refine @vPre_h5_congr (icPrg s.2.2) _ _ hA _ _ _ fun x hx => ?_
-      rw [@vIn5_congr (icPrg s.2.2) _ st _ _ hmu h4] at hx
+      refine @vPre_h5_congr (icPrg (rowFn s.2.2)) _ _ hA _ _ _ fun x hx => ?_
+      rw [@vIn5_congr (icPrg (rowFn s.2.2)) _ st _ _ hmu h4] at hx
       refine withTable_h5_congr _ fun _ => (h _ (mem_image.2 ⟨x, List.mem_toFinset.2 hx, rfl⟩)).symm
     · rfl
   · unfold progKeysE
     split
     · exact rdKeys_card _ _ _ _
     · simp
-  · suffices e : @outPre (icPrg E) Hb CrtGen.tables st s.2.1 (simulate p c) =
-        @outPre (icPrg s.2.2) Hb CrtGen.tables st s.2.1 (simulate p c) by
+  · suffices e : @outPre (icPrg (rowFn E)) Hb CrtGen.tables st s.2.1 (simulate p c) =
+        @outPre (icPrg (rowFn s.2.2)) Hb CrtGen.tables st s.2.1 (simulate p c) by
       simp only [progRO, e]
     unfold progKeysE at h
     unfold outPre
     split
     · rename_i b hb
       rw [hb] at h
-      exact (vPre_ic_congr _ _ _ _ h).symm
+      exact (vPre_ic_congr _ _ _ _ fun k hk => rowFn_congr (h k hk)).symm
     · rfl
 
 end ProgReads
@@ -660,18 +693,21 @@ lemma εRO_nonneg' (q3 q5 qE : ℕ) : 0 ≤ εRO q3 q5 qE := by unfold εRO; pos
 /-- **The budget of a distinguisher** that sees an output, an `H₃` slice and the shared tables:
 it reads the slice at `q3`, `H₅` at `q5` and the cipher at `qE` keys (each with the rest fixed),
 and `H₂³` freely. -/
-structure Budget {O : Type*} (p : Params) (q3 q5 qE : ℕ) (D : O → Tab3 → Sh p → Prop) : Prop where
+structure Budget {R : Type} {O : Type*} (p : Params) (q3 q5 qE : ℕ) (D : O → Tab3 → ShG R p → Prop) :
+    Prop where
   h3 : ∀ o s, Rd3 (fun G3 => D o G3 s) q3
   h5 : ∀ o G3, Rd5 (D o G3) q5
   hE : ∀ o G3, RdE (D o G3) qE
 
-lemma Budget.mono {O : Type*} {p : Params} {q3 q5 qE q3' q5' qE' : ℕ} {D : O → Tab3 → Sh p → Prop}
+lemma Budget.mono {R : Type} {O : Type*} {p : Params} {q3 q5 qE q3' q5' qE' : ℕ}
+    {D : O → Tab3 → ShG R p → Prop}
     (h : Budget p q3 q5 qE D) (h3 : q3 ≤ q3') (h5 : q5 ≤ q5') (hE : qE ≤ qE') :
     Budget p q3' q5' qE' D :=
   ⟨fun o s => (h.h3 o s).mono h3, fun o G3 => (h.h5 o G3).mono h5, fun o G3 => (h.hE o G3).mono hE⟩
 
 /-- An output map keeps budgets. -/
-lemma Budget.comp {O O' : Type*} {p : Params} {q3 q5 qE : ℕ} (φ : O → O') {D : O' → Tab3 → Sh p → Prop}
+lemma Budget.comp {R : Type} {O O' : Type*} {p : Params} {q3 q5 qE : ℕ} (φ : O → O')
+    {D : O' → Tab3 → ShG R p → Prop}
     (h : Budget p q3 q5 qE D) : Budget p q3 q5 qE (fun o g s => D (φ o) g s) :=
   ⟨fun o s => h.h3 (φ o) s, fun o g => h.h5 (φ o) g, fun o g => h.hE (φ o) g⟩
 
@@ -686,8 +722,8 @@ lemma simulate_ok_size {p : Params} {c : SimCoins p} {b : ByteArray} (h : simula
     exact (fields_assemble p _).2.2.2.2.2.2.2.2.2
 
 /-- **A simulation that produced no proof programs independently of the statement.** -/
-lemma progRO_of_error (Hb : Hashes) {p : Params} {c : SimCoins p} {e : String}
-    (h : simulate p c = .error e) (st st' : Statement) : progRO p Hb st c = progRO p Hb st' c := by
+lemma progRO_of_error {R : Type} [CipherRow R] (Hb : Hashes) {p : Params} {c : SimCoins p} {e : String}
+    (h : simulate p c = .error e) (st st' : Statement) : progRO (R := R) p Hb st c = progRO p Hb st' c := by
   funext s
   simp only [progRO, outPre, h]
 
@@ -741,9 +777,9 @@ theorem lean_zeroKnowledgeRO {I W : Type*} (p : Params) (stOf : I → Statement)
     (R : I → W → Prop) (cs : I → ByteArray → ByteArray → System GF128)
     (h : ∀ x w, R x w → ZKHyp CrtGen.tables (stOf x) (enc x w) (cs x)) (hHb : HashesWF Hb)
     (hsp : SmallParams p) (q3 q5 qE : ℕ) :
-    ZeroKnowledgeRO R (fun x w ρ G3 s => realRO p Hb (stOf x) (enc x w) ρ G3 s)
-      (fun _ c => simulate p c) (fun x c s => progRO p Hb (stOf x) c s) (Budget p q3 q5 qE)
-      (εRO q3 q5 qE) := by
+    ZeroKnowledgeRO R (fun x w ρ G3 (s : Sh p) => realRO p Hb (stOf x) (enc x w) ρ G3 s)
+      (fun _ c => simulate p c) (fun x c (s : Sh p) => progRO p Hb (stOf x) c s)
+      (Budget p q3 q5 qE) (εRO q3 q5 qE) := by
   intro x w hxw D hD
   beta_reduce
   have hz := h x w hxw
@@ -753,5 +789,62 @@ theorem lean_zeroKnowledgeRO {I W : Type*} (p : Params) (stOf : I → Statement)
   exact zk_ro Hb st (enc x w) hlr hz hHb hsp D hD
 
 end ZKRO
+
+/-! ## Zero knowledge for a type of cipher rows -/
+
+section ZKRow
+
+/-- **Zero knowledge for a type of cipher rows**: `zk_ro` for the shared tables `ShG R p` (the
+cipher's rows in `R`), with an error `εz p q₃ q₅ q_E` monotone in the budgets and nonnegative.
+Function rows: `εRO` (`zk_ro`, the instance `ZKRow.fn`); permutation rows: `εROPm`
+(`ZK/ReadsROPerm.lean`). The privacy games are stated once, for every row type with this
+structure. -/
+class ZKRow (R : Type) [Fintype R] [CipherRow R] where
+  /-- The zero-knowledge error at parameters `p` and budgets `q₃`, `q₅`, `q_E`. -/
+  εz : Params → ℕ → ℕ → ℕ → ℝ
+  εz_mono : ∀ (p : Params) {q3 q5 qE q3' q5' qE' : ℕ}, q3 ≤ q3' → q5 ≤ q5' → qE ≤ qE' →
+    εz p q3 q5 qE ≤ εz p q3' q5' qE'
+  εz_nonneg : ∀ p q3 q5 qE, 0 ≤ εz p q3 q5 qE
+  /-- `zk_ro` with this row type. -/
+  zk : ∀ (Hb : Hashes) (st : Statement) (w : ByteArray) {cs : ByteArray → ByteArray → System GF128},
+    st.params.labelRows = true → ZKHyp CrtGen.tables st w cs → HashesWF Hb →
+    SmallParams st.params → ∀ {q3 q5 qE : ℕ} (D : Except String ByteArray → Tab3 →
+      ShG R st.params → Prop), Budget st.params q3 q5 qE D →
+    |pr ((Bytes 16 × Tab3) × ShG R st.params) (fun a =>
+        D (realRO st.params Hb st w a.1.1 a.1.2 a.2) a.1.2 a.2) -
+      pr ((SimCoins st.params × Tab3) × ShG R st.params) (fun a =>
+        D (simulate st.params a.1.1) a.1.2 (progRO st.params Hb st a.1.1 a.2))| ≤
+      εz st.params q3 q5 qE
+
+/-- **Function rows**: `zk_ro`, error `εRO`. -/
+noncomputable instance ZKRow.fn : ZKRow (Blk → Blk) where
+  εz _ := εRO
+  εz_mono _ _ _ _ _ _ _ h3 h5 hE := εRO_mono h3 h5 hE
+  εz_nonneg _ := εRO_nonneg'
+  zk Hb st w _ hlr hzk hHb hp _ _ _ D hD := zk_ro Hb st w hlr hzk hHb hp D hD
+
+@[simp] lemma ZKRow.εz_fn (p : Params) : ZKRow.εz (Blk → Blk) p = εRO := rfl
+
+variable {R : Type} [Fintype R] [CipherRow R] [ZKRow R] (Hb : Hashes)
+
+/-- **The Lean prover is `ZeroKnowledgeRO` for every row type with `ZKRow`** (as
+`lean_zeroKnowledgeRO`, error `ZKRow.εz p q₃ q₅ q_E`). -/
+theorem lean_zeroKnowledgeROG {I W : Type*} (p : Params) (stOf : I → Statement)
+    (hp : ∀ x, (stOf x).params = p) (hlr : p.labelRows = true) (enc : I → W → ByteArray)
+    (Rl : I → W → Prop) (cs : I → ByteArray → ByteArray → System GF128)
+    (h : ∀ x w, Rl x w → ZKHyp CrtGen.tables (stOf x) (enc x w) (cs x)) (hHb : HashesWF Hb)
+    (hsp : SmallParams p) (q3 q5 qE : ℕ) :
+    ZeroKnowledgeRO Rl (fun x w ρ G3 (s : ShG R p) => realRO p Hb (stOf x) (enc x w) ρ G3 s)
+      (fun _ c => simulate p c) (fun x c (s : ShG R p) => progRO p Hb (stOf x) c s)
+      (Budget p q3 q5 qE) (ZKRow.εz R p q3 q5 qE) := by
+  intro x w hxw D hD
+  beta_reduce
+  have hz := h x w hxw
+  have hpx := hp x
+  generalize stOf x = st at hz hpx ⊢
+  subst hpx
+  exact ZKRow.zk Hb st (enc x w) hlr hz hHb hsp D hD
+
+end ZKRow
 
 end VoleMole.ZK.Sim

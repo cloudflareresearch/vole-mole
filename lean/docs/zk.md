@@ -716,7 +716,9 @@ All files are under `lean/VoleMole/ZK/` (and `Privacy/LeanProver.lean`, `Privacy
 `ZK/TwoPhaseReadsRO.lean`, `Privacy/PomFRITRO.lean`, §10.2; `Privacy/Resample.lean`,
 `ZK/IdealCipherP.lean`, `ZK/HopsPatch.lean`, `ZK/AdaptRO.lean`, `Privacy/AdaptiveRO.lean`,
 `Privacy/MoussakaRA.lean`, `Privacy/RatatouilleRA.lean`, `ZK/TwoPhaseAd.lean`,
-`Privacy/PomFRITRA.lean`, `Privacy/PomFRITRAGame.lean`, §10.3). There is no `sorry` and no `axiom`. `#print axioms` lists
+`Privacy/PomFRITRA.lean`, `Privacy/PomFRITRAGame.lean`, §10.3; `ZK/TwoPhasePerm.lean`,
+`ZK/IdealCipherPermP.lean`, `ZK/HopsPatchPerm.lean`, `Privacy/PermRO.lean`, `Privacy/PermRA.lean`,
+§10.4). There is no `sorry` and no `axiom`. `#print axioms` lists
 only `propext`, `Classical.choice` and `Quot.sound`.
 
 | Statement | Lean | Used in |
@@ -807,6 +809,10 @@ which the random-oracle ones are proved with the hashed domain a uniform table:
 | **The grinding term numerically** (faest-arch-opt's tables, `2³²` uniform grinding answers): the accepted set has `|A| ≥ 2¹¹¹` (Markov on the box `[0, 120)¹⁷` of hidden-index tuples, whose summed open count the kernel evaluates in one pass over the tree; the open count is the number of internal nodes with exactly one child on a hidden path); `noHitProb = (1 − |A|/2¹²⁸)^{2³²} ≤ 2^{−2¹⁵}`; an accepted `Δ` with `Δ' = 0` is `0` (`W_CRT` injective), and the first accepted answer is `0` with probability `≤ 1/|A| ≤ 2⁻¹¹¹`; so `Pr[GrindBad] ≤ 2^{−2¹⁵} + 2⁻¹¹¹ ≤ 2⁻¹¹⁰`, and the two headline bounds hold with `2⁻¹¹⁰` for `Pr[GrindBad]` | `card_accSet_ge`, `openCount_eq_sum`, `hid_iff`, `enc`, `deltaIndex_enc`, `sum_openCount`, `go_val`, `markov` (`ZK/AcceptCount.lean`); `noHitProb_eq`, `noHitProb_le`, `firstHit_some`, `pr_firstHit_le`, `pr_hitZero_le`, `tDL_eq_zero`, `grindBad_num`, `grindBad_le_110`, `zk_rom_ic_h23_num`, `zk_rom_h23_num` (`ZK/GrindNum.lean`) | H2 |
 | **H4 with AES as uniformly random permutations** (the cipher a table `π : Blk → Perm Blk` of independent uniform permutations, `PCipher`; the BAVC computed with its rows, `hiddenOutE (cf π)`; the distinguisher reads whole permutations at `q` keys, so forward and inverse queries). (i) *The GGM hybrid* replaces the rows of the `≤ 221` hidden-path nodes by independent uniform permutations, one node at a time in heap order. The node's value is its parent's (already replaced) permutation at the node's input, and the rest of the experiment reads that permutation only at the sibling's input and, for the root, at the `nHi` `u_hi` blocks (`rdH`, `hidOfRows_rd`); a fresh value of a uniform permutation given its values on `S` is one of `q` candidates with probability `≤ q/(2¹²⁸ − \|S\|)` (double counting with the neighbours `swap(σ x₀, b)·σ`, `b ∉ σ(S)`). Each hop costs `(4607 + q)/(2¹²⁸ − (nHi + 1))`. (ii) *The switching term*: after the hybrid the hidden part reads the replaced permutations at the same distinct points as in the PRF view; within each row these are samples without replacement, which are `Pr[collision]`-close to independent uniform values (exactly: all collision-free value tuples have equally many permutation preimages, `Perm.exists_extending_pair`). A hidden internal node's row is read at most once (its opened child; two opened nodes never share a parent, `oPar_inj`), so only the `τ = 17` hidden leaves (2 commitment + `VOLE_COL_BLOCKS` VOLE blocks) and the root (`nHi` `u_hi` blocks + at most one opened child) contribute: `switchEps = (17·C(2 + VOLE_COL_BLOCKS, 2) + C(nHi + 1, 2))·2⁻¹²⁸`. **Bound** `221·(4607 + q)/(2¹²⁸ − (nHi + 1)) + switchEps`. For the relations' parameters `nHi = 1` and `switchEps` is `1548·2⁻¹²⁸` (PomFRIT), `3231·2⁻¹²⁸` (Moussaka and Ratatouille issuance), `5526·2⁻¹²⁸` (Moussaka redemption), `28102·2⁻¹²⁸ ≈ 2⁻¹¹³·²` (Ratatouille spend), far below the hybrid's `≈ 2⁻¹²⁰·²·(4607 + q)` | `hide_rom_query_perm`, `hide_puncture_perm`, `hidOfRows_rd`, `rdH`, `oPar_inj`, `grpH`, `grpH_cov`, `grpH_sum`, `switchEps`, `restr_closePm`, `exper_finalPm` (`ZK/HopsH4Perm.lean`); `IC.pr_perm_fresh_le`, `IC.pr_perm_reset_le`, `IC.rowAt_congr_par`, `IC.hopPm`, `IC.puncturePm`, `IC.experPm_empty`, `IC.experPm_close`, `IC.close_evalPts`, `IC.card_fiber_eq`, `IC.pr_not_injOn_le`, `IC.pr_not_injPts_le` (`ZK/IdealCipherPerm.lean`) | H4 |
 | **The headline with AES as random permutations**: `zk_rom_ic_h23` with the cipher of the whole BAVC and VOLE expansion the rows of a uniform permutation table `π` (the executable prover at `icPrg (cf π)`, the simulator's recomputation with the same rows), the distinguisher seeing `π` and reading it at `q_E` keys (whole permutations). The hops before and after H4 hold for every cipher, so for the rows of every `π`; H4 is `hide_rom_query_perm` with the honest recomputation's `≤ 4607` reads counted. Advantage `≤ q₃·2⁻¹²⁸ + 2⁻¹¹⁰ + 221·(4607 + q_E + 4607)/(2¹²⁸ − (nHi + 1)) + switchEps + (q₅ + 1)·2⁻¹²⁸`; as `ZeroKnowledgeRO` on the shared tables `ShPm p = Tab2G p × Tab5F × PCipher` with budgets `BudgetPm` (error `εROPm`) | `zk_rom_ic_h23_perm`, `zk_rom_ic_h23_num_perm`, `joint3_h4_perm`, `viewICPm`, `viewKeysPm`, `viewICPm_congr` (`ZK/HopsICPerm.lean`); `zk_ro_perm`, `lean_zeroKnowledgeRO_perm`, `ShPm`, `BudgetPm`, `realROPm`, `progROPm`, `εROPm` (`ZK/ReadsROPerm.lean`) | H1, H2, H4, H6 |
+| **Cipher rows as a parameter**: the shared tables `ShG R p = Tab2G p × Tab5F × (Blk → R)` for a row type `R` with `CipherRow R` (a row as a function of the blocks), the read algebra, the prover's, simulator's and programming's reads and the games stated for every `R`; zero knowledge as classes on `R` (`ZKRow`, `ZK2Row`, `ZK2ARow`, `ZKPRow`) with function rows (`Sh p`, the PRF view) and permutation rows (`ShPm p`) as instances | `CipherRow`, `CipherRow.fn`, `rowFn`, `rowFn_congr`, `ShG`, `ZKRow`, `ZKRow.fn`, `lean_zeroKnowledgeROG` (`ZK/ReadsRO.lean`); `CipherRow.perm`, `ZKRow.perm` (`ZK/ReadsROPerm.lean`); `ZK2Row` (`ZK/TwoPhaseReadsRO.lean`); `ZK2ARow` (`ZK/TwoPhaseAd.lean`); `ZKPRow`, `εAdG`, `h23G` (`ZK/AdaptRO.lean`) | §10.4 |
+| **Two-phase zero knowledge with AES as random permutations** (plain, and with the continuation reading the tables after step 1): the chains of `zk2_rom_ic_h23`, `zk2_rom_ic_h23A` with H4 `hide_rom_query_perm` on the view at the rows of `π`; errors `εROPm p q₃ (q₅ + q_k5) (q_E + q_kE)` and `εROPm p (q₃ + q_k3) (q₅ + q_k5) (q_E + q_kE)` | `zk2_rom_ic_h23_perm`, `zk2_rom_ic_h23_num_perm`, `joint3_h4_2_perm`, `viewIC2Pm_congr`, `zk2_rom_ic_h23A_perm`, `zk2_rom_ic_h23A_num_perm`, `joint3_h4_2A_perm`, `viewIC2APm_congr`, `viewIC2A_kcongr`, `zk2_ro_perm`, `zk2_adaptive_perm`, `ZK2Row.perm`, `ZK2ARow.perm` (`ZK/TwoPhasePerm.lean`) | §10.4 |
+| **H4 with the permutation table patched on `PE`** (rows fixed at the keys an earlier reader saw): a node's value must also avoid `PE`; `221·(4607 + q + \|PE\|)/(2¹²⁸ − (nHi + 1)) + switchEps`; zero knowledge with `H₅` and the permutation table patched, error `εROPmP` | `IC.hopPmP`, `IC.puncturePmP`, `IC.pr_secretPm_mem_candsP`, `IC.experPmP_empty`, `IC.experPmP_close` (`ZK/IdealCipherPermP.lean`); `hide_puncture_permP`, `exper_finalPmP`, `hide_rom_query_permP`, `joint3_h4P_perm`, `zk_rom_ic_h23P_perm`, `zk_roP_perm`, `εROPmP`, `εAdPm`, `ZKPRow.perm` (`ZK/HopsPatchPerm.lean`) | §10.4 |
+| **The privacy theorems with AES as random permutations** (every §10.2 and §10.3 theorem at permutation rows) | `anonymityRO_lean_num_perm`, `unlinkabilityRO_lean_num_perm`, `blindnessRO_lean_num_perm` (`Privacy/PermRO.lean`); `anonymityRA_lean_num_perm`, `unlinkabilityRA_lean_num_perm`, `blindnessRA_lean_num_perm` (`Privacy/PermRA.lean`); the generic `*_leanG`, `*_lean_numG` | §10.4 |
 | **BAVC completeness**: the prover's opening at any `Δ` reconstructs its leaf keys off the hidden leaves and its commitments (the walks as folds over the node index; opened nodes, placement, top-down derivation) | `Bridge.bavcComplete` (`Verifier/Bridge/BAVCComplete.lean`) | H3 |
 | **CRT completeness**: the verifier's CRT masks are `ṽ_mask + u_mask·Δ'` for every `Δ` (gate labels `L^{γ_e}`, `c_mult` read back, `r̃` bilinear, and the tables' bilinear identity `L_c(a) = a·W_crt[c]`, checked in the kernel on all `120 · 128` basis pairs) | `Bridge.crtComplete`, `Bridge.crt_core`, `CrtCheck.Lc_eq`, `CrtCheck.crtCheck_eq` (`Verifier/Bridge/CrtComplete.lean`, `CrtCheck.lean`) | H3 |
 | The privacy theorems with the Lean prover: Moussaka issuer hiding/unlinkability, Ratatouille unlinkability | `Privacy.Moussaka.anonymity_lean`, `Privacy.Ratatouille.unlinkability_lean` (`Privacy/LeanProver.lean`) | — |
@@ -952,12 +958,10 @@ as a check of the theorem's conditions and kept as a smoke test of the executabl
     tables (`zk_adaptive`, `zk2_adaptive`; `anonymityRA_lean_num`, `unlinkabilityRA_lean_num`,
     and `blindnessRA_lean_num` for an Issuer that reads every table but `H₂³`). Left open: a
     PomFRIT interaction that reads `H₂³` (§10.3, "Open"); `ε_iv` (two proofs sharing an `H₃`
-    slice), a modelling step of the per-proof slices; the PRP/PRF switching term in the games
-    (proved for one proof, `zk_ro_perm`, `lean_zeroKnowledgeRO_perm`; the games and their
-    reductions are stated on `Sh p` with function rows, and restating them on `ShPm p` needs the
-    read predicates `Rd5`, `RdE`, `IsProg` and the prover's read lemmas for `ShPm`, a mechanical
-    port, see §10.3 "Open"); the modelling steps (SHAKE as a random oracle, AES as an ideal
-    cipher). The `*_shake` theorems, which take
+    slice), a modelling step of the per-proof slices; the modelling steps (SHAKE as a random
+    oracle, AES as an ideal cipher). The PRP/PRF switching term is proved in the games as well:
+    every privacy theorem above also holds with the cipher's rows uniform permutations read
+    forward and backward (§10.4, `Privacy/PermRO.lean`, `Privacy/PermRA.lean`). The `*_shake` theorems, which take
     the fixed-record `HopHyps`, are unchanged: the random-oracle results replace them rather than
     discharge them.
 - **Deterministic hypotheses**, per statement and witness (`ZKHyp`, `RunHyp`): the statement's
@@ -1404,15 +1408,103 @@ hop 1 `εRO(q₃ + 4i₃, q₅ + 4i₅ + 312, q_E + 4i_E + 23035)`.
 - An adaptive base statement or witness prefix in `zk2_adaptive` (not needed for PomFRIT).
 - The consistency of the interaction (`SReads`) is a hypothesis on the adversary (true of every
   deterministic query algorithm; a randomized one is a mixture of deterministic ones).
-- *The privacy games with AES as random permutations.* The single-proof theorem is proved with
-  permutation rows (`lean_zeroKnowledgeRO_perm`, error `εROPm p q₃ q₅ q_E`, `ZK/ReadsROPerm.lean`).
-  The games (`Privacy/MoussakaRO.lean`, `RatatouilleRO.lean`, `PomFRITRO.lean`, their `*RA`
-  adaptive versions, `ZK/TwoPhase*.lean`, `ZK/AdaptRO.lean`) are built on `Sh p` (function
-  rows): their reductions use `zk_ro`/`lean_zeroKnowledgeRO` and the read algebra of `Sh`. They
-  follow with `εRO` replaced by `εROPm` once that algebra (`Rd5`, `RdE`, `IsProg`, `realRO_rdE`,
-  `progRO_isProg`, the two-phase `zk2_rom_ic_h23` and the patched `hide_rom_queryP`) is restated
-  for `ShPm p`. Nothing in those arguments uses that the cipher's rows are functions except H4:
-  the reads are key sets, and whole-row reads of a permutation table are such key sets. For the
-  adaptive versions the patched table (`IC.patchT`: rows fixed at the keys `PE` an earlier reader
-  saw) is again a table of independent rows, so a patched `IC.hopPm` (the candidates extended by
-  `PE`, as in `IC.hopP`) would cost `(4607 + q + |PE|)/(2¹²⁸ − (nHi + 1))` per hop; not done.
+- *The privacy games with AES as random permutations*: done (§10.4).
+
+### 10.4 The privacy games with AES as random permutations (`ZK/ReadsRO.lean`, `ZK/ReadsROPerm.lean`, `ZK/TwoPhasePerm.lean`, `ZK/IdealCipherPermP.lean`, `ZK/HopsPatchPerm.lean`, `Privacy/PermRO.lean`, `Privacy/PermRA.lean`)
+
+§10.2 and §10.3 model AES as an ideal cipher whose rows are uniform *functions* (the PRF view).
+The single-proof theorem with uniform *permutations* (`lean_zeroKnowledgeRO_perm`, §10.1) left the
+games on function rows. Here every game is stated **once**, for an abstract type of cipher rows,
+and instantiated twice.
+
+**The abstraction.**
+- *Cipher rows* (`CipherRow R`, `ZK/ReadsRO.lean`): the shared tables are
+  `ShG R p = Tab2G p × Tab5F × (Blk → R)`, one row per key, read as a function of the blocks by
+  `CipherRow.row` (`rowFn E : Cipher` the whole table). The executable prover, the verifier and the
+  simulator's recomputation run with the CTR PRG of the rows (`icPrg (rowFn s.2.2)`); the
+  adversary sees and reads the table itself. Instances: **function rows** `Blk → Blk`
+  (`CipherRow.fn`, `row = id`, `Sh p = ShG (Blk → Blk) p`) and **permutation rows**
+  `Equiv.Perm Blk` (`CipherRow.perm`, `ShPm p`), where reading a row at a key reads the whole
+  permutation: forward and inverse queries.
+- *The read algebra* (`Rd5`, `RdE`, `Rd3`, `IsProg`, `Budget`, `ProgAt`, `SReads`, `CProg`, `Tb`,
+  `mixT`, `patch5E`, `patch2`, …) and the prover's, the simulator's and the programming's reads
+  (`realROb_rdE`, `realROb_rd5`, `progRO_isProg`, `realRO2_rdE`, `simRO2_rdE`, `progRO2_isProg`,
+  `step1_rdE`, `outPre_rdE`, `progRO_cprog`, …) are stated for any `R`: they only use that a
+  table agreeing at a key has the same row there (`rowFn_congr`).
+- *Zero knowledge as structure*: the theorems each game uses are classes on `R`, whose fields are
+  the theorems in the games' form:
+  `ZKRow R` (`zk_ro`, an error `εz p q₃ q₅ q_E`), `ZK2Row R` (`zk2_ro`, the same error at the
+  continuation's reads added), `ZK2ARow R` (`zk2_adaptive`), `ZKPRow R` (`zk_roP`, an error
+  `εP p q₃ q₅ q_E |P5| |PE|` with the `H₅` and cipher tables patched on fixed sets; `h23G`,
+  `εAdG` the errors of §10.3 with it). Function rows: `ZKRow.fn` (`εRO`), `ZK2Row.fn`,
+  `ZK2ARow.fn`, `ZKPRow.fn` (`εROP`); permutation rows: `ZKRow.perm` (`εROPm`),
+  `ZK2Row.perm`, `ZK2ARow.perm`, `ZKPRow.perm` (`εROPmP`).
+- *The games* (`Privacy/MoussakaRO.lean`, `RatatouilleRO.lean`, `PomFRITRO.lean`, the `*Delta`
+  and `*RA` files, `ZK/CollideRO.lean`, `ZK/AdaptRO.lean`, `ZK/TwoPhaseAd.lean`) take the row type
+  as a parameter of the adversary (`AdversaryRO R`, `AdversaryRA R`) and of the tables, and the
+  Lean-prover bounds are proved once (`*_leanG`, `*_lean_numG`); the theorems of §10.2 and §10.3
+  (`anonymityRO_lean_num`, …, with their statements unchanged but for `AdversaryRO (Blk → Blk)`)
+  are their instances at function rows. Moussaka's and Ratatouille's generic bounds split the
+  issuance and redemption/spend errors (`4·εz(pI; …) + 4·εz(pR; …)`), since the permutation
+  error depends on the parameters through `nHi` and `switchEps`.
+
+**The permutation-row zero-knowledge theorems** (new for this section).
+- *Two phases* (`ZK/TwoPhasePerm.lean`): `zk2_rom_ic_h23_perm`, `zk2_rom_ic_h23_num_perm`, error
+  `εROPm p q₃ (q₅ + q_k5) (q_E + q_kE)`; with the continuation reading the tables after step 1,
+  `zk2_rom_ic_h23A_perm`, `zk2_rom_ic_h23A_num_perm`, error
+  `εROPm p (q₃ + q_k3) (q₅ + q_k5) (q_E + q_kE)`. As for one proof, the hops before and after H4
+  hold for every cipher (`zk2_pre_h4`, `zk2_post_h4`, `zk2_pre_h4A`, `zk2_post_h4A` at
+  `icPrg (cf π)`), and H4 is `hide_rom_query_perm` applied to the view at the rows of `π`
+  (`viewIC2Pm`, `viewIC2APm`): its congruence (`viewIC2Pm_congr`, `viewIC2APm_congr`) changes the
+  distinguisher's permutation table, then the view's rows (`viewIC2_congr`, `viewIC2A_congr` with
+  a constant continuation), then the continuation (for `zk2A` only at the run's step-1 output,
+  `viewIC2A_kcongr`). In the games' form: `zk2_ro_perm`, `zk2_adaptive_perm`.
+- *The patched H4 with permutation rows* (`ZK/IdealCipherPermP.lean`, `ZK/HopsPatchPerm.lean`):
+  the table `IC.patchT PE WE π` (fixed permutations at the keys `PE`, uniform elsewhere) is again
+  a table of independent uniform permutations off `PE`; in the GGM hop the node's value is fresh in
+  its parent's (replaced) permutation, and programming the table at it is perfect unless it is a
+  candidate or in `PE` (`IC.hopPmP`, `(N + q + |PE|)/(|K| − s)`; `IC.puncturePmP`,
+  `IC.experPmP_empty`, `IC.experPmP_close`). With the switching term unchanged
+  (`exper_finalPmP`: the replacement permutations are fresh), `hide_rom_query_permP`:
+  `221·(4607 + q + |PE|)/(2¹²⁸ − (nHi + 1)) + switchEps`. The chain (`joint3_h4P_perm`,
+  `zk_rom_ic_h23P_perm`: `zk_pre_h4Φ`, `zk_post_h4P` for every cipher) gives `zk_roP_perm` with
+
+      εROPmP p q₃ q₅ q_E n₅ n_E = q₃·2⁻¹²⁸ + 2⁻¹¹⁰ + 221·(4607 + q_E + 4607 + n_E)/(2¹²⁸ − (nHi + 1))
+                                   + switchEps p + (q₅ + 1)·2⁻¹²⁸ + (n₅ + 1)·2⁻¹²⁸,
+
+  and `εAdPm`, `h23Pm` (§10.3's `εAd`, `h23Term` with `εROPmP`).
+
+**The privacy theorems with AES as random permutations.**
+
+    Moussaka (anonymityRO_lean_num_perm):  |Pr[W₀] − Pr[W₁]| ≤
+        4·εROPm(pI; q₃, q₅ + 1872, q_E + 13821) + 4·εROPm(pR; q₃, q₅ + 1872, q_E + 13821)
+      + 4·(2⁻¹¹⁰ + εROPm(pR; 0, 312, 4607)) + 6·noHitProb + 12·2⁻¹⁰²⁴ + 2·εhide
+    Ratatouille (unlinkabilityRO_lean_num_perm): the same with pS for pR
+    PomFRIT (blindnessRO_lean_num_perm):  4·εROPm(pP; q₃, q₅ + 1248, q_E + 18428)
+      + 2·noHitProb + 2·2⁻¹²⁸
+
+    Moussaka (anonymityRA_lean_num_perm):
+        4·εROPm(pI; i₃ + q₃, q₅ + i₅ + 1872, q_E + i_E + 13821)
+      + 4·εAdPm(pR; 9; q₃, q₅ + 1248, q_E + 13821; i₃, i₂, i₅ + 624, i_E + 9214)
+      + 4·(i₃·2⁻¹²⁸ + 2⁻¹¹⁰ + εROPmP(pR; 0, 312, 4607; i₅ + 624, i_E + 9214))
+      + 6·noHitProb + 12·2⁻¹⁰²⁴ + 2·εhide
+    Ratatouille (unlinkabilityRA_lean_num_perm):
+        4·εROPm(pI; 2i₃ + q₃, q₅ + 2i₅ + 1872, q_E + 2i_E + 13821)
+      + 2·εAdPm(pS; 9; i₃ + q₃, q₅ + i₅ + 1248, q_E + i_E + 13821; i₃, i₂, i₅ + 624, i_E + 9214)
+      + 2·εAdPm(pS; 9; q₃, q₅ + 936, q_E + 13821; 2i₃, 2i₂, 2i₅ + 1560, 2i_E + 23035)
+      + 6·i₃·2⁻¹²⁸ + 4·(2⁻¹¹⁰ + εROPmP(pS; 0, 312, 4607; 2i₅ + 1560, 2i_E + 23035))
+      + 6·noHitProb + 12·2⁻¹⁰²⁴ + 2·εhide
+    PomFRIT (blindnessRA_lean_num_perm):
+        4·εROPm(pP; q₃ + 4i₃, q₅ + 4i₅ + 1872, q_E + 4i_E + 23035) + 2·noHitProb + 2·2⁻¹²⁸
+
+Each is the function-row bound with every `εRO` (`εROP`, `εAd`) replaced by its permutation-row
+counterpart: the hop denominator `2¹²⁸ − (nHi + 1)` for `2¹²⁸` (`nHi = 1`), and one switching term
+`switchEps ≤ 2⁻¹¹³·²` per error term. Without budgets the RO bounds are about `2⁻¹⁰²·²`
+(Moussaka, Ratatouille) and `2⁻¹⁰³·⁴` (PomFRIT), as for function rows to two decimals.
+
+**What did not need porting.** Nothing in the games, the collision bounds (`pr_collide_zk`,
+`pr_collide_adaptive`, `deltaRO_le`, `deltaRA_le`) or the adaptive layer uses that the rows are
+functions: they read the cipher through key sets, and a whole permutation row is a key's entry.
+The only permutation-specific steps are the H4 hops above (plain, two-phase, two-phase with an
+adaptive continuation, patched), each the function-row chain around `hide_rom_query_perm` or
+`hide_rom_query_permP`.

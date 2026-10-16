@@ -21,12 +21,20 @@ programmed. Here `δ(A) ≤ noHitProb + 2⁻¹²⁸` (`deltaRO_le`):
 
 **`blindnessRO_lean_num`**: `|Pr[W₀] − Pr[W₁]| ≤ 4·εRO(q₃, q₅ + 1248, q_E + 18428)
 + 2·noHitProb + 2·2⁻¹²⁸`.
+
+**Cipher rows.** Everything here is stated for every type of cipher rows `R` (the shared
+tables `ZK.Sim.ShG R p`, `ZK/ReadsRO.lean`) with `ZKRow R`, `ZK2Row R`; `blindnessRO_lean_numG` is the generic
+Lean-prover bound and `blindnessRO_lean_num` its instance at function rows (`Blk → Blk`, the PRF
+view); `Privacy/PermRO.lean` instantiates it at permutation rows (AES as uniformly random
+permutations, the adversary reading whole rows: forward and inverse queries).
 -/
 
 open Finset
 
 -- (The coin types are large products: their `Fintype` instances exceed the default size.)
 set_option synthInstance.maxSize 1024
+
+set_option linter.unusedSectionVars false
 
 namespace VoleMole.Privacy.PomFRIT
 
@@ -36,13 +44,13 @@ open VoleMole.Spec VoleMole.Spec.PomFRIT
 -- `Com` and the UOV map evaluate Keccak and the public map; nothing below needs to unfold them.
 attribute [local irreducible] commitRefresher UOVKey.eval
 
-variable {Hb : Hashes} (A : AdversaryRO)
+variable {R : Type} [Fintype R] [Nonempty R] [CipherRow R] {Hb : Hashes} (A : AdversaryRO R)
 
 lemma tail_pP : (8 * (16 * (pP.qsDegree - 1)) : ℕ) = 128 := rfl
 
 /-- **A simulated session's request does not read its `ã`.** -/
 lemma s1C_tail (ref : Coins refresherBytes) (c : SimCoins pP) (fb : Fallback pP)
-    (a : Sim.Bytes (16 * (pP.qsDegree - 1))) (s : ShP) :
+    (a : Sim.Bytes (16 * (pP.qsDegree - 1))) (s : ShP R) :
     s1C Hb ref ((c.1, (c.2.1, c.2.2.1, c.2.2.2.1, c.2.2.2.2.1, a)), fb) s = s1C Hb ref (c, fb) s := by
   unfold s1C simRun2
   dsimp only
@@ -51,28 +59,28 @@ lemma s1C_tail (ref : Coins refresherBytes) (c : SimCoins pP) (fb : Fallback pP)
   · simp only [simPhase1]
 
 /-- The prefix session `1`'s real run grinds at, in `deltaRO`'s tape. -/
-noncomputable def pre1 (Hb : Hashes) (z : (XS × XR) × ShP) : ByteArray :=
-  @pre2 (icPrg z.2.2.2) (rec5 Hb z.2.2.1) CrtGen.tables (stOf z.1.2.1.2.1)
+noncomputable def pre1 (Hb : Hashes) (z : (XS × XR) × ShP R) : ByteArray :=
+  @pre2 (icPrg (rowFn z.2.2.2)) (rec5 Hb z.2.2.1) CrtGen.tables (stOf z.1.2.1.2.1)
     (toBA (List.ofFn z.1.2.1.2.2))
     (kOf A (A.msg true) z.1.2.1.2.1 z.1.2.1.2.2 true (tS Hb A (A.msg false) z.1.1 z.2))
     (splitSeed (z.1.2.2 z.1.2.1.1))
 
 /-- The prefix block session `0`'s simulator programs, in `deltaRO`'s tape. -/
-noncomputable def pre0 (Hb : Hashes) (y₀ : XS) (x₁ : XR) (s : ShP) : ByteArray :=
-  @outPre2 (icPrg s.2.2) Hb CrtGen.tables (stOf y₀.1.2.1)
+noncomputable def pre0 (Hb : Hashes) (y₀ : XS) (x₁ : XR) (s : ShP R) : ByteArray :=
+  @outPre2 (icPrg (rowFn s.2.2)) Hb CrtGen.tables (stOf y₀.1.2.1)
     (kOf A (A.msg false) y₀.1.2.1 y₀.1.2.2 false (tR Hb A (A.msg true) x₁ s)) s.2.1
-    (@simRun2 (icPrg s.2.2) Hb (stOf y₀.1.2.1) uovM
+    (@simRun2 (icPrg (rowFn s.2.2)) Hb (stOf y₀.1.2.1) uovM
       (kOf A (A.msg false) y₀.1.2.1 y₀.1.2.2 false (tR Hb A (A.msg true) x₁ s)) y₀.1.1)
 
-lemma pS_pre0 (y₀ : XS) (x₁ : XR) (s : ShP) :
+lemma pS_pre0 (y₀ : XS) (x₁ : XR) (s : ShP R) :
     pS Hb A (A.msg false) false y₀ (tR Hb A (A.msg true) x₁) s =
       (programAt (key2 pP (pre0 A Hb y₀ x₁ s)) y₀.1.1.1.1.2.1 s.1, s.2) := by
   rw [pS_eq]; rfl
 
 /-- Session `1`'s real run, with its continuation's other request fixed. -/
-lemma oR_run (y₀ : XS) (x₁ : XR) (s v : ShP) (hv : v.2 = s.2) :
+lemma oR_run (y₀ : XS) (x₁ : XR) (s v : ShP R) (hv : v.2 = s.2) :
     oR Hb A (A.msg true) true x₁ (tS Hb A (A.msg false) y₀) v =
-      @realRun2 (icPrg s.2.2) (recH Hb (st1 (stOf x₁.1.2.1)) (toBA (List.ofFn x₁.1.2.2)) x₁.2 v.1
+      @realRun2 (icPrg (rowFn s.2.2)) (recH Hb (st1 (stOf x₁.1.2.1)) (toBA (List.ofFn x₁.1.2.2)) x₁.2 v.1
         s.2.1) CrtGen.tables (stOf x₁.1.2.1) (toBA (List.ofFn x₁.1.2.2))
         (kOf A (A.msg true) x₁.1.2.1 x₁.1.2.2 true (tS Hb A (A.msg false) y₀ s)) (ba x₁.1.1) := by
   obtain ⟨G2, r⟩ := v
@@ -84,7 +92,7 @@ lemma oR_run (y₀ : XS) (x₁ : XR) (s v : ShP) (hv : v.2 = s.2) :
 
 /-- **A collision of `deltaRO`**: session `0`'s grinding failed, or session `1`'s prefix ends
 with session `0`'s `ã₀`. -/
-theorem deltaRO_event' (hHb : HashesWF Hb) (y₀ : XS) (x₁ : XR) (s : ShP)
+theorem deltaRO_event' (hHb : HashesWF Hb) (y₀ : XS) (x₁ : XR) (s : ShP R)
     (hz : oR Hb A (A.msg true) true x₁ (tS Hb A (A.msg false) y₀)
         (pS Hb A (A.msg false) false y₀ (tR Hb A (A.msg true) x₁) s) ≠
       oR Hb A (A.msg true) true x₁ (tS Hb A (A.msg false) y₀) s) :
@@ -94,12 +102,12 @@ theorem deltaRO_event' (hHb : HashesWF Hb) (y₀ : XS) (x₁ : XR) (s : ShP)
   rw [oR_run A y₀ x₁ s _ (by rw [pS_pre0]), oR_run A y₀ x₁ s s rfl, pS_pre0] at hz
   -- Session 1 continues, and reads a programmed point.
   have hcol : (kOf A (A.msg true) x₁.1.2.1 x₁.1.2.2 true (tS Hb A (A.msg false) y₀ s)
-      (@out1 (icPrg s.2.2) (rec5 Hb s.2.1) CrtGen.tables (stOf x₁.1.2.1)
+      (@out1 (icPrg (rowFn s.2.2)) (rec5 Hb s.2.1) CrtGen.tables (stOf x₁.1.2.1)
         (toBA (List.ofFn x₁.1.2.2)) (splitSeed (x₁.2 x₁.1.1)))).isSome ∧
       ∃ c, programAt (key2 pP (pre0 A Hb y₀ x₁ s)) y₀.1.1.1.1.2.1 s.1
           (key2 pP (pre1 A Hb ((y₀, x₁), s)) c) ≠ s.1 (key2 pP (pre1 A Hb ((y₀, x₁), s)) c) := by
     by_contra hn
-    refine hz (@realRun2_h23_congr (icPrg s.2.2) Hb (stOf x₁.1.2.1) (toBA (List.ofFn x₁.1.2.2))
+    refine hz (@realRun2_h23_congr (icPrg (rowFn s.2.2)) Hb (stOf x₁.1.2.1) (toBA (List.ofFn x₁.1.2.2))
       _ hHb hh x₁.2 s.1 _ s.2.1 x₁.1.1 fun hk c => ?_)
     by_contra hc
     exact hn ⟨hk, c, hc⟩
@@ -112,27 +120,27 @@ theorem deltaRO_event' (hHb : HashesWF Hb) (y₀ : XS) (x₁ : XR) (s : ShP)
   · exact Or.inl rfl
   · right
     -- Session 0 continues too: `bothOK` is symmetric.
-    have hs1 : s1R Hb x₁ s = @out1 (icPrg s.2.2) (rec5 Hb s.2.1) CrtGen.tables (stOf x₁.1.2.1)
+    have hs1 : s1R Hb x₁ s = @out1 (icPrg (rowFn s.2.2)) (rec5 Hb s.2.1) CrtGen.tables (stOf x₁.1.2.1)
         (toBA (List.ofFn x₁.1.2.2)) (splitSeed (x₁.2 x₁.1.1)) :=
       (oR_s1 Hb A (A.msg true) true x₁ (fun _ => tS Hb A (A.msg false) y₀ s) s).symm.trans
-        (@realRun2_out1 (icPrg s.2.2) Hb (stOf x₁.1.2.1) (toBA (List.ofFn x₁.1.2.2)) _ hHb hh x₁.2
+        (@realRun2_out1 (icPrg (rowFn s.2.2)) Hb (stOf x₁.1.2.1) (toBA (List.ofFn x₁.1.2.2)) _ hHb hh x₁.2
           s.1 s.2.1 x₁.1.1)
-    have hs0 : s1S Hb y₀ s = @simPhase1 (icPrg s.2.2) Hb (st1 (stOf y₀.1.2.1)) uovM y₀.1.1.1.1 ctr
+    have hs0 : s1S Hb y₀ s = @simPhase1 (icPrg (rowFn s.2.2)) Hb (st1 (stOf y₀.1.2.1)) uovM y₀.1.1.1.1 ctr
         δ y₀.1.1.1.2 := by
       simp only [s1S, s1C, simRun2, hf]
     have hk0 : (kOf A (A.msg false) y₀.1.2.1 y₀.1.2.2 false (tR Hb A (A.msg true) x₁ s)
-        (@simPhase1 (icPrg s.2.2) Hb (st1 (stOf y₀.1.2.1)) uovM y₀.1.1.1.1 ctr δ
+        (@simPhase1 (icPrg (rowFn s.2.2)) Hb (st1 (stOf y₀.1.2.1)) uovM y₀.1.1.1.1 ctr δ
           y₀.1.1.1.2)).isSome := by
       rw [kOf_isSome] at hk1 ⊢
       simp only [Bool.cond_true, Bool.cond_false] at hk1 ⊢
       rw [tR, hs1, ← hs0]
       exact hk1
-    have ht := @preTail_outPre2 (icPrg s.2.2) Hb (stOf y₀.1.2.1) _ hHb CrtGen.tables uovM
+    have ht := @preTail_outPre2 (icPrg (rowFn s.2.2)) Hb (stOf y₀.1.2.1) _ hHb CrtGen.tables uovM
       s.2.1 y₀.1.1 ctr δ hf hk0
     rw [hblk]
     exact ht
 
-theorem deltaRO_event (hHb : HashesWF Hb) (z : (XS × XR) × ShP)
+theorem deltaRO_event (hHb : HashesWF Hb) (z : (XS × XR) × ShP R)
     (hz : oR Hb A (A.msg true) true z.1.2 (tS Hb A (A.msg false) z.1.1)
         (pS Hb A (A.msg false) false z.1.1 (tR Hb A (A.msg true) z.1.2) z.2) ≠
       oR Hb A (A.msg true) true z.1.2 (tS Hb A (A.msg false) z.1.1) z.2) :
@@ -156,16 +164,30 @@ theorem deltaRO_le (hHb : HashesWF Hb) : deltaRO Hb A ≤ noHitProb + 1 / 2 ^ 12
   rw [tail_pP] at h
   exact h
 
+/-- **PomFRIT blindness with every term explicit, for every type of cipher rows** (`ZKRow R`,
+`ZK2Row R`): `blindnessRO_leanG` with the collision terms bounded,
+
+    |Pr[W₀] − Pr[W₁]| ≤ 4·εz(pP; q₃, q₅ + 1248, q_E + 18428) + 2·noHitProb + 2·2⁻¹²⁸. -/
+theorem blindnessRO_lean_numG [ZKRow R] [ZK2Row R] (A : AdversaryRO R) {q3 q5 qE : ℕ}
+    (hA : A.Budget q3 q5 qE) :
+    |pr ((XR × XR) × ShP R) (realGameRO Hashes.shake A false) -
+        pr ((XR × XR) × ShP R) (realGameRO Hashes.shake A true)| ≤
+      4 * ZKRow.εz R pP q3 (q5 + 1248) (qE + 18428) + 2 * noHitProb + 2 / 2 ^ 128 := by
+  refine (blindnessRO_leanG A hA).trans (le_trans (add_le_add (add_le_add le_rfl
+    (deltaRO_le A hashesWF_shake)) (deltaRO_le A.swap hashesWF_shake)) (le_of_eq ?_))
+  ring
+
 /-- **PomFRIT blindness in the random-oracle and ideal-cipher model, with every term explicit**:
 `blindnessRO_lean` with the collision terms bounded,
 
-    |Pr[W₀] − Pr[W₁]| ≤ 4·εRO(q₃, q₅ + 1248, q_E + 18428) + 2·noHitProb + 2·2⁻¹²⁸. -/
-theorem blindnessRO_lean_num (A : AdversaryRO) {q3 q5 qE : ℕ} (hA : A.Budget q3 q5 qE) :
-    |pr ((XR × XR) × ShP) (realGameRO Hashes.shake A false) -
-        pr ((XR × XR) × ShP) (realGameRO Hashes.shake A true)| ≤
-      4 * εRO q3 (q5 + 1248) (qE + 18428) + 2 * noHitProb + 2 / 2 ^ 128 := by
-  refine (blindnessRO_lean A hA).trans (le_trans (add_le_add (add_le_add le_rfl
-    (deltaRO_le A hashesWF_shake)) (deltaRO_le A.swap hashesWF_shake)) (le_of_eq ?_))
-  ring
+    |Pr[W₀] − Pr[W₁]| ≤ 4·εRO(q₃, q₅ + 1248, q_E + 18428) + 2·noHitProb + 2·2⁻¹²⁸.
+
+(`blindnessRO_lean_numG` at function rows.) -/
+theorem blindnessRO_lean_num (A : AdversaryRO (Blk → Blk)) {q3 q5 qE : ℕ}
+    (hA : A.Budget q3 q5 qE) :
+    |pr ((XR × XR) × ShP (Blk → Blk)) (realGameRO Hashes.shake A false) -
+        pr ((XR × XR) × ShP (Blk → Blk)) (realGameRO Hashes.shake A true)| ≤
+      4 * εRO q3 (q5 + 1248) (qE + 18428) + 2 * noHitProb + 2 / 2 ^ 128 :=
+  blindnessRO_lean_numG A hA
 
 end VoleMole.Privacy.PomFRIT

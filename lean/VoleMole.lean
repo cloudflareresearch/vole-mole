@@ -193,3 +193,8 @@ import VoleMole.Privacy.RatatouilleRA
 import VoleMole.ZK.TwoPhaseAd
 import VoleMole.Privacy.PomFRITRA
 import VoleMole.Privacy.PomFRITRAGame
+import VoleMole.ZK.IdealCipherPermP
+import VoleMole.ZK.HopsPatchPerm
+import VoleMole.ZK.TwoPhasePerm
+import VoleMole.Privacy.PermRO
+import VoleMole.Privacy.PermRA

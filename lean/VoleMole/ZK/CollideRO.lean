@@ -30,6 +30,10 @@ proof on the original tables. Here are the facts that bound it (`lean/docs/zk.md
   the verifier recomputes from the proof, a distinguisher of the proof and the tables reading `H₅`
   and the cipher at `312`, `4607` keys; by zero knowledge (`zk_ro`) its probability is that for the
   simulated proof up to `εRO(0, 312, 4607)`, and the simulated proof's tail is its own uniform `ã`.
+
+Everything is stated for any type of cipher rows (`ShG R p`); `pr_collide_zk` for a row type with
+`ZKRow R`, with `ZKRow.εz R p 0 312 4607` (`εRO(0, 312, 4607)` for function rows,
+`εROPm p 0 312 4607` for permutation rows) in place of `εRO(0, 312, 4607)`.
 -/
 
 open Finset
@@ -208,53 +212,53 @@ end Tail
 
 section ProgAt
 
-variable {p : Params}
+variable {R : Type} [CipherRow R] {p : Params}
 
 /-- **A programming of `H₂³` at the prefix blocks `B s`**: it changes only the `H₂³` table, and
 there only the keys whose prefix block is in `B s`. -/
-def ProgAt (L : Sh p → Sh p) (B : Sh p → Finset (Bytes (preLen p))) : Prop :=
+def ProgAt (L : ShG R p → ShG R p) (B : ShG R p → Finset (Bytes (preLen p))) : Prop :=
   (∀ s, (L s).2 = s.2) ∧ ∀ s (k : K2 p), k.1 ∉ B s → (L s).1 k = s.1 k
 
-lemma ProgAt.id : ProgAt (fun s : Sh p => s) (fun _ => ∅) :=
+lemma ProgAt.id : ProgAt (fun s : ShG R p => s) (fun _ => ∅) :=
   ⟨fun _ => rfl, fun _ _ _ => rfl⟩
 
-lemma ProgAt.comp {L L' : Sh p → Sh p} {B B' : Sh p → Finset (Bytes (preLen p))}
+lemma ProgAt.comp {L L' : ShG R p → ShG R p} {B B' : ShG R p → Finset (Bytes (preLen p))}
     (h : ProgAt L B) (h' : ProgAt L' B') :
     ProgAt (fun s => L (L' s)) (fun s => B (L' s) ∪ B' s) := by
   refine ⟨fun s => (h.1 _).trans (h'.1 s), fun s k hk => ?_⟩
   rw [Finset.mem_union, not_or] at hk
   exact (h.2 _ k hk.1).trans (h'.2 s k hk.2)
 
-lemma ProgAt.ite {L : Sh p → Sh p} {B : Sh p → Finset (Bytes (preLen p))} (c : Prop)
+lemma ProgAt.ite {L : ShG R p → ShG R p} {B : ShG R p → Finset (Bytes (preLen p))} (c : Prop)
     [Decidable c] (h : ProgAt L B) :
     ProgAt (fun s => if c then L s else s) (fun s => if c then B s else ∅) := by
   by_cases hc : c
   · simpa only [hc, ↓reduceIte] using h
   · simpa only [hc, ↓reduceIte] using (ProgAt.id (p := p))
 
-lemma ProgAt.ite_else {L : Sh p → Sh p} {B : Sh p → Finset (Bytes (preLen p))} (c : Prop)
+lemma ProgAt.ite_else {L : ShG R p → ShG R p} {B : ShG R p → Finset (Bytes (preLen p))} (c : Prop)
     [Decidable c] (h : ProgAt L B) :
     ProgAt (fun s => if c then s else L s) (fun s => if c then ∅ else B s) := by
   by_cases hc : c
   · simpa only [hc, ↓reduceIte] using (ProgAt.id (p := p))
   · simpa only [hc, ↓reduceIte] using h
 
-lemma ProgAt.mono {L : Sh p → Sh p} {B B' : Sh p → Finset (Bytes (preLen p))} (h : ProgAt L B)
+lemma ProgAt.mono {L : ShG R p → ShG R p} {B B' : ShG R p → Finset (Bytes (preLen p))} (h : ProgAt L B)
     (hB : ∀ s, B s ⊆ B' s) : ProgAt L B' :=
   ⟨h.1, fun s k hk => h.2 s k fun h' => hk (hB s h')⟩
 
-lemma ProgAt.congr {L L' : Sh p → Sh p} {B : Sh p → Finset (Bytes (preLen p))} (h : ProgAt L B)
+lemma ProgAt.congr {L L' : ShG R p → ShG R p} {B : ShG R p → Finset (Bytes (preLen p))} (h : ProgAt L B)
     (e : ∀ s, L' s = L s) : ProgAt L' B :=
   ⟨fun s => by rw [e]; exact h.1 s, fun s k hk => by rw [e]; exact h.2 s k hk⟩
 
 /-- The prefix block a simulation programs, on the tables `s`. -/
-noncomputable def simBlk (Hb : Hashes) (st : Statement) (c : SimCoins p) (s : Sh p) :
+noncomputable def simBlk (Hb : Hashes) (st : Statement) (c : SimCoins p) (s : ShG R p) :
     Bytes (preLen p) :=
-  blk (preLen p) (@outPre (icPrg s.2.2) Hb CrtGen.tables st s.2.1 (simulate p c))
+  blk (preLen p) (@outPre (icPrg (rowFn s.2.2)) Hb CrtGen.tables st s.2.1 (simulate p c))
 
 /-- **The simulator programs one prefix block**, the one of the prefix it recomputes. -/
 theorem progRO_progAt (Hb : Hashes) (st : Statement) (c : SimCoins p) :
-    ProgAt (progRO p Hb st c) (fun s => {simBlk Hb st c s}) := by
+    ProgAt (progRO (R := R) p Hb st c) (fun s => {simBlk Hb st c s}) := by
   refine ⟨fun _ => rfl, fun s k hk => ?_⟩
   refine programAt_apply_of_ne _ _ fun i hi => hk ?_
   rw [← hi, Finset.mem_singleton]
@@ -262,14 +266,16 @@ theorem progRO_progAt (Hb : Hashes) (st : Statement) (c : SimCoins p) :
 
 /-- **The tail of the block a simulation programs** is its `simTail`. -/
 theorem preTail_simBlk {Hb : Hashes} (hHb : HashesWF Hb) {st : Statement} (hp : st.params = p)
-    (c : SimCoins p) (s : Sh p) : preTail (simBlk Hb st c s) = simTail c :=
-  @preTail_outPre p (icPrg s.2.2) Hb hHb CrtGen.tables st hp s.2.1 c
+    (c : SimCoins p) (s : ShG R p) : preTail (simBlk Hb st c s) = simTail c :=
+  @preTail_outPre p (icPrg (rowFn s.2.2)) Hb hHb CrtGen.tables st hp s.2.1 c
 
 end ProgAt
 
 /-! ## What the real prover reads of `H₂³` -/
 
 section Real
+
+variable {R : Type} [CipherRow R]
 
 /-- **The executable prover with the record `recH`** is the run of hybrid H2 at the seed and
 `iv_pre` of its `H₃` slice and the `H₂³` table's answers at its own grinding prefix. -/
@@ -291,29 +297,29 @@ theorem prove_recH_eq [HasPrg] {Hb : Hashes} {st : Statement} {w : ByteArray}
 /-- **The real prover's grinding prefix** on the shared tables (it reads neither `H₃` beyond the
 seed nor `H₂³`). -/
 noncomputable def preRO (Hb : Hashes) (st : Statement) (w : ByteArray) (ρ : Bytes 16) (G3 : Tab3)
-    (s : Sh st.params) : ByteArray :=
-  @preR (icPrg s.2.2) Hb CrtGen.tables st w s.2.1 (splitSeed (G3 ρ))
+    (s : ShG R st.params) : ByteArray :=
+  @preR (icPrg (rowFn s.2.2)) Hb CrtGen.tables st w s.2.1 (splitSeed (G3 ρ))
 
 variable {Hb : Hashes} {st : Statement} {w : ByteArray} {cs : ByteArray → ByteArray → System GF128}
 
-lemma realRO_eq (ρ : Bytes 16) (G3 : Tab3) (s : Sh st.params) :
+lemma realRO_eq (ρ : Bytes 16) (G3 : Tab3) (s : ShG R st.params) :
     realRO st.params Hb st w ρ G3 s =
-      @Prover.prove (icPrg s.2.2) (recH Hb st w G3 s.1 s.2.1) CrtGen.tables st w (ba ρ)
+      @Prover.prove (icPrg (rowFn s.2.2)) (recH Hb st w G3 s.1 s.2.1) CrtGen.tables st w (ba ρ)
         st.params.witnessBytes := rfl
 
 /-- **A programming that leaves the real prover's prefix block alone leaves its proof alone.** -/
 theorem realRO_progAt (hzk : ZKHyp CrtGen.tables st w cs) (hHb : HashesWF Hb)
-    (hlab : st.params.labelRowOffset + 128 ≤ st.params.correctionRows) {L : Sh st.params → Sh st.params}
-    {B : Sh st.params → Finset (Bytes (preLen st.params))} (hL : ProgAt L B) (ρ : Bytes 16)
-    (G3 : Tab3) (s : Sh st.params) (hn : blk (preLen st.params) (preRO Hb st w ρ G3 s) ∉ B s) :
+    (hlab : st.params.labelRowOffset + 128 ≤ st.params.correctionRows) {L : ShG R st.params → ShG R st.params}
+    {B : ShG R st.params → Finset (Bytes (preLen st.params))} (hL : ProgAt L B) (ρ : Bytes 16)
+    (G3 : Tab3) (s : ShG R st.params) (hn : blk (preLen st.params) (preRO Hb st w ρ G3 s) ∉ B s) :
     realRO st.params Hb st w ρ G3 (L s) = realRO st.params Hb st w ρ G3 s := by
   have h2 : L s = ((L s).1, s.2) := Prod.ext rfl (hL.1 s)
   rw [realRO_eq, realRO_eq, h2]
   dsimp only
-  rw [@prove_recH_eq (icPrg s.2.2) Hb st w cs hzk hHb hlab, @prove_recH_eq (icPrg s.2.2) Hb st w cs
+  rw [@prove_recH_eq (icPrg (rowFn s.2.2)) Hb st w cs hzk hHb hlab, @prove_recH_eq (icPrg (rowFn s.2.2)) Hb st w cs
     hzk hHb hlab]
-  have e : (L s).1 ∘ key2 st.params (@preR (icPrg s.2.2) Hb CrtGen.tables st w s.2.1
-      (splitSeed (G3 ρ))) = s.1 ∘ key2 st.params (@preR (icPrg s.2.2) Hb CrtGen.tables st w s.2.1
+  have e : (L s).1 ∘ key2 st.params (@preR (icPrg (rowFn s.2.2)) Hb CrtGen.tables st w s.2.1
+      (splitSeed (G3 ρ))) = s.1 ∘ key2 st.params (@preR (icPrg (rowFn s.2.2)) Hb CrtGen.tables st w s.2.1
       (splitSeed (G3 ρ))) :=
     funext fun c => hL.2 s _ hn
   rw [e]
@@ -323,21 +329,21 @@ prover's prefix is bad, the real prover produces a proof, and the prefix recompu
 prover's. -/
 theorem realRO_vPre (hzk : ZKHyp CrtGen.tables st w cs) (hHb : HashesWF Hb)
     (hlab : st.params.labelRowOffset + 128 ≤ st.params.correctionRows) (ρ : Bytes 16) (G3 : Tab3)
-    (s : Sh st.params)
+    (s : ShG R st.params)
     (hg : ¬ GrindBad CrtGen.tables (s.1 ∘ key2 st.params (preRO Hb st w ρ G3 s))) :
     ∃ proof, realRO st.params Hb st w ρ G3 s = .ok proof ∧
-      @outPre (icPrg s.2.2) Hb CrtGen.tables st s.2.1 (.ok proof) = preRO Hb st w ρ G3 s := by
-  rw [realRO_eq, @prove_recH_eq (icPrg s.2.2) Hb st w cs hzk hHb hlab]
+      @outPre (icPrg (rowFn s.2.2)) Hb CrtGen.tables st s.2.1 (.ok proof) = preRO Hb st w ρ G3 s := by
+  rw [realRO_eq, @prove_recH_eq (icPrg (rowFn s.2.2)) Hb st w cs hzk hHb hlab]
   have hwf : HashesWF (recB Hb st w G3 s.2.1) := recH_wf hHb G3 _ s.2.1
-  obtain ⟨proof, hok, hv⟩ := @hyb3_vPre (icPrg s.2.2) _ st w hwf cs hzk hlab (splitSeed (G3 ρ)) _ hg
+  obtain ⟨proof, hok, hv⟩ := @hyb3_vPre (icPrg (rowFn s.2.2)) _ st w hwf cs hzk hlab (splitSeed (G3 ρ)) _ hg
   have hiv : ivOfPre (recB Hb st w G3 s.2.1) st = ivOfPre Hb st :=
-    @recH_ivOfPre (icPrg s.2.2) Hb st w G3 (fun _ => 0) s.2.1
-  have hvp : @vPre (icPrg s.2.2) (recB Hb st w G3 s.2.1) CrtGen.tables st =
-      @vPre (icPrg s.2.2) (rec5 Hb s.2.1) CrtGen.tables st :=
-    @vPre_recH (icPrg s.2.2) Hb CrtGen.tables st w G3 (fun _ => 0) s.2.1
-  have hpp : @prePrefix (icPrg s.2.2) (recB Hb st w G3 s.2.1) CrtGen.tables st w =
-      @preR (icPrg s.2.2) Hb CrtGen.tables st w s.2.1 :=
-    @prePrefix_recH (icPrg s.2.2) Hb CrtGen.tables st w G3 (fun _ => 0) s.2.1
+    @recH_ivOfPre (icPrg (rowFn s.2.2)) Hb st w G3 (fun _ => 0) s.2.1
+  have hvp : @vPre (icPrg (rowFn s.2.2)) (recB Hb st w G3 s.2.1) CrtGen.tables st =
+      @vPre (icPrg (rowFn s.2.2)) (rec5 Hb s.2.1) CrtGen.tables st :=
+    @vPre_recH (icPrg (rowFn s.2.2)) Hb CrtGen.tables st w G3 (fun _ => 0) s.2.1
+  have hpp : @prePrefix (icPrg (rowFn s.2.2)) (recB Hb st w G3 s.2.1) CrtGen.tables st w =
+      @preR (icPrg (rowFn s.2.2)) Hb CrtGen.tables st w s.2.1 :=
+    @prePrefix_recH (icPrg (rowFn s.2.2)) Hb CrtGen.tables st w G3 (fun _ => 0) s.2.1
   rw [hiv] at hok
   rw [hvp, hpp] at hv
   exact ⟨proof, hok, hv⟩
@@ -348,17 +354,17 @@ end Real
 
 section Reads
 
-variable {p : Params}
+variable {R : Type} [CipherRow R] {p : Params}
 
 /-- **The recomputed prefix reads `H₅` at `312` keys** (the verifier's gate inputs). -/
 theorem outPre_rd5 (Hb : Hashes) (st : Statement) (o : Except String ByteArray) :
-    Rd5 (fun s : Sh p => @outPre (icPrg s.2.2) Hb CrtGen.tables st s.2.1 o) 312 := by
+    Rd5 (fun s : ShG R p => @outPre (icPrg (rowFn s.2.2)) Hb CrtGen.tables st s.2.1 o) 312 := by
   classical
   refine ⟨progKeys5 Hb st o, fun s => ?_, fun s G5 h => ?_⟩
   · unfold progKeys5
     split
     · exact card_image_le.trans ((List.toFinset_card_le _).trans
-        (@vIn5_length_le (icPrg s.2.2) _ _ _ _))
+        (@vIn5_length_le (icPrg (rowFn s.2.2)) _ _ _ _))
     · simp
   · unfold progKeys5 at h
     unfold outPre
@@ -370,13 +376,13 @@ theorem outPre_rd5 (Hb : Hashes) (st : Statement) (o : Except String ByteArray) 
       have h4 : (rec5 Hb G5).hash .h4 = (rec5 Hb s.2.1).hash .h4 := by rw [rec5_h4, rec5_h4]
       have hA : (rec5 Hb G5).AgreeOff .h5 (rec5 Hb s.2.1) := by
         intro k hk; rw [rec5_agree_ne hk, rec5_agree_ne hk]
-      refine @vPre_h5_congr (icPrg s.2.2) _ _ hA _ _ _ fun x hx => ?_
-      rw [@vIn5_congr (icPrg s.2.2) _ st _ _ hmu h4] at hx
+      refine @vPre_h5_congr (icPrg (rowFn s.2.2)) _ _ hA _ _ _ fun x hx => ?_
+      rw [@vIn5_congr (icPrg (rowFn s.2.2)) _ st _ _ hmu h4] at hx
       exact withTable_h5_congr _ fun _ => (h _ (mem_image.2 ⟨x, List.mem_toFinset.2 hx, rfl⟩)).symm
 
 /-- **The recomputed prefix reads the cipher at `4607` keys** (the reconstruction's nodes). -/
 theorem outPre_rdE (Hb : Hashes) (st : Statement) (o : Except String ByteArray) :
-    RdE (fun s : Sh p => @outPre (icPrg s.2.2) Hb CrtGen.tables st s.2.1 o) 4607 := by
+    RdE (fun s : ShG R p => @outPre (icPrg (rowFn s.2.2)) Hb CrtGen.tables st s.2.1 o) 4607 := by
   classical
   refine ⟨progKeysE Hb st o, fun s => ?_, fun s E h => ?_⟩
   · unfold progKeysE
@@ -387,7 +393,7 @@ theorem outPre_rdE (Hb : Hashes) (st : Statement) (o : Except String ByteArray) 
     unfold outPre
     cases o with
     | error e => rfl
-    | ok b => exact (vPre_ic_congr _ _ _ _ h).symm
+    | ok b => exact (vPre_ic_congr _ _ _ _ fun k hk => rowFn_congr (h k hk)).symm
 
 /-- **A simulation's tail is in a fixed set** with probability `≤ noHitProb + |T|·2^(−8·16(d−1))`
 (no proof, or the uniform `ã` in `T`). -/
@@ -424,17 +430,18 @@ end Reads
 
 section Collide
 
+variable {R : Type} [Fintype R] [Nonempty R] [CipherRow R]
 variable {Hb : Hashes} {st : Statement} {w : ByteArray} {cs : ByteArray → ByteArray → System GF128}
 
 /-- The grinding answers at the real prover's prefix are uniform: the prefix does not read
 `H₂³`. -/
 theorem pr_grindBad_preRO :
-    pr ((Bytes 16 × Tab3) × Sh st.params) (fun a =>
+    pr ((Bytes 16 × Tab3) × ShG R st.params) (fun a =>
       GrindBad CrtGen.tables (a.2.1 ∘ key2 st.params (preRO Hb st w a.1.1 a.1.2 a.2))) ≤
       1 / 2 ^ 110 := by
   refine pr_le_of_fst fun x => pr_le_of_snd fun r => ?_
   have h := close_restrict (R := Bytes 16)
-    (key2_injective st.params (@preR (icPrg r.2) Hb CrtGen.tables st w r.1 (splitSeed (x.2 x.1))))
+    (key2_injective st.params (@preR (icPrg (rowFn r.2)) Hb CrtGen.tables st w r.1 (splitSeed (x.2 x.1))))
     (GrindBad CrtGen.tables)
   rw [abs_nonpos_iff, sub_eq_zero] at h
   exact (le_of_eq h).trans grindBad_le_110
@@ -442,9 +449,9 @@ theorem pr_grindBad_preRO :
 /-- **A collision puts the real prefix's tail among the programmed tails.** -/
 theorem realRO_ne_tail (hzk : ZKHyp CrtGen.tables st w cs) (hHb : HashesWF Hb)
     (hlab : st.params.labelRowOffset + 128 ≤ st.params.correctionRows)
-    {L : Sh st.params → Sh st.params} {B : Sh st.params → Finset (Bytes (preLen st.params))}
-    (hL : ProgAt L B) {T : Sh st.params → Finset ByteArray}
-    (hT : ∀ s, ∀ b ∈ B s, preTail b ∈ T s) (ρ : Bytes 16) (G3 : Tab3) (s : Sh st.params)
+    {L : ShG R st.params → ShG R st.params} {B : ShG R st.params → Finset (Bytes (preLen st.params))}
+    (hL : ProgAt L B) {T : ShG R st.params → Finset ByteArray}
+    (hT : ∀ s, ∀ b ∈ B s, preTail b ∈ T s) (ρ : Bytes 16) (G3 : Tab3) (s : ShG R st.params)
     (h : realRO st.params Hb st w ρ G3 (L s) ≠ realRO st.params Hb st w ρ G3 s) :
     preTail (blk (preLen st.params) (preRO Hb st w ρ G3 s)) ∈ T s := by
   by_contra hn
@@ -466,31 +473,31 @@ lemma pr_false {α : Type*} [Fintype α] : pr α (fun _ => False) = 0 := by
 /-- The distinguisher of the second application of zero knowledge: the tail of the prefix
 recomputed from the output is in `T`. -/
 def TailIn {p : Params} (Hb : Hashes) (st : Statement) (T : Finset ByteArray)
-    (o : Except String ByteArray) (s : Sh p) : Prop :=
-  preTail (blk (preLen p) (@outPre (icPrg s.2.2) Hb CrtGen.tables st s.2.1 o)) ∈ T
+    (o : Except String ByteArray) (s : ShG R p) : Prop :=
+  preTail (blk (preLen p) (@outPre (icPrg (rowFn s.2.2)) Hb CrtGen.tables st s.2.1 o)) ∈ T
 
 /-- **The programming-collision bound for a real proof** whose statement may depend on the
 earlier simulations: a programming `L` at prefix blocks whose tails lie in a fixed set `T` changes
 the real proof with probability at most
 
     2⁻¹¹⁰ + εRO(0, 312, 4607) + noHitProb + |T|·2^(−8·16(d−1)). -/
-theorem pr_collide_zk (hlr : st.params.labelRows = true) (hzk : ZKHyp CrtGen.tables st w cs)
-    (hHb : HashesWF Hb) (hp : SmallParams st.params) {L : Sh st.params → Sh st.params}
-    {B : Sh st.params → Finset (Bytes (preLen st.params))} (hL : ProgAt L B)
+theorem pr_collide_zk [ZKRow R] (hlr : st.params.labelRows = true) (hzk : ZKHyp CrtGen.tables st w cs)
+    (hHb : HashesWF Hb) (hp : SmallParams st.params) {L : ShG R st.params → ShG R st.params}
+    {B : ShG R st.params → Finset (Bytes (preLen st.params))} (hL : ProgAt L B)
     (T : Finset ByteArray) (hT : ∀ s, ∀ b ∈ B s, preTail b ∈ T) :
-    pr ((Bytes 16 × Tab3) × Sh st.params) (fun a =>
+    pr ((Bytes 16 × Tab3) × ShG R st.params) (fun a =>
         realRO st.params Hb st w a.1.1 a.1.2 (L a.2) ≠ realRO st.params Hb st w a.1.1 a.1.2 a.2) ≤
-      1 / 2 ^ 110 + εRO 0 312 4607 +
+      1 / 2 ^ 110 + ZKRow.εz R st.params 0 312 4607 +
         (noHitProb + T.card / 2 ^ (8 * (16 * (st.params.qsDegree - 1)))) := by
   obtain ⟨hl1, -, -, hl2⟩ := labelRows_sizes hlr
   have hlab : st.params.labelRowOffset + 128 ≤ st.params.correctionRows := by omega
   -- The distinguisher: the recomputed prefix's tail is in `T`.
-  let D : Except String ByteArray → Tab3 → Sh st.params → Prop := fun o _ s => TailIn Hb st T o s
+  let D : Except String ByteArray → Tab3 → ShG R st.params → Prop := fun o _ s => TailIn Hb st T o s
   have hD : Budget st.params 0 312 4607 D :=
     ⟨fun o s => Rd3.const (TailIn Hb st T o s),
       fun o _ => (outPre_rd5 Hb st o).map fun P => preTail (blk (preLen st.params) P) ∈ T,
       fun o _ => (outPre_rdE Hb st o).map fun P => preTail (blk (preLen st.params) P) ∈ T⟩
-  have hsplit : ∀ a : (Bytes 16 × Tab3) × Sh st.params,
+  have hsplit : ∀ a : (Bytes 16 × Tab3) × ShG R st.params,
       realRO st.params Hb st w a.1.1 a.1.2 (L a.2) ≠ realRO st.params Hb st w a.1.1 a.1.2 a.2 →
       GrindBad CrtGen.tables (a.2.1 ∘ key2 st.params (preRO Hb st w a.1.1 a.1.2 a.2)) ∨
         D (realRO st.params Hb st w a.1.1 a.1.2 a.2) a.1.2 a.2 := by
@@ -502,31 +509,31 @@ theorem pr_collide_zk (hlr : st.params.labelRows = true) (hzk : ZKHyp CrtGen.tab
         by_contra hn
         exact h (realRO_progAt hzk hHb hlab hL a.1.1 a.1.2 a.2 hn)
       obtain ⟨proof, hok, hv⟩ := realRO_vPre hzk hHb hlab a.1.1 a.1.2 a.2 hg
-      show preTail (blk (preLen st.params) (@outPre (icPrg a.2.2.2) Hb CrtGen.tables st a.2.2.1
+      show preTail (blk (preLen st.params) (@outPre (icPrg (rowFn a.2.2.2)) Hb CrtGen.tables st a.2.2.1
         (realRO st.params Hb st w a.1.1 a.1.2 a.2))) ∈ T
       rw [hok, hv]
       exact hT _ _ hmem
-  have hz := zk_ro Hb st w hlr hzk hHb hp D hD
-  have hsim : pr ((SimCoins st.params × Tab3) × Sh st.params) (fun a =>
+  have hz := ZKRow.zk Hb st w hlr hzk hHb hp D hD
+  have hsim : pr ((SimCoins st.params × Tab3) × ShG R st.params) (fun a =>
       D (simulate st.params a.1.1) a.1.2 (progRO st.params Hb st a.1.1 a.2)) ≤
       noHitProb + T.card / 2 ^ (8 * (16 * (st.params.qsDegree - 1))) := by
-    have e : ∀ a : (SimCoins st.params × Tab3) × Sh st.params,
+    have e : ∀ a : (SimCoins st.params × Tab3) × ShG R st.params,
         D (simulate st.params a.1.1) a.1.2 (progRO st.params Hb st a.1.1 a.2) ↔
           simTail a.1.1 ∈ T := fun a => by
-      show preTail (blk (preLen st.params) (@outPre (icPrg a.2.2.2) Hb CrtGen.tables st a.2.2.1
+      show preTail (blk (preLen st.params) (@outPre (icPrg (rowFn a.2.2.2)) Hb CrtGen.tables st a.2.2.1
         (simulate st.params a.1.1))) ∈ T ↔ _
-      rw [@preTail_outPre st.params (icPrg a.2.2.2) Hb hHb CrtGen.tables st rfl a.2.2.1 a.1.1]
+      rw [@preTail_outPre st.params (icPrg (rowFn a.2.2.2)) Hb hHb CrtGen.tables st rfl a.2.2.1 a.1.1]
     rw [pr_congr e]
-    have e1 := pr_prod_fst (β := Sh st.params) (fun c : SimCoins st.params × Tab3 => simTail c.1 ∈ T)
+    have e1 := pr_prod_fst (β := ShG R st.params) (fun c : SimCoins st.params × Tab3 => simTail c.1 ∈ T)
     have e2 := pr_prod_fst (β := Tab3) (fun c : SimCoins st.params => simTail c ∈ T)
     exact (e1.trans e2).le.trans (pr_simTail_mem T)
-  have hreal : pr ((Bytes 16 × Tab3) × Sh st.params) (fun a =>
+  have hreal : pr ((Bytes 16 × Tab3) × ShG R st.params) (fun a =>
       D (realRO st.params Hb st w a.1.1 a.1.2 a.2) a.1.2 a.2) ≤
-      εRO 0 312 4607 + (noHitProb + T.card / 2 ^ (8 * (16 * (st.params.qsDegree - 1)))) := by
+      ZKRow.εz R st.params 0 312 4607 + (noHitProb + T.card / 2 ^ (8 * (16 * (st.params.qsDegree - 1)))) := by
     have := (abs_sub_le_iff.1 hz).1
     linarith
   refine (pr_mono hsplit).trans ((pr_or_le _ _).trans ?_)
-  have := pr_grindBad_preRO (Hb := Hb) (st := st) (w := w)
+  have := pr_grindBad_preRO (R := R) (Hb := Hb) (st := st) (w := w)
   linarith
 
 end Collide
