@@ -36,9 +36,24 @@ struct TokenAccess {
     static const Nullifier& nf(const PendingToken& pending_token);
     static const Opening& r(const PendingToken& pending_token);
 
+    // As above, for unbound tokens.
+    static UnboundToken make_unbound_token(const NfKey& nf_key, const Opening& r,
+                                           const uov::Preimage& s);
+    static PendingUnboundToken make_pending_unbound_token(const NfKey& nf_key, const Opening& r,
+                                                          const Commitment& t);
+    static UnboundToken copy(const UnboundToken& token);
+    static PendingUnboundToken copy(const PendingUnboundToken& pending_token);
+    static const NfKey& nf_key(const UnboundToken& token);
+    static const Opening& r(const UnboundToken& token);
+    static const uov::Preimage& s(const UnboundToken& token);
+    static const NfKey& nf_key(const PendingUnboundToken& pending_token);
+    static const Opening& r(const PendingUnboundToken& pending_token);
+
   private:
     static const Token& checked(const Token& token);
     static const PendingToken& checked(const PendingToken& pending_token);
+    static const UnboundToken& checked(const UnboundToken& token);
+    static const PendingUnboundToken& checked(const PendingUnboundToken& pending_token);
 };
 
 } // namespace vole_mole::moussaka::detail
