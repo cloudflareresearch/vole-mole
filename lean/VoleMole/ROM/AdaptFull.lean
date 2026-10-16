@@ -130,7 +130,8 @@ theorem prEvent_accept_le_adaptive (hT : liftInvOk T = true) (st₀ : Statement)
         ((qE * 2 : ℕ) : ℝ≥0∞) * (((512 * q .h1 : ℕ) : ℝ≥0∞) * (2 ^ 256 : ℝ≥0∞)⁻¹) := by
   intro n'
   have hE := fun E => prEvent_accept_le_adaptive_E T stF dec sys P E hT st₀ hparams hdel cb hcomb
-    hdec hn N Wit hvals (hdet E) q hq
+    hdec hn N Wit hvals (hdet E) (fun r => PostOut E r)
+    (fun s g h => keysPre_of_not_postOut T (stF s) P E g h) q hq
   have hdo := prEvent_joint_deadOpen_le_A T stF P st₀.params hparams q hq
   refine (prEvent_avg_le_add3 _ _ (fun E r => bindFailA stF E r) (fun E r => deadOpenA stF E r)
     (fun E r => PostOut E r) _ hE).trans ?_

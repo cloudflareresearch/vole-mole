@@ -628,10 +628,13 @@ theorem combBad_trace_icD (hT : liftInvOk T = true) (st : Statement) {M : ℕ}
     (Wit : ByteArray → (ℕ → GF128) → Prop)
     (hvals : ∀ c1 (v : Prob.Bytes (16 * M)) w, st.values c1 v.ba w = (sysC c1 (combDec v)).values w)
     (P : OracleComp specIC (ByteArray × β)) (E : CTable)
-    (hdet : @CombDetD (icPrg E.cipher) M T st sysC witC N Wit) (g : Table)
+    (hdet : @CombDetD (icPrg E.cipher) M T st sysC witC N Wit)
+    (cf : Out (β × QueryLog specIC) → Prop)
+    (hcf' : ∀ g, ¬cf (evalWithAnswerFn (QueryImpl.ofFn g) (gameIC T st P E)) →
+      KeysPre st E (jOf g P E) (gLog T st P E g) g) (g : Table)
     (hacc : (evalWithAnswerFn (QueryImpl.ofFn g) (gameIC T st P E)).2.2.accept = true)
     (hnex : ¬@Extracted (icPrg E.cipher) _ st Wit (evalWithAnswerFn (QueryImpl.ofFn g) (gameIC T st P E)))
-    (hnc : ¬PostOut E (evalWithAnswerFn (QueryImpl.ofFn g) (gameIC T st P E)))
+    (hnc : ¬cf (evalWithAnswerFn (QueryImpl.ofFn g) (gameIC T st P E)))
     (hnb : ¬@bindFail (icPrg E.cipher) _ st (evalWithAnswerFn (QueryImpl.ofFn g) (gameIC T st P E)))
     (hnd : ¬DeadOpenOut st E (evalWithAnswerFn (QueryImpl.ofFn g) (gameIC T st P E)))
     (hh : NoHit (gameIC T st P E) (chainHit T st P E) g) :
@@ -648,11 +651,11 @@ theorem combBad_trace_icD (hT : liftInvOk T = true) (st : Statement) {M : ℕ}
   classical
   let _ : HasPrg := icPrg E.cipher
   set C := combDataFixD T st P E sysC witC dst
-  have hs := sameChainHyp_ic T st P E g
-  have hl := deadHiddenHyp_ic T st P E g
-  have hcf := combFreshHyp_ic T st P E hcomb C rfl rfl g
+  have hs := sameChainHyp_ic_of T st P E cf hcf' g
+  have hl := deadHiddenHyp_ic_of T st P E cf hcf' g
+  have hcf := combFreshHyp_ic_of T st P E hcomb C rfl rfl cf g
   change let r := evalWithAnswerFn (QueryImpl.ofFn g) (game T st (proverIC st E P))
-    r.2.2.accept = true → ¬PostOut E r → NoHit (game T st (proverIC st E P)) (chainHit T st P E) g →
+    r.2.2.accept = true → ¬cf r → NoHit (game T st (proverIC st E P)) (chainHit T st P E) g →
     ∀ leaves, BAVC.reconstruct r.2.2.iv (Proof.opening ⟨st.params, r.1⟩)
       (Proof.delta ⟨st.params, r.1⟩) = some leaves →
     let ch := runChain (Hashes.ofTable g) T st r.1 leaves r.2.1.keys
@@ -660,12 +663,12 @@ theorem combBad_trace_icD (hT : liftInvOk T = true) (st : Statement) {M : ℕ}
         (runX (Hashes.ofTable g) st r.1 leaves) (runY (Hashes.ofTable g) st ch) (runZ st ch) ∧
       ∀ i ∉ r.2.1.known, (deadOf T st P E g i).Nonempty at hs
   change let r := evalWithAnswerFn (QueryImpl.ofFn g) (game T st (proverIC st E P))
-    r.2.2.accept = true → ¬PostOut E r → ¬DeadOpenOut st E r →
+    r.2.2.accept = true → ¬cf r → ¬DeadOpenOut st E r →
     NoHit (game T st (proverIC st E P)) (chainHit T st P E) g →
     ∀ i : Fin BAVC.tau, ∀ j ∈ deadOf T st P E g i,
       BAVC.deltaIndex (Proof.delta ⟨st.params, r.1⟩) i = j at hl
   change let r := evalWithAnswerFn (QueryImpl.ofFn g) (game T st (proverIC st E P))
-    r.2.2.accept = true → ¬PostOut E r → NoHit (game T st (proverIC st E P)) (chainHit T st P E) g →
+    r.2.2.accept = true → ¬cf r → NoHit (game T st (proverIC st E P)) (chainHit T st P E) g →
     ∀ leaves, BAVC.reconstruct r.2.2.iv (Proof.opening ⟨st.params, r.1⟩)
       (Proof.delta ⟨st.params, r.1⟩) = some leaves →
     let y := runY (Hashes.ofTable g) st (runChain (Hashes.ofTable g) T st r.1 leaves r.2.1.keys)
@@ -674,7 +677,7 @@ theorem combBad_trace_icD (hT : liftInvOk T = true) (st : Statement) {M : ℕ}
     at hacc
   change ¬Extracted st Wit (evalWithAnswerFn (QueryImpl.ofFn g) (game T st (proverIC st E P)))
     at hnex
-  change ¬PostOut E (evalWithAnswerFn (QueryImpl.ofFn g) (game T st (proverIC st E P))) at hnc
+  change ¬cf (evalWithAnswerFn (QueryImpl.ofFn g) (game T st (proverIC st E P))) at hnc
   change ¬bindFail st (evalWithAnswerFn (QueryImpl.ofFn g) (game T st (proverIC st E P))) at hnb
   change ¬DeadOpenOut st E (evalWithAnswerFn (QueryImpl.ofFn g) (game T st (proverIC st E P)))
     at hnd
@@ -923,6 +926,9 @@ theorem prEvent_accept_le_adaptive_pomfrit_E (hT : liftInvOk T = true) (N : ℕ)
     (hdet : ∀ s, @CombDetD (icPrg E.cipher) 45 T (stP pk sigF msgF lr s)
       (sysKP pk sigF msgF lr (some s)) (witKP pk sigF msgF lr (some s)) N
       (witKP pk sigF msgF lr (some s)))
+    (cf : Out ((ι × β) × QueryLog specIC) → Prop)
+    (hcf : ∀ s g, ¬cf (evalWithAnswerFn (QueryImpl.ofFn g) (gameIC T (stP pk sigF msgF lr s) P E)) →
+      KeysPre (stP pk sigF msgF lr s) E (jOf g P E) (gLog T (stP pk sigF msgF lr s) P E g) g)
     (n : ℕ) (hn : IsQueryBoundP P (fun t => t.isLeft = true) n) (q : Kind → ℕ)
     (hq : IsKindQueryBoundIC P q) :
     let n'' := q + extractorQueries + verifierQueries
@@ -939,7 +945,7 @@ theorem prEvent_accept_le_adaptive_pomfrit_E (hT : liftInvOk T = true) (N : ℕ)
         Pr{let r ← (simulateQ randomOracle (gameA T (stP pk sigF msgF lr) P E)).run' ∅}[
           deadOpenA (stP pk sigF msgF lr) E r] +
         Pr{let r ← (simulateQ randomOracle (gameA T (stP pk sigF msgF lr) P E)).run' ∅}[
-          PostOut E r] := by
+          cf r] := by
   classical
   intro n''
   let _ : HasPrg := icPrg E.cipher
@@ -971,7 +977,7 @@ theorem prEvent_accept_le_adaptive_pomfrit_E (hT : liftInvOk T = true) (N : ℕ)
   let : SampleableType ((d : K) → Ans d.val) := SampleableType.piOfFintype _
   have hq'' := isKindQueryBound_gameA T stF P E hq
   have htrace : ∀ g : Table, (fun r => ev r ∧ ¬bindFailA stF E r ∧ ¬deadOpenA stF E r ∧
-      ¬PostOut E r) (evalWithAnswerFn (QueryImpl.ofFn g) oa) →
+      ¬cf r) (evalWithAnswerFn (QueryImpl.ofFn g) oa) →
       ∃ e ∈ tableQueryLog oa g, bad e.1 g := by
     intro g h
     simp only [ev, bindFailA, deadOpenA, oa, evalWithAnswerFn_gameA, stOut_gameIC] at h
@@ -1000,7 +1006,7 @@ theorem prEvent_accept_le_adaptive_pomfrit_E (hT : liftInvOk T = true) (N : ℕ)
       (fun c1 v w => by
         show (pomfritRedeem pk (sigF (sA g P E)) (msgF (sA g P E)) lr).values c1 v.ba w = _
         rw [pomfritRedeem_values]; simp only [pomfritRedeemSys, ofArr_combinationOf_ba]; rfl)
-      P E (hdet (sA g P E)) g hacc hnex hnp hnb hnd hh
+      P E (hdet (sA g P E)) cf (hcf (sA g P E)) g hacc hnex hnp hnb hnd hh
     set keys := (evalWithAnswerFn (QueryImpl.ofFn g) (proverIC (stF (sA g P E)) E P)).2.keys
     set ch := runChain (Hashes.ofTable g) T (stF (sA g P E)) (πOf g P E) leaves keys
     obtain ⟨s', hdec, hmuEq⟩ := decP_spec pk sigF msgF lr ch.chal1 (sA g P E)
@@ -1053,7 +1059,7 @@ theorem prEvent_accept_le_adaptive_pomfrit_E (hT : liftInvOk T = true) (N : ℕ)
   have hgood := prEvent_randomOracle_le_of_fresh_bad_queries oa K hS (fun t => ε t.1) _
     (worstCaseCostBound_of_kindQueryBound oa adaptKinds ε hKε n'' hq'') ntot
     (isTotalQueryBound_gameA T stF E hn)
-    (fun r => ev r ∧ ¬bindFailA stF E r ∧ ¬deadOpenA stF E r ∧ ¬PostOut E r) bad ?_ htrace
+    (fun r => ev r ∧ ¬bindFailA stF E r ∧ ¬deadOpenA stF E r ∧ ¬cf r) bad ?_ htrace
   · have hsum : ∑ k ∈ adaptKinds, (n'' k : ℝ≥0∞) * ε k =
         n'' .h21 * epsKOS #chal3Blocks (Chain.kosL (stKP pk sigF msgF lr none)) +
           n'' .h22 * (ENNReal.ofReal (Seed.epsQS (2 ^ 128) (2 ^ 64) n') + εc +
@@ -1068,12 +1074,12 @@ theorem prEvent_accept_le_adaptive_pomfrit_E (hT : liftInvOk T = true) (N : ℕ)
         add_zero, mul_add, ntot]
       ring
     calc Pr{let r ← mx}[ev r]
-        ≤ Pr{let r ← mx}[(ev r ∧ ¬bindFailA stF E r ∧ ¬deadOpenA stF E r ∧ ¬PostOut E r) ∨
-            (bindFailA stF E r ∨ (deadOpenA stF E r ∨ PostOut E r))] :=
+        ≤ Pr{let r ← mx}[(ev r ∧ ¬bindFailA stF E r ∧ ¬deadOpenA stF E r ∧ ¬cf r) ∨
+            (bindFailA stF E r ∨ (deadOpenA stF E r ∨ cf r))] :=
           prEvent_mono mx _ _ fun r h => by tauto
-      _ ≤ Pr{let r ← mx}[ev r ∧ ¬bindFailA stF E r ∧ ¬deadOpenA stF E r ∧ ¬PostOut E r] +
+      _ ≤ Pr{let r ← mx}[ev r ∧ ¬bindFailA stF E r ∧ ¬deadOpenA stF E r ∧ ¬cf r] +
             (Pr{let r ← mx}[bindFailA stF E r] +
-              (Pr{let r ← mx}[deadOpenA stF E r] + Pr{let r ← mx}[PostOut E r])) :=
+              (Pr{let r ← mx}[deadOpenA stF E r] + Pr{let r ← mx}[cf r])) :=
           (prEvent_or_le mx _ _).trans (add_le_add le_rfl ((prEvent_or_le mx _ _).trans
             (add_le_add le_rfl (prEvent_or_le mx _ _))))
       _ ≤ _ := by
@@ -1154,7 +1160,8 @@ theorem prEvent_accept_le_adaptive_pomfrit (hT : liftInvOk T = true) (N : ℕ) {
         ((qE * 2 : ℕ) : ℝ≥0∞) * (((512 * q .h1 : ℕ) : ℝ≥0∞) * (2 ^ 256 : ℝ≥0∞)⁻¹) := by
   intro n''
   have hE := fun E => prEvent_accept_le_adaptive_pomfrit_E pk sigF msgF lr T P E hT N hn' hεc
-    (hdet E) n hn q hq
+    (hdet E) (fun r => PostOut E r)
+    (fun s g h => keysPre_of_not_postOut T (stP pk sigF msgF lr s) P E g h) n hn q hq
   have hdo := prEvent_joint_deadOpen_le_A T (stP pk sigF msgF lr) P (pomfritParams lr)
     (fun _ => rfl) q hq
   refine (prEvent_avg_le_add3 _ _ (fun E r => bindFailA (stP pk sigF msgF lr) E r)

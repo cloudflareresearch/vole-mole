@@ -117,6 +117,13 @@ import VoleMole.ROM.AdaptChain
 import VoleMole.ROM.AdaptFull
 import VoleMole.ROM.AdaptComb
 import VoleMole.ROM.AdaptPomfrit
+import VoleMole.ROM.PermModel
+import VoleMole.ROM.PermCount
+import VoleMole.ROM.PermBind
+import VoleMole.ROM.PermOpen
+import VoleMole.ROM.PermPost
+import VoleMole.ROM.PermFull
+import VoleMole.ROM.PermAdapt
 import VoleMole.Privacy.Basic
 import VoleMole.Privacy.PomFRIT
 import VoleMole.Privacy.Moussaka

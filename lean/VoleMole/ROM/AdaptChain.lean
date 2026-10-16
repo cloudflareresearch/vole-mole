@@ -62,15 +62,18 @@ variable {β : Type} {T : CrtTables}
 set_option maxRecDepth 4000 in
 /-- **The deterministic step at the joint game** (`prEvent_accept_le_chain_terms`' `htrace`, with
 the chain data, hits and failure events of `ROM/CipherChain.lean`): an accepted proof from which
-extraction fails, outside Post, a binding failure, an opened dead leaf and chain hits, makes one
-of the verifier's `H₂¹`, `H₂²`, `H₂³` queries bad. -/
+extraction fails, outside a failure event `cf` that implies `KeysPre` (Post: `PostOut` in the PRF
+view, `PostPOut` in the permutation model), a binding failure, an opened dead leaf and chain hits,
+makes one of the verifier's `H₂¹`, `H₂²`, `H₂³` queries bad. -/
 theorem chainBad_trace_ic (hT : liftInvOk T = true) (st : Statement) (cs : System GF128) (N : ℕ)
     (Wit : ByteArray → (ℕ → GF128) → Prop) (hvals : ∀ c1 lb w, st.values c1 lb w = cs.values w)
     (P : OracleComp specIC (ByteArray × β)) (E : CTable)
-    (hdet : @ChainDet (icPrg E.cipher) T st cs N Wit) (g : Table)
+    (hdet : @ChainDet (icPrg E.cipher) T st cs N Wit) (cf : Out (β × QueryLog specIC) → Prop)
+    (hcf : ∀ g, ¬cf (evalWithAnswerFn (QueryImpl.ofFn g) (gameIC T st P E)) →
+      KeysPre st E (jOf g P E) (gLog T st P E g) g) (g : Table)
     (hacc : (evalWithAnswerFn (QueryImpl.ofFn g) (gameIC T st P E)).2.2.accept = true)
     (hnex : ¬@Extracted (icPrg E.cipher) _ st Wit (evalWithAnswerFn (QueryImpl.ofFn g) (gameIC T st P E)))
-    (hnc : ¬PostOut E (evalWithAnswerFn (QueryImpl.ofFn g) (gameIC T st P E)))
+    (hnc : ¬cf (evalWithAnswerFn (QueryImpl.ofFn g) (gameIC T st P E)))
     (hnb : ¬@bindFail (icPrg E.cipher) _ st (evalWithAnswerFn (QueryImpl.ofFn g) (gameIC T st P E)))
     (hnd : ¬DeadOpenOut st E (evalWithAnswerFn (QueryImpl.ofFn g) (gameIC T st P E)))
     (hh : NoHit (gameIC T st P E) (chainHit T st P E) g) :
@@ -87,10 +90,10 @@ theorem chainBad_trace_ic (hT : liftInvOk T = true) (st : Statement) (cs : Syste
   classical
   let _ : HasPrg := icPrg E.cipher
   set C := ChainData.ofSys (st := st) (preOf T st P E) (midOf T st P E) cs (accOf T st P E)
-  have hs := sameChainHyp_ic T st P E g
-  have hl := deadHiddenHyp_ic T st P E g
+  have hs := sameChainHyp_ic_of T st P E cf hcf g
+  have hl := deadHiddenHyp_ic_of T st P E cf hcf g
   change let r := evalWithAnswerFn (QueryImpl.ofFn g) (game T st (proverIC st E P))
-    r.2.2.accept = true → ¬PostOut E r → NoHit (game T st (proverIC st E P)) (chainHit T st P E) g →
+    r.2.2.accept = true → ¬cf r → NoHit (game T st (proverIC st E P)) (chainHit T st P E) g →
     ∀ leaves, BAVC.reconstruct r.2.2.iv (Proof.opening ⟨st.params, r.1⟩)
       (Proof.delta ⟨st.params, r.1⟩) = some leaves →
     let ch := runChain (Hashes.ofTable g) T st r.1 leaves r.2.1.keys
@@ -98,7 +101,7 @@ theorem chainBad_trace_ic (hT : liftInvOk T = true) (st : Statement) (cs : Syste
         (runX (Hashes.ofTable g) st r.1 leaves) (runY (Hashes.ofTable g) st ch) (runZ st ch) ∧
       ∀ i ∉ r.2.1.known, (deadOf T st P E g i).Nonempty at hs
   change let r := evalWithAnswerFn (QueryImpl.ofFn g) (game T st (proverIC st E P))
-    r.2.2.accept = true → ¬PostOut E r → ¬DeadOpenOut st E r →
+    r.2.2.accept = true → ¬cf r → ¬DeadOpenOut st E r →
     NoHit (game T st (proverIC st E P)) (chainHit T st P E) g →
     ∀ i : Fin BAVC.tau, ∀ j ∈ deadOf T st P E g i,
       BAVC.deltaIndex (Proof.delta ⟨st.params, r.1⟩) i = j at hl
@@ -106,7 +109,7 @@ theorem chainBad_trace_ic (hT : liftInvOk T = true) (st : Statement) (cs : Syste
     at hacc
   change ¬Extracted st Wit (evalWithAnswerFn (QueryImpl.ofFn g) (game T st (proverIC st E P)))
     at hnex
-  change ¬PostOut E (evalWithAnswerFn (QueryImpl.ofFn g) (game T st (proverIC st E P))) at hnc
+  change ¬cf (evalWithAnswerFn (QueryImpl.ofFn g) (game T st (proverIC st E P))) at hnc
   change ¬bindFail st (evalWithAnswerFn (QueryImpl.ofFn g) (game T st (proverIC st E P))) at hnb
   change ¬DeadOpenOut st E (evalWithAnswerFn (QueryImpl.ofFn g) (game T st (proverIC st E P)))
     at hnd
@@ -233,6 +236,9 @@ theorem prEvent_accept_le_adaptive_E (hT : liftInvOk T = true) (st₀ : Statemen
     (Wit : ι → ByteArray → (ℕ → GF128) → Prop)
     (hvals : ∀ s c1 lb w, (stF s).values c1 lb w = (sys s).values w)
     (hdet : ∀ s, @ChainDet (icPrg E.cipher) T (stF s) (sys s) N (Wit s))
+    (cf : Out ((ι × β) × QueryLog specIC) → Prop)
+    (hcf : ∀ s g, ¬cf (evalWithAnswerFn (QueryImpl.ofFn g) (gameIC T (stF s) P E)) →
+      KeysPre (stF s) E (jOf g P E) (gLog T (stF s) P E g) g)
     (q : Kind → ℕ) (hq : IsKindQueryBoundIC P q) :
     let n' := q + extractorQueries + verifierQueries
     Pr{let r ← (simulateQ randomOracle (gameA T stF P E)).run' ∅}[
@@ -243,7 +249,7 @@ theorem prEvent_accept_le_adaptive_E (hT : liftInvOk T = true) (st₀ : Statemen
         n' .mu * stmtEps n' .mu +
         Pr{let r ← (simulateQ randomOracle (gameA T stF P E)).run' ∅}[bindFailA stF E r] +
         Pr{let r ← (simulateQ randomOracle (gameA T stF P E)).run' ∅}[deadOpenA stF E r] +
-        Pr{let r ← (simulateQ randomOracle (gameA T stF P E)).run' ∅}[PostOut E r] := by
+        Pr{let r ← (simulateQ randomOracle (gameA T stF P E)).run' ∅}[cf r] := by
   classical
   intro n'
   let _ : HasPrg := icPrg E.cipher
@@ -266,7 +272,7 @@ theorem prEvent_accept_le_adaptive_E (hT : liftInvOk T = true) (st₀ : Statemen
         (prEvent_chainHitL_le cb oa n' (isKindQueryBound_gameA T stF P E hq) t g)
         (prEvent_stmtHit_le oa n' (isKindQueryBound_gameA T stF P E hq) t g))))
   have htrace : ∀ g : Table, (fun r => ev r ∧ ¬bindFailA stF E r ∧ ¬deadOpenA stF E r ∧
-      ¬PostOut E r) (evalWithAnswerFn (QueryImpl.ofFn g) oa) →
+      ¬cf r) (evalWithAnswerFn (QueryImpl.ofFn g) oa) →
       ∃ e ∈ tableQueryLog oa g, bad e.1 g := by
     intro g h
     simp only [ev, bindFailA, deadOpenA, oa, evalWithAnswerFn_gameA, stOut_gameIC] at h
@@ -291,7 +297,7 @@ theorem prEvent_accept_le_adaptive_E (hT : liftInvOk T = true) (st₀ : Statemen
       rw [hlog]
       exact hhit
     obtain ⟨leaves, hr, hacc', hbad⟩ := chainBad_trace_ic hT st (sys s) N (Wit s) (hvals s) P E
-      (hdet s) g hacc hnex hnp hnb hnd hh
+      (hdet s) cf (hcf s) g hacc hnex hnp hnb hnd hh
     set keys := (evalWithAnswerFn (QueryImpl.ofFn g) (proverIC st E P)).2.keys
     obtain ⟨h1, h2, h3⟩ := stmtAt_ident dec T st P E g (hdel s) (hdec s) hh hs keys hacc' hr
     have hr0 : BAVC.reconstruct (ivOf (Hashes.ofTable g) ⟨st.params, πOf g P E⟩
@@ -311,7 +317,7 @@ theorem prEvent_accept_le_adaptive_E (hT : liftInvOk T = true) (st₀ : Statemen
     · exact hmk _ hyL h2 hb
     · exact hmk _ hzL h3 hb
   have hgood := prEvent_exists_bad_query_le oa n' (isKindQueryBound_gameA T stF P E hq)
-    (fun r => ev r ∧ ¬bindFailA stF E r ∧ ¬deadOpenA stF E r ∧ ¬PostOut E r) bad
+    (fun r => ev r ∧ ¬bindFailA stF E r ∧ ¬deadOpenA stF E r ∧ ¬cf r) bad
     adaptKinds ε hK hbad htrace
   have hsum : ∑ k ∈ adaptKinds, (n' k : ℝ≥0∞) * ε k =
       n' .h21 * epsKOS #chal3Blocks (Chain.kosL st₀) +
@@ -324,12 +330,12 @@ theorem prEvent_accept_le_adaptive_E (hT : liftInvOk T = true) (st₀ : Statemen
     simp only [chainEps, hitEps, stmtEps, hitSum, zero_add, add_zero, mul_add]
     ring
   calc Pr{let r ← mx}[ev r]
-      ≤ Pr{let r ← mx}[(ev r ∧ ¬bindFailA stF E r ∧ ¬deadOpenA stF E r ∧ ¬PostOut E r) ∨
-          (bindFailA stF E r ∨ (deadOpenA stF E r ∨ PostOut E r))] :=
+      ≤ Pr{let r ← mx}[(ev r ∧ ¬bindFailA stF E r ∧ ¬deadOpenA stF E r ∧ ¬cf r) ∨
+          (bindFailA stF E r ∨ (deadOpenA stF E r ∨ cf r))] :=
         prEvent_mono mx _ _ fun r h => by tauto
-    _ ≤ Pr{let r ← mx}[ev r ∧ ¬bindFailA stF E r ∧ ¬deadOpenA stF E r ∧ ¬PostOut E r] +
+    _ ≤ Pr{let r ← mx}[ev r ∧ ¬bindFailA stF E r ∧ ¬deadOpenA stF E r ∧ ¬cf r] +
           (Pr{let r ← mx}[bindFailA stF E r] +
-            (Pr{let r ← mx}[deadOpenA stF E r] + Pr{let r ← mx}[PostOut E r])) :=
+            (Pr{let r ← mx}[deadOpenA stF E r] + Pr{let r ← mx}[cf r])) :=
         (prEvent_or_le mx _ _).trans (add_le_add le_rfl ((prEvent_or_le mx _ _).trans
           (add_le_add le_rfl (prEvent_or_le mx _ _))))
     _ ≤ _ := by
