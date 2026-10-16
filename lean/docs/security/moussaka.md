@@ -815,7 +815,9 @@ harmless.
    `lean/docs/zk.md` §10.8), and with `N` challenge pairs (the left-or-right game, a hybrid over
    the pairs, `anonymityP_lean_num`, `≤ N·(2N·2⁻¹⁰² + 2·εhide)` plus budget terms: `2⁻⁶³` at
    `2²⁰` Clients, `2⁻³⁹` at `2³²`; quadratic by an artifact of the proof, `lean/docs/zk.md`
-   §10.8); adaptive schedules (Clients started after earlier outcomes) are not: Clients before
+   §10.8; the lazy-sampling reduction that removes the per-session charge for PomFRIT with `H₄`
+   a table, `Privacy/PomFRITLin.lean`, does not apply as it stands, since the further Clients'
+   redemption statements are chosen after the challenge requests); adaptive schedules (Clients started after earlier outcomes) are not: Clients before
    the challenge would have to influence the challenge keys, which the table-reading game keeps
    fixed. In the ROM and ideal-cipher model, what remains is: SHAKE as a random oracle, AES
    as an ideal cipher (with its rows uniform functions, `anonymityRO_lean_num`,

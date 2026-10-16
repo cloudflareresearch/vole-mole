@@ -54,7 +54,12 @@ scope.
   (the left-or-right game, quadratic: `≤ N·(2N·2⁻¹⁰³ + …)` for PomFRIT, `N·(2N·2⁻¹⁰² + …)` for
   Moussaka and Ratatouille: `2⁻⁶⁴`/`2⁻⁶³` at `2²⁰` sessions, `2⁻⁴⁰`/`2⁻³⁹` at `2³²`; the
   quadratic term is an artifact of the key-level tree-hiding hop and of `H₄` being concrete in
-  the model, not an attack); and for PomFRIT, further sessions started **adaptively**, after the
+  the model, not an attack); for PomFRIT with **`H₄` a random-oracle table** of the game, `N`
+  pairs with no per-session cipher charge (the other sessions moved to private tables by lazy
+  sampling): `≤ N·2⁻¹⁰³ + 32·N²·2⁻¹²⁸ + …` (`n·2⁻¹⁰⁴ + n²·2⁻¹²⁵` for `n = 2N` sessions, the
+  quadratic part the birthday bound of the 128-bit `iv`s and seeds): `2⁻⁸³` at `2²⁰` sessions,
+  `2⁻⁶⁰` at `2³²`, and one pair with `m` further sessions `≤ 2⁻¹⁰³ + 16·m·2⁻¹²⁸ + …` (`2⁻⁹¹` at
+  `2³²`); and for PomFRIT, further sessions started **adaptively**, after the
   Issuer has seen earlier sessions' outcomes, before, during and after the challenge (`≤ n·2⁻⁹²`:
   `2⁻⁷²` at `2²⁰`, `2⁻⁶⁰` at `2³²`; §3).
 - *`main` is not zero-knowledge.* The PomFRIT Issuer's attack test, and the (PU) bound for the
@@ -68,7 +73,9 @@ protocols (§5), strong simulation-extractability beyond its Lean core (§2), ev
 statement (§4, `docs/zk-qrom.md`), Lemma DS (c), adaptive schedules of Moussaka's and
 Ratatouille's games (Lean has any number of sessions in one concurrent schedule for all three
 protocols and adaptive schedules for PomFRIT, §3), a bound linear in `N` for `N` challenge pairs
-(the argument is in `docs/zk.md` §10.8), and ZK on `main` beyond the bad-event bound.
+(the argument is in `docs/zk.md` §10.8; Lean has it for PomFRIT with `H₄` a table up to the
+`n²·2⁻¹²⁵` birthday term of the `iv`s, and with the budget terms charged once per pair), and ZK on
+`main` beyond the bad-event bound.
 
 **Modelling assumptions**: SHAKE128/256 are random oracles, AES-128 is an ideal cipher (classical
 and quantum); Keccak-p[800,12] one-wayness and binding/hiding of `Com`; the protocol-specific UOV
@@ -517,7 +524,8 @@ with the Lean redemption prover `anonymityNC_label_rows`, `_shake`, `unlinkabili
   `_perm_seed`) add `2·(2q_X + 2)·2⁻²⁵⁶`, the abort term bounded uniformly in the XOF table.
 
 *Many sessions* (`docs/zk.md` §10.8; `ZK/ReadsMany.lean`, `Privacy/PomFRITMany.lean`,
-`Privacy/MoussakaMany.lean`, `Privacy/RatatouilleMany.lean`, `Privacy/PomFRITAdaptive.lean`). The
+`Privacy/MoussakaMany.lean`, `Privacy/RatatouilleMany.lean`, `Privacy/PomFRITAdaptive.lean`,
+`ZK/ReadsPoint.lean`, `Privacy/PomFRITLin.lean`). The
 games above have the challenge sessions only. Here the adversary also serves `m` further honest
 sessions on the same tables (each with its own randomness and `H₃` slices), concurrently with the
 challenge (below also adaptively, and with `N` challenge pairs): their first
@@ -573,8 +581,35 @@ by the stages after them (Ratatouille's stage 2 sees the further Clients' spends
   interfere only through a key **and** an iv collision (`≈ n²·2⁻²³⁶·L²`, negligible), and an
   adversary's query targets one proof's inputs: the bound becomes linear. A shared iv would make
   the `n²` loss real (a birthday search among all proofs' revealed seeds, with `q_E ∝ n` queries).
-  Lean cannot state the linear bound yet: `H₄` is the concrete SHAKE in the model, and H4
-  punctures whole rows; both would change, with one joint hybrid over all proofs.
+- **PomFRIT with `H₄` a table: no per-session charge** (`docs/zk.md` §10.8, "With `H₄` a table";
+  `ZK/ReadsPoint.lean`, `Privacy/PomFRITLin.lean`). With `H₄` a uniform table of the game
+  (`hb4 G4`: the executable prover with this base record takes its `iv` from the table,
+  `step1Iv_hb4`; the Issuer may read all of `H₄`) and function rows, the other sessions are taken
+  out of the tables instead of being charged: step 1 reads the cipher only at its tree's nodes **on
+  the CTR blocks of its own `iv`** (`step1_consP`, a point-level `step1_cons`), so by lazy sampling
+  (`red_close_redP`) the step's game is the two-session table-reading game of a reduction whose
+  interaction reads **no** table and whose guess has the Issuer's budget (`AdversaryN.redP`,
+  `redP_iBudget`, `redP_gBudget`), up to the event that a challenge session reads a point the
+  other sessions read (`badQ`). That needs a common `H₅` key (equal `iv`s, `k5X_iv`) or a common
+  tree node **and** equal second lanes of the `iv`s (`lane1_of_ctrBlock_eq`); with the `iv`s from
+  `H₄` and the seeds from independent slices it has probability `≤ 4·2⁻¹²⁸` per pair of sessions
+  (`pr_Bp_le`: `2⁻¹²⁸` each for equal `iv_pre`s, an `H₄` collision and equal root seeds, and
+  `2⁻³²·4607²·2⁻¹²⁸` for a node collision with equal lanes, a non-root node on a uniform cipher
+  being uniform, `pr_treeNode_eq_le`). So one pair with `m` further sessions is
+  `≤ εPair0 + 16·m·2⁻¹²⁸` (`blindnessNH_lean`; numerically `≤ 2⁻¹⁰³ + 16·m·2⁻¹²⁸ + 4·(q₃ + q₅ +
+  221·q_E)·2⁻¹²⁸`, `blindnessNH_lean_le`: `2⁻¹⁰²` at `m ≤ 2²⁰`, `2⁻⁹¹` at `m ≤ 2³²`,
+  `blindnessNH_lean_2pow20`, `_2pow32`), and
+  `N` pairs `≤ N·(εPair0 + 32(N − 1)·2⁻¹²⁸)` (`blindnessPH_lean`), numerically
+  `≤ N·2⁻¹⁰³ + 32·N²·2⁻¹²⁸ + N·4·(q₃ + q₅ + 221·q_E)·2⁻¹²⁸` (`blindnessPH_lean_le`): `2⁻⁸³` for
+  `2N ≤ 2²⁰` sessions, `2⁻⁶⁰` for `2N ≤ 2³²` (`blindnessPH_lean_2pow20`, `_2pow32`), against
+  `2⁻⁶⁴` and `2⁻⁴⁰` key-level. `εPair0 = 4·εRO(q₃, q₅ + 1872, q_E + 23035) + 2·noHitProb + 2·2⁻¹²⁸
+  ≤ 2⁻¹⁰³ + …` is the two-session bound. What remains quadratic is the birthday bound of the
+  128-bit `iv`s and seeds (`n²·2⁻¹²⁵`), from counting equal `iv`s as an `H₅` collision (the `H₅`
+  inputs also contain the gate labels); the budget terms are still charged once per pair, and the
+  point-level H4 hop and the joint hybrid of the paper argument are not needed for this bound and
+  not formalized. Moussaka and Ratatouille are not covered: their further Clients' redemption
+  statements are chosen after the challenge requests, so their reads are not a reader of the
+  private tables alone (§10.8, "Open").
 - PomFRIT with an **adaptive schedule** (`Privacy/PomFRITAdaptive.lean`; `realGameAd`): further
   sessions before the challenge, between the challenge requests and responses, and after the
   challenge outcome, one after the other, each one's key, message and response chosen from all
@@ -622,12 +657,15 @@ runs of each layout.
 - *Scope of the games.* Any number of further honest sessions is covered, in one concurrent
   schedule per protocol (the further sessions' first messages before the adversary's first answer,
   their later ones seen by the next stage or the guess), any number of challenge pairs for all
-  three protocols (quadratic bounds), and adaptive schedules for PomFRIT (§3, "Many sessions";
+  three protocols (quadratic bounds; for PomFRIT with `H₄` a table, `N·2⁻¹⁰³ + 32·N²·2⁻¹²⁸` plus
+  budget terms), and adaptive schedules for PomFRIT (§3, "Many sessions";
   `docs/zk.md` §10.8). Not covered in Lean: adaptive schedules for Moussaka and Ratatouille
   (sessions before the challenge would have to influence the challenge keys and contexts, which
   are constants of their `RA` adversaries: an `RA` game with a table-reading key stage is
-  missing), a bound linear in `N` for `N` challenge pairs (`H₄` as a table, point-level H4, one
-  joint hybrid), further sessions in the shared-`H₃`, seed-XOF and non-colluding games, PomFRIT's
+  missing), a bound linear in `N` for `N` challenge pairs for Moussaka and Ratatouille, and for
+  PomFRIT without the `iv` birthday term and with the budget terms charged once (one joint bad
+  event over all proofs, the gate labels' distribution), the `H₄`-table games with permutation
+  rows, further sessions in the shared-`H₃`, seed-XOF and non-colluding games, PomFRIT's
   contexts beyond a finite type (the seed-XOF model), and every quantum statement
   (`docs/zk-qrom.md`).
 - *Not gaps, but artifacts of the proofs*: the second `4607` in `εRO` (the honest recomputation's
@@ -930,8 +968,8 @@ What is **not** established, roughly in order of importance:
    with table-reading choices, one shared `H₃` or the real Clients' seeds, adaptive schedules of
    many sessions for Moussaka and Ratatouille (any number of further sessions in one concurrent
    schedule and `N` challenge pairs for all three protocols, and PomFRIT's adaptive schedules, are
-   mechanized; the `N`-pair bounds are quadratic, a linear one is on paper) and the quantum
-   versions.
+   mechanized; the `N`-pair bounds are quadratic, for PomFRIT with `H₄` a table only through the
+   `iv` birthday term `n²·2⁻¹²⁵`, a linear one is on paper) and the quantum versions.
    The abstract privacy theorems (`VoleMole/Privacy/`) take per-proof zero knowledge and hiding of
    `Com` as hypotheses, so they apply to any proof system with the label-row fix; on `main` the
    joint (PU) hop over proofs sharing `r` replaces the per-proof hypothesis and is paper. Every
