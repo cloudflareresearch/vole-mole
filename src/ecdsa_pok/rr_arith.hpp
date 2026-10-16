@@ -5,8 +5,9 @@
 //
 //   Q = s T + U,  for the public points T = r^-1 R and U = -(e / r) G,
 //
-// a fixed-base scalar multiplication on T. It's computed with a comb on T as in arith.hpp, two
-// base-16 digits of s per step, with tables that the prover and the verifier compute per proof:
+// a fixed-base scalar multiplication on T. It's computed with a joint comb on T (arith.hpp's
+// JointTables), two base-16 digits of s per step, with tables that the prover and the verifier
+// compute per proof:
 // for j < 32, T_j[a][a'] = (a + 16 a') 256^j T + H, and
 //
 //   A_0 = H_0,  A_(j+1) = A_j + T_j[s_(2j)][s_(2j+1)],  Q = A_32 + P*,
@@ -19,7 +20,9 @@
 //   Witness over F_n: none
 //
 // Constraints: each digit is in [0, 16) (degree 16), each addition lambda (x_T - x_A) = y_T - y_A
-// (degree 31), and Z_p = c_x x_Q + c_y y_Q + rho_p (degree 31).
+// (degree 31), and Z_p = c_x x_Q + c_y y_Q + rho_p (degree 31). (One digit per step would lower
+// the degree to 16, as in arith.hpp, but the witness isn't derived here, and the 32 extra slopes
+// would cost more proof than the 15 fewer QuickSilver masks save.)
 //
 // Incomplete additions. The prover chooses R, and so T, so the offsets H_0 and H are hashed to the
 // curve from the statement, which includes R (see rr_relation.hpp): the prover can't choose T as a
@@ -56,7 +59,7 @@ constexpr size_t LP = WP_RHO + 1;
 static_assert(LP == 98);
 constexpr size_t LN = 0;
 
-constexpr size_t DP = 2 * (RADIX - 1) + 1; // 31, as in arith.hpp
+constexpr size_t DP = 2 * (RADIX - 1) + 1; // 31
 constexpr size_t DN = 2;                   // the minimum of voleith_p256 (no constraints)
 
 // The comb tables of T with offset H, and the start H_0 and last addend P* = U - (H_0 + 32 H), in

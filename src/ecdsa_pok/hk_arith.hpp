@@ -5,27 +5,36 @@
 // multiplication. The message, and so e, is public.
 //
 //   Instance: e, the link challenge, and the link values Z_n, Z_p, Y_1, Y_2
-//   Witness over F_p: Q = (x_Q, y_Q), the slopes of the table of Q, the base-16 digits a_k of u1
-//             and b_k of u2 (k < 64), the slopes of the ladder, the comb and the final step, the
-//             mask rho_p, and the masks sigma_1, sigma_2
+//   Witness over F_p: Q = (x_Q, y_Q), the slopes and points of the table of Q, the base-16 digits
+//             a_k of u1 and b_k of u2 (k < 64), the slopes of the ladder, the table points it
+//             selects, the slopes of the comb and the final step, the mask rho_p, and the masks
+//             sigma_1, sigma_2
 //   Witness over F_n: the 64-bit limbs of u1 and u2, X, the inverse of u2 X, the mask rho_n, and
 //             the masks sigma_1, sigma_2 (reduced modulo n)
 //
 // R = u1 G + u2 Q is computed in three parts, all with incomplete affine additions that commit only
 // to the slope (as in arith.hpp):
 //
-//   1. The table P_b = b Q + H_1 for b < 16: P_0 = H_1 and P_b = P_(b - 1) + Q (15 slopes). The
-//      coordinates of P_b have degree 2 (x) and 3 (y) in the slopes and Q.
+//   1. The table P_b = b Q + H_1 for b < 16: P_0 = H_1 and P_b = P_(b - 1) + Q. Both the slopes
+//      and the points P_1, ..., P_15 are committed (degree-2 constraints), so that the points have
+//      degree 1.
 //   2. A ladder on the digits of u2, from the most significant: A = H_0, then for k = 63, ..., 0,
-//      A = 16 A (four doublings, except for k = 63) and A = A + P_(b_k). The coordinates of
-//      P_(b_k) are the Newton interpolation of the table at the committed digit, of degree
-//      15 + 2 (x) and 15 + 3 (y). A doubling commits to its slope lambda, constrained by
-//      lambda 2 y_A = 3 x_A^2 - 3, of degree 2 (15 + 2) = 34: that's the QuickSilver degree DP.
+//      A = 16 A (four doublings, except for k = 63) and A = A + S_k, for a committed point S_k
+//      constrained to be the Newton interpolation of the table at the committed digit b_k, of
+//      degree 15 + 1 = 16. A doubling commits to its slope lambda, constrained by
+//      lambda 2 y_A = 3 x_A^2 - 3. As the added points have degree 1, the coordinates of A have
+//      degree at most 2 (x) and 3 (y) along the ladder, and the doubling constraints degree 4.
 //      Then A = u2 Q + (16^63 h_0 + h_1 sum_k 16^k) G.
-//   3. A fixed-base comb on the digits of u1, two per step: for j < 32,
-//      A = A + T_j[a_(2j)][a_(2j + 1)], where T_j[a][a'] = (a + 16 a') 256^j G + H_2 are public, in
-//      Newton form (as in arith.hpp, of degree 15 + 15). Finally R = A + P*, for the public
-//      P* = -(16^63 h_0 + h_1 sum_k 16^k + 32 h_2) G.
+//   3. A fixed-base comb on the digits of u1: for k < 64, A = A + T_k[a_k], where
+//      T_k[a] = a 16^k G + H_2 are public, in Newton form (arith.hpp's Comb, of degree 15). Finally
+//      R = A + P*, for the public P* = -(16^63 h_0 + h_1 sum_k 16^k + 64 h_2) G. As in arith.hpp,
+//      the constraints have degree 16.
+//
+// So the QuickSilver degree DP is 16, that of the digits' range checks. (Without committing the
+// table points and the selected points, the selection would have degree 15 + 2 and the doubling
+// constraints 2 (15 + 2) = 34; with two digits per comb step, the comb would have degree 31. The
+// extra 222 elements cost less than that degree, in proof size with a derived witness and in
+// proving time.)
 //
 // Each digit d is constrained by prod_(m < 16) (d - m) = 0, and Q by the curve equation.
 //
@@ -77,20 +86,22 @@ namespace vole_mole::ecdsa_pok::detail::hk {
 constexpr size_t NUM_WINDOWS = NUM_DIGITS;                       // 64 digits of u2
 constexpr size_t NUM_DOUBLINGS = DIGIT_BITS * (NUM_WINDOWS - 1); // 252
 constexpr size_t LADDER_STEPS = NUM_DOUBLINGS + NUM_WINDOWS;     // 316
-constexpr size_t COMB_STEPS = NUM_DIGITS / 2;                    // two digits of u1 per step
+constexpr size_t COMB_STEPS = NUM_DIGITS;                        // one digit of u1 per step
 
 // F_p witness layout.
-constexpr size_t WP_Q = 0;                           // x_Q, y_Q
-constexpr size_t WP_TABLE = WP_Q + 2;                // slopes of P_1, ..., P_15
-constexpr size_t WP_A = WP_TABLE + RADIX - 1;        // digits of u1
-constexpr size_t WP_B = WP_A + NUM_DIGITS;           // digits of u2
-constexpr size_t WP_LADDER = WP_B + NUM_DIGITS;      // slopes of the ladder, in order
-constexpr size_t WP_COMB = WP_LADDER + LADDER_STEPS; // slopes of the comb
-constexpr size_t WP_FINAL = WP_COMB + COMB_STEPS;    // slope of the last step (+ P*)
+constexpr size_t WP_Q = 0;                                // x_Q, y_Q
+constexpr size_t WP_TABLE = WP_Q + 2;                     // slopes of P_1, ..., P_15
+constexpr size_t WP_TABLE_PTS = WP_TABLE + RADIX - 1;     // x, y of P_1, ..., P_15
+constexpr size_t WP_A = WP_TABLE_PTS + 2 * (RADIX - 1);   // digits of u1
+constexpr size_t WP_B = WP_A + NUM_DIGITS;                // digits of u2
+constexpr size_t WP_LADDER = WP_B + NUM_DIGITS;           // slopes of the ladder, in order
+constexpr size_t WP_SELECTED = WP_LADDER + LADDER_STEPS;  // x, y of S_63, ..., S_0, in order
+constexpr size_t WP_COMB = WP_SELECTED + 2 * NUM_WINDOWS; // slopes of the comb
+constexpr size_t WP_FINAL = WP_COMB + COMB_STEPS;         // slope of the last step (+ P*)
 constexpr size_t WP_RHO = WP_FINAL + 1;
 constexpr size_t WP_SIGMA = WP_RHO + 1;
 constexpr size_t LP = WP_SIGMA + NUM_Y_CHECKS;
-static_assert(LP == 497);
+static_assert(LP == 687);
 
 // F_n witness layout.
 constexpr size_t WN_U1 = 0; // limbs of u1
@@ -101,12 +112,8 @@ constexpr size_t WN_RHO = WN_INV + 1;
 constexpr size_t WN_SIGMA = WN_RHO + 1;
 constexpr size_t LN = WN_SIGMA + NUM_Y_CHECKS;
 
-// The QuickSilver degrees. The ladder's x-coordinate has the degree of the selected table entry,
-// RADIX - 1 + 2, and the doubling constraint squares it.
-constexpr size_t TABLE_X_DEGREE = 2;
-constexpr size_t LADDER_X_DEGREE = RADIX - 1 + TABLE_X_DEGREE; // 17
-constexpr size_t DP = 2 * LADDER_X_DEGREE;                     // 34
-static_assert(DP >= 2 * (RADIX - 1) + 1);                      // the comb (as in arith.hpp)
+// The QuickSilver degrees (see above).
+constexpr size_t DP = RADIX; // 16
 constexpr size_t DN = 3;
 
 // The offsets H_i = h_i G, with h_i = SHA-256("ecdsa-pok-hk-h" || i) mod n, and P*.
@@ -179,52 +186,9 @@ inline bool offsets_are_sound() {
     return true;
 }
 
-// The comb tables of G: T_j[a][a'] = (a + 16 a') 256^j G + H_2 for j < 32, with Newton
-// coefficients as in arith.hpp's JointTables (with b = a').
-inline const JointTables& comb_tables() {
-    static const JointTables out = [] {
-        JointTables t;
-        std::vector<Jacobian> pts;
-        pts.reserve(COMB_STEPS * RADIX * RADIX);
-        Jacobian b1 = Jacobian::from(p256::GENERATOR);
-        Jacobian b2 = b1;
-        for (size_t i = 0; i < DIGIT_BITS; ++i) {
-            b2 = b2.dbl();
-        }
-        const Jacobian h2 = Jacobian::from(offsets().h2);
-        for (size_t j = 0; j < COMB_STEPS; ++j) {
-            Jacobian row = h2;
-            for (size_t a = 0; a < RADIX; ++a) {
-                Jacobian e = row;
-                for (size_t a2 = 0; a2 < RADIX; ++a2) {
-                    pts.push_back(e);
-                    e = e.add(b2);
-                }
-                row = row.add(b1);
-            }
-            for (size_t i = 0; i < 2 * DIGIT_BITS; ++i) {
-                b1 = b1.dbl();
-                b2 = b2.dbl();
-            }
-        }
-        t.t = p256::batch_to_affine(pts);
-        t.nx.resize(t.t.size());
-        t.ny.resize(t.t.size());
-        for (size_t i = 0; i < t.t.size(); ++i) {
-            if (t.t[i].inf) {
-                throw std::logic_error("ecdsa_pok: degenerate comb table");
-            }
-            t.nx[i] = t.t[i].x;
-            t.ny[i] = t.t[i].y;
-        }
-        for (size_t j = 0; j < COMB_STEPS; ++j) {
-            newton_form(std::span<Fp, RADIX * RADIX>(&t.nx[RADIX * RADIX * j], RADIX * RADIX));
-            newton_form(std::span<Fp, RADIX * RADIX>(&t.ny[RADIX * RADIX * j], RADIX * RADIX));
-        }
-        t.h0 = offsets().h0;
-        t.pstar = offsets().pstar;
-        return t;
-    }();
+// The comb tables of G: T_k[a] = a 16^k G + H_2 for k < 64 (see arith.hpp's Comb).
+inline const Comb& comb_tables() {
+    static const Comb out = make_comb(p256::GENERATOR, offsets().h2);
     return out;
 }
 
@@ -283,7 +247,7 @@ struct HkArithRelation {
         using PV = typename Ctx::PV;
         using NV = typename Ctx::NV;
         const Offsets& off = offsets();
-        const JointTables& tab = comb_tables();
+        const Comb& tab = comb_tables();
         const Fp three = Fp::from_u64(3);
 
         // A + T: commit to the slope, and update A.
@@ -299,14 +263,17 @@ struct HkArithRelation {
         const PV xq = ctx.wp(WP_Q), yq = ctx.wp(WP_Q + 1);
         ctx.add_p(yq * yq - ((xq * xq - three) * xq + p256::CURVE_B));
 
-        // The table P_b = b Q + H_1, in Newton form.
+        // The table P_b = b Q + H_1 (committed), in Newton form.
         std::array<PV, RADIX> tx, ty;
         tx[0] = ctx.cp(off.h1.x);
         ty[0] = ctx.cp(off.h1.y);
         for (size_t b = 1; b < RADIX; ++b) {
-            tx[b] = tx[b - 1];
-            ty[b] = ty[b - 1];
-            add(tx[b], ty[b], xq, yq, ctx.wp(WP_TABLE + b - 1));
+            PV px = tx[b - 1], py = ty[b - 1];
+            add(px, py, xq, yq, ctx.wp(WP_TABLE + b - 1));
+            tx[b] = ctx.wp(WP_TABLE_PTS + 2 * (b - 1));
+            ty[b] = ctx.wp(WP_TABLE_PTS + 2 * (b - 1) + 1);
+            ctx.add_p(tx[b] - px);
+            ctx.add_p(ty[b] - py);
         }
         newton_1d(tx);
         newton_1d(ty);
@@ -327,21 +294,22 @@ struct HkArithRelation {
             }
             const PV d = ctx.wp(WP_B + NUM_WINDOWS - 1 - w);
             ctx.add_p(range16(ctx, d));
-            add(ax, ay, select(ctx, tx, d), select(ctx, ty, d), ctx.wp(s++));
+            const PV sx = ctx.wp(WP_SELECTED + 2 * w), sy = ctx.wp(WP_SELECTED + 2 * w + 1);
+            ctx.add_p(sx - select(ctx, tx, d));
+            ctx.add_p(sy - select(ctx, ty, d));
+            add(ax, ay, sx, sy, ctx.wp(s++));
         }
 
         // The comb.
-        for (size_t j = 0; j < COMB_STEPS; ++j) {
-            const PV a2 = ctx.wp(WP_A + 2 * j + 1);
-            const auto fa = detail::ArithRelation::falling(ctx, ctx.wp(WP_A + 2 * j));
-            const auto fb = detail::ArithRelation::falling(ctx, a2);
+        for (size_t k = 0; k < COMB_STEPS; ++k) {
+            const auto fa = detail::ArithRelation::falling(ctx, ctx.wp(WP_A + k));
             ctx.add_p(fa[RADIX]);
-            ctx.add_p(fb[RADIX]);
-            const PV cx = detail::ArithRelation::newton_eval(
-                ctx, fa, a2, [&](size_t i, size_t i2) { return tab.newton_x(j, i, i2); });
-            const PV cy = detail::ArithRelation::newton_eval(
-                ctx, fa, a2, [&](size_t i, size_t i2) { return tab.newton_y(j, i, i2); });
-            add(ax, ay, cx, cy, ctx.wp(WP_COMB + j));
+            add(ax, ay,
+                detail::ArithRelation::newton_eval_1d(fa,
+                                                      [&](size_t i) { return tab.newton_x(k, i); }),
+                detail::ArithRelation::newton_eval_1d(fa,
+                                                      [&](size_t i) { return tab.newton_y(k, i); }),
+                ctx.wp(WP_COMB + k));
         }
         add(ax, ay, ctx.cp(off.pstar.x), ctx.cp(off.pstar.y), ctx.wp(WP_FINAL));
 

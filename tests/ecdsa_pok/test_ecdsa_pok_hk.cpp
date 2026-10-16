@@ -81,18 +81,17 @@ TEST(EcdsaHk, Offsets) {
         EXPECT_TRUE(p->on_curve());
         EXPECT_FALSE(p->inf);
     }
-    // Spot-check the comb tables: T_j[a][a'] = (a + 16 a') 256^j G + H_2.
+    // Spot-check the comb tables: T_j[a] = a 16^j G + H_2.
     const auto& tab = hk::comb_tables();
-    for (const auto [j, a, a2] :
-         {std::array<size_t, 3>{0, 0, 0}, {0, 3, 5}, {7, 15, 1}, {31, 9, 15}}) {
-        p256::Fn k = p256::Fn::from_u64(a + 16 * a2);
+    for (const auto [j, a] : {std::array<size_t, 2>{0, 0}, {0, 3}, {7, 15}, {63, 9}}) {
+        p256::Fn k = p256::Fn::from_u64(a);
         for (size_t i = 0; i < j; ++i) {
-            k *= p256::Fn::from_u64(256);
+            k *= p256::Fn::from_u64(16);
         }
         const auto expect = p256::scalar_mul(p256::GENERATOR, k.canonical())
                                 .add(p256::Jacobian::from(o.h2))
                                 .to_affine();
-        EXPECT_EQ(tab.at(j, a, a2), expect) << j << " " << a << " " << a2;
+        EXPECT_EQ(tab.at(j, a), expect) << j << " " << a;
     }
 }
 
@@ -239,17 +238,19 @@ TYPED_TEST(EcdsaHkWhiteBox, CheatKey) {
     auto w = wb.witness();
     w.wp[hk::WP_Q + 1] += p256::Fp::one();
     EXPECT_FALSE(wb.verify(wb.prove(w)));
-    w = wb.witness();
-    w.wp[hk::WP_TABLE + 3] += p256::Fp::one();
-    EXPECT_FALSE(wb.verify(wb.prove(w)));
+    for (const size_t i : {hk::WP_TABLE + 3, hk::WP_TABLE_PTS + 4, hk::WP_TABLE_PTS + 29}) {
+        w = wb.witness();
+        w.wp[i] += p256::Fp::one();
+        EXPECT_FALSE(wb.verify(wb.prove(w))) << i;
+    }
 }
 
 // A digit out of range, or a wrong slope in the ladder (doubling or addition), comb, or last step.
 TYPED_TEST(EcdsaHkWhiteBox, CheatScalarMul) {
     const WhiteBox<TypeParam> wb;
-    for (const size_t i :
-         {hk::WP_A + 5, hk::WP_B + 60, hk::WP_LADDER, hk::WP_LADDER + 1, hk::WP_LADDER + 5,
-          hk::WP_LADDER + hk::LADDER_STEPS - 1, hk::WP_COMB + 7, hk::WP_FINAL}) {
+    for (const size_t i : {hk::WP_A + 5, hk::WP_B + 60, hk::WP_LADDER, hk::WP_LADDER + 1,
+                           hk::WP_LADDER + 5, hk::WP_LADDER + hk::LADDER_STEPS - 1, hk::WP_SELECTED,
+                           hk::WP_SELECTED + 77, hk::WP_COMB + 7, hk::WP_FINAL}) {
         auto w = wb.witness();
         w.wp[i] += (i < hk::WP_LADDER ? p256::Fp::from_u64(16) : p256::Fp::one());
         EXPECT_FALSE(wb.verify(wb.prove(w))) << i;

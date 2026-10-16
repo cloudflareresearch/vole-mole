@@ -33,7 +33,7 @@ constexpr size_t LP = WP_RHO_Q + 1;
 // The F_n witness: the issuer's, then the device's.
 constexpr size_t WN_DEVICE = detail::LN;
 constexpr size_t LN = WN_DEVICE + hk::LN;
-constexpr size_t DP = std::max(detail::DP, hk::DP); // 34
+constexpr size_t DP = std::max(detail::DP, hk::DP); // 16
 constexpr size_t DN = std::max(detail::DN, hk::DN);
 
 struct ArithInstance {

@@ -163,7 +163,7 @@ inline Witness make_witness(const Affine& q, std::span<const uint8_t> msg,
         throw std::invalid_argument("ecdsa_pok: invalid signature");
     }
     const Offsets& off = offsets();
-    const JointTables& tab = comb_tables();
+    const Comb& tab = comb_tables();
     const Fn r = *Fn::from_bytes(sig.r);
     const Fn s = *Fn::from_bytes(sig.s);
     const Fn e = Fn::reduce_32(sha256::hash(msg));
@@ -184,6 +184,10 @@ inline Witness make_witness(const Affine& q, std::span<const uint8_t> msg,
     const p256::Chain tc = p256::slope_chain(off.h1, steps);
     std::copy(tc.slopes.begin(), tc.slopes.end(), wit.wp.begin() + WP_TABLE);
     const std::vector<Affine>& table = tc.points;
+    for (size_t b = 1; b < RADIX; ++b) {
+        wit.wp[WP_TABLE_PTS + 2 * (b - 1)] = table[b].x;
+        wit.wp[WP_TABLE_PTS + 2 * (b - 1) + 1] = table[b].y;
+    }
 
     steps.clear();
     for (size_t wi = 0; wi < NUM_WINDOWS; ++wi) {
@@ -193,18 +197,19 @@ inline Witness make_witness(const Affine& q, std::span<const uint8_t> msg,
         const size_t k = NUM_WINDOWS - 1 - wi;
         const size_t d = digit(u2, k);
         wit.wp[WP_B + k] = Fp::from_u64(d);
+        wit.wp[WP_SELECTED + 2 * wi] = table[d].x;
+        wit.wp[WP_SELECTED + 2 * wi + 1] = table[d].y;
         steps.push_back({false, table[d]});
     }
     for (size_t k = 0; k < NUM_DIGITS; ++k) {
         wit.wp[WP_A + k] = Fp::from_u64(digit(u1, k));
-    }
-    for (size_t j = 0; j < COMB_STEPS; ++j) {
-        steps.push_back({false, tab.at(j, digit(u1, 2 * j), digit(u1, 2 * j + 1))});
+        steps.push_back({false, tab.at(k, digit(u1, k))});
     }
     steps.push_back({false, off.pstar});
     const p256::Chain lc = p256::slope_chain(off.h0, steps);
-    static_assert(WP_COMB == WP_LADDER + LADDER_STEPS && WP_FINAL == WP_COMB + COMB_STEPS);
-    std::copy(lc.slopes.begin(), lc.slopes.end(), wit.wp.begin() + WP_LADDER);
+    static_assert(WP_FINAL == WP_COMB + COMB_STEPS);
+    std::copy_n(lc.slopes.begin(), LADDER_STEPS, wit.wp.begin() + WP_LADDER);
+    std::copy(lc.slopes.begin() + LADDER_STEPS, lc.slopes.end(), wit.wp.begin() + WP_COMB);
     const Fp ax = lc.points.back().x;
     if (!(Fn::reduce_32(ax.to_bytes()) == r)) {
         throw std::logic_error("ecdsa_pok: x(R) != r");
