@@ -103,8 +103,8 @@ void BM_RedeemRequest(benchmark::State& state) {
     const auto keys = anchor_set(static_cast<size_t>(state.range(0)));
     uint64_t i = 0;
     for (auto _ : state) {
-        auto req = redeem_request_with_seed(copy(token()), keys, keys.size() - 1, CTX_ISS, CTX_RED,
-                                            CHALLENGE_DIGEST, seed_from_counter(i++));
+        auto req = redeem_request_with_seed(copy(token()), keys, CTX_ISS, CTX_RED, CHALLENGE_DIGEST,
+                                            seed_from_counter(i++));
         benchmark::DoNotOptimize(req);
     }
     state.SetLabel(std::to_string(REDEEM_PROOF_BYTES) + "-byte proof");
@@ -114,8 +114,8 @@ BENCHMARK(BM_RedeemRequest)->Arg(1)->Arg(8)->Arg(MAX_ANCHORS)->Unit(benchmark::k
 // Argument: size of the Anchor Set.
 void BM_FinalizeRedeem(benchmark::State& state) {
     const auto keys = anchor_set(static_cast<size_t>(state.range(0)));
-    const auto req = redeem_request_with_seed(copy(token()), keys, keys.size() - 1, CTX_ISS,
-                                              CTX_RED, CHALLENGE_DIGEST, seed_from_counter(0));
+    const auto req = redeem_request_with_seed(copy(token()), keys, CTX_ISS, CTX_RED,
+                                              CHALLENGE_DIGEST, seed_from_counter(0));
     for (auto _ : state) {
         auto nf = finalize_redeem(keys, req, CTX_ISS, CTX_RED, CHALLENGE_DIGEST);
         benchmark::DoNotOptimize(nf);

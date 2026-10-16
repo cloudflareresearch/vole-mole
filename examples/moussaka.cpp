@@ -117,7 +117,7 @@ int main() {
 
     // Client: Request redemption.
     const auto redeem_request =
-        std::move(*token).redeem_request(anchors, ISSUER, ctx_iss, ctx_red, challenge_digest);
+        std::move(*token).redeem_request(anchors, ctx_iss, ctx_red, challenge_digest);
 
     // Moderator: Finalize redemption.
     if (!handle_redeem(redeem_request, challenge_digest)) {

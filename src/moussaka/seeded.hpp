@@ -26,7 +26,7 @@ IssueRequestResult issue_request_with_seed(const Context& ctx_iss, const Context
 //
 // Throws as for Token::redeem_request, except that it doesn't use the operating system's random
 // number generator.
-RedeemRequest redeem_request_with_seed(Token&& token, const AnchorSet& anchors, size_t i,
+RedeemRequest redeem_request_with_seed(Token&& token, const AnchorSet& anchors,
                                        const Context& ctx_iss, const Context& ctx_red,
                                        const ChallengeDigest& challenge_digest, const Seed& seed);
 

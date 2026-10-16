@@ -152,7 +152,7 @@ TEST(Moussaka, KnownAnswers) {
                                                           TokenAccess::s(*token), issuer),
                   redeem_witness);
         const auto generated_redemption = redeem_request_with_seed(
-            std::move(*token), anchors, issuer, ctx_iss, ctx_red, challenge_digest, redeem_seed);
+            std::move(*token), anchors, ctx_iss, ctx_red, challenge_digest, redeem_seed);
         EXPECT_TRUE(std::ranges::equal(generated_redemption, redeem_request))
             << "redemption request bytes differ";
         EXPECT_EQ(to_hex(std::span(redeem_request).first<NF_BYTES>()), to_hex(nf));
@@ -353,7 +353,7 @@ const Seed REDEEM_SEED = filled<SEED_BYTES>(0x90);
 
 const RedeemRequest& redemption() {
     static const RedeemRequest req = redeem_request_with_seed(
-        copy(token()), anchors().keys, ISSUER, CTX_ISS, CTX_RED, CHALLENGE_DIGEST, REDEEM_SEED);
+        copy(token()), anchors().keys, CTX_ISS, CTX_RED, CHALLENGE_DIGEST, REDEEM_SEED);
     return req;
 }
 
@@ -439,7 +439,7 @@ TEST(Redeem, RandomizedVerifies) {
     ASSERT_TRUE(t.has_value());
     const Nullifier want = TokenAccess::nf(*t);
     const auto req =
-        std::move(*t).redeem_request(anchors().keys, ISSUER, CTX_ISS, CTX_RED, CHALLENGE_DIGEST);
+        std::move(*t).redeem_request(anchors().keys, CTX_ISS, CTX_RED, CHALLENGE_DIGEST);
     const auto nf = finalize_redeem(anchors().keys, req, CTX_ISS, CTX_RED, CHALLENGE_DIGEST);
     ASSERT_TRUE(nf.has_value());
     EXPECT_EQ(to_hex(*nf), to_hex(want));
@@ -450,7 +450,7 @@ TEST(Redeem, VerifiesAtEveryPosition) {
     for (const size_t n : {size_t{1}, size_t{2}}) {
         for (size_t i = 0; i < n; ++i) {
             const AnchorSet keys = anchor_set_with_issuer_at(n, i);
-            const auto req = redeem_request_with_seed(copy(token()), keys, i, CTX_ISS, CTX_RED,
+            const auto req = redeem_request_with_seed(copy(token()), keys, CTX_ISS, CTX_RED,
                                                       CHALLENGE_DIGEST, REDEEM_SEED);
             EXPECT_TRUE(finalize_redeem(keys, req, CTX_ISS, CTX_RED, CHALLENGE_DIGEST))
                 << "n = " << n << ", i = " << i;
@@ -460,8 +460,8 @@ TEST(Redeem, VerifiesAtEveryPosition) {
 
 TEST(Redeem, VerifiesLargestAnchorSet) {
     const AnchorSet keys = anchor_set_with_issuer_at(MAX_ANCHORS, MAX_ANCHORS / 2);
-    const auto req = redeem_request_with_seed(copy(token()), keys, MAX_ANCHORS / 2, CTX_ISS,
-                                              CTX_RED, CHALLENGE_DIGEST, REDEEM_SEED);
+    const auto req = redeem_request_with_seed(copy(token()), keys, CTX_ISS, CTX_RED,
+                                              CHALLENGE_DIGEST, REDEEM_SEED);
     EXPECT_TRUE(finalize_redeem(keys, req, CTX_ISS, CTX_RED, CHALLENGE_DIGEST));
 }
 
@@ -475,8 +475,7 @@ TEST(Redeem, AnchorSetFromOwnedKeys) {
     keys.emplace_back(anchors().c.sk.public_key_bytes());
 
     const AnchorSet anchor_set(keys);
-    const auto req =
-        copy(token()).redeem_request(anchor_set, ISSUER, CTX_ISS, CTX_RED, CHALLENGE_DIGEST);
+    const auto req = copy(token()).redeem_request(anchor_set, CTX_ISS, CTX_RED, CHALLENGE_DIGEST);
     const auto nf = finalize_redeem(anchor_set, req, CTX_ISS, CTX_RED, CHALLENGE_DIGEST);
     ASSERT_TRUE(nf.has_value());
     EXPECT_EQ(to_hex(*nf), to_hex(TokenAccess::nf(token())));
@@ -487,18 +486,18 @@ TEST(Redeem, AnchorSetFromOwnedKeys) {
 
     // A different Anchor Set: the first two keys in reverse order.
     const AnchorSet subset({keys[1], keys[0]});
-    const auto req2 = copy(token()).redeem_request(subset, 0, CTX_ISS, CTX_RED, CHALLENGE_DIGEST);
+    const auto req2 = copy(token()).redeem_request(subset, CTX_ISS, CTX_RED, CHALLENGE_DIGEST);
     EXPECT_TRUE(finalize_redeem(subset, req2, CTX_ISS, CTX_RED, CHALLENGE_DIGEST));
 }
 
 TEST(Redeem, IsDeterministicGivenSeed) {
     const auto& a = redemption();
-    const auto b = redeem_request_with_seed(copy(token()), anchors().keys, ISSUER, CTX_ISS, CTX_RED,
+    const auto b = redeem_request_with_seed(copy(token()), anchors().keys, CTX_ISS, CTX_RED,
                                             CHALLENGE_DIGEST, REDEEM_SEED);
     EXPECT_TRUE(std::ranges::equal(a, b));
 
     // A different seed yields a different proof for the same token.
-    const auto c = redeem_request_with_seed(copy(token()), anchors().keys, ISSUER, CTX_ISS, CTX_RED,
+    const auto c = redeem_request_with_seed(copy(token()), anchors().keys, CTX_ISS, CTX_RED,
                                             CHALLENGE_DIGEST, filled<SEED_BYTES>(0x91));
     EXPECT_FALSE(std::ranges::equal(a, c));
     EXPECT_TRUE(std::ranges::equal(std::span(a).first<NF_BYTES>(), std::span(c).first<NF_BYTES>()));
@@ -510,8 +509,8 @@ TEST(Redeem, IsDeterministicGivenSeed) {
 TEST(Redeem, BindsChallengeDigest) {
     ChallengeDigest other = CHALLENGE_DIGEST;
     other.back() ^= 1;
-    const auto req = redeem_request_with_seed(copy(token()), anchors().keys, ISSUER, CTX_ISS,
-                                              CTX_RED, other, REDEEM_SEED);
+    const auto req = redeem_request_with_seed(copy(token()), anchors().keys, CTX_ISS, CTX_RED,
+                                              other, REDEEM_SEED);
     EXPECT_FALSE(std::ranges::equal(req, redemption()));
     EXPECT_EQ(finalize_redeem(anchors().keys, req, CTX_ISS, CTX_RED, other),
               finalize_redeem(anchors().keys, redemption(), CTX_ISS, CTX_RED, CHALLENGE_DIGEST));
@@ -611,34 +610,25 @@ TEST(Redeem, RequestRejectsInvalidArguments) {
     const auto& keys = anchors().keys;
     Token t = copy(token());
 
-    // Index out of range.
-    EXPECT_THROW(
-        (void)std::move(t).redeem_request(keys, keys.size(), CTX_ISS, CTX_RED, CHALLENGE_DIGEST),
-        std::invalid_argument);
-
-    // The token wasn't issued by the Anchor at the given index, or for these contexts.
-    EXPECT_THROW((void)std::move(t).redeem_request(keys, 0, CTX_ISS, CTX_RED, CHALLENGE_DIGEST),
-                 std::invalid_argument);
+    // The token wasn't issued by any Anchor for these contexts.
     Context ctx = CTX_ISS;
     ctx[0] ^= 1;
-    EXPECT_THROW((void)std::move(t).redeem_request(keys, ISSUER, ctx, CTX_RED, CHALLENGE_DIGEST),
+    EXPECT_THROW((void)std::move(t).redeem_request(keys, ctx, CTX_RED, CHALLENGE_DIGEST),
                  std::invalid_argument);
     ctx = CTX_RED;
     ctx[0] ^= 1;
-    EXPECT_THROW((void)std::move(t).redeem_request(keys, ISSUER, CTX_ISS, ctx, CHALLENGE_DIGEST),
+    EXPECT_THROW((void)std::move(t).redeem_request(keys, CTX_ISS, ctx, CHALLENGE_DIGEST),
                  std::invalid_argument);
-    EXPECT_THROW(
-        (void)std::move(t).redeem_request(keys, ISSUER, CTX_RED, CTX_ISS, CHALLENGE_DIGEST),
-        std::invalid_argument);
+    EXPECT_THROW((void)std::move(t).redeem_request(keys, CTX_RED, CTX_ISS, CHALLENGE_DIGEST),
+                 std::invalid_argument);
     Opening bad_r = TokenAccess::r(token());
     bad_r[0] ^= 1;
     Token bad = TokenAccess::make_token(TokenAccess::nf(token()), bad_r, TokenAccess::s(token()));
-    EXPECT_THROW(
-        (void)std::move(bad).redeem_request(keys, ISSUER, CTX_ISS, CTX_RED, CHALLENGE_DIGEST),
-        std::invalid_argument);
+    EXPECT_THROW((void)std::move(bad).redeem_request(keys, CTX_ISS, CTX_RED, CHALLENGE_DIGEST),
+                 std::invalid_argument);
 
     // The token is still intact.
-    const auto req = redeem_request_with_seed(std::move(t), keys, ISSUER, CTX_ISS, CTX_RED,
+    const auto req = redeem_request_with_seed(std::move(t), keys, CTX_ISS, CTX_RED,
                                               CHALLENGE_DIGEST, REDEEM_SEED);
     EXPECT_TRUE(std::ranges::equal(req, redemption()));
 }
@@ -647,20 +637,18 @@ TEST(Redeem, RequestRejectsInvalidArguments) {
 TEST(Redeem, ConsumesToken) {
     const auto& keys = anchors().keys;
     Token t = copy(token());
-    (void)std::move(t).redeem_request(keys, ISSUER, CTX_ISS, CTX_RED, CHALLENGE_DIGEST);
-    EXPECT_THROW(
-        (void)std::move(t).redeem_request(keys, ISSUER, CTX_ISS, CTX_RED, CHALLENGE_DIGEST),
-        std::logic_error);
-    EXPECT_THROW((void)redeem_request_with_seed(std::move(t), keys, ISSUER, CTX_ISS, CTX_RED,
+    (void)std::move(t).redeem_request(keys, CTX_ISS, CTX_RED, CHALLENGE_DIGEST);
+    EXPECT_THROW((void)std::move(t).redeem_request(keys, CTX_ISS, CTX_RED, CHALLENGE_DIGEST),
+                 std::logic_error);
+    EXPECT_THROW((void)redeem_request_with_seed(std::move(t), keys, CTX_ISS, CTX_RED,
                                                 CHALLENGE_DIGEST, REDEEM_SEED),
                  std::logic_error);
 
     // Likewise for a token that was moved from.
     Token u = copy(token());
     const Token v = std::move(u);
-    EXPECT_THROW(
-        (void)std::move(u).redeem_request(keys, ISSUER, CTX_ISS, CTX_RED, CHALLENGE_DIGEST),
-        std::logic_error);
+    EXPECT_THROW((void)std::move(u).redeem_request(keys, CTX_ISS, CTX_RED, CHALLENGE_DIGEST),
+                 std::logic_error);
     EXPECT_THROW((void)TokenAccess::nf(u), std::logic_error);
 }
 
