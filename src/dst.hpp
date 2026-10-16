@@ -60,6 +60,7 @@ constexpr Dst ECDSA_RR_STATEMENT_DST = make_dst("ecrr", ecdsa_pok::VERSION, 'x',
 constexpr Dst ECDSA_MDOC_BINARY_DST = make_dst("ecmd", ecdsa_pok::VERSION, 'b', '0');
 constexpr Dst ECDSA_MDOC_SELECT_DST = make_dst("ecmd", ecdsa_pok::VERSION, 'c', '0'); // coeffs
 constexpr Dst ECDSA_MDOC_BINDER_DST = make_dst("ecmd", ecdsa_pok::VERSION, 'f', '0');
+// Unused (the comb offsets of an earlier version that revealed the device signature's R); reserved.
 constexpr Dst ECDSA_MDOC_OFFSET_DST = make_dst("ecmd", ecdsa_pok::VERSION, 'h', '0');
 constexpr Dst ECDSA_MDOC_BINARY_PRG_DST = make_dst("ecmd", ecdsa_pok::VERSION, 'q', '0');
 constexpr Dst ECDSA_MDOC_LINK_DST = make_dst("ecmd", ecdsa_pok::VERSION, 'l', '0');

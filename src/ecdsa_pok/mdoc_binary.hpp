@@ -2,12 +2,13 @@
 // VOLEitH (src/voleith.hpp).
 //
 //   Instance: the statement (through mu), the time "now", the disclosed attributes, the link
-//             challenges, and the link values Z_n, Z_p (issuer) and Z_q (device)
+//             challenges, and the link values Z_n, Z_p (issuer), Z_q, Z_n', Z_p' (device)
 //   Witness:  the issuer's signed message (COSE Sig_structure of the MSO) in MAX_BLOCKS padded
 //             blocks and their SHA-256 values, the index of its last block, its digest e, the
 //             selectors of the fields of the MSO and their dates, the issuer's X = x(R), the device
-//             key Q, and for each attribute, its padded IssuerSignedItemBytes, their SHA-256
-//             values, and the selectors of its fields; the masks rho_n, rho_p, rho_q; and carries
+//             key Q, the device's X' = x(R'), and for each attribute, its padded
+//             IssuerSignedItemBytes, their SHA-256 values, and the selectors of its fields; the
+//             masks rho_n, rho_p, rho_q, rho_n', rho_p'; and carries
 //
 // The constraints, which are those of Longfellow's mdoc circuit (version 7, lib/circuits/mdoc/
 // mdoc_hash.h), except where noted:
@@ -40,10 +41,11 @@
 //        - 6C "elementValue" <public value>, and len its length.
 //      The patterns' first bytes differ, so no two fields share a slot, and sigma is a
 //      permutation.
-//   4. X < p, x_Q < p, and y_Q < p (not part of Longfellow's hash circuit, whose signature circuit
-//      takes these values as field elements).
-//   5. The link sums Z_n = c_1 e + c_2 X + rho_n, Z_p = c_3 X + rho_p (as binary.hpp), and
-//      Z_q = c_x x_Q + c_y y_Q + rho_q (as rr_binary.hpp, with a second link challenge).
+//   4. X < p, x_Q < p, y_Q < p, and X' < p (not part of Longfellow's hash circuit, whose signature
+//      circuit takes these values as field elements).
+//   5. The link sums Z_n = c_1 e + c_2 X + rho_n, Z_p = c_3 X + rho_p (as binary.hpp), and, with a
+//      second link challenge, Z_q = c_x x_Q + c_y y_Q + rho_q (as rr_binary.hpp) and
+//      Z_n' = c_2' X' + rho_n', Z_p' = c_3' X' + rho_p' (as hk_binary.hpp).
 //
 // As in binary.hpp, the carries of the link sums are committed after the link challenge, with a
 // budget. The witness may be derived from a short key with a PRG (BinPrg).
@@ -54,6 +56,7 @@
 #include "dst.hpp"
 #include "ecdsa_pok/bin_ops.hpp"
 #include "ecdsa_pok/binary.hpp"
+#include "ecdsa_pok/hk_binary.hpp"
 #include "ecdsa_pok/link.hpp"
 #include "ecdsa_pok/rr_binary.hpp"
 #include "ecdsa_pok/select_ops.hpp"
@@ -79,6 +82,15 @@
 namespace vole_mole::ecdsa_pok::detail::mdoc {
 
 constexpr size_t MAX_ATTRIBUTES = 4;
+
+// The link values, in this order in the proof: the issuer's Z_n, Z_p, and the device's Z_q, Z_n',
+// Z_p'.
+enum LinkValue : size_t { Z_N = 0, Z_P = 1, Z_Q = 2, Z_DN = 3, Z_DP = 4, NUM_Z = 5 };
+constexpr std::array<size_t, NUM_Z> Z_COLS = {ZN_COLS, ZP_COLS, rr::Z_COLS, hk::Z_COLS, hk::Z_COLS};
+using LinkValues = std::array<uint8_t, NUM_Z * Z_BYTES>;
+inline std::span<uint8_t, Z_BYTES> z_at(std::span<uint8_t, NUM_Z * Z_BYTES> z, size_t i) {
+    return std::span<uint8_t, Z_BYTES>(z.data() + i * Z_BYTES, Z_BYTES);
+}
 
 // The issuer's signed message: at most MAX_BLOCKS SHA-256 blocks (as Longfellow's version 7).
 constexpr size_t MAX_BLOCKS = 40;
@@ -161,13 +173,15 @@ struct MdocValues {
     std::vector<size_t> windows;    // offsets of the windows
     std::array<uint8_t, 32> x;      // issuer's X, little endian
     std::array<uint8_t, 32> qx, qy; // device key, little endian
+    std::array<uint8_t, 32> xd;     // device's X', little endian
     std::vector<ItemValues> items;
-    std::array<uint8_t, Z_BYTES> rho_n, rho_p, rho_q;
+    std::array<uint8_t, Z_BYTES> rho_n, rho_p, rho_q, rho_dn, rho_dp;
 };
 
 template <typename Ops> struct MdocWires {
-    PrefixWires<Ops> issuer;  // e, X, rho_n, rho_p
-    rr::PrefixWires<Ops> dev; // x_Q, y_Q, rho_q
+    PrefixWires<Ops> issuer;   // e, X, rho_n, rho_p
+    rr::PrefixWires<Ops> dev;  // x_Q, y_Q, rho_q
+    hk::PrefixWires<Ops> dsig; // X', rho_n', rho_p'
     // Indices in the witness of the first bit of: t, and each window's block selector (for
     // tests).
     size_t t_bit = 0;
@@ -551,6 +565,7 @@ MdocWires<Ops> prefix_circuit(Ops& ops, const BinPublic& pub, const MdocValues* 
     out.issuer.x = rr::canonical_coordinate<LOG>(ops, plain ? &vals->x : nullptr);
     out.dev.x = rr::canonical_coordinate<LOG>(ops, plain ? &vals->qx : nullptr);
     out.dev.y = rr::canonical_coordinate<LOG>(ops, plain ? &vals->qy : nullptr);
+    out.dsig.x = rr::canonical_coordinate<LOG>(ops, plain ? &vals->xd : nullptr);
 
     // 2. The dates, and their comparisons with now (20-byte big-endian integers).
     const Wires<Ops> from =
@@ -621,22 +636,26 @@ MdocWires<Ops> prefix_circuit(Ops& ops, const BinPublic& pub, const MdocValues* 
     out.issuer.rho_n = commit_bits(ops, RHO_N_BITS, plain ? vals->rho_n.data() : nullptr);
     out.issuer.rho_p = commit_bits(ops, RHO_P_BITS, plain ? vals->rho_p.data() : nullptr);
     out.dev.rho = commit_bits(ops, rr::RHO_BITS, plain ? vals->rho_q.data() : nullptr);
+    out.dsig.rho_n = commit_bits(ops, hk::RHO_BITS, plain ? vals->rho_dn.data() : nullptr);
+    out.dsig.rho_p = commit_bits(ops, hk::RHO_BITS, plain ? vals->rho_dp.data() : nullptr);
     return out;
 }
 
-// The link carries' budget: the issuer's (binary.hpp) and the device's (rr_binary.hpp).
+// The link carries' budget: the issuer's (binary.hpp) and the device's (rr_binary.hpp and
+// hk_binary.hpp).
 template <size_t LOG>
-constexpr size_t LINK_BUDGET = detail::LINK_BUDGET<LOG> + rr::LINK_BUDGET<LOG>;
+constexpr size_t LINK_BUDGET =
+    detail::LINK_BUDGET<LOG> + rr::LINK_BUDGET<LOG> + hk::LINK_BUDGET<LOG>;
 
 // The link circuit: the link sums, with carries in [first, first + LINK_BUDGET<LOG>). Throws
 // std::runtime_error if the budget is exceeded (which happens with negligible probability).
 template <size_t LOG, typename Ops>
 void link_circuit(Ops& ops, const MdocWires<Ops>& in, const LinkChallenge& chal,
-                  const LinkChallenge& dchal, std::span<uint8_t, Z_BYTES> zn,
-                  std::span<uint8_t, Z_BYTES> zp, std::span<uint8_t, Z_BYTES> zq, bool record) {
+                  const LinkChallenge& dchal, std::span<uint8_t, NUM_Z * Z_BYTES> z, bool record) {
     const size_t first = ops.next;
-    detail::link_sums<LOG>(ops, in.issuer, chal, zn, zp, record);
-    rr::link_sums<LOG>(ops, in.dev, dchal, zq, record);
+    detail::link_sums<LOG>(ops, in.issuer, chal, z_at(z, Z_N), z_at(z, Z_P), record);
+    rr::link_sums<LOG>(ops, in.dev, dchal, z_at(z, Z_Q), record);
+    hk::link_sums<LOG>(ops, in.dsig, dchal, z_at(z, Z_DN), z_at(z, Z_DP), record);
     if (ops.next > first + LINK_BUDGET<LOG>) {
         throw std::runtime_error("ecdsa_pok: link carry budget exceeded");
     }
@@ -652,8 +671,8 @@ struct Counts {
 };
 // Index LOG - 2, then number of attributes - 1.
 constexpr std::array<std::array<Counts, MAX_ATTRIBUTES>, 2> COUNTS = {{
-    {{{1156530, 1160357}, {1211583, 1214333}, {1266636, 1268309}, {1321689, 1322285}}},
-    {{{911850, 902957}, {955466, 945496}, {999082, 988035}, {1042698, 1030574}}},
+    {{{1158322, 1171296}, {1213375, 1225272}, {1268428, 1279248}, {1323481, 1333224}}},
+    {{{913642, 908928}, {957258, 951467}, {1000874, 994006}, {1044490, 1036545}}},
 }};
 constexpr Counts counts(size_t log, size_t na) { return COUNTS[log - 2][na - 1]; }
 
@@ -673,8 +692,8 @@ template <Shape SH> Counts count_circuit(const BinPublic& pub) {
     Counts out{ops.next, 0};
     ops.next = 8 * ((out.prefix_bits + 7) / 8);
     const LinkChallenge chal = derive_link_challenge(Digest{});
-    std::array<uint8_t, Z_BYTES> zn{}, zp{}, zq{};
-    link_circuit<SH.link_log>(ops, wires, chal, chal, zn, zp, zq, false);
+    LinkValues z{};
+    link_circuit<SH.link_log>(ops, wires, chal, chal, z, false);
     out.constraints = ops.constraints;
     return out;
 }
@@ -726,7 +745,7 @@ template <size_t NA, bool SMALL, BinPrg PRG> struct BinRelation {
         const BinPublic* pub;
         const LinkChallenge* chal;
         const LinkChallenge* dchal;
-        std::array<uint8_t, Z_BYTES> zn, zp, zq;
+        LinkValues z;
     };
 
     static constexpr size_t RELATION_WITNESS_BITS = witness_bits<SH>(NA);
@@ -741,9 +760,7 @@ template <size_t NA, bool SMALL, BinPrg PRG> struct BinRelation {
         hasher.update(*x.mu);
         hasher.update(x.chal->digest);
         hasher.update(x.dchal->digest);
-        hasher.update(x.zn);
-        hasher.update(x.zp);
-        hasher.update(x.zq);
+        hasher.update(x.z);
     }
 
     template <typename QS>
@@ -758,10 +775,8 @@ template <size_t NA, bool SMALL, BinPrg PRG> struct BinRelation {
         SelQsOps<QS> ops(qs, chal2, vole_mole::detail::ECDSA_MDOC_SELECT_DST);
         const auto wires = prefix_circuit<SH.sha_log>(ops, *x.pub, nullptr);
         ops.next = 8 * WITNESS_PREFIX_BYTES;
-        auto zn = x.zn;
-        auto zp = x.zp;
-        auto zq = x.zq;
-        link_circuit<SH.link_log>(ops, wires, *x.chal, *x.dchal, zn, zp, zq, false);
+        auto z = x.z;
+        link_circuit<SH.link_log>(ops, wires, *x.chal, *x.dchal, z, false);
     }
 };
 

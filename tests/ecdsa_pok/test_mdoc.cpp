@@ -69,11 +69,8 @@ TEST(Mdoc, Witness) {
     for (const auto& [v, attrs] : cases) {
         const auto req = request(v, attrs);
         const auto m = md::parse(vectors().at(v).mdoc, req);
-        const auto dmsg = md::device_sig_structure(req.transcript, req.doc_type);
-        const auto rb = vole_mole::ecdsa_pok::detail::rr::encode_r(
-            vole_mole::ecdsa_pok::detail::rr::nonce_point(m.q, dmsg, m.device_sig));
         const auto pub =
-            md::make_public(req, rb, Vole::fast, vole_mole::ecdsa_pok::detail::BinPrg::local);
+            md::make_public(req, Vole::fast, vole_mole::ecdsa_pok::detail::BinPrg::local);
         ASSERT_TRUE(pub) << v;
         const std::array<uint8_t, 32> seed{};
         const auto wit = md::make_witness(req, m, *pub, seed);
@@ -104,6 +101,21 @@ TEST(Mdoc, Honest) {
     bad = req;
     bad.transcript[5] ^= 1;
     EXPECT_FALSE(md::verify(bad, proof));
+    // Neither signature appears in the proof (as R, r, or s).
+    namespace rr = vole_mole::ecdsa_pok::detail::rr;
+    const auto m = md::parse(vectors().at(0).mdoc, req);
+    const auto ri = rr::encode_r(rr::nonce_point(*vole_mole::p256::decode_point(req.issuer_pk),
+                                                 m.sig_structure, m.issuer_sig));
+    const auto rd = rr::encode_r(
+        rr::nonce_point(m.q, md::device_sig_structure(req.transcript, req.doc_type), m.device_sig));
+    for (const auto* sig : {&m.issuer_sig, &m.device_sig}) {
+        EXPECT_TRUE(std::ranges::search(proof, sig->r).empty());
+        EXPECT_TRUE(std::ranges::search(proof, sig->s).empty());
+    }
+    for (const auto* r : {&ri, &rd}) {
+        EXPECT_TRUE(std::ranges::search(proof, std::span(*r).first<32>()).empty());
+        EXPECT_TRUE(std::ranges::search(proof, std::span(*r).last<32>()).empty());
+    }
 }
 
 // Each vector, with 1 to 4 attributes, and items with keys in different orders (15, 16).
@@ -168,12 +180,13 @@ TEST(Mdoc, OtherParams) {
 TEST(Mdoc, RejectsBadInputs) {
     const auto req = request(0, {AGE_OVER_18});
     const auto proof = md::prove(vectors().at(0).mdoc, req);
-    // R off the curve, or not a field element.
-    auto bad = proof;
-    bad[40] ^= 1;
-    EXPECT_FALSE(md::verify(req, bad));
-    std::fill_n(bad.begin(), 32, 0xff);
-    EXPECT_FALSE(md::verify(req, bad));
+    // Link values out of range.
+    using S = md::Scheme<1, Vole::fast, vole_mole::ecdsa_pok::detail::BinPrg::local>;
+    for (size_t i = 0; i < md::NUM_Z; ++i) {
+        auto bad = proof;
+        bad[S::OFF_Z + (i + 1) * vole_mole::ecdsa_pok::detail::Z_BYTES - 1] = 0xff;
+        EXPECT_FALSE(md::verify(req, bad)) << i;
+    }
     // No attributes, or too many.
     auto r = req;
     r.attributes.clear();
@@ -192,8 +205,12 @@ TEST(Mdoc, Tampered) {
     const auto req = request(0, {AGE_OVER_18});
     const auto proof = md::prove(vectors().at(0).mdoc, req);
     using S = md::Scheme<1, Vole::fast, vole_mole::ecdsa_pok::detail::BinPrg::local>;
+    constexpr size_t ZB = vole_mole::ecdsa_pok::detail::Z_BYTES;
+    constexpr size_t YB = vole_mole::ecdsa_pok::detail::Y_BYTES;
     for (const size_t off : {size_t{3}, S::OFF_BIN + 100, S::OFF_BIN + S::BIN_BYTES - 5,
-                             S::OFF_ARITH + 1000, S::OFF_ZN + 2, S::OFF_ZQ + 7, S::OFF_Y + 1}) {
+                             S::OFF_ARITH + 1000, S::OFF_ARITH + S::ARITH_BYTES - 3, S::OFF_Z + 2,
+                             S::OFF_Z + md::Z_Q * ZB + 7, S::OFF_Z + md::Z_DN * ZB + 1,
+                             S::OFF_Z + md::Z_DP * ZB + 4, S::OFF_Y + 1, S::OFF_Y + 3 * YB + 2}) {
         auto bad = proof;
         bad[off] ^= 0x10;
         EXPECT_FALSE(md::verify(req, bad)) << off;
@@ -224,22 +241,18 @@ bool cheat_verifies(const Cheat& c) {
     if (c.request) {
         c.request(req);
     }
-    const auto dmsg = md::device_sig_structure(req.transcript, req.doc_type);
-    const auto rb = vole_mole::ecdsa_pok::detail::rr::encode_r(
-        vole_mole::ecdsa_pok::detail::rr::nonce_point(m.q, dmsg, m.device_sig));
-    const auto pub = md::make_public(req, rb, c.params.vole,
+    const auto pub = md::make_public(req, c.params.vole,
                                      vole_mole::ecdsa_pok::detail::rr::bin_prg_of(c.params.prg));
     if (!pub) {
         return false;
     }
     const std::array<uint8_t, 32> seed{1};
-    // For another issuer, the issuer's witness is for the real one.
+    // The signatures in the witness are the mdoc's (for the real issuer and transcript).
     auto wit = [&] {
-        if (req.issuer_pk == real.issuer_pk) {
-            return md::make_witness(req, m, *pub, seed);
-        }
         auto r2 = req;
         r2.issuer_pk = real.issuer_pk;
+        r2.transcript = real.transcript;
+        r2.doc_type = real.doc_type;
         auto p2 = *pub;
         p2.issuer_tables = vole_mole::ecdsa_pok::detail::make_tables(
             *vole_mole::p256::decode_point(real.issuer_pk));
@@ -255,8 +268,8 @@ bool cheat_verifies(const Cheat& c) {
                      [&]<size_t NA, Vole V, vole_mole::ecdsa_pok::detail::BinPrg PRG>() {
                          std::vector<uint8_t> p(md::Scheme<NA, V, PRG>::PROOF_BYTES);
                          md::prove_with_witness<NA, V, PRG>(
-                             std::span<uint8_t, md::Scheme<NA, V, PRG>::PROOF_BYTES>(p), rb, *pub,
-                             wit, seed, tamper);
+                             std::span<uint8_t, md::Scheme<NA, V, PRG>::PROOF_BYTES>(p), *pub, wit,
+                             seed, tamper);
                          return p;
                      });
     return md::verify(req, proof, c.params);
@@ -322,6 +335,31 @@ TEST(Mdoc, CheatStatement) {
     // Another issuer.
     EXPECT_FALSE(cheat_verifies(
         {.request = [](md::Request& r) { r.issuer_pk = vectors().at(3).req.issuer_pk; }}));
+}
+
+TEST(Mdoc, CheatDevice) {
+    SKIP_IF_ASSERTS();
+    namespace hk = vole_mole::ecdsa_pok::detail::hk;
+    // The device signature is on another transcript or docType.
+    EXPECT_FALSE(cheat_verifies({.request = [](md::Request& r) { r.transcript[7] ^= 1; }}));
+    EXPECT_FALSE(cheat_verifies({.request = [](md::Request& r) { r.doc_type += "x"; }}));
+    // X' isn't the x-coordinate of R'.
+    EXPECT_FALSE(cheat_verifies({.witness = [](md::Witness& w) { w.bin.xd[0] ^= 1; }}));
+    // Q in F_p isn't the MSO's (with the device key's bits from the witness).
+    EXPECT_FALSE(cheat_verifies(
+        {.witness = [](md::Witness& w) { w.device.wp[hk::WP_Q] += vole_mole::p256::Fp::one(); }}));
+    // A wrong slope in the ladder, or a wrong mask.
+    EXPECT_FALSE(cheat_verifies({.witness = [](md::Witness& w) {
+        w.device.wp[hk::WP_LADDER + 7] += vole_mole::p256::Fp::one();
+    }}));
+    EXPECT_FALSE(
+        cheat_verifies({.witness = [](md::Witness& w) { w.rho_q += vole_mole::p256::Fp::one(); }}));
+    EXPECT_FALSE(cheat_verifies({.witness = [](md::Witness& w) {
+        w.device.wn[hk::WN_RHO] += vole_mole::p256::Fn::one();
+    }}));
+    // Another u2 over F_n.
+    EXPECT_FALSE(cheat_verifies(
+        {.witness = [](md::Witness& w) { w.device.wn[hk::WN_U2] += vole_mole::p256::Fn::one(); }}));
 }
 
 TEST(Mdoc, CheatItem) {

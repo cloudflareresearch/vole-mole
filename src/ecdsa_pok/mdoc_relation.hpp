@@ -3,9 +3,8 @@
 //
 // Statement. Public: the issuer's public key, the session transcript, the document type, the time
 // "now" (20 bytes, YYYY-MM-DDTHH:MM:SSZ), and 1 to MAX_ATTRIBUTES disclosed attributes (element
-// identifier and CBOR-encoded value), and the device signature's nonce point R (the first 64
-// bytes of the proof). The prover shows that it knows an MSO, an issuer signature on it, and a
-// device signature, such that:
+// identifier and CBOR-encoded value). The prover shows that it knows an MSO, an issuer signature
+// on it, and a device signature, such that:
 //
 //   (a) the issuer's ECDSA-P256-SHA256 signature on the COSE Sig_structure of the MSO (as
 //       COSE_PREFIX, a 2-byte length, and the tagged MSO, in at most MAX_BLOCKS SHA-256 blocks)
@@ -13,18 +12,22 @@
 //   (b) the MSO has validFrom <= now <= validUntil, a device key Q, and valueDigests, and for each
 //       attribute, the SHA-256 of an IssuerSignedItemBytes with that identifier and value (in the
 //       weak sense of Longfellow's circuit: as patterns at secret offsets; see mdoc_binary.hpp);
-//   (c) the device signature, with nonce point R, on the DeviceAuthentication of the transcript
-//       and document type (with empty DeviceNameSpaces) is valid under Q.
+//   (c) the device signature on the DeviceAuthentication of the transcript and document type (with
+//       empty DeviceNameSpaces) is valid under Q.
 //
-// Proof. A binary VOLEitH proof (mdoc_binary.hpp) shows (b), and that e = SHA-256 of the
-// Sig_structure, X < p, and Q's coordinates are less than p. A VOLEitH proof over F_p and F_n
-// (mdoc_arith.hpp) shows the issuer's signature equation for e (as relation.hpp, with X = x(R_I))
-// and the device's (as rr_relation.hpp). They're linked as in relation.hpp (e and X, by Z_n, Z_p,
-// Y_1, Y_2) and rr_relation.hpp (Q, by Z_q, with a second link challenge).
+// Both signatures are hidden entirely, as in Longfellow: the verifier learns nothing about Q, R, or
+// s of either signature.
 //
-// Revealing R. The device signs a fresh transcript in each presentation, so R = k G is fresh and
-// independent of Q (see rr_relation.hpp). The issuer's signature is the same in every
-// presentation, so its R stays hidden.
+// Proof. A binary VOLEitH proof (mdoc_binary.hpp) shows (b), that e = SHA-256 of the
+// Sig_structure, and that X = x(R), Q's coordinates, and X' = x(R') are less than p. A VOLEitH
+// proof over F_p and F_n (mdoc_arith.hpp) shows the issuer's signature equation for e (as
+// relation.hpp, with X = x(R)) and the device's for the public e' = SHA-256 of the device's
+// Sig_structure (as hk_relation.hpp, with X' = x(R') and Q committed). They're linked as in
+// relation.hpp (e and X, by Z_n, Z_p, Y_1, Y_2), and with a second link challenge, as in
+// hk_relation.hpp (X', by Z_n', Z_p', and u1', u2' by Y_1', Y_2') and rr_relation.hpp (Q, by Z_q).
+// The incomplete additions of the device's scalar multiplication are as in hk_arith.hpp: a prover
+// that makes one exceptional either knows the device's private key (and so can sign) or hit a
+// collision that offsets_are_sound() rules out.
 
 #ifndef VOLE_MOLE_ECDSA_POK_MDOC_RELATION_HPP
 #define VOLE_MOLE_ECDSA_POK_MDOC_RELATION_HPP
@@ -36,11 +39,12 @@
 #include "ecdsa_pok/arith.hpp"
 #include "ecdsa_pok/bin_ops.hpp"
 #include "ecdsa_pok/cbor.hpp"
+#include "ecdsa_pok/hk_relation.hpp"
 #include "ecdsa_pok/link.hpp"
 #include "ecdsa_pok/mdoc_arith.hpp"
 #include "ecdsa_pok/mdoc_binary.hpp"
 #include "ecdsa_pok/relation.hpp"
-#include "ecdsa_pok/rr_relation.hpp"
+#include "ecdsa_pok/rr_relation.hpp" // bin_prg_of
 #include "ecdsa_pok/sha256_circuit.hpp"
 #include "p256/curve.hpp"
 #include "p256/field.hpp"
@@ -73,7 +77,7 @@ struct Attribute {
     std::vector<uint8_t> value; // the CBOR encoding of elementValue
 };
 
-// The verifier's request: everything public but R.
+// The verifier's request: the whole statement.
 struct Request {
     PublicKey issuer_pk;             // SEC1 uncompressed
     std::vector<uint8_t> transcript; // SessionTranscript, CBOR encoded
@@ -81,8 +85,6 @@ struct Request {
     std::array<uint8_t, DATE_BYTES> now;
     std::vector<Attribute> attributes;
 };
-
-constexpr size_t R_BYTES = rr::R_BYTES;
 
 template <size_t NA, Vole V, BinPrg PRG> struct Scheme {
     using Bin = BinRelation<NA, V == Vole::small, PRG>;
@@ -92,14 +94,11 @@ template <size_t NA, Vole V, BinPrg PRG> struct Scheme {
 
     static constexpr size_t BIN_BYTES = vole_mole::detail::PROOF_BYTES<Bin>;
     static constexpr size_t ARITH_BYTES = Arith::PROOF_BYTES;
-    static constexpr size_t OFF_R = 0;
-    static constexpr size_t OFF_BIN = OFF_R + R_BYTES;
+    static constexpr size_t OFF_BIN = 0;
     static constexpr size_t OFF_ARITH = OFF_BIN + BIN_BYTES;
-    static constexpr size_t OFF_ZN = OFF_ARITH + ARITH_BYTES;
-    static constexpr size_t OFF_ZP = OFF_ZN + Z_BYTES;
-    static constexpr size_t OFF_ZQ = OFF_ZP + Z_BYTES;
-    static constexpr size_t OFF_Y = OFF_ZQ + Z_BYTES;
-    static constexpr size_t PROOF_BYTES = OFF_Y + NUM_Y_CHECKS * Y_BYTES;
+    static constexpr size_t OFF_Z = OFF_ARITH + ARITH_BYTES; // the link values (LinkValue)
+    static constexpr size_t OFF_Y = OFF_Z + NUM_Z * Z_BYTES; // the issuer's Y_i, then the device's
+    static constexpr size_t PROOF_BYTES = OFF_Y + 2 * NUM_Y_CHECKS * Y_BYTES;
 };
 
 // CBOR headers.
@@ -163,15 +162,15 @@ inline std::vector<uint8_t> value_pattern(const Attribute& a) {
     return out;
 }
 
-// The public values, from the request and R.
+// The public values, from the request.
 struct Public {
     Digest mu;
-    Tables issuer_tables, device_tables;
+    Tables issuer_tables;
+    Fn device_e; // SHA-256 of the device's Sig_structure, reduced modulo n
     BinPublic bin;
 };
 
-inline Digest statement_digest(const Request& req, std::span<const uint8_t, R_BYTES> r, Vole vole,
-                               BinPrg prg) {
+inline Digest statement_digest(const Request& req, Vole vole, BinPrg prg) {
     faest::hash_state h;
     h.init(faest::secpar::s128);
     h.update(vole_mole::detail::ECDSA_MDOC_STATEMENT_DST);
@@ -196,54 +195,26 @@ inline Digest statement_digest(const Request& req, std::span<const uint8_t, R_BY
         str(a.id);
         part(a.value);
     }
-    h.update(r);
     Digest out;
     h.finalize(out);
     return out;
 }
 
-// The public values: nothing if the request is malformed, if R isn't a point on the curve or
-// x(R) = 0 (mod n), or in the degenerate cases of the tables (which happen with negligible
-// probability).
-inline std::optional<Public> make_public(const Request& req, std::span<const uint8_t, R_BYTES> rb,
-                                         Vole vole, BinPrg prg) {
+// The public values: nothing if the request is malformed, or in the degenerate cases of the
+// issuer's tables (which happen with negligible probability).
+inline std::optional<Public> make_public(const Request& req, Vole vole, BinPrg prg) {
     if (req.attributes.empty() || req.attributes.size() > MAX_ATTRIBUTES) {
         return std::nullopt;
     }
     const auto qi = p256::decode_point(req.issuer_pk);
-    const auto x = Fp::from_bytes(rb.subspan<0, 32>());
-    const auto y = Fp::from_bytes(rb.subspan<32, 32>());
-    if (!qi || !x || !y) {
-        return std::nullopt;
-    }
-    const Affine rp{*x, *y, false};
-    if (!rp.on_curve()) {
-        return std::nullopt;
-    }
-    const Fn r = Fn::reduce_32(rp.x.to_bytes());
-    if (r.is_zero()) {
+    if (!qi) {
         return std::nullopt;
     }
     Public out;
-    out.mu = statement_digest(req, rb, vole, prg);
-    const Fn e = Fn::reduce_32(sha256::hash(device_sig_structure(req.transcript, req.doc_type)));
-    const Fn r_inv = r.inv();
-    const Affine t = p256::scalar_mul(rp, r_inv.canonical()).to_affine();
-    const Affine u = p256::scalar_mul(p256::GENERATOR, (-(e * r_inv)).canonical()).to_affine();
-    if (t.inf || u.inf) {
-        return std::nullopt;
-    }
-    std::array<Affine, 2> h;
-    for (size_t i = 0; i < 2; ++i) {
-        std::vector<uint8_t> label(vole_mole::detail::ECDSA_MDOC_OFFSET_DST.begin(),
-                                   vole_mole::detail::ECDSA_MDOC_OFFSET_DST.end());
-        label.insert(label.end(), out.mu.begin(), out.mu.end());
-        label.push_back(static_cast<uint8_t>(i));
-        h[i] = p256::hash_to_point(label);
-    }
+    out.mu = statement_digest(req, vole, prg);
+    out.device_e = Fn::reduce_32(sha256::hash(device_sig_structure(req.transcript, req.doc_type)));
     try {
         out.issuer_tables = detail::make_tables(*qi);
-        out.device_tables = rr::make_tables(t, u, h[0], h[1]);
     } catch (const std::runtime_error&) {
         return std::nullopt;
     }
@@ -462,13 +433,14 @@ inline Parsed parse(std::span<const uint8_t> resp, const Request& req) {
 // The prover's witness.
 struct Witness {
     detail::Witness issuer;
-    rr::Witness device;
+    hk::Witness device;
+    Fp rho_q; // the mask of Z_q, reduced modulo p
     MdocValues bin;
 };
 
 // Compute the witness. Throws std::invalid_argument if a signature is invalid, and
-// std::runtime_error in the degenerate cases of the combs (which happen with negligible
-// probability).
+// std::runtime_error in the degenerate cases of the scalar multiplications (which happen with
+// negligible probability).
 inline Witness make_witness(const Request& req, const Parsed& m, const Public& pub,
                             std::span<const uint8_t, 32> seed) {
     const auto qi = p256::decode_point(req.issuer_pk);
@@ -476,20 +448,23 @@ inline Witness make_witness(const Request& req, const Parsed& m, const Public& p
         throw std::invalid_argument("mdoc: invalid issuer key");
     }
     std::array<uint8_t, 32> s1, s2;
+    std::array<uint8_t, Z_BYTES> rho_q{};
     {
         faest::hash_state h;
         h.init(faest::secpar::s128);
         h.update(vole_mole::detail::ECDSA_MDOC_SEED_DST);
         h.update(seed);
         h.update_byte(2);
-        std::array<uint8_t, 64> b;
-        h.finalize(b);
-        std::copy_n(b.begin(), 32, s1.begin());
-        std::copy_n(b.begin() + 32, 32, s2.begin());
+        Keccak_HashFinal(&h.ctx, nullptr);
+        squeeze_bits(h.ctx, s1, 256);
+        squeeze_bits(h.ctx, s2, 256);
+        squeeze_bits(h.ctx, rho_q, rr::RHO_BITS);
     }
-    Witness w{detail::make_witness(*qi, pub.issuer_tables, m.sig_structure, m.issuer_sig, s1),
-              rr::make_witness(m.q, m.device_sig, rr::Public{pub.mu, pub.device_tables}, s2),
-              {}};
+    Witness w{
+        detail::make_witness(*qi, pub.issuer_tables, m.sig_structure, m.issuer_sig, s1),
+        hk::make_witness(m.q, device_sig_structure(req.transcript, req.doc_type), m.device_sig, s2),
+        reduce_le<Fp>(rho_q),
+        {}};
     MdocValues& b = w.bin;
     b.sig.fill(0);
     const auto padded = sha256::pad(m.sig_structure);
@@ -500,12 +475,15 @@ inline Witness make_witness(const Request& req, const Parsed& m, const Public& p
     b.valid_until = m.valid_until;
     b.windows = m.windows;
     b.x = w.issuer.bin.x;
-    b.qx = w.device.bin.x;
-    b.qy = w.device.bin.y;
+    store_limbs_le(b.qx.data(), m.q.x.canonical());
+    store_limbs_le(b.qy.data(), m.q.y.canonical());
+    b.xd = w.device.bin.x;
     b.items = m.items;
     b.rho_n = w.issuer.bin.rho_n;
     b.rho_p = w.issuer.bin.rho_p;
-    b.rho_q = w.device.bin.rho;
+    b.rho_q = rho_q;
+    b.rho_dn = w.device.bin.rho_n;
+    b.rho_dp = w.device.bin.rho_p;
     return w;
 }
 
@@ -546,14 +524,18 @@ inline Digest arith_binder(const LinkChallenge& chal, const LinkChallenge& dchal
     return d;
 }
 
+using YValues = std::array<p256::Limbs, 2 * NUM_Y_CHECKS>; // the issuer's, then the device's
+
 inline ArithInstance arith_instance(const Public& pub, const LinkChallenge& chal,
-                                    const LinkChallenge& dchal,
-                                    std::span<const uint8_t, Z_BYTES> zn,
-                                    std::span<const uint8_t, Z_BYTES> zp,
-                                    std::span<const uint8_t, Z_BYTES> zq,
-                                    const std::array<p256::Limbs, NUM_Y_CHECKS>& y) {
-    return {detail::arith_instance(&pub.issuer_tables, chal, zn, zp, y),
-            rr::arith_instance(&pub.device_tables, dchal, zq)};
+                                    const LinkChallenge& dchal, LinkValues& z, const YValues& y) {
+    auto zc = [&](size_t i) { return std::span<const uint8_t, Z_BYTES>(z_at(z, i)); };
+    std::array<p256::Limbs, NUM_Y_CHECKS> yi, yd;
+    std::copy_n(y.begin(), NUM_Y_CHECKS, yi.begin());
+    std::copy_n(y.begin() + NUM_Y_CHECKS, NUM_Y_CHECKS, yd.begin());
+    return {detail::arith_instance(&pub.issuer_tables, chal, zc(Z_N), zc(Z_P), yi),
+            hk::arith_instance(pub.device_e, dchal, zc(Z_DN), zc(Z_DP), yd),
+            LinkChallenge::weight<Fp>(dchal.xn_pos), LinkChallenge::weight<Fp>(dchal.xp_pos),
+            reduce_le<Fp>(zc(Z_Q))};
 }
 
 // For tests: modifies the binary witness prefix, given the circuit's wires.
@@ -563,17 +545,13 @@ using Tamper = std::function<void(std::span<uint8_t>, const MdocWires<PlainOps>&
 // isn't checked (for tests of cheating provers).
 template <size_t NA, Vole V, BinPrg PRG>
 void prove_with_witness(std::span<uint8_t, Scheme<NA, V, PRG>::PROOF_BYTES> proof,
-                        std::span<const uint8_t, R_BYTES> r, const Public& pub, const Witness& wit,
-                        std::span<const uint8_t, 32> seed, const Tamper* tamper = nullptr) {
+                        const Public& pub, const Witness& wit, std::span<const uint8_t, 32> seed,
+                        const Tamper* tamper = nullptr) {
     using S = Scheme<NA, V, PRG>;
     using Bin = typename S::Bin;
     using VP = typename S::VP;
-    std::ranges::copy(r, proof.begin() + S::OFF_R);
     const auto bin = proof.template subspan<S::OFF_BIN, S::BIN_BYTES>();
     const auto ar = proof.template subspan<S::OFF_ARITH, S::ARITH_BYTES>();
-    const auto zn = proof.template subspan<S::OFF_ZN, Z_BYTES>();
-    const auto zp = proof.template subspan<S::OFF_ZP, Z_BYTES>();
-    const auto zq = proof.template subspan<S::OFF_ZQ, Z_BYTES>();
 
     vp::ProveSeed rho_arith;
     vole_mole::detail::ProveSeed<Bin> rho_bin;
@@ -592,8 +570,11 @@ void prove_with_witness(std::span<uint8_t, Scheme<NA, V, PRG>::PROOF_BYTES> proo
     // Commit to the witness over F_p and F_n.
     std::vector<Fp> wp = wit.issuer.wp;
     wp.insert(wp.end(), wit.device.wp.begin(), wit.device.wp.end());
-    auto arith_state = vp::prove_commit<ArithRelation, VP>(
-        ar, pub.mu, std::span<const Fp, LP>(wp), std::span<const Fn, LN>(wit.issuer.wn), rho_arith);
+    wp.push_back(wit.rho_q);
+    std::vector<Fn> wn = wit.issuer.wn;
+    wn.insert(wn.end(), wit.device.wn.begin(), wit.device.wn.end());
+    auto arith_state = vp::prove_commit<ArithRelation, VP>(ar, pub.mu, std::span<const Fp, LP>(wp),
+                                                           std::span<const Fn, LN>(wn), rho_arith);
 
     // The binary witness prefix, and its commitment.
     std::vector<uint8_t> bin_witness(Bin::RELATION_WITNESS_BITS / 8, 0);
@@ -613,17 +594,20 @@ void prove_with_witness(std::span<uint8_t, Scheme<NA, V, PRG>::PROOF_BYTES> proo
     // The link challenges and values.
     const auto [chal, dchal] = link_challenges<Bin>(pub.mu, arith_state.chal2, pending.chal1, bin);
     ops.next = 8 * Bin::WITNESS_PREFIX_BYTES;
-    link_circuit<Bin::SH.link_log>(ops, wires, chal, dchal, zn, zp, zq, true);
-    const auto y = detail::y_values(wit.issuer, chal);
-    for (size_t i = 0; i < NUM_Y_CHECKS; ++i) {
+    LinkValues z{};
+    link_circuit<Bin::SH.link_log>(ops, wires, chal, dchal, z, true);
+    std::ranges::copy(z, proof.begin() + S::OFF_Z);
+    YValues y;
+    const auto yi = detail::y_values(wit.issuer, chal);
+    const auto yd = hk::y_values(wit.device, dchal);
+    std::ranges::copy(yi, y.begin());
+    std::ranges::copy(yd, y.begin() + NUM_Y_CHECKS);
+    for (size_t i = 0; i < 2 * NUM_Y_CHECKS; ++i) {
         store_limbs_le(proof.data() + S::OFF_Y + i * Y_BYTES, y[i]);
     }
 
     // Finish the binary proof.
-    typename Bin::instance bin_inst{&pub.mu, &pub.bin, &chal, &dchal, {}, {}, {}};
-    std::ranges::copy(zn, bin_inst.zn.begin());
-    std::ranges::copy(zp, bin_inst.zp.begin());
-    std::ranges::copy(zq, bin_inst.zq.begin());
+    typename Bin::instance bin_inst{&pub.mu, &pub.bin, &chal, &dchal, z};
     vole_mole::detail::voleith_prove_commit<Bin>(
         bin, bin_inst,
         std::span<const uint8_t, vole_mole::detail::WITNESS_SUFFIX_BYTES<Bin>>(
@@ -632,8 +616,8 @@ void prove_with_witness(std::span<uint8_t, Scheme<NA, V, PRG>::PROOF_BYTES> proo
         std::move(pending));
 
     // Finish the proof over F_p and F_n.
-    const ArithInstance ar_inst = mdoc::arith_instance(pub, chal, dchal, zn, zp, zq, y);
-    const Digest binder = arith_binder(chal, dchal, proof.subspan(S::OFF_ZN));
+    const ArithInstance ar_inst = mdoc::arith_instance(pub, chal, dchal, z, y);
+    const Digest binder = arith_binder(chal, dchal, proof.subspan(S::OFF_Z));
     vp::prove_finish<ArithRelation, VP>(ar, arith_state, ar_inst, binder);
 }
 
@@ -645,9 +629,8 @@ bool verify_proof(std::span<const uint8_t, Scheme<NA, V, PRG>::PROOF_BYTES> proo
     using VP = typename S::VP;
     const auto bin = proof.template subspan<S::OFF_BIN, S::BIN_BYTES>();
     const auto ar = proof.template subspan<S::OFF_ARITH, S::ARITH_BYTES>();
-    const auto zn = proof.template subspan<S::OFF_ZN, Z_BYTES>();
-    const auto zp = proof.template subspan<S::OFF_ZP, Z_BYTES>();
-    const auto zq = proof.template subspan<S::OFF_ZQ, Z_BYTES>();
+    LinkValues z;
+    std::copy_n(proof.begin() + S::OFF_Z, z.size(), z.begin());
 
     // The link values must be in range.
     auto top_zero = [](std::span<const uint8_t> z, size_t cols) {
@@ -658,11 +641,13 @@ bool verify_proof(std::span<const uint8_t, Scheme<NA, V, PRG>::PROOF_BYTES> proo
         }
         return true;
     };
-    if (!top_zero(zn, ZN_COLS) || !top_zero(zp, ZP_COLS) || !top_zero(zq, rr::Z_COLS)) {
-        return false;
+    for (size_t i = 0; i < NUM_Z; ++i) {
+        if (!top_zero(z_at(z, i), Z_COLS[i])) {
+            return false;
+        }
     }
-    std::array<p256::Limbs, NUM_Y_CHECKS> y;
-    for (size_t i = 0; i < NUM_Y_CHECKS; ++i) {
+    YValues y;
+    for (size_t i = 0; i < 2 * NUM_Y_CHECKS; ++i) {
         y[i] = load_limbs_le(proof.data() + S::OFF_Y + i * Y_BYTES);
         if (!y_in_range(y[i])) {
             return false;
@@ -680,16 +665,13 @@ bool verify_proof(std::span<const uint8_t, Scheme<NA, V, PRG>::PROOF_BYTES> proo
     const auto [chal, dchal] =
         link_challenges<Bin>(pub.mu, arith_state->chal2, pending->chal1, bin);
 
-    typename Bin::instance bin_inst{&pub.mu, &pub.bin, &chal, &dchal, {}, {}, {}};
-    std::ranges::copy(zn, bin_inst.zn.begin());
-    std::ranges::copy(zp, bin_inst.zp.begin());
-    std::ranges::copy(zq, bin_inst.zq.begin());
+    typename Bin::instance bin_inst{&pub.mu, &pub.bin, &chal, &dchal, z};
     if (!vole_mole::detail::voleith_verify_commit<Bin>(bin, bin_inst, std::move(*pending))) {
         return false;
     }
 
-    const ArithInstance ar_inst = mdoc::arith_instance(pub, chal, dchal, zn, zp, zq, y);
-    const Digest binder = arith_binder(chal, dchal, proof.subspan(S::OFF_ZN));
+    const ArithInstance ar_inst = mdoc::arith_instance(pub, chal, dchal, z, y);
+    const Digest binder = arith_binder(chal, dchal, proof.subspan(S::OFF_Z));
     return vp::verify_finish<ArithRelation, VP>(ar, *arith_state, ar_inst, binder);
 }
 
@@ -755,10 +737,9 @@ inline std::vector<uint8_t> prove(std::span<const uint8_t> resp, const Request& 
     if (!(m.valid_from <= req.now && req.now <= m.valid_until)) {
         throw std::invalid_argument("mdoc: not valid now");
     }
-    const auto rb = rr::encode_r(rr::nonce_point(m.q, dmsg, m.device_sig));
-    const auto pub = make_public(req, rb, params.vole, rr::bin_prg_of(params.prg));
+    const auto pub = make_public(req, params.vole, rr::bin_prg_of(params.prg));
     if (!pub) {
-        throw std::runtime_error("mdoc: degenerate signature");
+        throw std::runtime_error("mdoc: degenerate issuer key");
     }
     constexpr int ATTEMPTS = 8;
     for (int attempt = 1;; ++attempt) {
@@ -768,8 +749,7 @@ inline std::vector<uint8_t> prove(std::span<const uint8_t> resp, const Request& 
             return dispatch(req.attributes.size(), params, [&]<size_t NA, Vole V, BinPrg PRG>() {
                 std::vector<uint8_t> proof(Scheme<NA, V, PRG>::PROOF_BYTES);
                 prove_with_witness<NA, V, PRG>(
-                    std::span<uint8_t, Scheme<NA, V, PRG>::PROOF_BYTES>(proof), rb, *pub, wit,
-                    seed);
+                    std::span<uint8_t, Scheme<NA, V, PRG>::PROOF_BYTES>(proof), *pub, wit, seed);
                 return proof;
             });
         } catch (const std::runtime_error&) {
@@ -786,8 +766,7 @@ inline bool verify(const Request& req, std::span<const uint8_t> proof, Params pa
         proof.size() != mdoc::proof_bytes(req.attributes.size(), params)) {
         return false;
     }
-    const auto pub =
-        make_public(req, proof.subspan<0, R_BYTES>(), params.vole, rr::bin_prg_of(params.prg));
+    const auto pub = make_public(req, params.vole, rr::bin_prg_of(params.prg));
     if (!pub) {
         return false;
     }
