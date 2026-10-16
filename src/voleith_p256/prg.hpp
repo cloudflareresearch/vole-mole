@@ -110,18 +110,18 @@ template <typename F> class LocalPrg {
     size_t key_len() const { return n_; }
     size_t outputs() const { return m_; }
 
-    // G(K)_i.
+    // G(K)_i. (The sums of products are reduced lazily: see Field::mul_add_wide.)
     F eval(size_t i, std::span<const F> k) const {
         const uint16_t* ix = &idx_[i * (l_ + 2 * q_)];
         const F* c = &coef_[i * (l_ + q_)];
-        F acc = F::zero();
+        typename F::Wide acc{};
         for (size_t t = 0; t < l_; ++t) {
-            acc += c[t] * k[ix[t]];
+            F::mul_add_wide(acc, c[t], k[ix[t]]);
         }
         for (size_t s = 0; s < q_; ++s) {
-            acc += c[l_ + s] * k[ix[l_ + 2 * s]] * k[ix[l_ + 2 * s + 1]];
+            F::mul_add_wide(acc, c[l_ + s] * k[ix[l_ + 2 * s]], k[ix[l_ + 2 * s + 1]]);
         }
-        return acc;
+        return F::reduce_wide(acc);
     }
 
     // For the prover, with the MAC v_j and value k_j of each key element (degree 1): the
@@ -130,33 +130,35 @@ template <typename F> class LocalPrg {
     std::array<F, 3> eval_prover(size_t i, std::span<const F> v, std::span<const F> k) const {
         const uint16_t* ix = &idx_[i * (l_ + 2 * q_)];
         const F* c = &coef_[i * (l_ + q_)];
-        std::array<F, 3> out{};
+        std::array<typename F::Wide, 3> acc{};
         for (size_t t = 0; t < l_; ++t) {
-            out[1] += c[t] * v[ix[t]];
-            out[2] += c[t] * k[ix[t]];
+            F::mul_add_wide(acc[1], c[t], v[ix[t]]);
+            F::mul_add_wide(acc[2], c[t], k[ix[t]]);
         }
         for (size_t s = 0; s < q_; ++s) {
             const size_t a = ix[l_ + 2 * s], b = ix[l_ + 2 * s + 1];
             const F ck = c[l_ + s] * k[a], cv = c[l_ + s] * v[a];
-            out[0] += cv * v[b];
-            out[1] += ck * v[b] + cv * k[b];
-            out[2] += ck * k[b];
+            F::mul_add_wide(acc[0], cv, v[b]);
+            F::mul_add_wide(acc[1], ck, v[b]);
+            F::mul_add_wide(acc[1], cv, k[b]);
+            F::mul_add_wide(acc[2], ck, k[b]);
         }
-        return out;
+        return {F::reduce_wide(acc[0]), F::reduce_wide(acc[1]), F::reduce_wide(acc[2])};
     }
 
     // For the verifier, with the key MACs K_j = v_j + k_j Delta: Delta^2 G(K / Delta)_i.
     F eval_verifier(size_t i, std::span<const F> key_macs, const F& delta) const {
         const uint16_t* ix = &idx_[i * (l_ + 2 * q_)];
         const F* c = &coef_[i * (l_ + q_)];
-        F lin = F::zero(), quad = F::zero();
+        typename F::Wide lin{}, quad{};
         for (size_t t = 0; t < l_; ++t) {
-            lin += c[t] * key_macs[ix[t]];
+            F::mul_add_wide(lin, c[t], key_macs[ix[t]]);
         }
         for (size_t s = 0; s < q_; ++s) {
-            quad += c[l_ + s] * key_macs[ix[l_ + 2 * s]] * key_macs[ix[l_ + 2 * s + 1]];
+            F::mul_add_wide(quad, c[l_ + s] * key_macs[ix[l_ + 2 * s]],
+                            key_macs[ix[l_ + 2 * s + 1]]);
         }
-        return quad + lin * delta;
+        return F::reduce_wide(quad) + F::reduce_wide(lin) * delta;
     }
 
   private:

@@ -41,6 +41,7 @@
 #include <cstdint>
 #include <span>
 #include <stdexcept>
+#include <type_traits>
 #include <vector>
 
 namespace vole_mole::mq::detail {
@@ -170,6 +171,54 @@ template <size_t KEY_BITS_, size_t NUM_OUTPUTS, size_t LINEAR, size_t ANDS> clas
         using qs_1 = qs_bit<QS, 1>;
         using qs_2 = qs_bit<QS, DEGREE>;
         std::vector<qs_2> out;
+        if constexpr (requires { key[0].value_; }) {
+            // The prover. A committed bit of degree 1 is A + a_v X, with the MAC A and the value
+            // a_v (a byte 0x00 or 0xff), and a b = A B + (b_v A + a_v B) X + a_v b_v X^2 (see
+            // qs_mul), so the outputs' products A B are summed before a single reduction. The key
+            // is copied into separate arrays of MACs and values, which are smaller than the
+            // padded bits, for the random accesses.
+            static_assert(DEGREE == 2);
+            using mac_t = std::remove_cvref_t<decltype(key[0].mac.coeffs[0])>;
+            std::vector<mac_t> km(KEY_BITS);
+            std::vector<uint8_t> kv(KEY_BITS);
+            for (size_t j = 0; j < KEY_BITS; ++j) {
+                km[j] = key[j].mac.coeffs[0];
+                kv[j] = key[j].value().data;
+            }
+            out.resize(NUM_OUTPUTS, qs_2(static_cast<const QS*>(nullptr)));
+            for (size_t i = 0; i < NUM_OUTPUTS; ++i) {
+                const auto ix = indices(i);
+                mac_t l0 = km[ix[0]], l1 = km[ix[1]];
+                uint8_t lv = kv[ix[0]] ^ kv[ix[1]];
+                size_t t = 2;
+                for (; t + 2 <= LINEAR; t += 2) {
+                    l0 = l0 + km[ix[t]];
+                    l1 = l1 + km[ix[t + 1]];
+                    lv ^= kv[ix[t]] ^ kv[ix[t + 1]];
+                }
+                for (; t < LINEAR; ++t) {
+                    l0 = l0 + km[ix[t]];
+                    lv ^= kv[ix[t]];
+                }
+                mac_t m1 = l0 + l1;
+                auto prod = km[ix[LINEAR]] * km[ix[LINEAR + 1]];
+                for (size_t s = 0; s < ANDS; ++s) {
+                    const size_t a = ix[LINEAR + 2 * s], b = ix[LINEAR + 2 * s + 1];
+                    if (s > 0) {
+                        prod = prod + km[a] * km[b];
+                    }
+                    m1 = m1 + faest::poly1::set_all(kv[b]) * km[a] +
+                         faest::poly1::set_all(kv[a]) * km[b];
+                    lv ^= kv[a] & kv[b];
+                }
+                qs_2 y(static_cast<const QS*>(nullptr));
+                y.mac.coeffs[0] = prod.template reduce_to<QS::secpar_bits>();
+                y.mac.coeffs[1] = m1;
+                y.value() = faest::poly1::set_all(lv) + faest::poly1((e[i / 8] >> (i % 8)) & 1);
+                out[i] = y;
+            }
+            return out;
+        }
         out.reserve(NUM_OUTPUTS);
         for (size_t i = 0; i < NUM_OUTPUTS; ++i) {
             const auto ix = indices(i);
