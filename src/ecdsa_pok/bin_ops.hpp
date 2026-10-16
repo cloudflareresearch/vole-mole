@@ -31,9 +31,12 @@
 #ifndef VOLE_MOLE_ECDSA_POK_BIN_OPS_HPP
 #define VOLE_MOLE_ECDSA_POK_BIN_OPS_HPP
 
+#include "dst.hpp"
 #include "qs_bit.hpp"
 
+#include "hash.hpp"        // from faest-arch-opt
 #include "polynomials.hpp" // from faest-arch-opt
+#include "qs_batch.hpp"
 
 #include <algorithm>
 #include <array>
@@ -130,11 +133,26 @@ struct PlainOps {
     }
 };
 
+// The constraints are batched (see qs_batch.hpp), with a coefficient derived from chal2; finish()
+// adds the last batch.
 template <typename QS> struct QsOps {
     using Wire = vole_mole::detail::qs_bit<QS, 1>;
     QS* qs;
     size_t next = 0;
     size_t constraints = 0;
+    vole_mole::detail::QsBatch<QS> batch;
+
+    QsOps(QS* q, std::span<const uint8_t> chal2) : qs(q), batch(q, batch_coeff(chal2)) {}
+
+    template <size_t d> void constrain(const faest::quicksilver_gfsecpar<QS, d>& e) {
+        batch.add(e);
+    }
+    void finish() { batch.flush(); }
+    // a is a bit: a (a + 1) = 0.
+    void assert_bit(const Wire& a) {
+        constrain(vole_mole::detail::qs_to_gfsecpar(
+            vole_mole::detail::qs_mul<QS, 1, 1>(a, a + faest::poly1(1))));
+    }
 
     Wire zero() const { return Wire(faest::poly1(0), qs); }
     Wire one() const { return Wire(faest::poly1(1), qs); }
@@ -145,18 +163,16 @@ template <typename QS> struct QsOps {
     bool value(const Wire&) const { return false; }
     void assert_eq(const Wire& a, bool v) {
         ++constraints;
-        qs->add_constraint(vole_mole::detail::qs_to_gfsecpar(a + faest::poly1(v)));
+        constrain(vole_mole::detail::qs_to_gfsecpar(a + faest::poly1(v)));
     }
     void assert_maj(const Wire& a, const Wire& b, const Wire& c, const Wire& o) {
         using vole_mole::detail::qs_mul;
         ++constraints;
-        qs->add_constraint(
-            vole_mole::detail::qs_to_gfsecpar(Bit<2>(o) + qs_mul(a, b) + qs_mul(c, a + b)));
+        constrain(vole_mole::detail::qs_to_gfsecpar(Bit<2>(o) + qs_mul(a, b) + qs_mul(c, a + b)));
     }
     void assert_quad(const Wire& l, const Wire& v, const Wire& w) {
         ++constraints;
-        qs->add_constraint(
-            vole_mole::detail::qs_to_gfsecpar(Bit<2>(l) + vole_mole::detail::qs_mul(v, w)));
+        constrain(vole_mole::detail::qs_to_gfsecpar(Bit<2>(l) + vole_mole::detail::qs_mul(v, w)));
     }
     void assert_quad_carry(const Wire& l, const Wire& v1, const Wire& w1, const Wire& v,
                            const Wire& w, const Wire& u, const Wire& x, const Wire& s) {
@@ -165,7 +181,7 @@ template <typename QS> struct QsOps {
         const Bit<2> vw = qs_mul(v, w);
         const Wire t = x + s;
         const Bit<2> q = Bit<2>(l) + qs_mul(v1, w1) + vw + qs_mul(u, t) + qs_mul(x, s);
-        qs->add_constraint(vole_mole::detail::qs_to_gfsecpar(Bit<3>(q) + qs_mul(vw, t)));
+        constrain(vole_mole::detail::qs_to_gfsecpar(Bit<3>(q) + qs_mul(vw, t)));
     }
     void counter(std::span<const Wire> in, std::span<Wire> out) {
         for (auto& o : out) {
@@ -176,6 +192,16 @@ template <typename QS> struct QsOps {
     }
 
   private:
+    static faest::poly_secpar<QS::secpar_v> batch_coeff(std::span<const uint8_t> chal2) {
+        faest::hash_state h;
+        h.init(faest::secpar::s128);
+        h.update(vole_mole::detail::ECDSA_POK_BATCH_DST);
+        h.update(chal2);
+        std::array<uint8_t, 16> b;
+        h.finalize(b.data(), b.size());
+        return faest::poly_secpar<QS::secpar_v>::load(b.data());
+    }
+
     // Counters whose constraints exceed the QuickSilver degree aren't instantiated (the circuit
     // doesn't use them).
     template <size_t O> void dispatch(std::span<const Wire> in, std::span<const Wire> out) {
@@ -211,7 +237,7 @@ template <typename QS> struct QsOps {
     template <size_t i, typename Tuple>
     void constrain_bit(const Tuple& e, std::span<const Wire> out) {
         constexpr size_t K = size_t{1} << (i + 1);
-        qs->add_constraint(vole_mole::detail::qs_to_gfsecpar(Bit<K>(out[i]) + std::get<K - 1>(e)));
+        constrain(vole_mole::detail::qs_to_gfsecpar(Bit<K>(out[i]) + std::get<K - 1>(e)));
     }
     template <typename Tuple, size_t... I>
     void constrain_bits(const Tuple& e, std::span<const Wire> out, std::index_sequence<I...>) {

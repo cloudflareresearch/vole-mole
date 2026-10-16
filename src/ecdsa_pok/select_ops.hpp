@@ -75,7 +75,8 @@ template <typename QS> struct SelQsOps : QsOps<QS> {
     using Poly = faest::poly_secpar<QS::secpar_v>;
     Keccak_HashInstance stream;
 
-    SelQsOps(QS* q, std::span<const uint8_t> chal2, std::span<const uint8_t> dst) : QsOps<QS>{q} {
+    SelQsOps(QS* q, std::span<const uint8_t> chal2, std::span<const uint8_t> dst)
+        : QsOps<QS>(q, chal2) {
         faest::hash_state h;
         h.init(faest::secpar::s128);
         h.update(dst);
@@ -203,7 +204,7 @@ void assert_onehot(SelQsOps<QS>& ops, std::span<const typename QsOps<QS>::Wire> 
     }
     ops.assert_eq(parity, true);
     ++ops.constraints;
-    ops.qs->add_constraint(a * b + G<QS, 2>(c));
+    ops.constrain(a * b + G<QS, 2>(c));
 }
 
 template <typename QS>
@@ -229,7 +230,7 @@ void assert_select(SelQsOps<QS>& ops, std::span<const typename QsOps<QS>::Wire> 
         acc += vole_mole::detail::qs_mul(s[k], dot(x[k]));
     }
     ++ops.constraints;
-    ops.qs->add_constraint(acc);
+    ops.constrain(acc);
 }
 
 template <typename QS>
@@ -241,7 +242,7 @@ void assert_and_zero(SelQsOps<QS>& ops, std::span<const typename QsOps<QS>::Wire
         acc += vole_mole::detail::qs_mul(w[k], inner<QS>(ops, x[k]));
     }
     ++ops.constraints;
-    ops.qs->add_constraint(acc);
+    ops.constrain(acc);
 }
 
 template <typename QS>
@@ -277,7 +278,7 @@ void assert_window(SelQsOps<QS>& ops, std::span<const typename QsOps<QS>::Wire> 
         acc += vole_mole::detail::qs_mul(t.a, vole_mole::detail::qs_mul(t.b, v));
     }
     ++ops.constraints;
-    ops.qs->add_constraint(acc);
+    ops.constrain(acc);
 }
 
 template <typename QS>
@@ -305,7 +306,7 @@ void assert_poly(SelQsOps<QS>& ops, std::span<const Monomial<typename QsOps<QS>:
         }
     }
     ++ops.constraints;
-    ops.qs->add_constraint(acc);
+    ops.constrain(acc);
 }
 
 } // namespace vole_mole::ecdsa_pok::detail

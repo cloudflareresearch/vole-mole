@@ -362,9 +362,10 @@ template <size_t NB, bool SMALL, BinPrg PRG> struct BinRelation {
         vole_mole::detail::ECDSA_POK_BINARY_PRG_DST;
 
     // The bit constraints (unless the witness is derived: its bits are bits by construction) and
-    // the circuit's (which don't depend on the message length within NB blocks).
-    static constexpr size_t NUM_CONSTRAINTS =
-        (DERIVED ? 0 : RELATION_WITNESS_BITS) + CIRCUIT_CONSTRAINTS<SH>(NB);
+    // the circuit's (which don't depend on the message length within NB blocks), in batches (see
+    // qs_batch.hpp).
+    static constexpr size_t NUM_CONSTRAINTS = vole_mole::detail::qs_batches(
+        (DERIVED ? 0 : RELATION_WITNESS_BITS) + CIRCUIT_CONSTRAINTS<SH>(NB));
 
     static void hash_instance(faest::hash_state& hasher, const instance& x) {
         hasher.update(x.stmt->mu);
@@ -375,19 +376,20 @@ template <size_t NB, bool SMALL, BinPrg PRG> struct BinRelation {
 
     template <typename QS>
     static void constraints(QS* qs, const instance& x,
-                            std::span<const uint8_t, params::CONSTS::QS::CHALLENGE_BYTES>) {
+                            std::span<const uint8_t, params::CONSTS::QS::CHALLENGE_BYTES> chal2) {
         static_assert(QS::max_degree == BIN_QS_DEGREE<PRG>);
+        QsOps<QS> ops(qs, chal2);
         if constexpr (!DERIVED) {
             for (size_t i = 0; i < RELATION_WITNESS_BITS; ++i) {
-                vole_mole::detail::qs_add_bit_constraint(qs, qs->get_witness_bit(i));
+                ops.assert_bit(qs->get_witness_bit(i));
             }
         }
-        QsOps<QS> ops{qs};
         const auto wires = prefix_circuit<SH.small_log>(ops, x.stmt->msg_len, nullptr);
         ops.next = 8 * WITNESS_PREFIX_BYTES;
         auto zn = x.zn;
         auto zp = x.zp;
         link_circuit<SH.link_log>(ops, wires, *x.chal, zn, zp, false);
+        ops.finish();
     }
 };
 

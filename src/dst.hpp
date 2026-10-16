@@ -38,6 +38,8 @@ constexpr Dst ECDSA_POK_BINARY_PRG_DST = make_dst("ecpk", ecdsa_pok::VERSION, 'q
 constexpr Dst ECDSA_POK_LINK_DST = make_dst("ecpk", ecdsa_pok::VERSION, 'l', '0'); // link chal
 constexpr Dst ECDSA_POK_SEED_DST = make_dst("ecpk", ecdsa_pok::VERSION, 's', '0'); // prover seed
 constexpr Dst ECDSA_POK_STATEMENT_DST = make_dst("ecpk", ecdsa_pok::VERSION, 'x', '0'); // mu
+// The batches of binary constraints (qs_batch.hpp), in all the binary proofs below.
+constexpr Dst ECDSA_POK_BATCH_DST = make_dst("ecpk", ecdsa_pok::VERSION, 'k', '0');
 
 // ECDSA proof with a hidden public key (experimental, src/ecdsa_pok/hk_relation.hpp)
 constexpr Dst ECDSA_HK_BINARY_DST = make_dst("echk", ecdsa_pok::VERSION, 'b', '0');
@@ -108,6 +110,7 @@ constexpr bool dsts_are_distinct() {
         ECDSA_POK_LINK_DST,
         ECDSA_POK_SEED_DST,
         ECDSA_POK_STATEMENT_DST,
+        ECDSA_POK_BATCH_DST,
         ECDSA_HK_BINARY_DST,
         ECDSA_HK_BINDER_DST,
         ECDSA_HK_BINARY_PRG_DST,
