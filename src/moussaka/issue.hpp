@@ -28,21 +28,18 @@
 
 #include "dst.hpp"
 #include "keccak/segmented.hpp"
+#include "moussaka/circuit.hpp"
 #include "moussaka/commit.hpp"
-#include "qs_bit.hpp"
 #include "voleith.hpp"
 
-#include "constants.hpp"   // from faest-arch-opt
-#include "hash.hpp"        // from faest-arch-opt
-#include "parameters.hpp"  // from faest-arch-opt
-#include "polynomials.hpp" // from faest-arch-opt
+#include "hash.hpp"       // from faest-arch-opt
+#include "parameters.hpp" // from faest-arch-opt
 
 #include <algorithm>
 #include <array>
 #include <cstddef>
 #include <cstdint>
 #include <span>
-#include <type_traits>
 
 namespace vole_mole::moussaka::detail {
 
@@ -130,27 +127,9 @@ struct faest::OWF_CONSTANTS<faest::secpar::s128, vole_mole::moussaka::detail::OW
 
 namespace vole_mole::moussaka::detail {
 
-// Same as faest::v3::faest_em_128_f, except for the OWF.
-using IssueParams =
-    faest::parameter_set<faest::secpar::s128, /* TAU */ 17, OWF_MOUSSAKA_ISSUE, faest::prg::aes_ctr,
-                         faest::prg::aes_ctr, faest::leaf_hash::aes_ctr, /* W_GRIND */ 8,
-                         {faest::bavc::one_tree, /* T_OPEN */ 105},
-                         /* CRT_VOLE_MASKS */ true, /* HASH_INPUTS_V3 */ true>;
-
-namespace check {
-using EM128F = faest::v3::faest_em_128_f;
-static_assert(std::is_same_v<IssueParams::bavc_t, EM128F::bavc_t>);
-static_assert(IssueParams::tau_v == EM128F::tau_v);
-static_assert(IssueParams::delta_bits_v == EM128F::delta_bits_v);
-static_assert(IssueParams::vole_prg_v == EM128F::vole_prg_v);
-static_assert(IssueParams::leaf_hash_v == EM128F::leaf_hash_v);
-static_assert(IssueParams::use_crt_vole_masks == EM128F::use_crt_vole_masks);
-static_assert(IssueParams::use_v3_hash_inputs == EM128F::use_v3_hash_inputs);
-static_assert(IssueParams::use_grinding == EM128F::use_grinding);
-static_assert(IssueParams::CONSTS::REUSE_CRT_WITNESS);
-static_assert(IssueParams::CONSTS::CRT_LABEL_ROW_OFFSET == 0);
+using IssueParams = VoleithParams<OWF_MOUSSAKA_ISSUE>;
+static_assert(is_em128f_variant<IssueParams>());
 static_assert(WIT_OFF_R == 0 && R_BYTES >= IssueParams::secpar_bytes);
-} // namespace check
 
 struct IssueRelation {
     using params = IssueParams;
@@ -176,12 +155,9 @@ struct IssueRelation {
     constraints(QS* qs, const instance& x,
                 std::span<const uint8_t, params::CONSTS::QS::CHALLENGE_BYTES> /* chal2 */) {
         static_assert(QS::max_degree == ISSUE_QS_DEGREE);
-        using faest::poly1;
 
         // Add bit constraints: Every witness bit is a bit.
-        for (size_t i = 0; i < ISSUE_WITNESS_BITS; ++i) {
-            qs_add_bit_constraint(qs, qs->get_witness_bit(i));
-        }
+        qs_add_bit_constraints(qs, ISSUE_WITNESS_BITS);
 
         // Add segment constraints: All but the last segment end in the expected intermediate state.
         const auto out = keccak::detail::qs_keccak(
@@ -190,13 +166,10 @@ struct IssueRelation {
 
         // Add output constraint: The last segment ends in the commitment. (Only the bits of t are
         // computed in the last round.)
-        for (size_t i = 0; i < 8 * uov::M; ++i) {
-            qs->add_constraint(qs_to_gfsecpar(out[i] + poly1((x.t[i / 8] >> (i % 8)) & 1)));
-        }
+        qs_add_output_constraints(qs, out, x.t);
     }
 };
 
-// The public header hard-codes the proof size, so check it against faest-arch-opt's.
 static_assert(ISSUE_PROOF_BYTES == PROOF_BYTES<IssueRelation>,
               "ISSUE_PROOF_BYTES is out of sync with faest-arch-opt");
 

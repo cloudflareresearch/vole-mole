@@ -38,6 +38,14 @@ using IssueRequest = std::array<uint8_t, ISSUE_REQUEST_BYTES>;
 using IssueResponse = uov::Preimage;
 using RedeemRequest = std::array<uint8_t, REDEEM_REQUEST_BYTES>;
 
+// Protocol messages for unbound tokens.
+constexpr size_t UNBOUND_ISSUE_PROOF_BYTES = 6864; // issuance proof length
+constexpr size_t UNBOUND_ISSUE_REQUEST_BYTES = uov::M + UNBOUND_ISSUE_PROOF_BYTES;
+constexpr size_t UNBOUND_REDEEM_PROOF_BYTES = 12423; // redemption proof length
+constexpr size_t UNBOUND_REDEEM_REQUEST_BYTES = NF_BYTES + UNBOUND_REDEEM_PROOF_BYTES;
+using UnboundIssueRequest = std::array<uint8_t, UNBOUND_ISSUE_REQUEST_BYTES>;
+using UnboundRedeemRequest = std::array<uint8_t, UNBOUND_REDEEM_REQUEST_BYTES>;
+
 // A reference to an Anchor's public key.
 using AnchorRef = std::reference_wrapper<const uov::PublicKey>;
 
@@ -149,6 +157,102 @@ std::optional<IssueResponse> issue_response(const uov::SecretKey& sk, const Issu
 std::optional<Nullifier> finalize_redeem(const AnchorSet& anchors, const RedeemRequest& request,
                                          const Context& ctx_iss, const Context& ctx_red,
                                          const ChallengeDigest& challenge_digest);
+
+// A Moussaka token that has not yet been bound to a redemption context.
+//
+// A Token is bound to its redemption context at issuance. An UnboundToken is bound later, during
+// redemption, and can be redeemed in any number of redemption contexts. The nullifier is a
+// pseudorandom function of the redemption context, keyed by a secret key that the Client commits
+// to at issuance. Thus, redemptions of the same token for different redemption contexts can't be
+// linked to each other (or to issuance). However, redemptions for the same issuance and redemption
+// context have the same nullifier.
+//
+// Unbound tokens use their own commitment and proofs, so a Token can't be redeemed as an
+// UnboundToken or vice versa, even if the same Anchor issued both.
+class UnboundToken {
+  public:
+    UnboundToken(UnboundToken&&) noexcept;
+    UnboundToken& operator=(UnboundToken&&) noexcept;
+    ~UnboundToken();
+
+    // Generate a redemption request for the issuing Anchor in the given Anchor Set and issuance
+    // and redemption contexts. challenge_digest binds the challenge that triggered redemption to
+    // the proof; the Moderator must verify with the same digest.
+    //
+    // Throws std::logic_error if the token was moved from, std::invalid_argument if no Anchor
+    // issued the token for ctx_iss, std::bad_alloc if memory allocation fails, and
+    // std::runtime_error if the operating system's random number generator fails or proof
+    // generation fails (which happens with negligible probability).
+    UnboundRedeemRequest redeem_request(const AnchorSet& anchors, const Context& ctx_iss,
+                                        const Context& ctx_red,
+                                        const ChallengeDigest& challenge_digest) const;
+
+  private:
+    struct Impl;
+    std::unique_ptr<Impl> impl_;
+
+    explicit UnboundToken(std::unique_ptr<Impl> impl);
+    friend class PendingUnboundToken;
+    friend struct detail::TokenAccess;
+};
+
+// Client state while awaiting the issue response for an unbound token.
+class PendingUnboundToken {
+  public:
+    PendingUnboundToken(PendingUnboundToken&&) noexcept;
+    PendingUnboundToken& operator=(PendingUnboundToken&&) noexcept;
+    ~PendingUnboundToken();
+
+    // Consume the pending token and finalize issuance using the issuing Anchor's public key pk.
+    // Returns std::nullopt if the response isn't a signature of the Client's commitment under pk.
+    //
+    // Throws std::logic_error if the pending token was already consumed and std::bad_alloc if
+    // memory allocation fails.
+    std::optional<UnboundToken> finalize_issue(const uov::PublicKey& pk,
+                                               const IssueResponse& response) &&;
+
+  private:
+    struct Impl;
+    std::unique_ptr<Impl> impl_;
+
+    explicit PendingUnboundToken(std::unique_ptr<Impl> impl);
+    friend struct detail::TokenAccess;
+};
+
+struct UnboundIssueRequestResult {
+    PendingUnboundToken pending_token;
+    UnboundIssueRequest request;
+};
+
+// Generate an issue request for an unbound token for the given issuance context.
+//
+// Throws std::bad_alloc if memory allocation fails and std::runtime_error if the operating
+// system's random number generator fails or if proof generation fails (which happens with
+// negligible probability).
+UnboundIssueRequestResult unbound_issue_request(const Context& ctx_iss);
+
+// Respond to an issue request for an unbound token. Returns std::nullopt if the issuance proof is
+// invalid, i.e., the request doesn't commit to ctx_iss.
+//
+// Throws std::bad_alloc if memory allocation fails and std::runtime_error if preimage derivation
+// fails (which happens with negligible probability). An invalid request never causes an exception.
+std::optional<IssueResponse> unbound_issue_response(const uov::SecretKey& sk,
+                                                    const UnboundIssueRequest& request,
+                                                    const Context& ctx_iss);
+
+// Verify a redemption request for an unbound token. Returns the nullifier of the redeemed token for
+// ctx_red, or std::nullopt if the request is invalid.
+//
+// As for finalize_redeem, it's the caller's responsibility to record the nullifier of every token
+// it accepts for ctx_iss and ctx_red, and to reject a request whose nullifier it has already
+// recorded, across every Anchor Set it accepts for these contexts. Since an unbound token can be
+// redeemed for any context, this is necessary to limit the Client to one redemption per context.
+//
+// Throws std::bad_alloc if memory allocation fails. An invalid request never causes an exception.
+std::optional<Nullifier> unbound_finalize_redeem(const AnchorSet& anchors,
+                                                 const UnboundRedeemRequest& request,
+                                                 const Context& ctx_iss, const Context& ctx_red,
+                                                 const ChallengeDigest& challenge_digest);
 
 } // namespace vole_mole::moussaka
 
