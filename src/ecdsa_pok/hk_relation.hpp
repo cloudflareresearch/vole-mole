@@ -196,9 +196,8 @@ inline Witness make_witness(const Affine& q, std::span<const uint8_t> msg,
         }
         const size_t k = NUM_WINDOWS - 1 - wi;
         const size_t d = digit(u2, k);
-        wit.wp[WP_B + k] = Fp::from_u64(d);
-        wit.wp[WP_SELECTED + 2 * wi] = table[d].x;
-        wit.wp[WP_SELECTED + 2 * wi + 1] = table[d].y;
+        wit.wp[WP_B + 2 * k] = Fp::from_u64(d % SUB);
+        wit.wp[WP_B + 2 * k + 1] = Fp::from_u64(d / SUB);
         steps.push_back({false, table[d]});
     }
     for (size_t k = 0; k < NUM_DIGITS; ++k) {

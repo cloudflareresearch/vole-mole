@@ -249,8 +249,8 @@ TYPED_TEST(EcdsaHkWhiteBox, CheatKey) {
 TYPED_TEST(EcdsaHkWhiteBox, CheatScalarMul) {
     const WhiteBox<TypeParam> wb;
     for (const size_t i : {hk::WP_A + 5, hk::WP_B + 60, hk::WP_LADDER, hk::WP_LADDER + 1,
-                           hk::WP_LADDER + 5, hk::WP_LADDER + hk::LADDER_STEPS - 1, hk::WP_SELECTED,
-                           hk::WP_SELECTED + 77, hk::WP_COMB + 7, hk::WP_FINAL}) {
+                           hk::WP_LADDER + 5, hk::WP_LADDER + hk::LADDER_STEPS - 1, hk::WP_B + 1,
+                           hk::WP_B + 127, hk::WP_COMB + 7, hk::WP_FINAL}) {
         auto w = wb.witness();
         w.wp[i] += (i < hk::WP_LADDER ? p256::Fp::from_u64(16) : p256::Fp::one());
         EXPECT_FALSE(wb.verify(wb.prove(w))) << i;

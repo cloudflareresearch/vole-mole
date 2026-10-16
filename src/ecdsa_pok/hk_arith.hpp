@@ -6,9 +6,9 @@
 //
 //   Instance: e, the link challenge, and the link values Z_n, Z_p, Y_1, Y_2
 //   Witness over F_p: Q = (x_Q, y_Q), the slopes and points of the table of Q, the base-16 digits
-//             a_k of u1 and b_k of u2 (k < 64), the slopes of the ladder, the table points it
-//             selects, the slopes of the comb and the final step, the mask rho_p, and the masks
-//             sigma_1, sigma_2
+//             a_k of u1 (k < 64), the base-4 digits c_(k,0) and c_(k,1) of u2 (so that its
+//             base-16 digit b_k = c_(k,0) + 4 c_(k,1)), the slopes of the ladder, the comb and the
+//             final step, the mask rho_p, and the masks sigma_1, sigma_2
 //   Witness over F_n: the 64-bit limbs of u1 and u2, X, the inverse of u2 X, the mask rho_n, and
 //             the masks sigma_1, sigma_2 (reduced modulo n)
 //
@@ -19,24 +19,26 @@
 //      and the points P_1, ..., P_15 are committed (degree-2 constraints), so that the points have
 //      degree 1.
 //   2. A ladder on the digits of u2, from the most significant: A = H_0, then for k = 63, ..., 0,
-//      A = 16 A (four doublings, except for k = 63) and A = A + S_k, for a committed point S_k
-//      constrained to be the Newton interpolation of the table at the committed digit b_k, of
-//      degree 15 + 1 = 16. A doubling commits to its slope lambda, constrained by
-//      lambda 2 y_A = 3 x_A^2 - 3. As the added points have degree 1, the coordinates of A have
-//      degree at most 2 (x) and 3 (y) along the ladder, and the doubling constraints degree 4.
-//      Then A = u2 Q + (16^63 h_0 + h_1 sum_k 16^k) G.
+//      A = 16 A (four doublings, except for k = 63) and A = A + S_k, where S_k = P_(b_k) is the
+//      two-dimensional Newton interpolation of the table (as a 4 x 4 grid) at (c_(k,0), c_(k,1)),
+//      of degree 3 + 3 + 1 = 7 (S_k isn't committed). A doubling commits to its slope lambda,
+//      constrained by lambda 2 y_A = 3 x_A^2 - 3. An addition or doubling keeps the degree of x_A
+//      (x' = lambda^2 - x_A - x_S), so along the ladder x_A has degree at most 7 and y_A at most
+//      8, and the doubling constraints have degree 14. Then
+//      A = u2 Q + (16^63 h_0 + h_1 sum_k 16^k) G.
 //   3. A fixed-base comb on the digits of u1: for k < 64, A = A + T_k[a_k], where
 //      T_k[a] = a 16^k G + H_2 are public, in Newton form (arith.hpp's Comb, of degree 15). Finally
 //      R = A + P*, for the public P* = -(16^63 h_0 + h_1 sum_k 16^k + 64 h_2) G. As in arith.hpp,
 //      the constraints have degree 16.
 //
-// So the QuickSilver degree DP is 16, that of the digits' range checks. (Without committing the
-// table points and the selected points, the selection would have degree 15 + 2 and the doubling
-// constraints 2 (15 + 2) = 34; with two digits per comb step, the comb would have degree 31. The
-// extra 222 elements cost less than that degree, in proof size with a derived witness and in
-// proving time.)
+// So the QuickSilver degree DP is 16, that of the comb and of the range checks of the digits of u1.
+// (Without committing the table points, the selection would have degree 7 + 2 = 9 and the doubling
+// constraints 18. Selecting with the base-16 digits of u2 would need degree 15 + 1, and so
+// committing the selected points to keep the doublings within degree 16: 128 elements rather than
+// the 64 extra digits. With two digits per comb step, the comb would have degree 31.)
 //
-// Each digit d is constrained by prod_(m < 16) (d - m) = 0, and Q by the curve equation.
+// Each digit a of u1 is constrained by prod_(m < 16) (a - m) = 0, each base-4 digit c of u2 by
+// c (c - 1) (c - 2) (c - 3) = 0, and Q by the curve equation.
 //
 // Incomplete additions. In arith.hpp, Q is fixed by the statement and the offsets have unknown
 // discrete logarithms. Here the prover chooses Q, so it could pick Q to make an addition
@@ -89,19 +91,20 @@ constexpr size_t LADDER_STEPS = NUM_DOUBLINGS + NUM_WINDOWS;     // 316
 constexpr size_t COMB_STEPS = NUM_DIGITS;                        // one digit of u1 per step
 
 // F_p witness layout.
-constexpr size_t WP_Q = 0;                                // x_Q, y_Q
-constexpr size_t WP_TABLE = WP_Q + 2;                     // slopes of P_1, ..., P_15
-constexpr size_t WP_TABLE_PTS = WP_TABLE + RADIX - 1;     // x, y of P_1, ..., P_15
-constexpr size_t WP_A = WP_TABLE_PTS + 2 * (RADIX - 1);   // digits of u1
-constexpr size_t WP_B = WP_A + NUM_DIGITS;                // digits of u2
-constexpr size_t WP_LADDER = WP_B + NUM_DIGITS;           // slopes of the ladder, in order
-constexpr size_t WP_SELECTED = WP_LADDER + LADDER_STEPS;  // x, y of S_63, ..., S_0, in order
-constexpr size_t WP_COMB = WP_SELECTED + 2 * NUM_WINDOWS; // slopes of the comb
-constexpr size_t WP_FINAL = WP_COMB + COMB_STEPS;         // slope of the last step (+ P*)
+constexpr size_t WP_Q = 0;                              // x_Q, y_Q
+constexpr size_t WP_TABLE = WP_Q + 2;                   // slopes of P_1, ..., P_15
+constexpr size_t WP_TABLE_PTS = WP_TABLE + RADIX - 1;   // x, y of P_1, ..., P_15
+constexpr size_t SUB = 4;                               // base of the digits of u2
+constexpr size_t WP_A = WP_TABLE_PTS + 2 * (RADIX - 1); // digits of u1
+constexpr size_t WP_B = WP_A + NUM_DIGITS;              // c_(k,0), c_(k,1) for k < 64
+constexpr size_t WP_LADDER = WP_B + 2 * NUM_DIGITS;     // slopes of the ladder, in order
+constexpr size_t WP_COMB = WP_LADDER + LADDER_STEPS;    // slopes of the comb
+constexpr size_t WP_FINAL = WP_COMB + COMB_STEPS;       // slope of the last step (+ P*)
 constexpr size_t WP_RHO = WP_FINAL + 1;
 constexpr size_t WP_SIGMA = WP_RHO + 1;
 constexpr size_t LP = WP_SIGMA + NUM_Y_CHECKS;
-static_assert(LP == 687);
+static_assert(LP == 623);
+static_assert(SUB * SUB == RADIX);
 
 // F_n witness layout.
 constexpr size_t WN_U1 = 0; // limbs of u1
@@ -209,38 +212,61 @@ struct HkArithRelation {
     static constexpr size_t LP = hk::LP, LN = hk::LN, DP = hk::DP, DN = hk::DN;
     using instance = ArithInstance;
 
-    // prod_(m < 16) (d - m), which is zero iff d is in [0, 16).
-    template <typename Ctx, typename V> static V range16(const Ctx& ctx, const V& d) {
-        const auto& c = small_constants();
-        V acc = d;
-        for (size_t m = 1; m < RADIX; ++m) {
-            acc = acc * (d - ctx.cp(c[m]));
-        }
-        return acc;
+    // c (c - 1) (c - 2) (c - 3), which is zero iff c is in [0, 4).
+    template <typename Ctx, typename V> static V range4(const Ctx& ctx, const V& c) {
+        const auto& k = small_constants();
+        return c * (c - ctx.cp(k[1])) * ((c - ctx.cp(k[2])) * (c - ctx.cp(k[3])));
     }
 
-    // In place, from the values v_b (b < 16) to the Newton coefficients n_i = (D^i v)_0 / i!.
-    template <typename V> static void newton_1d(std::array<V, RADIX>& v) {
-        for (size_t i = 1; i < RADIX; ++i) {
-            for (size_t b = RADIX - 1; b >= i; --b) {
+    // In place, from the values v_b (b < 4) to the Newton coefficients n_i = (D^i v)_0 / i!.
+    template <typename V> static void newton_4(std::array<V, SUB>& v) {
+        for (size_t i = 1; i < SUB; ++i) {
+            for (size_t b = SUB - 1; b >= i; --b) {
                 v[b] = v[b] - v[b - 1];
             }
         }
         const auto& inv_fact = inv_factorials();
-        for (size_t i = 2; i < RADIX; ++i) {
+        for (size_t i = 2; i < SUB; ++i) {
             v[i] *= inv_fact[i];
         }
     }
 
-    // sum_i n_i F_i(d) = n_0 + d (n_1 + (d - 1) (n_2 + ... + (d - 14) n_15)).
+    // sum_i n_i F_i(c) = n_0 + c (n_1 + (c - 1) (n_2 + (c - 2) n_3)).
     template <typename Ctx, typename V>
-    static V select(const Ctx& ctx, const std::array<V, RADIX>& n, const V& d) {
-        const auto& c = small_constants();
-        V acc = n[RADIX - 1];
-        for (size_t i = RADIX - 1; i-- > 0;) {
-            acc = n[i] + (d - ctx.cp(c[i])) * acc;
+    static V select_4(const Ctx& ctx, const std::array<V, SUB>& n, const V& c) {
+        const auto& k = small_constants();
+        V acc = n[SUB - 1];
+        for (size_t i = SUB - 1; i-- > 0;) {
+            acc = n[i] + (c - ctx.cp(k[i])) * acc;
         }
         return acc;
+    }
+
+    // The two-dimensional Newton coefficients n[j][i] of v[4 c1 + c0] (c0, c1 < 4), in place:
+    // v(c0, c1) = sum_(i, j) n[j][i] F_i(c0) F_j(c1).
+    template <typename V> static void newton_grid(std::array<std::array<V, SUB>, SUB>& g) {
+        for (auto& row : g) {
+            newton_4(row);
+        }
+        for (size_t i = 0; i < SUB; ++i) {
+            std::array<V, SUB> col;
+            for (size_t j = 0; j < SUB; ++j) {
+                col[j] = g[j][i];
+            }
+            newton_4(col);
+            for (size_t j = 0; j < SUB; ++j) {
+                g[j][i] = col[j];
+            }
+        }
+    }
+    template <typename Ctx, typename V>
+    static V select_grid(const Ctx& ctx, const std::array<std::array<V, SUB>, SUB>& n, const V& c0,
+                         const V& c1) {
+        std::array<V, SUB> rows;
+        for (size_t j = 0; j < SUB; ++j) {
+            rows[j] = select_4(ctx, n[j], c0);
+        }
+        return select_4(ctx, rows, c1);
     }
 
     template <typename Ctx> static void constraints(Ctx& ctx, const instance& x) {
@@ -263,20 +289,22 @@ struct HkArithRelation {
         const PV xq = ctx.wp(WP_Q), yq = ctx.wp(WP_Q + 1);
         ctx.add_p(yq * yq - ((xq * xq - three) * xq + p256::CURVE_B));
 
-        // The table P_b = b Q + H_1 (committed), in Newton form.
-        std::array<PV, RADIX> tx, ty;
-        tx[0] = ctx.cp(off.h1.x);
-        ty[0] = ctx.cp(off.h1.y);
+        // The table P_b = b Q + H_1 (committed), as a 4 x 4 grid in Newton form.
+        std::array<std::array<PV, SUB>, SUB> tx, ty;
+        tx[0][0] = ctx.cp(off.h1.x);
+        ty[0][0] = ctx.cp(off.h1.y);
         for (size_t b = 1; b < RADIX; ++b) {
-            PV px = tx[b - 1], py = ty[b - 1];
+            PV px = tx[(b - 1) / SUB][(b - 1) % SUB], py = ty[(b - 1) / SUB][(b - 1) % SUB];
             add(px, py, xq, yq, ctx.wp(WP_TABLE + b - 1));
-            tx[b] = ctx.wp(WP_TABLE_PTS + 2 * (b - 1));
-            ty[b] = ctx.wp(WP_TABLE_PTS + 2 * (b - 1) + 1);
-            ctx.add_p(tx[b] - px);
-            ctx.add_p(ty[b] - py);
+            PV& bx = tx[b / SUB][b % SUB];
+            PV& by = ty[b / SUB][b % SUB];
+            bx = ctx.wp(WP_TABLE_PTS + 2 * (b - 1));
+            by = ctx.wp(WP_TABLE_PTS + 2 * (b - 1) + 1);
+            ctx.add_p(bx - px);
+            ctx.add_p(by - py);
         }
-        newton_1d(tx);
-        newton_1d(ty);
+        newton_grid(tx);
+        newton_grid(ty);
 
         // The ladder.
         PV ax = ctx.cp(off.h0.x), ay = ctx.cp(off.h0.y);
@@ -292,12 +320,11 @@ struct HkArithRelation {
                     ay = ny;
                 }
             }
-            const PV d = ctx.wp(WP_B + NUM_WINDOWS - 1 - w);
-            ctx.add_p(range16(ctx, d));
-            const PV sx = ctx.wp(WP_SELECTED + 2 * w), sy = ctx.wp(WP_SELECTED + 2 * w + 1);
-            ctx.add_p(sx - select(ctx, tx, d));
-            ctx.add_p(sy - select(ctx, ty, d));
-            add(ax, ay, sx, sy, ctx.wp(s++));
+            const size_t k = NUM_WINDOWS - 1 - w;
+            const PV c0 = ctx.wp(WP_B + 2 * k), c1 = ctx.wp(WP_B + 2 * k + 1);
+            ctx.add_p(range4(ctx, c0));
+            ctx.add_p(range4(ctx, c1));
+            add(ax, ay, select_grid(ctx, tx, c0, c1), select_grid(ctx, ty, c0, c1), ctx.wp(s++));
         }
 
         // The comb.
@@ -331,15 +358,21 @@ struct HkArithRelation {
         ctx.add_n(xn * x.c2 + ctx.wn(WN_RHO) - x.zn);
 
         // Y_i, over F_p from the digits and over F_n from the limbs.
-        const Fp sixteen = Fp::from_u64(RADIX);
+        const Fp sixteen = Fp::from_u64(RADIX), four = Fp::from_u64(SUB);
+        // The base-16 digit k of u1 or u2.
+        auto digit = [&](size_t u, size_t k) -> PV {
+            if (u == 0) {
+                return ctx.wp(WP_A + k);
+            }
+            return ctx.wp(WP_B + 2 * k + 1) * four + ctx.wp(WP_B + 2 * k);
+        };
         std::array<PV, 2 * NUM_LIMBS> limbs_p;
         for (size_t u = 0; u < 2; ++u) {
-            const size_t first = u == 0 ? WP_A : WP_B;
             for (size_t l = 0; l < NUM_LIMBS; ++l) {
                 constexpr size_t PER_LIMB = 64 / DIGIT_BITS;
-                PV acc = ctx.wp(first + PER_LIMB * l + PER_LIMB - 1);
+                PV acc = digit(u, PER_LIMB * l + PER_LIMB - 1);
                 for (size_t i = PER_LIMB - 1; i-- > 0;) {
-                    acc = acc * sixteen + ctx.wp(first + PER_LIMB * l + i);
+                    acc = acc * sixteen + digit(u, PER_LIMB * l + i);
                 }
                 limbs_p[NUM_LIMBS * u + l] = acc;
             }
