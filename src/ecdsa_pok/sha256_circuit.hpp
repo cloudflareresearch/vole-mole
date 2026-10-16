@@ -1,21 +1,24 @@
 // SHA-256 as a binary circuit (see bin_ops.hpp).
 //
-// For each block, the circuit commits to the message schedule W_16, ..., W_63, to the two new state
-// words A_t, E_t of each round, and to the output chaining value, and checks each of these as an
-// integer sum modulo 2^32 of (GF(2)-linear) wires, by column compression. The nonlinear functions
-// Ch and Maj aren't linear, but twice them is an integer combination of linear wires:
+// Every 32-bit word the circuit computes is a GF(2)-linear combination of committed bits (or a
+// public constant), so the linear functions (the rotations, shifts, XORs and Sigmas) are free. Each
+// addition modulo 2^32 is a ripple-carry addition:
 //
-//   2 Maj(a, b, c) = a + b + c - (a ^ b ^ c),
-//   2 Ch(e, f, g)  = 2 (e & f) + 2 (~e & g) = f + g + 1 - (e ^ f) - ~(e ^ g),
+//   - x + y, where x and y are linear: commit the carries c_1, ..., c_31 (c_0 = 0), constrained by
+//     c_{i+1} = maj(x_i, y_i, c_i) (degree 2); the sum s_i = x_i + y_i + c_i is linear. If y is a
+//     constant, the carries are known (and not committed) up to y's lowest set bit.
+//   - x + y, where y = u + v w bitwise for linear u, v, w (y = Ch(e, f, g) = g + e (f + g), or
+//     y = Maj(a, b, c) = b + (a + b)(b + c)): commit the sum s instead, so that s is linear. Then
+//     the carries c_i = x_i + y_i + s_i are of degree 2, and c_{i+1} = maj(x_i, y_i, c_i) becomes
+//     the constraint
 //
-// so round t checks, modulo 2^33,
+//       c_{i+1} = x_i y_i + (x_i + y_i) c_i = y_i (x_i + s_i) + x_i + y_i + x_i s_i,
 //
-//   2 (d + h + S1(e) + K_t + W_t - E_t) + 2 Ch(e, f, g)  = 0,
-//   2 (E_t - d + S0(a) - A_t)           + 2 Maj(a, b, c) = 0,
+//     of degree 3.
 //
-// whose wires are all linear. (E_t = d + T1 and A_t = T1 + T2 = E_t - d + T2.) Each sum has about
-// 10 wires per column, reduced by counters: one of size 3 (degree 8) that commits 3 carries, or
-// a few of size 2 (degree 4).
+// So a round, T1 = h + S1(e) + W_t + K_t + Ch(e, f, g), E = d + T1, and A = T1 + S0(a) + Maj(a, b,
+// c), costs five additions of linear words and two with Ch and Maj, about 218 committed bits,
+// and the message schedule costs three additions per word.
 
 #ifndef VOLE_MOLE_ECDSA_POK_SHA256_CIRCUIT_HPP
 #define VOLE_MOLE_ECDSA_POK_SHA256_CIRCUIT_HPP
@@ -27,24 +30,34 @@
 #include <array>
 #include <cstddef>
 #include <cstdint>
+#include <initializer_list>
 #include <span>
 #include <vector>
 
 namespace vole_mole::ecdsa_pok::detail {
 
-// LOG is the size of the counters (see bin_ops.hpp).
-template <typename Ops, size_t LOG> struct ShaCircuit {
+template <typename Ops> struct ShaCircuit {
     using W = Word<Ops>;
     using Wire = typename Ops::Wire;
 
     Ops& ops;
 
-    W commit_word(uint32_t v) {
-        W out;
-        for (size_t i = 0; i < 32; ++i) {
-            out.w[i] = ops.commit(((v >> i) & 1) != 0);
+    Wire bit(const W& a, size_t i) const {
+        if (a.is_const) {
+            return ((a.c >> i) & 1) != 0 ? ops.one() : ops.zero();
         }
-        return out;
+        return a.w[i];
+    }
+    // a's value (PlainOps; 0 otherwise).
+    uint32_t value(const W& a) const {
+        if (a.is_const) {
+            return a.c;
+        }
+        uint32_t v = 0;
+        for (size_t i = 0; i < 32; ++i) {
+            v |= uint32_t{ops.value(a.w[i])} << i;
+        }
+        return v;
     }
     W x(const W& a, const W& b) const {
         if (a.is_const && b.is_const) {
@@ -60,7 +73,17 @@ template <typename Ops, size_t LOG> struct ShaCircuit {
         }
         return out;
     }
-    W n(const W& a) const { return x(a, W::constant(0xffffffff)); }
+    // a & k for a constant k.
+    W and_const(const W& a, uint32_t k) const {
+        if (a.is_const) {
+            return W::constant(a.c & k);
+        }
+        W out = a;
+        for (size_t i = 0; i < 32; ++i) {
+            out.w[i] = ((k >> i) & 1) != 0 ? a.w[i] : ops.zero();
+        }
+        return out;
+    }
     W rotr(const W& a, unsigned k) const {
         if (a.is_const) {
             return W::constant(sha256::rotr(a.c, k));
@@ -86,10 +109,82 @@ template <typename Ops, size_t LOG> struct ShaCircuit {
     W ss0(const W& a) const { return x(x(rotr(a, 7), rotr(a, 18)), shr(a, 3)); }
     W ss1(const W& a) const { return x(x(rotr(a, 17), rotr(a, 19)), shr(a, 10)); }
 
+    // x + y modulo 2^32, for linear (or constant) x and y.
+    W add(const W& a, const W& b) {
+        if (a.is_const && b.is_const) {
+            return W::constant(a.c + b.c);
+        }
+        const W& xx = a.is_const ? b : a;
+        const W& y = a.is_const ? a : b; // the constant, if any
+        W out = xx;
+        Wire c = ops.zero();
+        bool c_zero = true; // c is known to be 0
+        bool cv = false;    // c's value (PlainOps)
+        for (size_t i = 0; i < 32; ++i) {
+            const Wire yi = bit(y, i);
+            out.w[i] = c_zero ? ops.add(xx.w[i], yi) : ops.add(ops.add(xx.w[i], yi), c);
+            if (i == 31) {
+                break;
+            }
+            if (c_zero && y.is_const) {
+                // c_{i+1} = x_i y_i is 0 or x_i.
+                if (((y.c >> i) & 1) != 0) {
+                    c = xx.w[i];
+                    cv = ops.value(c);
+                    c_zero = false;
+                }
+                continue;
+            }
+            const bool xv = ops.value(xx.w[i]), yv = ops.value(yi);
+            cv = (xv && yv) || (cv && (xv != yv));
+            const Wire cn = ops.commit(cv);
+            ops.assert_maj(xx.w[i], yi, c, cn);
+            c = cn;
+            c_zero = false;
+        }
+        return out;
+    }
+    W add(std::initializer_list<W> terms) {
+        uint32_t k = 0;
+        W acc = W::constant(0);
+        bool first = true;
+        for (const W& t : terms) {
+            if (t.is_const) {
+                k += t.c;
+            } else {
+                acc = first ? t : add(acc, t);
+                first = false;
+            }
+        }
+        return k != 0 || first ? add(acc, W::constant(k)) : acc;
+    }
+
+    // x + (u + v w) modulo 2^32 (bitwise products), for linear (or constant) x, u, v, w.
+    W add_quad(const W& xw, const W& u, const W& v, const W& w) {
+        if (v.is_const || w.is_const) {
+            return add(xw, x(u, v.is_const ? and_const(w, v.c) : and_const(v, w.c)));
+        }
+        const uint32_t sv = value(xw) + (value(u) ^ (value(v) & value(w)));
+        W s;
+        for (size_t i = 0; i < 32; ++i) {
+            s.w[i] = ops.commit(((sv >> i) & 1) != 0);
+        }
+        // l_i = x_i + u_i + s_i, so that c_i = l_i + v_i w_i.
+        std::array<Wire, 32> l;
+        for (size_t i = 0; i < 32; ++i) {
+            l[i] = ops.add(ops.add(bit(xw, i), bit(u, i)), s.w[i]);
+        }
+        ops.assert_quad(l[0], v.w[0], w.w[0]); // c_0 = 0
+        for (size_t i = 0; i < 31; ++i) {
+            ops.assert_quad_carry(ops.add(ops.add(l[i + 1], bit(xw, i)), bit(u, i)), v.w[i + 1],
+                                  w.w[i + 1], v.w[i], w.w[i], bit(u, i), bit(xw, i), s.w[i]);
+        }
+        return s;
+    }
+
     // One compression of the message block whose bit (8 j + i) is wire msg[8 j + i] (byte j, bit
-    // i), from chaining value h. trace holds the values to commit (PlainOps), or is null.
-    std::array<W, 8> compress(const std::array<W, 8>& h, std::span<const Wire, 512> msg,
-                              const sha256::Trace* trace) {
+    // i), from chaining value h.
+    std::array<W, 8> compress(const std::array<W, 8>& h, std::span<const Wire, 512> msg) {
         std::array<W, 64> w;
         for (size_t t = 0; t < 16; ++t) {
             for (size_t i = 0; i < 32; ++i) {
@@ -97,14 +192,7 @@ template <typename Ops, size_t LOG> struct ShaCircuit {
             }
         }
         for (size_t t = 16; t < 64; ++t) {
-            w[t] = commit_word(trace ? trace->w[t] : 0);
-            ColSum<Ops> sum(ops, 32);
-            sum.add_word(ss1(w[t - 2]), 0);
-            sum.add_word(w[t - 7], 0);
-            sum.add_word(ss0(w[t - 15]), 0);
-            sum.add_word(w[t - 16], 0);
-            sum.sub_word(w[t], 0);
-            sum.template assert_zero<LOG>();
+            w[t] = add({ss1(w[t - 2]), w[t - 7], ss0(w[t - 15]), w[t - 16]});
         }
 
         // a[t + 4] = A_t, so a[0..4) = A_{-4}, ..., A_{-1} = h[3], h[2], h[1], h[0].
@@ -116,63 +204,31 @@ template <typename Ops, size_t LOG> struct ShaCircuit {
         for (size_t t = 0; t < 64; ++t) {
             const W &aa = a[t + 3], &b = a[t + 2], &c = a[t + 1], &d = a[t];
             const W &ee = e[t + 3], &f = e[t + 2], &g = e[t + 1], &hh = e[t];
-            const W an = commit_word(trace ? trace->a[t] : 0);
-            const W en = commit_word(trace ? trace->e[t] : 0);
-            {
-                ColSum<Ops> sum(ops, 33);
-                sum.add_word(d, 1);
-                sum.add_word(hh, 1);
-                sum.add_word(s1(ee), 1);
-                sum.add_word(w[t], 1);
-                sum.add_const(sha256::K[t], 1);
-                sum.sub_word(en, 1);
-                sum.add_word(f, 0);
-                sum.add_word(g, 0);
-                sum.add_const(0xffffffff, 0);
-                sum.sub_word(x(ee, f), 0);
-                sum.sub_word(n(x(ee, g)), 0);
-                sum.template assert_zero<LOG>();
-            }
-            {
-                ColSum<Ops> sum(ops, 33);
-                sum.add_word(en, 1);
-                sum.sub_word(d, 1);
-                sum.add_word(s0(aa), 1);
-                sum.sub_word(an, 1);
-                sum.add_word(aa, 0);
-                sum.add_word(b, 0);
-                sum.add_word(c, 0);
-                sum.sub_word(x(x(aa, b), c), 0);
-                sum.template assert_zero<LOG>();
-            }
-            a[t + 4] = an;
-            e[t + 4] = en;
+            // Ch(e, f, g) = g + e (f + g), Maj(a, b, c) = b + (a + b)(b + c).
+            const W t1 =
+                add_quad(add({hh, s1(ee), w[t], W::constant(sha256::K[t])}), g, ee, x(f, g));
+            e[t + 4] = add(d, t1);
+            a[t + 4] = add_quad(add(t1, s0(aa)), b, x(aa, b), x(b, c));
         }
 
         const std::array<const W*, 8> s = {&a[67], &a[66], &a[65], &a[64],
                                            &e[67], &e[66], &e[65], &e[64]};
         std::array<W, 8> out;
         for (size_t i = 0; i < 8; ++i) {
-            out[i] = commit_word(trace ? trace->out[i] : 0);
-            ColSum<Ops> sum(ops, 32);
-            sum.add_word(h[i], 0);
-            sum.add_word(*s[i], 0);
-            sum.sub_word(out[i], 0);
-            sum.template assert_zero<LOG>();
+            out[i] = add(h[i], *s[i]);
         }
         return out;
     }
 
     // Hash the padded message msg (512 wires per block, in witness order), returning the digest
-    // words. traces holds the compression traces (PlainOps), or is null.
-    std::array<W, 8> hash(std::span<const Wire> msg, const std::vector<sha256::Trace>* traces) {
+    // words.
+    std::array<W, 8> hash(std::span<const Wire> msg) {
         std::array<W, 8> h;
         for (size_t i = 0; i < 8; ++i) {
             h[i] = W::constant(sha256::IV[i]);
         }
         for (size_t b = 0; b < msg.size() / 512; ++b) {
-            h = compress(h, std::span<const Wire, 512>(msg.subspan(512 * b, 512)),
-                         traces ? &(*traces)[b] : nullptr);
+            h = compress(h, std::span<const Wire, 512>(msg.subspan(512 * b, 512)));
         }
         return h;
     }

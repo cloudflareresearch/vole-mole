@@ -19,6 +19,14 @@
 // is the elementary symmetric polynomial e_{2^i}(x_1, ..., x_t) modulo 2, of degree 2^i: that's the
 // constraint for the committed bit. Carries out of the last column are dropped, so the result is
 // the sum modulo 2^(#columns).
+//
+// Besides counters, the Ops provide the constraints of ripple-carry additions (sha256_circuit.hpp),
+// on wires a, b, c, ... (whose values the circuit reads with value(), in PlainOps):
+//
+//   - assert_maj(a, b, c, o):  o = maj(a, b, c) = a b + c (a + b), of degree 2;
+//   - assert_quad(l, v, w):    l + v w = 0, of degree 2;
+//   - assert_quad_carry(l, v1, w1, v, w, u, x, s):
+//                              l + v1 w1 + v w + (u + v w) (x + s) + x s = 0, of degree 3.
 
 #ifndef VOLE_MOLE_ECDSA_POK_BIN_OPS_HPP
 #define VOLE_MOLE_ECDSA_POK_BIN_OPS_HPP
@@ -58,7 +66,11 @@ struct CountOps {
         ++next;
         return {};
     }
+    bool value(Wire) const { return false; }
     void assert_eq(Wire, bool) { ++constraints; }
+    void assert_maj(Wire, Wire, Wire, Wire) { ++constraints; }
+    void assert_quad(Wire, Wire, Wire) { ++constraints; }
+    void assert_quad_carry(Wire, Wire, Wire, Wire, Wire, Wire, Wire, Wire) { ++constraints; }
     void counter(std::span<const Wire>, std::span<Wire> out) {
         for (auto& o : out) {
             o = commit(false);
@@ -73,6 +85,7 @@ struct PlainOps {
     size_t next = 0;
     size_t failed = 0; // constraints that don't hold
     size_t constraints = 0;
+    bool replay = false; // commit returns the witness bits rather than writing them (for tests)
 
     Wire zero() const { return 0; }
     Wire one() const { return 1; }
@@ -83,14 +96,24 @@ struct PlainOps {
         if (b / 8 >= witness.size()) {
             throw std::logic_error("ecdsa_pok: witness overflow");
         }
+        if (replay) {
+            return bit(b);
+        }
         witness[b / 8] =
             static_cast<uint8_t>((witness[b / 8] & ~(1u << (b % 8))) | (unsigned{v} << (b % 8)));
         return v ? 1 : 0;
     }
     Wire bit(size_t i) const { return (witness[i / 8] >> (i % 8)) & 1; }
+    bool value(Wire a) const { return a != 0; }
     void assert_eq(Wire a, bool v) {
         ++constraints;
         failed += (a != static_cast<Wire>(v));
+    }
+    void assert_maj(Wire a, Wire b, Wire c, Wire o) { check(o ^ (a & b) ^ (c & (a ^ b))); }
+    void assert_quad(Wire l, Wire v, Wire w) { check(l ^ (v & w)); }
+    void assert_quad_carry(Wire l, Wire v1, Wire w1, Wire v, Wire w, Wire u, Wire x, Wire s) {
+        const Wire vw = v & w;
+        check(l ^ (v1 & w1) ^ vw ^ ((u ^ vw) & (x ^ s)) ^ (x & s));
     }
     void counter(std::span<const Wire> in, std::span<Wire> out) {
         const size_t sum = static_cast<size_t>(std::ranges::count(in, Wire{1}));
@@ -98,6 +121,12 @@ struct PlainOps {
             out[i] = commit(((sum >> (i + 1)) & 1) != 0);
         }
         constraints += out.size();
+    }
+
+  private:
+    void check(Wire e) {
+        ++constraints;
+        failed += e;
     }
 };
 
@@ -113,9 +142,30 @@ template <typename QS> struct QsOps {
     Wire add(const Wire& a, const Wire& b) const { return a + b; }
     Wire commit(bool) { return qs->get_witness_bit(next++); }
     Wire bit(size_t i) const { return qs->get_witness_bit(i); }
+    bool value(const Wire&) const { return false; }
     void assert_eq(const Wire& a, bool v) {
         ++constraints;
         qs->add_constraint(vole_mole::detail::qs_to_gfsecpar(a + faest::poly1(v)));
+    }
+    void assert_maj(const Wire& a, const Wire& b, const Wire& c, const Wire& o) {
+        using vole_mole::detail::qs_mul;
+        ++constraints;
+        qs->add_constraint(
+            vole_mole::detail::qs_to_gfsecpar(Bit<2>(o) + qs_mul(a, b) + qs_mul(c, a + b)));
+    }
+    void assert_quad(const Wire& l, const Wire& v, const Wire& w) {
+        ++constraints;
+        qs->add_constraint(
+            vole_mole::detail::qs_to_gfsecpar(Bit<2>(l) + vole_mole::detail::qs_mul(v, w)));
+    }
+    void assert_quad_carry(const Wire& l, const Wire& v1, const Wire& w1, const Wire& v,
+                           const Wire& w, const Wire& u, const Wire& x, const Wire& s) {
+        using vole_mole::detail::qs_mul;
+        ++constraints;
+        const Bit<2> vw = qs_mul(v, w);
+        const Wire t = x + s;
+        const Bit<2> q = Bit<2>(l) + qs_mul(v1, w1) + vw + qs_mul(u, t) + qs_mul(x, s);
+        qs->add_constraint(vole_mole::detail::qs_to_gfsecpar(Bit<3>(q) + qs_mul(vw, t)));
     }
     void counter(std::span<const Wire> in, std::span<Wire> out) {
         for (auto& o : out) {

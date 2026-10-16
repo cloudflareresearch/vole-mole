@@ -71,10 +71,10 @@ TEST(EcdsaPok, Counts) {
     for (const size_t nb : {1, 2}) {
         CountOps ops;
         prefix_circuit<3>(ops, 64 * nb - 9, nullptr);
-        EXPECT_EQ(ops.next, prefix_bits(nb, 3)) << nb;
+        EXPECT_EQ(ops.next, prefix_bits(nb)) << nb;
         CountOps ops2;
         prefix_circuit<2>(ops2, 64 * nb - 9, nullptr);
-        EXPECT_EQ(ops2.next, prefix_bits(nb, 2)) << nb;
+        EXPECT_EQ(ops2.next, prefix_bits(nb)) << nb;
         for (const size_t len : {64 * nb - 9, 64 * nb - 64}) {
             EXPECT_EQ(count_circuit_constraints<SHAPE_DIRECT>(len),
                       CIRCUIT_CONSTRAINTS<SHAPE_DIRECT>(nb));
@@ -202,7 +202,6 @@ TYPED_TEST(EcdsaPokWhiteBox, CheatOtherMessage) {
     auto other = wb.msg;
     other[0] ^= 1;
     w.bin.padded = vole_mole::sha256::pad(other);
-    w.bin.traces = sha256_traces(w.bin.padded);
     EXPECT_FALSE(wb.verify(wb.prove(w)));
 }
 

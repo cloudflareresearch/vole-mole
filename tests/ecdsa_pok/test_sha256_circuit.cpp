@@ -9,7 +9,6 @@
 #include <cstdint>
 #include <cstdio>
 #include <random>
-#include <type_traits>
 #include <vector>
 
 namespace {
@@ -24,9 +23,8 @@ struct Result {
 };
 
 // Run the circuit in the clear on msg, and return the witness, the digest it computes, and counts.
-template <size_t LOG> Result run_plain(const std::vector<uint8_t>& msg) {
+Result run_plain(const std::vector<uint8_t>& msg) {
     const auto padded = sha256::pad(msg);
-    const auto traces = sha256_traces(padded);
     Result r;
     r.witness.assign(1 << 16, 0);
     PlainOps ops{r.witness};
@@ -34,8 +32,8 @@ template <size_t LOG> Result run_plain(const std::vector<uint8_t>& msg) {
     for (size_t i = 0; i < 8 * padded.size(); ++i) {
         wires.push_back(ops.commit(((padded[i / 8] >> (i % 8)) & 1) != 0));
     }
-    ShaCircuit<PlainOps, LOG> c{ops};
-    const auto h = c.hash(wires, &traces);
+    ShaCircuit<PlainOps> c{ops};
+    const auto h = c.hash(wires);
     sha256::State s;
     for (size_t i = 0; i < 8; ++i) {
         uint32_t v = 0;
@@ -51,85 +49,67 @@ template <size_t LOG> Result run_plain(const std::vector<uint8_t>& msg) {
     return r;
 }
 
-// Checks the circuit on a modified trace: flipping a committed value must make a check fail.
-template <size_t LOG>
-size_t failures_with_bad_trace(const std::vector<uint8_t>& msg, size_t which) {
-    const auto padded = sha256::pad(msg);
-    auto traces = sha256_traces(padded);
-    switch (which % 4) {
-    case 0:
-        traces[0].w[20 + which % 40] ^= 1u << (which % 32);
-        break;
-    case 1:
-        traces[0].a[which % 64] ^= 1u << (which % 32);
-        break;
-    case 2:
-        traces[0].e[which % 64] ^= 1u << (which % 32);
-        break;
-    default:
-        traces.back().out[which % 8] ^= 1u << (which % 32);
-        break;
-    }
-    std::vector<uint8_t> witness(1 << 16, 0);
+// The failed constraints when the circuit is run on `witness` (as committed by run_plain).
+size_t replay(std::vector<uint8_t> witness, size_t blocks) {
     PlainOps ops{witness};
+    ops.replay = true;
     std::vector<uint8_t> wires;
-    for (size_t i = 0; i < 8 * padded.size(); ++i) {
-        wires.push_back(ops.commit(((padded[i / 8] >> (i % 8)) & 1) != 0));
+    for (size_t i = 0; i < 512 * blocks; ++i) {
+        wires.push_back(ops.commit(false));
     }
-    ShaCircuit<PlainOps, LOG> c{ops};
-    c.hash(wires, &traces);
+    ShaCircuit<PlainOps> c{ops};
+    c.hash(wires);
     return ops.failed;
 }
 
-template <size_t LOG> size_t count_bits(size_t blocks, size_t* constraints) {
+size_t count_bits(size_t blocks, size_t* constraints) {
     CountOps ops;
     std::vector<CountOps::Wire> wires(512 * blocks);
-    ShaCircuit<CountOps, LOG> c{ops};
-    c.hash(wires, nullptr);
+    ShaCircuit<CountOps> c{ops};
+    c.hash(wires);
     *constraints = ops.constraints;
     return ops.next;
 }
 
-template <typename LogT> struct Sha256Circuit : ::testing::Test {};
-using Logs = ::testing::Types<std::integral_constant<size_t, 2>, std::integral_constant<size_t, 3>>;
-TYPED_TEST_SUITE(Sha256Circuit, Logs);
-
-TYPED_TEST(Sha256Circuit, MatchesReference) {
-    constexpr size_t LOG = TypeParam::value;
+TEST(Sha256Circuit, MatchesReference) {
     std::mt19937 rng(7);
     for (const size_t len : {0, 3, 55, 56, 64, 100, 200}) {
         std::vector<uint8_t> msg(len);
         for (auto& b : msg) {
             b = static_cast<uint8_t>(rng());
         }
-        const auto r = run_plain<LOG>(msg);
+        const auto r = run_plain(msg);
         EXPECT_EQ(r.failed, 0u) << len;
         EXPECT_EQ(r.digest, sha256::hash(msg)) << len;
         size_t constraints;
-        const size_t bits = count_bits<LOG>(sha256::num_blocks(len), &constraints);
+        const size_t bits = count_bits(sha256::num_blocks(len), &constraints);
         EXPECT_EQ(bits + 8 * 64 * sha256::num_blocks(len), r.bits);
         EXPECT_EQ(constraints, r.constraints);
+        EXPECT_EQ(replay(r.witness, sha256::num_blocks(len)), 0u) << len;
     }
 }
 
-TYPED_TEST(Sha256Circuit, DetectsBadTrace) {
-    constexpr size_t LOG = TypeParam::value;
+// Flipping any committed bit (besides the message) makes a constraint fail.
+TEST(Sha256Circuit, DetectsBadWitness) {
     const std::vector<uint8_t> msg(70, 0x61);
-    for (size_t which = 0; which < 64; ++which) {
-        EXPECT_GT(failures_with_bad_trace<LOG>(msg, which), 0u) << which;
+    const auto r = run_plain(msg);
+    const size_t first = 8 * 64 * 2;
+    for (size_t b = first; b < r.bits; ++b) {
+        auto bad = r.witness;
+        bad[b / 8] ^= static_cast<uint8_t>(1u << (b % 8));
+        ASSERT_GT(replay(bad, 2), 0u) << b;
     }
 }
 
-TYPED_TEST(Sha256Circuit, Counts) {
-    constexpr size_t LOG = TypeParam::value;
+TEST(Sha256Circuit, Counts) {
     size_t c1, c2;
-    const size_t b1 = count_bits<LOG>(1, &c1);
-    const size_t b2 = count_bits<LOG>(2, &c2);
-    std::printf("SHA-256 (counters of size %zu): first block %zu bits, %zu constraints; next "
-                "blocks %zu bits, %zu constraints\n",
-                LOG, b1, c1, b2 - b1, c2 - c1);
-    EXPECT_EQ(b1, sha_first_block_bits(LOG));
-    EXPECT_EQ(b2 - b1, sha_next_block_bits(LOG));
+    const size_t b1 = count_bits(1, &c1);
+    const size_t b2 = count_bits(2, &c2);
+    std::printf("SHA-256: first block %zu bits, %zu constraints; next blocks %zu bits, %zu "
+                "constraints\n",
+                b1, c1, b2 - b1, c2 - c1);
+    EXPECT_EQ(b1, sha_first_block_bits());
+    EXPECT_EQ(b2 - b1, sha_next_block_bits());
 }
 
 } // namespace

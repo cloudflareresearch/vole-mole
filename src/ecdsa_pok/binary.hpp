@@ -60,22 +60,23 @@ constexpr size_t ZP_COLS = RHO_P_BITS + 1;
 constexpr size_t Z_BYTES = 81;
 static_assert(8 * Z_BYTES >= ZN_COLS && 8 * Z_BYTES >= ZP_COLS);
 
-// The sizes of the counters (see bin_ops.hpp) of SHA-256 and X < p, whose columns have fewer than
-// 16 wires, and of the link sums, whose columns have up to 63. Without a derived witness, they're
-// 3 (degree 8) and 4 (degree 16), which minimizes the committed bits. A derived witness doubles
-// the QuickSilver degree (which faest-arch-opt limits to 29) but makes each committed bit cost only
-// one bit of proof, so then they're both 2 (degree 4, so QuickSilver degree 8): about 10,000 more
-// committed bits (about 1 KB), but proving is about a third faster.
+// The sizes of the counters (see bin_ops.hpp) of the small sums (such as X < p), whose columns have
+// fewer than 16 wires, and of the link sums, whose columns have up to 63. (SHA-256 doesn't use
+// counters; its constraints have degree 3.) Without a derived witness, they're 3 (degree 8) and 4
+// (degree 16), which minimizes the committed bits. A derived witness doubles the QuickSilver degree
+// (which faest-arch-opt limits to 29) but makes each committed bit cost only one bit of proof, so
+// then they're both 2 (degree 4, so QuickSilver degree 8): about 5,000 more committed bits per
+// link sum (about 0.6 KB), but proving is faster.
 struct Shape {
-    size_t sha_log, link_log;
-    constexpr size_t degree() const { return size_t{1} << std::max(sha_log, link_log); }
+    size_t small_log, link_log;
+    constexpr size_t degree() const { return size_t{1} << std::max(small_log, link_log); }
 };
 constexpr Shape SHAPE_DIRECT{3, 4};
 constexpr Shape SHAPE_DERIVED{2, 2};
 
 // Committed bits per SHA-256 block (sha256_circuit.hpp, checked by tests), besides the message.
-constexpr size_t sha_first_block_bits(size_t log) { return log == 3 ? 20968 : 26568; }
-constexpr size_t sha_next_block_bits(size_t log) { return log == 3 ? 21080 : 26917; }
+constexpr size_t sha_first_block_bits() { return 18419; }
+constexpr size_t sha_next_block_bits() { return 18605; }
 // The carries of the check X < p.
 constexpr size_t X_LT_P_BITS = 256;
 // The budget of carries of the link sums, for counters of size LOG (see bin_ops.hpp). Over 20000
@@ -88,17 +89,15 @@ constexpr size_t LINK_BUDGET = LOG == 4   ? 8 * 704
                                : LOG == 3 ? 8 * 1040
                                           : 8 * 1660;
 
-constexpr size_t sha_bits(size_t nb, size_t log) {
-    return 512 * nb + sha_first_block_bits(log) + (nb - 1) * sha_next_block_bits(log);
+constexpr size_t sha_bits(size_t nb) {
+    return 512 * nb + sha_first_block_bits() + (nb - 1) * sha_next_block_bits();
 }
-constexpr size_t prefix_bits(size_t nb, size_t sha_log) {
-    return sha_bits(nb, sha_log) + 256 + X_LT_P_BITS + RHO_N_BITS + RHO_P_BITS;
+constexpr size_t prefix_bits(size_t nb) {
+    return sha_bits(nb) + 256 + X_LT_P_BITS + RHO_N_BITS + RHO_P_BITS;
 }
-constexpr size_t prefix_bytes(size_t nb, size_t sha_log) {
-    return (prefix_bits(nb, sha_log) + 7) / 8;
-}
+constexpr size_t prefix_bytes(size_t nb) { return (prefix_bits(nb) + 7) / 8; }
 template <Shape SH> constexpr size_t witness_bits(size_t nb) {
-    return 8 * prefix_bytes(nb, SH.sha_log) + LINK_BUDGET<SH.link_log>;
+    return 8 * prefix_bytes(nb) + LINK_BUDGET<SH.link_log>;
 }
 
 // 2^256 - p, so that X + (2^256 - p) < 2^256 iff X < p.
@@ -120,7 +119,6 @@ template <typename Ops> struct PrefixWires {
 // The values the prover commits to in the prefix (PlainOps only).
 struct PrefixValues {
     std::vector<uint8_t> padded;               // the padded message
-    std::vector<sha256::Trace> traces;         // SHA-256 traces
     std::array<uint8_t, 32> x;                 // X, little endian
     std::array<uint8_t, Z_BYTES> rho_n, rho_p; // little endian
 };
@@ -146,8 +144,8 @@ PrefixWires<Ops> prefix_circuit(Ops& ops, size_t msg_len, const PrefixValues* va
     }
 
     // e = SHA-256(msg) as an integer: digest word w holds bits 32 (7 - w), ..., 32 (7 - w) + 31.
-    ShaCircuit<Ops, LOG> sha{ops};
-    const auto h = sha.hash(msg, vals ? &vals->traces : nullptr);
+    ShaCircuit<Ops> sha{ops};
+    const auto h = sha.hash(msg);
     out.e.resize(256);
     for (size_t w = 0; w < 8; ++w) {
         for (size_t i = 0; i < 32; ++i) {
@@ -272,15 +270,15 @@ void link_circuit(Ops& ops, const PrefixWires<Ops>& in, const LinkChallenge& cha
 // constraint per carry in the budget, besides those of the outputs.
 template <Shape SH> size_t count_circuit_constraints(size_t msg_len) {
     CountOps ops;
-    auto wires = prefix_circuit<SH.sha_log>(ops, msg_len, nullptr);
-    ops.next = 8 * prefix_bytes(sha256::num_blocks(msg_len), SH.sha_log);
+    auto wires = prefix_circuit<SH.small_log>(ops, msg_len, nullptr);
+    ops.next = 8 * prefix_bytes(sha256::num_blocks(msg_len));
     const LinkChallenge chal = derive_link_challenge(Digest{});
     std::array<uint8_t, Z_BYTES> zn{}, zp{};
     link_circuit<SH.link_log>(ops, wires, chal, zn, zp, false);
     return ops.constraints;
 }
 template <Shape SH> constexpr size_t CIRCUIT_CONSTRAINTS(size_t nb) {
-    const size_t base = SH.sha_log == 3 ? 23148 + (nb - 1) * 21720 : 28748 + (nb - 1) * 27557;
+    const size_t base = 20471 + (nb - 1) * 19117;
     return base + LINK_BUDGET<SH.link_log>;
 }
 
@@ -358,7 +356,7 @@ template <size_t NB, bool SMALL, BinPrg PRG> struct BinRelation {
 
     // The relation's witness (derived from a short key if DERIVED).
     static constexpr size_t RELATION_WITNESS_BITS = witness_bits<SH>(NB);
-    static constexpr size_t WITNESS_PREFIX_BYTES = prefix_bytes(NB, SH.sha_log);
+    static constexpr size_t WITNESS_PREFIX_BYTES = prefix_bytes(NB);
     static constexpr std::span<const uint8_t> DST = vole_mole::detail::ECDSA_POK_BINARY_DST;
     static constexpr std::span<const uint8_t> WITNESS_PRG_DST =
         vole_mole::detail::ECDSA_POK_BINARY_PRG_DST;
@@ -385,7 +383,7 @@ template <size_t NB, bool SMALL, BinPrg PRG> struct BinRelation {
             }
         }
         QsOps<QS> ops{qs};
-        const auto wires = prefix_circuit<SH.sha_log>(ops, x.stmt->msg_len, nullptr);
+        const auto wires = prefix_circuit<SH.small_log>(ops, x.stmt->msg_len, nullptr);
         ops.next = 8 * WITNESS_PREFIX_BYTES;
         auto zn = x.zn;
         auto zp = x.zp;

@@ -154,15 +154,14 @@ struct BinPublic {
 // The values the prover commits to (PlainOps only).
 struct ItemValues {
     std::array<uint8_t, ITEM_BYTES> buf; // padded
-    std::array<sha256::Trace, 2> traces;
-    size_t len;                     // L
-    std::array<size_t, 4> slot_pos; // pos_0 = 5, pos_1, pos_2, pos_3
-    std::array<size_t, 4> slot_of;  // the slot of each field
-    std::array<size_t, 4> slot_len; // len_j
-    size_t id_class;                // index into DIGEST_ID_LENS
-    size_t rnd_len;                 // the random field's length
-    bool rnd_long;                  // ai = 24
-    uint8_t rnd_n;                  // the random value's length
+    size_t len;                          // L
+    std::array<size_t, 4> slot_pos;      // pos_0 = 5, pos_1, pos_2, pos_3
+    std::array<size_t, 4> slot_of;       // the slot of each field
+    std::array<size_t, 4> slot_len;      // len_j
+    size_t id_class;                     // index into DIGEST_ID_LENS
+    size_t rnd_len;                      // the random field's length
+    bool rnd_long;                       // ai = 24
+    uint8_t rnd_n;                       // the random value's length
 };
 
 struct MdocValues {
@@ -341,14 +340,13 @@ Wires<Ops> item_circuit(Ops& ops, std::span<const uint8_t> ei, std::span<const u
     }
 
     // The digest.
-    ShaCircuit<Ops, LOG> sha{ops};
+    ShaCircuit<Ops> sha{ops};
     std::array<Word<Ops>, 8> h;
     for (size_t i = 0; i < 8; ++i) {
         h[i] = Word<Ops>::constant(sha256::IV[i]);
     }
     for (size_t b = 0; b < 2; ++b) {
-        h = sha.compress(h, std::span<const Wire, 512>(buf.data() + 512 * b, 512),
-                         plain ? &v->traces[b] : nullptr);
+        h = sha.compress(h, std::span<const Wire, 512>(buf.data() + 512 * b, 512));
     }
     Wires<Ops> digest;
     push_be256(digest, digest_int(h));
@@ -522,15 +520,14 @@ MdocWires<Ops> prefix_circuit(Ops& ops, const BinPublic& pub, const MdocValues* 
                                plain ? &vals->sig[COSE_PREFIX.size()] : nullptr)) {
         msg.push_back(w);
     }
-    ShaCircuit<Ops, LOG> sha{ops};
+    ShaCircuit<Ops> sha{ops};
     std::array<Word<Ops>, 8> h;
     for (size_t i = 0; i < 8; ++i) {
         h[i] = Word<Ops>::constant(sha256::IV[i]);
     }
     std::vector<Wires<Ops>> chain;
     for (size_t b = 0; b < MAX_BLOCKS; ++b) {
-        h = sha.compress(h, std::span<const Wire, 512>(msg.data() + 512 * b, 512),
-                         plain ? &vals->traces[b] : nullptr);
+        h = sha.compress(h, std::span<const Wire, 512>(msg.data() + 512 * b, 512));
         chain.push_back(digest_int(h));
     }
     out.t_bit = ops.next;
@@ -671,8 +668,8 @@ struct Counts {
 };
 // Index LOG - 2, then number of attributes - 1.
 constexpr std::array<std::array<Counts, MAX_ATTRIBUTES>, 2> COUNTS = {{
-    {{{1158322, 1171296}, {1213375, 1225272}, {1268428, 1279248}, {1323481, 1333224}}},
-    {{{913642, 908928}, {957258, 951467}, {1000874, 994006}, {1044490, 1036545}}},
+    {{{809544, 817142}, {848136, 854401}, {886728, 891660}, {925320, 928919}}},
+    {{{809544, 799454}, {848136, 836713}, {886728, 873972}, {925320, 911231}}},
 }};
 constexpr Counts counts(size_t log, size_t na) { return COUNTS[log - 2][na - 1]; }
 
@@ -680,15 +677,15 @@ constexpr size_t prefix_bytes(size_t log, size_t na) {
     return (counts(log, na).prefix_bits + 7) / 8;
 }
 template <Shape SH> constexpr size_t witness_bits(size_t na) {
-    return 8 * prefix_bytes(SH.sha_log, na) + LINK_BUDGET<SH.link_log>;
+    return 8 * prefix_bytes(SH.small_log, na) + LINK_BUDGET<SH.link_log>;
 }
 template <Shape SH> constexpr size_t circuit_constraints(size_t na) {
-    return counts(SH.sha_log, na).constraints;
+    return counts(SH.small_log, na).constraints;
 }
 
 template <Shape SH> Counts count_circuit(const BinPublic& pub) {
     CountOps ops;
-    const auto wires = prefix_circuit<SH.sha_log>(ops, pub, nullptr);
+    const auto wires = prefix_circuit<SH.small_log>(ops, pub, nullptr);
     Counts out{ops.next, 0};
     ops.next = 8 * ((out.prefix_bits + 7) / 8);
     const LinkChallenge chal = derive_link_challenge(Digest{});
@@ -749,7 +746,7 @@ template <size_t NA, bool SMALL, BinPrg PRG> struct BinRelation {
     };
 
     static constexpr size_t RELATION_WITNESS_BITS = witness_bits<SH>(NA);
-    static constexpr size_t WITNESS_PREFIX_BYTES = prefix_bytes(SH.sha_log, NA);
+    static constexpr size_t WITNESS_PREFIX_BYTES = prefix_bytes(SH.small_log, NA);
     static constexpr std::span<const uint8_t> DST = vole_mole::detail::ECDSA_MDOC_BINARY_DST;
     static constexpr std::span<const uint8_t> WITNESS_PRG_DST =
         vole_mole::detail::ECDSA_MDOC_BINARY_PRG_DST;
@@ -773,7 +770,7 @@ template <size_t NA, bool SMALL, BinPrg PRG> struct BinRelation {
             }
         }
         SelQsOps<QS> ops(qs, chal2, vole_mole::detail::ECDSA_MDOC_SELECT_DST);
-        const auto wires = prefix_circuit<SH.sha_log>(ops, *x.pub, nullptr);
+        const auto wires = prefix_circuit<SH.small_log>(ops, *x.pub, nullptr);
         ops.next = 8 * WITNESS_PREFIX_BYTES;
         auto z = x.z;
         link_circuit<SH.link_log>(ops, wires, *x.chal, *x.dchal, z, false);

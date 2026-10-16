@@ -268,8 +268,6 @@ inline ItemValues parse_item(std::span<const uint8_t> tagged) {
     ItemValues v{};
     const auto padded = sha256::pad(tagged);
     std::ranges::copy(padded, v.buf.begin());
-    const auto traces = sha256_traces(padded);
-    v.traces = {traces[0], traces[1]};
     v.len = tagged.size();
     const auto in = tagged.subspan(4);
     for (size_t j = 0; j < 4; ++j) {
@@ -580,7 +578,7 @@ void prove_with_witness(std::span<uint8_t, Scheme<NA, V, PRG>::PROOF_BYTES> proo
     // The binary witness prefix, and its commitment.
     std::vector<uint8_t> bin_witness(Bin::RELATION_WITNESS_BITS / 8, 0);
     PlainOps ops{bin_witness};
-    const auto wires = prefix_circuit<Bin::SH.sha_log>(ops, pub.bin, &wit.bin);
+    const auto wires = prefix_circuit<Bin::SH.small_log>(ops, pub.bin, &wit.bin);
     if (tamper) {
         (*tamper)(std::span<uint8_t>(bin_witness).first(Bin::WITNESS_PREFIX_BYTES), wires);
     } else if (ops.failed != 0) {

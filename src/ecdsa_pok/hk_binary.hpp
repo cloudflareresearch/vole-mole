@@ -164,7 +164,7 @@ void link_circuit(Ops& ops, const PrefixWires<Ops>& in, const LinkChallenge& cha
 // computes it, and CIRCUIT_CONSTRAINTS is checked against it by test_ecdsa_pok_hk.cpp.
 template <Shape SH> size_t count_circuit_constraints() {
     CountOps ops;
-    auto wires = prefix_circuit<SH.sha_log>(ops, nullptr);
+    auto wires = prefix_circuit<SH.small_log>(ops, nullptr);
     ops.next = 8 * PREFIX_BYTES;
     const LinkChallenge chal = derive_link_challenge(Digest{});
     std::array<uint8_t, Z_BYTES> zn{}, zp{};
@@ -249,7 +249,7 @@ template <bool SMALL, BinPrg PRG> struct BinRelation {
             }
         }
         QsOps<QS> ops{qs};
-        const auto wires = prefix_circuit<SH.sha_log>(ops, nullptr);
+        const auto wires = prefix_circuit<SH.small_log>(ops, nullptr);
         ops.next = 8 * WITNESS_PREFIX_BYTES;
         auto zn = x.zn;
         auto zp = x.zp;

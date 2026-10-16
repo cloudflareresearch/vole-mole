@@ -281,7 +281,7 @@ void prove_with_witness(std::span<uint8_t, Scheme<V, PRG>::PROOF_BYTES> proof,
 
     std::vector<uint8_t> bin_witness(Bin::RELATION_WITNESS_BITS / 8, 0);
     PlainOps ops{bin_witness};
-    const auto wires = prefix_circuit<Bin::SH.sha_log>(ops, &wit.bin);
+    const auto wires = prefix_circuit<Bin::SH.small_log>(ops, &wit.bin);
     auto pending = vole_mole::detail::voleith_vole_gen<Bin>(
         bin, nullptr,
         std::span<const uint8_t, Bin::WITNESS_PREFIX_BYTES>(bin_witness.data(),

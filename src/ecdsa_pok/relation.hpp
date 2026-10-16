@@ -306,7 +306,6 @@ inline Witness make_witness(const Affine& q, const Tables& tables, std::span<con
     wit.wn[WN_RHO] = reduce_le<Fn>(wit.bin.rho_n);
 
     wit.bin.padded = sha256::pad(msg);
-    wit.bin.traces = sha256_traces(wit.bin.padded);
     store_limbs_le(wit.bin.x.data(), x_limbs);
     return wit;
 }
@@ -361,7 +360,7 @@ void prove_with_witness(std::span<uint8_t, Scheme<NB, V, PRG>::PROOF_BYTES> proo
     // The binary witness prefix, and its commitment.
     std::vector<uint8_t> bin_witness(Bin::RELATION_WITNESS_BITS / 8, 0);
     PlainOps ops{bin_witness};
-    const auto wires = prefix_circuit<Bin::SH.sha_log>(ops, msg_len, &wit.bin);
+    const auto wires = prefix_circuit<Bin::SH.small_log>(ops, msg_len, &wit.bin);
     auto pending = vole_mole::detail::voleith_vole_gen<Bin>(
         bin, nullptr,
         std::span<const uint8_t, Bin::WITNESS_PREFIX_BYTES>(bin_witness.data(),
