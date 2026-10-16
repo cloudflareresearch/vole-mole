@@ -225,12 +225,12 @@ proofs commit, tie `e` and `X` across the two proofs. See
 
 | Parameters | Message   | Proof     | Prove   | Verify  |
 |:-----------|:----------|----------:|--------:|--------:|
-| fast       | ≤ 55 B    | 109328 B  | 10.6 ms | 5.8 ms  |
-| fast       | 56–119 B  | 112109 B  | 11.2 ms | 6.1 ms  |
-| medium     | ≤ 55 B    | 92650 B   | 18.0 ms | 13.2 ms |
-| medium     | 56–119 B  | 95431 B   | 18.7 ms | 13.6 ms |
-| small      | ≤ 55 B    | 80442 B   | 45.9 ms | 40.8 ms |
-| small      | 56–119 B  | 83085 B   | 47.0 ms | 41.1 ms |
+| fast       | ≤ 55 B    | 109328 B  | 10.0 ms | 5.6 ms  |
+| fast       | 56–119 B  | 112109 B  | 10.8 ms | 5.9 ms  |
+| medium     | ≤ 55 B    | 92650 B   | 17.6 ms | 13.1 ms |
+| medium     | 56–119 B  | 95431 B   | 18.1 ms | 13.4 ms |
+| small      | ≤ 55 B    | 80442 B   | 45.5 ms | 40.3 ms |
+| small      | 56–119 B  | 83085 B   | 46.0 ms | 40.8 ms |
 
 Without deriving the witnesses (`WitnessPrg::none`), proofs are
 212170 B (fast), 183972 B (medium) and 145190 B (small) for messages of up to
