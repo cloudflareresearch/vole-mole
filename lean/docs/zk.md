@@ -1012,7 +1012,8 @@ as a check of the theorem's conditions and kept as a smoke test of the executabl
     per-proof slices and with one shared `H₃`, and with the real Clients' seeds
     (`anonymityNCRO_lean_num`, `anonymityNCSh_num`, `unlinkability*`, `*_seed`, §10.7). Left
     open: the modelling steps (SHAKE as a random oracle, AES as an ideal cipher), the hiding of
-    `Com`, and the game-specific items of §10.3, §10.5 and §10.7 ("Open") and §10.6 ("What
+    `Com` (a computational assumption on Keccak-p[800,12] that no random-oracle step discharges,
+    §10.9), and the game-specific items of §10.3, §10.5 and §10.7 ("Open") and §10.6 ("What
     remains"). The PRP/PRF switching term is proved in the games as well:
     every privacy theorem above also holds with the cipher's rows uniform permutations read
     forward and backward (§10.4, `Privacy/PermRO.lean`, `Privacy/PermRA.lean`). The `*_shake` theorems, which take
@@ -2362,3 +2363,75 @@ adversary (the further sessions' tapes fixed, a non-uniform reduction).
   the seed-XOF games (§10.6: their XOF reads in `q_X`), the non-colluding games (§10.7).
 - *Interactions that read the tables* in the many-session games (the `RA` form): the composed
   adversary's interaction is `SReads` by `SReads.bind` with the adversary's own reads; not stated.
+
+### 10.9 Hiding of `Com` (`Privacy/ComHide.lean`)
+
+Every Moussaka (Thm 4(a)) and Ratatouille privacy theorem above carries `2·εhide`, the hypothesis
+`hidingAdv … (reduction …) ≤ εhide` of the hiding hop (`hiding_hop`, `hiding_hopRO`, `hiding_hopR`
+and their `RA`/`Sh`/`_perm`/`_seed`/many-session descendants). The hop is the last one: all
+proofs are simulated, the view is a function of the commitments, the nullifiers, the simulator
+coins and the tables (`simGame_iff`, `simGameRO_iff`), and the reduction is the adversary with
+those coins and tables fixed. Moussaka's form: given `t_c = Com(nf_c, ctx_iss, ctx_red, r_c)`,
+distinguish the committed `(nf₀, nf₁)` from fresh ones. Ratatouille's: four commitments, each at
+the credit value the game evaluates it at, with their nullifiers, against uniform 32-byte strings.
+
+**What `Com` is.** Not a SHAKE call: one Keccak-p[800,12] permutation call, truncated, on the
+100-byte state `DST ‖ r ‖ 0⁹ ‖ …` (`Spec.Moussaka.com`: 45 bytes out, `commit.hpp:33-48`;
+`Spec.Ratatouille.com`: 32 bytes out, `ratatouille.cpp:94-100`); `|r| = 128`, `|nf| = 192`, `r` and
+`nf` fresh per token from the Client's seed XOF (Ratatouille's change tokens draw a fresh `r'`).
+
+**It is not a random-oracle table of the games, and cannot be one.** The issuance, redemption and
+spend relations evaluate `Com`'s rounds (the witnesses carry the states after rounds 5 and 9), and
+the zero-knowledge hops need the honest witness to satisfy the concrete relation (`IssueRelW`,
+`RedeemRelW`, `IssueRel`, `SpendRel`). A random table in place of `Com` would make every honest
+witness invalid. (This is `security/moussaka.md` F3 for the privacy games; replacing
+Keccak-p[800] by SHAKE would change nothing, since a hash evaluated inside a proof is never a table
+of the game.) And the games' adversaries are arbitrary functions, so the reductions can evaluate
+Keccak-p[800] at will: `εhide` cannot be bounded by counting queries. Brute force over the opening
+shows the hypothesis is computational:
+
+- `ComHide.Moussaka.hidingAdv_bruteForce`: the search over all `2¹²⁸` openings has advantage
+  exactly `1 − p`, where `p` is the probability that a fresh nullifier admits an opening of the
+  honest `t₀` (`p ≈ 2⁻¹⁹² + 2⁻²³²` for a random function; not bounded in Lean, since that would
+  need Keccak's structure);
+- `ComHide.Ratatouille.hidingAdv_bruteForce_ge`: for Ratatouille the same search has advantage
+  `≥ 1 − 2⁻¹²⁸`, with no assumption on Keccak.
+
+In the real game this is a `2¹²⁸`-work linking attack: a Moderator (Issuer) that sees `t` at
+issuance and `nf` at redemption (spend) tests whether some `r` opens `t` with that `nf`. So the
+privacy theorems hold for computationally unbounded adversaries only up to `2·εhide`, with
+`εhide` that adversary's own hiding advantage, which is how they are stated.
+
+**The random-oracle statement (heuristic, for the standalone experiment).** The hiding experiment
+contains no proof that evaluates `Com`, so, as Lemma U does for CT-UF, one may model `Com`
+heuristically as a random function there alone: `Com`'s cells a uniform table that the
+distinguisher reads at `q` cells (`RdX`), keyed injectively by `(nf, r)` (`EncInj`; the contexts
+and the DST fixed). The DSTs `mous‖0‖c0`, `rata‖0‖c0`, `rata‖0‖t0` keep `Com`'s cells disjoint
+from `Tag`'s and from each other's.
+
+- `abs_pr_com_uniform_le` (generic, `ι` commitments, nullifiers fixed, by `abs_pr_seed_le`):
+  `Pr[openings collide] + |ι|·q/|R|`.
+- Moussaka's form (`hidingAdvRO`): `hidingAdvRO_le`, `≤ 2·(1 + 2q)/|R|`; `hidingAdvRO_num`,
+  `≤ (4q + 2)·2⁻¹²⁸` at `|r| = 128` (the note's generic estimate is `≲ 2(q + 1)·2⁻¹²⁸`). The
+  hop's subtlety: the nullifiers are revealed, so only the opening is secret, and a read hits
+  an honest cell only by guessing an `r` (`2⁻¹²⁸`, and one read can hit at most one of the
+  commitments).
+- Ratatouille's form (`hidingAdvColRO`; a cell is a column over the credit value, so a query at
+  any `t` reads the whole column, which only overcounts): `hidingAdvColRO_le`,
+  `≤ (|ι|² + |ι|·q)/|R|`; `hidingAdvColRO_num`, `≤ (4q + 16)·2⁻¹²⁸` for the four commitments;
+  `hidingAdvAtRO_le` for a distinguisher that reads each commitment at one fixed credit value,
+  against independent uniform values as in `Ratatouille.hidingAdv`. Credit values chosen
+  adaptively (the change tokens' `t'`) are the same lazy-sampling step, on paper.
+- Keccak-p[800] is a permutation, so inverse queries add the notes' `q·2⁻⁴⁴⁰` (Moussaka) and
+  `q·Q_c·2⁻⁵⁴³` (Ratatouille) terms, on paper.
+
+These bound distinguishers that read a `Com` table, so they are **not corollaries** of the privacy
+theorems: the reductions read no `Com` table. No `εhide`-free version of `anonymityRO_lean_num`,
+`unlinkabilityRO_lean_num` or their variants follows. Getting one needs a protocol change that
+takes `Com` out of the proved relations (e.g. a commitment opened outside the proofs), or a
+proof system whose relations treat `Com` as an oracle. Under the heuristic, `εhide ≈ (4q + 2)·2⁻¹²⁸`
+(Moussaka) or `(4q + 16)·2⁻¹²⁸` (Ratatouille) for `q` Keccak-p[800] evaluations. That matches
+brute force up to a constant factor, and `r` (128 bits, never reused) is long enough for the
+128-bit level. `r` also enters each proof's `H₃` seed input as the witness prefix `w[0..16)`,
+together with the proof's secret 128-bit `ρ`. This does not reach `hidingAdv`: in every game the
+hiding hop comes after all proofs are simulated, when the tables no longer depend on `r`.

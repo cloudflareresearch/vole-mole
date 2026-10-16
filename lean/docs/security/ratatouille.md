@@ -134,6 +134,16 @@ Parameters: `L = 8` (credits are `uint64_t`), `nf_len = 24`, `ctx_len = 16`, `r_
 
   The second term covers honest nullifier collisions, and the third covers inverse queries that
   return a true input.
+
+  [Lean] `lean/VoleMole/Privacy/ComHide.lean` (`lean/docs/zk.md` §10.9) has the forward-query
+  part for the four commitments of the unlinkability game, with `Com`'s cells a random-function
+  table (one column per `(nf, r)` over the credit value): `≤ (4q + 16)·2^{−128}`
+  (`hidingAdvColRO_num`, `hidingAdvAtRO_le`). This is a heuristic for the standalone experiment
+  only. `Com` is evaluated inside the issuance and spend relations, so it is not a table of the
+  games, and their reductions can compute it. Against such distinguishers, searching the `2^{128}`
+  openings wins with advantage `≥ 1 − 2^{−128}`, with no assumption on Keccak
+  (`ComHide.Ratatouille.hidingAdv_bruteForce_ge`). So `ε_hide` in the Lean theorems is a
+  computational assumption, never a query count.
 - **One-wayness in `r`** (what `lean/docs/zk.md` calls `Adv^{ow}_{Com}`) is the same event: for one target,
   it is at most `(q_K + 1)·2^{−128}`.
 
