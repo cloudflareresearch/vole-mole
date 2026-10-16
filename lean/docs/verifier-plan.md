@@ -324,7 +324,10 @@ is part of milestone 6.
    `moussakaIssue_complete`, `moussakaRedeem_complete`, `ratatouilleIssue_complete`,
    `ratatouilleSpend_complete`, `pomfritRedeem_complete`), assuming `HashesWF` (discharged for
    SHAKE, `hashesWF_shake`), `BAVCComplete` (the tree opening), `CrtComplete` (the CRT masks are a
-   VOLE) and `Δ' ≠ 0` (probability `2⁻¹²⁰`; not tested by the C++ either).
+   VOLE) and `Δ' ≠ 0` (not tested by the C++ either; `Δ' = 0` has probability `Pr[hit]/|A| ≈ 2⁻¹¹⁸·⁷`,
+   not `2⁻¹²⁰`: the accepted `Δ` is uniform on the grinding acceptance set `A`, `|A| ≈ 0.40·2¹²⁰`;
+   proved `≤ 2⁻¹¹⁴`, `ZK.Sim.pr_hitZero_le_114`). Without these two assumptions, in the
+   random-oracle model: `ZK/CompleteRO.lean` (`complete_rom`, below).
    **Both correctness facts are proved** (no `sorry`, same axioms):
    * `Bridge/BAVCComplete.lean`, `bavcComplete`: for every seed, `iv` and `Δ`. The verifier's
      reconstruction and the prover's `openSeeds` share one walk (`BAVC.openNodes`, a fold of
@@ -349,6 +352,10 @@ is part of milestone 6.
    * `Bridge/Complete.lean`: `verify_proveCommit_tables`, `verify_prove_tables`,
      `*_complete_tables` (five relations), `*_complete_shake`: completeness at `CrtGen.tables`
      assuming only `HashesWF` (none with SHAKE) and `Δ' ≠ 0`. For PomFRIT also on the final
-     signature (`Privacy.PomFRIT.pomfritVerify_complete_tables`). The `ZeroKnowledge` hypotheses
+     signature (`Privacy.PomFRIT.pomfritVerify_complete_tables`).
+   * `ZK/CompleteRO.lean`: **probabilistic completeness** with neither the prover's success nor
+     `Δ' ≠ 0` assumed: with `H₃`, `H₂³`, `H₅` uniform tables (`recH`) and `ρ` uniform, the
+     prover fails or `verify` rejects with probability `≤ Pr[GrindBad] ≤ 2⁻¹¹³` (`complete_rom`,
+     `complete_rom_ic`, the five relations `*_complete_rom`, two phases `complete2_rom`). The `ZeroKnowledge` hypotheses
      of `Privacy/Basic.lean` are instantiated with this prover in `Privacy/*Lean.lean`
      (`docs/zk.md` §10.1).

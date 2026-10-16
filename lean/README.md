@@ -33,7 +33,10 @@ scope.
   function of the prover's query counts, with no hypothesis left, for fixed and adaptively chosen
   statements, with AES's rows uniform functions or uniform permutations with inverse queries (§9).
 - *Zero knowledge, with the label-row fix.* For the executable Lean prover, one proof, in the
-  random-oracle and ideal-cipher model, about `2⁻¹⁰⁶·⁹` plus the distinguisher's read terms (§3).
+  random-oracle and ideal-cipher model, about `2⁻¹⁰⁷·⁰` plus the distinguisher's read terms (§3).
+- *Completeness.* The executable Lean verifier accepts the executable Lean prover's proofs except
+  with probability `≤ 2⁻¹¹³` over `ρ` and the random oracle, for all five relations, with no
+  assumption on `Δ'` (§8).
 - *Privacy.* PomFRIT blindness, Moussaka issuer hiding and unlinkability (Thm 4(a), colluding
   Anchors), Ratatouille unlinkability, as games on the executable specs with the Lean prover, in
   the random-oracle and ideal-cipher model with the adversary seeing the tables, every
@@ -73,8 +76,9 @@ assumptions (§5, Gap 5); the Lean models are tied to the C++ by tests, not proo
   F3); Moussaka Thm 4(b) misses an abort term and needs the Client's index rule, Thm 4(a) and
   4(b) need no `2⁻¹⁹²`; Ratatouille's H1 misses seed collisions and Moussaka's Thm 4 has no
   seed-XOF term; the redemption and spend collision bounds missed `Δ' = 0` and undercounted by
-  one; the "independent `H₃` slices up to `ε_iv`" step is not a black-box reduction (all
-  negligible numerically; §3, §5).
+  one; the "independent `H₃` slices up to `ε_iv`" step is not a black-box reduction; `Δ' = 0` has
+  probability `≈ 2⁻¹¹⁸·⁷`, not `2⁻¹²⁰` (grinding makes `Δ` uniform on the accepted set, of size
+  `≈ 0.40·2¹²⁰`, so `2⁻¹²⁰` is a lower bound) (all negligible numerically; §3, §5).
 
 ## Layout
 
@@ -224,8 +228,9 @@ chal1/chal2 (recommended, not implemented).
 *One proof, reduced to per-hop hypotheses* (`docs/zk.md` §10.1; `ZK/Sim.lean` … `ZK/Exec.lean`).
 - An executable simulator (`Sim.simulate`; `Sim.simulateRO` also programs `H₂³`). The verifier
   accepts its proofs under the programmed oracle with no assumption beyond `Δ ≠ 0`
-  (`simulateRO_accept'`), i.e. except with probability `≤ noHitProb + 2⁻¹¹¹ ≤ 2⁻¹¹⁰` over the
-  simulator's coins (`pr_simulateRO_reject_110`).
+  (`simulateRO_accept'`), i.e. except with probability `≤ noHitProb + 1/|A| ≤ 2^{−2¹⁵} + 2⁻¹¹⁴
+  ≤ 2⁻¹¹³` over the simulator's coins (`pr_simulateRO_reject_113`; `pr_simulateRO_reject_110`
+  with the first-moment bound).
 - The executable Lean prover equals an ideal-tape prover at its own run's tape
   (`prove_eq_proveIdeal`), and on a uniform tape the ideal-tape prover's output is distributed
   exactly as the simulator's (`proveIdeal_close`; with label rows Θ is moreover uniform and
@@ -295,6 +300,20 @@ chal1/chal2 (recommended, not implemented).
   single-proof error is thus
   `εRO(q₃, q₅, q_E) = q₃·2⁻¹²⁸ + 2⁻¹¹⁰ + 221·(4607 + q_E + 4607)·2⁻¹²⁸ + (q₅ + 1)·2⁻¹²⁸`, about
   `2⁻¹⁰⁶·⁹` at zero budgets.
+- **The grinding term by the second moment** (`ZK/AcceptVar.lean`, `ZK/AcceptVarData.lean`,
+  `ZK/GrindTight.lean`): Chebyshev's inequality on the same box, with the second moment of the
+  open count evaluated by the kernel (pairs of tree nodes: related pairs on a pass over the tree,
+  disjoint pairs through the histogram of the `136` distinct leaf-count vectors), gives
+  `|A| ≥ 2¹¹⁴` (`card_accSet_ge_114`), so `Pr[Δ' = 0] ≤ 2⁻¹¹⁴` (`pr_hitZero_le_114`) and
+  `Pr[GrindBad] ≤ 2^{−2¹⁵} + 2⁻¹¹⁴ ≤ 2⁻¹¹³` (`grindBad_num_114`, `grindBad_le_113`). The headline
+  bounds with `2⁻¹¹³` in place of `2⁻¹¹⁰` are `zk_rom_ic_h23_num113`, `zk_rom_h23_num113`,
+  `zk_rom_ic_h23_num113_perm` and `zk2_rom_ic_h23_num113`: `εRO` at zero budgets is then about
+  `2⁻¹⁰⁷·⁰`. The privacy corollaries below are stated with the earlier `2⁻¹¹⁰` (swapping in
+  `grindBad_le_113` is mechanical). The true `Pr[Δ' = 0] = Pr[hit]/|A|` is `≈ 2⁻¹¹⁸·⁶⁷`
+  (`|A| ≈ 0.397·2¹²⁰` by sampling); the paper's `2⁻¹²⁰` treats `Δ'` as uniform on all `2¹²⁰`
+  values, but grinding makes the accepted `Δ` uniform on `A` only. The rest of the gap is the box
+  (`120¹⁷ ≈ 2¹¹⁷·⁴`) and the slack of a second-moment bound near the mean; an exact count of `A`
+  needs a subset-state dynamic program out of the kernel's reach.
 - **AES as random permutations** (`ZK/IdealCipherPerm.lean`, `ZK/HopsH4Perm.lean`,
   `ZK/HopsICPerm.lean`, `ZK/ReadsROPerm.lean`): with the cipher a table of independent uniform
   permutations, read by the distinguisher as whole permutations (forward and inverse queries),
@@ -497,8 +516,10 @@ runs of each layout.
   contexts in a finite type (the seed-XOF model); the general schedule and every quantum statement
   (`docs/zk-qrom.md`) are on paper.
 - *Not gaps, but artifacts of the proofs*: the second `4607` in `εRO` (the honest recomputation's
-  cipher reads, `docs/zk.md` §10.1) and, with one shared `H₃`, the charge of `221·2⁻¹²⁸` per `H₃`
-  read where `2⁻¹²⁸` would do. The fixed-record `*_shake` theorems keep the hop hypotheses
+  cipher reads, `docs/zk.md` §10.1); `Pr[Δ' = 0]` proved `≤ 2⁻¹¹⁴` (second moment) where it is
+  `≈ 2⁻¹¹⁸·⁷` (an exact count of the accepted set is out of the kernel's reach); the privacy
+  corollaries still quote `Pr[GrindBad] ≤ 2⁻¹¹⁰`; and, with one shared `H₃`, the charge of
+  `221·2⁻¹²⁸` per `H₃` read where `2⁻¹²⁸` would do. The fixed-record `*_shake` theorems keep the hop hypotheses
   (`HopHyps`, `HopHyps2`), each an idealization (`Privacy/Basic.lean`); the random-oracle theorems
   supersede rather than discharge them.
 
@@ -626,7 +647,7 @@ prover_vectors` against the KAT files.
 | Bridge across Δ (`Bridge/Lift.lean`, `Columns.lean`, `Chain.lean`, `ChainRelations.lean`) | done, modulo the probabilistic steps: ConvertToVOLE and the CRT step are read as functions of the challenge blocks with the commitments fixed (the steps take `Δ` as bits and the commitments as arguments: `convertToVoleAt`, `crtReconstructAt`). Proved: each column is `V_{i,b} + Δ_{i,b}·u^{(i)}` with `u^{(i)} = c_i + Σ_j PRG(K_{i,j})` (the hidden leaf's key never read), so each lifted witness row is `C_r + Σ_i u^{(i)}_r·e_i(Δ_i)` (`resp_row`); the executable lift `Δ ↦ Σ Δ_c W_CRT[c]` is additive and injective (`lift_injective`, an explicit left inverse checked by `decide +kernel`); an opening that reconstructs the committed keys makes the run equal to the committed response (`crtReconstruct_eq_respAt`). On a chain (fixed `iv`, `H₅`, `chal1`, `h_V`, `z`; `chal2` determined before Δ), `chain_claim4` gives `Claim4Hyp` and the accepting equation on all of `A` with one remainder `maskPoly d a b ã z` (masks affine by L3); `onChain_of_accept` puts every accepted proof of the chain in `A` with `Δ = chal3`; `*_extract_chain` (five relations) apply `*_extract_gf128`. Assumed: `KOSGood` for `chal1` (L3), `IsFixed` for dead-leaf trees (L2), `hQS`/`hcomb` (L4), `hδ`/`hclaim1` and binding of the leaf commitments (L1). §9 discharges L3, L4 and `hδ` for uniform independent `chal1`, `chal2`, `l` |
 | Prover (`Prover.lean`, `ProverKats.lean`) | done: `voleith_vole_gen` + `voleith_prove_commit` with the C++'s seed derivation (`H₃(w_prefix ‖ mu₁ ‖ rho ‖ 3)`, `rho` from the `Spec/*` seed expanders). Each sender step is the verifier's step function at `Δ = 0` (tag columns, gate hashes, lifted rows, masks, VOLEHash), plus the prover-only `u`, `u_mask` (`M_tree`·PRG), the second gate labels and `c_mult`; QuickSilver's `ã` and check value are the coefficients of the verifier's check value as a polynomial in `Δ'`, obtained by evaluating it at `d + 1` points and interpolating (no coefficient decomposition of the constraints); grinding and the BAVC opening as `grind_and_open`. `lake exe prover_vectors` reproduces all 18 KAT proofs byte for byte on `main`, and all 18 of the label-rows KATs with `labelrows`; the Lean verifier accepts every Lean proof, also on random statements of all five relations (issuers' UOV preimages from a test-only oil-space sampler); a non-satisfying witness is refused. About 44 s per layout |
 | Zero-knowledge simulator (`ZK/Sim.lean`, `ZK/SimKats.lean`, `docs/zk.md` §10.1) | done: the simulator, `H₂³` programming, the ideal-tape prover and the real run's tape (`tapeOf`), executable. `lake exe zk_sim` checks on all 18 KAT runs of each layout that `proveIdeal (tapeOf …) = prove`, that the verifier accepts the simulated proof with the programmed oracle (proved for every run with `Δ ≠ 0`, `simulateRO_accept'` in `ZK/SimAcceptFull.lean`, so this check is redundant) and rejects it without, and (except PomFRIT) that it accepts the ideal-tape prover's proof on a pseudorandom tape with programmed grinding answers. About 10 minutes per layout |
-| Completeness (`Bridge/Prover.lean`, `Bridge/BAVCComplete.lean`, `Bridge/CrtCheck.lean`, `Bridge/CrtComplete.lean`, `Bridge/Complete.lean`) | proved: the VOLE correlation of the prover's output for every `Δ` on columns and lifted rows (`prover_column`, `prover_row`), the VOLE check identity (`voleHash_complete`), QuickSilver completeness for every `Δ' ≠ 0` (`qsProve_complete`, via `EndToEnd.sysCheckPoly` and Lagrange uniqueness), BAVC opening correctness for every seed and `Δ` (`bavcComplete`: the walks are folds, read as functions of the node index; the opened nodes are exactly the unmarked children of marked nodes, and top-down derivation recovers every node off the hidden paths), the CRT masks' VOLE correlation for faest-arch-opt's tables and every `Δ` (`crtComplete`: gate labels and `c_mult` read back, `r̃` bilinear, and the tables' bilinear identity `L_c(a) = a · W_crt[c]` checked in the kernel on all `120 · 128` basis pairs, packed into 120 numbers of `2¹⁶³⁸⁴` bits, ≈ 1 min), and **completeness of `verify` on the prover's output** (`verify_proveCommit_tables`, `verify_prove_tables`, `*_complete_tables` for the five relations, `*_complete_shake` with SHAKE; for PomFRIT also `pomfritVerify` on the final signature, `Privacy.PomFRIT.pomfritVerify_complete_tables`). The general versions (`verify_prove`, `*_complete`: any tables) keep `BAVCComplete` and `CrtComplete` as hypotheses. Assumed: `Δ' ≠ 0` (`Δ' = 0` only at `Δ = 0`, `ZK.Sim.tDL_eq_zero`; the prover's first accepted grinding answer is `0` with probability `≤ 2⁻¹¹¹`, `pr_hitZero_le`) and, for a general hash record, its output lengths (SHAKE: `hashesWF_shake`) |
+| Completeness (`Bridge/Prover.lean`, `Bridge/BAVCComplete.lean`, `Bridge/CrtCheck.lean`, `Bridge/CrtComplete.lean`, `Bridge/Complete.lean`) | proved: the VOLE correlation of the prover's output for every `Δ` on columns and lifted rows (`prover_column`, `prover_row`), the VOLE check identity (`voleHash_complete`), QuickSilver completeness for every `Δ' ≠ 0` (`qsProve_complete`, via `EndToEnd.sysCheckPoly` and Lagrange uniqueness), BAVC opening correctness for every seed and `Δ` (`bavcComplete`: the walks are folds, read as functions of the node index; the opened nodes are exactly the unmarked children of marked nodes, and top-down derivation recovers every node off the hidden paths), the CRT masks' VOLE correlation for faest-arch-opt's tables and every `Δ` (`crtComplete`: gate labels and `c_mult` read back, `r̃` bilinear, and the tables' bilinear identity `L_c(a) = a · W_crt[c]` checked in the kernel on all `120 · 128` basis pairs, packed into 120 numbers of `2¹⁶³⁸⁴` bits, ≈ 1 min), and **completeness of `verify` on the prover's output** (`verify_proveCommit_tables`, `verify_prove_tables`, `*_complete_tables` for the five relations, `*_complete_shake` with SHAKE; for PomFRIT also `pomfritVerify` on the final signature, `Privacy.PomFRIT.pomfritVerify_complete_tables`). The general versions (`verify_prove`, `*_complete`: any tables) keep `BAVCComplete` and `CrtComplete` as hypotheses. These deterministic theorems assume that the prover returned a proof and `Δ' ≠ 0` (`Δ' = 0` only at `Δ = 0`, `ZK.Sim.tDL_eq_zero`), and, for a general hash record, its output lengths (SHAKE: `hashesWF_shake`). **Probabilistic completeness** (`ZK/CompleteRO.lean`) removes the first two: in the random-oracle model of §3 (`recH`: `H₃`, `H₂³`, `H₅` uniform tables, `ρ` uniform), the prover fails or `verify` rejects its proof with probability `≤ Pr[GrindBad] ≤ 2⁻¹¹³` (`complete_rom`, for every statement and witness with `ZKHyp`; `complete_rom_ic` with the ideal cipher), per relation `moussakaIssue_complete_rom`, `moussakaRedeem_complete_rom`, `ratatouilleIssue_complete_rom`, `ratatouilleSpend_complete_rom` (the privacy games' label-row statements, for every witness in the relation), and for two phases `complete2_rom` and `pomfritRedeem_complete_rom` (AES as the PRG; whenever the Issuer's valid continuation continues with an instance, the final proof is accepted for it). The error is the grinding term alone: no accepted grinding answer (`≤ 2^{−2¹⁵}`) or a first accepted answer `Δ = 0` (`≤ 2⁻¹¹⁴`) |
 
 ### 9. Probabilistic layer — `VoleMole/Prob/` (single challenges) and `VoleMole/ROM/` (random oracle)
 

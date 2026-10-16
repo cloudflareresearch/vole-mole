@@ -217,3 +217,7 @@ import VoleMole.ROM.SeedXOFReads
 import VoleMole.Privacy.MoussakaNC
 import VoleMole.ZK.VerifyReadsRO
 import VoleMole.Privacy.MoussakaNCRO
+import VoleMole.ZK.AcceptVarData
+import VoleMole.ZK.AcceptVar
+import VoleMole.ZK.GrindTight
+import VoleMole.ZK.CompleteRO
