@@ -731,7 +731,8 @@ All files are under `lean/VoleMole/ZK/` (and `Privacy/LeanProver.lean`, `Privacy
 `Privacy/PomFRITAdaptive.lean`, `Privacy/PomFRITAdaptivePfx.lean`, `Privacy/MoussakaAdaptive.lean`,
 `Privacy/RatatouilleAdaptive.lean`, `ZK/ReadsPoint.lean`, `Privacy/PomFRITLin.lean`,
 `ZK/ReadsInterleave.lean`, `Privacy/PomFRITInterleave.lean`, `Privacy/MoussakaInterleave.lean`,
-`Privacy/RatatouilleInterleave.lean`, §10.8). There is
+`Privacy/RatatouilleInterleave.lean`, `ZK/ReadsInterleaveOC.lean`, `Privacy/PomFRITInterleaveOC.lean`,
+`Privacy/MoussakaInterleaveOC.lean`, `Privacy/RatatouilleInterleaveOC.lean`, §10.8). There is
 no `sorry` and no `axiom`. `#print axioms` lists
 only `propext`, `Classical.choice` and `Quot.sound`.
 
@@ -2142,7 +2143,7 @@ and the Anchors' signers `sk g` may depend on the XOF table; `anonymityNCRO_lean
 **Open.** The adversary's choices (contexts, keys, Anchor Sets, digests) do not read the tables
 (no `RA`/`OC` version).
 
-### 10.8 Many sessions (`ZK/ReadsMany.lean`, `Privacy/PomFRITMany.lean`, `Privacy/MoussakaMany.lean`, `Privacy/RatatouilleMany.lean`, `Privacy/PomFRITAdaptive.lean`, `Privacy/PomFRITAdaptivePfx.lean`, `Privacy/MoussakaAdaptive.lean`, `Privacy/RatatouilleAdaptive.lean`, `ZK/ReadsPoint.lean`, `Privacy/PomFRITLin.lean`, `ZK/ReadsInterleave.lean`, `Privacy/PomFRITInterleave.lean`, `Privacy/MoussakaInterleave.lean`, `Privacy/RatatouilleInterleave.lean`)
+### 10.8 Many sessions (`ZK/ReadsMany.lean`, `Privacy/PomFRITMany.lean`, `Privacy/MoussakaMany.lean`, `Privacy/RatatouilleMany.lean`, `Privacy/PomFRITAdaptive.lean`, `Privacy/PomFRITAdaptivePfx.lean`, `Privacy/MoussakaAdaptive.lean`, `Privacy/RatatouilleAdaptive.lean`, `ZK/ReadsPoint.lean`, `Privacy/PomFRITLin.lean`, `ZK/ReadsInterleave.lean`, `Privacy/PomFRITInterleave.lean`, `Privacy/MoussakaInterleave.lean`, `Privacy/RatatouilleInterleave.lean`, `ZK/ReadsInterleaveOC.lean`, `Privacy/PomFRITInterleaveOC.lean`, `Privacy/MoussakaInterleaveOC.lean`, `Privacy/RatatouilleInterleaveOC.lean`)
 
 Every game above has the challenge sessions only: two (PomFRIT) or four (Moussaka, Ratatouille)
 requests. A deployment has many sessions on the same random oracle and cipher, and the adversary
@@ -2231,8 +2232,16 @@ slices, concurrently with the challenge:
   Ratatouille's further Clients **spend up to `K` times**: the `i`-th spend is of the change token
   finalized (`finalize_spend`) on the Issuer's response to spend `i − 1` (`tokOf`, `finSX`), each
   spend with its own tape.
+- *Interleaved schedules with a table-reading scheduler and a free challenge* (`AdversaryILO`,
+  `realGameILO`; `AdversaryILMO`, `realGameILMO`; `AdversaryILRO`, `realGameILRO`): as above, but
+  each step of the scheduler is a VCVio oracle computation over the challenge `H₃` slices and the
+  shared tables (`ROM.Reads.TSpec`), and the challenge is placed by the scheduler: it starts at the
+  first step at which `go` holds, its answers (Ratatouille: each stage's) are read off the
+  transcript at the first step at which `done` (`done₁`, `done₂`) holds, at most `L₁`, `L₂`, …
+  steps each. The old adversaries are the special case `next := pure ∘ next`, `go = done = false`
+  (`AdversaryIL.toO`, `realGameILO_toO`, and likewise `AdversaryILM.toO`, `AdversaryILR.toO`).
 
-In each game the adversary's interaction does not read the tables (as in the `RO` games); its
+In each game but the last the adversary's interaction does not read the tables (as in the `RO` games); its
 guess reads them with a budget (`AdversaryN.Budget`, and `AdversaryP.Budget`, `AdversaryAd.Budget`,
 `AdversaryAdM.Budget`, `AdversaryAdR.Budget`, `AdversaryIL.Budget`, `AdversaryILM.Budget`,
 `AdversaryILR.Budget` likewise: each challenge slice at `q₃` keys, `H₅` at `q₅`, the cipher at `q_E`, `H₂³` and the
@@ -2575,6 +2584,59 @@ the sequential `n·2⁻¹⁰²` because the key stage and the interaction each p
 Ratatouille per proof `≈ 2⁻¹⁰¹·⁷⁷` (`2⁻⁸²·¹⁸` at `2²⁰` proofs). Linear in the number of sessions
 (proofs) in every case.
 
+**A scheduler that reads the tables, and a free challenge** (`ZK/ReadsInterleaveOC.lean`,
+`Privacy/PomFRITInterleaveOC.lean`, `Privacy/MoussakaInterleaveOC.lean`,
+`Privacy/RatatouilleInterleaveOC.lean`).
+- *The scheduler as an oracle computation* (`stepO`, `runO`, `logO`): each step runs
+  `next tr : OracleComp (TSpec ι R m) Act` on the tables (`ROM.Reads.runT`), and its read set at
+  that step is its query log (`qlog`); a stretch runs at most `L` steps and stops early when
+  `stop tr` holds. The budget is per step and syntactic: `SBudget a₃ a₂ a₅ a_E`, VCVio's
+  `IsQueryBoundP` per slice, for `H₂³`, `H₅` and the cipher (`QBudget`), so `L` steps make at most
+  `L·a` queries of each class (`countP_logO_le`, `countP_logO_qb`). The scheduler remembers
+  answers only through the transcript (it may record them in refused actions, or re-query).
+- **The interleaving lemma with a table-reading scheduler** (`GoodO`, `GoodO.const`, `GoodO.ext`,
+  `GoodO.step`, `GoodO.run`, `GoodO.cons`): a transcript function together with the scheduler's
+  queries so far `G` is *good* if tables that agree on the sessions' read sets (`RQl`) and on
+  `G` give the same transcript and the same queries. One step keeps it good: the earlier
+  transcript is read off the larger set; `runT_congr` makes the scheduler's computation take the
+  same path and the same action; the session's result is as in `Good.step`. A stretch that stops
+  early is good as well: the stopping test is on the transcript, which agrees before the test
+  (`le_runO`: the sessions' read sets only grow). So the read set of every stage is the union of
+  the sessions' read sets and the scheduler's per-step read sets, consistent by construction;
+  packaged per slice (`GoodO.sreads`: `SReads` with `n·b` for the sessions and `L·a` for the
+  scheduler) and, for PomFRIT, jointly for both slices with `H₂³` counted by prefixes
+  (`GoodO.sreadsPB_IL`: `n` session prefixes plus the scheduler's `H₂³` keys).
+- *The challenge placed by the scheduler.* The challenge starts when `go` holds and its answers
+  are taken when `done` holds (both on the transcript, so the reductions' stages stay functions of
+  the requests and the tables); an answer may be decided at any earlier step and recorded (an
+  action to a session that does not exist is refused and changes nothing). The challenge
+  requests are revealed together and the answers take effect together. Neither restricts the
+  adversary: revealing a request earlier only gives it more (an adversary that wants it later
+  ignores it), and an answer has no visible effect before the outcome, which needs all answers
+  (PomFRIT's "both ⊥" rule, §6's rule for Moussaka, Ratatouille's stages), so answering one
+  session earlier is answering it at the step of the last with what was decided then.
+- *The reductions* are those of the interleaved games with every stretch on the slices and the
+  tables (`realGameILO_iff`, `realGameILMO_iff`: `Iff.rfl`; `realGameILRO_iff`). Budgets: PomFRIT
+  `IBudgetHB ((L₁+L₂)a₃, n + (L₁+L₂)a₂, 624n + (L₁+L₂)a₅, 4607n + (L₁+L₂)a_E)` (both stages rerun
+  the steps before the challenge), guess `(La₃ + q₃, 624n + La₅ + q₅, 4607n + La_E + q_E)`,
+  `L = L₁ + L₂ + L₃`; Moussaka key stage `(L₁a₃, 2·2³²n + L₁a₂, 1248n + L₁a₅, 9214n + L₁a_E)`,
+  interaction the same with `L₂`, guess with `L₂ + L₃`; Ratatouille key stage with `L₁`, both
+  stages with `L₂ + L₃`, guess with `L₂ + L₃ + L₄`, the sessions' `n(K+1)·(0, 2³², 624, 4607)`.
+
+| | bound (`a = (a₃, a₂, a₅, a_E)` per step, `L` steps in all) | Lean |
+|---|---|---|
+| PomFRIT | `(n + 2)·2⁻¹⁰² + 4·(q₃ + q₅ + 221·q_E)·2⁻¹²⁸ + 52·L·(a₃ + a₂ + a₅ + 221·a_E)·2⁻¹²⁸` | `blindnessILO_lean_le`, `_2pow20` (`2⁻⁸²`), `_2pow32` (`2⁻⁷⁰`) |
+| Moussaka | `(n + 2)·2⁻¹⁰¹ + 8·(q₃ + q₅ + 221·q_E)·2⁻¹²⁸ + 28·L·(a₃ + a₂ + a₅ + 221·a_E)·2⁻¹²⁸ + 2·εhide` | `anonymityILO_lean_le`, `_2pow20` (`2⁻⁸¹`), `_2pow32` (`2⁻⁶⁹`) |
+| Ratatouille | `(n(K+1) + 2)·2⁻¹⁰¹ + 8·(q₃ + q₅ + 221·q_E)·2⁻¹²⁸ + 46·L·(a₃ + a₂ + a₅ + 221·a_E)·2⁻¹²⁸ + 2·εhide` | `unlinkabilityILO_lean_le`, `_2pow20` (`2⁻⁸¹`), `_2pow32` (`2⁻⁶⁹`) |
+
+also `_numG` (every row type with `ZKRow`), `_num` and `_num_perm` (`#print axioms`: `propext`,
+`Classical.choice`, `Quot.sound`). At `a = 0` these are the interleaved bounds above. The
+scheduler's reads cost what an interaction's reads cost (each slice or `H₅` key `2⁻¹²⁸` per hop
+that pays it, each cipher key `221·2⁻¹²⁸`), with constants `52`, `28` and `46`; an `H₂³` key is charged at `2⁻¹²⁸` (for Moussaka and Ratatouille it
+costs `2·2⁻¹⁰²⁴`, rounded up). For example `L·(a₃ + a₂ + a₅ + 221·a_E) = 2⁶⁴` adds `2⁻⁵⁸·³` (PomFRIT),
+`2⁻⁵⁹·²` (Moussaka), `2⁻⁵⁸·⁵` (Ratatouille). The per-step budget is charged at every step, so a
+scheduler that reads in few steps pays for all `L`.
+
 **What the model assumes.** The further sessions' `H₃` slices are independent tables, as in every
 slice game (§10.2: two sessions with equal `(nf, r)` or `(r, binder)` would share `H₃` inputs; on
 paper `C(n, 2)·2⁻¹⁹²` for Moussaka and Ratatouille's nullifiers, `C(n, 2)·2⁻³⁶⁰` for PomFRIT, about
@@ -2583,13 +2645,29 @@ adversary (the further sessions' tapes fixed, a non-uniform reduction).
 
 **Open.**
 - *Interleaved schedules* (done above, for all three protocols, Ratatouille's Clients spending up
-  to `K` times). Not covered: a scheduler that reads the tables itself (the interleaving lemma
-  would add its per-step read sets to the union; the games' interactions are table-oblivious
-  throughout); challenge sessions started or answered separately (the two-session games take both
-  challenge requests, and both answers, at once); Moussaka's and Ratatouille's factor about 2
-  against the sequential schedule (a Client pending across the challenge is read by the key stage
-  and again by the interaction; removing it needs a key-stage game whose interaction budget
-  excludes what the key stage read).
+  to `K` times, with a table-reading scheduler and the challenge placed by the scheduler). Not
+  covered:
+  - a challenge whose second session is started on inputs chosen after the first session's
+    request (a key or a message for the second session chosen after seeing the first request).
+    That is a different game: the privacy notions choose the challenge inputs first (PomFRIT:
+    `(pk, µ₀, µ₁)`; Moussaka: contexts and keys; Ratatouille: key, context and balance), and every
+    two-session game and its hops are stated for that order (`keyOf`, the key stage, before both
+    requests); a game with the second session's inputs chosen after the first request is not
+    formalized (neither its definition nor its hops). Revealing the
+    requests at different steps with the inputs fixed up front is covered (above: revealing both
+    at once is the stronger game);
+  - Moussaka's and Ratatouille's factor about 2 against the sequential schedule. A Client pending
+    across the challenge is read by the key stage (its issuance, on the original tables) and again
+    by the interaction (its output after an answer is recomputed from its issuance on, on the
+    tables the issuance simulations programmed), and the key-stage game's redemption hops bound
+    the composed reader by `SReads.bind` as `k + i` (`sReads_SxLK`, `sReads_SxRK`; Ratatouille's
+    analogues). Removing it is not local: it needs (a) budgets that depend on the key stage's
+    state, `k(σ) + i(σ) ≤ m` pointwise, with the redemption hops' composed reader charged `m` (the
+    issuance hops keep `k`), and (b) an interleaving lemma whose stretches charge only the outputs
+    they produce, with the further Clients' states passed in `σ` so that the interaction resumes
+    them instead of recomputing them (Moussaka's redemption does not read its issuance's result,
+    but Ratatouille's next spend does). Both change the key-stage games' hop proofs and the
+    session model; not done.
 - *A linear bound for `N` challenge pairs.* For PomFRIT with `H₄` a table, done up to the `iv`
   birthday term `n²·2⁻¹²⁵` and with the budget terms charged per pair (`blindnessPH_lean`, above);
   removing the birthday term needs the gate labels' distribution (an `H₅` collision needs equal
@@ -2604,8 +2682,10 @@ adversary (the further sessions' tapes fixed, a non-uniform reduction).
   the seed-XOF games (§10.6: their XOF reads in `q_X`), the non-colluding games (§10.7); the
   `H₄`-table games (`blindnessNH_lean`, `blindnessPH_lean`) with permutation rows (the lazy
   sampling patches single points of a row, above).
-- *Interactions that read the tables* in the many-session games (the `RA` form): the composed
-  adversary's interaction is `SReads` by `SReads.bind` with the adversary's own reads; not stated.
+- *Interactions that read the tables* in the many-session games (the `RA` form): done for the
+  interleaved games (the scheduler, above), which contain the adaptive schedules; for the
+  non-adaptive `realGameN`/`realGameP` the composed adversary's interaction is `SReads` by
+  `SReads.bind` with the adversary's own reads; not stated.
 
 ### 10.9 Hiding of `Com` (`Privacy/ComHide.lean`)
 

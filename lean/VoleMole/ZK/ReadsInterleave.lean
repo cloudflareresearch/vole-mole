@@ -28,7 +28,9 @@ received so far; its output after receiving `h` is `out j c h t` on the tables `
   counts (the prefix count of `Privacy/PomFRITAdaptivePfx.lean`).
 
 The scheduler here reads no table (it is a function of the transcript), as the adaptive games'
-interactions are; the sessions run inside it do.
+interactions are; the sessions run inside it do. A scheduler that reads the tables (an oracle
+computation at each step) and stretches that stop when the scheduler says so are in
+`ZK/ReadsInterleaveOC.lean`.
 -/
 
 open Finset
