@@ -518,7 +518,15 @@ and `d` at 3075 and 3139; at `Layout.main` the definitions are the spec's, by `r
     cipher (with the cipher's rows uniform functions; with uniform permutations read forward and
     inverse, the PRP/PRF switching term included, the same bound with `εROPm` for `εRO`,
     `blindnessRO_lean_num_perm`, and `blindnessRA_lean_num_perm` for the table-reading Issuer below,
-    `lean/docs/zk.md` §10.4), the two slices independent (distinct `r`), G0 → G1.
+    `lean/docs/zk.md` §10.4), G0 → G1. The two sessions' slices need not be independent: with one
+    shared `H₃(r ‖ μ ‖ ρ ‖ 3)`, each session reading its column of the shared tables at its prefix
+    (equal for sessions with equal `r` and refresher commitment), **`blindnessSh_num`**:
+    `≤ 4·εRO(q_E + 18428, q₅ + 1248, q_E + 18428) + 2·noHitProb + 2·2⁻¹²⁸`, no `2⁻³⁶⁰` term (hop 0
+    uses the adaptive two-phase theorem, since session `0`'s continuation runs session `1`'s step 1,
+    which reads session `0`'s column when the prefixes coincide); with the table-reading Issuer
+    below, **`blindnessRASh_num`** (`4·εRO(q_E + 4i_E + 23035, q₅ + 4i₅ + 1872, q_E + 4i_E + 23035)
+    + 2·noHitProb + 2·2⁻¹²⁸`), `blindnessOCSh_num`, `_perm` (`lean/docs/zk.md` §10.5). Not done in
+    the shared model: the Issuer that reads `H₂³` (`blindnessRAH`).
 - **[Lean] Blindness with an Issuer whose key, messages and responses read the tables**
   (`lean/VoleMole/ZK/TwoPhaseAd.lean`, `Privacy/PomFRITRA.lean`, `Privacy/PomFRITRAGame.lean`;
   `lean/docs/zk.md` §10.3). The Issuer (`AdversaryRA`) picks its key and both messages as functions

@@ -719,7 +719,9 @@ All files are under `lean/VoleMole/ZK/` (and `Privacy/LeanProver.lean`, `Privacy
 `Privacy/PomFRITRA.lean`, `Privacy/PomFRITRAGame.lean`, `ZK/CollideAd2.lean`,
 `Privacy/PomFRITRAH.lean`, §10.3; `ZK/TwoPhasePerm.lean`,
 `ZK/IdealCipherPermP.lean`, `ZK/HopsPatchPerm.lean`, `Privacy/PermRO.lean`, `Privacy/PermRA.lean`,
-§10.4). There is no `sorry` and no `axiom`. `#print axioms` lists
+§10.4; `ZK/SharedH3.lean`, `ZK/SharedH3Two.lean`, `ZK/SharedH3RA.lean`, `ZK/SharedH3One.lean`,
+`Privacy/SharedH3RO.lean`, `Privacy/SharedH3PomFRIT.lean`, `Privacy/SharedH3RA.lean`,
+`Privacy/SharedH3PomFRITRA.lean`, `ROM/SharedH3Reads.lean`, §10.5). There is no `sorry` and no `axiom`. `#print axioms` lists
 only `propext`, `Classical.choice` and `Quot.sound`.
 
 | Statement | Lean | Used in |
@@ -837,6 +839,10 @@ which the random-oracle ones are proved with the hashed domain a uniform table:
 | **Ratatouille unlinkability with an interaction that reads the tables**: each stage of the Issuer's interaction (issuance responses and `d₁`; round 1's response and `d₂`) is a function of what it has seen, the four slices and the shared tables (budget `(i₃, i₂, i₅, i_E)` per stage and slice position, consistent), read on the tables as the simulations before it programmed them; `≤ 4·εRO(2i₃ + q₃, q₅ + 2i₅ + 1872, q_E + 2i_E + 13821) + 2·εAd(9; i₃ + q₃, q₅ + i₅ + 1248, q_E + i_E + 13821; i₃, i₂, i₅ + 624, i_E + 9214) + 2·εAd(9; q₃, q₅ + 936, q_E + 13821; 2i₃, 2i₂, 2i₅ + 1560, 2i_E + 23035) + 6·i₃·2⁻¹²⁸ + 4·(2⁻¹¹⁰ + εROP(0, 312, 4607; 2i₅ + 1560, 2i_E + 23035)) + 6·noHitProb + 12·2⁻¹⁰²⁴ + 2·εhide` | `AdversaryRA`, `transR`, `viewRA`, `hopI0RA`, `hopI1RA`, `hopS1RA`, `hopS2RA`, `sReads_Sx1`, `sReads_Sx2`, `deltaS1A_le`, `deltaS2A_le`, `view_congr`, `simGameRA_iff`, `unlinkabilityRA`, `unlinkabilityRA_lean_num` (`Privacy/RatatouilleRA.lean`) | §10.3 |
 | **PomFRIT blindness with an Issuer whose interaction reads every table, `H₂³` included**: the interaction's joint reads (`IBudgetH`: both slices and the shared tables jointly, `i₂` `H₂³` keys) taken out by lazy sampling of `H₂³` before the hybrids (`pr_resampleC`), the existing theorem applied to the Issuer that reads an independent `Γ` in place of `H₂³` (`AdversaryRA.subst`, whose guess patches `H₂³` at the interaction's read set); the collision term (a real session's grinding block meets the interaction's `H₂³` reads) by a second application of two-phase zero knowledge, after which the block's tail is the simulator's uniform `ã`: `≤ 2⁻¹¹⁰ + εz(6i₃, 6i₅ + 2184, 6i_E + 18428) + 2i₂·2⁻¹²⁸` per session and world; no simulator change | `pr_tail2A`, `realRun2_outPre2`, `outPre2_rd5`, `outPre2_rdE`, `tailEv2`, `pr_simCoins_tail_mem` (`ZK/CollideAd2.lean`); `SReadsP`, `IBudgetH`, `AdversaryRA.subst`, `IBudget.subst`, `GBudget.subst`, `pr_resampleC`, `pr_G0RA_resample`, `G0_at_iff_subst`, `K1R`, `hyp2RA_R1`, `qf0`, `qf1`, `pr_bad0H`, `pr_bad1H`, `G0RA_subst_close`, `blindnessRAH_lean_numG`, `blindnessRAH_lean_num` (`Privacy/PomFRITRAH.lean`); `blindnessRAH_lean_num_perm` (`Privacy/PermRA.lean`); `sReadsP_runT`, `AdversaryOC.iBudgetH`, `blindnessOCH_lean_num`, `blindnessOCH_lean_num_perm` (`ROM/PrivacyReads.lean`) | §10.3 |
 | **Table-reading interactions as oracle computations** (no consistency hypothesis): an interaction written as a VCVio `OracleComp` over the tables (`TSpec`: the `H₃` slices, `H₂³`, `H₅`, the cipher rows), run deterministically on them (`runT`), is a consistent table reader with its syntactic query budget (`QBudget`, VCVio's `IsQueryBoundP` per slice and per shared table): the read sets are its query log (`qlog`, `runT_congr`). The single-proof theorem and the six headline privacy bounds for such interactions, bounds unchanged, `IBudget` derived (`AdversaryOC.iBudget`); a budget cannot be dropped (`not_sReads_slice`: the reader that outputs its slice has no consistent query sets of fewer than `2¹²⁸` keys) | `TSpec`, `runT`, `qlog`, `runT_congr`, `countP_qlog_le`, `QBudget`, `sReads_runT`, `sReads_runT₁`, `not_sReads_slice`, `zk_adaptive_oc`, `OCReader`, `lean_zeroKnowledgeROA_oc` (`ROM/TableReads.lean`); `AdversaryOC`, `AdversaryOC.toRA`, `AdversaryOC.iBudget`, `anonymityOC_lean_num`, `anonymityOC_lean_num_perm`, `unlinkabilityOC_lean_num`, `unlinkabilityOC_lean_num_perm`, `blindnessOC_lean_num`, `blindnessOC_lean_num_perm`, and with `H₂³` queries `sReadsP_runT`, `blindnessOCH_lean_num`, `blindnessOCH_lean_num_perm` (`ROM/PrivacyReads.lean`) | §10.3 |
+| **One shared `H₃`, the model**: `H₃` on the seed inputs `x ‖ ρ ‖ 3` (`|x| < 1024`) as columns of the shared tables' rows (`RowH R = R × (Pre → Bytes 32)`; row `ρ` carries `H₃(x ‖ ρ ‖ 3)` for every prefix `x`; read as the cipher row by the prover); a proof's slice is the column at its prefix `wPrefix ‖ μ₁` (`h3At s (preKey …)`); the executable prover with the one-`H₃` record (`recOne`: `H₃` on every seed input, `seedEnc` injective) is the prover with that slice (`prove_recOne`); the prover reads `H₃` only at its seed input for every witness (`prove_h3_congr`, `realROb_g3_congr'`, `step1_h3_congr`, `realRun2_h3_congr`, `realRO2_g3_congr'`) | `Pre`, `preKey`, `H3Row`, `RowH`, `CipherRow.rowH`, `h3At`, `setK`, `swapK`, `pr_setK`, `pr_prod_setK`, `rd5_h3At`, `rdE_h3At`, `rd3_setK`, `rd5_setK`, `rdE_setK`, `splitH`, `combH` (`ZK/SharedH3.lean`); `preBytes`, `seedEnc`, `seedEnc_injective`, `recOne`, `prove_recOne` (`ZK/SharedH3One.lean`) | §10.5 |
+| **Zero knowledge with one shared `H₃`** (statement fixed): the slice prover's theorem at `(q_E, q₅, q_E)` (the proof's column re-sampled, `pr_setK`; the distinguisher reads it through rows) with no hypothesis on the prefixes; the rows' `H₃` columns are extra uniform data for the slice prover (`ZKRow.rowH`, `ZK2ARow.rowH`, `ZKPRow.rowH`); two-phase with a continuation that reads the shared tables, the replaced column included (`zk2_shared`, `zk2_sharedA`, via `zk2_adaptive`); collision terms unchanged (`pr_h3At_slice`) | `ZeroKnowledgeRO.shared`, `dCol`, `Budget.dCol`, `pr_h3At_slice`, `ZKRow.rowH` (`ZK/SharedH3.lean`); `zk2_shared`, `zk2_sharedA`, `ZK2ARow.rowH` (`ZK/SharedH3Two.lean`) | §10.5 |
+| **Zero knowledge with one shared `H₃`, the statement chosen from the tables**: against readers and distinguishers that read no slot slice, the proof's column exchanged with an independent slice off the reader's rows (`swapOff`, a measure-preserving involution keeping the reader's view), error `ε(q_E, q₅, q_E) + s_E·2⁻¹²⁸` (the fresh `ρ` is a row the reader read: the only cost of reading a future proof's prefix); collision events likewise | `withH`, `hcols`, `swapOff`, `swapOff_swapOff`, `agT_swapOff`, `ZeroKnowledgeROA.shared`, `pr_h3At_sliceA`, `pr_mem_rows_le`, `ZKPRow.rowH` (`ZK/SharedH3RA.lean`) | §10.5 |
+| **The privacy games with one shared `H₃`**, no prefix-collision term: Moussaka `≤ 8·εRO(q_E + 13824, q₅ + 1872, q_E + 13824) + 4·(2⁻¹¹⁰ + εRO(0, 312, 4607)) + 6·noHitProb + 12·2⁻¹⁰²⁴ + 2·εhide`, Ratatouille the same, PomFRIT `≤ 4·εRO(q_E + 18428, q₅ + 1248, q_E + 18428) + 2·noHitProb + 2·2⁻¹²⁸`; with a table-reading interaction (`+ 8·(i_E + 9214)·2⁻¹²⁸` Moussaka, `+ 4·(i_E + 9214)·2⁻¹²⁸ + 4·(2i_E + 23035)·2⁻¹²⁸` Ratatouille, none for PomFRIT) and as oracle computations; function and permutation rows | `anonymitySh_numG`, `anonymitySh_num`, `anonymitySh_num_perm`, `unlinkabilitySh_numG`, `unlinkabilitySh_num`, `unlinkabilitySh_num_perm`, `leanPISh`, `leanPRSh`, `leanPIRSh`, `leanPSRSh`, `realGameSh`, `deltaI1_sh`, `deltaL_sh`, `deltaR_sh`, `deltaI1R_sh`, `deltaS1R_sh`, `deltaS2R_sh` (`Privacy/SharedH3RO.lean`); `blindnessSh`, `blindnessSh_numG`, `blindnessSh_num`, `blindnessSh_num_perm`, `realGameSh`, `hop0Sh`, `hop1Sh`, `deltaRO_sh`, `AdversaryRO.SliceFree` (`Privacy/SharedH3PomFRIT.lean`); `anonymityRASh_numG`, `anonymityRASh_num`, `anonymityRASh_num_perm`, `unlinkabilityRASh_numG`, `unlinkabilityRASh_num`, `unlinkabilityRASh_num_perm`, `deltaLA_sh`, `deltaRA_sh`, `deltaS1A_sh`, `deltaS2A_sh` (`Privacy/SharedH3RA.lean`); `blindnessRASh`, `blindnessRASh_numG`, `blindnessRASh_num`, `blindnessRASh_num_perm`, `hop0RASh`, `hop1RASh`, `deltaSh_le`, `AdversaryRA.at_free` (`Privacy/SharedH3PomFRITRA.lean`); `anonymityOCSh_num`, `unlinkabilityOCSh_num`, `blindnessOCSh_num` and `_perm` (`ROM/SharedH3Reads.lean`) | §10.5 |
 
 `lake exe zk_sim [TESTS [main\|labelrows [FILTER]]]` runs, on all 18 KAT runs of each layout: the
 equation `prove = proveIdeal ∘ tapeOf` (all pass), the simulator with the programmed oracle
@@ -961,7 +967,9 @@ as a check of the theorem's conditions and kept as a smoke test of the executabl
     tables (`zk_adaptive`, `zk2_adaptive`; `anonymityRA_lean_num`, `unlinkabilityRA_lean_num`,
     and `blindnessRA_lean_num` for an Issuer that reads every table but `H₂³`;
     `blindnessRAH_lean_num` for one that reads `H₂³` too, with explicit collision terms, §10.3).
-    Left open: `ε_iv` (two proofs sharing an `H₃` slice), a modelling step of the per-proof slices; the modelling steps (SHAKE as a random
+    The per-proof `H₃` slices of these games are not a modelling step any more: with one shared
+    `H₃`, as in the scheme, every game is mechanized again with no prefix-collision (`ε_iv`-type)
+    term (§10.5). Left open: the modelling steps (SHAKE as a random
     oracle, AES as an ideal cipher). The PRP/PRF switching term is proved in the games as well:
     every privacy theorem above also holds with the cipher's rows uniform permutations read
     forward and backward (§10.4, `Privacy/PermRO.lean`, `Privacy/PermRA.lean`). The `*_shake` theorems, which take
@@ -1029,7 +1037,9 @@ this is `zk_rom_ic_h23_num` (`zk_ro`, `lean_zeroKnowledgeRO`), with
 same `qsDegree = 9`, hence the same `H₂³` key set), and one `H₃` slice per proof. A global `H₃`
 restricted to the four slices is four independent tables when the four `(μ₁, wPrefix)` differ;
 the games do not force this (two Clients with equal `(nf, r)`, probability `≤ 2⁻¹⁹²` for
-independent nullifiers), so this modelling step carries the `ε_iv`-type term, on paper. The
+independent nullifiers), so this modelling step carries the `ε_iv`-type term, on paper. (§10.5
+states the games with one shared `H₃` instead; the term is not needed, and the step is not a
+black-box consequence of the slice games.) The
 adversary's guess sees all tables, with a budget `(q₃, q₅, q_E)`; **its interaction (responses,
 Anchor Sets, digests, amounts) does not read the tables**: the zero-knowledge theorem is for a
 statement fixed before the tables are drawn, and the redemption and spend statements are the
@@ -1186,7 +1196,7 @@ failed, since a stopping continuation of session `0` means session `1` stops too
 
 The two sessions'
 `H₃` slices are independent tables when their `r` differ (`2⁻³⁶⁰` otherwise), as in the other two
-games.
+games (§10.5: with one shared `H₃` no such term is needed).
 
 ### 10.3 Statements chosen from the tables (`Privacy/Resample.lean`, `ZK/IdealCipherP.lean`, `ZK/HopsPatch.lean`, `ZK/AdaptRO.lean`, `Privacy/AdaptiveRO.lean`, `Privacy/MoussakaRA.lean`, `Privacy/RatatouilleRA.lean`, `ZK/TwoPhaseAd.lean`, `Privacy/PomFRITRA.lean`, `Privacy/PomFRITRAGame.lean`, `ZK/CollideAd2.lean`, `Privacy/PomFRITRAH.lean`)
 
@@ -1512,6 +1522,8 @@ one; it uses no `noHitProb` because the event requires a produced proof.
   still semantic; it needs no consistency (it is only an upper bound on reads, by query sets that
   may depend on the tables).
 - *The privacy games with AES as random permutations*: done (§10.4).
+- *One shared `H₃`* (the slices determined by the proofs' prefixes): done (§10.5) for every game
+  above but `blindnessRAH` / `blindnessOCH` (a PomFRIT Issuer that reads `H₂³`).
 
 ### 10.4 The privacy games with AES as random permutations (`ZK/ReadsRO.lean`, `ZK/ReadsROPerm.lean`, `ZK/TwoPhasePerm.lean`, `ZK/IdealCipherPermP.lean`, `ZK/HopsPatchPerm.lean`, `Privacy/PermRO.lean`, `Privacy/PermRA.lean`)
 
@@ -1614,3 +1626,122 @@ functions: they read the cipher through key sets, and a whole permutation row is
 The only permutation-specific steps are the H4 hops above (plain, two-phase, two-phase with an
 adaptive continuation, patched), each the function-row chain around `hide_rom_query_perm` or
 `hide_rom_query_permP`.
+
+### 10.5 One shared `H₃` (`ZK/SharedH3.lean`, `ZK/SharedH3Two.lean`, `ZK/SharedH3RA.lean`, `ZK/SharedH3One.lean`, `Privacy/SharedH3RO.lean`, `Privacy/SharedH3PomFRIT.lean`, `Privacy/SharedH3RA.lean`, `Privacy/SharedH3PomFRITRA.lean`, `ROM/SharedH3Reads.lean`)
+
+§10.2–§10.4 give every proof of a game its own independent `H₃` slice. The scheme has one `H₃`.
+
+**What the code hashes.** The seed and `iv_pre` are `H₃(witness_prefix ‖ μ ‖ ρ ‖ 3)`
+(`voleith.hpp:168-185`; Lean `Prover.voleGen`, `Hs.hash .h3 ((wPrefix ++ mu1 ++ rho).push 3)`):
+the per-proof **prefix** is `wPrefix ‖ μ₁` (the whole witness for Moussaka and Ratatouille,
+`WITNESS_PREFIX_BYTES = WITNESS_BYTES`; PomFRIT's `r`, `uov::M` bytes, with the delayed `μ` of the
+refresher commitment) and the fresh per-proof randomness is the 16-byte `ρ` (`ProveSeed`; the
+tree `iv` is derived, `iv = H₄(iv_pre ‖ μ)`, so there is no separate random IV or salt). A
+slice is `ρ ↦ H₃(prefix ‖ ρ ‖ 3)`; two proofs share a slice iff they share the prefix (Moussaka,
+Ratatouille: the two Clients' `(nf, r)`, or the tokens' openings; PomFRIT: the two sessions' `r`
+and refresher commitments). Issuance and redemption (spend) prefixes have different lengths
+(`256 + 32` vs `343 + 32`; `240 + 32` vs `847 + 32` bytes), so their inputs never meet.
+
+**The model.** `H₃` on the seed inputs `x ‖ ρ ‖ 3` with `|x| < 1024` is a uniform table indexed by
+`(x, ρ)` (`seedEnc` is injective, `seedEnc_injective`). It is put into the shared tables: each
+cipher row also carries `H₃`'s column at that `ρ` (`RowH R = R × (Pre → Bytes 32)`, `Blk = Bytes 16`
+is `ρ`'s type; the prover, verifier and simulator read a row as its cipher part, `CipherRow.rowH`).
+A proof's slice is the column at its prefix (`h3At s (preKey (wPrefix ‖ μ₁))`), and the shared
+provers (`leanPISh`, `leanPRSh`, `leanPIRSh`, `leanPSRSh`, PomFRIT's sessions in `realGameSh`)
+compute their prefix from the witness and statement they are called with, so the redemption and
+spend prefixes, chosen through the adversary's choices, are those of the code. `prove_recOne`: the
+executable prover with the record that has **one** `H₃` on every seed input (`recOne`) is the
+shared prover. The adversary reads `H₃` through rows: a read of `H₃(x ‖ ρ ‖ 3)` is a read of row
+`ρ`, counted with its cipher queries in `q_E` (`i_E` for an interaction); the games' slot slices are
+still drawn but read by no prover (Moussaka, Ratatouille: the guess may read them, for free;
+PomFRIT and the table-reading interactions: no slice reads, `SliceFree`, `IBudget 0 …`,
+`GBudget 0 …`).
+
+**Why the slice games do not give this directly.** The paper's step is: the restrictions of one
+`H₃` to the four prefixes are four independent tables when the prefixes differ, up to `ε_iv`
+(`≤ 2⁻¹⁹²`, two Clients with equal nullifiers; PomFRIT `2⁻³⁶⁰`). That is true, but it does not turn a
+shared-`H₃` adversary into a slice-model one: the reduction would have to answer the adversary's
+`H₃` queries at the proofs' prefixes from the slices, and the prefixes contain the Clients'
+secrets (`r`, `nf`, the refresher), which the reduction does not know, while an unbounded
+adversary may (`Com` is only computationally hiding). And the redemption and spend prefixes are
+chosen by the adversary after it has read `H₃`, possibly at those very prefixes (a "future
+prefix" read), so "the four restrictions" are not restrictions to four fixed inputs. The
+mechanized route avoids both: the hybrid argument runs on the shared tables, and each hop
+re-samples the replaced proof's column.
+
+**Zero knowledge with one shared `H₃`.**
+- *Statement fixed* (`ZeroKnowledgeRO.shared`): write the tables as the column at the proof's
+  prefix overwritten by an independent uniform slice (`pr_setK`: this keeps them uniform); then the
+  real proof reads an independent slice, and the slice prover's theorem applies to the
+  distinguisher that writes it into the column (`dCol`: its row reads are slice reads, budget
+  `(q_E, q₅, q_E)`). No hypothesis on the prefixes: another proof with the same prefix is part of
+  the distinguisher and reads this slice at its own `ρ` (one row each, `rdE_h3At`: every real
+  proof reads `4607 + 1` rows), which `εRO`'s `q₃·2⁻¹²⁸` term pays for. This is where the birthday
+  bound over the proofs' `ρ` sits: `2⁻¹²⁸` per pair of proofs, within the main term.
+- *Two phases* (`zk2_sharedA`, `zk2_shared`): the same, the continuation reading the shared tables
+  at bounded keys, the replaced column included: in PomFRIT's hop 0, session `0`'s continuation runs
+  session `1`'s step 1, which reads session `0`'s column when the two prefixes coincide. After the
+  re-sampling this continuation reads the proof's own slice, so the adaptive two-phase theorem
+  (`zk2_adaptive`, `ZK2ARow`) is used even for the non-adaptive PomFRIT game.
+- *Statement chosen from the tables* (`ZeroKnowledgeROA.shared`): the prefix is known only after
+  the reader ran, and the reader may have read that column. Exchange the independent slice with
+  the column at the chosen prefix, **off the rows the reader read** (`swapOff`): for a reader with
+  consistent read sets this is a measure-preserving involution that keeps the reader's output and
+  reads (`agT_swapOff`); afterwards the real proof's slice agrees with the independent one at
+  every row the reader did not read, so the two experiments agree unless the fresh `ρ` is one of
+  the reader's `s_E` rows (`pr_mem_rows_le`), and the simulated side is unchanged (`swapOff_map`:
+  the programming commutes with the exchange). Error `ε(q_E, q₅, q_E) + s_E·2⁻¹²⁸`, for readers and
+  distinguishers that read no slot slice (`SReads p · 0 s₂ s₅ s_E`, `Budget p 0 q₅ q_E`).
+  `pr_h3At_sliceA`: the same for the games' collision events.
+- With the `H₃` columns as extra row data the slice prover keeps its theorems
+  (`ZKRow.rowH`, `ZK2ARow.rowH`, `ZKPRow.rowH`, by averaging over the columns), so function and
+  permutation rows are covered by the same statements (`εz (RowH R) = εz R`).
+
+**The bounds** (all `#print axioms`: `propext`, `Classical.choice`, `Quot.sound`):
+
+    Moussaka (anonymitySh_num):       8·εRO(q_E + 13824, q₅ + 1872, q_E + 13824)
+                                       + 4·(2⁻¹¹⁰ + εRO(0, 312, 4607)) + 6·noHitProb + 12·2⁻¹⁰²⁴ + 2·εhide
+    Ratatouille (unlinkabilitySh_num): the same
+    PomFRIT (blindnessSh_num):        4·εRO(q_E + 18428, q₅ + 1248, q_E + 18428) + 2·noHitProb + 2·2⁻¹²⁸
+
+    Moussaka, table-reading interaction (anonymityRASh_num):
+        4·εRO(q_E + i_E + 13824, q₅ + i₅ + 1872, q_E + i_E + 13824)
+      + 4·εAd(9; q_E + 13822, q₅ + 1248, q_E + 13822; 0, i₂, i₅ + 624, i_E + 9214)
+      + 4·(2⁻¹¹⁰ + εROP(0, 312, 4607; i₅ + 624, i_E + 9214)) + 8·(i_E + 9214)·2⁻¹²⁸
+      + 6·noHitProb + 12·2⁻¹⁰²⁴ + 2·εhide
+    Ratatouille (unlinkabilityRASh_num):
+        4·εRO(q_E + 2i_E + 13824, q₅ + 2i₅ + 1872, q_E + 2i_E + 13824)
+      + 2·εAd(9; q_E + i_E + 13822, q₅ + i₅ + 1248, q_E + i_E + 13822; 0, i₂, i₅ + 624, i_E + 9214)
+      + 2·εAd(9; q_E + 13821, q₅ + 936, q_E + 13821; 0, 2i₂, 2i₅ + 1560, 2i_E + 23035)
+      + 4·(2⁻¹¹⁰ + εROP(0, 312, 4607; 2i₅ + 1560, 2i_E + 23035))
+      + 4·(i_E + 9214)·2⁻¹²⁸ + 4·(2i_E + 23035)·2⁻¹²⁸ + 6·noHitProb + 12·2⁻¹⁰²⁴ + 2·εhide
+    PomFRIT (blindnessRASh_num):
+        4·εRO(q_E + 4i_E + 23035, q₅ + 4i₅ + 1872, q_E + 4i_E + 23035) + 2·noHitProb + 2·2⁻¹²⁸
+
+and the same for interactions written as oracle computations (`anonymityOCSh_num`,
+`unlinkabilityOCSh_num`, `blindnessOCSh_num`: zero slice queries) and with permutation rows
+(`*_num_perm`: `εROPm`, `εAdPm`, `εROPmP`). Each is the slice-model bound with the slice-read
+budget `q₃` (`i₃`) replaced by the row budget plus the other real proofs' rows (`4607 + 1` each),
+and, for the adaptive Moussaka and Ratatouille hops, `(rows the interaction read)·2⁻¹²⁸` per
+redemption or spend hop and per collision term. In PomFRIT a session's prefix is fixed by its
+coins before the Issuer reads anything, so no such term appears there; its collision term is
+bounded pointwise as before (`deltaRO_sh`, `deltaSh_le`: `≤ noHitProb + 2⁻¹²⁸`). Without budgets the
+totals are those of §10.2–§10.4 to two decimals (`8·13824·2⁻¹²⁸ ≈ 2⁻¹¹¹`).
+
+**On the paper's `ε_iv`.** As a bound on the probability that two proofs' prefixes coincide,
+`2⁻¹⁹²` (Moussaka, Ratatouille; equal `(nf, r)` has probability `2⁻³²⁰`, equal `nf` `2⁻¹⁹²`) and
+`2⁻³⁶⁰` (PomFRIT) are right. But it is not the price of sharing `H₃`: (i) with the hybrid argument
+on the shared tables the term is not needed at all, the proofs' prefixes may coincide; (ii) the
+step "one `H₃` = independent slices up to `ε_iv`" is not a black-box reduction (above), so the
+paper's argument for the slice model is incomplete rather than its bound wrong. What sharing
+`H₃` actually costs is a fresh `ρ` meeting an `H₃` row read by someone else (another proof with the
+same prefix, the adversary, or an interaction that read a future proof's prefix), `2⁻¹²⁸` per read,
+already inside the slice-model bounds' `q₃·2⁻¹²⁸` term (and `i₃·2⁻¹²⁸` in §10.3) once those reads
+are counted. The slice-model theorems are unchanged; the shared-model ones are new theorems.
+
+**Open.** PomFRIT with an Issuer that reads `H₂³` (`blindnessRAH`, `blindnessOCH`) in the shared
+model: its lazy sampling of `H₂³` and its second application of two-phase zero knowledge would
+have to be redone on the shared tables (no new idea needed). The model counts the adversary's `H₃`
+reads with its cipher queries (`q_E`), so the bounds charge `221·2⁻¹²⁸` per `H₃` read where `2⁻¹²⁸`
+would do; a separate `H₃` budget would need the shared tables to carry `H₃` as a separate
+component (not possible with the games' `ShG R p` shape) and changes nothing beyond that factor.

@@ -725,9 +725,15 @@ and determinism of `Tag`. The witness satisfies V3 by `change_correct`. ∎
   `unlinkabilityRA_lean_num`; with AES's rows uniform permutations read forward and inverse, the
   PRP/PRF switching term included, `unlinkabilityRO_lean_num_perm`, `unlinkabilityRA_lean_num_perm`,
   `lean/docs/zk.md` §10.4), leaving SHAKE as a random oracle, AES as an ideal cipher, the
-  independence of the four `H₃` slices, the consistency of a
+  consistency of a
   table-reading Issuer given as a function of the tables (a hypothesis; a theorem for one written
-  as oracle computations, `unlinkabilityOC_lean_num`) and hiding. H1 (the seed XOF) and the general adaptive
-  schedule (any number of Clients and spends) are on paper.
+  as oracle computations, `unlinkabilityOC_lean_num`) and hiding. The per-proof `H₃` slices are not
+  an assumption: with one shared `H₃(wPrefix ‖ μ₁ ‖ ρ ‖ 3)`, each proof reading its column of the
+  shared tables at its prefix, the game is proved again with no prefix-collision term
+  (`unlinkabilitySh_num`: `8·εRO(q_E + 13824, q₅ + 1872, q_E + 13824) + 4·(2⁻¹¹⁰ + εRO(0, 312,
+  4607)) + 6·noHitProb + 12·2⁻¹⁰²⁴ + 2·εhide`; `unlinkabilityRASh_num`, with
+  `4·(i_E + 9214)·2⁻¹²⁸ + 4·(2i_E + 23035)·2⁻¹²⁸` for spends whose fresh `ρ` meets a row the Issuer
+  read; `unlinkabilityOCSh_num`; `_perm`; `lean/docs/zk.md` §10.5). H1 (the seed XOF) and the general
+  adaptive schedule (any number of Clients and spends) are on paper.
 - The Lean file covers the accounting and the 64-bit arithmetic only. Extraction, binding and
   forgery are paper arguments.
