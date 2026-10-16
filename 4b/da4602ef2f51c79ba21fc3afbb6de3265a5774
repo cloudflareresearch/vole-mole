@@ -1,0 +1,21 @@
+src/ecdsa_pok/hk_arith.hpp
+  s_45ee28f7dc1e9b::t_70cc563a3a42f4 8,18-20,24-27,34-37,93-100,104,290,297-298
+tests/ecdsa_pok/test_ecdsa_pok_hk.cpp
+  s_45ee28f7dc1e9b::t_aecf1b09940c43 241
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.10",
+  "base_commit_sha": "4bda4602ef2f51c79ba21fc3afbb6de3265a5774",
+  "prompts": {},
+  "sessions": {
+    "s_45ee28f7dc1e9b": {
+      "agent_id": {
+        "tool": "opencode",
+        "id": "ses_ebfe7e377ffe00JYcsmgH2SCOu",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Bas Westerbaan <bas@cloudflare.com>"
+    }
+  }
+}
