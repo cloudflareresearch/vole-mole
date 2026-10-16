@@ -184,10 +184,6 @@ inline Witness make_witness(const Affine& q, std::span<const uint8_t> msg,
     const p256::Chain tc = p256::slope_chain(off.h1, steps);
     std::copy(tc.slopes.begin(), tc.slopes.end(), wit.wp.begin() + WP_TABLE);
     const std::vector<Affine>& table = tc.points;
-    for (size_t b = 1; b < RADIX; ++b) {
-        wit.wp[WP_TABLE_PTS + 2 * (b - 1)] = table[b].x;
-        wit.wp[WP_TABLE_PTS + 2 * (b - 1) + 1] = table[b].y;
-    }
 
     steps.clear();
     for (size_t wi = 0; wi < NUM_WINDOWS; ++wi) {

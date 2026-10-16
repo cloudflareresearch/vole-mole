@@ -238,7 +238,7 @@ TYPED_TEST(EcdsaHkWhiteBox, CheatKey) {
     auto w = wb.witness();
     w.wp[hk::WP_Q + 1] += p256::Fp::one();
     EXPECT_FALSE(wb.verify(wb.prove(w)));
-    for (const size_t i : {hk::WP_TABLE + 3, hk::WP_TABLE_PTS + 4, hk::WP_TABLE_PTS + 29}) {
+    for (const size_t i : {hk::WP_TABLE, hk::WP_TABLE + 3, hk::WP_TABLE + 14}) {
         w = wb.witness();
         w.wp[i] += p256::Fp::one();
         EXPECT_FALSE(wb.verify(wb.prove(w))) << i;

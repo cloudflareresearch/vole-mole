@@ -5,7 +5,7 @@
 // multiplication. The message, and so e, is public.
 //
 //   Instance: e, the link challenge, and the link values Z_n, Z_p, Y_1, Y_2
-//   Witness over F_p: Q = (x_Q, y_Q), the slopes and points of the table of Q, the base-16 digits
+//   Witness over F_p: Q = (x_Q, y_Q), the slopes of the table of Q, the base-16 digits
 //             a_k of u1 (k < 64), the base-4 digits c_(k,0) and c_(k,1) of u2 (so that its
 //             base-16 digit b_k = c_(k,0) + 4 c_(k,1)), the slopes of the ladder, the comb and the
 //             final step, the mask rho_p, and the masks sigma_1, sigma_2
@@ -15,27 +15,26 @@
 // R = u1 G + u2 Q is computed in three parts, all with incomplete affine additions that commit only
 // to the slope (as in arith.hpp):
 //
-//   1. The table P_b = b Q + H_1 for b < 16: P_0 = H_1 and P_b = P_(b - 1) + Q. Both the slopes
-//      and the points P_1, ..., P_15 are committed (degree-2 constraints), so that the points have
-//      degree 1.
+//   1. The table P_b = b Q + H_1 for b < 16: P_0 = H_1 and P_b = P_(b - 1) + Q. Only the slopes
+//      are committed: an addition keeps the degree of x (x' = lambda^2 - x_P - x_Q), so the
+//      points have degree 2 (x) and 3 (y).
 //   2. A ladder on the digits of u2, from the most significant: A = H_0, then for k = 63, ..., 0,
 //      A = 16 A (four doublings, except for k = 63) and A = A + S_k, where S_k = P_(b_k) is the
 //      two-dimensional Newton interpolation of the table (as a 4 x 4 grid) at (c_(k,0), c_(k,1)),
-//      of degree 3 + 3 + 1 = 7 (S_k isn't committed). A doubling commits to its slope lambda,
-//      constrained by lambda 2 y_A = 3 x_A^2 - 3. An addition or doubling keeps the degree of x_A
-//      (x' = lambda^2 - x_A - x_S), so along the ladder x_A has degree at most 7 and y_A at most
-//      8, and the doubling constraints have degree 14. Then
+//      of degree 3 + 3 + 2 = 8 (x) and 9 (y); S_k isn't committed. A doubling commits to its slope
+//      lambda, constrained by lambda 2 y_A = 3 x_A^2 - 3. An addition or doubling keeps the degree
+//      of x_A, so along the ladder x_A has degree at most 8 and y_A at most 9, and the doubling
+//      constraints have degree 16. Then
 //      A = u2 Q + (16^63 h_0 + h_1 sum_k 16^k) G.
 //   3. A fixed-base comb on the digits of u1: for k < 64, A = A + T_k[a_k], where
 //      T_k[a] = a 16^k G + H_2 are public, in Newton form (arith.hpp's Comb, of degree 15). Finally
 //      R = A + P*, for the public P* = -(16^63 h_0 + h_1 sum_k 16^k + 64 h_2) G. As in arith.hpp,
 //      the constraints have degree 16.
 //
-// So the QuickSilver degree DP is 16, that of the comb and of the range checks of the digits of u1.
-// (Without committing the table points, the selection would have degree 7 + 2 = 9 and the doubling
-// constraints 18. Selecting with the base-16 digits of u2 would need degree 15 + 1, and so
-// committing the selected points to keep the doublings within degree 16: 128 elements rather than
-// the 64 extra digits. With two digits per comb step, the comb would have degree 31.)
+// So the QuickSilver degree DP is 16: that of the doublings, the comb, and the range checks of the
+// digits of u1. (Selecting with the base-16 digits of u2 would have degree 15 + 3, so it would need
+// committing the table points and the selected points, 158 elements rather than the 64 extra
+// digits. With two digits per comb step, the comb would have degree 31.)
 //
 // Each digit a of u1 is constrained by prod_(m < 16) (a - m) = 0, each base-4 digit c of u2 by
 // c (c - 1) (c - 2) (c - 3) = 0, and Q by the curve equation.
@@ -91,19 +90,18 @@ constexpr size_t LADDER_STEPS = NUM_DOUBLINGS + NUM_WINDOWS;     // 316
 constexpr size_t COMB_STEPS = NUM_DIGITS;                        // one digit of u1 per step
 
 // F_p witness layout.
-constexpr size_t WP_Q = 0;                              // x_Q, y_Q
-constexpr size_t WP_TABLE = WP_Q + 2;                   // slopes of P_1, ..., P_15
-constexpr size_t WP_TABLE_PTS = WP_TABLE + RADIX - 1;   // x, y of P_1, ..., P_15
-constexpr size_t SUB = 4;                               // base of the digits of u2
-constexpr size_t WP_A = WP_TABLE_PTS + 2 * (RADIX - 1); // digits of u1
-constexpr size_t WP_B = WP_A + NUM_DIGITS;              // c_(k,0), c_(k,1) for k < 64
-constexpr size_t WP_LADDER = WP_B + 2 * NUM_DIGITS;     // slopes of the ladder, in order
-constexpr size_t WP_COMB = WP_LADDER + LADDER_STEPS;    // slopes of the comb
-constexpr size_t WP_FINAL = WP_COMB + COMB_STEPS;       // slope of the last step (+ P*)
+constexpr size_t WP_Q = 0;                           // x_Q, y_Q
+constexpr size_t WP_TABLE = WP_Q + 2;                // slopes of P_1, ..., P_15
+constexpr size_t SUB = 4;                            // base of the digits of u2
+constexpr size_t WP_A = WP_TABLE + RADIX - 1;        // digits of u1
+constexpr size_t WP_B = WP_A + NUM_DIGITS;           // c_(k,0), c_(k,1) for k < 64
+constexpr size_t WP_LADDER = WP_B + 2 * NUM_DIGITS;  // slopes of the ladder, in order
+constexpr size_t WP_COMB = WP_LADDER + LADDER_STEPS; // slopes of the comb
+constexpr size_t WP_FINAL = WP_COMB + COMB_STEPS;    // slope of the last step (+ P*)
 constexpr size_t WP_RHO = WP_FINAL + 1;
 constexpr size_t WP_SIGMA = WP_RHO + 1;
 constexpr size_t LP = WP_SIGMA + NUM_Y_CHECKS;
-static_assert(LP == 623);
+static_assert(LP == 593);
 static_assert(SUB * SUB == RADIX);
 
 // F_n witness layout.
@@ -289,19 +287,15 @@ struct HkArithRelation {
         const PV xq = ctx.wp(WP_Q), yq = ctx.wp(WP_Q + 1);
         ctx.add_p(yq * yq - ((xq * xq - three) * xq + p256::CURVE_B));
 
-        // The table P_b = b Q + H_1 (committed), as a 4 x 4 grid in Newton form.
+        // The table P_b = b Q + H_1, as a 4 x 4 grid in Newton form.
         std::array<std::array<PV, SUB>, SUB> tx, ty;
         tx[0][0] = ctx.cp(off.h1.x);
         ty[0][0] = ctx.cp(off.h1.y);
         for (size_t b = 1; b < RADIX; ++b) {
             PV px = tx[(b - 1) / SUB][(b - 1) % SUB], py = ty[(b - 1) / SUB][(b - 1) % SUB];
             add(px, py, xq, yq, ctx.wp(WP_TABLE + b - 1));
-            PV& bx = tx[b / SUB][b % SUB];
-            PV& by = ty[b / SUB][b % SUB];
-            bx = ctx.wp(WP_TABLE_PTS + 2 * (b - 1));
-            by = ctx.wp(WP_TABLE_PTS + 2 * (b - 1) + 1);
-            ctx.add_p(bx - px);
-            ctx.add_p(by - py);
+            tx[b / SUB][b % SUB] = px;
+            ty[b / SUB][b % SUB] = py;
         }
         newton_grid(tx);
         newton_grid(ty);
