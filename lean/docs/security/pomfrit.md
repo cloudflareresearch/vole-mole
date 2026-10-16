@@ -31,7 +31,7 @@ Line references are to the working tree at commit `6d7113e`.
 |---|---|---|---|
 | One-more unforgeability (paper Def. 2.5), classical ROM + ideal cipher | **Holds.** Tight under a τ-shift variant of UOV one-more preimage resistance (Thm U2). Under the paper's standard assumption (Def. 3.1) the reduction loses an extra `(Q₃+ℓ+1)·2^{−71}` (Thm U1) | Same (ZK is not used) | §5–§6 |
 | One-more unforgeability, QROM | **On paper, under new quantum-oracle assumptions** (U1-Q, U2-Q of `lean/docs/extraction/Q7-qrom-multi-extraction.md` §4: database-controlled programming replaces the mid-run extractor). From the paper's A-OMPR with the classical reduction: open, since Q2 extracts only after the run | Same | §7 |
-| Blindness against a malicious Issuer (paper Def. 2.4: malicious key, selective-failure form) | **Fails.** An honest-but-curious Issuer links with advantage ≈ 1 using about 310 SHAKE calls per (signature, session) pair (`lean/docs/zk.md` §4) | **Holds** (Thm B), with advantage `≤ ε_ZK^fix(Q_P = 2) + 2Q_X·2^{−256}`; [Lean] from G1, with (ZK-fix) as a hypothesis (`Privacy/PomFRIT.lean`), and with (ZK-fix) derived for the executable Lean prover with label rows down to its tape hypothesis (`Privacy/PomFRITLean.lean`, `blindness_lean`); in the ROM and ideal-cipher model with the Issuer seeing the tables, for the Lean prover, `≤ 4·εRO(q₃, q₅ + 1248, q_E + 18428) + 2·noHitProb + 2·2⁻¹²⁸` (`Privacy/PomFRITRO.lean`, `blindnessRO_lean`; the collision terms bounded in `Privacy/PomFRITDelta.lean`, `blindnessRO_lean_num`), and with the Issuer's key, messages and responses also reading the tables (except `H₂³`), `≤ 4·εRO(q₃ + 4i₃, q₅ + 4i₅ + 1872, q_E + 4i_E + 23035) + 2·noHitProb + 2·2⁻¹²⁸` (`Privacy/PomFRITRAGame.lean`, `blindnessRA_lean_num`), and reading `H₂³` too (joint budget), `≤ 4·εRO(q₃ + 6i₃, q₅ + 6i₅ + 1872, q_E + 6i_E + 23035) + 2·noHitProb + 2·2⁻¹²⁸ + [i₂ > 0]·4·(2⁻¹¹⁰ + εRO(6i₃, 6i₅ + 2184, 6i_E + 18428) + 2i₂·2⁻¹²⁸)` (`Privacy/PomFRITRAH.lean`, `blindnessRAH_lean_num`); both also with AES as random permutations (`εROPm` for `εRO`; `Privacy/PermRO.lean`, `Privacy/PermRA.lean`, `blindnessRO_lean_num_perm`, `blindnessRA_lean_num_perm`, `blindnessRAH_lean_num_perm`) | §8 |
+| Blindness against a malicious Issuer (paper Def. 2.4: malicious key, selective-failure form) | **Fails.** An honest-but-curious Issuer links with advantage ≈ 1 using about 310 SHAKE calls per (signature, session) pair (`lean/docs/zk.md` §4) | **Holds** (Thm B), with advantage `≤ ε_ZK^fix(Q_P = 2) + 2Q_X·2^{−256}`; [Lean] from G1, with (ZK-fix) as a hypothesis (`Privacy/PomFRIT.lean`), and with (ZK-fix) derived for the executable Lean prover with label rows down to its tape hypothesis (`Privacy/PomFRITLean.lean`, `blindness_lean`); in the ROM and ideal-cipher model with the Issuer seeing the tables, for the Lean prover, `≤ 4·εRO(q₃, q₅ + 1248, q_E + 18428) + 2·noHitProb + 2·2⁻¹²⁸` (`Privacy/PomFRITRO.lean`, `blindnessRO_lean`; the collision terms bounded in `Privacy/PomFRITDelta.lean`, `blindnessRO_lean_num`), and with the Issuer's key, messages and responses also reading the tables (except `H₂³`), `≤ 4·εRO(q₃ + 4i₃, q₅ + 4i₅ + 1872, q_E + 4i_E + 23035) + 2·noHitProb + 2·2⁻¹²⁸` (`Privacy/PomFRITRAGame.lean`, `blindnessRA_lean_num`), and reading `H₂³` too (joint budget), `≤ 4·εRO(q₃ + 6i₃, q₅ + 6i₅ + 1872, q_E + 6i_E + 23035) + 2·noHitProb + 2·2⁻¹²⁸ + [i₂ > 0]·4·(2⁻¹¹⁰ + εRO(6i₃, 6i₅ + 2184, 6i_E + 18428) + 2i₂·2⁻¹²⁸)` (`Privacy/PomFRITRAH.lean`, `blindnessRAH_lean_num`); both also with AES as random permutations (`εROPm` for `εRO`; `Privacy/PermRO.lean`, `Privacy/PermRA.lean`, `blindnessRO_lean_num_perm`, `blindnessRA_lean_num_perm`, `blindnessRAH_lean_num_perm`); from the real Clients' OS seeds and `XOF_seed` (G0), each `+ 2·(2Q_X + 1)·2⁻²⁵⁶` (`blindness*_seed`, `lean/docs/zk.md` §10.6) | §8 |
 | No selective failure via `finalize_issue`'s check (`pomfrit.cpp:207`) | Holds: the abort event is a function of the Issuer's own view | Holds | §8.3 |
 | Message binding; no re-targeting of a signature | Holds (part of unforgeability; L8 §7) | Holds | §9.1 |
 | Third parties cannot maul a signature (strong SE) | Holds against parties who never saw the request `t` | Holds against everyone, the Issuer included | §9.2 |
@@ -425,6 +425,9 @@ abort pattern revealed per session:
   independent uniform values.
   - The two games are identical unless `A` queries XOF_seed with a session's 32-byte seed, or the
     two seeds collide. The cost is `≤ 2Q_X·2^{−256}` (DS for independence from the other oracles).
+  - The collision is not charged. It is harmless here: for `µ₀ ≠ µ₁` the two inputs differ even
+    for equal seeds, and for `µ₀ = µ₁` the two worlds are equal. **[Lean]** (`lean/docs/zk.md`
+    §10.6): `(2Q_X + 1)·2^{−256}` per world, the `2^{−256}` from a model keyed by the seed alone.
 - **G2.** Replace both proofs by simulated ones, `(Sim₁, Sim₂)` of `lean/docs/zk.md` §5 with the fix.
   This is a reduction to (ZK-fix) with `Q_P = 2`.
   - The reduction plays the Clients. At `Sig1` it gets π₁ from the ZK challenger for prefix `r`
@@ -469,7 +472,15 @@ and `d` at 3075 and 3139; at `Layout.main` the definitions are the spec's, by `r
   for every Issuer (key, messages, responses). The signatures are revealed only if both sessions
   complete; the Issuer computes the per-session abort pattern itself. The only other hypothesis is
   that phase 1 outputs a `PROOF_BYTES` buffer (`Correct.voleGen_length`).
-- On paper: G0 → G1 (`2Q_X·2^{−256}`, Lemma DS) and, for an abstract prover, (ZK-fix) itself.
+- G0 → G1 is **[Lean]** for the games below (`lean/docs/zk.md` §10.6, `Privacy/SeedXOF.lean`,
+  `Privacy/SeedXOFGames.lean`): with `XOF_seed` a uniform table (a column of answers per seed,
+  over a finite type of contexts `dig(pk) ‖ msg`), uniform seeds, and an Issuer `A g` at table `g`
+  that reads at most `Q_X = q_k + q_g` columns, each theorem gains `2·(2Q_X + 1)·2^{−256}` in the
+  left/right difference (`blindness*_seed`). The note's `2Q_X·2^{−256}` names the seed collision
+  but does not charge it. In the full random-oracle model it is still right, since `µ₀ ≠ µ₁` keeps
+  the two inputs apart and `µ₀ = µ₁` makes the worlds equal; the Lean model keys the table by the
+  seed alone and pays `2^{−256}`. On paper: Lemma DS (c) (the seed XOF's independence from the
+  proof-system oracles, F-DS2) and, for an abstract prover, (ZK-fix) itself.
 - **[Lean] (ZK-fix) for the executable prover** (`lean/VoleMole/Privacy/PomFRITLean.lean`,
   `ZK/TwoPhase.lean`, `lean/docs/zk.md` §10.1). The Lean prover with dedicated label rows, run as
   `issue_request_with_seed` / `finalize_issue` run it (`leanProver`: step 1 with `r` and
@@ -518,7 +529,10 @@ and `d` at 3075 and 3139; at `Layout.main` the definitions are the spec's, by `r
     cipher (with the cipher's rows uniform functions; with uniform permutations read forward and
     inverse, the PRP/PRF switching term included, the same bound with `εROPm` for `εRO`,
     `blindnessRO_lean_num_perm`, and `blindnessRA_lean_num_perm` for the table-reading Issuer below,
-    `lean/docs/zk.md` §10.4), G0 → G1. The two sessions' slices need not be independent: with one
+    `lean/docs/zk.md` §10.4), and Lemma DS (c) for `XOF_seed`; G0 → G1 is mechanized
+    (`blindnessRO_lean_num_seed`, `blindnessRA_lean_num_seed`, `blindnessRAH_lean_num_seed`,
+    `blindnessSh_num_seed`, `blindnessRASh_num_seed`, the `OC` versions and `_perm`;
+    `+ 2·(2Q_X + 1)·2^{−256}`, `lean/docs/zk.md` §10.6). The two sessions' slices need not be independent: with one
     shared `H₃(r ‖ μ ‖ ρ ‖ 3)`, each session reading its column of the shared tables at its prefix
     (equal for sessions with equal `r` and refresher commitment), **`blindnessSh_num`**:
     `≤ 4·εRO(q_E + 18428, q₅ + 1248, q_E + 18428) + 2·noHitProb + 2·2⁻¹²⁸`, no `2⁻³⁶⁰` term (hop 0

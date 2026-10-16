@@ -495,6 +495,10 @@ probability ε_π ≤ q_π·2⁻²²² + q_π²·2⁻⁴⁴⁰.
 
 **(c) Up to n_seed·Q·2⁻²⁵⁶.** A3, the PomFRIT seed XOF, can be added to the list in (a), except
 with probability n_seed·Q·2⁻²⁵⁶.
+(Separately, the hop that the seed XOFs' outputs are uniform, given the adversary's own XOF
+queries, is mechanized for the privacy games with the XOF an independent table: `lean/docs/zk.md`
+§10.6. Part (c), the independence of A3 from the overlapping proof-system domains, stays on
+paper.)
 
 **(d) PomFRIT `hash_to_target`, as implemented: NOT covered by (a).** O_tgt is a random oracle, and
 it is independent of the oracles in (a) at every string outside the overlap with
