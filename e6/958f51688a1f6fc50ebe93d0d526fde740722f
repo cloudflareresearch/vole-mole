@@ -1,0 +1,25 @@
+src/ecdsa_pok/arith.hpp
+  s_45ee28f7dc1e9b::t_d6a8ec00dde6cf 267-268
+src/p256/field.hpp
+  s_45ee28f7dc1e9b::t_1cbac8064172ff 231-308
+src/voleith_p256/qs.hpp
+  s_45ee28f7dc1e9b::t_0019756b152eb5 24,110-137,149-177,244-251
+tests/p256/test_p256.cpp
+  s_45ee28f7dc1e9b::t_bed4368cd17eea 84-118
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.10",
+  "base_commit_sha": "e6958f51688a1f6fc50ebe93d0d526fde740722f",
+  "prompts": {},
+  "sessions": {
+    "s_45ee28f7dc1e9b": {
+      "agent_id": {
+        "tool": "opencode",
+        "id": "ses_ebfe7e377ffe00JYcsmgH2SCOu",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Bas Westerbaan <bas@cloudflare.com>"
+    }
+  }
+}
