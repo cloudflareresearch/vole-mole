@@ -744,8 +744,10 @@ the dead leaf's cells changes neither `P`'s run nor its statement): the fixed-st
 **The result** (`prEvent_accept_le_adaptive`, `prEvent_accept_le_adaptive_comb`, and per relation
 `moussakaIssue_accept_le_adaptive`, `ratatouilleIssue_accept_le_adaptive`,
 `moussakaRedeem_accept_le_adaptive`, `ratatouilleSpend_accept_le_adaptive`; PomFRIT below): for a
-family of instances `inst : ι → …` (one `labelRows`) with injective instance encodings (`hinj`,
-e.g. `t` of fixed length, `Spec.Moussaka.issueEncode_inj`, `redeemEncode_inj`):
+family of instances `inst : ι → …` (one `labelRows`) with injective instance encodings (`hinj`;
+for Moussaka issuance with `t` of fixed length it is `Audit.hinj_moussakaIssue`, from
+`Spec.Moussaka.issueEncode_inj`; for the other relations no family with more than one instance
+is shown to satisfy it in Lean, `redeemEncode_inj` being the corresponding spec-level fact):
 
     Pr[accept(stF s) ∧ ¬Extracted(stF s)] ≤ (the `_full` bound) + stmtBindEps q,
     stmtBindEps q = (q₀+3)·(q₂₁+1 + q₀+3)·2⁻²⁵⁶,

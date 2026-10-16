@@ -1013,9 +1013,10 @@ as a check of the theorem's conditions and kept as a smoke test of the executabl
     `anonymityRAK_lean_num`, `unlinkabilityRAK_lean_num` with a key stage that reads them too,
     §10.3).
     The per-proof `H₃` slices of these games are not a modelling step any more: with one shared
-    `H₃`, as in the scheme, every game is mechanized again (the PomFRIT Issuer that reads `H₂³`
+    `H₃`, as in the scheme, every game except the key-stage games (`*RAK*`) and PomFRIT's
+    prefix-counting bound (`*_pfx`) is mechanized again (the PomFRIT Issuer that reads `H₂³`
     included) with no prefix-collision (`ε_iv`-type) term (§10.5), and the seed-XOF hop to the
-    real Clients is mechanized for all of them (§10.6). Moussaka's non-colluding mode is
+    real Clients is mechanized for the same games (§10.6). Moussaka's non-colluding mode is
     mechanized with the honest Anchors running the Lean verifier on the same tables, with
     per-proof slices and with one shared `H₃`, and with the real Clients' seeds
     (`anonymityNCRO_lean_num`, `anonymityNCSh_num`, `unlinkability*`, `*_seed`, §10.7). Any number
@@ -1121,7 +1122,8 @@ collision term
 
 zero for the first proof. After the four steps the view is a function of the commitments, the
 nullifiers, the simulator coins and the tables; hiding (for the reduction with the coins and the
-tables fixed: a non-uniform reduction, which in an implementation samples the tables lazily) and
+tables fixed: a non-uniform reduction, the hypothesis quantifying over every fixed table and coin,
+so a worst case rather than an average; an efficient version would sample the tables lazily) and
 the exchange of the fresh nullifiers finish as before. For Ratatouille the programmed tables are a
 function of the requests the Issuer sees and of the coins (`Vtab`; a simulation that produced no
 proof programs independently of its statement, `progRO_of_error`, and otherwise the statement is
@@ -2244,8 +2246,9 @@ slices, concurrently with the challenge:
 In each game but the last the adversary's interaction does not read the tables (as in the `RO` games); its
 guess reads them with a budget (`AdversaryN.Budget`, and `AdversaryP.Budget`, `AdversaryAd.Budget`,
 `AdversaryAdM.Budget`, `AdversaryAdR.Budget`, `AdversaryIL.Budget`, `AdversaryILM.Budget`,
-`AdversaryILR.Budget` likewise: each challenge slice at `q₃` keys, `H₅` at `q₅`, the cipher at `q_E`, `H₂³` and the
-further sessions' slices freely).
+`AdversaryILR.Budget` likewise: each challenge slice at `q₃` keys, `H₅` at `q₅`, the cipher at
+`q_E`, `H₂³` freely, and in `realGameN` also the further sessions' slices, which only its guess
+receives).
 
 **The proof: a reduction to the table-reading games.** For a fixed tape `c` of the further
 sessions, an honest session is a function of the tables. So the game is the two-session game of
@@ -2641,7 +2644,8 @@ scheduler that reads in few steps pays for all `L`.
 slice game (§10.2: two sessions with equal `(nf, r)` or `(r, binder)` would share `H₃` inputs; on
 paper `C(n, 2)·2⁻¹⁹²` for Moussaka and Ratatouille's nullifiers, `C(n, 2)·2⁻³⁶⁰` for PomFRIT, about
 `2⁻¹²⁹` at `n = 2³²`); hiding of `Com` is assumed for the explicit reductions of every composed
-adversary (the further sessions' tapes fixed, a non-uniform reduction).
+adversary, uniformly over the further sessions' tapes, the simulator coins, the slices and the
+tables (a worst-case, non-uniform reduction).
 
 **Open.**
 - *Interleaved schedules* (done above, for all three protocols, Ratatouille's Clients spending up
@@ -2683,7 +2687,9 @@ adversary (the further sessions' tapes fixed, a non-uniform reduction).
   `H₄`-table games (`blindnessNH_lean`, `blindnessPH_lean`) with permutation rows (the lazy
   sampling patches single points of a row, above).
 - *Interactions that read the tables* in the many-session games (the `RA` form): done for the
-  interleaved games (the scheduler, above), which contain the adaptive schedules; for the
+  interleaved games (the scheduler, above), which can emulate the adaptive schedules (not stated
+  as a Lean lemma; Moussaka's and Ratatouille's interleaved bounds are about twice the adaptive
+  ones); for the
   non-adaptive `realGameN`/`realGameP` the composed adversary's interaction is `SReads` by
   `SReads.bind` with the adversary's own reads; not stated.
 
