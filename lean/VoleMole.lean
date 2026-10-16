@@ -111,6 +111,12 @@ import VoleMole.ROM.ChainParse
 import VoleMole.ROM.CipherChain
 import VoleMole.ROM.CipherSame
 import VoleMole.ROM.CipherFull
+import VoleMole.ROM.AdaptGame
+import VoleMole.ROM.StmtBind
+import VoleMole.ROM.AdaptChain
+import VoleMole.ROM.AdaptFull
+import VoleMole.ROM.AdaptComb
+import VoleMole.ROM.AdaptPomfrit
 import VoleMole.Privacy.Basic
 import VoleMole.Privacy.PomFRIT
 import VoleMole.Privacy.Moussaka

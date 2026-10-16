@@ -107,7 +107,7 @@ cipher.
 | Lemma | Content | Status |
 |---|---|---|
 | L0 | All hash domains are disjoint; AES inputs of different roles never collide | [paper] + [Lean] `Seed/Commitments.lean` |
-| L1 | Committed data (commitment preimages, leaf keys) is well defined and binding | [paper] + [Lean] unique leaf keys and straight-line key extraction from the cipher log (PRF view, forward queries), binding with explicit `ε_bind` `ROM/CipherBind.lean`, `ROM/CipherOpen.lean`; the ordering half of the `H₁` linking, `Coll₁` and Post (C3) `ROM/CipherChain.lean`, `ROM/CipherSame.lean` (PRF view, fixed statement) |
+| L1 | Committed data (commitment preimages, leaf keys) is well defined and binding | [paper] + [Lean] unique leaf keys and straight-line key extraction from the cipher log (PRF view, forward queries), binding with explicit `ε_bind` `ROM/CipherBind.lean`, `ROM/CipherOpen.lean`; the ordering half of the `H₁` linking, `Coll₁` and Post (C3) `ROM/CipherChain.lean`, `ROM/CipherSame.lean` (PRF view); statement binding for adaptive statements `ROM/StmtBind.lean`, `ROM/AdaptPomfrit.lean` |
 | L2 | A leaf the prover cannot open is always the hidden one | [paper] + [Lean] in the corrected form (accepting set hides the committed dead leaves; L2(c), L2(a)) `ROM/CipherSame.lean` |
 | L3 | KOS consistency check forces affine VOLE correlations (ε_KOS ≈ 2⁻¹⁵⁴) | [paper] + [Lean] `Seed/KOS.lean` + [test] |
 | L4 | QuickSilver with challenge-dependent constraints: either the constraints hold or few challenges accept | [paper] + [Lean] `Seed/QuickSilver.lean` + [test] |
@@ -511,6 +511,10 @@ used here add nothing).
 | `ROM/CipherChain.lean` | done (M6): chain data read off the logs before each challenge query (`preOf`, `midOf`, `accOf`, committed dead leaves `deadOf`; committed: `chainData_committed`); the hits `chainHit` (`prEvent_chainHit_le`); Post (C3) `PostJ`, `prEvent_joint_postOut_le` `≤ 1024·q_E·q₁·2⁻²⁵⁶` |
 | `ROM/CipherSame.lean` | done (M6): without hits and Post, the verifier's chain is the committed one (`chain_ident`: L1.4 ordering, `Coll₁`; `extractKey_pre_eq`); `sameChainHyp_ic` (`hsame`, L2(c)), `deadHiddenHyp_ic` (L2(a)) |
 | `ROM/CipherFull.lean` | done (M6): **all five relations with no remaining hypothesis**: `moussakaIssue_accept_le_full`, `ratatouilleIssue_accept_le_full`, `moussakaRedeem_accept_le_full`, `ratatouilleSpend_accept_le_full`, `pomfritRedeem_accept_le_full` (bounds in plan §2f); combination freshness `combFreshHyp_ic` |
+| `ROM/AdaptGame.lean` | done (M6, statement binding): the game with an adaptively chosen statement (`gameA`: the prover outputs a proof and a statement index; the extractor and the verifier run at that statement); per table it is the fixed game at the chosen statement (`evalWithAnswerFn_gameA`, `tableQueryLog_gameA`); Post, binding and an opened dead leaf bounded adaptively (`prEvent_joint_postOut_le_A`, `prEvent_joint_bindFail_le_A`, `prEvent_joint_deadOpen_le_A`) |
+| `ROM/StmtBind.lean` | done (M6): the statement committed at a chain query, read off the log before it (`stmtAt`: the decoded first `H₂⁰` preimage of the `mu₁` field of the `H₂¹` input, followed back from `H₂²`, `H₂³` inputs); statement hits (`stmtHit`, `≤ (n₂₁+n₀)·2⁻²⁵⁶` per `H₂⁰` query); the identification `stmtAt_ident` |
+| `ROM/AdaptChain.lean`, `ROM/AdaptFull.lean`, `ROM/AdaptComb.lean` | done (M6): the adaptive union bounds (`prEvent_accept_le_adaptive_E`, `…_comb_E`: each chain query charged at the statement committed there) and **the four non-delayed relations with adaptively chosen instances**: `moussakaIssue_accept_le_adaptive`, `ratatouilleIssue_accept_le_adaptive`, `moussakaRedeem_accept_le_adaptive`, `ratatouilleSpend_accept_le_adaptive`: the `_full` bound plus `stmtBindEps q = (q₀+3)(q₂₁+q₀+4)·2⁻²⁵⁶`, for instance families with injective encodings (plan §2g) |
+| `ROM/AdaptPomfrit.lean` | done (M6): PomFRIT's delayed binding (`μ` in the `H₂²` input, `stmtAtD`, `stmtHitD`, `stmtAtD_ident`); transport of the bad events between statements with equal parameters (`chainBad_transport`, `combBad_transport`); `pomfritRedeem_accept_le_adaptive`: the `_full` bound plus `(q₀+3)(q₂₂+q₀+4)·2⁻²⁵⁶`, for any family of signatures and messages (the `μ` preimage determines the target, which is all the relation reads) |
 
 The phase-B theorems of `ROM/Accept.lean` hold for every CTR PRG (`[HasPrg]`) and take as
 hypotheses binding (`ε_bind`), the "same chain" step with L2(c) (`hsame : SameChainHyp`), L2(a)
@@ -527,8 +531,13 @@ query counts, e.g. for Moussaka issuance
 
 with `openHashEps q = (q₁+18)(17q₁+q₂₁)·2⁻²⁵⁶ + (q₂₁+1)q₂₂·2⁻¹⁰⁸⁸ + (q₂₂+1)q₂₃·2⁻⁴⁴⁸ + 2⁻¹²⁸` and
 `chainHitEps q = (q₁+18)(18q₁+q₂₁+325)·2⁻²⁵⁶ + (q₂₁+1)(q₂₁+q₂₂+2)·2⁻¹⁰⁸⁸ + (q₂₂+1)(q₂₂+q₂₃+2)·2⁻⁴⁴⁸`.
-Not done: inverse cipher queries (permutation model) and the statement-binding term
-`(q²+q)·2⁻²⁵⁶` for adaptively chosen statements (plan §2c).
+With the statement chosen by the prover (it outputs the statement with its proof; the extractor
+runs on the log at that statement), the same bound plus the statement-binding term
+`stmtBindEps q = (q₀+3)(q₂₁+q₀+4)·2⁻²⁵⁶` holds for all five relations
+(`*_accept_le_adaptive`, `ROM/AdaptFull.lean`, `ROM/AdaptComb.lean`, `ROM/AdaptPomfrit.lean`; plan
+§2g): for Moussaka issuance and redemption and Ratatouille issuance and spend for instance
+families with injective encodings, for PomFRIT (delayed binding, `(q₀+3)(q₂₂+q₀+4)·2⁻²⁵⁶`) for
+any family of signatures and messages. Not done: inverse cipher queries (permutation model).
 
 ## Gaps
 
@@ -554,8 +563,10 @@ What is **not** established, roughly in order of importance:
    ideal-cipher model (PRF view, forward cipher queries, fixed statement) the remaining terms are
    mechanized too: binding (`ε_bind`), the "same chain" step (`ε_chain`: L1.4's ordering, `Coll₁`,
    Post/C3) and L2 (`ε_dead`, with the corrected interface of plan §2e F2), so all five relations
-   have a bound with no hypothesis left (`ROM/CipherFull.lean`, plan §2f). Still on paper: inverse
-   cipher queries (the permutation model) and statement binding (`(q²+q)·2⁻²⁵⁶`).
+   have a bound with no hypothesis left (`ROM/CipherFull.lean`, plan §2f), and for adaptively
+   chosen statements with the statement-binding term `(q₀+3)(q₂₁+q₀+4)·2⁻²⁵⁶` added
+   (`*_accept_le_adaptive`, plan §2g). Still on paper: inverse cipher queries (the permutation
+   model).
 2. **Code ↔ model is tested, not proved.** Each Lean model was written by reading the C++ and is
    tied to it by tests in `tests/voleith/test_lean_models.cpp` (and, when finished, the `Arith`
    cross-check). Compiler behaviour, memory safety and constant-time execution are out of scope.
