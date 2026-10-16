@@ -528,6 +528,10 @@ and `d` at 3075 and 3139; at `Layout.main` the definitions are the spec's, by `r
   (`IBudget i₃ i₅ i_E`): the key-and-messages stage and the response stage at every pair of
   requests are consistent table readers (`SReads`) of each slice and the shared tables, at most
   `i₃` slice keys, `i₅` `H₅` keys, `i_E` cipher keys and **no `H₂³` key**; the guess as before.
+  For an Issuer whose stages are VCVio oracle computations over the tables (`AdversaryOC`,
+  `lean/VoleMole/ROM/PrivacyReads.lean`), consistency is a theorem and the budget is the
+  syntactic query bound (`QBudget`): `blindnessOC_lean_num`, `blindnessOC_lean_num_perm`, the
+  same bounds with no consistency hypothesis.
   `hash_to_target`, `XOF_seed` and the refresher commitment stay SHAKE, outside the tables.
   - The zero-knowledge theorem (`zk2_adaptive`, `zk2_rom_ic_h23A_num`): the continuation (the
     Issuer's response to the request computed from the session's step-1 output) reads the
@@ -742,4 +746,4 @@ dedicated to PomFRIT.
 | Two-phase zero knowledge in the ROM and ideal-cipher model with `H₂³` visible, the continuation reading the tables (`lean/VoleMole/ZK/TwoPhaseRO.lean`, `ZK/TwoPhaseIC.lean`, `ZK/TwoPhaseReadsRO.lean`) | `zk2_rom_ic_h23`, `zk2_rom_ic_h23_num`, `zk2_ro`, `lean_zeroKnowledgeROS2` |
 | Blindness in the ROM and ideal-cipher model, both sessions on shared tables, the Issuer's guess seeing them (`lean/VoleMole/Privacy/PomFRITRO.lean`) | `blindnessRO`, `blindnessRO_lean`, `hop0`, `hop1`, `G2_swap`, `realGameRO_iff`; the collision term: `deltaRO_le`, `blindnessRO_lean_num` (`Privacy/PomFRITDelta.lean`) |
 | Two-phase zero knowledge with a continuation that reads the slice, `H₅` and the cipher after step 1 (`lean/VoleMole/ZK/TwoPhaseAd.lean`) | `zk2_rom_ic_h23A`, `zk2_rom_ic_h23A_num`, `zk2_adaptive`, `Hyp2RA` |
-| Blindness with the Issuer's key, messages and responses reading the tables except `H₂³` (`lean/VoleMole/Privacy/PomFRITRA.lean`, `Privacy/PomFRITRAGame.lean`) | `AdversaryRA`, `IBudget`, `hyp2RA_R`, `hyp2RA_S`, `budget_D0A`, `budget_D1A`, `hop0RA`, `hop1RA`, `G2RA_swap`, `deltaRA_le`, `blindnessRA`, `blindnessRA_lean_num` |
+| Blindness with the Issuer's key, messages and responses reading the tables except `H₂³` (`lean/VoleMole/Privacy/PomFRITRA.lean`, `Privacy/PomFRITRAGame.lean`) | `AdversaryRA`, `IBudget`, `hyp2RA_R`, `hyp2RA_S`, `budget_D0A`, `budget_D1A`, `hop0RA`, `hop1RA`, `G2RA_swap`, `deltaRA_le`, `blindnessRA`, `blindnessRA_lean_num`; for an Issuer written as oracle computations over the tables (no consistency hypothesis, `ROM/PrivacyReads.lean`): `AdversaryOC`, `blindnessOC_lean_num`, `blindnessOC_lean_num_perm` |

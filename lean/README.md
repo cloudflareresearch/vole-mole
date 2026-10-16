@@ -337,6 +337,12 @@ guess reads the tables. Here its interaction does too.
   `εROPm`, `εAdPm`, `εROPmP`) and `blindnessRA_lean_num_perm` (`4·εROPm(pP; q₃ + 4i₃,
   q₅ + 4i₅ + 1872, q_E + 4i_E + 23035) + 2·noHitProb + 2·2⁻¹²⁸`, from `zk2_adaptive_perm`); each is
   the function-row bound to within the switching terms (`switchEps ≤ 2⁻¹¹³·²` per error term).
+- **Interactions as oracle computations** (`ROM/TableReads.lean`, `ROM/PrivacyReads.lean`): an
+  interaction written as a VCVio `OracleComp` over the tables (`TSpec`), run on them (`runT`), is
+  a consistent table reader with its query budget (`QBudget`, VCVio's `IsQueryBoundP`):
+  `sReads_runT`. So `IBudget` is derived (`AdversaryOC.iBudget`), and `anonymityOC_lean_num`,
+  `unlinkabilityOC_lean_num`, `blindnessOC_lean_num` (and `_perm`) state the `*RA` bounds with
+  no consistency hypothesis; `zk_adaptive_oc`, `lean_zeroKnowledgeROA_oc` for one proof.
 
 `lake exe zk_sim` checks the tape equation, the simulator and the ideal-tape prover on all 18 KAT
 runs of each layout.
@@ -357,8 +363,12 @@ runs of each layout.
   Ratatouille's H1, Moussaka's `issueRequest_eq`); this hop is on paper.
 - *Hiding of `Com`* (Moussaka, Ratatouille): an assumption, the hypothesis `εhide` on explicit
   reductions.
-- *Table-reading interactions* must be consistent readers (`SReads`; true of every deterministic
-  query algorithm). A PomFRIT Issuer whose interaction reads `H₂³` is **open**: the two-phase
+- *Table-reading interactions* given as functions of the tables must be consistent readers
+  (`SReads`). Written as VCVio oracle computations over the tables, consistency is a theorem and
+  the budget is the syntactic query bound (`ROM/TableReads.lean`, `sReads_runT`;
+  `ROM/PrivacyReads.lean`: `anonymityOC_lean_num`, `unlinkabilityOC_lean_num`,
+  `blindnessOC_lean_num` and their `_perm` versions, the same bounds with no consistency
+  hypothesis). A budget is needed in either form (`not_sReads_slice`). A PomFRIT Issuer whose interaction reads `H₂³` is **open**: the two-phase
   simulator programs `H₂³` at the zero-prefix block when the continuation stops, and the
   reductions see only programmed tables (`docs/zk.md` §10.3).
 - *Scope of the games.* Fixed sizes (two sessions, two Clients, the stated rounds); the general
@@ -559,6 +569,7 @@ used here add nothing).
 | `ROM/PermOpen.lean` | done: the permutation game `gameP`, the bridge `prEvent_jointP_le_add`; binding `≤ 2·q_E²·p² + ε_open`; the opened dead leaf `≤ q₁·p'²`, `p' = 1/(2¹²⁸−q_E−4607)` (`prEvent_perm_deadQueried_le_g`); `ε_open ≤ openHashEps q + q₁·p'²` |
 | `ROM/PermPost.lean` | done: finding F3 (the PRF view's Post is not small with inverse queries); the point-tied Post `PostP` (half-targets of the chains, with their `iv` from N1), `≤ q_E·4608·q₂₁·p²` (`prEvent_perm_postP_le`); outside it the committed keys are found before the chain (`keysPre_of_not_postP_gen`) |
 | `ROM/PermFull.lean`, `ROM/PermAdapt.lean` | done: **all five relations in the permutation model with inverse queries**, fixed statements (`*_accept_le_perm`) and adaptively chosen ones (`*_accept_le_adaptive_perm`): the PRF-view bounds with `2⁻¹²⁸` per fresh cipher value replaced by `p` (`p'` for the dead-leaf guess) and Post by `q_E·4608·q₂₁·p²`; combined relations' hash count `n + q₂₁` (plan §2h) |
+| `ROM/TableReads.lean`, `ROM/PrivacyReads.lean` | done: **table-reading interactions as oracle computations**: an `OracleComp` over the tables (`TSpec`), run on them (`runT`), is a consistent table reader (`SReads`) with its syntactic query budget (`QBudget`, VCVio's `IsQueryBoundP`): `sReads_runT` (consistency by construction, `runT_congr`); a budget cannot be dropped (`not_sReads_slice`); `zk_adaptive_oc`, `lean_zeroKnowledgeROA_oc`; the privacy games' adversaries `AdversaryOC` (`toRA`, `iBudget`) and `anonymityOC_lean_num`, `unlinkabilityOC_lean_num`, `blindnessOC_lean_num` with their `_perm` versions: the `*RA` bounds with no consistency hypothesis (`docs/zk.md` §10.3) |
 
 The phase-B theorems of `ROM/Accept.lean` hold for every CTR PRG (`[HasPrg]`) and take as
 hypotheses binding (`ε_bind`), the "same chain" step with L2(c) (`hsame : SameChainHyp`), L2(a)
@@ -657,7 +668,9 @@ What is **not** established, roughly in order of importance:
    modelling steps (SHAKE as a random oracle, AES as an ideal cipher; the PRP/PRF switching term
    is proved, for one proof and for every game, `Privacy/PermRO.lean`, `Privacy/PermRA.lean`),
    independent per-proof `H₃` slices, the seed-XOF hop, the hiding of `Com`, the
-   consistency of a table-reading interaction, a PomFRIT interaction that reads `H₂³` (open),
+   consistency of a table-reading interaction given as a function of the tables (automatic for
+   one written as an oracle computation, `ROM/PrivacyReads.lean`), a PomFRIT interaction that
+   reads `H₂³` (open),
    Moussaka's non-colluding mode (Thm 4b), the general game schedule and the quantum versions.
    The abstract privacy theorems (`VoleMole/Privacy/`) take per-proof zero knowledge and hiding of
    `Com` as hypotheses, so they apply to any proof system with the label-row fix; on `main` the
