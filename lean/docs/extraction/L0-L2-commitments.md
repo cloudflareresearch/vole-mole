@@ -571,9 +571,17 @@ any realistic budget.
   `Hit₁` or its `H₂¹`, `H₂²` analogues up the chain, or the verifier's fresh `H₂³` answer is `Δ`:
   the "linking" half of L1.4, without the ordering), or the prover's `H₁` input contains the
   commitment of two cipher cells it never queried (a two-cell guess; the GGM derivation reads no
-  leaf-commitment point). Still on paper: the ordering half of L1.4 (preimages queried *before*
-  `Θ`), `Coll₁`, and L2 with `Post` (C3). Note for the Lean interface (plan §2e, F2): the formal L2
-  hypothesis takes the "accepting set" to be the `chal3` on the committed chain computed with the
-  extractor's keys, garbage at dead leaves; a prover that uses the garbage key itself at a hidden
-  dead leaf makes that set all of `chal3`, so the formal hypothesis fails although L2 of §5.2 holds.
-  The accepting set must exclude the `Δ` that open a committed dead leaf, as in §6.
+  leaf-commitment point). The rest of L1.4 and L2 is now in Lean too (`ROM/CipherChain.lean`,
+  `ROM/CipherSame.lean`, `ROM/CipherFull.lean`; plan §2f), for a fixed statement: the data committed
+  at the verifier's `H₂¹` input are read off the logs before its first query; without a hit (an
+  `H₁`, `H₂¹`, `H₂²` answer equal to a field of an earlier input or to an earlier answer of its
+  kind) the verifier's preimages were queried before `Θ` in order and are the first ones found (the
+  ordering half of L1.4 and `Coll₁`); without Post (C3: a cipher query, first at both points of a
+  key, whose blocks form a block of an earlier `H₁` input; `≤ 1024·q_E·q₁·2⁻²⁵⁶`) the keys found
+  before `Θ` are the extractor's. L2 is used in the form of §5.2/§6: the accepting set excludes the
+  `Δ` that open a committed dead leaf (the earlier formal hypothesis took the challenges on the
+  committed chain with garbage keys at dead leaves, which a prover using the garbage key at a hidden
+  dead leaf makes all of `chal3`; plan §2e F2). L2(c) is then deterministic, and L2(a) follows from
+  Post and the opened-dead-leaf bound. The resulting soundness bounds for all five relations have
+  no remaining hypothesis (`*_accept_le_full`). Still paper only: inverse cipher queries and the
+  permutation model, and statement binding for adaptively chosen statements.

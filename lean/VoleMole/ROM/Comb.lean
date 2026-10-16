@@ -26,7 +26,10 @@ last).
 for an adversary with at most `n` queries in total and `q₁`, `q₂`, `Q` to `H₂¹`, `H₂²`, `H₂³`.
 
 The chain data at an `H₂²` query (`midOf`, the system at a free `l`, the witness predicate) must
-read neither the `H₂²` answer nor any combination cell.
+read neither the `H₂²` answer nor any combination cell outside `C.pre y g` (e.g. the log before
+`y`, `ROM/CipherFull.lean`'s `preCells`), and `combBad` at `H₂²` asks the combination cell of the
+answer to be outside `C.pre y g` (for the verifier's own query this is a freshness hypothesis,
+`ROM/Accept.lean`'s `CombFreshHyp`).
 
 **The relations**: `moussakaRedeem_prEvent_le`, `ratatouilleSpend_prEvent_le`,
 `pomfritRedeem_prEvent_le` (`ε_c = 2⁻¹²⁸` from `*_comb_bad_gf128`; PomFRIT's system and target
@@ -76,22 +79,31 @@ structure CombData (st : Statement) (M : ℕ) where
   accOf : ByteArray → Table → Bytes 16 → Prop
   /-- The relation's combination domain separator. -/
   dst : ByteArray
+  /-- The cells the data at an `H₂²` query `y` may have read (e.g. the log before `y`): the data
+  must not read the combination cells outside it. Empty for data that read no combination cell. -/
+  pre : ByteArray → Table → List Dom := fun _ _ => []
 
 namespace CombData
 
 variable {st : Statement} {M : ℕ} (C : CombData st M)
 
 /-- The data at each query reads neither the query's own answer nor, at `H₂²`, a combination
-cell. -/
+cell outside `C.pre y g`; and `C.pre y g` itself reads neither `H₂²(y)` nor such a cell. -/
 structure Committed : Prop where
   pre : ∀ x (g : Table) u, C.preOf x (Function.update g (.h21, x) u) = C.preOf x g
   acc : ∀ z (g : Table) u, C.accOf z (Function.update g (.h23, z) u) = C.accOf z g
   mid : ∀ y (g : Table) u, C.midOf y (Function.update g (.h22, y) u) = C.midOf y g
-  midComb : ∀ y (g : Table) x v, C.midOf y (Function.update g (.comb M, x) v) = C.midOf y g
+  midComb : ∀ y (g : Table) x v, ((.comb M, x) : Dom) ∉ C.pre y g →
+    C.midOf y (Function.update g (.comb M, x) v) = C.midOf y g
   sys : ∀ y (g : Table) u, C.sysOf y (Function.update g (.h22, y) u) = C.sysOf y g
-  sysComb : ∀ y (g : Table) x v, C.sysOf y (Function.update g (.comb M, x) v) = C.sysOf y g
+  sysComb : ∀ y (g : Table) x v, ((.comb M, x) : Dom) ∉ C.pre y g →
+    C.sysOf y (Function.update g (.comb M, x) v) = C.sysOf y g
   wit : ∀ y (g : Table) u, C.witOf y (Function.update g (.h22, y) u) = C.witOf y g
-  witComb : ∀ y (g : Table) x v, C.witOf y (Function.update g (.comb M, x) v) = C.witOf y g
+  witComb : ∀ y (g : Table) x v, ((.comb M, x) : Dom) ∉ C.pre y g →
+    C.witOf y (Function.update g (.comb M, x) v) = C.witOf y g
+  preMid : ∀ y (g : Table) u, C.pre y (Function.update g (.h22, y) u) = C.pre y g
+  preComb : ∀ y (g : Table) x v, ((.comb M, x) : Dom) ∈ C.pre y g →
+    ((.comb M, x) : Dom) ∈ C.pre y (Function.update g (.comb M, x) v)
 
 /-- The `H₂¹` and `H₂³` parts, as a `ChainData` (its system is unused). -/
 def toChainData : ChainData st where
@@ -127,7 +139,8 @@ end CombData
 `chal2 = g(H₂², y)` and `l = g(H_comb, chal2 ‖ dst)`; elsewhere those of `chainBad`. -/
 def combBad {st : Statement} {M : ℕ} (C : CombData st M) (T : CrtTables) (S : Finset Blocks)
     (N : ℕ) (t : Dom) (g : Table) : Prop :=
-  if t.1 = .h22 then C.qsComb T S t.2 g (g (.h22, t.2)) (g (combKey M C.dst (g (.h22, t.2))))
+  if t.1 = .h22 then C.qsComb T S t.2 g (g (.h22, t.2)) (g (combKey M C.dst (g (.h22, t.2)))) ∧
+    combKey M C.dst (g (.h22, t.2)) ∉ C.pre t.2 g
   else chainBad C.toChainData T S N t g
 
 /-! ## The `H₂²` bound -/
@@ -138,32 +151,40 @@ variable {st : Statement} {M : ℕ} (C : CombData st M) (K : Finset Dom)
 
 /-- The `H₂²` event at a table `Y` whose `H₂²(y)` answer is `u`, whose `H_comb(u ‖ dst)` answer is
 `v`, and whose chain data are those of `X`. -/
-lemma combBad_h22_iff (T : CrtTables) (S : Finset Blocks) (N : ℕ) {y : ByteArray} {Y X : Table}
+lemma combBad_h22_iff (T : CrtTables) (S : Finset Blocks) {y : ByteArray} {Y X : Table}
     {u : Bytes 56} {v : Ans (combKey M C.dst u)} (hu : Y (.h22, y) = u)
     (hv : Y (combKey M C.dst u) = v) (hmid : C.midOf y Y = C.midOf y X)
     (hsys : C.sysOf y Y = C.sysOf y X) (hwit : C.witOf y Y = C.witOf y X) :
-    combBad C T S N (.h22, y) Y ↔ C.qsComb T S y X u v := by
+    C.qsComb T S y Y (Y (.h22, y)) (Y (combKey M C.dst (Y (.h22, y)))) ↔ C.qsComb T S y X u v := by
   subst hv hu
-  simp only [combBad, ite_true, CombData.qsComb, CombData.wC]
+  simp only [CombData.qsComb, CombData.wC]
   rw [hmid, hsys, hwit]
 
 /-- The `H₂²` event at a table where the cells `H₂²(y)` and `H_comb(u ‖ dst)`, both uncached,
-were set to `u` and `v`: the chain data are those of the table without them. -/
+were set to `u` and `v`: then the combination cell is outside `C.pre y`, so the chain data are
+those of the table without the two updates. -/
 lemma combBad_h22_update (hC : C.Committed) (T : CrtTables) (S : Finset Blocks) (N : ℕ)
     (hK : ∀ u, combKey M C.dst u ∈ K) {y : ByteArray} (hy : ((.h22, y) : Dom) ∈ K)
     (c : (ofFn fun d : K => Ans d.val).QueryCache) (hc : c ⟨_, hy⟩ = none) (u : Ans (.h22, y))
     (v : Ans (combKey M C.dst u)) (hv : c ⟨_, hK u⟩ = none) (g : (d : K) → Ans d.val) :
     combBad C T S N (.h22, y) (extendTable K (completeTable c
-        (Function.update (Function.update g ⟨_, hK u⟩ v) ⟨_, hy⟩ u))) ↔
+        (Function.update (Function.update g ⟨_, hK u⟩ v) ⟨_, hy⟩ u))) →
       C.qsComb T S y (extendTable K (completeTable c g)) u v := by
   rw [← completeTable_update_of_none c _ hc, ← completeTable_update_of_none c _ hv,
     extendTable_update, extendTable_update]
+  set X := extendTable K (completeTable c g)
   have hne : combKey M C.dst u ≠ (.h22, y) := fun h => by cases congrArg Prod.fst h
-  refine combBad_h22_iff C T S N (Function.update_self _ _ _) ?_ ?_ ?_ ?_
+  have hu : Function.update (Function.update X (combKey M C.dst u) v) (.h22, y) u (.h22, y) = u :=
+    Function.update_self _ _ _
+  simp only [combBad, ite_true]
+  rintro ⟨hq, hfresh⟩
+  rw [hu, hC.preMid] at hfresh
+  have hfresh' : combKey M C.dst u ∉ C.pre y X := fun h => hfresh (hC.preComb y X _ v h)
+  refine (combBad_h22_iff C T S hu ?_ ?_ ?_ ?_).1 hq
   · exact (Function.update_of_ne hne _ _).trans (Function.update_self _ _ _)
-  · exact (hC.mid _ _ _).trans (hC.midComb _ _ _ _)
-  · exact (hC.sys _ _ _).trans (hC.sysComb _ _ _ _)
-  · exact (hC.wit _ _ _).trans (hC.witComb _ _ _ _)
+  · exact (hC.mid _ _ _).trans (hC.midComb _ _ _ _ hfresh')
+  · exact (hC.sys _ _ _).trans (hC.sysComb _ _ _ _ hfresh')
+  · exact (hC.wit _ _ _).trans (hC.witComb _ _ _ _ hfresh')
 
 set_option exponentiation.threshold 500 in
 /-- **The `H₂²` bound of a combined relation**, on the tables over a finite key set `K` holding
@@ -202,8 +223,7 @@ theorem prEvent_combBad_h22_le (hC : C.Committed) (T : CrtTables) (S : Finset Bl
       ((C.sysOf y (X g) (combDec v)).Holds (C.wC T S y (X g)) ∧
         ¬C.witOf y (X g) (C.wC T S y (X g)))) ?_).trans ?_
     · intro u v g h
-      have key := combBad_h22_update C K hC T S N hK hy c hc u v h.1 g
-      exact key.1 h.2
+      exact combBad_h22_update C K hC T S N hK hy c hc u v h.1 g h.2
     refine (prEvent_three_or_le _ _).trans (add_le_add ?_ ?_)
     · refine prEvent_three_le_of_first _ fun v g => prEvent_uniformSample_le ?_
       exact (prU_qs_bad_le _ _).trans_eq (by rw [hn'])
@@ -293,6 +313,82 @@ theorem prEvent_le_comb_terms {α : Type} {T : CrtTables} (hT : liftInvOk T = tr
         rw [← add_assoc]
         exact add_le_add (add_le_add hgood hbind) hdead
 
+set_option exponentiation.threshold 500 in
+set_option maxRecDepth 4000 in
+/-- **`prEvent_le_comb_terms` with a second family of bad queries** (`hit`, as
+`prEvent_le_chain_terms_hit`): `Σ_k q k · εh k` is added. -/
+theorem prEvent_le_comb_terms_hit {α : Type} {T : CrtTables} (hT : liftInvOk T = true)
+    {st : Statement} {M : ℕ} (C : CombData st M) (hC : C.Committed) (S : Finset Blocks)
+    {n' : ℕ} (hn' : ∀ y g l, (C.sysOf y g l).length = n') {εc : ℝ≥0∞}
+    (hεc : ∀ y g w, prU (Fin M → GF128) (fun l => (C.sysOf y g l).Holds w ∧ ¬C.witOf y g w) ≤ εc)
+    (N : ℕ) (oa : OracleComp spec α) (n : ℕ) (hn : IsTotalQueryBound oa n) (q : Kind → ℕ)
+    (hq : IsKindQueryBound oa q) (event bindFail deadFail : α → Prop) {εb εd : ℝ≥0∞}
+    (hbind : Pr{let r ← (simulateQ randomOracle oa).run' ∅}[bindFail r] ≤ εb)
+    (hdead : Pr{let r ← (simulateQ randomOracle oa).run' ∅}[deadFail r] ≤ εd)
+    (hit : Dom → Table → Prop) (εh : Kind → ℝ≥0∞) (hεh : ∀ k ∉ hitKinds, εh k = 0)
+    (hhit : ∀ t g, Pr{let u ← $ᵗ (Ans t)}[hit t (Function.update g t u)] ≤ εh t.1)
+    (htrace : ∀ g : Table, let r := evalWithAnswerFn (QueryImpl.ofFn g) oa;
+      event r → ¬bindFail r → ¬deadFail r →
+        ∃ e ∈ tableQueryLog oa g, combBad C T S N e.1 g ∨ hit e.1 g) :
+    Pr{let r ← (simulateQ randomOracle oa).run' ∅}[event r] ≤
+      q .h21 * epsKOS #S (Chain.kosL st) +
+        q .h22 * (ENNReal.ofReal (Seed.epsQS (2 ^ 128) (2 ^ 64) n') + εc + (n : ℝ≥0∞) / 2 ^ 448) +
+        q .h23 * ((N : ℝ≥0∞) / 2 ^ 128) + εb + εd + hitSum q εh := by
+  let mx := (simulateQ randomOracle oa).run' ∅
+  let K : Finset Dom := possibleQueryKeys oa ∪ Finset.univ.image (combKey M C.dst)
+  have hK : ∀ u, combKey M C.dst u ∈ K := fun u =>
+    Finset.mem_union_right _ (Finset.mem_image_of_mem _ (Finset.mem_univ u))
+  have hS : AllQueriesSatisfy oa (· ∈ K) :=
+    (allQueriesSatisfy_possibleQueryKeys oa).mono fun d h => Finset.mem_union_left _ h
+  let : SampleableType ((d : K) → Ans d.val) := SampleableType.piOfFintype _
+  have hgood : Pr{let r ← mx}[event r ∧ ¬bindFail r ∧ ¬deadFail r] ≤
+      q .h21 * epsKOS #S (Chain.kosL st) +
+        q .h22 * (ENNReal.ofReal (Seed.epsQS (2 ^ 128) (2 ^ 64) n') + εc + (n : ℝ≥0∞) / 2 ^ 448) +
+        q .h23 * ((N : ℝ≥0∞) / 2 ^ 128) + hitSum q εh := by
+    refine (prEvent_randomOracle_le_of_fresh_bad_queries oa K hS
+      (fun t => combEps st S n' εc n N t.1 + εh t.1) _
+      (worstCaseCostBound_of_kindQueryBound oa hitKinds (fun k => combEps st S n' εc n N k + εh k)
+        (fun k hk => by
+          rw [combEps_eq_zero st S n' εc n N k fun h => hk (chainKinds_subset_hitKinds h),
+            hεh k hk, add_zero]) q hq)
+      n hn _ (fun t g => combBad C T S N t g ∨ hit t g) ?_
+      fun g h => htrace g h.1 h.2.1 h.2.2).trans_eq ?_
+    · rintro c ⟨⟨k, x⟩, hx⟩ hc hcard
+      refine (prEvent_or_le _ _ _).trans (add_le_add ?_ ?_)
+      · cases k
+        case h22 => exact prEvent_combBad_h22_le C K hC T S N hn' hεc hK hx c hc hcard
+        case h21 | h23 =>
+          refine prEvent_completeTable_cell_le c _ hc
+            (fun t G => combBad C T S N t.val (extendTable K G)) _ fun G => ?_
+          simp only [extendTable_update, combBad, reduceCtorEq, ite_false]
+          exact prEvent_chainBad_update_le hT C.toChainData (C.toChainData_committed hC) S
+            (n := 0) (fun _ _ => rfl) N _ _
+        all_goals
+          refine le_of_eq_of_le (prEvent_eq_zero_of_forall_not _ _ fun G h => ?_) zero_le
+          simp [combBad, chainBad] at h
+      · refine prEvent_completeTable_cell_le c _ hc
+          (fun t G => hit t.val (extendTable K G)) _ fun G => ?_
+        simp only [extendTable_update]
+        exact hhit _ _
+    · simp only [hitKinds, combEps, hitSum]
+      rw [Finset.sum_insert (by decide), Finset.sum_insert (by decide),
+        Finset.sum_insert (by decide), Finset.sum_singleton]
+      simp only [zero_add, mul_add]
+      ring
+  calc Pr{let r ← mx}[event r]
+      ≤ Pr{let r ← mx}[(event r ∧ ¬bindFail r ∧ ¬deadFail r) ∨ (bindFail r ∨ deadFail r)] :=
+        prEvent_mono mx _ _ fun r h => by tauto
+    _ ≤ Pr{let r ← mx}[event r ∧ ¬bindFail r ∧ ¬deadFail r] +
+          (Pr{let r ← mx}[bindFail r] + Pr{let r ← mx}[deadFail r]) :=
+        (prEvent_or_le mx _ _).trans (add_le_add le_rfl (prEvent_or_le mx _ _))
+    _ ≤ _ := by
+        calc _ ≤ (q .h21 * epsKOS #S (Chain.kosL st) +
+                q .h22 * (ENNReal.ofReal (Seed.epsQS (2 ^ 128) (2 ^ 64) n') + εc +
+                  (n : ℝ≥0∞) / 2 ^ 448) +
+                q .h23 * ((N : ℝ≥0∞) / 2 ^ 128) + hitSum q εh) + (εb + εd) :=
+              add_le_add hgood (add_le_add hbind hdead)
+          _ = _ := by ring
+
 /-! ## The deterministic step at one chain -/
 
 /-- **A chain of a combined relation whose `H₂¹` and `H₂²` queries are not bad satisfies the
@@ -321,18 +417,21 @@ theorem comb_good_of_not_bad {T : CrtTables} (hT : liftInvOk T = true) {st : Sta
         C.witOf y g (wStar uStar (ch.dc st))) →
       P A → Good)
     (h1 : ¬combBad C T S N (.h21, x) g) (h2 : ¬combBad C T S N (.h22, y) g)
-    (hP : P (onSet st T ch S)) : Good := by
+    (hfresh : combKey M C.dst (g (.h22, y)) ∉ C.pre y g)
+    (A : Finset Blocks) (hAon : A ⊆ onSet st T ch S) (hP : P A) : Good := by
   simp only [combBad, reduceCtorEq, ite_false, chainBad, not_not] at h1
-  simp only [combBad, ite_true, CombData.qsComb, not_or, not_and, not_not] at h2
+  replace h2 : ¬C.qsComb T S y g (g (.h22, y)) (g (combKey M C.dst (g (.h22, y)))) := fun hq =>
+    h2 (by simp only [combBad, ite_true]; exact ⟨hq, hfresh⟩)
+  simp only [CombData.qsComb, not_or, not_and, not_not] at h2
   have hkM : Seed.KOSGood (C.midOf y g).kosCh (S : Set Blocks) (lift T)
       ((C.midOf y g).kosQ st T) ((C.midOf y g).kosD st T) := by
     rw [hpre.kosQ_eq, hpre.kosD_eq, Chain.kosCh, hc1]
     exact h1
   have hk : Seed.KOSGood ch.kosCh (S : Set Blocks) (lift T) (ch.kosQ st T) (ch.kosD st T) := by
     rw [hmid.kosCh_eq, hmid.1.kosQ_eq, hmid.1.kosD_eq]; exact hkM
-  have hA : ∀ Δ ∈ onSet st T ch S, ch.OnChain st T Δ := fun Δ h => (mem_onSet.1 h).2
-  have hAS : onSet st T ch S ⊆ S := fun Δ h => (mem_onSet.1 h).1
-  have hAV : onSet st T ch S ⊆ (C.midOf y g).AV st T S := fun Δ h => by
+  have hA : ∀ Δ ∈ A, ch.OnChain st T Δ := fun Δ h => (mem_onSet.1 (hAon h)).2
+  have hAS : A ⊆ S := fun Δ h => (mem_onSet.1 (hAon h)).1
+  have hAV : A ⊆ (C.midOf y g).AV st T S := fun Δ h => by
     rw [← hmid.AV_eq]; exact Chain.mem_AV_of_onChain st T _ (hA Δ h) (hAS h)
   refine hdet _ hA (Finset.coe_subset.2 hAS) hk (fun h2' uStar hs hnot => ?_)
     (fun h2' uStar hs hH => ?_) hP
@@ -348,20 +447,26 @@ theorem comb_good_of_not_bad {T : CrtTables} (hT : liftInvOk T = true) {st : Sta
 the chain. -/
 def CombData.ofSys {st : Statement} {M : ℕ} (preOf midOf : ByteArray → Table → Chain)
     (sys : (Fin M → GF128) → System GF128) (wit : (ℕ → GF128) → Prop)
-    (accOf : ByteArray → Table → Bytes 16 → Prop) (dst : ByteArray) : CombData st M :=
-  ⟨preOf, midOf, fun _ _ => sys, fun _ _ => wit, accOf, dst⟩
+    (accOf : ByteArray → Table → Bytes 16 → Prop) (dst : ByteArray)
+    (pre : ByteArray → Table → List Dom := fun _ _ => []) : CombData st M :=
+  ⟨preOf, midOf, fun _ _ => sys, fun _ _ => wit, accOf, dst, pre⟩
 
 omit [VoleMole.Verifier.HasPrg] in
 lemma CombData.ofSys_committed {st : Statement} {M : ℕ} (preOf midOf : ByteArray → Table → Chain)
     (sys : (Fin M → GF128) → System GF128) (wit : (ℕ → GF128) → Prop)
     (accOf : ByteArray → Table → Bytes 16 → Prop) (dst : ByteArray)
+    (pre : ByteArray → Table → List Dom)
     (hpre : ∀ x (g : Table) u, preOf x (Function.update g (.h21, x) u) = preOf x g)
     (hacc : ∀ z (g : Table) u, accOf z (Function.update g (.h23, z) u) = accOf z g)
     (hmid : ∀ y (g : Table) u, midOf y (Function.update g (.h22, y) u) = midOf y g)
-    (hmidComb : ∀ y (g : Table) x v, midOf y (Function.update g (.comb M, x) v) = midOf y g) :
-    (CombData.ofSys (st := st) preOf midOf sys wit accOf dst).Committed :=
-  ⟨hpre, hacc, hmid, hmidComb, fun _ _ _ => rfl, fun _ _ _ _ => rfl, fun _ _ _ => rfl,
-    fun _ _ _ _ => rfl⟩
+    (hmidComb : ∀ y (g : Table) x v, ((.comb M, x) : Dom) ∉ pre y g →
+      midOf y (Function.update g (.comb M, x) v) = midOf y g)
+    (hpreMid : ∀ y (g : Table) u, pre y (Function.update g (.h22, y) u) = pre y g)
+    (hpreComb : ∀ y (g : Table) x v, ((.comb M, x) : Dom) ∈ pre y g →
+      ((.comb M, x) : Dom) ∈ pre y (Function.update g (.comb M, x) v)) :
+    (CombData.ofSys (st := st) preOf midOf sys wit accOf dst pre).Committed :=
+  ⟨hpre, hacc, hmid, hmidComb, fun _ _ _ => rfl, fun _ _ _ _ _ => rfl, fun _ _ _ => rfl,
+    fun _ _ _ _ _ => rfl, hpreMid, hpreComb⟩
 
 set_option exponentiation.threshold 500 in
 /-- **Moussaka redemption over all random-oracle queries** (at most 64 anchors):
@@ -475,7 +580,8 @@ theorem moussakaRedeem_good_of_not_bad (anchors : List UovPk)
     (fun A => ChainHyps A known acc) _
     (fun _A hA hAS hkos hQS hcomb hP => moussakaRedeem_extract_chain anchors nf ctxIss ctxRed
       challengeDigest labelRows ch _ hvals hA hAS hkos hP.1 hQS hcomb admissible deltaBlocks
-      deltaBlocks_injOn _ hP.2) h1 h2 hhyp
+      deltaBlocks_injOn _ hP.2) h1 h2
+      List.not_mem_nil _ subset_rfl hhyp
 
 set_option maxRecDepth 8000 in
 /-- **Ratatouille spend at one chain of the random-oracle game** (as
@@ -510,14 +616,15 @@ theorem ratatouilleSpend_good_of_not_bad (pk : UovPk) (nf : ByteArray) (d : ℕ)
     (fun A => ChainHyps A known acc) _
     (fun _A hA hAS hkos hQS hcomb hP => ratatouilleSpend_extract_chain pk nf d cNext ctxIss
       labelRows ch _ hvals hA hAS hkos hP.1 hQS hcomb admissible deltaBlocks deltaBlocks_injOn _
-      hP.2) h1 h2 hhyp
+      hP.2) h1 h2 List.not_mem_nil _ subset_rfl hhyp
 
 /-! ## PomFRIT -/
 
 /-- PomFRIT's combined-relation data: the system and the relation at the chain's `chal1` (the
 target `h(c₁)`), and the combination DST `"pomf" 0 'l' '0'`. -/
 def pomfritData (pk : UovPk) (sig msg : ByteArray) (labelRows : Bool)
-    (preOf midOf : ByteArray → Table → Chain) (accOf : ByteArray → Table → Bytes 16 → Prop) :
+    (preOf midOf : ByteArray → Table → Chain) (accOf : ByteArray → Table → Bytes 16 → Prop)
+    (pre : ByteArray → Table → List Dom := fun _ _ => []) :
     CombData (pomfritRedeem pk sig msg labelRows) 45 where
   preOf := preOf
   midOf := midOf
@@ -527,23 +634,31 @@ def pomfritData (pk : UovPk) (sig msg : ByteArray) (labelRows : Bool)
       k.val⟩) w
   accOf := accOf
   dst := toBA (VoleMole.Spec.makeDst "pomf" 0 'l' '0')
+  pre := pre
 
 omit [VoleMole.Verifier.HasPrg] in
 lemma pomfritData_committed (pk : UovPk) (sig msg : ByteArray) (labelRows : Bool)
     (preOf midOf : ByteArray → Table → Chain) (accOf : ByteArray → Table → Bytes 16 → Prop)
+    (pre : ByteArray → Table → List Dom)
     (hpre : ∀ x (g : Table) u, preOf x (Function.update g (.h21, x) u) = preOf x g)
     (hacc : ∀ z (g : Table) u, accOf z (Function.update g (.h23, z) u) = accOf z g)
     (hmid : ∀ y (g : Table) u, midOf y (Function.update g (.h22, y) u) = midOf y g)
-    (hmidComb : ∀ y (g : Table) x v, midOf y (Function.update g (.comb 45, x) v) = midOf y g) :
-    (pomfritData pk sig msg labelRows preOf midOf accOf).Committed where
+    (hmidComb : ∀ y (g : Table) x v, ((.comb 45, x) : Dom) ∉ pre y g →
+      midOf y (Function.update g (.comb 45, x) v) = midOf y g)
+    (hpreMid : ∀ y (g : Table) u, pre y (Function.update g (.h22, y) u) = pre y g)
+    (hpreComb : ∀ y (g : Table) x v, ((.comb 45, x) : Dom) ∈ pre y g →
+      ((.comb 45, x) : Dom) ∈ pre y (Function.update g (.comb 45, x) v)) :
+    (pomfritData pk sig msg labelRows preOf midOf accOf pre).Committed where
   pre := hpre
   acc := hacc
   mid := hmid
   midComb := hmidComb
   sys y g u := by simp only [pomfritData, hmid]
-  sysComb y g x v := by simp only [pomfritData, hmidComb]
+  sysComb y g x v hx := by simp only [pomfritData, hmidComb y g x v hx]
   wit y g u := by simp only [pomfritData, hmid]
-  witComb y g x v := by simp only [pomfritData, hmidComb]
+  witComb y g x v hx := by simp only [pomfritData, hmidComb y g x v hx]
+  preMid := hpreMid
+  preComb := hpreComb
 
 set_option exponentiation.threshold 500 in
 /-- **PomFRIT redemption over all random-oracle queries.** For chain data committed as in
@@ -604,6 +719,7 @@ theorem pomfritRedeem_good_of_not_bad (pk : UovPk) (sig msg : ByteArray) (labelR
   comb_good_of_not_bad liftInvOk_tables (pomfritData pk sig msg labelRows preOf midOf accOf)
     chal3Blocks 2 hpre hc1 hmid hc2 (fun A => ChainHyps A known acc) _
     (fun _A hA hAS hkos hQS hcomb hP => pomfritRedeem_extract_chain pk sig msg labelRows ch _ _
-      hvals hA hAS hkos hP.1 hQS hcomb admissible deltaBlocks deltaBlocks_injOn _ hP.2) h1 h2 hhyp
+      hvals hA hAS hkos hP.1 hQS hcomb admissible deltaBlocks deltaBlocks_injOn _ hP.2) h1 h2
+    List.not_mem_nil _ subset_rfl hhyp
 
 end VoleMole.ROM

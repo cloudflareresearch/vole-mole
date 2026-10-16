@@ -32,7 +32,10 @@ The proof splits on the leaf hash `w_i = c_i ‖ 1` of the dead leaf's tree.
 Together with `ROM/CipherGame.lean`: **`moussakaIssue_accept_le_ic'`**, the Moussaka issuance bound
 in the joint experiment with `ε_bind` fully explicit,
 
-    (q₁+1)·2⁻¹⁵⁰ + (q₂+1)·ε_QS(4008) + (Q+1)·9·2⁻¹²⁸ + 2·q_E²·2⁻²⁵⁶ + ε_open(q) + ε_dead + ε_chain.
+    (q₁+1)·2⁻¹⁵⁰ + (q₂+1)·ε_QS(4008) + (Q+1)·9·2⁻¹²⁸ + 2·q_E²·2⁻²⁵⁶ + ε_open(q) + ε_dead + ε_chain
+      + Σ_k q'_k·εh_k
+
+(the last three are discharged in `ROM/CipherFull.lean`, `moussakaIssue_accept_le_full`).
 -/
 
 open Finset OracleComp OracleSpec
@@ -684,10 +687,11 @@ theorem prEvent_joint_deadOpen_le (T : CrtTables) (st : Statement)
 `moussakaIssue_accept_le_ic` with `ε_open` replaced by its bound `prEvent_joint_deadOpen_le`,
 
     Pr[accept ∧ ¬Extracted] ≤ (q₂₁+1)·2⁻¹⁵⁰ + (q₂₂+1)·ε_QS(4008) + (q₂₃+1)·9·2⁻¹²⁸
-      + (2·q_E²·2⁻²⁵⁶ + openHashEps q + q₁·2⁻²⁵⁶) + ε_dead + ε_chain,
+      + (2·q_E²·2⁻²⁵⁶ + openHashEps q + q₁·2⁻²⁵⁶) + ε_dead + ε_chain + Σ_k q'_k·εh_k,
 
 `openHashEps q = (q₁+18)·(17q₁+q₂₁)·2⁻²⁵⁶ + (q₂₁+1)·q₂₂·2⁻¹⁰⁸⁸ + (q₂₂+1)·q₂₃·2⁻⁴⁴⁸ +
-2⁻¹²⁸`. What remains assumed: `hsame` (`ε_chain`) and `hL2` (`ε_dead`). -/
+2⁻¹²⁸`. What remains assumed: `hsame` and `hL2` with their failure events and hits
+(`ROM/CipherChain.lean` discharges them). -/
 theorem moussakaIssue_accept_le_ic' (t ctxIss : ByteArray) (labelRows : Bool)
     (preOf midOf : CTable → ByteArray → Table → Chain)
     (accOf : CTable → ByteArray → Table → Prob.Bytes 16 → Prop)
@@ -697,25 +701,19 @@ theorem moussakaIssue_accept_le_ic' (t ctxIss : ByteArray) (labelRows : Bool)
     (hqE : IsQueryBoundP P (fun t => t.isRight = true) qE) (q : Kind → ℕ)
     (hq : IsKindQueryBoundIC P q)
     (chainFail deadFail : CTable → Out (β × QueryLog specIC) → Prop) {εd εs : ℝ≥0∞}
-    (hdead : ∀ E, Pr{let r ← (simulateQ randomOracle
+    (hdead : Pr{let E ← $ᵗ CTable; let r ← (simulateQ randomOracle
       (gameIC CrtGen.tables (moussakaIssue t ctxIss labelRows) P E)).run' ∅}[deadFail E r] ≤ εd)
-    (hchain : ∀ E, Pr{let r ← (simulateQ randomOracle
+    (hchain : Pr{let E ← $ᵗ CTable; let r ← (simulateQ randomOracle
       (gameIC CrtGen.tables (moussakaIssue t ctxIss labelRows) P E)).run' ∅}[chainFail E r] ≤ εs)
-    (hsame : ∀ (E : CTable) (g : Table), let _ : HasPrg := icPrg E.cipher
-      let st := moussakaIssue t ctxIss labelRows
-      let r := evalWithAnswerFn (QueryImpl.ofFn g) (gameIC CrtGen.tables st P E)
-      r.2.2.accept = true → ¬chainFail E r → ∀ leaves, BAVC.reconstruct r.2.2.iv
-        (Proof.opening ⟨st.params, r.1⟩) (Proof.delta ⟨st.params, r.1⟩) = some leaves →
-      let ch := runChain (Hashes.ofTable g) CrtGen.tables st r.1 leaves r.2.1.keys
-      SameChain st CrtGen.tables (preOf E) (midOf E) (accOf E) g ch
-        (runX (Hashes.ofTable g) st r.1 leaves) (runY (Hashes.ofTable g) st ch) (runZ st ch))
-    (hL2 : ∀ (E : CTable) (g : Table), let _ : HasPrg := icPrg E.cipher
-      let st := moussakaIssue t ctxIss labelRows
-      let r := evalWithAnswerFn (QueryImpl.ofFn g) (gameIC CrtGen.tables st P E)
-      r.2.2.accept = true → ¬chainFail E r → ¬deadFail E r → ∀ leaves, BAVC.reconstruct r.2.2.iv
-        (Proof.opening ⟨st.params, r.1⟩) (Proof.delta ⟨st.params, r.1⟩) = some leaves →
-      ∀ i ∉ r.2.1.known, IsFixed ((onSet st CrtGen.tables (runChain (Hashes.ofTable g)
-        CrtGen.tables st r.1 leaves r.2.1.keys) chal3Blocks : Finset Blocks) : Set Blocks) i) :
+    (deadOf : CTable → Table → Fin BAVC.tau → Finset ℕ) (hit : CTable → Dom → Table → Prop)
+    (εh : Kind → ℝ≥0∞) (hεh : ∀ k ∉ hitKinds, εh k = 0)
+    (hhit : ∀ E t g, Pr{let u ← $ᵗ (Ans t)}[hit E t (Function.update g t u)] ≤ εh t.1)
+    (hsame : ∀ E : CTable, @SameChainHyp (icPrg E.cipher) _ CrtGen.tables
+      (moussakaIssue t ctxIss labelRows) (proverIC (moussakaIssue t ctxIss labelRows) E P)
+      (preOf E) (midOf E) (accOf E) (deadOf E) (hit E) (chainFail E))
+    (hL2 : ∀ E : CTable, @DeadHiddenHyp (icPrg E.cipher) _ CrtGen.tables
+      (moussakaIssue t ctxIss labelRows) (proverIC (moussakaIssue t ctxIss labelRows) E P)
+      (deadOf E) (hit E) (chainFail E) (deadFail E)) :
     Pr{let E ← $ᵗ CTable; let r ← (simulateQ randomOracle
       (gameIC CrtGen.tables (moussakaIssue t ctxIss labelRows) P E)).run' ∅}[
         r.2.2.accept = true ∧ ¬@Extracted (icPrg E.cipher) _ (moussakaIssue t ctxIss labelRows)
@@ -723,9 +721,11 @@ theorem moussakaIssue_accept_le_ic' (t ctxIss : ByteArray) (labelRows : Bool)
       (q .h21 + 1) * (2 ^ 150 : ℝ≥0∞)⁻¹ +
         (q .h22 + 1) * ENNReal.ofReal (Seed.epsQS (2 ^ 128) (2 ^ 64) 4008) +
         (q .h23 + 1) * ((9 : ℝ≥0∞) / 2 ^ 128) +
-        (2 * qE ^ 2 * (2 ^ 256)⁻¹ + (openHashEps q + q .h1 * (2 ^ 256 : ℝ≥0∞)⁻¹)) + εd + εs :=
+        (2 * qE ^ 2 * (2 ^ 256)⁻¹ + (openHashEps q + q .h1 * (2 ^ 256 : ℝ≥0∞)⁻¹)) + εd + εs +
+        hitSum (q + verifierQueries) εh :=
   moussakaIssue_accept_le_ic t ctxIss labelRows preOf midOf accOf hC P qE hqE q hq chainFail
-    deadFail (prEvent_joint_deadOpen_le CrtGen.tables _ P q hq) hdead hchain hsame hL2
+    deadFail (prEvent_joint_deadOpen_le CrtGen.tables _ P q hq) hdead hchain deadOf hit εh hεh hhit
+    hsame hL2
 
 end Open
 
