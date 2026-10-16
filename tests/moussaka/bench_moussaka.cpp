@@ -19,6 +19,8 @@ using vole_mole::moussaka::detail::issue_request_with_seed;
 using vole_mole::moussaka::detail::redeem_request_with_seed;
 using vole_mole::moussaka::detail::Seed;
 using vole_mole::moussaka::detail::TokenAccess;
+using vole_mole::moussaka::detail::unbound_issue_request_with_seed;
+using vole_mole::moussaka::detail::unbound_redeem_request_with_seed;
 using vole_mole::test::uov_key_pair;
 
 namespace {
@@ -126,5 +128,89 @@ void BM_FinalizeRedeem(benchmark::State& state) {
     }
 }
 BENCHMARK(BM_FinalizeRedeem)->Arg(1)->Arg(8)->Arg(MAX_ANCHORS)->Unit(benchmark::kMillisecond);
+
+// Unbound tokens.
+
+// An unbound token issued by the fixed test key pair.
+const UnboundToken& unbound_token() {
+    static const UnboundToken t = [] {
+        const auto& [pk, sk] = uov_key_pair();
+        auto [pending, request] = unbound_issue_request_with_seed(CTX_ISS, Seed{});
+        return *std::move(pending).finalize_issue(pk,
+                                                  *unbound_issue_response(sk, request, CTX_ISS));
+    }();
+    return t;
+}
+
+void BM_UnboundIssueRequest(benchmark::State& state) {
+    uint64_t i = 0;
+    for (auto _ : state) {
+        auto res = unbound_issue_request_with_seed(CTX_ISS, seed_from_counter(i++));
+        benchmark::DoNotOptimize(res);
+    }
+    state.SetLabel(std::to_string(UNBOUND_ISSUE_PROOF_BYTES) + "-byte proof");
+}
+BENCHMARK(BM_UnboundIssueRequest)->Unit(benchmark::kMillisecond);
+
+// Verify the issuance proof and sign the commitment.
+void BM_UnboundIssueResponse(benchmark::State& state) {
+    const auto& [pk, sk] = uov_key_pair();
+    const auto res = unbound_issue_request_with_seed(CTX_ISS, seed_from_counter(0));
+    for (auto _ : state) {
+        auto response = unbound_issue_response(sk, res.request, CTX_ISS);
+        benchmark::DoNotOptimize(response);
+        if (!response) {
+            state.SkipWithError("proof failed to verify");
+            break;
+        }
+    }
+}
+BENCHMARK(BM_UnboundIssueResponse)->Unit(benchmark::kMillisecond);
+
+void BM_UnboundFinalizeIssue(benchmark::State& state) {
+    const auto& [pk, sk] = uov_key_pair();
+    const auto [pending, request] = unbound_issue_request_with_seed(CTX_ISS, seed_from_counter(0));
+    const auto response = *unbound_issue_response(sk, request, CTX_ISS);
+    for (auto _ : state) {
+        // Finalization consumes the pending token, so finalize a copy.
+        auto t = TokenAccess::copy(pending).finalize_issue(pk, response);
+        benchmark::DoNotOptimize(t);
+    }
+}
+BENCHMARK(BM_UnboundFinalizeIssue)->Unit(benchmark::kMillisecond);
+
+// Argument: size of the Anchor Set. (Redemption doesn't consume an unbound token, so every
+// iteration redeems the same one.)
+void BM_UnboundRedeemRequest(benchmark::State& state) {
+    const auto keys = anchor_set(static_cast<size_t>(state.range(0)));
+    uint64_t i = 0;
+    for (auto _ : state) {
+        auto req = unbound_redeem_request_with_seed(unbound_token(), keys, CTX_ISS, CTX_RED,
+                                                    CHALLENGE_DIGEST, seed_from_counter(i++));
+        benchmark::DoNotOptimize(req);
+    }
+    state.SetLabel(std::to_string(UNBOUND_REDEEM_PROOF_BYTES) + "-byte proof");
+}
+BENCHMARK(BM_UnboundRedeemRequest)->Arg(1)->Arg(8)->Arg(MAX_ANCHORS)->Unit(benchmark::kMillisecond);
+
+// Argument: size of the Anchor Set.
+void BM_UnboundFinalizeRedeem(benchmark::State& state) {
+    const auto keys = anchor_set(static_cast<size_t>(state.range(0)));
+    const auto req = unbound_redeem_request_with_seed(unbound_token(), keys, CTX_ISS, CTX_RED,
+                                                      CHALLENGE_DIGEST, seed_from_counter(0));
+    for (auto _ : state) {
+        auto nf = unbound_finalize_redeem(keys, req, CTX_ISS, CTX_RED, CHALLENGE_DIGEST);
+        benchmark::DoNotOptimize(nf);
+        if (!nf) {
+            state.SkipWithError("proof failed to verify");
+            break;
+        }
+    }
+}
+BENCHMARK(BM_UnboundFinalizeRedeem)
+    ->Arg(1)
+    ->Arg(8)
+    ->Arg(MAX_ANCHORS)
+    ->Unit(benchmark::kMillisecond);
 
 } // namespace

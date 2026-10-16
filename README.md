@@ -68,7 +68,9 @@ const auto response = pomfrit::issue_response(sk, request);
 
 // Client: unblind. Returns std::nullopt if the response is invalid.
 const auto sig = std::move(pending).finalize_issue(pk, response);
-if (!sig) return EXIT_FAILURE;
+if (!sig) {
+    return EXIT_FAILURE;
+}
 
 // Verifier: check the signature. It cannot be linked to the issuance.
 const bool ok = pomfrit::verify(pk, msg, *sig);
@@ -84,6 +86,7 @@ functions, including what they return and throw.
 | [`keys.cpp`](examples/keys.cpp)                | UOV key generation, encoding, and expansion                   |
 | [`pomfrit.cpp`](examples/pomfrit.cpp)          | Blind signature issuance and verification                     |
 | [`moussaka.cpp`](examples/moussaka.cpp)        | Issuance from one of several Anchors and redemption, with replay rejection |
+| [`unbound_moussaka.cpp`](examples/unbound_moussaka.cpp) | Moussaka with late binding of the redemption context |
 | [`ratatouille.cpp`](examples/ratatouille.cpp)  | Issuance, spending credits, and double-spend rejection        |
 
 Build as above, then run:

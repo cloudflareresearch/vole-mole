@@ -14,6 +14,14 @@
 #include <cstddef>
 #include <cstdint>
 
+namespace vole_mole::moussaka::detail {
+
+// Version used for domain separation of unbound tokens. A future version of Moussaka may drop
+// support for binding the redemption context at issuance.
+constexpr uint8_t UNBOUND_VERSION = 1;
+
+} // namespace vole_mole::moussaka::detail
+
 namespace vole_mole::detail {
 
 constexpr size_t DST_BYTES = 7;
@@ -36,6 +44,22 @@ constexpr Dst MOUSSAKA_ISSUE_SEED_DST = make_dst("mous", moussaka::VERSION, 's',
 constexpr Dst MOUSSAKA_REDEEM_COMBINE_DST = make_dst("mous", moussaka::VERSION, 'l', '0');
 constexpr Dst MOUSSAKA_REDEEM_PROOF_DST = make_dst("mous", moussaka::VERSION, 'r', '0');
 constexpr Dst MOUSSAKA_REDEEM_SEED_DST = make_dst("mous", moussaka::VERSION, 's', '1');
+
+// Moussaka (unbound tokens)
+constexpr Dst UNBOUND_MOUSSAKA_COM_DST =
+    make_dst("mous", moussaka::detail::UNBOUND_VERSION, 'c', '0');
+constexpr Dst UNBOUND_MOUSSAKA_DERIVE_DST =
+    make_dst("mous", moussaka::detail::UNBOUND_VERSION, 'd', '0');
+constexpr Dst UNBOUND_MOUSSAKA_ISSUE_PROOF_DST =
+    make_dst("mous", moussaka::detail::UNBOUND_VERSION, 'i', '0');
+constexpr Dst UNBOUND_MOUSSAKA_ISSUE_SEED_DST =
+    make_dst("mous", moussaka::detail::UNBOUND_VERSION, 's', '0');
+constexpr Dst UNBOUND_MOUSSAKA_REDEEM_COMBINE_DST =
+    make_dst("mous", moussaka::detail::UNBOUND_VERSION, 'l', '0');
+constexpr Dst UNBOUND_MOUSSAKA_REDEEM_PROOF_DST =
+    make_dst("mous", moussaka::detail::UNBOUND_VERSION, 'r', '0');
+constexpr Dst UNBOUND_MOUSSAKA_REDEEM_SEED_DST =
+    make_dst("mous", moussaka::detail::UNBOUND_VERSION, 's', '1');
 
 // PomFRIT
 constexpr Dst POMFRIT_COMBINE_DST = make_dst("pomf", pomfrit::VERSION, 'l', '0');
@@ -74,6 +98,13 @@ constexpr bool dsts_are_distinct() {
         RATATOUILLE_SPEND_PROOF_DST,
         RATATOUILLE_SPEND_SEED_DST,
         RATATOUILLE_TAG_DST,
+        UNBOUND_MOUSSAKA_COM_DST,
+        UNBOUND_MOUSSAKA_DERIVE_DST,
+        UNBOUND_MOUSSAKA_ISSUE_PROOF_DST,
+        UNBOUND_MOUSSAKA_ISSUE_SEED_DST,
+        UNBOUND_MOUSSAKA_REDEEM_COMBINE_DST,
+        UNBOUND_MOUSSAKA_REDEEM_PROOF_DST,
+        UNBOUND_MOUSSAKA_REDEEM_SEED_DST,
     };
     bool distinct = true;
     for (size_t i = 0; i < all.size(); ++i) {
