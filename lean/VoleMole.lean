@@ -124,6 +124,8 @@ import VoleMole.ROM.PermOpen
 import VoleMole.ROM.PermPost
 import VoleMole.ROM.PermFull
 import VoleMole.ROM.PermAdapt
+import VoleMole.ROM.TableReads
+import VoleMole.ROM.PrivacyReads
 import VoleMole.Privacy.Basic
 import VoleMole.Privacy.PomFRIT
 import VoleMole.Privacy.Moussaka

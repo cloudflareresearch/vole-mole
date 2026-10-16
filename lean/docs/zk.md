@@ -834,6 +834,7 @@ which the random-oracle ones are proved with the hashed domain a uniform table:
 | **Zero knowledge for a statement chosen by an adversary that reads the tables** (one proof, ROM and ideal cipher): the statement and witness are a function of the proof's `H₃` slice and the shared tables, read at `s₃`, `s₂`, `s₅`, `s_E` keys adaptively and consistently (`SReads`); then the real proof (fresh 16-byte `ρ`) or the simulated one (`H₂³` programmed); a distinguisher of the reader's output, the proof and the tables with budget `(q₃, q₅, q_E)`, `H₂³` free. Advantage `≤ εAd = εRO(q₃, q₅, q_E) + (s₃ + s₅ + 1 + 221·s_E)·2⁻¹²⁸ + [s₂ > 0]·(2⁻¹¹⁰ + εROP(0, 312, 4607; s₅, s_E) + 2·noHitProb + 2·s₂·2^{−8·16(d−1)})`. Lazy sampling of the reader's view (an involution of a uniform pair), then the chain with the tables patched at the reader's queries: the hops other than H6 and H4 hold for every value of `H₅` and the cipher, H6 and H4 with patched tables cost `(|P₅| + 1)·2⁻¹²⁸` and `221·|P_E|·2⁻¹²⁸` more, the `H₃` patch costs `Pr[ρ ∈ P₃]`, the `H₂³` patch the simulated block (uniform `ã`) and the real block (a second application of zero knowledge) among the patched blocks; the adaptive collision bound; the simulator's programming as a consistent reader | `zk_adaptive`, `zk_adaptive_at`, `zk_patched`, `zk_roP`, `lean_zeroKnowledgeROA`, `pr_collide_adaptive`, `pr_preTail_mem`, `pr_simBlk_mem`, `realRO_g3_congr`, `progRO_patch2`, `SReads`, `SReads.comp_prog`, `CProg`, `progRO_cprog`, `vIn5_ic_congr`, `rdKeys_ic_congr`, `εAd` (`ZK/AdaptRO.lean`); `zk_rom_ic_h23P`, `zk_pre_h4Φ`, `joint2_h6P`, `lab_rom_hyp_sGP`, `joint3_h4P`, `hide_rom_queryP` (`ZK/HopsPatch.lean`); `IC.hopP`, `IC.punctureP` (`ZK/IdealCipherP.lean`); `pr_resample` (`Privacy/Resample.lean`); `ZeroKnowledgeROA`, `hop_roA` (`Privacy/AdaptiveRO.lean`) | §10.3 |
 | **Moussaka anonymity with an interaction that reads the tables**: responses, Anchor Sets and digests are functions of the requests, the four slices and the shared tables (budget `(i₃, i₂, i₅, i_E)` per slice position, consistent); `≤ 4·εRO(i₃ + q₃, q₅ + i₅ + 1872, q_E + i_E + 13821) + 4·εAd(9; q₃, q₅ + 1248, q_E + 13821; i₃, i₂, i₅ + 624, i_E + 9214) + 4·(i₃·2⁻¹²⁸ + 2⁻¹¹⁰ + εROP(0, 312, 4607; i₅ + 624, i_E + 9214)) + 6·noHitProb + 12·2⁻¹⁰²⁴ + 2·εhide` | `AdversaryRA`, `viewRA`, `hop0RA`, `hop1RA`, `hopLRA`, `hopRRA`, `deltaLA_le`, `deltaRA_le`, `anonymityRA`, `anonymityRA_lean_num` (`Privacy/MoussakaRA.lean`) | §10.3 |
 | **Ratatouille unlinkability with an interaction that reads the tables**: each stage of the Issuer's interaction (issuance responses and `d₁`; round 1's response and `d₂`) is a function of what it has seen, the four slices and the shared tables (budget `(i₃, i₂, i₅, i_E)` per stage and slice position, consistent), read on the tables as the simulations before it programmed them; `≤ 4·εRO(2i₃ + q₃, q₅ + 2i₅ + 1872, q_E + 2i_E + 13821) + 2·εAd(9; i₃ + q₃, q₅ + i₅ + 1248, q_E + i_E + 13821; i₃, i₂, i₅ + 624, i_E + 9214) + 2·εAd(9; q₃, q₅ + 936, q_E + 13821; 2i₃, 2i₂, 2i₅ + 1560, 2i_E + 23035) + 6·i₃·2⁻¹²⁸ + 4·(2⁻¹¹⁰ + εROP(0, 312, 4607; 2i₅ + 1560, 2i_E + 23035)) + 6·noHitProb + 12·2⁻¹⁰²⁴ + 2·εhide` | `AdversaryRA`, `transR`, `viewRA`, `hopI0RA`, `hopI1RA`, `hopS1RA`, `hopS2RA`, `sReads_Sx1`, `sReads_Sx2`, `deltaS1A_le`, `deltaS2A_le`, `view_congr`, `simGameRA_iff`, `unlinkabilityRA`, `unlinkabilityRA_lean_num` (`Privacy/RatatouilleRA.lean`) | §10.3 |
+| **Table-reading interactions as oracle computations** (no consistency hypothesis): an interaction written as a VCVio `OracleComp` over the tables (`TSpec`: the `H₃` slices, `H₂³`, `H₅`, the cipher rows), run deterministically on them (`runT`), is a consistent table reader with its syntactic query budget (`QBudget`, VCVio's `IsQueryBoundP` per slice and per shared table): the read sets are its query log (`qlog`, `runT_congr`). The single-proof theorem and the six headline privacy bounds for such interactions, bounds unchanged, `IBudget` derived (`AdversaryOC.iBudget`); a budget cannot be dropped (`not_sReads_slice`: the reader that outputs its slice has no consistent query sets of fewer than `2¹²⁸` keys) | `TSpec`, `runT`, `qlog`, `runT_congr`, `countP_qlog_le`, `QBudget`, `sReads_runT`, `sReads_runT₁`, `not_sReads_slice`, `zk_adaptive_oc`, `OCReader`, `lean_zeroKnowledgeROA_oc` (`ROM/TableReads.lean`); `AdversaryOC`, `AdversaryOC.toRA`, `AdversaryOC.iBudget`, `anonymityOC_lean_num`, `anonymityOC_lean_num_perm`, `unlinkabilityOC_lean_num`, `unlinkabilityOC_lean_num_perm`, `blindnessOC_lean_num`, `blindnessOC_lean_num_perm` (`ROM/PrivacyReads.lean`) | §10.3 |
 
 `lake exe zk_sim [TESTS [main\|labelrows [FILTER]]]` runs, on all 18 KAT runs of each layout: the
 equation `prove = proveIdeal ∘ tapeOf` (all pass), the simulator with the programmed oracle
@@ -1196,7 +1197,8 @@ an adversary `S` that reads the tables first.
 `s₅`, `s_E` keys (`SReads`: query sets `Q t`, bounded per table, and **consistent**: a table that
 agrees with `t` on `Q t` has the same queries and the same output; every deterministic query
 algorithm is consistent, and the reduction below needs it: a reader that reads a key only when
-the key is zero breaks it). The real world runs `realRO` for `(stOf x, wOf x)` with a fresh `ρ` on
+the key is zero breaks it; for oracle computations it is a theorem, see *Interactions as oracle
+computations* below). The real world runs `realRO` for `(stOf x, wOf x)` with a fresh `ρ` on
 `t`; the simulated world outputs `simulate` from fresh coins and programs `H₂³` (`progRO`) on `t`.
 A distinguisher sees `x`, the output and the (programmed) tables, with budget `(q₃, q₅, q_E)` and
 `H₂³` free. `S` saw the tables before the programming, the distinguisher sees them after.
@@ -1259,6 +1261,37 @@ proof's statement is read off the tables as earlier simulations programmed them.
 programming is consistent: its block, its answers and its `H₅` and cipher reads are determined by
 the tables on those reads (`rdKeys_ic_congr`, `vIn5_ic_congr`). So the composed reader is
 consistent, with `312` more `H₅` keys and `4607` more cipher keys per programming.
+
+**Interactions as oracle computations** (`ROM/TableReads.lean`, `ROM/PrivacyReads.lean`).
+`SReads` is a semantic hypothesis on a function of the tables. It cannot hold for every function:
+the reader `t ↦ t.1` that outputs its whole slice has no consistent query sets of fewer than
+`2¹²⁸` slice keys (`not_sReads_slice`), so a budget must be stated somewhere. Consistency, on the
+other hand, is automatic once the reads are part of the computation's syntax:
+- *The table oracle* (`TSpec n R m`): a VCVio `OracleSpec` with one query per key of the `n`
+  `H₃` slices, of `H₂³` (prefixes of `m` bytes), of `H₅` and of the cipher (a whole row). An
+  `OracleComp (TSpec n R m) X` has no sampling: it is a query tree, run on the tables by
+  answering each query with the table's entry (`runT`, `TKey.read`).
+- *Consistency by construction* (`runT_congr`): answers agreeing with the tables on the run's
+  query log (`qlog`) give the same log and the same output. *The budget is syntactic*
+  (`QBudget a₃ a₂ a₅ a_E`: VCVio's `IsQueryBoundP` for each slice and each shared table; closed
+  under `pure`, `bind`, `mono`), and it bounds the log (`countP_qlog_le`).
+- **`sReads_runT`**: an oracle computation within `QBudget a₃ a₂ a₅ a_E`, run with slice `j` and
+  the shared tables taken from `t` and the other slices fixed, is `SReads p · a₃ a₂ a₅ a_E`, the
+  read sets being the log's keys. With one slice: `sReads_runT₁`; the single-proof theorems
+  `zk_adaptive_oc` and `lean_zeroKnowledgeROA_oc` (admissible readers `OCReader`).
+- *The games* (`AdversaryOC` in each protocol's namespace): the interaction's stages are oracle
+  computations over the four (PomFRIT: two) slices and the shared tables (Moussaka: the
+  transcript at a pair of requests; Ratatouille: stage 1, and stage 2 at a request; PomFRIT: the
+  key and messages, and the responses at a pair of requests), the rest as in `AdversaryRA`;
+  `toRA` runs them on the game's tables, and `AdversaryOC.iBudget` derives `IBudget` from
+  `QBudget` (for PomFRIT with `a₂ = 0`). **`anonymityOC_lean_num`**, **`unlinkabilityOC_lean_num`**,
+  **`blindnessOC_lean_num`** and their `_perm` versions are the `*RA_lean_num(_perm)` bounds,
+  unchanged, for `A.toRA`, with `QBudget` in place of `IBudget`.
+
+The `*RA` theorems keep `IBudget` for functions of the tables: a consistent reader partitions the
+tables into subcubes on which it is constant, and such a partition need not come from a query
+tree with the same budget, so `SReads` is the more general form. VCVio's `IsQueryBoundP` lives in
+`ROM/`, the only directory that imports VCVio.
 
 **Moussaka with a table-reading interaction** (`Privacy/MoussakaRA.lean`).
 - *The adversary* (`AdversaryRA`): its responses and choices read the four slices and the shared
@@ -1406,8 +1439,14 @@ hop 1 `εRO(q₃ + 4i₃, q₅ + 4i₅ + 312, q_E + 4i_E + 23035)`.
   would compute the other session's responses on them, so each hop needs a collision term for
   the responses reading a programmed block (the simulator's uniform `ã`).
 - An adaptive base statement or witness prefix in `zk2_adaptive` (not needed for PomFRIT).
-- The consistency of the interaction (`SReads`) is a hypothesis on the adversary (true of every
-  deterministic query algorithm; a randomized one is a mixture of deterministic ones).
+- The consistency of the interaction (`SReads`): **done for interactions written as oracle
+  computations over the tables** (`ROM/TableReads.lean`, `ROM/PrivacyReads.lean`: consistency by
+  construction, the budget VCVio's syntactic query bound; `*OC_lean_num`, `*OC_lean_num_perm`).
+  For a bare function of the tables it stays a hypothesis, necessarily so for the budget
+  (`not_sReads_slice`). A randomized interaction is a mixture of deterministic ones (its coins
+  fixed, as the games' requests are). The guess's budget (`Rd3`, `Rd5`, `RdE`, `Budget`) is
+  still semantic; it needs no consistency (it is only an upper bound on reads, by query sets that
+  may depend on the tables).
 - *The privacy games with AES as random permutations*: done (§10.4).
 
 ### 10.4 The privacy games with AES as random permutations (`ZK/ReadsRO.lean`, `ZK/ReadsROPerm.lean`, `ZK/TwoPhasePerm.lean`, `ZK/IdealCipherPermP.lean`, `ZK/HopsPatchPerm.lean`, `Privacy/PermRO.lean`, `Privacy/PermRA.lean`)

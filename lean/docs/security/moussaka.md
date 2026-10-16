@@ -725,7 +725,8 @@ harmless.
    term included, `anonymityRO_lean_num_perm`, `anonymityRA_lean_num_perm`, `lean/docs/zk.md`
    §10.4), the four `H₃` slices independent
    (`≤ 2⁻¹⁹²`), the seed-XOF hop (outputs drawn uniformly), the consistency of a table-reading
-   interaction (a hypothesis), and the hiding of `Com` (an assumption). Theorem 4(b) is not
+   interaction given as a function of the tables (a hypothesis; a theorem for one written as an
+   oracle computation, `anonymityOC_lean_num`), and the hiding of `Com` (an assumption). Theorem 4(b) is not
    mechanized.
 6. Whether lean/docs/zk.md's `Pred` product can be made additive on `main`. It is moot with the fix.
 7. Timing side channels beyond the index check (OS RNG, allocation) are out of scope.
@@ -828,7 +829,10 @@ bounded the same way (`pr_collide_adaptive`). **`anonymityRA_lean_num`**:
 
 about `2⁻¹⁰¹·⁹` without budgets (`2⁻¹⁰¹·⁵` if the interaction reads `H₂³` at all). So the
 restriction to a table-oblivious interaction is not needed: there is no attack, and the cost is
-of the same order.
+of the same order. For an interaction written as a VCVio oracle computation over the tables
+(`AdversaryOC`, `lean/VoleMole/ROM/PrivacyReads.lean`), consistency is a theorem and the budget
+the syntactic query bound (`QBudget`): `anonymityOC_lean_num`, `anonymityOC_lean_num_perm`, the
+same bounds with no consistency hypothesis.
 
 **AES as random permutations** (`lean/docs/zk.md` §10.4, `Privacy/PermRO.lean`,
 `Privacy/PermRA.lean`). Both theorems also hold with the cipher's rows uniform permutations that

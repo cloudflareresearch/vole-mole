@@ -506,6 +506,10 @@ and affords the amount, else it is refused for both (feasibility is leakage).
   `unlinkabilityRO_lean_num_perm`, `unlinkabilityRA_lean_num_perm`, the same bounds with `εROPm`,
   `εROPmP`, `εAdPm` (the PRP/PRF switching term included); numerically the same to two
   decimals.
+  **Consistency for free**: for an Issuer whose two stages are VCVio oracle computations over
+  the tables (`AdversaryOC`, `lean/VoleMole/ROM/PrivacyReads.lean`), `IBudget` is a theorem from
+  the syntactic query bound (`QBudget`): `unlinkabilityOC_lean_num`,
+  `unlinkabilityOC_lean_num_perm`, the same bounds with no consistency hypothesis.
 
 **A precision found while mechanizing H3.** "The client still finalizes against the commitment
 string it sent" is not enough on its own: before its next spend the Client checks its token with
@@ -722,7 +726,8 @@ and determinism of `Tag`. The witness satisfies V3 by `change_correct`. ∎
   PRP/PRF switching term included, `unlinkabilityRO_lean_num_perm`, `unlinkabilityRA_lean_num_perm`,
   `lean/docs/zk.md` §10.4), leaving SHAKE as a random oracle, AES as an ideal cipher, the
   independence of the four `H₃` slices, the consistency of a
-  table-reading Issuer (a hypothesis) and hiding. H1 (the seed XOF) and the general adaptive
+  table-reading Issuer given as a function of the tables (a hypothesis; a theorem for one written
+  as oracle computations, `unlinkabilityOC_lean_num`) and hiding. H1 (the seed XOF) and the general adaptive
   schedule (any number of Clients and spends) are on paper.
 - The Lean file covers the accounting and the 64-bit arithmetic only. Extraction, binding and
   forgery are paper arguments.
