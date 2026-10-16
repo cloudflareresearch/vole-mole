@@ -723,8 +723,7 @@ harmless.
    as an ideal cipher (with its rows uniform functions, `anonymityRO_lean_num`,
    `anonymityRA_lean_num`, or uniform permutations read forward and inverse, the PRP/PRF switching
    term included, `anonymityRO_lean_num_perm`, `anonymityRA_lean_num_perm`, `lean/docs/zk.md`
-   §10.4), the four `H₃` slices independent
-   (`≤ 2⁻¹⁹²`), the seed-XOF hop (outputs drawn uniformly), the consistency of a table-reading
+   §10.4), the seed-XOF hop (outputs drawn uniformly), the consistency of a table-reading
    interaction given as a function of the tables (a hypothesis; a theorem for one written as an
    oracle computation, `anonymityOC_lean_num`), and the hiding of `Com` (an assumption). Theorem 4(b) is not
    mechanized.
@@ -807,7 +806,28 @@ the grinding failure (`Pr[GrindBad] ≤ 2⁻¹¹⁰` instead of `noHitProb`). Re
 adversary's interaction (contexts, keys, responses, Anchor Sets, digests) does not read the
 tables, only its guess does (the zero-knowledge theorem is for statements fixed before the
 tables; lifted below); the four `H₃` slices are independent (exact unless two proofs share `(μ₁, wPrefix)`,
-`≤ 2⁻¹⁹²`); hiding is for the reduction with the simulator coins and the tables fixed.
+`≤ 2⁻¹⁹²`; lifted below: with one shared `H₃` no such term); hiding is for the reduction with the
+simulator coins and the tables fixed.
+
+**With one shared `H₃`** (`lean/VoleMole/Privacy/SharedH3RO.lean`, `SharedH3RA.lean`,
+`lean/VoleMole/ROM/SharedH3Reads.lean`, zk.md §10.5). In the scheme the four proofs hash with one
+`H₃(wPrefix ‖ μ₁ ‖ ρ ‖ 3)`; the four slices are its restrictions to the four prefixes. The games are
+proved again with `H₃` in the shared tables (each row carries `H₃`'s column at that `ρ`) and each
+proof reading the column at its prefix, computed from the witness and instance it proves (the
+redemption prefixes through the adversary's Anchor Sets and digests). No prefix-collision term is
+needed: in each hop the replaced proof's column is re-sampled, and another proof with the same
+prefix reads it at its own `ρ` (one row, inside `εRO`'s slice-read term).
+**`anonymitySh_num`**: `8·εRO(q_E + 13824, q₅ + 1872, q_E + 13824) + 4·(2⁻¹¹⁰ + εRO(0, 312, 4607))
++ 6·noHitProb + 12·2⁻¹⁰²⁴ + 2·εhide` (the adversary's `H₃` reads count in `q_E`); with a
+table-reading interaction (which may read `H₃` at a redemption's prefix before choosing it),
+**`anonymityRASh_num`**: `4·εRO(q_E + i_E + 13824, q₅ + i₅ + 1872, q_E + i_E + 13824) +
+4·εAd(9; q_E + 13822, q₅ + 1248, q_E + 13822; 0, i₂, i₅ + 624, i_E + 9214) + 4·(2⁻¹¹⁰ +
+εROP(0, 312, 4607; i₅ + 624, i_E + 9214)) + 8·(i_E + 9214)·2⁻¹²⁸ + 6·noHitProb + 12·2⁻¹⁰²⁴ +
+2·εhide` (the `RA` bound below with no slice reads, the row budgets in the slice-read slots, and
+`8·(i_E + 9214)·2⁻¹²⁸` for a redemption's fresh `ρ` meeting a row the interaction read);
+`anonymityOCSh_num` and `_perm` likewise. So the `≤ 2⁻¹⁹²` step is not needed; it is not wrong as
+a bound on the prefix collision, but "independent slices up to `2⁻¹⁹²`" is not a black-box reduction
+from one `H₃` (the slices' locations involve the Clients' secret `r`, `nf`).
 
 **With an interaction that reads the tables** (`lean/VoleMole/Privacy/MoussakaRA.lean`, zk.md
 §10.3). Here the responses, Anchor Sets and digests are functions of the two requests, the four

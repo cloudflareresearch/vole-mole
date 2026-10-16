@@ -202,3 +202,12 @@ import VoleMole.ZK.HopsPatchPerm
 import VoleMole.ZK.TwoPhasePerm
 import VoleMole.Privacy.PermRO
 import VoleMole.Privacy.PermRA
+import VoleMole.ZK.SharedH3
+import VoleMole.ZK.SharedH3Two
+import VoleMole.ZK.SharedH3One
+import VoleMole.Privacy.SharedH3RO
+import VoleMole.Privacy.SharedH3PomFRIT
+import VoleMole.ZK.SharedH3RA
+import VoleMole.Privacy.SharedH3RA
+import VoleMole.Privacy.SharedH3PomFRITRA
+import VoleMole.ROM.SharedH3Reads

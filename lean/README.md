@@ -357,6 +357,20 @@ guess reads the tables. Here its interaction does too.
   `unlinkabilityOC_lean_num`, `blindnessOC_lean_num`, `blindnessOCH_lean_num` (with `H₂³`
   queries; `sReadsP_runT`) (and `_perm`) state the `*RA` bounds with
   no consistency hypothesis; `zk_adaptive_oc`, `lean_zeroKnowledgeROA_oc` for one proof.
+- **One shared `H₃`** (`docs/zk.md` §10.5; `ZK/SharedH3.lean`, `ZK/SharedH3Two.lean`,
+  `ZK/SharedH3RA.lean`, `ZK/SharedH3One.lean`, `Privacy/SharedH3RO.lean`,
+  `Privacy/SharedH3PomFRIT.lean`, `Privacy/SharedH3RA.lean`, `Privacy/SharedH3PomFRITRA.lean`,
+  `ROM/SharedH3Reads.lean`): `H₃` on the seed inputs `x ‖ ρ ‖ 3` becomes part of the shared
+  tables (a column per row `ρ`, `RowH R`), each proof reads the column at its prefix
+  `wPrefix ‖ μ₁` (`prove_recOne`: this is the executable prover with one `H₃` table). Zero
+  knowledge moves to it by re-sampling the proof's column (`ZeroKnowledgeRO.shared`,
+  `zk2_shared`; with the statement chosen from the tables, `ZeroKnowledgeROA.shared`, the column
+  exchanged off the reader's rows, `+ s_E·2⁻¹²⁸`), with no hypothesis on the prefixes. The games:
+  `anonymitySh_num`, `unlinkabilitySh_num` (`8·εRO(q_E + 13824, q₅ + 1872, q_E + 13824) +
+  4·(2⁻¹¹⁰ + εRO(0, 312, 4607)) + 6·noHitProb + 12·2⁻¹⁰²⁴ + 2·εhide`), `blindnessSh_num`
+  (`4·εRO(q_E + 18428, q₅ + 1248, q_E + 18428) + 2·noHitProb + 2·2⁻¹²⁸`), the table-reading
+  `anonymityRASh_num`, `unlinkabilityRASh_num`, `blindnessRASh_num`, the oracle-computation
+  `*OCSh_num`, all with `_perm`. No `ε_iv`-type term.
 
 `lake exe zk_sim` checks the tape equation, the simulator and the ideal-tape prover on all 18 KAT
 runs of each layout.
@@ -370,9 +384,18 @@ runs of each layout.
   (`zk_rom_ic_h23_num_perm`, `lean_zeroKnowledgeRO_perm`, the `*_lean_num_perm` theorems of
   `Privacy/PermRO.lean`, `Privacy/PermRA.lean`; soundness likewise, §9, plan §2h), as well as with
   uniform-function rows.
-- *Per-proof `H₃` slices.* The games give each proof its own independent slice; this is exact
-  unless two proofs share `(μ₁, wPrefix)` (Moussaka, Ratatouille: `≤ 2⁻¹⁹²`; PomFRIT: two sessions
-  with equal `r`), a modelling step on paper (the `ε_iv`-type term).
+- *Per-proof `H₃` slices*: **no longer a modelling step** (`docs/zk.md` §10.5). The games of
+  §10.2–§10.4 give each proof its own independent slice; with one shared `H₃`, as in the scheme
+  (`H₃(wPrefix ‖ μ₁ ‖ ρ ‖ 3)`, the slices determined by the proofs' prefixes; `ZK/SharedH3*.lean`,
+  `prove_recOne`: the executable prover with one `H₃` table), every game is proved again with **no
+  prefix-collision (`ε_iv`-type) term**: `Privacy.Moussaka.anonymitySh_num`,
+  `Privacy.Ratatouille.unlinkabilitySh_num`, `Privacy.PomFRIT.blindnessSh_num`, the table-reading
+  `anonymityRASh_num`, `unlinkabilityRASh_num`, `blindnessRASh_num`, the oracle-computation
+  `*OCSh_num`, and `_perm` versions. The adversary's `H₃` reads count with its cipher queries; an
+  interaction that reads a later proof's prefix costs `(its rows)·2⁻¹²⁸` per adaptive hop. The
+  paper's `≤ 2⁻¹⁹²` (`2⁻³⁶⁰`) bounds the prefix collision correctly but is not what sharing `H₃`
+  costs, and its "independent slices" step is not a black-box reduction (§10.5). Not done: a
+  PomFRIT Issuer that reads `H₂³` (`blindnessRAH`) in the shared model.
 - *The seed-XOF hop.* The games draw the seed XOF's outputs uniformly (PomFRIT's G0 → G1,
   Ratatouille's H1, Moussaka's `issueRequest_eq`); this hop is on paper.
 - *Hiding of `Com`* (Moussaka, Ratatouille): an assumption, the hypothesis `εhide` on explicit
@@ -426,7 +449,7 @@ limitation, not an attack) takes over. Strong simulation-extractability: 2⁻⁶
 | `ratatouille.md` | Balance (no inflation), no theft, unlinkability, correctness: proved. | Spends are not bound to a session, so a copied spend request can be redeemed first (medium). |
 | `domain-separation.md` | Every hash/XOF/permutation call lies in a disjoint domain, except below. [Lean] `Protocols/DomainSeparation.lean` | PomFRIT's `hash_to_target` overlaps four proof-system domains (no exploit found; fix: a final domain byte). |
 | `uov-assumptions.md` | Relates the protocol-specific UOV assumptions to each other and to standard UOV. [Lean] `Protocols/UOVAssumptions.lean` | Several reductions are unavailable; the note states why. |
-| Privacy on the specs ([Lean] `VoleMole/Privacy/`) | The privacy theorems as games on `Spec/*`, each hybrid hop mechanized: PomFRIT blindness (`Privacy.PomFRIT.blindness`, `≤ 4ε`), Moussaka issuer hiding and unlinkability against a Moderator colluding with all Anchors (`Privacy.Moussaka.anonymity`, `≤ 4εI + 4εR + 2εhide`), Ratatouille unlinkability of spends from issuances and from each other through change tokens (`Privacy.Ratatouille.unlinkability`, `≤ 4εI + 4εS + 2εhide`). Hypotheses: zero knowledge of the abstract proof systems (`Privacy.ZeroKnowledge`: a simulator from the instance alone, output `ε`-close to the prover's for every valid witness; `ε = 0` is equality of distributions), hiding of `Com` for the explicit reductions. The final hybrids are exact. With the executable Lean prover (label rows; `Spec.Ratatouille.Sizes.labelRows`, `Spec/PomFRITLayout.lean`): down to the tape hypothesis (`Privacy/LeanProver.lean`; `Privacy.Moussaka.anonymity_label_rows`, `Privacy.Ratatouille.unlinkability_label_rows`, `Privacy.PomFRIT.blindness_lean`; `*_shake` with the hop hypotheses); in the random-oracle and ideal-cipher model with the adversary seeing the tables and every zero-knowledge term explicit (`Privacy.Moussaka.anonymityRO_lean_num`, `Privacy.Ratatouille.unlinkabilityRO_lean_num`, `Privacy.PomFRIT.blindnessRO_lean_num`); and with an interaction that reads the tables (`Privacy.Moussaka.anonymityRA_lean_num`, `Privacy.Ratatouille.unlinkabilityRA_lean_num`; `Privacy.PomFRIT.blindnessRA_lean_num` for an Issuer that does not read `H₂³`, `Privacy.PomFRIT.blindnessRAH_lean_num` for one that does). Bounds and remaining assumptions: §3 | The zero-knowledge hypothesis is false on `main` for PomFRIT (`ZK.pomfrit_issuer_hits`, `ZK.pomfrit_attack_test`); for Moussaka and Ratatouille no efficient simulator satisfies it per proof on `main`, and the joint (PU) hop replaces it (paper). PomFRIT note §8.3: the "both ⊥" rule is needed. Moussaka Thm 4(a) needs no `2⁻¹⁹²` term; Thm 4(b) misses an abort term. Ratatouille H3 needs the Client's validity check against the commitment it sent |
+| Privacy on the specs ([Lean] `VoleMole/Privacy/`) | The privacy theorems as games on `Spec/*`, each hybrid hop mechanized: PomFRIT blindness (`Privacy.PomFRIT.blindness`, `≤ 4ε`), Moussaka issuer hiding and unlinkability against a Moderator colluding with all Anchors (`Privacy.Moussaka.anonymity`, `≤ 4εI + 4εR + 2εhide`), Ratatouille unlinkability of spends from issuances and from each other through change tokens (`Privacy.Ratatouille.unlinkability`, `≤ 4εI + 4εS + 2εhide`). Hypotheses: zero knowledge of the abstract proof systems (`Privacy.ZeroKnowledge`: a simulator from the instance alone, output `ε`-close to the prover's for every valid witness; `ε = 0` is equality of distributions), hiding of `Com` for the explicit reductions. The final hybrids are exact. With the executable Lean prover (label rows; `Spec.Ratatouille.Sizes.labelRows`, `Spec/PomFRITLayout.lean`): down to the tape hypothesis (`Privacy/LeanProver.lean`; `Privacy.Moussaka.anonymity_label_rows`, `Privacy.Ratatouille.unlinkability_label_rows`, `Privacy.PomFRIT.blindness_lean`; `*_shake` with the hop hypotheses); in the random-oracle and ideal-cipher model with the adversary seeing the tables and every zero-knowledge term explicit (`Privacy.Moussaka.anonymityRO_lean_num`, `Privacy.Ratatouille.unlinkabilityRO_lean_num`, `Privacy.PomFRIT.blindnessRO_lean_num`); and with an interaction that reads the tables (`Privacy.Moussaka.anonymityRA_lean_num`, `Privacy.Ratatouille.unlinkabilityRA_lean_num`; `Privacy.PomFRIT.blindnessRA_lean_num` for an Issuer that does not read `H₂³`, `Privacy.PomFRIT.blindnessRAH_lean_num` for one that does); with one shared `H₃` instead of per-proof slices, no `ε_iv`-type term (`Privacy.Moussaka.anonymitySh_num`, `Privacy.Ratatouille.unlinkabilitySh_num`, `Privacy.PomFRIT.blindnessSh_num`, `*RASh_num`, `*OCSh_num`, `_perm`; `docs/zk.md` §10.5). Bounds and remaining assumptions: §3 | The zero-knowledge hypothesis is false on `main` for PomFRIT (`ZK.pomfrit_issuer_hits`, `ZK.pomfrit_attack_test`); for Moussaka and Ratatouille no efficient simulator satisfies it per proof on `main`, and the joint (PU) hop replaces it (paper). PomFRIT note §8.3: the "both ⊥" rule is needed. Moussaka Thm 4(a) needs no `2⁻¹⁹²` term; Thm 4(b) misses an abort term. Ratatouille H3 needs the Client's validity check against the commitment it sent |
 
 **Cross-cutting finding (critical, deployment):** PomFRIT's Issuer signs arbitrary targets, and
 all protocols share the UOV key type. If one key serves PomFRIT and another protocol, anyone can
@@ -684,11 +707,12 @@ What is **not** established, roughly in order of importance:
    zero-knowledge and collision term explicit (§3). What remains is listed at the end of §3: the
    modelling steps (SHAKE as a random oracle, AES as an ideal cipher; the PRP/PRF switching term
    is proved, for one proof and for every game, `Privacy/PermRO.lean`, `Privacy/PermRA.lean`),
-   independent per-proof `H₃` slices, the seed-XOF hop, the hiding of `Com`, the
+   the seed-XOF hop, the hiding of `Com`, the
    consistency of a table-reading interaction given as a function of the tables (automatic for
    one written as an oracle computation, `ROM/PrivacyReads.lean`), a PomFRIT interaction that
    reads `H₂³` under per-slice budgets only (with a joint budget it is proved,
-   `Privacy/PomFRITRAH.lean`),
+   `Privacy/PomFRITRAH.lean`), that Issuer with one shared `H₃` (every other game is proved with
+   one shared `H₃` and no `ε_iv`-type term, `docs/zk.md` §10.5),
    Moussaka's non-colluding mode (Thm 4b), the general game schedule and the quantum versions.
    The abstract privacy theorems (`VoleMole/Privacy/`) take per-proof zero knowledge and hiding of
    `Com` as hypotheses, so they apply to any proof system with the label-row fix; on `main` the
