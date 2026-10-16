@@ -26,6 +26,9 @@ open ENNReal OracleComp OracleSpec
 
 namespace VoleMole.ROM
 
+-- The statements hold for any CTR PRG (`HasPrg`, `Verifier/Prg.lean`), AES included.
+variable [VoleMole.Verifier.HasPrg]
+
 open VoleMole.Prob VoleMole.Verifier VoleMole.Verifier.Bridge
 
 /-- L0's domain of a final byte. -/
@@ -46,9 +49,11 @@ def kindOfByte (b : UInt8) : Kind :=
 /-- **L0's domain rule**: the domain of an input is read from its final byte. -/
 def l0Kind (x : ByteArray) : Kind := kindOfByte x[x.size - 1]!
 
+omit [VoleMole.Verifier.HasPrg] in
 @[simp] lemma l0Kind_push (a : ByteArray) (b : UInt8) : l0Kind (a.push b) = kindOfByte b := by
   simp [l0Kind, ByteArray.size_push]
 
+omit [VoleMole.Verifier.HasPrg] in
 lemma l0Kind_append {a c : ByteArray} (hc : 0 < c.size) : l0Kind (a ++ c) = l0Kind c := by
   have h1 : (a ++ c).size - 1 < (a ++ c).size := by simp [ByteArray.size_append]; omega
   have h2 : c.size - 1 < c.size := by omega
@@ -62,6 +67,7 @@ lemma l0Kind_append {a c : ByteArray} (hc : 0 < c.size) : l0Kind (a ++ c) = l0Ki
 def CombOk (st : Statement) : Prop :=
   ∀ M dst, st.comb = some (M, dst) → M = 45 ∧ 0 < dst.size ∧ dst[dst.size - 1]! = 48
 
+omit [VoleMole.Verifier.HasPrg] in
 /-- `l.length` queries in their domains, then `f`. -/
 lemma allQueriesSatisfy_mapM_hashQ_bind {α : Type} (k : Kind) (l : List ByteArray)
     {f : List ByteArray → OracleComp spec α} {P : Dom → Prop} (hl : ∀ x ∈ l, P (k, x))
@@ -73,6 +79,7 @@ lemma allQueriesSatisfy_mapM_hashQ_bind {α : Type} (k : Kind) (l : List ByteArr
     exact (allQueriesSatisfy_query_bind_iff _ _ _).mpr ⟨hl x (by simp), fun u =>
       ih (fun y hy => hl y (by simp [hy])) fun ans => hf _⟩
 
+omit [VoleMole.Verifier.HasPrg] in
 lemma allQueriesSatisfy_hashQ_bind {α : Type} {k : Kind} {x : ByteArray}
     {f : ByteArray → OracleComp spec α} {P : Dom → Prop} (hx : P (k, x))
     (hf : ∀ u, AllQueriesSatisfy (f u) P) : AllQueriesSatisfy (hashQ k x >>= f) P := by
@@ -133,6 +140,7 @@ theorem allQueriesSatisfy_verifyQ (T : CrtTables) (st : Statement) (hst : CombOk
   exact hcb fun lb => allQueriesSatisfy_hashQ_bind (by simp [chal3Input, kindOfByte])
     fun c3 => allQueriesSatisfy_pure _ _
 
+omit [VoleMole.Verifier.HasPrg] in
 lemma combOk_dst {M : ℕ} {dst : ByteArray} (hM : M = 45) (hsz : 0 < dst.size)
     (hlast : dst[dst.size - 1]! = 48) {st : Statement} (h : st.comb = some (M, dst)) :
     CombOk st := fun M' dst' h' => by
@@ -140,22 +148,27 @@ lemma combOk_dst {M : ℕ} {dst : ByteArray} (hM : M = 45) (hsz : 0 < dst.size)
   cases h'
   exact ⟨hM, hsz, hlast⟩
 
+omit [VoleMole.Verifier.HasPrg] in
 theorem combOk_moussakaIssue (t ctxIss : ByteArray) (labelRows : Bool) :
     CombOk (moussakaIssue t ctxIss labelRows) := fun _ _ h => by cases h
 
+omit [VoleMole.Verifier.HasPrg] in
 theorem combOk_ratatouilleIssue (c : ByteArray) (tInit : ℕ) (ctxIss : ByteArray)
     (labelRows : Bool) : CombOk (ratatouilleIssue c tInit ctxIss labelRows) := fun _ _ h => by
   cases h
 
+omit [VoleMole.Verifier.HasPrg] in
 theorem combOk_moussakaRedeem (anchors : List UovPk) (nf ctxIss ctxRed challengeDigest : ByteArray)
     (labelRows : Bool) :
     CombOk (moussakaRedeem anchors nf ctxIss ctxRed challengeDigest labelRows) :=
   combOk_dst rfl (by decide) (by decide) rfl
 
+omit [VoleMole.Verifier.HasPrg] in
 theorem combOk_ratatouilleSpend (pk : UovPk) (nf : ByteArray) (d : ℕ) (cNext ctxIss : ByteArray)
     (labelRows : Bool) : CombOk (ratatouilleSpend pk nf d cNext ctxIss labelRows) :=
   combOk_dst rfl (by decide) (by decide) rfl
 
+omit [VoleMole.Verifier.HasPrg] in
 theorem combOk_pomfritRedeem (pk : UovPk) (sig msg : ByteArray) (labelRows : Bool) :
     CombOk (pomfritRedeem pk sig msg labelRows) :=
   combOk_dst rfl (by decide) (by decide) rfl

@@ -54,6 +54,9 @@ open Finset ENNReal
 
 namespace VoleMole.Verifier.Bridge.Chain
 
+-- The statements hold for any CTR PRG (`HasPrg`, `Verifier/Prg.lean`), AES included.
+variable [VoleMole.Verifier.HasPrg]
+
 open VoleMole.Arith VoleMole.Verifier
 
 variable (st : Statement) (T : CrtTables)
@@ -92,20 +95,24 @@ lemma SamePrefix.u_eq (h : SamePrefix st pre ch) : ch.u st = pre.u st := by
   funext i j
   simp only [u, hcorr, hk, hi]
 
+omit [VoleMole.Verifier.HasPrg] in
 lemma SamePrefix.trans {ch'' : Chain} (h : SamePrefix st pre ch) (h' : SamePrefix st ch ch'') :
     SamePrefix st pre ch'' :=
   ⟨h'.1.trans h.1, h'.2.1.trans h.2.1, h'.2.2.1.trans h.2.2.1, h'.2.2.2.1.trans h.2.2.2.1,
     h'.2.2.2.2.trans h.2.2.2.2⟩
 
+omit [VoleMole.Verifier.HasPrg] in
 lemma SamePrefix.symm (h : SamePrefix st pre ch) : SamePrefix st ch pre :=
   ⟨h.1.symm, h.2.1.symm, h.2.2.1.symm, h.2.2.2.1.symm, h.2.2.2.2.symm⟩
 
 lemma SameMid.kosCh_eq (h : SameMid st ch ch') : ch'.kosCh = ch.kosCh := by
   simp only [kosCh, h.2.1]
 
+omit [VoleMole.Verifier.HasPrg] in
 lemma SameMid.kosU_eq (h : SameMid st ch ch') : ch'.kosU st = ch.kosU st := by
   funext j; simp only [kosU, h.2.2.1]
 
+omit [VoleMole.Verifier.HasPrg] in
 lemma SameMid.dc_eq (h : SameMid st ch ch') : ch'.dc st = ch.dc st := by
   funext j; simp only [dc, corrBit, h.2.2.2.1]
 
@@ -118,6 +125,7 @@ lemma SameMid.isSlope_iff (h : SameMid st ch ch') {A : Finset Blocks}
     {u : Fin st.params.witnessBits → GF128} : ch'.IsSlope st T A u ↔ ch.IsSlope st T A u := by
   simp only [IsSlope, h.1.Qw_eq]
 
+omit [VoleMole.Verifier.HasPrg] in
 lemma dite_choose_congr {α : Type*} [Zero α] {p q : α → Prop} (h : p = q)
     [Decidable (∃ u, p u)] [Decidable (∃ u, q u)] :
     (if h : ∃ u, p u then h.choose else 0) = (if h : ∃ u, q u then h.choose else 0) := by
@@ -134,6 +142,9 @@ lemma SameMid.uCanon_eq (h : SameMid st ch ch') (S : Finset Blocks) :
 end VoleMole.Verifier.Bridge.Chain
 
 namespace VoleMole.Prob
+
+-- The statements hold for any CTR PRG (`HasPrg`, `Verifier/Prg.lean`), AES included.
+variable [VoleMole.Verifier.HasPrg]
 
 open VoleMole.Arith VoleMole.Verifier VoleMole.Verifier.Bridge VoleMole.EndToEnd
 open VoleMole.SeedExtraction
@@ -239,6 +250,7 @@ noncomputable def chal3Blocks : Finset Blocks := by
   classical
   exact admissible.image deltaBlocks
 
+omit [VoleMole.Verifier.HasPrg] in
 lemma card_chal3Blocks : #chal3Blocks ≤ 2 ^ 120 := by
   classical
   unfold chal3Blocks
@@ -249,11 +261,13 @@ lemma card_chal3Blocks : #chal3Blocks ≤ 2 ^ 120 := by
 def ChainHyps (A : Finset Blocks) (known : Finset (Fin BAVC.tau)) (acc : Bytes 16 → Prop) : Prop :=
   (∀ i ∉ known, IsFixed (A : Set Blocks) i) ∧ ∀ x ∈ admissible, acc x → deltaBlocks x ∈ A
 
+omit [VoleMole.Verifier.HasPrg] in
 lemma kosL_le (st : Statement) (hw : st.params.witnessBytes ≤ 847) (hd : st.params.qsDegree ≤ 9) :
     Chain.kosL st ≤ 2 ^ 13 := by
   unfold Chain.kosL Params.correctionRows Params.witnessBits
   split <;> omega
 
+omit [VoleMole.Verifier.HasPrg] in
 lemma epsKOS_chal3Blocks_le (st : Statement) (hw : st.params.witnessBytes ≤ 847)
     (hd : st.params.qsDegree ≤ 9) : epsKOS #chal3Blocks (Chain.kosL st) ≤ (2 ^ 150 : ℝ≥0∞)⁻¹ :=
   (epsKOS_mono card_chal3Blocks).trans (epsKOS_le le_rfl (kosL_le st hw hd))
@@ -262,6 +276,7 @@ lemma epsKOS_chal3Blocks_le (st : Statement) (hw : st.params.witnessBytes ≤ 84
 def dropUnit : Bytes 136 × Bytes 56 × Unit ≃ Bytes 136 × Bytes 56 :=
   (Equiv.refl _).prodCongr (Equiv.prodPUnit _)
 
+omit [VoleMole.Verifier.HasPrg] in
 lemma prU_no_comb (P : Prop) (hP : ¬P) : prU Unit (fun _ => P) ≤ 0 :=
   (prU_congr fun _ => iff_false_intro hP).trans_le (le_of_eq prU_false)
 

@@ -29,6 +29,9 @@ open ENNReal
 
 namespace VoleMole.ROM
 
+-- The statements hold for any CTR PRG (`HasPrg`, `Verifier/Prg.lean`), AES included.
+variable [VoleMole.Verifier.HasPrg]
+
 open VoleMole.Prob VoleMole.Arith VoleMole.Verifier VoleMole.Verifier.Bridge OracleComp OracleSpec
 
 /-! ## The hashes of an answer table -/
@@ -36,6 +39,7 @@ open VoleMole.Prob VoleMole.Arith VoleMole.Verifier VoleMole.Verifier.Bridge Ora
 /-- **The verifier's hashes read from an answer table**: `H_k(x) = g(k, x)`, as bytes. -/
 def Hashes.ofTable (g : Table) : Hashes := ⟨fun k x => (g (k, x)).ba⟩
 
+omit [VoleMole.Verifier.HasPrg] in
 @[simp] lemma Hashes.ofTable_hash (g : Table) (k : Kind) (x : ByteArray) :
     (Hashes.ofTable g).hash k x = (g (k, x)).ba := rfl
 
@@ -43,9 +47,11 @@ def Hashes.ofTable (g : Table) : Hashes := ⟨fun k x => (g (k, x)).ba⟩
 def hashQ (k : Kind) (x : ByteArray) : OracleComp spec ByteArray :=
   (fun u : Ans (k, x) => u.ba) <$> (liftM (spec.query (k, x)) : OracleComp spec (Ans (k, x)))
 
+omit [VoleMole.Verifier.HasPrg] in
 @[simp] lemma evalWithAnswerFn_hashQ (g : Table) (k : Kind) (x : ByteArray) :
     evalWithAnswerFn (QueryImpl.ofFn g) (hashQ k x) = (Hashes.ofTable g).hash k x := rfl
 
+omit [VoleMole.Verifier.HasPrg] in
 @[simp] lemma evalWithAnswerFn_mapM_hashQ (g : Table) (k : Kind) (l : List ByteArray) :
     evalWithAnswerFn (QueryImpl.ofFn g) (l.mapM (hashQ k)) = l.map ((Hashes.ofTable g).hash k) := by
   induction l with
@@ -69,14 +75,17 @@ def combBytesQ (st : Statement) (c2 : ByteArray) : OracleComp spec ByteArray :=
   | none => pure ByteArray.empty
   | some (M, dst) => hashQ (.comb M) (c2 ++ dst)
 
+omit [VoleMole.Verifier.HasPrg] in
 @[simp] lemma evalWithAnswerFn_mu1Q (g : Table) (st : Statement) :
     evalWithAnswerFn (QueryImpl.ofFn g) (mu1Q st) = st.mu1 (Hashes.ofTable g) := by
   unfold mu1Q Statement.mu1 mu; split <;> rfl
 
+omit [VoleMole.Verifier.HasPrg] in
 @[simp] lemma evalWithAnswerFn_muDelayedQ (g : Table) (st : Statement) (c1 : ByteArray) :
     evalWithAnswerFn (QueryImpl.ofFn g) (muDelayedQ st c1) = st.muDelayed (Hashes.ofTable g) c1 := by
   unfold muDelayedQ Statement.muDelayed mu; split <;> rfl
 
+omit [VoleMole.Verifier.HasPrg] in
 @[simp] lemma evalWithAnswerFn_combBytesQ (g : Table) (st : Statement) (c2 : ByteArray) :
     evalWithAnswerFn (QueryImpl.ofFn g) (combBytesQ st c2) = st.combBytes (Hashes.ofTable g) c2 := by
   unfold combBytesQ Statement.combBytes
@@ -167,6 +176,7 @@ def runZ (st : Statement) (ch : Chain) : ByteArray := chal3Input (ch.pf st) ch.c
 def InLog {α : Type} (oa : OracleComp spec α) (g : Table) (t : Dom) : Prop :=
   t ∈ (tableQueryLog oa g).map Sigma.fst
 
+omit [VoleMole.Verifier.HasPrg] in
 lemma tableQueryLog_hashQ (g : Table) (k : Kind) (x : ByteArray) :
     tableQueryLog (hashQ k x) g = [⟨(k, x), g (k, x)⟩] := by
   rw [hashQ, map_eq_bind_pure_comp, tableQueryLog_bind]
@@ -197,22 +207,26 @@ theorem inLog_verifyQ (g : Table) (T : CrtTables) (st : Statement) (proof : Byte
 
 /-! ## Query bounds -/
 
+omit [VoleMole.Verifier.HasPrg] in
 lemma hashQ_bind {α : Type} (k : Kind) (x : ByteArray) (f : ByteArray → OracleComp spec α) :
     hashQ k x >>= f = liftM (spec.query (k, x)) >>= fun u : Ans (k, x) => f u.ba := by
   simp [hashQ]
 
+omit [VoleMole.Verifier.HasPrg] in
 lemma isKindQueryBound_hashQ_bind_iff {α : Type} {k : Kind} {x : ByteArray}
     {f : ByteArray → OracleComp spec α} {q : Kind → ℕ} :
     IsKindQueryBound (hashQ k x >>= f) q ↔
       0 < q k ∧ ∀ u : Ans (k, x), IsKindQueryBound (f u.ba) (Function.update q k (q k - 1)) := by
   rw [hashQ_bind]; exact isKindQueryBound_query_bind_iff
 
+omit [VoleMole.Verifier.HasPrg] in
 lemma isTotalQueryBound_hashQ_bind_iff {α : Type} {k : Kind} {x : ByteArray}
     {f : ByteArray → OracleComp spec α} {n : ℕ} :
     IsTotalQueryBound (hashQ k x >>= f) n ↔
       0 < n ∧ ∀ u : Ans (k, x), IsTotalQueryBound (f u.ba) (n - 1) := by
   rw [hashQ_bind]; exact isTotalQueryBound_query_bind_iff
 
+omit [VoleMole.Verifier.HasPrg] in
 /-- `l.length` queries to `k`, then `f`. -/
 lemma isKindQueryBound_mapM_hashQ_bind {α : Type} (k : Kind) (l : List ByteArray)
     {f : List ByteArray → OracleComp spec α} {q : Kind → ℕ} (hl : l.length ≤ q k)
@@ -228,6 +242,7 @@ lemma isKindQueryBound_mapM_hashQ_bind {α : Type} (k : Kind) (l : List ByteArra
     simp only [List.length_cons, Function.update_self, Function.update_idem] at this ⊢
     rwa [show q k - 1 - l.length = q k - (l.length + 1) by omega]
 
+omit [VoleMole.Verifier.HasPrg] in
 /-- `l.length` queries, then `f`. -/
 lemma isTotalQueryBound_mapM_hashQ_bind {α : Type} (k : Kind) (l : List ByteArray)
     {f : List ByteArray → OracleComp spec α} {n : ℕ} (hl : l.length ≤ n)
@@ -243,6 +258,7 @@ lemma isTotalQueryBound_mapM_hashQ_bind {α : Type} (k : Kind) (l : List ByteArr
     simp only [List.length_cons] at this
     rwa [show n - 1 - l.length = n - (l.length + 1) by omega]
 
+omit [VoleMole.Verifier.HasPrg] in
 lemma IsKindQueryBound.mono {α : Type} {oa : OracleComp spec α} {q q' : Kind → ℕ}
     (h : IsKindQueryBound oa q) (hle : q ≤ q') : IsKindQueryBound oa q' := by
   induction oa using OracleComp.inductionOn generalizing q q' with
@@ -256,6 +272,7 @@ lemma IsKindQueryBound.mono {α : Type} {oa : OracleComp spec α} {q q' : Kind �
       exact Nat.sub_le_sub_right this 1
     · simp only [Function.update_of_ne hk]; exact hle k'
 
+omit [VoleMole.Verifier.HasPrg] in
 lemma isKindQueryBound_muDelayedQ_bind {α : Type} (st : Statement) (c1 : ByteArray)
     {f : ByteArray → OracleComp spec α} {q : Kind → ℕ} (h : 0 < q .mu)
     (hf : ∀ u, IsKindQueryBound (f u) (Function.update q .mu (q .mu - 1))) :
@@ -269,6 +286,7 @@ lemma isKindQueryBound_muDelayedQ_bind {α : Type} (st : Statement) (c1 : ByteAr
     · subst hk; simp
     · simp [Function.update_of_ne hk]
 
+omit [VoleMole.Verifier.HasPrg] in
 lemma isKindQueryBound_combBytesQ_bind {α : Type} (st : Statement) (c2 : ByteArray)
     {f : ByteArray → OracleComp spec α} {q : Kind → ℕ} (h : ∀ M, 0 < q (.comb M))
     (hf : ∀ M u, IsKindQueryBound (f u) (Function.update q (.comb M) (q (.comb M) - 1)))
@@ -279,9 +297,11 @@ lemma isKindQueryBound_combBytesQ_bind {α : Type} (st : Statement) (c2 : ByteAr
   · rw [pure_bind]; exact hf0 _
   · exact isKindQueryBound_hashQ_bind_iff.2 ⟨h _, fun u => hf _ _⟩
 
+omit [VoleMole.Verifier.HasPrg] in
 lemma length_leafHashInputs (coms : ByteArray) : (BAVC.leafHashInputs coms).length = 17 := by
   simp [BAVC.leafHashInputs, BAVC.tau]
 
+omit [VoleMole.Verifier.HasPrg] in
 lemma length_gateInputs (p : Params) (T : CrtTables) (iv : ByteArray)
     (cols : Array (Array UInt64)) : (gateInputs p T iv cols).length = 312 := by
   simp [gateInputs, Params.nMult]
@@ -344,6 +364,7 @@ theorem isKindQueryBound_verifyQ (T : CrtTables) (st : Statement) (proof : ByteA
       refine isKindQueryBound_hashQ_bind_iff.2 ⟨by simp [verifierQueries],
         fun c3 => trivial⟩
 
+omit [VoleMole.Verifier.HasPrg] in
 lemma isTotalQueryBound_muDelayedQ_bind {α : Type} (st : Statement) (c1 : ByteArray)
     {f : ByteArray → OracleComp spec α} {n : ℕ} (h : 0 < n)
     (hf : ∀ u, IsTotalQueryBound (f u) (n - 1)) : IsTotalQueryBound (muDelayedQ st c1 >>= f) n := by
@@ -352,6 +373,7 @@ lemma isTotalQueryBound_muDelayedQ_bind {α : Type} (st : Statement) (c1 : ByteA
   · exact isTotalQueryBound_hashQ_bind_iff.2 ⟨h, fun u => hf _⟩
   · rw [pure_bind]; exact (hf _).mono (by omega)
 
+omit [VoleMole.Verifier.HasPrg] in
 lemma isTotalQueryBound_combBytesQ_bind {α : Type} (st : Statement) (c2 : ByteArray)
     {f : ByteArray → OracleComp spec α} {n : ℕ} (h : 0 < n)
     (hf : ∀ u, IsTotalQueryBound (f u) (n - 1)) : IsTotalQueryBound (combBytesQ st c2 >>= f) n := by
@@ -427,6 +449,7 @@ theorem inLog_game {g : Table} {T : CrtTables} {st : Statement}
   simp only [List.map_append, List.mem_append]
   exact Or.inr (Or.inl h)
 
+omit [VoleMole.Verifier.HasPrg] in
 /-- Per-domain query bounds add up along a bind. -/
 theorem isKindQueryBound_bind {α β : Type} {oa : OracleComp spec α}
     {ob : α → OracleComp spec β} {q₁ q₂ : Kind → ℕ} (h₁ : IsKindQueryBound oa q₁)

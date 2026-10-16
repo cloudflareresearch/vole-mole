@@ -14,9 +14,11 @@ extraction from it fails**, in the game `game T st oa` of `ROM/Verifier.lean` (t
 
 The prover `oa` outputs a proof and the extractor's data (`ExtData β`: the committed leaf keys it
 recovered, the trees it treats as known, and an auxiliary output, e.g. a log for the failure events
-to read). The ideal cipher is not modelled, so the keys are not computed here: read `oa` as the
-prover together with the straight-line extractor; the theorems hold for any key recovery, and its
-quality enters only through the assumptions. The game's output is `(proof, ext, transcript)`.
+to read). The keys are not computed here: read `oa` as the prover together with the straight-line
+extractor; the theorems hold for any key recovery, and its quality enters only through the
+assumptions. The theorems hold for every CTR PRG (`[HasPrg]`); `ROM/CipherGame.lean` runs them with
+the ideal cipher, the extractor computing the keys from the prover's cipher log, and replaces
+`ε_bind` by an explicit term (plan §2d). The game's output is `(proof, ext, transcript)`.
 * `Extracted st Wit r`: some known tree's corrected small-VOLE value `u^{(i)} + d`, computed from
   the extractor's keys, the proof's corrections and `d` and the verifier's `iv`, encodes a witness
   (`Wit chal1`; PomFRIT's relation depends on `chal1`). This is the candidate of `*_extract_chain`.
@@ -55,6 +57,9 @@ queries are in the log (`inLog_verifyQ`), an accepted proof is on its chain at i
 open Finset ENNReal
 
 namespace VoleMole.ROM
+
+-- The statements hold for any CTR PRG (`HasPrg`, `Verifier/Prg.lean`), AES included.
+variable [VoleMole.Verifier.HasPrg]
 
 open VoleMole.Prob VoleMole.Arith VoleMole.Verifier VoleMole.Verifier.Bridge
 open VoleMole.EndToEnd VoleMole.SeedExtraction OracleComp OracleSpec
@@ -207,6 +212,7 @@ theorem chainBad_of_accept {T : CrtTables} (hT : liftInvOk T = true) {st : State
     rw [deltaBlocks, show (g.chal3 z).ba = _ from hd]
     exact hon.1
 
+omit [VoleMole.Verifier.HasPrg] in
 /-- `InLog` as a log entry. -/
 lemma exists_of_inLog {α : Type} {oa : OracleComp spec α} {g : Table} {t : Dom}
     (h : InLog oa g t) : ∃ e ∈ tableQueryLog oa g, e.1 = t := by
@@ -406,6 +412,7 @@ theorem ratatouilleIssue_accept_le (c : ByteArray) (tInit : ℕ) (ctxIss : ByteA
 
 /-! ## The combined relations -/
 
+omit [VoleMole.Verifier.HasPrg] in
 /-- The verifier's combination bytes are the table's combination cell at `chal2 ‖ dst`. -/
 lemma combBytes_ofTable {st : Statement} {M : ℕ} {dst : ByteArray} (hcomb : st.comb = some (M, dst))
     (g : Table) (u : Bytes 56) :
@@ -609,6 +616,7 @@ theorem prEvent_accept_le_comb_terms {T : CrtTables} (hT : liftInvOk T = true) {
 
 /-! ### Per relation, numerically -/
 
+omit [VoleMole.Verifier.HasPrg] in
 lemma ofArr_combinationOf_ba {M : ℕ} (v : Bytes (16 * M)) :
     ofArr (n := M) (combinationOf M v.ba) = combDec v := by
   funext k; exact ofArr_combinationOf _ k

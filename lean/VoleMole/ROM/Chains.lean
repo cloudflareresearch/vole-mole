@@ -57,6 +57,9 @@ open Finset ENNReal
 
 namespace VoleMole.ROM
 
+-- The statements hold for any CTR PRG (`HasPrg`, `Verifier/Prg.lean`), AES included.
+variable [VoleMole.Verifier.HasPrg]
+
 open VoleMole.Prob VoleMole.Arith VoleMole.Verifier VoleMole.Verifier.Bridge
 open VoleMole.EndToEnd OracleComp OracleSpec
 
@@ -113,11 +116,13 @@ noncomputable def chainEps (st : Statement) (S : Finset Blocks) (n N : ℕ) : Ki
 /-- The domains with a nonzero charge. -/
 def chainKinds : Finset Kind := {.h21, .h22, .h23}
 
+omit [VoleMole.Verifier.HasPrg] in
 lemma chainEps_eq_zero (st : Statement) (S : Finset Blocks) (n N : ℕ) :
     ∀ k ∉ chainKinds, chainEps st S n N k = 0 := by
   intro k hk
   cases k <;> simp_all [chainKinds, chainEps]
 
+omit [VoleMole.Verifier.HasPrg] in
 lemma prEvent_false_le {α : Type} [SampleableType α] [Fintype α] (ε : ℝ≥0∞) :
     Pr{let _x ← $ᵗ α}[False] ≤ ε :=
   (prEvent_uniformSample_eq_prU (fun _ : α => False)).trans_le (prU_false.trans_le zero_le)
@@ -318,6 +323,7 @@ def ChainData.ofSys {st : Statement} (preOf midOf : ByteArray → Table → Chai
     (cs : System GF128) (accOf : ByteArray → Table → Bytes 16 → Prop) : ChainData st :=
   ⟨preOf, midOf, fun _ _ => cs, accOf⟩
 
+omit [VoleMole.Verifier.HasPrg] in
 lemma ChainData.ofSys_committed {st : Statement} (preOf midOf : ByteArray → Table → Chain)
     (cs : System GF128) (accOf : ByteArray → Table → Bytes 16 → Prop)
     (hpre : ∀ x (g : Table) u, preOf x (Function.update g (.h21, x) u) = preOf x g)

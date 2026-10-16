@@ -38,12 +38,16 @@ open Finset ENNReal
 
 namespace VoleMole.ROM
 
+-- The statements hold for any CTR PRG (`HasPrg`, `Verifier/Prg.lean`), AES included.
+variable [VoleMole.Verifier.HasPrg]
+
 open VoleMole.Prob VoleMole.Arith VoleMole.Verifier VoleMole.Verifier.Bridge
 open VoleMole.EndToEnd VoleMole.SeedExtraction OracleComp OracleSpec
 
 /-- The combination cell `H_comb(chal2 ‖ dst)` of a relation combining `M` equations. -/
 def combKey (M : ℕ) (dst : ByteArray) (u : Bytes 56) : Dom := (.comb M, u.ba ++ dst)
 
+omit [VoleMole.Verifier.HasPrg] in
 theorem Bytes.ba_injective {n : ℕ} : Function.Injective (Bytes.ba (n := n)) := by
   intro b b' h
   have : Array.ofFn b = Array.ofFn b' := congrArg ByteArray.data h
@@ -51,6 +55,7 @@ theorem Bytes.ba_injective {n : ℕ} : Function.Injective (Bytes.ba (n := n)) :=
   have := congrArg (fun a : Array UInt8 => a[i.val]!) this
   simpa using this
 
+omit [VoleMole.Verifier.HasPrg] in
 theorem combKey_injective (M : ℕ) (dst : ByteArray) : Function.Injective (combKey M dst) := by
   intro u u' h
   simp only [combKey, Prod.mk.injEq, true_and] at h
@@ -95,6 +100,7 @@ def toChainData : ChainData st where
   csOf := fun _ _ => []
   accOf := C.accOf
 
+omit [VoleMole.Verifier.HasPrg] in
 lemma toChainData_committed (hC : C.Committed) : C.toChainData.Committed where
   pre := hC.pre
   mid := hC.mid
@@ -220,6 +226,7 @@ noncomputable def combEps (st : Statement) (S : Finset Blocks) (n' : ℕ) (εc :
   | .h23 => (N : ℝ≥0∞) / 2 ^ 128
   | _ => 0
 
+omit [VoleMole.Verifier.HasPrg] in
 lemma combEps_eq_zero (st : Statement) (S : Finset Blocks) (n' : ℕ) (εc : ℝ≥0∞) (n N : ℕ) :
     ∀ k ∉ chainKinds, combEps st S n' εc n N k = 0 := by
   intro k hk
@@ -344,6 +351,7 @@ def CombData.ofSys {st : Statement} {M : ℕ} (preOf midOf : ByteArray → Table
     (accOf : ByteArray → Table → Bytes 16 → Prop) (dst : ByteArray) : CombData st M :=
   ⟨preOf, midOf, fun _ _ => sys, fun _ _ => wit, accOf, dst⟩
 
+omit [VoleMole.Verifier.HasPrg] in
 lemma CombData.ofSys_committed {st : Statement} {M : ℕ} (preOf midOf : ByteArray → Table → Chain)
     (sys : (Fin M → GF128) → System GF128) (wit : (ℕ → GF128) → Prop)
     (accOf : ByteArray → Table → Bytes 16 → Prop) (dst : ByteArray)
@@ -520,6 +528,7 @@ def pomfritData (pk : UovPk) (sig msg : ByteArray) (labelRows : Bool)
   accOf := accOf
   dst := toBA (VoleMole.Spec.makeDst "pomf" 0 'l' '0')
 
+omit [VoleMole.Verifier.HasPrg] in
 lemma pomfritData_committed (pk : UovPk) (sig msg : ByteArray) (labelRows : Bool)
     (preOf midOf : ByteArray → Table → Chain) (accOf : ByteArray → Table → Bytes 16 → Prop)
     (hpre : ∀ x (g : Table) u, preOf x (Function.update g (.h21, x) u) = preOf x g)
