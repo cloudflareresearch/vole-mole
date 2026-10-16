@@ -809,7 +809,10 @@ harmless.
    Theorem 1 are in `lean/docs/extraction/Q7-qrom-multi-extraction.md` (paper). `ε_multi` caps Q2
    at about `2^{40}` cipher queries.
 5. Theorem 4(a) is mechanized for a fixed-size game (two Clients, one redemption per side,
-   Appendix B). In the ROM and ideal-cipher model, what remains is: SHAKE as a random oracle, AES
+   Appendix B), and with any number of further honest Clients on the same tables, issued with the
+   challenge Clients and redeeming at Anchor Sets chosen after every issuance request
+   (`anonymityN_lean_num`, `≤ n·2⁻¹⁰² + 2·εhide` plus budget terms for `n` Clients in all;
+   `lean/docs/zk.md` §10.8); adaptive schedules (Clients started after earlier outcomes) are not. In the ROM and ideal-cipher model, what remains is: SHAKE as a random oracle, AES
    as an ideal cipher (with its rows uniform functions, `anonymityRO_lean_num`,
    `anonymityRA_lean_num`, or uniform permutations read forward and inverse, the PRP/PRF switching
    term included, `anonymityRO_lean_num_perm`, `anonymityRA_lean_num_perm`, `lean/docs/zk.md`
@@ -1032,3 +1035,13 @@ redemptions or the refusal, the four `H₃` slices and the tables, with read bud
   `unlinkabilityNCSh_num` (and `_perm`) with `+ 2·(2q_X + 2)·2⁻²⁵⁶` (`*_seed`; the abort term
   bounded uniformly in the XOF table). Theorem 4(b′) has no seed-XOF term either (D7); as for
   4(a), the hop is not free.
+- **With many Clients** (`lean/VoleMole/Privacy/MoussakaMany.lean`, `ZK/ReadsMany.lean`, zk.md
+  §10.8): the adversary also serves `m` further honest Clients on the same tables (their issuance
+  requests seen with the challenge requests, their redemptions at Anchor Sets chosen after them);
+  for each tape of the further Clients the game is `realGameRA` of the adversary that runs them
+  (`AdversaryN.withClients`), whose interaction reads their issuance proofs consistently
+  (`realRO_sreads`: `H₅`, the cipher and `H₂³` at the `2³²` grinding points of each prefix).
+  **`anonymityN_lean_num`**: `anonymityRA_lean_num` at `i₂ = 2³²m`, `i₅ = 624m`, `i_E = 4607m`
+  and the guess's budget `(q₃, q₅ + 2·624m, q_E + 2·4607m)`; in numbers `≤ n·2⁻¹⁰² +
+  8·(q₃ + q₅ + 221·q_E)·2⁻¹²⁸ + 2·εhide` (`anonymityN_lean_le`; `2⁻⁸²` at `n = 2²⁰`, `2⁻⁷⁰` at
+  `2³²`: `anonymityN_lean_2pow20`, `_2pow32`); `anonymityN_lean_num_perm`.
