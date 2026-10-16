@@ -1,0 +1,21 @@
+src/mq/local.hpp
+  s_45ee28f7dc1e9b::t_1cb6816b58cb0b 44,174-221
+src/voleith_p256/prg.hpp
+  s_45ee28f7dc1e9b::t_40a79c8587dd25 113,117,119,122,124,133,135-136,141-144,146,153,155,158-159,161
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.10",
+  "base_commit_sha": "6a623606b20335823ff6f33708bb08810d7db088",
+  "prompts": {},
+  "sessions": {
+    "s_45ee28f7dc1e9b": {
+      "agent_id": {
+        "tool": "opencode",
+        "id": "ses_ebfe7e377ffe00JYcsmgH2SCOu",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Bas Westerbaan <bas@cloudflare.com>"
+    }
+  }
+}
