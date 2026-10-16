@@ -14,14 +14,15 @@ the cipher and a *fixed* hash table. Here the two are joined.
   `Dom ⊕ Cell`), at most `q_E` times the cipher (`IsQueryBoundP P Sum.isRight q_E`) and `q k` times
   each hash domain `k` (`IsKindQueryBoundIC`).
 * **The game at a cipher table `E`**: `proverIC st E P` is `P` with the cipher answered by `E`
-  (`runE`, which also returns `P`'s cipher log) followed by the **straight-line extractor** (it
-  queries `mu₁` and `iv`, and computes the leaf keys from the log, the table and the proof:
-  `keysOf`, `knownOf`; the log is kept in `aux` for the events), and the verifier runs with the
+  (`runE`, which also returns `P`'s **joint log**: its hash and cipher queries in order, with
+  answers; `cipherLog`, `hashLog` are its parts) followed by the **straight-line extractor** (it
+  queries `mu₁` and `iv`, and computes the leaf keys from the cipher log, the table and the proof:
+  `keysOf`, `knownOf`; the joint log is kept in `aux` for the events), and the verifier runs with the
   ideal-cipher PRG `icPrg E.cipher` (`game` of `ROM/Verifier.lean` at that instance). The
   experiment draws `E` uniformly, then runs the game against the lazy hash oracle.
 * `runH h P`: `P` with the hashes answered by a fixed table `h`, a cipher-only prover;
-  `evalWithAnswerFn_runE`: against `h`, `runE E P` returns `P`'s output against both tables and
-  the log of `runH h P` against `E`.
+  `evalWithAnswerFn_runE`: against `h`, `runE E P` returns `P`'s output and log against both
+  tables, whose cipher entries are the log of `runH h P` against `E` (`cipherLog_tableQueryLog`).
 * **`prEvent_joint_le_add`** (the bridge): if for every complete hash table `h` an event of the
   game has cipher probability `≤ c + ` that of another, the same holds in the joint experiment
   (the lazy hash oracle replaced by a uniform table on the finite set of the possible queries of
@@ -33,15 +34,12 @@ the cipher and a *fixed* hash table. Here the two are joined.
   replaced by `2·q_E²·2⁻²⁵⁶ + Pr[DeadOpenOut]`.
 * **`moussakaIssue_accept_le_ic`**: `moussakaIssue_accept_le` in the joint experiment, with
   `ε_bind` replaced by `2·q_E²·2⁻²⁵⁶ + ε_open`, `ε_open` a bound on `DeadOpenOut` (an accepted
-  proof opens a leaf whose key the prover never queried at that leaf's points). The other four
-  relations' bounds go through `prEvent_joint_le_of_bindFail` in the same way (not stated here;
-  the combined relations also need `P`'s total hash-query count transferred to `proverIC`).
+  proof opens a leaf whose key the prover never queried at that leaf's points).
 
-What `ε_open` still contains (`L0-L2` §5): the linking of the verifier's leaf commitments to the
-`H₁` preimages committed before the chain's `H₂¹` query (L1.4, `Coll₁`, `Hit₁`) and L2(a) (a
-leaf with no key evaluated before the chain is not opened), both ordering facts about the hash
-and cipher queries, as for the "same chain" step. `hsame` (the keys committed at the chain's
-`H₂¹` input are the extractor's) and `hL2` stay as in `ROM/Accept.lean`.
+`ε_open` is bounded in `ROM/CipherOpen.lean` (`prEvent_joint_deadOpen_le`, with
+`moussakaIssue_accept_le_ic'`), and the other four relations are in `ROM/CipherRelations.lean`.
+`hsame` (the keys committed at the chain's `H₂¹` input are the extractor's) and `hL2` stay as in
+`ROM/Accept.lean`.
 -/
 
 open Finset OracleComp OracleSpec
@@ -71,13 +69,15 @@ def join (h : Table) (E : CTable) : ∀ d, AnsIC d
 
 variable {α : Type}
 
-/-- **`P` with the cipher answered by `E`**, returning `P`'s output and its cipher log. -/
-def runE (E : CTable) (P : OracleComp specIC α) : OracleComp spec (α × QueryLog cspec) :=
-  OracleComp.construct (C := fun _ => OracleComp spec (α × QueryLog cspec))
+/-- **`P` with the cipher answered by `E`**, returning `P`'s output and its **joint log** (the hash
+and cipher queries in order, with their answers). -/
+def runE (E : CTable) (P : OracleComp specIC α) : OracleComp spec (α × QueryLog specIC) :=
+  OracleComp.construct (C := fun _ => OracleComp spec (α × QueryLog specIC))
     (fun a => pure (a, []))
     (fun t _ rec => match t, rec with
-      | .inl d, rec => liftM (spec.query d) >>= rec
-      | .inr x, rec => (fun r => (r.1, ⟨x, E x⟩ :: r.2)) <$> rec (E x))
+      | .inl d, rec => liftM (spec.query d) >>= fun u =>
+          (fun r => (r.1, ⟨.inl d, u⟩ :: r.2)) <$> rec u
+      | .inr x, rec => (fun r => (r.1, ⟨.inr x, E x⟩ :: r.2)) <$> rec (E x))
     P
 
 /-- **`P` with the hashes answered by `h`**: a prover against the cipher only. -/
@@ -93,12 +93,13 @@ def runH (h : Table) (P : OracleComp specIC α) : OracleComp cspec α :=
     runE E (pure a : OracleComp specIC α) = pure (a, []) := rfl
 
 lemma runE_inl (E : CTable) (d : Dom) (k : specIC.Range (.inl d) → OracleComp specIC α) :
-    runE E (liftM (specIC.query (.inl d)) >>= k) = liftM (spec.query d) >>= fun u => runE E (k u) :=
+    runE E (liftM (specIC.query (.inl d)) >>= k) = liftM (spec.query d) >>= fun u =>
+      (fun r => (r.1, (⟨.inl d, u⟩ : (t : DomIC) × AnsIC t) :: r.2)) <$> runE E (k u) :=
   rfl
 
 lemma runE_inr (E : CTable) (x : Cell) (k : specIC.Range (.inr x) → OracleComp specIC α) :
     runE E (liftM (specIC.query (.inr x)) >>= k) =
-      (fun r => (r.1, ⟨x, E x⟩ :: r.2)) <$> runE E (k (E x)) :=
+      (fun r => (r.1, (⟨.inr x, E x⟩ : (t : DomIC) × AnsIC t) :: r.2)) <$> runE E (k (E x)) :=
   rfl
 
 @[simp] lemma runH_pure (h : Table) (a : α) : runH h (pure a : OracleComp specIC α) = pure a := rfl
@@ -110,25 +111,60 @@ lemma runH_inr (h : Table) (x : Cell) (k : specIC.Range (.inr x) → OracleComp 
     runH h (liftM (specIC.query (.inr x)) >>= k) = liftM (cspec.query x) >>= fun u => runH h (k u) :=
   rfl
 
-/-- **Against a hash table `h`, `runE E P` is `P` against both tables**, with the log of the
-cipher-only prover `runH h P` against `E`. -/
+/-- **Against a hash table `h`, `runE E P` is `P` against both tables**, with its log against
+both tables (the joint log). -/
 theorem evalWithAnswerFn_runE (h : Table) (E : CTable) (P : OracleComp specIC α) :
     evalWithAnswerFn (QueryImpl.ofFn h) (runE E P) =
-      (evalWithAnswerFn (QueryImpl.ofFn (join h E)) P, tableQueryLog (runH h P) E) := by
+      (evalWithAnswerFn (QueryImpl.ofFn (join h E)) P, tableQueryLog P (join h E)) := by
   induction P using OracleComp.inductionOn with
   | pure a => simp
   | query_bind t k ih =>
     cases t with
     | inl d =>
-      rw [runE_inl, runH_inl]
-      simp only [evalWithAnswerFn_bind, evalWithAnswerFn_liftM_query, QueryImpl.ofFn_apply]
-      exact ih (h d)
-    | inr x =>
-      rw [runE_inr, runH_inr]
+      rw [runE_inl]
       simp only [evalWithAnswerFn_map, evalWithAnswerFn_bind, evalWithAnswerFn_liftM_query,
         QueryImpl.ofFn_apply, tableQueryLog_query_bind]
+      rw [ih (h d)]
+      rfl
+    | inr x =>
+      rw [runE_inr]
+      simp only [evalWithAnswerFn_map, tableQueryLog_query_bind]
       rw [ih (E x)]
       rfl
+
+/-- **The cipher entries of a joint log.** -/
+def cipherLog (l : QueryLog specIC) : QueryLog cspec :=
+  l.filterMap fun e => match e with
+    | ⟨.inl _, _⟩ => none
+    | ⟨.inr x, v⟩ => some ⟨x, v⟩
+
+/-- **The hash queries of a joint log** (the cells only). -/
+def hashLog (l : QueryLog specIC) : List Dom :=
+  l.filterMap fun e => match e.1 with
+    | .inl d => some d
+    | .inr _ => none
+
+@[simp] lemma cipherLog_nil : cipherLog [] = [] := rfl
+
+@[simp] lemma cipherLog_cons_inl (d : Dom) (u : Ans d) (l : QueryLog specIC) :
+    cipherLog (⟨.inl d, u⟩ :: l) = cipherLog l := rfl
+
+@[simp] lemma cipherLog_cons_inr (x : Cell) (u : Blk) (l : QueryLog specIC) :
+    cipherLog (⟨.inr x, u⟩ :: l) = ⟨x, u⟩ :: cipherLog l := rfl
+
+/-- **The cipher entries of `P`'s joint log are the log of the cipher-only prover `runH h P`.** -/
+theorem cipherLog_tableQueryLog (h : Table) (E : CTable) (P : OracleComp specIC α) :
+    cipherLog (tableQueryLog P (join h E)) = tableQueryLog (runH h P) E := by
+  induction P using OracleComp.inductionOn with
+  | pure a => simp
+  | query_bind t k ih =>
+    cases t with
+    | inl d =>
+      rw [runH_inl, tableQueryLog_query_bind]
+      exact ih (h d)
+    | inr x =>
+      rw [runH_inr, tableQueryLog_query_bind, tableQueryLog_query_bind]
+      exact congrArg (List.cons _) (ih (E x))
 
 /-- Against `E`, the cipher-only prover `runH h P` is `P` against both tables. -/
 theorem evalWithAnswerFn_runH (h : Table) (E : CTable) (P : OracleComp specIC α) :
@@ -164,7 +200,8 @@ theorem isKindQueryBound_runE (E : CTable) {P : OracleComp specIC α} {q : Kind 
     cases t with
     | inl d =>
       rw [runE_inl]
-      exact isKindQueryBound_query_bind_iff.2 ⟨hP.1, fun u => ih u (hP.2 u)⟩
+      exact isKindQueryBound_query_bind_iff.2 ⟨hP.1, fun u =>
+        (isQueryBound_map_iff _ _ _ _ _).2 (ih u (hP.2 u))⟩
     | inr x =>
       rw [runE_inr]
       exact (isQueryBound_map_iff _ _ _ _ _).2 (ih (E x) (hP.2 (E x)))
@@ -299,24 +336,24 @@ def knownOf (log : QueryLog cspec) (E : CTable) (iv opening : ByteArray) : Finse
   univ.filter fun i => (extractKey log E iv i (opening.extract (32 * i) (32 * i + 32))).isSome
 
 /-- **The prover `P` with the straight-line extractor, at the cipher table `E`**: `P` with the
-cipher answered by `E` (and its cipher log), then the extractor queries `mu₁` and `iv` and computes
-the leaf keys (`keysOf`) and the known trees (`knownOf`) from the log, `E` and the proof. The log
-is kept in `aux`. -/
+cipher answered by `E` (and its joint log), then the extractor queries `mu₁` and `iv` and computes
+the leaf keys (`keysOf`) and the known trees (`knownOf`) from the cipher log, `E` and the proof.
+The joint log is kept in `aux`. -/
 def proverIC (st : Statement) (E : CTable) (P : OracleComp specIC (ByteArray × β)) :
-    OracleComp spec (ByteArray × ExtData (β × QueryLog cspec)) := do
+    OracleComp spec (ByteArray × ExtData (β × QueryLog specIC)) := do
   let r ← runE E P
   let pf : Proof := { params := st.params, bytes := r.1.1 }
   let mu1 ← mu1Q st
   let iv ← hashQ .h4 ((pf.ivPre ++ mu1).push 4)
   pure (r.1.1,
-    { keys := keysOf r.2 E iv pf.opening pf.delta
-      known := knownOf r.2 E iv pf.opening
+    { keys := keysOf (cipherLog r.2) E iv pf.opening pf.delta
+      known := knownOf (cipherLog r.2) E iv pf.opening
       aux := (r.1.2, r.2) })
 
 /-- **The game at the cipher table `E`**: `proverIC`, then the verifier with the ideal-cipher PRG
 `icPrg E.cipher`, against the hash oracles. -/
 def gameIC (T : CrtTables) (st : Statement) (P : OracleComp specIC (ByteArray × β)) (E : CTable) :
-    OracleComp spec (Out (β × QueryLog cspec)) :=
+    OracleComp spec (Out (β × QueryLog specIC)) :=
   @game (icPrg E.cipher) _ T st (proverIC st E P)
 
 /-- The extractor's queries: `mu₁` (`H₂⁰` or `H₂⁴`) and `iv` (`H₄`). -/
@@ -331,11 +368,11 @@ theorem isKindQueryBound_proverIC (st : Statement) (E : CTable) {P : OracleComp 
   have h4 : ∀ k : Kind, k ≠ .h4 → ∀ mu1 : ByteArray,
       IsKindQueryBound (hashQ .h4 ((Proof.ivPre ⟨st.params, r.1.1⟩ ++ mu1).push 4) >>= fun iv =>
         (pure (r.1.1,
-          { keys := keysOf r.2 E iv (Proof.opening ⟨st.params, r.1.1⟩)
+          { keys := keysOf (cipherLog r.2) E iv (Proof.opening ⟨st.params, r.1.1⟩)
               (Proof.delta ⟨st.params, r.1.1⟩)
-            known := knownOf r.2 E iv (Proof.opening ⟨st.params, r.1.1⟩)
+            known := knownOf (cipherLog r.2) E iv (Proof.opening ⟨st.params, r.1.1⟩)
             aux := (r.1.2, r.2) }) :
-          OracleComp spec (ByteArray × ExtData (β × QueryLog cspec))))
+          OracleComp spec (ByteArray × ExtData (β × QueryLog specIC))))
         (Function.update extractorQueries k (extractorQueries k - 1)) := by
     intro k hk mu1
     refine isKindQueryBound_hashQ_bind_iff.2 ⟨?_, fun _ => trivial⟩
@@ -349,7 +386,7 @@ theorem isKindQueryBound_proverIC (st : Statement) (E : CTable) {P : OracleComp 
       h4 .mu (by decide) u.ba⟩
 
 /-- Against a hash table `h`, the extractor's data are computed from `P`'s output against both
-tables, the cipher log of `runH h P` and the verifier's `iv`. -/
+tables, the cipher log of `runH h P` and the verifier's `iv`; `aux` holds `P`'s joint log. -/
 theorem evalWithAnswerFn_proverIC (h : Table) (st : Statement) (E : CTable)
     (P : OracleComp specIC (ByteArray × β)) :
     let r := evalWithAnswerFn (QueryImpl.ofFn (join h E)) P
@@ -360,14 +397,15 @@ theorem evalWithAnswerFn_proverIC (h : Table) (st : Statement) (E : CTable)
       (r.1,
         { keys := keysOf log E iv pf.opening pf.delta
           known := knownOf log E iv pf.opening
-          aux := (r.2, log) }) := by
+          aux := (r.2, tableQueryLog P (join h E)) }) := by
   simp only [proverIC, evalWithAnswerFn_bind, evalWithAnswerFn_runE, evalWithAnswerFn_mu1Q,
-    evalWithAnswerFn_hashQ, evalWithAnswerFn_pure, ivOf, Hashes.ofTable_hash]
+    evalWithAnswerFn_hashQ, evalWithAnswerFn_pure, ivOf, Hashes.ofTable_hash,
+    cipherLog_tableQueryLog]
 
 /-- **A dead leaf is opened by an accepted proof**: the verifier accepts, and some non-hidden leaf
 key of its reconstruction was queried by the prover at neither of that leaf's points. -/
-def DeadOpenOut (st : Statement) (E : CTable) (r : Out (β × QueryLog cspec)) : Prop :=
-  r.2.2.accept = true ∧ DeadOpen r.2.1.aux.2 E r.2.2.iv (Proof.opening ⟨st.params, r.1⟩)
+def DeadOpenOut (st : Statement) (E : CTable) (r : Out (β × QueryLog specIC)) : Prop :=
+  r.2.2.accept = true ∧ DeadOpen (cipherLog r.2.1.aux.2) E r.2.2.iv (Proof.opening ⟨st.params, r.1⟩)
     (Proof.delta ⟨st.params, r.1⟩)
 
 /-- **The binding failure for a fixed hash table**: over the cipher table, the binding failure
@@ -395,7 +433,10 @@ theorem pr_bindFail_le_table (T : CrtTables) (st : Statement) (P : OracleComp sp
         (Proof.delta ⟨st.params, π⟩) with hB | hC | hD
     · exact absurd (fun leaves' hr' => hB leaves' (hiv ▸ hr')) hnb
     · exact Or.inl hC
-    · exact Or.inr ⟨hacc, by rw [hiv]; exact hD⟩
+    · refine Or.inr ⟨hacc, ?_⟩
+      show DeadOpen (cipherLog (tableQueryLog P (join h E))) E _ _ _
+      rw [cipherLog_tableQueryLog, hiv]
+      exact hD
   refine (prEvent_mono _ _ (fun E => freshBadC (runH h P) ∅ E collBad ∨
     DeadOpenOut st E (evalWithAnswerFn (QueryImpl.ofFn h) (gameIC T st P E))) hpt).trans
     ((prEvent_or_le _ _ _).trans (add_le_add ?_ le_rfl))
@@ -423,7 +464,7 @@ then in the joint experiment `Pr[ev] ≤ c + 2·q_E²·2⁻²⁵⁶ + Pr[DeadOpe
 theorem prEvent_joint_le_of_bindFail (T : CrtTables) (st : Statement)
     (P : OracleComp specIC (ByteArray × β)) (qE : ℕ)
     (hqE : IsQueryBoundP P (fun t => t.isRight = true) qE)
-    (ev : CTable → Out (β × QueryLog cspec) → Prop) (c : ℝ≥0∞)
+    (ev : CTable → Out (β × QueryLog specIC) → Prop) (c : ℝ≥0∞)
     (h : ∀ E, Pr{let r ← (simulateQ randomOracle (gameIC T st P E)).run' ∅}[ev E r] ≤
       c + Pr{let r ← (simulateQ randomOracle (gameIC T st P E)).run' ∅}[
         @bindFail (icPrg E.cipher) _ st r]) :
@@ -455,7 +496,7 @@ theorem moussakaIssue_accept_le_ic (t ctxIss : ByteArray) (labelRows : Bool)
     (P : OracleComp specIC (ByteArray × β)) (qE : ℕ)
     (hqE : IsQueryBoundP P (fun t => t.isRight = true) qE) (q : Kind → ℕ)
     (hq : IsKindQueryBoundIC P q)
-    (chainFail deadFail : CTable → Out (β × QueryLog cspec) → Prop) {εo εd εs : ℝ≥0∞}
+    (chainFail deadFail : CTable → Out (β × QueryLog specIC) → Prop) {εo εd εs : ℝ≥0∞}
     (hopen : Pr{let E ← $ᵗ CTable; let r ← (simulateQ randomOracle
       (gameIC CrtGen.tables (moussakaIssue t ctxIss labelRows) P E)).run' ∅}[
         DeadOpenOut (moussakaIssue t ctxIss labelRows) E r] ≤ εo)

@@ -103,6 +103,9 @@ import VoleMole.ROM.SingleOracle
 import VoleMole.ROM.FreshCache
 import VoleMole.ROM.CipherBind
 import VoleMole.ROM.CipherGame
+import VoleMole.ROM.Queried
+import VoleMole.ROM.CipherOpen
+import VoleMole.ROM.CipherRelations
 import VoleMole.Privacy.Basic
 import VoleMole.Privacy.PomFRIT
 import VoleMole.Privacy.Moussaka

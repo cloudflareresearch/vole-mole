@@ -3,8 +3,10 @@
 Status: **phase A (M1–M3) implemented** in `VoleMole/Prob/` (Mathlib only, no new dependency), with
 the deviations listed in §2a. **Phase B: M4 done, M5 done** in `VoleMole/ROM/` (VCVio), including
 the run of the executable verifier against the oracle (§2c); what remains is listed at the end of
-§2c. **M6: binding (`ε_bind`) done in the ideal-cipher model, PRF view** (§2d); `ε_chain`, `ε_dead`
-and the residual `ε_open` of §2d still open. Scope: the classical (ROM + ideal cipher) proof of knowledge
+§2c. **M6: binding (`ε_bind`) done in the ideal-cipher model, PRF view** (§2d), **including its
+residual `ε_open`, for all five relations** (§2e). `ε_chain` and `ε_dead` still open; the
+formal L2 hypothesis `hL2` turns out not to be dischargeable with a small `ε_dead` as stated, and
+needs a corrected interface (§2e, finding F2). Scope: the classical (ROM + ideal cipher) proof of knowledge
 of `docs/extraction/README.md`. The ZK hybrids (`docs/zk.md` §10, "proved only on paper") and the
 QROM documents (Q1–Q7) are out of scope here. Notes on ZK are at the end.
 
@@ -20,7 +22,7 @@ The deterministic cores are in Lean. Each per-relation theorem `*_extract_chain`
 | `hcomb` (3 combined relations) | L4 | `*_comb_bad`, `*_comb_bad_gf128`, `SeedExtraction.combination_prob` | `l` uniform and independent of `chal2` ⇒ `Pr ≤ 1/\|F\|`; RO freshness of `chal2 ‖ dst` (`q_c·2⁻⁴⁴⁸`) |
 | `hδ : Set.InjOn δ Z` | L1 (bookkeeping) | none | **deterministic**: `chal3` with zero grinding bits ↦ `blocksOf (deltaBit ·)` is injective |
 | `hclaim1` | L1 | `onChain_of_accept` (given `hrun`) | binding of leaf commitments (ideal cipher, C1–C3) and the RO "same chain" step |
-| `hL2 : ∀ i ∉ known, IsFixed A i` | L2 | none | ideal-cipher counting (`ε_dead`), no Lean core yet |
+| `hL2 : ∀ i ∉ known, IsFixed A i` | L2 | none | ideal-cipher counting (`ε_dead`), no Lean core yet; with `A = onSet` (garbage keys at dead leaves) not dischargeable, §2e F2 |
 | final step: "at most `max(d,1)` accepted ⇒ accepted with prob. ≤ `max(d,1)·2⁻¹²⁸`" | assembly step 4 | the `#{x ∈ Z \| acc x} ≤ max d 1` conclusion | uniform `chal3` ⇒ per query; union over `Q` H₂³ queries (RO) |
 
 So three kinds of work remain:
@@ -470,7 +472,9 @@ cipher values is a second logged witness). What remains is `ε_open = Pr[DeadOpe
 accepted proof opens a leaf whose key the prover never evaluated at either of the leaf's points.
 Bounding it is L1.4 (the leaf commitments the verifier recomputes are the `H₁` preimages
 committed before the chain's `H₂¹` query: `Coll₁`, `Hit₁`) together with L2(a) (C3, `Post`): an
-ordering argument over the hash and cipher logs, the same kind as the "same chain" step. Note also
+ordering argument over the hash and cipher logs, the same kind as the "same chain" step. (Done in
+§2e, without the ordering: `Pr[DeadOpenOut] ≤ openHashEps q + q₁·2⁻²⁵⁶`, because a key never
+queried at all needs no "before".) Note also
 that the extracted keys are logged keys, but "logged before `chal1`" (committed by the chain) is
 not part of binding here: it is in `hsame` (`SameChain.pre` compares the keys committed at the
 chain's `H₂¹` input with the extractor's).
@@ -481,6 +485,107 @@ committed at the `H₂¹` input), and L2's `Post` event is a `collBad`-style fre
 cipher log charged against the half-targets of earlier chains (C3), for which
 `prEvent_freshBadC_le_of_cached` is the union bound (with a bad event that reads the log of the
 hash queries too; the combined oracle `specIC` puts both in one log).
+
+### 2e. M6, second part: `ε_open`, the other relations, and what is left
+
+Files: `ROM/Queried.lean`, `ROM/FreshGuess.lean`, `ROM/CipherOpen.lean`, `ROM/CipherRelations.lean`;
+`ROM/CipherGame.lean` changed (below). No executable definition changed. `#print axioms` of the
+main results: `propext`, `Classical.choice`, `Quot.sound`.
+
+- **The joint log.** `runE E P` now returns `P`'s **joint log** (hash and cipher queries, in order,
+  with answers), which is `tableQueryLog P (join h E)` (`evalWithAnswerFn_runE`); `proverIC` keeps it
+  in `aux`. `cipherLog` (its cipher entries, `= tableQueryLog (runH h P) E`,
+  `cipherLog_tableQueryLog`) feeds `keysOf`, `knownOf`, `DeadOpenOut` as before; `hashLog` (its hash
+  cells) is `P`'s own hash queries. Generic log facts (`ROM/Queried.lean`): two tables agreeing on
+  the queried cells give the same run (`tableQueryLog_congr`), and a queried cell stays queried when
+  the table is changed there (`mem_tableQueryLog_congr`).
+- **The hash ladder** (`ROM/Queried.lean`, generic in `HasPrg` and the prover): the verifier's chain
+  `w_i → cw → x → y → z` (17 leaf hashes, `com`, `H₂¹`, `H₂²`, `H₂³`), each input containing the
+  previous answer at a fixed position. If the prover (its reported queries `qs aux`, behaving as a
+  log: `hfix`, `hmem`, `hcnt`) did not query some `w_i` but the verifier accepts, then walking up
+  the chain, either the prover did not query `z` either, or the first queried input contains the
+  answer of an unqueried cell: a bad answer (`ladderBad`, targets `ladderTargets`), i.e. `Hit₁` and
+  its analogues for `H₂¹`, `H₂²` (`ladder_walk`). Union bound: **`prEvent_accept_leafUnqueried_z_le`**
+  `≤ (q₁+18)·(17q'₁+q'₂₁)·2⁻²⁵⁶ + (q₂₁+1)·q'₂₂·2⁻¹⁰⁸⁸ + (q₂₂+1)·q'₂₃·2⁻⁴⁴⁸` when `z` was queried
+  (`zOut`: `z` read off the transcript). The all-in-one union bound with the `H₂³` step charged to
+  every `H₂³` query is `prEvent_accept_leafUnqueried_le` (`+ (q₂₃+1)·2⁻¹²⁸`).
+- **A fresh answer guessed** (`ROM/FreshGuess.lean`). `card_finOf_mul_le`: abstract class counting
+  (cells `t g`, classes `{update g (t g) w}` of `|W|` tables, at most `K` per class in the event,
+  classes disjoint), stated over abstract finite types so that no cardinality of a concrete
+  `2¹²⁸`-element type enters arithmetic (the kernel would evaluate it: `0 * Fintype.card …`
+  through `zero_mul` already recurses). `prEvent_fresh_guess_le`: lazy oracle → uniform table on the
+  possible queries → counting, `Pr ≤ K·2^{-8·outLen}`. Hence **`prEvent_accept_zUnqueried_le`**:
+  accepted with the verifier's `H₂³` input not queried by the prover, `≤ 2⁻¹²⁸` (not `(q₂₃+1)·2⁻¹²⁸`:
+  the verifier's chain reads no `H₂³` cell, `runChain_ofTable_update_h23`).
+- **Two fresh cipher cells** (`ROM/CipherOpen.lean`). If the dead leaf's leaf-hash input `w_i` *was*
+  queried by `P`, block `j` of it is the commitment `E_{s'}(x₀) ‖ E_{s'}(x₁)` of the dead leaf
+  (`extract_leafHashInput`, `comAt_reconstruct`, `leafCom_ic`), at two cells `P` never queried. At a
+  fixed hash table, updating the cipher table at those two cells changes neither `P`'s run (not in
+  its log), nor the verifier's tree (the GGM derivation reads only points of tweak `< L − 1`,
+  `recTree_ic_congr_cells`, `lp_ne_gp`), nor the dead leaf, nor `P`'s `H₁` inputs: the class
+  counting with two cells, **`prEvent_two_cells_le`**, gives `≤ q₁·2⁻²⁵⁶`
+  (`prEvent_deadQueried_le`).
+- **`ε_open` discharged**: **`prEvent_joint_deadOpen_le`**,
+  `Pr[DeadOpenOut] ≤ openHashEps q + q₁·2⁻²⁵⁶` with
+  `openHashEps q = (q₁+18)·(17q₁+q₂₁)·2⁻²⁵⁶ + (q₂₁+1)·q₂₂·2⁻¹⁰⁸⁸ + (q₂₂+1)·q₂₃·2⁻⁴⁴⁸ + 2⁻¹²⁸`
+  (`q` = `P`'s per-domain hash counts). For `q ≤ 2⁶⁴` this is `2⁻¹²⁸ + O(2⁻¹²⁰)`; the `2⁻¹²⁸`
+  is the one fresh guess of `Δ`, as the paper's "the verifier's own query is fresh".
+- **The five relations, `ε_bind` explicit**: `moussakaIssue_accept_le_ic'` (`ROM/CipherOpen.lean`),
+  `ratatouilleIssue_accept_le_ic`, `moussakaRedeem_accept_le_ic`, `ratatouilleSpend_accept_le_ic`,
+  `pomfritRedeem_accept_le_ic` (`ROM/CipherRelations.lean`): the `ROM/Accept.lean` bounds in the
+  joint experiment with `ε_bind` replaced by `2·q_E²·2⁻²⁵⁶ + openHashEps q + q₁·2⁻²⁵⁶`; for the
+  combined relations the total hash count `n` of `P` (`IsQueryBoundP P Sum.isLeft n`) becomes `n + 2`
+  (the extractor's two queries, `isTotalQueryBound_proverIC`). Remaining hypotheses: `hsame`
+  (`ε_chain`) and `hL2` (`ε_dead`), per cipher table.
+
+**Finding F2: `hL2` cannot be discharged with a small `ε_dead`.** `hL2` asks, outside `deadFail` on
+accepted runs, that every tree outside `known` has a fixed block on `onSet st T ch chal3Blocks`,
+the `chal3` values on the chain *computed with the extractor's keys*. Take an honest prover that,
+in one tree `i₀`, replaces the commitment of one leaf `j₀` by a random 32-byte string and uses the
+key `0` there in its VOLE (ConvertToVOLE does not need the hidden leaf's key, so its proofs are
+accepted whenever `Δ_{i₀} = j₀`; it grinds `chal3` for that). Then `i₀ ∉ known` (no logged key for
+the hidden commitment), the extractor's key at `(i₀, j₀)` is `zeroBlock` (`keysOf`), i.e. exactly
+the key the prover used, so the committed chain is consistent for *every* `Δ'` and `onSet` is all
+of `chal3Blocks`: tree `i₀` is not fixed on it. So `deadFail` must contain essentially every
+accepted run of this prover, and adding the trick to any cheating prover makes `ε_dead ≈ Pr[accept]`.
+The bound is still true, but `ε_dead` is not uniformly small, so the theorem says nothing in
+general. The paper's L2 is fine: L3 uses "a tree with a dead leaf has, *on the accepting set*,
+`Δ_i` fixed", and the accepting set excludes every `Δ'` that would open a dead leaf. The formal
+translation used `onSet` (consistency of the committed data, with garbage keys at dead leaves) in
+place of the accepting set. **Correction** (not yet implemented; it changes the hypotheses of
+`ROM/Accept.lean`'s theorems): let the chain data at `z` carry the committed dead leaves
+`dead i : Finset ℕ` (leaves with no key evaluated before the chain's `H₂¹` query, a function of the
+log prefix, so `Committed`), take `A := {Δ' ∈ onSet | ∀ i, ∀ j ∈ dead i, Δ'_i = j}` in
+`chainBad_of_accept` (`chain_good_of_not_bad` needs only `A ⊆ onSet`; its `hP` should take any
+such `A`), `SameChain.acc : accOf z g b ↔ deltaBlocks b ∈ A`, and replace `hL2` by (i) L2(c):
+`i ∉ known → (dead i).Nonempty` (then `IsFixed A i` holds by construction) and (ii) L2(a): the
+accepted `Δ` hides every committed dead leaf (`Δ ∈ A`, from `onChain_of_accept`). Both are
+small-probability statements (`Post`/C3 and the `DeadOpen` argument of this section).
+
+**What is left for `ε_chain` and `ε_dead`, precisely.** Both need the **committed data of a chain
+from the log prefix**: for the verifier's `H₂¹` input `x`, the `com` field of `x` (bytes
+`32 … 64`), its first `H₁` preimage of length 545 in the joint log before the first query of `x`,
+the 17 leaf-hash preimages of its blocks, and for each leaf the first key in the cipher log
+*before `x`* with that commitment (Definition B); `preOf x g` is this, with `c_i`, `c_mult`,
+`iv_pre`, `mu₁` parsed from `x` (and `iv = H₄(iv_pre ‖ mu₁ ‖ 4)`, `h5` from the table). Such data are
+`Committed` automatically (the log before the first query of a cell does not read it). The missing
+lemmas:
+1. *Ordering* (L1.4, `Hit₁` up the chain): on accepted runs, outside hits whose targets are fields
+   of *earlier* queries, the first queries of `w_i`, `cw`, `x`, `y`, `z` are `P`'s and in this order.
+   The union bound is the ladder's with targets taken from the log before the first occurrence
+   (invariant when that cell is resampled); the event is about the log, so it needs the game's log
+   in the output (a logged game, or `P`'s joint log as here, with answers).
+2. *`Coll₁`* (`H₁` answers distinct among the logged inputs, `≤ (q₁+18)²·2⁻²⁵⁶`) and an `H₂¹`
+   collision bound (`chal1` identifies `x` inside `y`), both cache-reading union bounds
+   (`prEvent_freshBadC_le_of_cached`).
+3. *`Post`* (C3(b), L2(c)): a key whose two matching cells are both first queried after `x` (so the
+   extractor's key from the full log differs from the pre-`x` one), `≤ 8·L·q₂·q_E·p²`; a joint
+   ordering event (hash log before the cipher query), at a fixed hash table a `freshBadC`-type
+   bound over the cipher log with the half-targets of the earlier `H₂¹` queries.
+4. *Parsing*: `chal1Input`, `chal2Input` (with `h_V` serialized), `chal3Input` inverted on their
+   fields, and `keysOf` made zero outside `i < τ, j < 2^{k_i}` so that `SamePrefix.keys` (equality
+   of functions `ℕ → ℕ → ByteArray`) does not ask for agreement on meaningless indices.
+5. For `ε_dead`: the corrected interface of F2, then (i) and (ii) above from 1–3.
 
 ### M4 — Mathlib bump and VCVio dependency (Phase B, ~1–3 days, mostly waiting on builds) — done
 
@@ -517,7 +622,7 @@ Subtlety: the "parse a prefix from `x`" functions must be total functions of the
 the RO cache *before* the query). This is where L1's "committed data" enters. In M5 take it as
 given via a hypothesis that the committed keys are a function of the prior log.
 
-### M6 — Ideal cipher, L1/L2, the "same chain" step (Phase B, ~3–6 weeks, optional) — binding done (PRF view), see §2d
+### M6 — Ideal cipher, L1/L2, the "same chain" step (Phase B, ~3–6 weeks, optional) — binding done (PRF view), see §2d, §2e
 
 - Model AES as an ideal cipher: a lazy random *permutation* per key, with forward and inverse
   queries. VCVio has no ready-made ideal cipher that I could find; build it as a stateful
