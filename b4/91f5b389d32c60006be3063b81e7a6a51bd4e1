@@ -1,0 +1,29 @@
+README.md
+  s_45ee28f7dc1e9b::t_fcfec4980cb6e6 217-220,228-235,237-239
+include/vole_mole/ecdsa_pok.hpp
+  s_45ee28f7dc1e9b::t_680595cc9f6e93 43-48
+src/ecdsa_pok/arith.hpp
+  s_45ee28f7dc1e9b::t_2d21d7f08c39db 48,354-362
+src/ecdsa_pok/hk_relation.hpp
+  s_45ee28f7dc1e9b::t_97c389e662128c 65-68,308,340,373,388
+src/ecdsa_pok/mdoc_relation.hpp
+  s_45ee28f7dc1e9b::t_6322d9ee66a352 93
+src/ecdsa_pok/relation.hpp
+  s_45ee28f7dc1e9b::t_d7fa62440ddff6 114-117,358,395,432,448
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.10",
+  "base_commit_sha": "b491f5b389d32c60006be3063b81e7a6a51bd4e1",
+  "prompts": {},
+  "sessions": {
+    "s_45ee28f7dc1e9b": {
+      "agent_id": {
+        "tool": "opencode",
+        "id": "ses_ebfe7e377ffe00JYcsmgH2SCOu",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Bas Westerbaan <bas@cloudflare.com>"
+    }
+  }
+}
