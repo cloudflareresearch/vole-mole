@@ -30,7 +30,7 @@ Line references are to the working tree at commit `6d7113e`.
 | Property | On `main` | With the label-row fix | Section |
 |---|---|---|---|
 | One-more unforgeability (paper Def. 2.5), classical ROM + ideal cipher | **Holds.** Tight under a τ-shift variant of UOV one-more preimage resistance (Thm U2). Under the paper's standard assumption (Def. 3.1) the reduction loses an extra `(Q₃+ℓ+1)·2^{−71}` (Thm U1) | Same (ZK is not used) | §5–§6 |
-| One-more unforgeability, QROM | **Open.** The reduction needs a first-phase extractor *during* the run; Q2 extracts only after the run | Same | §7 |
+| One-more unforgeability, QROM | **On paper, under new quantum-oracle assumptions** (U1-Q, U2-Q of `lean/docs/extraction/Q7-qrom-multi-extraction.md` §4: database-controlled programming replaces the mid-run extractor). From the paper's A-OMPR with the classical reduction: open, since Q2 extracts only after the run | Same | §7 |
 | Blindness against a malicious Issuer (paper Def. 2.4: malicious key, selective-failure form) | **Fails.** An honest-but-curious Issuer links with advantage ≈ 1 using about 310 SHAKE calls per (signature, session) pair (`lean/docs/zk.md` §4) | **Holds** (Thm B), with advantage `≤ ε_ZK^fix(Q_P = 2) + 2Q_X·2^{−256}`; [Lean] from G1, with (ZK-fix) as a hypothesis (`Privacy/PomFRIT.lean`), and with (ZK-fix) derived for the executable Lean prover with label rows down to its tape hypothesis (`Privacy/PomFRITLean.lean`, `blindness_lean`); in the ROM and ideal-cipher model with the Issuer seeing the tables, for the Lean prover, `≤ 4·εRO(q₃, q₅ + 1248, q_E + 18428) + 2·noHitProb + 2·2⁻¹²⁸` (`Privacy/PomFRITRO.lean`, `blindnessRO_lean`; the collision terms bounded in `Privacy/PomFRITDelta.lean`, `blindnessRO_lean_num`), and with the Issuer's key, messages and responses also reading the tables (except `H₂³`), `≤ 4·εRO(q₃ + 4i₃, q₅ + 4i₅ + 1872, q_E + 4i_E + 23035) + 2·noHitProb + 2·2⁻¹²⁸` (`Privacy/PomFRITRAGame.lean`, `blindnessRA_lean_num`) | §8 |
 | No selective failure via `finalize_issue`'s check (`pomfrit.cpp:207`) | Holds: the abort event is a function of the Issuer's own view | Holds | §8.3 |
 | Message binding; no re-targeting of a signature | Holds (part of unforgeability; L8 §7) | Holds | §9.1 |
@@ -349,6 +349,13 @@ What Theorems U1/U2 do **not** need:
 
 ## 7. One-more unforgeability in the QROM
 
+*Status.* This section explains why the classical reduction does not lift with Q2 alone. The
+QROM theorems were later written in `lean/docs/extraction/Q7-qrom-multi-extraction.md` §4 (U1-Q,
+U2-Q, paper): database-controlled programming of `H_T` (Q7 Lemma S) replaces the mid-run `E₁`,
+Theorem M gives simultaneous extraction from the ℓ+1 outputs, and the UOV assumptions become
+their quantum-random-oracle forms A-OMPR-RO and A-OMPR⊕τ-RO, which are new. What follows is the
+analysis with Q2 only.
+
 Q2 (Theorem 7.1) gives a straight-line extractor for a quantum prover's *final* proof:
 
     Pr[accept ∧ E fails] ≤ Σ² + ε_multi + ε_rec (+ ε_Sim).
@@ -554,7 +561,8 @@ and `d` at 3075 and 3139; at `Layout.main` the definitions are the spec's, by `r
     complete, as in `Privacy/PomFRIT.lean`'s `outcome`.
   - Other aborts are not influenced by the Issuer, and their probability does not depend on `b`:
     - grinding overflow, `std::runtime_error`, probability `≈ (1−p)^{2^{32}}`, reproduced exactly
-      by the simulator (`lean/docs/zk.md` `ε_abort = 0`);
+      by the simulator (`lean/docs/zk.md` §3, `ε_abort = 0`; the Lean two-phase tape hypothesis
+      charges `noHitProb ≤ 2^{−2¹⁵}` for the fallback block instead, `ε_abort`);
     - `std::invalid_argument` for a different `pk`, which does not occur in the game.
 - **Malicious key.** `pk` is arbitrary, and the ZK theorem holds for every statement. With a
   malformed key, `P_pk(s) = t` may be unsatisfiable. Then both sessions abort, which is again a
@@ -575,11 +583,14 @@ as public binders (`lean/docs/zk.md` §7.5). They do not link.
 
 ### 8.5 Blindness in the QROM
 
-`lean/docs/zk-qrom.md` is absent. The classical ZK proof programs H₂³ at points with a fresh 3λ+64-bit
-prefix. A QROM version needs adaptive reprogramming (GHHM21) and a quantum treatment of the
-lazy-sampled `H₅` siblings. G1 lifts directly (a query to an unknown 256-bit seed costs
-`O(Q_X²·2^{−256})`), and G3 is information-theoretic. **Blindness in the QROM is open**, pending
-`lean/docs/zk-qrom.md`.
+The classical ZK proof programs H₂³ at points with a fresh 3λ+64-bit prefix. A QROM version needs
+adaptive reprogramming (GHHM21) and a quantum treatment of the lazy-sampled `H₅` siblings.
+`lean/docs/zk-qrom.md` gives it on paper, including the delayed-instance setting of PomFRIT's
+issuance (`Exp^{dly-G}`, its §10: proof-level unlinkability against a quantum Issuer costs about
+`2⁻¹⁹` at `2³⁰` queries). G1 lifts directly (a query to an unknown 256-bit seed costs
+`O(Q_X²·2^{−256})`), and G3 is information-theoretic. Theorem B itself is not restated with the
+quantum ZK bound (zk-qrom.md leaves `hash_to_target` and the refresher outside), so **blindness in
+the QROM is not written out**; nothing of it is mechanized.
 
 ## 9. Other properties
 
@@ -612,8 +623,8 @@ checked (`lean/docs/zk.md` §7.3).
 - The Client knows every seed, so it can keep grinding and open at a second accepting `Δ`. This
   yields a second, distinct, valid σ on the **same** message, from the same Issuer response.
 - Expected cost: about `2^8/Pr[open]` extra hashes per extra signature.
-- Demo: `/tmp/claude-1016/-home-claude-scm-vole-mole/93cbb905-f2d6-4f97-8011-866bcdeb7a31/scratchpad/demo/ctr_malleability.cpp`
-  (outside the repo). It runs one issuance with one `issue_response`, accepted counters 1398 and
+- Demo: `scratchpad/demo/ctr_malleability.cpp` (outside the repo). It runs one issuance with one
+  `issue_response`, accepted counters 1398 and
   1740, and prints `verify(sig0)=1 verify(sig1)=1 distinct=1`.
 
 Consequences:
@@ -667,7 +678,10 @@ dedicated to PomFRIT.
 
 1. **ROM and ideal cipher.** SHAKE as random oracles (proof and application hashes), and AES-128
    as an ideal cipher (for PoK) or a PRP (for ZK hiding, `lean/docs/zk.md` §8.1).
-2. **Lemma DS.** The proof and application hash families are disjoint (in progress).
+2. **Lemma DS.** The proof and application hash families are disjoint (`lean/docs/security/domain-separation.md`
+   §7): the refresher commitment by part (a), the seed XOF by part (c) (up to `n_seed·Q·2⁻²⁵⁶`),
+   and `hash_to_target` only in the restricted form (d), at a cost `ε_MC` per hop, because its
+   domain overlaps four proof-system domains (finding F-DS1; a final domain byte would remove it).
 3. **UOV.** A-OMPR (paper Def. 3.1) for U1, or A-OMPR⊕17 for the tight U2. The Issuer key is used
    only for PomFRIT.
 4. **PoK.** README theorem, L1–L7, simultaneous extraction (L8 §9.1), and the Lean lemmas
@@ -680,11 +694,11 @@ dedicated to PomFRIT.
 | | `main` | label-row fix |
 |---|---|---|
 | U1, U2 (classical one-more unforgeability) | ✓ | ✓ |
-| QROM one-more unforgeability | open | open |
+| QROM one-more unforgeability | paper, new quantum UOV assumptions (Q7 §4) | same |
 | Blindness, honest-but-curious Issuer | ✗ (practical linking) | ✓ (Thm B) |
 | Blindness, malicious Issuer, malicious key, selective failure | ✗ | ✓ (Thm B, §8.3) |
 | Blindness in the ROM + ideal cipher, Issuer seeing the tables (Lean prover) | ✗ | ✓ (`blindnessRO_lean_num`, every term explicit; `blindnessRA_lean_num` with the key, messages and responses reading the tables except `H₂³`) |
-| Blindness in the QROM | ✗ | open (`lean/docs/zk-qrom.md`) |
+| Blindness in the QROM | ✗ | proof-system ZK on paper (`lean/docs/zk-qrom.md`); Theorem B not restated (§8.5) |
 | Strong SE / no third-party mauling | ✓ against parties without `t` | ✓ against all |
 | Owner re-randomization (§9.3) | present | present |
 
@@ -692,12 +706,15 @@ dedicated to PomFRIT.
 
 - **G1.** Is A-OMPR ⇒ A-OMPR⊕τ without the `τ^{ℓ+1}` loss? If so, U1 loses its `Q₃·2^{−71}`
   term. A protocol change that pins `r` to π₁ would also remove it, but none was explored here.
-- **G2.** QROM unforgeability (§7) needs mid-run extraction, or a different reduction. QROM
-  simultaneous extraction from ℓ+1 proofs is not covered by Q2.
+- **G2.** QROM unforgeability (§7) needs mid-run extraction, or a different reduction. Q7 §4
+  supplies one (database-controlled programming, simultaneous extraction from ℓ+1 proofs by
+  Theorem M), on paper and under the new assumptions A-OMPR-RO and A-OMPR⊕τ-RO; from the
+  classical A-OMPR it remains open.
 - **G3.** Blindness depends on the label-row fix being implemented as described (dedicated rows,
   `Θ` uniform and witness-independent) and on `lean/docs/zk.md`'s theorem being re-checked for it. The
   paper's App. B.3 ZK argument should not be relied on (§8.1).
-- **G4.** Lemma DS is assumed.
+- **G4.** Lemma DS is proved on paper (`lean/docs/security/domain-separation.md`), but covers
+  `hash_to_target` only in a restricted form (F-DS1), with the extra term `ε_MC`.
 - **G5.** The probabilistic steps of Lemma P (the "fixed before the answer" argument and the
   union) are on paper. The deterministic steps are in Lean.
 - **G6.** The 2^{−71} uses the FAEST-EM-128f tree shapes. For other parameter sets, recompute it
@@ -718,7 +735,7 @@ dedicated to PomFRIT.
 | Minority prefix group ⇒ `|A| ≤ 2^{57}` | `minority_card_le` |
 | `2^{57}/2^{128} ≤ 2^{−71}`; loss at `2^{50}`, `2^{64}` | `per_query_bound`, `loss_at_2_50`, `loss_at_2_64` |
 | Blindness (Thm B, from G1) under (ZK-fix) as a two-phase hypothesis: `≤ 4ε` between the worlds, for either proof layout (`lean/VoleMole/Privacy/PomFRIT.lean`) | `blindness` |
-| (ZK-fix) for the executable Lean prover with label rows, from the two-phase tape hypothesis; blindness with that prover; completeness of `verify` on the final signature (`lean/VoleMole/Privacy/PomFRITLean.lean`) | `lean_zeroKnowledge`, `blindness_lean`, `pomfritVerify_complete` |
+| (ZK-fix) for the executable Lean prover with label rows, from the two-phase tape hypothesis; blindness with that prover; completeness of `verify` on the final signature (`lean/VoleMole/Privacy/PomFRITLean.lean`) | `lean_zeroKnowledge`, `blindness_lean`, `blindness_lean_shake`, `pomfritVerify_complete`, `pomfritVerify_complete_tables` |
 | G1 → G2 for one session; G3 exactly (one-time pad, then a swap of the sessions' simulator coins) | `sessionClose_real_sim`, `simGame_eq` |
 | Two-phase zero knowledge in the ROM and ideal-cipher model with `H₂³` visible, the continuation reading the tables (`lean/VoleMole/ZK/TwoPhaseRO.lean`, `ZK/TwoPhaseIC.lean`, `ZK/TwoPhaseReadsRO.lean`) | `zk2_rom_ic_h23`, `zk2_rom_ic_h23_num`, `zk2_ro`, `lean_zeroKnowledgeROS2` |
 | Blindness in the ROM and ideal-cipher model, both sessions on shared tables, the Issuer's guess seeing them (`lean/VoleMole/Privacy/PomFRITRO.lean`) | `blindnessRO`, `blindnessRO_lean`, `hop0`, `hop1`, `G2_swap`, `realGameRO_iff`; the collision term: `deltaRO_le`, `blindnessRO_lean_num` (`Privacy/PomFRITDelta.lean`) |

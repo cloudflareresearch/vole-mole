@@ -36,7 +36,7 @@ Contents:
 | One-more unforgeability, per issuance context (Thm 1) | **Yes** | `ε_ext^iss + ε_ext^red + ε_dig + Adv^bind_Com + K·Adv^ct-uf_UOV,Com` | PoK (extraction README), binding of `Com`, chosen-target unforgeability of UOV on `Com`-images (implied by one-more-UOV, heuristically) |
 | One nullifier per signed commitment; double-spend detection (Cor 2) | **Yes**, if the Moderator keeps one record per `(ctx_iss, ctx_red)` across all Anchor Sets (`moussaka.hpp:141-146`) | as Thm 1 | as Thm 1 |
 | Redemption non-malleability: no redirect to another `challenge_digest`, Anchor Set or `ctx_red` (Thm 3) | **Yes** | `ε_SE^red + Adv^bind + K·Adv^ct-uf + U·Adv^ow-r + ZK hops` | weak SE (L8), plus the above, plus one-wayness in `r` |
-| Issuer hiding and unlinkability vs a Moderator **colluding with all Anchors**, with adversarial keys (Thm 4a) | **Yes, computationally**; [Lean] from uniform seed outputs (`Privacy/Moussaka.lean`, `anonymity`); with the executable Lean prover (label rows) down to its tape hypothesis (`Privacy/MoussakaLean.lean`, `anonymity_label_rows`) | `2·ε_ZK^joint + 2·Adv^hide_Com` (the `2^{−192}` is not needed, §6) | ZK (lean/docs/zk.md), hiding of `Com` |
+| Issuer hiding and unlinkability vs a Moderator **colluding with all Anchors**, with adversarial keys (Thm 4a) | **Yes, computationally**; [Lean] from uniform seed outputs (`Privacy/Moussaka.lean`, `anonymity`); with the executable Lean prover (label rows) down to its tape hypothesis (`Privacy/MoussakaLean.lean`, `anonymity_label_rows`); for the Lean prover in the ROM and ideal-cipher model with every zero-knowledge term explicit, `≈ 2⁻¹⁰²·²` plus budget terms and `2·Adv^hide_Com` (`anonymityRO_lean_num`), and `≈ 2⁻¹⁰¹·⁹` with a table-reading interaction (`anonymityRA_lean_num`; Appendix B) | `2·ε_ZK^joint + 2·Adv^hide_Com` (the `2^{−192}` is not needed, §6) | ZK (lean/docs/zk.md), hiding of `Com` |
 | The same vs a Moderator that sees no issuance (Thm 4b) | **Yes**, with no Keccak assumption | `2·Σ ε_ZK^red` with `Pred = 2^{−128}` | ZK only |
 | Issuer hiding under a Moderator-chosen Anchor Set | **Only relative to the Anchors in the set that are honest and in common use** (§7) | n/a | Anchor-Set consistency outside the library |
 
@@ -171,7 +171,8 @@ Let `q` be the adversary's total number of oracle queries, with the per-oracle c
 
   On the fix (`voleith-label-rows`, `CRT_DEDICATED_LABEL_ROWS`), standard adaptive NIZK holds with
   `ε_lab = (Q₅ + n_mult·Q_V + Q_P)·2^{−128}`, with no `Pred` term.
-- **Lemma DS** (cited, being proved in `lean/docs/security/domain-separation.md`). The DST-prefixed
+- **Lemma DS** (`lean/docs/security/domain-separation.md` §7: part (a), unconditional, for every
+  SHAKE call Moussaka makes; part (b) for `Com`). The DST-prefixed
   application hashes (`SHAKE128(DST ‖ seed)` at `moussaka.cpp:58-85`) and the end-tagged
   proof-system hashes have disjoint input domains, and so does the combination hash. So all are
   independent random oracles. Two other hashes are separate from the start:
@@ -583,10 +584,11 @@ against a future CRQC that analyses recorded transcripts.
   - `ε_ext^R` becomes Q2's Theorem 7.1: `Σ² + ε_multi + ε_rec`, with leading term
     `≈ 200·q²·2^{−128}`. This is `2^{−60}` at `q = 2^{30}` and vacuous at `2^{64}`.
   - `ε_multi` is open above about `2^{40}` cipher queries.
-  - Q2 is stated for one proof. Simultaneous extraction from the `Q_iss + Q_red` outputs needs a
-    hybrid over the extraction measurements (one commutator term per output). This is plausible,
-    but **not proved**.
-  - QROM SE is **not covered** (README), so Theorem 3 has no quantum version.
+  - Q2 is stated for one proof. Simultaneous extraction from the `Q_iss + Q_red` outputs is
+    `lean/docs/extraction/Q7-qrom-multi-extraction.md`'s Theorem M, and Q7 §6 states Theorem 1 in
+    the QROM with it (paper).
+  - QROM SE is Q5 (paper), but Theorem 3 is not restated with it (Q7 §6), so Theorem 3 has no
+    quantum version.
   - `Com` generic quantum bounds:
     - binding `≲ q³/2^{360}` (BHT) `+ q²/2^{224}` (Grover on the inverse, `2^{112}` work);
     - one-wayness and hiding in `r`: `≲ q²/2^{128}`, a `2^{64}` Grover search.
@@ -595,8 +597,10 @@ against a future CRQC that analyses recorded transcripts.
     standalone assumption.
 
 **Privacy against a CRQC:**
-- ZK against quantum distinguishers (QROM programming of H₂³ and H₅) is **open**. `lean/docs/zk-qrom.md` is
-  absent at the time of writing.
+- ZK against quantum distinguishers (QROM programming of H₂³ and H₅) is proved on paper in
+  `lean/docs/zk-qrom.md`, with the label-row fix: about `2⁻¹⁹` at `2³⁰` queries and `2³⁰` proofs
+  (the dominant term is the adaptive-reprogramming loss, README §3). It is not mechanized, and
+  Theorem 4 is not restated with it.
 - Generic quantum attacks bound privacy at NIST level 1, with no margin:
   - **Hidden-leaf keys.** Each proof contains the commitments `com_{i,Δ_i} = E_k(x₀) ‖ E_k(x₁)` of
     its unopened leaves (AES-128). A Grover search of about `2^{64}` iterations recovers one hidden
@@ -689,7 +693,7 @@ harmless.
 
 ## 10. `main` versus the `voleith-label-rows` fix
 
-| | `main` | fix (`CRT_DEDICATED_LABEL_ROWS`, worktree `agent-a62889915cc70016f`; proofs grow to 7528 / 9007 bytes) |
+| | `main` | fix (`CRT_DEDICATED_LABEL_ROWS`, branch `voleith-label-rows`; proofs grow to 7528 / 9007 bytes) |
 |---|---|---|
 | ZK notion | (PU)-ZK: `Pred_R` = predicting `r` | Standard adaptive NIZK |
 | `ε_lab` per proof | `(Q₅ + n_mult·Q_V)·Pred + Q_P·2^{−128}` | `(Q₅ + n_mult·Q_V + Q_P)·2^{−128}` |
@@ -703,16 +707,25 @@ harmless.
 
 ## 11. Open gaps
 
-1. Lemma DS (application vs proof-system hash disjointness) is assumed and cited. Its proof is in
-   progress (`lean/docs/security/domain-separation.md`).
+1. Lemma DS (application vs proof-system hash disjointness) is proved on paper, with the
+   separation table checked in Lean (`lean/docs/security/domain-separation.md`,
+   `Protocols/DomainSeparation.lean`); SHAKE as a random oracle remains the modelling step.
 2. CT-UF → plain UOV problem: the signing simulation with retry (§3.3) is not re-derived. The
    theorems rest on CT-UF, or on one-more-UOV via the heuristic Lemma U, as the draft does.
 3. `Com`'s binding, one-wayness and hiding are assumptions about 12-round Keccak-p[800]. Only
    generic estimates are given.
-4. QROM: multi-output extraction, SE (and so Thm 3), and ZK (`lean/docs/zk-qrom.md` absent) are open.
-   `ε_multi` caps Q2 at about `2^{40}` cipher queries.
-5. Whether lean/docs/zk.md's `Pred` product can be made additive on `main`. It is moot with the fix.
-6. Timing side channels beyond the index check (OS RNG, allocation) are out of scope.
+4. QROM: Theorem 3 has no quantum version (QROM SE is Q5, not applied here); ZK is on paper only
+   (`lean/docs/zk-qrom.md`), and Theorem 4 is not restated with it; multi-output extraction and
+   Theorem 1 are in `lean/docs/extraction/Q7-qrom-multi-extraction.md` (paper). `ε_multi` caps Q2
+   at about `2^{40}` cipher queries.
+5. Theorem 4(a) is mechanized for a fixed-size game (two Clients, one redemption per side,
+   Appendix B). In the ROM and ideal-cipher model, what remains is: SHAKE as a random oracle, AES
+   as an ideal cipher (with the PRP/PRF switching term on paper), the four `H₃` slices independent
+   (`≤ 2⁻¹⁹²`), the seed-XOF hop (outputs drawn uniformly), the consistency of a table-reading
+   interaction (a hypothesis), and the hiding of `Com` (an assumption). Theorem 4(b) is not
+   mechanized.
+6. Whether lean/docs/zk.md's `Pred` product can be made additive on `main`. It is moot with the fix.
+7. Timing side channels beyond the index check (OS RNG, allocation) are out of scope.
 
 ---
 
@@ -784,12 +797,12 @@ time, to "the recomputed prefix's last `128` bytes are among the earlier simulat
     |Pr[W₀] − Pr[W₁]| ≤ 8·εRO(q₃, q₅ + 1872, q_E + 13821) + 4·(2⁻¹¹⁰ + εRO(0, 312, 4607))
                         + 6·noHitProb + 12·2⁻¹⁰²⁴ + 2·εhide,
 
-about `2⁻¹⁰²` plus `8·(q₃ + q₅ + 221·q_E)·2⁻¹²⁸` and `2·εhide` (`noHitProb ≤ 2^{−2¹⁵}`). The
+about `2⁻¹⁰²·²` plus `8·(q₃ + q₅ + 221·q_E)·2⁻¹²⁸` and `2·εhide` (`noHitProb ≤ 2^{−2¹⁵}`). The
 earlier paper bound for a redemption (`εRO + 2⁻¹⁰²³ + 2·noHitProb`) missed the `Δ' = 0` part of
 the grinding failure (`Pr[GrindBad] ≤ 2⁻¹¹⁰` instead of `noHitProb`). Restrictions of the model: the
 adversary's interaction (contexts, keys, responses, Anchor Sets, digests) does not read the
 tables, only its guess does (the zero-knowledge theorem is for statements fixed before the
-tables); the four `H₃` slices are independent (exact unless two proofs share `(μ₁, wPrefix)`,
+tables; lifted below); the four `H₃` slices are independent (exact unless two proofs share `(μ₁, wPrefix)`,
 `≤ 2⁻¹⁹²`); hiding is for the reduction with the simulator coins and the tables fixed.
 
 **With an interaction that reads the tables** (`lean/VoleMole/Privacy/MoussakaRA.lean`, zk.md
