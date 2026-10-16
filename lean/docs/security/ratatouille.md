@@ -526,7 +526,8 @@ and affords the amount, else it is refused for both (feasibility is leakage).
   **Consistency for free**: for an Issuer whose two stages are VCVio oracle computations over
   the tables (`AdversaryOC`, `lean/VoleMole/ROM/PrivacyReads.lean`), `IBudget` is a theorem from
   the syntactic query bound (`QBudget`): `unlinkabilityOC_lean_num`,
-  `unlinkabilityOC_lean_num_perm`, the same bounds with no consistency hypothesis.
+  `unlinkabilityOC_lean_num_perm`, the same bounds with no consistency hypothesis
+  on the interaction (the guess keeps its semantic read budget).
 - **[Lean] With one shared `H₃` and with the real seeds.** The games are also proved with one
   `H₃(wPrefix ‖ μ₁ ‖ ρ ‖ 3)` in the shared tables instead of per-proof slices, with no
   prefix-collision term (`unlinkabilitySh_num`, `unlinkabilityRASh_num`, `unlinkabilityOCSh_num`,

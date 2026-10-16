@@ -558,7 +558,8 @@ and `d` at 3075 and 3139; at `Layout.main` the definitions are the spec's, by `r
   For an Issuer whose stages are VCVio oracle computations over the tables (`AdversaryOC`,
   `lean/VoleMole/ROM/PrivacyReads.lean`), consistency is a theorem and the budget is the
   syntactic query bound (`QBudget`): `blindnessOC_lean_num`, `blindnessOC_lean_num_perm`, the
-  same bounds with no consistency hypothesis.
+  same bounds with no consistency hypothesis on the interaction (the guess keeps its semantic
+  read budget).
   `hash_to_target`, `XOF_seed` and the refresher commitment stay SHAKE, outside the tables.
   - The zero-knowledge theorem (`zk2_adaptive`, `zk2_rom_ic_h23A_num`): the continuation (the
     Issuer's response to the request computed from the session's step-1 output) reads the

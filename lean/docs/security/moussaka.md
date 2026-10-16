@@ -472,8 +472,14 @@ mode `Pred = 2^{−128}`, because `r` is independent of `A`'s view.
 ```
 (b') non-colluding:  Adv^anon ≤ 2·ε_ZK^joint|_{2 redemption proofs} + 2·(φ₀ + φ₁),
      φ_c = Pr_{nf, r}[DerivePreimage_{sk_c}(Com(nf, ctx_iss, ctx_red, r)) fails]
-         ≤ δ(sk_c)^{256}   (vinegar hash SHAKE256 a random oracle; no assumption on Com),
+     E_vin[φ_c] ≤ δ(sk_c)^{256}   (on average over the vinegar hash SHAKE256, a random oracle,
+                                   for signers that fail only when all 256 vinegars are bad;
+                                   no assumption on Com),
 ```
+
+(In Lean the signer is abstract and the vinegar bound is `anonymityNC_vinegarRO` under the
+hypothesis `hfail`; no concrete signer with small `φ_c` is exhibited, and the always-failing
+signer, which is `Correct`, has `φ_c = 1`: `lean/VoleMole/Audit/Nonvacuous.lean`.)
 
 and with one Anchor (`pk⁰ = pk¹`, pure unlinkability) `Adv^anon ≤ 2·ε_ZK^joint|_{2 redemption
 proofs}`, with no abort term and for any index rule. The game is as above, with the Client taking
@@ -965,7 +971,8 @@ restriction to a table-oblivious interaction is not needed: there is no attack, 
 of the same order. For an interaction written as a VCVio oracle computation over the tables
 (`AdversaryOC`, `lean/VoleMole/ROM/PrivacyReads.lean`), consistency is a theorem and the budget
 the syntactic query bound (`QBudget`): `anonymityOC_lean_num`, `anonymityOC_lean_num_perm`, the
-same bounds with no consistency hypothesis.
+same bounds with no consistency hypothesis on the interaction (the guess keeps its semantic
+read budget).
 
 **With one shared `H₃`** (`lean/VoleMole/Privacy/SharedH3RO.lean`, `SharedH3RA.lean`,
 `lean/VoleMole/ROM/SharedH3Reads.lean`, zk.md §10.5). In the scheme the four proofs hash with one
@@ -1050,8 +1057,8 @@ redemptions or the refusal, the four `H₃` slices and the tables, with read bud
   `unlinkabilityNCSh_num` (`_perm`).
 - **With the real Clients' seeds** (`lean/VoleMole/Privacy/SeedXOFNC.lean`, zk.md §10.6): each of
   `anonymityNCRO_lean_num`, `unlinkabilityNCRO_lean_num`, `anonymityNCSh_num`,
-  `unlinkabilityNCSh_num` (and `_perm`) with `+ 2·(2q_X + 2)·2⁻²⁵⁶` (`*_seed`; the abort term
-  bounded uniformly in the XOF table). Theorem 4(b′) has no seed-XOF term either (D7); as for
+  `unlinkabilityNCSh_num` (and `_perm`) with `+ 2·(2q_X + 2)·2⁻²⁵⁶` (`*_seed`; given a bound
+  `φ₀ + φ₁ ≤ φ` on the abort term at every XOF table, the hypothesis `hφ`). Theorem 4(b′) has no seed-XOF term either (D7); as for
   4(a), the hop is not free.
 - **With many Clients** (`lean/VoleMole/Privacy/MoussakaMany.lean`, `ZK/ReadsMany.lean`, zk.md
   §10.8): the adversary also serves `m` further honest Clients on the same tables (their issuance
