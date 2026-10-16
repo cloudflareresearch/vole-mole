@@ -750,7 +750,12 @@ and determinism of `Tag`. The witness satisfies V3 by `change_correct`. ∎
   seeds, the Issuer reading at most `q_g` cells; `unlinkabilityRO_lean_num_seed`,
   `unlinkabilityRA_lean_num_seed`, `unlinkabilitySh_num_seed`, `unlinkabilityRASh_num_seed`, the
   `OC` versions and `_perm`, each `+ 2·(2q_g + 2)·2⁻²⁵⁶`). Lemma DS for the seed domains (part (a))
-  is the same modelling step as for the other tables. The general adaptive schedule (any number
-  of Clients and spends) is on paper.
+  is the same modelling step as for the other tables. With any number of further honest Clients
+  on the same tables, each issued with the challenge Clients and spending once with round 1 (their
+  spend requests seen by the Issuer's stage 2), the game is mechanized as a reduction to the
+  table-reading game (`unlinkabilityN_lean_num`, `≤ n·2⁻¹⁰¹ + 8·(q₃ + q₅ + 221·q_E)·2⁻¹²⁸ +
+  2·εhide` for `n` Clients in all: `2⁻⁸¹` at `2²⁰`, `2⁻⁶⁹` at `2³²`; `unlinkabilityN_lean_le`,
+  `Privacy/RatatouilleMany.lean`, `lean/docs/zk.md` §10.8). The general adaptive schedule (more
+  spends per Client, sessions started after earlier outcomes) is on paper.
 - The Lean file covers the accounting and the 64-bit arithmetic only. Extraction, binding and
   forgery are paper arguments.

@@ -221,6 +221,10 @@ import VoleMole.ZK.VerifyReadsRO
 import VoleMole.Privacy.MoussakaNCRO
 import VoleMole.Privacy.MoussakaNCSh
 import VoleMole.Privacy.SeedXOFNC
+import VoleMole.ZK.ReadsMany
+import VoleMole.Privacy.PomFRITMany
+import VoleMole.Privacy.MoussakaMany
+import VoleMole.Privacy.RatatouilleMany
 import VoleMole.ZK.AcceptVarData
 import VoleMole.ZK.AcceptVar
 import VoleMole.ZK.CompleteRO
