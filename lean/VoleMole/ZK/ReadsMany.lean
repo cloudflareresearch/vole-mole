@@ -18,7 +18,8 @@ Generic pieces for the privacy games with many sessions (`Privacy/PomFRITMany.le
 * **The single-phase prover is a consistent reader** (`realRO_sreads`): of `H₅` at `624` keys, the
   cipher at `4607` keys and `H₂³` at the `nGrind = 2³²` grinding points of its own prefix
   (`prove_recH_eq`: the proof reads `H₂³` only there), and of no `H₃` slice but its own.
-* **The hybrid over `n` steps** (`abs_sub_le_sum_of_steps`, `abs_sub_le_mul_of_steps`), and
+* **The hybrid over `n` steps** (`abs_sub_le_sum_of_steps`, `abs_sub_le_mul_of_steps`), over `N`
+  world bits (`abs_sub_le_mul_of_worlds`), and
   `noHitProb_le_128` for the numeric bounds.
 -/
 
@@ -515,6 +516,23 @@ theorem abs_sub_le_mul_of_steps (P : ℕ → ℝ) (ε : ℝ) (n : ℕ) (h : ∀ 
     |P 0 - P n| ≤ n * ε := by
   have := abs_sub_le_sum_of_steps P (fun _ => ε) n h
   simpa using this
+
+/-- **The hybrid argument over `N` world coordinates**: if any two worlds that differ at most at one
+position are `ε`-close, any two worlds are `N·ε`-close (change the coordinates one at a time,
+`abs_sub_le_mul_of_steps`). -/
+theorem abs_sub_le_mul_of_worlds {N : ℕ} {β : Type*} (P : (Fin N → β) → ℝ) (ε : ℝ)
+    (h : ∀ (k : Fin N) (u u' : Fin N → β), (∀ j, j ≠ k → u j = u' j) → |P u - P u'| ≤ ε)
+    (w w' : Fin N → β) : |P w - P w'| ≤ N * ε := by
+  let mix : ℕ → Fin N → β := fun k j => if j.val < k then w' j else w j
+  have h0 : mix 0 = w := funext fun j => by simp [mix]
+  have hN : mix N = w' := funext fun j => by simp [mix, j.isLt]
+  have key := abs_sub_le_mul_of_steps (fun k => P (mix k)) ε N fun k hk =>
+    h ⟨k, hk⟩ (mix k) (mix (k + 1)) fun j hj => by
+      have : j.val ≠ k := fun e => hj (Fin.ext e)
+      simp only [mix]
+      congr 1
+      exact propext ⟨fun h => by omega, fun h => by omega⟩
+  simpa only [h0, hN] using key
 
 end VoleMole.Privacy
 

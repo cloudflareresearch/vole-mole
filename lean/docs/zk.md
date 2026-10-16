@@ -725,7 +725,8 @@ All files are under `lean/VoleMole/ZK/` (and `Privacy/LeanProver.lean`, `Privacy
 `ROM/SharedH3Reads.lean`, §10.5; `Privacy/SeedXOF.lean`, `Privacy/SeedXOFGames.lean`,
 `ROM/SeedXOFReads.lean`, `Privacy/SeedXOFNC.lean`, §10.6; `ZK/VerifyReadsRO.lean`,
 `Privacy/MoussakaNCRO.lean`, `Privacy/MoussakaNCSh.lean`, §10.7; `ZK/ReadsMany.lean`,
-`Privacy/PomFRITMany.lean`, `Privacy/MoussakaMany.lean`, `Privacy/RatatouilleMany.lean`, §10.8). There is no `sorry` and no `axiom`. `#print axioms` lists
+`Privacy/PomFRITMany.lean`, `Privacy/MoussakaMany.lean`, `Privacy/RatatouilleMany.lean`,
+`Privacy/PomFRITAdaptive.lean`, §10.8). There is no `sorry` and no `axiom`. `#print axioms` lists
 only `propext`, `Classical.choice` and `Quot.sound`.
 
 | Statement | Lean | Used in |
@@ -2047,7 +2048,7 @@ and the Anchors' signers `sk g` may depend on the XOF table; `anonymityNCRO_lean
 **Open.** The adversary's choices (contexts, keys, Anchor Sets, digests) do not read the tables
 (no `RA`/`OC` version).
 
-### 10.8 Many sessions (`ZK/ReadsMany.lean`, `Privacy/PomFRITMany.lean`, `Privacy/MoussakaMany.lean`, `Privacy/RatatouilleMany.lean`)
+### 10.8 Many sessions (`ZK/ReadsMany.lean`, `Privacy/PomFRITMany.lean`, `Privacy/MoussakaMany.lean`, `Privacy/RatatouilleMany.lean`, `Privacy/PomFRITAdaptive.lean`)
 
 Every game above has the challenge sessions only: two (PomFRIT) or four (Moussaka, Ratatouille)
 requests. A deployment has many sessions on the same random oracle and cipher, and the adversary
@@ -2081,10 +2082,28 @@ slices, concurrently with the challenge:
   the Issuer answers every session after every request, and the guess sees each pair's signatures
   (if both of its sessions complete), all slices and the tables: the left-or-right game with `N`
   queries.
+- *Moussaka with `N` challenge pairs* (`AdversaryP`, `realGameP`, worlds `w : Fin N → Bool`): two
+  issuing keys per pair; after **every** issuance request the adversary answers every Client and
+  chooses both sides' Anchor Sets and digests of every pair; side `s` of pair `j` redeems Client
+  `w j ^^ s`'s token (`outAt`, §6's rule per pair: both redemptions if all four checks pass, else
+  none); the guess sees all issuance requests, every pair's outcome, all slices and the tables.
+- *Ratatouille with `N` challenge pairs* (`AdversaryP`, `realGameP`, worlds `w : Fin N → Bool ×
+  Bool`): stage 1 sees **every** pair's issuance requests and gives every response and every
+  pair's `d₁`; each pair's round 1 runs (Client `b₁` spends) if §6's rule allows it; stage 2 sees
+  every pair's round-1 request **for the pairs whose round 1 runs** (`rq1Of`) and gives every
+  round-1 response and `d₂`; each pair's round 2 runs as in the two-session game (`roundsOf`); the
+  guess sees all issuance requests, every pair's rounds, all slices and the tables.
+- *PomFRIT with an adaptive schedule* (`AdversaryAd`, `realGameAd`): `m₁` further sessions before
+  the challenge, `m₂` between the challenge requests and the challenge responses, `m₃` after the
+  challenge outcome, **one after the other**: each further session's key and message and the
+  Issuer's response to it are chosen from all earlier requests and outcomes (`runSeq`, each session
+  run to the end, `fullX`); the challenge key and messages from the first `m₁`, the challenge
+  responses from everything before them; the guess sees everything.
 
 In each game the adversary's interaction does not read the tables (as in the `RO` games); its
-guess reads them with a budget (`AdversaryN.Budget`: each challenge slice at `q₃` keys, `H₅` at
-`q₅`, the cipher at `q_E`, `H₂³` and the further sessions' slices freely).
+guess reads them with a budget (`AdversaryN.Budget`, and `AdversaryP.Budget`, `AdversaryAd.Budget`
+likewise: each challenge slice at `q₃` keys, `H₅` at `q₅`, the cipher at `q_E`, `H₂³` and the
+further sessions' slices freely).
 
 **The proof: a reduction to the table-reading games.** For a fixed tape `c` of the further
 sessions, an honest session is a function of the tables. So the game is the two-session game of
@@ -2146,16 +2165,111 @@ for the guess's own budget. (The exact per-session coefficients are `0.61·2⁻�
 
 **`N` challenge pairs** (`blindnessP_lean_numG`, `_num`, `_num_perm`): a hybrid over the pairs
 (`abs_sub_le_mul_of_steps`, from `abs_sub_le_sum_of_steps`: consecutive hybrids `ε_k`-close give
-`Σ ε_k`). Step `k` changes pair `k`'s bit; at it, the game is the one-pair game of `A.hop k v`
-with the other `2(N − 1)` sessions as further sessions in their current worlds (`realGameP_iff`,
-the tape split `splitP`), so it costs `εPair = blindnessN`'s bound at `m = 2(N − 1)`. In numbers
-(`blindnessP_lean_le`) `≤ N·(2N·2⁻¹⁰³ + 4·(q₃ + q₅ + 221·q_E)·2⁻¹²⁸)`: `2⁻⁶⁴` for `2N ≤ 2²⁰`
-sessions, `2⁻⁴⁰` for `2N ≤ 2³²` (`blindnessP_lean_2pow20`, `_2pow32`). This is quadratic in the
-number of sessions: each of the `N` steps pays, in its H4 hop, for the cipher reads of all other
-sessions. Simulating all `2N` sessions in one hybrid would not help: each of the `2N` hops would
-pay the same reads of the sessions still real. A bound linear in `N` would need a joint H4 argument
-for all sessions' hidden nodes (a collision among `n·221` hidden keys and `n·4607` honest reads is
-itself `≈ n²·2⁻¹⁰⁸`, so the quadratic term is close to what this proof structure can give).
+`Σ ε_k`; `abs_sub_le_mul_of_worlds` packages it for worlds `Fin N → β`). Step `k` changes pair
+`k`'s world; at it, the game is the one-pair game of `A.hop k v` with the other `2(N − 1)` sessions
+as further sessions in their current worlds (`realGameP_iff`, the tape split `splitP`), so it costs
+`εPair = blindnessN`'s bound at `m = 2(N − 1)`. In numbers (`blindnessP_lean_le`)
+`≤ N·(2N·2⁻¹⁰³ + 4·(q₃ + q₅ + 221·q_E)·2⁻¹²⁸)`: `2⁻⁶⁴` for `2N ≤ 2²⁰` sessions, `2⁻⁴⁰` for
+`2N ≤ 2³²` (`blindnessP_lean_2pow20`, `_2pow32`).
+
+- *Moussaka* (`anonymityP_lean_numG`, `_num`, `_num_perm`): the same hybrid; at step `k` the other
+  pairs' `2(N − 1)` Clients are further Clients of `anonymityN` (`A.hop idx k v`: Client `c` of pair
+  `j` redeems at side `v j ^^ c`, `splitM` gives it that side's redemption tape), and the hop's
+  guess rebuilds each other pair's outcome from its two Clients' redemptions and §6's rule on the
+  commitments (`outAt_eq`: `allOk` is `allOkT` on the requests, `allOk_eq_allOkT`, and then each
+  side's redemption is its Client's `redX`). Each step costs `εPairM`, `anonymityN`'s bound at
+  `m = 2(N − 1)`; in numbers (`anonymityP_lean_le`) `≤ N·(2N·2⁻¹⁰² + 8·(q₃ + q₅ + 221·q_E)·2⁻¹²⁸ +
+  2·εhide)`: `2⁻⁶³` for `2N ≤ 2²⁰` Clients, `2⁻³⁹` for `2N ≤ 2³²` (`_2pow20`, `_2pow32`), plus `N`
+  times the budget and hiding terms. Hiding is assumed for every hop's reductions.
+- *Ratatouille* (`unlinkabilityP_lean_numG`, `_num`, `_num_perm`): the other pairs cannot be
+  `unlinkabilityN`'s further Clients (those spend once; a pair has two rounds, the second after
+  the Issuer's round-1 response), so each step is a direct reduction to the two-session
+  table-reading game: `A.hop k c v` runs the other pairs itself with their tapes `c` (its stage 1
+  their issuances, its stage 2 also their round-1 spends, its guess also their round-2 spends;
+  `realGameP_iff`, `realGameRA_hop`), and `unlinkabilityRA_lean_numG` applies for every `c`
+  (`realGameP_hybrid`, averaging over `c`). Its stage 2 must hide pair `k`'s round-1 request
+  when §6's rule refuses round 1, without pair `k`'s tokens: the rule is computed from the
+  Issuer's view (`ok1Of_eq_pub`: both responses are preimages of the commitments in the requests,
+  `tkOk`, and the balance affords `d₁`; honest finalized tokens are valid, `fin_issXR`). Budgets
+  (`hop_iBudget`, `hop_gBudget`): the interaction `(0, 3(N−1)·2³², 3(N−1)·624, 3(N−1)·4607)` (the
+  other pairs' issuances and round-1 spends, consistent readers by `issXR_sreads`, `spXR_sreads`),
+  the guess `(q₃, q₅ + 4(N−1)·624, q_E + 4(N−1)·4607)`. Each step costs `εPairR`; in numbers
+  (`εPairR_le`, `unlinkabilityP_lean_le`) `≤ N·(N·2⁻¹⁰¹ + 8·(q₃ + q₅ + 221·q_E)·2⁻¹²⁸ + 2·εhide)`:
+  `2⁻⁶³` for `2N ≤ 2²⁰` Clients, `2⁻³⁹` for `2N ≤ 2³²` (`_2pow20`, `_2pow32`).
+
+All three are quadratic in the number of sessions: each of the `N` steps pays, in its H4 hop, for
+the cipher reads of all other sessions.
+
+**Is the quadratic term inherent?** No; it is an artifact of how the H4 hop is charged, together
+with a modelling choice. Precisely:
+
+1. *The hop charges keys, not points.* H4 (`ZK/HopsH4.lean`, `HopsH4Ideal.lean`) replaces the
+   cipher **rows** of the `≤ 221` hidden-path nodes of the proof under hop and charges every read
+   of such a row, at any input: `≤ 221·(4607 + q)·2⁻¹²⁸` for `q` reads by the distinguisher. In the
+   `N`-pair game the distinguisher of pair `k`'s hops includes the other sessions, whose tree keys
+   are uniform and independent of pair `k`'s hidden keys; each of their `4607` reads hits a hidden
+   row with probability exactly `221·2⁻¹²⁸`, and summing over the hops sums over ordered pairs of
+   sessions. A single joint hybrid with one bad event ("some read, by an honest session or the
+   adversary, at a hidden key of some proof") does not change the order: that event has probability
+   `≈ n·221·n·4607·2⁻¹²⁸ ≈ n²·2⁻¹⁰⁸` for `n = 2N` sessions — `2⁻⁶⁸` at `n = 2²⁰`, `2⁻⁴⁴` at
+   `n = 2³²`, against the proved `2⁻⁶⁴`, `2⁻⁴⁰` — and it really occurs with about that probability
+   (a birthday bound on 128-bit keys). So **no key-level argument is linear**; the joint hybrid
+   would only save the constant (`≈ 16`).
+2. *A key collision alone is harmless.* What a hidden node contributes is the cipher's values at
+   the finitely many points `pts` (key, CTR input) that the hidden part reads (`HopsH4Ideal.lean`
+   already isolates them: `pts_injective`, `IC.rowAt_congr_points`). Another session's read at a
+   colliding key but at a different input sees an independent value (function rows; a `2⁻¹²⁸`
+   correction for permutation rows). The CTR inputs contain the proof's `iv = H₄(iv_pre ‖ µ)`
+   (`voleith.hpp:188-194`), fresh per proof, so an honest–honest point collision needs a key
+   collision **and** an input collision: `≲ C(n, 2)·221·4607·L²·2⁻²⁵⁶` with `L` the counters per
+   node (`< 2³²`, `SmallParams`): `≈ 2⁻¹⁰⁹` at `n = 2³²` even with `L = 2³²`, and in practice far
+   below. With point-level charging and fresh ivs, an adversary's cipher query also targets the
+   proofs whose input sets contain its input, so its term is `≈ q_E·221·2⁻¹²⁸` once for the whole
+   game rather than once per pair. The resulting bound is linear in `n`: the per-proof terms (the
+   grinding `2⁻¹¹³`, the proof's own `221·4607·2⁻¹²⁸`, the H6 and slice terms) once per proof, of
+   order `n·2⁻¹⁰⁵`, plus the adversary's budget terms once.
+3. *What is inherent.* The linear per-proof terms, and the adversary's budget terms. With a **shared
+   or predictable iv** the quadratic loss would be real: expand each revealed GGM seed of every
+   proof once (two cipher queries) and look the children up among all proofs' revealed seeds; a hit
+   means a revealed seed equals another proof's hidden-path node, whose hidden child then follows,
+   breaking that proof's hiding. With `≈ 2·n·221` queries this succeeds with probability
+   `≈ (n·221)²·2⁻¹²⁸` up to the positions' factor — an `n²` advantage, but bought with `q_E ∝ n`
+   queries, i.e. the multi-target term `q_E·n·221·2⁻¹²⁸` of a key-level bound. The per-proof iv is
+   what removes it.
+4. *Why Lean cannot state the linear bound yet.* (a) In the Lean model `H₄` is the concrete SHAKE
+   (`Hashes.shake`; only `H₃`, `H₂³`, `H₅` and the cipher are tables), so distinct sessions' ivs
+   are not known to differ; a linear bound needs `H₄` as a table of the game (or a hypothesis
+   that the sessions' ivs differ). (b) H4 would have to puncture the cipher at the points `pts`
+   instead of whole rows, and (c) the hybrid would have to replace all `2N` proofs with one bad
+   event over all hidden points. The key-level `N`-pair bounds above are the best this proof
+   structure gives up to a constant.
+
+**Adaptive schedules** (`Privacy/PomFRITAdaptive.lean`; PomFRIT). A session run inside the
+interaction must be a consistent reader of `H₂³` too: **step 2 of the two-phase prover is**.
+`fullX_sreads`: a whole further session (`fullX`: request, the Client's checks and step 2 on the
+Issuer's response `ρ(request)`) is `SReads` with `(0, 2³², 624, 4607)`: step 1's keys
+(`step1_cons`, `full_step1`), the prefix read off them (`preX_cons`: `pendAt_step1`, `realPre_h5`),
+the signature read off step 1 and `H₂³` (`sigR_tables`, `proveCommit_agreeOff_h5`) and `H₂³` only
+at the prefix's `2³²` grinding points when the response passes the checks (`sigR_h23`: `sigOf_oR`,
+`oR_fix` and `realRun2_h23_congr` for the Issuer `respAdv` that answers `ρ`; `finish_of_not_valid`
+otherwise). Sequential sessions compose (`runSeq_sreads`), and a reader of the shared tables is a
+joint reader of both slices (`SReadsP.of_shared`). For each tape `c` of the further sessions the
+adaptive game is the `RAH` game (§10.3) of the Issuer `A.red c` that runs them in its key stage,
+its response stage and its guess (`realGameAd_iff`, `Iff.rfl`), with budgets `IBudgetH` `(0,
+(m₁+m₂)·2³², (m₁+m₂)·624, (m₁+m₂)·4607)` (`red_iBudgetH`) and guess `(q₃, q₅ + (m₁+m₂+m₃)·624,
+q_E + (m₁+m₂+m₃)·4607)` (`red_gBudget`); `blindnessRAH_lean_numG` and averaging over `c` give
+
+    blindnessAd_lean_num:  ≤ 4·εRO(q₃, q₅ + M·624 + 6m·624 + 1872, q_E + M·4607 + 6m·4607 + 23035)
+                             + 2·noHitProb + 2·2⁻¹²⁸ + h23H(0, m·2³², m·624, m·4607),
+                           m = m₁ + m₂, M = m₁ + m₂ + m₃,
+
+in numbers (`blindnessAd_lean_le`) `≤ n·2⁻⁹² + 4·(q₃ + q₅ + 221·q_E)·2⁻¹²⁸` for `n = M + 2`
+sessions: `2⁻⁷²` at `n = 2²⁰`, `2⁻⁶⁰` at `n = 2³²` (`_2pow20`, `_2pow32`; `_num_perm`, `_numG`).
+Linear, but the per-session term, `≈ 2⁻⁹³`, is the `RAH` collision term's charge of `2·2⁻¹²⁸` per
+`H₂³` **key** the interaction reads (`pr_bad0H`, `pr_bad1H`), and each session run inside the
+interaction reads `2³²` keys, all with one prefix. The challenge's grinding block is hit only if a
+read's prefix equals the challenge prefix, whose tail `ã` is uniform; counting prefixes instead of
+keys would make it `≈ 8·2⁻¹²⁸` per session, and the bound `≈ n·2⁻¹⁰¹`. Not done.
 
 **What the model assumes.** The further sessions' `H₃` slices are independent tables, as in every
 slice game (§10.2: two sessions with equal `(nf, r)` or `(r, binder)` would share `H₃` inputs; on
@@ -2164,16 +2278,18 @@ paper `C(n, 2)·2⁻¹⁹²` for Moussaka and Ratatouille's nullifiers, `C(n, 2)
 adversary (the further sessions' tapes fixed, a non-uniform reduction).
 
 **Open.**
-- *Adaptive schedules.* The schedule is concurrent and fixed: the further sessions' first
-  messages come before the adversary's first answer, their later ones are seen by the next stage
-  or the guess. An adversary that starts further sessions after seeing earlier outcomes (sequential
-  sessions with adaptive messages) needs the further sessions' full runs inside interaction stages,
-  which then read `H₂³` (PomFRIT: the `RAH` game, §10.3, with the two-phase prover's step 2 as a
-  consistent reader of its grinding points; Moussaka, Ratatouille: the redemption and spend
-  stages). The consistency lemmas above are the main ingredient; the game definitions are not done.
+- *Adaptive schedules for Moussaka and Ratatouille.* PomFRIT's are done (`blindnessAd_lean_num`,
+  above). For Moussaka and Ratatouille, further Clients started inside or after the challenge's
+  interaction fit the existing `RA` games (their interactions may read `H₂³`, `IBudget`'s `i₂`, and
+  a whole single-phase session is a consistent reader, `realRO_sreads`), but sessions **before**
+  the challenge cannot influence the challenge keys, contexts and balance: those are constants of
+  the `RA` adversaries (`AdversaryRA.pk`, `ctxIss`, `ctxRed`; `pk`, `ctx`, `tInit`). The missing
+  piece is an `RA` game whose key stage reads the tables (as PomFRIT's does), and its proof.
+- *A linear bound for `N` challenge pairs* (the paragraph above): `H₄` as a table of the game,
+  point-level puncturing in H4, and one joint hybrid over all proofs.
+- *A prefix count in the `RAH` collision term*, for adaptive PomFRIT `≈ n·2⁻¹⁰¹` instead of
+  `n·2⁻⁹²`.
 - *Other games.* Further sessions in the shared-`H₃` games (§10.5: the prover reading its column),
-  the seed-XOF games (§10.6: their XOF reads in `q_X`), the non-colluding games (§10.7); `N`
-  challenge pairs for Moussaka and Ratatouille (the same hybrid over pairs, with their games'
-  world bits per pair).
+  the seed-XOF games (§10.6: their XOF reads in `q_X`), the non-colluding games (§10.7).
 - *Interactions that read the tables* in the many-session games (the `RA` form): the composed
   adversary's interaction is `SReads` by `SReads.bind` with the adversary's own reads; not stated.

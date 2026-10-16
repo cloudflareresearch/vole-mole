@@ -812,7 +812,12 @@ harmless.
    Appendix B), and with any number of further honest Clients on the same tables, issued with the
    challenge Clients and redeeming at Anchor Sets chosen after every issuance request
    (`anonymityN_lean_num`, `≤ n·2⁻¹⁰² + 2·εhide` plus budget terms for `n` Clients in all;
-   `lean/docs/zk.md` §10.8); adaptive schedules (Clients started after earlier outcomes) are not. In the ROM and ideal-cipher model, what remains is: SHAKE as a random oracle, AES
+   `lean/docs/zk.md` §10.8), and with `N` challenge pairs (the left-or-right game, a hybrid over
+   the pairs, `anonymityP_lean_num`, `≤ N·(2N·2⁻¹⁰² + 2·εhide)` plus budget terms: `2⁻⁶³` at
+   `2²⁰` Clients, `2⁻³⁹` at `2³²`; quadratic by an artifact of the proof, `lean/docs/zk.md`
+   §10.8); adaptive schedules (Clients started after earlier outcomes) are not: Clients before
+   the challenge would have to influence the challenge keys, which the table-reading game keeps
+   fixed. In the ROM and ideal-cipher model, what remains is: SHAKE as a random oracle, AES
    as an ideal cipher (with its rows uniform functions, `anonymityRO_lean_num`,
    `anonymityRA_lean_num`, or uniform permutations read forward and inverse, the PRP/PRF switching
    term included, `anonymityRO_lean_num_perm`, `anonymityRA_lean_num_perm`, `lean/docs/zk.md`
@@ -1045,3 +1050,14 @@ redemptions or the refusal, the four `H₃` slices and the tables, with read bud
   and the guess's budget `(q₃, q₅ + 2·624m, q_E + 2·4607m)`; in numbers `≤ n·2⁻¹⁰² +
   8·(q₃ + q₅ + 221·q_E)·2⁻¹²⁸ + 2·εhide` (`anonymityN_lean_le`; `2⁻⁸²` at `n = 2²⁰`, `2⁻⁷⁰` at
   `2³²`: `anonymityN_lean_2pow20`, `_2pow32`); `anonymityN_lean_num_perm`.
+- **With `N` challenge pairs** (`Privacy/MoussakaMany.lean`, zk.md §10.8; `AdversaryP`,
+  `realGameP`, worlds `Fin N → Bool`): the adversary answers every Client and chooses every pair's
+  two sides after every issuance request; side `s` of pair `j` redeems Client `w j ^^ s`'s token
+  under §6's rule per pair (`outAt`). A hybrid over the pairs (`abs_sub_le_mul_of_worlds`), each
+  step `anonymityN` with the other pairs' Clients as further Clients (`AdversaryP.hop`, the tape
+  split `splitM`, `realGameP_iff`; the hop's guess rebuilds the other pairs' outcomes from their
+  Clients' redemptions with §6's rule on the commitments, `outAt_eq`). **`anonymityP_lean_num`**
+  `≤ N·εPairM`; in numbers `≤ N·(2N·2⁻¹⁰² + 8·(q₃ + q₅ + 221·q_E)·2⁻¹²⁸ + 2·εhide)`
+  (`anonymityP_lean_le`; `2⁻⁶³` for `2N ≤ 2²⁰` Clients, `2⁻³⁹` for `2N ≤ 2³²`:
+  `anonymityP_lean_2pow20`, `_2pow32`); `anonymityP_lean_num_perm`. Quadratic in the number of
+  Clients by an artifact of the tree-hiding hop (zk.md §10.8, "Is the quadratic term inherent?").

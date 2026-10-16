@@ -50,8 +50,13 @@ scope.
   adversary also serves any number of further honest sessions on the same tables, concurrently
   with the challenge, at a cost linear in the number `n` of sessions (`≤ n·2⁻¹⁰³` for PomFRIT,
   `n·2⁻¹⁰²` for Moussaka, `n·2⁻¹⁰¹` for Ratatouille, plus budget terms and `2·εhide`: about
-  `2⁻⁸³`–`2⁻⁸¹` at `n = 2²⁰`, `2⁻⁷¹`–`2⁻⁶⁹` at `n = 2³²`), and PomFRIT with `N` challenge pairs
-  (`≤ N·(2N·2⁻¹⁰³ + …)`: `2⁻⁶⁴` at `2²⁰` sessions, `2⁻⁴⁰` at `2³²`; §3).
+  `2⁻⁸³`–`2⁻⁸¹` at `n = 2²⁰`, `2⁻⁷¹`–`2⁻⁶⁹` at `n = 2³²`); for all three, `N` challenge pairs
+  (the left-or-right game, quadratic: `≤ N·(2N·2⁻¹⁰³ + …)` for PomFRIT, `N·(2N·2⁻¹⁰² + …)` for
+  Moussaka and Ratatouille: `2⁻⁶⁴`/`2⁻⁶³` at `2²⁰` sessions, `2⁻⁴⁰`/`2⁻³⁹` at `2³²`; the
+  quadratic term is an artifact of the key-level tree-hiding hop and of `H₄` being concrete in
+  the model, not an attack); and for PomFRIT, further sessions started **adaptively**, after the
+  Issuer has seen earlier sessions' outcomes, before, during and after the challenge (`≤ n·2⁻⁹²`:
+  `2⁻⁷²` at `2²⁰`, `2⁻⁶⁰` at `2³²`; §3).
 - *`main` is not zero-knowledge.* The PomFRIT Issuer's attack test, and the (PU) bound for the
   others (§3).
 - Deterministic cores of the protocol notes (Lemma P, the domain-separation table, UOV-assumption
@@ -60,9 +65,10 @@ scope.
 
 **On paper only**: the unforgeability, balance, no-theft and non-malleability reductions of the
 protocols (§5), strong simulation-extractability beyond its Lean core (§2), every quantum
-statement (§4, `docs/zk-qrom.md`), Lemma DS (c), the general adaptive schedules of the privacy
-games (Lean has any number of sessions in one concurrent schedule, §3), and ZK on `main` beyond
-the bad-event bound.
+statement (§4, `docs/zk-qrom.md`), Lemma DS (c), adaptive schedules of Moussaka's and
+Ratatouille's games (Lean has any number of sessions in one concurrent schedule for all three
+protocols and adaptive schedules for PomFRIT, §3), a bound linear in `N` for `N` challenge pairs
+(the argument is in `docs/zk.md` §10.8), and ZK on `main` beyond the bad-event bound.
 
 **Modelling assumptions**: SHAKE128/256 are random oracles, AES-128 is an ideal cipher (classical
 and quantum); Keccak-p[800,12] one-wayness and binding/hiding of `Com`; the protocol-specific UOV
@@ -511,9 +517,10 @@ with the Lean redemption prover `anonymityNC_label_rows`, `_shake`, `unlinkabili
   `_perm_seed`) add `2·(2q_X + 2)·2⁻²⁵⁶`, the abort term bounded uniformly in the XOF table.
 
 *Many sessions* (`docs/zk.md` §10.8; `ZK/ReadsMany.lean`, `Privacy/PomFRITMany.lean`,
-`Privacy/MoussakaMany.lean`, `Privacy/RatatouilleMany.lean`). The games above have the challenge
-sessions only. Here the adversary also serves `m` further honest sessions on the same tables
-(each with its own randomness and `H₃` slices), concurrently with the challenge: their first
+`Privacy/MoussakaMany.lean`, `Privacy/RatatouilleMany.lean`, `Privacy/PomFRITAdaptive.lean`). The
+games above have the challenge sessions only. Here the adversary also serves `m` further honest
+sessions on the same tables (each with its own randomness and `H₃` slices), concurrently with the
+challenge (below also adaptively, and with `N` challenge pairs): their first
 messages are seen by the adversary's interaction before it answers anyone, their later messages
 by the stages after them (Ratatouille's stage 2 sees the further Clients' spends) or by the guess.
 - **The proof is a reduction, not a new hybrid**: for each fixed tape `c` of the further sessions
@@ -544,7 +551,44 @@ by the stages after them (Ratatouille's stage 2 sees the further Clients' spends
   with round 1, their spend requests seen by stage 2): `unlinkabilityN_lean_num`, numerically
   `≤ n·2⁻¹⁰¹ + 8·(q₃ + q₅ + 221·q_E)·2⁻¹²⁸ + 2·εhide` (`unlinkabilityN_lean_le`): `2⁻⁸¹` at
   `2²⁰`, `2⁻⁶⁹` at `2³²`.
-- All with AES as random permutations (`*N_lean_num_perm`, `blindnessP_lean_num_perm`), and for
+- Moussaka and Ratatouille with **`N` challenge pairs** (`realGameP`; worlds `Fin N → Bool`, resp.
+  `Fin N → Bool × Bool`; the adversary's stages see every pair, and Ratatouille's stage 2 sees a
+  pair's round-1 request only if §6's rule runs round 1): the same hybrid (`abs_sub_le_mul_of_worlds`).
+  Moussaka's steps are `anonymityN` with the other pairs' Clients as further Clients, the hop's
+  guess rebuilding their outcomes with §6's rule on the commitments (`outAt_eq`):
+  `anonymityP_lean_num`, numerically `≤ N·(2N·2⁻¹⁰² + 8·(q₃ + q₅ + 221·q_E)·2⁻¹²⁸ + 2·εhide)`
+  (`anonymityP_lean_le`). Ratatouille's other pairs have two rounds, so each step is a direct
+  reduction to the two-session table-reading game whose Issuer runs the other pairs and masks pair
+  `k`'s round-1 request by §6's rule recomputed from its own view (`ok1Of_eq_pub`):
+  `unlinkabilityP_lean_num`, numerically `≤ N·(N·2⁻¹⁰¹ + 8·(q₃ + q₅ + 221·q_E)·2⁻¹²⁸ + 2·εhide)`
+  (`unlinkabilityP_lean_le`). Both `2⁻⁶³` for `2N ≤ 2²⁰` Clients, `2⁻³⁹` for `2N ≤ 2³²`
+  (`_2pow20`, `_2pow32`), plus `N` times the budget and hiding terms.
+- **Linear or quadratic?** The quadratic term is not inherent (`docs/zk.md` §10.8, "Is the
+  quadratic term inherent?"). The H4 hop charges every read of a hidden node's cipher row, at any
+  input, and in the `N`-pair game every other session's `4607` reads are such reads with
+  probability `221·2⁻¹²⁸` each; even one joint bad event over all proofs ("some read hits some
+  hidden key") has probability `≈ n²·2⁻¹⁰⁸` and really occurs, so no key-level argument is linear.
+  But a key collision alone leaks nothing: the hidden values are the cipher at (key, CTR input)
+  points whose inputs contain the proof's fresh `iv = H₄(iv_pre ‖ µ)`, so honest sessions
+  interfere only through a key **and** an iv collision (`≈ n²·2⁻²³⁶·L²`, negligible), and an
+  adversary's query targets one proof's inputs: the bound becomes linear. A shared iv would make
+  the `n²` loss real (a birthday search among all proofs' revealed seeds, with `q_E ∝ n` queries).
+  Lean cannot state the linear bound yet: `H₄` is the concrete SHAKE in the model, and H4
+  punctures whole rows; both would change, with one joint hybrid over all proofs.
+- PomFRIT with an **adaptive schedule** (`Privacy/PomFRITAdaptive.lean`; `realGameAd`): further
+  sessions before the challenge, between the challenge requests and responses, and after the
+  challenge outcome, one after the other, each one's key, message and response chosen from all
+  earlier requests and outcomes. The reduction runs them inside its interaction, which then reads
+  `H₂³` (the `RAH` route): **step 2 of the two-phase prover is a consistent reader** (`fullX_sreads`:
+  a whole session reads `H₂³` only at its prefix's `2³²` grinding points, and only if the response
+  passes the Client's checks; `sigR_h23`, `preX_cons`, `sigR_tables`), sequential sessions compose
+  (`runSeq_sreads`), and `blindnessRAH_lean_numG` applies: `blindnessAd_lean_num`, numerically
+  `≤ n·2⁻⁹² + 4·(q₃ + q₅ + 221·q_E)·2⁻¹²⁸` for `n` sessions in all (`blindnessAd_lean_le`):
+  `2⁻⁷²` at `2²⁰`, `2⁻⁶⁰` at `2³²`. The per-session `≈ 2⁻⁹³` is the `RAH` collision term charging
+  each of a session's `2³²` grinding keys separately (all have one prefix); a prefix count would
+  give `≈ n·2⁻¹⁰¹`.
+- All with AES as random permutations (`*N_lean_num_perm`, `blindnessP_lean_num_perm`,
+  `anonymityP_lean_num_perm`, `unlinkabilityP_lean_num_perm`, `blindnessAd_lean_num_perm`), and for
   every row type with `ZKRow` (`*_numG`). Hiding of `Com` is assumed for the reductions of every
   composed adversary (the further sessions' tapes fixed).
 
@@ -577,13 +621,15 @@ runs of each layout.
   adversary interaction (no `RA`/`OC` version).
 - *Scope of the games.* Any number of further honest sessions is covered, in one concurrent
   schedule per protocol (the further sessions' first messages before the adversary's first answer,
-  their later ones seen by the next stage or the guess), and for PomFRIT any number of challenge
-  pairs (§3, "Many sessions"; `docs/zk.md` §10.8). Not covered in Lean: adaptive schedules in
-  which the adversary starts further sessions after seeing earlier outcomes (it would need the
-  further sessions inside interaction stages that read `H₂³`, i.e. the `RAH` route), further
-  sessions in the shared-`H₃`, seed-XOF and non-colluding games, `N` challenge pairs for Moussaka
-  and Ratatouille (the same hybrid, `abs_sub_le_mul_of_steps`), PomFRIT's contexts beyond a finite
-  type (the seed-XOF model), and every quantum statement (`docs/zk-qrom.md`).
+  their later ones seen by the next stage or the guess), any number of challenge pairs for all
+  three protocols (quadratic bounds), and adaptive schedules for PomFRIT (§3, "Many sessions";
+  `docs/zk.md` §10.8). Not covered in Lean: adaptive schedules for Moussaka and Ratatouille
+  (sessions before the challenge would have to influence the challenge keys and contexts, which
+  are constants of their `RA` adversaries: an `RA` game with a table-reading key stage is
+  missing), a bound linear in `N` for `N` challenge pairs (`H₄` as a table, point-level H4, one
+  joint hybrid), further sessions in the shared-`H₃`, seed-XOF and non-colluding games, PomFRIT's
+  contexts beyond a finite type (the seed-XOF model), and every quantum statement
+  (`docs/zk-qrom.md`).
 - *Not gaps, but artifacts of the proofs*: the second `4607` in `εRO` (the honest recomputation's
   cipher reads, `docs/zk.md` §10.1); `Pr[Δ' = 0]` proved `≤ 2⁻¹¹⁴` (second moment) where it is
   `≈ 2⁻¹¹⁸·⁷` (an exact count of the accepted set is out of the kernel's reach), so every bound
@@ -882,8 +928,10 @@ What is **not** established, roughly in order of importance:
    `Com`, consistency of interactions given as bare functions of the tables, PomFRIT's
    `H₂³`-reading Issuer under per-slice budgets or one shared `H₃`, Moussaka's non-colluding mode
    with table-reading choices, one shared `H₃` or the real Clients' seeds, adaptive schedules of
-   many sessions (any number of further sessions in one concurrent schedule, and PomFRIT's `N`
-   challenge pairs, are mechanized) and the quantum versions.
+   many sessions for Moussaka and Ratatouille (any number of further sessions in one concurrent
+   schedule and `N` challenge pairs for all three protocols, and PomFRIT's adaptive schedules, are
+   mechanized; the `N`-pair bounds are quadratic, a linear one is on paper) and the quantum
+   versions.
    The abstract privacy theorems (`VoleMole/Privacy/`) take per-proof zero knowledge and hiding of
    `Com` as hypotheses, so they apply to any proof system with the label-row fix; on `main` the
    joint (PU) hop over proofs sharing `r` replaces the per-proof hypothesis and is paper. Every

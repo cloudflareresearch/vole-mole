@@ -66,7 +66,10 @@ same tables, and then **any number `N` of challenge pairs**.
   `2N ≤ 2²⁰` sessions, `≤ 2⁻⁴⁰` for `2N ≤ 2³²` (`blindnessP_lean_2pow20`, `_2pow32`), plus `N`
   times the guess's budget terms. Quadratic in the number of sessions: each of the `N` hops pays
   for the others' `2(N − 1)` sessions' cipher reads in its H4 hop (`221·4607` per session and
-  hop).
+  hop). This is an artifact of the key-level hop (a read at a hidden key, at any input, is
+  charged), not an attack: with the per-proof `iv` in the cipher's inputs only a key **and** iv
+  collision makes sessions interfere, and the bound would be linear; Lean would need `H₄` as a
+  table and a point-level H4 (`lean/docs/zk.md` §10.8, "Is the quadratic term inherent?").
 
 The per-session `H₃` slices are independent tables, as in every slice game (a modelling step:
 two sessions with equal `(r, binder)` would share their `H₃` inputs; `lean/docs/zk.md` §10.2).

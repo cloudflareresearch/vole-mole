@@ -786,10 +786,13 @@ dedicated to PomFRIT.
   (modelling steps); Lemma DS (c) for `XOF_seed`; the consistency of an Issuer given as a bare
   function of the tables (a theorem for one written as oracle computations); `H₂³` reads under
   the per-slice budget `IBudget`; the Issuer that reads `H₂³` with one shared `H₃`; contexts
-  beyond the length bound of the finite context type of the seed-XOF model; adaptive schedules of
-  many sessions (any number of further honest sessions in one concurrent schedule,
-  `blindnessN_lean_num`, `≤ n·2⁻¹⁰³` plus budget terms, and any number `N` of challenge pairs,
-  `blindnessP_lean_num`, `≤ N·(2N·2⁻¹⁰³ + …)`, are mechanized; `lean/docs/zk.md` §10.8). The unforgeability reductions (U1, U2) are on paper; Lean has Lemma P's deterministic
+  beyond the length bound of the finite context type of the seed-XOF model; a bound linear in `N`
+  for `N` challenge pairs (any number of further honest sessions in one concurrent schedule,
+  `blindnessN_lean_num`, `≤ n·2⁻¹⁰³` plus budget terms, any number `N` of challenge pairs,
+  `blindnessP_lean_num`, `≤ N·(2N·2⁻¹⁰³ + …)`, and further sessions started adaptively after
+  earlier outcomes, before, during and after the challenge, `blindnessAd_lean_num`, `≤ n·2⁻⁹²`
+  plus budget terms, are mechanized; the `N`-pair bound's quadratic term is an artifact of the
+  key-level tree-hiding hop, not an attack, `lean/docs/zk.md` §10.8). The unforgeability reductions (U1, U2) are on paper; Lean has Lemma P's deterministic
   steps and the extraction bounds they build on (`lean/README.md` §9).
 
 ## 13. Lean
@@ -818,3 +821,4 @@ dedicated to PomFRIT.
 | Blindness with one shared `H₃` (`lean/VoleMole/ZK/SharedH3Two.lean`, `Privacy/SharedH3PomFRIT.lean`, `Privacy/SharedH3PomFRITRA.lean`, `Privacy/SharedH3PomFRITRAH.lean`, `ZK/SharedH3Tail.lean`, `ROM/SharedH3Reads.lean`; `lean/docs/zk.md` §10.5) | `zk2_sharedA`, `zk2_shared`, `deltaRO_sh`, `deltaSh_le`, `blindnessSh_num`, `blindnessRASh_num`, `blindnessOCSh_num`, `pr_tail2Sh`, `pr_G0RASh_resample`, `pr_bad0HSh`, `pr_bad1HSh`, `blindnessRAHSh_num`, `blindnessOCHSh_num`, with `_perm` |
 | G0 → G1, the seed-XOF hop (`lean/VoleMole/Privacy/SeedXOF.lean`, `Privacy/SeedXOFGames.lean`, `ROM/SeedXOFReads.lean`; `lean/docs/zk.md` §10.6) | `abs_pr_seed_le`, `abs_pr_seedGame_sub_le`, `blindnessRO_lean_num_seed`, `blindnessRA_lean_num_seed`, `blindnessRAH_lean_num_seed`, `blindnessSh_num_seed`, `blindnessRASh_num_seed`, `blindnessOC_lean_num_seed`, `blindnessOCH_lean_num_seed`, `blindnessOCSh_num_seed`, `blindnessRAHSh_num_seed`, `blindnessOCHSh_num_seed`, with `_perm_seed` |
 | Blindness with many sessions: further honest sessions on the same tables, concurrently with the challenge pair, as a reduction to the table-reading game (the further sessions consistent table readers); `N` challenge pairs by a hybrid over the pairs (`lean/VoleMole/Privacy/PomFRITMany.lean`, `ZK/ReadsMany.lean`; `lean/docs/zk.md` §10.8) | `AdversaryN`, `realGameN`, `realGameN_iff`, `s1R_sreads`, `step1_cons`, `red_iBudget`, `red_gBudget`, `blindnessN_lean_numG`, `blindnessN_lean_num`, `blindnessN_lean_num_perm`, `blindnessN_lean_le`, `blindnessN_lean_2pow20`, `blindnessN_lean_2pow32`; `AdversaryP`, `realGameP`, `realGameP_iff`, `abs_sub_le_mul_of_steps`, `blindnessP_lean_numG`, `blindnessP_lean_num`, `blindnessP_lean_num_perm`, `blindnessP_lean_le`, `blindnessP_lean_2pow20`, `blindnessP_lean_2pow32` |
+| Blindness with an adaptive schedule: further sessions run one after the other before, during and after the challenge, each chosen from the earlier sessions' outcomes; the reduction runs them inside its `H₂³`-reading interaction (`RAH`), a whole session (step 2 included) a consistent table reader (`lean/VoleMole/Privacy/PomFRITAdaptive.lean`; `lean/docs/zk.md` §10.8) | `fullX`, `fullX_sreads`, `sigR_h23`, `preX_cons`, `sigR_tables`, `runSeq`, `runSeq_sreads`, `SReadsP.of_shared`, `AdversaryAd`, `realGameAd`, `realGameAd_iff`, `red_iBudgetH`, `red_gBudget`, `blindnessAd_lean_numG`, `blindnessAd_lean_num`, `blindnessAd_lean_num_perm`, `blindnessAd_lean_le`, `blindnessAd_lean_2pow20`, `blindnessAd_lean_2pow32` |
