@@ -1,6 +1,7 @@
 import VoleMole.Privacy.MoussakaRA
 import VoleMole.Privacy.RatatouilleRA
 import VoleMole.Privacy.PomFRITRAGame
+import VoleMole.Privacy.PomFRITRAH
 import VoleMole.ZK.HopsPatchPerm
 import VoleMole.ZK.TwoPhasePerm
 
@@ -34,6 +35,12 @@ that reads the tables after step 1 (`ZK.Sim.ZK2ARow`). With **permutation rows**
 * **`blindnessRA_lean_num_perm`** (PomFRIT, no `H₂³` reads by the interaction):
 
       4·εROPm(pP; q₃ + 4i₃, q₅ + 4i₅ + 1872, q_E + 4i_E + 23035) + 2·noHitProb + 2·2⁻¹²⁸.
+
+* **`blindnessRAH_lean_num_perm`** (PomFRIT, the interaction reading `H₂³` too, joint budget
+  `IBudgetH`, `Privacy/PomFRITRAH.lean`):
+
+      4·εROPm(pP; q₃ + 6i₃, q₅ + 6i₅ + 1872, q_E + 6i_E + 23035) + 2·noHitProb + 2·2⁻¹²⁸
+        + [i₂ > 0]·4·(2⁻¹¹⁰ + εROPm(pP; 6i₃, 6i₅ + 2184, 6i_E + 18428) + 2i₂·2⁻¹²⁸).
 -/
 
 open Finset
@@ -107,6 +114,20 @@ theorem blindnessRA_lean_num_perm (A : AdversaryRA (Equiv.Perm Blk)) {q3 q5 qE i
       4 * εROPm pP (q3 + 4 * i3) (q5 + 4 * i5 + 1872) (qE + 4 * iE + 23035) + 2 * noHitProb +
         2 / 2 ^ 128 :=
   blindnessRA_lean_numG A hA hI
+
+/-- **PomFRIT blindness with an Issuer whose interaction reads every table, `H₂³` included, and
+AES as uniformly random permutations, every term explicit** (`blindnessRAH_lean_numG` at
+permutation rows; SHAKE as the base record). -/
+theorem blindnessRAH_lean_num_perm (A : AdversaryRA (Equiv.Perm Blk)) {q3 q5 qE i3 i2 i5 iE : ℕ}
+    (hA : A.GBudget q3 q5 qE) (hI : A.IBudgetH i3 i2 i5 iE) :
+    |pr ((XR × XR) × ShP (Equiv.Perm Blk)) (realGameRA Hashes.shake A false) -
+        pr ((XR × XR) × ShP (Equiv.Perm Blk)) (realGameRA Hashes.shake A true)| ≤
+      4 * εROPm pP (q3 + 6 * i3) (q5 + 6 * i5 + 1872) (qE + 6 * iE + 23035) + 2 * noHitProb +
+        2 / 2 ^ 128 +
+        (if i2 = 0 then 0 else
+          4 * (1 / 2 ^ 110 + εROPm pP (6 * i3) (6 * i5 + 2184) (6 * iE + 18428) +
+            (i2 + i2 : ℕ) / 2 ^ 128)) :=
+  blindnessRAH_lean_numG A hA hI
 
 end PomFRIT
 

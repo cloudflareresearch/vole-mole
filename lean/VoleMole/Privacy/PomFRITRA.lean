@@ -54,7 +54,10 @@ zero-prefix block when the continuation stops (`simTab2` at `outPre2 = ∅`), wh
 could read before deciding whether to answer validly; the programming hop would need a collision
 term for a continuation that read the block it later programs; and a reduction, which sees only
 the programmed tables, would compute the other session's responses on them
-(`ZK/TwoPhaseAd.lean`, `lean/docs/zk.md` §10.3).
+(`ZK/TwoPhaseAd.lean`, `lean/docs/zk.md` §10.3). `Privacy/PomFRITRAH.lean` covers such an Issuer
+(`blindnessRAH_lean_num`, joint budget `IBudgetH`) without changing these hybrids: the
+interaction's `H₂³` reads are taken out by lazy sampling first, and this file's theorem is applied
+to the Issuer that reads an independent table in place of `H₂³`.
 
 **Cipher rows.** Everything here is stated for every type of cipher rows `R`
 (`ZK.Sim.ShG R pP`, `ZK/ReadsRO.lean`); the theorems are instantiated in
