@@ -1,0 +1,33 @@
+src/dst.hpp
+  s_45ee28f7dc1e9b::t_a71ddc63f36cc7 41-42,113
+src/ecdsa_pok/bin_ops.hpp
+  s_45ee28f7dc1e9b::t_4dbd33caaabde1 34,37,39,136-137,143-155,166,171,175,184,195-204,240
+src/ecdsa_pok/binary.hpp
+  s_45ee28f7dc1e9b::t_2450e813fe87a0 365-368,379,381,384,392
+src/ecdsa_pok/hk_binary.hpp
+  s_45ee28f7dc1e9b::t_f202605ad4a291 232-233,244,246,249,257
+src/ecdsa_pok/mdoc_binary.hpp
+  s_45ee28f7dc1e9b::t_1953ec6bbceda4 753-754,767,770,777
+src/ecdsa_pok/rr_binary.hpp
+  s_45ee28f7dc1e9b::t_abf8be6ac6fe78 230-231,241,243,246,253
+src/ecdsa_pok/select_ops.hpp
+  s_45ee28f7dc1e9b::t_fa9e2865bba42d 78-79,207,233,245,281,309
+src/qs_batch.hpp
+  s_45ee28f7dc1e9b::t_687008c39f7530 1-148
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.10",
+  "base_commit_sha": "7b6e66a355a6fc83b4c5b5e3693dab27ffe5124d",
+  "prompts": {},
+  "sessions": {
+    "s_45ee28f7dc1e9b": {
+      "agent_id": {
+        "tool": "opencode",
+        "id": "ses_ebfe7e377ffe00JYcsmgH2SCOu",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Bas Westerbaan <bas@cloudflare.com>"
+    }
+  }
+}
