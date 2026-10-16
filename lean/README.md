@@ -53,7 +53,11 @@ scope.
     to `2⁻⁶³` at `2²⁰` sessions, `2⁻⁴⁰` to `2⁻³⁹` at `2³²`; an artifact of the key-level
     tree-hiding hop, not an attack); adaptive schedules, further sessions started before, during
     and after the challenge from earlier outcomes (`n·2⁻¹⁰²` for PomFRIT and Moussaka, `n·2⁻¹⁰¹`
-    for Ratatouille: `2⁻⁸²`, `2⁻⁸¹` at `2²⁰`, `2⁻⁷⁰`, `2⁻⁶⁹` at `2³²`); for PomFRIT, with `H₄` a
+    for Ratatouille: `2⁻⁸²`, `2⁻⁸¹` at `2²⁰`, `2⁻⁷⁰`, `2⁻⁶⁹` at `2³²`); interleaved schedules, the
+    adversary an interactive machine that starts further sessions and answers pending ones in any
+    order (`(n + 2)·2⁻¹⁰²` for PomFRIT, `(n + 2)·2⁻¹⁰¹` for Moussaka, `(n(K + 1) + 2)·2⁻¹⁰¹` for
+    Ratatouille with further Clients spending up to `K` times along their change tokens: `2⁻⁸²`,
+    `2⁻⁸¹` at `2²⁰` sessions (proofs), `2⁻⁷⁰`, `2⁻⁶⁹` at `2³²`); for PomFRIT, with `H₄` a
     random-oracle table, `N` pairs at
     `N·2⁻¹⁰³ + 32·N²·2⁻¹²⁸` (`2⁻⁸³` at `2²⁰`, `2⁻⁶⁰` at `2³²`; the quadratic part is the birthday
     bound of the 128-bit `iv`s and seeds), all plus budget terms;
@@ -548,7 +552,8 @@ with the Lean redemption prover `anonymityNC_label_rows`, `_shake`, `unlinkabili
 *Many sessions* (`docs/zk.md` §10.8; `ZK/ReadsMany.lean`, `Privacy/PomFRITMany.lean`,
 `Privacy/MoussakaMany.lean`, `Privacy/RatatouilleMany.lean`, `Privacy/PomFRITAdaptive.lean`,
 `Privacy/PomFRITAdaptivePfx.lean`, `Privacy/MoussakaAdaptive.lean`, `Privacy/RatatouilleAdaptive.lean`,
-`ZK/ReadsPoint.lean`, `Privacy/PomFRITLin.lean`). The
+`ZK/ReadsPoint.lean`, `Privacy/PomFRITLin.lean`, `ZK/ReadsInterleave.lean`, `Privacy/PomFRITInterleave.lean`,
+`Privacy/MoussakaInterleave.lean`, `Privacy/RatatouilleInterleave.lean`). The
 games above have the challenge sessions only. Here the adversary also serves `m` further honest
 sessions on the same tables (each with its own randomness and `H₃` slices), concurrently with the
 challenge (below also adaptively, and with `N` challenge pairs): their first
@@ -659,9 +664,37 @@ by the stages after them (Ratatouille's stage 2 sees the further Clients' spends
   `n` Clients in all: the non-adaptive numbers. The `H₂³` reads are counted by keys at
   `2·2⁻¹⁰²⁴` each (the `128`-byte `ã`), so no prefix count is needed (per session `≈ 2⁻¹⁰²·⁵`
   and `≈ 2⁻¹⁰¹·⁸`).
+- **Interleaved schedules** (`ZK/ReadsInterleave.lean`, `Privacy/PomFRITInterleave.lean`,
+  `Privacy/MoussakaInterleave.lean`, `Privacy/RatatouilleInterleave.lean`; `AdversaryIL`,
+  `AdversaryILM`, `AdversaryILR`, `realGameIL`, `realGameILM`, `realGameILR`): the adversary is an
+  interactive machine, a step function from the transcript to the next action (`Act`: start a new
+  honest session with inputs of its choice, or deliver a message to any pending session), run for
+  a number of steps before, between and after the challenge's messages, seeing every result; it
+  may start many sessions and answer them in any order. A session's state is its tape (the `j`-th
+  started uses tape `j`, at most `n`) and the messages it received. **The interleaving lemma**
+  (`Good.run`, `Good.sreads`): if each session's output after the messages `h` is read off a read
+  set that grows with `h` (`SessReads`), every stretch of the schedule, whatever the scheduler and
+  the fuel, is a consistent reader whose read set is the union of the sessions' current read sets,
+  so `n` times one session's budget. A session given as a chain of consistent readers (issuance,
+  then redemption or spends, each at the state the earlier steps left) is one (`ChainCons`,
+  `ChainCons.sessReads`, `chain_card`). The reductions are those of the adaptive games, with the
+  schedule in place of the sequential sessions (`realGameIL_iff`, `realGameILM_iff`: `Iff.rfl`).
+  PomFRIT: `IBudgetHB (0, n, 624n, 4607n)` (a session's read set is step 1's keys, then
+  `fullKeys`, one prefix), `blindnessIL_lean_num`, numerically `≤ (n + 2)·2⁻¹⁰² + 4·(q₃ + q₅ +
+  221·q_E)·2⁻¹²⁸` for `n` further sessions (`blindnessIL_lean_le`; `2⁻⁸²` at `n + 2 ≤ 2²⁰`,
+  `2⁻⁷⁰` at `2³²`, `_2pow20`, `_2pow32`), the sequential numbers. Moussaka: key stage and
+  interaction both `(0, 2·2³²n, 1248n, 9214n)` (a Client started before the challenge and
+  answered after it is read by both), `anonymityIL_lean_num`, `≤ (n + 2)·2⁻¹⁰¹ + 8·(q₃ + q₅ +
+  221·q_E)·2⁻¹²⁸ + 2·εhide` (`anonymityIL_lean_le`; `2⁻⁸¹`, `2⁻⁶⁹`; per Client `≈ 2⁻¹⁰¹·¹³`).
+  Ratatouille with **Clients that spend up to `K` times**, each spend's change token, finalized on
+  the Issuer's response, spent by the next (`tokOf`, `finSX`): budgets `n(K + 1)·(0, 2³², 624,
+  4607)`, `unlinkabilityIL_lean_num`, `≤ (n(K + 1) + 2)·2⁻¹⁰¹ + 8·(q₃ + q₅ + 221·q_E)·2⁻¹²⁸ +
+  2·εhide` (`unlinkabilityIL_lean_le`; `2⁻⁸¹` at `n(K + 1) + 2 ≤ 2²⁰`, `2⁻⁶⁹` at `2³²`; per proof
+  `≈ 2⁻¹⁰¹·⁷⁷`).
 - All with AES as random permutations (`*N_lean_num_perm`, `blindnessP_lean_num_perm`,
   `anonymityP_lean_num_perm`, `unlinkabilityP_lean_num_perm`, `blindnessAd_lean_num_perm`,
-  `blindnessAd_lean_num_perm_pfx`, `anonymityAd_lean_num_perm`, `unlinkabilityAd_lean_num_perm`),
+  `blindnessAd_lean_num_perm_pfx`, `anonymityAd_lean_num_perm`, `unlinkabilityAd_lean_num_perm`,
+  `blindnessIL_lean_num_perm`, `anonymityIL_lean_num_perm`, `unlinkabilityIL_lean_num_perm`),
   and for
   every row type with `ZKRow` (`*_numG`). Hiding of `Com` is assumed for the reductions of every
   composed adversary (the further sessions' tapes fixed).
@@ -704,14 +737,18 @@ runs of each layout.
   adversary interaction (no `RA`/`OC` version).
 - *Scope of the games.* Covered: any number of further honest sessions in one concurrent schedule
   per protocol (their first messages before the adversary's first answer, their later ones seen by
-  the next stage or the guess), any number of challenge pairs (quadratic bounds), and adaptive
-  schedules, for Moussaka and Ratatouille through a table-reading key stage (§3, "Many sessions";
+  the next stage or the guess), any number of challenge pairs (quadratic bounds), adaptive
+  schedules, for Moussaka and Ratatouille through a table-reading key stage, and interleaved
+  schedules, the adversary starting and answering further sessions in any order, Ratatouille's
+  further Clients spending up to `K` times along their change tokens (§3, "Many sessions";
   `docs/zk.md` §10.8). Not covered in Lean:
-  - adaptive schedules in which further sessions interleave with each other (in the adaptive games
-    each further session runs to the end before the next starts; the concurrent games are not
-    adaptive), and Ratatouille further Clients that spend more than once (each spends its token
-    once; change tokens are not spent again); a key stage written as an oracle computation (`OC`)
-    or in the shared-`H₃` and seed-XOF games;
+  - in the interleaved games, a scheduler that itself reads the tables (its choices are functions
+    of the transcript, as in every many-session game); challenge sessions started or answered
+    separately (the two challenge requests come together and the two answers together, as in the
+    two-session games); Moussaka's and Ratatouille's interleaved bounds charge a further Client in
+    both the key stage and the interaction (`2⁻¹⁰¹` per Client where the sequential schedule has
+    `2⁻¹⁰²`); a key stage written as an oracle computation (`OC`) or in the shared-`H₃` and
+    seed-XOF games;
   - a bound linear in `N` for `N` challenge pairs: for Moussaka and Ratatouille at all, for PomFRIT
     without the `iv` birthday term and with the budget terms charged once (one joint bad event over
     all proofs, the gate labels' distribution);
@@ -756,7 +793,7 @@ limitation, not an attack) takes over. Strong simulation-extractability: 2⁻⁶
 | `ratatouille.md` | Balance (no inflation), no theft, unlinkability, correctness: proved. | Spends are not bound to a session, so a copied spend request can be redeemed first (medium). |
 | `domain-separation.md` | Every hash/XOF/permutation call lies in a disjoint domain, except below. [Lean] `Protocols/DomainSeparation.lean` | PomFRIT's `hash_to_target` overlaps four proof-system domains (no exploit found; fix: a final domain byte). |
 | `uov-assumptions.md` | Relates the protocol-specific UOV assumptions to each other and to standard UOV. [Lean] `Protocols/UOVAssumptions.lean` | Several reductions are unavailable; the note states why. |
-| Privacy on the specs ([Lean] `VoleMole/Privacy/`) | The privacy theorems as games on `Spec/*`, each hybrid hop mechanized, from per-proof zero knowledge (`Privacy.ZeroKnowledge`: a simulator from the instance alone, `ε`-close for every valid witness) and, for Moussaka 4(a) and Ratatouille, hiding of `Com` for explicit reductions: PomFRIT blindness (`Privacy.PomFRIT.blindness`, `≤ 4ε`); Moussaka issuer hiding and unlinkability against a Moderator colluding with all Anchors (Thm 4a, `Privacy.Moussaka.anonymity`, `≤ 4εI + 4εR + 2εhide`) and against one that sees no issuance (Thm 4b corrected, `Privacy.Moussaka.anonymityNC`, `≤ 4εR + 2·(φ₀ + φ₁)`, no assumption on `Com`); Ratatouille unlinkability of spends from issuances and from each other through change tokens (`Privacy.Ratatouille.unlinkability`, `≤ 4εI + 4εS + 2εhide`). With the executable Lean prover (label rows) down to its tape hypothesis (`*_label_rows`, `blindness_lean`; `*_shake` with the hop hypotheses); for 4(a), Ratatouille and PomFRIT also in the random-oracle and ideal-cipher model with every zero-knowledge term explicit (`*RO_lean_num`), with table-reading interactions (`*RA_lean_num`, `blindnessRAH_lean_num`, `*OC*`), with AES as random permutations (`_perm`), with one shared `H₃` (`*Sh_num`, `blindnessRAHSh_num`) and from the real Clients' seeds (`*_seed`); Moussaka 4(b) also in the random-oracle and ideal-cipher model (`anonymityNCRO_lean_num`, `anonymityNCSh_num`, with `_seed`); 4(a) and Ratatouille also with table-reading key stages (`anonymityRAK_lean_num`, `unlinkabilityRAK_lean_num`); 4(a), Ratatouille and PomFRIT also with many sessions (`*N_lean_num`, `*P_lean_num`, `blindnessPH_lean`, `blindnessAd_lean_num`, `anonymityAd_lean_num`, `unlinkabilityAd_lean_num`). Bounds and what remains: §3 | The zero-knowledge hypothesis is false on `main` for PomFRIT (`ZK.pomfrit_issuer_hits`, `ZK.pomfrit_attack_test`); for Moussaka and Ratatouille no efficient simulator satisfies it per proof on `main`, and the joint (PU) hop replaces it (paper). PomFRIT note §8.3: the "both ⊥" rule is needed. Moussaka Thm 4(a) needs no `2⁻¹⁹²` term; Thm 4(b) misses an abort term `2·(φ₀ + φ₁)` (negligible, bounded with no assumption on `Com`), needs the Client to take its index from `S`, and needs no `2⁻¹⁹²` term either. Ratatouille H3 needs the Client's validity check against the commitment it sent. Ratatouille's H1 misses the seed collisions, and Moussaka's Thm 4 has no term for the seed-XOF hop (`docs/zk.md` §10.6) |
+| Privacy on the specs ([Lean] `VoleMole/Privacy/`) | The privacy theorems as games on `Spec/*`, each hybrid hop mechanized, from per-proof zero knowledge (`Privacy.ZeroKnowledge`: a simulator from the instance alone, `ε`-close for every valid witness) and, for Moussaka 4(a) and Ratatouille, hiding of `Com` for explicit reductions: PomFRIT blindness (`Privacy.PomFRIT.blindness`, `≤ 4ε`); Moussaka issuer hiding and unlinkability against a Moderator colluding with all Anchors (Thm 4a, `Privacy.Moussaka.anonymity`, `≤ 4εI + 4εR + 2εhide`) and against one that sees no issuance (Thm 4b corrected, `Privacy.Moussaka.anonymityNC`, `≤ 4εR + 2·(φ₀ + φ₁)`, no assumption on `Com`); Ratatouille unlinkability of spends from issuances and from each other through change tokens (`Privacy.Ratatouille.unlinkability`, `≤ 4εI + 4εS + 2εhide`). With the executable Lean prover (label rows) down to its tape hypothesis (`*_label_rows`, `blindness_lean`; `*_shake` with the hop hypotheses); for 4(a), Ratatouille and PomFRIT also in the random-oracle and ideal-cipher model with every zero-knowledge term explicit (`*RO_lean_num`), with table-reading interactions (`*RA_lean_num`, `blindnessRAH_lean_num`, `*OC*`), with AES as random permutations (`_perm`), with one shared `H₃` (`*Sh_num`, `blindnessRAHSh_num`) and from the real Clients' seeds (`*_seed`); Moussaka 4(b) also in the random-oracle and ideal-cipher model (`anonymityNCRO_lean_num`, `anonymityNCSh_num`, with `_seed`); 4(a) and Ratatouille also with table-reading key stages (`anonymityRAK_lean_num`, `unlinkabilityRAK_lean_num`); 4(a), Ratatouille and PomFRIT also with many sessions (`*N_lean_num`, `*P_lean_num`, `blindnessPH_lean`, `blindnessAd_lean_num`, `anonymityAd_lean_num`, `unlinkabilityAd_lean_num`; interleaved schedules, Ratatouille's further Clients spending several times: `blindnessIL_lean_num`, `anonymityIL_lean_num`, `unlinkabilityIL_lean_num`). Bounds and what remains: §3 | The zero-knowledge hypothesis is false on `main` for PomFRIT (`ZK.pomfrit_issuer_hits`, `ZK.pomfrit_attack_test`); for Moussaka and Ratatouille no efficient simulator satisfies it per proof on `main`, and the joint (PU) hop replaces it (paper). PomFRIT note §8.3: the "both ⊥" rule is needed. Moussaka Thm 4(a) needs no `2⁻¹⁹²` term; Thm 4(b) misses an abort term `2·(φ₀ + φ₁)` (negligible, bounded with no assumption on `Com`), needs the Client to take its index from `S`, and needs no `2⁻¹⁹²` term either. Ratatouille H3 needs the Client's validity check against the commitment it sent. Ratatouille's H1 misses the seed collisions, and Moussaka's Thm 4 has no term for the seed-XOF hop (`docs/zk.md` §10.6) |
 
 **Cross-cutting finding (critical, deployment):** PomFRIT's Issuer signs arbitrary targets, and
 all protocols share the UOV key type. If one key serves PomFRIT and another protocol, anyone can
@@ -1015,7 +1052,7 @@ What is **not** established, roughly in order of importance:
    end of §3: SHAKE as a random oracle and AES as an ideal cipher, Lemma DS (c) for PomFRIT's seed
    XOF, hiding of `Com` (computational), consistency of interactions given as bare functions of
    the tables, PomFRIT's `H₂³`-reading Issuer under per-slice budgets, Moussaka's non-colluding
-   mode with table-reading choices, adaptive schedules with interleaved further sessions,
+   mode with table-reading choices, table-reading schedulers in the many-session games,
    a bound linear in `N` for `N` challenge pairs (on paper; the Lean `N`-pair bounds are quadratic,
    for PomFRIT with `H₄` a table only through the `iv` birthday term `n²·2⁻¹²⁵`), and the quantum
    versions.
