@@ -8,6 +8,10 @@
 //
 // which ties Q to the device key in the MSO, committed as bits in the binary proof (as
 // rr_binary.hpp's link sum).
+//
+// With DERIVED, the F_p witness is derived from a key of prg_key_len(LP) elements with the local
+// PRG over F_p (voleith_p256/prg.hpp), which makes it about 6 times cheaper, at the cost of a
+// doubled QuickSilver degree and an additional, experimental assumption for zero knowledge.
 
 #ifndef VOLE_MOLE_ECDSA_POK_MDOC_ARITH_HPP
 #define VOLE_MOLE_ECDSA_POK_MDOC_ARITH_HPP
@@ -15,6 +19,7 @@
 #include "ecdsa_pok/arith.hpp"
 #include "ecdsa_pok/hk_arith.hpp"
 #include "p256/field.hpp"
+#include "voleith_p256/prg.hpp"
 
 #include <algorithm>
 #include <cstddef>
@@ -53,8 +58,10 @@ template <typename Ctx> struct OffsetCtx {
     void add_n(const NV& f) { ctx->add_n(f); }
 };
 
-struct ArithRelation {
+template <bool DERIVED> struct ArithRelation {
     static constexpr size_t LP = mdoc::LP, LN = mdoc::LN, DP = mdoc::DP, DN = mdoc::DN;
+    static constexpr size_t KP = DERIVED ? voleith_p256::prg_key_len(LP) : 0;
+    static_assert(!DERIVED || KP > 0);
     using instance = ArithInstance;
 
     template <typename Ctx> static void constraints(Ctx& ctx, const instance& x) {

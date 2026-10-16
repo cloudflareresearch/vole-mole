@@ -90,7 +90,8 @@ template <size_t NA, Vole V, BinPrg PRG> struct Scheme {
     using Bin = BinRelation<NA, V == Vole::small, PRG>;
     using VP = std::conditional_t<V == Vole::small, vp::Small,
                                   std::conditional_t<V == Vole::medium, vp::Medium, vp::Fast>>;
-    using Arith = vp::Layout<ArithRelation, VP>;
+    using AR = ArithRelation<PRG != BinPrg::none>;
+    using Arith = vp::Layout<AR, VP>;
 
     static constexpr size_t BIN_BYTES = vole_mole::detail::PROOF_BYTES<Bin>;
     static constexpr size_t ARITH_BYTES = Arith::PROOF_BYTES;
@@ -573,8 +574,8 @@ void prove_with_witness(std::span<uint8_t, Scheme<NA, V, PRG>::PROOF_BYTES> proo
     wp.push_back(wit.rho_q);
     std::vector<Fn> wn = wit.issuer.wn;
     wn.insert(wn.end(), wit.device.wn.begin(), wit.device.wn.end());
-    auto arith_state = vp::prove_commit<ArithRelation, VP>(ar, pub.mu, std::span<const Fp, LP>(wp),
-                                                           std::span<const Fn, LN>(wn), rho_arith);
+    auto arith_state = vp::prove_commit<typename S::AR, VP>(ar, pub.mu, std::span<const Fp, LP>(wp),
+                                                            std::span<const Fn, LN>(wn), rho_arith);
 
     // The binary witness prefix, and its commitment.
     std::vector<uint8_t> bin_witness(Bin::RELATION_WITNESS_BITS / 8, 0);
@@ -618,7 +619,7 @@ void prove_with_witness(std::span<uint8_t, Scheme<NA, V, PRG>::PROOF_BYTES> proo
     // Finish the proof over F_p and F_n.
     const ArithInstance ar_inst = mdoc::arith_instance(pub, chal, dchal, z, y);
     const Digest binder = arith_binder(chal, dchal, proof.subspan(S::OFF_Z));
-    vp::prove_finish<ArithRelation, VP>(ar, arith_state, ar_inst, binder);
+    vp::prove_finish<typename S::AR, VP>(ar, arith_state, ar_inst, binder);
 }
 
 template <size_t NA, Vole V, BinPrg PRG>
@@ -658,7 +659,7 @@ bool verify_proof(std::span<const uint8_t, Scheme<NA, V, PRG>::PROOF_BYTES> proo
     if (!pending) {
         return false;
     }
-    const auto arith_state = vp::verify_commit<ArithRelation, VP>(ar, pub.mu);
+    const auto arith_state = vp::verify_commit<typename S::AR, VP>(ar, pub.mu);
     if (!arith_state) {
         return false;
     }
@@ -672,7 +673,7 @@ bool verify_proof(std::span<const uint8_t, Scheme<NA, V, PRG>::PROOF_BYTES> proo
 
     const ArithInstance ar_inst = mdoc::arith_instance(pub, chal, dchal, z, y);
     const Digest binder = arith_binder(chal, dchal, proof.subspan(S::OFF_Z));
-    return vp::verify_finish<ArithRelation, VP>(ar, *arith_state, ar_inst, binder);
+    return vp::verify_finish<typename S::AR, VP>(ar, *arith_state, ar_inst, binder);
 }
 
 // Dispatch on the number of attributes and the parameters. The MQ PRG isn't supported: its key
