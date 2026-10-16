@@ -718,7 +718,8 @@ All files are under `lean/VoleMole/ZK/` (and `Privacy/LeanProver.lean`, `Privacy
 `ZK/IdealCipherP.lean`, `ZK/HopsPatch.lean`, `ZK/AdaptRO.lean`, `Privacy/AdaptiveRO.lean`,
 `Privacy/MoussakaRA.lean`, `Privacy/RatatouilleRA.lean`, `ZK/TwoPhaseAd.lean`,
 `Privacy/PomFRITRA.lean`, `Privacy/PomFRITRAGame.lean`, `ZK/CollideAd2.lean`,
-`Privacy/PomFRITRAH.lean`, `Privacy/PomFRITRAHPfx.lean`, §10.3; `ZK/TwoPhasePerm.lean`,
+`Privacy/PomFRITRAH.lean`, `Privacy/PomFRITRAHPfx.lean`, `Privacy/MoussakaRAK.lean`,
+`Privacy/RatatouilleRAK.lean`, §10.3; `ZK/TwoPhasePerm.lean`,
 `ZK/IdealCipherPermP.lean`, `ZK/HopsPatchPerm.lean`, `Privacy/PermRO.lean`, `Privacy/PermRA.lean`,
 §10.4; `ZK/SharedH3.lean`, `ZK/SharedH3Two.lean`, `ZK/SharedH3RA.lean`, `ZK/SharedH3One.lean`,
 `Privacy/SharedH3RO.lean`, `Privacy/SharedH3PomFRIT.lean`, `Privacy/SharedH3RA.lean`,
@@ -727,8 +728,8 @@ All files are under `lean/VoleMole/ZK/` (and `Privacy/LeanProver.lean`, `Privacy
 `ROM/SeedXOFReads.lean`, `Privacy/SeedXOFNC.lean`, §10.6; `ZK/VerifyReadsRO.lean`,
 `Privacy/MoussakaNCRO.lean`, `Privacy/MoussakaNCSh.lean`, §10.7; `ZK/ReadsMany.lean`,
 `Privacy/PomFRITMany.lean`, `Privacy/MoussakaMany.lean`, `Privacy/RatatouilleMany.lean`,
-`Privacy/PomFRITAdaptive.lean`, `Privacy/PomFRITAdaptivePfx.lean`, `ZK/ReadsPoint.lean`,
-`Privacy/PomFRITLin.lean`, §10.8). There is
+`Privacy/PomFRITAdaptive.lean`, `Privacy/PomFRITAdaptivePfx.lean`, `Privacy/MoussakaAdaptive.lean`,
+`Privacy/RatatouilleAdaptive.lean`, `ZK/ReadsPoint.lean`, `Privacy/PomFRITLin.lean`, §10.8). There is
 no `sorry` and no `axiom`. `#print axioms` lists
 only `propext`, `Classical.choice` and `Quot.sound`.
 
@@ -1005,7 +1006,9 @@ as a check of the theorem's conditions and kept as a smoke test of the executabl
     whose continuation may read `H₅` and the cipher), and with an interaction that reads the
     tables (`zk_adaptive`, `zk2_adaptive`; `anonymityRA_lean_num`, `unlinkabilityRA_lean_num`,
     and `blindnessRA_lean_num` for an Issuer that reads every table but `H₂³`;
-    `blindnessRAH_lean_num` for one that reads `H₂³` too, with explicit collision terms, §10.3).
+    `blindnessRAH_lean_num` for one that reads `H₂³` too, with explicit collision terms;
+    `anonymityRAK_lean_num`, `unlinkabilityRAK_lean_num` with a key stage that reads them too,
+    §10.3).
     The per-proof `H₃` slices of these games are not a modelling step any more: with one shared
     `H₃`, as in the scheme, every game is mechanized again (the PomFRIT Issuer that reads `H₂³`
     included) with no prefix-collision (`ε_iv`-type) term (§10.5), and the seed-XOF hop to the
@@ -1013,8 +1016,9 @@ as a check of the theorem's conditions and kept as a smoke test of the executabl
     mechanized with the honest Anchors running the Lean verifier on the same tables, with
     per-proof slices and with one shared `H₃`, and with the real Clients' seeds
     (`anonymityNCRO_lean_num`, `anonymityNCSh_num`, `unlinkability*`, `*_seed`, §10.7). Any number
-    of further honest sessions, `N` challenge pairs and (for PomFRIT) adaptive schedules are
-    mechanized by reductions to these games (§10.8). Left
+    of further honest sessions, `N` challenge pairs and adaptive schedules (Moussaka and
+    Ratatouille through the key-stage games) are mechanized by reductions to these games (§10.8).
+    Left
     open: the modelling steps (SHAKE as a random oracle, AES as an ideal cipher), the hiding of
     `Com` (a computational assumption on Keccak-p[800,12] that no random-oracle step discharges,
     §10.9), and the game-specific items of §10.3, §10.5, §10.7 and §10.8 ("Open") and §10.6 ("What
@@ -1247,7 +1251,7 @@ The two sessions'
 `H₃` slices are independent tables when their `r` differ (`2⁻³⁶⁰` otherwise), as in the other two
 games (§10.5: with one shared `H₃` no such term is needed).
 
-### 10.3 Statements chosen from the tables (`Privacy/Resample.lean`, `ZK/IdealCipherP.lean`, `ZK/HopsPatch.lean`, `ZK/AdaptRO.lean`, `Privacy/AdaptiveRO.lean`, `Privacy/MoussakaRA.lean`, `Privacy/RatatouilleRA.lean`, `ZK/TwoPhaseAd.lean`, `Privacy/PomFRITRA.lean`, `Privacy/PomFRITRAGame.lean`, `ZK/CollideAd2.lean`, `Privacy/PomFRITRAH.lean`, `Privacy/PomFRITRAHPfx.lean`)
+### 10.3 Statements chosen from the tables (`Privacy/Resample.lean`, `ZK/IdealCipherP.lean`, `ZK/HopsPatch.lean`, `ZK/AdaptRO.lean`, `Privacy/AdaptiveRO.lean`, `Privacy/MoussakaRA.lean`, `Privacy/RatatouilleRA.lean`, `ZK/TwoPhaseAd.lean`, `Privacy/PomFRITRA.lean`, `Privacy/PomFRITRAGame.lean`, `ZK/CollideAd2.lean`, `Privacy/PomFRITRAH.lean`, `Privacy/PomFRITRAHPfx.lean`, `Privacy/MoussakaRAK.lean`, `Privacy/RatatouilleRAK.lean`)
 
 §10.2's games assume that the adversary's interaction does not read the tables, because `zk_ro`
 is for a statement fixed before the tables are drawn. Here the statement and witness are chosen by
@@ -1576,8 +1580,73 @@ take one get the size of the whole table (`CardPB.cardP`). So `pr_bad0H_pfx`, `p
 a few keys of many prefixes nothing changes; for one that reads whole blocks (honest sessions run
 inside it, §10.8 "Adaptive schedules") the collision term drops by `2³²` per block.
 
+**Moussaka and Ratatouille with a key stage that reads the tables** (`Privacy/MoussakaRAK.lean`,
+`Privacy/RatatouilleRAK.lean`). In the `RA` games above the interaction reads the tables, but the
+contexts and the challenge Clients' issuing keys (Moussaka: `AdversaryRA.ctxIss`, `ctxRed`, `pk`;
+Ratatouille: the Issuer's `pk`, `ctx`, `tInit`) are constants. PomFRIT's key stage reads the
+tables already (`keyOf`); here Moussaka and Ratatouille get one.
+- *The adversary* (`AdversaryRAK`): `setup : Slices → Sh → Σ` and, at every state `σ`, a
+  table-reading adversary `adv σ` of the `RA` game (contexts, keys, balance, interaction, guess).
+  *The budget* (`KBudget k₃ k₂ k₅ k_E`): as a function of each slice and the shared tables (the
+  other slices fixed), the setup reads at most `k₃` slice keys, `k₂` `H₂³` keys, `k₅` `H₅` keys
+  and `k_E` cipher keys, consistently (`SReads`); `IBudget`, `GBudget` hold at every state.
+- *The game* (`realGameRAK`, `gameRAK`): the setup on the slices and the **original** tables
+  (nothing is programmed before the challenge), then `realGameRA` (and in the hybrids `gameRA`)
+  of `adv σ` with the slots at `σ` (`realGameRAK_iff`, `Iff.rfl`).
+- *The issuance hops become adaptive.* The commitment and the issuance instance contain the
+  contexts (Ratatouille: also the balance; with balance `0` nothing is proved), so both issuance
+  hops are `hop_roA` with `ZeroKnowledgeROA` for the reader `t ↦ setup(…, t)` (`hop0RAK`,
+  `hop1RAK`, `hopI0RAK`, `hopI1RAK`; the Lean issuance provers are `ZeroKnowledgeROA` by
+  `lean_zeroKnowledgeROA`: `leanPI_zkROA`, `leanPIR_zkROA`); the interaction, the other real
+  proofs and the guess at `σ` are the distinguisher, with the budgets of the `RA` hops. The
+  collision term of issuance `1` is still `≤ noHitProb + 2⁻¹⁰²⁴` (`deltaI1K_le`, `deltaI1RK_le`):
+  issuance `0`'s simulator coins are independent of the setup, of issuance `1`'s tape and of the
+  tables, so fixing everything else the simulated tail is uniform (`pr_simTail_eq_le`).
+- *The redemption and spend hops* read the state and the transcript through the setup and the
+  issuance programmings (`SxLK`, `SxRK`, `Sx1K`, `Sx2K`; `SReads.bind` of the setup and the `RA`
+  readers: Moussaka `(k₃ + i₃, k₂ + i₂, k₅ + i₅ + 624, k_E + i_E + 9214)`, Ratatouille round 1 the
+  same, round 2 `(k₃ + 2i₃, k₂ + 2i₂, k₅ + 2i₅ + 1560, k_E + 2i_E + 23035)`); the collision terms
+  are `pr_collide_adaptive` at those budgets (`deltaLAK_le`, `deltaRAK_le`, `deltaS1AK_le`,
+  `deltaS2AK_le`).
+- *The new collision terms.* The setup reads the tables before any simulation programs them, so
+  its reads may meet the blocks the simulators program later. That is the `H₂³` term of `εAd`
+  (`h23Term`): in each issuance hop at the setup's budget, in each later hop at the composed
+  reader's; `2·k₂·2⁻¹⁰²⁴` for the simulated block (its `128`-byte `ã` is uniform given the reads)
+  and, for the real one, a second zero-knowledge application and `2⁻¹¹³`. Its `H₅` and cipher reads
+  cost `(k₅ + 1)·2⁻¹²⁸` and `221·k_E·2⁻¹²⁸` per hop (`εROP`), its slice reads `k₃·2⁻¹²⁸`.
+- *The end*: the simulated world is `simGameRA` of `adv σ`, `σ` a function of the slices and the
+  tables of the hiding tape, so the hiding hop (`hiding_hopRAK`) and the ideal world
+  (`idealGameRAK_eq`) are those of `adv σ` with the hiding hypothesis at `σ`.
+
+The bounds (`#print axioms`: `propext`, `Classical.choice`, `Quot.sound`; each for every row type
+(`_numG`), function rows and permutation rows (`_perm`)):
+
+    Moussaka (anonymityRAK_lean_num):  |Pr[W₀] − Pr[W₁]| ≤
+        4·εAd(9; i₃ + q₃, q₅ + i₅ + 1872, q_E + i_E + 13821; k₃, k₂, k₅, k_E)
+      + 4·εAd(9; q₃, q₅ + 1248, q_E + 13821; k₃ + i₃, k₂ + i₂, k₅ + i₅ + 624, k_E + i_E + 9214)
+      + 4·((k₃ + i₃)·2⁻¹²⁸ + 2⁻¹¹³ + εROP(0, 312, 4607; k₅ + i₅ + 624, k_E + i_E + 9214))
+      + 6·noHitProb + 12·2⁻¹⁰²⁴ + 2·εhide,
+
+    Ratatouille (unlinkabilityRAK_lean_num):  |Pr[W(b₁, b₂)] − Pr[W(b₁', b₂')]| ≤
+        4·εAd(9; 2i₃ + q₃, q₅ + 2i₅ + 1872, q_E + 2i_E + 13821; k₃, k₂, k₅, k_E)
+      + 2·εAd(9; i₃ + q₃, q₅ + i₅ + 1248, q_E + i_E + 13821;
+              k₃ + i₃, k₂ + i₂, k₅ + i₅ + 624, k_E + i_E + 9214)
+      + 2·εAd(9; q₃, q₅ + 936, q_E + 13821; k₃ + 2i₃, k₂ + 2i₂, k₅ + 2i₅ + 1560, k_E + 2i_E + 23035)
+      + 2·(k₃ + i₃)·2⁻¹²⁸ + 2·(k₃ + 2i₃)·2⁻¹²⁸
+      + 4·(2⁻¹¹³ + εROP(0, 312, 4607; k₅ + 2i₅ + 1560, k_E + 2i_E + 23035))
+      + 6·noHitProb + 12·2⁻¹⁰²⁴ + 2·εhide.
+
+Without budgets these are about `2⁻¹⁰¹·⁹` and `2⁻¹⁰¹·⁶` (the `RA` bounds up to `4·2⁻¹²⁸`:
+`εAd` at a zero reader budget is `εRO + 2⁻¹²⁸`), and about `2⁻¹⁰¹·⁴` and `2⁻¹⁰¹·¹` if the key stage
+reads `H₂³`. They are what §10.8's adaptive schedules need: sessions before the challenge run in
+the key stage.
+
 **Open.** (A PomFRIT interaction that reads `H₂³` under the joint budget, interactions written as
-oracle computations, AES as random permutations (§10.4) and one shared `H₃` (§10.5) are done.)
+oracle computations, AES as random permutations (§10.4), one shared `H₃` (§10.5) and a Moussaka
+and Ratatouille key stage that reads the tables are done.)
+- *Key stages in the other forms*: the key-stage games (`*RAK`) take the setup as a function of
+  the tables with `SReads` as a hypothesis, with function and permutation rows; there are no
+  oracle-computation (`OC`), shared-`H₃` (`Sh`) or real-seed (`_seed`) versions of them.
 - *`H₂³` reads under per-slice budgets* (PomFRIT, `IBudget` with `i₂ > 0`): not covered; the
   substituted Issuer's guess must recompute the interaction's `H₂³` reads jointly (`IBudgetH`).
 - *A two-phase zero-knowledge theorem with a continuation that reads `H₂³`* (`zk2_adaptive`
@@ -2071,7 +2140,7 @@ and the Anchors' signers `sk g` may depend on the XOF table; `anonymityNCRO_lean
 **Open.** The adversary's choices (contexts, keys, Anchor Sets, digests) do not read the tables
 (no `RA`/`OC` version).
 
-### 10.8 Many sessions (`ZK/ReadsMany.lean`, `Privacy/PomFRITMany.lean`, `Privacy/MoussakaMany.lean`, `Privacy/RatatouilleMany.lean`, `Privacy/PomFRITAdaptive.lean`, `Privacy/PomFRITAdaptivePfx.lean`, `ZK/ReadsPoint.lean`, `Privacy/PomFRITLin.lean`)
+### 10.8 Many sessions (`ZK/ReadsMany.lean`, `Privacy/PomFRITMany.lean`, `Privacy/MoussakaMany.lean`, `Privacy/RatatouilleMany.lean`, `Privacy/PomFRITAdaptive.lean`, `Privacy/PomFRITAdaptivePfx.lean`, `Privacy/MoussakaAdaptive.lean`, `Privacy/RatatouilleAdaptive.lean`, `ZK/ReadsPoint.lean`, `Privacy/PomFRITLin.lean`)
 
 Every game above has the challenge sessions only: two (PomFRIT) or four (Moussaka, Ratatouille)
 requests. A deployment has many sessions on the same random oracle and cipher, and the adversary
@@ -2122,10 +2191,28 @@ slices, concurrently with the challenge:
   Issuer's response to it are chosen from all earlier requests and outcomes (`runSeq`, each session
   run to the end, `fullX`); the challenge key and messages from the first `m₁`, the challenge
   responses from everything before them; the guess sees everything.
+- *Moussaka with an adaptive schedule* (`AdversaryAdM`, `realGameAdM`): `m₁` further sessions
+  before the challenge, `m₂` between the challenge issuance requests and the adversary's answers
+  to the challenge Clients, `m₃` after the challenge outcome, one after the other: each further
+  session's contexts and issuing key (`CfgX`), the adversary's response to its request and the
+  Anchor Set and digest it then redeems at (`AnsX`) are chosen from all earlier requests and
+  outcomes (`runSeqM`; a session is `fullXM`: `issue_request`, `finalize_issue`,
+  `redeem_request` at the Client's index); the challenge contexts and keys from the first `m₁`
+  sessions, the challenge responses and Anchor Sets from everything before them, the outcome by
+  §6's rule (`outAt`); the guess sees everything.
+- *Ratatouille with an adaptive schedule* (`AdversaryAdR`, `realGameAdR`): `m₁` further sessions
+  before the challenge, `m₂` between the challenge issuance requests and stage 1, `m₃` between
+  round 1's request and stage 2 (they happen only if round 1 runs), `m₄` after the challenge
+  outcome, one after the other: each further session's key, context and balance (`CfgR`), the
+  Issuer's response and the amount the Client spends (`AnsR`) chosen from all earlier requests and
+  outcomes (`runSeqR`; a session is `fullXR`: issuance, `finalize_issue`, one spend with round 1);
+  the challenge key, context and balance from the first `m₁` sessions; the game is the key-stage
+  game of the Issuer that runs the sessions (`realGameAdR_iff`), as `realGameN` is the `RA` game of
+  the Issuer served by the further Clients.
 
 In each game the adversary's interaction does not read the tables (as in the `RO` games); its
-guess reads them with a budget (`AdversaryN.Budget`, and `AdversaryP.Budget`, `AdversaryAd.Budget`
-likewise: each challenge slice at `q₃` keys, `H₅` at `q₅`, the cipher at `q_E`, `H₂³` and the
+guess reads them with a budget (`AdversaryN.Budget`, and `AdversaryP.Budget`, `AdversaryAd.Budget`,
+`AdversaryAdM.Budget`, `AdversaryAdR.Budget` likewise: each challenge slice at `q₃` keys, `H₅` at `q₅`, the cipher at `q_E`, `H₂³` and the
 further sessions' slices freely).
 
 **The proof: a reduction to the table-reading games.** For a fixed tape `c` of the further
@@ -2372,6 +2459,45 @@ The prefix part is no longer the dominant one: what remains above the non-adapti
 that the sessions inside the interaction are read six times in the main term and once more in the
 collision term's zero-knowledge application.
 
+*Moussaka and Ratatouille* (`Privacy/MoussakaAdaptive.lean`, `Privacy/RatatouilleAdaptive.lean`).
+Sessions before the challenge fix the challenge contexts and keys (Ratatouille: key, context and
+balance), which are constants of the `RA` adversaries; so the reduction runs them in a key stage
+that reads the tables, and the game of §10.3's key-stage games (`*RAK`) applies:
+- *A whole session is a consistent reader.* Moussaka: the issuance request (`issX_req_sreads`)
+  and, at the statement the request and the adversary's answer fix, the redemption request
+  (`redX_sreads`, from `realRO_sreads`: no proof unless the token finalizes and the Client's check
+  passes, and then the witness is in `RedeemRelW`); `fullXM_sreads`: `(0, 2·2³², 1248, 9214)`.
+  Ratatouille: the issuance and the spend (`issXR_sreads`, `spXR_sreads`; `fullXR_sreads`), the
+  same budget. Sequential sessions compose (`runSeqM_sreads`, `runSeqR_sreads`).
+- *The reduction* (`AdversaryAdM.red`, `AdversaryAdR.red`): its setup runs the `m₁` sessions
+  before the challenge on the original tables (it reads no slice), its adversary at that state
+  (`atH`) has the contexts and keys they fix, its interaction runs the sessions between the
+  challenge's messages, its guess also those after. For each tape `c` the adaptive game is, by
+  definition, the key-stage game of `red c` (`realGameAdM_iff`, `Iff.rfl`, for the explicit
+  Moussaka game; `realGameAdR_iff`). Budgets (`red_kBudget`, `red_iBudget`, `red_gBudget`): key
+  stage `(0, 2·2³²m₁, 1248m₁, 9214m₁)`; interaction `(0, 2·2³²m, 1248m, 9214m)` with `m = m₂`
+  (Moussaka), `m = m₂ + m₃` (Ratatouille, both stages); guess `(q₃, q₅ + 1248M, q_E + 9214M)`
+  with `M` the sessions after the challenge requests.
+- *The collision term counts keys, and that is enough*: each `H₂³` key the reads hit costs
+  `2·2⁻¹⁰²⁴` (the simulated block's `ã` is `128` bytes for `d = 9`), so a session's `2·2³²` keys
+  cost `2⁻⁹⁸⁹`; PomFRIT's prefix count (above) is not needed.
+
+    anonymityAd_lean_num:    anonymityRAK_lean_num at k = (0, 2·2³²m₁, 1248m₁, 9214m₁),
+                             i = (0, 2·2³²m₂, 1248m₂, 9214m₂) and the guess budget above,
+    unlinkabilityAd_lean_num: unlinkabilityRAK_lean_num at k = (0, 2·2³²m₁, 1248m₁, 9214m₁),
+                             i = (0, 2·2³²(m₂ + m₃), 1248(m₂ + m₃), 9214(m₂ + m₃)), guess likewise,
+
+in numbers, for `n = m₁ + m₂ + m₃ (+ m₄) + 2` Clients in all: `≤ n·2⁻¹⁰² + 8·(q₃ + q₅ +
+221·q_E)·2⁻¹²⁸ + 2·εhide` (`anonymityAd_lean_le`; `2⁻⁸²` at `2²⁰`, `2⁻⁷⁰` at `2³²`,
+`anonymityAd_lean_2pow20`, `_2pow32`) and `≤ n·2⁻¹⁰¹ + …` (`unlinkabilityAd_lean_le`; `2⁻⁸¹`,
+`2⁻⁶⁹`, `unlinkabilityAd_lean_2pow20`, `_2pow32`): the non-adaptive schedule's numbers (also
+`_numG`, `_num_perm`). Per session, in units of `2⁻¹⁰²` for Moussaka: `0.61` before the challenge
+(its reads in both issuance hops' and both redemption hops' `εAd` and collision terms, five times
+`4·221·9214·2⁻¹²⁸`), `0.73` in between, `0.24` after; constant `≈ 1.53`. In units of `2⁻¹⁰¹` for
+Ratatouille: `0.30`, `0.58` in either stage, `0.12` after; constant `≈ 0.95`. As for PomFRIT, the
+further sessions add no collision term of their own beyond the key stage's `εAd` terms: they are
+part of the distinguisher in every hop.
+
 **What the model assumes.** The further sessions' `H₃` slices are independent tables, as in every
 slice game (§10.2: two sessions with equal `(nf, r)` or `(r, binder)` would share `H₃` inputs; on
 paper `C(n, 2)·2⁻¹⁹²` for Moussaka and Ratatouille's nullifiers, `C(n, 2)·2⁻³⁶⁰` for PomFRIT, about
@@ -2379,13 +2505,12 @@ paper `C(n, 2)·2⁻¹⁹²` for Moussaka and Ratatouille's nullifiers, `C(n, 2)
 adversary (the further sessions' tapes fixed, a non-uniform reduction).
 
 **Open.**
-- *Adaptive schedules for Moussaka and Ratatouille.* PomFRIT's are done (`blindnessAd_lean_num`,
-  `blindnessAd_lean_num_pfx`, above). For Moussaka and Ratatouille, further Clients started
-  inside or after the challenge's interaction fit the existing `RA` games (their interactions may
-  read `H₂³`, `IBudget`'s `i₂`, and a whole single-phase session is a consistent reader, `realRO_sreads`), but sessions **before**
-  the challenge cannot influence the challenge keys, contexts and balance: those are constants of
-  the `RA` adversaries (`AdversaryRA.pk`, `ctxIss`, `ctxRed`; `pk`, `ctx`, `tInit`). The missing
-  piece is an `RA` game whose key stage reads the tables (as PomFRIT's does), and its proof.
+- *Adaptive schedules: further sessions interleaved with each other* (all three protocols). In the
+  adaptive games each further session runs to the end before the next starts (and the concurrent
+  games are not adaptive). An adaptive schedule of interleaved sessions would run unfinished
+  sessions' later steps inside later stages; not stated. Also
+  Ratatouille further Clients that spend more than once (each spends its token once with round 1;
+  change tokens are not spent again).
 - *A linear bound for `N` challenge pairs.* For PomFRIT with `H₄` a table, done up to the `iv`
   birthday term `n²·2⁻¹²⁵` and with the budget terms charged per pair (`blindnessPH_lean`, above);
   removing the birthday term needs the gate labels' distribution (an `H₅` collision needs equal

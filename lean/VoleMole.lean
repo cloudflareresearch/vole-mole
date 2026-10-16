@@ -230,6 +230,10 @@ import VoleMole.ZK.ReadsPoint
 import VoleMole.Privacy.PomFRITLin
 import VoleMole.Privacy.MoussakaMany
 import VoleMole.Privacy.RatatouilleMany
+import VoleMole.Privacy.MoussakaRAK
+import VoleMole.Privacy.RatatouilleRAK
+import VoleMole.Privacy.MoussakaAdaptive
+import VoleMole.Privacy.RatatouilleAdaptive
 import VoleMole.Privacy.ComHide
 import VoleMole.ZK.AcceptVarData
 import VoleMole.ZK.AcceptVar
