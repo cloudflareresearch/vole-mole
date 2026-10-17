@@ -37,7 +37,7 @@ Contents:
 | One nullifier per signed commitment; double-spend detection (Cor 2) | **Yes**, if the Moderator keeps one record per `(ctx_iss, ctx_red)` across all Anchor Sets (`moussaka.hpp:141-146`) | as Thm 1 | as Thm 1 |
 | Redemption non-malleability: no redirect to another `challenge_digest`, Anchor Set or `ctx_red` (Thm 3) | **Yes** | `ε_SE^red + Adv^bind + K·Adv^ct-uf + U·Adv^ow-r + ZK hops` | weak SE (L8), plus the above, plus one-wayness in `r` |
 | Issuer hiding and unlinkability vs a Moderator **colluding with all Anchors**, with adversarial keys (Thm 4a) | **Yes, computationally**; [Lean] from uniform seed outputs (`Privacy/Moussaka.lean`, `anonymity`); with the executable Lean prover (label rows) down to its tape hypothesis (`Privacy/MoussakaLean.lean`, `anonymity_label_rows`); for the Lean prover in the ROM and ideal-cipher model with every zero-knowledge term explicit, `≈ 2⁻¹⁰²·³` plus budget terms and `2·Adv^hide_Com` (`anonymityRO_lean_num`), and `≈ 2⁻¹⁰¹·⁹` with a table-reading interaction (`anonymityRA_lean_num`; Appendix B); also with AES as random permutations (`_perm`) and with one shared `H₃` (`anonymitySh_num`, `anonymityRASh_num`); from the real Clients' OS seeds and seed XOF, each `+ 2·(2q_X + 2)·2⁻²⁵⁶` (`anonymity*_seed`, `lean/docs/zk.md` §10.6); with a key stage (contexts, keys) that reads the tables too (`anonymityRAK_lean_num`, `≈ 2⁻¹⁰¹·⁹`); with any number `n` of further honest Clients, `≤ n·2⁻¹⁰²` plus budget terms and `2·Adv^hide_Com` (`anonymityN_lean_num`), also adaptively scheduled, each further session's contexts, key, response and Anchor Set chosen from earlier outcomes and the challenge contexts and keys from the sessions before it (`anonymityAd_lean_num`, the same numbers), and interleaved in any order (`anonymityIL_lean_num`, `≤ (n + 2)·2⁻¹⁰¹`; with a table-reading scheduler that also places the challenge, `anonymityILO_lean_num`, `+ 28·L·(a₃ + a₂ + a₅ + 221·a_E)·2⁻¹²⁸`), and with `N` challenge pairs (`anonymityP_lean_num`; `lean/docs/zk.md` §10.8; §11 item 5) | `2·ε_ZK^joint + 2·Adv^hide_Com` (the `2^{−192}` is not needed, §6) | ZK (lean/docs/zk.md), hiding of `Com` |
-| The same vs a Moderator that sees no issuance (Thm 4b) | **Yes**, with no Keccak assumption, up to an abort term the note missed (§6); [Lean] from uniform seed outputs (`Privacy/MoussakaNC.lean`, `anonymityNC`, `unlinkabilityNC`), with the vinegar hash a random oracle (`anonymityNC_vinegarRO`), and with the executable Lean prover down to its tape or hop hypotheses (`anonymityNC_label_rows`, `_shake`); in the ROM and ideal-cipher model with every proof and the honest Anchors' Lean verifier on the shared tables, `≈ 2⁻¹⁰³·²` plus budget terms and `2·(φ₀ + φ₁)` (`anonymityNCRO_lean_num`, `unlinkabilityNCRO_lean_num`, also `_perm`), also with one shared `H₃` (`anonymityNCSh_num`) and from the real Clients' seeds (`*NC*_seed`; Appendix B) | `2·Σ ε_ZK^red + 2·(φ₀ + φ₁)`, `φ_c ≤ δ_c^{256} ≈ 2^{−2046}` on average over the vinegar random oracle (`0` for one Anchor; no `2^{−192}`) | ZK of the redemption proofs only; the Client takes its index from `S` |
+| The same vs a Moderator that sees no issuance (Thm 4b) | **Yes**, with no Keccak assumption, up to an abort term the note missed (§6); [Lean] from uniform seed outputs (`Privacy/MoussakaNC.lean`, `anonymityNC`, `unlinkabilityNC`), with the vinegar hash a random oracle (`anonymityNC_vinegarRO`), and with the executable Lean prover down to its tape or hop hypotheses (`anonymityNC_label_rows`, `_shake`); in the ROM and ideal-cipher model with every proof and the honest Anchors' Lean verifier on the shared tables, `≈ 2⁻¹⁰³·²` plus budget terms and `2·(φ₀ + φ₁)` (`anonymityNCRO_lean_num`, `unlinkabilityNCRO_lean_num`, also `_perm`), also with one shared `H₃` (`anonymityNCSh_num`) and from the real Clients' seeds (`*NC*_seed`; Appendix B); with a model of pqov's `derive_preimage` as the Anchors' signer (`anonymityNC_pqov`, `anonymityNCRO_pqov`), averaged over keys of pqov's key generation with `O = 0` (`anonymityNCRO_pqov_keys`, abort term `≈ 2⁻²⁹³·⁸`), and the games shown to reach redemption (`pr_refused_NCRO_le`; Appendix B) | `2·Σ ε_ZK^red + 2·(φ₀ + φ₁)`, `φ_c ≤ δ_c^{255}` on average over the vinegar random oracle (pqov uses 255 vinegars, §6), `E[δ_c^{255}] ≤ 255^{−37} + 1/(255·256^{37}) ≈ 2^{−295.8}` on average over the key (`δ ≤ 1/255` holds on average over the key, not per key) (`0` for one Anchor; no `2^{−192}`) | ZK of the redemption proofs only; the Client takes its index from `S` |
 | Issuer hiding under a Moderator-chosen Anchor Set | **Only relative to the Anchors in the set that are honest and in common use** (§7) | n/a | Anchor-Set consistency outside the library |
 
 Main findings (§9):
@@ -478,14 +478,18 @@ mode `Pred = 2^{−128}`, because `r` is independent of `A`'s view.
 ```
 (b') non-colluding:  Adv^anon ≤ 2·ε_ZK^joint|_{2 redemption proofs} + 2·(φ₀ + φ₁),
      φ_c = Pr_{nf, r}[DerivePreimage_{sk_c}(Com(nf, ctx_iss, ctx_red, r)) fails]
-     E_vin[φ_c] ≤ δ(sk_c)^{256}   (on average over the vinegar hash SHAKE256, a random oracle,
-                                   for signers that fail only when all 256 vinegars are bad;
-                                   no assumption on Com),
+     E_vin[φ_c] ≤ δ(sk_c)^{255}   (on average over the vinegar hash SHAKE256, a random oracle;
+                                   pqov's DerivePreimage fails only when its first 255
+                                   vinegars are bad; no assumption on Com),
+     E_key[δ^{255}] ≤ 255^{−37} + 1/(255·256^{37}) ≈ 2^{−295.8}
+                                  (on average over the key's P2 part; Lean for O = 0),
 ```
 
-(In Lean the signer is abstract and the vinegar bound is `anonymityNC_vinegarRO` under the
-hypothesis `hfail`; no concrete signer with small `φ_c` is exhibited, and the always-failing
-signer, which is `Correct`, has `φ_c = 1`: `lean/VoleMole/Audit/Nonvacuous.lean`.)
+(In Lean, `anonymityNC` takes the signer abstract; `Spec/PqovSigner.lean` models pqov's
+`DerivePreimage` and proves it correct and failing only on singular systems, and
+`Privacy/MoussakaPqov.lean`, `Privacy/PqovDelta.lean` give the bounds above: Appendix B. The
+always-failing signer is also `Correct`, with `φ_c = 1`, so the abstract theorem needs the
+concrete signer to be meaningful.)
 
 and with one Anchor (`pk⁰ = pk¹`, pure unlinkability) `Adv^anon ≤ 2·ε_ZK^joint|_{2 redemption
 proofs}`, with no abort term and for any index rule. The game is as above, with the Client taking
@@ -530,12 +534,21 @@ success is not independent of the nullifiers. *Proof (b').*
    `acc(x₀) ∧ acc(x₁) ∧ K₀ ∧ K₁` is identical until a `DerivePreimage` fails: `φ₀ + φ₁` per world.
 4. The resulting hybrid is symmetric in the two Clients' tapes. Swapping them exchanges the worlds,
    so the worlds are equal (no `2^{−192}`: the swap needs no distinctness).
-5. `φ_c`. `DerivePreimage` is deterministic: its vinegars are `SHAKE256(t ‖ sk_seed ‖ … ‖ ctr)`,
-   and it fails iff all 256 are bad (`lean/docs/security/uov-assumptions.md` §2). With SHAKE256 a
-   random oracle (Lemma D), the 256 vinegars at any fixed `t` are uniform, so for every fixed
-   `(nf, r)` the failure probability is `δ(sk_c)^{256}`, whatever `Com(nf, …, r)` is. So
-   `E[φ_c] ≤ δ(sk_c)^{256}` with no statement about `Com`. Heuristically `δ ≤ 1/255`, so
-   `φ_c ≲ 2^{−2046}`. (The adversary makes no SHAKE256 query at `sk_seed` in this game, so Lemma
+5. `φ_c`. `DerivePreimage` is deterministic: its vinegars are `SHAKE256(t ‖ sk_seed ‖ … ‖ ctr)`.
+   It tries `ctr = 0, …, 255` but uses only the first 255: `ov_preimage_core` increments
+   `n_attempt` before each attempt and returns `-1` when `MAX_ATTEMPT_VINEGAR <= n_attempt`
+   after the loop (`subprojects/pqov/src/ov.c:166`), which also discards a success at
+   `ctr = 255` (upstream pqov; harmless). So it fails iff the first 255 vinegars are all bad
+   (`lean/docs/security/uov-assumptions.md` §2 says 256). With SHAKE256 a random oracle (Lemma D),
+   the vinegars at any fixed `t` are uniform, so for every fixed `(nf, r)` the failure
+   probability is `δ(sk_c)^{255}`, whatever `Com(nf, …, r)` is, and `E[φ_c] ≤ δ(sk_c)^{255}` with
+   no statement about `Com`. The figure `δ ≤ 1/255` is the fraction `σ` of singular `45 × 45`
+   matrices over GF(256); it is not a bound for a fixed key, since `L_v = vᵀ S` ranges over a
+   space of dimension `≤ 74` of matrices (a key with `S = 0` has `δ = 1`). It holds on average over
+   the key: `S = (P1 + P1ᵀ)O + P2` is uniform for uniform `P2`, and for `v ≠ 0` so is `L_v`, hence
+   `E[δ] ≤ σ + 256^{−74}`; for `m ≤ 74` linearly independent vinegars the systems are independent
+   and uniform, hence `E[δ^m] ≤ σ^m + 256^m/(255·256^{74})`, and with `m = 37`,
+   `E[δ^{255}] ≤ E[δ^{37}] ≤ 255^{−37} + 1/(255·256^{37}) ≈ 2^{−295.8}`. (The adversary makes no SHAKE256 query at `sk_seed` in this game, so Lemma
    D's `q_v·2^{−256}` term does not arise.)
 6. One Anchor: `good₀ = good₁` as functions, so the refusal bit is already symmetric and step 3 is
    not needed, for any index rule. ∎
@@ -596,7 +609,11 @@ only the two redemption requests or the refusal. The refusal rule is that of 4(a
 - **`anonymityNC_vinegarRO`** (step 5): with each Anchor's signer failing only when all 256
   vinegars of a uniform table at the target are bad (`hfail`), averaged over the tables
   `≤ 4εR + 2·(δ₀^{256} + δ₁^{256})`, `δ_c` the fraction of bad vinegars (`pr_fail_vinegar`,
-  from `pr_eval` and `pr_forall_fin`).
+  from `pr_eval` and `pr_forall_fin`). With pqov's signer (255 usable vinegars):
+  `anonymityNC_pqov`, `≤ 4εR + 2·(δ₀^{255} + δ₁^{255})` (Appendix B).
+- The honest Anchor checks the request length of the label-row layout (`45 + 7528` bytes,
+  `Spec.Moussaka.issueResponseLR`), the layout of the Lean prover of the random-oracle games
+  below; `main`'s `45 + 7272` would make every honest label-row request malformed.
 - With the executable Lean prover for redemption (label rows): `anonymityNC_label_rows` (tape
   hypothesis), `anonymityNC_label_rows_shake` (hop hypotheses: `εR = ε_rho + ε_grind + ε_bavc +
   ε_lab`), `unlinkabilityNC_label_rows`.
@@ -851,7 +868,9 @@ harmless.
      random-oracle model, `Privacy/MoussakaNC.lean`), and in the ROM and ideal-cipher model with
      the honest Anchors' Lean verifier on the shared tables (`anonymityNCRO_lean_num`), with one
      shared `H₃` (`anonymityNCSh_num`) and from the real Clients' seeds (`*NC*_seed`), each with
-     `_perm`.
+     `_perm`; with a model of pqov's signer (`2·(δ₀^{255} + δ₁^{255})`; averaged over keys of
+     pqov's key generation with `O = 0`, `≤ 4·(255^{−37} + 1/(255·256^{37}))`), and with the games
+     shown to reach redemption (`Privacy/MoussakaPqov.lean`, `Privacy/PqovDelta.lean`).
    - *What remains*: SHAKE as a random oracle and AES as an ideal cipher; the hiding of `Com` for
      4(a) (computational, §3.2); the consistency of a table-reading interaction given as a bare
      function of the tables (a theorem for oracle computations); for 4(b), adversary choices that
@@ -1066,6 +1085,48 @@ redemptions or the refusal, the four `H₃` slices and the tables, with read bud
   `unlinkabilityNCSh_num` (and `_perm`) with `+ 2·(2q_X + 2)·2⁻²⁵⁶` (`*_seed`; given a bound
   `φ₀ + φ₁ ≤ φ` on the abort term at every XOF table, the hypothesis `hφ`). Theorem 4(b′) has no seed-XOF term either (D7); as for
   4(a), the hop is not free.
+- **pqov's signer and completeness** (`lean/VoleMole/Spec/PqovSigner.lean`,
+  `lean/VoleMole/Privacy/MoussakaPqov.lean`, `lean/VoleMole/Privacy/PqovDelta.lean`,
+  `lean/VoleMole/Arith/GF256Field.lean`). The theorems above take the signers abstract
+  (`Signer.Correct` only, which the always-failing signer meets with `φ = 1`) and hold for any
+  issuance verifier; these files make them concrete.
+  - *The signer.* `Spec.Pqov.signer pk O vin tries` models `ov_preimage_core` over `GF256` (a
+    `Field` instance from the embedding into GF(2¹²⁸)): attempt `ctr` solves
+    `L_v x = t − P(x₀)`, `x₀ = (v, 0)`, `L_v[k][j] = B(x₀, ō_j)_k` with `B` the polar form of the
+    public map and `ō_j = (O_j, e_j)` (pqov's `vᵀS_k`, `t + P₁(v)` by the UOV identities; the
+    byte-level routines are not modelled), and returns `x₀ + Σ_j x_j ō_j`. `signer_correct`: correct
+    for every key whose map vanishes on the oil space (`OilSpace`). `signer_fail`: it fails only
+    if every attempt `ctr < tries` has `det L_v = 0`. pqov uses `tries = 255`
+    (`ov.c:166`, §6 step 5); `deriveRef` uses pqov's vinegar derivation `vinShake`.
+  - *In the games.* `pqovRO` reads the vinegars from the vinegar tables. With 256 attempts it
+    satisfies `hfail` as stated (`pqovRO256_hfail`), so `anonymityNC_vinegarRO` applies to it; with
+    pqov's 255, `pr_fail_vinegar_lt` gives `E[φ_c] ≤ δ_c^{255}` and `anonymityNC_pqov`,
+    `anonymityNCRO_pqov`, `anonymityNCSh_pqov` the abort term `2·(δ₀^{255} + δ₁^{255})`.
+  - *`δ`* (`delta pk O`, the fraction of vinegars with `det L_v = 0`). `L_v = Σ_i v_i S_i`
+    (`sysMat_eq_sum`) is linear in `v`, so a fixed key bounds nothing (`delta_zero_key`: `δ = 1`).
+    Over uniform coefficients `S`: `pr_singular_avg`, `E[δ] ≤ 1/255 + 256^{−74}` (`pr_det_zero`:
+    `σ = 1 − |GL₄₅(𝔽₂₅₆)|/256^{2025} ≤ 1/255`; `pr_comp_addHom`: `S ↦ L_v` is a surjective
+    additive map for `v ≠ 0`); `pr_singular_all`, `pr_dependent_le`: `E[δ^m] ≤ σ^m +
+    256^m/(255·256^{74})` for `m ≤ 74`. For the keys `keyO0 P1 P2` (pqov's key generation with
+    `O = 0`: `P3 = 0`; `oilSpace_keyO0`; `sysCoef_keyO0`: `S` is the `P2` part) with `P2` uniform:
+    `avg_delta_keyO0`, `avg_delta255_keyO0` (`E[δ^{255}] ≤ 255^{−37} + 1/(255·256^{37})`), and
+    averaged over the Anchors' keys `anonymityNC_pqov_keys`, `anonymityNCRO_pqov_keys`: abort term
+    `≤ 4·(255^{−37} + 1/(255·256^{37})) ≈ 2^{−293.8}`. For real keys (`O` uniform, `P3` computed)
+    `S = (P1 + P1ᵀ)O + P2` is uniform by the same argument; that is not mechanized.
+  - *The request length (finding).* `Spec.Moussaka.issueResponse` checks `main`'s length
+    `45 + 7272`; the Lean prover of the random-oracle games emits label-row proofs of `7528` bytes
+    (`leanPI_length`), so with it every honest request was malformed (`issueResponse_leanPI_malformed`)
+    and the random-oracle games of Theorem 4(b′) always refused: their bounds held vacuously. The
+    games now use `Spec.Moussaka.issueResponseLR` (`lean/VoleMole/Spec/MoussakaLabelRows.lean`,
+    `45 + 7528`).
+  - *Completeness.* `leanI_complete`: the Lean issuance proof has the label-row length and passes
+    `leanVI` on the shared tables except with probability `≤ 2⁻¹¹³` (`complete_rom`; the verifier
+    reads no `H₃`); `accNC_lean_complete`, `accNC_leanSh_complete` (one shared `H₃`): each honest
+    Anchor rejects its Client's request with probability `≤ 2⁻¹¹³`. `pr_refused_le`,
+    `pr_refused_NCRO_le`, `pr_refused_NCSh_le`: with both issuers' keys found at the Clients'
+    indices in both sets, the redemptions are refused with probability `≤ φ₀ + φ₁ + 2·2⁻¹¹³`;
+    `pr_refused_NCRO_pqov`: `≤ δ₀^{255} + δ₁^{255} + 2·2⁻¹¹³` with pqov's signers. `#print axioms`:
+    `propext`, `Classical.choice`, `Quot.sound`.
 - **With many Clients** (`lean/VoleMole/Privacy/MoussakaMany.lean`, `ZK/ReadsMany.lean`, zk.md
   §10.8): the adversary also serves `m` further honest Clients on the same tables (their issuance
   requests seen with the challenge requests, their redemptions at Anchor Sets chosen after them);

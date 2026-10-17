@@ -8,6 +8,7 @@ import VoleMole.Privacy.RatatouilleInterleaveOC
 import VoleMole.Privacy.PomFRITLin
 import VoleMole.Privacy.SeedXOFNC
 import VoleMole.ROM.SpecSound
+import VoleMole.Privacy.PqovDelta
 
 /-!
 # Non-vacuity checks for the headline theorems
@@ -23,12 +24,23 @@ The soundness section also instantiates the spec-relation corollaries (`ROM/Spec
 fixed-length `c`, Moussaka redemption with the challenge digest chosen by the prover, Ratatouille
 spends with the nullifier and amount chosen by the prover (`EndToEnd/SpecRelations.lean`).
 
+Moussaka 4(b) is instantiated with the model of pqov's `derive_preimage` (`Spec/PqovSigner.lean`;
+correct and with `hfail` proved, so `anonymityNC_vinegarRO` applies as stated with 256 attempts and
+`anonymityNC_pqov` with pqov's 255) for keys of pqov's key generation with oil matrix `O = 0`
+(`keyO0`), averaged over their `P2` parts with an abort term `≤ 4·(255⁻³⁷ + 1/(255·256³⁷))`
+(`anonymityNC_pqov_keys`, `anonymityNCRO_pqov_keys`), and the games are shown to reach redemption
+(`pr_refused_NCRO_pqov`, `pr_refused_NCSh_le`: refusal `≤ φ₀ + φ₁ + 2·2⁻¹¹³` with the honest
+Anchors' Lean verifier).
+
 What is not exhibited here: a redemption or spend witness (it needs a UOV preimage; the KAT
 vectors give instances, checked by `lake exe verifier_vectors`, not by a theorem); `hinj` for a
 redemption or spend family with two keys of the same digest (false: the encoding hashes digests
 only; for keys from `UovPk.ofCompressed`, distinct digests is SHAKE256 collision freedom, not a
-theorem); a concrete signer with small abort term `φ` for Moussaka 4(b); completeness of the honest
-Anchors' verifier in the 4(b) games.
+theorem); a fixed key with a proved small fraction `δ` of bad vinegars (the bounds on `δ` are on
+average over the key; for one key `δ` is a count over `256⁷⁴` vinegars, and the zero key has
+`δ = 1`); the abort bound for pqov's real keys (`O` uniform, `P3` computed), whose system
+coefficients `S = (P1 + P1ᵀ)O + P2` are uniform by the same argument but are not computed from the
+key layout here (only `O = 0` is).
 -/
 
 open OracleComp OracleSpec
@@ -378,9 +390,9 @@ end Ratatouille
 
 `IdxSound` is satisfiable by a non-degenerate rule (the first key with the issuer's public map).
 A digest lookup is not `IdxSound` in the model (`UOVKey`'s digest does not determine its map).
-The signer hypothesis `Signer.Correct` holds for the always-failing signer, for which the abort
-term `φ` is `1` and the bound is trivial: no concrete signer with small `φ` is exhibited in Lean
-(the paper bound `E[φ] ≤ δ²⁵⁶` is `anonymityNC_vinegarRO`, under the hypothesis `hfail`). -/
+The signer hypothesis `Signer.Correct` alone also holds for the always-failing signer, for which
+the abort term `φ` is `1` and the bound is trivial; pqov's signer with a small abort term is the
+next section. -/
 
 section NC
 
@@ -427,5 +439,113 @@ example := anonymityNCSh_num_seed idxEval (fun _ => nc) (fun _ _ => skNone)
   (fun _ _ => RdX.const _)
 
 end NC
+
+/-! ## Privacy: Moussaka 4(b) with pqov's signer
+
+The signer is the model of pqov's `derive_preimage` (`Spec/PqovSigner.lean`; in the vinegar
+random-oracle model `pqovRO`, 255 usable attempts as in pqov, or all 256), for keys of the family
+`keyO0` (pqov's key generation with `O = 0`, `P3 = 0`; `P` vanishes on the oil space,
+`oilSpace_keyO0`). Its correctness and `hfail` are theorems, so `anonymityNC_vinegarRO` applies as
+stated (256 attempts) and `anonymityNC_pqov` with 255; averaged over the keys' `P2` parts the abort
+term is `≤ 4·(255⁻³⁷ + 1/(255·256³⁷))` (`anonymityNC_pqov_keys`, `anonymityNCRO_pqov_keys`), and the
+games reach redemption (`pr_refused_NCRO_pqov`, with the honest Anchors' Lean verifier). -/
+
+section NCPqov
+
+open VoleMole.Spec VoleMole.Spec.Moussaka VoleMole.Privacy VoleMole.Privacy.Moussaka
+open VoleMole.Spec.Pqov VoleMole.ZK.Sim VoleMole.Arith
+
+/-- A key of the family `keyO0` with a one-byte digest. -/
+def kq (P1 : ℕ → GF256) (P2 : P2Part) (d : UInt8) : UOVKey := ⟨[d], (keyO0 P1 P2).map⟩
+
+theorem oilSpace_kq (P1 : ℕ → GF256) (P2 : P2Part) (d : UInt8) : OilSpace (kq P1 P2 d) 0 :=
+  oilSpace_of_map_eq rfl 0 (oilSpace_keyO0 P1 P2)
+
+/-- The two Anchors' keys (digests `0`, `1`). -/
+def pkq (P1 : Bool → ℕ → GF256) (P2 : Bool → P2Part) (c : Bool) : UOVKey :=
+  kq (P1 c) (P2 c) (bif c then 1 else 0)
+
+/-- The Anchor Set holding both keys. -/
+def Sq (P1 : Bool → ℕ → GF256) (P2 : Bool → P2Part) : AnchorSet :=
+  ⟨[pkq P1 P2 false, pkq P1 P2 true], ⟨by simp, by simp [maxAnchors], by simp [pkq, kq]⟩⟩
+
+/-- A Moderator with both keys in both sets (and a constant guess). -/
+def ncq (P1 : Bool → ℕ → GF256) (P2 : Bool → P2Part) : AdversaryNC :=
+  ⟨fun _ => 0, fun _ => 0, pkq P1 P2, fun _ => (Sq P1 P2, []), fun _ => True⟩
+
+/-- The random-oracle version. -/
+def ncqRO {R : Type} (P1 : Bool → ℕ → GF256) (P2 : Bool → P2Part) : AdversaryNCRO R :=
+  ⟨fun _ => 0, fun _ => 0, pkq P1 P2, fun _ => (Sq P1 P2, []), fun _ _ _ => True⟩
+
+theorem ncqRO_budget {R : Type} [Fintype R] [Nonempty R] (P1 : Bool → ℕ → GF256)
+    (P2 : Bool → P2Part) : (ncqRO (R := R) P1 P2).Budget 0 0 0 :=
+  ⟨fun _ _ _ _ _ => Rd3.const _, fun _ _ _ _ _ => Rd3.const _, fun _ _ _ _ _ => Rd3.const _,
+    fun _ _ _ _ _ => Rd3.const _, fun _ _ => Rd5.const _, fun _ _ => RdE.const _⟩
+
+open Classical in
+/-- The index rule `idxEval` finds a key whenever the set holds one with the issuer's map. -/
+theorem foundNC_idxEval (A : AdversaryNC) (c side : Bool)
+    (h : ∃ i : ℕ, ∃ k : UOVKey, (A.choose side).1.keys[i]? = some k ∧ k.eval = (A.pk c).eval) :
+    foundNC A idxEval c side = true := by
+  unfold foundNC idxEval
+  split_ifs
+  obtain ⟨k, hk, -⟩ := Nat.find_spec h
+  rw [hk]
+  rfl
+
+theorem found_ncqRO {R : Type} (P1 : Bool → ℕ → GF256) (P2 : Bool → P2Part) (c side : Bool) :
+    foundNC (ncqRO (R := R) P1 P2).nc idxEval c side = true :=
+  foundNC_idxEval _ c side ⟨bif c then 1 else 0, pkq P1 P2 c, by cases c <;> rfl, rfl⟩
+
+/-- **`anonymityNC_vinegarRO` as stated, with pqov's signer** (all 256 attempts; `hfail` is
+`pqovRO256_hfail`). -/
+example (P1 : Bool → ℕ → GF256) (P2 : Bool → P2Part) (PI : NIZK IssueInstance) {CR : Type}
+    [Fintype CR] [Nonempty CR] (simR : RedeemInstance → CR → Bytes) (PR : NIZK RedeemInstance)
+    {εR : ℝ} (hεR : 0 ≤ εR) (hR : ZeroKnowledge RedeemRelW (proveR PR) simR εR) :=
+  anonymityNC_vinegarRO (fun c v => (sysMat (pkq P1 P2 c) 0 v).det ≠ 0) (ncq P1 P2) idxEval PI
+    (pqovRO (ncq P1 P2).pk (fun _ => 0) 256) simR PR hεR
+    (pqovRO_correct _ _ (fun _ => oilSpace_kq _ _ _) 256) idxEval_sound
+    (fun w c t h i => pqovRO256_hfail _ _ w c t h i) hR
+
+/-- **Theorem 4(b′) with pqov's signer (255 attempts)** for a concrete pair of keys:
+`≤ 4εR + 2·(δ₀²⁵⁵ + δ₁²⁵⁵)`. -/
+example (P1 : Bool → ℕ → GF256) (P2 : Bool → P2Part) (PI : NIZK IssueInstance) {CR : Type}
+    [Fintype CR] [Nonempty CR] (simR : RedeemInstance → CR → Bytes) (PR : NIZK RedeemInstance)
+    {εR : ℝ} (hεR : 0 ≤ εR) (hR : ZeroKnowledge RedeemRelW (proveR PR) simR εR) :=
+  anonymityNC_pqov (ncq P1 P2) idxEval PI (fun _ => 0) (fun _ => oilSpace_kq _ _ _) idxEval_sound
+    simR PR hεR hR
+
+/-- **Averaged over the Anchors' keys (`P2` uniform)**: the abort term is
+`≤ 4·(255⁻³⁷ + 1/(255·256³⁷))` (about `2⁻²⁹³·⁸`). -/
+example (P1 : Bool → ℕ → GF256) (PI : NIZK IssueInstance) {CR : Type} [Fintype CR] [Nonempty CR]
+    (simR : RedeemInstance → CR → Bytes) (PR : NIZK RedeemInstance) {εR : ℝ} (hεR : 0 ≤ εR)
+    (hR : ZeroKnowledge RedeemRelW (proveR PR) simR εR) :=
+  anonymityNC_pqov_keys P1 (ncq P1) (fun _ _ => rfl) idxEval PI idxEval_sound simR PR hεR hR
+
+/-- The same in the random-oracle and ideal-cipher model (the Lean prover and verifier). -/
+example (P1 : Bool → ℕ → GF256) :=
+  anonymityNCRO_pqov_keys (R := Blk → Blk) P1 (ncqRO P1) (fun _ _ => rfl) idxEval idxEval_sound
+    (fun κ => ncqRO_budget P1 κ)
+
+/-- **The game reaches redemption**: with pqov's signers and the honest Anchors' Lean verifier, the
+redemptions are refused with probability `≤ δ₀²⁵⁵ + δ₁²⁵⁵ + 2·2⁻¹¹³` (averaged over the vinegar
+tables). -/
+example (P1 : Bool → ℕ → GF256) (P2 : Bool → P2Part) :=
+  pr_refused_NCRO_pqov (R := Blk → Blk) (ncqRO P1 P2) idxEval (fun _ => 0)
+    (fun _ => oilSpace_kq _ _ _) idxEval_sound (found_ncqRO P1 P2)
+
+/-- With one shared `H₃`, for any signers correct for their keys. -/
+example (P1 : Bool → ℕ → GF256) (P2 : Bool → P2Part) (sk : Bool → Signer)
+    (hsk : ∀ c, (sk c).Correct (pkq P1 P2 c)) :=
+  pr_refused_NCSh_le (R := Blk → Blk) (ncqRO P1 P2) idxEval sk hsk idxEval_sound (found_ncqRO P1 P2)
+
+/-- The key-averaged fraction of bad vinegars: `E[δ] ≤ 1/255 + 256⁻⁷⁴`, `E[δ²⁵⁵] ≤ 255⁻³⁷ + …`. -/
+example (P1 : ℕ → GF256) := avg_delta_keyO0 P1
+example (P1 : ℕ → GF256) := avg_delta255_keyO0 P1
+
+/-- For a fixed key the fraction of bad vinegars can be `1`. -/
+example : delta ⟨[], fun _ => 0⟩ 0 = 1 := delta_zero_key 0
+
+end NCPqov
 
 end VoleMole.Audit

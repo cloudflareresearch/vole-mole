@@ -65,7 +65,10 @@ redemptions or the refusal, the four slices and the tables, with a read budget (
 * **`unlinkabilityNCRO`**, `unlinkabilityNCRO_leanG`, `unlinkabilityNCRO_lean_num`,
   `unlinkabilityNCRO_lean_num_perm`: one Anchor, any index rule, no abort term.
 
-Nothing is assumed of the issuance proofs' zero knowledge or of `Com`. Restrictions: the
+Nothing is assumed of the issuance proofs' zero knowledge or of `Com`. The honest Anchors check
+the label-row request length (`Spec.Moussaka.issueResponseLR`); completeness of their verification,
+i.e. that the games reach redemption, and the bounds with pqov's signer are in
+`Privacy/MoussakaPqov.lean` (`pr_refused_NCRO_le`, `anonymityNCRO_pqov`). Restrictions: the
 adversary's choices do not read the tables (as in `Privacy/MoussakaRO.lean`), the `H₃` slices are
 per proof, and the seed XOF's outputs are uniform.
 -/
