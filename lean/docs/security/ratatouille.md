@@ -539,6 +539,15 @@ and affords the amount, else it is refused for both (feasibility is leakage).
   prefix-collision term (`unlinkabilitySh_num`, `unlinkabilityRASh_num`, `unlinkabilityOCSh_num`,
   `_perm`; zk.md §10.5; bounds in §11), and H1 is mechanized for all of them
   (`unlinkability*_seed`, `+ 2·(2q_g + 2)·2⁻²⁵⁶`, `q_g` the Issuer's XOF reads; zk.md §10.6).
+- **[Lean] The games are live** (`lean/VoleMole/Audit/Liveness.lean`). Every Lean-prover game uses
+  `Sizes.labelRows`, the size of the Lean proofs, so `vecOf` keeps every proof the prover returns,
+  and no honest step verifies a proof (the Issuer is the adversary). With an Issuer holding a
+  trapdoor key (`pkR`, the map of a key of pqov's key generation with `O = 0`), an honest
+  issuance finalizes to a valid token and an honest spend to a valid change token (`iss_live`,
+  `sp_live`); if the provers do not abort, both rounds run on every tape, round 1 revealing the
+  nullifier of Client `b₁`'s token and round 2 that of Client `b₂`'s current token
+  (`realGame_liveR`); the Lean provers of the random-oracle games abort with probability
+  `≤ 2⁻¹¹³` per proof (`leanPIR_some`, `leanPSR_some`).
 
 **A precision found while mechanizing H3.** "The client still finalizes against the commitment
 string it sent" is not enough on its own: before its next spend the Client checks its token with

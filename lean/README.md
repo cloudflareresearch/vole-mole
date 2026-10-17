@@ -97,6 +97,19 @@ scope.
   knowledge, budget-0 adversaries for the privacy games, a non-degenerate sound index rule for
   Moussaka 4(b), and pqov's signer with keys of its key generation (`O = 0`) for Moussaka 4(b),
   with the averaged abort term `≈ 2⁻²⁹³·⁸` and the games reaching redemption.
+- *Liveness.* `VoleMole/Audit/Liveness.lean` checks every privacy game for the other kind of
+  vacuity, an honest path that never produces the challenge-dependent outputs (as Moussaka 4(b)'s
+  random-oracle games did, below). Only those games had it: elsewhere the adversary plays every
+  Anchor, Issuer and Moderator, the honest Clients check only its responses, and every
+  Lean-prover game uses the label-row layout. With a trapdoor key whose signer never fails
+  (`keyI`, `skI`: a key of pqov's key generation with `O = 0`), the games are shown to reach their
+  challenge outputs on every tape: Moussaka 4(a)'s redemptions happen and reveal `nf_b ‖ π`
+  (`allOk_live`, `realGameRO_live`) and are accepted by the label-row Moderator with the Lean
+  verifier except with probability `≤ 2⁻¹¹³` (`redeem_accepted_RO`); 4(b)'s abort term is `0`
+  for this signer (`phi_skI`, refusal `≤ 2·2⁻¹¹³`); Ratatouille runs both rounds and reveals the
+  challenge nullifiers when the provers do not abort (`realGame_liveR`), which the Lean provers do
+  with probability `≤ 2⁻¹¹³` per proof (`leanPIR_some`, `leanPSR_some`); PomFRIT finalizes both
+  sessions and reveals both signatures (`realGame_liveP`, `realGameRO_liveP`).
 - *`main` is not zero-knowledge.* The PomFRIT Issuer's attack test, and the (PU) bound for the
   others (§3).
 - Deterministic cores of the protocol notes (Lemma P, the domain-separation table, UOV-assumption
@@ -130,6 +143,12 @@ assumptions (§5, Gap 5); the Lean models are tied to the C++ by tests, not proo
   label-row length); pqov's `ov_preimage_core` discards a success at its last (256th) vinegar, so
   only 255 vinegars are usable (negligible: `δ²⁵⁵` for `δ²⁵⁶`); and the `δ ≤ 1/255` figure for
   the fraction of bad vinegars holds on average over the key, not for a fixed key.
+- Liveness audit of every privacy game (`Audit/Liveness.lean`): no other game is vacuous. One
+  latent hazard of the same kind: the spec's Moderator (`Spec.Moussaka.finalizeRedeem`) checks
+  `main`'s redemption length `24 + 8751`, while the Lean redemption proofs have `9007` bytes
+  (`leanPR_length`), so it would reject every label-row redemption (`finalizeRedeem_leanPR_none`);
+  no game runs an honest Moderator, and `finalizeRedeemLR` (`Spec/MoussakaLabelRows.lean`) is the
+  one to use.
 - Corrections to the paper proofs: the sketch's "alive" leaf definition and per-query charging of
   bad challenges (§1); the L2 interface and Post against inverse cipher queries (§9, findings F2,
   F3); Moussaka Thm 4(b) misses an abort term and needs the Client's index rule, Thm 4(a) and
@@ -162,7 +181,8 @@ lean/
     Privacy/                privacy games on the executable specs (blindness, issuer hiding,
                             unlinkability): with zero knowledge and hiding as hypotheses, and
                             for the Lean prover in the random-oracle and ideal-cipher model
-    Audit/                  non-vacuity checks: the headline theorems' hypotheses instantiated
+    Audit/                  non-vacuity checks: the headline theorems' hypotheses instantiated,
+                            and the games' honest paths shown to reach the challenge outputs
   vectors/                  test vectors dumped by the C++ for the Arith/ cross-check
   docs/
     sketch.md               the maintainer's original design note
