@@ -225,18 +225,18 @@ proofs commit, tie `e` and `X` across the two proofs. See
 
 | Parameters | Message   | Proof     | Prove   | Verify  |
 |:-----------|:----------|----------:|--------:|--------:|
-| fast       | ≤ 55 B    | 109328 B  | 10.0 ms | 5.6 ms  |
-| fast       | 56–119 B  | 112109 B  | 10.8 ms | 5.9 ms  |
-| medium     | ≤ 55 B    | 92650 B   | 17.6 ms | 13.1 ms |
-| medium     | 56–119 B  | 95431 B   | 18.1 ms | 13.4 ms |
-| small      | ≤ 55 B    | 80442 B   | 45.5 ms | 40.3 ms |
-| small      | 56–119 B  | 83085 B   | 46.0 ms | 40.8 ms |
+| fast       | ≤ 55 B    | 108627 B  | 10.3 ms | 5.8 ms  |
+| fast       | 56–119 B  | 110739 B  | 11.0 ms | 6.0 ms  |
+| medium     | ≤ 55 B    | 91949 B   | 18.0 ms | 13.5 ms |
+| medium     | 56–119 B  | 94061 B   | 18.7 ms | 13.7 ms |
+| small      | ≤ 55 B    | 79783 B   | 46.2 ms | 41.7 ms |
+| small      | 56–119 B  | 81781 B   | 49.8 ms | 41.9 ms |
 
 Without deriving the witnesses (`WitnessPrg::none`), proofs are
-212170 B (fast), 183972 B (medium) and 145190 B (small) for messages of up to
+202276 B (fast), 174078 B (medium) and 138788 B (small) for messages of up to
 55 bytes, and proving takes up to 50% longer. With the MQ PRG (`WitnessPrg::mq`),
-only the binary witness is derived: proofs are 163298 B (fast), 135100 B
-(medium) and 114912 B (small), and proving takes about 0.55 s. The times include
+only the binary witness is derived: proofs are 162512 B (fast), 134314 B
+(medium) and 114198 B (small), and proving takes about 0.45 s. The times include
 computing the comb tables of the public key (0.4 ms; the tables of `G` are
 computed once), which prover and verifier both do. Measured with Apple clang 21,
 release build.
