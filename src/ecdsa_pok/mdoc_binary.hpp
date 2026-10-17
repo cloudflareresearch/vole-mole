@@ -668,8 +668,8 @@ struct Counts {
 };
 // Index LOG - 2, then number of attributes - 1.
 constexpr std::array<std::array<Counts, MAX_ATTRIBUTES>, 2> COUNTS = {{
-    {{{809544, 817142}, {848136, 854401}, {886728, 891660}, {925320, 928919}}},
-    {{{809544, 799454}, {848136, 836713}, {886728, 873972}, {925320, 911231}}},
+    {{{608036, 615634}, {637169, 643434}, {666302, 671234}, {695435, 699034}}},
+    {{{608036, 597946}, {637169, 625746}, {666302, 653546}, {695435, 681346}}},
 }};
 constexpr Counts counts(size_t log, size_t na) { return COUNTS[log - 2][na - 1]; }
 

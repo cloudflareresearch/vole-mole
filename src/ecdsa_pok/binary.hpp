@@ -75,8 +75,8 @@ constexpr Shape SHAPE_DIRECT{3, 4};
 constexpr Shape SHAPE_DERIVED{2, 2};
 
 // Committed bits per SHA-256 block (sha256_circuit.hpp, checked by tests), besides the message.
-constexpr size_t sha_first_block_bits() { return 18419; }
-constexpr size_t sha_next_block_bits() { return 18605; }
+constexpr size_t sha_first_block_bits() { return 13765; }
+constexpr size_t sha_next_block_bits() { return 13800; }
 // The carries of the check X < p.
 constexpr size_t X_LT_P_BITS = 256;
 // The budget of carries of the link sums, for counters of size LOG (see bin_ops.hpp). Over 20000
@@ -278,7 +278,7 @@ template <Shape SH> size_t count_circuit_constraints(size_t msg_len) {
     return ops.constraints;
 }
 template <Shape SH> constexpr size_t CIRCUIT_CONSTRAINTS(size_t nb) {
-    const size_t base = 20471 + (nb - 1) * 19117;
+    const size_t base = 15817 + (nb - 1) * 14312;
     return base + LINK_BUDGET<SH.link_log>;
 }
 

@@ -27,6 +27,9 @@
 //   - assert_quad(l, v, w):    l + v w = 0, of degree 2;
 //   - assert_quad_carry(l, v1, w1, v, w, u, x, s):
 //                              l + v1 w1 + v w + (u + v w) (x + s) + x s = 0, of degree 3.
+//
+// and, for constraints on uncommitted products of wires, expressions of degree d (Expr<d>, with
+// Expr<1> = Wire): lift<d, e> (from degree e <= d), mul<a, b>, plus<d>, and assert_zero<d>.
 
 #ifndef VOLE_MOLE_ECDSA_POK_BIN_OPS_HPP
 #define VOLE_MOLE_ECDSA_POK_BIN_OPS_HPP
@@ -80,6 +83,12 @@ struct CountOps {
         }
         constraints += out.size();
     }
+
+    template <size_t d> using Expr = Wire;
+    template <size_t d, size_t e> Wire lift(Wire) const { return {}; }
+    template <size_t a, size_t b> Wire mul(Wire, Wire) const { return {}; }
+    template <size_t d> Wire plus(Wire, Wire) const { return {}; }
+    template <size_t d> void assert_zero(Wire) { ++constraints; }
 };
 
 struct PlainOps {
@@ -125,6 +134,12 @@ struct PlainOps {
         }
         constraints += out.size();
     }
+
+    template <size_t d> using Expr = Wire;
+    template <size_t d, size_t e> Wire lift(Wire a) const { return a; }
+    template <size_t a, size_t b> Wire mul(Wire x, Wire y) const { return x & y; }
+    template <size_t d> Wire plus(Wire x, Wire y) const { return x ^ y; }
+    template <size_t d> void assert_zero(Wire e) { check(e); }
 
   private:
     void check(Wire e) {
@@ -189,6 +204,25 @@ template <typename QS> struct QsOps {
         }
         constraints += out.size();
         dispatch<1>(in, out);
+    }
+
+    template <size_t d> using Expr = vole_mole::detail::qs_bit<QS, d>;
+    template <size_t d> bool value(const Expr<d>&) const { return false; }
+    template <size_t d, size_t e> Expr<d> lift(const Expr<e>& a) const {
+        static_assert(e <= d);
+        if constexpr (d == e) {
+            return a;
+        } else {
+            return Expr<d>(a);
+        }
+    }
+    template <size_t a, size_t b> Expr<a + b> mul(const Expr<a>& x, const Expr<b>& y) const {
+        return vole_mole::detail::qs_mul<QS, a, b>(x, y);
+    }
+    template <size_t d> Expr<d> plus(const Expr<d>& x, const Expr<d>& y) const { return x + y; }
+    template <size_t d> void assert_zero(const Expr<d>& e) {
+        ++constraints;
+        constrain(vole_mole::detail::qs_to_gfsecpar(e));
     }
 
   private:
