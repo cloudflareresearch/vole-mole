@@ -198,6 +198,49 @@ against the literature on attacks on local PRGs (e.g., Couteau et al.,
 Asiacrypt 2018; Ünal, Eurocrypt 2023), so it's experimental, and no protocol
 uses it by default.
 
+## Proof of knowledge of an ECDSA signature
+
+`vole_mole/ecdsa_pok.hpp` is an experimental proof of knowledge of an
+ECDSA-P256-SHA256 signature on a hidden message. The public key, the message
+length (at most 119 bytes) and a context string are public; the message and
+signature stay hidden. It combines two VOLEitH proofs:
+
+- a binary proof (FAEST-EM-128 parameters) of SHA-256 on the padded message,
+  of `X < p` for the x-coordinate `X` of `R`, and of two masked integer
+  linear combinations of the hash `e` and `X`. By default, its witness is
+  derived from a short key with the (experimental) local PRG, see
+  [above](#deriving-the-witness-with-a-prg);
+- a prime-field proof over F_p and F_n, which proves that `R = u1 G + u2 Q`
+  using two interleaved radix-16 fixed-base combs on precomputed tables of `G`
+  and `Q` (only the slopes are committed), with constraints of degree 16. It also proves `u1 X = u2 e` and `u2 X != 0` over F_n (so
+  `r = X mod n`), and that the digits of `u1` and `u2` match their values over
+  F_n. With the local PRG, its F_p witness (260 elements) is also derived from
+  a key of 124 elements, with an (experimental) local quadratic PRG over F_p
+  ([`src/voleith_p256/prg.hpp`](src/voleith_p256/prg.hpp)), which doubles the
+  QuickSilver degree.
+
+The same masked linear combinations, with a challenge derived after both
+proofs commit, tie `e` and `X` across the two proofs. See
+`src/ecdsa_pok/relation.hpp` for the full relation and soundness argument.
+
+| Parameters | Message   | Proof     | Prove   | Verify  |
+|:-----------|:----------|----------:|--------:|--------:|
+| fast       | ≤ 55 B    | 108627 B  | 10.3 ms | 5.8 ms  |
+| fast       | 56–119 B  | 110739 B  | 11.0 ms | 6.0 ms  |
+| medium     | ≤ 55 B    | 91949 B   | 18.0 ms | 13.5 ms |
+| medium     | 56–119 B  | 94061 B   | 18.7 ms | 13.7 ms |
+| small      | ≤ 55 B    | 79783 B   | 46.2 ms | 41.7 ms |
+| small      | 56–119 B  | 81781 B   | 49.8 ms | 41.9 ms |
+
+Without deriving the witnesses (`WitnessPrg::none`), proofs are
+202276 B (fast), 174078 B (medium) and 138788 B (small) for messages of up to
+55 bytes, and proving takes up to 50% longer. With the MQ PRG (`WitnessPrg::mq`),
+only the binary witness is derived: proofs are 162512 B (fast), 134314 B
+(medium) and 114198 B (small), and proving takes about 0.45 s. The times include
+computing the comb tables of the public key (0.4 ms; the tables of `G` are
+computed once), which prover and verifier both do. Measured with Apple clang 21,
+release build.
+
 ## License
 
 BSD 3-Clause, see [LICENSE](LICENSE). Meson downloads

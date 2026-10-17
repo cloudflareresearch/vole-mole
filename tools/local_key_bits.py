@@ -41,8 +41,20 @@ import mq_key_bits
 SECURITY_BITS = 128
 ANDS = (1, 2, 4)
 MIN_KEY_BITS = 128
-MAX_KEY_BITS = 1536
+MAX_KEY_BITS = 5440
+# Key lengths are multiples of KEY_BITS_STEP up to COARSE_FROM. For q in EXTENDED_ANDS (the binary
+# proofs' PRG), they continue in multiples of COARSE_STEP up to MAX_KEY_BITS, for witnesses of over
+# a million bits, such as the mdoc proof's.
 KEY_BITS_STEP = 8
+COARSE_FROM = 1536
+COARSE_STEP = 64
+EXTENDED_ANDS = (2,)
+
+
+def key_lengths(q):
+    yield from range(MIN_KEY_BITS, COARSE_FROM + 1, KEY_BITS_STEP)
+    if q in EXTENDED_ANDS:
+        yield from range(COARSE_FROM + COARSE_STEP, MAX_KEY_BITS + 1, COARSE_STEP)
 
 
 def log2_cost_guess_and_determine(n, m, q):
@@ -58,7 +70,7 @@ def max_outputs(n, q):
     """The largest m for which both estimates are at least SECURITY_BITS, or 0 if there is none."""
     if log2_cost_guess_and_determine(n, n, q) < SECURITY_BITS:
         return 0
-    lo, hi = n, 64 * n
+    lo, hi = n, 1024 * n
     while hi - lo > 1:
         mid = (lo + hi) // 2
         if log2_cost_guess_and_determine(n, mid, q) >= SECURITY_BITS:
@@ -84,7 +96,7 @@ def main():
     tables = {}
     for q in ANDS:
         entries = []
-        for n in range(MIN_KEY_BITS, MAX_KEY_BITS + 1, KEY_BITS_STEP):
+        for n in key_lengths(q):
             m = max_outputs(n, q)
             if m > 0 and (not entries or m > entries[-1][1]):
                 entries.append((n, m))
