@@ -3,15 +3,21 @@
 #include "vole_mole/moussaka.hpp"
 #include "vole_mole/uov.hpp"
 
-#include "moussaka/commit.hpp" // internal
-#include "uov/circuit.hpp"     // internal
-#include "uov/public_key.hpp"  // internal
+#include "keccak/segmented.hpp" // internal
+#include "moussaka/commit.hpp"  // internal
+#include "uov/circuit.hpp"      // internal
+#include "uov/public_key.hpp"   // internal
 
 #include "test.hpp"
 
 #include "constants.hpp"   // from faest-arch-opt
 #include "parameters.hpp"  // from faest-arch-opt
 #include "quicksilver.hpp" // from faest-arch-opt
+
+extern "C" {
+#include "gf16.h" // from pqov
+#include "ov.h"   // from pqov
+}
 
 #include <gtest/gtest.h>
 
@@ -47,7 +53,7 @@ const moussaka::detail::Opening R = filled<moussaka::detail::R_BYTES>(0x40);
 const uov::Target T = filled<uov::M>(0x70);
 
 // Multiplication in GF(256) = GF(2)[x] / (x^8 + x^4 + x^3 + x + 1), as in UOV.
-uint8_t gf256_mul(uint8_t a, uint8_t b) {
+uint8_t gf256_mul_plain(uint8_t a, uint8_t b) {
     uint8_t out = 0;
     for (size_t i = 0; i < 8; ++i) {
         if ((b >> i) & 1) {
@@ -172,6 +178,17 @@ TEST(Uov, RejectTamperedPreimage) {
     }
 }
 
+// gf256_mul_plain above is pqov's multiplication in GF(256).
+TEST(Uov, Gf256MulMatchesPqov) {
+    for (unsigned a = 0; a < 256; ++a) {
+        for (unsigned b = 0; b < 256; ++b) {
+            const auto x = static_cast<uint8_t>(a);
+            const auto y = static_cast<uint8_t>(b);
+            ASSERT_EQ(gf256_mul_plain(x, y), ::gf256_mul(x, y)) << a << " * " << b;
+        }
+    }
+}
+
 // Test that the UOV public map circuit properly embeds GF(256) in GF(2^128).
 TEST(UovCircuit, EmbeddingIsHomomorphism) {
     using QS = faest::quicksilver_state<faest::secpar::s128, true, 2>;
@@ -181,7 +198,7 @@ TEST(UovCircuit, EmbeddingIsHomomorphism) {
             const auto x = static_cast<uint8_t>(a);
             const auto y = static_cast<uint8_t>(b);
             ASSERT_TRUE(embed(x) + embed(y) == embed(x ^ y)) << a << " + " << b;
-            ASSERT_TRUE((embed(x) * embed(y)).reduce_to<128>() == embed(gf256_mul(x, y)))
+            ASSERT_TRUE((embed(x) * embed(y)).reduce_to<128>() == embed(gf256_mul_plain(x, y)))
                 << a << " * " << b;
         }
     }
@@ -196,9 +213,9 @@ TEST(UovCircuit, ForEachMonomialEvaluatesPublicMap) {
     for_each_monomial(uov::detail::PublicKeyAccess::expanded(pk),
                       [&](size_t i, size_t j, std::span<const uint8_t, uov::M> coeffs) {
                           ASSERT_LE(i, j);
-                          const uint8_t monomial = gf256_mul(s[i], s[j]);
+                          const uint8_t monomial = gf256_mul_plain(s[i], s[j]);
                           for (size_t k = 0; k < uov::M; ++k) {
-                              got[k] ^= gf256_mul(coeffs[k], monomial);
+                              got[k] ^= gf256_mul_plain(coeffs[k], monomial);
                           }
                           ++num_monomials;
                       });
@@ -306,5 +323,187 @@ TEST(UovCircuit, CombinationDetectsWrongComponent) {
         wrong[k] ^= 1;
         EXPECT_FALSE(combine_plain(combination(), wrong) == combine_plain(combination(), T))
             << "component " << k;
+    }
+}
+
+// The embedding is an injective ring homomorphism GF(256) -> GF(2^128): EmbeddingIsHomomorphism
+// checks that it preserves sums and products, and it maps 1 to 1, so its kernel is a proper ideal
+// of the field GF(256), i.e., zero. Check injectivity directly anyway.
+TEST(UovCircuit, EmbeddingIsInjective) {
+    const auto embed = uov::detail::embed<QS>;
+    EXPECT_TRUE(embed(0) == poly::set_zero());
+    EXPECT_TRUE(embed(1) == poly::from_1(faest::poly1(1)));
+    for (unsigned a = 0; a < 256; ++a) {
+        for (unsigned b = 0; b < a; ++b) {
+            ASSERT_FALSE(embed(static_cast<uint8_t>(a)) == embed(static_cast<uint8_t>(b)))
+                << a << " and " << b;
+        }
+    }
+}
+
+namespace {
+
+template <size_t N> std::array<uint8_t, N> random_bytes(std::mt19937& rng) {
+    std::array<uint8_t, N> out;
+    for (uint8_t& b : out) {
+        b = static_cast<uint8_t>(rng());
+    }
+    return out;
+}
+
+} // namespace
+
+// Witness bytes are combined into GF(2^128) by the same embedding as public constants, for both the
+// prover and the verifier: for each byte a, with arbitrary VOLE correlations q_i = v_i + u_i Delta
+// for its bits u_i, the prover's combined value is embed(a), and the verifier's combined key is the
+// prover's combined tag plus embed(a) Delta.
+TEST(UovCircuit, WitnessBytesAreEmbedded) {
+    using Verifier = faest::quicksilver_state<faest::secpar::s128, true, 2>;
+    using block = faest::block_secpar<faest::secpar::s128>;
+    const auto embed = uov::detail::embed<QS>;
+    std::mt19937 rng(0); // fixed seed, so that failures are reproducible
+
+    // The witness holds every byte value.
+    std::array<uint8_t, 256> witness;
+    for (size_t a = 0; a < 256; ++a) {
+        witness[a] = static_cast<uint8_t>(a);
+    }
+    const auto delta_bytes = random_bytes<sizeof(block)>(rng);
+    const poly delta = poly::load(delta_bytes.data());
+    std::vector<block> tags(8 * witness.size()), keys(8 * witness.size());
+    for (size_t i = 0; i < tags.size(); ++i) {
+        const auto tag_bytes = random_bytes<sizeof(block)>(rng);
+        const poly tag = poly::load(tag_bytes.data());
+        const bool bit = (witness[i / 8] >> (i % 8)) & 1;
+        tag.store(&tags[i]);
+        (bit ? tag + delta : tag).store(&keys[i]);
+    }
+
+    std::array<uint8_t, faest::QS_CONSTANTS<faest::secpar::s128, 2>::CHALLENGE_BYTES> challenge{};
+    const QS prover(witness.data(), tags.data(), 1, challenge.data());
+    block delta_block;
+    delta.store(&delta_block);
+    const Verifier verifier(keys.data(), 1, delta_block, challenge.data());
+
+    vole_mole::test::BasicPlainQS<2> plain{witness.data(), {}};
+    for (size_t a = 0; a < 256; ++a) {
+        const auto x = static_cast<uint8_t>(a);
+        const auto p = prover.load_witness_8_bits_and_combine(8 * a);
+        EXPECT_TRUE(p.value() == embed(x)) << "byte " << a;
+        const auto v = verifier.load_witness_8_bits_and_combine(8 * a);
+        EXPECT_TRUE(v.mac == p.mac.coeffs[0] + (p.value() * delta).reduce_to<128>())
+            << "byte " << a;
+        EXPECT_TRUE(plain.load_witness_8_bits_and_combine(8 * a).v == embed(x)) << "byte " << a;
+    }
+}
+
+// The bytes of the output of Keccak (which the Moussaka redemption and Ratatouille spend relations
+// compare with P(s)) are combined into GF(2^128) by the same embedding.
+TEST(UovCircuit, KeccakOutputBytesAreEmbedded) {
+    using Plain = vole_mole::test::BasicPlainQS<2>;
+    for (unsigned a = 0; a < 256; ++a) {
+        keccak::detail::QsState<Plain, 1> state;
+        for (size_t j = 0; j < 8; ++j) {
+            state.emplace_back(((a >> j) & 1) != 0);
+        }
+        EXPECT_TRUE(keccak::detail::qs_byte(state, 0).v ==
+                    uov::detail::embed<QS>(static_cast<uint8_t>(a)))
+            << "byte " << a;
+    }
+}
+
+// Combination::combine(a) is sum_k l[k] * embed(a[k]), so its tables are consistent with embed.
+TEST(UovCircuit, CombinationCombinesEmbeddedComponents) {
+    const Combination& l = combination();
+    for (size_t k = 0; k < uov::M; ++k) {
+        for (unsigned a = 0; a < 256; ++a) {
+            uov::Target t{};
+            t[k] = static_cast<uint8_t>(a);
+            ASSERT_TRUE(l.combine(t) == combine_plain(l, t)) << "component " << k << ", " << a;
+        }
+    }
+    std::mt19937 rng(0);
+    for (int n = 0; n < 16; ++n) {
+        const uov::Target t = random_bytes<uov::M>(rng);
+        EXPECT_TRUE(l.combine(t) == combine_plain(l, t));
+    }
+}
+
+// With the unit vector e_k as the combination, the plaintext evaluation of the circuit (as in the
+// relations' tests) is embed(P(s)[k]), where P is pqov's public map: both its reference evaluation
+// ov_publicmap() and the constant-time evaluation behind PublicKey::eval().
+TEST(UovCircuit, PlainEvalWithUnitVectorsMatchesPqov) {
+    using Plain = vole_mole::test::BasicPlainQS<2>;
+    using PlainCombination = uov::detail::Combination<Plain>;
+    std::array<PlainCombination::poly, uov::M> e;
+    e.fill(PlainCombination::poly::set_zero());
+    std::vector<PlainCombination> units;
+    for (size_t k = 0; k < uov::M; ++k) {
+        e[k] = uov::detail::embed<Plain>(1);
+        units.emplace_back(e);
+        e[k] = PlainCombination::poly::set_zero();
+    }
+
+    const auto& [pk, sk] = uov_key_pair();
+    const UovKeyPair other(uov::SecretKey{filled<uov::SECRET_KEY_BYTES>(0x61)});
+    std::mt19937 rng(1); // fixed seed, so that failures are reproducible
+    for (const uov::PublicKey* public_key : {&pk, &other.pk}) {
+        uov::Preimage ones;
+        ones.fill(0xff);
+        std::vector<uov::Preimage> points = {uov::Preimage{}, ones, sk.derive_preimage(T)};
+        for (int n = 0; n < 4; ++n) {
+            points.push_back(random_bytes<uov::N>(rng));
+        }
+        for (const uov::Preimage& s : points) {
+            uov::Target want;
+            ov_publicmap(want.data(), uov::detail::PublicKeyAccess::expanded(*public_key).data(),
+                         s.data());
+            EXPECT_EQ(to_hex(public_key->eval(s)), to_hex(want));
+
+            Plain qs{s.data(), {}};
+            std::array<uov::detail::qs_val<Plain, 1>, uov::N> s_committed;
+            for (size_t i = 0; i < uov::N; ++i) {
+                s_committed[i] = qs.load_witness_8_bits_and_combine(8 * i);
+            }
+            for (size_t k = 0; k < uov::M; ++k) {
+                const auto p = uov::detail::qs_eval_combined_public_map<Plain>(
+                    *public_key, s_committed, units[k]);
+                ASSERT_TRUE(p.v == uov::detail::embed<Plain>(want[k]))
+                    << "component " << k << " at s = " << to_hex(s);
+            }
+        }
+    }
+}
+
+// for_each_monomial reads the expanded public key in the same layout as pqov's public map, for
+// arbitrary (not necessarily well-formed) keys. All three evaluations are linear in the key and
+// quadratic in the preimage, so if any two differed as functions, a uniformly random (key,
+// preimage) pair would tell them apart with probability at least 1 - 3/256 (Schwartz-Zippel); 32
+// independent pairs leave a probability below 2^-200 of missing a difference.
+TEST(UovCircuit, ForEachMonomialMatchesPqovLayoutForRandomKeys) {
+    using uov::detail::EXPANDED_PUBLIC_KEY_BYTES;
+    std::mt19937 rng(2); // fixed seed, so that failures are reproducible
+    // Padded, since pqov's vectorized code may read past the last coefficient vector.
+    std::vector<uint8_t> pk(EXPANDED_PUBLIC_KEY_BYTES + 64);
+    for (int n = 0; n < 32; ++n) {
+        for (uint8_t& b : pk) {
+            b = static_cast<uint8_t>(rng());
+        }
+        const uov::Preimage s = random_bytes<uov::N>(rng);
+
+        uov::Target got{};
+        for_each_monomial(std::span<const uint8_t, EXPANDED_PUBLIC_KEY_BYTES>(
+                              pk.data(), EXPANDED_PUBLIC_KEY_BYTES),
+                          [&](size_t i, size_t j, std::span<const uint8_t, uov::M> coeffs) {
+                              const uint8_t monomial = gf256_mul_plain(s[i], s[j]);
+                              for (size_t k = 0; k < uov::M; ++k) {
+                                  got[k] ^= gf256_mul_plain(coeffs[k], monomial);
+                              }
+                          });
+        uov::Target want, want_ct;
+        ov_publicmap(want.data(), pk.data(), s.data());
+        ov_publicmap_ct(want_ct.data(), pk.data(), s.data());
+        EXPECT_EQ(to_hex(got), to_hex(want));
+        EXPECT_EQ(to_hex(got), to_hex(want_ct));
     }
 }
