@@ -32,9 +32,11 @@ it is not a bound for a fixed key: `L_v = Σ_i v_i S_i` (`Spec.Pqov.sysMat_eq_su
   for keys `keyO0` with independent uniform `P2` parts, averaged over the keys and the vinegar
   tables (the Moderator may depend on the keys): abort term `≤ 4·(255⁻³⁷ + 1/(255·256³⁷))`.
 
-For pqov's real keys (`O` uniform, `P3` computed) `S = (P1 + P1ᵀ)·O + P2` is uniform given `P1` and
-`O` because `P2` is; that computation of `S` from the key layout is not mechanized here (only the
-`O = 0` family is), nor is the distribution of `P2` (AES-CTR of `pk_seed`) derived.
+For pqov's real keys (any `O`, `P3` computed) see `Privacy/PqovKeys.lean`: `S = (P1 + P1ᵀ)·O + P2`
+from the key layout (`Spec.Pqov.sysCoef_pqovKey`), uniform given `P1` and `O` because `P2` is, and
+the same bounds and key-averaged theorems (`avg_delta255_pqovKey`, `anonymityNC_pqov_pqovKeys`,
+`anonymityNCRO_pqov_pqovKeys`); `keyO0` is the case `O = 0` (`pqovKey_zero`). The distribution of
+`P2` (AES-CTR of `pk_seed`) is the modelling step, not derived.
 -/
 
 open Finset

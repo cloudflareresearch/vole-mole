@@ -52,7 +52,10 @@ import VoleMole.Spec.Common
 import VoleMole.Spec.PomFRIT
 import VoleMole.Spec.Moussaka
 import VoleMole.Spec.MoussakaLabelRows
+import VoleMole.Spec.PqovSignerDefs
 import VoleMole.Spec.PqovSigner
+import VoleMole.Spec.PqovKey
+import VoleMole.Spec.PqovSignerExec
 import VoleMole.Spec.Kats
 import VoleMole.Spec.Ratatouille
 import VoleMole.Spec.RatatouilleKats
@@ -228,6 +231,7 @@ import VoleMole.Privacy.MoussakaNCSh
 import VoleMole.Privacy.SeedXOFNC
 import VoleMole.Privacy.MoussakaPqov
 import VoleMole.Privacy.PqovDelta
+import VoleMole.Privacy.PqovKeys
 import VoleMole.ZK.ReadsMany
 import VoleMole.Privacy.PomFRITMany
 import VoleMole.Privacy.PomFRITAdaptive

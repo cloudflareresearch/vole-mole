@@ -3,6 +3,7 @@ import VoleMole.Spec.Moussaka
 import VoleMole.Spec.RatatouilleKats
 import VoleMole.Verifier.Relations
 import VoleMole.Verifier.CrtGen
+import VoleMole.Spec.PqovSignerExec
 
 /-!
 # Known-answer cross-checks of the protocol specs against the C++ (`lake exe spec_kats`)
@@ -31,6 +32,12 @@ digests of all Anchor keys, `RedeemInstance.encode`). So the redemption request 
 (`Verifier.verify` on `Verifier.moussakaRedeem`, CRT tables from `Verifier.CrtGen`), under the
 Anchor Set generated from the `anchor_sk` fields: the proof must be accepted, which checks every
 Anchor's digest, and rejected when two non-issuer Anchors are swapped.
+
+pqov's signer model (`Spec.Pqov.deriveRef`, `Spec/PqovSigner.lean`: the linear system from the
+public map's polar form) is run, in its executable form `Spec.Pqov.deriveRefExec`
+(`Spec/PqovSignerExec.lean`), on the test key generated in Lean with the oil matrix of its seed, at
+every Moussaka issuance and PomFRIT request target of the files: its output must equal the C++
+`derive_preimage` response byte for byte (and satisfy `P(s) = t`).
 -/
 
 namespace VoleMole.Spec.Kats
@@ -187,6 +194,21 @@ def checkPomfrit (pk : UOVKey) (r : KatRecord) : Except String (List String) := 
   if PomFRIT.verify V pk msg sig'' then errs := errs ++ ["verify accepted a modified refresher"]
   return errs
 
+/-- The executable model of pqov's signer on the key `pk` (oil matrix of `skSeed`) at `t`, against
+the C++ response `s`. -/
+def checkSigner (pk : UOVKey) (skSeed : Bytes) (label : String) (t s : Bytes) : IO Bool := do
+  let t0 ← IO.monoMsNow
+  let oa := (shake256B skSeed (16 + 74 * 45)).toArray
+  let res ← IO.lazyPure fun _ => Pqov.deriveRefExec pk (Pqov.oilOfArray oa) skSeed t
+  let ms := (← IO.monoMsNow) - t0
+  match res with
+  | none => report s!"{label}: pqov signer model ({ms} ms)" ["the model failed (255 attempts)"]
+  | some (i, w) =>
+    let mut errs : List String := []
+    if w ≠ s then errs := errs ++ ["model preimage ≠ C++ derive_preimage response"]
+    if pk.eval w ≠ t then errs := errs ++ ["P(model preimage) ≠ t"]
+    report s!"{label}: pqov signer model = C++ derive_preimage (attempt {i.val}, {ms} ms)" errs
+
 def main (args : List String) : IO UInt32 := do
   let root := args.headD ".."
   -- UOV keys, generated in Lean; compared with uov_keys.txt if present.
@@ -234,6 +256,19 @@ def main (args : List String) : IO UInt32 := do
     if pom.size ≠ 4 then ok := false; IO.println s!"FAIL  pomfrit_kat.txt: {pom.size} records"
     for h : i in [1:pom.size] do
       ok := (← report s!"pomfrit_kat.txt case {i - 1}" (runChecks (checkPomfrit pk pom[i]))) && ok
+  -- pqov's signer model on the test key, at the Moussaka and PomFRIT targets.
+  let some test := keys["test"]? | throw (IO.userError "no key `test`")
+  let pkT := UOVKey.ofExpanded [] test
+  let mut pairs : Array (String × Bytes × Bytes) := #[]
+  for h : i in [0:mous.size] do
+    if let (.ok req, .ok s) := (mous[i].bytes "issue_request", mous[i].bytes "issue_response") then
+      pairs := pairs.push (s!"moussaka_kat.txt case {i}", req.take uovM, s)
+  for h : i in [1:pom.size] do
+    if let (.ok t, .ok s) := (pom[i].bytes "request", pom[i].bytes "response") then
+      pairs := pairs.push (s!"pomfrit_kat.txt case {i - 1}", t, s)
+  if pairs.size ≠ 6 then ok := false; IO.println s!"FAIL  {pairs.size} signer targets, expected 6"
+  for (label, t, s) in pairs do
+    ok := (← checkSigner pkT (filled 0x60) label t s) && ok
   -- Ratatouille.
   let rata := parseKat (← IO.FS.readFile s!"{root}/tests/ratatouille/ratatouille_kat.txt")
   let rataResults := Ratatouille.Kats.checkFile keys rata
