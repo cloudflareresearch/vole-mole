@@ -862,6 +862,7 @@ which the random-oracle ones are proved with the hashed domain a uniform table:
 | **The privacy games with one shared `H₃`**, no prefix-collision term: Moussaka `≤ 8·εRO(q_E + 13824, q₅ + 1872, q_E + 13824) + 4·(2⁻¹¹³ + εRO(0, 312, 4607)) + 6·noHitProb + 12·2⁻¹⁰²⁴ + 2·εhide`, Ratatouille the same, PomFRIT `≤ 4·εRO(q_E + 18428, q₅ + 1248, q_E + 18428) + 2·noHitProb + 2·2⁻¹²⁸`; with a table-reading interaction (`+ 8·(i_E + 9214)·2⁻¹²⁸` Moussaka, `+ 4·(i_E + 9214)·2⁻¹²⁸ + 4·(2i_E + 23035)·2⁻¹²⁸` Ratatouille, none for PomFRIT) and as oracle computations; function and permutation rows | `anonymitySh_numG`, `anonymitySh_num`, `anonymitySh_num_perm`, `unlinkabilitySh_numG`, `unlinkabilitySh_num`, `unlinkabilitySh_num_perm`, `leanPISh`, `leanPRSh`, `leanPIRSh`, `leanPSRSh`, `realGameSh`, `deltaI1_sh`, `deltaL_sh`, `deltaR_sh`, `deltaI1R_sh`, `deltaS1R_sh`, `deltaS2R_sh` (`Privacy/SharedH3RO.lean`); `blindnessSh`, `blindnessSh_numG`, `blindnessSh_num`, `blindnessSh_num_perm`, `realGameSh`, `hop0Sh`, `hop1Sh`, `deltaRO_sh`, `AdversaryRO.SliceFree` (`Privacy/SharedH3PomFRIT.lean`); `anonymityRASh_numG`, `anonymityRASh_num`, `anonymityRASh_num_perm`, `unlinkabilityRASh_numG`, `unlinkabilityRASh_num`, `unlinkabilityRASh_num_perm`, `deltaLA_sh`, `deltaRA_sh`, `deltaS1A_sh`, `deltaS2A_sh` (`Privacy/SharedH3RA.lean`); `blindnessRASh`, `blindnessRASh_numG`, `blindnessRASh_num`, `blindnessRASh_num_perm`, `hop0RASh`, `hop1RASh`, `deltaSh_le`, `AdversaryRA.at_free` (`Privacy/SharedH3PomFRITRA.lean`); `anonymityOCSh_num`, `unlinkabilityOCSh_num`, `blindnessOCSh_num` and `_perm` (`ROM/SharedH3Reads.lean`) | §10.5 |
 | **PomFRIT with an Issuer that also reads `H₂³`, one shared `H₃`**: the lazy sampling of `H₂³` on the coins with the sessions' slices their columns (`τC`), the substituted Issuer under `blindnessRASh_numG`; the collision term by `pr_tail2A` for the prover that reads its column (the column re-sampled, `pr_prod_setK`): `≤ 2⁻¹¹³ + εz(6i_E + 13824, 6i₅ + 2184, 6i_E + 18431) + 2i₂·2⁻¹²⁸` per session and world; `≤ 4·εRO(q_E + 6i_E + 23035, q₅ + 6i₅ + 1872, q_E + 6i_E + 23035) + 2·noHitProb + 2·2⁻¹²⁸ + [i₂ > 0]·4·εcolSh` | `pr_tail2Sh` (`ZK/SharedH3Tail.lean`); `ConsP.free`, `AdversaryRA.at_freeH`, `realGameRASh_iff'`, `τC`, `pr_G0RASh_resample`, `qf0Sh`, `qf1Sh`, `K1RSh`, `pr_bad0HSh`, `pr_bad1HSh`, `G0RASh_subst_close`, `blindnessRAHSh_numG`, `blindnessRAHSh_num`, `blindnessRAHSh_num_perm` (`Privacy/SharedH3PomFRITRAH.lean`); `blindnessOCHSh_num`, `_perm` (`ROM/SharedH3Reads.lean`) | §10.5 |
 | **Moussaka 4(b′) with one shared `H₃`**: an issuance prover that ignores its slot slice makes the slice hop exact (`pr_slice_free`), so no `4·q₃·2⁻¹²⁸`; with the Lean provers reading their columns, `≤ 4·εRO(q_E + 23038, q₅ + 2496, q_E + 23038) + 2·(noHitProb + 2⁻¹⁰²⁴) + 2·(φ₀ + φ₁)`; the seed-XOF hop applied to both non-colluding games | `SliceFreeP`, `pr_slice_free`, `sim_fresh_NC_free`, `anonymityNCRO_free`, `unlinkabilityNCRO_free`, `realGameNCSh`, `deltaNC_sh`, `anonymityNCSh_leanG`, `anonymityNCSh_num`, `anonymityNCSh_num_perm`, `anonymityNCSh_vinegarRO`, `unlinkabilityNCSh_num`, `unlinkabilityNCSh_num_perm` (`Privacy/MoussakaNCSh.lean`); `seedGameNCRO`, `seedGameNCSh`, `anonymityNCRO_lean_num_seed`, `unlinkabilityNCRO_lean_num_seed`, `anonymityNCSh_num_seed`, `unlinkabilityNCSh_num_seed` and `_perm_seed` (`Privacy/SeedXOFNC.lean`) | §10.6, §10.7 |
+| **Moussaka 4(b′): the Anchors' request length, completeness and pqov's signer**: the games' Anchors check the label-row length `45 + 7528` (with `main`'s `45 + 7272` they rejected every Lean issuance proof and the games held vacuously, fixed in commit `919a204`); the Lean issuance proofs pass `leanVI` except with probability `≤ 2⁻¹¹³`, so the redemptions are refused with probability `≤ φ₀ + φ₁ + 2·2⁻¹¹³` when both keys are found in both sets; with a model of pqov's signer (255 vinegars) the abort term is `2·(δ₀²⁵⁵ + δ₁²⁵⁵)`, and on average over the `P2` parts of pqov's keys `≤ 4·(255⁻³⁷ + 1/(255·256³⁷)) ≈ 2⁻²⁹³·⁸` (not for a fixed key) | `issueResponseLR` (`Spec/MoussakaLabelRows.lean`); `issueResponse_leanPI_malformed`, `leanI_complete`, `accNC_lean_complete`, `accNC_leanSh_complete`, `pr_refused_NCRO_le`, `pr_refused_NCSh_le`, `anonymityNC_pqov`, `anonymityNCRO_pqov`, `anonymityNCSh_pqov`, `pr_refused_NCRO_pqov` (`Privacy/MoussakaPqov.lean`); `delta_zero_key`, `pr_singular_avg` (`Privacy/PqovDelta.lean`); `avg_delta255_pqovKey`, `anonymityNC_pqov_pqovKeys`, `anonymityNCRO_pqov_pqovKeys` (`Privacy/PqovKeys.lean`) | §10.7 |
 
 `lake exe zk_sim [TESTS [main\|labelrows [FILTER]]]` runs, on all 18 KAT runs of each layout: the
 equation `prove = proveIdeal ∘ tapeOf` (all pass), the simulator with the programmed oracle
@@ -2056,7 +2057,8 @@ commitments, the VOLE expansion off the hidden leaves), `H₂³` only at `chal3`
 which recomputes the same prefix.
 
 **The game** (`realGameNCRO`): Client `c`'s `issue_request` with the issuance prover on the tables
-(its own `H₃` slice), Anchor `c`'s `issue_response` (the Lean verifier `leanVI` on the tables, then
+(its own `H₃` slice), Anchor `c`'s `issue_response` (`issueResponseLR`: the label-row request
+length, the Lean verifier `leanVI` on the tables, then
 `derive_preimage` of any signer correct for its key), `finalize_issue`, §6's refusal rule, and the
 redemptions with the redemption prover on the tables; the adversary's guess sees the redemptions or
 the refusal, the four `H₃` slices and the tables (`AdversaryNCRO.Budget`: `q₃` per slice, `q₅`,
@@ -2141,6 +2143,29 @@ and the Anchors' signers `sk g` may depend on the XOF table; `anonymityNCRO_lean
 `anonymityNCSh_num_seed` (the abort term bounded uniformly, `φ₀ + φ₁ ≤ φ`),
 `unlinkabilityNCRO_lean_num_seed`, `unlinkabilityNCSh_num_seed`, each with `_perm_seed`, add
 `2·(2q_g + 2)·2⁻²⁵⁶`.
+
+**The Anchors' length check, completeness and pqov's signer** (`Spec/MoussakaLabelRows.lean`,
+`Privacy/MoussakaPqov.lean`, `Privacy/PqovDelta.lean`, `Privacy/PqovKeys.lean`,
+`Audit/Liveness.lean`; details in `security/moussaka.md` Appendix B).
+- *The games were vacuous before commit 919a204.* Their Anchors ran
+  `Spec.Moussaka.issueResponse`, which checks `main`'s request length `45 + 7272`, while the Lean
+  issuance prover emits label-row proofs of `7528` bytes (`leanPI_length`). Every honest request
+  was rejected as malformed (`issueResponse_leanPI_malformed`), the redemptions were always
+  refused, and the bounds above held for a game whose view never depends on the challenge. The
+  games now run the label-row Anchor `Spec.Moussaka.issueResponseLR` (`45 + 7528`).
+- *Completeness.* The Lean issuance proof passes `leanVI` on the shared tables except with
+  probability `≤ 2⁻¹¹³` (`leanI_complete`; `accNC_lean_complete`, `accNC_leanSh_complete`), so
+  with both issuers' keys found at the Clients' indices in both sets the redemptions are refused
+  with probability `≤ φ₀ + φ₁ + 2·2⁻¹¹³` (`pr_refused_NCRO_le`, `pr_refused_NCSh_le`). With a
+  trapdoor key whose signer never fails, `φ = 0` and the refusal is `≤ 2·2⁻¹¹³` (`phi_skI`,
+  `refused_ncL`).
+- *The abort term for pqov.* The signer above is abstract (`Signer.Correct` only, which the
+  always-failing signer meets with `φ = 1`). With a model of pqov's `derive_preimage`, which uses
+  255 vinegars (`Spec.Pqov.signer`): `anonymityNCRO_pqov`, `anonymityNCSh_pqov`, abort term
+  `2·(δ₀²⁵⁵ + δ₁²⁵⁵)`, `δ_c` the fraction of vinegars with a singular system. For a fixed key `δ`
+  is not bounded (`delta_zero_key`: `δ = 1`); on average over the `P2` parts of keys of pqov's key
+  generation (any oil matrices and `P1`; `P2` uniform is the modelling step)
+  `anonymityNCRO_pqov_pqovKeys` has abort term `≤ 4·(255⁻³⁷ + 1/(255·256³⁷)) ≈ 2⁻²⁹³·⁸`.
 
 **Open.** The adversary's choices (contexts, keys, Anchor Sets, digests) do not read the tables
 (no `RA`/`OC` version).
@@ -2318,16 +2343,16 @@ as further sessions in their current worlds (`realGameP_iff`, the tape split `sp
 `2N ≤ 2³²` (`blindnessP_lean_2pow20`, `_2pow32`).
 
 - *Moussaka* (`anonymityP_lean_numG`, `_num`, `_num_perm`): the same hybrid; at step `k` the other
-  pairs' `2(N − 1)` Clients are further Clients of `anonymityN` (`A.hop idx k v`: Client `c` of pair
+  pairs' `2(N − 1)` Clients are further Clients of `anonymityN_lean_numG` (`A.hop idx k v`: Client `c` of pair
   `j` redeems at side `v j ^^ c`, `splitM` gives it that side's redemption tape), and the hop's
   guess rebuilds each other pair's outcome from its two Clients' redemptions and §6's rule on the
   commitments (`outAt_eq`: `allOk` is `allOkT` on the requests, `allOk_eq_allOkT`, and then each
-  side's redemption is its Client's `redX`). Each step costs `εPairM`, `anonymityN`'s bound at
+  side's redemption is its Client's `redX`). Each step costs `εPairM`, `anonymityN_lean_numG`'s bound at
   `m = 2(N − 1)`; in numbers (`anonymityP_lean_le`) `≤ N·(2N·2⁻¹⁰² + 8·(q₃ + q₅ + 221·q_E)·2⁻¹²⁸ +
   2·εhide)`: `2⁻⁶³` for `2N ≤ 2²⁰` Clients, `2⁻³⁹` for `2N ≤ 2³²` (`_2pow20`, `_2pow32`), plus `N`
   times the budget and hiding terms. Hiding is assumed for every hop's reductions.
 - *Ratatouille* (`unlinkabilityP_lean_numG`, `_num`, `_num_perm`): the other pairs cannot be
-  `unlinkabilityN`'s further Clients (those spend once; a pair has two rounds, the second after
+  `unlinkabilityN_lean_numG`'s further Clients (those spend once; a pair has two rounds, the second after
   the Issuer's round-1 response), so each step is a direct reduction to the two-session
   table-reading game: `A.hop k c v` runs the other pairs itself with their tapes `c` (its stage 1
   their issuances, its stage 2 also their round-1 spends, its guess also their round-2 spends;

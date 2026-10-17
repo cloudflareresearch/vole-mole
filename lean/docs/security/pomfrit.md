@@ -806,7 +806,8 @@ dedicated to PomFRIT.
     with per-session slices and with one shared `H₃`);
   - for many sessions (`lean/docs/zk.md` §10.8; mechanized: any number of further honest sessions
     in one concurrent schedule, `≤ n·2⁻¹⁰³`, adaptive schedules, `≤ n·2⁻¹⁰²` (`n·2⁻⁹²` with the
-    `H₂³` reads counted in keys), and `N` challenge
+    `H₂³` reads counted in keys), interleaved schedules, also with a table-reading scheduler that
+    places the challenge, `≤ (n + 2)·2⁻¹⁰²` (plus the scheduler's reads), and `N` challenge
     pairs, `≤ N·(2N·2⁻¹⁰³ + …)`, or `≤ N·2⁻¹⁰³ + 32·N²·2⁻¹²⁸` with `H₄` a random-oracle table,
     each plus budget terms): a bound linear in `N` without the `iv` birthday term and with the
     budget terms charged once (the quadratic terms are artifacts of the proofs, not attacks); the

@@ -14,9 +14,12 @@ delayed binding; `*_accept_le_adaptive`). **The permutation model with inverse q
 same results with AES an ideal cipher as random permutations, the prover making forward and
 inverse queries and the extractor reading the forward-and-inverse records (`*_accept_le_perm`,
 `*_accept_le_adaptive_perm`, all five relations), with `p = 1/(2¹²⁸ − q_E)` per fresh cipher value
-in place of `2⁻¹²⁸` and a point-tied Post (finding F3); no PRP/PRF switching term. Scope: the classical (ROM + ideal cipher) proof of knowledge
-of `docs/extraction/README.md`. The ZK hybrids (`docs/zk.md` §10, "proved only on paper") and the
-QROM documents (Q1–Q7) are out of scope here. Notes on ZK are at the end.
+in place of `2⁻¹²⁸` and a point-tied Post (finding F3); no PRP/PRF switching term. **The spec
+relations (§2i)**: every one of these bounds also holds for the decoded witness and the byte-level
+spec relation, for well-formed instances (`ROM/SpecSound.lean`, `*_spec`). Scope: the classical
+(ROM + ideal cipher) proof of knowledge of `docs/extraction/README.md`. Zero knowledge (mechanized
+separately, `ZK/` and `Privacy/`, `docs/zk.md` §10) and the QROM documents (Q1–Q7) are out of
+scope here.
 
 ## 0. Where we stand
 
@@ -1007,12 +1010,11 @@ and `ε_dead` as named hypotheses about the cipher.
 - **Modelling gap.** The ROM statement is about the *model* (independent oracles per L0 domain,
   ideal cipher). L0's disjointness (`Seed/Commitments.lean`, `Protocols/DomainSeparation.lean`)
   justifies splitting one SHAKE into independent oracles; this is now a lemma (§2c,
-  `ROM/DomainSep.lean`, `ROM/SingleOracle.lean`). The ideal cipher remains.
+  `ROM/DomainSep.lean`, `ROM/SingleOracle.lean`). AES as an ideal cipher (or random permutations,
+  M6) remains a modelling assumption.
 
-## 4. ZK (for later)
+## 4. ZK
 
-`docs/zk.md` §10's paper-only steps are H1/H2 programming, H6 identical-until-bad, and the union
-over adaptive H₅ queries. They need VCVio's `ProgrammingOracle`, the identical-until-bad /
-TV-distance lemmas (`EvalDist/MeasureTVDist/`), and the same `prEvent_exists_bad_query_le` as M5.
-The existing `*_fiberCard` / `*_indep` lemmas become `=ᵈ` statements through `prU_map_equiv`. Do
-this after M5 has proved the RO setup.
+Done outside this plan: the classical random-oracle and ideal-cipher zero-knowledge proofs and the
+protocols' privacy games are mechanized in `ZK/` and `Privacy/` (`docs/zk.md` §10, `README.md`
+§3), with the oracles as uniform tables of the games rather than VCVio's programming oracle.
