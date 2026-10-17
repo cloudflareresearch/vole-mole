@@ -85,6 +85,14 @@ checkout `subprojects/pqov` (revision `fac2ec1`, UOV round-3 code, with
   - Lean `singular_prob_bounds_256` proves `δ_unif ∈ [2^{−8}, 1/255]` from Mathlib's
     `card_GL_field`.
   - The proofs below carry `δ(sk)` as a parameter.
+  - **Only on average over the key.** For a fixed key `L_v = vᵀS` is linear in `v`, so it ranges
+    over a subspace of dimension `≤ 74` of the `45 × 45` matrices and its law is not uniform (a
+    key with `S = 0` has `δ = 1`). With `S = (P1 + P1ᵀ)O + P2` uniform (uniform `P2`), `L_v` is
+    uniform for `v ≠ 0`, so `E[δ] ≤ δ_unif + 256^{−74}`, and `m ≤ 74` linearly independent
+    vinegars give independent uniform systems, so `E[δ^m] ≤ δ_unif^m + 256^m/(255·256^{74})`
+    (`E[δ^{255}] ≤ 255^{−37} + 1/(255·256^{37}) ≈ 2^{−295.8}`). Lean: `pr_singular_avg`,
+    `pr_singular_all`, `pr_dependent_le`, `avg_delta255_keyO0` (`Privacy/PqovDelta.lean`; the
+    key family there has `O = 0`).
 - **Oracles.** SHAKE256 is a random oracle. That covers pqov's key expansion and vinegar hash, and
   vole-mole's key digest; these have distinct input lengths (32, 98 and 46591 bytes), so they are
   disjoint.
@@ -112,8 +120,13 @@ D_sk(y):                                  // y ∈ F^45, used as is (no hashing,
 - **Vinegar** is derived from the target and the secret seed by SHAKE256, with a DST that separates
   it from `ov_sign`'s `H(m‖salt‖sk_seed‖ctr)` (patch comment, `ov.c:217-224`). vole-mole never
   calls `ov_sign`.
-- **Retries** happen on a singular `L_v`, at most 256 times. Since `L_v` does not depend on `y`,
-  the abort probability is `δ^{256} ≈ 2^{−2046}`.
+- **Retries** happen on a singular `L_v`. pqov draws at most 256 vinegars but **uses only 255**:
+  `ov_preimage_core` increments `n_attempt` before each attempt and, after the loop, returns `-1`
+  if `MAX_ATTEMPT_VINEGAR <= n_attempt` (`subprojects/pqov/src/ov.c:166`), which also holds after a
+  success at `ctr = 255`. So `D_sk` fails iff the first 255 vinegars are bad, and the abort
+  probability is `δ^{255}` (not `δ^{256}`; read `E[δ^{256}]` below as `E[δ^{255}]`, a negligible
+  difference). Since `L_v` does not depend on `y`, this holds at every target. Lean:
+  `Spec.Pqov.signer` (`tries = 255`), `signer_fail`, `signer_correct`.
 - **Timing** reveals the number of rejected vinegars. These are independent of the output, so this
   reveals nothing about the returned preimage.
 - **The same function** serves PomFRIT (`pomfrit.cpp:189`), Moussaka (`moussaka.cpp:135`) and

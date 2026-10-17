@@ -60,8 +60,11 @@ scope.
     key-stage games (`*RAK*`) and PomFRIT's prefix-counting bound (`*_pfx`), which have only
     the permutation-row variant (no shared-`H₃`, seed or oracle-computation version); Moussaka
     4(b) with the honest Anchors running the Lean verifier on the same tables (its adversary's
-    choices do not read them), plus the abort term `2·(φ₀ + φ₁)` of the Anchors' signers, which
-    Lean does not bound for a concrete signer (§3);
+    choices do not read them), plus the abort term `2·(φ₀ + φ₁)` of the Anchors' signers: with a
+    model of pqov's `derive_preimage` (correct, the vinegar hash a random oracle) it is
+    `2·(δ₀²⁵⁵ + δ₁²⁵⁵)`, and on average over keys of pqov's key generation with oil matrix `O = 0`
+    `≤ 4·(255⁻³⁷ + 1/(255·256³⁷)) ≈ 2⁻²⁹³·⁸`; the games reach redemption except with probability
+    `≤ φ₀ + φ₁ + 2·2⁻¹¹³` (§3);
   - *many sessions* (PomFRIT, Moussaka 4(a), Ratatouille): any number of further honest
     sessions in one concurrent schedule, linear in the number `n` of sessions in all
     (`n·2⁻¹⁰³`, `n·2⁻¹⁰²`, `n·2⁻¹⁰¹`: about `2⁻⁸³`–`2⁻⁸¹` at `n = 2²⁰`, `2⁻⁷¹`–`2⁻⁶⁹` at
@@ -92,7 +95,8 @@ scope.
   and families with many instances satisfying `hinj` for all four relations that need it (with
   the spec-relation versions), a concrete issuance witness for completeness and zero
   knowledge, budget-0 adversaries for the privacy games, a non-degenerate sound index rule for
-  Moussaka 4(b).
+  Moussaka 4(b), and pqov's signer with keys of its key generation (`O = 0`) for Moussaka 4(b),
+  with the averaged abort term `≈ 2⁻²⁹³·⁸` and the games reaching redemption.
 - *`main` is not zero-knowledge.* The PomFRIT Issuer's attack test, and the (PU) bound for the
   others (§3).
 - Deterministic cores of the protocol notes (Lemma P, the domain-separation table, UOV-assumption
@@ -120,6 +124,12 @@ assumptions (§5, Gap 5); the Lean models are tied to the C++ by tests, not proo
   are not unique per message, `hash_to_target` overlaps proof-system domains; Moussaka nullifier
   squatting and an invalid one-more-UOV argument (restructured); Ratatouille spends are not bound
   to a session.
+- Lean-model findings for Moussaka 4(b) (§3): the spec's Anchor checked `main`'s issuance request
+  length while the games' Lean prover uses label rows (`7528`-byte proofs), so the non-colluding
+  random-oracle games refused every request and held vacuously (fixed: the games use the
+  label-row length); pqov's `ov_preimage_core` discards a success at its last (256th) vinegar, so
+  only 255 vinegars are usable (negligible: `δ²⁵⁵` for `δ²⁵⁶`); and the `δ ≤ 1/255` figure for
+  the fraction of bad vinegars holds on average over the key, not for a fixed key.
 - Corrections to the paper proofs: the sketch's "alive" leaf definition and per-query charging of
   bad challenges (§1); the L2 interface and Post against inverse cipher queries (§9, findings F2,
   F3); Moussaka Thm 4(b) misses an abort term and needs the Client's index rule, Thm 4(a) and
@@ -558,11 +568,10 @@ its index from the Anchor Set by a sound rule (`IdxSound`: the index holds a key
 issuer's public map, or is out of range; e.g. the first key with that map, `Audit/Nonvacuous.lean`;
 a lookup by digest qualifies only if digests bind keys, which the model does not assume);
 `anonymityNC_vinegarRO`: `≤ 4εR + 2·(δ₀²⁵⁶ + δ₁²⁵⁶)` on average over a random-oracle vinegar
-hash, for abstract signers that fail only when all 256 vinegars are bad (`hfail`). The signer is
-abstract (`Signer`, `Correct` its only hypothesis): the always-failing signer is correct and has
-`φ = 1`, and no concrete signer with small `φ` is exhibited in Lean. Nor is completeness: the
-theorems hold for any issuance prover and verifier, so they do not show that the redemptions
-take place (with `leanVI` on `leanPI` over the shared tables, completeness is not stated); `unlinkabilityNC`: `≤ 4εR` for one Anchor and any index rule;
+hash, for signers that fail only when all 256 vinegars are bad (`hfail`); the signer is abstract
+here (`Signer`, `Correct` its only hypothesis, which the always-failing signer, `φ = 1`, also
+meets; pqov's signer and completeness are the last item below); `unlinkabilityNC`: `≤ 4εR` for
+one Anchor and any index rule;
 with the Lean redemption prover `anonymityNC_label_rows`, `_shake`, `unlinkabilityNC_label_rows`
 (per-proof zero knowledge, down to the tape or hop hypotheses).
 - **In the random-oracle and ideal-cipher model** (`Privacy/MoussakaNCRO.lean`,
@@ -589,6 +598,36 @@ with the Lean redemption prover `anonymityNC_label_rows`, `_shake`, `unlinkabili
   `_perm_seed`) add `2·(2q_X + 2)·2⁻²⁵⁶`, given a bound `φ₀ + φ₁ ≤ φ` on the abort term at
   every XOF table (the hypothesis `hφ`; immediate when the Moderator and the Anchors' signers do
   not depend on the table).
+- **pqov's signer, and completeness** (`Spec/PqovSigner.lean`, `Privacy/MoussakaPqov.lean`,
+  `Privacy/PqovDelta.lean`; `Arith/GF256Field.lean` makes `GF256` a field). `Spec.Pqov.signer`
+  models pqov's `ov_preimage_core`: each attempt's system `L_v x = t − P(x₀)` computed from the
+  public map's polar form (pqov's `vᵀS`, `t + P₁(v)`), the solution `x₀ + Σ_j x_j ō_j`. It is
+  correct for every key whose map vanishes on the oil space (`signer_correct`, `OilSpace`) and
+  fails only if every attempt's `L_v` is singular (`signer_fail`). pqov uses only 255 of its 256
+  vinegars (`ov.c:166` discards a success at `ctr = 255`), so `hfail` holds as stated for the
+  256-attempt variant (`pqovRO256_hfail`; `anonymityNC_vinegarRO` applies), and
+  `anonymityNC_pqov`, `anonymityNCRO_pqov`, `anonymityNCSh_pqov` give the abort term
+  `2·(δ₀²⁵⁵ + δ₁²⁵⁵)` for pqov (`pr_fail_vinegar_lt`), `δ` the fraction of vinegars with singular
+  `L_v` (`delta`). For a fixed key `δ` is not the fraction `σ ≤ 1/255` of singular `45 × 45`
+  matrices: `L_v = Σ_i v_i S_i` ranges over a space of dimension `≤ 74` (the zero key has
+  `δ = 1`, `delta_zero_key`). On average over uniform coefficients `S` it is:
+  `E[δ] ≤ 1/255 + 256⁻⁷⁴` (`pr_singular_avg`, `σ` from `|GL₄₅(𝔽₂₅₆)|`), and
+  `E[δ^m] ≤ 255⁻ᵐ + 256^m/(255·256⁷⁴)` for `m ≤ 74` (linearly independent vinegars give
+  independent uniform systems, `pr_singular_all`, `pr_dependent_le`). For keys of pqov's key
+  generation with `O = 0` (`keyO0`: `P3 = 0`, `S` the `P2` part) and uniform `P2`,
+  `E[δ²⁵⁵] ≤ 255⁻³⁷ + 1/(255·256³⁷)` (`avg_delta255_keyO0`), so averaged over the Anchors' keys
+  `anonymityNC_pqov_keys`, `anonymityNCRO_pqov_keys` have abort term
+  `≤ 4·(255⁻³⁷ + 1/(255·256³⁷)) ≈ 2⁻²⁹³·⁸`; for real keys (`O` uniform) `S = (P1 + P1ᵀ)O + P2` is
+  uniform as well, on paper only. Completeness: `Spec.Moussaka.issueResponse` checks `main`'s
+  request length `45 + 7272`, while the games' Lean prover emits label-row proofs of `7528`
+  bytes, so with it every honest request was rejected as malformed and the random-oracle games
+  refused always (their bounds held vacuously; `issueResponse_leanPI_malformed`). The games now
+  use the label-row Anchor (`Spec.Moussaka.issueResponseLR`, `45 + 7528`). The Lean issuance
+  proofs then pass `leanVI` on the shared tables except with probability `≤ 2⁻¹¹³`
+  (`leanI_complete`, `accNC_lean_complete`, `accNC_leanSh_complete`), and the games refuse the
+  redemptions with probability `≤ φ₀ + φ₁ + 2·2⁻¹¹³` when both keys are found in both sets
+  (`pr_refused_NCRO_le`, `pr_refused_NCSh_le`; with pqov's signers `pr_refused_NCRO_pqov`,
+  `≤ δ₀²⁵⁵ + δ₁²⁵⁵ + 2·2⁻¹¹³`).
 
 *Many sessions* (`docs/zk.md` §10.8; `ZK/ReadsMany.lean`, `Privacy/PomFRITMany.lean`,
 `Privacy/MoussakaMany.lean`, `Privacy/RatatouilleMany.lean`, `Privacy/PomFRITAdaptive.lean`,
@@ -863,7 +902,7 @@ limitation, not an attack) takes over. Strong simulation-extractability: 2⁻⁶
 | `ratatouille.md` | Balance (no inflation), no theft, unlinkability, correctness: proved. | Spends are not bound to a session, so a copied spend request can be redeemed first (medium). |
 | `domain-separation.md` | Every hash/XOF/permutation call lies in a disjoint domain, except below. [Lean] `Protocols/DomainSeparation.lean` | PomFRIT's `hash_to_target` overlaps four proof-system domains (no exploit found; fix: a final domain byte). |
 | `uov-assumptions.md` | Relates the protocol-specific UOV assumptions to each other and to standard UOV. [Lean] `Protocols/UOVAssumptions.lean` | Several reductions are unavailable; the note states why. |
-| Privacy on the specs ([Lean] `VoleMole/Privacy/`) | The privacy theorems as games on `Spec/*`, each hybrid hop mechanized, from per-proof zero knowledge (`Privacy.ZeroKnowledge`: a simulator from the instance alone, `ε`-close for every valid witness) and, for Moussaka 4(a) and Ratatouille, hiding of `Com` for explicit reductions: PomFRIT blindness (`Privacy.PomFRIT.blindness`, `≤ 4ε`); Moussaka issuer hiding and unlinkability against a Moderator colluding with all Anchors (Thm 4a, `Privacy.Moussaka.anonymity`, `≤ 4εI + 4εR + 2εhide`) and against one that sees no issuance (Thm 4b corrected, `Privacy.Moussaka.anonymityNC`, `≤ 4εR + 2·(φ₀ + φ₁)`, no assumption on `Com`); Ratatouille unlinkability of spends from issuances and from each other through change tokens (`Privacy.Ratatouille.unlinkability`, `≤ 4εI + 4εS + 2εhide`). With the executable Lean prover (label rows) down to its tape hypothesis (`*_label_rows`, `blindness_lean`; `*_shake` with the hop hypotheses); for 4(a), Ratatouille and PomFRIT also in the random-oracle and ideal-cipher model with every zero-knowledge term explicit (`*RO_lean_num`), with table-reading interactions (`*RA_lean_num`, `blindnessRAH_lean_num`, `*OC*`), with AES as random permutations (`_perm`), with one shared `H₃` (`*Sh_num`, `blindnessRAHSh_num`) and from the real Clients' seeds (`*_seed`); Moussaka 4(b) also in the random-oracle and ideal-cipher model (`anonymityNCRO_lean_num`, `anonymityNCSh_num`, with `_seed`); 4(a) and Ratatouille also with table-reading key stages (`anonymityRAK_lean_num`, `unlinkabilityRAK_lean_num`); 4(a), Ratatouille and PomFRIT also with many sessions (`*N_lean_num`, `*P_lean_num`, `blindnessPH_lean`, `blindnessAd_lean_num`, `anonymityAd_lean_num`, `unlinkabilityAd_lean_num`; interleaved schedules, Ratatouille's further Clients spending several times: `blindnessIL_lean_num`, `anonymityIL_lean_num`, `unlinkabilityIL_lean_num`; with a table-reading scheduler and a free challenge: `blindnessILO_lean_num`, `anonymityILO_lean_num`, `unlinkabilityILO_lean_num`). Bounds and what remains: §3 | The zero-knowledge hypothesis is false on `main` for PomFRIT (`ZK.pomfrit_issuer_hits`, `ZK.pomfrit_attack_test`); for Moussaka and Ratatouille no efficient simulator satisfies it per proof on `main`, and the joint (PU) hop replaces it (paper). PomFRIT note §8.3: the "both ⊥" rule is needed. Moussaka Thm 4(a) needs no `2⁻¹⁹²` term; Thm 4(b) misses an abort term `2·(φ₀ + φ₁)` (negligible, bounded with no assumption on `Com`), needs the Client to take its index from `S`, and needs no `2⁻¹⁹²` term either. Ratatouille H3 needs the Client's validity check against the commitment it sent. Ratatouille's H1 misses the seed collisions, and Moussaka's Thm 4 has no term for the seed-XOF hop (`docs/zk.md` §10.6) |
+| Privacy on the specs ([Lean] `VoleMole/Privacy/`) | The privacy theorems as games on `Spec/*`, each hybrid hop mechanized, from per-proof zero knowledge (`Privacy.ZeroKnowledge`: a simulator from the instance alone, `ε`-close for every valid witness) and, for Moussaka 4(a) and Ratatouille, hiding of `Com` for explicit reductions: PomFRIT blindness (`Privacy.PomFRIT.blindness`, `≤ 4ε`); Moussaka issuer hiding and unlinkability against a Moderator colluding with all Anchors (Thm 4a, `Privacy.Moussaka.anonymity`, `≤ 4εI + 4εR + 2εhide`) and against one that sees no issuance (Thm 4b corrected, `Privacy.Moussaka.anonymityNC`, `≤ 4εR + 2·(φ₀ + φ₁)`, no assumption on `Com`); Ratatouille unlinkability of spends from issuances and from each other through change tokens (`Privacy.Ratatouille.unlinkability`, `≤ 4εI + 4εS + 2εhide`). With the executable Lean prover (label rows) down to its tape hypothesis (`*_label_rows`, `blindness_lean`; `*_shake` with the hop hypotheses); for 4(a), Ratatouille and PomFRIT also in the random-oracle and ideal-cipher model with every zero-knowledge term explicit (`*RO_lean_num`), with table-reading interactions (`*RA_lean_num`, `blindnessRAH_lean_num`, `*OC*`), with AES as random permutations (`_perm`), with one shared `H₃` (`*Sh_num`, `blindnessRAHSh_num`) and from the real Clients' seeds (`*_seed`); Moussaka 4(b) also in the random-oracle and ideal-cipher model (`anonymityNCRO_lean_num`, `anonymityNCSh_num`, with `_seed`), with pqov's signer (`anonymityNC_pqov`, `anonymityNCRO_pqov`; averaged over keys `anonymityNCRO_pqov_keys`, abort term `≈ 2⁻²⁹³·⁸`) and reaching redemption (`pr_refused_NCRO_le`); 4(a) and Ratatouille also with table-reading key stages (`anonymityRAK_lean_num`, `unlinkabilityRAK_lean_num`); 4(a), Ratatouille and PomFRIT also with many sessions (`*N_lean_num`, `*P_lean_num`, `blindnessPH_lean`, `blindnessAd_lean_num`, `anonymityAd_lean_num`, `unlinkabilityAd_lean_num`; interleaved schedules, Ratatouille's further Clients spending several times: `blindnessIL_lean_num`, `anonymityIL_lean_num`, `unlinkabilityIL_lean_num`; with a table-reading scheduler and a free challenge: `blindnessILO_lean_num`, `anonymityILO_lean_num`, `unlinkabilityILO_lean_num`). Bounds and what remains: §3 | The zero-knowledge hypothesis is false on `main` for PomFRIT (`ZK.pomfrit_issuer_hits`, `ZK.pomfrit_attack_test`); for Moussaka and Ratatouille no efficient simulator satisfies it per proof on `main`, and the joint (PU) hop replaces it (paper). PomFRIT note §8.3: the "both ⊥" rule is needed. Moussaka Thm 4(a) needs no `2⁻¹⁹²` term; Thm 4(b) misses an abort term `2·(φ₀ + φ₁)` (negligible, bounded with no assumption on `Com`), needs the Client to take its index from `S`, and needs no `2⁻¹⁹²` term either. Ratatouille H3 needs the Client's validity check against the commitment it sent. Ratatouille's H1 misses the seed collisions, and Moussaka's Thm 4 has no term for the seed-XOF hop (`docs/zk.md` §10.6) |
 
 **Cross-cutting finding (critical, deployment):** PomFRIT's Issuer signs arbitrary targets, and
 all protocols share the UOV key type. If one key serves PomFRIT and another protocol, anyone can

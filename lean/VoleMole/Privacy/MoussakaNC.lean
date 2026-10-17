@@ -1,5 +1,6 @@
 import VoleMole.Privacy.SeedXOF
 import VoleMole.Privacy.MoussakaLean
+import VoleMole.Spec.MoussakaLabelRows
 
 /-!
 # Moussaka issuer hiding and unlinkability against a non-colluding Moderator (Theorem 4(b))
@@ -8,8 +9,11 @@ Game ANON in the non-colluding mode of `security/moussaka.md` §6: the adversary
 alone. It chooses the contexts, the two issuing keys `pk false`, `pk true` and, per side, an Anchor
 Set `S` and a challenge digest `cd`; it sees **no issuance**. Honest Anchors with signers
 `sk false`, `sk true` (any `Signer` correct for its key: abstract `derive_preimage`, the keys
-possibly chosen by the adversary) answer the Clients' requests with `Spec.Moussaka.issueResponse`
-(the Anchor verifies the issuance proof, then runs `derive_preimage`), and the Clients run
+possibly chosen by the adversary) answer the Clients' requests with `Spec.Moussaka.issueResponseLR`
+(the Anchor checks the request's length, verifies the issuance proof, then runs `derive_preimage`;
+the length is the label-row layout's `45 + 7528` bytes, that of the Lean prover of the
+random-oracle games: with `main`'s `issueResponse`, `45 + 7272`, the honest Anchor would reject
+every label-row request as malformed, `Privacy/MoussakaPqov.lean`), and the Clients run
 `finalizeIssue`. In world `b` the left redemption is Client `b`'s token and the right one Client
 `¬b`'s. §6's refusal rule is as in `Privacy.Moussaka.view`: both redemptions happen only if both
 tokens finalized and each is redeemable at its own index in both sets; otherwise both are refused.
@@ -48,7 +52,10 @@ The seed expansions' outputs `(nf, r, ρ_iss)` and `ρ_red` are uniform, as in
   table are bad (pqov's `D_sk` with its vinegar hash SHAKE256 as a random oracle,
   `security/uov-assumptions.md` §2 Lemma D), averaging over the tables gives
   `≤ 4εR + 2·(δ₀^256 + δ₁^256)`, `δ_c` the fraction of bad vinegars of Anchor `c`'s key
-  (`pr_fail_vinegar`; heuristically `δ ≤ 1/255`, `UOVAssumptions.singular_prob_bounds_256`).
+  (`pr_fail_vinegar`). pqov's `derive_preimage` is exhibited as a signer satisfying `hfail` with
+  all 256 attempts; pqov itself uses only the first 255 (`Privacy/MoussakaPqov.lean`:
+  `pqovRO`, `anonymityNC_pqov`, `δ^255`). `δ ≤ 1/255` holds on average over the key, not for a
+  fixed key (`Privacy/PqovDelta.lean`).
 * `anonymityNC_label_rows`, `anonymityNC_label_rows_shake`, `unlinkabilityNC_label_rows`: with the
   Lean prover for redemption (label rows), down to its tape hypothesis or to the hop hypotheses.
 
@@ -109,10 +116,10 @@ section Game
 variable (A : AdversaryNC) (idx : AnchorSet → UOVKey → ℕ) (PI : NIZK IssueInstance)
   (sk : Bool → Signer)
 
-/-- The honest Anchor `c`'s answer to a request (`issue_response`; `none` when it refuses or
-throws). -/
+/-- The honest Anchor `c`'s answer to a request (`issue_response` with the label-row request
+length; `none` when it refuses or throws). -/
 def respNC (c : Bool) (q : Bytes) : Option Bytes :=
-  match issueResponse PI (sk c) q A.base.ci with
+  match issueResponseLR PI (sk c) q A.base.ci with
   | .ok (some s) => some s
   | _ => none
 
@@ -174,16 +181,16 @@ section Honest
 variable (A : AdversaryNC) (idx : AnchorSet → UOVKey → ℕ) (PI : NIZK IssueInstance)
   (sk : Bool → Signer)
 
-/-- The Anchor accepts the request: right length and a verifying issuance proof. -/
+/-- The Anchor accepts the request: right (label-row) length and a verifying issuance proof. -/
 def accNC (q : Bytes) : Bool :=
-  decide (q.length = issueRequestBytes) && PI.verify (q.drop uovM) ⟨q.take uovM, A.base.ci⟩
+  decide (q.length = issueRequestBytesLR) && PI.verify (q.drop uovM) ⟨q.take uovM, A.base.ci⟩
 
 lemma length_ci : A.base.ci.length = ctxBytes := by simp [Adversary.ci]
 
 lemma respNC_eq (c : Bool) (q : Bytes) :
     respNC A PI sk c q = if accNC A PI q then (sk c).derivePreimage (q.take uovM) else none := by
-  unfold respNC issueResponse accNC
-  by_cases hl : q.length = issueRequestBytes
+  unfold respNC issueResponseLR issueResponseN accNC
+  by_cases hl : q.length = issueRequestBytesLR
   · simp only [hl, length_ci, ne_eq, not_true_eq_false, or_self, ↓reduceIte, decide_true,
       Bool.true_and]
     cases PI.verify (q.drop uovM) ⟨q.take uovM, A.base.ci⟩
