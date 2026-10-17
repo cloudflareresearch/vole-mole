@@ -428,5 +428,6 @@ and the numbers.
 - (Historical) **Status of `ε_multi`.** Neither a point-level compressed ideal cipher (Carolan–Majenz) nor
   `E_k = P_{F(k)}` improves it. What's missing is a Liu–Zhandry-style multi-collision bound for the
   compressed ideal cipher.
-- **Simulation-extractability in the QROM** is not covered; it needs reprogramming tools.
+- **Simulation-extractability in the QROM** is on paper only (Q5, superseded numerically by Q6/Q7;
+  bookkeeping in `Seed/QSimExt.lean`).
 - Parallel queries are not handled.

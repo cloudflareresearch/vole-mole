@@ -56,6 +56,11 @@ Main findings (§9):
   Grover). Privacy against everyone has at most a 64-bit Grover margin, through AES-128 hidden-leaf
   keys. On `main`, lean/docs/zk.md's formal ZK bound multiplies `Q₅` by `Adv^ow`, which is vacuous at
   `q = 2^64`. The fix removes this.
+- **F7 (proof and model).** Theorem 4(b) misses an abort term and needs the Client's index rule
+  (§6). Mechanizing it found three more points (§9): the non-colluding random-oracle games were
+  vacuous before commit `919a204` (the spec's Anchor checked `main`'s request length); pqov's
+  `derive_preimage` uses 255 of its 256 vinegars; and `δ ≤ 1/255` holds only on average over the
+  key.
 
 No attack was found on the implementation itself: soundness, the selector, constant-time index
 handling, or transcript binding.
@@ -542,7 +547,7 @@ success is not independent of the nullifiers. *Proof (b').*
    `n_attempt` before each attempt and returns `-1` when `MAX_ATTEMPT_VINEGAR <= n_attempt`
    after the loop (`subprojects/pqov/src/ov.c:166`), which also discards a success at
    `ctr = 255` (upstream pqov; harmless). So it fails iff the first 255 vinegars are all bad
-   (`lean/docs/security/uov-assumptions.md` §2 says 256). With SHAKE256 a random oracle (Lemma D),
+   (`lean/docs/security/uov-assumptions.md` §2 said 256; corrected there). With SHAKE256 a random oracle (Lemma D),
    the vinegars at any fixed `t` are uniform, so for every fixed `(nf, r)` the failure
    probability is `δ(sk_c)^{255}`, whatever `Com(nf, …, r)` is, and `E[φ_c] ≤ δ(sk_c)^{255}` with
    no statement about `Com`. The figure `δ ≤ 1/255` is the fraction `σ` of singular `45 × 45`
@@ -593,11 +598,13 @@ Remarks from the mechanization:
 - **Theorem 4(b) misses an abort term**: corrected to (b') above and mechanized below. An
   earlier version of this remark said that bounding the abort probability needs a statement about
   `Com`'s outputs. It does not: `DerivePreimage`'s vinegars are a random-oracle hash of the target,
-  so its failure probability at every fixed target is `δ^{256}` (`pr_fail_vinegar`). So "no Keccak
+  so its failure probability at every fixed target is `δ^{256}` for 256 usable vinegars
+  (`pr_fail_vinegar`) and `δ^{255}` for pqov's 255 (`pr_fail_vinegar_lt`). So "no Keccak
   assumption" is exact.
 
 **[Lean] `lean/VoleMole/Privacy/MoussakaNC.lean`, Theorem 4(b').** The non-colluding game on
-`Spec/Moussaka.lean`'s `issueRequest`, `issueResponse` (the honest Anchor verifies the issuance
+`Spec/Moussaka.lean`'s `issueRequest`, `issueResponseLR` (`Spec/MoussakaLabelRows.lean`, the
+label-row length variant of `issueResponse`; the honest Anchor verifies the issuance
 proof, then runs `derive_preimage`: any `Signer` correct for its key, which may be
 adversarially chosen), `finalizeIssue` and `redeemRequest`. The seed-XOF outputs are uniform. The
 adversary (`AdversaryNC`) chooses the contexts, both keys and, per side, `S` and `cd`, and sees
@@ -806,6 +813,24 @@ which delegate consistency to deployment.
 **F6 — Interoperability (D1, D10).** `challenge_digest`'s place in the transcript, and the DST
 position, are not pinned down by the draft.
 
+**F7 — Theorem 4(b) and its Lean model (proof and model).**
+- *Abort term and index rule.* (b) as stated misses `2·(φ₀ + φ₁)`, and needs the Client to take
+  its index from `S` (§6, (b′)).
+- *Vacuous games, fixed.* Until commit `919a204` the random-oracle games of (b′) ran
+  `Spec.Moussaka.issueResponse`, which checks `main`'s request length `45 + 7272`, with the
+  label-row Lean prover (`7528`-byte proofs): every honest request was rejected and the bounds held
+  vacuously (`issueResponse_leanPI_malformed`). The games now use `issueResponseLR`, and the
+  redemptions are refused with probability `≤ φ₀ + φ₁ + 2·2⁻¹¹³` when both keys are found in
+  both sets (Appendix B). The liveness audit
+  (`lean/VoleMole/Audit/Liveness.lean`) found no other vacuous game, and one latent hazard of the
+  same kind: `Spec.Moussaka.finalizeRedeem` checks `main`'s redemption length (use
+  `finalizeRedeemLR`).
+- *255 vinegars.* `ov_preimage_core` discards a success at `ctr = 255` (`ov.c:166`), so the abort
+  probability is `δ^{255}`, not `δ^{256}` (harmless).
+- *`δ` only on average.* `δ ≤ 1/255` is the fraction of singular uniform matrices; for a fixed
+  key `δ` is not bounded (`δ = 1` for `S = 0`). On average over the `P2` part of the key (uniform
+  `P2` the modelling step) `E[δ^{255}] ≤ 255^{−37} + 1/(255·256^{37}) ≈ 2^{−295.8}`.
+
 **Checked and found sound:**
 - the constant-time index check and witness encoding;
 - the selector (Lean);
@@ -878,7 +903,8 @@ harmless.
    - *What remains*: SHAKE as a random oracle and AES as an ideal cipher; the hiding of `Com` for
      4(a) (computational, §3.2); the consistency of a table-reading interaction given as a bare
      function of the tables (a theorem for oracle computations); for 4(b), adversary choices that
-     read the tables (no `RA`/`OC` version); in the interleaved game, a second challenge Client
+     read the tables (no `RA`/`OC` version) and the abort term for a fixed key (bounded only on
+     average over uniform `P2` parts of pqov's keys, F7); in the interleaved game, a second challenge Client
      whose contexts or key are chosen after the first one's request, and the factor about 2
      against the sequential schedule (`lean/docs/zk.md` §10.8 "Open"); a bound linear in `N` (the lazy-sampling reduction that
      gives one for PomFRIT with `H₄` a table does not apply as it stands, since the further
@@ -1227,7 +1253,7 @@ redemptions or the refusal, the four `H₃` slices and the tables, with read bud
   `realGameP`, worlds `Fin N → Bool`): the adversary answers every Client and chooses every pair's
   two sides after every issuance request; side `s` of pair `j` redeems Client `w j ^^ s`'s token
   under §6's rule per pair (`outAt`). A hybrid over the pairs (`abs_sub_le_mul_of_worlds`), each
-  step `anonymityN` with the other pairs' Clients as further Clients (`AdversaryP.hop`, the tape
+  step `anonymityN_lean_numG` with the other pairs' Clients as further Clients (`AdversaryP.hop`, the tape
   split `splitM`, `realGameP_iff`; the hop's guess rebuilds the other pairs' outcomes from their
   Clients' redemptions with §6's rule on the commitments, `outAt_eq`). **`anonymityP_lean_num`**
   `≤ N·εPairM`; in numbers `≤ N·(2N·2⁻¹⁰² + 8·(q₃ + q₅ + 221·q_E)·2⁻¹²⁸ + 2·εhide)`
