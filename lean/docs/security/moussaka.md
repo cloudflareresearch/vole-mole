@@ -1127,6 +1127,19 @@ redemptions or the refusal, the four `H₃` slices and the tables, with read bud
     indices in both sets, the redemptions are refused with probability `≤ φ₀ + φ₁ + 2·2⁻¹¹³`;
     `pr_refused_NCRO_pqov`: `≤ δ₀^{255} + δ₁^{255} + 2·2⁻¹¹³` with pqov's signers. `#print axioms`:
     `propext`, `Classical.choice`, `Quot.sound`.
+  - *Liveness audit* (`lean/VoleMole/Audit/Liveness.lean`). Every privacy game was checked for the
+    failure above (an honest step that rejects the Lean prover's output, a refusal rule that always
+    fires): only the non-colluding games had one. With a trapdoor key `keyI` (pqov's key
+    generation with `O = 0`, `P2` chosen so that the system of one vinegar is the identity) and
+    its never-failing signer `skI`: `phi_skI` (abort term `0`), `refused_ncL` (refusal
+    `≤ 2·2⁻¹¹³`); in 4(a), two such issuers make §6's rule allow the redemptions on every tape
+    (`allOk_live`) and the guess sees `nf_b ‖ π_L`, `nf_{¬b} ‖ π_R` (`view_live`,
+    `realGameRO_live`), and the label-row Moderator accepts each honest redemption with the Lean
+    verifier except with probability `≤ 2⁻¹¹³` (`redeem_accepted_RO`, `leanR_complete`). A latent
+    hazard of the same kind: `Spec.Moussaka.finalizeRedeem` checks `main`'s `24 + 8751`, while the
+    Lean redemption proofs have `9007` bytes (`leanPR_length`), so `main`'s Moderator would reject
+    every one (`finalizeRedeem_leanPR_none`); no game runs an honest Moderator, and
+    `Spec.Moussaka.finalizeRedeemLR` (`24 + 9007`) is the one to use.
 - **With many Clients** (`lean/VoleMole/Privacy/MoussakaMany.lean`, `ZK/ReadsMany.lean`, zk.md
   §10.8): the adversary also serves `m` further honest Clients on the same tables (their issuance
   requests seen with the challenge requests, their redemptions at Anchor Sets chosen after them);
