@@ -91,8 +91,23 @@ checkout `subprojects/pqov` (revision `fac2ec1`, UOV round-3 code, with
     uniform for `v ≠ 0`, so `E[δ] ≤ δ_unif + 256^{−74}`, and `m ≤ 74` linearly independent
     vinegars give independent uniform systems, so `E[δ^m] ≤ δ_unif^m + 256^m/(255·256^{74})`
     (`E[δ^{255}] ≤ 255^{−37} + 1/(255·256^{37}) ≈ 2^{−295.8}`). Lean: `pr_singular_avg`,
-    `pr_singular_all`, `pr_dependent_le`, `avg_delta255_keyO0` (`Privacy/PqovDelta.lean`; the
-    key family there has `O = 0`).
+    `pr_singular_all`, `pr_dependent_le` (`Privacy/PqovDelta.lean`), and for pqov's key
+    generation with **any** oil matrix `O` and `P1` (fixed) and `P2` uniform
+    `avg_delta255_pqovKey` (`Privacy/PqovKeys.lean`; `avg_delta255_keyO0` is `O = 0`). `S` is read
+    from the key layout (`sysCoef_pqovKey`). The modelling step is `P2` uniform given `(O, P1)`:
+    AES-128-CTR of `pk_seed` as a random function, `O` independent of `pk_seed` (SHAKE256 a random
+    oracle); it is not derived.
+- **The UOV identities, in Lean** (`Spec/PqovKey.lean`, on the expanded key in
+  `for_each_monomial`'s layout, blocks `P1`, `P2`, `P3` at pqov's `idx_of_trimat` offsets):
+  - For every key, `B(e_i, (O_j, e_j))_k = ((P1 + P1ᵀ)·O + P2)_{k,ij}` (`sysCoef_eq_pqovS`: the
+    system the signer model builds from the polar form is pqov's `ov_calc_l1_mat`, `vᵀS`), and
+    `P(v, 0) = P₁(v)` (`qmap_vinVec_eq`).
+  - `P(Oy, y) = Σ_{a ≤ b} (P3 − UT(M + Mᵀ))_{ab} y_a y_b` with `M = Oᵀ(P1·O + P2)`
+    (`qmap_oil_eq`), so `P` vanishes on `𝒪` **iff** `P3 = UT(M + Mᵀ)`, pqov's `calculate_F2_P3`
+    (`oilSpace_iff_P3Pqov`). `pqovKey O P1 P2` (the key with that `P3`) satisfies it for all `O`,
+    `P1`, `P2` (`oilSpace_pqovKey`), so `Spec.Pqov.signer` is correct for pqov's keys.
+  - `lake exe spec_kats` runs the model (`Spec/PqovSignerExec.lean`) on the test key with pqov's
+    vinegars: it reproduces the C++ `derive_preimage` on six KAT targets byte for byte.
 - **Oracles.** SHAKE256 is a random oracle. That covers pqov's key expansion and vinegar hash, and
   vole-mole's key digest; these have distinct input lengths (32, 98 and 46591 bytes), so they are
   disjoint.
@@ -700,8 +715,11 @@ hash-and-sign with retry [KX24]).
 - Turn the **meta-reduction** (§5.7) into a theorem, with a precise proviso.
 - **QROM** versions of T2–T5. This needs quantum programming of an invertible permutation for
   Com/Tag. The salted variants are the promising ones.
-- `δ(sk)` is heuristic: we did not verify that `L_v` is distributed like a uniform matrix for
-  uov-Ip keys. The proofs use `δ(sk)` symbolically, and `E[δ^{256}]` only in Lemma D.
+- `δ(sk)` for a fixed key is not bounded: `L_v = vᵀS` ranges over a subspace of dimension `≤ 74`,
+  so it is not distributed like a uniform matrix. On average over the key (uniform `P2`, any
+  `O`, `P1`) `E[δ^m] ≤ δ_unif^m + 256^m/(255·256^{74})` is proved (§1, `Privacy/PqovKeys.lean`);
+  the uniformity of `P2` (AES-CTR output) is the modelling step. The proofs use `δ(sk)`
+  symbolically, and `E[δ^{256}]` only in Lemma D.
 
 ## 10. Lean
 
@@ -723,6 +741,13 @@ hash-and-sign with retry [KX24]).
 | One-more counting; wasted calls | `one_more_count`, `wasted_calls` |
 
 The probabilistic steps (Lemma D, the hybrid games, the ideal-permutation bookkeeping) are on paper.
+
+pqov's `derive_preimage` and its keys (§1–2): `Spec/PqovSigner.lean` (`signer_correct`,
+`signer_fail`, 255 attempts), `Spec/PqovKey.lean` (`sysCoef_eq_pqovS`, `qmap_vinVec_eq`,
+`qmap_oil_eq`, `oilSpace_iff_P3Pqov`, `pqovKey`, `oilSpace_pqovKey`, `sysCoef_pqovKey`),
+`Privacy/PqovDelta.lean` (`pr_singular_avg`, `pr_singular_all`, `pr_dependent_le`) and
+`Privacy/PqovKeys.lean` (`avg_delta_pqovKey`, `avg_delta_pow_pqovKey`, `avg_delta255_pqovKey`).
+`lake exe spec_kats` checks the model against the C++ `derive_preimage` (`Spec/PqovSignerExec.lean`).
 
 ## References
 

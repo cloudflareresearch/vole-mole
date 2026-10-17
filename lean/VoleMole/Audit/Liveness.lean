@@ -32,7 +32,12 @@ redemption length `24 + 8751` and would reject every label-row redemption (`9007
   `O = 0` (`keyO0`, `P1 = 0`) whose `P2` part makes the system of the vinegar `e₀` the identity
   (`sysMat_keyI`). Its signer `skI d` returns a preimage for every target (`skI_some`,
   `eval_preI`) and is correct (`skI_correct`), so the abort term of the non-colluding games is `0`
-  (`phi_skI`; `refused_ncL`: refusal `≤ 2·2⁻¹¹³`).
+  (`phi_skI`; `refused_ncL`: refusal `≤ 2·2⁻¹¹³`). (For `O = 0` the keys `keyO0` are exactly
+  pqov's keys `Spec.Pqov.pqovKey 0 P1 P2`, `pqovKey_zero`. For pqov's keys with any oil matrix the
+  signer model is correct, `oilSpace_pqovKey`, and the non-colluding games with them are
+  instantiated in `Audit/Nonvacuous.lean`; a key whose signer provably never fails is exhibited
+  only for `O = 0`. On the real test key, `lake exe spec_kats` runs the model, which reproduces the
+  C++ `derive_preimage` on six KAT targets.)
 * **Moussaka 4(a).** With two trapdoor keys as the issuers, §6's rule allows the redemptions on
   every tape, for every issuance prover (`allOk_live`), and the guess sees both redemption
   requests, the left one `nf_b ‖ π` (`view_live`, `realGameRO_live`). The redemption proof has

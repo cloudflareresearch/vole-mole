@@ -1,4 +1,4 @@
-import VoleMole.Spec.Common
+import VoleMole.Spec.PqovSignerDefs
 import VoleMole.Arith.GF256Field
 
 /-!
@@ -26,8 +26,13 @@ oil coordinates), so the model computes the system from the public map: `sysMat 
 entries `B(x₀, ō_j)_k`, right-hand side `t − P(x₀)` (`= t + P(x₀)` in characteristic 2), the
 unique solution `x = L_v⁻¹ (t − P(x₀))` when `det L_v ≠ 0` (any correct elimination returns it),
 and `w = x₀ + Σ_j x_j ō_j` (`preimageVec`). The byte-level routines (`gfmat_prod`, the triangular
-evaluations, the elimination) are not modelled, and the identity between pqov's stored `S` and
-`B(e_i, ō_j)` is the UOV algebra, not a theorem here.
+evaluations, the elimination) are not modelled. The identities with pqov's key layout are theorems
+of `Spec/PqovKey.lean`: `B(e_i, ō_j)` is pqov's stored `S = (P1 + P1ᵀ)·O + P2` for every key
+(`sysCoef_eq_pqovS`), `P(x₀) = P₁(v)` (`qmap_vinVec_eq`), and `OilSpace` holds exactly when `P3`
+is pqov's `UT(Oᵀ(P1·O + P2) + (…)ᵀ)` (`oilSpace_iff_P3Pqov`), so for every key of pqov's key
+generation (`pqovKey`, `oilSpace_pqovKey`). The computable definitions are in
+`Spec/PqovSignerDefs.lean`; `Spec/PqovSignerExec.lean` runs the model (`lake exe spec_kats`
+compares it with the C++ `derive_preimage` on the test key: equal on every KAT target).
 
 **Only 255 vinegars are used.** `ov_preimage_core` increments `n_attempt` *before* trying the
 attempt, breaks on success, and then returns `-1` if `MAX_ATTEMPT_VINEGAR <= n_attempt`
@@ -57,20 +62,7 @@ namespace VoleMole.Spec.Pqov
 
 open VoleMole.Arith VoleMole.Arith.UOV
 
-/-- A vinegar vector (`_V = 74` bytes). -/
-abbrev Vin := Fin 74 → GF256
-
-/-- An oil matrix `O` (`sk->O`): column `j < 45` is `O_j ∈ GF(256)⁷⁴`. -/
-abbrev OilMat := Fin 45 → Fin 74 → GF256
-
 /-! ## The public map as a quadratic form -/
-
-/-- `P(σ)` (`UOVKey.eval` before the byte conversion). -/
-def qmap (pk : UOVKey) (σ : ℕ → GF256) : Fin 45 → GF256 := publicMap 119 45 pk.map σ
-
-/-- The polar form `B(a, b) = P(a + b) − P(a) − P(b)`, monomial by monomial. -/
-def polar (pk : UOVKey) (a b : ℕ → GF256) (k : Fin 45) : GF256 :=
-  ((forEachMonomial 119 45).map fun m => pk.map (m.off + k) * (a m.i * b m.j + b m.i * a m.j)).sum
 
 lemma list_sum_map_finsum {α ι : Type*} [Fintype ι] (L : List α) (f : α → ι → GF256) :
     (L.map fun a => ∑ j, f a j).sum = ∑ j, (L.map fun a => f a j).sum := by
@@ -129,24 +121,10 @@ theorem qmap_congr (pk : UOVKey) {σ τ : ℕ → GF256} (h : ∀ i < 119, σ i 
 
 /-! ## The linear system of one attempt -/
 
-/-- `x₀ = (v, 0)`. -/
-def vinVec (v : Vin) : ℕ → GF256 := fun i => if h : i < 74 then v ⟨i, h⟩ else 0
-
-/-- The oil vector `ō_j = (O_j, e_j)`. -/
-def oilVec (O : OilMat) (j : Fin 45) : ℕ → GF256 := fun i =>
-  if h : i < 74 then O j ⟨i, h⟩ else if i = 74 + j.val then 1 else 0
-
-/-- **`P` vanishes on the oil space** `span(ō_j)` (pqov's keys: `P3 = Upper(Oᵀ P1 O + Oᵀ P2)`). -/
+/-- **`P` vanishes on the oil space** `span(ō_j)` (pqov's keys: `P3 = UT(M + Mᵀ)`,
+`M = Oᵀ(P1·O + P2)`; `Spec/PqovKey.lean`, `oilSpace_iff_P3Pqov`). -/
 def OilSpace (pk : UOVKey) (O : OilMat) : Prop :=
   ∀ y : Fin 45 → GF256, qmap pk (∑ j, y j • oilVec O j) = 0
-
-/-- **The system matrix** of the attempt with vinegar `v`: `L_v[k][j] = B(x₀, ō_j)_k` (pqov's
-`vᵀ S_k`). -/
-def sysMat (pk : UOVKey) (O : OilMat) (v : Vin) : Matrix (Fin 45) (Fin 45) GF256 :=
-  Matrix.of fun k j => polar pk (vinVec v) (oilVec O j) k
-
-/-- The target as a vector. -/
-def target (t : Bytes) : Fin 45 → GF256 := fun k => ⟨t.getD k 0⟩
 
 /-- The oil part: `x = L_v⁻¹ (t − P(x₀))`. -/
 noncomputable def oilSol (pk : UOVKey) (O : OilMat) (v : Vin) (t : Bytes) : Fin 45 → GF256 :=
@@ -155,9 +133,6 @@ noncomputable def oilSol (pk : UOVKey) (O : OilMat) (v : Vin) (t : Bytes) : Fin 
 /-- The preimage `w = x₀ + Σ_j x_j ō_j = (v + O x, x)`. -/
 noncomputable def preimageVec (pk : UOVKey) (O : OilMat) (v : Vin) (t : Bytes) : ℕ → GF256 :=
   vinVec v + ∑ j, oilSol pk O v t j • oilVec O j
-
-/-- The first `119` coordinates as bytes. -/
-def toBytes (σ : ℕ → GF256) : Bytes := List.ofFn fun i : Fin 119 => (σ i).val
 
 /-- **One attempt**: the preimage if `L_v` is invertible. -/
 noncomputable def attempt (pk : UOVKey) (O : OilMat) (t : Bytes) (v : Vin) : Option Bytes :=
@@ -268,13 +243,6 @@ theorem sysMat_eq_sum (pk : UOVKey) (O : OilMat) (v : Vin) :
   rw [vinVec_eq_sum v, polar_sum_left]
 
 /-! ## The reference signer (pqov's vinegar derivation) -/
-
-/-- `PREIMAGE_DST` (`ov.c`, patch 0001). -/
-def preimageDst : Bytes := "pqov-derive-preimage".toList.map fun c => c.toNat.toUInt8
-
-/-- pqov's vinegar of attempt `ctr` at target `t`: `SHAKE256(t ‖ sk_seed ‖ DST ‖ ctr)`, 74 bytes. -/
-def vinShake (skSeed : Bytes) (t : Bytes) (ctr : Fin 256) : Vin := fun i =>
-  ⟨(shake256B (t ++ skSeed ++ preimageDst ++ [ctr.val.toUInt8]) 74).getD i.val 0⟩
 
 /-- **pqov's `ov_derive_preimage`** for the key `(pk, O, sk_seed)`: 255 usable attempts. -/
 noncomputable def deriveRef (pk : UOVKey) (O : OilMat) (skSeed : Bytes) : Signer :=

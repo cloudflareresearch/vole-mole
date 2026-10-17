@@ -9,6 +9,7 @@ import VoleMole.Privacy.PomFRITLin
 import VoleMole.Privacy.SeedXOFNC
 import VoleMole.ROM.SpecSound
 import VoleMole.Privacy.PqovDelta
+import VoleMole.Privacy.PqovKeys
 
 /-!
 # Non-vacuity checks for the headline theorems
@@ -30,7 +31,10 @@ correct and with `hfail` proved, so `anonymityNC_vinegarRO` applies as stated wi
 (`keyO0`), averaged over their `P2` parts with an abort term `≤ 4·(255⁻³⁷ + 1/(255·256³⁷))`
 (`anonymityNC_pqov_keys`, `anonymityNCRO_pqov_keys`), and the games are shown to reach redemption
 (`pr_refused_NCRO_pqov`, `pr_refused_NCSh_le`: refusal `≤ φ₀ + φ₁ + 2·2⁻¹¹³` with the honest
-Anchors' Lean verifier).
+Anchors' Lean verifier). The same for **pqov's real key generation** with any oil matrices `O`
+(`Spec.Pqov.pqovKey O P1 P2`: `P3` computed as `calculate_F2_P3` does; `P` vanishes on the oil
+space, `oilSpace_pqovKey`): `anonymityNC_pqov_pqovKeys`, `anonymityNCRO_pqov_pqovKeys`,
+`pr_refused_NCRO_pqov` and `avg_delta255_pqovKey` instantiated with keys `pqovKey (O c) (P1 c) _`.
 
 What is not exhibited here: a redemption or spend witness (it needs a UOV preimage; the KAT
 vectors give instances, checked by `lake exe verifier_vectors`, not by a theorem); `hinj` for a
@@ -38,9 +42,9 @@ redemption or spend family with two keys of the same digest (false: the encoding
 only; for keys from `UovPk.ofCompressed`, distinct digests is SHAKE256 collision freedom, not a
 theorem); a fixed key with a proved small fraction `δ` of bad vinegars (the bounds on `δ` are on
 average over the key; for one key `δ` is a count over `256⁷⁴` vinegars, and the zero key has
-`δ = 1`); the abort bound for pqov's real keys (`O` uniform, `P3` computed), whose system
-coefficients `S = (P1 + P1ᵀ)O + P2` are uniform by the same argument but are not computed from the
-key layout here (only `O = 0` is).
+`δ = 1`; for the test key the KAT check of `lake exe spec_kats` finds a good vinegar at the first
+attempt on six targets, which is evidence, not a bound); the uniformity of `P2` (AES-128-CTR of
+`pk_seed`), which the real-key bounds take as their modelling step.
 -/
 
 open OracleComp OracleSpec
@@ -545,6 +549,66 @@ example (P1 : ℕ → GF256) := avg_delta255_keyO0 P1
 
 /-- For a fixed key the fraction of bad vinegars can be `1`. -/
 example : delta ⟨[], fun _ => 0⟩ 0 = 1 := delta_zero_key 0
+
+/-! ### With pqov's real key generation (any oil matrices) -/
+
+/-- A key of pqov's key generation (`pqovKey O P1 P2`) with a one-byte digest. -/
+noncomputable def kqR (O : OilMat) (P1 : ℕ → GF256) (P2 : P2Part) (d : UInt8) : UOVKey :=
+  ⟨[d], (pqovKey O P1 P2).map⟩
+
+theorem oilSpace_kqR (O : OilMat) (P1 : ℕ → GF256) (P2 : P2Part) (d : UInt8) :
+    OilSpace (kqR O P1 P2 d) O :=
+  oilSpace_of_map_eq rfl O (oilSpace_pqovKey O P1 P2)
+
+/-- The two Anchors' keys (digests `0`, `1`), Anchor `c` with oil matrix `O c`. -/
+noncomputable def pkqR (O : Bool → OilMat) (P1 : Bool → ℕ → GF256) (P2 : Bool → P2Part)
+    (c : Bool) : UOVKey :=
+  kqR (O c) (P1 c) (P2 c) (bif c then 1 else 0)
+
+/-- The Anchor Set holding both keys. -/
+noncomputable def SqR (O : Bool → OilMat) (P1 : Bool → ℕ → GF256) (P2 : Bool → P2Part) :
+    AnchorSet :=
+  ⟨[pkqR O P1 P2 false, pkqR O P1 P2 true], ⟨by simp, by simp [maxAnchors], by simp [pkqR, kqR]⟩⟩
+
+/-- A Moderator with both keys in both sets (and a constant guess). -/
+noncomputable def ncqR (O : Bool → OilMat) (P1 : Bool → ℕ → GF256) (P2 : Bool → P2Part) :
+    AdversaryNC :=
+  ⟨fun _ => 0, fun _ => 0, pkqR O P1 P2, fun _ => (SqR O P1 P2, []), fun _ => True⟩
+
+/-- The random-oracle version. -/
+noncomputable def ncqROR {R : Type} (O : Bool → OilMat) (P1 : Bool → ℕ → GF256)
+    (P2 : Bool → P2Part) : AdversaryNCRO R :=
+  ⟨fun _ => 0, fun _ => 0, pkqR O P1 P2, fun _ => (SqR O P1 P2, []), fun _ _ _ => True⟩
+
+theorem ncqROR_budget {R : Type} [Fintype R] [Nonempty R] (O : Bool → OilMat)
+    (P1 : Bool → ℕ → GF256) (P2 : Bool → P2Part) : (ncqROR (R := R) O P1 P2).Budget 0 0 0 :=
+  ⟨fun _ _ _ _ _ => Rd3.const _, fun _ _ _ _ _ => Rd3.const _, fun _ _ _ _ _ => Rd3.const _,
+    fun _ _ _ _ _ => Rd3.const _, fun _ _ => Rd5.const _, fun _ _ => RdE.const _⟩
+
+theorem found_ncqROR {R : Type} (O : Bool → OilMat) (P1 : Bool → ℕ → GF256) (P2 : Bool → P2Part)
+    (c side : Bool) : foundNC (ncqROR (R := R) O P1 P2).nc idxEval c side = true :=
+  foundNC_idxEval _ c side ⟨bif c then 1 else 0, pkqR O P1 P2 c, by cases c <;> rfl, rfl⟩
+
+/-- **Theorem 4(b′) with pqov's real keys and signers**, averaged over the `P2` parts: abort term
+`≤ 4·(255⁻³⁷ + 1/(255·256³⁷))`, for every choice of oil matrices and `P1` parts. -/
+example (O : Bool → OilMat) (P1 : Bool → ℕ → GF256) (PI : NIZK IssueInstance) {CR : Type}
+    [Fintype CR] [Nonempty CR] (simR : RedeemInstance → CR → Bytes) (PR : NIZK RedeemInstance)
+    {εR : ℝ} (hεR : 0 ≤ εR) (hR : ZeroKnowledge RedeemRelW (proveR PR) simR εR) :=
+  anonymityNC_pqov_pqovKeys O P1 (ncqR O P1) (fun _ _ => rfl) idxEval PI idxEval_sound simR PR
+    hεR hR
+
+/-- The same in the random-oracle and ideal-cipher model (the Lean prover and verifier). -/
+example (O : Bool → OilMat) (P1 : Bool → ℕ → GF256) :=
+  anonymityNCRO_pqov_pqovKeys (R := Blk → Blk) O P1 (ncqROR O P1) (fun _ _ => rfl) idxEval
+    idxEval_sound (fun κ => ncqROR_budget O P1 κ)
+
+/-- The game with pqov's real keys reaches redemption. -/
+example (O : Bool → OilMat) (P1 : Bool → ℕ → GF256) (P2 : Bool → P2Part) :=
+  pr_refused_NCRO_pqov (R := Blk → Blk) (ncqROR O P1 P2) idxEval O
+    (fun _ => oilSpace_kqR _ _ _ _) idxEval_sound (found_ncqROR O P1 P2)
+
+/-- The real-key-averaged fraction of bad vinegars. -/
+example (O : OilMat) (P1 : ℕ → GF256) := avg_delta255_pqovKey O P1
 
 end NCPqov
 
