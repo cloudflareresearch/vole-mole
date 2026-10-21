@@ -1,0 +1,216 @@
+#include "vole_mole/ihat.hpp"
+
+#include "ihat/seeded.hpp" // internal
+#include "ihat/token.hpp"  // internal: TokenAccess
+
+#include "test.hpp"
+
+#include <benchmark/benchmark.h>
+
+#include <cstddef>
+#include <cstdint>
+#include <string>
+#include <utility>
+#include <vector>
+
+using namespace vole_mole;
+using namespace vole_mole::ihat;
+using vole_mole::ihat::detail::issue_request_with_seed;
+using vole_mole::ihat::detail::redeem_request_with_seed;
+using vole_mole::ihat::detail::Seed;
+using vole_mole::ihat::detail::TokenAccess;
+using vole_mole::ihat::detail::unbound_issue_request_with_seed;
+using vole_mole::ihat::detail::unbound_redeem_request_with_seed;
+using vole_mole::test::uov_key_pair;
+
+namespace {
+
+const Context CTX_ISS = vole_mole::test::filled<CTX_BYTES>(0x10);
+const Context CTX_RED = vole_mole::test::filled<CTX_BYTES>(0x20);
+const ChallengeDigest CHALLENGE_DIGEST = vole_mole::test::filled<CHALLENGE_DIGEST_BYTES>(0x70);
+
+// A different seed per iteration, so that every run proves a fresh statement.
+Seed seed_from_counter(uint64_t i) {
+    Seed seed{};
+    for (size_t j = 0; j < sizeof(i); ++j) {
+        seed[j] = static_cast<uint8_t>(i >> (8 * j));
+    }
+    return seed;
+}
+
+// A token issued by the fixed test key pair.
+const Token& token() {
+    static const Token t = [] {
+        const auto& [pk, sk] = uov_key_pair();
+        auto [pending, request] = issue_request_with_seed(CTX_ISS, CTX_RED, Seed{});
+        return *std::move(pending).finalize_issue(pk, *issue_response(sk, request, CTX_ISS));
+    }();
+    return t;
+}
+
+// Redemption consumes a token, so each redemption redeems a copy. (Copying is negligible compared
+// to proof generation.)
+Token copy(const Token& t) { return TokenAccess::copy(t); }
+
+// An Anchor Set of size n, with the issuer of `token()` last.
+AnchorSet anchor_set(size_t n) {
+    std::vector<AnchorRef> keys;
+    for (size_t u = 0; u + 1 < n; ++u) {
+        keys.emplace_back(vole_mole::test::distinct_uov_public_key(u));
+    }
+    keys.emplace_back(uov_key_pair().pk);
+    return AnchorSet(keys);
+}
+
+void BM_IssueRequest(benchmark::State& state) {
+    uint64_t i = 0;
+    for (auto _ : state) {
+        auto res = issue_request_with_seed(CTX_ISS, CTX_RED, seed_from_counter(i++));
+        benchmark::DoNotOptimize(res);
+    }
+    state.SetLabel(std::to_string(ISSUE_PROOF_BYTES) + "-byte proof");
+}
+BENCHMARK(BM_IssueRequest)->Unit(benchmark::kMillisecond);
+
+// Verify the issuance proof and sign the commitment.
+void BM_IssueResponse(benchmark::State& state) {
+    const auto& [pk, sk] = uov_key_pair();
+    const auto res = issue_request_with_seed(CTX_ISS, CTX_RED, seed_from_counter(0));
+    for (auto _ : state) {
+        auto response = issue_response(sk, res.request, CTX_ISS);
+        benchmark::DoNotOptimize(response);
+        if (!response) {
+            state.SkipWithError("proof failed to verify");
+            break;
+        }
+    }
+}
+BENCHMARK(BM_IssueResponse)->Unit(benchmark::kMillisecond);
+
+void BM_FinalizeIssue(benchmark::State& state) {
+    const auto& [pk, sk] = uov_key_pair();
+    const auto [pending, request] = issue_request_with_seed(CTX_ISS, CTX_RED, seed_from_counter(0));
+    const auto response = *issue_response(sk, request, CTX_ISS);
+    for (auto _ : state) {
+        // Finalization consumes the pending token, so finalize a copy. (Copying is negligible
+        // compared to evaluating the public map.)
+        auto t = TokenAccess::copy(pending).finalize_issue(pk, response);
+        benchmark::DoNotOptimize(t);
+    }
+}
+BENCHMARK(BM_FinalizeIssue)->Unit(benchmark::kMillisecond);
+
+// Argument: size of the Anchor Set.
+void BM_RedeemRequest(benchmark::State& state) {
+    const auto keys = anchor_set(static_cast<size_t>(state.range(0)));
+    uint64_t i = 0;
+    for (auto _ : state) {
+        auto req = redeem_request_with_seed(copy(token()), keys, CTX_ISS, CTX_RED, CHALLENGE_DIGEST,
+                                            seed_from_counter(i++));
+        benchmark::DoNotOptimize(req);
+    }
+    state.SetLabel(std::to_string(REDEEM_PROOF_BYTES) + "-byte proof");
+}
+BENCHMARK(BM_RedeemRequest)->Arg(1)->Arg(8)->Arg(MAX_ANCHORS)->Unit(benchmark::kMillisecond);
+
+// Argument: size of the Anchor Set.
+void BM_FinalizeRedeem(benchmark::State& state) {
+    const auto keys = anchor_set(static_cast<size_t>(state.range(0)));
+    const auto req = redeem_request_with_seed(copy(token()), keys, CTX_ISS, CTX_RED,
+                                              CHALLENGE_DIGEST, seed_from_counter(0));
+    for (auto _ : state) {
+        auto nf = finalize_redeem(keys, req, CTX_ISS, CTX_RED, CHALLENGE_DIGEST);
+        benchmark::DoNotOptimize(nf);
+        if (!nf) {
+            state.SkipWithError("proof failed to verify");
+            break;
+        }
+    }
+}
+BENCHMARK(BM_FinalizeRedeem)->Arg(1)->Arg(8)->Arg(MAX_ANCHORS)->Unit(benchmark::kMillisecond);
+
+// Unbound tokens.
+
+// An unbound token issued by the fixed test key pair.
+const UnboundToken& unbound_token() {
+    static const UnboundToken t = [] {
+        const auto& [pk, sk] = uov_key_pair();
+        auto [pending, request] = unbound_issue_request_with_seed(CTX_ISS, Seed{});
+        return *std::move(pending).finalize_issue(pk,
+                                                  *unbound_issue_response(sk, request, CTX_ISS));
+    }();
+    return t;
+}
+
+void BM_UnboundIssueRequest(benchmark::State& state) {
+    uint64_t i = 0;
+    for (auto _ : state) {
+        auto res = unbound_issue_request_with_seed(CTX_ISS, seed_from_counter(i++));
+        benchmark::DoNotOptimize(res);
+    }
+    state.SetLabel(std::to_string(UNBOUND_ISSUE_PROOF_BYTES) + "-byte proof");
+}
+BENCHMARK(BM_UnboundIssueRequest)->Unit(benchmark::kMillisecond);
+
+// Verify the issuance proof and sign the commitment.
+void BM_UnboundIssueResponse(benchmark::State& state) {
+    const auto& [pk, sk] = uov_key_pair();
+    const auto res = unbound_issue_request_with_seed(CTX_ISS, seed_from_counter(0));
+    for (auto _ : state) {
+        auto response = unbound_issue_response(sk, res.request, CTX_ISS);
+        benchmark::DoNotOptimize(response);
+        if (!response) {
+            state.SkipWithError("proof failed to verify");
+            break;
+        }
+    }
+}
+BENCHMARK(BM_UnboundIssueResponse)->Unit(benchmark::kMillisecond);
+
+void BM_UnboundFinalizeIssue(benchmark::State& state) {
+    const auto& [pk, sk] = uov_key_pair();
+    const auto [pending, request] = unbound_issue_request_with_seed(CTX_ISS, seed_from_counter(0));
+    const auto response = *unbound_issue_response(sk, request, CTX_ISS);
+    for (auto _ : state) {
+        // Finalization consumes the pending token, so finalize a copy.
+        auto t = TokenAccess::copy(pending).finalize_issue(pk, response);
+        benchmark::DoNotOptimize(t);
+    }
+}
+BENCHMARK(BM_UnboundFinalizeIssue)->Unit(benchmark::kMillisecond);
+
+// Argument: size of the Anchor Set. (Redemption doesn't consume an unbound token, so every
+// iteration redeems the same one.)
+void BM_UnboundRedeemRequest(benchmark::State& state) {
+    const auto keys = anchor_set(static_cast<size_t>(state.range(0)));
+    uint64_t i = 0;
+    for (auto _ : state) {
+        auto req = unbound_redeem_request_with_seed(unbound_token(), keys, CTX_ISS, CTX_RED,
+                                                    CHALLENGE_DIGEST, seed_from_counter(i++));
+        benchmark::DoNotOptimize(req);
+    }
+    state.SetLabel(std::to_string(UNBOUND_REDEEM_PROOF_BYTES) + "-byte proof");
+}
+BENCHMARK(BM_UnboundRedeemRequest)->Arg(1)->Arg(8)->Arg(MAX_ANCHORS)->Unit(benchmark::kMillisecond);
+
+// Argument: size of the Anchor Set.
+void BM_UnboundFinalizeRedeem(benchmark::State& state) {
+    const auto keys = anchor_set(static_cast<size_t>(state.range(0)));
+    const auto req = unbound_redeem_request_with_seed(unbound_token(), keys, CTX_ISS, CTX_RED,
+                                                      CHALLENGE_DIGEST, seed_from_counter(0));
+    for (auto _ : state) {
+        auto nf = unbound_finalize_redeem(keys, req, CTX_ISS, CTX_RED, CHALLENGE_DIGEST);
+        benchmark::DoNotOptimize(nf);
+        if (!nf) {
+            state.SkipWithError("proof failed to verify");
+            break;
+        }
+    }
+}
+BENCHMARK(BM_UnboundFinalizeRedeem)
+    ->Arg(1)
+    ->Arg(8)
+    ->Arg(MAX_ANCHORS)
+    ->Unit(benchmark::kMillisecond);
+
+} // namespace

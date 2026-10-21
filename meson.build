@@ -50,11 +50,11 @@ vole_mole_inc = include_directories('include')
 vole_mole_src_inc = include_directories('src')
 
 vole_mole_lib = static_library('vole-mole',
+  'src/act/act.cpp',
+  'src/ihat/ihat.cpp',
   'src/keccak/keccak.cpp',
-  'src/moussaka/moussaka.cpp',
   'src/pomfrit/pomfrit.cpp',
   'src/random.cpp',
-  'src/ratatouille/ratatouille.cpp',
   'src/uov/uov.cpp',
   include_directories : [vole_mole_inc, vole_mole_src_inc],
   dependencies : [faest_dep, randomness_dep, pqov_dep],
