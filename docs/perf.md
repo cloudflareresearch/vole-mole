@@ -3,7 +3,7 @@
 Measurements are for the release build on an Apple M4 Pro. Each protocol uses
 a 46,591-byte UOV public key. `Party` is who runs the step, `Sends` is how many
 bytes that party sends, and `Time` is the step's runtime. `N` is the number of
-Anchors in the Anchor Set during Moussaka redemption.
+Anchors in the Anchor Set during VOLE-IHAT redemption.
 
 ## Default parameters
 
@@ -16,7 +16,7 @@ proof size.
 |             | `issue_response`           | Issuer    | 119 B   | 0.013 ms |
 |             | `finalize_issue`           | Client    | 5643 B  | 0.19 ms  |
 |             | `verify`                   | Verifier  | —       | 0.37 ms  |
-| Moussaka    | `issue_request`            | Client    | 7317 B  | 0.60 ms  |
+| VOLE-IHAT   | `issue_request`            | Client    | 7317 B  | 0.60 ms  |
 |             | `issue_response`           | Anchor    | 119 B   | 0.36 ms  |
 |             | `finalize_issue`           | Client    | —       | 0.008 ms |
 |             | `redeem_request` (N = 1)   | Client    | 8775 B  | 0.77 ms  |
@@ -25,7 +25,7 @@ proof size.
 |             | `finalize_redeem` (N = 1)  | Moderator | —       | 0.51 ms  |
 |             | `finalize_redeem` (N = 8)  | Moderator | —       | 1.19 ms  |
 |             | `finalize_redeem` (N = 64) | Moderator | —       | 6.55 ms  |
-| Ratatouille | `issue_request`            | Client    | 7032 B  | 0.58 ms  |
+| VOLE-ACT    | `issue_request`            | Client    | 7032 B  | 0.58 ms  |
 |             | `issue_response`           | Issuer    | 119 B   | 0.35 ms  |
 |             | `finalize_issue`           | Client    | —       | 0.008 ms |
 |             | `spend_request`            | Client    | 17383 B | 1.45 ms  |
@@ -43,7 +43,7 @@ smaller, but proving and verifying would be roughly 1.3–7× slower:
 |             | `issue_response`           | Issuer    | 119 B   | 0.013 ms |
 |             | `finalize_issue`           | Client    | 4339 B  | 0.46 ms  |
 |             | `verify`                   | Verifier  | —       | 1.95 ms  |
-| Moussaka    | `issue_request`            | Client    | 5557 B  | 2.47 ms  |
+| VOLE-IHAT   | `issue_request`            | Client    | 5557 B  | 2.47 ms  |
 |             | `issue_response`           | Anchor    | 119 B   | 2.02 ms  |
 |             | `finalize_issue`           | Client    | —       | 0.008 ms |
 |             | `redeem_request` (N = 1)   | Client    | 6493 B  | 2.73 ms  |
@@ -52,7 +52,7 @@ smaller, but proving and verifying would be roughly 1.3–7× slower:
 |             | `finalize_redeem` (N = 1)  | Moderator | —       | 2.27 ms  |
 |             | `finalize_redeem` (N = 8)  | Moderator | —       | 2.96 ms  |
 |             | `finalize_redeem` (N = 64) | Moderator | —       | 8.33 ms  |
-| Ratatouille | `issue_request`            | Client    | 5368 B  | 2.43 ms  |
+| VOLE-ACT    | `issue_request`            | Client    | 5368 B  | 2.43 ms  |
 |             | `issue_response`           | Issuer    | 119 B   | 2.01 ms  |
 |             | `finalize_issue`           | Client    | —       | 0.008 ms |
 |             | `spend_request`            | Client    | 12077 B | 4.04 ms  |
@@ -77,7 +77,7 @@ To pass Google Benchmark flags, such as repetitions or JSON output, run a
 benchmark directly:
 
 ```sh
-./build-release/tests/bench_moussaka --benchmark_repetitions=10 --benchmark_report_aggregates_only=true
+./build-release/tests/bench_ihat --benchmark_repetitions=10 --benchmark_report_aggregates_only=true
 ```
 
 On macOS, set `CC` and `CXX` before `meson setup`, as shown in the

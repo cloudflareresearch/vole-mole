@@ -22,7 +22,7 @@
 // CRT VOLE masks: FAEST v3 derives them from the first lambda witness bits, which lets a verifier
 // check a guess for those bits. Our patched faest-arch-opt uses separate VOLE rows instead, unless
 // OWF_CONSTANTS::REUSE_CRT_WITNESS is set. Separate rows add 256 bytes per proof, and break
-// compatibility with FAEST signatures. FAEST's own parameter sets, Moussaka, and Ratatouille set
+// compatibility with FAEST signatures. FAEST's own parameter sets, VOLE-IHAT, and VOLE-ACT set
 // the flag: their witnesses start with a uniform secret (the key, or commitment randomness r).
 //
 // This code was adapted from faest-arch-opt, which is distributed under the following license:

@@ -14,15 +14,15 @@ proof system from [FAEST][faest].
 
 | Protocol    | Use it when                                                                    | Header                     |
 |:------------|:-------------------------------------------------------------------------------|:---------------------------|
-| PomFRIT     | You need a blind signature: the issuer signs a message it never sees.          | `vole_mole/pomfrit.hpp`     |
-| Moussaka    | A verifier trusts several issuers and must not learn which one issued a token. | `vole_mole/moussaka.hpp`    |
-| Ratatouille | A token carries a hidden credit balance that the issuer updates on each spend. | `vole_mole/ratatouille.hpp` |
+| PomFRIT     | You need a blind signature: the issuer signs a message it never sees.          | `vole_mole/pomfrit.hpp`    |
+| VOLE-IHAT   | A verifier trusts several issuers and must not learn which one issued a token. | `vole_mole/ihat.hpp`       |
+| VOLE-ACT    | A token carries a hidden credit balance that the issuer updates on each spend. | `vole_mole/act.hpp`        |
 
 PomFRIT implements Algorithm 2 of [ePrint 2026/109][pomfrit], a
-[Fischlin][fischlin]-style blind signature. Moussaka is an Issuer-Hiding
-Anonymous Token ([draft-authors-mole-vole-ihat][mous]). Ratatouille is an
-Anonymous Credit Token ([draft-authors-mole-vole-act][rata]). Moussaka and
-Ratatouille were designed for [MOLE][mole], but do not depend on it.
+[Fischlin][fischlin]-style blind signature. VOLE-IHAT is an Issuer-Hiding
+Anonymous Token ([draft-authors-mole-vole-ihat][ihat]). VOLE-ACT is an
+Anonymous Credit Token ([draft-authors-mole-vole-act][act]). VOLE-IHAT and
+VOLE-ACT were designed for [MOLE][mole], but do not depend on it.
 
 ## Build
 
@@ -85,9 +85,9 @@ functions, including what they return and throw.
 |:-----------------------------------------------|:--------------------------------------------------------------|
 | [`keys.cpp`](examples/keys.cpp)                | UOV key generation, encoding, and expansion                   |
 | [`pomfrit.cpp`](examples/pomfrit.cpp)          | Blind signature issuance and verification                     |
-| [`moussaka.cpp`](examples/moussaka.cpp)        | Issuance from one of several Anchors and redemption, with replay rejection |
-| [`unbound_moussaka.cpp`](examples/unbound_moussaka.cpp) | Moussaka with late binding of the redemption context |
-| [`ratatouille.cpp`](examples/ratatouille.cpp)  | Issuance, spending credits, and double-spend rejection        |
+| [`ihat.cpp`](examples/ihat.cpp)                | Issuance from one of several Anchors and redemption, with replay rejection |
+| [`unbound_ihat.cpp`](examples/unbound_ihat.cpp) | VOLE-IHAT with late binding of the redemption context |
+| [`act.cpp`](examples/act.cpp)                  | Issuance, spending credits, and double-spend rejection        |
 
 Build as above, then run:
 
@@ -122,10 +122,10 @@ There is no installed package or pkg-config file yet.
 
 This code has not been audited.
 
-The library does not prevent double spending. Moussaka `finalize_redeem` and
-Ratatouille `spend_response` return a nullifier for each accepted token. Store
+The library does not prevent double spending. VOLE-IHAT `finalize_redeem` and
+VOLE-ACT `spend_response` return a nullifier for each accepted token. Store
 it and reject any request that reuses it, for as long as you accept tokens for
-those contexts. For Moussaka, one record must cover every Anchor Set you accept,
+those contexts. For VOLE-IHAT, one record must cover every Anchor Set you accept,
 since a token is valid under any set that contains its Anchor. Expiring
 contexts, such as an issuance epoch, bound the storage. PomFRIT has no built-in
 nullifier; to make signatures single-use, put one in the signed message.
@@ -133,7 +133,7 @@ nullifier; to make signatures single-use, put one in the signed message.
 ## Performance
 
 Client messages carrying proofs are 5–17 KB. On an Apple M4 Pro, every step
-takes under 2 ms, except Moussaka redemption, which grows with the number of
+takes under 2 ms, except VOLE-IHAT redemption, which grows with the number of
 Anchors (about 7 ms for 64). See [docs/perf.md](docs/perf.md) for full numbers, the smaller-proof
 parameter trade-off (4-12KB), and how to run the benchmarks.
 
@@ -153,8 +153,8 @@ the circuit and protocol designs.
 [mole]: https://github.com/Moderation-of-unLinkable-Endorsements/internet-drafts
 [pomfrit]: https://eprint.iacr.org/2026/109
 [fischlin]: https://www.cryptoplexity.informatik.tu-darmstadt.de/media/crypt/publications_1/fischlinblind-sigs2006.pdf
-[mous]: https://github.com/Moderation-of-unLinkable-Endorsements/internet-drafts/blob/main/draft-authors-mole-vole-ihat.md
-[rata]: https://github.com/Moderation-of-unLinkable-Endorsements/internet-drafts/blob/main/draft-authors-mole-vole-act.md
+[ihat]: https://github.com/Moderation-of-unLinkable-Endorsements/internet-drafts/blob/main/draft-authors-mole-vole-ihat.md
+[act]: https://github.com/Moderation-of-unLinkable-Endorsements/internet-drafts/blob/main/draft-authors-mole-vole-act.md
 [faest]: https://faest.info
 [arch-opt]: https://github.com/faest-sign/faest-arch-opt
 [pqov]: https://github.com/pqov/pqov
