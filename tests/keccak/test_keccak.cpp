@@ -10,8 +10,10 @@
 #include <cstddef>
 #include <cstdint>
 #include <fstream>
+#include <limits>
 #include <optional>
 #include <sstream>
+#include <stdexcept>
 #include <string>
 #include <string_view>
 #include <utility>
@@ -93,6 +95,18 @@ TEST(Keccak, RoundsCompose) {
     keccak_p800_rounds(b, 3, 5);
     keccak_p800_rounds(b, 8, 4);
     EXPECT_EQ(to_hex(b), to_hex(keccak_p800(a)));
+}
+
+TEST(Keccak, ValidatesRoundRange) {
+    Kp800State state{};
+    const Kp800State unchanged = state;
+    keccak_p800_rounds(state, KP800_ROUNDS, 0);
+    EXPECT_EQ(state, unchanged);
+
+    EXPECT_THROW(keccak_p800_rounds(state, KP800_ROUNDS, 1), std::invalid_argument);
+    EXPECT_THROW(keccak_p800_rounds(state, KP800_ROUNDS + 1, 0), std::invalid_argument);
+    EXPECT_THROW(keccak_p800_rounds(state, std::numeric_limits<size_t>::max(), 1),
+                 std::invalid_argument);
 }
 
 struct Bit {

@@ -3,9 +3,9 @@
 #include "keccak/tables.hpp"
 
 #include <array>
-#include <cassert>
 #include <cstddef>
 #include <cstdint>
+#include <stdexcept>
 
 namespace vole_mole {
 
@@ -52,7 +52,9 @@ void round800(std::array<uint32_t, 25>& a, uint32_t rc) {
 } // namespace
 
 void keccak_p800_rounds(Kp800State& state, size_t first_round, size_t num_rounds) {
-    assert(first_round + num_rounds <= KP800_ROUNDS);
+    if (first_round > KP800_ROUNDS || num_rounds > KP800_ROUNDS - first_round) {
+        throw std::invalid_argument("Keccak-p[800]: round range is out of bounds");
+    }
 
     std::array<uint32_t, 25> lanes;
     for (size_t i = 0; i < 25; ++i) {

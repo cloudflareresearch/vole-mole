@@ -19,6 +19,8 @@ using Kp800State = std::array<uint8_t, KP800_STATE_BYTES>;
 //
 // Splitting the permutation up like this lets the prover compute the intermediate states that
 // are committed to in the witness.
+//
+// Throws std::invalid_argument if the requested rounds are outside the permutation.
 void keccak_p800_rounds(Kp800State& state, size_t first_round, size_t num_rounds);
 
 // Apply Keccak-p[800, 12] to `state`.
