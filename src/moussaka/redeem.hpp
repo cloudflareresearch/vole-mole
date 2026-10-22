@@ -41,26 +41,20 @@
 #include "vole_mole/moussaka.hpp"
 #include "vole_mole/uov.hpp"
 
-#include "ct.hpp"
 #include "dst.hpp"
 #include "keccak/segmented.hpp"
+#include "moussaka/circuit.hpp"
 #include "moussaka/commit.hpp"
-#include "qs_bit.hpp"
-#include "uov/circuit.hpp"
-#include "uov/public_key.hpp"
 #include "voleith.hpp"
 
-#include "constants.hpp"   // from faest-arch-opt
-#include "hash.hpp"        // from faest-arch-opt
-#include "parameters.hpp"  // from faest-arch-opt
-#include "polynomials.hpp" // from faest-arch-opt
+#include "hash.hpp"       // from faest-arch-opt
+#include "parameters.hpp" // from faest-arch-opt
 
 #include <algorithm>
 #include <array>
 #include <cstddef>
 #include <cstdint>
 #include <span>
-#include <type_traits>
 
 namespace vole_mole::moussaka::detail {
 
@@ -68,15 +62,11 @@ constexpr size_t REDEEM_QS_DEGREE =
     std::max(keccak::detail::QS_DEGREE, size_t{3}); // Q(s) has degree 3
 static_assert(REDEEM_QS_DEGREE - 1 + 4 <= 32, "faest-arch-opt supports at most 32 masks");
 
-using AnchorSpan = std::span<const AnchorRef>;
-
 // Witness layout.
 constexpr size_t REDEEM_WIT_OFF_R = 0;
 constexpr size_t REDEEM_WIT_OFF_S = REDEEM_WIT_OFF_R + R_BYTES;
 constexpr size_t REDEEM_WIT_OFF_STATES = REDEEM_WIT_OFF_S + uov::N;
 constexpr size_t REDEEM_WIT_OFF_B = REDEEM_WIT_OFF_STATES + keccak::detail::COMMITTED_STATES_BYTES;
-static_assert(MAX_ANCHORS % 8 == 0 && MAX_ANCHORS > 0);
-constexpr size_t SELECTOR_BYTES = MAX_ANCHORS / 8;
 constexpr size_t REDEEM_WITNESS_BYTES = REDEEM_WIT_OFF_B + SELECTOR_BYTES;
 constexpr size_t REDEEM_WITNESS_BITS = 8 * REDEEM_WITNESS_BYTES;
 
@@ -98,10 +88,8 @@ static_assert(keccak::detail::input_map_is_valid(REDEEM_COM_TO_WIT, REDEEM_WIT_O
               "REDEEM_COM_TO_WIT is malformed");
 
 constexpr size_t REDEEM_NUM_CONSTRAINTS =
-    8 * REDEEM_WIT_OFF_B // bit constraints for r, s, and the intermediate states
-    + MAX_ANCHORS        // each selector bit is a bit (or zero if beyond the Anchor Set)
-    + (MAX_ANCHORS - 1)  // parity constraints
-    + 1                  // weight constraint
+    8 * REDEEM_WIT_OFF_B       // bit constraints for r, s, and the intermediate states
+    + SELECTOR_NUM_CONSTRAINTS // selector constraints
     + keccak::detail::NUM_SEGMENT_CONSTRAINTS // segment ends in a committed state
     + 1; // Q(s) = commitment (a random linear combination of the M components)
 
@@ -116,11 +104,7 @@ encode_redeem_witness(const Nullifier& nf, const Context& ctx_iss, const Context
     keccak::detail::encode_committed_states(
         std::span(w).subspan<REDEEM_WIT_OFF_STATES, keccak::detail::COMMITTED_STATES_BYTES>(),
         encode_com_state(nf, ctx_iss, ctx_red, r));
-    // Write every selector bit so that the memory access pattern doesn't depend on i.
-    for (size_t u = 0; u < MAX_ANCHORS; ++u) {
-        const size_t b = selector_bit(u);
-        w[b / 8] |= static_cast<uint8_t>(vole_mole::detail::ct_eq_mask(u, i) & (1u << (b % 8)));
-    }
+    encode_selector(std::span(w).subspan<REDEEM_WIT_OFF_B, SELECTOR_BYTES>(), i);
     return w;
 }
 
@@ -145,38 +129,14 @@ struct faest::OWF_CONSTANTS<faest::secpar::s128, vole_mole::moussaka::detail::OW
 
 namespace vole_mole::moussaka::detail {
 
-// Same as faest::v3::faest_em_128_f, except for the OWF.
-using RedeemParams =
-    faest::parameter_set<faest::secpar::s128, /* TAU */ 17, OWF_MOUSSAKA_REDEEM,
-                         faest::prg::aes_ctr, faest::prg::aes_ctr, faest::leaf_hash::aes_ctr,
-                         /* W_GRIND */ 8, {faest::bavc::one_tree, /* T_OPEN */ 105},
-                         /* CRT_VOLE_MASKS */ true, /* HASH_INPUTS_V3 */ true>;
-
-namespace check {
-using EM128F = faest::v3::faest_em_128_f;
-static_assert(std::is_same_v<RedeemParams::bavc_t, EM128F::bavc_t>);
-static_assert(RedeemParams::tau_v == EM128F::tau_v);
-static_assert(RedeemParams::delta_bits_v == EM128F::delta_bits_v);
-static_assert(RedeemParams::vole_prg_v == EM128F::vole_prg_v);
-static_assert(RedeemParams::leaf_hash_v == EM128F::leaf_hash_v);
-static_assert(RedeemParams::use_crt_vole_masks == EM128F::use_crt_vole_masks);
-static_assert(RedeemParams::use_v3_hash_inputs == EM128F::use_v3_hash_inputs);
-static_assert(RedeemParams::use_grinding == EM128F::use_grinding);
-static_assert(RedeemParams::CONSTS::REUSE_CRT_WITNESS);
-static_assert(RedeemParams::CONSTS::CRT_LABEL_ROW_OFFSET == 0);
+using RedeemParams = VoleithParams<OWF_MOUSSAKA_REDEEM>;
+static_assert(is_em128f_variant<RedeemParams>());
 static_assert(REDEEM_WIT_OFF_R == 0 && R_BYTES >= RedeemParams::secpar_bytes);
-} // namespace check
 
 struct RedeemRelation {
     using params = RedeemParams;
 
-    struct instance {
-        AnchorSpan anchors;
-        Nullifier nf;
-        Context ctx_iss;
-        Context ctx_red;
-        ChallengeDigest challenge_digest;
-    };
+    using instance = RedeemInstance;
 
     static constexpr size_t NUM_CONSTRAINTS = REDEEM_NUM_CONSTRAINTS;
 
@@ -185,66 +145,19 @@ struct RedeemRelation {
     static constexpr std::span<const uint8_t> DST = MOUSSAKA_REDEEM_PROOF_DST;
 
     static void hash_instance(faest::hash_state& hasher, const instance& x) {
-        static_assert(MAX_ANCHORS <= UINT32_MAX);
-        const auto update_u32 = [&hasher](size_t v) {
-            const auto u = static_cast<uint32_t>(v);
-            const std::array<uint8_t, 4> bytes = {
-                static_cast<uint8_t>(u), static_cast<uint8_t>(u >> 8),
-                static_cast<uint8_t>(u >> 16), static_cast<uint8_t>(u >> 24)};
-            hasher.update(bytes);
-        };
-        update_u32(MAX_ANCHORS);
-        update_u32(x.anchors.size());
-        for (const uov::PublicKey& pk : x.anchors) {
-            hasher.update(uov::detail::PublicKeyAccess::digest(pk));
-        }
-        hasher.update(x.nf);
-        hasher.update(x.ctx_iss);
-        hasher.update(x.ctx_red);
-        hasher.update(x.challenge_digest);
+        hash_redeem_instance(hasher, x);
     }
 
     template <typename QS>
     static void constraints(QS* qs, const instance& x,
                             std::span<const uint8_t, params::CONSTS::QS::CHALLENGE_BYTES> chal2) {
         static_assert(QS::max_degree == REDEEM_QS_DEGREE);
-        using faest::poly1;
-        using vole_mole::detail::qs_add_bit_constraint;
-        using vole_mole::detail::qs_mul;
-        using vole_mole::detail::qs_to_gfsecpar;
-        using qs_bit = vole_mole::detail::qs_bit<QS, 1>;
-        using qs_1 = keccak::detail::qs_val<QS, 1>;
-        using qs_2 = keccak::detail::qs_val<QS, 2>;
-        using qs_3 = keccak::detail::qs_val<QS, 3>;
-        using qs_out = keccak::detail::qs_val<QS, keccak::detail::OUTPUT_DEGREE>;
-        static_assert(3 <= keccak::detail::OUTPUT_DEGREE);
-        const size_t n = x.anchors.size();
 
         // Add bit constraints: Every bit of r, s, and the intermediate states is a bit.
-        for (size_t i = 0; i < 8 * REDEEM_WIT_OFF_B; ++i) {
-            qs_add_bit_constraint(qs, qs->get_witness_bit(i));
-        }
+        qs_add_bit_constraints(qs, 8 * REDEEM_WIT_OFF_B);
 
-        // Add selector constraints: b[u] is a bit for u in [N] and 0 otherwise; ...
-        std::array<qs_bit, MAX_ANCHORS> b;
-        for (size_t u = 0; u < MAX_ANCHORS; ++u) {
-            b[u] = qs->get_witness_bit(selector_bit(u));
-            if (u < n) {
-                qs_add_bit_constraint(qs, b[u]);
-            } else {
-                qs->add_constraint(qs_to_gfsecpar(b[u]));
-            }
-        }
-
-        // ... sum(b[0..u+1]) * b[u+1] = 0 for each u in [MAX_ANCHORS - 1]; ...
-        qs_bit prefix = b[0];
-        for (size_t u = 0; u + 1 < MAX_ANCHORS; ++u) {
-            qs->add_constraint(qs_to_gfsecpar(qs_mul<QS, 1, 1>(prefix, b[u + 1])));
-            prefix += b[u + 1];
-        }
-
-        // ... and sum(b) = 1.
-        qs->add_constraint(qs_to_gfsecpar(prefix + poly1(1)));
+        // Add selector constraints.
+        const auto b = qs_add_selector_constraints(qs, x.anchors.size(), REDEEM_WIT_OFF_B);
 
         // Add segment constraints: All but the last segment end in the expected intermediate state.
         const auto out = keccak::detail::qs_keccak(
@@ -253,26 +166,9 @@ struct RedeemRelation {
                                      REDEEM_COM_TO_WIT),
             REDEEM_WIT_OFF_STATES);
 
-        // Compute l(Q(s)) = sum_u b[u] * l(P[u](s)), where l is the random linear combination of
-        // the M components.
-        const uov::detail::Combination<QS> l(chal2, MOUSSAKA_REDEEM_COMBINE_DST);
-        std::array<qs_1, uov::N> s;
-        for (size_t i = 0; i < uov::N; ++i) {
-            s[i] = qs->load_witness_8_bits_and_combine(8 * (REDEEM_WIT_OFF_S + i));
-        }
-        qs_3 lq(poly1(0), qs);
-        for (size_t u = 0; u < n; ++u) {
-            const qs_2 lp = uov::detail::qs_eval_combined_public_map<QS>(x.anchors[u].get(), s, l);
-            lq += qs_mul<QS, 1, 2>(b[u], lp);
-        }
-
-        // Add output constraint: The last segment ends in Q(s), i.e., l(Q(s)) = l(out). Each byte
-        // of the output is combined into an element of GF(256).
-        qs_out lout(poly1(0), qs);
-        for (size_t k = 0; k < uov::M; ++k) {
-            lout += l.coeff(k) * keccak::detail::qs_byte(out, k);
-        }
-        qs->add_constraint(lout + keccak::detail::qs_lift<keccak::detail::OUTPUT_DEGREE>(lq));
+        // Add output constraint: The last segment ends in Q(s).
+        qs_add_signature_constraint(qs, x.anchors, b, REDEEM_WIT_OFF_S, out, chal2,
+                                    MOUSSAKA_REDEEM_COMBINE_DST);
     }
 };
 

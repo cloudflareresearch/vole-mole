@@ -7,8 +7,11 @@ if get_option('tests')
   tests = [
     ['keccak', 'keccak/test_keccak.cpp'],
     ['moussaka-issue', 'moussaka/test_issue.cpp'],
+    ['unbound-moussaka-issue', 'moussaka/test_unbound_issue.cpp'],
     ['moussaka-redeem', 'moussaka/test_redeem.cpp'],
+    ['unbound-moussaka-redeem', 'moussaka/test_unbound_redeem.cpp'],
     ['moussaka', 'moussaka/test_moussaka.cpp'],
+    ['unbound-moussaka', 'moussaka/test_unbound_moussaka.cpp'],
     ['pomfrit', 'pomfrit/test_pomfrit.cpp'],
     ['poly2d', 'poly2d/test_poly2d.cpp'],
     ['random', 'random/test_random.cpp'],
@@ -20,7 +23,8 @@ if get_option('tests')
   ]
 
   # Test data files (e.g., known answers) are read from the source tree; see `data_path` in
-  # keccak/test_keccak.cpp, moussaka/test_moussaka.cpp, and ratatouille/test_ratatouille.cpp.
+  # keccak/test_keccak.cpp, moussaka/test_moussaka.cpp, moussaka/test_unbound_moussaka.cpp, and
+  # ratatouille/test_ratatouille.cpp.
   test_data_arg = '-DVOLE_MOLE_TEST_DATA_DIR="@0@"'.format(meson.current_source_dir())
 
   foreach t : tests
@@ -35,8 +39,9 @@ if get_option('tests')
 
   # Run explicitly to regenerate Moussaka and Ratatouille known answers, never as part of the test
   # suite.
-  foreach g : ['moussaka', 'ratatouille']
-    executable('gen_@0@_kat'.format(g), '@0@/gen_@0@_kat.cpp'.format(g),
+  foreach g : [['moussaka', 'moussaka'], ['moussaka', 'unbound_moussaka'],
+               ['ratatouille', 'ratatouille']]
+    executable('gen_@0@_kat'.format(g[1]), '@0@/gen_@1@_kat.cpp'.format(g[0], g[1]),
       include_directories : test_inc,
       dependencies : test_deps,
     )

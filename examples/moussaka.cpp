@@ -37,6 +37,30 @@ moussaka::Context make_context(std::string_view label) {
     return ctx;
 }
 
+// A Moderator, identified by its redemption context.
+struct Moderator {
+    std::string_view name;
+    std::set<moussaka::Nullifier> spent;
+
+    // Handle a redemption request. Returns true if the token is accepted.
+    bool handle_redeem(const moussaka::AnchorSet& anchors, const moussaka::Context& ctx_iss,
+                       const moussaka::RedeemRequest& request,
+                       const moussaka::ChallengeDigest& challenge_digest) {
+        const auto ctx_red = make_context(name);
+        const auto nf =
+            moussaka::finalize_redeem(anchors, request, ctx_iss, ctx_red, challenge_digest);
+        if (!nf) {
+            std::println("Moderator {}: rejected an invalid token", name);
+            return false;
+        } else if (!spent.insert(*nf).second) {
+            std::println("Moderator {}: rejected a token that was already redeemed", name);
+            return false;
+        }
+        std::println("Moderator {}: accepted a token", name);
+        return true;
+    }
+};
+
 } // namespace
 
 int main() {
@@ -46,10 +70,6 @@ int main() {
     // the start of the epoch and 86400 as the duration of the epoch in seconds.
     const auto ctx_iss =
         std::bit_cast<moussaka::Context>(std::array<uint64_t, 2>{1791244800, 86400});
-
-    // The redemption context might be used to bound the identity of the Moderator. This ensures the
-    // token can only be redeemed by the Moderator the Client committed to during issuance.
-    const auto ctx_red = make_context("example.com");
 
     // Setup.
     //
@@ -65,34 +85,19 @@ int main() {
         anchor_pks.emplace_back(sk.public_key_bytes());
     }
 
-    // The Moderator remembers the nullifier of every token it accepts, for as long as it accepts
-    // tokens for the given issuance and redemption context (across every Anchor Set it accepts).
-    std::set<moussaka::Nullifier> spent;
-
     // The Anchor Set trusted by the Moderator. Clients redeem tokens against this set.
     const moussaka::AnchorSet anchors(anchor_pks); // anchor_pks must outlive anchors
 
-    // Handle a redemption request. Returns true if the token is accepted.
-    const auto handle_redeem = [&](const moussaka::RedeemRequest& request,
-                                   const moussaka::ChallengeDigest& challenge_digest) {
-        const auto nf =
-            moussaka::finalize_redeem(anchors, request, ctx_iss, ctx_red, challenge_digest);
-        if (!nf) {
-            std::println("Moderator: rejected an invalid token");
-            return false;
-        } else if (!spent.insert(*nf).second) {
-            std::println("Moderator: rejected a token that was already redeemed");
-            return false;
-        }
-        std::println("Moderator: accepted a token");
-        return true;
-    };
+    // The redemption context might be used to bound the identity of the Moderator. This ensures the
+    // token can only be redeemed by the Moderator the Client committed to during issuance.
+    Moderator moderator{.name = "example.com", .spent = {}};
 
     // Issue.
     //
     // Client: Request a token from an Anchor.
     constexpr size_t ISSUER = 1;
-    auto [pending_token, issue_request] = moussaka::issue_request(ctx_iss, ctx_red);
+    auto [pending_token, issue_request] =
+        moussaka::issue_request(ctx_iss, make_context(moderator.name));
 
     // Anchor: Issue a token to the Client.
     const auto issue_response =
@@ -116,16 +121,16 @@ int main() {
     const moussaka::ChallengeDigest challenge_digest{0x01};
 
     // Client: Request redemption.
-    const auto redeem_request =
-        std::move(*token).redeem_request(anchors, ctx_iss, ctx_red, challenge_digest);
+    const auto redeem_request = std::move(*token).redeem_request(
+        anchors, ctx_iss, make_context(moderator.name), challenge_digest);
 
     // Moderator: Finalize redemption.
-    if (!handle_redeem(redeem_request, challenge_digest)) {
+    if (!moderator.handle_redeem(anchors, ctx_iss, redeem_request, challenge_digest)) {
         return EXIT_FAILURE;
     }
 
     // Malicious Client: Try to replay the redemption request.
-    if (handle_redeem(redeem_request, challenge_digest)) {
+    if (moderator.handle_redeem(anchors, ctx_iss, redeem_request, challenge_digest)) {
         return EXIT_FAILURE;
     }
 

@@ -5,6 +5,7 @@
 #include "vole_mole/uov.hpp"
 
 #include "keccak/segmented.hpp" // internal
+#include "moussaka/circuit.hpp" // internal
 #include "moussaka/commit.hpp"  // internal
 #include "moussaka/redeem.hpp"  // internal
 
