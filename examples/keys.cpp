@@ -29,7 +29,7 @@ int main() {
 
     // Here is a minimal round-trip example for a UOV key pair as used in MOLE. The signer doesn't
     // produce a proper UOV signature. Instead, it directly derives a preimage for a target. This is
-    // a building block for higher-level protocols, including PomFRIT, Moussaka, Ratatouille, and
+    // a building block for higher-level protocols, including PomFRIT, VOLE-IHAT, VOLE-ACT, and
     // UOV signatures themselves.
     //
     // WARNING: The target may be chosen by an attacker, and the signer can't tell what it's

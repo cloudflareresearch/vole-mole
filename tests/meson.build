@@ -5,26 +5,25 @@ if get_option('tests')
   gtest_dep = dependency('gtest_main', default_options : ['warning_level=0']).as_system()
 
   tests = [
+    ['act-issue', 'act/test_issue.cpp'],
+    ['act-spend', 'act/test_spend.cpp'],
+    ['act', 'act/test_act.cpp'],
+    ['ihat-issue', 'ihat/test_issue.cpp'],
+    ['unbound-ihat-issue', 'ihat/test_unbound_issue.cpp'],
+    ['ihat-redeem', 'ihat/test_redeem.cpp'],
+    ['unbound-ihat-redeem', 'ihat/test_unbound_redeem.cpp'],
+    ['ihat', 'ihat/test_ihat.cpp'],
+    ['unbound-ihat', 'ihat/test_unbound_ihat.cpp'],
     ['keccak', 'keccak/test_keccak.cpp'],
-    ['moussaka-issue', 'moussaka/test_issue.cpp'],
-    ['unbound-moussaka-issue', 'moussaka/test_unbound_issue.cpp'],
-    ['moussaka-redeem', 'moussaka/test_redeem.cpp'],
-    ['unbound-moussaka-redeem', 'moussaka/test_unbound_redeem.cpp'],
-    ['moussaka', 'moussaka/test_moussaka.cpp'],
-    ['unbound-moussaka', 'moussaka/test_unbound_moussaka.cpp'],
     ['pomfrit', 'pomfrit/test_pomfrit.cpp'],
     ['poly2d', 'poly2d/test_poly2d.cpp'],
     ['random', 'random/test_random.cpp'],
-    ['ratatouille-issue', 'ratatouille/test_issue.cpp'],
-    ['ratatouille-spend', 'ratatouille/test_spend.cpp'],
-    ['ratatouille', 'ratatouille/test_ratatouille.cpp'],
     ['uov', 'uov/test_uov.cpp'],
     ['voleith', 'voleith/test_voleith.cpp'],
   ]
 
   # Test data files (e.g., known answers) are read from the source tree; see `data_path` in
-  # keccak/test_keccak.cpp, moussaka/test_moussaka.cpp, moussaka/test_unbound_moussaka.cpp, and
-  # ratatouille/test_ratatouille.cpp.
+  # keccak/test_keccak.cpp, ihat/test_ihat.cpp, ihat/test_unbound_ihat.cpp, and act/test_act.cpp.
   test_data_arg = '-DVOLE_MOLE_TEST_DATA_DIR="@0@"'.format(meson.current_source_dir())
 
   foreach t : tests
@@ -37,10 +36,9 @@ if get_option('tests')
     test(t[0], exe, protocol : 'gtest', timeout : 300)
   endforeach
 
-  # Run explicitly to regenerate Moussaka and Ratatouille known answers, never as part of the test
+  # Run explicitly to regenerate VOLE-IHAT and VOLE-ACT known answers, never as part of the test
   # suite.
-  foreach g : [['moussaka', 'moussaka'], ['moussaka', 'unbound_moussaka'],
-               ['ratatouille', 'ratatouille']]
+  foreach g : [['act', 'act'], ['ihat', 'ihat'], ['ihat', 'unbound_ihat']]
     executable('gen_@0@_kat'.format(g[1]), '@0@/gen_@1@_kat.cpp'.format(g[0], g[1]),
       include_directories : test_inc,
       dependencies : test_deps,
@@ -54,9 +52,9 @@ if get_option('benchmarks')
   ).as_system()
 
   benchmarks = [
-    ['moussaka', 'moussaka/bench_moussaka.cpp'],
+    ['act', 'act/bench_act.cpp'],
+    ['ihat', 'ihat/bench_ihat.cpp'],
     ['pomfrit', 'pomfrit/bench_pomfrit.cpp'],
-    ['ratatouille', 'ratatouille/bench_ratatouille.cpp'],
     ['uov', 'uov/bench_uov.cpp'],
   ]
 
