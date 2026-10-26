@@ -481,9 +481,11 @@ the base protocol.
    Keccak-p[800] with 128-bit keys and 192-bit truncation is outside this note.
 2. The extraction, ZK and random-oracle bounds of `lean/` are mechanized for the five base
    relations; for the two unbound relations only the arithmetization (soundness and completeness),
-   the domain separation and the protocol cores below are mechanized. Extending the end-to-end
-   extraction theorems (`EndToEnd/Relations.lean`) and the executable verifier to the unbound
-   relations is mechanical but not done.
+   the domain separation, the byte-level spec (checked against the C++ KAT) and the protocol cores
+   below are mechanized. Extending the end-to-end extraction theorems (`EndToEnd/Relations.lean`)
+   and the executable verifier and prover (`Verifier/Relations.lean`, so that `lake exe
+   verifier_vectors` also checks the proofs of `unbound_moussaka_kat.txt`) to the unbound relations
+   is mechanical but not done.
 3. Thm U5 is mechanized only from its step 3 on (the swap invariance and the assembly from
    per-hop hypotheses), not on an executable spec as `Privacy/Moussaka.lean` does for the base
    protocol.
@@ -504,4 +506,8 @@ All in `lean/VoleMole/`; no `sorry`, no axioms beyond the standard three.
   `t_injOn_of_derive`, `exists_unsigned_per_context`, `count_le_per_variant` (Thm U1),
   `nf_determined` (Cor U2), `squat_cases` (Prop U3), `swap_invariant` (Thm U5 step 4) and
   `anonymity_unbound` (Thm U5 from the hop hypotheses).
+- `Spec/MoussakaUnbound.lean`: the executable byte-level spec (seed expansion, `ucom`, `derive`,
+  both witness encodings), built on the Arith encodings, with `ucom_getD` and `derive_getD` tying it
+  to the Arith model. `lake exe spec_kats` checks it against every field of
+  `tests/moussaka/unbound_moussaka_kat.txt` that does not depend on the VOLEitH internals.
 - `Protocols/DomainSeparation.lean`: the unbound rows (`mousU`).

@@ -19,7 +19,8 @@ and the traced lengths, first bytes, final bytes and output lengths match the ta
 **Result.** Every SHAKE128 call in vole-mole falls into one of 25 input domains: 18 for the proof
 system (per relation where lengths differ), 5 fixed-length application domains, PomFRIT's
 `hash_to_target`, and PomFRIT's seed XOF. The first 23 are pairwise disjoint (Lean:
-`clean_pairwise`). Disjointness comes from a final tag byte (proof system), a 7-byte DST prefix
+`clean_pairwise`). With the unbound Moussaka tokens of PR #63 (§3.6) there are 5 more domains (30
+in all, 28 separated). Disjointness comes from a final tag byte (proof system), a 7-byte DST prefix
 (application) or the input length. The SHAKE256 calls (pk digest, pqov keygen, pqov vinegar) have
 three distinct fixed lengths. The three Keccak-p[800,12] calls have distinct 7-byte DST prefixes.
 
@@ -381,6 +382,23 @@ length separation above (and the relation-level parse) is lost.
 
 ---
 
+### 3.6 Unbound Moussaka tokens (PR #63)
+
+The unbound relations and seed XOFs use the Moussaka DSTs with version byte 1
+(`UNBOUND_VERSION`, `src/dst.hpp`): `"mous\1i0"`, `"mous\1r0"`, `"mous\1l0"`, `"mous\1s0"`,
+`"mous\1s1"`. They add the domains H₂⁰ unbound issue (69 bytes) and unbound redeem (`104 + 32k`,
+prefix `40 00 00 00`), the unbound combination hash (63), and the two unbound seed XOFs (39), each
+separated from its bound counterpart by byte 4 of the DST. In the suffix-tagged proof-system
+domains they add the lengths H₃ 281 and 608, H₂¹ 4261 and 9493, H₂² 497 and 824, and H₂³ 205
+(already present); these are distinct from the bound relations' lengths, so relation-level
+separation (§3.5) holds for all seven relations. The H₂¹, H₂² and H₂³ lengths are checked against
+the C++ by `LeanModels.ProofHashLengthsMatchDomainTable`. `UCom` and `Derive` (the two new
+Keccak-p[800,12] inputs, `"mous\1c0"` and `"mous\1d0"`) differ from each other and from the bound
+`Com` in their DST bytes (`Arith/MoussakaUnbound.lean`, `encodeUnboundComState_ne_encodeComState`,
+`encodeDeriveState_ne_*`). The PomFRIT exceptions of §3.3 do not involve any of them except
+through the H₃, H₂¹ and H₂² tags, where `target_meets_H3` and `target_meets_H21` are restated with
+the extended length sets.
+
 ## 4. XOF output-length reuse
 
 SHAKE outputs are prefix-consistent, so a problem would need one input squeezed to two lengths.
@@ -549,14 +567,15 @@ A **length prefix on msg alone does not fix this**: the final byte would still b
 `lean/VoleMole/Protocols/DomainSeparation.lean` (check with
 `cd lean && lake env lean VoleMole/Protocols/DomainSeparation.lean`):
 - `Shape`, `sep` and `sep_sound`: the prefix/suffix/length criterion is sound;
-- `clean_pairwise`: the 23 domains of §3.2 are pairwise separated;
+- `clean_pairwise`: the 23 domains of §3.2, and the 5 unbound Moussaka domains of §3.6, are pairwise
+  separated (28);
 - `target_sep` and `seed_sep`: A2 and A3 are separated from every domain except the listed
   exceptions;
 - `target_seed_sep`: A2 and A3 are separated from each other;
 - `target_meets_H1_leaves7/8`, `target_meets_H1_com`, `target_meets_H3`, `target_meets_H21` and
   `target_meets_H22`, plus `seed_meets_H20_pomfrit` and `seed_meets_H23`: explicit common strings,
   so the exceptions are real;
-- `fixed_pairwise`: with `APP_TAG = 0x20` appended to A2 and A3, all 25 domains are pairwise
+- `fixed_pairwise`: with `APP_TAG = 0x20` appended to A2 and A3, all 30 domains are pairwise
   separated.
 
 The table entries (lengths, tags, DST bytes) are transcribed from §2 and were checked against the
