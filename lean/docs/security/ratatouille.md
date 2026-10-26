@@ -2,8 +2,9 @@
 
 This note fixes the security notions of the Ratatouille Anonymous Credit Token (ACT) and proves
 them for the code in `src/ratatouille/*` and `include/vole_mole/ratatouille.hpp` at commit
-`6d7113e` (`main`), with explicit bounds. It also covers the in-progress fix on branch
-`voleith-label-rows`.
+`6d7113e` (`main`), with explicit bounds. It also covers the fix of commit `d5def9c` (branch
+`voleith-label-rows`). That fix was merged as `64fd1a4`, but Ratatouille opts out of it with
+`REUSE_CRT_WITNESS`, so on `main` Ratatouille is still at the `6d7113e` bounds (PU).
 
 Sources used:
 - the draft, now named `draft-authors-mole-act-ratatouille.md` (the README links to the old name,

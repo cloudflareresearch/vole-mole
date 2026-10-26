@@ -16,9 +16,10 @@ import VoleMole.Spec.Common
   (`keccak/segmented.hpp:113-119`) and the 64-bit one-hot selector.
 * The proof instances as hashed by `hash_instance` (`issue.hpp:164-167`, `redeem.hpp:182-200`),
   and the relations the constraint systems are proved (in `Arith/Moussaka.lean`) to enforce.
-* Every step: `issueRequest`, `issueResponse` (Anchor), `finalizeIssue`, `redeemRequest`
-  (index and token checks, `moussaka.cpp:186-215`), `finalizeRedeem` (Moderator,
-  `:278-289`), the `AnchorSet` constructor's validation (`:138-152`), and a Moderator that keeps
+* Every step: `issueRequest`, `issueResponse` (Anchor), `finalizeIssue`, `redeemRequest` (the
+  Client finds its issuer itself, `findIssuer`, `moussaka.cpp:184-219`; the index-taking step of
+  the API before `21be618` is `redeemRequestAt`, `redeemRequest_eq_at`), `finalizeRedeem` (Moderator,
+  `:276-287`), the `AnchorSet` constructor's validation (`:138-152`), and a Moderator that keeps
   one nullifier record per `(ctx_iss, ctx_red)` across all Anchor Sets, as `moussaka.hpp:136-146`
   requires of the caller.
 * UOV verification `P(s) = t` concretely (`UOVKey.eval`).
@@ -38,7 +39,7 @@ import VoleMole.Spec.Common
 * `redeemEncode_inj`, `redeemEncode_ne_of_challengeDigest`, `issueEncode_inj`, `comState_inj`:
   instance and commitment encodings parse uniquely (redemption is bound to `challenge_digest`,
   the Anchor Set, `nf` and both contexts; the commitment input determines all of its fields).
-* Input validation: `redeemRequest_index`, `redeemRequest_invalidToken`, `finalizeIssue_none_iff`,
+* Input validation: `redeemRequest_invalidToken`, `redeemRequestAt_index`, `finalizeIssue_none_iff`,
   `issueResponse_none_iff`, `finalizeRedeem_some`, `AnchorSet.mk?_valid`.
 -/
 
@@ -234,8 +235,12 @@ def issueResponse (PI : NIZK IssueInstance) (sk : Signer) (req ctxIss : Bytes) :
 def finalizeIssue (pk : UOVKey) (p : PendingToken) (s : Bytes) : Option Token :=
   if pk.eval s = p.t then some ⟨p.nf, p.r, s⟩ else none
 
-/-- `detail::redeem_request_with_seed(token, anchors, i, ctx_iss, ctx_red, challenge_digest, seed)`. -/
-def redeemRequest (PR : NIZK RedeemInstance) (tok : Token) (A : AnchorSet) (i : ℕ)
+/-- The redemption step of the API before `21be618`, where the caller passes the issuer's index `i`
+(`redeem_request_with_seed(token, anchors, i, …)`): out of range is `indexOutOfRange`, a key that
+does not verify the token `invalidToken`. `redeemRequest` is this step at the index `findIssuer`
+returns (`redeemRequest_eq_at`); the privacy games parametrized by an index rule
+(`Privacy/Moussaka*.lean`) are stated for it. -/
+def redeemRequestAt (PR : NIZK RedeemInstance) (tok : Token) (A : AnchorSet) (i : ℕ)
     (ctxIss ctxRed cd seed : Bytes) : Except Error Bytes :=
   match A.keys[i]? with
   | none => .error .indexOutOfRange
@@ -244,6 +249,64 @@ def redeemRequest (PR : NIZK RedeemInstance) (tok : Token) (A : AnchorSet) (i : 
       .ok (tok.nf ++ PR.prove (encodeRedeemWitness tok.nf ctxIss ctxRed tok.r tok.s i)
         ⟨A.keys, tok.nf, ctxIss, ctxRed, cd⟩ (expandRedeemSeed seed))
     else .error .invalidToken
+
+/-- `find_issuer` (`moussaka.cpp:192-209`, the loop of `redeem_request_with_seed`): the last
+index `u` with `P_u(s) = t`, or `none` (`std::invalid_argument("Moussaka: invalid token")`). -/
+def findIssuer (A : AnchorSet) (t s : Bytes) : Option ℕ :=
+  ((List.range A.keys.length).filter fun u => decide (A.keys[u]?.map (·.eval s) = some t)).getLast?
+
+theorem findIssuer_some {A : AnchorSet} {t s : Bytes} {i : ℕ} (h : findIssuer A t s = some i) :
+    ∃ pk : UOVKey, A.keys[i]? = some pk ∧ pk.eval s = t := by
+  have hm := List.mem_of_getLast? h
+  simp only [List.mem_filter, decide_eq_true_eq] at hm
+  obtain ⟨-, he⟩ := hm
+  cases hk : A.keys[i]? with
+  | none => simp [hk] at he
+  | some pk => simp only [hk, Option.map_some, Option.some.injEq] at he; exact ⟨pk, rfl, he⟩
+
+theorem findIssuer_isSome {A : AnchorSet} {t s : Bytes} :
+    (findIssuer A t s).isSome ↔ ∃ i : ℕ, ∃ pk : UOVKey, A.keys[i]? = some pk ∧ pk.eval s = t := by
+  constructor
+  · intro h
+    obtain ⟨i, hi⟩ := Option.isSome_iff_exists.1 h
+    exact ⟨i, findIssuer_some hi⟩
+  · rintro ⟨i, pk, hk, he⟩
+    have hi : i < A.keys.length := (List.getElem?_eq_some_iff.1 hk).1
+    unfold findIssuer
+    rw [Option.isSome_iff_ne_none, Ne, List.getLast?_eq_none_iff, ← Ne, ← List.length_pos_iff]
+    refine List.length_pos_of_mem (a := i) ?_
+    have : A.keys[i] = pk := (List.getElem?_eq_some_iff.1 hk).2
+    simp [hi, this, he]
+
+/-- `detail::redeem_request_with_seed(token, anchors, ctx_iss, ctx_red, challenge_digest, seed)`
+(`moussaka.cpp:184-219`): the Client finds its issuer's index itself (`findIssuer`, the last key
+that verifies the token) and rejects the token if no key does. -/
+def redeemRequest (PR : NIZK RedeemInstance) (tok : Token) (A : AnchorSet)
+    (ctxIss ctxRed cd seed : Bytes) : Except Error Bytes :=
+  match findIssuer A (com tok.nf ctxIss ctxRed tok.r) tok.s with
+  | none => .error .invalidToken
+  | some i =>
+    .ok (tok.nf ++ PR.prove (encodeRedeemWitness tok.nf ctxIss ctxRed tok.r tok.s i)
+      ⟨A.keys, tok.nf, ctxIss, ctxRed, cd⟩ (expandRedeemSeed seed))
+
+/-- **The bridge to the index-taking step**: where `findIssuer` succeeds, `redeemRequest` is
+`redeemRequestAt` at the index it returns. -/
+theorem redeemRequest_eq_at (PR : NIZK RedeemInstance) (tok : Token) (A : AnchorSet) (i : ℕ)
+    (ctxIss ctxRed cd seed : Bytes) (h : findIssuer A (com tok.nf ctxIss ctxRed tok.r) tok.s = some i) :
+    redeemRequest PR tok A ctxIss ctxRed cd seed = redeemRequestAt PR tok A i ctxIss ctxRed cd seed := by
+  obtain ⟨pk, hk, he⟩ := findIssuer_some h
+  simp [redeemRequest, redeemRequestAt, h, hk, he]
+
+/-- No key of the set verifies the token: rejected (`std::invalid_argument`), before any proving. -/
+theorem redeemRequest_invalidToken (PR : NIZK RedeemInstance) (tok : Token) (A : AnchorSet)
+    (ctxIss ctxRed cd seed : Bytes)
+    (h : ∀ pk ∈ A.keys, pk.eval tok.s ≠ com tok.nf ctxIss ctxRed tok.r) :
+    redeemRequest PR tok A ctxIss ctxRed cd seed = .error .invalidToken := by
+  cases hf : findIssuer A (com tok.nf ctxIss ctxRed tok.r) tok.s with
+  | none => simp [redeemRequest, hf]
+  | some i =>
+    obtain ⟨pk, hk, he⟩ := findIssuer_some hf
+    exact absurd he (h pk (List.mem_of_getElem? hk))
 
 /-- `finalize_redeem(anchors, request, ctx_iss, ctx_red, challenge_digest)`. -/
 def finalizeRedeem (VR : NIZK RedeemInstance) (A : AnchorSet) (req ctxIss ctxRed cd : Bytes) :
@@ -350,7 +413,7 @@ theorem honest_run_redeems (PI : NIZK IssueInstance) (PR : NIZK RedeemInstance)
     issueResponse PI sk (issueRequest PI ctxIss ctxRed seed).2 ctxIss = .ok (some s) ∧
     ∃ tok, finalizeIssue pk (issueRequest PI ctxIss ctxRed seed).1 s = some tok ∧
       tok.nf = (expandIssueSeed seed).1 ∧
-      ∃ req, redeemRequest PR tok A i ctxIss ctxRed cd seed' = .ok req ∧
+      ∃ req, redeemRequest PR tok A ctxIss ctxRed cd seed' = .ok req ∧
         finalizeRedeem PR A req ctxIss ctxRed cd = some tok.nf ∧
         (Moderator.step PR ⟨[]⟩ ⟨A, req, ctxIss, ctxRed, cd⟩).1 = some tok.nf := by
   obtain ⟨hl1, hl2, hl3⟩ := length_expandIssueSeed seed
@@ -372,29 +435,30 @@ theorem honest_run_redeems (PI : NIZK IssueInstance) (PR : NIZK RedeemInstance)
   refine ⟨?_, ⟨nf, r, s⟩, ?_, rfl, ?_⟩
   · simp [issueResponse, hci, htl, hpl, take_append_eq htl, drop_append_eq htl, hpv, hs]
   · simp [finalizeIssue, hev]
-  · have hrel2 : RedeemRel ⟨A.keys, nf, ctxIss, ctxRed, cd⟩
-        (encodeRedeemWitness nf ctxIss ctxRed r s i) := ⟨r, s, i, pk, hl2, hsl, hA, rfl, hev'⟩
+  · obtain ⟨j, hj⟩ := Option.isSome_iff_exists.1
+      (findIssuer_isSome.2 ⟨i, pk, hA, hev'⟩ : (findIssuer A (com nf ctxIss ctxRed r) s).isSome)
+    obtain ⟨pk', hA', hev''⟩ := findIssuer_some hj
+    have hrel2 : RedeemRel ⟨A.keys, nf, ctxIss, ctxRed, cd⟩
+        (encodeRedeemWitness nf ctxIss ctxRed r s j) := ⟨r, s, j, pk', hl2, hsl, hA', rfl, hev''⟩
     obtain ⟨hpl2, hpv2⟩ := hPR _ _ _ hrel2 (length_expandRedeemSeed seed')
-    refine ⟨nf ++ PR.prove (encodeRedeemWitness nf ctxIss ctxRed r s i)
+    refine ⟨nf ++ PR.prove (encodeRedeemWitness nf ctxIss ctxRed r s j)
       ⟨A.keys, nf, ctxIss, ctxRed, cd⟩ (expandRedeemSeed seed'), ?_, ?_, ?_⟩
-    · simp only [redeemRequest, hA, hev', ↓reduceIte]
+    · simp only [redeemRequest, hj]
     · simp [finalizeRedeem, hl1, hpl2, take_append_eq hl1, drop_append_eq hl1, hpv2]
     · simp [Moderator.step, finalizeRedeem, hl1, hpl2, take_append_eq hl1, drop_append_eq hl1, hpv2]
 
 /-! ## Input validation -/
 
-theorem redeemRequest_index (PR : NIZK RedeemInstance) (tok : Token) (A : AnchorSet) (i : ℕ)
+theorem redeemRequestAt_index (PR : NIZK RedeemInstance) (tok : Token) (A : AnchorSet) (i : ℕ)
     (ctxIss ctxRed cd seed : Bytes) (hi : A.keys.length ≤ i) :
-    redeemRequest PR tok A i ctxIss ctxRed cd seed = .error .indexOutOfRange := by
-  simp [redeemRequest, List.getElem?_eq_none hi]
+    redeemRequestAt PR tok A i ctxIss ctxRed cd seed = .error .indexOutOfRange := by
+  simp [redeemRequestAt, List.getElem?_eq_none hi]
 
-/-- A token that the indicated Anchor's key does not verify is rejected (`std::invalid_argument`),
-before any proving. -/
-theorem redeemRequest_invalidToken (PR : NIZK RedeemInstance) (tok : Token) (A : AnchorSet) (i : ℕ)
-    (ctxIss ctxRed cd seed : Bytes) (pk : UOVKey) (hA : A.keys[i]? = some pk)
+theorem redeemRequestAt_invalidToken (PR : NIZK RedeemInstance) (tok : Token) (A : AnchorSet)
+    (i : ℕ) (ctxIss ctxRed cd seed : Bytes) (pk : UOVKey) (hA : A.keys[i]? = some pk)
     (h : pk.eval tok.s ≠ com tok.nf ctxIss ctxRed tok.r) :
-    redeemRequest PR tok A i ctxIss ctxRed cd seed = .error .invalidToken := by
-  simp [redeemRequest, hA, h]
+    redeemRequestAt PR tok A i ctxIss ctxRed cd seed = .error .invalidToken := by
+  simp [redeemRequestAt, hA, h]
 
 theorem finalizeIssue_none_iff (pk : UOVKey) (p : PendingToken) (s : Bytes) :
     finalizeIssue pk p s = none ↔ pk.eval s ≠ p.t := by

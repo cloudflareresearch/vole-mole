@@ -58,7 +58,7 @@ Hypotheses used:
 
 ## 2. The verifier's QuickSilver check in the code
 
-Line numbers refer to branch `voleith-label-rows` (commit `d5def9c`), with faest-arch-opt patches 0001–0005.
+Line numbers refer to branch `voleith-label-rows` (commit `d5def9c`; merged to `main` as `64fd1a4`, with the opt-in flag `CRT_DEDICATED_LABEL_ROWS` replaced by the opt-out `REUSE_CRT_WITNESS`, which Moussaka and Ratatouille set; see `lean/docs/zk.md`, "Status on `main`"), with faest-arch-opt patches 0001–0005.
 
 Verifier, `voleith.hpp:451–497`:
 1. `chall₂ = H₂²(chall₁ ‖ ũ ‖ h̃_V ‖ [μ] ‖ binder ‖ d ‖ 0x0A)` (`:456–467`). The whole correction

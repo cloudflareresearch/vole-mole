@@ -46,7 +46,9 @@ structure Params where
   witnessBytes : Nat
   /-- QuickSilver degree `d` (`OWF_CONSTANTS::QS_DEGREE`). -/
   qsDegree : Nat
-  /-- `OWF_CONSTANTS::CRT_DEDICATED_LABEL_ROWS` (branch `voleith-label-rows`). -/
+  /-- Dedicated label rows: `OWF_CONSTANTS::CRT_DEDICATED_LABEL_ROWS` on `d5def9c` (branch
+  `voleith-label-rows`); on `main` since `64fd1a4`, the default unless the relation sets
+  `REUSE_CRT_WITNESS` (PomFRIT only). -/
   labelRows : Bool := false
 
 namespace Params

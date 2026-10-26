@@ -36,8 +36,8 @@ Contents:
 | One-more unforgeability, per issuance context (Thm 1) | **Yes** | `ε_ext^iss + ε_ext^red + ε_dig + Adv^bind_Com + K·Adv^ct-uf_UOV,Com` | PoK (extraction README), binding of `Com`, chosen-target unforgeability of UOV on `Com`-images (implied by one-more-UOV, heuristically) |
 | One nullifier per signed commitment; double-spend detection (Cor 2) | **Yes**, if the Moderator keeps one record per `(ctx_iss, ctx_red)` across all Anchor Sets (`moussaka.hpp:141-146`) | as Thm 1 | as Thm 1 |
 | Redemption non-malleability: no redirect to another `challenge_digest`, Anchor Set or `ctx_red` (Thm 3) | **Yes** | `ε_SE^red + Adv^bind + K·Adv^ct-uf + U·Adv^ow-r + ZK hops` | weak SE (L8), plus the above, plus one-wayness in `r` |
-| Issuer hiding and unlinkability vs a Moderator **colluding with all Anchors**, with adversarial keys (Thm 4a) | **Yes, computationally**; [Lean] from uniform seed outputs (`Privacy/Moussaka.lean`, `anonymity`); with the executable Lean prover (label rows) down to its tape hypothesis (`Privacy/MoussakaLean.lean`, `anonymity_label_rows`); for the Lean prover in the ROM and ideal-cipher model with every zero-knowledge term explicit, `≈ 2⁻¹⁰²·³` plus budget terms and `2·Adv^hide_Com` (`anonymityRO_lean_num`), and `≈ 2⁻¹⁰¹·⁹` with a table-reading interaction (`anonymityRA_lean_num`; Appendix B); also with AES as random permutations (`_perm`) and with one shared `H₃` (`anonymitySh_num`, `anonymityRASh_num`); from the real Clients' OS seeds and seed XOF, each `+ 2·(2q_X + 2)·2⁻²⁵⁶` (`anonymity*_seed`, `lean/docs/zk.md` §10.6); with a key stage (contexts, keys) that reads the tables too (`anonymityRAK_lean_num`, `≈ 2⁻¹⁰¹·⁹`); with any number `n` of further honest Clients, `≤ n·2⁻¹⁰²` plus budget terms and `2·Adv^hide_Com` (`anonymityN_lean_num`), also adaptively scheduled, each further session's contexts, key, response and Anchor Set chosen from earlier outcomes and the challenge contexts and keys from the sessions before it (`anonymityAd_lean_num`, the same numbers), and interleaved in any order (`anonymityIL_lean_num`, `≤ (n + 2)·2⁻¹⁰¹`; with a table-reading scheduler that also places the challenge, `anonymityILO_lean_num`, `+ 28·L·(a₃ + a₂ + a₅ + 221·a_E)·2⁻¹²⁸`), and with `N` challenge pairs (`anonymityP_lean_num`; `lean/docs/zk.md` §10.8; §11 item 5) | `2·ε_ZK^joint + 2·Adv^hide_Com` (the `2^{−192}` is not needed, §6) | ZK (lean/docs/zk.md), hiding of `Com` |
-| The same vs a Moderator that sees no issuance (Thm 4b) | **Yes**, with no Keccak assumption, up to an abort term the note missed (§6); [Lean] from uniform seed outputs (`Privacy/MoussakaNC.lean`, `anonymityNC`, `unlinkabilityNC`), with the vinegar hash a random oracle (`anonymityNC_vinegarRO`), and with the executable Lean prover down to its tape or hop hypotheses (`anonymityNC_label_rows`, `_shake`); in the ROM and ideal-cipher model with every proof and the honest Anchors' Lean verifier on the shared tables, `≈ 2⁻¹⁰³·²` plus budget terms and `2·(φ₀ + φ₁)` (`anonymityNCRO_lean_num`, `unlinkabilityNCRO_lean_num`, also `_perm`), also with one shared `H₃` (`anonymityNCSh_num`) and from the real Clients' seeds (`*NC*_seed`; Appendix B); with a model of pqov's `derive_preimage` as the Anchors' signer (`anonymityNC_pqov`, `anonymityNCRO_pqov`), averaged over keys of pqov's key generation with any oil matrix (`anonymityNCRO_pqov_pqovKeys`; `O = 0`: `anonymityNCRO_pqov_keys`; abort term `≈ 2⁻²⁹³·⁸`; the model reproduces the C++ `derive_preimage` on the KAT targets), and the games shown to reach redemption (`pr_refused_NCRO_le`; Appendix B) | `2·Σ ε_ZK^red + 2·(φ₀ + φ₁)`, `φ_c ≤ δ_c^{255}` on average over the vinegar random oracle (pqov uses 255 vinegars, §6), `E[δ_c^{255}] ≤ 255^{−37} + 1/(255·256^{37}) ≈ 2^{−295.8}` on average over the key (`δ ≤ 1/255` holds on average over the key, not per key) (`0` for one Anchor; no `2^{−192}`) | ZK of the redemption proofs only; the Client takes its index from `S` |
+| Issuer hiding and unlinkability vs a Moderator **colluding with all Anchors**, with adversarial keys (Thm 4a) | **Yes, computationally**; [Lean] from uniform seed outputs (`Privacy/Moussaka.lean`, `anonymity`; for `main`'s Client, which finds its index itself, `Privacy/MoussakaFind.lean`); with the executable Lean prover (label rows) down to its tape hypothesis (`Privacy/MoussakaLean.lean`, `anonymity_label_rows`); for the Lean prover in the ROM and ideal-cipher model with every zero-knowledge term explicit, `≈ 2⁻¹⁰²·³` plus budget terms and `2·Adv^hide_Com` (`anonymityRO_lean_num`), and `≈ 2⁻¹⁰¹·⁹` with a table-reading interaction (`anonymityRA_lean_num`; Appendix B); also with AES as random permutations (`_perm`) and with one shared `H₃` (`anonymitySh_num`, `anonymityRASh_num`); from the real Clients' OS seeds and seed XOF, each `+ 2·(2q_X + 2)·2⁻²⁵⁶` (`anonymity*_seed`, `lean/docs/zk.md` §10.6); with a key stage (contexts, keys) that reads the tables too (`anonymityRAK_lean_num`, `≈ 2⁻¹⁰¹·⁹`); with any number `n` of further honest Clients, `≤ n·2⁻¹⁰²` plus budget terms and `2·Adv^hide_Com` (`anonymityN_lean_num`), also adaptively scheduled, each further session's contexts, key, response and Anchor Set chosen from earlier outcomes and the challenge contexts and keys from the sessions before it (`anonymityAd_lean_num`, the same numbers), and interleaved in any order (`anonymityIL_lean_num`, `≤ (n + 2)·2⁻¹⁰¹`; with a table-reading scheduler that also places the challenge, `anonymityILO_lean_num`, `+ 28·L·(a₃ + a₂ + a₅ + 221·a_E)·2⁻¹²⁸`), and with `N` challenge pairs (`anonymityP_lean_num`; `lean/docs/zk.md` §10.8; §11 item 5) | `2·ε_ZK^joint + 2·Adv^hide_Com` (the `2^{−192}` is not needed, §6) | ZK (lean/docs/zk.md), hiding of `Com` |
+| The same vs a Moderator that sees no issuance (Thm 4b) | **Yes**, with no Keccak assumption, up to an abort term the note missed (§6); [Lean] from uniform seed outputs (`Privacy/MoussakaNC.lean`, `anonymityNC`, `unlinkabilityNC`; for `main`'s Client `Privacy/MoussakaNCFind.lean`), with the vinegar hash a random oracle (`anonymityNC_vinegarRO`), and with the executable Lean prover down to its tape or hop hypotheses (`anonymityNC_label_rows`, `_shake`); in the ROM and ideal-cipher model with every proof and the honest Anchors' Lean verifier on the shared tables, `≈ 2⁻¹⁰³·²` plus budget terms and `2·(φ₀ + φ₁)` (`anonymityNCRO_lean_num`, `unlinkabilityNCRO_lean_num`, also `_perm`), also with one shared `H₃` (`anonymityNCSh_num`) and from the real Clients' seeds (`*NC*_seed`; Appendix B); with a model of pqov's `derive_preimage` as the Anchors' signer (`anonymityNC_pqov`, `anonymityNCRO_pqov`), averaged over keys of pqov's key generation with any oil matrix (`anonymityNCRO_pqov_pqovKeys`; `O = 0`: `anonymityNCRO_pqov_keys`; abort term `≈ 2⁻²⁹³·⁸`; the model reproduces the C++ `derive_preimage` on the KAT targets), and the games shown to reach redemption (`pr_refused_NCRO_le`; Appendix B) | `2·Σ ε_ZK^red + 2·(φ₀ + φ₁)`, `φ_c ≤ δ_c^{255}` on average over the vinegar random oracle (pqov uses 255 vinegars, §6), `E[δ_c^{255}] ≤ 255^{−37} + 1/(255·256^{37}) ≈ 2^{−295.8}` on average over the key (`δ ≤ 1/255` holds on average over the key, not per key) (`0` for one Anchor; no `2^{−192}`) | ZK of the redemption proofs only; both issuers in the Anchor Sets (`main`'s Client; for the index-taking Client of the random-oracle games, an index taken from `S`) |
 | Issuer hiding under a Moderator-chosen Anchor Set | **Only relative to the Anchors in the set that are honest and in common use** (§7) | n/a | Anchor-Set consistency outside the library |
 
 Main findings (§9):
@@ -56,8 +56,9 @@ Main findings (§9):
   Grover). Privacy against everyone has at most a 64-bit Grover margin, through AES-128 hidden-leaf
   keys. On `main`, lean/docs/zk.md's formal ZK bound multiplies `Q₅` by `Adv^ow`, which is vacuous at
   `q = 2^64`. The fix removes this.
-- **F7 (proof and model).** Theorem 4(b) misses an abort term and needs the Client's index rule
-  (§6). Mechanizing it found three more points (§9): the non-colluding random-oracle games were
+- **F7 (proof and model).** Theorem 4(b) misses an abort term, and needs Anchor Sets that contain
+  both issuers (with `main`'s Client, which finds its index itself since `21be618`; before, an index
+  rule that the Client takes from `S`) (§6). Mechanizing it found three more points (§9): the non-colluding random-oracle games were
   vacuous before commit `919a204` (the spec's Anchor checked `main`'s request length); pqov's
   `derive_preimage` uses 255 of its 256 vinegars; and `δ ≤ 1/255` holds only on average over the
   key.
@@ -104,8 +105,10 @@ string below (`commit.hpp:33-48`, `moussaka.cpp:89-96`):
 3. The Client checks `P(s) = t` (`moussaka.cpp:177`).
 
 **Redemption.**
-- The Client first checks, in constant time over all `u`, that `anchors[i].eval(s) = Com(nf, ctx_iss,
-  ctx_red, r)` (`moussaka.cpp:196-211`). It then consumes the token (`:214`) and sends `nf ‖ π_red`.
+- The Client finds its issuer itself: in constant time over all `u`, it takes `i` as the last `u`
+  with `anchors[u].eval(s) = Com(nf, ctx_iss, ctx_red, r)`, and throws if there is none
+  (`moussaka.cpp:192-209`; since `21be618`, before which the caller passed `i` and the loop checked
+  that index). It then consumes the token (`:212`) and sends `nf ‖ π_red`.
 - `RedeemRelation` (`redeem.hpp:1-36`, `:165-272`):
   - instance: `(anchors, nf, ctx_iss, ctx_red, challenge_digest)`;
   - witness: `(r, s, s5, s9, b)`, with `b ∈ {0,1}^64`;
@@ -138,7 +141,7 @@ string below (`commit.hpp:33-48`, `moussaka.cpp:89-96`):
 | D3 | `P[i](s) = Com(…)` componentwise | One random linear combination `l` of the 45 components, `l = H(chall₂ ‖ "mous"‖0‖"l0")` (`redeem.hpp:253`) | Soundness loss `2^{−128} + q_c·2^{−448}` (L4) |
 | D4 | `Com` circuit unspecified (TODO) | Two committed intermediate states, after 5 and 9 rounds (`issue.hpp:5-20`) | Covered by L7 (Keccak segments) |
 | D5 | Anchor Set: `0 < N ≤ MAX_ANCHORS` | Also rejects duplicate keys by digest (`moussaka.cpp:138-151`) | Hygiene only (§7) |
-| D6 | `RedeemRequest` does not check the token | The Client checks validity for index `i` in constant time (`moussaka.cpp:196-211`) | Better: no proof is made for a false statement. No leak of `i` |
+| D6 | `RedeemRequest` does not check the token | The Client finds the index `i` of a key that verifies its token, in constant time, and throws if none does (`moussaka.cpp:192-209`) | Better: no proof is made for a false statement. No leak of `i`, and the caller need not supply it |
 | D7 | `nf`, `r` sampled directly | Derived with `ρ_iss` from one OS seed through SHAKE128 (`moussaka.cpp:58-71`) | None in the ROM up to the seed-XOF hop: `(2q_X + 2)·2^{−256}` per world in Theorem 4's game (an XOF query at a Client's seed gives its `nf`; two seeds of one domain collide), which Theorem 4 does not charge; [Lean] `anonymity*_seed`, `lean/docs/zk.md` §10.6. This needs the application-hash vs proof-hash disjointness (Lemma DS, §3.1) |
 | D8 | "samples a solution `s`" (older text) / "DerivePreimage" | Deterministic in `(sk, t)` | Needed: two preimages of one target from different vinegars are not known to be harmful, but determinism makes the UOV oracle a function (§3.3) |
 | D9 | Security claim: one-more-UOV (PoMFRIT Def. 8) | — | This note uses a weaker assumption, CT-UF (§3.3), which follows from one-more-UOV heuristically |
@@ -180,7 +183,9 @@ Let `q` be the adversary's total number of oracle queries, with the per-oracle c
     that never sees `t`, `Pred_R = 2^{−128}` unconditionally (`moussakaRedeem_main_zk_uniform`;
     `lean/docs/zk.md` §4.1).
 
-  On the fix (`voleith-label-rows`, `CRT_DEDICATED_LABEL_ROWS`), standard adaptive NIZK holds with
+  On the fix (`d5def9c` of branch `voleith-label-rows`, `CRT_DEDICATED_LABEL_ROWS`; on `main`
+  since `64fd1a4` the same rows are the default, but Moussaka opts out with `REUSE_CRT_WITNESS`, so
+  `main` stays at the (PU) bound above), standard adaptive NIZK holds with
   `ε_lab = (Q₅ + n_mult·Q_V + Q_P)·2^{−128}`, with no `Pred` term.
 - **Lemma DS** (`lean/docs/security/domain-separation.md` §7: part (a), unconditional, for every
   SHAKE call Moussaka makes; part (b) for `Com`). The DST-prefixed
@@ -369,7 +374,7 @@ With Lemma U, `K·Adv^ct-uf ≤ K·(Adv^om-uov + q/2^{223.9} + q²/2^{360})`.
    NOTE (issue 45, `nf = PRF(K, ctx_red)` in-circuit) would also prevent squatting.
 5. **Linkage through reuse.** The same token redeemed twice exposes the same `nf`. `ctx_red` binds
    the token to one redemption context. The `Token` object is consumed by `redeem_request`
-   (`moussaka.cpp:214`). The MoLE protocols draft uses a fixed `ctx_red` for all Moderators in its
+   (`moussaka.cpp:212`). The MoLE protocols draft uses a fixed `ctx_red` for all Moderators in its
    Rollatini profile. A Moussaka profile copying this would make one token valid at every
    Moderator, so the Client must burn it after one use (architecture draft, "Clients … MUST burn
    them").
@@ -500,8 +505,10 @@ always-failing signer is also `Correct`, with `φ_c = 1`, so the abstract theore
 concrete signer to be meaningful.)
 
 and with one Anchor (`pk⁰ = pk¹`, pure unlinkability) `Adv^anon ≤ 2·ε_ZK^joint|_{2 redemption
-proofs}`, with no abort term and for any index rule. The game is as above, with the Client taking
-its index from `S` (the index holds its issuer's map or is out of range).
+proofs}`, with no abort term and for any Anchor Sets. The game is as above, with `main`'s Client
+(it finds its index with `find_issuer`), and in the general case Anchor Sets that contain both
+issuers' keys. (For the index-taking Client before `21be618`: an index the Client takes from `S`,
+holding its issuer's map or out of range.)
 
 *Proof (a).*
 1. In each world, replace all four proofs by simulated ones (`ε_ZK^joint` per world).
@@ -509,8 +516,9 @@ its index from `S` (the index holds its issuer's map or is out of range).
      Anchor responses are chosen by `A`.
    - lean/docs/zk.md's two-phase definition allows this (its sampler includes `A`'s first stage). The
      simulator needs only the statement, and the honest witness satisfies the relation.
-   - The constant-time validity check (`moussaka.cpp:196-211`) and the witness encoding
-     (`redeem.hpp:119-123`) do not branch on `i`. The proof size is fixed.
+   - The constant-time search for `i` (`moussaka.cpp:192-209`) and the witness encoding
+     (`redeem.hpp:119-123`) do not branch on `i`. `i` may be a foreign key's, if that key also
+     verifies the token: the witness is then valid for it, and the simulator does not need `i`. The proof size is fixed.
 2. Now `A`'s view consists of:
    - `t₀, t₁`, and its own `s⁰, s¹`;
    - the simulated proofs, which are functions of the statements only;
@@ -533,13 +541,15 @@ success is not independent of the nullifiers. *Proof (b').*
 2. Now the view is a function of the refusal bit `g = good₀(x₀) ∧ good₁(x₁)`, the two nullifiers
    (in left/right order) and the simulator coins. `x_c = (nf_c, r_c, ρ_c)` is Client `c`'s tape and
    `good_c(x)` says that Anchor `c` accepted the request, `DerivePreimage_{sk_c}(t)` succeeded,
-   and the token is redeemable at its index in both sets. `t` and `r` appear nowhere else, so no
-   hiding is needed.
-3. If the Client takes its index from `S` (the key at the index has its issuer's map, or the
-   index is out of range), then, unless `DerivePreimage_{sk_c}` fails on `t_c`, `good_c(x)` equals
-   `acc(x) ∧ K_c`. Here `acc(x)` (length and proof check) is the same function for both Anchors,
-   and `K_c` (the key is found in both sets) is a constant. Replacing `g` by the symmetric
-   `acc(x₀) ∧ acc(x₁) ∧ K₀ ∧ K₁` is identical until a `DerivePreimage` fails: `φ₀ + φ₁` per world.
+   and the token is redeemable (`find_issuer` succeeds) in both sets. `t` and `r` appear nowhere
+   else, so no hiding is needed.
+3. If both sets contain both issuers' keys, then, unless `DerivePreimage_{sk_c}` fails on `t_c`,
+   `good_c(x)` equals `acc(x)`: a finalized token verifies under its issuer's key, which `find_issuer`
+   then finds. Here `acc(x)` (length and proof check) is the same function for both Anchors.
+   Replacing `g` by the symmetric `acc(x₀) ∧ acc(x₁)` is identical until a `DerivePreimage` fails:
+   `φ₀ + φ₁` per world. (For the index-taking Client: if the key at the index has the issuer's map
+   or the index is out of range, `good_c(x) = acc(x) ∧ K_c` with the constant `K_c`, "the key is
+   found in both sets", and the symmetric bit is `acc(x₀) ∧ acc(x₁) ∧ K₀ ∧ K₁`.)
 4. The resulting hybrid is symmetric in the two Clients' tapes. Swapping them exchanges the worlds,
    so the worlds are equal (no `2^{−192}`: the swap needs no distinctness).
 5. `φ_c`. `DerivePreimage` is deterministic: its vinegars are `SHAKE256(t ‖ sk_seed ‖ … ‖ ctr)`.
@@ -559,19 +569,27 @@ success is not independent of the nullifiers. *Proof (b').*
    `E[δ^{255}] ≤ E[δ^{37}] ≤ 255^{−37} + 1/(255·256^{37}) ≈ 2^{−295.8}`. (The adversary makes no SHAKE256 query at `sk_seed` in this game, so Lemma
    D's `q_v·2^{−256}` term does not arise.)
 6. One Anchor: `good₀ = good₁` as functions, so the refusal bit is already symmetric and step 3 is
-   not needed, for any index rule. ∎
+   not needed, for any Anchor Sets (and any index rule). ∎
 
 Why the abort term is needed in general: with `pk⁰ ≠ pk¹`, the targets on which `DerivePreimage`
 fails differ between the Anchors. Conditioned on both issuances succeeding, the laws of `nf₀` and
 `nf₁` can then differ, and the pairing of nullifiers to sides is no longer exchangeable. The term is
-negligible, but it is not zero. Why the index rule is needed: with an arbitrary rule that points
-Client `c` at a foreign key `P'`, the refusal reveals whether `P'(s_c) = t_c` for the Client's
-hidden `s_c`, and nothing here bounds that event.
+negligible, but it is not zero. Why both issuers must be in the sets: if Client `c`'s issuer is
+missing from `S`, `main`'s Client still redeems whenever some other key `P'` of `S` verifies its
+token, so the refusal reveals whether `P'(s_c) = t_c` for the Client's hidden `s_c`, and nothing here
+bounds that event. (The Moderator chooses `S` before any issuance and knows whether it contains both
+issuers, so this is a restriction on the adversary that it can check itself. For the index-taking
+Client the same event arises from an index rule that points at a foreign key.)
 
-**[Lean] `lean/VoleMole/Privacy/Moussaka.lean`, Theorem 4(a).** The game above on
-`Spec/Moussaka.lean`'s `issueRequest`, `finalizeIssue` and `redeemRequest`, with the seed XOF's
-outputs `(nf, r, ρ_iss)` and `ρ_red` drawn uniformly (`issueRequest_eq`, `redeemRequest_eq`), any
-Client-side index rule `idx`, and the refusal rule above (`allOk`). The seed-XOF hop to the real
+**[Lean] `lean/VoleMole/Privacy/MoussakaFind.lean` and `Privacy/Moussaka.lean`, Theorem 4(a).**
+The game above on `Spec/Moussaka.lean`'s `issueRequest`, `finalizeIssue` and redemption, with the
+seed XOF's outputs `(nf, r, ρ_iss)` and `ρ_red` drawn uniformly (`issueRequest_eq`), and the refusal
+rule above (`allOk`). `Privacy/MoussakaFind.lean` runs `main`'s `redeemRequest` (the Client finds
+its index with `findIssuer`, as `moussaka.cpp:192-209`; `MoussakaFind.anonymity`).
+`Privacy/Moussaka.lean` runs the index-taking `redeemRequestAt` of the API before `21be618` with any
+Client-side index rule `idx` of `S` and the issuer's key; `main`'s index depends on the token, so it
+is not such a rule. The two proofs are the same; the random-oracle, Lean-prover and many-session
+refinements of Appendix B are stated for the index-taking Client. The seed-XOF hop to the real
 Clients is mechanized for the random-oracle games of Appendix B (`lean/docs/zk.md` §10.6).
 - Step 1, one proof at a time: `issue_close`, `redeem_close`, from zero knowledge as the hypothesis
   `Privacy.ZeroKnowledge` (simulator from the statement; `ε`-close for every statement and valid
@@ -587,7 +605,7 @@ Clients is mechanized for the random-oracle games of Appendix B (`lean/docs/zk.m
 - Step 4: `hiding_hop`, with `Adv^hide_Com` as the hypothesis `hidingAdv ≤ εhide` for the explicit
   reduction `reduction` (the adversary with the simulator coins fixed). After it the worlds
   coincide exactly (`idealGame_eq`).
-- `anonymity`: `|Pr[A accepts | b = 0] − Pr[A accepts | b = 1]| ≤ 4εI + 4εR + 2εhide`, the
+- `anonymity` (both files): `|Pr[A accepts | b = 0] − Pr[A accepts | b = 1]| ≤ 4εI + 4εR + 2εhide`, the
   `2·ε_ZK^joint + 2·Adv^hide_Com` of Theorem 4(a) with `ε_ZK^joint` taken as the sum of the four
   per-proof errors.
 
@@ -602,20 +620,25 @@ Remarks from the mechanization:
   (`pr_fail_vinegar`) and `δ^{255}` for pqov's 255 (`pr_fail_vinegar_lt`). So "no Keccak
   assumption" is exact.
 
-**[Lean] `lean/VoleMole/Privacy/MoussakaNC.lean`, Theorem 4(b').** The non-colluding game on
+**[Lean] `lean/VoleMole/Privacy/MoussakaNCFind.lean` (`main`'s Client) and
+`Privacy/MoussakaNC.lean` (the index-taking Client), Theorem 4(b').** The non-colluding game on
 `Spec/Moussaka.lean`'s `issueRequest`, `issueResponseLR` (`Spec/MoussakaLabelRows.lean`, the
 label-row length variant of `issueResponse`; the honest Anchor verifies the issuance
 proof, then runs `derive_preimage`: any `Signer` correct for its key, which may be
-adversarially chosen), `finalizeIssue` and `redeemRequest`. The seed-XOF outputs are uniform. The
+adversarially chosen), `finalizeIssue` and redemption (`redeemRequest`, or `redeemRequestAt`). The seed-XOF outputs are uniform. The
 adversary (`AdversaryNC`) chooses the contexts, both keys and, per side, `S` and `cd`, and sees
 only the two redemption requests or the refusal. The refusal rule is that of 4(a).
 - Step 1: `hopL_NC`, `hopR_NC`, `real_sim_NC`, from `Privacy.ZeroKnowledge` for `RedeemRelW` via
   `redeem_close`. No hypothesis on the issuance proof system `PI`.
-- Step 2: `simNC_iff`. Step 3: `good_eq_of_derive`, `sim_hyb_NC` (`IdxSound idx`: the Client's
-  index holds its issuer's map, or nothing). Step 4: `hybNC_eq`.
+- Step 2: `simNC_iff`. Step 3: `good_eq_of_derive`, `sim_hyb_NC`: for `main`'s Client from
+  `Contains` (both sets hold a key with each issuer's map); for the index-taking Client from
+  `IdxSound idx` (the Client's index holds its issuer's map, or nothing). Step 4: `hybNC_eq`.
 - **`anonymityNC`**: `|Pr[W₀] − Pr[W₁]| ≤ 4εR + 2·(φ false + φ true)`, `φ c` = `phi`: the
   probability over uniform `(nf, r)` that `sk c` fails on `Com(nf, ctx_iss, ctx_red, r)`.
-- **`unlinkabilityNC`**: one Anchor, any index rule: `≤ 4εR`.
+- **`unlinkabilityNC`**: one Anchor, any Anchor Sets (any index rule): `≤ 4εR`.
+- `MoussakaFind.anonymityNC`, `unlinkabilityNC`, `anonymityNC_vinegarRO` and the `_label_rows`
+  theorems are these for `main`'s Client; the random-oracle games of Appendix B (`MoussakaNCRO`,
+  `MoussakaPqov`, …) remain stated for the index-taking Client.
 - **`anonymityNC_vinegarRO`** (step 5): with each Anchor's signer failing only when all 256
   vinegars of a uniform table at the target are bad (`hfail`), averaged over the tables
   `≤ 4εR + 2·(δ₀^{256} + δ₁^{256})`, `δ_c` the fraction of bad vinegars (`pr_fail_vinegar`,
@@ -690,7 +713,7 @@ only the two redemption requests or the refusal. The refusal rule is that of 4(a
    - A minimum `n` would not help. The Moderator can pad `S` with dummy keys of its own, or with keys
      of Anchors that no Client uses, and the Client cannot tell.
    - The Client must also refuse a set that omits its Anchor (the protocols draft says so;
-     `moussaka.cpp:192-194` and `:208-211` throw). Each refusal tells a Moderator that serves
+     `moussaka.cpp:207-209` throws when no key of `S` verifies the token). Each refusal tells a Moderator that serves
      different sets to different Clients (or one at a time) "issuer ∉ S".
    - So issuer hiding is meaningful only relative to the honest, actually used Anchors in a set that
      all Clients see consistently (architecture draft, "Configuration Consistency and Partitioning
@@ -814,8 +837,9 @@ which delegate consistency to deployment.
 position, are not pinned down by the draft.
 
 **F7 — Theorem 4(b) and its Lean model (proof and model).**
-- *Abort term and index rule.* (b) as stated misses `2·(φ₀ + φ₁)`, and needs the Client to take
-  its index from `S` (§6, (b′)).
+- *Abort term and Anchor Sets.* (b) as stated misses `2·(φ₀ + φ₁)`, and needs both issuers in the
+  Anchor Sets: `main`'s Client redeems with any key that verifies its token (§6, (b′)). For the
+  index-taking Client before `21be618`, it needed the Client to take its index from `S`.
 - *Vacuous games, fixed.* Until commit `919a204` the random-oracle games of (b′) ran
   `Spec.Moussaka.issueResponse`, which checks `main`'s request length `45 + 7272`, with the
   label-row Lean prover (`7528`-byte proofs): every honest request was rejected and the bounds held
@@ -847,6 +871,12 @@ harmless.
 ---
 
 ## 10. `main` versus the `voleith-label-rows` fix
+
+Since `64fd1a4`, `main` has the dedicated label rows as the default, but Moussaka (bound and
+unbound) sets `REUSE_CRT_WITNESS` and keeps the witness-derived masks, on the grounds that `r` is
+known only to the Client. The column `main` below therefore still describes Moussaka on `main`;
+the fix column describes `d5def9c`, where Moussaka used the rows (and what dropping
+`REUSE_CRT_WITNESS` from the two Moussaka relations would give).
 
 | | `main` | fix (`CRT_DEDICATED_LABEL_ROWS`, branch `voleith-label-rows`; proofs grow to 7528 / 9007 bytes) |
 |---|---|---|
@@ -945,8 +975,11 @@ demo2: adversary token with squatted nf ACCEPTED; honest token then REJECTED (do
 
 `lean/VoleMole/Privacy/Moussaka.lean` (Theorem 4(a), §6): `anonymity` (`≤ 4εI + 4εR + 2εhide`
 from per-proof zero knowledge and the hiding of `Com` for the explicit reduction), with the hops
-`issue_close`, `redeem_close`, `simGame_iff`, `hiding_hop`, `idealGame_eq`. `#print axioms`:
-`propext`, `Classical.choice`, `Quot.sound`.
+`issue_close`, `redeem_close`, `simGame_iff`, `hiding_hop`, `idealGame_eq`, for the index-taking
+Client of the API before `21be618` (`Spec.Moussaka.redeemRequestAt`, any index rule).
+`lean/VoleMole/Privacy/MoussakaFind.lean`: the same theorem and hops for `main`'s Client
+(`Spec.Moussaka.redeemRequest`, which finds its index with `findIssuer`; `redeemRequest_eq_at`
+relates the two steps). `#print axioms`: `propext`, `Classical.choice`, `Quot.sound`.
 
 `lean/VoleMole/Privacy/MoussakaNC.lean` (Theorem 4(b'), §6): `anonymityNC` (`≤ 4εR + 2·(φ₀ + φ₁)`
 from zero knowledge of the redemption proofs, signers correct for their keys and a sound index
@@ -954,7 +987,11 @@ rule; nothing assumed of the issuance proofs or of `Com`), `unlinkabilityNC` (on
 rule, `≤ 4εR`), `anonymityNC_vinegarRO` (`≤ 4εR + 2·(δ₀^{256} + δ₁^{256})` averaged over the
 Anchors' vinegar tables), `anonymityNC_label_rows`, `anonymityNC_label_rows_shake`,
 `unlinkabilityNC_label_rows` (the Lean prover for redemption), with the hops `real_sim_NC`,
-`simNC_iff`, `sim_hyb_NC`, `hybNC_eq`. `#print axioms`: `propext`, `Classical.choice`,
+`simNC_iff`, `sim_hyb_NC`, `hybNC_eq`. `lean/VoleMole/Privacy/MoussakaNCFind.lean`: the same
+theorems for `main`'s Client, with `Contains` (both Anchor Sets hold both issuers' keys) in place of
+the sound index rule (`unlinkabilityNC` needs neither); `Audit/Nonvacuous.lean` instantiates
+`MoussakaFind.anonymityNC_vinegarRO` with pqov's signer (`contains_ncq`). The other games of this
+appendix take the index-taking Client. `#print axioms`: `propext`, `Classical.choice`,
 `Quot.sound`.
 
 `lean/VoleMole/Privacy/MoussakaLean.lean`: `anonymity_label_rows`, Theorem 4(a) with both proof

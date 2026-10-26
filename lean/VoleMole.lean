@@ -137,6 +137,8 @@ import VoleMole.ROM.PrivacyReads
 import VoleMole.Privacy.Basic
 import VoleMole.Privacy.PomFRIT
 import VoleMole.Privacy.Moussaka
+import VoleMole.Privacy.MoussakaFind
+import VoleMole.Privacy.MoussakaNCFind
 import VoleMole.Privacy.Ratatouille
 import VoleMole.ZK.Sim
 import VoleMole.ZK.SimKats

@@ -14,6 +14,11 @@ on that branch. "Spec" is the FAEST v3.0 specification. "GHHM" is Grilo, Hövelm
 Majenz, *Tight adaptive reprogramming in the QROM*, ASIACRYPT 2021 (arXiv:2010.15103v2; the
 theorem numbers below were checked against that version).
 
+**On `main`.** Patch 0005 was merged as `64fd1a4`: the same mechanism with the default inverted
+(dedicated rows unless the relation sets `REUSE_CRT_WITNESS`). On `main` only PomFRIT uses them;
+Moussaka and Ratatouille opt out, so for them this note does not apply and only the (PU) bound of
+`lean/docs/zk.md` §4 holds. `d5def9c` is no longer on a remote branch; line numbers refer to it.
+
 ---
 
 ## 0. Summary

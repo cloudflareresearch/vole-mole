@@ -8,7 +8,7 @@ and the committed data of L1. The argument uses no structure of the responses: i
 per-tree affinity, the CRT lift, or the shape of the mask computation. That matters because the
 mask rows are *not* affine per tree (§2.3).
 
-Line numbers refer to branch `voleith-label-rows` (commit `d5def9c`), with faest-arch-opt patches
+Line numbers refer to branch `voleith-label-rows` (commit `d5def9c`; merged to `main` as `64fd1a4`, with the opt-in flag `CRT_DEDICATED_LABEL_ROWS` replaced by the opt-out `REUSE_CRT_WITNESS`, which Moussaka and Ratatouille set; see `lean/docs/zk.md`, "Status on `main`"), with faest-arch-opt patches
 0001–0005 applied. Patch 0005 (`CRT_DEDICATED_LABEL_ROWS`, set by all five relations) adds λ
 corrected "label rows" after the witness, so the KOS check hashes λ more rows than before. That
 changes `L`, and `ε_KOS` by at most 0.06 bits (§6); the argument is unchanged, because

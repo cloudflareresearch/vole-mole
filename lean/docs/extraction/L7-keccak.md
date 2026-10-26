@@ -6,7 +6,7 @@ range and conservation parts of Ratatouille spend, it shows that **any bit vecto
 every uncombined constraint satisfies the stated relation** for the decoded witness `Dec(w)`.
 
 The UOV public-map evaluation and the Moussaka selector are treated as black boxes; they are
-covered by `L7-uov.md`. All citations are to branch `voleith-label-rows` (commit `d5def9c`), which differs from `6d7113e` in the
+covered by `L7-uov.md`. All citations are to branch `voleith-label-rows` (commit `d5def9c`; merged to `main` as `64fd1a4`, with the opt-in flag `CRT_DEDICATED_LABEL_ROWS` replaced by the opt-out `REUSE_CRT_WITNESS`, which Moussaka and Ratatouille set; see `lean/docs/zk.md`, "Status on `main`"), which differs from `6d7113e` in the
 relation headers only by the `CRT_DEDICATED_LABEL_ROWS` flag; the constraints are unchanged.
 
 Status: **[paper + tests]**. The proof is complete, given the following:

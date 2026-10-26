@@ -3,6 +3,7 @@ import VoleMole.ZK.CompleteRO
 import VoleMole.Privacy.LeanProver
 import VoleMole.ZK.ReadsROPerm
 import VoleMole.Privacy.MoussakaInterleaveOC
+import VoleMole.Privacy.MoussakaNCFind
 import VoleMole.Privacy.PomFRITInterleaveOC
 import VoleMole.Privacy.RatatouilleInterleaveOC
 import VoleMole.Privacy.PomFRITLin
@@ -509,6 +510,20 @@ example (P1 : Bool → ℕ → GF256) (P2 : Bool → P2Part) (PI : NIZK IssueIns
   anonymityNC_vinegarRO (fun c v => (sysMat (pkq P1 P2 c) 0 v).det ≠ 0) (ncq P1 P2) idxEval PI
     (pqovRO (ncq P1 P2).pk (fun _ => 0) 256) simR PR hεR
     (pqovRO_correct _ _ (fun _ => oilSpace_kq _ _ _) 256) idxEval_sound
+    (fun w c t h i => pqovRO256_hfail _ _ w c t h i) hR
+
+/-- The Moderator `ncq` chooses Anchor Sets with both issuers (`MoussakaFind.Contains`). -/
+theorem contains_ncq (P1 : Bool → ℕ → GF256) (P2 : Bool → P2Part) :
+    VoleMole.Privacy.MoussakaFind.Contains (ncq P1 P2) := fun c _ =>
+  ⟨pkq P1 P2 c, by cases c <;> simp [ncq, Sq], rfl⟩
+
+/-- **Theorem 4(b) for `main`'s Client (`find_issuer`) with pqov's signer** (all 256 attempts). -/
+example (P1 : Bool → ℕ → GF256) (P2 : Bool → P2Part) (PI : NIZK IssueInstance) {CR : Type}
+    [Fintype CR] [Nonempty CR] (simR : RedeemInstance → CR → Bytes) (PR : NIZK RedeemInstance)
+    {εR : ℝ} (hεR : 0 ≤ εR) (hR : ZeroKnowledge RedeemRelW (proveR PR) simR εR) :=
+  VoleMole.Privacy.MoussakaFind.anonymityNC_vinegarRO (fun c v => (sysMat (pkq P1 P2 c) 0 v).det ≠ 0)
+    (ncq P1 P2) PI (pqovRO (ncq P1 P2).pk (fun _ => 0) 256) simR PR hεR
+    (pqovRO_correct _ _ (fun _ => oilSpace_kq _ _ _) 256) (contains_ncq P1 P2)
     (fun w c t h i => pqovRO256_hfail _ _ w c t h i) hR
 
 /-- **Theorem 4(b′) with pqov's signer (255 attempts)** for a concrete pair of keys:

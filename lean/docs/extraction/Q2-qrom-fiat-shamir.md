@@ -51,7 +51,7 @@ oracle cell, so this is where it must be charged (§5.4, §10).
 
 ### 1.1 The code (FS form)
 
-Line numbers refer to `src/voleith.hpp` on branch `voleith-label-rows` (commit `d5def9c`), and `faest-arch-opt` means the patched read-only
+Line numbers refer to `src/voleith.hpp` on branch `voleith-label-rows` (commit `d5def9c`; merged to `main` as `64fd1a4`, with the opt-in flag `CRT_DEDICATED_LABEL_ROWS` replaced by the opt-out `REUSE_CRT_WITNESS`, which Moussaka and Ratatouille set; see `lean/docs/zk.md`, "Status on `main`"), and `faest-arch-opt` means the patched read-only
 copy in `subprojects/` (patches 0001–0005). These are the FAEST v3 parameters used by the repo: λ = 128, τ = 17, `w_grind = 8`,
 `n_Δ = 120`, a `one_tree` BAVC with `L = 2304` leaves, the `aes_ctr` leaf commitment, and the CRT
 VOLE.

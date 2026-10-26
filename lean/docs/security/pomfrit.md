@@ -12,12 +12,19 @@ PomFRIT is Algorithm 2 ("Optimized BS") of Baum, Beckmann, Beullens, Mukherjee a
 whose numbering is: Defs. 2.4 (blindness), 2.5 (one-more unforgeability), 3.1 (one-more preimage
 resistance), 4.2 (NIZK) and 4.3 (knowledge soundness); Algorithm 2; Theorem 6.1; Appendix B.3.
 
+**Which code.** "`main`" in this note is the code before `64fd1a4` (`6d7113e`), on which the
+Issuer's attack works. Since `64fd1a4` `main` gives PomFRIT the dedicated label rows (+256 bytes per
+signature): the column "With the label-row fix" below is current `main`, blindness holds there,
+and the attack column describes the earlier code (`ZK.pomfrit_issuer_hits` is a theorem about
+that layout, `Spec/PomFRITLayout.lean`'s `Layout.main`).
+
 The note builds on these proof-system results:
 - the classical straight-line proof of knowledge `ε_ext` (`lean/docs/extraction/README.md`, main theorem and
   §Assembly);
 - strong simulation-extractability (`lean/docs/extraction/L8-simulation-extractability.md`);
 - arithmetization soundness, i.e. that the constraints force `P(s) = h + r` (`lean/docs/extraction/L7-uov.md`);
-- zero knowledge (`lean/docs/zk.md`) and its fix on branch `voleith-label-rows`;
+- zero knowledge (`lean/docs/zk.md`) and its fix (dedicated label rows, on `main` for PomFRIT since
+  `64fd1a4`);
 - the QROM proof of knowledge (`lean/docs/extraction/Q2-qrom-fiat-shamir.md`).
 
 The combinatorial core of the new lemma (Lemma P) is checked in Lean, in
@@ -216,7 +223,7 @@ trigger verifications and query all oracles.
       ε_ZK^fix(Q_P) = ε_rho + ε_prog + 2ε_hide + ε_lab + ε_iv,   ε_lab = (Q₅ + n_mult·Q_V + Q_P)·2^{−128},
 
   with the other terms as in `lean/docs/zk.md` §3, and `n_mult ∈ [305, 312]`.
-  - Assumed here; the fix is in progress on `voleith-label-rows`.
+  - Assumed here; it holds on `main` since `64fd1a4`, which gives PomFRIT the dedicated label rows.
   - Requirements: `rho` uniform and secret, and an honest prover on a satisfying witness.
   - Multiple sessions may interleave their phases. `lean/docs/zk.md`'s hybrids are per proof and
     order-independent; in Lean, interleaved further sessions are covered by

@@ -3,8 +3,10 @@ import VoleMole.ZK.Labels
 /-!
 # Zero knowledge: dedicated label rows (`lean/docs/zk.md` §3, hybrid H6, patched layout)
 
-On branch `voleith-label-rows` (faest-arch-opt patch 0005), the relations set
-`OWF_CONSTANTS::CRT_DEDICATED_LABEL_ROWS`. The CRT gate labels are then computed from λ dedicated
+On commit `d5def9c` of branch `voleith-label-rows` (faest-arch-opt patch 0005), the relations set
+`OWF_CONSTANTS::CRT_DEDICATED_LABEL_ROWS` (on `main` since `64fd1a4` this layout is the default and
+relations opt out with `REUSE_CRT_WITNESS`; PomFRIT uses it, Moussaka and Ratatouille opt out;
+line numbers below are `d5def9c`'s). The CRT gate labels are then computed from λ dedicated
 VOLE rows `[ℓ, ℓ+λ)` directly after the `ℓ = WITNESS_BITS` witness rows
 (`constants.hpp:410-414`, `CRT_LABEL_ROWS`, `CRT_LABEL_ROW_OFFSET = QUICKSILVER_ROWS = ℓ`). These
 rows count toward `VOLE_CORRECTION_ROWS` (`constants.hpp:430-436`), so they get the cross-tree

@@ -3,8 +3,8 @@ import VoleMole.ZK.Masking
 /-!
 # Zero knowledge: VOLE correlation, gate labels, and the sibling-label attack (`lean/docs/zk.md` §§3–4)
 
-Two label layouts. FAEST's default (`main`, and faest-arch-opt without
-`CRT_DEDICATED_LABEL_ROWS`) derives the CRT gate labels from the first λ witness rows. On branch
+Two label layouts. FAEST's default (`main` before `64fd1a4`, and on `main` the relations that set
+`REUSE_CRT_WITNESS`: Moussaka and Ratatouille) derives the CRT gate labels from the first λ witness rows. On branch
 `voleith-label-rows` (patch 0005) the relations set `CRT_DEDICATED_LABEL_ROWS`, and the labels come
 from λ dedicated rows `[ℓ, ℓ+λ)` after the witness, which carry corrections `c_i` but no `d`; that
 layout is in `LabelRows.lean`. Line numbers marked "main" are `vole_commit.inc` with patches

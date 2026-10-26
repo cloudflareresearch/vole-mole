@@ -100,8 +100,9 @@ def AdversaryNC.base (A : AdversaryNC) : Adversary :=
   ⟨A.ctxIss, A.ctxRed, A.pk, fun _ _ _ _ => 0, fun _ _ side => A.choose side, fun _ _ _ => True⟩
 
 /-- **A sound index rule**: the index the Client takes from `S` for its issuer's key `pk` holds a
-key with `pk`'s map, or is out of range (`moussaka.cpp:186-215` leaves the index to the caller;
-the game of §6 has the Client take it from `S`). -/
+key with `pk`'s map, or is out of range (the index-taking API before `21be618` left the index to
+the caller; the game of §6 has the Client take it from `S`). `main`'s Client finds it itself
+(`find_issuer`): `Privacy/MoussakaNCFind.lean`. -/
 def IdxSound (idx : AnchorSet → UOVKey → ℕ) : Prop :=
   ∀ S pk k, S.keys[idx S pk]? = some k → k.eval = pk.eval
 

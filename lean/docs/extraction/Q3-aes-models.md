@@ -34,7 +34,7 @@ references are listed in §References.
 ## Setting: how AES enters the repo's proofs
 
 Line numbers into `src/` and into the patched faest files (`constants.hpp`) refer to branch
-`voleith-label-rows` (commit `d5def9c`), with faest-arch-opt patches 0001–0005.
+`voleith-label-rows` (commit `d5def9c`; merged to `main` as `64fd1a4`, with the opt-in flag `CRT_DEDICATED_LABEL_ROWS` replaced by the opt-out `REUSE_CRT_WITNESS`, which Moussaka and Ratatouille set; see `lean/docs/zk.md`, "Status on `main`"), with faest-arch-opt patches 0001–0005.
 
 The relevant code and parameters:
 - **Leaf commitment** (`leaf_hash::aes_ctr`, faest-arch-opt `vector_com.hpp:182-198`,

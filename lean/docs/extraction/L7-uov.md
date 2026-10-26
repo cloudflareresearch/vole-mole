@@ -11,7 +11,7 @@ use only their interface: if their uncombined constraints hold at a bit vector `
 committed output bits `out[8k+j]` equal bit `j` (LSB first) of byte `k` of the stated Keccak
 output.
 
-Line numbers refer to branch `voleith-label-rows` (commit `d5def9c`) (relation headers shifted by up to 6
+Line numbers refer to branch `voleith-label-rows` (commit `d5def9c`; merged to `main` as `64fd1a4`, with the opt-in flag `CRT_DEDICATED_LABEL_ROWS` replaced by the opt-out `REUSE_CRT_WITNESS`, which Moussaka and Ratatouille set; see `lean/docs/zk.md`, "Status on `main`") (relation headers shifted by up to 6
 lines relative to `6d7113e` by the `CRT_DEDICATED_LABEL_ROWS` flag; the constraints are unchanged). Subproject paths are relative to
 `subprojects/`.
 

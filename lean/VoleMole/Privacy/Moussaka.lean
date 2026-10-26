@@ -9,16 +9,20 @@ It chooses the contexts and the two issuing keys `pk false`, `pk true` (arbitrar
 allowed; equal keys give unlinkability, different keys issuer hiding), sees both Clients' issuance
 requests, answers them, and then chooses, per side, an Anchor Set `S` and a challenge digest `cd`.
 In world `b` the left redemption is Client `b`'s token and the right one Client `¬b`'s. The Client
-looks up its issuer's index in `S` itself (`idx`, any rule). As §6 requires, the redemptions happen
+takes its issuer's index from `S` by a rule `idx` of `S` and the issuer's key (any rule): this is
+the index-taking Client of the API before `21be618` (`Spec.Moussaka.redeemRequestAt`). `main`'s
+Client finds the index from its token (`find_issuer`), which is not such a rule; Theorem 4(a) for it
+is `Privacy/MoussakaFind.lean`. The random-oracle and Lean-prover refinements of this game
+(`Privacy/Moussaka*.lean`) stay stated for the index-taking Client. As §6 requires, the redemptions happen
 only if both tokens finalized and both are redeemable at their own index in both sets; otherwise
 both are refused. The adversary computes the finalization outcomes and the refusal itself (they
 depend only on its view). Its responses are 119 bytes, the C++ `std::array` type: the spec's
-`finalizeIssue` accepts any length, and a token with `|s| ≠ 119` would make `redeemRequest` prove a
-witness outside `RedeemRel`.
+`finalizeIssue` accepts any length, and a token with `|s| ≠ 119` would make `redeemRequestAt` prove
+a witness outside `RedeemRel`.
 
-The game runs `Spec/Moussaka.lean`'s `issueRequest`, `finalizeIssue` and `redeemRequest`, with the
-seed expansions' outputs `(nf, r, ρ_iss)` and `ρ_red` uniform (`issueRequest_eq`,
-`redeemRequest_eq`): the step "the adversary never queries the seed XOF at a Client's 32-byte seed"
+The game runs `Spec/Moussaka.lean`'s `issueRequest`, `finalizeIssue` and `redeemRequestAt`, with
+the seed expansions' outputs `(nf, r, ρ_iss)` and `ρ_red` uniform (`issueRequest_eq`,
+`redeemRequestAt_eq`): the step "the adversary never queries the seed XOF at a Client's 32-byte seed"
 is a random-oracle step that stays on paper, as in the note.
 
 ## Assumptions
@@ -71,7 +75,7 @@ theorem issueRequest_eq (PI : NIZK IssueInstance) (ctxIss ctxRed seed : Bytes) :
       issueRequestOf PI ctxIss ctxRed (expandIssueSeed seed).1 (expandIssueSeed seed).2.1
         (expandIssueSeed seed).2.2 := rfl
 
-/-- `redeemRequest` with `ρ_red = expand_redeem_seed(seed')` as an argument. -/
+/-- `redeemRequestAt` with `ρ_red = expand_redeem_seed(seed')` as an argument. -/
 def redeemRequestOf (PR : NIZK RedeemInstance) (tok : Token) (A : AnchorSet) (i : ℕ)
     (ctxIss ctxRed cd rho : Bytes) : Except Error Bytes :=
   match A.keys[i]? with
@@ -82,9 +86,9 @@ def redeemRequestOf (PR : NIZK RedeemInstance) (tok : Token) (A : AnchorSet) (i 
         ⟨A.keys, tok.nf, ctxIss, ctxRed, cd⟩ rho)
     else .error .invalidToken
 
-theorem redeemRequest_eq (PR : NIZK RedeemInstance) (tok : Token) (A : AnchorSet) (i : ℕ)
+theorem redeemRequestAt_eq (PR : NIZK RedeemInstance) (tok : Token) (A : AnchorSet) (i : ℕ)
     (ctxIss ctxRed cd seed : Bytes) :
-    redeemRequest PR tok A i ctxIss ctxRed cd seed =
+    redeemRequestAt PR tok A i ctxIss ctxRed cd seed =
       redeemRequestOf PR tok A i ctxIss ctxRed cd (expandRedeemSeed seed) := rfl
 
 /-- The prover of a `NIZK` with its randomness `ρ` uniform (16 bytes). -/
@@ -125,7 +129,7 @@ def tok (i₀ i₁ : PendingToken × Bytes) (c : Bool) : Option Token :=
 def tokD (i₀ i₁ : PendingToken × Bytes) (c : Bool) : Token :=
   (tok A i₀ i₁ c).getD ⟨List.replicate nfBytes 0, List.replicate rBytes 0, List.replicate uovN 0⟩
 
-/-- The Client's validity check at index `i` of `S` (`moussaka.cpp:196-211`). -/
+/-- The index-taking Client's validity check at index `i` of `S` (`redeemRequestAt`). -/
 def redeemOk (ci cr : Bytes) (t : Token) (S : AnchorSet) (i : ℕ) : Bool :=
   match S.keys[i]? with
   | none => false

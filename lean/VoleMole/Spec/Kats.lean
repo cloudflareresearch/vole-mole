@@ -122,13 +122,18 @@ def checkMoussaka (keys : Std.HashMap String ByteArray) (pks : Std.HashMap Strin
     match Moussaka.AnchorSet.mk? (anchors.map Verifier.UovPk.toSpec) with
     | .error _ => errs := errs ++ ["AnchorSet.mk? rejected the Anchor Set"]
     | .ok A =>
-      match Moussaka.redeemRequest zeroRedeemProver tok A issuer ctxIss ctxRed cd [] with
+      -- The Client's `find_issuer` picks the KAT's issuer index (the witness above uses it).
+      if Moussaka.findIssuer A t s ≠ some issuer then
+        errs := errs ++ ["findIssuer: not the KAT's issuer index"]
+      match Moussaka.redeemRequest zeroRedeemProver tok A ctxIss ctxRed cd [] with
       | .ok q =>
         errs := errs ++ checkEq "redeemRequest framing" (q.take Moussaka.nfBytes) (rreq.take Moussaka.nfBytes)
         if q.length ≠ Moussaka.redeemRequestBytes then errs := errs ++ ["redeemRequest: bad length"]
       | .error _ => errs := errs ++ ["redeemRequest rejected the honest token"]
-      if (Moussaka.redeemRequest zeroRedeemProver tok A n ctxIss ctxRed cd []) matches .ok _ then
-        errs := errs ++ ["redeemRequest accepted an out-of-range index"]
+      -- A token that no key of the set verifies is rejected.
+      if (Moussaka.redeemRequest zeroRedeemProver ⟨tok.nf, tok.r, s.map (· ^^^ 1)⟩ A ctxIss ctxRed cd
+          []) matches .ok _ then
+        errs := errs ++ ["redeemRequest accepted a token that no key verifies"]
       -- The redemption proof, verified under the generated Anchor Set (all digests).
       let VR := verifierRedeem anchors
       if Moussaka.finalizeRedeem VR A rreq ctxIss ctxRed cd ≠ some nf then

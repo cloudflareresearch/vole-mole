@@ -4,7 +4,7 @@ This file proves Lemmas L0, L1 and L2 of `README.md` for the repo's five relatio
 VOLEitH, λ = 128, τ = 17, n_Δ = 120, `one_tree` BAVC, `aes_ctr` leaf commitment). Every protocol
 fact is checked against the code. `voleith.hpp` means `src/voleith.hpp`. A bare faest file name
 means the patched copy in `subprojects/faest-arch-opt/`. Line numbers in `src/` and in the patched
-faest files refer to branch `voleith-label-rows` (commit `d5def9c`), with faest-arch-opt patches 0001–0005 applied. Of the files used
+faest files refer to branch `voleith-label-rows` (commit `d5def9c`; merged to `main` as `64fd1a4`, with the opt-in flag `CRT_DEDICATED_LABEL_ROWS` replaced by the opt-out `REUSE_CRT_WITNESS`, which Moussaka and Ratatouille set; see `lean/docs/zk.md`, "Status on `main`"), with faest-arch-opt patches 0001–0005 applied. Of the files used
 here, the repo's patches change only `vole_commit.inc`, `constants.hpp` and `quicksilver.hpp`. In
 `vole_commit.inc`, patch 0002 widens the H₅ output from 16 to 32 bits, and patch 0005 derives the
 CRT gate labels from λ dedicated VOLE rows after the witness (`CRT_DEDICATED_LABEL_ROWS`, set by

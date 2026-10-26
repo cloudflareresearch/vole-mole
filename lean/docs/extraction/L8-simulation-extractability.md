@@ -10,7 +10,7 @@ statement or a binder must differ, follows. Lean is used only for the combinator
 Model, notation, parameters and lemma names follow `lean/docs/extraction/README.md`. The simulator is the
 one from `lean/docs/zk.md` §5. Citations `faest/<file>:<line>` refer to the patched faest-arch-opt in
 `subprojects/faest-arch-opt`, with patches 0001–0005; those into `src/` and the patched faest files
-refer to branch `voleith-label-rows` (commit `d5def9c`).
+refer to branch `voleith-label-rows` (commit `d5def9c`; merged to `main` as `64fd1a4`, with the opt-in flag `CRT_DEDICATED_LABEL_ROWS` replaced by the opt-out `REUSE_CRT_WITNESS`, which Moussaka and Ratatouille set; see `lean/docs/zk.md`, "Status on `main`").
 
 Contents:
 - §0 Verdict

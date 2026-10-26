@@ -17,6 +17,18 @@ faest files cited here (`kos_vole_check.hpp`, `quicksilver.hpp`, `vector_com.inc
 **unpatched** code (`main`, patches 0001–0004, the layout FAEST itself uses). Its citations are
 marked `main:`. "Spec" means the FAEST v3.0 specification (faest.info/faest-spec-v3.0.pdf).
 
+**Status on `main` (since `64fd1a4`).** Patch 0005 was merged as
+`0005-Use-separate-VOLE-rows-for-the-CRT-VOLE-masks-unless-REUSE_CRT_WITNESS.patch`. The mechanism
+is the same as `d5def9c`'s (λ label rows after the witness, cross-tree corrections, hashed by KOS,
+no witness correction), with the default inverted: dedicated rows are used unless the relation
+sets `OWF_CONSTANTS::REUSE_CRT_WITNESS = true` (an opt-out), where `d5def9c` used them only if it
+set `CRT_DEDICATED_LABEL_ROWS = true` (an opt-in). So "with `CRT_DEDICATED_LABEL_ROWS`" below
+reads "without `REUSE_CRT_WITNESS`" on `main`. On `main` PomFRIT uses the label rows; Moussaka,
+unbound Moussaka and Ratatouille set `REUSE_CRT_WITNESS` and keep the layout of §4 (their witnesses
+start with the Client's secret `r`), so for them only the (PU) form of §4 holds, with the joint hop
+on paper (`security/moussaka.md` §10). Line numbers below still refer to `d5def9c`, which is no
+longer on a remote branch (`voleith-label-rows` was force-pushed to the merged version).
+
 ## 0. Verdict
 
 **With patch 0005, the proof system is zero-knowledge in the standard (adaptive, multi-proof)
@@ -697,12 +709,15 @@ really is perfect, and the label offset is handled in H6 at cost `(Q₅ + n_mult
 
 1. **Done: dedicated label rows.** The branch implements the generic fix, which replaces the
    per-relation pad that an earlier version of this note proposed. All five relations set
-   `CRT_DEDICATED_LABEL_ROWS` and assert it. The PomFRIT unlinkability argument should still be
+   `CRT_DEDICATED_LABEL_ROWS` and assert it. (On `main`, `64fd1a4`: PomFRIT only; Moussaka and
+   Ratatouille opt out with `REUSE_CRT_WITNESS`, see "Status on `main`".) The PomFRIT unlinkability argument should still be
    re-read against the new theorem, which now gives standard ZK towards the Issuer.
 2. **Make the flag hard to forget.** `voleith.hpp` accepts any relation, and a new relation
    without the flag silently gets the `main` layout, whose ZK needs (PU). Add a `static_assert`
    in `voleith_vole_gen` / `voleith_vole_reconstruct` that `CP::CRT_DEDICATED_LABEL_ROWS` holds,
    unless the relation explicitly opts out (for example, a FAEST-compatibility test relation).
+   (Done on `main` by `64fd1a4` in another way: dedicated rows are the default, and a relation
+   must opt out explicitly with `REUSE_CRT_WITNESS`.)
 3. **Raise with the FAEST authors.** Raise the spec's G8→G9 hop (§8.3) and the label offset, with
    patch 0005 as the proposed generic-VOLEitH layout. The patch has a TODO to this effect, and see
    also `voleith.hpp:124`.
