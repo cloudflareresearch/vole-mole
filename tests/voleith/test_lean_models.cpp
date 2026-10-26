@@ -10,6 +10,8 @@
 #include "ihat/commit.hpp"   // internal
 #include "ihat/issue.hpp"    // internal
 #include "ihat/redeem.hpp"   // internal
+#include "ihat/unbound_issue.hpp"  // internal
+#include "ihat/unbound_redeem.hpp" // internal
 #include "pomfrit/redeem.hpp"    // internal
 #include "act/issue.hpp" // internal
 #include "act/spend.hpp" // internal
@@ -1089,21 +1091,24 @@ ProofHashLengths proof_hash_lengths(bool delayed, size_t binder1, size_t binder2
 } // namespace
 
 // The `proofSystem` rows H2^1, H2^2 and H2^3 of DomainSeparation.lean: lengths per relation (in the
-// order PomFRIT, VOLE-IHAT issue, VOLE-IHAT redeem, VOLE-ACT issue, VOLE-ACT spend). PomFRIT
+// order PomFRIT, VOLE-IHAT issue, VOLE-IHAT redeem, VOLE-ACT issue, VOLE-ACT spend, unbound
+// VOLE-IHAT issue, unbound VOLE-IHAT redeem). PomFRIT
 // binds the instance late and passes refresher_com (32 bytes) and the refresher (32 bytes) as
 // binders (pomfrit.cpp); the others use voleith_prove, with no binders. The final tags 09, 0A and
 // 0B are hard-coded in voleith.hpp; GrindingReturnsFirstHit checks the H_2^3 suffix ctr || 0B.
 TEST(LeanModels, ProofHashLengthsMatchDomainTable) {
-    const std::array<ProofHashLengths, 5> got = {
+    const std::array<ProofHashLengths, 7> got = {
         proof_hash_lengths<pf::RedeemRelation>(true, 32, 32),
         proof_hash_lengths<mo::IssueRelation>(false, 0, 0),
         proof_hash_lengths<mo::RedeemRelation>(false, 0, 0),
         proof_hash_lengths<ra::IssueRelation>(false, 0, 0),
         proof_hash_lengths<ra::SpendRelation>(false, 0, 0),
+        proof_hash_lengths<mo::UnboundIssueRelation>(false, 0, 0),
+        proof_hash_lengths<mo::UnboundRedeemRelation>(false, 0, 0),
     };
-    const std::array<size_t, 5> h21 = {3188, 4645, 6037, 4389, 14101};
-    const std::array<size_t, 5> h22 = {493, 521, 608, 505, 1112};
-    const std::array<size_t, 5> h23 = {93, 205, 205, 205, 205};
+    const std::array<size_t, 7> h21 = {3188, 4645, 6037, 4389, 14101, 4261, 9493};
+    const std::array<size_t, 7> h22 = {493, 521, 608, 505, 1112, 497, 824};
+    const std::array<size_t, 7> h23 = {93, 205, 205, 205, 205, 205, 205};
     for (size_t i = 0; i < got.size(); ++i) {
         SCOPED_TRACE(testing::Message() << "relation " << i);
         EXPECT_EQ(got[i].h21, h21[i]);

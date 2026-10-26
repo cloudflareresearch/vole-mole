@@ -14,14 +14,18 @@ are *separated* if their length sets are disjoint, or their prefixes disagree at
 their suffixes do. Separation implies that no string belongs to both (`sep_sound`).
 
 We prove:
-* `clean_pairwise`: the 23 domains other than PomFRIT's `hash_to_target` and seed XOF are
+* `clean_pairwise`: the 28 domains other than PomFRIT's `hash_to_target` and seed XOF are
   pairwise separated;
 * `target_sep`, `seed_sep`: those two are separated from every other domain except the listed
   proof-system domains;
 * `target_meets_*`, `seed_meets_*`: for each listed exception there is a concrete string in both
   domains, so the exceptions are real;
 * `fixed_pairwise`: after appending a final byte `0x20` to those two inputs (the proposed fix),
-  all 25 domains are pairwise separated.
+  all 30 domains are pairwise separated.
+
+The unbound Moussaka rows (`mousU`: version byte 1, `src/dst.hpp`) are those of
+`src/moussaka/unbound_issue.hpp`, `unbound_redeem.hpp` and `moussaka.cpp`; their H₂¹, H₂² and H₃
+lengths are checked against the C++ by `LeanModels.ProofHashLengthsMatchDomainTable`.
 -/
 
 namespace VoleMole.Protocols.DomainSeparation
@@ -120,6 +124,8 @@ theorem sep_sound {D E : Shape} (h : sep D E = true) {x : List ℕ} (hD : D.mem 
 def mous (purpose index : ℕ) : List ℕ := [0x6d, 0x6f, 0x75, 0x73, 0, purpose, index]
 def pomf (purpose index : ℕ) : List ℕ := [0x70, 0x6f, 0x6d, 0x66, 0, purpose, index]
 def rata (purpose index : ℕ) : List ℕ := [0x72, 0x61, 0x74, 0x61, 0, purpose, index]
+/-- `make_dst("mous", UNBOUND_VERSION = 1, purpose, index)`: unbound Moussaka tokens. -/
+def mousU (purpose index : ℕ) : List ℕ := [0x6d, 0x6f, 0x75, 0x73, 1, purpose, index]
 
 def c' : ℕ := 0x63
 def h' : ℕ := 0x68
@@ -147,16 +153,19 @@ def proofSystem : List (String × Shape) :=
    ("H2^0 moussaka redeem", ⟨[0x40, 0, 0, 0], mous r' z0 ++ [0x08], .exact mrLens⟩),
    ("H2^0 ratatouille issue", ⟨[], rata i' z0 ++ [0x08], .exact [64]⟩),
    ("H2^0 ratatouille spend", ⟨[], rata p' z0 ++ [0x08], .exact [120]⟩),
+   ("H2^0 unbound moussaka issue", ⟨[], mousU i' z0 ++ [0x08], .exact [69]⟩),
+   ("H2^0 unbound moussaka redeem", ⟨[0x40, 0, 0, 0], mousU r' z0 ++ [0x08], .exact mrLens⟩),
    ("H2^4 pomfrit", ⟨pomf p' z0, [0x0C], .exact [8]⟩),
-   ("H3", ⟨[], [0x03], .exact [94, 305, 392, 289, 896]⟩),
+   ("H3", ⟨[], [0x03], .exact [94, 305, 392, 289, 896, 281, 608]⟩),
    ("H4", ⟨[], [0x04], .exact [49]⟩),
    ("H5", ⟨[], [0x05], .exact [37]⟩),
-   ("H2^1", ⟨[], [0x09], .exact [3188, 4645, 6037, 4389, 14101]⟩),
-   ("H2^2", ⟨[], [0x0A], .exact [493, 521, 608, 505, 1112]⟩),
+   ("H2^1", ⟨[], [0x09], .exact [3188, 4645, 6037, 4389, 14101, 4261, 9493]⟩),
+   ("H2^2", ⟨[], [0x0A], .exact [493, 521, 608, 505, 1112, 497, 824]⟩),
    ("H2^3", ⟨[], [0x0B], .exact [93, 205]⟩),
    ("UOV combination pomfrit", ⟨[], pomf l' z0, .exact [63]⟩),
    ("UOV combination moussaka", ⟨[], mous l' z0, .exact [63]⟩),
-   ("UOV combination ratatouille", ⟨[], rata l' z0, .exact [63]⟩)]
+   ("UOV combination ratatouille", ⟨[], rata l' z0, .exact [63]⟩),
+   ("UOV combination unbound moussaka", ⟨[], mousU l' z0, .exact [63]⟩)]
 
 /-- Application domains with fixed length (prefix-tagged). -/
 def appFixed : List (String × Shape) :=
@@ -164,7 +173,9 @@ def appFixed : List (String × Shape) :=
    ("Moussaka issue seed", ⟨mous s' z0, [], .exact [39]⟩),
    ("Moussaka redeem seed", ⟨mous s' z1, [], .exact [39]⟩),
    ("Ratatouille issue seed", ⟨rata s' z0, [], .exact [39]⟩),
-   ("Ratatouille spend seed", ⟨rata s' z1, [], .exact [39]⟩)]
+   ("Ratatouille spend seed", ⟨rata s' z1, [], .exact [39]⟩),
+   ("Unbound Moussaka issue seed", ⟨mousU s' z0, [], .exact [39]⟩),
+   ("Unbound Moussaka redeem seed", ⟨mousU s' z1, [], .exact [39]⟩)]
 
 /-- PomFRIT `hash_to_target`: DST ‖ digest(32) ‖ chal1(136) ‖ vole_check_proof(64) ‖ corr(45) ‖ msg. -/
 def target : Shape := ⟨pomf h' z0, [], .atLeast 284⟩
@@ -244,15 +255,15 @@ theorem target_meets_H1_com :
   target_meets [0x01] [545] 537 (by decide) (by decide)
 
 theorem target_meets_H3 :
-    ∃ x, target.mem x ∧ (Shape.mk [] [0x03] (.exact [94, 305, 392, 289, 896])).mem x :=
+    ∃ x, target.mem x ∧ (Shape.mk [] [0x03] (.exact [94, 305, 392, 289, 896, 281, 608])).mem x :=
   target_meets [0x03] _ 297 (by decide) (by decide)
 
 theorem target_meets_H21 :
-    ∃ x, target.mem x ∧ (Shape.mk [] [0x09] (.exact [3188, 4645, 6037, 4389, 14101])).mem x :=
+    ∃ x, target.mem x ∧ (Shape.mk [] [0x09] (.exact [3188, 4645, 6037, 4389, 14101, 4261, 9493])).mem x :=
   target_meets [0x09] _ 3180 (by decide) (by decide)
 
 theorem target_meets_H22 :
-    ∃ x, target.mem x ∧ (Shape.mk [] [0x0A] (.exact [493, 521, 608, 505, 1112])).mem x :=
+    ∃ x, target.mem x ∧ (Shape.mk [] [0x0A] (.exact [493, 521, 608, 505, 1112, 497, 824])).mem x :=
   target_meets [0x0A] _ 485 (by decide) (by decide)
 
 /-- E.g. `"pomf\0s0" ‖ 0^70 ‖ "pomf\0p0" ‖ 08` is a seed-XOF input (seed = digest = 0^32,
