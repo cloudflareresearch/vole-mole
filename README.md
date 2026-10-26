@@ -153,8 +153,8 @@ the circuit and protocol designs.
 [mole]: https://github.com/Moderation-of-unLinkable-Endorsements/internet-drafts
 [pomfrit]: https://eprint.iacr.org/2026/109
 [fischlin]: https://www.cryptoplexity.informatik.tu-darmstadt.de/media/crypt/publications_1/fischlinblind-sigs2006.pdf
-[ihat]: https://github.com/Moderation-of-unLinkable-Endorsements/internet-drafts/blob/main/draft-authors-mole-vole-ihat.md
-[act]: https://github.com/Moderation-of-unLinkable-Endorsements/internet-drafts/blob/main/draft-authors-mole-vole-act.md
+[ihat]: https://moderation-of-unlinkable-endorsements.github.io/internet-drafts/draft-authors-mole-vole-ihat.html
+[act]: https://moderation-of-unlinkable-endorsements.github.io/internet-drafts/draft-authors-mole-vole-act.html
 [faest]: https://faest.info
 [arch-opt]: https://github.com/faest-sign/faest-arch-opt
 [pqov]: https://github.com/pqov/pqov
