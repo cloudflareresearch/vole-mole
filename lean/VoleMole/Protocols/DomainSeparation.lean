@@ -151,7 +151,7 @@ def proofSystem : List (String × Shape) :=
    ("H3", ⟨[], [0x03], .exact [94, 305, 392, 289, 896]⟩),
    ("H4", ⟨[], [0x04], .exact [49]⟩),
    ("H5", ⟨[], [0x05], .exact [37]⟩),
-   ("H2^1", ⟨[], [0x09], .exact [2932, 4645, 6037, 4389, 14101]⟩),
+   ("H2^1", ⟨[], [0x09], .exact [3188, 4645, 6037, 4389, 14101]⟩),
    ("H2^2", ⟨[], [0x0A], .exact [493, 521, 608, 505, 1112]⟩),
    ("H2^3", ⟨[], [0x0B], .exact [93, 205]⟩),
    ("UOV combination pomfrit", ⟨[], pomf l' z0, .exact [63]⟩),
@@ -248,8 +248,8 @@ theorem target_meets_H3 :
   target_meets [0x03] _ 297 (by decide) (by decide)
 
 theorem target_meets_H21 :
-    ∃ x, target.mem x ∧ (Shape.mk [] [0x09] (.exact [2932, 4645, 6037, 4389, 14101])).mem x :=
-  target_meets [0x09] _ 2924 (by decide) (by decide)
+    ∃ x, target.mem x ∧ (Shape.mk [] [0x09] (.exact [3188, 4645, 6037, 4389, 14101])).mem x :=
+  target_meets [0x09] _ 3180 (by decide) (by decide)
 
 theorem target_meets_H22 :
     ∃ x, target.mem x ∧ (Shape.mk [] [0x0A] (.exact [493, 521, 608, 505, 1112])).mem x :=

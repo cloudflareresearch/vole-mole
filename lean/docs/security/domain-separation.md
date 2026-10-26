@@ -120,7 +120,7 @@ Lengths per relation (measured; "–" means not used):
 | H₃ | w_prefix ‖ mu ‖ rho (16) ‖ 03 | 03 | 94 | 305 | 392 | 289 | 896 | 32 | `voleith.hpp:169-184` |
 | H₄ | iv_pre (16) ‖ mu ‖ 04 | 04 | 49 | 49 | 49 | 49 | 49 | 16 | `voleith.hpp:187-194,366-377` |
 | H₅ (gate) | iv ‖ e (u32) ‖ label (16) ‖ 05 | 05 | 37 | 37 | 37 | 37 | 37 | 4 | `vole_commit.inc:372-431` |
-| H₂¹ | mu ‖ com ‖ corr ‖ c_mult ‖ iv_pre ‖ binder₁ ‖ 09 | 09 | 2932 | 4645 | 6037 | 4389 | 14101 | 136 | `voleith.hpp:206-216,396-406` |
+| H₂¹ | mu ‖ com ‖ corr ‖ c_mult ‖ iv_pre ‖ binder₁ ‖ 09 | 09 | 3188 | 4645 | 6037 | 4389 | 14101 | 136 | `voleith.hpp:206-216,396-406` |
 | H₂² | chal₁ (136) ‖ ũ (64) ‖ h_V (64) ‖ [mu] ‖ binder₂ ‖ d (ℓ_w) ‖ 0A | 0A | 493 | 521 | 608 | 505 | 1112 | 56 | `voleith.hpp:218-226,267-285,433-450`; `kos_vole_check.hpp:107,138,172-177` |
 | H₂³ | chal₂ (56) ‖ ã₀ (16) ‖ ã₁.. ‖ ctr (u32) ‖ 0B | 0B | 93 | 205 | 205 | 205 | 205 | 16 | `voleith.hpp:297-307,470-480` |
 | Comb. l | chal₂ (56) ‖ DST_comb (7) | 0x30 | 63 | – | 63 | – | 63 | 720 | `uov/circuit.hpp:59-66` |
@@ -211,7 +211,7 @@ We relinked the three examples with `-Wl,--wrap` around the eight `Keccak_Hash*`
 traced; none was left untracked. The traced (primitive, length, output length, 7-byte prefix,
 final byte) classes are exactly the rows above:
 - PomFRIT shows lengths 8, 37, 39, 49, 63, 85, 89 (seed XOF with an 18-byte msg), 93, 94,
-  302 (target, 18-byte msg), 493, 545, 2932, 4097 and 8193.
+  302 (target, 18-byte msg), 493, 545, 3188 (2932 before `64fd1a4`), 4097 and 8193.
 - Moussaka shows 37, 39, 49, 63, 69, 200 (redeem H₂⁰ with k = 3), 205, 305, 392, 521, 545, 608,
   4097, 4645, 6037 and 8193.
 - Ratatouille shows 37, 39, 49, 63, 64, 120, 205, 289, 505, 545, 896, 1112, 4097, 4389, 8193 and
@@ -269,7 +269,7 @@ common strings (each is also checked in Lean):
 | A2 ∩ H₁ (k=8) | `"pomf\0h0"` ‖ 0⁸¹⁸⁵ ‖ 01 | msg = 0⁷⁹⁰⁸ ‖ 01 | tree-0 leaf string |
 | A2 ∩ H₁ com | `"pomf\0h0"` ‖ 0⁵³⁷ ‖ 01 | msg = 0²⁶⁰ ‖ 01 | h₀ = `"pomf\0h0"` ‖ 0²⁵, h₁..₁₆ = 0³² |
 | A2 ∩ H₃ (Mous. issue) | `"pomf\0h0"` ‖ 0²⁹⁷ ‖ 03 (305 B) | msg = 0²⁰ ‖ 03 | w = `"pomf\0h0"` ‖ 0²⁴⁹, mu = 0³², rho = 0¹⁶ |
-| A2 ∩ H₂¹ (PomFRIT length) | `"pomf\0h0"` ‖ 0²⁹²⁴ ‖ 09 (2932 B) | msg = 0²⁶⁴⁷ ‖ 09 | mu = `"pomf\0h0"` ‖ 0²⁵, rest 0 |
+| A2 ∩ H₂¹ (PomFRIT length) | `"pomf\0h0"` ‖ 0³¹⁸⁰ ‖ 09 (3188 B) | msg = 0²⁹⁰³ ‖ 09 | mu = `"pomf\0h0"` ‖ 0²⁵, rest 0 |
 | A2 ∩ H₂² (PomFRIT length) | `"pomf\0h0"` ‖ 0⁴⁸⁵ ‖ 0A (493 B) | msg = 0²⁰⁸ ‖ 0A | chal₁ = `"pomf\0h0"` ‖ 0¹²⁹, rest 0 |
 
 *Reachability of each half.* The **A2 half** is free: any PomFRIT verifier
@@ -365,7 +365,7 @@ probability ≤ n_seed·Q·2⁻²⁵⁶ (Q = all SHAKE128 evaluations).
 ### 3.5 Relation-level separation (correction to L0 O3)
 
 The shipped binders are fixed-length (§2.1), so:
-- H₂¹ lengths are pairwise distinct across the five relations: 2932, 4645, 6037, 4389 and 14101;
+- H₂¹ lengths are pairwise distinct across the five relations: 3188, 4645, 6037, 4389 and 14101;
 - H₂² lengths are pairwise distinct: 493, 521, 608, 505 and 1112;
 - H₃ lengths are pairwise distinct: 94, 305, 392, 289 and 896;
 - H₂⁰ is told apart by its DST suffix.

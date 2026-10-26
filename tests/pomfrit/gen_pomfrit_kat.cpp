@@ -63,7 +63,7 @@ int main(int argc, char** argv) {
         << "\nvole_check_proof_offset " << ProofView::OFFSET_VOLE_CHECK_PROOF
         << "\nvole_check_proof_bytes " << ProofView::SIZE_VOLE_CHECK_PROOF << "\ncorrection_offset "
         << ProofView::OFFSET_CORRECTION << "\ncorrection_bytes " << ProofView::SIZE_CORRECTION
-        << "\nsk " << to_hex(test::UOV_SK_BYTES) << "\npk " << to_hex(kp.sk.public_key())
+        << "\nsk " << to_hex(test::UOV_SK_BYTES) << "\npk " << to_hex(kp.sk.public_key_bytes())
         << "\npk_digest " << to_hex(uov::detail::PublicKeyAccess::digest(kp.pk)) << '\n';
 
     for (size_t i = 0; i < 3; ++i) {

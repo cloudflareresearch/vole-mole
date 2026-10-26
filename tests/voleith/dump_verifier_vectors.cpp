@@ -785,7 +785,7 @@ void dump_keys(const std::string& dir) {
                 continue;
             }
             const uov::SecretKey sk(to_array<uov::SECRET_KEY_BYTES>(unhex(value)));
-            out << "key " << value << " " << hex(sk.public_key()) << "\n";
+            out << "key " << value << " " << hex(sk.public_key_bytes()) << "\n";
         }
     }
 }

@@ -1101,7 +1101,7 @@ TEST(LeanModels, ProofHashLengthsMatchDomainTable) {
         proof_hash_lengths<ra::IssueRelation>(false, 0, 0),
         proof_hash_lengths<ra::SpendRelation>(false, 0, 0),
     };
-    const std::array<size_t, 5> h21 = {2932, 4645, 6037, 4389, 14101};
+    const std::array<size_t, 5> h21 = {3188, 4645, 6037, 4389, 14101};
     const std::array<size_t, 5> h22 = {493, 521, 608, 505, 1112};
     const std::array<size_t, 5> h23 = {93, 205, 205, 205, 205};
     for (size_t i = 0; i < got.size(); ++i) {
