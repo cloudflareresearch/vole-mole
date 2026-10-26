@@ -47,6 +47,12 @@ def ucom (k ctxIss r : Bytes) : Bytes := (Keccak.keccakP800 (ucomState k ctxIss 
 def derive (k ctxRed : Bytes) : Bytes :=
   (Keccak.keccakP800 (deriveState k ctxRed)).toList.take Moussaka.nfBytes
 
+theorem length_ucom (k ctxIss r : Bytes) : (ucom k ctxIss r).length = uovM := by
+  simp [ucom, uovM]
+
+theorem length_derive (k ctxRed : Bytes) : (derive k ctxRed).length = Moussaka.nfBytes := by
+  simp [derive, Moussaka.nfBytes]
+
 /-- `encode_unbound_issue_witness`: `r ‖ nf_key ‖ s5 ‖ s9` (232 bytes). -/
 def encodeIssueWitness (k ctxIss r : Bytes) : Bytes :=
   r ++ k ++ Moussaka.committedStates (ucomState k ctxIss r)
@@ -68,5 +74,111 @@ theorem derive_getD (k ctxRed : Bytes) (j : Fin MoussakaUnbound.NF) :
     (derive k ctxRed).getD j.val 0 = VoleMole.Arith.MoussakaUnbound.derive (fn k) (fn ctxRed) j := by
   have hj := j.isLt
   simp [derive, VoleMole.Arith.MoussakaUnbound.derive, deriveState, Moussaka.nfBytes] at *
+
+/-! ## The protocol -/
+
+open VoleMole.Spec.Moussaka (NIZK AnchorSet Error)
+
+/-- `UNBOUND_ISSUE_PROOF_BYTES`, `UNBOUND_REDEEM_PROOF_BYTES`. -/
+abbrev issueProofBytes : ℕ := 6864
+abbrev redeemProofBytes : ℕ := 12423
+
+/-- `expand_redeem_seed<UnboundRedeemRelation>(seed, UNBOUND_MOUSSAKA_REDEEM_SEED_DST)`. -/
+def expandRedeemSeed (seed : Bytes) : Bytes := shake128B (redeemSeedDst ++ seed) Moussaka.proveSeedBytes
+
+structure IssueInstance where
+  t : Bytes
+  ctxIss : Bytes
+
+/-- `UnboundIssueRelation::hash_instance`: `t ‖ ctx_iss`. -/
+def IssueInstance.encode (x : IssueInstance) : Bytes := x.t ++ x.ctxIss
+
+structure RedeemInstance where
+  anchors : List UOVKey
+  nf : Bytes
+  ctxIss : Bytes
+  ctxRed : Bytes
+  challengeDigest : Bytes
+
+/-- The unbound issuance relation: the witness encodes some `(nf_key, r)` with
+`t = UCom(nf_key, ctx_iss, r)` (soundness of the constraints: `Arith.MoussakaUnbound.uIssue_sound`). -/
+def IssueRel (x : IssueInstance) (w : Bytes) : Prop :=
+  ∃ k r, k.length = nfKeyBytes ∧ r.length = Moussaka.rBytes ∧
+    w = encodeIssueWitness k x.ctxIss r ∧ x.t = ucom k x.ctxIss r
+
+/-- The unbound redemption relation: for some Anchor `u` of the set, `P_u(s) = UCom(nf_key, ctx_iss,
+r)`, and `nf = Derive(nf_key, ctx_red)` (`Arith.MoussakaUnbound.uRedeem_sound_card`). -/
+def RedeemRel (x : RedeemInstance) (w : Bytes) : Prop :=
+  ∃ k r s u pk, k.length = nfKeyBytes ∧ r.length = Moussaka.rBytes ∧ s.length = uovN ∧
+    x.anchors[u]? = some pk ∧ w = encodeRedeemWitness k x.ctxIss x.ctxRed r s u ∧
+    pk.eval s = ucom k x.ctxIss r ∧ x.nf = derive k x.ctxRed
+
+/-- `PendingUnboundToken`. -/
+structure PendingToken where
+  k : Bytes
+  r : Bytes
+  ctxIss : Bytes
+  t : Bytes
+
+/-- `UnboundToken`: `(nf_key, r, s)`; not bound to a redemption context. -/
+structure Token where
+  k : Bytes
+  r : Bytes
+  s : Bytes
+
+/-- `detail::unbound_issue_request_with_seed(ctx_iss, seed)`. -/
+def issueRequest (PI : NIZK IssueInstance) (ctxIss seed : Bytes) : PendingToken × Bytes :=
+  let (k, r, rho) := expandIssueSeed seed
+  let t := ucom k ctxIss r
+  (⟨k, r, ctxIss, t⟩, t ++ PI.prove (encodeIssueWitness k ctxIss r) ⟨t, ctxIss⟩ rho)
+
+/-- `PendingUnboundToken::finalize_issue(pk, s)`. -/
+def finalizeIssue (pk : UOVKey) (p : PendingToken) (s : Bytes) : Option Token :=
+  if pk.eval s = p.t then some ⟨p.k, p.r, s⟩ else none
+
+/-- `find_issuer(anchors, t, s)` (`moussaka.cpp:120-139`): the last index `u` with
+`P_u(s) = t`, or `none` (`std::invalid_argument`). -/
+def findIssuer (A : AnchorSet) (t s : Bytes) : Option ℕ :=
+  ((List.range A.keys.length).filter fun u => decide (A.keys[u]?.map (·.eval s) = some t)).getLast?
+
+theorem findIssuer_some {A : AnchorSet} {t s : Bytes} {i : ℕ} (h : findIssuer A t s = some i) :
+    ∃ pk : UOVKey, A.keys[i]? = some pk ∧ pk.eval s = t := by
+  have hm := List.mem_of_getLast? h
+  simp only [List.mem_filter, decide_eq_true_eq] at hm
+  obtain ⟨-, he⟩ := hm
+  cases hk : A.keys[i]? with
+  | none => simp [hk] at he
+  | some pk => simp only [hk, Option.map_some, Option.some.injEq] at he; exact ⟨pk, rfl, he⟩
+
+theorem findIssuer_isSome {A : AnchorSet} {t s : Bytes} :
+    (findIssuer A t s).isSome ↔ ∃ i : ℕ, ∃ pk : UOVKey, A.keys[i]? = some pk ∧ pk.eval s = t := by
+  constructor
+  · intro h
+    obtain ⟨i, hi⟩ := Option.isSome_iff_exists.1 h
+    exact ⟨i, findIssuer_some hi⟩
+  · rintro ⟨i, pk, hk, he⟩
+    have hi : i < A.keys.length := (List.getElem?_eq_some_iff.1 hk).1
+    unfold findIssuer
+    rw [Option.isSome_iff_ne_none, Ne, List.getLast?_eq_none_iff, ← Ne, ← List.length_pos_iff]
+    refine List.length_pos_of_mem (a := i) ?_
+    have : A.keys[i] = pk := (List.getElem?_eq_some_iff.1 hk).2
+    simp [hi, this, he]
+
+/-- `detail::unbound_redeem_request_with_seed(token, anchors, ctx_iss, ctx_red, challenge_digest,
+seed)`: the Client finds its Anchor itself; `nf = Derive(nf_key, ctx_red)`. -/
+def redeemRequest (PR : NIZK RedeemInstance) (tok : Token) (A : AnchorSet)
+    (ctxIss ctxRed cd seed : Bytes) : Except Error Bytes :=
+  match findIssuer A (ucom tok.k ctxIss tok.r) tok.s with
+  | none => .error .invalidToken
+  | some i =>
+    .ok (derive tok.k ctxRed ++ PR.prove (encodeRedeemWitness tok.k ctxIss ctxRed tok.r tok.s i)
+      ⟨A.keys, derive tok.k ctxRed, ctxIss, ctxRed, cd⟩ (expandRedeemSeed seed))
+
+/-- `unbound_finalize_redeem(anchors, request, ctx_iss, ctx_red, challenge_digest)`. -/
+def finalizeRedeem (VR : NIZK RedeemInstance) (A : AnchorSet) (req ctxIss ctxRed cd : Bytes) :
+    Option Bytes :=
+  if req.length ≠ Moussaka.nfBytes + redeemProofBytes then none else
+  let nf := req.take Moussaka.nfBytes
+  if VR.verify (req.drop Moussaka.nfBytes) ⟨A.keys, nf, ctxIss, ctxRed, cd⟩ then some nf else none
 
 end VoleMole.Spec.MoussakaUnbound

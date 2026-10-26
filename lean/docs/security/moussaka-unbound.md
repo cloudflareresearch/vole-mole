@@ -148,7 +148,13 @@ of `lean/docs/extraction/README.md` is generic in the constraint system, needing
 (9), bit constraints on every witness bit (or `b_u = 0` for the unused selector bits), and, for
 redemption, a combined slot whose failure probability over `l` is `≤ 1/|F|`
 (`uRedeem_sound_card`). So `ε_ext^{u-iss}` and `ε_ext^{u-red}` are the base note's
-`ε_ext` formulas with the new constraint counts.
+`ε_ext` formulas with the new constraint counts. [Lean] `EndToEnd/MoussakaUnbound.lean` proves the
+degree bound (`moussaka_unbound_issue_deg`, `moussaka_unbound_redeem_deg`) and the deterministic
+end-to-end theorems `moussaka_unbound_issue_extract` and `moussaka_unbound_redeem_extract`, in the
+form of `EndToEnd/Relations.lean`: some known tree's candidate is a bit vector whose decoding
+satisfies the unbound relation, or at most 9 admissible `chall₃` are accepted;
+`moussaka_unbound_redeem_comb_bad` discharges the combination hypothesis except with probability
+`1/|F|`.
 
 ---
 
@@ -413,6 +419,22 @@ abort term (the probability that `DerivePreimage_{sk_c}` fails on the Client's c
    `Protocols/MoussakaUnbound.lean`, `swap_invariant`, and the assembly `anonymity_unbound`.)
 5. Hence `|Pr[b' = 1 | 1] − Pr[b' = 1 | 0]| ≤ 2·ε_ZK^joint + 2·Adv^prf-t_2`. ∎
 
+**[Lean] `lean/VoleMole/Privacy/MoussakaUnbound.lean`, Theorem U5(a) on the executable spec.** The
+game above on `Spec/MoussakaUnbound.lean`'s `issueRequest`, `finalizeIssue` and `redeemRequest`
+(with the C++ `find_issuer`), with the seed expansions' outputs `(nf_key, r, ρ_iss)` and every
+`ρ_red` uniform, `n` redemption queries `(i, w, S, ctx_red, cd)` chosen after issuance, and the
+refusal rule (both tokens finalized, both redeemable in every queried set, and the context rule).
+`anonymity`: the two worlds differ by at most `4εI + 2n·εR + 2εprf`, from
+- per-proof zero knowledge of both unbound relations (`ZeroKnowledge` for `IssueRelW`, `RedeemRelW`;
+  each hop is one proof, so the joint `ε_ZK^joint` is the sum `2εI + n·εR` per world; on `main` the
+  per-proof hypothesis fails, as for the bound relations, UF6), and
+- the PRF hypothesis for the explicit reductions (`prfAdv`, `reduction`): given `t₀, t₁`,
+  distinguish the table `c, ctx ↦ Derive(k_c, ctx)` from a uniform table.
+
+Step 4 is `idealGame_eq`: the involution `swapF` of the uniform table maps world 1 to world 0. The
+redemption queries are chosen non-adaptively (after issuance, before any redemption); adaptive
+queries need the lazy-sampling argument above, which is on paper only.
+
 *Proof (b).* As (a), but `A` sees neither issuance, so the issuance proofs are never shown and not
 simulated, the `t_i` are not leaked (the PRF hop is `Adv^prf_2`), and the refusal bit must be
 symmetrized as in base (b'): with the Client taking its index from `S`, the refusal bit is
@@ -479,18 +501,17 @@ the base protocol.
 1. The PRF-with-commitment, key-recovery and key-second-preimage assumptions on Keccak-p[800,12]
    are new and are supported only by generic estimates; structural cryptanalysis of 12-round
    Keccak-p[800] with 128-bit keys and 192-bit truncation is outside this note.
-2. The extraction, ZK and random-oracle bounds of `lean/` are mechanized for the five base
-   relations; for the two unbound relations only the arithmetization (soundness and completeness),
-   the domain separation, the byte-level spec (checked against the C++ KAT) and the protocol cores
-   below are mechanized. Extending the end-to-end extraction theorems (`EndToEnd/Relations.lean`)
-   and the executable verifier and prover (`Verifier/Relations.lean`, so that `lake exe
-   verifier_vectors` also checks the proofs of `unbound_moussaka_kat.txt`) to the unbound relations
-   is mechanical but not done.
-3. Thm U5 is mechanized only from its step 3 on (the swap invariance and the assembly from
-   per-hop hypotheses), not on an executable spec as `Privacy/Moussaka.lean` does for the base
-   protocol.
-4. The game allows any number of redemptions; the paper argument for adaptively chosen swap flags
-   (lazy sampling) is not mechanized.
+2. The random-oracle bounds of `lean/ROM/` (and the probabilistic wrappers of the extraction
+   theorems) are mechanized for the five base relations only. For the unbound relations the
+   deterministic end-to-end extraction (`EndToEnd/MoussakaUnbound.lean`), the arithmetization, the
+   domain separation and the byte-level spec (checked against the C++ KAT) are mechanized; the
+   executable verifier and prover (`Verifier/Relations.lean`, so that `lake exe verifier_vectors`
+   also checks the proofs of `unbound_moussaka_kat.txt`) are not extended.
+3. Thm U5(a) is mechanized on the executable spec with non-adaptive redemption queries
+   (`Privacy/MoussakaUnbound.lean`); adaptively chosen queries (lazy sampling) and Thm U5(b) are on
+   paper only.
+4. As for the base protocol, the per-proof zero-knowledge hypothesis of the mechanized Thm U5 holds
+   only with dedicated label rows; on `main` the joint (PU) hop is on paper.
 
 ---
 
@@ -507,7 +528,12 @@ All in `lean/VoleMole/`; no `sorry`, no axioms beyond the standard three.
   `nf_determined` (Cor U2), `squat_cases` (Prop U3), `swap_invariant` (Thm U5 step 4) and
   `anonymity_unbound` (Thm U5 from the hop hypotheses).
 - `Spec/MoussakaUnbound.lean`: the executable byte-level spec (seed expansion, `ucom`, `derive`,
-  both witness encodings), built on the Arith encodings, with `ucom_getD` and `derive_getD` tying it
+  both witness encodings, and the protocol steps with `find_issuer`: `findIssuer_some`,
+  `findIssuer_isSome`), built on the Arith encodings, with `ucom_getD` and `derive_getD` tying it
   to the Arith model. `lake exe spec_kats` checks it against every field of
   `tests/moussaka/unbound_moussaka_kat.txt` that does not depend on the VOLEitH internals.
+- `EndToEnd/MoussakaUnbound.lean`: degree bounds and the end-to-end extraction theorems for both
+  unbound relations (§2).
+- `Privacy/MoussakaUnbound.lean`: Theorem U5(a) on the executable spec (`anonymity`), with
+  `close_pi` (`n` independent hops), `simGame_iff`, `prf_hop` and `idealGame_eq` (§6).
 - `Protocols/DomainSeparation.lean`: the unbound rows (`mousU`).
