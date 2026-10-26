@@ -918,23 +918,23 @@ TEST(LeanModels, ConstraintCountsMatchNumConstraints) {
         check_constraint_count<pf::RedeemRelation>({&pk, {}});
     }
     {
-        SCOPED_TRACE("Ihat issue");
+        SCOPED_TRACE("VOLE-IHAT issue");
         static_assert(mo::IssueRelation::NUM_CONSTRAINTS == 4008);
         check_constraint_count<mo::IssueRelation>({});
     }
     {
-        SCOPED_TRACE("Ihat redeem");
+        SCOPED_TRACE("VOLE-IHAT redeem");
         static_assert(mo::RedeemRelation::NUM_CONSTRAINTS == 4409);
         const std::array<vole_mole::ihat::AnchorRef, 1> anchors = {pk};
         check_constraint_count<mo::RedeemRelation>({anchors, {}, {}, {}, {}});
     }
     {
-        SCOPED_TRACE("Act issue");
+        SCOPED_TRACE("VOLE-ACT issue");
         static_assert(ra::IssueRelation::NUM_CONSTRAINTS == 3776);
         check_constraint_count<ra::IssueRelation>({});
     }
     {
-        SCOPED_TRACE("Act spend");
+        SCOPED_TRACE("VOLE-ACT spend");
         static_assert(ra::SpendRelation::NUM_CONSTRAINTS == 12282);
         check_constraint_count<ra::SpendRelation>({pk, {}, 0, {}, {}});
     }

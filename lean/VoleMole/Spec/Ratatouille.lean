@@ -11,7 +11,7 @@ This file models the protocol logic of `include/vole_mole/ratatouille.hpp` and
 and change tokens, the client's checks and its 64-bit credit arithmetic on `UInt64`, the move-only
 client objects (`Token`, `PendingToken`, `PendingSpend`), and the Issuer's nullifier store as the
 header prescribes it to the caller (`ratatouille.hpp:174-182`). `lake exe spec_kats`
-(`Spec/RatatouilleKats.lean`) checks it against `tests/ratatouille/ratatouille_kat.txt`.
+(`Spec/RatatouilleKats.lean`) checks it against `tests/act/act_kat.txt`.
 
 ## What is concrete and what is abstract
 

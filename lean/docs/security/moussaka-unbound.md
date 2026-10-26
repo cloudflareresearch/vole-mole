@@ -1,6 +1,6 @@
 # Unbound Moussaka: security analysis of late redemption-context binding
 
-This note analyses the "unbound token" variant of Moussaka added by PR #63 (commit "moussaka: Add
+This note analyses the "unbound token" variant of Moussaka added by PR #63 (merged as `62be5bc`, "moussaka: Add
 support for late redemption context binding"): `include/vole_mole/moussaka.hpp`
 (`UnboundToken`, `PendingUnboundToken`, `unbound_issue_request`, `unbound_issue_response`,
 `unbound_finalize_redeem`), `src/moussaka/commit.hpp` (`UnboundCom`, `Derive`),
@@ -506,7 +506,7 @@ the base protocol.
    deterministic end-to-end extraction (`EndToEnd/MoussakaUnbound.lean`), the arithmetization, the
    domain separation and the byte-level spec (checked against the C++ KAT) are mechanized; the
    executable verifier and prover (`Verifier/Relations.lean`, so that `lake exe verifier_vectors`
-   also checks the proofs of `unbound_moussaka_kat.txt`) are not extended.
+   also checks the proofs of `unbound_ihat_kat.txt`) are not extended.
 3. Thm U5(a) is mechanized on the executable spec with non-adaptive redemption queries
    (`Privacy/MoussakaUnbound.lean`); adaptively chosen queries (lazy sampling) and Thm U5(b) are on
    paper only.
@@ -531,7 +531,7 @@ All in `lean/VoleMole/`; no `sorry`, no axioms beyond the standard three.
   both witness encodings, and the protocol steps with `find_issuer`: `findIssuer_some`,
   `findIssuer_isSome`), built on the Arith encodings, with `ucom_getD` and `derive_getD` tying it
   to the Arith model. `lake exe spec_kats` checks it against every field of
-  `tests/moussaka/unbound_moussaka_kat.txt` that does not depend on the VOLEitH internals.
+  `tests/ihat/unbound_ihat_kat.txt` that does not depend on the VOLEitH internals.
 - `EndToEnd/MoussakaUnbound.lean`: degree bounds and the end-to-end extraction theorems for both
   unbound relations (§2).
 - `Privacy/MoussakaUnbound.lean`: Theorem U5(a) on the executable spec (`anonymity`), with

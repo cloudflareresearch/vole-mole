@@ -18,7 +18,7 @@
 //                        finalize). Records named x4_* are hash_state_x4 outputs (lane 0 of
 //                        update_4 on four distinct inputs), which must equal hash_state's.
 //
-// verifier_bavc.txt: the one-tree BAVC of the Moussaka issuance parameters (FAEST-EM-128f: s128,
+// verifier_bavc.txt: the one-tree BAVC of the VOLE-IHAT issuance parameters (FAEST-EM-128f: s128,
 // tau = 17, delta_bits = 120, AES-CTR tree PRG and leaf hash, T_OPEN = 105), for a fixed seed and
 // iv. Leaves are listed in "spec order": leaf j of small VOLE i (concatenated over i = 0..16, the
 // first vector having 2^8 leaves and the others 2^7), i.e., with faest-arch-opt's in-memory
@@ -32,10 +32,10 @@
 //                        j = Delta_i of each vector is zero), hashed_leaves, check.
 //
 // verifier_keys.txt: lines `key SK PK`, the compressed UOV public key PK of each compact secret key
-// SK in the Moussaka and Ratatouille KAT files.
+// SK in the VOLE-IHAT and VOLE-ACT KAT files.
 //
 // verifier_kat.txt: the CRT tables, then one record per relation with the intermediate values of
-// the verification of a KAT proof (Moussaka issuance and redemption, Ratatouille issuance and
+// the verification of a KAT proof (VOLE-IHAT issuance and redemption, VOLE-ACT issuance and
 // spend, PomFRIT redemption; see dump_moussaka etc. for which KAT record), following
 // voleith_vole_reconstruct and voleith_verify_commit step by step.
 //
@@ -66,18 +66,18 @@
 //     delta_check          H_2^3(chal2 || qs_check || qs_proof || ctr || 11), compared with Delta
 //     accept               1 if voleith_verify (or PomFRIT's two-step verification) accepts
 
-#include "vole_mole/moussaka.hpp"
-#include "vole_mole/ratatouille.hpp"
+#include "vole_mole/ihat.hpp"
+#include "vole_mole/act.hpp"
 #include "vole_mole/uov.hpp"
 
 #include "dst.hpp"                // internal
-#include "moussaka/commit.hpp"    // internal
-#include "moussaka/issue.hpp"     // internal
-#include "moussaka/redeem.hpp"    // internal
+#include "ihat/commit.hpp" // internal
+#include "ihat/issue.hpp"  // internal
+#include "ihat/redeem.hpp" // internal
 #include "pomfrit/redeem.hpp"     // internal
-#include "ratatouille/commit.hpp" // internal
-#include "ratatouille/issue.hpp"  // internal
-#include "ratatouille/spend.hpp"  // internal
+#include "act/commit.hpp" // internal
+#include "act/issue.hpp"  // internal
+#include "act/spend.hpp"  // internal
 #include "uov/public_key.hpp"     // internal
 #include "voleith.hpp"            // internal
 
@@ -119,7 +119,7 @@
 namespace {
 
 using namespace vole_mole;
-using P = moussaka::detail::IssueParams;
+using P = ihat::detail::IssueParams;
 using CP = P::CONSTS;
 using VC = CP::VEC_COM;
 using BAVC = P::bavc_t;
@@ -636,15 +636,15 @@ std::array<uint8_t, 4> u32le(size_t v) {
 }
 
 void dump_moussaka(std::ostream& out) {
-    namespace md = moussaka::detail;
-    const auto kat = read_kat("moussaka/moussaka_kat.txt");
+    namespace md = ihat::detail;
+    const auto kat = read_kat("ihat/ihat_kat.txt");
 
     // Issuance: record 0. issue_request = t || proof.
     {
         const auto request = unhex(kat_value(kat, "issue_request"));
         md::IssueRelation::instance x{};
         std::copy_n(request.begin(), x.t.size(), x.t.begin());
-        x.ctx_iss = to_array<moussaka::CTX_BYTES>(unhex(kat_value(kat, "ctx_iss")));
+        x.ctx_iss = to_array<ihat::CTX_BYTES>(unhex(kat_value(kat, "ctx_iss")));
         std::vector<uint8_t> enc;
         append(enc, x.t);
         append(enc, x.ctx_iss);
@@ -661,7 +661,7 @@ void dump_moussaka(std::ostream& out) {
             sks.emplace_back(
                 to_array<uov::SECRET_KEY_BYTES>(unhex(kat_value(kat, "anchor_sk", u, start))));
         }
-        std::vector<moussaka::AnchorRef> anchors;
+        std::vector<ihat::AnchorRef> anchors;
         for (const auto& sk : sks) {
             anchors.emplace_back(sk.expanded_public_key());
         }
@@ -669,13 +669,13 @@ void dump_moussaka(std::ostream& out) {
         md::RedeemRelation::instance x{
             anchors,
             {},
-            to_array<moussaka::CTX_BYTES>(unhex(kat_value(kat, "ctx_iss", 0, start))),
-            to_array<moussaka::CTX_BYTES>(unhex(kat_value(kat, "ctx_red", 0, start))),
-            to_array<moussaka::CHALLENGE_DIGEST_BYTES>(
+            to_array<ihat::CTX_BYTES>(unhex(kat_value(kat, "ctx_iss", 0, start))),
+            to_array<ihat::CTX_BYTES>(unhex(kat_value(kat, "ctx_red", 0, start))),
+            to_array<ihat::CHALLENGE_DIGEST_BYTES>(
                 unhex(kat_value(kat, "challenge_digest", 0, start)))};
         std::copy_n(request.begin(), x.nf.size(), x.nf.begin());
         std::vector<uint8_t> enc;
-        append(enc, u32le(moussaka::MAX_ANCHORS));
+        append(enc, u32le(ihat::MAX_ANCHORS));
         append(enc, u32le(anchors.size()));
         for (const uov::PublicKey& pk : anchors) {
             append(enc, uov::detail::PublicKeyAccess::digest(pk));
@@ -691,10 +691,10 @@ void dump_moussaka(std::ostream& out) {
 }
 
 void dump_ratatouille(std::ostream& out) {
-    namespace rd = ratatouille::detail;
-    const auto kat = read_kat("ratatouille/ratatouille_kat.txt");
+    namespace rd = act::detail;
+    const auto kat = read_kat("act/act_kat.txt");
     const uov::SecretKey sk(to_array<uov::SECRET_KEY_BYTES>(unhex(kat_value(kat, "issuer_sk"))));
-    const auto ctx_iss = to_array<ratatouille::CTX_BYTES>(unhex(kat_value(kat, "ctx_iss")));
+    const auto ctx_iss = to_array<act::CTX_BYTES>(unhex(kat_value(kat, "ctx_iss")));
 
     // Issuance: record 0. issue_request = c || proof.
     {
@@ -720,9 +720,9 @@ void dump_ratatouille(std::ostream& out) {
         size_t off = 0;
         std::copy_n(request.begin(), x.nf.size(), x.nf.begin());
         off += x.nf.size();
-        x.d = rd::decode_credits(std::span<const uint8_t, ratatouille::CREDIT_BYTES>(
-            request.data() + off, ratatouille::CREDIT_BYTES));
-        off += ratatouille::CREDIT_BYTES;
+        x.d = rd::decode_credits(std::span<const uint8_t, act::CREDIT_BYTES>(
+            request.data() + off, act::CREDIT_BYTES));
+        off += act::CREDIT_BYTES;
         std::copy_n(request.begin() + static_cast<std::ptrdiff_t>(off), x.c_next.size(),
                     x.c_next.begin());
         off += x.c_next.size();
@@ -773,13 +773,13 @@ void dump_pomfrit(std::ostream& out) {
                                 refresher);
 }
 
-// The compressed public keys of all UOV secret keys in the Moussaka and Ratatouille KAT files.
+// The compressed public keys of all UOV secret keys in the VOLE-IHAT and VOLE-ACT KAT files.
 void dump_keys(const std::string& dir) {
     std::ofstream out(dir + "/verifier_keys.txt");
     out << "# Generated by tests/voleith/dump_verifier_vectors.cpp. Do not edit.\n";
     out << "# key SK PK: a compact UOV secret key and its compressed public key.\n\n";
     std::set<std::string> seen;
-    for (const auto* path : {"moussaka/moussaka_kat.txt", "ratatouille/ratatouille_kat.txt"}) {
+    for (const auto* path : {"ihat/ihat_kat.txt", "act/act_kat.txt"}) {
         for (const auto& [key, value] : read_kat(path)) {
             if ((key != "anchor_sk" && key != "issuer_sk") || !seen.insert(value).second) {
                 continue;

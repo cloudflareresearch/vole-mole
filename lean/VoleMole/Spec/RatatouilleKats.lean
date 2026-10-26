@@ -4,7 +4,7 @@ import VoleMole.Spec.Ratatouille
 /-!
 # Known-answer cross-check of `Spec.Ratatouille` (run by `lake exe spec_kats`)
 
-Reads `tests/ratatouille/ratatouille_kat.txt` (`tests/ratatouille/gen_ratatouille_kat.cpp`; one
+Reads `tests/act/act_kat.txt` (`tests/act/gen_act_kat.cpp`; one
 record per issuance followed by one record per spend, each spend spending the previous change
 token) and the expanded public maps `test`, `alt61`, `alt62` of the keys with secret key
 `filled(0x60)`, `filled(0x61)`, `filled(0x62)` (generated in Lean by `Spec/Kats.lean`).
@@ -175,7 +175,7 @@ def checkFile (keys : Std.HashMap String ByteArray) (recs : Array Rec) : List (S
     let mut cases := 0
     while i < recs.size do
       let r := recs[i]!
-      let label := s!"ratatouille_kat.txt case {cases}"
+      let label := s!"act_kat.txt case {cases}"
       cases := cases + 1
       match checkIssue keys r, r.nat "spend_count" with
       | .ok (errs, pk, ctx, τ), .ok n =>

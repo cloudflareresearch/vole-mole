@@ -17,9 +17,9 @@ import VoleMole.Spec.Common
 * The proof instances as hashed by `hash_instance` (`issue.hpp:164-167`, `redeem.hpp:182-200`),
   and the relations the constraint systems are proved (in `Arith/Moussaka.lean`) to enforce.
 * Every step: `issueRequest`, `issueResponse` (Anchor), `finalizeIssue`, `redeemRequest` (the
-  Client finds its issuer itself, `findIssuer`, `moussaka.cpp:184-219`; the index-taking step of
+  Client finds its issuer itself, `findIssuer`, `src/ihat/ihat.cpp:237-256` on `main`; the index-taking step of
   the API before `21be618` is `redeemRequestAt`, `redeemRequest_eq_at`), `finalizeRedeem` (Moderator,
-  `:276-287`), the `AnchorSet` constructor's validation (`:138-152`), and a Moderator that keeps
+  `ihat.cpp:313-324`), the `AnchorSet` constructor's validation (`ihat.cpp:191-204`), and a Moderator that keeps
   one nullifier record per `(ctx_iss, ctx_red)` across all Anchor Sets, as `moussaka.hpp:136-146`
   requires of the caller.
 * UOV verification `P(s) = t` concretely (`UOVKey.eval`).
@@ -250,7 +250,7 @@ def redeemRequestAt (PR : NIZK RedeemInstance) (tok : Token) (A : AnchorSet) (i 
         ⟨A.keys, tok.nf, ctxIss, ctxRed, cd⟩ (expandRedeemSeed seed))
     else .error .invalidToken
 
-/-- `find_issuer` (`moussaka.cpp:192-209`, the loop of `redeem_request_with_seed`): the last
+/-- `find_issuer` (`src/ihat/ihat.cpp:120-138`, called by `redeem_request_with_seed`): the last
 index `u` with `P_u(s) = t`, or `none` (`std::invalid_argument("Moussaka: invalid token")`). -/
 def findIssuer (A : AnchorSet) (t s : Bytes) : Option ℕ :=
   ((List.range A.keys.length).filter fun u => decide (A.keys[u]?.map (·.eval s) = some t)).getLast?
@@ -279,7 +279,7 @@ theorem findIssuer_isSome {A : AnchorSet} {t s : Bytes} :
     simp [hi, this, he]
 
 /-- `detail::redeem_request_with_seed(token, anchors, ctx_iss, ctx_red, challenge_digest, seed)`
-(`moussaka.cpp:184-219`): the Client finds its issuer's index itself (`findIssuer`, the last key
+(`src/ihat/ihat.cpp:237-256`): the Client finds its issuer's index itself (`findIssuer`, the last key
 that verifies the token) and rejects the token if no key does. -/
 def redeemRequest (PR : NIZK RedeemInstance) (tok : Token) (A : AnchorSet)
     (ctxIss ctxRed cd seed : Bytes) : Except Error Bytes :=

@@ -398,8 +398,8 @@ in `docs/perf.md`.
 - **Proof size: unchanged.** `hash_len = 2λ/8` for both (`vector_com.hpp:188,268`), so `OPEN_SIZE`
   is identical.
 - **Wire format:**
-  - Proof bytes change, so regenerate `tests/moussaka/moussaka_kat.txt` and
-    `tests/ratatouille/ratatouille_kat.txt` (via `gen_*_kat.cpp`).
+  - Proof bytes change, so regenerate `tests/ihat/ihat_kat.txt` and
+    `tests/act/act_kat.txt` (via `gen_*_kat.cpp`).
   - `tests/voleith/test_voleith.cpp` `FaestInterop` uses `faest::v3::faest_em_128_f` directly
     (`test_voleith.cpp:27-33`), so it is **unaffected** and still checks the shared code path
     against FAEST.

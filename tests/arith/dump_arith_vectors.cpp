@@ -383,8 +383,8 @@ constexpr size_t ALL = SIZE_MAX;
 // Name of each UOV key in uov_keys.txt.
 constexpr std::string_view KEY_TEST = "test"; // test::uov_key_pair()
 constexpr std::string_view KEY_ALT = "alt61"; // the key pair with secret key filled(0x61)
-// The key pair with secret key filled(0x62): only dumped, for the Ratatouille KAT check of
-// `lake exe spec_kats` (tests/ratatouille/ratatouille_kat.txt, third case).
+// The key pair with secret key filled(0x62): only dumped, for the VOLE-ACT KAT check of
+// `lake exe spec_kats` (tests/act/act_kat.txt, third case).
 constexpr std::string_view KEY_ALT62 = "alt62";
 
 const test::UovKeyPair& alt_key_pair() {
@@ -630,11 +630,11 @@ void dump_ihat(const std::string& dir) {
 
     {
         using Rel = md::IssueRelation;
-        VectorFile f(dir, "ihat_issue",
-                     "Ihat issuance relation, t = Com(nf, ctx_iss, ctx_red, r).");
+        VectorFile f(dir, "moussaka_issue",
+                     "VOLE-IHAT issuance relation, t = Com(nf, ctx_iss, ctx_red, r).");
         std::mt19937_64 rng(0x6d697373);
         dump_relation<Rel, md::ISSUE_QS_DEGREE>(
-            f, "ihat_issue", md::encode_issue_witness(nf, ctx_iss, ctx_red, r), {t, ctx_iss},
+            f, "moussaka_issue", md::encode_issue_witness(nf, ctx_iss, ctx_red, r), {t, ctx_iss},
             chal2_bytes<Rel::params::CONSTS::QS::CHALLENGE_BYTES>(),
             {{"t", to_hex(t)},
              {"ctx_iss", to_hex(ctx_iss)},
@@ -644,8 +644,8 @@ void dump_ihat(const std::string& dir) {
     {
         using Rel = md::RedeemRelation;
         using FQS = test::FieldQS<md::REDEEM_QS_DEGREE>;
-        VectorFile f(dir, "ihat_redeem",
-                     "Ihat redemption relation, Q(s) = Com(nf, ctx_iss, ctx_red, r), Q in "
+        VectorFile f(dir, "moussaka_redeem",
+                     "VOLE-IHAT redemption relation, Q(s) = Com(nf, ctx_iss, ctx_red, r), Q in "
                      "the Anchor Set.");
         std::mt19937_64 rng(0x6d726564);
         // Two Anchors; the issuer (the fixed test key pair) is at index 1.
@@ -654,7 +654,7 @@ void dump_ihat(const std::string& dir) {
         const uov::Preimage s = test::uov_key_pair().sk.derive_preimage(t);
         const auto chal2 = chal2_bytes<Rel::params::CONSTS::QS::CHALLENGE_BYTES>();
         dump_relation<Rel, md::REDEEM_QS_DEGREE>(
-            f, "ihat_redeem", md::encode_redeem_witness(nf, ctx_iss, ctx_red, r, s, 1),
+            f, "moussaka_redeem", md::encode_redeem_witness(nf, ctx_iss, ctx_red, r, s, 1),
             {anchors, nf, ctx_iss, ctx_red, challenge_digest}, chal2,
             {{"anchors", std::string(KEY_ALT) + "," + std::string(KEY_TEST)},
              {"nf", to_hex(nf)},
@@ -676,13 +676,13 @@ void dump_act(const std::string& dir) {
 
     {
         using Rel = rd::IssueRelation;
-        VectorFile f(dir, "act_issue",
-                     "Act issuance relation, c = Com(nf, ctx_iss, t_init, r).");
+        VectorFile f(dir, "ratatouille_issue",
+                     "VOLE-ACT issuance relation, c = Com(nf, ctx_iss, t_init, r).");
         std::mt19937_64 rng(0x72697373);
         const Credits t_init = 1000;
         const rd::Commitment c = rd::commit(nf, ctx_iss, t_init, r);
         dump_relation<Rel, rd::ISSUE_QS_DEGREE>(
-            f, "act_issue", rd::encode_issue_witness(nf, ctx_iss, t_init, r),
+            f, "ratatouille_issue", rd::encode_issue_witness(nf, ctx_iss, t_init, r),
             {c, t_init, ctx_iss}, chal2_bytes<Rel::params::CONSTS::QS::CHALLENGE_BYTES>(),
             {{"c", to_hex(c)},
              {"t_init", std::to_string(t_init)},
@@ -693,7 +693,7 @@ void dump_act(const std::string& dir) {
     {
         using Rel = rd::SpendRelation;
         using FQS = test::FieldQS<rd::SPEND_QS_DEGREE>;
-        VectorFile f(dir, "act_spend", "Act spend relation.");
+        VectorFile f(dir, "ratatouille_spend", "VOLE-ACT spend relation.");
         std::mt19937_64 rng(0x7273706e);
         const Credits t = 100, x_refund = 5, d = 30;
         const act::Nullifier nf_next = filled<act::NF_BYTES>(0x50);
@@ -704,7 +704,7 @@ void dump_act(const std::string& dir) {
         const rd::Commitment c_next = rd::commit(nf_next, ctx_iss, st.t_next, r_next);
         const auto chal2 = chal2_bytes<Rel::params::CONSTS::QS::CHALLENGE_BYTES>();
         dump_relation<Rel, rd::SPEND_QS_DEGREE>(
-            f, "act_spend", rd::encode_spend_witness(st, d, ctx_iss),
+            f, "ratatouille_spend", rd::encode_spend_witness(st, d, ctx_iss),
             {test::uov_key_pair().pk, nf, d, c_next, ctx_iss}, chal2,
             {{"pk", std::string(KEY_TEST)},
              {"nf", to_hex(nf)},

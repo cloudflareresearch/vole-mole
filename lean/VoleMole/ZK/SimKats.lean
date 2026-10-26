@@ -181,8 +181,8 @@ def main (args : List String) : IO UInt32 := do
   let tests := args.headD "../tests"
   let layouts := Layouts.ofArg (args.getD 1 "")
   let filter := args.getD 2 ""
-  let mousPath := s!"{tests}/moussaka/moussaka_kat.txt"
-  let rataPath := s!"{tests}/ratatouille/ratatouille_kat.txt"
+  let mousPath := s!"{tests}/ihat/ihat_kat.txt"
+  let rataPath := s!"{tests}/act/act_kat.txt"
   let sks :=
     (getAll (← readLines mousPath) "anchor_sk") ++ (getAll (← readLines rataPath) "issuer_sk")
   let mut cpks : Std.HashMap String ByteArray := {}

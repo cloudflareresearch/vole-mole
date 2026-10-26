@@ -2,13 +2,13 @@ import VoleMole.Spec.Moussaka
 import VoleMole.Arith.MoussakaUnbound
 
 /-!
-# Executable spec of unbound Moussaka tokens (PR #63)
+# Executable spec of unbound Moussaka tokens (PR #63, `62be5bc`)
 
 The byte-level pieces of `src/moussaka/moussaka.cpp`, `unbound_issue.hpp` and `unbound_redeem.hpp`
 that do not depend on the VOLEitH internals: the issue seed expansion, `UCom`, `Derive`, and the two
 witness encodings. The Keccak inputs are `Arith.MoussakaUnbound.encodeUnboundComState` and
 `encodeDeriveState` themselves, so `lake exe spec_kats` (which checks these functions against
-`tests/moussaka/unbound_moussaka_kat.txt`) tests the encodings that the soundness and completeness
+`tests/ihat/unbound_ihat_kat.txt`) tests the encodings that the soundness and completeness
 theorems of `Arith/MoussakaUnbound.lean` are stated over.
 -/
 
@@ -136,7 +136,7 @@ def issueRequest (PI : NIZK IssueInstance) (ctxIss seed : Bytes) : PendingToken 
 def finalizeIssue (pk : UOVKey) (p : PendingToken) (s : Bytes) : Option Token :=
   if pk.eval s = p.t then some ⟨p.k, p.r, s⟩ else none
 
-/-- `find_issuer(anchors, t, s)` (`moussaka.cpp:120-139`): the bound Client's search
+/-- `find_issuer(anchors, t, s)` (`src/ihat/ihat.cpp:120-138`, also called at `:415`): the bound Client's search
 (`Spec.Moussaka.findIssuer`), the last index `u` with `P_u(s) = t`, or `none`. -/
 abbrev findIssuer : AnchorSet → Bytes → Bytes → Option ℕ := Moussaka.findIssuer
 

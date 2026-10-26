@@ -1,5 +1,5 @@
 // Generate PomFRIT known answers for the Lean protocol spec (lean/VoleMole/Spec/PomFRIT.lean, run
-// by `lake exe spec_kats`). Unlike the Moussaka and Ratatouille known answers, no C++ test reads
+// by `lake exe spec_kats`). Unlike the VOLE-IHAT and VOLE-ACT known answers, no C++ test reads
 // them.
 //
 // Every case uses the fixed test key pair (secret key filled(0x60)) and a fixed seed, through

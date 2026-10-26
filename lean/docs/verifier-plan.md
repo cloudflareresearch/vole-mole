@@ -1,8 +1,8 @@
 # Plan: an executable Lean VOLEitH verifier
 
 Goal (D): a Lean function `verify : Relation → instance → proof → Bool` that accepts the real proofs
-the C++ produces (the KAT files `tests/moussaka/moussaka_kat.txt`, `tests/ratatouille/
-ratatouille_kat.txt`, PomFRIT's `tests/pomfrit/pomfrit_kat.txt`) and rejects mutated ones. It should
+the C++ produces (the KAT files `tests/ihat/ihat_kat.txt`, `tests/ratatouille/
+act_kat.txt`, PomFRIT's `tests/pomfrit/pomfrit_kat.txt`) and rejects mutated ones. It should
 be assembled from pieces that are the executable counterparts of the Lean models the proofs use
 (`Seed/Commitments.lean`, `Seed/KOS.lean`, `Seed/QuickSilver.lean`, the `Arith/*` constraint
 generators), so that each model can later be connected to the verifier by a theorem.

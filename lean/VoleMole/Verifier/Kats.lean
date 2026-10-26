@@ -4,8 +4,8 @@ import VoleMole.Verifier.VectorFile
 /-!
 # Full verification of the KAT proofs
 
-Runs `Verifier.verify` on every proof in `tests/moussaka/moussaka_kat.txt` (issuance and
-redemption requests), `tests/ratatouille/ratatouille_kat.txt` (issuance and spend requests) and
+Runs `Verifier.verify` on every proof in `tests/ihat/ihat_kat.txt` (issuance and
+redemption requests), `tests/act/act_kat.txt` (issuance and spend requests) and
 `tests/pomfrit/pomfrit_kat.txt` (blind signatures, with PomFRIT's refresher check), building each
 statement from the KAT fields alone: the UOV public keys are generated in Lean from the compact
 secret keys (`Keygen.compressedPk`, pqov's key generation, then `expand_pk`) or, for PomFRIT, expanded
@@ -196,8 +196,8 @@ def pomfrit (c : Ctx) (path : String) : IO Bool := do
 def main (T : CrtTables) (dumpedRecs : Array Vectors.Record) (dir tests filter : String)
     (layouts : Layouts) : IO Bool := do
   -- UOV keys: generated from every compact secret key in the KAT files.
-  let mousPath := s!"{tests}/moussaka/moussaka_kat.txt"
-  let rataPath := s!"{tests}/ratatouille/ratatouille_kat.txt"
+  let mousPath := s!"{tests}/ihat/ihat_kat.txt"
+  let rataPath := s!"{tests}/act/act_kat.txt"
   let sks := (getAll (← readLines mousPath) "anchor_sk") ++ (getAll (← readLines rataPath) "issuer_sk")
   let t0 ← IO.monoMsNow
   let mut cpks : Std.HashMap String ByteArray := {}

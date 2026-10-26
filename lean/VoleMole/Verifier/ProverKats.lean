@@ -5,7 +5,7 @@ import VoleMole.Spec.Ratatouille
 /-!
 # The Lean prover against the KAT proofs (`lake exe prover_vectors`, root `ProverMain.lean`)
 
-For every proof in `tests/moussaka/moussaka_kat.txt`, `tests/ratatouille/ratatouille_kat.txt` and
+For every proof in `tests/ihat/ihat_kat.txt`, `tests/act/act_kat.txt` and
 `tests/pomfrit/pomfrit_kat.txt`, run `Prover.prove` (`Prover.voleGen` and `Prover.proveCommit` for
 PomFRIT) on the KAT's witness and statement, with the prover randomness `rho` derived from the KAT
 seed as the C++ does (`Spec.Moussaka.expandIssueSeed`/`expandRedeemSeed`,
@@ -407,8 +407,8 @@ def main (args : List String) : IO UInt32 := do
   let tests := args.headD "../tests"
   let layouts := Layouts.ofArg (args.getD 1 "")
   let filter := args.getD 2 ""
-  let mousPath := s!"{tests}/moussaka/moussaka_kat.txt"
-  let rataPath := s!"{tests}/ratatouille/ratatouille_kat.txt"
+  let mousPath := s!"{tests}/ihat/ihat_kat.txt"
+  let rataPath := s!"{tests}/act/act_kat.txt"
   let sks :=
     (getAll (← readLines mousPath) "anchor_sk") ++ (getAll (← readLines rataPath) "issuer_sk")
   let t0 ← IO.monoMsNow

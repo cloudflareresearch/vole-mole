@@ -1,5 +1,7 @@
 # Moussaka: security analysis of the implementation
 
+**Name.** `main` calls this protocol **VOLE-IHAT** since `9d9bec8` (code under `src/ihat/`; domain-separation strings and KATs unchanged). This note keeps the old name and paths; see `lean/README.md`, "Names".
+
 This note states and proves the security properties of vole-mole's Moussaka implementation. It
 covers `src/moussaka/*.{cpp,hpp}` and `include/vole_mole/moussaka.hpp` at commit `6d7113e`
 (`main`). Moussaka is the Issuer-Hiding Anonymous Token (IHAT) of the Moussaka draft. The README
@@ -107,8 +109,9 @@ string below (`commit.hpp:33-48`, `moussaka.cpp:89-96`):
 **Redemption.**
 - The Client finds its issuer itself: in constant time over all `u`, it takes `i` as the last `u`
   with `anchors[u].eval(s) = Com(nf, ctx_iss, ctx_red, r)`, and throws if there is none
-  (`moussaka.cpp:192-209`; since `21be618`, before which the caller passed `i` and the loop checked
-  that index). It then consumes the token (`:212`) and sends `nf ‖ π_red`.
+  (`find_issuer`, `src/ihat/ihat.cpp:120-138`, called at `:245`, on `main`; since `21be618`, before
+  which the caller passed `i` and the loop checked that index). It then consumes the token
+  (`ihat.cpp:247`) and sends `nf ‖ π_red`.
 - `RedeemRelation` (`redeem.hpp:1-36`, `:165-272`):
   - instance: `(anchors, nf, ctx_iss, ctx_red, challenge_digest)`;
   - witness: `(r, s, s5, s9, b)`, with `b ∈ {0,1}^64`;
@@ -141,7 +144,7 @@ string below (`commit.hpp:33-48`, `moussaka.cpp:89-96`):
 | D3 | `P[i](s) = Com(…)` componentwise | One random linear combination `l` of the 45 components, `l = H(chall₂ ‖ "mous"‖0‖"l0")` (`redeem.hpp:253`) | Soundness loss `2^{−128} + q_c·2^{−448}` (L4) |
 | D4 | `Com` circuit unspecified (TODO) | Two committed intermediate states, after 5 and 9 rounds (`issue.hpp:5-20`) | Covered by L7 (Keccak segments) |
 | D5 | Anchor Set: `0 < N ≤ MAX_ANCHORS` | Also rejects duplicate keys by digest (`moussaka.cpp:138-151`) | Hygiene only (§7) |
-| D6 | `RedeemRequest` does not check the token | The Client finds the index `i` of a key that verifies its token, in constant time, and throws if none does (`moussaka.cpp:192-209`) | Better: no proof is made for a false statement. No leak of `i`, and the caller need not supply it |
+| D6 | `RedeemRequest` does not check the token | The Client finds the index `i` of a key that verifies its token, in constant time, and throws if none does (`src/ihat/ihat.cpp:120-138` on `main`) | Better: no proof is made for a false statement. No leak of `i`, and the caller need not supply it |
 | D7 | `nf`, `r` sampled directly | Derived with `ρ_iss` from one OS seed through SHAKE128 (`moussaka.cpp:58-71`) | None in the ROM up to the seed-XOF hop: `(2q_X + 2)·2^{−256}` per world in Theorem 4's game (an XOF query at a Client's seed gives its `nf`; two seeds of one domain collide), which Theorem 4 does not charge; [Lean] `anonymity*_seed`, `lean/docs/zk.md` §10.6. This needs the application-hash vs proof-hash disjointness (Lemma DS, §3.1) |
 | D8 | "samples a solution `s`" (older text) / "DerivePreimage" | Deterministic in `(sk, t)` | Needed: two preimages of one target from different vinegars are not known to be harmful, but determinism makes the UOV oracle a function (§3.3) |
 | D9 | Security claim: one-more-UOV (PoMFRIT Def. 8) | — | This note uses a weaker assumption, CT-UF (§3.3), which follows from one-more-UOV heuristically |
@@ -374,7 +377,7 @@ With Lemma U, `K·Adv^ct-uf ≤ K·(Adv^om-uov + q/2^{223.9} + q²/2^{360})`.
    NOTE (issue 45, `nf = PRF(K, ctx_red)` in-circuit) would also prevent squatting.
 5. **Linkage through reuse.** The same token redeemed twice exposes the same `nf`. `ctx_red` binds
    the token to one redemption context. The `Token` object is consumed by `redeem_request`
-   (`moussaka.cpp:212`). The MoLE protocols draft uses a fixed `ctx_red` for all Moderators in its
+   (`moussaka.cpp:214` at `6d7113e`, `src/ihat/ihat.cpp:247` on `main`). The MoLE protocols draft uses a fixed `ctx_red` for all Moderators in its
    Rollatini profile. A Moussaka profile copying this would make one token valid at every
    Moderator, so the Client must burn it after one use (architecture draft, "Clients … MUST burn
    them").
@@ -516,7 +519,7 @@ holding its issuer's map or out of range.)
      Anchor responses are chosen by `A`.
    - lean/docs/zk.md's two-phase definition allows this (its sampler includes `A`'s first stage). The
      simulator needs only the statement, and the honest witness satisfies the relation.
-   - The constant-time search for `i` (`moussaka.cpp:192-209`) and the witness encoding
+   - The constant-time search for `i` (`find_issuer`, `src/ihat/ihat.cpp:120-138`) and the witness encoding
      (`redeem.hpp:119-123`) do not branch on `i`. `i` may be a foreign key's, if that key also
      verifies the token: the witness is then valid for it, and the simulator does not need `i`. The proof size is fixed.
 2. Now `A`'s view consists of:
@@ -585,7 +588,7 @@ Client the same event arises from an index rule that points at a foreign key.)
 The game above on `Spec/Moussaka.lean`'s `issueRequest`, `finalizeIssue` and redemption, with the
 seed XOF's outputs `(nf, r, ρ_iss)` and `ρ_red` drawn uniformly (`issueRequest_eq`), and the refusal
 rule above (`allOk`). `Privacy/MoussakaFind.lean` runs `main`'s `redeemRequest` (the Client finds
-its index with `findIssuer`, as `moussaka.cpp:192-209`; `MoussakaFind.anonymity`).
+its index with `findIssuer`, as `src/ihat/ihat.cpp:120-138`; `MoussakaFind.anonymity`).
 `Privacy/Moussaka.lean` runs the index-taking `redeemRequestAt` of the API before `21be618` with any
 Client-side index rule `idx` of `S` and the issuer's key; `main`'s index depends on the token, so it
 is not such a rule. The two proofs are the same; the random-oracle, Lean-prover and many-session
@@ -713,7 +716,7 @@ only the two redemption requests or the refusal. The refusal rule is that of 4(a
    - A minimum `n` would not help. The Moderator can pad `S` with dummy keys of its own, or with keys
      of Anchors that no Client uses, and the Client cannot tell.
    - The Client must also refuse a set that omits its Anchor (the protocols draft says so;
-     `moussaka.cpp:207-209` throws when no key of `S` verifies the token). Each refusal tells a Moderator that serves
+     `find_issuer`, `src/ihat/ihat.cpp:134-136`, throws when no key of `S` verifies the token). Each refusal tells a Moderator that serves
      different sets to different Clients (or one at a time) "issuer ∉ S".
    - So issuer hiding is meaningful only relative to the honest, actually used Anchors in a set that
      all Clients see consistently (architecture draft, "Configuration Consistency and Partitioning

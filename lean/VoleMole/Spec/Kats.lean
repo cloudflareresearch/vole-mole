@@ -11,11 +11,11 @@ import VoleMole.Spec.PqovSignerExec
 
 Usage: `lake exe spec_kats [REPO_ROOT]` (default `..`, i.e. run from `lean/`). Reads
 
-* `tests/moussaka/moussaka_kat.txt` (`tests/moussaka/gen_moussaka_kat.cpp`),
-* `tests/moussaka/unbound_moussaka_kat.txt` (unbound tokens: seed expansion, `UCom`, `Derive`, both
+* `tests/ihat/ihat_kat.txt` (`tests/ihat/gen_ihat_kat.cpp`),
+* `tests/ihat/unbound_ihat_kat.txt` (unbound tokens: seed expansion, `UCom`, `Derive`, both
   witness encodings and the request framing, with `Spec.MoussakaUnbound`),
 * `tests/pomfrit/pomfrit_kat.txt` (`tests/pomfrit/gen_pomfrit_kat.cpp`),
-* `tests/ratatouille/ratatouille_kat.txt` (`tests/ratatouille/gen_ratatouille_kat.cpp`; checked by
+* `tests/act/act_kat.txt` (`tests/act/gen_act_kat.cpp`; checked by
   `Spec/RatatouilleKats.lean`, see there),
 and recomputes with `Spec.Moussaka` / `Spec.PomFRIT` every field that does not depend on the
 VOLEitH internals: seed expansions, commitments, witness layouts, request/response framing,
@@ -82,7 +82,7 @@ def verifierRedeem (pks : List Verifier.UovPk) : Moussaka.NIZK Moussaka.RedeemIn
           (Verifier.toBA x.ctxRed) (Verifier.toBA x.challengeDigest)) (Verifier.toBA pf)).accept
     | none => false⟩
 
-/-- One record of `unbound_moussaka_kat.txt`: an unbound token and its redemptions. -/
+/-- One record of `unbound_ihat_kat.txt`: an unbound token and its redemptions. -/
 def checkMoussakaUnbound (r : KatRecord) : Except String (List String) := do
   let hex (k : String) (i : ℕ) : Except String Bytes := do
     let some v := (r.getAll k)[i]? | throw s!"missing field `{k}` #{i}"
@@ -273,7 +273,7 @@ def main (args : List String) : IO UInt32 := do
     if n = 0 then errs := errs ++ ["no keys"]
     ok := (← report "generated UOV keys = uov_keys.txt (test, alt61, alt62)" errs) && ok
   else IO.println "      (no lean/vectors/uov_keys.txt: generated keys not compared with the C++)"
-  let mous := parseKat (← IO.FS.readFile s!"{root}/tests/moussaka/moussaka_kat.txt")
+  let mous := parseKat (← IO.FS.readFile s!"{root}/tests/ihat/ihat_kat.txt")
   let mut pks : Std.HashMap String Verifier.UovPk := {}
   for r in mous do
     for sk in r.getAll "anchor_sk" do
@@ -282,17 +282,17 @@ def main (args : List String) : IO UInt32 := do
         pks := pks.insert sk (Verifier.UovPk.ofSecret b)
   IO.println s!"      UOV key generation: {pks.size + 3} keys ({(← IO.monoMsNow) - t0} ms)"
   -- Moussaka.
-  if mous.size ≠ 3 then ok := false; IO.println s!"FAIL  moussaka_kat.txt: {mous.size} records"
+  if mous.size ≠ 3 then ok := false; IO.println s!"FAIL  ihat_kat.txt: {mous.size} records"
   for h : i in [0:mous.size] do
     let t1 ← IO.monoMsNow
     let errs ← IO.lazyPure fun _ =>
       runChecks (checkMoussaka keys pks ((mous[i].getAll "anchor_sk").length ≤ 3) mous[i])
-    ok := (← report s!"moussaka_kat.txt case {i} ({(← IO.monoMsNow) - t1} ms)" errs) && ok
+    ok := (← report s!"ihat_kat.txt case {i} ({(← IO.monoMsNow) - t1} ms)" errs) && ok
   -- Unbound Moussaka tokens.
-  let unb := parseKat (← IO.FS.readFile s!"{root}/tests/moussaka/unbound_moussaka_kat.txt")
-  if unb.size = 0 then ok := false; IO.println "FAIL  unbound_moussaka_kat.txt: empty"
+  let unb := parseKat (← IO.FS.readFile s!"{root}/tests/ihat/unbound_ihat_kat.txt")
+  if unb.size = 0 then ok := false; IO.println "FAIL  unbound_ihat_kat.txt: empty"
   for h : i in [0:unb.size] do
-    ok := (← report s!"unbound_moussaka_kat.txt case {i}" (runChecks (checkMoussakaUnbound unb[i]))) && ok
+    ok := (← report s!"unbound_ihat_kat.txt case {i}" (runChecks (checkMoussakaUnbound unb[i]))) && ok
   -- PomFRIT.
   let pom := parseKat (← IO.FS.readFile s!"{root}/tests/pomfrit/pomfrit_kat.txt")
   match pom[0]? with
@@ -311,7 +311,7 @@ def main (args : List String) : IO UInt32 := do
   let mut pairs : Array (String × Bytes × Bytes) := #[]
   for h : i in [0:mous.size] do
     if let (.ok req, .ok s) := (mous[i].bytes "issue_request", mous[i].bytes "issue_response") then
-      pairs := pairs.push (s!"moussaka_kat.txt case {i}", req.take uovM, s)
+      pairs := pairs.push (s!"ihat_kat.txt case {i}", req.take uovM, s)
   for h : i in [1:pom.size] do
     if let (.ok t, .ok s) := (pom[i].bytes "request", pom[i].bytes "response") then
       pairs := pairs.push (s!"pomfrit_kat.txt case {i - 1}", t, s)
@@ -319,10 +319,10 @@ def main (args : List String) : IO UInt32 := do
   for (label, t, s) in pairs do
     ok := (← checkSigner pkT (filled 0x60) label t s) && ok
   -- Ratatouille.
-  let rata := parseKat (← IO.FS.readFile s!"{root}/tests/ratatouille/ratatouille_kat.txt")
+  let rata := parseKat (← IO.FS.readFile s!"{root}/tests/act/act_kat.txt")
   let rataResults := Ratatouille.Kats.checkFile keys rata
   if rataResults.length ≠ 3 then
-    ok := false; IO.println s!"FAIL  ratatouille_kat.txt: {rataResults.length} cases"
+    ok := false; IO.println s!"FAIL  act_kat.txt: {rataResults.length} cases"
   for (label, errs) in rataResults do
     ok := (← report label errs) && ok
   IO.println (if ok then "all spec known answers match" else "MISMATCHES")

@@ -159,6 +159,16 @@ zero-knowledge fix refer to commit `d5def9c` of branch `voleith-label-rows` (opt
 branch since force-pushed to that version), and those about `21be618` (the Client finds its
 Anchor) to `main`.
 
+**Names.** Since `9d9bec8`, `main` calls Moussaka **VOLE-IHAT** and Ratatouille **VOLE-ACT**
+(the drafts' names): `src/moussaka/` is `src/ihat/` (`moussaka.cpp` is `ihat.cpp`),
+`src/ratatouille/` is `src/act/` (`ratatouille.cpp` is `act.cpp`), the headers are
+`vole_mole/ihat.hpp` and `vole_mole/act.hpp`, and the tests and KATs are under `tests/ihat/` and
+`tests/act/` (`ihat_kat.txt`, `unbound_ihat_kat.txt`, `act_kat.txt`). The domain-separation
+strings (`"mous"`, `"rata"`) and every KAT value are unchanged. This directory keeps the old names
+(`Spec/Moussaka.lean`, `docs/security/moussaka.md`, …), and citations of `src/moussaka/…` and
+`src/ratatouille/…` refer to the old paths at the commit stated; the Lean executables and the C++
+dumpers read the new paths.
+
 ## Building and checking
 
 ```sh
@@ -941,7 +951,7 @@ limitation, not an attack) takes over. Strong simulation-extractability: 2⁻⁶
 |---|---|---|
 | `pomfrit.md` | One-more unforgeability (classical: proved; quantum: Q7, under new quantum UOV assumptions). Blindness: **fails on `main`**, proved with the ZK fix. | The paper's reduction has a gap (its first-phase extractor is not well defined for multi-tree VOLEitH), repaired by Lemma P at a 2⁻⁷¹ per-query loss ([Lean] `Protocols/PomFRIT.lean`). A holder can make many valid signatures per message (non-minimal grinding counter): deduplicate on the message. |
 | `moussaka.md` | One-more unforgeability, double-spend detection, redemption non-malleability, issuer hiding: proved. | Nullifier squatting (low). The draft's one-more-UOV argument is invalid as written; restructured. |
-| `moussaka-unbound.md` | Unbound tokens (late `ctx_red` binding, PR #63): one-more unforgeability per `(ctx_iss, ctx_red)`, nullifier determinism, redemption non-malleability (including redirection to another `ctx_red`), issuer hiding and unlinkability, also across redemption contexts. Proved on paper; [Lean] arithmetization soundness and completeness (`Arith/MoussakaUnbound.lean`), end-to-end extraction (`EndToEnd/MoussakaUnbound.lean`), issuer hiding and unlinkability across contexts on the executable spec, `≤ 4εI + 2n·εR + 2εprf` for `n` non-adaptive redemption queries (`Privacy/MoussakaUnbound.anonymity`), the deterministic cores of unforgeability (`Protocols/MoussakaUnbound.lean`), domain separation. | Squatting is no longer possible (fixes the base note's F2). Privacy against non-colluding Moderators now needs a PRF assumption on Keccak-p[800,12]. A token keeps no record of the contexts it was redeemed in. The executable verifier and the random-oracle bounds do not cover the two relations. |
+| `moussaka-unbound.md` | Unbound tokens (late `ctx_red` binding, PR #63, `62be5bc`): one-more unforgeability per `(ctx_iss, ctx_red)`, nullifier determinism, redemption non-malleability (including redirection to another `ctx_red`), issuer hiding and unlinkability, also across redemption contexts. Proved on paper; [Lean] arithmetization soundness and completeness (`Arith/MoussakaUnbound.lean`), end-to-end extraction (`EndToEnd/MoussakaUnbound.lean`), issuer hiding and unlinkability across contexts on the executable spec, `≤ 4εI + 2n·εR + 2εprf` for `n` non-adaptive redemption queries (`Privacy/MoussakaUnbound.anonymity`), the deterministic cores of unforgeability (`Protocols/MoussakaUnbound.lean`), domain separation. | Squatting is no longer possible (fixes the base note's F2). Privacy against non-colluding Moderators now needs a PRF assumption on Keccak-p[800,12]. A token keeps no record of the contexts it was redeemed in. The executable verifier and the random-oracle bounds do not cover the two relations. |
 | `ratatouille.md` | Balance (no inflation), no theft, unlinkability, correctness: proved. | Spends are not bound to a session, so a copied spend request can be redeemed first (medium). |
 | `domain-separation.md` | Every hash/XOF/permutation call lies in a disjoint domain, except below. [Lean] `Protocols/DomainSeparation.lean` | PomFRIT's `hash_to_target` overlaps four proof-system domains (no exploit found; fix: a final domain byte). |
 | `uov-assumptions.md` | Relates the protocol-specific UOV assumptions to each other and to standard UOV. [Lean] `Protocols/UOVAssumptions.lean` | Several reductions are unavailable; the note states why. |

@@ -1,5 +1,7 @@
 # Security of Ratatouille, as implemented
 
+**Name.** `main` calls this protocol **VOLE-ACT** since `9d9bec8` (code under `src/act/`; domain-separation strings and KATs unchanged). This note keeps the old name and paths; see `lean/README.md`, "Names".
+
 This note fixes the security notions of the Ratatouille Anonymous Credit Token (ACT) and proves
 them for the code in `src/ratatouille/*` and `include/vole_mole/ratatouille.hpp` at commit
 `6d7113e` (`main`), with explicit bounds. It also covers the fix of commit `d5def9c` (branch
