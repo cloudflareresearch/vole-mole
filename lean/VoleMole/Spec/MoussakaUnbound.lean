@@ -136,33 +136,16 @@ def issueRequest (PI : NIZK IssueInstance) (ctxIss seed : Bytes) : PendingToken 
 def finalizeIssue (pk : UOVKey) (p : PendingToken) (s : Bytes) : Option Token :=
   if pk.eval s = p.t then some ⟨p.k, p.r, s⟩ else none
 
-/-- `find_issuer(anchors, t, s)` (`moussaka.cpp:120-139`): the last index `u` with
-`P_u(s) = t`, or `none` (`std::invalid_argument`). -/
-def findIssuer (A : AnchorSet) (t s : Bytes) : Option ℕ :=
-  ((List.range A.keys.length).filter fun u => decide (A.keys[u]?.map (·.eval s) = some t)).getLast?
+/-- `find_issuer(anchors, t, s)` (`moussaka.cpp:120-139`): the bound Client's search
+(`Spec.Moussaka.findIssuer`), the last index `u` with `P_u(s) = t`, or `none`. -/
+abbrev findIssuer : AnchorSet → Bytes → Bytes → Option ℕ := Moussaka.findIssuer
 
 theorem findIssuer_some {A : AnchorSet} {t s : Bytes} {i : ℕ} (h : findIssuer A t s = some i) :
-    ∃ pk : UOVKey, A.keys[i]? = some pk ∧ pk.eval s = t := by
-  have hm := List.mem_of_getLast? h
-  simp only [List.mem_filter, decide_eq_true_eq] at hm
-  obtain ⟨-, he⟩ := hm
-  cases hk : A.keys[i]? with
-  | none => simp [hk] at he
-  | some pk => simp only [hk, Option.map_some, Option.some.injEq] at he; exact ⟨pk, rfl, he⟩
+    ∃ pk : UOVKey, A.keys[i]? = some pk ∧ pk.eval s = t := Moussaka.findIssuer_some h
 
 theorem findIssuer_isSome {A : AnchorSet} {t s : Bytes} :
-    (findIssuer A t s).isSome ↔ ∃ i : ℕ, ∃ pk : UOVKey, A.keys[i]? = some pk ∧ pk.eval s = t := by
-  constructor
-  · intro h
-    obtain ⟨i, hi⟩ := Option.isSome_iff_exists.1 h
-    exact ⟨i, findIssuer_some hi⟩
-  · rintro ⟨i, pk, hk, he⟩
-    have hi : i < A.keys.length := (List.getElem?_eq_some_iff.1 hk).1
-    unfold findIssuer
-    rw [Option.isSome_iff_ne_none, Ne, List.getLast?_eq_none_iff, ← Ne, ← List.length_pos_iff]
-    refine List.length_pos_of_mem (a := i) ?_
-    have : A.keys[i] = pk := (List.getElem?_eq_some_iff.1 hk).2
-    simp [hi, this, he]
+    (findIssuer A t s).isSome ↔ ∃ i : ℕ, ∃ pk : UOVKey, A.keys[i]? = some pk ∧ pk.eval s = t :=
+  Moussaka.findIssuer_isSome
 
 /-- `detail::unbound_redeem_request_with_seed(token, anchors, ctx_iss, ctx_red, challenge_digest,
 seed)`: the Client finds its Anchor itself; `nf = Derive(nf_key, ctx_red)`. -/
