@@ -17,7 +17,7 @@ For every proof of the three KAT files (the statements, witnesses and prover ran
   depends on `chal1`, so a fixed witness satisfies only the statement built from its own run).
 
 All coins are SHAKE128 outputs of labels (reproducible). Usage:
-`lake exe zk_sim [TESTS_DIR [main|labelrows [FILTER]]]` (default `../tests`, `main`).
+`lake exe zk_sim [TESTS_DIR [main|labelrows|none [FILTER]]]` (default `../tests`, `main`).
 -/
 
 namespace VoleMole.ZK.SimKats

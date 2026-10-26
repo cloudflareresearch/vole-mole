@@ -3,9 +3,9 @@ import VoleMole.Spec.PomFRIT
 /-!
 # PomFRIT on either proof layout
 
-`Spec/PomFRIT.lean` hard-codes the proof layout of `main` (`PROOF_BYTES = 5323`, `ũ` at 2819,
-`d` at 2883). With dedicated label rows (branch `voleith-label-rows`) the proof is 256 bytes
-longer and both fields move (the corrections grow by 16 bytes each): `5579`, `3075`, `3139`. The
+`Spec/PomFRIT.lean` hard-codes the proof layout of `main` before `64fd1a4` (`PROOF_BYTES = 5323`,
+`ũ` at 2819, `d` at 2883). With dedicated label rows (`main` since `64fd1a4`, and branch
+`voleith-label-rows`) the proof is 256 bytes longer and both fields move (the corrections grow by 16 bytes each): `5579`, `3075`, `3139`. The
 protocol is otherwise the same. Here the layout-dependent part of the spec is a function of a
 `Layout`: the signature's fields (`sigProof`, …), `hash_to_target` (which reads `ũ` and
 `d[0..M)` from the signature), `issueRequest`, `finalizeIssue` and `verify`. At `Layout.main` every

@@ -30,10 +30,11 @@ from a test-only sampler (`sample`, below), proved with random `rho` and verifie
 through `pomfritVerify`). A changed witness bit, or a wrong Signer response, must make the prover
 fail (the constraint check of `Prover.qsProve`).
 
-With `labelrows`, all statements use the dedicated-label-row layout, for the KAT files of branch
-`voleith-label-rows`.
+The layout argument (`Layouts.ofArg`): `main` (the default) uses dedicated label rows for PomFRIT
+only, as `main` does since `64fd1a4`; `labelrows` uses them for every relation, for the KAT files of
+branch `voleith-label-rows`; `none` for KAT files from before `64fd1a4`.
 
-Usage: `lake exe prover_vectors [TESTS_DIR [main|labelrows [FILTER]]]` (default `../tests`, `main`;
+Usage: `lake exe prover_vectors [TESTS_DIR [main|labelrows|none [FILTER]]]` (default `../tests`, `main`;
 with a filter, only the runs whose label starts with it).
 -/
 

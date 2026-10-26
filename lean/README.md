@@ -75,9 +75,11 @@ averaged abort term, the `P2` part of pqov's keys uniform; the protocol-specific
 (§5, Gap 5); the Lean models are tied to the C++ by tests, not proofs (Gap 2).
 
 **Findings and paper corrections** (details in the section or note cited):
-- *ZK fails on `main`*: PomFRIT's Issuer links redemptions to issuances; fixed by dedicated label
-  rows (branch `voleith-label-rows`, +256 bytes per proof). The FAEST v3 spec's own ZK proof has a
-  gap (G8 → G9) (§3, `docs/zk.md` §4, §8.3).
+- *ZK fails with FAEST's CRT masks*: PomFRIT's Issuer linked redemptions to issuances; fixed on
+  `main` since `64fd1a4` by dedicated label rows for PomFRIT (+256 bytes per proof). Moussaka and
+  Ratatouille still take the masks from the witness (`REUSE_CRT_WITNESS`), so their ZK rests on (PU)
+  (branch `voleith-label-rows` has the rows everywhere). The FAEST v3 spec's own ZK proof has a gap
+  (G8 → G9) (§3, `docs/zk.md` §4, §8.3).
 - *Cross-protocol key sharing* lets anyone mint Ratatouille credits or forge Moussaka tokens
   (critical, demonstrated; §5).
 - *Protocols* (§5): PomFRIT's paper reduction has a gap (repaired by Lemma P), its signatures are
@@ -143,7 +145,8 @@ lean/
 ```
 
 All `file:line` citations in `docs/` are relative to the repository root. Most refer to commit
-`6d7113e` (`main`); those about the zero-knowledge fix refer to branch `voleith-label-rows`.
+`6d7113e` (`main` before `64fd1a4`, which moved PomFRIT to dedicated label rows); those about the
+zero-knowledge fix refer to branch `voleith-label-rows`.
 
 ## Building and checking
 
@@ -162,8 +165,9 @@ of `VoleMole/ROM/` compiles the part of VCVio, PolyFun and cslib it imports (abo
 (`lake` prints `info: … native backend disabled`); nothing here calls them.
 
 The prover is checked against the KAT proofs with `lake exe prover_vectors` (from `lean/`; `lake exe
-prover_vectors DIR/tests labelrows` for the KAT files of a `voleith-label-rows` build), and the
-zero-knowledge simulator with `lake exe zk_sim [DIR/tests [main|labelrows [FILTER]]]` (about 10
+prover_vectors DIR/tests labelrows` for the KAT files of a `voleith-label-rows` build, `none` for
+those before `64fd1a4`), and the zero-knowledge simulator with
+`lake exe zk_sim [DIR/tests [main|labelrows|none [FILTER]]]` (about 10
 minutes per layout; `FILTER` is a label prefix such as `moussaka` or `ratatouille 0`).
 
 The C++ side of the cross-checks runs with the normal test suite:
@@ -220,13 +224,15 @@ simulated proofs, for any accepting proof that differs from all simulated ones. 
 
 ### 3. Zero knowledge — `docs/zk.md`, `docs/zk-qrom.md`
 
-**Finding (on `main`): the proofs are not zero-knowledge.** The free-XOR label offset of FAEST's
-CRT masks equals the first 128 witness bits (up to a public value). A verifier who knows those bits
-learns the masks. In PomFRIT the Issuer knows them, so it can link redemptions to issuances:
-blindness fails.
+**Finding (with FAEST's CRT masks): the proofs are not zero-knowledge.** The free-XOR label offset
+of FAEST's CRT masks equals the first 128 witness bits (up to a public value). A verifier who knows
+those bits learns the masks. In PomFRIT the Issuer knows them, so it could link redemptions to
+issuances: blindness failed.
 
-**Fix:** derive the labels from dedicated VOLE rows (branch `voleith-label-rows`, faest-arch-opt
-patch 0005, +256 bytes per proof).
+**Fix:** derive the labels from dedicated VOLE rows (+256 bytes per proof). On `main` since
+`64fd1a4` (faest-arch-opt's `REUSE_CRT_WITNESS` patch) PomFRIT does this; Moussaka and Ratatouille
+keep the masks from the witness, whose first 128 bits are a uniform secret, and rely on (PU) below.
+Branch `voleith-label-rows` uses the rows for all five relations.
 
 **Statement (on `main`, `docs/zk.md` §4.1).** [Lean] `ZK/Main.lean`, `ZK/Relations.lean`: in the
 `main` layout the view `(d, c_i, forced labels)` is witness-independent, but the label offset is
