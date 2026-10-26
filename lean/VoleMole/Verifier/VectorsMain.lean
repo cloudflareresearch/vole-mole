@@ -29,9 +29,11 @@ written by `tests/voleith/dump_verifier_vectors.cpp` (format documented there):
   and PomFRIT KAT files is verified in full and must be accepted; mutated proofs and instances
   must be rejected.
 
-The proof layout (`Params.labelRows`) is read off the dump: `correction_rows` is `8 · witness_bytes`
-on `main` and `8 · witness_bytes + 128` with dedicated label rows (a `voleith-label-rows` build of the
-dumper, with `TESTS_DIR` that branch's `tests/`); all records must agree.
+The proof layout (`Params.labelRows`) is read off the dump, per protocol: `correction_rows` is
+`8 · witness_bytes` with the CRT masks taken from the witness and `8 · witness_bytes + 128` with
+dedicated label rows. On `main` (since `64fd1a4`) PomFRIT has label rows and Moussaka and Ratatouille
+do not (`Layouts.main`); a `voleith-label-rows` build of the dumper, with `TESTS_DIR` that branch's
+`tests/`, has them everywhere. The records of one protocol must agree.
 
 Usage: `lake exe verifier_vectors [VECTOR_DIR [TESTS_DIR [FILTER]]]` (defaults `vectors`,
 `../tests`, and the empty filter; with a filter, only the KAT checks whose label starts with it run).
@@ -189,9 +191,16 @@ def checkKat (rs : Array Record) : IO Bool := do
       n := n + 1
       ok := (← checkKatRecord T r) && ok
   ok := (← check "kat records" (n == 5)) && ok
-  let lr := (rs.filter (·.group == "kat")).map labelRowsOf
-  ok := (← check "kat records: one layout" (lr.all (· == lr[0]!))) && ok
+  for pre in ["moussaka", "ratatouille", "pomfrit"] do
+    let lr := (rs.filter fun r => r.group == "kat" && r.name.startsWith pre).map labelRowsOf
+    ok := (← check s!"kat records: one layout for {pre}" (lr.all (· == lr[0]!))) && ok
   return ok
+
+/-- The per-protocol layouts of the dumped KAT records. -/
+def layoutsOf (rs : Array Record) : Layouts :=
+  let lr (pre : String) :=
+    (rs.find? fun r => r.group == "kat" && r.name.startsWith pre).any labelRowsOf
+  ⟨lr "pomfrit", lr "moussaka", lr "ratatouille"⟩
 
 def main (args : List String) : IO UInt32 := do
   let dir := args.headD "vectors"
@@ -221,9 +230,9 @@ def main (args : List String) : IO UInt32 := do
   let okR ← check "CRT: regenerated F, G, W_tree, W_gate = CrtData" (CrtSearch.regenOk R)
   IO.println s!"CRT tables regenerated: {R.picks.length} places, {R.F.size} gates, \
     {if okR then "equal to CrtData" else "DIFFERENT"}"
-  let labelRows := (katRecs.find? (·.group == "kat")).any labelRowsOf
-  IO.println s!"Proof layout: {if labelRows then "dedicated label rows" else "main"}"
-  let ok4 ← Kats.main G katRecs dir (args.getD 1 "../tests") (args.getD 2 "") labelRows
+  let layouts := layoutsOf katRecs
+  IO.println s!"Proof layout: {layouts.describe}"
+  let ok4 ← Kats.main G katRecs dir (args.getD 1 "../tests") (args.getD 2 "") layouts
   return if ok1 && ok2 && ok3 && okT && okR && ok4 then 0 else 1
 
 end VoleMole.Verifier.Vectors

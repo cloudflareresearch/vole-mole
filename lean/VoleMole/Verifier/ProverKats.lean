@@ -44,7 +44,7 @@ open VoleMole.Verifier VoleMole.Verifier.Kats
 structure Ctx where
   T : CrtTables
   cpks : Std.HashMap String ByteArray
-  labelRows : Bool
+  layouts : Layouts
   filter : String
   reproduced : IO.Ref Nat
   verified : IO.Ref Nat
@@ -148,7 +148,7 @@ def moussaka (c : Ctx) (path : String) : IO Bool := do
     let cd := unhex (get r "challenge_digest")
     let req := unhex (get r "issue_request")
     let t := req.extract 0 45
-    let st := moussakaIssue t ctxIss c.labelRows
+    let st := moussakaIssue t ctxIss c.layouts.moussaka
     let w := unhex (get r "issue_witness")
     let rho := toBA (Spec.Moussaka.expandIssueSeed (toL (unhex (get r "issue_seed")))).2.2
     ok := (← run c s!"moussaka {i} issue" st (some (req.extract 45 req.size)) fun _ =>
@@ -161,7 +161,7 @@ def moussaka (c : Ctx) (path : String) : IO Bool := do
     let anchors ← IO.ofExcept ((getAll r "anchor_sk").toList.mapM c.pk)
     let rreq := unhex (get r "redeem_request")
     let nf := rreq.extract 0 24
-    let rst := moussakaRedeem anchors nf ctxIss ctxRed cd c.labelRows
+    let rst := moussakaRedeem anchors nf ctxIss ctxRed cd c.layouts.moussaka
     let rw := unhex (get r "redeem_witness")
     let rrho := toBA (Spec.Moussaka.expandRedeemSeed (toL (unhex (get r "redeem_seed"))))
     ok := (← run c s!"moussaka {i} redeem ({anchors.length} anchors)" rst
@@ -180,7 +180,7 @@ def ratatouille (c : Ctx) (path : String) : IO Bool := do
     let pk ← IO.ofExcept (c.pk (get r "issuer_sk"))
     let req := unhex (get r "issue_request")
     let cc := req.extract 0 32
-    let st := ratatouilleIssue cc tInit ctxIss c.labelRows
+    let st := ratatouilleIssue cc tInit ctxIss c.layouts.ratatouille
     let w := unhex (get r "issue_witness")
     ok := (← run c s!"ratatouille {i} issue" st (some (req.extract 32 req.size)) fun _ =>
       proveChecked c.T st w (rho Spec.Ratatouille.issueSeedDst (unhex (get r "issue_seed")))) && ok
@@ -192,7 +192,7 @@ def ratatouille (c : Ctx) (path : String) : IO Bool := do
       let nf := sreq.extract 0 24
       let d := (sreq.extract 24 32).toList.foldr (fun b acc => acc * 256 + b.toNat) 0
       let cNext := sreq.extract 32 64
-      let sst := ratatouilleSpend pk nf d cNext ctxIss c.labelRows
+      let sst := ratatouilleSpend pk nf d cNext ctxIss c.layouts.ratatouille
       ok := (← run c s!"ratatouille {i} spend {j}" sst (some (sreq.extract 64 sreq.size)) fun _ =>
         proveChecked c.T sst (unhex sws[j]!) (rho Spec.Ratatouille.spendSeedDst (unhex sseeds[j]!)))
         && ok
@@ -201,13 +201,13 @@ def ratatouille (c : Ctx) (path : String) : IO Bool := do
 /-- PomFRIT's two steps (`issue_request_with_seed`, `finalize_issue`). -/
 def pomfritProve (c : Ctx) (pk : UovPk) (msg seed s rhoOverride : ByteArray) :
     Except String ByteArray :=
-  let p := pomfritParams c.labelRows
+  let p := pomfritParams c.layouts.pomfrit
   let (rho, refresher, r) := Spec.PomFRIT.expandSeed (toL pk.digest) (toL msg) (toL seed)
   let rho := if rhoOverride.isEmpty then toBA rho else rhoOverride
   let com := toBA (Spec.PomFRIT.commitRefresher refresher)
   let dst := toBA (Spec.makeDst "pomf" 0 'p' '0')
   let pend := Prover.voleGen Hashes.shake c.T p (mu Hashes.shake none dst) (toBA r) rho com
-  let st := pomfritRedeem pk (pend.proof ++ com ++ toBA refresher) msg c.labelRows
+  let st := pomfritRedeem pk (pend.proof ++ com ++ toBA refresher) msg c.layouts.pomfrit
   match Prover.proveCommit Hashes.shake st s pend with
   | .ok pf => (checkCorrelation c.T pend pf).map fun _ => pf
   | .error e => .error e
@@ -217,14 +217,14 @@ def pomfrit (c : Ctx) (path : String) : IO Bool := do
   let pk := UovPk.ofCompressed (unhex (get ls "pk"))
   let mut ok := true
   let recs := records ls "seed"
-  let n := (pomfritParams c.labelRows).proofBytes
+  let n := (pomfritParams c.layouts.pomfrit).proofBytes
   for i in [0:recs.size] do
     let r := recs[i]!
     let sig := unhex (get r "signature")
     let msg := unhex (get r "msg")
     let seed := unhex (get r "seed")
     let s := unhex (get r "response")
-    let st := pomfritRedeem pk sig msg c.labelRows
+    let st := pomfritRedeem pk sig msg c.layouts.pomfrit
     ok := (← run c s!"pomfrit {i}" st (some (sig.extract 0 n)) fun _ =>
       pomfritProve c pk msg seed s ByteArray.empty) && ok
     if i == 0 then
@@ -318,7 +318,7 @@ def randomUov (c : Ctx) (k : Nat) (mousSks : List ByteArray) (rataSk pomSk : Byt
     | IO.eprintln "FAIL sampler (moussaka)"; return false
   ok := (← Vectors.check s!"random moussaka {k}: P(s) = t" (publicMapBytes pkI s == toBA t)) && ok
   let cd := rnd s!"rmoussaka cd {k}" 32
-  let st := moussakaRedeem anchors (toBA nf) (toBA ctxIss) (toBA ctxRed) cd c.labelRows
+  let st := moussakaRedeem anchors (toBA nf) (toBA ctxIss) (toBA ctxRed) cd c.layouts.moussaka
   ok := (← run c s!"random moussaka redeem {k} ({anchors.length} anchors, issuer {issuer})" st none
     fun _ => proveChecked c.T st
       (toBA (Spec.Moussaka.encodeRedeemWitness nf ctxIss ctxRed rr (toL s) issuer))
@@ -341,14 +341,14 @@ def randomUov (c : Ctx) (k : Nat) (mousSks : List ByteArray) (rataSk pomSk : Byt
     (vec (rnd s!"rratatouille spend seed {k}" 32))
   let w : Spec.Ratatouille.SpendWitness := ⟨tInit, ro, 0, vec rs, nf', t', r'⟩
   let cNext := Spec.Ratatouille.com nf' ctx t' r'
-  let sst := ratatouilleSpend pk ⟨rnf.toArray⟩ d.toNat ⟨cNext.toArray⟩ ⟨ctx.toArray⟩ c.labelRows
+  let sst := ratatouilleSpend pk ⟨rnf.toArray⟩ d.toNat ⟨cNext.toArray⟩ ⟨ctx.toArray⟩ c.layouts.ratatouille
   ok := (← run c s!"random ratatouille spend {k}" sst none fun _ =>
     proveChecked c.T sst (toBA (Spec.Ratatouille.encodeSpendWitness rnf w d ctx))
       (rnd s!"rratatouille rho {k}")) && ok
   -- PomFRIT: step 1, the Signer's preimage of `h ⊕ r`, step 2.
   let ppk := UovPk.ofSecret pomSk
   let msg := rnd s!"rpomfrit msg {k}" (k + 3)
-  let p := pomfritParams c.labelRows
+  let p := pomfritParams c.layouts.pomfrit
   let (_, refresher, r) := Spec.PomFRIT.expandSeed (toL ppk.digest) (toL msg)
     (toL (rnd s!"rpomfrit seed {k}" 32))
   let com := toBA (Spec.PomFRIT.commitRefresher refresher)
@@ -356,7 +356,7 @@ def randomUov (c : Ctx) (k : Nat) (mousSks : List ByteArray) (rataSk pomSk : Byt
   let pend := Prover.voleGen Hashes.shake c.T p (mu Hashes.shake none dst) (toBA r)
     (rnd s!"rpomfrit rho {k}") com
   let sig1 := pend.proof ++ com ++ toBA refresher
-  let pst := pomfritRedeem ppk sig1 msg c.labelRows
+  let pst := pomfritRedeem ppk sig1 msg c.layouts.pomfrit
   let h := pomfritTarget p ppk.digest pend.chal1 sig1 msg
   let some ps := sample pomSk ppk (xorB h (toBA r)) s!"rpomfrit {k}"
     | IO.eprintln "FAIL sampler (pomfrit)"; return false
@@ -370,7 +370,7 @@ def randomUov (c : Ctx) (k : Nat) (mousSks : List ByteArray) (rataSk pomSk : Byt
     | .ok pf =>
       ok := (← Vectors.check s!"random pomfrit {k}: pomfritVerify"
         (pomfritVerify Hashes.shake c.T ppk (pf ++ com ++ toBA refresher) msg
-          c.labelRows).accept) && ok
+          c.layouts.pomfrit).accept) && ok
     | .error _ => ok := false
   return ok
 
@@ -383,7 +383,7 @@ def random (c : Ctx) (n : Nat) : IO Bool := do
     let ctxRed := toL (rnd s!"moussaka ctx_red {k}")
     let (nf, rr, rho) := Spec.Moussaka.expandIssueSeed seed
     let t := Spec.Moussaka.com nf ctxIss ctxRed rr
-    let st := moussakaIssue (toBA t) (toBA ctxIss) c.labelRows
+    let st := moussakaIssue (toBA t) (toBA ctxIss) c.layouts.moussaka
     ok := (← run c s!"random moussaka issue {k}" st none fun _ =>
       proveChecked c.T st (toBA (Spec.Moussaka.encodeIssueWitness nf ctxIss ctxRed rr))
         (toBA rho)) && ok
@@ -395,7 +395,7 @@ def random (c : Ctx) (n : Nat) : IO Bool := do
       (Vector.ofFn fun i => rseed.get! i.1)
     let ctxV : Spec.Ratatouille.Context := Vector.ofFn fun i => rctx.get! i.1
     let cm := Spec.Ratatouille.com rnf ctxV tInit.toUInt64 ro
-    let rst := ratatouilleIssue ⟨cm.toArray⟩ tInit rctx c.labelRows
+    let rst := ratatouilleIssue ⟨cm.toArray⟩ tInit rctx c.layouts.ratatouille
     ok := (← run c s!"random ratatouille issue {k}" rst none fun _ =>
       proveChecked c.T rst
         (toBA (Spec.Ratatouille.encodeIssueWitness rnf ctxV tInit.toUInt64 ro))
@@ -404,7 +404,7 @@ def random (c : Ctx) (n : Nat) : IO Bool := do
 
 def main (args : List String) : IO UInt32 := do
   let tests := args.headD "../tests"
-  let labelRows := args.getD 1 "" == "labelrows"
+  let layouts := Layouts.ofArg (args.getD 1 "")
   let filter := args.getD 2 ""
   let mousPath := s!"{tests}/moussaka/moussaka_kat.txt"
   let rataPath := s!"{tests}/ratatouille/ratatouille_kat.txt"
@@ -416,9 +416,9 @@ def main (args : List String) : IO UInt32 := do
     if !cpks.contains sk then cpks := cpks.insert sk (Keygen.compressedPk (unhex sk))
   let t1 ← IO.monoMsNow
   IO.println s!"UOV key generation: {cpks.size} keys ({t1 - t0} ms)"
-  IO.println s!"Proof layout: {if labelRows then "dedicated label rows" else "main"}"
+  IO.println s!"Proof layout: {layouts.describe}"
   let c : Ctx :=
-    { T := CrtGen.tables, cpks := cpks, labelRows := labelRows, filter := filter,
+    { T := CrtGen.tables, cpks := cpks, layouts := layouts, filter := filter,
       reproduced := ← IO.mkRef 0, verified := ← IO.mkRef 0 }
   let ok1 ← moussaka c mousPath
   let ok2 ← ratatouille c rataPath

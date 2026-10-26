@@ -110,14 +110,14 @@ def moussaka (c : Ctx) (path : String) : IO Bool := do
     let ctxRed := unhex (get r "ctx_red")
     let cd := unhex (get r "challenge_digest")
     let req := unhex (get r "issue_request")
-    let st := moussakaIssue (req.extract 0 45) ctxIss c.pc.labelRows
+    let st := moussakaIssue (req.extract 0 45) ctxIss c.pc.layouts.moussaka
     let w := unhex (get r "issue_witness")
     let rho := toBA (Spec.Moussaka.expandIssueSeed (toL (unhex (get r "issue_seed")))).2.2
     ok := (← checkRun c s!"moussaka {i} issue" st w rho
       fun _ => Prover.prove Hashes.shake c.T st w rho) && ok
     let anchors ← IO.ofExcept ((getAll r "anchor_sk").toList.mapM c.pc.pk)
     let rreq := unhex (get r "redeem_request")
-    let rst := moussakaRedeem anchors (rreq.extract 0 24) ctxIss ctxRed cd c.pc.labelRows
+    let rst := moussakaRedeem anchors (rreq.extract 0 24) ctxIss ctxRed cd c.pc.layouts.moussaka
     let rw := unhex (get r "redeem_witness")
     let rrho := toBA (Spec.Moussaka.expandRedeemSeed (toL (unhex (get r "redeem_seed"))))
     ok := (← checkRun c s!"moussaka {i} redeem" rst rw rrho
@@ -135,7 +135,7 @@ def ratatouille (c : Ctx) (path : String) : IO Bool := do
     let tInit := (get r "t_init").toNat!
     let pk ← IO.ofExcept (c.pc.pk (get r "issuer_sk"))
     let req := unhex (get r "issue_request")
-    let st := ratatouilleIssue (req.extract 0 32) tInit ctxIss c.pc.labelRows
+    let st := ratatouilleIssue (req.extract 0 32) tInit ctxIss c.pc.layouts.ratatouille
     let w := unhex (get r "issue_witness")
     let irho := rho Spec.Ratatouille.issueSeedDst (unhex (get r "issue_seed"))
     ok := (← checkRun c s!"ratatouille {i} issue" st w irho
@@ -147,7 +147,7 @@ def ratatouille (c : Ctx) (path : String) : IO Bool := do
       let sreq := unhex spends[j]!
       let d := (sreq.extract 24 32).toList.foldr (fun b acc => acc * 256 + b.toNat) 0
       let sst := ratatouilleSpend pk (sreq.extract 0 24) d (sreq.extract 32 64) ctxIss
-        c.pc.labelRows
+        c.pc.layouts.ratatouille
       let sw := unhex sws[j]!
       let srho := rho Spec.Ratatouille.spendSeedDst (unhex sseeds[j]!)
       ok := (← checkRun c s!"ratatouille {i} spend {j}" sst sw srho
@@ -166,20 +166,20 @@ def pomfrit (c : Ctx) (path : String) : IO Bool := do
     let msg := unhex (get r "msg")
     let seed := unhex (get r "seed")
     let s := unhex (get r "response")
-    let p := pomfritParams c.pc.labelRows
+    let p := pomfritParams c.pc.layouts.pomfrit
     let (rho, refresher, rr) := Spec.PomFRIT.expandSeed (toL pk.digest) (toL msg) (toL seed)
     let com := toBA (Spec.PomFRIT.commitRefresher refresher)
     let dst := toBA (Spec.makeDst "pomf" 0 'p' '0')
     let pend := Prover.voleGen Hashes.shake c.T p (mu Hashes.shake none dst) (toBA rr) (toBA rho)
       com
-    let st := pomfritRedeem pk (pend.proof ++ com ++ toBA refresher) msg c.pc.labelRows
+    let st := pomfritRedeem pk (pend.proof ++ com ++ toBA refresher) msg c.pc.layouts.pomfrit
     ok := (← checkRun c s!"pomfrit {i}" st (toBA rr ++ s) (toBA rho)
       (fun _ => Prover.proveCommit Hashes.shake st s pend) rr.length) && ok
   return ok
 
 def main (args : List String) : IO UInt32 := do
   let tests := args.headD "../tests"
-  let labelRows := args.getD 1 "" == "labelrows"
+  let layouts := Layouts.ofArg (args.getD 1 "")
   let filter := args.getD 2 ""
   let mousPath := s!"{tests}/moussaka/moussaka_kat.txt"
   let rataPath := s!"{tests}/ratatouille/ratatouille_kat.txt"
@@ -188,9 +188,9 @@ def main (args : List String) : IO UInt32 := do
   let mut cpks : Std.HashMap String ByteArray := {}
   for sk in sks do
     if !cpks.contains sk then cpks := cpks.insert sk (Keygen.compressedPk (unhex sk))
-  IO.println s!"Proof layout: {if labelRows then "dedicated label rows" else "main"}"
+  IO.println s!"Proof layout: {layouts.describe}"
   let pc : ProverKats.Ctx :=
-    { T := CrtGen.tables, cpks := cpks, labelRows := labelRows, filter := filter,
+    { T := CrtGen.tables, cpks := cpks, layouts := layouts, filter := filter,
       reproduced := ← IO.mkRef 0, verified := ← IO.mkRef 0 }
   let c : Ctx := { T := CrtGen.tables, pc := pc, filter := filter, passed := ← IO.mkRef 0 }
   let t0 ← IO.monoMsNow

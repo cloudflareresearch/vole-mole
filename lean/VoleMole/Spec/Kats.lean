@@ -1,4 +1,4 @@
-import VoleMole.Spec.PomFRIT
+import VoleMole.Spec.PomFRITLayout
 import VoleMole.Spec.Moussaka
 import VoleMole.Spec.RatatouilleKats
 import VoleMole.Verifier.Relations
@@ -153,11 +153,14 @@ def checkMoussaka (keys : Std.HashMap String ByteArray) (pks : Std.HashMap Strin
 
 /-! ## PomFRIT -/
 
-def checkPomfritHeader (r : KatRecord) : Except String (List String) := do
+/-- PomFRIT's proof layout on `main`: dedicated label rows since `64fd1a4`. -/
+def pomfritLayout : PomFRIT.Layout := .labelRows
+
+def checkPomfritHeader (L : PomFRIT.Layout) (r : KatRecord) : Except String (List String) := do
   let mut errs : List String := []
-  for (k, v) in [("signature_bytes", PomFRIT.sigBytes), ("proof_bytes", PomFRIT.proofBytes),
-      ("refresher_bytes", PomFRIT.refresherBytes), ("vole_check_proof_offset", PomFRIT.offVoleCheck),
-      ("vole_check_proof_bytes", PomFRIT.voleCheckBytes), ("correction_offset", PomFRIT.offCorrection),
+  for (k, v) in [("signature_bytes", L.sigBytes), ("proof_bytes", L.proofBytes),
+      ("refresher_bytes", PomFRIT.refresherBytes), ("vole_check_proof_offset", L.offVoleCheck),
+      ("vole_check_proof_bytes", PomFRIT.voleCheckBytes), ("correction_offset", L.offCorrection),
       ("correction_bytes", PomFRIT.correctionBytes)] do
     if (← r.nat k) ≠ v then errs := errs ++ [s!"{k}: spec has {v}"]
   errs := errs ++ checkEq "pk_digest = SHAKE256(pk)" (shake256B (← r.bytes "pk") digestBytes)
@@ -165,7 +168,7 @@ def checkPomfritHeader (r : KatRecord) : Except String (List String) := do
   errs := errs ++ checkEq "sk" (← r.bytes "sk") (filled 0x60)
   return errs
 
-def checkPomfrit (pk : UOVKey) (r : KatRecord) : Except String (List String) := do
+def checkPomfrit (L : PomFRIT.Layout) (pk : UOVKey) (r : KatRecord) : Except String (List String) := do
   let seed ← r.bytes "seed"
   let msg ← r.bytes "msg"
   let t ← r.bytes "request"
@@ -173,11 +176,11 @@ def checkPomfrit (pk : UOVKey) (r : KatRecord) : Except String (List String) := 
   let chal1 ← r.bytes "chal1"
   let sig ← r.bytes "signature"
   let (_, refresher, rr) := PomFRIT.expandSeed pk.digest msg seed
-  let h := PomFRIT.hashToTarget pk.digest chal1 sig msg
+  let h := L.hashToTarget pk.digest chal1 sig msg
   let mut errs : List String := []
-  if sig.length ≠ PomFRIT.sigBytes then errs := errs ++ ["signature: bad length"]
-  errs := errs ++ checkEq "refresher" (PomFRIT.sigRefresher sig) refresher
-  errs := errs ++ checkEq "refresher_com" (PomFRIT.sigRefresherCom sig)
+  if sig.length ≠ L.sigBytes then errs := errs ++ ["signature: bad length"]
+  errs := errs ++ checkEq "refresher" (L.sigRefresher sig) refresher
+  errs := errs ++ checkEq "refresher_com" (L.sigRefresherCom sig)
     (PomFRIT.commitRefresher refresher)
   errs := errs ++ checkEq "request = H_T(...) ⊕ r" (xorBytes h rr) t
   if pk.eval s ≠ t then errs := errs ++ ["P(s) ≠ t"]
@@ -186,12 +189,12 @@ def checkPomfrit (pk : UOVKey) (r : KatRecord) : Except String (List String) := 
   -- target it is handed is the Client's h = t ⊕ r.
   let V : PomFRIT.Verifier :=
     ⟨fun _ _ => some chal1, fun _ _ _ h' _ => decide (h' = xorBytes t rr)⟩
-  if !PomFRIT.verify V pk msg sig then errs := errs ++ ["verify (front end) rejected"]
-  if PomFRIT.verify V pk (msg ++ [0]) sig then errs := errs ++ ["verify accepted another message"]
-  let sig' := sig.set (PomFRIT.offCorrection + 3) ((sig.getD (PomFRIT.offCorrection + 3) 0) ^^^ 1)
-  if PomFRIT.verify V pk msg sig' then errs := errs ++ ["verify accepted a modified d[0..M)"]
-  let sig'' := sig.set (PomFRIT.sigBytes - 1) ((sig.getD (PomFRIT.sigBytes - 1) 0) ^^^ 1)
-  if PomFRIT.verify V pk msg sig'' then errs := errs ++ ["verify accepted a modified refresher"]
+  if !L.verify V pk msg sig then errs := errs ++ ["verify (front end) rejected"]
+  if L.verify V pk (msg ++ [0]) sig then errs := errs ++ ["verify accepted another message"]
+  let sig' := sig.set (L.offCorrection + 3) ((sig.getD (L.offCorrection + 3) 0) ^^^ 1)
+  if L.verify V pk msg sig' then errs := errs ++ ["verify accepted a modified d[0..M)"]
+  let sig'' := sig.set (L.sigBytes - 1) ((sig.getD (L.sigBytes - 1) 0) ^^^ 1)
+  if L.verify V pk msg sig'' then errs := errs ++ ["verify accepted a modified refresher"]
   return errs
 
 /-- The executable model of pqov's signer on the key `pk` (oil matrix of `skSeed`) at `t`, against
@@ -249,13 +252,13 @@ def main (args : List String) : IO UInt32 := do
   match pom[0]? with
   | none => ok := false; IO.println "FAIL  pomfrit_kat.txt: empty"
   | some hdr =>
-    ok := (← report "pomfrit_kat.txt layout and key digest" (runChecks (checkPomfritHeader hdr))) && ok
+    ok := (← report "pomfrit_kat.txt layout and key digest" (runChecks (checkPomfritHeader pomfritLayout hdr))) && ok
     let some test := keys["test"]? | throw (IO.userError "no key `test`")
     let dig ← IO.ofExcept (hdr.bytes "pk_digest")
     let pk := UOVKey.ofExpanded dig test
     if pom.size ≠ 4 then ok := false; IO.println s!"FAIL  pomfrit_kat.txt: {pom.size} records"
     for h : i in [1:pom.size] do
-      ok := (← report s!"pomfrit_kat.txt case {i - 1}" (runChecks (checkPomfrit pk pom[i]))) && ok
+      ok := (← report s!"pomfrit_kat.txt case {i - 1}" (runChecks (checkPomfrit pomfritLayout pk pom[i]))) && ok
   -- pqov's signer model on the test key, at the Moussaka and PomFRIT targets.
   let some test := keys["test"]? | throw (IO.userError "no key `test`")
   let pkT := UOVKey.ofExpanded [] test

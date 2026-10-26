@@ -120,6 +120,35 @@ def ratatouilleSpend (pk : UovPk) (nf : ByteArray) (d : ℕ) (cNext ctxIss : Byt
     UovEval.ratatouilleSpendValues pk.map (fnOf nf) d (fnOf cNext) (fnOf ctxIss)
       (combinationOf Ratatouille.uovM lb) w
 
+/-! ## Proof layouts per protocol -/
+
+/-- Which relations use dedicated label rows (`Params.labelRows`). Since `64fd1a4`, `main` uses them
+for PomFRIT only (`REUSE_CRT_WITNESS` is unset for PomFRIT's relation): Moussaka and Ratatouille
+keep FAEST v3's CRT VOLE masks, since their witnesses start with a uniform secret. -/
+structure Layouts where
+  pomfrit : Bool
+  moussaka : Bool
+  ratatouille : Bool
+  deriving Repr, BEq
+
+/-- `main` since `64fd1a4`: label rows for PomFRIT only. -/
+def Layouts.main : Layouts := ⟨true, false, false⟩
+/-- Label rows for every relation (branch `voleith-label-rows`). -/
+def Layouts.all : Layouts := ⟨true, true, true⟩
+/-- No label rows (`main` before `64fd1a4`). -/
+def Layouts.none : Layouts := ⟨false, false, false⟩
+
+/-- The command-line layout argument: `labelrows` (every relation), `none` (before `64fd1a4`), or
+anything else (`main`). -/
+def Layouts.ofArg : String → Layouts
+  | "labelrows" => .all
+  | "none" => .none
+  | _ => .main
+
+def Layouts.describe (l : Layouts) : String :=
+  let f (b : Bool) := if b then "label rows" else "CRT masks from the witness"
+  s!"PomFRIT: {f l.pomfrit}; Moussaka: {f l.moussaka}; Ratatouille: {f l.ratatouille}"
+
 /-! ## PomFRIT -/
 
 def pomfritParams (labelRows := false) : Params := { witnessBytes := 164, qsDegree := 2, labelRows }
