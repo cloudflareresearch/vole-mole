@@ -1,5 +1,6 @@
 import VoleMole.Spec.PomFRITLayout
 import VoleMole.Spec.Moussaka
+import VoleMole.Spec.MoussakaUnbound
 import VoleMole.Spec.RatatouilleKats
 import VoleMole.Verifier.Relations
 import VoleMole.Verifier.CrtGen
@@ -11,6 +12,8 @@ import VoleMole.Spec.PqovSignerExec
 Usage: `lake exe spec_kats [REPO_ROOT]` (default `..`, i.e. run from `lean/`). Reads
 
 * `tests/moussaka/moussaka_kat.txt` (`tests/moussaka/gen_moussaka_kat.cpp`),
+* `tests/moussaka/unbound_moussaka_kat.txt` (unbound tokens: seed expansion, `UCom`, `Derive`, both
+  witness encodings and the request framing, with `Spec.MoussakaUnbound`),
 * `tests/pomfrit/pomfrit_kat.txt` (`tests/pomfrit/gen_pomfrit_kat.cpp`),
 * `tests/ratatouille/ratatouille_kat.txt` (`tests/ratatouille/gen_ratatouille_kat.cpp`; checked by
   `Spec/RatatouilleKats.lean`, see there),
@@ -78,6 +81,39 @@ def verifierRedeem (pks : List Verifier.UovPk) : Moussaka.NIZK Moussaka.RedeemIn
         (Verifier.moussakaRedeem ps (Verifier.toBA x.nf) (Verifier.toBA x.ctxIss)
           (Verifier.toBA x.ctxRed) (Verifier.toBA x.challengeDigest)) (Verifier.toBA pf)).accept
     | none => false⟩
+
+/-- One record of `unbound_moussaka_kat.txt`: an unbound token and its redemptions. -/
+def checkMoussakaUnbound (r : KatRecord) : Except String (List String) := do
+  let hex (k : String) (i : ℕ) : Except String Bytes := do
+    let some v := (r.getAll k)[i]? | throw s!"missing field `{k}` #{i}"
+    let some b := Hex.decode? v | throw s!"field `{k}` #{i}: bad hex"
+    pure b
+  let ctxIss ← r.bytes "ctx_iss"
+  let issuer ← r.nat "issuer"
+  let (k, rr, _) := MoussakaUnbound.expandIssueSeed (← r.bytes "issue_seed")
+  let t := MoussakaUnbound.ucom k ctxIss rr
+  let req ← r.bytes "issue_request"
+  let s ← r.bytes "issue_response"
+  let mut errs : List String := []
+  errs := errs ++ checkEq "nf_key" k (← r.bytes "nf_key")
+  errs := errs ++ checkEq "r" rr (← r.bytes "r")
+  errs := errs ++ checkEq "commitment" t (← r.bytes "commitment")
+  errs := errs ++ checkEq "issue_witness" (MoussakaUnbound.encodeIssueWitness k ctxIss rr)
+    (← r.bytes "issue_witness")
+  if req.length ≠ uovM + 6864 then errs := errs ++ ["issue_request: bad length"]
+  errs := errs ++ checkEq "issue_request[0..45)" (req.take uovM) t
+  let n := (r.getAll "redeem_seed").length
+  if n = 0 then errs := errs ++ ["no redemptions"]
+  for i in [0:n] do
+    let ctxRed ← hex "ctx_red" i
+    let nf := MoussakaUnbound.derive k ctxRed
+    let rreq ← hex "redeem_request" i
+    errs := errs ++ checkEq s!"nf #{i}" nf (← hex "nf" i)
+    errs := errs ++ checkEq s!"redeem_witness #{i}"
+      (MoussakaUnbound.encodeRedeemWitness k ctxIss ctxRed rr s issuer) (← hex "redeem_witness" i)
+    if rreq.length ≠ Moussaka.nfBytes + 12423 then errs := errs ++ [s!"redeem_request #{i}: bad length"]
+    errs := errs ++ checkEq s!"redeem_request[0..24) #{i}" (rreq.take Moussaka.nfBytes) nf
+  return errs
 
 /-- `pks`: compact secret key (hex) ↦ generated public key, for every `anchor_sk`. -/
 def checkMoussaka (keys : Std.HashMap String ByteArray) (pks : Std.HashMap String Verifier.UovPk)
@@ -252,6 +288,11 @@ def main (args : List String) : IO UInt32 := do
     let errs ← IO.lazyPure fun _ =>
       runChecks (checkMoussaka keys pks ((mous[i].getAll "anchor_sk").length ≤ 3) mous[i])
     ok := (← report s!"moussaka_kat.txt case {i} ({(← IO.monoMsNow) - t1} ms)" errs) && ok
+  -- Unbound Moussaka tokens.
+  let unb := parseKat (← IO.FS.readFile s!"{root}/tests/moussaka/unbound_moussaka_kat.txt")
+  if unb.size = 0 then ok := false; IO.println "FAIL  unbound_moussaka_kat.txt: empty"
+  for h : i in [0:unb.size] do
+    ok := (← report s!"unbound_moussaka_kat.txt case {i}" (runChecks (checkMoussakaUnbound unb[i]))) && ok
   -- PomFRIT.
   let pom := parseKat (← IO.FS.readFile s!"{root}/tests/pomfrit/pomfrit_kat.txt")
   match pom[0]? with
