@@ -1,18 +1,17 @@
 # vole-mole
 
-C++ implementations of various post-quantum anonymous credentials based on the
-[UOV][uov] signature scheme and the VOLE-in-the-Head (VOLEitH) proof system from
-[FAEST][faest]:
+Various post-quantum anonymous credentials based on the [UOV][uov] signature
+scheme and the VOLE-in-the-Head (VOLEitH) proof system from [FAEST][faest]:
 
-1. [PomFRIT][pomfrit], a blind signature scheme. Allows a client to obtain and
-   later present a signature over a message without it to the issuer.
+1. [PomFRIT][pomfrit], a blind signature. Allows a client to obtain and later
+   present a signature without revealing the message to the issuer.
 
 2. [VOLE-IHAT][ihat], an issuer-hiding anonymous token (IHAT). Similar to a
    blind signature, except presentation (aka redemption) also hides the issuer
    among an anonymity set.
 
 3. [VOLE-ACT][act], an anonymous credit token (ACT). The token carries state
-   across presentations (aka spends) that the issuer can update without learning
+   across presentations (aka spends) that the issuer updates without learning
    its value.
 
 > [!WARNING]
@@ -57,8 +56,7 @@ auto [pending, request] = pomfrit::issue_request(pk, msg);
 // Issuer: Generate issue response.
 const auto response = pomfrit::issue_response(sk, request);
 
-// Client: Finalize the blind signature. Returns std::nullopt if the response
-// is invalid.
+// Client: Finalize the blind signature.
 const auto sig = std::move(pending).finalize_issue(pk, response);
 if (!sig) {
     return EXIT_FAILURE;
@@ -76,7 +74,6 @@ The `examples/` folder includes additional examples:
 | [`ihat.cpp`](examples/ihat.cpp)                 | VOLE-IHAT issuance and redemption                     |
 | [`unbound_ihat.cpp`](examples/unbound_ihat.cpp) | VOLE-IHAT with late binding of the redemption context |
 | [`act.cpp`](examples/act.cpp)                   | VOLE-ACT issuance and spend                           |
-
 
 ## Benchmarks
 
@@ -116,8 +113,8 @@ vole_mole_dep = subproject('vole-mole',
 This code has not been audited.
 
 The library does not prevent double spending. VOLE-IHAT `finalize_redeem` and
-VOLE-ACT `spend_response` return a nullifier. Before accepting the presentation,
-the relying party needs to ensure that has not recorded the same nullifier in a
+VOLE-ACT `spend_response` return a nullifier; before accepting the presentation,
+the caller needs to ensure that it has not recorded the same nullifier in a
 previous presentation. Likewise, typical applications of PomFRIT will include a
 nullifier in the message that the verifier is meant to use for double spend
 prevention.
