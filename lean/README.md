@@ -74,8 +74,10 @@ permutations with inverse queries):
 - *Protocol reductions* (§5), in the random-oracle and ideal-cipher model on the executable
   specs, with the Lean verifier as the honest parties' check (`ROM/VerifyIC.lean`):
   - Moussaka one-more unforgeability (Thm 1, `omuf_le_num`): `Pr[Win] ≤ qI·ε_I + qR·ε_R +
-    Adv^bind_Com(B₁) + Adv^ct-uf_K(B₂)`, `ε_I`, `ε_R` the adaptive spec soundness bounds at the
-    game's budgets;
+    Adv^bind_Com(B₁) + Adv^ct-uf-open_K(B₂)`, `ε_I`, `ε_R` the adaptive spec soundness bounds at the
+    game's budgets; the last term is a CT-UF^open advantage in a standalone game
+    (`omuf_le_num_open`), which follows from one-more-UOV (`uov-assumptions.md` T4; paper). Plain
+    CT-UF, without openings, is false for UOV (`ctuf_pqov_broken`);
   - Ratatouille balance (Thm 1, `balance_le_ufTag`): `N` adaptive issuance and spend calls with
     chosen refunds, `Pr[win] ≤ N·ε_iss + N·ε_spend + Adv^uf-tag(B) + Adv^coll_Com(C)`, `B` an
     explicit UF-Tag forger (with a signability probe) and `C` an explicit `Com` collision finder;

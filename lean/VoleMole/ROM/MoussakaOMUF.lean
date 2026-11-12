@@ -13,7 +13,8 @@ adversary to
   ideal-cipher soundness theorems for the spec relations (`ROM/SpecSound.lean`,
   `moussakaIssue_accept_le_adaptive_spec`, `moussakaRedeem_accept_le_adaptive_spec`);
 * a collision of `Com` among the extracted openings (`Adv^bind_Com(B₁)`, an assumption);
-* a CT-UF forgery on the honest Anchors' keys (`Adv^ct-uf(B₂)`, an assumption).
+* a CT-UF^open forgery on the honest Anchors' keys (`Adv^ct-uf(B₂)`, an assumption; as a standalone
+  CT-UF^open advantage in `Assumptions/UOVLinks.lean`, `omuf_le_num_open`).
 
 ## The game
 
@@ -521,7 +522,7 @@ commitment. (`B₁` outputs such a pair if there is one: the candidates are poly
 def Coll (E : CTable) (v : View K) : Prop :=
   ∃ x ∈ SI lr E v ∪ SR lr pk E v, ∃ x' ∈ SI lr E v ∪ SR lr pk E v, x ≠ x' ∧ comO x = comO x'
 
-/-- **`B₂` wins the CT-UF game**: an extracted redemption opening `x`, with an honest Anchor `k` and
+/-- **`B₂` wins the CT-UF^open game**: an extracted redemption opening `x`, with an honest Anchor `k` and
 `s` such that `P_k(s) = Com(x)`, whose commitment was never submitted to any Anchor's signer (the
 signer is called exactly on the accepted Issue queries' `t`, `anchorIC`). -/
 def Forge (E : CTable) (v : View K) : Prop :=
@@ -538,7 +539,7 @@ theorem extAll_eval (g : Table) (E : CTable) :
     evalWithAnswerFn_pure]
 
 /-- **The per-table core of Theorem 1**: a win means that some accepted proof is not extracted, or
-`B₁` finds a `Com` collision, or `B₂` a CT-UF forgery. -/
+`B₁` finds a `Com` collision, or `B₂` a CT-UF^open forgery. -/
 theorem win_imp (g : Table) (E : CTable)
     (hwin : Win (evalWithAnswerFn (QueryImpl.ofFn (join g E)) (game lr pk sk qI A))) :
     (∃ j ∈ Finset.range qI, BadI E lr (evalWithAnswerFn (QueryImpl.ofFn g)
@@ -597,7 +598,7 @@ end Red
 /-- **Theorem 1 (one-more unforgeability), the reduction.** For every OMUF adversary, honest
 Anchors with any public keys and signers, and either proof layout (`lr`): the probability that the
 adversary wins is at most the extraction failures of the `qI` issuance and `qR` redemption provers
-(each a prover of the soundness theorems), plus `B₁`'s binding advantage and `B₂`'s CT-UF
+(each a prover of the soundness theorems), plus `B₁`'s binding advantage and `B₂`'s CT-UF^open
 advantage. -/
 theorem omuf_le (lr : Bool) (pk : Fin K → UovPk) (sk : Fin K → Spec.Signer) (qI : ℕ)
     (A : Adversary K qR) :

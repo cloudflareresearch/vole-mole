@@ -38,9 +38,9 @@ Contents:
 
 | Property | Holds? | Bound (classical) | Assumptions |
 |---|---|---|---|
-| One-more unforgeability, per issuance context (Thm 1) | **Yes**; [Lean] in the ROM and ideal-cipher model on the spec, with the Lean verifier as the honest Anchors' and Moderator's check, the extraction terms from the soundness theorems (`ROM/MoussakaOMUF.lean`, `omuf_le_num`; §4 "Status") | `ε_ext^iss + ε_ext^red + ε_dig + Adv^bind_Com + K·Adv^ct-uf_UOV,Com`; mechanized: `qI·ε_I + qR·ε_R + Adv^bind_Com(B₁) + Adv^ct-uf_K(B₂)`, `ε_dig` a condition on the honest keys | PoK (extraction README), binding of `Com`, chosen-target unforgeability of UOV on `Com`-images (implied by one-more-UOV, heuristically) |
+| One-more unforgeability, per issuance context (Thm 1) | **Yes**; [Lean] in the ROM and ideal-cipher model on the spec, with the Lean verifier as the honest Anchors' and Moderator's check, the extraction terms from the soundness theorems (`ROM/MoussakaOMUF.lean`, `omuf_le_num`; §4 "Status") | `ε_ext^iss + ε_ext^red + ε_dig + Adv^bind_Com + K·Adv^ct-uf-open_UOV,Com`; mechanized: `qI·ε_I + qR·ε_R + Adv^bind_Com(B₁) + Adv^ct-uf-open_K(B₂)` (`omuf_le_num_open`), `ε_dig` a condition on the honest keys | PoK (extraction README), binding of `Com`, chosen-target unforgeability of UOV on `Com`-images with openings (CT-UF^open, implied tightly by one-more-UOV with `Com` ideal in the standalone game, §3.3) |
 | One nullifier per signed commitment; double-spend detection (Cor 2) | **Yes**, if the Moderator keeps one record per `(ctx_iss, ctx_red)` across all Anchor Sets (`moussaka.hpp:141-146`) | as Thm 1 | as Thm 1 |
-| Redemption non-malleability: no redirect to another `challenge_digest`, Anchor Set or `ctx_red` (Thm 3) | **Yes** | `ε_SE^red + Adv^bind + K·Adv^ct-uf + U·Adv^ow-r + ZK hops` | weak SE (L8), plus the above, plus one-wayness in `r` |
+| Redemption non-malleability: no redirect to another `challenge_digest`, Anchor Set or `ctx_red` (Thm 3) | **Yes** | `ε_SE^red + Adv^bind + K·Adv^ct-uf-open + U·Adv^ow-r + ZK hops` | weak SE (L8), plus the above, plus one-wayness in `r` |
 | Issuer hiding and unlinkability vs a Moderator **colluding with all Anchors**, with adversarial keys (Thm 4a) | **Yes, computationally**; [Lean] from uniform seed outputs (`Privacy/Moussaka.lean`, `anonymity`; for `main`'s Client, which finds its index itself, `Privacy/MoussakaFind.lean`); with the executable Lean prover (label rows) down to its tape hypothesis (`Privacy/MoussakaLean.lean`, `anonymity_label_rows`); for the Lean prover in the ROM and ideal-cipher model with every zero-knowledge term explicit, `≈ 2⁻¹⁰²·³` plus budget terms and `2·Adv^hide_Com` (`anonymityRO_lean_num`), and `≈ 2⁻¹⁰¹·⁹` with a table-reading interaction (`anonymityRA_lean_num`; Appendix B); also with AES as random permutations (`_perm`) and with one shared `H₃` (`anonymitySh_num`, `anonymityRASh_num`); from the real Clients' OS seeds and seed XOF, each `+ 2·(2q_X + 2)·2⁻²⁵⁶` (`anonymity*_seed`, `lean/docs/zk.md` §10.6); with a key stage (contexts, keys) that reads the tables too (`anonymityRAK_lean_num`, `≈ 2⁻¹⁰¹·⁹`); with any number `n` of further honest Clients, `≤ n·2⁻¹⁰²` plus budget terms and `2·Adv^hide_Com` (`anonymityN_lean_num`), also adaptively scheduled, each further session's contexts, key, response and Anchor Set chosen from earlier outcomes and the challenge contexts and keys from the sessions before it (`anonymityAd_lean_num`, the same numbers), and interleaved in any order (`anonymityIL_lean_num`, `≤ (n + 2)·2⁻¹⁰¹`; with a table-reading scheduler that also places the challenge, `anonymityILO_lean_num`, `+ 28·L·(a₃ + a₂ + a₅ + 221·a_E)·2⁻¹²⁸`), and with `N` challenge pairs (`anonymityP_lean_num`; linear in `N` up to a bad event bounded on paper, `anonymityP_lin`; `lean/docs/zk.md` §10.8; §11 item 5) | `2·ε_ZK^joint + 2·Adv^hide_Com` (the `2^{−192}` is not needed, §6) | ZK (lean/docs/zk.md), hiding of `Com` |
 | The same vs a Moderator that sees no issuance (Thm 4b) | **Yes**, with no Keccak assumption, up to an abort term the note missed (§6); [Lean] from uniform seed outputs (`Privacy/MoussakaNC.lean`, `anonymityNC`, `unlinkabilityNC`; for `main`'s Client `Privacy/MoussakaNCFind.lean`), with the vinegar hash a random oracle (`anonymityNC_vinegarRO`), and with the executable Lean prover down to its tape or hop hypotheses (`anonymityNC_label_rows`, `_shake`); in the ROM and ideal-cipher model with every proof and the honest Anchors' Lean verifier on the shared tables, `≈ 2⁻¹⁰³·²` plus budget terms and `2·(φ₀ + φ₁)` (`anonymityNCRO_lean_num`, `unlinkabilityNCRO_lean_num`, also `_perm`), also with one shared `H₃` (`anonymityNCSh_num`), with the Moderator's choices read off the tables (`anonymityNCRA_lean_num`, as oracle computations `anonymityNCOC_lean_num`) and from the real Clients' seeds (`*NC*_seed`; Appendix B); with a model of pqov's `derive_preimage` as the Anchors' signer (`anonymityNC_pqov`, `anonymityNCRO_pqov`), averaged over keys of pqov's key generation with any oil matrix (`anonymityNCRO_pqov_pqovKeys`; `O = 0`: `anonymityNCRO_pqov_keys`; abort term `≈ 2⁻²⁹³·⁸`; the model reproduces the C++ `derive_preimage` on the KAT targets), and the games shown to reach redemption (`pr_refused_NCRO_le`; Appendix B) | `2·Σ ε_ZK^red + 2·(φ₀ + φ₁)`, `φ_c ≤ δ_c^{255}` on average over the vinegar random oracle (pqov uses 255 vinegars, §6), `E[δ_c^{255}] ≤ 255^{−37} + 1/(255·256^{37}) ≈ 2^{−295.8}` on average over the key (`δ ≤ 1/255` holds on average over the key, not per key) (`0` for one Anchor; no `2^{−192}`) | ZK of the redemption proofs only; both issuers in the Anchor Sets (`main`'s Client; for the index-taking Client of the random-oracle games, an index taken from `S`) |
 | Issuer hiding under a Moderator-chosen Anchor Set | **Only relative to the Anchors in the set that are honest and in common use** (§7) | n/a | Anchor-Set consistency outside the library |
@@ -153,7 +153,7 @@ string below (`commit.hpp:33-48`, `moussaka.cpp:89-96`):
 | D6 | `RedeemRequest` does not check the token | The Client finds the index `i` of a key that verifies its token, in constant time, and throws if none does (`src/ihat/ihat.cpp:120-138` on `main`) | Better: no proof is made for a false statement. No leak of `i`, and the caller need not supply it |
 | D7 | `nf`, `r` sampled directly | Derived with `ρ_iss` from one OS seed through SHAKE128 (`moussaka.cpp:58-71`) | None in the ROM up to the seed-XOF hop: `(2q_X + 2)·2^{−256}` per world in Theorem 4's game (an XOF query at a Client's seed gives its `nf`; two seeds of one domain collide), which Theorem 4 does not charge; [Lean] `anonymity*_seed`, `lean/docs/zk.md` §10.6. This needs the application-hash vs proof-hash disjointness (Lemma DS, §3.1) |
 | D8 | "samples a solution `s`" (older text) / "DerivePreimage" | Deterministic in `(sk, t)` | Needed: two preimages of one target from different vinegars are not known to be harmful, but determinism makes the UOV oracle a function (§3.3) |
-| D9 | Security claim: one-more-UOV (PoMFRIT Def. 8) | — | This note uses a weaker assumption, CT-UF (§3.3), which follows from one-more-UOV heuristically |
+| D9 | Security claim: one-more-UOV (PoMFRIT Def. 8) | — | None. This note uses one-more-UOV too, through CT-UF^open (§3.3), which follows from it tightly. (An earlier version used plain CT-UF, which is false for UOV; §3.3) |
 | D10 | DST template "as in Ratatouille" | DST is *appended* to the instance in `mu` (`voleith.hpp:118`). Application hashes *prepend* DSTs | Covered by Lemma DS (§3.1) |
 
 There are no deviations in the commitment layout, the issuance relation, or the API flow.
@@ -252,48 +252,53 @@ The draft defers to the Ratatouille draft for this choice.
 Let `P_k` be the public maps of `K` honest Anchors and `Sign_k(y) = DerivePreimage(sk_k, y)` for any
 `y ∈ F_{256}^{45}`.
 
-- **CT-UF (chosen-target unforgeability on `Com`-images), `K` keys.**
-  - `A` gets `P_1..P_K` and oracles `Sign_1..Sign_K` on **arbitrary** targets.
-  - It wins if it outputs `(k, x*, s*)` with `x* ∈ D`, `P_k(s*) = Com(x*)`, and `Com(x*)` never
-    queried to **any** `Sign_j`.
-  - `Adv^ct-uf_{UOV,Com,K} ≤ K·Adv^ct-uf_{UOV,Com,1}`: the reduction generates the other `K−1`
-    keys itself.
-  - This is EUF-CMA of "UOV-FDH with hash `Com` and deterministic retry signing". The signing
-    oracle may be queried on any target, as in the protocol, where an issuance proof shows
-    knowledge but places no other restriction on `t`.
-- **One-more-UOV** (draft; PoMFRIT Def. 8, restated because the paper was not retrievable here).
+The draft's assumption is **one-more-UOV** (PoMFRIT Def. 8; OMPR in `uov-assumptions.md` §3,
+item 7). This note uses it too, through one intermediate notion, CT-UF^open, that matches the
+structure of the proof: the reduction knows an opening of every target it has signed, because it
+extracts them from the issuance proofs.
+
+- **One-more-UOV (OMPR).**
   - `A` gets `P` and `Q` uniform targets `y_1..y_Q`, and the oracle `Sign` on arbitrary targets.
   - After `ℓ` distinct oracle targets, it outputs `ℓ+1` pairs `(j, s_j)` with distinct `y_j` and
     `P(s_j) = y_j`.
-  - Note that `Sign` is the real, deterministic `DerivePreimage`.
-- **Lemma U (heuristic link).** Model `Com` as a random permutation **for the standalone CT-UF game
-  only**. This is legitimate there, because CT-UF contains no proof that evaluates `Com`'s circuit.
-  Then
-  `Adv^ct-uf_{UOV,Com,1} ≤ Adv^om-uov(Q = q_P^fwd, ℓ ≤ q_Sign) + q_P^inv·2^{−223.9} + q_P²·2^{−360}`.
-  - *Proof.* Answer each fresh forward query on `x ∈ D` with `y_j ‖ z`, for the next challenge
-    target `y_j` and a uniform 440-bit `z`, resampling on a range collision.
-  - Answer other forward queries, and all inverse queries, uniformly. An inverse answer that lands
-    in `D` is a bad event, with probability `≤ 2^{576}/(2^{800}−q)` per query.
-  - Forward `Sign` queries go to the one-more oracle.
-  - A CT-UF forgery's target is a challenge target that was never queried. Together with the `ℓ`
-    oracle answers, it gives `ℓ+1` solutions.
-  - The last term covers repeated challenge targets. ∎
-  - **Correction (`lean/docs/security/uov-assumptions.md`): Lemma U is wrong as stated.** CT-UF lets the
-    adversary ask `Sign` about a target that is not a `Com` image, e.g. `Sign(0)`. The reduction must
-    then spend a one-more call that yields no challenge preimage, so it never reaches "one more".
-  - **CT-UF as defined above is false** (`lean/docs/security/uov-open-reductions.md` Theorem B1;
-    Lean `ctuf_scaling_attack`). `P(λs) = λ²·P(s)` and every element of `GF(256)` is a square, so
-    the answer to `Sign_k(μ·Com(x*))`, `μ ∉ {0, 1}`, multiplied by `√(μ^{−1})`, is a preimage of
-    the unqueried `Com(x*)`. Read every use of CT-UF in this note as CT-UF^open.
-  - **The fix: use CT-UF^open,** where the adversary must also open every target it had signed.
-    Moussaka's `B₂` already extracts those openings, so Theorem 1 holds unchanged with CT-UF^open in
-    place of CT-UF. The repaired Lemma U is tight from OMPR (`uov-assumptions.md`).
-- **Plain UOV problem.** Reducing CT-UF to the plain UOV problem (`P`, one random target, no oracle)
-  needs the hash-and-sign-with-retry signing simulation. The naive simulator ("sample `s`, program
-  `Com(x) := P(s)`") differs from real signing by `Pr[L_v singular] ≈ 1/255` per signing query,
-  because real preimages never have a "bad" vinegar. A tight argument needs the refined analysis of
-  the UOV specification or of Kosuge–Xagawa's probabilistic hash-and-sign with retry. That
-  analysis is **not re-derived here**, so the main theorems are stated under CT-UF.
+  - `Sign` is the real, deterministic `DerivePreimage`.
+- **CT-UF^open (chosen-target unforgeability on `Com`-images, with openings), `K` keys.**
+  - `A` gets `P_1..P_K` and oracles `Sign_1..Sign_K` on arbitrary targets.
+  - It wins if it outputs `(k, x*, s*)` with `x* ∈ D`, `P_k(s*) = Com(x*)` and `Com(x*)` never
+    queried to any `Sign_j`, **and** an opening `x_t ∈ D` with `Com(x_t) = t` for every target `t`
+    it queried.
+  - `Adv^{ct-uf-open}_K ≤ K·Adv^{ct-uf-open}_1`: the reduction generates the other `K−1` keys itself.
+- **Lemma U (CT-UF^open from one-more-UOV; `uov-assumptions.md` §5.4, T4).** Model `Com` as a
+  random permutation with inverse access **in the standalone CT-UF^open game only**. This is
+  legitimate there, because that game contains no proof that evaluates `Com`'s circuit. With `q_f`
+  forward, `q_i` inverse and `q_S` `Sign` queries,
+
+      Adv^{ct-uf-open}_1(A) ≤ Adv^{ompr}(B; q_f + q_S + 1, q_S)
+                             + q_i·2^{−223.9} + q_S·(q_f + q_S + 1)·2^{−359.9} + (q_f + q_S + 1)²·2^{−800}.
+
+  - *Proof idea.* Answer each fresh forward query on `x ∈ D` with `y_j ‖ z`, for the next challenge
+    target `y_j` and a uniform 440-bit `z`; forward `Sign` queries to the one-more oracle. Because
+    every signed target comes with an opening, it was a challenge target when it was signed, except
+    in the middle bad event. The forgery is a preimage of a fresh challenge, so the reduction has
+    `q_S + 1` preimages after `q_S` calls. The full proof is in `uov-assumptions.md` §5.4.
+  - The bound is tight: no loss beyond the bad events.
+- **Why not plain CT-UF (no openings).** An earlier version of this note used CT-UF, with a signing
+  oracle on arbitrary targets and freshness "`Com(x*)` was never queried", as a weaker intermediate
+  assumption. That was a mistake:
+  - **CT-UF is false for UOV** (`uov-open-reductions.md` Theorem B1; Lean `ctuf_scaling_attack`,
+    `ctuf_pqov_broken`). The public map is homogeneous quadratic, `P(λs) = λ²·P(s)`, and every
+    element of `GF(256)` is a square (`√μ = μ^{128}`). So the answer to `Sign_k(μ·Com(x*))`,
+    `μ ∉ {0, 1}`, multiplied by `(μ^{−1})^{128}`, is a preimage of the unqueried `Com(x*)`.
+  - The old Lemma U (CT-UF from one-more-UOV) was therefore wrong. Its last step counted a `Sign`
+    query on a non-challenge target as a challenge preimage (`uov-assumptions.md` §5.4).
+  - The protocol is not affected: an Anchor signs `t` only after verifying a proof of knowledge of an
+    opening, and the reduction extracts it. The draft's own assumption, one-more-UOV, was never
+    affected. The scaling symmetry matters only for a key that signs raw targets, e.g. a key shared
+    with PomFRIT (F1).
+- **Plain UOV problem.** One-more-UOV is not expected to follow from the plain UOV problem
+  (`uov-open-structure.md` Part A: no key-preserving black-box reduction). From GPI and OW instead,
+  `Adv^{ct-uf-open}_1 ≤ Adv^{gpi}(q_f + q_S + 1) + (q_f + q_S + 1)·Adv^{ow} + …` (`uov-assumptions.md`
+  §5.4), with loss `q`. The main theorems are stated under CT-UF^open, hence under one-more-UOV.
 
 ---
 
@@ -317,18 +322,19 @@ MoLE's security goal (architecture draft, "Security Goals"):
 **Theorem 1.** For every classical `A`,
 
 ```
-Adv^omuf(A) ≤ ε_ext^iss + ε_ext^red + ε_dig + Adv^bind_Com(B₁) + K·Adv^ct-uf_{UOV,Com,1}(B₂).
+Adv^omuf(A) ≤ ε_ext^iss + ε_ext^red + ε_dig + Adv^bind_Com(B₁) + K·Adv^{ct-uf-open}_{UOV,Com,1}(B₂).
 ```
 
 - `B₁` and `B₂` run `A` once, plus `E` on every accepted proof at the end (straight-line).
 - `B₂` makes exactly as many `Sign` queries as `A` makes accepted `Issue` queries.
 
-With Lemma U, `K·Adv^ct-uf ≤ K·(Adv^om-uov + q/2^{223.9} + q²/2^{360})`.
+With Lemma U, `K·Adv^{ct-uf-open} ≤ K·(Adv^{ompr} + q_i·2^{−223.9} + q²·2^{−359.9} + q²·2^{−800})` (§3.3).
 
 *Proof.*
-1. **Simulation.** `B₂` gets CT-UF keys and oracles. It answers `Issue(k, (t, π), ctx)` by verifying
+1. **Simulation.** `B₂` gets CT-UF^open keys and oracles. It answers `Issue(k, (t, π), ctx)` by verifying
    `π` (public) and returning `Sign_k(t)`. This equals `DerivePreimage(sk_k, t)`, so the
-   simulation is perfect. No extraction is needed during the run. `Redeem` is public verification.
+   simulation is perfect. No extraction is needed during the run; `B₂` extracts the openings of the
+   issuance proofs after it. `Redeem` is public verification.
 2. **Extraction.** At the end, run `E` on every accepted issuance proof and every accepted
    redemption proof (§3.1 simultaneity). Outside an event of probability
    `ε_ext^iss + ε_ext^red + ε_dig`:
@@ -346,7 +352,8 @@ With Lemma U, `K·Adv^ct-uf ≤ K·(Adv^om-uov + q/2^{223.9} + q²/2^{360})`.
    - If `t_j ∈ L_{ctx'}` for some `ctx' ≠ ctx_iss*`, then `x_j` (context `ctx_iss*`) and the
      extracted `x_q` (context `ctx'`) collide, which is case 3. So `t_j` was never submitted to any
      `Sign_k`.
-   - `B₂` outputs `(S_j[u_j], x_j, s_j)`, a CT-UF forgery. ∎
+   - `B₂` outputs `(S_j[u_j], x_j, s_j)`, together with the extracted opening `x_q` of every target
+     `t_q` it had signed (they exist on the good event of steps 2–3), a CT-UF^open forgery. ∎
 
 **Status: [Lean]** (`lean/VoleMole/ROM/MoussakaOMUF.lean`, `ROM/VerifyIC.lean`,
 `Protocols/Moussaka.lean`). Game OMUF on the executable spec, in the random-oracle and
@@ -374,7 +381,7 @@ ideal-cipher model of `lean/VoleMole/ROM/` (SHAKE a random oracle, AES's rows un
   queries (`55292` for an issuance proof, `69116` for a redemption proof).
 - *The reduction* (`omuf_le`). The provers `P^iss_j`, `P^red_j` are the whole game with its
   `j`-th proof as output. Per table, a win in which every accepted proof is extracted gives a
-  `Com` collision among the extracted openings or a CT-UF forgery (`win_imp`; the deterministic
+  `Com` collision among the extracted openings or a CT-UF^open forgery (`win_imp`; the deterministic
   steps 3–4 are `Moussaka.collision_or_forgery`, through `exists_unsigned_of_card_lt`). A union
   bound across the games on one table (`prEvent_bind_le_sum4_of_table`, `ROM/ExtractReduce.lean`)
   gives
@@ -413,10 +420,10 @@ ideal-cipher model of `lean/VoleMole/ROM/` (SHAKE a random oracle, AES's rows un
 - *Differences from the paper bound.* (1) `qI·ε_I + qR·ε_R` in place of `ε_ext^iss + ε_ext^red`:
   the union bound charges every proof separately, where the paper extracts all proofs of a run at
   once (§3.1, "simultaneous"; L8 §9.1–9.2), which is not mechanized. Each `ε` is a sum of
-  per-query terms, so this costs a factor `qI` or `qR`. (2) `Adv^ct-uf` for `K` keys, not
-  `K·Adv^ct-uf_1` (the guessing step needs key generation; paper). (3) `Com` binding and CT-UF stay
-  assumptions (§3.2, §3.3; on the good event every signed target has an extracted opening, so
-  `B₂` is also a CT-UF^open adversary). No step of the paper proof was found wrong.
+  per-query terms, so this costs a factor `qI` or `qR`. (2) `Adv^ct-uf-open` for `K` keys, not
+  `K·Adv^ct-uf-open_1` (the guessing step needs key generation; paper). (3) `Com` binding and
+  CT-UF^open stay assumptions (§3.2, §3.3); `omuf_le_num` names the term `AdvCTUF(B₂)`, and
+  `omuf_le_num_open` shows it is a CT-UF^open advantage. No step of the paper proof was found wrong.
 
 **Remarks.**
 - *Counting refinement.* The same argument bounds, for each `(ctx_iss, ctx_red)`, the accepted
@@ -500,13 +507,14 @@ The last condition excludes F2, where `A` uses its own, separately signed commit
 **Theorem 3.** For `U` honest tokens,
 
 ```
-Pr[A wins NM] ≤ ε_SE^red + ε_dig + Adv^bind_Com + K·Adv^ct-uf + U·Adv^ow-r_Com + ε_hop,
+Pr[A wins NM] ≤ ε_SE^red + ε_dig + Adv^bind_Com + K·Adv^{ct-uf-open} + U·Adv^ow-r_Com + ε_hop,
 ```
 
 where `ε_hop` is the cost of replacing the honest proofs by simulated ones (§6, `ε_ZK^joint`).
 Moreover:
-- if the extracted commitment `t' ≠ t_h`, and `t'` was not signed, this is a CT-UF forgery (the
-  `K·Adv^ct-uf` term);
+- if the extracted commitment `t' ≠ t_h`, and `t'` was not signed, this is a CT-UF^open forgery (the
+  `K·Adv^{ct-uf-open}` term; the reduction knows the openings of the honest Clients' targets, and
+  extracts the adversary's);
 - if `t'` was signed, it was submitted by `A` itself, which is F2 and is accounted for by Theorem 1.
 
 *Proof.*
@@ -852,8 +860,8 @@ MoLE needs **security** (unforgeability) only against pre-CRQC attackers. It nee
 against a future CRQC that analyses recorded transcripts.
 
 **Unforgeability in the QROM** (not required by MoLE):
-- The structure of Theorem 1 survives. `B₂` needs no mid-run extraction, because the CT-UF oracle
-  takes targets. All extraction happens after the run.
+- The structure of Theorem 1 survives. `B₂` needs no mid-run extraction, because the CT-UF^open oracle
+  takes targets and the openings are output at the end. All extraction happens after the run.
 - What changes:
   - `ε_ext^R` becomes Q2's Theorem 7.1: `Σ² + ε_multi + ε_rec`, with leading term
     `≈ 200·q²·2^{−128}`. This is `2^{−60}` at `q = 2^{30}` and vacuous at `2^{64}`.
@@ -867,8 +875,8 @@ against a future CRQC that analyses recorded transcripts.
     - binding `≲ q³/2^{360}` (BHT) `+ q²/2^{224}` (Grover on the inverse, `2^{112}` work);
     - one-wayness and hiding in `r`: `≲ q²/2^{128}`, a `2^{64}` Grover search.
   - Lemma U needs programming a quantum random *permutation* with inverse access. There is no
-    general tool for this, so the link from CT-UF to one-more-UOV is heuristic. Quantum CT-UF is a
-    standalone assumption.
+    general tool for this, so the link from CT-UF^open to one-more-UOV is classical only. Quantum
+    CT-UF^open is a standalone assumption.
 
 **Privacy against a CRQC:**
 - ZK against quantum distinguishers (QROM programming of H₂³ and H₅) is proved on paper in
@@ -928,8 +936,8 @@ against a future CRQC that analyses recorded transcripts.
   `KP800(x)|₃₆₀ = t` for the *real* permutation. So the programmed values do not match what is
   proved.
 - §4 repairs this:
-  - first reduce to the standalone assumptions CT-UF and binding, using only the extractor;
-  - then idealise `Com` only inside the CT-UF game (Lemma U).
+  - first reduce to the standalone assumptions CT-UF^open and binding, using only the extractor;
+  - then idealise `Com` only inside the CT-UF^open game (Lemma U).
 - The draft's earlier "tagged `c ‖ x`" discussion has the same issue.
 
 **F4 — Privacy margins (informational).**
@@ -1018,8 +1026,9 @@ the fix column describes `d5def9c`, where Moussaka used the rows (and what dropp
 1. Lemma DS (application vs proof-system hash disjointness) is proved on paper, with the
    separation table checked in Lean (`lean/docs/security/domain-separation.md`,
    `Protocols/DomainSeparation.lean`); SHAKE as a random oracle remains the modelling step.
-2. CT-UF → plain UOV problem: the signing simulation with retry (§3.3) is not re-derived. The
-   theorems rest on CT-UF, or on one-more-UOV via the heuristic Lemma U, as the draft does.
+2. One-more-UOV → plain UOV problem: not expected (`uov-open-structure.md` Part A: no
+   key-preserving black-box reduction). The theorems rest on one-more-UOV through CT-UF^open and
+   Lemma U (§3.3), as the draft does, or on GPI and OW with loss `q`.
 3. `Com`'s binding, one-wayness and hiding are assumptions about 12-round Keccak-p[800]. Only
    generic estimates are given.
 4. QROM: Theorem 3 has no quantum version (QROM SE is Q5, not applied here); ZK is on paper only
@@ -1074,9 +1083,9 @@ the fix column describes `d5def9c`, where Moussaka used the rows (and what dropp
      non-colluding games.
 6. Whether lean/docs/zk.md's `Pred` product can be made additive on `main`. It is moot with the fix.
 7. Unforgeability in Lean (§4 "Status"). Theorem 1 is mechanized in the ROM and ideal-cipher
-   model on the spec (`omuf_le_num`). What remains: `Com` binding and CT-UF as assumptions (items
-   2, 3); the simultaneous extraction of all proofs of a run (the Lean bound pays `qI·ε_I + qR·ε_R`
-   by a union bound); the `K·Adv^ct-uf_1` guessing step; `ε_dig` as a probability over key
+   model on the spec (`omuf_le_num`). What remains: `Com` binding and CT-UF^open as assumptions
+   (items 2, 3; the step CT-UF^open ⇐ one-more-UOV is paper); the simultaneous extraction of all proofs of a run (the Lean bound pays `qI·ε_I + qR·ε_R`
+   by a union bound); the `K·Adv^{ct-uf-open}_1` guessing step; `ε_dig` as a probability over key
    generation (a condition on the keys in Lean); AES as random permutations (the `_perm`
    soundness theorems exist, but `verifyIC` is written for the cipher as uniform functions).
    Corollary 2 is not stated separately, and Theorem 3 (non-malleability) is paper only (§5.3
