@@ -143,4 +143,86 @@ def blindAdv (B : PK → ProbComp (OracleComp (specB AR X' Hn' G S) (List (X' ×
     let f ← simulateQ liftV (cl.post pk κ (claimed z))
     pure ((claimed z).map fun e => (e.1, e.2.2.2.2), f)
 
+/-! ## The forger against the challenger (`red` of `OneMore`), collapsed -/
+
+section Comb
+
+set_option linter.unusedSectionVars false
+
+variable (pre : G → S) (pk : PK) (κ : Cn)
+
+/-- The state of the forger run by `red` against the challenger. -/
+abbrev CSt {DR DC : Type} (AR : DR → Type) (AC : DC → Type) (X' X G Hn' St : Type) :=
+  BSt X G Hn' St X' × ((X → Option (G × G)) × Ch (WA AR AC) X G G)
+
+/-- The forger, `red` and the challenger as one handler. -/
+def bcomb : QueryImpl (specB AR X' Hn' G S) (StateT (CSt AR AC X' X G Hn' St) ProbComp) :=
+  fun q => StateT.mk fun s => (fun r => (r.1.1, (r.1.2, r.2))) <$>
+    (simulateQ (combImpl addHint pre) ((blindImpl cl n pk κ q).run s.1)).run s.2
+
+theorem collapseB {α : Type} (oa : OracleComp (specB AR X' Hn' G S) α) (s : BSt X G Hn' St X')
+    (c : (X → Option (G × G)) × Ch (WA AR AC) X G G) :
+    (simulateQ (combImpl addHint pre) ((simulateQ (blindImpl cl n pk κ) oa).run s)).run c =
+      (fun r => ((r.1, r.2.1), r.2.2)) <$> (simulateQ (bcomb cl n pre pk κ) oa).run (s, c) := by
+  refine simulateQ_StateT_StateT_compose _ _ _ (fun q s c => ?_) oa s c
+  show _ = _ <$> ((fun r : (_ × _) × _ => (r.1.1, (r.1.2, r.2))) <$> _)
+  rw [Functor.map_map]
+  exact (id_map _).symm
+
+/-- `B`'s part of the composed world's cache. -/
+def resL (c : (specR (WA AR AC)).QueryCache) : (specR AR).QueryCache :=
+  QueryCache.ofFn fun d => c (.inl d)
+
+lemma resL_cacheQuery_inl (c : (specR (WA AR AC)).QueryCache) (d : DR) (u : AR d) :
+    resL (c.cacheQuery (.inl d) u) = (resL c).cacheQuery d u := by
+  refine QueryCache.ext fun d' => ?_
+  show (c.cacheQuery (.inl d) u) (.inl d') = ((resL c).cacheQuery d u) d'
+  by_cases h : d' = d
+  · subst h
+    erw [QueryCache.cacheQuery_self, QueryCache.cacheQuery_self]
+    rfl
+  · show Function.update c.toFn (.inl d) (some u) (.inl d') =
+      Function.update (resL c).toFn d (some u) d'
+    rw [Function.update_of_ne (by simpa using h), Function.update_of_ne h]
+    rfl
+
+lemma resL_cacheQuery_inr (c : (specR (WA AR AC)).QueryCache) (d : DC) (u : AC d) :
+    resL (c.cacheQuery (.inr d) u) = resL c := by
+  refine QueryCache.ext fun d' => ?_
+  show Function.update c.toFn (.inr d) (some u) (.inl d') = c (.inl d')
+  rw [Function.update_of_ne (by simp)]
+
+/-- **`B`'s world in the composed world is `B`'s world**: a query at `inl d`, restricted to `B`'s
+part of the cache. -/
+lemma roL (c : (specR (WA AR AC)).QueryCache) (d : DR) :
+    (fun r => (r.1, resL r.2)) <$> ((specR (WA AR AC)).randomOracle (.inl d)).run c =
+      (((specR AR).randomOracle d).run (resL c) : ProbComp (AR d × (specR AR).QueryCache)) := by
+  rw [randomOracle.run_eq, randomOracle.run_eq]
+  have h' : (resL c) d = c (.inl d) := rfl
+  rw [h']
+  cases h : c (.inl d) with
+  | some u => simp
+  | none =>
+    simp only [map_bind, map_pure]
+    show ($ᵗ (AR d)) >>= (fun a => pure (a, resL (c.cacheQuery (Sum.inl d) a))) = _
+    congr 1
+    funext a
+    rw [resL_cacheQuery_inl]
+
+/-- The client's oracle leaves `B`'s part of the cache alone. -/
+lemma roR_resL (c : (specR (WA AR AC)).QueryCache) (d : DC) :
+    ∀ z ∈ support (((specR (WA AR AC)).randomOracle (.inr d)).run c), resL z.2 = resL c := by
+  intro z hz
+  rw [randomOracle.run_eq] at hz
+  cases h : c (.inr d) with
+  | some u =>
+    simp only [h, support_pure, Set.mem_singleton_iff] at hz
+    rw [hz]
+  | none =>
+    simp only [h, mem_support_bind_iff, support_pure, Set.mem_singleton_iff] at hz
+    obtain ⟨u, -, rfl⟩ := hz
+    exact resL_cacheQuery_inr c d u
+
+end Comb
+
 end VoleMole.Assumptions.Blind
