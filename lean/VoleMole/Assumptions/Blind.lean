@@ -223,6 +223,82 @@ lemma roR_resL (c : (specR (WA AR AC)).QueryCache) (d : DC) :
     obtain ⟨u, -, rfl⟩ := hz
     exact resL_cacheQuery_inr c d u
 
+/-! ### The steps -/
+
+lemma bcomb_inl (d : DR) (w : CSt AR AC X' X G Hn' St) :
+    (bcomb cl n pre pk κ (.inl d)).run w =
+      ((fun r => ((r.1 : AR d), (w.1, (w.2.1, r.2)))) <$>
+        (roStep (Sum.inl d) w.2.2 : ProbComp (AR d × Ch (WA AR AC) X G G)) :
+        ProbComp ((specB AR X' Hn' G S).Range (.inl d) × CSt AR AC X' X G Hn' St)) := by
+  simp only [bcomb, blindImpl, StateT.run_mk]
+  erw [simulateQ_map, simulateQ_spec_query, StateT.run_map, comb_inl]
+  simp only [realImpl, StateT.run_mk]
+  erw [Functor.map_map, Functor.map_map]
+
+lemma bcomb_iss (t : G) (w : CSt AR AC X' X G Hn' St) :
+    (bcomb cl n pre pk κ (.inr (.inr t))).run w =
+      pure (pre t, (w.1, (w.2.1, { w.2.2 with iq := w.2.2.iq + 1 }))) := by
+  simp only [bcomb, blindImpl, StateT.run_mk]
+  erw [simulateQ_map, simulateQ_spec_query, StateT.run_map, comb_iss]
+  simp [realImpl]
+
+lemma bcomb_stop (x' : X') (hB : Hn') (w : CSt AR AC X' X G Hn' St) (hk : ¬ w.1.k < n) :
+    (bcomb cl n pre pk κ (.inr (.inl (x', hB)))).run w = pure (none, w) := by
+  simp [bcomb, blindImpl, hk]
+
+/-- The client's first phase, run against `red` and the challenger. -/
+def startRun (w : CSt AR AC X' X G Hn' St) :
+    ProbComp ((X × G × St) × ((X → Option (G × G)) × Ch (WA AR AC) X G G)) :=
+  (simulateQ (combImpl addHint pre ∘ₛ (liftC (AR := AR) (X := X) (G := G) (S := S)))
+    (cl.start pk κ w.1.k)).run w.2
+
+lemma bcomb_serve (x' : X') (hB : Hn') (w : CSt AR AC X' X G Hn' St) (hk : w.1.k < n) :
+    (bcomb cl n pre pk κ (.inr (.inl (x', hB)))).run w =
+      (startRun cl pre pk κ w >>= fun op =>
+        (combImpl (S := S) addHint pre (.inr (.inl (op.1.1, op.1.2.1)))).run op.2 >>= fun ap =>
+          pure (some (ap.1.1 + op.1.2.1),
+            (BSt.mk (w.1.k + 1) (Function.update w.1.ses x'
+              (some (Ses.mk w.1.k op.1.1 op.1.2.1 op.1.2.2 ap.1.1 hB))), ap.2))) := by
+  simp only [bcomb, blindImpl, hk, ite_true, StateT.run_mk, startRun]
+  rw [simulateQ_bind, StateT.run_bind, ← QueryImpl.simulateQ_compose, map_bind]
+  refine bind_congr fun op => ?_
+  rw [simulateQ_bind, StateT.run_bind, map_bind]
+  erw [simulateQ_spec_query]
+  refine bind_congr fun ap => ?_
+  simp
+
+lemma comb_fresh' (x : X) (h : G) (p : (X → Option (G × G)) × Ch (WA AR AC) X G G)
+    (hx : p.1 x = none) (t : G) (r : List G) (hr : p.2.rest = t :: r) :
+    (combImpl (S := S) addHint pre (.inr (.inl (x, h)))).run p =
+      pure ((t - h, h), (Function.update p.1 x (some (t - h, h)),
+        ⟨p.2.ro, r, Function.update p.2.tg x (some (t, h)), p.2.iq⟩)) := by
+  simp [combImpl, redImpl, hx]
+  erw [simulateQ_spec_query]
+  simp [chImpl, hr, addHint, sub_eq_add_neg]
+
+/-- **The client's first phase changes only its own oracle's cache**, and outputs a value of
+`start`. -/
+lemma startRun_supp (w : CSt AR AC X' X G Hn' St) (z) (hz : z ∈ support (startRun cl pre pk κ w)) :
+    z.1 ∈ support (cl.start pk κ w.1.k) ∧ z.2.1 = w.2.1 ∧ z.2.2.rest = w.2.2.rest ∧
+      z.2.2.tg = w.2.2.tg ∧ z.2.2.iq = w.2.2.iq ∧ resL z.2.2.ro = resL w.2.2.ro := by
+  refine ⟨support_simulateQ_run'_subset (combImpl (S := S) addHint pre ∘ₛ
+      (liftC (AR := AR) (X := X) (G := G) (S := S))) (cl.start pk κ w.1.k) w.2 (by
+    rw [StateT.run'_eq, support_map]; exact ⟨z, hz, rfl⟩), ?_⟩
+  let I : (X → Option (G × G)) × Ch (WA AR AC) X G G → Prop := fun q =>
+    q.1 = w.2.1 ∧ q.2.rest = w.2.2.rest ∧ q.2.tg = w.2.2.tg ∧ q.2.iq = w.2.2.iq ∧
+      resL q.2.ro = resL w.2.2.ro
+  have hI : QueryImpl.PreservesInv (combImpl (S := S) addHint pre ∘ₛ
+      (liftC (AR := AR) (X := X) (G := G) (S := S))) I := by
+    intro d q hq y hy
+    simp only [QueryImpl.apply_compose, liftC] at hy
+    erw [simulateQ_spec_query, comb_inl] at hy
+    have hy' : y ∈ support ((fun r => (r.1, (q.1, r.2))) <$>
+        roStep (AR := WA AR AC) (X := X) (Hn := G) (G := G) (Sum.inr d) q.2) := hy
+    simp only [roStep, Functor.map_map, support_map, Set.mem_image] at hy'
+    obtain ⟨r, hr, rfl⟩ := hy'
+    exact ⟨hq.1, hq.2.1, hq.2.2.1, hq.2.2.2.1, (roR_resL _ d r hr).trans hq.2.2.2.2⟩
+  exact simulateQ_run_preservesInv _ I hI _ w.2 ⟨rfl, rfl, rfl, rfl, rfl⟩ z hz
+
 end Comb
 
 end VoleMole.Assumptions.Blind
