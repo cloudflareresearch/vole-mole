@@ -183,6 +183,17 @@ theorem gameA_out (T : CrtTables) (stF : ι → Statement) (P : OracleComp specI
       evalWithAnswerFn_proverIC]
     exact @evalWithAnswerFn_verifyQ (VoleMole.ZK.Sim.icPrg E.cipher) g T _ _
 
+
+/-- **Per table, the adaptive game depends on the prover only through its output and its log.** -/
+theorem gameA_congr (T : CrtTables) (stF : ι → Statement)
+    {P P' : OracleComp specIC (ByteArray × (ι × β))} (E : CTable) (g : Table)
+    (heval : evalWithAnswerFn (QueryImpl.ofFn (join g E)) P =
+      evalWithAnswerFn (QueryImpl.ofFn (join g E)) P')
+    (hlog : tableQueryLog P (join g E) = tableQueryLog P' (join g E)) :
+    evalWithAnswerFn (QueryImpl.ofFn g) (gameA T stF P E) =
+      evalWithAnswerFn (QueryImpl.ofFn g) (gameA T stF P' E) := by
+  simp only [gameA, proverA, evalWithAnswerFn_bind, evalWithAnswerFn_runE, heval, hlog]
+
 variable [HasPrg]
 
 open Classical in
@@ -386,6 +397,47 @@ theorem isQueryBoundP_proverAt {ι β : Type} (p : DomIC → Prop) [DecidablePre
   unfold proverAt
   exact isQueryBoundP_bind (isQueryBoundP_roundsM A serve p hA hS j _) fun x _ =>
     isQueryBoundP_bind (hA x.1) fun b _ => isQueryBoundP_pure p _ 0
+
+/-- **The `j`-th prover against two honest parties** whose calls make the same queries
+(`hlog`, e.g. the same verification with different signers): if the adversary's states agree in
+the two runs up to call `j`, the two provers have the same output and the same log. -/
+theorem proverAt_congr {ι β : Type} (serve' : W → Q → OracleComp specIC (R × W))
+    (f : (d : DomIC) → AnsIC d) (nextT : S → Q × S) (serveT serveT' : W → Q → R × W)
+    (hn : ∀ s, evalWithAnswerFn (QueryImpl.ofFn f) (A.next s) = nextT s)
+    (hs : ∀ w q, evalWithAnswerFn (QueryImpl.ofFn f) (serve w q) = serveT w q)
+    (hs' : ∀ w q, evalWithAnswerFn (QueryImpl.ofFn f) (serve' w q) = serveT' w q)
+    (hlog : ∀ w w' q, tableQueryLog (serve w q) f = tableQueryLog (serve' w' q) f)
+    (w₀ : W) (pick : Q → ByteArray × (ι × β)) (j : ℕ)
+    (hst : ∀ k ≤ j, (roundsT nextT serveT A.recv k (A.init, w₀, [])).1 =
+      (roundsT nextT serveT' A.recv k (A.init, w₀, [])).1) :
+    evalWithAnswerFn (QueryImpl.ofFn f) (proverAt A serve w₀ pick j) =
+        evalWithAnswerFn (QueryImpl.ofFn f) (proverAt A serve' w₀ pick j) ∧
+      tableQueryLog (proverAt A serve w₀ pick j) f =
+        tableQueryLog (proverAt A serve' w₀ pick j) f := by
+  have hround : ∀ (srv : W → Q → OracleComp specIC (R × W)) (y : S × W × List (Q × R)),
+      tableQueryLog (roundM A.next srv A.recv y) f =
+        tableQueryLog (A.next y.1) f ++ tableQueryLog (srv y.2.1 (nextT y.1).1) f := by
+    intro srv y
+    simp only [roundM, tableQueryLog_bind, hn, tableQueryLog_pure, List.append_nil]
+  have hr : ∀ n ≤ j, tableQueryLog (roundsM A.next serve A.recv n (A.init, w₀, [])) f =
+      tableQueryLog (roundsM A.next serve' A.recv n (A.init, w₀, [])) f := by
+    intro n
+    induction n with
+    | zero => intro _; rfl
+    | succ n ih =>
+      intro hnj
+      simp only [roundsM]
+      rw [tableQueryLog_bind, tableQueryLog_bind, ih (Nat.le_of_succ_le hnj),
+        evalWithAnswerFn_roundsM _ _ _ _ nextT serveT hn hs,
+        evalWithAnswerFn_roundsM _ _ _ _ nextT serveT' hn hs', hround, hround,
+        hst n (Nat.le_of_succ_le hnj), hlog]
+  rw [evalWithAnswerFn_proverAt A serve (QueryImpl.ofFn f) nextT serveT hn hs,
+    evalWithAnswerFn_proverAt A serve' (QueryImpl.ofFn f) nextT serveT' hn hs', hst j le_rfl]
+  refine ⟨rfl, ?_⟩
+  simp only [proverAt, tableQueryLog_bind, tableQueryLog_pure, List.append_nil]
+  rw [hr j le_rfl, evalWithAnswerFn_roundsM (QueryImpl.ofFn f) A.next serve A.recv nextT serveT hn hs,
+    evalWithAnswerFn_roundsM (QueryImpl.ofFn f) A.next serve' A.recv nextT serveT' hn hs',
+    hst j le_rfl]
 
 end Rounds
 
