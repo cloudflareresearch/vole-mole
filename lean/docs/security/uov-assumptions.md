@@ -42,6 +42,7 @@ checkout `subprojects/pqov` (revision `fac2ec1`, UOV round-3 code, with
 | T5 | With R1, Ratatouille balance ⇐ EUF-CMA of salted UOV with `H = Tag`, which ⇐ GPI + UOV (or ⇐ UOV alone with salt-UOV signing) | `q_K + 1` | §5.5 |
 | T6 | **PomFRIT ⇔ OMPR**: an OMPR breaker *is* a PomFRIT one-more forger. So OMPR ≤ PomFRIT ≤ OMPR⊕17 | tight | §5.6 |
 | P7 | OMPR is not expected to reduce to the UOV problem (meta-reduction sketch); determinism doesn't change that | — | §5.7 |
+| O | **Follow-up (`uov-open-reductions.md`).** CT-UF as defined is **false**: `P(λs) = λ²P(s)`, so one query on `μ·Com(x*)` forges. Its repair up to scalars equals "OMPR with free non-challenge calls", which no relativizing reduction derives from OMPR. For OMPR ⇒ OMPR⊕τ, every relativizing reduction, with rewinding, loses `≥ τ^{q+1}/2` | — | `uov-open-reductions.md` |
 | P8 | OMPR⊕τ ⇐ OMPR loses `τ^{q+1}`. Every *simple-embedding* reduction loses that much against some adversary. In a generic model the two assumptions have the same bound. For PomFRIT's tree shapes, U1's additive `Q₃·2^{−71}` (≈ `2^{−7}` at `2^{64}` queries) is unavoidable for simple-embedding reductions | — | §6 |
 | P9 | UF-Tag+probe ≡ UF-Tag up to the aborts of `D` on signed or probed pairs; so UF-Tag+probe ⇐ A-OMPI ⇐ OMPR with no extra oracle calls. The probe and the paper's abort event `E4` cost the same in Ratatouille's balance; R1 does not change this, the F5 fix removes the probe | `(q_S + q_P)·E[δ^{255}] + q_v·2^{−256}` (≈ `N·2^{−295.8}`) | §5.8 |
 
@@ -234,6 +235,9 @@ All games are for one key `(sk, pk) ← KeyGen` unless `K` is given. `D = D_sk` 
 10. **CT-UF_K** (`moussaka.md` §3.3). `A` gets `P_1..P_K` and `Sign_k = D_{sk_k}` on **arbitrary**
     targets. It wins with `(k, x*, s*)`, where `x* ∈ D_Com`, `P_k(s*) = Com(x*)`, and `Com(x*)`
     was never queried to any `Sign_j`.
+    - **False as stated** (`uov-open-reductions.md` Theorem B1): `P` is homogeneous of degree 2, so
+      the answer to `Sign_k(μ·Com(x*))`, `μ ∉ {0,1}`, rescaled, is a forgery. Use CT-UF^open
+      (item 11), which is not affected.
 11. **CT-UF^open_K** (new). This is CT-UF_K, except that `A` must also output, for every target `t`
     it queried to `Sign_k`, an opening `x_t ∈ D_Com` with `Com(x_t) = t`. Otherwise it loses.
 12. **UF-Tag** (`ratatouille.md` §2.3). The oracle takes `(c, x)` and returns `D(Tag(c, x))`.
@@ -396,7 +400,11 @@ query was on a *challenge* target, i.e. on a programmed Com output.
 - There is no other way to answer `Sign(0)` without `sk`. So **CT-UF as defined is not shown to
   follow from OMPR**.
 - What Lemma U actually needs is an OMPR variant in which calls on non-challenge targets are free.
-  That is a different, unstudied assumption.
+  That is a different assumption.
+- **Follow-up (`uov-open-reductions.md` §2–§3).** CT-UF as defined is in fact false (one query on
+  a scalar multiple of the target). With freshness up to scalars it is equivalent to that
+  free-call variant, which no relativizing reduction derives from OMPR. The repair below is not
+  affected.
 
 **The repair: CT-UF^open.** Model `Com = KP800(·)|_{360}` on the structured domain `D_Com` (576 free
 input bits, 224 fixed), with `KP800` a random permutation with inverse access, **in the standalone
@@ -753,6 +761,8 @@ imported by `Privacy/PqovDelta.lean`.
 
 **Verdict on G1.**
 - OMPR ⇒ OMPR⊕17 is **open**. No tight black-box proof exists in the natural class (b, d).
+  `uov-open-reductions.md` §4 extends (b) to all reductions that are black-box in `(P, D)`, with
+  rewinding (loss `≥ τ^{q+1}/2`), and notes that (b) must allow embeddings `μ·t_j ⊕ c_k`.
 - There is no separation either, and the generic bound (c) is the same.
 - Keep U1, which is proved and loses at most `2^{−7}` at `2^{64}` queries, as the main statement.
   Cite U2 under the explicitly stronger OMPR⊕17.
@@ -859,8 +869,14 @@ hash-and-sign with retry [KX24]).
 
 - **GPI** is new. It needs cryptanalysis: is badness of `s` decidable from `pk`, or with a few
   samples?
-- **OMPR ⇒ OMPR⊕17** (§6), in either direction.
-- **CT-UF with arbitrary targets** versus OMPR: is the "free non-challenge calls" variant implied?
+- **OMPR ⇒ OMPR⊕17** (§6). Partly answered in `uov-open-reductions.md` §4: OMPR⊕τ ⇒ OMPR is
+  tight; the converse has no relativizing proof with loss below `τ^{q+1}/2`, even with rewinding;
+  the shift cannot be absorbed into the key. A proof that uses the algebra of `P`, and a
+  separation, both remain open.
+- **CT-UF with arbitrary targets** versus OMPR. Answered in `uov-open-reductions.md` §2–§3: CT-UF
+  as defined is false (scaling); up to scalars it *is* the "free non-challenge calls" variant,
+  which is not implied by OMPR for relativizing reductions, and is implied when the free calls do
+  not depend on the targets. Whether UOV satisfies the variant is open.
 - Turn the **meta-reduction** (§5.7) into a theorem, with a precise proviso.
 - **QROM** versions of T2–T5. This needs quantum programming of an invertible permutation for
   Com/Tag. The salted variants are the promising ones.
@@ -889,6 +905,8 @@ hash-and-sign with retry [KX24]).
 | `17^{−k} ≤ 16^{−k}` | `guess_loss` |
 | One-more counting; wasted calls | `one_more_count`, `wasted_calls` |
 | UF-Tag+probe ≤ UF-Tag of the probe-free forger + failures (P9(a)); failure event read off the total signer; union bound per table; `B` logs ≤ `N` pairs; Theorem 1 with a probe-free forger | `ufTagAdv_le_noProbe`, `failOut_iff_patch`, `pr_failOut_le`, `forger_logs_le`, `balance_le_noProbe` (in `ROM/RatatouilleProbe.lean`) |
+| Cores of `uov-open-reductions.md`: combiner forest, lottery accounting, the rewinding supermartingale inequality | `combiner_count`, `lottery_count`, `four_mul_le_pow`, `rewind_supermartingale` |
+| Scaling symmetry of `P` and the one-query CT-UF attack (`Spec/PqovScale.lean`) | `qmap_smul`, `sq_pow_128`, `scaled_preimage`, `ctuf_scaling_attack` |
 
 The probabilistic steps (Lemma D, the hybrid games, the ideal-permutation bookkeeping) are on paper.
 
