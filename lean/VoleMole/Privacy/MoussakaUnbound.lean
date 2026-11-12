@@ -26,7 +26,8 @@ unlinkability of redemptions across contexts. All redemptions happen only if:
 
 Otherwise every query is refused. The adversary's guess sees the issuance requests and all `n`
 redemption requests. The queries are chosen after issuance and before any redemption; adaptive
-redemption queries are not modelled (the note covers them by lazy sampling, on paper).
+redemption queries are `Privacy/MoussakaUnboundAd.lean` (`anonymityAd`), and the non-colluding
+Theorem U5(b) is `Privacy/MoussakaUnboundNC.lean`.
 
 **Assumptions.**
 * Zero knowledge of both unbound proof systems (`ZeroKnowledge` for `IssueRelW` and `RedeemRelW`,
