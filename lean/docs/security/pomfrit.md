@@ -418,6 +418,10 @@ exhaustion folded into the last term, `pomfrit_U1`, `pomfrit_U2`):
     Pr[PomWin] ≤ Adv^{ompr⊕τ}_{UOV}(B'; Q_T + ℓ + 1, ℓ) + Pr[∃ i ≤ ℓ, ShiftFail_i],
 
 for every first-phase rule `E₁` (a parameter, `e1`) and every shift rule (`sh`, truncated to `τ`).
+The first term is the standalone OMPR game of `Assumptions/UOV.lean` (`advOMPR`, labelled targets
+on demand; `pomfrit_U1_ompr`, `pomfrit_U2_omprShift` restate the theorems with it), and it is at
+most Def. 3.1's advantage, targets given up front, of an explicit adversary that pops them
+(`advOMPR_le_ompr31`).
 `PFail_i`: forgery `i` verifies, but its claim is not a preimage of `H_T(x_i) + E₁(x_i)`, with
 `H_T(x_i)` the oracle's value and `E₁(x_i)` the value at `x_i`'s *first* `H_T` query (the one the
 reduction programmed). The claim is the first candidate of the straight-line extractor's known

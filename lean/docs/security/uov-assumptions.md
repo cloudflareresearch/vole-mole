@@ -251,6 +251,12 @@ All games are for one key `(sk, pk) ← KeyGen` unless `K` is given. `D = D_sk` 
     `(c*, x*)` was answered: an unsigned, a probed-only, or a failed pair counts. Equivalent to
     UF-Tag up to `(q_S + q_P)·E[δ^{255}] + q_v·2^{−256}` (§5.8).
 
+**Lean.** Every item except 4 and 5 is a game in `lean/VoleMole/Assumptions/UOV.lean`, generic in
+`KeyGen`, the preimage relation of `P` and `D` (`Trapdoor`): `advUOV`, `advUOVn` (1), `advOW` (2),
+`advGPI` (3), `advFDH` (6), `advOMPR` and `advOMPR31` (7), `advOMPRShift` (8), `advOMPI` (9),
+`advCTUF` (10), `advCTUFOpen` (11), `advUFTag` and `advUFTagProbe` (12). The protocol theorems'
+terms are advantages in them (`Assumptions/UOVLinks.lean`). See §10.
+
 ## 4. The 1/255 obstacle, and what can fix it
 
 Every reduction to the UOV problem or OW must answer signing or preimage queries without `sk`.
@@ -926,6 +932,46 @@ hash-and-sign with retry [KX24]).
 | Scaling symmetry of `P` and the one-query CT-UF attack (`Spec/PqovScale.lean`) | `qmap_smul`, `sq_pow_128`, `scaled_preimage`, `ctuf_scaling_attack` |
 
 The probabilistic steps (Lemma D, the hybrid games, the ideal-permutation bookkeeping) are on paper.
+
+**The assumptions as games** (`lean/VoleMole/Assumptions/UOV.lean`, `UOVLinks.lean`; no `sorry`,
+no `axiom`). A *trapdoor* (`Trapdoor`) is a key generator, the preimage relation `IsPre pk s t`
+("`P(s) = t`") and the sampler `D`; every game is generic in it.
+
+| §3 item | Game | Notes |
+|---|---|---|
+| 1 | `advUOV`, `advUOVn` | `advUOVn_le_sum`: n-target ≤ Σᵢ single-target, by embedding at `i` (`embedAt`) |
+| 2, 3 | `advOW`, `advGPI` | GPI's good sampler `U(Good_sk)` is a parameter |
+| 6 | `advFDH` | lazy random oracle `H`, signer `D(H(m))`, budgets `q_H`, `q_S` |
+| 7 | `advOMPR` (= `OneMore.omExp` with `goodPre`: labelled targets on demand), `advOMPR31` (Def. 3.1 literally: all targets up front) | `advOMPR_le_ompr31`: on-demand ≤ Def. 3.1, for the popping adversary `popAdv` (a simulation, `comb31_eqd`) |
+| 8 | `advOMPRShift` (`omExp` with `goodShift τ`) | |
+| 9 | `advOMPI` | targets from a stream of `q_T`, index oracle, budget `Q` |
+| 10 | `advCTUF`, `advCTUFAt` | **false for UOV**: `ctuf_pqov_broken` (the rescaling forger `scaleForger` wins with probability 1, from `ctuf_scaling_attack`) |
+| — | `advCTUFXAt` (CT-UF^×, freshness up to a class; `uovCls`: nonzero scalars) | `advCTUFXAt_le`; the rescaling forger loses it (`not_ctxWin_scale`) |
+| 11 | `advCTUFOpen`, `advCTUFOpenAt` | `advCTUFOpenAt_le`: ≤ CT-UF |
+| 12 | `advUFTag`, `advUFTagProbe` (and `…At`) | `advUFTagAt_eq_probe`: a forger without probe is a probe forger |
+
+CT-UF and UF-Tag are *semantic-oracle* games (`SemForger`, the form of Ratatouille's
+`TagForger`): the forger gets the signer as a function, with a proof (`reads`) that its output
+depends on it only at the points it logs (and, for the probe, only on success there). Every
+oracle forger is one (`ofOracle`, same advantage); the converse is not proved. The
+trivial attacks lose each game (`not_wins_of_iq`, `not_ompiWin_of_opened`, `not_fdhWin_of_signed`,
+`not_ctWin_of_signed`, `not_ufWin_of_answered`). pqov's trapdoor (keys of
+`Privacy/PqovKeys.lean`, the reference `derive_preimage`) is correct (`Audit.pqovTrap_correct`).
+
+The protocol terms:
+- **Moussaka** (repairs Lemma U as §5.4 says): `omuf_le_num_open` is `omuf_le_num` with
+  `Adv^{ct-uf-open}_K` of the explicit forger `ctufForger` in place of `Pr[Forge]`. The forger runs
+  the OMUF game and all extractions with the signers as its oracle (it reads them only at the
+  accepted Issue queries, `game_congr`), outputs `Forge`'s forgery and an extracted opening of
+  every signed target. The openings may be missing only if an accepted issuance proof was not
+  extracted, which is already the term `BadI` (`win_imp_open`), so no term is added.
+- **Ratatouille**: `ufTagAdv` is the UF-Tag-with-probe advantage (`ufTagAdv_eq`);
+  `balance_le_ufTagProbe`.
+- **PomFRIT**: U1's and U2's experiment terms are `advOMPR` and `advOMPRShift τ` of
+  `pomTrap KG pre` by definition (`pomfrit_U1_ompr`, `pomfrit_U2_omprShift`), and U1's is at most
+  Def. 3.1's advantage of `popAdv` (`advOMPR_le_ompr31`; instantiated in `Audit/Nonvacuous.lean`).
+
+Not mechanized: the reductions between the games (T1–T6, P8), OMPR^free, and items 4 and 5.
 
 pqov's `derive_preimage` and its keys (§1–2): `Spec/PqovSigner.lean` (`signer_correct`,
 `signer_fail`, 255 attempts), `Spec/PqovKey.lean` (`sysCoef_eq_pqovS`, `qmap_vinVec_eq`,
