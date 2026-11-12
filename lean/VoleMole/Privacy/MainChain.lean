@@ -107,6 +107,12 @@ def Slot.mapObs {Y O Ω Ω' : Type} (A : Slot Y O Ω) (f : Ω → Ω') : Slot Y 
   run := A.run
   obs y k := f (A.obs y k)
 
+/-- The slot with another observation of its coins. -/
+def Slot.withObs {Y O Ω Ω' : Type} (A : Slot Y O Ω) (f : Option Y → A.K → Ω') : Slot Y O Ω' where
+  K := A.K
+  run := A.run
+  obs := f
+
 /-- **A game of four proofs in sequence**: each statement from the secret and the earlier
 outputs. -/
 structure Game (S O Y₁ Y₂ Y₃ Y₄ : Type) where
@@ -274,6 +280,20 @@ theorem pr_ev_mono (A₁ : Slot Y₁ O Ω₁) (A₂ : Slot Y₂ O Ω₂) (A₃ :
     (h : ∀ s o₁ o₂ o₃ o₄ ω₁ ω₂ ω₃ ω₄, Φ s o₁ o₂ o₃ o₄ ω₁ ω₂ ω₃ ω₄ → Ψ s o₁ o₂ o₃ o₄ ω₁ ω₂ ω₃ ω₄) :
     pr _ (ev G A₁ A₂ A₃ A₄ Φ) ≤ pr _ (ev G A₁ A₂ A₃ A₄ Ψ) :=
   pr_mono fun _ => h _ _ _ _ _ _ _ _ _
+
+omit [Nonempty S] in
+/-- **Changing what the event observes**: if the event `Φ` on the slots' observations implies `Ψ`
+on other observations of the same coins, the probability can only grow. -/
+theorem pr_ev_withObs_mono (A₁ : Slot Y₁ O Ω₁) (A₂ : Slot Y₂ O Ω₂) (A₃ : Slot Y₃ O Ω₃)
+    (A₄ : Slot Y₄ O Ω₄) {Ω₁' Ω₂' Ω₃' Ω₄' : Type} (f₁ : Option Y₁ → A₁.K → Ω₁')
+    (f₂ : Option Y₂ → A₂.K → Ω₂') (f₃ : Option Y₃ → A₃.K → Ω₃') (f₄ : Option Y₄ → A₄.K → Ω₄')
+    (Φ : Ev S O Ω₁ Ω₂ Ω₃ Ω₄) (Ψ : Ev S O Ω₁' Ω₂' Ω₃' Ω₄')
+    (h : ∀ s o₁ o₂ o₃ o₄ y₁ k₁ y₂ k₂ y₃ k₃ y₄ k₄,
+      Φ s o₁ o₂ o₃ o₄ (A₁.obs y₁ k₁) (A₂.obs y₂ k₂) (A₃.obs y₃ k₃) (A₄.obs y₄ k₄) →
+        Ψ s o₁ o₂ o₃ o₄ (f₁ y₁ k₁) (f₂ y₂ k₂) (f₃ y₃ k₃) (f₄ y₄ k₄)) :
+    pr _ (ev G A₁ A₂ A₃ A₄ Φ) ≤
+      pr _ (ev G (A₁.withObs f₁) (A₂.withObs f₂) (A₃.withObs f₃) (A₄.withObs f₄) Ψ) :=
+  pr_mono fun _ hx => h _ _ _ _ _ _ _ _ _ _ _ _ _ hx
 
 end Hop
 

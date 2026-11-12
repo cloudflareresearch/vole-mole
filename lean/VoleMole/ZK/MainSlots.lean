@@ -340,10 +340,9 @@ def cdOf (y : Option SW) (u : PadsU p) (z : Sib) :
   | some y => (corrB (withSib u z), dB y.2 (withSib u z))
 
 /-- The ideal slot with the predictor's observation. -/
-noncomputable def idealP (hm : MainP p) : Slot SW Out (PObs p) where
-  K := (mainH Hb T p hm).Coins
-  run := (mainH Hb T p hm).idealS.run
-  obs y k := (y, (k.2.2.2.1, k.2.2.1, k.2.2.2.2), (k.1.1, cdOf y k.1.2 k.2.1))
+noncomputable def idealP (hm : MainP p) : Slot SW Out (PObs p) :=
+  (mainH Hb T p hm).idealS.withObs fun y k =>
+    (y, (k.2.2.2.1, k.2.2.1, k.2.2.2.2), (k.1.1, cdOf y k.1.2 k.2.1))
 
 /-- The simulator's corrections and `d` (zero when no statement is proved). -/
 def cdSim (y : Option SW) (f : SimFields p) : Bytes (16 * p.correctionBytes) × Bytes p.witnessBytes :=
