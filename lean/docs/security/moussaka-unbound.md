@@ -154,7 +154,37 @@ end-to-end theorems `moussaka_unbound_issue_extract` and `moussaka_unbound_redee
 form of `EndToEnd/Relations.lean`: some known tree's candidate is a bit vector whose decoding
 satisfies the unbound relation, or at most 9 admissible `chall₃` are accepted;
 `moussaka_unbound_redeem_comb_bad` discharges the combination hypothesis except with probability
-`1/|F|`.
+`1/|F|` (`moussaka_unbound_redeem_comb_bad_gf128` at GF(2¹²⁸)).
+
+[Lean] The executable verifier and prover cover both unbound relations
+(`Verifier/Relations.lean`: `moussakaUnboundIssue`, `moussakaUnboundRedeem`; DSTs with version
+byte 1, the bound `hash_redeem_instance` for redemption, Moussaka's proof layout since both set
+`REUSE_CRT_WITNESS`). `lake exe verifier_vectors` accepts all 9 proofs of
+`tests/ihat/unbound_ihat_kat.txt` (3 issuances, 6 redemptions in two contexts each, up to 64
+Anchors), rejects 25 mutations (a flipped byte in each proof field; a changed `t`, `ctx_iss`, `nf`,
+`challenge_digest`, the token's other `ctx_red`; the issuance proof as a bound issuance), and
+compares the intermediate values of one proof per relation with the C++ (`verifier_kat.txt`).
+`lake exe prover_vectors` reproduces all 9 proofs byte for byte and checks the witnesses and `t`,
+`nf` against `Spec/MoussakaUnbound.lean`. The bridge theorems carry over: the verifier's
+evaluators are the systems' values (`moussakaUnboundIssue_values`,
+`moussakaUnboundRedeem_values`), so acceptance gives the accepting equation
+(`moussakaUnboundIssue_accept`, `moussakaUnboundRedeem_accept`), the executable verifier's chains
+give the extraction theorems above at GF(2¹²⁸) (`moussakaUnbound*_extract_chain`), with uniform
+challenges at probability `≤ 2⁻¹⁵⁰ + ε_QS(n) + 2⁻¹²⁸` per chain (`n = 3816`, `7929`;
+`Prob.moussakaUnbound*_chain_prob`), and the prover is complete
+(`moussakaUnbound*_complete_shake`). In the random-oracle and ideal-cipher model,
+`IC.moussakaUnboundIssue_accept_le_full` and `IC.moussakaUnboundRedeem_accept_le_full`
+(`ROM/MoussakaUnbound.lean`) bound "the executable verifier accepts and the extractor's candidate
+is not a witness" with every term explicit, as the base relations' `*_accept_le_full`:
+
+    (q₂₁+1)·2⁻¹⁵⁰ + (q₂₂+1)·ε_QS(3816) + (q₂₃+1)·9·2⁻¹²⁸ + ε_bind,dead,chain     (issuance)
+    (q₂₁+1)·2⁻¹⁵⁰ + (q₂₂+1)·(ε_QS(7929) + 2⁻¹²⁸ + (n+339)·2⁻⁴⁴⁸) + (q₂₃+1)·9·2⁻¹²⁸
+      + ε_bind,dead,chain + the combination hits                                    (redemption)
+
+with the same binding, dead-leaf and chain terms as `moussakaIssue_accept_le_full` and
+`moussakaRedeem_accept_le_full` (`2·q_E²·2⁻²⁵⁶ + 2·(openHashEps q + q₁·2⁻²⁵⁶) +
+1024·q_E·q₁·2⁻²⁵⁶ + chainHitEps q`, resp. `chainHitEpsComb q 45`), for one fixed statement and at
+most 64 Anchors.
 
 ---
 
@@ -501,12 +531,14 @@ the base protocol.
 1. The PRF-with-commitment, key-recovery and key-second-preimage assumptions on Keccak-p[800,12]
    are new and are supported only by generic estimates; structural cryptanalysis of 12-round
    Keccak-p[800] with 128-bit keys and 192-bit truncation is outside this note.
-2. The random-oracle bounds of `lean/ROM/` (and the probabilistic wrappers of the extraction
-   theorems) are mechanized for the five base relations only. For the unbound relations the
-   deterministic end-to-end extraction (`EndToEnd/MoussakaUnbound.lean`), the arithmetization, the
-   domain separation and the byte-level spec (checked against the C++ KAT) are mechanized; the
-   executable verifier and prover (`Verifier/Relations.lean`, so that `lake exe verifier_vectors`
-   also checks the proofs of `unbound_ihat_kat.txt`) are not extended.
+2. The executable verifier and prover, the bridge and completeness theorems, the per-chain
+   probability bound and the random-oracle and ideal-cipher bounds with every term explicit
+   (`*_accept_le_full`, fixed statements) cover the unbound relations (§2). Not extended: the
+   variants with AES as random permutations (`ROM/PermFull.lean`), adaptively chosen statements
+   (`ROM/AdaptFull.lean`, `AdaptComb.lean`, `PermAdapt.lean`, with their `hinj` for unbound
+   instance families) and the spec-relation corollaries (`ROM/SpecSound.lean`); they follow the
+   same pattern as for the base relations. The single-SHAKE-oracle side condition is proved
+   (`combOk_moussakaUnbound*`).
 3. Thm U5(a) is mechanized on the executable spec with non-adaptive redemption queries
    (`Privacy/MoussakaUnbound.lean`); adaptively chosen queries (lazy sampling) and Thm U5(b) are on
    paper only.
@@ -537,3 +569,20 @@ All in `lean/VoleMole/`; no `sorry`, no axioms beyond the standard three.
 - `Privacy/MoussakaUnbound.lean`: Theorem U5(a) on the executable spec (`anonymity`), with
   `close_pi` (`n` independent hops), `simGame_iff`, `prf_hop` and `idealGame_eq` (§6).
 - `Protocols/DomainSeparation.lean`: the unbound rows (`mousU`).
+- `Verifier/Relations.lean`: the verifier statements `moussakaUnboundIssue`,
+  `moussakaUnboundRedeem`; `Verifier/UovEval.lean`: `moussakaUnboundRedeemValues` (UOV terms over
+  arrays) `= uRedeemValues` (`moussakaUnboundRedeemValues_eq`). `lake exe verifier_vectors`
+  (`Verifier/Kats.lean`, `moussakaUnbound`) verifies every proof of `unbound_ihat_kat.txt` and
+  rejects mutations; `lake exe prover_vectors` (`Verifier/ProverKats.lean`) reproduces them byte
+  for byte, plus random statements of both relations.
+- `Verifier/Bridge/Relations.lean`: `moussakaUnboundIssue_values`, `moussakaUnboundRedeem_values`,
+  `moussakaUnboundIssue_accept`, `moussakaUnboundRedeem_accept`;
+  `Verifier/Bridge/ChainRelations.lean`: `moussakaUnboundIssue_extract_chain`,
+  `moussakaUnboundRedeem_extract_chain`; `Prob/ChainRelations.lean`:
+  `moussakaUnboundIssue_chain_prob`, `moussakaUnboundRedeem_chain_prob`;
+  `Verifier/Bridge/Prover.lean`, `Bridge/Complete.lean`: `moussakaUnbound*_complete`,
+  `*_complete_tables`, `*_complete_shake`; `EndToEnd/MoussakaUnbound.lean`:
+  `moussaka_unbound_redeem_comb_bad_gf128`.
+- `ROM/MoussakaUnbound.lean`: `moussakaUnboundIssue_accept_le`, `moussakaUnboundRedeem_accept_le`
+  (random oracle), `IC.*_accept_le_ic` (ideal cipher, binding explicit) and `IC.*_accept_le_full`
+  (every term explicit; §2), `combOk_moussakaUnbound*`.
