@@ -31,7 +31,7 @@ Line references are `file:line` at `6d7113e`.
 
 | Notion | Result | Main terms |
 |---|---|---|
-| **Balance** (no inflation): accepted spends ≤ issued + refunded, against adaptive malicious clients, honest clients present | **Proved** (Thm 1), classical. [Lean] as a game on the executable spec and the Lean verifier in the ROM and ideal-cipher model, `N·ε_iss + N·ε_spend + Adv^{uf-tag}(B) + Adv^{coll}(C)` (`ROM/RatatouilleBalance.lean`, `balance_le_ufTag`; §4): `B` a UF-Tag forger (with a signability probe) and `C` a `Com` collision finder, explicit; their advantages stay terms | `ε_ext + Adv^{uf-tag} + q_K²·2^{−257}` |
+| **Balance** (no inflation): accepted spends ≤ issued + refunded, against adaptive malicious clients, honest clients present | **Proved** (Thm 1), classical. [Lean] as a game on the executable spec and the Lean verifier in the ROM and ideal-cipher model, `N·ε_iss + N·ε_spend + Adv^{uf-tag}(B) + Adv^{coll}(C)` (`ROM/RatatouilleBalance.lean`, `balance_le_ufTag`; §4): `B` a UF-Tag forger (with a signability probe) and `C` a `Com` collision finder, explicit; their advantages stay terms. The probe costs only the Issuer's aborts: `balance_le_noProbe` (`ROM/RatatouilleProbe.lean`) has a probe-free forger plus a failure term `≤ N·δ(sk)^{255}` (`uov-assumptions.md` §5.8) | `ε_ext + Adv^{uf-tag} + q_K²·2^{−257} + N·E[δ^{255}]` |
 | **No theft**: an adversary cannot spend an honest client's credits through a request it did not copy verbatim | **Proved** (Thm 3), using weak SE and a ZK hop | `ε_ZK + ε_SE + q_K·2^{−127}` |
 | **No theft by copying** (hijack): anyone who obtains a spend request can redeem it first | **Fails** (F2). Nothing binds a spend to a session, unlike {{ACT}}'s `ctx_spend` and Moussaka's `challenge_digest` | — |
 | **Unlinkability/anonymity** against a malicious Issuer: spends and issuances leak only `(pk, ctx_iss, T_init, d)` and whether the client could afford the spend | **Proved** (Thm 2). On `main` it relies on Keccak one-wayness in `r`; with the fix it is standard NIZK. [Lean] a two-round left/right form, from ZK and hiding hypotheses (`Privacy/Ratatouille.lean`); with the executable Lean prover (label rows) down to its tape hypothesis (`Privacy/RatatouilleLean.lean`, `unlinkability_label_rows`); for the Lean prover in the ROM and ideal-cipher model with every zero-knowledge term explicit, `≈ 2⁻¹⁰²·³` plus budget terms and `2·ε_hide` (`unlinkabilityRO_lean_num`), and `≈ 2⁻¹⁰¹·⁶` with a table-reading Issuer (`unlinkabilityRA_lean_num`; §6); also with AES as random permutations (`_perm`) and with one shared `H₃` (`unlinkabilitySh_num`, `unlinkabilityRASh_num`); from the real Clients' OS seeds and seed XOF, each `+ 2·(2q_H + 2)·2⁻²⁵⁶` with `q_H` the Issuer's XOF queries (`unlinkability*_seed`, `lean/docs/zk.md` §10.6; the note's H1 does not charge seed collisions); with a key stage (the Issuer's key, context and balance) that reads the tables too (`unlinkabilityRAK_lean_num`, `≈ 2⁻¹⁰¹·⁶`); with any number `n` of further honest Clients, `≤ n·2⁻¹⁰¹` plus budget terms and `2·ε_hide` (`unlinkabilityN_lean_num`), also adaptively scheduled, each further session's key, context, balance, response and amount chosen from earlier outcomes and the challenge key, context and balance from the sessions before it (`unlinkabilityAd_lean_num`, the same numbers), and interleaved in any order with each further Client spending up to `K` times along its change tokens (`unlinkabilityIL_lean_num`, `≤ (n(K + 1) + 2)·2⁻¹⁰¹`; with a table-reading scheduler that also places the challenge's stages, `unlinkabilityILO_lean_num`, `+ 46·L·(a₃ + a₂ + a₅ + 221·a_E)·2⁻¹²⁸`), and with `N` challenge pairs (`unlinkabilityP_lean_num`; `lean/docs/zk.md` §10.8, §11) | `ε_ZK + q_K·2^{−127}` |
@@ -205,7 +205,8 @@ So the hop is not statistical. The salted UOV EUF-CMA proofs avoid this by resam
 Ratatouille has no salt (the draft's NOTE 2). **Recommendation R1:** put a 16-byte Issuer salt in
 the 25-byte zero slot of the Tag input (`commit.hpp:79-93`). The salt is returned with `s'` and
 carried in the witness. This costs no extra Keccak call. The signing then becomes salted UOV with
-`H = Tag`, so balance would reduce to standard UOV EUF-CMA. This is not done here.
+`H = Tag`, so balance would reduce to standard UOV EUF-CMA, plus the same abort term as
+Theorem 1 (`uov-assumptions.md` §5.5, §5.8). This is not done here.
 
 **Key separation is necessary** (see F1). A-OMPI is about a key used only for Ratatouille, or only
 together with protocols whose targets are disjoint, by Lemma DS and KP800 input structure. An
@@ -310,8 +311,12 @@ honest-client activity included in the query counts:
     Adv^{bal} ≤ ε_ext(N_I + N_S; q₁, q₂, Q)
               + Adv^{ompi}(q_T, N_I + N_S)
               + q_K²·2^{−257} + q_K²·2^{−361} + q_K·2^{−286}
+              + (N_I + N_S)·E[δ^{255}] + q_v·2^{−256}
 
-`N_I` and `N_S` count the issuance and spend requests verified.
+`N_I` and `N_S` count the issuance and spend requests verified. The last line is `Pr[E4]`: `δ(sk)`
+is the fraction of bad vinegars for the key, `q_v` counts the adversary's SHAKE256 queries, and
+`E[δ^{255}] ≤ 2^{−295.8}` (`uov-assumptions.md` §1, §5.8). Earlier versions of this note omitted
+this term as negligible.
 
 With `q, q_K ≤ 2⁶⁴`, the non-UOV part is about `2^{−60.8} + 2^{−129}`.
 
@@ -331,7 +336,10 @@ response. Discard four events:
 - (E2) a KP800 binding failure (`ε_bind^K`);
 - (E3) some spend's `(Com(nf_j, ctx, t_j, r_j), x_j) ∉ S`. Then
   `(Com(nf_j, ctx, t_j, r_j), x_j, s_j)` is a UF-Tag forgery (`Adv^{uf-tag}`);
-- (E4) an Issuer `DerivePreimage` abort (negligible, see Thm 4).
+- (E4) an Issuer `DerivePreimage` abort on a target it evaluates: a signing call (a spend of a
+  state whose signing failed is no UF-Tag forgery, since its pair was queried) or a
+  duplicate-path call (F5, below). In the vinegar ROM, `Pr[E4] ≤ (N_I + N_S)·E[δ^{255}] +
+  q_v·2^{−256}` (`uov-assumptions.md` §5.8).
 
 Outside these events, the following facts hold for each accepted spend `j`:
 1. **Parent.** `c_j := Com(nf_j, ctx, t_j, r_j)` with refund `x_j` was signed. By binding (¬E2),
@@ -458,6 +466,18 @@ per `ctx`, because parents share the spender's `ctx` (fact 1). ∎
     succeeded (an exception against a rejection), so `B` needs that bit. Without the probe, `B`
     would need the abort term `E4` (the signer fails on a probed target), as the paper discards
     it.
+  - *The probe costs exactly `E4`* (`uov-assumptions.md` §5.8, Proposition 9;
+    `ROM/RatatouilleProbe.lean`). The probe reveals only whether `derive_preimage` aborts, which
+    happens with probability `δ(sk)^{255}` per fresh target. It does not reveal whether a target
+    is "good": all targets have the same number of good preimages. `ufTagAdv_le_noProbe`:
+    `Adv^{uf-tag+probe}(B) ≤ Adv^{uf-tag}(B.noProbe τ) + failAdv(B)`, where `B.noProbe τ` answers
+    every probe "yes" and never probes, and `failAdv(B)` is the probability that the signer fails
+    on a pair `B` signed or probed. `B` logs at most `N` pairs (`forger_logs_le`), and for a signer
+    with independent failures the failure event has probability `≤ N·Pr[fail]` per table
+    (`pr_failOut_le`). `balance_le_noProbe` is Theorem 1 in this form. So, under A-OMPR, the
+    probe route and the `E4` route give the same bound: Theorem 1 above, with
+    `Adv^{ompr}(q_T, N_I + N_S)`. Two steps remain on paper: that pqov's signer in the vinegar ROM
+    has this law, and the average over the tables.
   - The bound loses a factor `N` against the paper's single `ε_ext` for all proofs (L8 §9.1): the
     Lean single-proof theorems are applied once per request, with a union bound.
 
@@ -468,7 +488,8 @@ forwards that call, `(c', x')` is in `B`'s signing log, and an adversary that la
 state with that pair is no UF-Tag forgery, yet that state was never released, so fact 1 fails.
 `B` must check the store before signing. Its simulation then differs from the Issuer only when
 `derive_preimage` fails on a duplicate-path pair (an exception instead of a rejection), which is
-the event `E4`. The Lean forgery event (`Forge`) is stated with released signatures, and the Lean
+the event `E4`. Spending a UF-Tag signing query on that pair instead would not work: a later spend
+of that state is then no forgery (`uov-assumptions.md` §5.8). The Lean forgery event (`Forge`) is stated with released signatures, and the Lean
 `B` probes the duplicate-path pairs instead of signing them.
 
 ## 5. No theft (N2) and honest clients
@@ -817,8 +838,9 @@ assumption (Thm 1, with A-OMPI).
   `t + x − d` and refund `x'` (Lean `change_correct`).
 - **Failure.** Each case fails only with:
   - the VOLEitH prover's grinding abort `(1 − p)^{2³²}` (lean/docs/zk.md §7.3), which throws;
-  - a `DerivePreimage` failure (every counter value giving a singular system, about
-    `255^{−256}`), which throws.
+  - a `DerivePreimage` failure (all 255 vinegars giving a singular system, probability
+    `δ(sk)^{255}`, about `255^{−255}` at `δ = 1/255`, and `E[δ^{255}] ≤ 2^{−295.8}` on average over
+    keys), which throws.
 - **Refund integrity (N5).** A client that finalizes holds exactly the Issuer's `x'`: altering it
   needs a signature on `Tag(c', x'')`, which falls under Thm 1 (E2, E3) and Thm 3.
 
@@ -862,8 +884,10 @@ and determinism of `Tag`. The witness satisfies V3 by `change_correct`. ∎
     for a UF-Tag game with a signability probe (`TagForger`; `B` is mechanized as a forger of
     it). Lemma 2.1 (UF-Tag from A-OMPI) and the binding bound `ε_bind^K` stay on paper: they
     need KP800 as an ideal permutation, while the Lean `Com` and `Tag` are the concrete
-    Keccak-p[800]. The probe is a (mild) strengthening of UF-Tag; the paper's alternative is the
-    abort term `E4`;
+    Keccak-p[800]. The probe is no real strengthening: `balance_le_noProbe`
+    (`ROM/RatatouilleProbe.lean`) removes it at the cost of the signer's failures on at most `N`
+    logged pairs, the paper's `E4` (`uov-assumptions.md` §5.8). That pqov's signer fails with
+    probability `δ(sk)^{255}` independently per target is the paper step (Lemma D);
   - the bound is `N·ε_iss + N·ε_spend` for the extraction step, against the paper's one `ε_ext`
     for all proofs (simultaneous extraction is not mechanized);
   - adversaries are deterministic given the oracles (randomized ones by averaging over their
@@ -877,8 +901,9 @@ and determinism of `Tag`. The witness satisfies V3 by `change_correct`. ∎
 - In the QROM: simultaneous extraction (Q7) and ZK (`lean/docs/zk-qrom.md`) are on paper only;
   SE for Theorem 3 is open; there is no quantum tool for an invertible permutation.
 - Thm 3 uses SE in the classical model only. N2b (copying) is not provided at all (F2).
-- The UF-Tag reduction counts `q_T ≤ q_K` Tag inputs. Issuer aborts in `DerivePreimage` are
-  treated as negligible.
+- The UF-Tag reduction counts `q_T ≤ q_K` Tag inputs. Issuer aborts in `DerivePreimage` are the
+  term `(N_I + N_S)·E[δ^{255}] + q_v·2^{−256}` of Theorem 1. R1 does not remove that term, and
+  the F5 fix removes only the probe (`uov-assumptions.md` §5.8).
 - Unlinkability (N3) in Lean (§6; `lean/docs/zk.md` §10):
   - mechanized as a two-round game in `lean/VoleMole/Privacy/Ratatouille.lean`, with zero
     knowledge and hiding as hypotheses; for the executable Lean prover in the ROM and ideal-cipher
@@ -982,4 +1007,14 @@ and determinism of `Tag`. The witness satisfies V3 by `change_correct`. ∎
 - `pr_failI_le`, `pr_failS_le`: the single-proof bounds for the `j`-th prover.
 - `balance_le`: Theorem 1 for any `VerifierIC`; `balance_le_lean`: with `verifyIC`;
   `balance_le_ufTag`: with `Adv^{uf-tag}(B)`.
+
+`lean/VoleMole/ROM/RatatouilleProbe.lean` (the probe, `uov-assumptions.md` §5.8):
+- `patch`, `FailOut`, `failAdv`, `run_patch_of_not_fail`, `failOut_iff_patch`: the failure event,
+  read off the run against a signer that never fails.
+- `TagForger.noProbe`, `TagForger.ProbeFree`, `noProbe_probeFree`, `ufWin_noProbe`,
+  `ufTagAdv_le_noProbe`: the probe-free forger and its bound.
+- `withFail`, `pr_eval_pt`, `pr_exists_list_le`, `pr_failOut_le`: the union bound for a signer with
+  independent failures.
+- `signRec_probeRec_le`, `logs_length_le`, `forger_logs_le`: one logged pair per call.
+- `balance_le_noProbe`: Theorem 1 with the probe-free forger and `failAdv(B)`.
 - `Audit/Nonvacuous.lean`: `balance_le_lean`'s hypotheses instantiated (`balA0`).

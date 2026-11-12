@@ -3,7 +3,8 @@
 This note relates the protocol-specific UOV assumptions used in
 - `lean/docs/security/pomfrit.md` (A-OMPR, i.e. Def. 3.1 of ePrint 2026/109, and its τ-shift variant A-OMPR⊕17),
 - `lean/docs/security/moussaka.md` (CT-UF and its Lemma U),
-- `lean/docs/security/ratatouille.md` (A-OMPI, UF-Tag, recommendation R1),
+- `lean/docs/security/ratatouille.md` (A-OMPI, UF-Tag, the Lean theorem's UF-Tag with a signability
+  probe, recommendation R1),
 
 to each other and to the standard UOV assumptions: the UOV problem, and EUF-CMA of the specified
 (salted) scheme. Where a reduction is not available, the note says exactly why.
@@ -25,6 +26,8 @@ checkout `subprojects/pqov` (revision `fac2ec1`, UOV round-3 code, with
   invertible oil system;
 - **CT-UF^open**: CT-UF in which the adversary must also open every target it had signed;
 - **det-FDH**: EUF-CMA of deterministic hash-and-sign UOV, `σ = D_sk(H(m))`.
+- **UF-Tag+probe**: UF-Tag with an extra oracle that reveals only whether `D` succeeds on
+  `Tag(c, x)`. This is the game of the Lean balance theorem.
 
 **Results.**
 
@@ -40,6 +43,7 @@ checkout `subprojects/pqov` (revision `fac2ec1`, UOV round-3 code, with
 | T6 | **PomFRIT ⇔ OMPR**: an OMPR breaker *is* a PomFRIT one-more forger. So OMPR ≤ PomFRIT ≤ OMPR⊕17 | tight | §5.6 |
 | P7 | OMPR is not expected to reduce to the UOV problem (meta-reduction sketch); determinism doesn't change that | — | §5.7 |
 | P8 | OMPR⊕τ ⇐ OMPR loses `τ^{q+1}`. Every *simple-embedding* reduction loses that much against some adversary. In a generic model the two assumptions have the same bound. For PomFRIT's tree shapes, U1's additive `Q₃·2^{−71}` (≈ `2^{−7}` at `2^{64}` queries) is unavoidable for simple-embedding reductions | — | §6 |
+| P9 | UF-Tag+probe ≡ UF-Tag up to the aborts of `D` on signed or probed pairs; so UF-Tag+probe ⇐ A-OMPI ⇐ OMPR with no extra oracle calls. The probe and the paper's abort event `E4` cost the same in Ratatouille's balance; R1 does not change this, the F5 fix removes the probe | `(q_S + q_P)·E[δ^{255}] + q_v·2^{−256}` (≈ `N·2^{−295.8}`) | §5.8 |
 
 **Assessment** (§7).
 - State all three protocols under **one** assumption: **A-OMPR**, i.e. Def. 3.1 instantiated with
@@ -233,6 +237,10 @@ All games are for one key `(sk, pk) ← KeyGen` unless `K` is given. `D = D_sk` 
 11. **CT-UF^open_K** (new). This is CT-UF_K, except that `A` must also output, for every target `t`
     it queried to `Sign_k`, an opening `x_t ∈ D_Com` with `Com(x_t) = t`. Otherwise it loses.
 12. **UF-Tag** (`ratatouille.md` §2.3). The oracle takes `(c, x)` and returns `D(Tag(c, x))`.
+13. **UF-Tag+probe** (new; Lean `TagForger`, `UFWin`, `ufTagAdv`). UF-Tag plus a probe oracle
+    `(c, x) ↦ [D(Tag(c, x)) ≠ ⊥]`. `A` wins with a valid `(c*, x*, s*)` if no signing query on
+    `(c*, x*)` was answered: an unsigned, a probed-only, or a failed pair counts. Equivalent to
+    UF-Tag up to `(q_S + q_P)·E[δ^{255}] + q_v·2^{−256}` (§5.8).
 
 ## 4. The 1/255 obstacle, and what can fix it
 
@@ -450,7 +458,10 @@ R1: `Tag(c, x, σ) = KP800("rata"‖0‖"t0" ‖ σ ‖ 0⁹ ‖ c ‖ ⟨x⟩�
 deterministic vinegar from target and seed), for messages `(c, x)` and with hash `Tag` instead of
 SHAKE256. So
 
-    Adv^{bal} ≤ ε_ext + Adv^{euf}_{UOV[Tag]}(B; q_K, N_I + N_S) + ε_bind^K + q_K·(2^{−287} + 2^{−351}).
+    Adv^{bal} ≤ ε_ext + Adv^{euf}_{UOV[Tag]}(B; q_K, N_I + N_S) + ε_bind^K + q_K·(2^{−287} + 2^{−351})
+              + (N_I + N_S)·E[δ^{255}] + q_v·2^{−256}.
+
+The last term is the Issuer's aborts (`E4`), which R1 does not remove (§5.8).
 
 *Proof.* This is `ratatouille.md` Theorem 1, with `S` the set of signed `(c, x)` pairs, and with
 (E3) replaced by "some spend's parent `(c_j, x_j)` was never signed".
@@ -538,6 +549,144 @@ Chaum blind signatures and the one-more-RSA problem [BNPS03].
   So this is evidence, not a theorem. OMPR should be treated as an independent assumption, as the
   paper does ("a new hardness assumption is indeed necessary").
 
+### 5.8 Proposition 9: UF-Tag with a signability probe
+
+**Why the probe exists.** `spend_response` signs before the caller's nullifier check
+(`ratatouille.md` F5). On the duplicate-nullifier path the Issuer computes `D(Tag(c', x'))` and
+withholds it, but its answer still shows whether `D` succeeded (an exception against a rejection).
+The Lean balance theorem therefore bounds the forgery term by a UF-Tag game with a probe
+(`ROM/RatatouilleBalance.lean`, `TagForger`, `UFWin`, `ufTagAdv`, `balance_le_ufTag`):
+
+- **UF-Tag+probe** (§3, item 13). The forger has `Sign(c, x) = D(Tag(c, x))`, which may return `⊥`,
+  and `Probe(c, x) = [D(Tag(c, x)) ≠ ⊥]` (`q_S` and `q_P` queries). It wins with `(c*, x*, s*)`,
+  `P(s*) = Tag(c*, x*)`, if no `Sign` query on `(c*, x*)` was answered. So a forgery on a probed
+  pair, or on a pair whose signing failed, counts.
+- This differs from UF-Tag (item 12) in two ways: the probe, and the win on a failed signing query.
+
+**What the probe reveals.** The probe does *not* reveal whether `Tag(c, x)` is "good". Goodness is a
+property of preimages, not targets: every target has exactly `|G_sk|` good preimages (Lemma C).
+The only target-dependent event is the abort of `D`, which happens iff the first 255 vinegars at
+the target are bad (§2). With SHAKE256 a random oracle and no query at `sk_seed`, this has
+probability `δ(sk)^{255}` at every fresh target, independently of the target, of `A`'s view and of
+the other targets. On average over the key `E[δ^{255}] ≤ 2^{−295.8}` (§1). So the probe answer is
+"yes" except with probability about `2^{−296}` per pair. (The per-target abort probability is
+`δ^{255}`, not `δ ≈ 2^{−7.994}`: `δ` is the probability that one *vinegar* is bad.)
+
+**Proposition 9.** Let `A` be a UF-Tag+probe forger with `q_S` signing, `q_P` probe, `q_v` SHAKE256
+and `q_K` KP800 queries, and let
+
+    φ = (q_S + q_P)·E_sk[δ(sk)^{255}] + q_v·2^{−256}.
+
+(a) **Probe elimination.** Let `A⁰` be `A` with every probe answered "yes" (no oracle call). Then
+
+    Adv^{uf-tag+probe}(A) ≤ Adv^{uf-tag}(A⁰) + φ,      Adv^{uf-tag}(A⁰) ≤ Adv^{uf-tag+probe}(A⁰).
+
+So the two notions are equivalent up to `φ`, statistically.
+
+(b) **From A-OMPI and A-OMPR.** With `q_T ≤ q_K` Tag inputs,
+
+    Adv^{uf-tag+probe}(A) ≤ Adv^{ompi}(B; q_T, q_S) + φ + q_K·2^{−479} + q_K²·2^{−799}
+                          ≤ Adv^{ompr}(B; q_T, q_S) + φ + q_K·2^{−479} + q_K²·2^{−799}.
+
+Probes cost no one-more budget: `B` makes only `A`'s `q_S` signing queries.
+
+*Proof of (a).*
+1. Let `Fail` be the event that `D` returns `⊥` on `Tag(q)` for some pair `q` that `A` signed or
+   probed. Outside `Fail`, every probe answer is "yes", so the runs of `A` and `A⁰` are identical.
+   A win of `A` outside `Fail` is on a pair with no answered signing query. Since no signing query
+   failed, the pair was never signed, so it is a UF-Tag win of `A⁰`. The second inequality is
+   trivial.
+2. **The failure event is read off a run that cannot fail** (Lean `failOut_iff_patch`). Let
+   `τ` be any total signer that agrees with `D` wherever `D` succeeds. A forger reads the signer
+   only through its signing answers and probe bits (`TagForger.reads`). So `Fail` holds in the run
+   against `D` iff `D` fails on a pair logged by the run against `τ`. Both directions follow by
+   applying `reads` to the run that has no failing logged pair.
+3. **The law of `D`** (Lemma D). Given no query at `sk_seed` (`q_v·2^{−256}`), `D(y)` is `⊥` with
+   probability `δ^{255}`, and otherwise uniform on `S^G_y`, independently across `y`. This is the law
+   of `withFail(f, τ)`: `⊥` if `f(y) = 1`, else `τ(y)`. Here `f(y)` is an independent
+   Bernoulli(`δ^{255}`) bit and `τ(y) ← U(S^G_y)` is independent of `f`.
+4. **Union bound.** The run against `τ`, and so its logged pairs, does not depend on `f`. So
+   `Pr[Fail | sk] ≤ (q_S + q_P)·δ(sk)^{255}` (Lean `pr_failOut_le`, per table). Average over `sk`. ∎
+
+*Proof of (b).* `B` runs Lemma 2.1's simulation of KP800 for `A⁰`, forwards its signing queries to
+the index oracle, and answers each probe "yes" itself. A forgery of `A⁰` on a pair never signed is a
+preimage of an unqueried index. Then apply (a) and T1(c). ∎
+
+**The other two ways of answering probes.**
+- *Spend an oracle call per probe.* The simulation is then exact, but it fails exactly where it
+  matters:
+  - the budget becomes `q_S + q_P`;
+  - a probed index counts as queried, so a forgery on a probed pair is no one-more win.
+  
+  In Ratatouille, the probed pairs are exactly the duplicate-path states whose later spend the
+  balance reduction must catch (F5). This is `wasted_calls` again: `h + 1 ≥ h + w + 1` forces
+  `w = 0`.
+- *Guess "yes".* That is (b). It loses `q_P·E[δ^{255}]`, not `q_P·δ`.
+- *A separation.* No separation beyond `φ` is possible. The probe oracle is simulated within `φ`
+  for every adversary with `q_v` SHAKE256 queries, whatever its running time.
+- *Weak keys.* For a fixed key the term is `(q_S + q_P)·δ(sk)^{255}`, which is 1 for a key with
+  `δ(sk) = 1` (`S = 0`, §1). On such a key the probe is informative, but it still reveals only
+  `D`'s abort, which the forger can use only as a signing failure. Only the key average is small.
+
+**Is the probe avoidable in the balance proof?** Yes, at no cost in the bound.
+- *With the probe* (Lean). `B` logs at most one pair per Issuer call (`forger_logs_le`), so
+  `q_S + q_P ≤ N_I + N_S`. By (b):
+
+      Adv^{bal} ≤ ε_ext + Adv^{ompi}(q_T, N_I + N_S) + (N_I + N_S)·E[δ^{255}] + q_v·2^{−256} + ε_bind^K + q_K·2^{−479} + q_K²·2^{−799}.
+
+  Lean `balance_le_noProbe` states the first step: `Adv^{uf-tag+probe}(B) ≤ Adv^{uf-tag}(B.noProbe τ)
+  + failAdv(B)`, with a probe-free forger and the failure term.
+- *With `E4`* (paper, `ratatouille.md` §4). `B'` checks the store first. It forwards only
+  fresh-nullifier signing calls, and answers duplicate-path calls "success" itself. It discards
+  `E4`, "`D` aborts on a target the Issuer evaluates". `E4` must include aborts on *forwarded*
+  calls: a spend of a state whose signing failed is no UF-Tag forgery, since its pair was queried.
+  `Pr[E4] ≤ (N_I + N_S)·E[δ^{255}] + q_v·2^{−256}`, the same term.
+- **Final statement under A-OMPR.** Both routes give
+
+      Adv^{bal} ≤ ε_ext + Adv^{ompr}(q_T, N_I + N_S) + (N_I + N_S)·E[δ^{255}] + q_v·2^{−256} + ε_bind^K + q_K·2^{−479} + q_K²·2^{−799}.
+
+  - State it in this probe-free form, with UF-Tag (item 12) as the intermediate notion. The probe
+    game is the Lean proof's interface, and `balance_le_noProbe` converts it.
+  - The abort term is about `N·2^{−295.8}`. `ratatouille.md` Theorem 1 omitted it ("negligible");
+    it is now explicit.
+
+**Does R1 remove the issue?** No. R1 is orthogonal to it.
+- The probe comes from the API order (F5), not from Tag's input. With R1, `spend_response` still
+  signs `Tag(c', x', salt)` before the store check, so its answer still reveals whether `D`
+  succeeded. Now the salt is fresh and hidden, so the abort bit at that target is
+  Bernoulli(`δ^{255}`) whatever `A` does.
+- The T5 reduction to EUF-CMA of `UOV[Tag]` must still answer that bit without signing. Signing
+  `(c', x')` would make it a signed message, so a later spend of that state would be no EUF
+  forgery: the same obstacle as above.
+- So T5 also carries `(N_I + N_S)·E[δ^{255}] + q_v·2^{−256}`. The specified signer, like `D`,
+  aborts after 255 bad vinegars, and an EUF-CMA forgery on a message whose signing aborted does
+  not count.
+- What removes the term:
+  - **The F5 fix** (check the store inside `spend_response`, before signing) removes the probe.
+    The aborts on signing calls remain, so the term stays as `(N_I + N_S)·E[δ^{255}]`, now over
+    signing calls only.
+  - **A signer that cannot abort** (salt-UOV with unbounded salt retry, §4 item 2) makes the probe
+    constant and the term zero. C4 advises against it for other reasons.
+  - Neither is needed: the term is about `2^{−232}` at `N = 2^{64}`.
+
+**Lean** (`ROM/RatatouilleProbe.lean`; no `sorry`, no `axiom`):
+- `patch`, `FailOut`, `failAdv`;
+- `run_patch_of_not_fail`, `failOut_iff_patch` (step 2);
+- `TagForger.noProbe`, `noProbe_probeFree`, `ufWin_noProbe`, **`ufTagAdv_le_noProbe`** ((a) for
+  any signer, with the failure term `failAdv`);
+- `withFail`, **`pr_failOut_le`** (step 4: per table, over the failure bits, at most the number of
+  logged pairs times `Pr[bad]`);
+- `signRec_probeRec_le`, `logs_length_le`, `forger_logs_le` (at most `N` logged pairs);
+- **`balance_le_noProbe`** (Theorem 1 with the probe-free forger and `failAdv`).
+
+Two steps stay on paper:
+- that pqov's `derive_preimage` in the vinegar ROM has the law `withFail(f, τ)` (step 3, Lemma D);
+- moving `pr_failOut_le` from one table to the average over the lazy oracle and the cipher in
+  `failAdv`. This is a Fubini step: the failure bits are independent of both.
+
+The module is separate from `Protocols/UOVAssumptions.lean`, which imports only Mathlib and is
+imported by `Privacy/PqovDelta.lean`.
+
 ## 6. Proposition 8: OMPR versus 17-shift OMPR
 
 **(a) Guessing.** `Adv^{ompr⊕τ}(N, q) ≤ τ^{q+1}·Adv^{ompr}(N, q)`.
@@ -617,7 +766,7 @@ Yes: **A-OMPR, i.e. OMPR(n, q) of Def. 3.1 for uov-Ip with `SPre = derive_preima
 |---|---|---|---|
 | PomFRIT | U1 (`pomfrit.md`); **and necessary** (T6) | `(Q₃+ℓ+1)·2^{−71}` | none: equivalent to OMPR; U2 needs OMPR⊕17 |
 | Moussaka | CT-UF^open ⇐ OMPR (T4), in Thm 1 | tight, ×K | GPI + OW, loss `q_π`, ×K (T4) |
-| Ratatouille | A-OMPI ≤ OMPR (T1c), in Lemma 2.1 and Thm 1 | tight | spec-SUF-CMA (T1e); GPI + OW (T2), loss `q_T` |
+| Ratatouille | A-OMPI ≤ OMPR (T1c), in Lemma 2.1 and Thm 1; the Lean theorem's UF-Tag+probe ≤ A-OMPI + abort term (P9) | tight, plus `(N_I + N_S)·E[δ^{255}] + q_v·2^{−256}` for Issuer aborts (`E4`, or the probe) | spec-SUF-CMA (T1e); GPI + OW (T2), loss `q_T`; both plus the same abort term |
 
 Reasons:
 1. PomFRIT forces it (T6).
@@ -739,6 +888,7 @@ hash-and-sign with retry [KX24]).
 | Complementary group widths differ by ≥ 6; attained at 57/63 | `group_gap`, `group_gap_attained` |
 | `17^{−k} ≤ 16^{−k}` | `guess_loss` |
 | One-more counting; wasted calls | `one_more_count`, `wasted_calls` |
+| UF-Tag+probe ≤ UF-Tag of the probe-free forger + failures (P9(a)); failure event read off the total signer; union bound per table; `B` logs ≤ `N` pairs; Theorem 1 with a probe-free forger | `ufTagAdv_le_noProbe`, `failOut_iff_patch`, `pr_failOut_le`, `forger_logs_le`, `balance_le_noProbe` (in `ROM/RatatouilleProbe.lean`) |
 
 The probabilistic steps (Lemma D, the hybrid games, the ideal-permutation bookkeeping) are on paper.
 
