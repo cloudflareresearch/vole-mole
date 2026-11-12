@@ -29,7 +29,7 @@ No `sorry`, no `axiom`.
 open OracleComp OracleSpec VoleMole.ROM.OneMore
 open scoped ENNReal
 
-namespace VoleMole.Assumptions.Lazy
+namespace VoleMole.Assumptions.LazyIdeal
 
 lemma eqd_bind_unused {α β : Type} (mx : ProbComp α) (my : ProbComp β) :
     (mx >>= fun _ => my) =ᵈ my := by
@@ -217,4 +217,4 @@ theorem prEvent_unifList_exists_le (μ : ProbComp β) (bad : β → T → Prop) 
 
 end Union
 
-end VoleMole.Assumptions.Lazy
+end VoleMole.Assumptions.LazyIdeal
