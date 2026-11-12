@@ -331,26 +331,33 @@ def BadAt (good : PK → S → Option (G × Hn) → Prop) (i : ℕ)
   r.2.1.2 = true ∧ ∃ p, r.2.1.1[i]? = some p ∧ ¬good r.1 p.2 (r.2.2.2.tg p.1)
 
 /-- **The generic one-more reduction**: a forger's win probability is at most the advantage of
-the reduction in the experiment plus, per claim position, the probability that the claim is
-accepted but not good. -/
+the reduction in the experiment plus the probability that some claim is accepted but not good. -/
+theorem omuf_le_ex (φ : Hn → G ≃ G)
+    (A : PK → ProbComp (OracleComp (specA AR X Hn G S) (List (X × S) × Bool)))
+    (good : PK → S → Option (G × Hn) → Prop) :
+    Pr{let r ← omuf KG pre n φ A}[Forges ℓ r.2.1 r.2.2.2] ≤
+      Pr{let r ← omExp KG pre n (red φ A)}[Wins ℓ good r.1 r.2.1 r.2.2] +
+        Pr{let r ← omuf KG pre n φ A}[∃ i : Fin (ℓ + 1), BadAt good i.val r] := by
+  refine (prEvent_le_prEvent_add_prEvent_and_not _ _
+    (fun r => Forges ℓ r.2.1 r.2.2.2 ∧ ∀ p ∈ r.2.1.1, good r.1 p.2 (r.2.2.2.tg p.1))).trans
+    (add_le_add (omuf_good_le KG pre n ℓ φ A good) ?_)
+  refine prEvent_mono _ _ _ fun r hr => ?_
+  obtain ⟨hF, hng⟩ := hr
+  have hng' : ¬∀ p ∈ r.2.1.1, good r.1 p.2 (r.2.2.2.tg p.1) := fun h => hng ⟨hF, h⟩
+  obtain ⟨hacc, hlen, -, -⟩ := hF
+  push Not at hng'
+  obtain ⟨p, hp, hbad⟩ := hng'
+  obtain ⟨i, hi, hpi⟩ := List.getElem_of_mem hp
+  exact ⟨⟨i, hlen ▸ hi⟩, hacc, p, List.getElem?_eq_some_iff.2 ⟨hi, hpi⟩, hbad⟩
+
+/-- `omuf_le_ex` with a union bound over the claims. -/
 theorem omuf_le (φ : Hn → G ≃ G)
     (A : PK → ProbComp (OracleComp (specA AR X Hn G S) (List (X × S) × Bool)))
     (good : PK → S → Option (G × Hn) → Prop) :
     Pr{let r ← omuf KG pre n φ A}[Forges ℓ r.2.1 r.2.2.2] ≤
       Pr{let r ← omExp KG pre n (red φ A)}[Wins ℓ good r.1 r.2.1 r.2.2] +
-        ∑ i : Fin (ℓ + 1), Pr{let r ← omuf KG pre n φ A}[BadAt good i.val r] := by
-  refine (prEvent_le_prEvent_add_prEvent_and_not _ _
-    (fun r => Forges ℓ r.2.1 r.2.2.2 ∧ ∀ p ∈ r.2.1.1, good r.1 p.2 (r.2.2.2.tg p.1))).trans
-    (add_le_add (omuf_good_le KG pre n ℓ φ A good) ?_)
-  refine (prEvent_mono _ _ (fun r => ∃ i : Fin (ℓ + 1), BadAt good i.val r)
-      fun r hr => ?_).trans (prEvent_exists_le _ _)
-  · obtain ⟨hF, hng⟩ := hr
-    have hng' : ¬∀ p ∈ r.2.1.1, good r.1 p.2 (r.2.2.2.tg p.1) := fun h => hng ⟨hF, h⟩
-    obtain ⟨hacc, hlen, -, -⟩ := hF
-    push Not at hng'
-    obtain ⟨p, hp, hbad⟩ := hng'
-    obtain ⟨i, hi, hpi⟩ := List.getElem_of_mem hp
-    exact ⟨⟨i, hlen ▸ hi⟩, hacc, p, List.getElem?_eq_some_iff.2 ⟨hi, hpi⟩, hbad⟩
+        ∑ i : Fin (ℓ + 1), Pr{let r ← omuf KG pre n φ A}[BadAt good i.val r] :=
+  (omuf_le_ex KG pre n ℓ φ A good).trans (add_le_add le_rfl (prEvent_exists_le _ _))
 
 /-! ### The two assumptions -/
 
@@ -513,16 +520,16 @@ def BadS (φ : Hn → G ≃ G) (good : PK → S → Option (G × Hn) → Prop) (
 
 /-- **The generic reduction, with a target-query budget**: if every run of the composed adversary
 makes at most `n` target queries (the stream's length), the stream never runs out, and the
-per-claim term is about the answer and first hint of the label. -/
+claims' term is about the answer and first hint of each label. -/
 theorem omuf_le_of_bound (φ : Hn → G ≃ G)
     (A : PK → ProbComp (OracleComp (specA AR X Hn G S) (List (X × S) × Bool)))
     (hA : ∀ pk, ∀ a ∈ support (A pk), IsQueryBoundP a (fun q => isTgt q = true) n)
     (good : PK → S → Option (G × Hn) → Prop) :
     Pr{let r ← omuf KG pre n φ A}[Forges ℓ r.2.1 r.2.2.2] ≤
       Pr{let r ← omExp KG pre n (red φ A)}[Wins ℓ good r.1 r.2.1 r.2.2] +
-        ∑ i : Fin (ℓ + 1), Pr{let r ← omuf KG pre n φ A}[BadS φ good i.val r] := by
-  refine (omuf_le KG pre n ℓ φ A good).trans (add_le_add le_rfl (Finset.sum_le_sum fun i _ => ?_))
-  refine prEvent_mono_of_support _ _ _ fun r hr hbad => ?_
+        Pr{let r ← omuf KG pre n φ A}[∃ i : Fin (ℓ + 1), BadS φ good i.val r] := by
+  refine (omuf_le_ex KG pre n ℓ φ A good).trans (add_le_add le_rfl ?_)
+  refine prEvent_mono_of_support _ _ _ fun r hr ⟨i, hbad⟩ => ⟨i, ?_⟩
   simp only [omuf, mem_support_bind_iff, support_pure, Set.mem_singleton_iff] at hr
   obtain ⟨kp, -, a, ha, L, hL, r', hr', rfl⟩ := hr
   have hinv := simulateQ_run_preservesInv (realImpl φ (pre kp.2)) (TgInv φ)

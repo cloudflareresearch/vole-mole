@@ -53,6 +53,10 @@ abbrev SIss := Option Spec.Bytes
 def relP (pk : UovPk) (s : SIss) (t : TG) : Prop :=
   ∃ σ, s = some σ ∧ σ.length = 119 ∧ pk.toSpec.eval σ = toL (encT t)
 
+/-- **The honest Issuer** (`issue_response`): `derive_preimage(sk, t)` on the target's 45 bytes
+(`Spec.PomFRIT.issueResponse` without its length check, which every target passes). -/
+def honestPre (sk : Spec.Signer) (t : TG) : SIss := sk.derivePreimage (toL (encT t))
+
 /-! ## The forger and its oracles -/
 
 /-- The forger's oracles: the hashes and the cipher (`specIC`), `hash_to_target` (`H_T`, inputs
@@ -618,13 +622,12 @@ theorem pomfrit_U1_bound (e1 : CTable → QueryLog specIC → ByteArray → TG)
     Pr{let r ← game KG pre (QT + (ℓ + 1)) ℓ T lr A addHint e1 tgts1}[PomWin ℓ r] ≤
       Pr{let r ← omExp KG pre (QT + (ℓ + 1)) (red addHint (advC ℓ T lr A e1 tgts1))}[
         Wins ℓ (goodPre relP) r.1 r.2.1 r.2.2] +
-      ∑ i : Fin (ℓ + 1),
-        Pr{let r ← game KG pre (QT + (ℓ + 1)) ℓ T lr A addHint e1 tgts1}[PFail i.val r] := by
+      Pr{let r ← game KG pre (QT + (ℓ + 1)) ℓ T lr A addHint e1 tgts1}[
+        ∃ i : Fin (ℓ + 1), PFail i.val r] := by
   refine (prEvent_mono_of_support _ _ _ fun _ hr hw =>
     pomWin_forges KG pre _ ℓ T lr A _ _ _ hr hw).trans ?_
   refine (omuf_le_of_bound KG pre _ ℓ addHint _ (advC_bound ℓ QT T lr A _ _ hA)
-    (goodPre relP)).trans (add_le_add le_rfl (Finset.sum_le_sum fun i _ =>
-      prEvent_mono _ _ _ fun r hr => ?_))
+    (goodPre relP)).trans (add_le_add le_rfl (prEvent_mono _ _ _ fun r ⟨i, hr⟩ => ⟨i, ?_⟩))
   obtain ⟨hacc, ⟨x, σ⟩, hp, hng⟩ := hr
   refine ⟨hacc, x, σ, hp, fun ⟨a, e, hs, hrel⟩ => hng ?_⟩
   simp only [hs, Option.map_some]
@@ -644,14 +647,12 @@ theorem pomfrit_U2_bound (τ : ℕ) (sh : CTable → QueryLog specIC → ByteArr
     Pr{let r ← game KG pre (QT + (ℓ + 1)) ℓ T lr A noHint (hint2 τ sh) tgts2}[PomWin ℓ r] ≤
       Pr{let r ← omExp KG pre (QT + (ℓ + 1)) (red noHint (advC ℓ T lr A (hint2 τ sh) tgts2))}[
         Wins ℓ (goodShift τ relP) r.1 r.2.1 r.2.2] +
-      ∑ i : Fin (ℓ + 1),
-        Pr{let r ← game KG pre (QT + (ℓ + 1)) ℓ T lr A noHint (hint2 τ sh) tgts2}[
-          ShiftFail τ i.val r] := by
+      Pr{let r ← game KG pre (QT + (ℓ + 1)) ℓ T lr A noHint (hint2 τ sh) tgts2}[
+        ∃ i : Fin (ℓ + 1), ShiftFail τ i.val r] := by
   refine (prEvent_mono_of_support _ _ _ fun _ hr hw =>
     pomWin_forges KG pre _ ℓ T lr A _ _ _ hr hw).trans ?_
   refine (omuf_le_of_bound KG pre _ ℓ noHint _ (advC_bound ℓ QT T lr A _ _ hA)
-    (goodShift τ relP)).trans (add_le_add le_rfl (Finset.sum_le_sum fun i _ =>
-      prEvent_mono _ _ _ fun r hr => ?_))
+    (goodShift τ relP)).trans (add_le_add le_rfl (prEvent_mono _ _ _ fun r ⟨i, hr⟩ => ⟨i, ?_⟩))
   obtain ⟨hacc, ⟨x, σ⟩, hp, hng⟩ := hr
   refine ⟨hacc, x, σ, hp, fun ⟨a, δs, hs, hlen, hrel⟩ => hng ?_⟩
   simp only [hs, Option.map_some]
