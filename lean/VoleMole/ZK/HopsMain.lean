@@ -1,4 +1,5 @@
 import VoleMole.ZK.HopsJoint
+import VoleMole.Privacy.MainChain
 
 /-!
 # Zero knowledge on `main`, one proof, in the random-oracle and ideal-cipher model
@@ -243,16 +244,6 @@ lemma pr_prod_le_prod {α β β' : Type*} [Fintype α] [Fintype β] [Fintype β'
   have hα : (0 : ℝ) < Fintype.card α := by exact_mod_cast Fintype.card_pos
   gcongr with a
   exact h a
-
-/-- Averaging a bound that depends on the shared coordinate. -/
-lemma abs_pr_prod_sub_le_pr {α β β' γ : Type*} [Fintype α] [Fintype β] [Fintype β'] [Fintype γ]
-    [Nonempty α] (P : α × β → Prop) (Q : α × β' → Prop) (B : α × γ → Prop)
-    (h : ∀ a, |pr β (fun b => P (a, b)) - pr β' (fun b => Q (a, b))| ≤ pr γ (fun c => B (a, c))) :
-    |pr (α × β) P - pr (α × β') Q| ≤ pr (α × γ) B := by
-  have hα : (0 : ℝ) < Fintype.card α := by exact_mod_cast Fintype.card_pos
-  rw [pr_prod, pr_prod, pr_prod, ← sub_div, ← Finset.sum_sub_distrib, abs_div, abs_of_pos hα]
-  gcongr
-  exact (Finset.abs_sum_le_sum_abs _ _).trans (Finset.sum_le_sum fun a _ => h a)
 
 section H6
 

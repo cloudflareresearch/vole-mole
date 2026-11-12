@@ -101,6 +101,12 @@ attribute [instance] Slot.fK Slot.nK
 def Slot.out {Y O Ω : Type} (A : Slot Y O Ω) (y : Option Y) (k : A.K) : Option O :=
   y.map (A.run · k)
 
+/-- The slot with its observation mapped. -/
+def Slot.mapObs {Y O Ω Ω' : Type} (A : Slot Y O Ω) (f : Ω → Ω') : Slot Y O Ω' where
+  K := A.K
+  run := A.run
+  obs y k := f (A.obs y k)
+
 /-- **A game of four proofs in sequence**: each statement from the secret and the earlier
 outputs. -/
 structure Game (S O Y₁ Y₂ Y₃ Y₄ : Type) where
@@ -328,6 +334,12 @@ def idealS : Slot Y O H.Obs where
   K := H.Coins
   run y k := H.out y k.1 k.2.1 k.2.2.1 k.2.2.2
   obs := H.obsOf
+
+lemma fillS_out (y : Y) (k : H.Coins) :
+    H.fillS.out (some y) k = some (H.out y k.1 (k.2.2.1 ∘ H.key y k.1) k.2.2.1 k.2.2.2) := rfl
+
+lemma idealS_out (y : Y) (k : H.Coins) :
+    H.idealS.out (some y) k = some (H.out y k.1 k.2.1 k.2.2.1 k.2.2.2) := rfl
 
 /-- **The bad event of a slot**: a statement was proved and one of its sibling keys is among the
 prover's keys or the read set `Rs`. -/
