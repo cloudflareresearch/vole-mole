@@ -565,4 +565,146 @@ theorem win_mid (hD : Distinct cl pk κ) (rel : PK → S → G → Prop) (ℓ : 
 
 end Post
 
+section Main
+
+set_option linter.unusedSectionVars false
+
+variable [SampleableType G] {SK : Type}
+
+/-- An event that holds on every outcome of the continuations of `W`-outcomes has probability at
+least `Pr[W]`. -/
+lemma prEvent_le_bind_of_support {α β : Type} (mx : ProbComp α) (f : α → ProbComp β)
+    (W : α → Prop) (E : β → Prop) (h : ∀ a ∈ support mx, W a → ∀ y ∈ support (f a), E y) :
+    Pr{let a ← mx}[W a] ≤ Pr{let y ← mx >>= f}[E y] := by
+  simpa using le_prEvent_bind_of_support mx f W E 1 fun a ha hw =>
+    (prEvent_eq_one_of_forall_mem_support _ _ (h a ha hw)).ge
+
+/-- **Theorem 6, generic core** (`uov-assumptions.md` §5.6): for every OMPR adversary `B` and every
+client whose sessions have distinct labels,
+
+    Adv^{ompr}(B; n, ℓ) ≤ Pr[Forges] + Pr[CompFail]
+
+in the one-more game (`OneMore.omuf`, programmed targets `H_T(x) + r`) of the blinding forger
+`blindAdv cl n B`; `CompFail`: the forger's claims are `ℓ + 1` preimages of the programmed targets
+of distinct labels within `ℓ` Issuer queries, and the client's finishing phase rejects. -/
+theorem ompr_le_blind (tr : Trapdoor PK SK G S) (cl : Client AC X G S St Cn PK) (n ℓ : ℕ)
+    (B : PK → ProbComp (OracleComp (specB AR X' Hn' G S) (List (X' × S))))
+    (hD : ∀ pk, ∀ κ ∈ support cl.coins, Distinct cl pk κ) :
+    advOMPR tr n ℓ B ≤
+      Pr{let r ← omuf tr.keyGen tr.D n addHint (blindAdv cl n B)}[Forges ℓ r.2.1 r.2.2.2] +
+      Pr{let r ← omuf tr.keyGen tr.D n addHint (blindAdv cl n B)}[
+        Wins ℓ (goodPre tr.IsPre) r.1 r.2.1.1 r.2.2.2 ∧ r.2.1.2 = false] := by
+  set O := omuf tr.keyGen tr.D n addHint (blindAdv cl n B) with hOdef
+  -- a win at the end is a forgery or a completeness failure
+  have hsplit : Pr{let r ← O}[Wins ℓ (goodPre tr.IsPre) r.1 r.2.1.1 r.2.2.2] ≤
+      Pr{let r ← O}[Forges ℓ r.2.1 r.2.2.2] +
+      Pr{let r ← O}[Wins ℓ (goodPre tr.IsPre) r.1 r.2.1.1 r.2.2.2 ∧ r.2.1.2 = false] := by
+    refine (prEvent_mono _ _ _ fun r h => ?_).trans (prEvent_or_le _ _ _)
+    by_cases hf : r.2.1.2 = true
+    · exact Or.inl ⟨hf, h.1, h.2.1, h.2.2.1⟩
+    · exact Or.inr ⟨h, by simpa using hf⟩
+  refine le_trans ?_ hsplit
+  -- the blinding phase in the real game
+  let RM : PK × SK → Cn → OracleComp (specB AR X' Hn' G S) (List (X' × S)) → List G →
+      ProbComp ((List (X' × S) × BSt X G Hn' St X') × ((X → Option (G × G)) × Ch (WA AR AC) X G G)) :=
+    fun kp κ b L => (simulateQ (realImpl addHint (tr.D kp.2))
+      ((simulateQ (blindImpl cl n kp.1 κ) b).run bs0)).run (fun _ => none, ch0 L)
+  let M1 := do
+    let kp ← tr.keyGen
+    let b ← B kp.1
+    let κ ← cl.coins
+    let L ← unifList G n
+    let m ← RM kp κ b L
+    pure (kp, κ, m)
+  let Wmid : (PK × SK) × Cn × ((List (X' × S) × BSt X G Hn' St X') ×
+      ((X → Option (G × G)) × Ch (WA AR AC) X G G)) → Prop :=
+    fun t => Wins ℓ (goodPre tr.IsPre) t.1.1 ((claimed t.2.2.1).map fun e => (e.1, e.2.2.2.2))
+      t.2.2.2.2
+  have h1 : Pr{let t ← M1}[Wmid t] ≤ Pr{let r ← O}[Wins ℓ (goodPre tr.IsPre) r.1 r.2.1.1 r.2.2.2] := by
+    have hO : O = M1 >>= fun t => (fun r => (t.1.1, ((claimed t.2.2.1).map fun e => (e.1, e.2.2.2.2),
+        r.1), r.2)) <$> (simulateQ (realImpl addHint (tr.D t.1.2))
+          (simulateQ (liftV (AR := AR) (S := S)) (cl.post t.1.1 t.2.1 (claimed t.2.2.1)))).run
+            t.2.2.2 := by
+      simp only [hOdef, omuf, M1, RM, blindAdv, bind_assoc, pure_bind, simulateQ_bind,
+        StateT.run_bind, simulateQ_pure, StateT.run_pure, map_eq_bind_pure_comp,
+        Function.comp_def]
+    rw [hO]
+    refine prEvent_le_bind_of_support _ _ _ _ fun t ht hW y hy => ?_
+    simp only [M1, RM, mem_support_bind_iff, support_pure, Set.mem_singleton_iff] at ht
+    obtain ⟨kp, -, b, -, κ, -, L, -, m, hm, rfl⟩ := ht
+    have hT := simulateQ_run_preservesInv (realImpl addHint (tr.D kp.2)) (TgInv addHint)
+      (tgInv_preserved addHint (tr.D kp.2)) _ _ (fun x t h hx => by simp [ch0] at hx) m hm
+    simp only [support_map, Set.mem_image] at hy
+    obtain ⟨r, hr, rfl⟩ := hy
+    obtain ⟨hiq, htg⟩ := post_pres (tr.D kp.2) _ m.2 hT r hr
+    obtain ⟨hlen, hnd, hiq', hg⟩ := hW
+    refine ⟨hlen, hnd, hiq ▸ hiq', fun p hp => ?_⟩
+    obtain ⟨t', h', ht', hrel⟩ := hg p hp
+    exact ⟨t', h', htg _ _ ht', hrel⟩
+  -- programming is perfect
+  let CM : PK × SK → Cn → OracleComp (specB AR X' Hn' G S) (List (X' × S)) → List G →
+      ProbComp ((List (X' × S) × BSt X G Hn' St X') × ((X → Option (G × G)) × Ch (WA AR AC) X G G)) :=
+    fun kp κ b L => (simulateQ (combImpl addHint (tr.D kp.2))
+      ((simulateQ (blindImpl cl n kp.1 κ) b).run bs0)).run (fun _ => none, ch0 L)
+  let M2 := do
+    let kp ← tr.keyGen
+    let b ← B kp.1
+    let κ ← cl.coins
+    let L ← unifList G n
+    let m ← CM kp κ b L
+    pure (kp, κ, m)
+  have h2 : M1 =ᵈ M2 := by
+    simp only [M1, M2, RM, CM]
+    refine EvalDistEq.bind_right _ fun kp => EvalDistEq.bind_right _ fun b =>
+      EvalDistEq.bind_right _ fun κ => ?_
+    have := (real_eqd_comb addHint (tr.D kp.2) ((simulateQ (blindImpl cl n kp.1 κ) b).run bs0)
+      (fun _ => none) (ch0 []) n).bind_left (fun m => pure (kp, κ, m))
+    simpa only [bind_assoc, pure_bind, ch0] using this
+  -- the forger against the challenger
+  let M3 := do
+    let kp ← tr.keyGen
+    let b ← B kp.1
+    let κ ← cl.coins
+    let L ← unifList G n
+    let w ← (simulateQ (bcomb cl n (tr.D kp.2) kp.1 κ) b).run (bs0, (fun _ => none, ch0 L))
+    pure (kp, κ, w)
+  have h3 : M2 = (fun t => (t.1, t.2.1, ((t.2.2.1, t.2.2.2.1), t.2.2.2.2))) <$> M3 := by
+    simp only [M2, M3, CM, collapseB, map_bind, map_pure, bind_map_left]
+  have hinit : ∀ kp κ L, L ∈ support (unifList G n) →
+      InvC (AR := AR) (Hn' := Hn') (X' := X') cl n kp κ (bs0, (fun _ => none, ch0 L)) :=
+    fun kp κ L hL => ⟨by simp [ch0, bs0, length_of_mem_unifList n L hL], by simp,
+      by simp [ch0], by simp [bs0], by simp [bs0]⟩
+  have h4 : Pr{let t ← M3}[Wins ℓ (goodPre tr.IsPre) t.1.1 t.2.2.1 (piB t.2.2.2)] ≤
+      Pr{let t ← M2}[Wmid t] := by
+    rw [h3, prEvent_map]
+    refine prEvent_mono_of_support _ _ _ fun t ht hW => ?_
+    simp only [M3, mem_support_bind_iff, support_pure, Set.mem_singleton_iff] at ht
+    obtain ⟨kp, -, b, -, κ, hκ, L, hL, w, hw, rfl⟩ := ht
+    have hinv := simulateQ_run_preservesInv (bcomb cl n (tr.D kp.2) kp.1 κ) (InvC cl n kp.1 κ)
+      (bcomb_inv cl n (tr.D kp.2) kp.1 κ (hD kp.1 κ hκ)) b _ (hinit kp.1 κ L hL) w hw
+    exact win_mid cl n kp.1 κ (hD kp.1 κ hκ) tr.IsPre ℓ kp.1 w.1 w.2 hinv hW
+  -- `B` in `omExp`
+  have h5 : advOMPR tr n ℓ B =
+      Pr{let t ← M3}[Wins ℓ (goodPre tr.IsPre) t.1.1 t.2.2.1 (piB t.2.2.2)] := by
+    have hE : omExp tr.keyGen tr.D n B =ᵈ
+        (fun t => (t.1.1, t.2.2.1, piB t.2.2.2)) <$> M3 := by
+      simp only [omExp, M3, map_bind, map_pure]
+      refine EvalDistEq.bind_right _ fun kp => EvalDistEq.bind_right _ fun b => ?_
+      refine (bind_unused cl.coins _).symm.trans (EvalDistEq.bind_congr_of_support _ fun κ hκ => ?_)
+      refine EvalDistEq.bind_congr_of_support _ fun L hL => ?_
+      have hp : piB (AR := AR) (AC := AC) (X' := X') (Hn' := Hn') (St := St) (X := X)
+          (bs0, (fun _ => none, ch0 L)) = ch0 L := by
+        simp only [piB, ch0, bs0]
+        congr 1
+      have := (bcomb_eqd cl n (tr.D kp.2) kp.1 κ (hD kp.1 κ hκ) b _
+        (hinit kp.1 κ L hL)).symm.bind_left (fun r => pure (kp.1, r.1, r.2))
+      rw [hp] at this
+      simpa only [bind_map_left] using this
+    unfold advOMPR
+    rw [hE.prEvent_eq, prEvent_map]
+  rw [h5]
+  exact h4.trans ((h2.prEvent_eq _).symm ▸ h1)
+
+end Main
+
 end VoleMole.Assumptions.Blind
