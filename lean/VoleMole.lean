@@ -137,6 +137,7 @@ import VoleMole.ROM.PermFull
 import VoleMole.ROM.PermAdapt
 import VoleMole.ROM.SpecSound
 import VoleMole.ROM.ExtractReduce
+import VoleMole.ROM.VerifierIC
 import VoleMole.ROM.RatatouilleBalance
 import VoleMole.ROM.TableReads
 import VoleMole.ROM.PrivacyReads

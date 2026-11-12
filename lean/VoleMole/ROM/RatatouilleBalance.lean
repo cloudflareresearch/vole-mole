@@ -1,4 +1,4 @@
-import VoleMole.ROM.ExtractReduce
+import VoleMole.ROM.VerifierIC
 import VoleMole.ROM.SpecSound
 
 /-!
@@ -1026,5 +1026,25 @@ theorem balance_le (A : RoundAdv S (Op Z) Resp) (N : ℕ) (σ : Signer)
   refine le_trans (add_le_add (add_le_add s1 s2) (le_of_eq ?_)) (le_of_eq (add_assoc _ _ _).symm)
   rw [Fintype.sum_bool]
   exact h3
+
+/-- The Issuer's verifications re-run with the cipher as queries (`ROM/VerifierIC.lean`). -/
+def verQL (st : Statement) (pf : ByteArray) : OracleComp specIC Bool :=
+  (·.accept) <$> verifyIC CrtGen.tables st pf
+
+/-- **Theorem 1 (balance), with no hypothesis on the verifier**: `balance_le` with the
+cipher-querying verifier `verifyIC` (`verifierIC_verifyIC`): per verification `verifierQueriesIC`
+hash queries per kind, `verifierTotal + 2` in all, and `cipherCount` cipher queries. -/
+theorem balance_le_lean (A : RoundAdv S (Op Z) Resp) (N : ℕ) (σ : Signer)
+    (hdig : pkU.digest.size = 32) {qA : Kind → ℕ} {nA eA : ℕ}
+    (hqA : ∀ s, IsKindQueryBoundIC (A.next s) qA)
+    (hnA : ∀ s, IsQueryBoundP (A.next s) (fun t => t.isLeft = true) nA)
+    (heA : ∀ s, IsQueryBoundP (A.next s) (fun t => t.isRight = true) eA) :
+    Pr{let E ← $ᵗ CTable; let r ← (simulateQ randomOracle (balQ lr pkU A N σ E)).run' ∅}[
+        Win r.2.2] ≤
+      N * epsIss (N * (eA + eVR lr pkU cipherCount)) (N • (qA + verifierQueriesIC)) +
+        N * epsSpend (N * (eA + eVR lr pkU cipherCount)) (N * (nA + (verifierTotal + 2)))
+          (N • (qA + verifierQueriesIC)) +
+        forgeAdv lr pkU verQL A N σ + collAdv lr pkU verQL A N σ :=
+  balance_le lr pkU verQL A N σ hdig (verifierIC_verifyIC CrtGen.tables) hqA hnA heA
 
 end VoleMole.ROM.IC.RatBalance
