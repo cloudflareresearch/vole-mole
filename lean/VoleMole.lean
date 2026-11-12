@@ -141,6 +141,8 @@ import VoleMole.EndToEnd.MoussakaUnboundSpec
 import VoleMole.ROM.MoussakaUnbound
 import VoleMole.ROM.MoussakaUnboundAdapt
 import VoleMole.ROM.MoussakaUnboundSpec
+import VoleMole.ROM.VerifyIC
+import VoleMole.ROM.MoussakaOMUF
 import VoleMole.ROM.TableReads
 import VoleMole.ROM.PrivacyReads
 import VoleMole.Privacy.Basic

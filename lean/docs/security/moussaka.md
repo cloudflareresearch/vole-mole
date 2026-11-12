@@ -38,7 +38,7 @@ Contents:
 
 | Property | Holds? | Bound (classical) | Assumptions |
 |---|---|---|---|
-| One-more unforgeability, per issuance context (Thm 1) | **Yes** | `ε_ext^iss + ε_ext^red + ε_dig + Adv^bind_Com + K·Adv^ct-uf_UOV,Com` | PoK (extraction README), binding of `Com`, chosen-target unforgeability of UOV on `Com`-images (implied by one-more-UOV, heuristically) |
+| One-more unforgeability, per issuance context (Thm 1) | **Yes**; [Lean] in the ROM and ideal-cipher model on the spec, with the Lean verifier as the honest Anchors' and Moderator's check, the extraction terms from the soundness theorems (`ROM/MoussakaOMUF.lean`, `omuf_le_num`; §4 "Status") | `ε_ext^iss + ε_ext^red + ε_dig + Adv^bind_Com + K·Adv^ct-uf_UOV,Com`; mechanized: `qI·ε_I + qR·ε_R + Adv^bind_Com(B₁) + Adv^ct-uf_K(B₂)`, `ε_dig` a condition on the honest keys | PoK (extraction README), binding of `Com`, chosen-target unforgeability of UOV on `Com`-images (implied by one-more-UOV, heuristically) |
 | One nullifier per signed commitment; double-spend detection (Cor 2) | **Yes**, if the Moderator keeps one record per `(ctx_iss, ctx_red)` across all Anchor Sets (`moussaka.hpp:141-146`) | as Thm 1 | as Thm 1 |
 | Redemption non-malleability: no redirect to another `challenge_digest`, Anchor Set or `ctx_red` (Thm 3) | **Yes** | `ε_SE^red + Adv^bind + K·Adv^ct-uf + U·Adv^ow-r + ZK hops` | weak SE (L8), plus the above, plus one-wayness in `r` |
 | Issuer hiding and unlinkability vs a Moderator **colluding with all Anchors**, with adversarial keys (Thm 4a) | **Yes, computationally**; [Lean] from uniform seed outputs (`Privacy/Moussaka.lean`, `anonymity`; for `main`'s Client, which finds its index itself, `Privacy/MoussakaFind.lean`); with the executable Lean prover (label rows) down to its tape hypothesis (`Privacy/MoussakaLean.lean`, `anonymity_label_rows`); for the Lean prover in the ROM and ideal-cipher model with every zero-knowledge term explicit, `≈ 2⁻¹⁰²·³` plus budget terms and `2·Adv^hide_Com` (`anonymityRO_lean_num`), and `≈ 2⁻¹⁰¹·⁹` with a table-reading interaction (`anonymityRA_lean_num`; Appendix B); also with AES as random permutations (`_perm`) and with one shared `H₃` (`anonymitySh_num`, `anonymityRASh_num`); from the real Clients' OS seeds and seed XOF, each `+ 2·(2q_X + 2)·2⁻²⁵⁶` (`anonymity*_seed`, `lean/docs/zk.md` §10.6); with a key stage (contexts, keys) that reads the tables too (`anonymityRAK_lean_num`, `≈ 2⁻¹⁰¹·⁹`); with any number `n` of further honest Clients, `≤ n·2⁻¹⁰²` plus budget terms and `2·Adv^hide_Com` (`anonymityN_lean_num`), also adaptively scheduled, each further session's contexts, key, response and Anchor Set chosen from earlier outcomes and the challenge contexts and keys from the sessions before it (`anonymityAd_lean_num`, the same numbers), and interleaved in any order (`anonymityIL_lean_num`, `≤ (n + 2)·2⁻¹⁰¹`; with a table-reading scheduler that also places the challenge, `anonymityILO_lean_num`, `+ 28·L·(a₃ + a₂ + a₅ + 221·a_E)·2⁻¹²⁸`), and with `N` challenge pairs (`anonymityP_lean_num`; `lean/docs/zk.md` §10.8; §11 item 5) | `2·ε_ZK^joint + 2·Adv^hide_Com` (the `2^{−192}` is not needed, §6) | ZK (lean/docs/zk.md), hiding of `Com` |
@@ -344,6 +344,66 @@ With Lemma U, `K·Adv^ct-uf ≤ K·(Adv^om-uov + q/2^{223.9} + q²/2^{360})`.
      `Sign_k`.
    - `B₂` outputs `(S_j[u_j], x_j, s_j)`, a CT-UF forgery. ∎
 
+**Status: [Lean]** (`lean/VoleMole/ROM/MoussakaOMUF.lean`, `ROM/VerifyIC.lean`,
+`Protocols/Moussaka.lean`). Game OMUF on the executable spec, in the random-oracle and
+ideal-cipher model of `lean/VoleMole/ROM/` (SHAKE a random oracle, AES's rows uniform functions):
+- *The game.* `K` honest Anchors with any public keys `pk k` and any signers `sk k` (nothing is
+  assumed of them). The adversary (`Adversary`) is an oracle computation over the hashes and the
+  cipher that makes `qI` Issue queries one after the other, each seeing the earlier answers, then
+  outputs `qR` redemptions with Anchor Sets of honest Anchors. The Anchor (`anchorIC`) is the
+  spec's `issue_response` with the request length of `main` (`7272`) or of label rows (`7528`)
+  and the executable Lean verifier on the oracles (`anchorIC_eq_spec`: per table it is
+  `Spec.Moussaka.issueResponseN` with that verifier); an accepted proof puts `t` into the signed
+  set, whether or not `derive_preimage` then succeeds. The Moderator (`moderatorIC`) is
+  `finalize_redeem` with the Lean verifier, for a valid Anchor Set and 16-byte contexts. The
+  Redeem oracle of the game above is replaced by a final list of redemptions: its answer is
+  public, so the adversary can compute it. `Win`: for some `ctx_iss`, more distinct accepted
+  `(ctx_red, nf)` than distinct accepted `t`, the record global across Anchor Sets. The
+  adversary is deterministic given the oracles; every term averages over its coins.
+- *The verifier as an oracle computation* (`ROM/VerifyIC.lean`). The soundness theorems need
+  provers that reach the cipher only through oracle queries; the honest checks run inside the
+  game, so they must too. `verifyIC` derives the BAVC tree with cipher queries, queries the cells
+  the verifier's PRG calls read (`needCells`), then runs the hash-query verifier with the PRG of
+  the queried cells; per table it is the executable verifier with the ideal-cipher PRG
+  (`evalWithAnswerFn_verifyIC`, from a cell-level read lemma `verify_congr_cells`). One
+  verification costs `2 + 337` hash queries and `9212 + 2304·(2 + voleColBlocks)` cipher
+  queries (`55292` for an issuance proof, `69116` for a redemption proof).
+- *The reduction* (`omuf_le`). The provers `P^iss_j`, `P^red_j` are the whole game with its
+  `j`-th proof as output. Per table, a win in which every accepted proof is extracted gives a
+  `Com` collision among the extracted openings or a CT-UF forgery (`win_imp`; the deterministic
+  steps 3–4 are `Moussaka.collision_or_forgery`, through `exists_unsigned_of_card_lt`). A union
+  bound across the games on one table (`prEvent_le_sum4_of_tables`) gives
+
+      Pr[Win] ≤ Σ_{j<qI} Pr[accept ∧ ¬Extracted](P^iss_j) + Σ_{j<qR} Pr[accept ∧ ¬Extracted](P^red_j)
+                + AdvBind(B₁) + AdvCTUF(B₂).
+
+  `B₁`, `B₂` (`extAll`) run the game and the straight-line extractor on every proof. `AdvBind` is
+  the probability that two distinct extracted openings in `Com`'s domain (`nf` of 24 bytes, the
+  rest 16) collide; `AdvCTUF` that an accepted redemption's extracted opening, with an honest key
+  of its Anchor Set and a preimage under it, commits to a target that no Anchor's signer was
+  called on (the signer is called exactly on the accepted Issue queries' `t`, so `B₂`'s `Sign`
+  queries are those).
+- *With the soundness theorems* (`omuf_le_num`). Each extraction term is bounded by
+  `moussakaIssue_accept_le_adaptive_spec` or `moussakaRedeem_accept_le_adaptive_spec`
+  (`ROM/SpecSound.lean`) at the provers' budgets: the adversary's `qI + 2` stages plus the
+  `qI + qR` honest verifications (`gameK`, `gameE`, `gameH`). Their `hinj` hypotheses are
+  discharged; for redemption this needs the honest keys' digests to be 32 bytes and distinct
+  (`hdig`, `hdinj`), the note's `ε_dig` as a condition on the keys (Anchor Sets hold honest keys
+  only; over key generation it fails with probability `≤ K²·2^{−257}` in the ROM). So
+
+      Pr[Win] ≤ qI·ε_I(q', q'_E) + qR·ε_R(q', q'_E, n') + AdvBind(B₁) + AdvCTUF(B₂).
+
+  `Audit/Nonvacuous.lean` instantiates the hypotheses; the honest checks' request lengths are the
+  verifier's proof sizes (`pfLenI_eq`, `pfLenR_eq`). `#print axioms`: `propext`,
+  `Classical.choice`, `Quot.sound`.
+- *Differences from the paper bound.* (1) `qI·ε_I + qR·ε_R` in place of `ε_ext^iss + ε_ext^red`:
+  the union bound charges every proof separately, where the paper extracts all proofs of a run at
+  once (§3.1, "simultaneous"; L8 §9.1–9.2), which is not mechanized. Each `ε` is a sum of
+  per-query terms, so this costs a factor `qI` or `qR`. (2) `Adv^ct-uf` for `K` keys, not
+  `K·Adv^ct-uf_1` (the guessing step needs key generation; paper). (3) `Com` binding and CT-UF stay
+  assumptions (§3.2, §3.3; on the good event every signed target has an extracted opening, so
+  `B₂` is also a CT-UF^open adversary). No step of the paper proof was found wrong.
+
 **Remarks.**
 - *Counting refinement.* The same argument bounds, for each `(ctx_iss, ctx_red)`, the accepted
   nullifiers by the signed commitments whose extracted opening carries that `ctx_red`. The Anchor
@@ -442,6 +502,13 @@ Moreover:
 3. By binding, `ctx_red' = ctx_red_h` and `r' = r_h`.
 4. In the simulated world, `r_h` enters `A`'s view only through `t_h`, so outputting it breaks
    `Adv^ow-r` (guess which of the `U` tokens: factor `U`). ∎
+
+**Status.** Corollary 2 (1) and (2) are what the core of Theorem 1 uses (one extracted opening
+per accepted redemption, binding); they are not stated separately in Lean. Theorem 3 is
+**[paper]**: it needs the honest Clients' proofs simulated inside the soundness game (weak SE with
+the zero-knowledge simulator's `H₂³` programming) and a reduction to one-wayness in `r`; the Lean
+zero-knowledge theorems are for the table model of the privacy games (`lean/docs/zk.md` §10), not
+for VCVio provers, and no SE theorem is mechanized beyond its core (`Seed/SimExt.lean`).
 
 The architecture and protocols drafts note one limit that remains: a Moderator that relays
 *another* Moderator's challenge is not stopped by `challenge_digest`.
@@ -970,7 +1037,15 @@ the fix column describes `d5def9c`, where Moussaka used the rows (and what dropp
      Clients' redemption statements are chosen after the challenge requests); further Clients in
      the shared-`H₃`, seed-XOF and non-colluding games.
 6. Whether lean/docs/zk.md's `Pred` product can be made additive on `main`. It is moot with the fix.
-7. Timing side channels beyond the index check (OS RNG, allocation) are out of scope.
+7. Unforgeability in Lean (§4 "Status"). Theorem 1 is mechanized in the ROM and ideal-cipher
+   model on the spec (`omuf_le_num`). What remains: `Com` binding and CT-UF as assumptions (items
+   2, 3); the simultaneous extraction of all proofs of a run (the Lean bound pays `qI·ε_I + qR·ε_R`
+   by a union bound); the `K·Adv^ct-uf_1` guessing step; `ε_dig` as a probability over key
+   generation (a condition on the keys in Lean); AES as random permutations (the `_perm`
+   soundness theorems exist, but `verifyIC` is written for the cipher as uniform functions).
+   Corollary 2 is not stated separately, and Theorem 3 (non-malleability) is paper only (§5.3
+   "Status").
+8. Timing side channels beyond the index check (OS RNG, allocation) are out of scope.
 
 ---
 
@@ -1001,6 +1076,18 @@ demo2: adversary token with squatted nf ACCEPTED; honest token then REJECTED (do
   one-hot with entry 1 (§5.2).
 - An `example` showing that the weight constraint alone fails over `GF(2)`.
 - `exists_unsigned_of_card_lt`: the pigeonhole step of Theorem 1.
+
+- `collision_or_forgery`: steps 3–4 of Theorem 1 (§4): if more distinct redemption identities
+  than signed commitments were accepted in one context, two distinct extracted openings collide
+  or a redemption opening's commitment was never signed.
+
+`lean/VoleMole/ROM/VerifyIC.lean`: the executable verifier as an oracle computation over the
+hashes and the cipher (`verifyIC`, `evalWithAnswerFn_verifyIC`, the cell-level read lemma
+`verify_congr_cells`, query bounds). `lean/VoleMole/ROM/MoussakaOMUF.lean` (Theorem 1, §4 "Status"):
+the game (`game`, `anchorIC`, `moderatorIC`, `Win`; `anchorIC_eq_spec`), the reduction `omuf_le`
+(per table `win_imp`), and `omuf_le_num` with the extraction terms of
+`moussakaIssue_accept_le_adaptive_spec` and `moussakaRedeem_accept_le_adaptive_spec`. `#print
+axioms`: `propext`, `Classical.choice`, `Quot.sound`.
 
 `lean/VoleMole/Privacy/Moussaka.lean` (Theorem 4(a), §6): `anonymity` (`≤ 4εI + 4εR + 2εhide`
 from per-proof zero knowledge and the hiding of `Com` for the explicit reduction), with the hops

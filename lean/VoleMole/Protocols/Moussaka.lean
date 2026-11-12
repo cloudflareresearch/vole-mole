@@ -19,6 +19,10 @@ Two deterministic facts that the written proofs in `lean/docs/security/moussaka.
   injectively to commitments (distinct `(ctx_red, nf)` and binding), and there are more accepted
   redemptions than signed commitments, then some accepted redemption's commitment was never signed.
   This is the pigeonhole step that turns a one-more forger into a UOV-Com forger.
+
+* `collision_or_forgery` (§4, steps 3–4): with an extracted opening for every accepted issuance and
+  redemption, a win yields a `Com` collision among the openings or a redemption opening whose
+  commitment was never signed. `ROM/MoussakaOMUF.lean` uses it for Theorem 1.
 -/
 
 open Finset
@@ -146,6 +150,58 @@ theorem exists_unsigned_of_card_lt (R : Finset ρ) (L : Finset τ) (t : ρ → �
   push Not at h
   have : R.card ≤ L.card := card_le_card_of_injOn t (fun j hj => h j hj) hinj
   omega
+
+/-- **The deterministic core of Theorem 1** (`lean/docs/security/moussaka.md` §4, steps 3–4).
+
+Openings `x : X` commit to `com x`, carry an issuance context `ctxOf x` and a redemption identity
+`rid x` (`(ctx_red, nf)`). `iss` lists the accepted issuance queries `(t, ctx)`; each has an
+extracted opening in `S` with that commitment and context. `red` lists the accepted redemptions
+`(ctx_iss, (ctx_red, nf))`; each has an extracted opening in `S' ⊆ S` with that context and
+identity (`S'`: the openings for which the redemption proof also extracted an Anchor key and a
+preimage). If, for some context, more distinct redemption identities were accepted than distinct
+commitments were signed, then either two distinct extracted openings collide (`Com` binding) or
+some redemption opening's commitment was never submitted to any Anchor (a CT-UF forgery). -/
+theorem collision_or_forgery {X τ C ρ : Type*} [DecidableEq τ] [DecidableEq C] [DecidableEq ρ]
+    (com : X → τ) (ctxOf : X → C) (rid : X → ρ) (S S' : Set X) (hS' : S' ⊆ S)
+    (iss : List (τ × C)) (red : List (C × ρ))
+    (hiss : ∀ q ∈ iss, ∃ x ∈ S, com x = q.1 ∧ ctxOf x = q.2)
+    (hred : ∀ j ∈ red, ∃ x ∈ S', ctxOf x = j.1 ∧ rid x = j.2)
+    (c : C) (hwin : ((iss.filter (·.2 = c)).map (·.1)).toFinset.card <
+      ((red.filter (·.1 = c)).map (·.2)).toFinset.card) :
+    (∃ x ∈ S, ∃ x' ∈ S, x ≠ x' ∧ com x = com x') ∨ (∃ x ∈ S', com x ∉ iss.map (·.1)) := by
+  classical
+  by_contra hno
+  push Not at hno
+  obtain ⟨hcoll, hforge⟩ := hno
+  -- an opening for every accepted redemption identity in context `c`
+  have hchoose : ∀ r ∈ ((red.filter (·.1 = c)).map (·.2)).toFinset,
+      ∃ x ∈ S', ctxOf x = c ∧ rid x = r := by
+    intro r hr
+    simp only [List.mem_toFinset, List.mem_map, List.mem_filter, decide_eq_true_eq] at hr
+    obtain ⟨j, ⟨hj, hjc⟩, rfl⟩ := hr
+    obtain ⟨x, hx, h1, h2⟩ := hred j hj
+    exact ⟨x, hx, h1.trans hjc, h2⟩
+  have : Nonempty X := by
+    obtain ⟨r, hr⟩ := Finset.card_pos.1 (lt_of_le_of_lt (Nat.zero_le _) hwin)
+    exact ⟨(hchoose r hr).choose⟩
+  choose! op hop using hchoose
+  set R := ((red.filter (·.1 = c)).map (·.2)).toFinset
+  set L := ((iss.filter (·.2 = c)).map (·.1)).toFinset
+  have hinj : Set.InjOn (fun r => com (op r)) R := by
+    intro r hr r' hr' h
+    by_contra hne
+    have hx : op r ≠ op r' := fun e => hne (by rw [← (hop r hr).2.2, e, (hop r' hr').2.2])
+    exact hcoll _ (hS' (hop r hr).1) _ (hS' (hop r' hr').1) hx h
+  obtain ⟨r, hr, hnot⟩ := exists_unsigned_of_card_lt R L (fun r => com (op r)) hinj hwin
+  -- `com (op r)` was signed (no forgery), but not in context `c`: a collision
+  have hsig := hforge _ (hop r hr).1
+  obtain ⟨q, hq, hqt⟩ := List.mem_map.1 hsig
+  obtain ⟨x, hx, hxt, hxc⟩ := hiss q hq
+  have hqc : q.2 ≠ c := fun e => hnot (by
+    simp only [L, List.mem_toFinset, List.mem_map, List.mem_filter, decide_eq_true_eq]
+    exact ⟨q, ⟨hq, e⟩, hqt⟩)
+  have hne : x ≠ op r := fun e => hqc (by rw [← hxc, e, (hop r hr).2.1])
+  exact hcoll _ hx _ (hS' (hop r hr).1) hne (hxt.trans hqt)
 
 end OneMore
 
