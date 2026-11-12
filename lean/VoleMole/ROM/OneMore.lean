@@ -417,4 +417,131 @@ theorem tgInv_preserved (φ : Hn → G ≃ G) (pre : G → S) :
 
 end Invariant
 
+section NoFallback
+
+variable {DR : Type} [DecidableEq DR] {AR : DR → Type} [∀ d, SampleableType (AR d)]
+  {X : Type} [DecidableEq X] {Hn G S : Type} [AddCommGroup G]
+
+/-- A target-oracle query. -/
+def isTgt : DR ⊕ ((X × Hn) ⊕ G) → Bool
+  | .inr (.inl _) => true
+  | _ => false
+
+/-- Every recorded answer got a target from the stream. -/
+def NoFall (φ : Hn → G ≃ G) (p : (X → Option (G × Hn)) × Ch AR X Hn G) : Prop :=
+  ∀ x a h, p.1 x = some (a, h) → p.2.tg x = some (φ h a, h)
+
+/-- **With at most `k ≤ |stream|` target queries, the stream never runs out.** -/
+theorem noFall_of_bound (φ : Hn → G ≃ G) (pre : G → S) {α : Type}
+    (oa : OracleComp (specA AR X Hn G S) α) :
+    ∀ (k : ℕ) (p : (X → Option (G × Hn)) × Ch AR X Hn G),
+      IsQueryBoundP oa (fun q => isTgt q = true) k → k ≤ p.2.rest.length → NoFall φ p →
+        ∀ z ∈ support ((simulateQ (realImpl φ pre) oa).run p), NoFall φ z.2 := by
+  induction oa using OracleComp.inductionOn with
+  | pure x =>
+    intro k p _ _ hp z hz
+    simp only [simulateQ_pure, StateT.run_pure, support_pure, Set.mem_singleton_iff] at hz
+    subst hz
+    exact hp
+  | query_bind q cont ih =>
+    intro k p hq hk hp z hz
+    rw [isQueryBoundP_query_bind_iff] at hq
+    simp only [simulateQ_bind, simulateQ_spec_query, StateT.run_bind, mem_support_bind_iff] at hz
+    obtain ⟨up, hu, hz⟩ := hz
+    rcases q with d | ⟨x, h⟩ | t
+    · have hq2 := hq.2 up.1
+      change IsQueryBoundP _ _ k at hq2
+      simp only [realImpl, StateT.run_mk, roStep, Functor.map_map, support_map,
+        Set.mem_image] at hu
+      obtain ⟨r, -, rfl⟩ := hu
+      exact ih _ k (p.1, { p.2 with ro := r.2 }) hq2 hk hp z hz
+    · have hq2 := hq.2 up.1
+      change IsQueryBoundP _ _ (k - 1) at hq2
+      have hk0 : 0 < k := hq.1.resolve_left (by simp [isTgt])
+      simp only [realImpl, StateT.run_mk, support_pure, Set.mem_singleton_iff] at hu
+      subst hu
+      cases hx : p.1 x with
+      | some a =>
+        simp only [hx] at hq2 hz
+        exact ih _ (k - 1) p hq2 (by omega) hp z hz
+      | none =>
+        cases hr : p.2.rest with
+        | nil => rw [hr] at hk; simp at hk; omega
+        | cons v r =>
+          simp only [hx, hr] at hq2 hz
+          refine ih _ (k - 1) _ hq2 ?_ ?_ z hz
+          · rw [hr] at hk
+            simp only [List.length_cons] at hk
+            simp only
+            omega
+          · intro y a h' hy
+            by_cases hyx : y = x
+            · subst hyx
+              simp only [Function.update_self, Option.some.injEq, Prod.mk.injEq] at hy ⊢
+              obtain ⟨rfl, rfl⟩ := hy
+              exact ⟨rfl, rfl⟩
+            · simp only [Function.update_of_ne hyx] at hy ⊢
+              exact hp y a h' hy
+    · have hq2 := hq.2 up.1
+      change IsQueryBoundP _ _ k at hq2
+      simp only [realImpl, StateT.run_mk, support_pure, Set.mem_singleton_iff] at hu
+      subst hu
+      exact ih _ k (p.1, { p.2 with iq := p.2.iq + 1 }) hq2 hk hp z hz
+
+end NoFallback
+
+section Bound
+
+variable {DR : Type} [DecidableEq DR] {AR : DR → Type} [∀ d, SampleableType (AR d)]
+  {X : Type} [DecidableEq X] {Hn G S : Type} [AddCommGroup G] [SampleableType G]
+  {PK K : Type} (KG : ProbComp (PK × K)) (pre : K → G → S) (n ℓ : ℕ)
+
+omit [AddCommGroup G] in
+lemma length_of_mem_unifList : ∀ (m : ℕ) (L : List G), L ∈ support (unifList G m) → L.length = m
+  | 0, L, h => by simp only [unifList, support_pure, Set.mem_singleton_iff] at h; subst h; rfl
+  | m + 1, L, h => by
+    simp only [unifList, mem_support_bind_iff, support_pure, Set.mem_singleton_iff] at h
+    obtain ⟨u, -, L', hL', rfl⟩ := h
+    simp [length_of_mem_unifList m L' hL']
+
+/-- The claim at position `i` is accepted but not good for the target the real game programmed
+from the answer `a` and the first hint `h` recorded for its label (`φ h a`). -/
+def BadS (φ : Hn → G ≃ G) (good : PK → S → Option (G × Hn) → Prop) (i : ℕ)
+    (r : PK × (List (X × S) × Bool) × (X → Option (G × Hn)) × Ch AR X Hn G) : Prop :=
+  r.2.1.2 = true ∧ ∃ p, r.2.1.1[i]? = some p ∧
+    ¬good r.1 p.2 ((r.2.2.1 p.1).map fun ah => (φ ah.2 ah.1, ah.2))
+
+/-- **The generic reduction, with a target-query budget**: if every run of the composed adversary
+makes at most `n` target queries (the stream's length), the stream never runs out, and the
+per-claim term is about the answer and first hint of the label. -/
+theorem omuf_le_of_bound (φ : Hn → G ≃ G)
+    (A : PK → ProbComp (OracleComp (specA AR X Hn G S) (List (X × S) × Bool)))
+    (hA : ∀ pk, ∀ a ∈ support (A pk), IsQueryBoundP a (fun q => isTgt q = true) n)
+    (good : PK → S → Option (G × Hn) → Prop) :
+    Pr{let r ← omuf KG pre n φ A}[Forges ℓ r.2.1 r.2.2.2] ≤
+      Pr{let r ← omExp KG pre n (red φ A)}[Wins ℓ good r.1 r.2.1 r.2.2] +
+        ∑ i : Fin (ℓ + 1), Pr{let r ← omuf KG pre n φ A}[BadS φ good i.val r] := by
+  refine (omuf_le KG pre n ℓ φ A good).trans (add_le_add le_rfl (Finset.sum_le_sum fun i _ => ?_))
+  refine prEvent_mono_of_support _ _ _ fun r hr hbad => ?_
+  simp only [omuf, mem_support_bind_iff, support_pure, Set.mem_singleton_iff] at hr
+  obtain ⟨kp, -, a, ha, L, hL, r', hr', rfl⟩ := hr
+  have hinv := simulateQ_run_preservesInv (realImpl φ (pre kp.2)) (TgInv φ)
+    (tgInv_preserved φ (pre kp.2)) a _ (fun x t h hx => by simp [ch0] at hx) r' hr'
+  have hnf := noFall_of_bound φ (pre kp.2) a n _ (hA kp.1 a ha)
+    (by simp [ch0, length_of_mem_unifList n L hL]) (fun x a h hx => by simp at hx) r' hr'
+  obtain ⟨hacc, p, hp, hng⟩ := hbad
+  refine ⟨hacc, p, hp, fun hg => hng ?_⟩
+  have htg : r'.2.2.tg p.1 = (r'.2.1 p.1).map fun ah => (φ ah.2 ah.1, ah.2) := by
+    cases hs : r'.2.1 p.1 with
+    | none =>
+      cases ht : r'.2.2.tg p.1 with
+      | none => rfl
+      | some th =>
+        obtain ⟨a', ha', -⟩ := hinv p.1 th.1 th.2 ht
+        simp [hs] at ha'
+    | some ah => simpa using hnf p.1 ah.1 ah.2 hs
+  simpa [htg] using hg
+
+end Bound
+
 end VoleMole.ROM.OneMore
