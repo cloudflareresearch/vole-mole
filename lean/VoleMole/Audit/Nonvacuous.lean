@@ -7,6 +7,8 @@ import VoleMole.Privacy.MoussakaNCFind
 import VoleMole.Privacy.PomFRITInterleaveOC
 import VoleMole.Privacy.RatatouilleInterleaveOC
 import VoleMole.Privacy.PomFRITLin
+import VoleMole.Privacy.MoussakaLin
+import VoleMole.Privacy.RatatouilleLin
 import VoleMole.Privacy.SeedXOFNC
 import VoleMole.ROM.SpecSound
 import VoleMole.ROM.MoussakaUnbound
@@ -330,6 +332,11 @@ example (ι : Type) [Fintype ι] [DecidableEq ι] (idx : AnchorSet → UOVKey �
   anonymityN_lean_le (mN ι) idx (mN_budget ι) (εhide := 0)
     (fun _ _ _ => (hidingAdv_true _ _).le)
 
+/-- With the further Clients on private tables (`Privacy/MoussakaLin.lean`). -/
+example (ι : Type) [Fintype ι] [DecidableEq ι] (idx : AnchorSet → UOVKey → ℕ) :=
+  anonymityN_lin (mN ι) idx (mN_budget ι) (εhide := 0)
+    (fun _ _ _ _ => (hidingAdv_true _ _).le)
+
 /-- The interleaved adversary: no further sessions started, a constant guess. -/
 def mIL {R : Type} : AdversaryILM R :=
   ⟨0, 0, 0, fun _ => .start (0, 0, k0), fun _ => 0, fun _ => 0, fun _ _ => k0, fun _ _ => 0,
@@ -409,6 +416,22 @@ theorem hidingAdvR_true (ctx : Context) : hidingAdv ctx (fun _ _ => True) = 0 :=
 example (n K : ℕ) (b₁ b₂ b₁' b₂' : Bool) :=
   unlinkabilityILO_lean_le (n := n) (K := K) rIL.toO rIL_budget.toO rIL.toO_sBudget
     (εhide := 0) (fun _ _ _ _ => (hidingAdvR_true _).le) b₁ b₂ b₁' b₂'
+
+/-- The `N`-pair Issuer with a constant guess. -/
+noncomputable def rP (N : ℕ) {R : Type} : AdversaryP R N :=
+  ⟨0, 0, 0, fun _ _ _ => default, fun _ _ => default, fun _ _ _ => default, fun _ _ _ => default,
+    fun _ _ _ _ => True⟩
+
+theorem rP_budget (N : ℕ) {R : Type} [Fintype R] [Nonempty R] : (rP N (R := R)).Budget 0 0 0 :=
+  ⟨fun _ _ _ _ _ => Rd3.const _, fun _ _ _ _ _ => Rd3.const _, fun _ _ _ _ _ => Rd3.const _,
+    fun _ _ _ _ _ => Rd3.const _, fun _ _ _ => Rd5.const _, fun _ _ _ => RdE.const _⟩
+
+set_option synthInstance.maxSize 1024 in
+/-- With the other pairs on private tables (`Privacy/RatatouilleLin.lean`; `β = 1` is always
+admissible, `pr_le_one`, so the hypothesis `hβ` is satisfiable; its value is the paper bound). -/
+example (N : ℕ) (w w' : Fin N → Bool × Bool) :=
+  unlinkabilityP_lin_le (rP N) (rP_budget N) (εhide := 0) (β := 1)
+    (fun _ _ _ _ _ _ _ => (hidingAdvR_true _).le) (fun _ _ _ _ => pr_le_one _) w w'
 
 end Ratatouille
 

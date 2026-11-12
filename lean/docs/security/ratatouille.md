@@ -791,7 +791,13 @@ and determinism of `Tag`. The witness satisfies V3 by `change_correct`. ∎
     §6's rule runs round 1), a hybrid over the pairs, each step a reduction to the table-reading
     game whose Issuer runs the other pairs (`unlinkabilityP_lean_num`, `≤ N·(N·2⁻¹⁰¹ + 2·εhide)`
     plus budget terms: `2⁻⁶³` at `2²⁰` Clients, `2⁻³⁹` at `2³²`; quadratic by an artifact of the
-    proof).
+    proof). With the other pairs moved to private tables by the interleaved lazy-sampling lemma
+    `pr_split_le` (`Privacy/RatatouilleLin.lean`; `lean/docs/zk.md` §10.8, "Linear in `N`"), the
+    step charges no other pair's reads: **`unlinkabilityP_lin`**, `≤ N·(2·2⁻¹⁰² + (N − 1)·2⁻¹²⁸ +
+    8·(q₃ + q₅ + 221·q_E)·2⁻¹²⁸ + 2·εhide + 2β)` (`unlinkabilityP_lin_le`) with `β` the split
+    world's bad event (a proof of pair `k` and a proof of another pair reading a common `H₅` key or
+    cipher point); `β ≲ 64(N − 1)·2⁻¹²⁸` is on paper only (it needs `H₄` a random oracle; in the
+    Lean games `H₄` is SHAKE), giving `≲ n·2⁻¹⁰² + 33·n²·2⁻¹²⁸` for `n = 2N` Clients.
   - with a key stage that reads the tables (`Privacy/RatatouilleRAK.lean`, `lean/docs/zk.md`
     §10.3): the Issuer's key, context and balance fixed by a setup that reads the slices and the
     shared tables (`AdversaryRAK`, `KBudget`), the issuance hops adaptive (`hopI0RAK`, `hopI1RAK`,
@@ -819,11 +825,13 @@ and determinism of `Tag`. The witness satisfies V3 by `change_correct`. ∎
     steps, `unlinkabilityILO_lean_le`, `_2pow20`, `_2pow32`).
   - what remains: SHAKE as a random oracle, AES as an ideal cipher, the consistency of a
     table-reading Issuer given as a bare function of the tables, and hiding (computational); a
-    bound linear in `N` (the lazy-sampling reduction of PomFRIT with `H₄` a table,
-    `Privacy/PomFRITLin.lean`, does not apply as it stands, since the further Clients' spend
-    statements are chosen by the Issuer); in the interleaved game, a second challenge Client whose
-    inputs are chosen after the first one's request, and the factor about 2 against the
-    sequential schedule (`lean/docs/zk.md` §10.8 "Open"); further
-    Clients in the shared-`H₃` and seed-XOF games.
+    bound on the bad event `β` of the linear `N`-pair reduction (`unlinkabilityP_lin` is linear in
+    `N` up to `β`; `β ≲ 64(N − 1)·2⁻¹²⁸` needs `H₄` a random oracle and is on paper); in the
+    interleaved game, the factor about 2 against the sequential
+    schedule (`lean/docs/zk.md` §10.8 "Open": it would disappear with the further Clients on
+    private tables); a second challenge Client with inputs chosen after the first one's request is
+    not a separate question here, since both challenge Clients share the Issuer's key, context and
+    balance, fixed before the first request (zk.md §10.8 "Open"); further Clients in the
+    shared-`H₃` and seed-XOF games.
 - The Lean file covers the accounting and the 64-bit arithmetic only. Extraction, binding and
   forgery are paper arguments.
