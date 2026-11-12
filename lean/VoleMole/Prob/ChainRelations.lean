@@ -44,7 +44,8 @@ depend on all of `ω`.
   event about the canonical slope `w* = uCanon + d` of `mid b₁` (`forall_slope_of_uCanon`), which
   is fixed before `chal2` and `l`; then union bound and averaging (`Prob/Uniform.lean`).
 * `moussakaIssue_chain_prob`, `moussakaRedeem_chain_prob`, `ratatouilleIssue_chain_prob`,
-  `ratatouilleSpend_chain_prob`, `pomfritRedeem_chain_prob`: the five relations, with
+  `ratatouilleSpend_chain_prob`, `pomfritRedeem_chain_prob`: the five relations, and
+  `moussakaUnboundIssue_chain_prob`, `moussakaUnboundRedeem_chain_prob` for unbound Moussaka, with
   `S = deltaBlocks '' admissible` (the `2¹²⁰` admissible `chal3`) and `hδ` discharged
   (`deltaBlocks_injOn`). The issue relations have no `l`: the samples are `(b₁, b₂)` and the bound
   is `2⁻¹⁵⁰ + ε_QS(n)`.
@@ -347,6 +348,79 @@ theorem moussakaRedeem_chain_prob (anchors : List UovPk) (hn : anchors.length �
       deltaBlocks deltaBlocks_injOn _ hP.2).trans ?_
   gcongr
   exact epsKOS_chal3Blocks_le _ (by norm_num [moussakaRedeem]) (by norm_num [moussakaRedeem])
+
+/-- **Unbound Moussaka issuance, one chain, uniform challenges.** -/
+theorem moussakaUnboundIssue_chain_prob (t ctxIss : ByteArray) (labelRows : Bool) (pre : Chain)
+    (mid : Bytes 136 → Chain) (ch : Bytes 136 × Bytes 56 → Chain)
+    (hpre : ∀ b, Chain.SamePrefix (moussakaUnboundIssue t ctxIss labelRows) pre (mid b))
+    (hc1 : ∀ b, (mid b).chal1 = b.ba)
+    (hmid : ∀ ω, Chain.SameMid (moussakaUnboundIssue t ctxIss labelRows) (mid ω.1) (ch ω))
+    (hc2 : ∀ ω, (ch ω).chal2 = ω.2.ba)
+    (hvals : ∀ ω x, (ch ω).vals x = (moussakaUnboundIssueSys t ctxIss).values x)
+    (known : Bytes 136 × Bytes 56 → Finset (Fin BAVC.tau))
+    (acc : Bytes 136 × Bytes 56 → Bytes 16 → Prop) [∀ ω, DecidablePred (acc ω)] :
+    prU (Bytes 136 × Bytes 56) (fun ω =>
+      ChainHyps (onSet (moussakaUnboundIssue t ctxIss labelRows) CrtGen.tables (ch ω) chal3Blocks)
+        (known ω) (acc ω) ∧
+      ¬((∃ i ∈ known ω, EndToEnd.moussakaUnboundIssueWit (fun k => fnOf t k.val) (fnOf ctxIss)
+          (candidate (F := GF128) ((ch ω).u (moussakaUnboundIssue t ctxIss labelRows))
+            ((ch ω).dc (moussakaUnboundIssue t ctxIss labelRows)) i)) ∨
+        #{x ∈ admissible | acc ω x} ≤ 9)) ≤
+      (2 ^ 150 : ℝ≥0∞)⁻¹ + ENNReal.ofReal (Seed.epsQS (2 ^ 128) (2 ^ 64) 3816) := by
+  rw [prU_map_equiv dropUnit]
+  refine (chain_prob liftInvOk_tables _ pre mid (ch ∘ dropUnit) hpre hc1 (fun ω => hmid _)
+    (fun ω => hc2 _) (fun _ _ => moussakaUnboundIssueSys t ctxIss) 3816
+    (fun _ _ => MoussakaUnbound.uIssueSystem_length _ _) (fun _ _ => True)
+    (fun _ _ => prU_no_comb _ (by simp))
+    chal3Blocks (fun ω A => ChainHyps A (known (dropUnit ω)) (acc (dropUnit ω))) _
+    fun ω A hA hAS hkos hQS _ hP => moussakaUnboundIssue_extract_chain t ctxIss labelRows _
+      (hvals _) hA hAS hkos hP.1 hQS admissible deltaBlocks deltaBlocks_injOn _ hP.2).trans ?_
+  rw [add_zero]
+  gcongr
+  exact epsKOS_chal3Blocks_le _ (by norm_num [moussakaUnboundIssue])
+    (by norm_num [moussakaUnboundIssue])
+
+/-- **Unbound Moussaka redemption, one chain, uniform challenges** (`l` uniform and
+independent). -/
+theorem moussakaUnboundRedeem_chain_prob (anchors : List UovPk) (hn : anchors.length ≤ 64)
+    (nf ctxIss ctxRed challengeDigest : ByteArray) (labelRows : Bool) (pre : Chain)
+    (mid : Bytes 136 → Chain) (ch : Bytes 136 × Bytes 56 × (Fin Moussaka.M → GF128) → Chain)
+    (hpre : ∀ b, Chain.SamePrefix
+      (moussakaUnboundRedeem anchors nf ctxIss ctxRed challengeDigest labelRows) pre (mid b))
+    (hc1 : ∀ b, (mid b).chal1 = b.ba)
+    (hmid : ∀ ω, Chain.SameMid
+      (moussakaUnboundRedeem anchors nf ctxIss ctxRed challengeDigest labelRows) (mid ω.1) (ch ω))
+    (hc2 : ∀ ω, (ch ω).chal2 = ω.2.1.ba)
+    (hvals : ∀ ω x,
+      (ch ω).vals x = (moussakaUnboundRedeemSysL anchors nf ctxIss ctxRed ω.2.2).values x)
+    (known : Bytes 136 × Bytes 56 × (Fin Moussaka.M → GF128) → Finset (Fin BAVC.tau))
+    (acc : Bytes 136 × Bytes 56 × (Fin Moussaka.M → GF128) → Bytes 16 → Prop)
+    [∀ ω, DecidablePred (acc ω)] :
+    prU (Bytes 136 × Bytes 56 × (Fin Moussaka.M → GF128)) (fun ω =>
+      ChainHyps (onSet (moussakaUnboundRedeem anchors nf ctxIss ctxRed challengeDigest labelRows)
+        CrtGen.tables (ch ω) chal3Blocks) (known ω) (acc ω) ∧
+      ¬((∃ i ∈ known ω, EndToEnd.moussakaUnboundRedeemWit GF256.ofBits (anchors.map UovPk.map)
+          (fnOf nf) (fnOf ctxIss) (fnOf ctxRed) (candidate (F := GF128)
+            ((ch ω).u (moussakaUnboundRedeem anchors nf ctxIss ctxRed challengeDigest labelRows))
+            ((ch ω).dc (moussakaUnboundRedeem anchors nf ctxIss ctxRed challengeDigest labelRows))
+            i)) ∨
+        #{x ∈ admissible | acc ω x} ≤ 9)) ≤
+      (2 ^ 150 : ℝ≥0∞)⁻¹ + ENNReal.ofReal (Seed.epsQS (2 ^ 128) (2 ^ 64) 7929) +
+        (2 ^ 128 : ℝ≥0∞)⁻¹ := by
+  refine (chain_prob liftInvOk_tables _ pre mid ch hpre hc1 hmid hc2
+    (fun _ l => moussakaUnboundRedeemSysL anchors nf ctxIss ctxRed l) 7929
+    (fun _ _ => MoussakaUnbound.uRedeemSystem_length _ _ _ _ _ _ _)
+    (fun _ w => EndToEnd.moussakaUnboundRedeemWit GF256.ofBits (anchors.map UovPk.map) (fnOf nf)
+      (fnOf ctxIss) (fnOf ctxRed) w)
+    (fun _ w => prU_comb_bad_le _ _ w fun hW =>
+      EndToEnd.moussaka_unbound_redeem_comb_bad_gf128 _ (by simpa using hn) _ _ _ w hW)
+    chal3Blocks (fun ω A => ChainHyps A (known ω) (acc ω)) _
+    fun ω A hA hAS hkos hQS hcomb hP => moussakaUnboundRedeem_extract_chain anchors nf ctxIss
+      ctxRed challengeDigest labelRows _ ω.2.2 (hvals ω) hA hAS hkos hP.1 hQS hcomb admissible
+      deltaBlocks deltaBlocks_injOn _ hP.2).trans ?_
+  gcongr
+  exact epsKOS_chal3Blocks_le _ (by norm_num [moussakaUnboundRedeem])
+    (by norm_num [moussakaUnboundRedeem])
 
 /-- **Ratatouille issuance, one chain, uniform challenges.** -/
 theorem ratatouilleIssue_chain_prob (c : ByteArray) (tInit : ℕ) (ctxIss : ByteArray)
