@@ -939,15 +939,13 @@ The adaptive versions keep `hinj` (above).
 ### 2j. The unbound Moussaka relations
 
 Files: `Prob/MoussakaUnbound.lean`, `ROM/MoussakaUnbound.lean`, `ROM/MoussakaUnboundAdapt.lean`,
-`EndToEnd/MoussakaUnboundSpec.lean`, `ROM/MoussakaUnboundSpec.lean`, `Audit/UnboundROM.lean` (new;
-nothing existing changed). `#print axioms` of the headline results: `propext`,
+`EndToEnd/MoussakaUnboundSpec.lean`, `ROM/MoussakaUnboundSpec.lean`, `Audit/UnboundROM.lean` (new; the base relations' files unchanged). `#print axioms` of the headline results: `propext`,
 `Classical.choice`, `Quot.sound`.
 
 Every generic theorem of §2c–§2i is stated for an arbitrary `Statement`; the per-relation
 theorems only add the relation's system, its length, the per-chain extraction and, for the
-combined relations, the `l` failure count. The unbound relations (`security/moussaka-unbound.md`)
-have no statement in `Verifier/Relations.lean` on this branch, so the per-relation theorems are
-stated **for any statement with the properties they use** (`Unbound.IssueStmt`,
+combined relations, the `l` failure count. The theorems for the unbound relations
+(`security/moussaka-unbound.md`) are stated once, **for any statement with the properties they use** (`Unbound.IssueStmt`,
 `Unbound.RedeemStmt`): the parameters (232 resp. 559 witness bytes, `QS_DEGREE = 9`, label rows
 `lr`), the DST, non-delayed binding, the combination `(45, "mous\x01l0")` for redemption, and
 `values = System.values` of `Arith.MoussakaUnbound.uIssueSystem` / `uRedeemSystem` at the instance
@@ -960,9 +958,10 @@ the base relations' terms and `n' = 3816` (issuance), `7929` (redemption):
 `_spec` versions of the last four (spec relations `Spec.MoussakaUnbound.IssueRel`, `RedeemRel`,
 for `|t| = 45` resp. `|nf| = 24`; no context lengths are needed since the spec reads the contexts
 through `fn`). `hinj` is discharged for the C++ encodings (`SpecRel.hinj_unboundIssue`,
-`hinj_unboundRedeem`). The reference statements `Unbound.refIssue`, `refRedeem` satisfy the
-properties (`refIssue_stmt`, `refRedeem_stmt`); for the executable verifier's own statements this
-is one lemma each once `Verifier/Relations.lean` has them.
+`hinj_unboundRedeem`). The executable verifier's statements `moussakaUnboundIssue`, `moussakaUnboundRedeem`
+(`Verifier/Relations.lean`) satisfy the properties (`Unbound.moussakaUnboundIssue_stmt`,
+`moussakaUnboundRedeem_stmt`: `rfl` and `moussakaUnbound*_values`), so all of these bounds are
+about the executable verifier.
 
 ### M4 — Mathlib bump and VCVio dependency (Phase B, ~1–3 days, mostly waiting on builds) — done
 

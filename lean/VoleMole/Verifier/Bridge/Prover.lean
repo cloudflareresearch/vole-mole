@@ -1335,7 +1335,7 @@ theorem verify_prove (Hs : Hashes) (hHs : HashesWF Hs) (hbavc : BAVCComplete) (T
 
 /-! ### Per relation
 
-The four relations without delayed instance binding, with the systems and degree bounds of
+The six relations without delayed instance binding (unbound Moussaka's two included), with the systems and degree bounds of
 `Bridge/Relations.lean` (`*_values`, `EndToEnd/Degree.lean`). Their C++ prover passes the whole
 witness to step 1 (`WITNESS_PREFIX_BYTES = WITNESS_BYTES`), as `Prover.prove`'s default. -/
 
@@ -1365,6 +1365,27 @@ theorem moussakaRedeem_complete (Hs : Hashes) (hHs : HashesWF Hs) (hbavc : BAVCC
   verify_prove Hs hHs hbavc T _ w rho _ proof h.1 h.2.1 h.2.2 _
     (moussakaRedeem_values anchors nf ctxIss ctxRed challengeDigest labelRows)
     (fun _ _ => Degree.moussaka_redeem_deg _ _ _ _ _ _ _)
+    (by show 1 ≤ 9; norm_num) (by show 9 + 1 < 2 ^ 64; norm_num)
+
+theorem moussakaUnboundIssue_complete (Hs : Hashes) (hHs : HashesWF Hs) (hbavc : BAVCComplete)
+    (T : CrtTables) (t ctxIss : ByteArray) (labelRows : Bool) (w rho proof : ByteArray)
+    (h : ProveOk Hs T (moussakaUnboundIssue t ctxIss labelRows) w rho proof) :
+    (verify Hs T (moussakaUnboundIssue t ctxIss labelRows) proof).accept = true :=
+  verify_prove Hs hHs hbavc T _ w rho _ proof h.1 h.2.1 h.2.2 _
+    (moussakaUnboundIssue_values t ctxIss labelRows)
+    (fun _ _ => Degree.moussaka_unbound_issue_deg _ _)
+    (by show 1 ≤ 9; norm_num) (by show 9 + 1 < 2 ^ 64; norm_num)
+
+theorem moussakaUnboundRedeem_complete (Hs : Hashes) (hHs : HashesWF Hs) (hbavc : BAVCComplete)
+    (T : CrtTables) (anchors : List UovPk) (nf ctxIss ctxRed challengeDigest : ByteArray)
+    (labelRows : Bool) (w rho proof : ByteArray)
+    (h : ProveOk Hs T (moussakaUnboundRedeem anchors nf ctxIss ctxRed challengeDigest labelRows) w
+      rho proof) :
+    (verify Hs T (moussakaUnboundRedeem anchors nf ctxIss ctxRed challengeDigest labelRows)
+      proof).accept = true :=
+  verify_prove Hs hHs hbavc T _ w rho _ proof h.1 h.2.1 h.2.2 _
+    (moussakaUnboundRedeem_values anchors nf ctxIss ctxRed challengeDigest labelRows)
+    (fun _ _ => Degree.moussaka_unbound_redeem_deg _ _ _ _ _ _ _)
     (by show 1 ≤ 9; norm_num) (by show 9 + 1 < 2 ^ 64; norm_num)
 
 theorem ratatouilleIssue_complete (Hs : Hashes) (hHs : HashesWF Hs) (hbavc : BAVCComplete)

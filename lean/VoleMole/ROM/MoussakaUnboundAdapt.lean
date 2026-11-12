@@ -53,10 +53,10 @@ theorem moussakaUnboundIssue_accept_le_adaptive (stF : ι → Statement) (lr : B
         ((qE * 2 : ℕ) : ℝ≥0∞) * (((512 * q .h1 : ℕ) : ℝ≥0∞) * (2 ^ 256 : ℝ≥0∞)⁻¹) +
         chainHitEps q + stmtBindEps q := by
   classical
-  set st₀ := Unbound.refIssue lr ByteArray.empty ByteArray.empty
+  set st₀ := moussakaUnboundIssue ByteArray.empty ByteArray.empty lr
   have hmu := muIn_injective (stF := stF) (dst := Unbound.issueDst) (fun s => (hst s).dst) hinj
   have h := prEvent_accept_le_adaptive CrtGen.tables stF (decOf fun s => muIn (stF s))
-    (fun s => Unbound.issueSys (inst s).1 (inst s).2) P liftInvOk_tables st₀
+    (fun s => moussakaUnboundIssueSys (inst s).1 (inst s).2) P liftInvOk_tables st₀
     (fun s => (hst s).params) (fun s => (hst s).delayed) none (fun s => (hst s).comb)
     (fun s => decOf_apply hmu s) (fun s => MoussakaUnbound.uIssueSystem_length _ _) 9
     (fun s _ => moussakaUnboundIssueWit (fun k => fnOf (inst s).1 k.val) (fnOf (inst s).2))
@@ -70,8 +70,8 @@ theorem moussakaUnboundIssue_accept_le_adaptive (stF : ι → Statement) (lr : B
   refine h.trans ?_
   rw [hitSum_add_extractorQueries, hitSum_hitEps, stmtEps_game]
   have hkos : epsKOS #chal3Blocks (Chain.kosL st₀) ≤ (2 ^ 150 : ℝ≥0∞)⁻¹ :=
-    epsKOS_chal3Blocks_le _ (Unbound.refIssue_stmt _ _ _).witnessBytes_le
-      (Unbound.refIssue_stmt _ _ _).qsDegree_le
+    epsKOS_chal3Blocks_le _ (Unbound.moussakaUnboundIssue_stmt ByteArray.empty ByteArray.empty lr).witnessBytes_le
+      (Unbound.moussakaUnboundIssue_stmt ByteArray.empty ByteArray.empty lr).qsDegree_le
   simp only [Pi.add_apply, extractorQueries, verifierQueries, reduceCtorEq, or_self, ite_false,
     add_zero, Nat.cast_add, Nat.cast_one, Nat.cast_ofNat]
   calc _ ≤ ((q .h21 : ℝ≥0∞) + 1) * (2 ^ 150 : ℝ≥0∞)⁻¹ +
@@ -110,22 +110,22 @@ theorem moussakaUnboundRedeem_accept_le_adaptive (stF : ι → Statement) (lr : 
         ((qE * 2 : ℕ) : ℝ≥0∞) * (((512 * q .h1 : ℕ) : ℝ≥0∞) * (2 ^ 256 : ℝ≥0∞)⁻¹) +
         chainHitEpsComb q Moussaka.M + stmtBindEps q := by
   classical
-  set st₀ := Unbound.refRedeem lr [] ByteArray.empty ByteArray.empty ByteArray.empty
-    ByteArray.empty
+  set st₀ := moussakaUnboundRedeem [] ByteArray.empty ByteArray.empty ByteArray.empty
+    ByteArray.empty lr
   have hmu := muIn_injective (stF := stF) (dst := Unbound.redeemDst) (fun s => (hst s).dst) hinj
   have h := prEvent_accept_le_adaptive_comb CrtGen.tables stF (decOf fun s => muIn (stF s)) P
-    (fun s => Unbound.redeemSysL (anc s) (nf s) (ctxIss s) (ctxRed s))
+    (fun s => moussakaUnboundRedeemSysL (anc s) (nf s) (ctxIss s) (ctxRed s))
     (fun s => moussakaUnboundRedeemWit GF256.ofBits ((anc s).map UovPk.map) (fnOf (nf s))
       (fnOf (ctxIss s)) (fnOf (ctxRed s)))
     Unbound.combDst liftInvOk_tables st₀ (fun s => (hst s).params) (fun s => (hst s).delayed)
     (fun s => (hst s).comb) (fun s => decOf_apply hmu s)
     (fun s _ => MoussakaUnbound.uRedeemSystem_length _ _ _ _ _ _ _)
     (fun s w => prU_comb_bad_le _ _ w fun hW =>
-      Unbound.redeem_comb_bad_gf128 _ (by simpa using hn64 s) _ _ _ w hW) 9
+      moussaka_unbound_redeem_comb_bad_gf128 _ (by simpa using hn64 s) _ _ _ w hW) 9
     (fun s _ => moussakaUnboundRedeemWit GF256.ofBits ((anc s).map UovPk.map) (fnOf (nf s))
       (fnOf (ctxIss s)) (fnOf (ctxRed s)))
     (fun s c1 v w => by
-      rw [(hst s).values]; simp only [Unbound.redeemSys, ofArr_combinationOf_ba])
+      rw [(hst s).values]; simp only [moussakaUnboundRedeemSys, ofArr_combinationOf_ba])
     (fun E s => by
       let _ : HasPrg := icPrg E.cipher
       exact fun ch known acc l hv A hA hAS hkos hQS hcb hP =>
@@ -135,8 +135,8 @@ theorem moussakaUnboundRedeem_accept_le_adaptive (stF : ι → Statement) (lr : 
   refine h.trans ?_
   rw [hitSum_add_extractorQueries, hitSum_hitEps_comb q Moussaka.M rfl, stmtEps_game]
   have hkos : epsKOS #chal3Blocks (Chain.kosL st₀) ≤ (2 ^ 150 : ℝ≥0∞)⁻¹ :=
-    epsKOS_chal3Blocks_le _ (Unbound.refRedeem_stmt _ _ _ _ _ _).witnessBytes_le
-      (Unbound.refRedeem_stmt _ _ _ _ _ _).qsDegree_le
+    epsKOS_chal3Blocks_le _ (Unbound.moussakaUnboundRedeem_stmt [] ByteArray.empty ByteArray.empty ByteArray.empty ByteArray.empty lr).witnessBytes_le
+      (Unbound.moussakaUnboundRedeem_stmt [] ByteArray.empty ByteArray.empty ByteArray.empty ByteArray.empty lr).qsDegree_le
   simp only [Pi.add_apply, extractorQueries, verifierQueries, reduceCtorEq, or_self, ite_false,
     add_zero, Nat.cast_add, Nat.cast_one, Nat.cast_ofNat]
   calc _ ≤ ((q .h21 : ℝ≥0∞) + 1) * (2 ^ 150 : ℝ≥0∞)⁻¹ +
@@ -174,10 +174,10 @@ theorem moussakaUnboundIssue_accept_le_adaptive_perm (stF : ι → Statement) (l
         (openHashEps q + q .h1 * pE (qE + 4607) ^ 2) +
         qE * ((4608 * q .h21 : ℕ) : ℝ≥0∞) * pE qE ^ 2 + chainHitEps q + stmtBindEps q := by
   classical
-  set st₀ := Unbound.refIssue lr ByteArray.empty ByteArray.empty
+  set st₀ := moussakaUnboundIssue ByteArray.empty ByteArray.empty lr
   have hmu := muIn_injective (stF := stF) (dst := Unbound.issueDst) (fun s => (hst s).dst) hinj
   have h := prEvent_accept_le_adaptiveP CrtGen.tables stF (decOf fun s => muIn (stF s))
-    (fun s => Unbound.issueSys (inst s).1 (inst s).2) P liftInvOk_tables st₀
+    (fun s => moussakaUnboundIssueSys (inst s).1 (inst s).2) P liftInvOk_tables st₀
     (fun s => (hst s).params) (fun s => (hst s).delayed) none (fun s => (hst s).comb)
     (fun s => decOf_apply hmu s) (fun s => MoussakaUnbound.uIssueSystem_length _ _) 9
     (fun s _ => moussakaUnboundIssueWit (fun k => fnOf (inst s).1 k.val) (fnOf (inst s).2))
@@ -191,8 +191,8 @@ theorem moussakaUnboundIssue_accept_le_adaptive_perm (stF : ι → Statement) (l
   refine h.trans ?_
   rw [hitSum_add_extractorQueries, hitSum_hitEps_perm q rfl, stmtEps_game, stmtBindEps_addH4]
   have hkos : epsKOS #chal3Blocks (Chain.kosL st₀) ≤ (2 ^ 150 : ℝ≥0∞)⁻¹ :=
-    epsKOS_chal3Blocks_le _ (Unbound.refIssue_stmt _ _ _).witnessBytes_le
-      (Unbound.refIssue_stmt _ _ _).qsDegree_le
+    epsKOS_chal3Blocks_le _ (Unbound.moussakaUnboundIssue_stmt ByteArray.empty ByteArray.empty lr).witnessBytes_le
+      (Unbound.moussakaUnboundIssue_stmt ByteArray.empty ByteArray.empty lr).qsDegree_le
   simp only [Pi.add_apply, extractorQueries, verifierQueries, reduceCtorEq, or_self, ite_false,
     add_zero, Nat.cast_add, Nat.cast_one, Nat.cast_ofNat,
     addH4_of_ne q (show Kind.h21 ≠ .h4 by decide), addH4_of_ne q (show Kind.h22 ≠ .h4 by decide),
@@ -234,22 +234,22 @@ theorem moussakaUnboundRedeem_accept_le_adaptive_perm (stF : ι → Statement) (
         qE * ((4608 * q .h21 : ℕ) : ℝ≥0∞) * pE qE ^ 2 + chainHitEpsComb q Moussaka.M +
         stmtBindEps q := by
   classical
-  set st₀ := Unbound.refRedeem lr [] ByteArray.empty ByteArray.empty ByteArray.empty
-    ByteArray.empty
+  set st₀ := moussakaUnboundRedeem [] ByteArray.empty ByteArray.empty ByteArray.empty
+    ByteArray.empty lr
   have hmu := muIn_injective (stF := stF) (dst := Unbound.redeemDst) (fun s => (hst s).dst) hinj
   have h := prEvent_accept_le_adaptive_combP CrtGen.tables stF (decOf fun s => muIn (stF s)) P
-    (fun s => Unbound.redeemSysL (anc s) (nf s) (ctxIss s) (ctxRed s))
+    (fun s => moussakaUnboundRedeemSysL (anc s) (nf s) (ctxIss s) (ctxRed s))
     (fun s => moussakaUnboundRedeemWit GF256.ofBits ((anc s).map UovPk.map) (fnOf (nf s))
       (fnOf (ctxIss s)) (fnOf (ctxRed s)))
     Unbound.combDst liftInvOk_tables st₀ (fun s => (hst s).params) (fun s => (hst s).delayed)
     (fun s => (hst s).comb) (fun s => decOf_apply hmu s)
     (fun s _ => MoussakaUnbound.uRedeemSystem_length _ _ _ _ _ _ _)
     (fun s w => prU_comb_bad_le _ _ w fun hW =>
-      Unbound.redeem_comb_bad_gf128 _ (by simpa using hn64 s) _ _ _ w hW) 9
+      moussaka_unbound_redeem_comb_bad_gf128 _ (by simpa using hn64 s) _ _ _ w hW) 9
     (fun s _ => moussakaUnboundRedeemWit GF256.ofBits ((anc s).map UovPk.map) (fnOf (nf s))
       (fnOf (ctxIss s)) (fnOf (ctxRed s)))
     (fun s c1 v w => by
-      rw [(hst s).values]; simp only [Unbound.redeemSys, ofArr_combinationOf_ba])
+      rw [(hst s).values]; simp only [moussakaUnboundRedeemSys, ofArr_combinationOf_ba])
     (fun E s => by
       let _ : HasPrg := icPrg E.cipher
       exact fun ch known acc l hv A hA hAS hkos hQS hcb hP =>
@@ -260,8 +260,8 @@ theorem moussakaUnboundRedeem_accept_le_adaptive_perm (stF : ι → Statement) (
   rw [hitSum_add_extractorQueries, hitSum_hitEps_comb_perm q Moussaka.M rfl, stmtEps_game,
     stmtBindEps_addH4]
   have hkos : epsKOS #chal3Blocks (Chain.kosL st₀) ≤ (2 ^ 150 : ℝ≥0∞)⁻¹ :=
-    epsKOS_chal3Blocks_le _ (Unbound.refRedeem_stmt _ _ _ _ _ _).witnessBytes_le
-      (Unbound.refRedeem_stmt _ _ _ _ _ _).qsDegree_le
+    epsKOS_chal3Blocks_le _ (Unbound.moussakaUnboundRedeem_stmt [] ByteArray.empty ByteArray.empty ByteArray.empty ByteArray.empty lr).witnessBytes_le
+      (Unbound.moussakaUnboundRedeem_stmt [] ByteArray.empty ByteArray.empty ByteArray.empty ByteArray.empty lr).qsDegree_le
   simp only [Pi.add_apply, extractorQueries, verifierQueries, reduceCtorEq, or_self, ite_false,
     add_zero, Nat.cast_add, Nat.cast_one, Nat.cast_ofNat,
     addH4_of_ne q (show Kind.h21 ≠ .h4 by decide), addH4_of_ne q (show Kind.h22 ≠ .h4 by decide),

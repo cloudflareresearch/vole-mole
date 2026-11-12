@@ -1,18 +1,22 @@
 import VoleMole.Verifier.Prover
 import VoleMole.Verifier.Kats
 import VoleMole.Spec.Ratatouille
+import VoleMole.Spec.MoussakaUnbound
 
 /-!
 # The Lean prover against the KAT proofs (`lake exe prover_vectors`, root `ProverMain.lean`)
 
-For every proof in `tests/ihat/ihat_kat.txt`, `tests/act/act_kat.txt` and
-`tests/pomfrit/pomfrit_kat.txt`, run `Prover.prove` (`Prover.voleGen` and `Prover.proveCommit` for
+For every proof in `tests/ihat/ihat_kat.txt`, `tests/ihat/unbound_ihat_kat.txt`,
+`tests/act/act_kat.txt` and `tests/pomfrit/pomfrit_kat.txt`, run `Prover.prove` (`Prover.voleGen` and `Prover.proveCommit` for
 PomFRIT) on the KAT's witness and statement, with the prover randomness `rho` derived from the KAT
 seed as the C++ does (`Spec.Moussaka.expandIssueSeed`/`expandRedeemSeed`,
-`Spec.Ratatouille.expandSeed`, `Spec.PomFRIT.expandSeed`), and require the C++'s proof byte for
+`Spec.MoussakaUnbound.expandIssueSeed`/`expandRedeemSeed`, `Spec.Ratatouille.expandSeed`, `Spec.PomFRIT.expandSeed`), and require the C++'s proof byte for
 byte. Every Lean proof is also verified (`Verifier.verify`, must accept).
 
-The witnesses are the KATs' `issue_witness`, `redeem_witness`, `spend_witness`; PomFRIT's is
+The witnesses are the KATs' `issue_witness`, `redeem_witness`, `spend_witness` (for unbound
+Moussaka also rebuilt from `nf_key`, `r` and the contexts by `Spec.MoussakaUnbound.encodeIssueWitness`
+and, with the Anchor's preimage `s` from `issue_response` and the KAT's `issuer`,
+`encodeRedeemWitness`, and compared); PomFRIT's is
 `r ‖ s` with `r` from the seed and `s` the Signer's `response`. PomFRIT is proved in two steps as in
 `src/pomfrit/pomfrit.cpp`: step 1 with `r`, `mu₁ = H(DST ‖ 12)` and the binder `refresher_com`; the
 statement (`pomfritRedeem`, whose instance `h = hash_to_target(…)` reads `ũ` and `d[0..45)` from
@@ -22,9 +26,10 @@ Every Lean proof is also checked against the two facts that `Bridge/Prover.lean`
 theorem assumes (`checkCorrelation`): the opening reconstructs the prover's leaf keys and
 commitments, and the verifier's CRT-lifted rows and masks at the proof's `Δ` are `v + u·Δ'`.
 
-Completeness smoke test (`random`, `randomUov`): statements and witnesses of all five relations
+Completeness smoke test (`random`, `randomUov`): statements and witnesses of all seven relations
 built from fresh pseudorandom seeds and contexts, the way the protocols build them
-(`Spec.Moussaka.com`/`encodeIssueWitness`/`encodeRedeemWitness`, `Spec.Ratatouille.com`/
+(`Spec.Moussaka.com`/`encodeIssueWitness`/`encodeRedeemWitness`,
+`Spec.MoussakaUnbound.ucom`/`derive`/`encodeIssueWitness`/`encodeRedeemWitness`, `Spec.Ratatouille.com`/
 `encodeIssueWitness`/`encodeSpendWitness`, PomFRIT's two steps), with the issuers' UOV preimages
 from a test-only sampler (`sample`, below), proved with random `rho` and verified (PomFRIT also
 through `pomfritVerify`). A changed witness bit, or a wrong Signer response, must make the prover
@@ -167,6 +172,65 @@ def moussaka (c : Ctx) (path : String) : IO Bool := do
     let rrho := toBA (Spec.Moussaka.expandRedeemSeed (toL (unhex (get r "redeem_seed"))))
     ok := (← run c s!"moussaka {i} redeem ({anchors.length} anchors)" rst
       (some (rreq.extract 24 rreq.size)) fun _ => proveChecked c.T rst rw rrho) && ok
+  return ok
+
+/-- Unbound Moussaka (`unbound_ihat_kat.txt`): each token's issuance request, and its redemption
+requests, one per redemption context. -/
+def moussakaUnbound (c : Ctx) (path : String) : IO Bool := do
+  let mut ok := true
+  let recs := records (← readLines path) "issue_seed"
+  for i in [0:recs.size] do
+    let r := recs[i]!
+    let ctxIss := unhex (get r "ctx_iss")
+    let k := unhex (get r "nf_key")
+    let rr := unhex (get r "r")
+    let req := unhex (get r "issue_request")
+    let t := req.extract 0 45
+    let st := moussakaUnboundIssue t ctxIss c.layouts.moussaka
+    let w := unhex (get r "issue_witness")
+    let (k', rr', rho) := Spec.MoussakaUnbound.expandIssueSeed (toL (unhex (get r "issue_seed")))
+    ok := (← Vectors.check s!"unbound moussaka {i}: issue seed, t and witness = spec"
+      (toBA k' == k && toBA rr' == rr &&
+        toBA (Spec.MoussakaUnbound.ucom (toL k) (toL ctxIss) (toL rr)) == t &&
+        toBA (Spec.MoussakaUnbound.encodeIssueWitness (toL k) (toL ctxIss) (toL rr)) == w)) && ok
+    ok := (← run c s!"unbound moussaka {i} issue" st (some (req.extract 45 req.size)) fun _ =>
+      proveChecked c.T st w (toBA rho)) && ok
+    if i == 0 then
+      ok := (← run c s!"unbound moussaka {i} issue, random rho" st none fun _ =>
+        proveChecked c.T st w (rnd s!"unbound moussaka {i} issue rho")) && ok
+      ok := (← runBad c s!"unbound moussaka {i} issue, witness bit 1000 flipped" fun _ =>
+        Prover.prove Hashes.shake c.T st (flipBit w 1000) (toBA rho)) && ok
+      ok := (← runBad c s!"unbound moussaka {i} issue, wrong t" fun _ =>
+        Prover.prove Hashes.shake c.T (moussakaUnboundIssue (flipBit t 0) ctxIss c.layouts.moussaka)
+          w (toBA rho)) && ok
+    let anchors ← IO.ofExcept ((getAll r "anchor_sk").toList.mapM c.pk)
+    let issuer := (get r "issuer").toNat!
+    let sResp := unhex (get r "issue_response")
+    let reqs := getAll r "redeem_request"
+    let ctxReds := getAll r "ctx_red"
+    let cds := getAll r "challenge_digest"
+    let seeds := getAll r "redeem_seed"
+    let wits := getAll r "redeem_witness"
+    for j in [0:reqs.size] do
+      let rreq := unhex reqs[j]!
+      let ctxRed := unhex ctxReds[j]!
+      let nf := rreq.extract 0 24
+      let rst := moussakaUnboundRedeem anchors nf ctxIss ctxRed (unhex cds[j]!) c.layouts.moussaka
+      let rw := unhex wits[j]!
+      ok := (← Vectors.check s!"unbound moussaka {i} redeem {j}: nf and witness = spec"
+        (toBA (Spec.MoussakaUnbound.derive (toL k) (toL ctxRed)) == nf &&
+          toBA (Spec.MoussakaUnbound.encodeRedeemWitness (toL k) (toL ctxIss) (toL ctxRed)
+            (toL rr) (toL sResp) issuer) == rw)) && ok
+      let rrho := toBA (Spec.MoussakaUnbound.expandRedeemSeed (toL (unhex seeds[j]!)))
+      ok := (← run c s!"unbound moussaka {i} redeem {j} ({anchors.length} anchors)" rst
+        (some (rreq.extract 24 rreq.size)) fun _ => proveChecked c.T rst rw rrho) && ok
+      if i == 0 && j == 0 then
+        ok := (← runBad c s!"unbound moussaka {i} redeem {j}, witness bit 3000 flipped" fun _ =>
+          Prover.prove Hashes.shake c.T rst (flipBit rw 3000) rrho) && ok
+        ok := (← runBad c s!"unbound moussaka {i} redeem {j}, wrong nf" fun _ =>
+          Prover.prove Hashes.shake c.T
+            (moussakaUnboundRedeem anchors (flipBit nf 0) ctxIss ctxRed (unhex cds[j]!)
+              c.layouts.moussaka) rw rrho) && ok
   return ok
 
 def ratatouille (c : Ctx) (path : String) : IO Bool := do
@@ -324,6 +388,20 @@ def randomUov (c : Ctx) (k : Nat) (mousSks : List ByteArray) (rataSk pomSk : Byt
     fun _ => proveChecked c.T st
       (toBA (Spec.Moussaka.encodeRedeemWitness nf ctxIss ctxRed rr (toL s) issuer))
       (rnd s!"rmoussaka rho {k}")) && ok
+  -- Unbound Moussaka: issue, sign, redeem in a context chosen afterwards.
+  let uctxIss := toL (rnd s!"rumoussaka ctx_iss {k}")
+  let uctxRed := toL (rnd s!"rumoussaka ctx_red {k}")
+  let (uk, ur, _) := Spec.MoussakaUnbound.expandIssueSeed (toL (rnd s!"rumoussaka seed {k}" 32))
+  let ut := Spec.MoussakaUnbound.ucom uk uctxIss ur
+  let some us := sample mousSks[issuer]! pkI (toBA ut) s!"rumoussaka {k}"
+    | IO.eprintln "FAIL sampler (unbound moussaka)"; return false
+  ok := (← Vectors.check s!"random unbound moussaka {k}: P(s) = t" (publicMapBytes pkI us == toBA ut)) && ok
+  let ust := moussakaUnboundRedeem anchors (toBA (Spec.MoussakaUnbound.derive uk uctxRed))
+    (toBA uctxIss) (toBA uctxRed) cd c.layouts.moussaka
+  ok := (← run c s!"random unbound moussaka redeem {k} ({anchors.length} anchors, issuer {issuer})"
+    ust none fun _ => proveChecked c.T ust
+      (toBA (Spec.MoussakaUnbound.encodeRedeemWitness uk uctxIss uctxRed ur (toL us) issuer))
+      (rnd s!"rumoussaka rho {k}")) && ok
   -- Ratatouille: issue, sign `tag(c, 0)`, spend.
   let pk := UovPk.ofSecret rataSk
   let vec {n : Nat} (b : ByteArray) : Spec.Ratatouille.Bytes n := Vector.ofFn fun i => b.get! i.1
@@ -375,7 +453,8 @@ def randomUov (c : Ctx) (k : Nat) (mousSks : List ByteArray) (rataSk pomSk : Byt
     | .error _ => ok := false
   return ok
 
-/-- Random Moussaka and Ratatouille issuance statements (completeness smoke test). -/
+/-- Random Moussaka (bound and unbound) and Ratatouille issuance statements (completeness smoke
+test). -/
 def random (c : Ctx) (n : Nat) : IO Bool := do
   let mut ok := true
   for k in [0:n] do
@@ -388,6 +467,12 @@ def random (c : Ctx) (n : Nat) : IO Bool := do
     ok := (← run c s!"random moussaka issue {k}" st none fun _ =>
       proveChecked c.T st (toBA (Spec.Moussaka.encodeIssueWitness nf ctxIss ctxRed rr))
         (toBA rho)) && ok
+    let (uk, ur, urho) := Spec.MoussakaUnbound.expandIssueSeed (toL (rnd s!"unbound moussaka seed {k}" 32))
+    let ust := moussakaUnboundIssue (toBA (Spec.MoussakaUnbound.ucom uk ctxIss ur)) (toBA ctxIss)
+      c.layouts.moussaka
+    ok := (← run c s!"random unbound moussaka issue {k}" ust none fun _ =>
+      proveChecked c.T ust (toBA (Spec.MoussakaUnbound.encodeIssueWitness uk ctxIss ur))
+        (toBA urho)) && ok
     let rseed := rnd s!"ratatouille seed {k}" 32
     let rctx := rnd s!"ratatouille ctx {k}"
     let tInit :=
@@ -408,9 +493,10 @@ def main (args : List String) : IO UInt32 := do
   let layouts := Layouts.ofArg (args.getD 1 "")
   let filter := args.getD 2 ""
   let mousPath := s!"{tests}/ihat/ihat_kat.txt"
+  let unboundPath := s!"{tests}/ihat/unbound_ihat_kat.txt"
   let rataPath := s!"{tests}/act/act_kat.txt"
-  let sks :=
-    (getAll (← readLines mousPath) "anchor_sk") ++ (getAll (← readLines rataPath) "issuer_sk")
+  let sks := (getAll (← readLines mousPath) "anchor_sk") ++
+    (getAll (← readLines unboundPath) "anchor_sk") ++ (getAll (← readLines rataPath) "issuer_sk")
   let t0 ← IO.monoMsNow
   let mut cpks : Std.HashMap String ByteArray := {}
   for sk in sks do
@@ -422,6 +508,7 @@ def main (args : List String) : IO UInt32 := do
     { T := CrtGen.tables, cpks := cpks, layouts := layouts, filter := filter,
       reproduced := ← IO.mkRef 0, verified := ← IO.mkRef 0 }
   let ok1 ← moussaka c mousPath
+  let ok1u ← moussakaUnbound c unboundPath
   let ok2 ← ratatouille c rataPath
   let ok3 ← pomfrit c s!"{tests}/pomfrit/pomfrit_kat.txt"
   let ok4 ← random c 2
@@ -435,7 +522,7 @@ def main (args : List String) : IO UInt32 := do
   for k in [0:2] do
     ok5 := (← randomUov c k mousSks rataSk pomSk) && ok5
   let t2 ← IO.monoMsNow
-  let ok := ok1 && ok2 && ok3 && ok4 && ok5
+  let ok := ok1 && ok1u && ok2 && ok3 && ok4 && ok5
   IO.println s!"Lean prover: {← c.reproduced.get} KAT proofs reproduced byte for byte, \
     {← c.verified.get} Lean proofs accepted by the Lean verifier, {if ok then "ok" else "FAILED"} \
     ({t2 - t1} ms)"

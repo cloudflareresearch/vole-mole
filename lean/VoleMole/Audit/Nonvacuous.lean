@@ -9,6 +9,7 @@ import VoleMole.Privacy.RatatouilleInterleaveOC
 import VoleMole.Privacy.PomFRITLin
 import VoleMole.Privacy.SeedXOFNC
 import VoleMole.ROM.SpecSound
+import VoleMole.ROM.MoussakaUnbound
 import VoleMole.Privacy.PqovDelta
 import VoleMole.Privacy.PqovKeys
 
@@ -115,6 +116,16 @@ example (pk : UovPk) (nf cn ci pf : ByteArray) (d : ℕ) (hd : d < 2 ^ 64) (lr :
 example (pk : UovPk) (sig msg pf : ByteArray) (lr : Bool) :=
   pomfritRedeem_accept_le_adaptive (ι := Unit) (β := Unit) pk (fun _ => sig) (fun _ => msg) lr
     (pure (pf, ((), ()))) 0 trivial 0 trivial 0 trivial
+
+/-! Unbound Moussaka (`ROM/MoussakaUnbound.lean`), fixed statements; more in `Audit/UnboundROM.lean`. -/
+
+example (t c pf : ByteArray) (lr : Bool) :=
+  moussakaUnboundIssue_accept_le_full (β := Unit) (Unbound.moussakaUnboundIssue_stmt t c lr)
+    (pure (pf, ())) 0 trivial 0 trivial
+
+example (A : List UovPk) (hA : A.length ≤ 64) (nf ci cr cd pf : ByteArray) (lr : Bool) :=
+  moussakaUnboundRedeem_accept_le_full (β := Unit) hA
+    (Unbound.moussakaUnboundRedeem_stmt A nf ci cr cd lr) (pure (pf, ())) 0 trivial 0 trivial 0 trivial
 
 /-! The permutation model with inverse queries. -/
 

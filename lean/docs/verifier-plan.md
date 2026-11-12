@@ -139,6 +139,9 @@ is part of milestone 6.
    (a byte flipped in each proof field of the first proof of each relation; a changed instance;
    PomFRIT's refresher). Time ≈ 25 s (≈ 5 min before (c) below); Moussaka/Ratatouille issuance
    ≈ 0.12 s, the 64-anchor redemption ≈ 0.8 s.
+   Later extended to unbound Moussaka (PR #63; `moussakaUnboundIssue`, `moussakaUnboundRedeem`):
+   now 27 KAT proofs accepted (with the 9 of `unbound_ihat_kat.txt`) and 76 mutations rejected;
+   `verifier_kat.txt` has 7 records (`moussaka_unbound_issue_0`, `moussaka_unbound_redeem_1`).
    CRT tables: `Verifier/CrtData.lean` holds faest-arch-opt's generated matrices
    (`vole_mult_tables.py --preset 128f`); `Verifier/CrtGen.lean` recomputes `W_crt` and `M_tree`
    from the moduli, checks the defining bilinear identity of `F`, `G`, `W_tree`, `W_gate` on all
@@ -310,7 +313,8 @@ is part of milestone 6.
    Lean verifier, including random statements of all five relations (seeds, contexts and credits
    from SHAKE of a label; issuers' UOV preimages from a test-only oil-space sampler, `sample`) and
    KAT witnesses with a random `rho`; a flipped witness bit or a wrong Signer response makes the
-   prover refuse. For every Lean proof the harness also checks the two correctness facts of the
+   prover refuse. With unbound Moussaka (PR #63): 27 KAT proofs reproduced, random statements of
+   all seven relations. For every Lean proof the harness also checks the two correctness facts of the
    completeness theorem (the opening reconstructs the prover's keys and commitments; the
    verifier's rows and masks are `v + u·Δ'`), now proved (below). About 44 s per layout (34 s of proving and verifying, 5 s of
    UOV key generation); a proof takes 0.2–1.1 s, the 64-anchor redemption 6.5 s (10 evaluations

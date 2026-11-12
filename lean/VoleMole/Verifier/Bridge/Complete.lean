@@ -17,8 +17,9 @@ faest-arch-opt's tables `CrtGen.tables` and every statement whose label rows are
   probability `≤ 2⁻¹¹⁴` over the grinding answers, `ZK.Sim.pr_hitZero_le_114`, `≈ 2⁻¹¹⁸·⁷` in
   truth; discharged in the random-oracle model by `ZK/CompleteRO.lean`, `complete_rom`).
 * `moussakaIssue_complete_tables`, `moussakaRedeem_complete_tables`,
+  `moussakaUnboundIssue_complete_tables`, `moussakaUnboundRedeem_complete_tables`,
   `ratatouilleIssue_complete_tables`, `ratatouilleSpend_complete_tables`,
-  `pomfritRedeem_complete_tables`: the five relations, either layout (`ProveOkT`: the prover
+  `pomfritRedeem_complete_tables`: the seven relations, either layout (`ProveOkT`: the prover
   returned the proof and `Δ' ≠ 0`).
 * `*_complete_shake`: the same with SHAKE (`hashesWF_shake`).
 -/
@@ -99,6 +100,24 @@ theorem moussakaRedeem_complete_tables (Hs : Hashes) (hHs : HashesWF Hs) (anchor
   moussakaRedeem_complete Hs hHs bavcComplete CrtGen.tables anchors nf ctxIss ctxRed
     challengeDigest labelRows w rho proof (h.proveOk (show 16 ≤ 343 by decide))
 
+theorem moussakaUnboundIssue_complete_tables (Hs : Hashes) (hHs : HashesWF Hs)
+    (t ctxIss : ByteArray) (labelRows : Bool) (w rho proof : ByteArray)
+    (h : ProveOkT Hs (moussakaUnboundIssue t ctxIss labelRows) w rho proof) :
+    (verify Hs CrtGen.tables (moussakaUnboundIssue t ctxIss labelRows) proof).accept = true :=
+  moussakaUnboundIssue_complete Hs hHs bavcComplete CrtGen.tables t ctxIss labelRows w rho proof
+    (h.proveOk (show 16 ≤ 232 by decide))
+
+theorem moussakaUnboundRedeem_complete_tables (Hs : Hashes) (hHs : HashesWF Hs)
+    (anchors : List UovPk) (nf ctxIss ctxRed challengeDigest : ByteArray) (labelRows : Bool)
+    (w rho proof : ByteArray)
+    (h : ProveOkT Hs (moussakaUnboundRedeem anchors nf ctxIss ctxRed challengeDigest labelRows) w
+      rho proof) :
+    (verify Hs CrtGen.tables
+      (moussakaUnboundRedeem anchors nf ctxIss ctxRed challengeDigest labelRows) proof).accept =
+      true :=
+  moussakaUnboundRedeem_complete Hs hHs bavcComplete CrtGen.tables anchors nf ctxIss ctxRed
+    challengeDigest labelRows w rho proof (h.proveOk (show 16 ≤ 559 by decide))
+
 theorem ratatouilleIssue_complete_tables (Hs : Hashes) (hHs : HashesWF Hs) (c : ByteArray)
     (tInit : ℕ) (ctxIss : ByteArray) (labelRows : Bool) (w rho proof : ByteArray)
     (h : ProveOkT Hs (ratatouilleIssue c tInit ctxIss labelRows) w rho proof) :
@@ -144,6 +163,23 @@ theorem moussakaRedeem_complete_shake (anchors : List UovPk)
     (verify Hashes.shake CrtGen.tables
       (moussakaRedeem anchors nf ctxIss ctxRed challengeDigest labelRows) proof).accept = true :=
   moussakaRedeem_complete_tables _ hashesWF_shake anchors nf ctxIss ctxRed challengeDigest
+    labelRows w rho proof h
+
+theorem moussakaUnboundIssue_complete_shake (t ctxIss : ByteArray) (labelRows : Bool)
+    (w rho proof : ByteArray)
+    (h : ProveOkT Hashes.shake (moussakaUnboundIssue t ctxIss labelRows) w rho proof) :
+    (verify Hashes.shake CrtGen.tables (moussakaUnboundIssue t ctxIss labelRows) proof).accept =
+      true :=
+  moussakaUnboundIssue_complete_tables _ hashesWF_shake t ctxIss labelRows w rho proof h
+
+theorem moussakaUnboundRedeem_complete_shake (anchors : List UovPk)
+    (nf ctxIss ctxRed challengeDigest : ByteArray) (labelRows : Bool) (w rho proof : ByteArray)
+    (h : ProveOkT Hashes.shake
+      (moussakaUnboundRedeem anchors nf ctxIss ctxRed challengeDigest labelRows) w rho proof) :
+    (verify Hashes.shake CrtGen.tables
+      (moussakaUnboundRedeem anchors nf ctxIss ctxRed challengeDigest labelRows) proof).accept =
+      true :=
+  moussakaUnboundRedeem_complete_tables _ hashesWF_shake anchors nf ctxIss ctxRed challengeDigest
     labelRows w rho proof h
 
 theorem ratatouilleIssue_complete_shake (c : ByteArray) (tInit : ℕ) (ctxIss : ByteArray)

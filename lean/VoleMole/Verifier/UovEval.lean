@@ -1,5 +1,6 @@
 import VoleMole.Arith.GF
 import VoleMole.Arith.Moussaka
+import VoleMole.Arith.MoussakaUnbound
 import VoleMole.Arith.Ratatouille
 import VoleMole.Arith.PomFRIT
 
@@ -22,11 +23,13 @@ directly:
   (`loadFn_byteVals`).
 
 `publicMapFast_eq` combines them: `publicMapFast` is the `Expr.eval` of the generator's
-expression. The relation evaluators `moussakaRedeemValues`, `ratatouilleSpendValues` and
-`pomfritRedeemValues` replace only the UOV term of `Moussaka.redeemValues`,
-`Ratatouille.spendValues` and `System.values (PomFRIT.pomfritRedeemSystem …)` and are proved
-equal to them (`moussakaRedeemValues_eq`, `ratatouilleSpendValues_eq`, `pomfritRedeemValues_eq`),
-so the bridge theorems (`Bridge/Relations.lean`) are about the code that runs.
+expression. The relation evaluators `moussakaRedeemValues`, `moussakaUnboundRedeemValues`,
+`ratatouilleSpendValues` and `pomfritRedeemValues` replace only the UOV term of
+`Moussaka.redeemValues`, `MoussakaUnbound.uRedeemValues`, `Ratatouille.spendValues` and
+`System.values (PomFRIT.pomfritRedeemSystem …)` and are proved equal to them
+(`moussakaRedeemValues_eq`, `moussakaUnboundRedeemValues_eq`, `ratatouilleSpendValues_eq`,
+`pomfritRedeemValues_eq`), so the bridge theorems (`Bridge/Relations.lean`) are about the code
+that runs.
 -/
 
 namespace VoleMole.Verifier
@@ -188,6 +191,36 @@ theorem moussakaRedeemValues_eq (anchors : List (ℕ → GF256)) (nf ctxIss ctxR
     eval_foldl_add, Expr.eval_mul, Expr.eval_wit, Expr.eval_const, ← publicMapFast_eq]
 
 end Moussaka
+
+section MoussakaUnbound
+
+open Moussaka MoussakaUnbound Keccak
+
+/-- `MoussakaUnbound.uRedeemValues` with the UOV terms by `publicMapFast` (the `N` loaded bytes of
+`s` are shared by all Anchors). -/
+def moussakaUnboundRedeemValues (anchors : List (ℕ → GF256)) (nf ctxIss ctxRed : ℕ → UInt8)
+    (lArr : Array GF128) (w : ℕ → GF128) : List GF128 :=
+  let tab := combTab M lArr
+  let xs := byteVals w uRedeemOffS N
+  let x := loadFn xs w uRedeemOffS
+  let kc := qsKeccakValues w uRedeemOffComStates 800 le_rfl
+    ((qsInput (F := GF128) (uRedeemComPub ctxIss) uRedeemComMap).map (Expr.eval w))
+  let kd := qsKeccakValues w uRedeemOffDeriveStates 192 (by norm_num)
+    ((qsInput (F := GF128) (uRedeemDerivePub ctxRed) uRedeemDeriveMap).map (Expr.eval w))
+  let lq := (List.finRange anchors.length).foldl
+    (fun acc (u : Fin anchors.length) => acc + w (uSelBit u) * publicMapFast tab N M anchors[u] x) 0
+  (bitSystem (8 * uRedeemOffB) ++ uSelectorSystem anchors.length).values w ++ kc.1 ++ kd.1 ++
+    ((List.finRange 192).map fun i => kd.2[i] + bitF (nfBit nf i)) ++
+    [(loutExpr betaFast (ofArr lArr) (kc.2.map Expr.const)).eval w + lq]
+
+theorem moussakaUnboundRedeemValues_eq (anchors : List (ℕ → GF256)) (nf ctxIss ctxRed : ℕ → UInt8)
+    (lArr : Array GF128) (w : ℕ → GF128) :
+    moussakaUnboundRedeemValues anchors nf ctxIss ctxRed lArr w =
+      uRedeemValues betaFast GF256.toBits anchors nf ctxIss ctxRed (ofArr lArr) w := by
+  simp only [moussakaUnboundRedeemValues, uRedeemValues, uRedeemOutput, uLqExpr, Expr.eval_add,
+    eval_foldl_add, Expr.eval_mul, Expr.eval_wit, Expr.eval_const, ← publicMapFast_eq]
+
+end MoussakaUnbound
 
 section Ratatouille
 

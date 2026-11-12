@@ -21,7 +21,8 @@ Unlike the bound relations no context length is needed: the spec relations read 
 The injective-encoding hypothesis `hinj` of the adaptive theorems: `hinj_unboundIssue` (`t` of
 fixed length, the C++ encoding `t ‖ ctx_iss`), `hinj_unboundRedeem` (the bound encoding
 `hash_redeem_instance`, as `hinj_moussakaRedeem`), for any family of statements whose instance
-encodings are these (e.g. `Unbound.refIssue`, `Unbound.refRedeem`).
+encodings are these, e.g. the executable verifier's (`hinj_moussakaUnboundIssue`,
+`hinj_moussakaUnboundRedeem`).
 -/
 
 open Finset
@@ -207,13 +208,13 @@ theorem hinj_unboundRedeem {ι : Type} (stF : ι → Statement) (anc : ι → Li
     simpa only [moussakaRedeem] using h
   exact hinj_moussakaRedeem anc nf ctxIss ctxRed cd false hdig hn nN nI nR hnf hci hcr hi h'
 
-theorem hinj_refIssue {ι : Type} (lr : Bool) (inst : ι → ByteArray × ByteArray) (n : ℕ)
+theorem hinj_moussakaUnboundIssue {ι : Type} (lr : Bool) (inst : ι → ByteArray × ByteArray) (n : ℕ)
     (hlen : ∀ s, (inst s).1.size = n) (hi : Function.Injective inst) :
     Function.Injective fun s =>
-      (Unbound.refIssue lr (inst s).1 (inst s).2).instEnc ByteArray.empty :=
+      (moussakaUnboundIssue (inst s).1 (inst s).2 lr).instEnc ByteArray.empty :=
   hinj_unboundIssue _ inst (fun _ => rfl) n hlen hi
 
-theorem hinj_refRedeem {ι : Type} (lr : Bool) (anc : ι → List UovPk)
+theorem hinj_moussakaUnboundRedeem {ι : Type} (lr : Bool) (anc : ι → List UovPk)
     (nf ctxIss ctxRed cd : ι → ByteArray)
     (hdig : ∀ s, ∀ pk ∈ anc s, pk.digest.size = 32) (hn : ∀ s, (anc s).length < 256)
     (nN nI nR : ℕ) (hnf : ∀ s, (nf s).size = nN) (hci : ∀ s, (ctxIss s).size = nI)
@@ -221,7 +222,7 @@ theorem hinj_refRedeem {ι : Type} (lr : Bool) (anc : ι → List UovPk)
     (hi : Function.Injective fun s =>
       ((anc s).map UovPk.digest, nf s, ctxIss s, ctxRed s, cd s)) :
     Function.Injective fun s =>
-      (Unbound.refRedeem lr (anc s) (nf s) (ctxIss s) (ctxRed s) (cd s)).instEnc
+      (moussakaUnboundRedeem (anc s) (nf s) (ctxIss s) (ctxRed s) (cd s) lr).instEnc
         ByteArray.empty :=
   hinj_unboundRedeem _ anc nf ctxIss ctxRed cd (fun _ => rfl) hdig hn nN nI nR hnf hci hcr hi
 

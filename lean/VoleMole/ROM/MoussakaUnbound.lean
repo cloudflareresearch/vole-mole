@@ -1,6 +1,7 @@
 import VoleMole.Prob.MoussakaUnbound
 import VoleMole.ROM.CipherRelations
 import VoleMole.ROM.PermFull
+import VoleMole.ROM.SingleOracle
 
 /-!
 # The unbound Moussaka relations in the random-oracle and ideal-cipher model (fixed statement)
@@ -32,6 +33,12 @@ Anchors for redemption), and the terms of `ROM/CipherFull.lean` (`openHashEps`, 
   hash queries).
 * **`moussakaUnboundIssue_accept_le_perm`, `moussakaUnboundRedeem_accept_le_perm`**: the cipher as
   random permutations with inverse queries (`ROM/PermFull.lean`).
+* `combOk_moussakaUnboundIssue`, `combOk_moussakaUnboundRedeem`: the single-oracle side condition
+  for the executable statements.
+
+All of them apply to the executable verifier's statements `moussakaUnboundIssue`,
+`moussakaUnboundRedeem` through `Unbound.moussakaUnboundIssue_stmt`,
+`Unbound.moussakaUnboundRedeem_stmt` (`Prob/MoussakaUnbound.lean`).
 -/
 
 open Finset OracleComp OracleSpec
@@ -44,6 +51,18 @@ variable [VoleMole.Verifier.HasPrg]
 open VoleMole.Prob VoleMole.Arith VoleMole.Verifier VoleMole.Verifier.Bridge
 open VoleMole.EndToEnd VoleMole.SeedExtraction
 
+omit [VoleMole.Verifier.HasPrg] in
+/-- The single-oracle side condition (`ROM/SingleOracle.lean`) for the executable statements. -/
+theorem combOk_moussakaUnboundIssue (t ctxIss : ByteArray) (labelRows : Bool) :
+    CombOk (moussakaUnboundIssue t ctxIss labelRows) := fun _ _ h => by cases h
+
+omit [VoleMole.Verifier.HasPrg] in
+/-- The combination DST `make_dst("mous", 1, 'l', '0')` ends in `'0'`. -/
+theorem combOk_moussakaUnboundRedeem (anchors : List UovPk)
+    (nf ctxIss ctxRed challengeDigest : ByteArray) (labelRows : Bool) :
+    CombOk (moussakaUnboundRedeem anchors nf ctxIss ctxRed challengeDigest labelRows) :=
+  combOk_dst rfl (by decide) (by decide) rfl
+
 variable {β : Type}
 
 /-- **Unbound issuance against the random oracle** (as `moussakaIssue_accept_le`):
@@ -51,7 +70,7 @@ variable {β : Type}
 theorem moussakaUnboundIssue_accept_le {st : Statement} {lr : Bool} {t ctxIss : ByteArray}
     (hst : Unbound.IssueStmt st lr t ctxIss)
     (preOf midOf : ByteArray → Table → Chain) (accOf : ByteArray → Table → Bytes 16 → Prop)
-    (hC : (ChainData.ofSys (st := st) preOf midOf (Unbound.issueSys t ctxIss) accOf).Committed)
+    (hC : (ChainData.ofSys (st := st) preOf midOf (moussakaUnboundIssueSys t ctxIss) accOf).Committed)
     (oa : OracleComp spec (ByteArray × ExtData β)) (q : Kind → ℕ) (hq : IsKindQueryBound oa q)
     (chainFail deadFail : Out β → Prop) {εb εd εs : ℝ≥0∞}
     (hbind : Pr{let r ← (simulateQ randomOracle (game CrtGen.tables st oa)).run' ∅}[
@@ -94,7 +113,7 @@ theorem moussakaUnboundRedeem_accept_le {st : Statement} {lr : Bool} {anchors : 
     (hst : Unbound.RedeemStmt st lr anchors nf ctxIss ctxRed)
     (preOf midOf : ByteArray → Table → Chain) (accOf : ByteArray → Table → Bytes 16 → Prop)
     (pre : ByteArray → Table → List Dom)
-    (hC : (CombData.ofSys (st := st) preOf midOf (Unbound.redeemSysL anchors nf ctxIss ctxRed)
+    (hC : (CombData.ofSys (st := st) preOf midOf (moussakaUnboundRedeemSysL anchors nf ctxIss ctxRed)
       (moussakaUnboundRedeemWit GF256.ofBits (anchors.map UovPk.map) (fnOf nf) (fnOf ctxIss)
         (fnOf ctxRed)) accOf Unbound.combDst pre).Committed)
     (oa : OracleComp spec (ByteArray × ExtData β)) (n : ℕ) (hn : IsTotalQueryBound oa n)
@@ -112,7 +131,7 @@ theorem moussakaUnboundRedeem_accept_le {st : Statement} {lr : Bool} {anchors : 
     (hsame : SameChainHyp CrtGen.tables st oa preOf midOf accOf deadOf hit chainFail)
     (hL2 : DeadHiddenHyp CrtGen.tables st oa deadOf hit chainFail deadFail)
     (hcombFresh : CombFreshHyp CrtGen.tables _ (CombData.ofSys (st := st) preOf midOf
-      (Unbound.redeemSysL anchors nf ctxIss ctxRed)
+      (moussakaUnboundRedeemSysL anchors nf ctxIss ctxRed)
       (moussakaUnboundRedeemWit GF256.ofBits (anchors.map UovPk.map) (fnOf nf) (fnOf ctxIss)
         (fnOf ctxRed)) accOf Unbound.combDst pre) oa hit chainFail) :
     Pr{let r ← (simulateQ randomOracle (game CrtGen.tables st oa)).run' ∅}[
@@ -128,9 +147,9 @@ theorem moussakaUnboundRedeem_accept_le {st : Statement} {lr : Bool} {anchors : 
   refine (prEvent_accept_le_comb_terms liftInvOk_tables _ hC
     (fun _ _ _ => MoussakaUnbound.uRedeemSystem_length _ _ _ _ _ _ _)
     (fun _ _ w => prU_comb_bad_le _ _ w fun hW =>
-      Unbound.redeem_comb_bad_gf128 _ (by simpa using hn64) _ _ _ w hW) 9 _ hst.comb
+      moussaka_unbound_redeem_comb_bad_gf128 _ (by simpa using hn64) _ _ _ w hW) 9 _ hst.comb
     (fun _ _ v w => by
-      rw [hst.values]; simp only [Unbound.redeemSys, ofArr_combinationOf_ba]; rfl)
+      rw [hst.values]; simp only [moussakaUnboundRedeemSys, ofArr_combinationOf_ba]; rfl)
     (fun y g ch known acc l _ hv A hA hAS hkos hQS hcb hP =>
       Unbound.redeem_extract_chain hst ch l hv hA hAS hkos hP.1 hQS hcb admissible deltaBlocks
         deltaBlocks_injOn acc hP.2)
@@ -157,7 +176,7 @@ theorem moussakaUnboundIssue_accept_le_ic {st : Statement} {lr : Bool} {t ctxIss
     (hst : Unbound.IssueStmt st lr t ctxIss)
     (preOf midOf : CTable → ByteArray → Table → Chain)
     (accOf : CTable → ByteArray → Table → Prob.Bytes 16 → Prop)
-    (hC : ∀ E, (ChainData.ofSys (st := st) (preOf E) (midOf E) (Unbound.issueSys t ctxIss)
+    (hC : ∀ E, (ChainData.ofSys (st := st) (preOf E) (midOf E) (moussakaUnboundIssueSys t ctxIss)
       (accOf E)).Committed)
     (P : OracleComp specIC (ByteArray × β)) (qE : ℕ)
     (hqE : IsQueryBoundP P (fun t => t.isRight = true) qE) (q : Kind → ℕ)
@@ -212,7 +231,7 @@ theorem moussakaUnboundRedeem_accept_le_ic {st : Statement} {lr : Bool} {anchors
     (accOf : CTable → ByteArray → Table → Prob.Bytes 16 → Prop)
     (pre : CTable → ByteArray → Table → List Dom)
     (hC : ∀ E, (CombData.ofSys (st := st) (preOf E) (midOf E)
-      (Unbound.redeemSysL anchors nf ctxIss ctxRed)
+      (moussakaUnboundRedeemSysL anchors nf ctxIss ctxRed)
       (moussakaUnboundRedeemWit GF256.ofBits (anchors.map UovPk.map) (fnOf nf) (fnOf ctxIss)
         (fnOf ctxRed)) (accOf E) Unbound.combDst (pre E)).Committed)
     (P : OracleComp specIC (ByteArray × β)) (qE : ℕ)
@@ -232,7 +251,7 @@ theorem moussakaUnboundRedeem_accept_le_ic {st : Statement} {lr : Bool} {anchors
     (hL2 : ∀ E : CTable, @DeadHiddenHyp (icPrg E.cipher) _ CrtGen.tables st (proverIC st E P)
       (deadOf E) (hit E) (chainFail E) (deadFail E))
     (hcombFresh : ∀ E : CTable, @CombFreshHyp (icPrg E.cipher) _ _ CrtGen.tables st
-      (CombData.ofSys (st := st) (preOf E) (midOf E) (Unbound.redeemSysL anchors nf ctxIss ctxRed)
+      (CombData.ofSys (st := st) (preOf E) (midOf E) (moussakaUnboundRedeemSysL anchors nf ctxIss ctxRed)
         (moussakaUnboundRedeemWit GF256.ofBits (anchors.map UovPk.map) (fnOf nf) (fnOf ctxIss)
           (fnOf ctxRed)) (accOf E) Unbound.combDst (pre E))
       (proverIC st E P) (hit E) (chainFail E)) :

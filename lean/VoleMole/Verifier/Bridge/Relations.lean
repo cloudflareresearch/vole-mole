@@ -1,6 +1,7 @@
 import VoleMole.Verifier.Bridge.Concrete
 import VoleMole.Verifier.Relations
 import VoleMole.EndToEnd.Concrete
+import VoleMole.EndToEnd.MoussakaUnbound
 
 /-!
 # Bridge, per relation: acceptance gives `EndToEnd`'s accepting equation for the proved system
@@ -14,12 +15,13 @@ two lists over `GF128`. For each relation of `Verifier/Relations.lean` it holds 
 `β := beta`, `K := GF256` and the verifier's instance data:
 
 * the issue relations' evaluators are the `Arith/*` sharing evaluators, which those files prove
-  equal to `System.values` (`Moussaka.issueValues_eq`, `Ratatouille.issueSystem_values`), for any
-  `+ * 0 1`, so at `GF128`;
-* Moussaka redeem and Ratatouille spend likewise (`Moussaka.redeemValues_eq`,
+  equal to `System.values` (`Moussaka.issueValues_eq`, `MoussakaUnbound.uIssueValues_eq`,
+  `Ratatouille.issueSystem_values`), for any `+ * 0 1`, so at `GF128`;
+* Moussaka redeem, unbound Moussaka redeem and Ratatouille spend likewise
+  (`Moussaka.redeemValues_eq`, `MoussakaUnbound.uRedeemValues_eq`,
   `Ratatouille.spendSystem_values`), and PomFRIT redeem is `System.values` already, once the UOV
   term computed over arrays is replaced by the generator's (`UovEval.moussakaRedeemValues_eq`,
-  `ratatouilleSpendValues_eq`, `pomfritRedeemValues_eq`); their evaluators use the tabulated
+  `moussakaUnboundRedeemValues_eq`, `ratatouilleSpendValues_eq`, `pomfritRedeemValues_eq`); their evaluators use the tabulated
   `betaFast`, equal to `beta` (`betaFast_eq`), and the cached combination coefficients
   `ofArr (combinationOf n lb)`, which enter the system unchanged as its `l`
   (`ofArr_combinationOf`: coefficient `k` is bytes `[16k, 16k+16)` of the combination bytes
@@ -32,10 +34,12 @@ No parametricity argument is needed: the evaluator and the system live over the 
 * `gfId`, `AcceptEq` (the conclusion of `accept_hacc` at `gfId`, written without `φ`),
   `accept_hacc_GF` (`accept_hacc` at `gfId`; `hvals` as an equation over `GF128`, `|F| = 2¹²⁸`
   and characteristic 2 proved).
-* `moussakaIssue_values`, `moussakaRedeem_values`, `ratatouilleIssue_values`,
-  `ratatouilleSpend_values`, `pomfritRedeem_values`: `hvals` per relation.
-* `moussakaIssue_accept`, `moussakaRedeem_accept`, `ratatouilleIssue_accept`,
-  `ratatouilleSpend_accept`, `pomfritRedeem_accept`, `pomfritVerify_accept`: **if the executable
+* `moussakaIssue_values`, `moussakaRedeem_values`, `moussakaUnboundIssue_values`,
+  `moussakaUnboundRedeem_values`, `ratatouilleIssue_values`, `ratatouilleSpend_values`,
+  `pomfritRedeem_values`: `hvals` per relation.
+* `moussakaIssue_accept`, `moussakaRedeem_accept`, `moussakaUnboundIssue_accept`,
+  `moussakaUnboundRedeem_accept`, `ratatouilleIssue_accept`, `ratatouilleSpend_accept`,
+  `pomfritRedeem_accept`, `pomfritVerify_accept`: **if the executable
   verifier accepts, `EndToEnd`'s accepting equation holds at that transcript for the relation's
   `Arith/*` system over GF(2¹²⁸)**, the `hacc` of the `*_extract_gf128` theorems
   (`EndToEnd/Concrete.lean`) at that `Δ`, with nothing assumed. On a whole chain of challenges,
@@ -122,6 +126,22 @@ def moussakaRedeemSys (anchors : List UovPk) (nf ctxIss ctxRed lb : ByteArray) :
     System GF128 :=
   moussakaRedeemSysL anchors nf ctxIss ctxRed (ofArr (combinationOf Moussaka.M lb))
 
+/-- Unbound Moussaka issuance's system. -/
+def moussakaUnboundIssueSys (t ctxIss : ByteArray) : System GF128 :=
+  MoussakaUnbound.uIssueSystem (fun k => fnOf t k.val) (fnOf ctxIss)
+
+/-- Unbound Moussaka redemption's system at a given combination vector `l`. -/
+def moussakaUnboundRedeemSysL (anchors : List UovPk) (nf ctxIss ctxRed : ByteArray)
+    (l : Fin Moussaka.M → GF128) : System GF128 :=
+  MoussakaUnbound.uRedeemSystem beta GF256.toBits (anchors.map UovPk.map) (fnOf nf) (fnOf ctxIss)
+    (fnOf ctxRed) l
+
+/-- Unbound Moussaka redemption's system at the combination decoded from the bytes
+`lb = H_comb(chal2 ‖ UNBOUND_IHAT_REDEEM_COMBINE_DST)`. -/
+def moussakaUnboundRedeemSys (anchors : List UovPk) (nf ctxIss ctxRed lb : ByteArray) :
+    System GF128 :=
+  moussakaUnboundRedeemSysL anchors nf ctxIss ctxRed (ofArr (combinationOf Moussaka.M lb))
+
 /-- Ratatouille issuance's system. -/
 def ratatouilleIssueSys (c : ByteArray) (tInit : ℕ) (ctxIss : ByteArray) : System GF128 :=
   Ratatouille.issueSystem (fnOf c) tInit (fnOf ctxIss)
@@ -163,6 +183,23 @@ theorem moussakaRedeem_values (anchors : List UovPk) (nf ctxIss ctxRed challenge
       (moussakaRedeemSys anchors nf ctxIss ctxRed lb).values x := by
   show UovEval.moussakaRedeemValues _ _ _ _ _ x = _
   rw [UovEval.moussakaRedeemValues_eq, Moussaka.redeemValues_eq, betaFast_eq]
+  rfl
+
+theorem moussakaUnboundIssue_values (t ctxIss : ByteArray) (labelRows : Bool) (c1 lb : ByteArray)
+    (x : ℕ → GF128) :
+    (moussakaUnboundIssue t ctxIss labelRows).values c1 lb x =
+      (moussakaUnboundIssueSys t ctxIss).values x := by
+  show MoussakaUnbound.uIssueValues _ _ x = _
+  rw [MoussakaUnbound.uIssueValues_eq]
+  rfl
+
+theorem moussakaUnboundRedeem_values (anchors : List UovPk)
+    (nf ctxIss ctxRed challengeDigest : ByteArray) (labelRows : Bool) (c1 lb : ByteArray)
+    (x : ℕ → GF128) :
+    (moussakaUnboundRedeem anchors nf ctxIss ctxRed challengeDigest labelRows).values c1 lb x =
+      (moussakaUnboundRedeemSys anchors nf ctxIss ctxRed lb).values x := by
+  show UovEval.moussakaUnboundRedeemValues _ _ _ _ _ x = _
+  rw [UovEval.moussakaUnboundRedeemValues_eq, MoussakaUnbound.uRedeemValues_eq, betaFast_eq]
   rfl
 
 theorem ratatouilleIssue_values (c : ByteArray) (tInit : ℕ) (ctxIss : ByteArray)
@@ -209,6 +246,27 @@ theorem moussakaRedeem_accept (Hs : Hashes) (T : CrtTables) (anchors : List UovP
   accept_hacc_GF Hs T _ proof h _
     (moussakaRedeem_values anchors nf ctxIss ctxRed challengeDigest labelRows)
     fun _ _ => Degree.moussaka_redeem_deg _ _ _ _ _ _ _
+
+/-- **Unbound Moussaka issuance: acceptance gives the accepting equation for `uIssueSystem`.** -/
+theorem moussakaUnboundIssue_accept (Hs : Hashes) (T : CrtTables) (t ctxIss : ByteArray)
+    (labelRows : Bool) (proof : ByteArray)
+    (h : (verify Hs T (moussakaUnboundIssue t ctxIss labelRows) proof).accept = true) :
+    AcceptEq Hs T (moussakaUnboundIssue t ctxIss labelRows) proof
+      fun _ _ => moussakaUnboundIssueSys t ctxIss :=
+  accept_hacc_GF Hs T _ proof h _ (moussakaUnboundIssue_values t ctxIss labelRows)
+    fun _ _ => Degree.moussaka_unbound_issue_deg _ _
+
+/-- **Unbound Moussaka redemption: acceptance gives the accepting equation for
+`uRedeemSystem`**, at the `l` the verifier derives from `chal2`. -/
+theorem moussakaUnboundRedeem_accept (Hs : Hashes) (T : CrtTables) (anchors : List UovPk)
+    (nf ctxIss ctxRed challengeDigest : ByteArray) (labelRows : Bool) (proof : ByteArray)
+    (h : (verify Hs T (moussakaUnboundRedeem anchors nf ctxIss ctxRed challengeDigest labelRows)
+      proof).accept = true) :
+    AcceptEq Hs T (moussakaUnboundRedeem anchors nf ctxIss ctxRed challengeDigest labelRows) proof
+      fun _ lb => moussakaUnboundRedeemSys anchors nf ctxIss ctxRed lb :=
+  accept_hacc_GF Hs T _ proof h _
+    (moussakaUnboundRedeem_values anchors nf ctxIss ctxRed challengeDigest labelRows)
+    fun _ _ => Degree.moussaka_unbound_redeem_deg _ _ _ _ _ _ _
 
 /-- **Ratatouille issuance: acceptance gives the accepting equation for `issueSystem`.** -/
 theorem ratatouilleIssue_accept (Hs : Hashes) (T : CrtTables) (c : ByteArray) (tInit : ℕ) (ctxIss : ByteArray)
