@@ -7,6 +7,7 @@ import VoleMole.Privacy.MoussakaNCFind
 import VoleMole.Privacy.PomFRITInterleaveOC
 import VoleMole.Privacy.RatatouilleInterleaveOC
 import VoleMole.Privacy.PomFRITLin
+import VoleMole.Privacy.MoussakaLin
 import VoleMole.Privacy.SeedXOFNC
 import VoleMole.ROM.SpecSound
 import VoleMole.Privacy.PqovDelta
@@ -308,6 +309,11 @@ theorem mN_budget (ι : Type) {R : Type} [Fintype R] [Nonempty R] : (mN ι (R :=
 example (ι : Type) [Fintype ι] [DecidableEq ι] (idx : AnchorSet → UOVKey → ℕ) :=
   anonymityN_lean_le (mN ι) idx (mN_budget ι) (εhide := 0)
     (fun _ _ _ => (hidingAdv_true _ _).le)
+
+/-- With the further Clients on private tables (`Privacy/MoussakaLin.lean`). -/
+example (ι : Type) [Fintype ι] [DecidableEq ι] (idx : AnchorSet → UOVKey → ℕ) :=
+  anonymityN_lin (mN ι) idx (mN_budget ι) (εhide := 0)
+    (fun _ _ _ _ => (hidingAdv_true _ _).le)
 
 /-- The interleaved adversary: no further sessions started, a constant guess. -/
 def mIL {R : Type} : AdversaryILM R :=

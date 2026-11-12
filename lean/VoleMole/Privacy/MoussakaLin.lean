@@ -5,7 +5,63 @@ import VoleMole.Privacy.Split
 /-!
 # Moussaka with many Clients: the further Clients on private tables
 
-PLACEHOLDER
+The many-Client and `N`-pair bounds of `Privacy/MoussakaMany.lean` charge every further Client's
+reads in every hop of the two-Client game (`anonymityN_lean_numG`: the guess's and the
+interaction's budgets grow by `2·624m`, `2·4607m`), so the `N`-pair bound is quadratic. PomFRIT
+avoids this with `H₄` a table by moving the further sessions to private tables with
+`Privacy.pr_resample` (`Privacy/PomFRITLin.lean`); that needs the further sessions' reads to be a
+function of their own tables, which fails for Moussaka: a further Client's redemption is proved
+for the Anchor Set and digest the adversary chooses **after** seeing the challenge requests.
+
+Here the further Clients are moved to private tables with the interleaved lemma
+`Privacy.pr_split_le` (`Privacy/Split.lean`), which allows exactly that.
+
+## The argument (one step: one challenge pair, the other Clients further Clients)
+
+* **Point read sets** (`ZK/ReadsPointRO.lean`, `rdRO_cons`): each Lean proof reads `H₅` at its
+  `624` gate inputs and the cipher at the CTR blocks of its `iv` at its tree's `4607` nodes; a
+  pair `(H₅, cipher)` that agrees there gives the same proof. Hence `rdIss_cons` (an issuance
+  request), `rdRedAt_cons` (a redemption request at a redemption point, whether or not the Client's
+  checks pass), `rdRedX_cons` (a further Client's redemption).
+* **The joint run** (`tauM`): with the challenge tapes, `H₂³` and the further tapes fixed, the
+  challenge Clients' issuance and redemption on the pair `a` and the further Clients' issuance and
+  redemption on the pair `u` (the adversary's interaction in between, reading nothing). Its read
+  sets are `RAM` (challenge) and `RBM` (further); it is **jointly consistent** (`tauM_cons`).
+  The real game is the run with `a = u` (`realGameRA_withClients_iff`, `Iff.rfl`).
+* **The reduction** (`AdversaryN.redS`): the two-Client game of `realGameRA` whose interaction
+  computes the further Clients' issuance requests on the private pair `u` and whose guess computes
+  their redemptions on `u` and looks at the game's tables patched with `u` at the further Clients'
+  points (`realGameRA_redS_iff`, `Iff.rfl`). Its interaction reads only `H₂³` (the further issuance
+  proofs' grinding points, `redS_iBudget`: `(0, m·2³², 0, 0)`) and its guess has the adversary's own
+  budget (`redS_gBudget`).
+* **The step** (`withClients_close_redS`, `withClients_step`): `pr_split_le` gives, in each world,
+  the game of `A.withClients idx c` within `Pr[badM]` of the reduction's game averaged over `u`,
+  and `anonymityRA_lean_num` bounds the reduction's two worlds by
+
+      εPair0M(q₃, q₅, q_E, m) ≤ 2·2⁻¹⁰² + m·2⁻¹²⁸ + 8·(q₃ + q₅ + 221·q_E)·2⁻¹²⁸ + 2·εhide
+
+  (`εPair0M_le`): no further Client's `H₅` or cipher reads.
+
+`badM` is the event that, in the split world (challenge Clients on `a`, further Clients on an
+independent `u`), a challenge proof and a further proof read a common `H₅` key or cipher point.
+
+## The bounds
+
+* `anonymityN_lin` (`m` further Clients): `≤ εPair0M(q₃, q₅, q_E, m) + Pr[bad₀] + Pr[bad₁]`.
+* `anonymityP_lin` (`N` pairs, the hybrid over the pairs of `MoussakaMany`): if every step's bad
+  event has probability `≤ β`, `≤ N·(εPair0M(q₃, q₅, q_E, 2(N − 1)) + 2β)`; in numbers
+  (`anonymityP_lin_le`) `≤ N·(2·2⁻¹⁰² + 2(N − 1)·2⁻¹²⁸ + 8·(q₃ + q₅ + 221·q_E)·2⁻¹²⁸ + 2·εhide +
+  2β)`.
+
+**What is not proved here: the bound on `β`.** In these games `H₄` is SHAKE, so two proofs' `iv`s
+are not known to differ, and `β` has no proved bound: with `iv`s ignored, a common cipher point
+needs a common tree node, `≈ 4607²·2⁻¹²⁸` per pair of proofs, which gives back a quadratic bound.
+With `H₄` a random oracle, `β ≤ 8m·(4·2⁻¹²⁸ + …)` on paper (`lean/docs/zk.md` §10.8, "Linear in
+`N` for Moussaka and Ratatouille"): every proof draws a fresh root seed and `iv_pre`, its `iv` is a
+fresh oracle answer, and its non-root nodes fresh cipher answers, whatever the statement the
+adversary chose. Mechanizing that needs the Moussaka two-Client bound for the base record with
+`H₄` a table (`anonymityRA_lean_numG` is stated for SHAKE) and the freshness argument with the
+adversary's choices in between.
 -/
 
 open Finset
@@ -227,11 +283,11 @@ noncomputable def rdChR (x : PT) (i : (PendingToken × Bytes) × (PendingToken �
     (List.ofFn (yOf x side).1) (yOf x side).2 g a
 
 /-- What the guess receives besides the tables. -/
-abbrev OutM (ι : Type) := ((PendingToken × Bytes) × (PendingToken × Bytes)) × (ι → Bytes) ×
+abbrev OutLin (ι : Type) := ((PendingToken × Bytes) × (PendingToken × Bytes)) × (ι → Bytes) ×
   Option (Except Error Bytes × Except Error Bytes) × (ι → Except Error Bytes)
 
 /-- **The joint run**: the challenge sessions on the pair `a`, the further Clients on `u`. -/
-noncomputable def tauM (z : PT × Tab2G pI) (a u : T5) : OutM ι :=
+noncomputable def tauM (z : PT × Tab2G pI) (a u : T5) : OutLin ι :=
   (chI A z.1 z.2 a, A.txB c z.2 u,
     bif allOk (baseOf A (chI A z.1 z.2 a) (A.issB c z.2 u)) idx (chI A z.1 z.2 a).1 (chI A z.1 z.2 a).2 then
       some (chR A idx b z.1 (chI A z.1 z.2 a) (A.issB c z.2 u) z.2 a false,
@@ -249,7 +305,7 @@ noncomputable def RBM (z : PT × Tab2G pI) (a u : T5) : RdS :=
   A.QB idx c (chI A z.1 z.2 a).1.2 (chI A z.1 z.2 a).2.2 (A.issB c z.2 u) z.2 u
 
 /-- The guess on what it receives and the pair `t`. -/
-def guessM (z : PT × Tab2G pI) (X : OutM ι) (t : T5) : Prop :=
+def guessM (z : PT × Tab2G pI) (X : OutLin ι) (t : T5) : Prop :=
   A.guess X.1.1.2 X.1.2.2 X.2.1 X.2.2.1 X.2.2.2 (slOf z.1) (fun j => ((c j).1.2.2, (c j).2.2)) (toSp z.2 t)
 
 /-- **The real game is the joint run on one pair.** -/
