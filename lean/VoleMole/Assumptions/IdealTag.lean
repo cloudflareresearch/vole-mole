@@ -1,0 +1,619 @@
+import VoleMole.Assumptions.UOV
+
+/-!
+# Programming challenge targets into an ideal hash: det-FDH ≤ A-OMPI ≤ OMPR
+
+`lean/docs/security/uov-assumptions.md` §5.1 (Theorem 1 (a), (c)) and §5.8 (Lemma 2.1 of
+`ratatouille.md` with `Tag` a random function). Protocol-independent: everything is generic in the
+trapdoor (`Trapdoor`: key generation, preimage relation, sampler `D`), the message type `M` and the
+world `specR AR` of the games of `Assumptions/UOV.lean`.
+
+**Generic simulation lemmas.**
+* `simulateQ_proj_eqd`: a handler `comb` simulates a handler `impl` through a projection `proj` of
+  its state, if it does so per query on the states of an invariant that may consume a budget (one
+  unit per query of a kind `p`); then the whole simulation does, for every computation within the
+  budget. `simulateQ_inv_bound`: the invariant on the support. (The step relation is equality of
+  distributions, so a fresh uniform sample on one side may match one on the other.)
+* `prEvent_unifList_exists_le`, `prEvent_keyed_unifList_exists_le`: union bound over a uniform list.
+* `unifList_add`: a uniform list of length `a + b` is a uniform list of length `a` followed by one
+  of length `b`.
+
+**The lazy A-OMPI challenger** (`ompiLazy`): it draws each target when requested (at most `q_T`),
+instead of from a pre-sampled stream. `ompi_lazy_eqd`, `advOMPI_eq_lazy`: the same game.
+
+**Theorem 1 (a): det-FDH ≤ A-OMPI** (`advFDH_le_ompi`). The reduction `fdhRed A` answers each fresh
+`H(m)` with a fresh challenge target, `Sign(m)` with the index oracle at `m`'s index, and turns a
+forgery `(m*, s*)` into `(index of m*, s*)` (it evaluates `H(m*)` first, `fwd`). The programming is
+perfect (`fdhComb_step`, through `fdhProj`), so for an adversary with at most `k` hash and signing
+queries on every path,
+
+    Adv^{euf}_{det}(A; q_H, q_S) ≤ Adv^{ompi}(fdhRed A; k + 1, q_S).
+
+With `Tag` modelled as a random function, UF-Tag (item 12, with the strict win "never signed") *is*
+det-FDH with `H = Tag`: this is Lemma 2.1 of `ratatouille.md` in the random-function model, with no
+loss. The permutation terms `q_K·2^{−479} + q_K²·2^{−799}` of the paper's Lemma 2.1 come from
+modelling KP800 as a permutation with inverse queries; they are not mechanized (see the note).
+
+**Theorem 1 (c): A-OMPI ≤ OMPR** (`advOMPI_le_ompr`). The reduction `ompiRed A` names A-OMPI's
+targets by their indices, forwards the index queries to the preimage oracle (caching them, so
+repeated indices cost nothing), caps the targets at `q_T`, and after the forgery *pads*: it requests
+`Q − (answered indices)` further targets and their preimages, so that it holds exactly `Q + 1`
+claims after exactly `Q` preimage queries, as `Wins` requires. A claim fails to be a preimage only
+if `D` fails (or errs) on one of the challenger's targets:
+
+    Adv^{ompi}(A; q_T, Q) ≤ Adv^{ompr}(ompiRed A; q_T + Q, Q) + Pr[∃ u ∈ L, ¬ P(D(u)) = u],
+
+`L` the challenger's `q_T + Q` uniform targets; the last term is at most `(q_T + Q)·ρ`, `ρ` the
+probability that `D` fails on a uniform target (`failRate`; for pqov `δ(sk)^{255}`, §2). The paper's
+"tight" T1(c) holds for `D*` (Lemma D), whose aborts are in `ε_D`; with the real sampler they appear
+here. The padding is why the target count is `q_T + Q`.
+
+No `sorry`, no `axiom`.
+-/
+
+open OracleComp OracleSpec VoleMole.ROM.OneMore
+open scoped ENNReal
+
+namespace VoleMole.Assumptions.IdealTag
+
+open VoleMole.Assumptions.UOV
+
+/-! ## Generic simulation lemmas -/
+
+section Sim
+
+variable {ι : Type} {spec : OracleSpec ι} {σ τ : Type}
+  (comb : QueryImpl spec (StateT σ ProbComp)) (impl : QueryImpl spec (StateT τ ProbComp))
+  (proj : σ → τ) (p : ι → Prop) [DecidablePred p] (Inv : ℕ → σ → Prop)
+
+/-- **Simulation through a projection, with a budget.** If, on the states of the invariant `Inv k`
+(`k` the remaining budget), every query of `comb` is distributed as the query of `impl` at the
+projected state (`hstep`), and keeps the invariant with one unit consumed per query of kind `p`
+(`hinv`), then every computation within the budget runs the same under both. -/
+theorem simulateQ_proj_eqd
+    (hstep : ∀ q s k, Inv k s → (p q → 0 < k) →
+      (fun z => (z.1, proj z.2)) <$> (comb q).run s =ᵈ (impl q).run (proj s))
+    (hinv : ∀ q s k, Inv k s → (p q → 0 < k) →
+      ∀ z ∈ support ((comb q).run s), Inv (if p q then k - 1 else k) z.2)
+    {α : Type} (oa : OracleComp spec α) :
+    ∀ k s, IsQueryBoundP oa p k → Inv k s →
+      (fun z => (z.1, proj z.2)) <$> (simulateQ comb oa).run s =ᵈ
+        (simulateQ impl oa).run (proj s) := by
+  induction oa using OracleComp.inductionOn with
+  | pure x => intro k s _ _; simp only [simulateQ_pure, StateT.run_pure, map_pure]; exact EvalDistEq.rfl
+  | query_bind q f ih =>
+    intro k s hb hI
+    rw [isQueryBoundP_query_bind_iff] at hb
+    have hk : p q → 0 < k := fun hp => hb.1.resolve_left (not_not.2 hp)
+    simp only [simulateQ_bind, simulateQ_spec_query, StateT.run_bind, map_bind]
+    refine (EvalDistEq.bind_congr_of_support _ fun z hz =>
+      ih z.1 _ z.2 (hb.2 z.1) (hinv q s k hI hk z hz)).trans ?_
+    have := (hstep q s k hI hk).bind_left (fun w => (simulateQ impl (f w.1)).run w.2)
+    simpa only [bind_map_left] using this
+
+/-- **The invariant on the support**, under the same hypotheses. -/
+theorem simulateQ_inv_bound
+    (hinv : ∀ q s k, Inv k s → (p q → 0 < k) →
+      ∀ z ∈ support ((comb q).run s), Inv (if p q then k - 1 else k) z.2)
+    {α : Type} (oa : OracleComp spec α) :
+    ∀ k s, IsQueryBoundP oa p k → Inv k s →
+      ∀ z ∈ support ((simulateQ comb oa).run s), ∃ k', Inv k' z.2 := by
+  induction oa using OracleComp.inductionOn with
+  | pure x =>
+    intro k s _ hI z hz
+    simp only [simulateQ_pure, StateT.run_pure, support_pure, Set.mem_singleton_iff] at hz
+    exact ⟨k, hz ▸ hI⟩
+  | query_bind q f ih =>
+    intro k s hb hI z hz
+    rw [isQueryBoundP_query_bind_iff] at hb
+    have hk : p q → 0 < k := fun hp => hb.1.resolve_left (not_not.2 hp)
+    simp only [simulateQ_bind, simulateQ_spec_query, StateT.run_bind, mem_support_bind_iff] at hz
+    obtain ⟨w, hw, hz⟩ := hz
+    exact ih w.1 _ w.2 (hb.2 w.1) (hinv q s k hI hk w hw) z hz
+
+end Sim
+
+/-! ## Uniform lists -/
+
+section Lists
+
+variable {T : Type} [SampleableType T]
+
+lemma bind_const_eqd {α β : Type} (mx : ProbComp α) (my : ProbComp β) :
+    (mx >>= fun _ => my) =ᵈ my := by
+  let : MeasurableSpace β := ⊤
+  exact EvalDistEq.of_evalDist_eq (OracleComp.evalDist_bind_const mx my)
+
+/-- **Union bound over a uniform list.** -/
+theorem prEvent_unifList_exists_le (bad : T → Prop) :
+    ∀ n : ℕ, Pr{let L ← unifList T n}[∃ u ∈ L, bad u] ≤ n * Pr{let u ← $ᵗ T}[bad u]
+  | 0 => by simp [unifList]
+  | n + 1 => by
+    have hμ : unifList T (n + 1) = (fun p : T × List T => p.1 :: p.2) <$>
+        (do let u ← $ᵗ T; let L ← unifList T n; pure (u, L)) := by
+      simp [unifList, map_bind]
+    rw [hμ, prEvent_map]
+    refine (prEvent_mono _ _ (fun p : T × List T => bad p.1 ∨ ∃ u ∈ p.2, bad u)
+      fun p hp => by simpa using hp).trans ((prEvent_or_le _ _ _).trans ?_)
+    have h1 : Pr{let p ← (do let u ← $ᵗ T; let L ← unifList T n; pure (u, L))}[bad p.1] =
+        Pr{let u ← $ᵗ T}[bad u] := by
+      have : Prod.fst <$> (do let u ← $ᵗ T; let L ← unifList T n; pure (u, L)) =ᵈ ($ᵗ T) := by
+        simp only [map_bind, map_pure]
+        refine (EvalDistEq.bind_right _ fun u => bind_const_eqd _ _).trans ?_
+        simp only [bind_pure]
+        exact EvalDistEq.rfl
+      have h := this.prEvent_eq bad
+      rw [prEvent_map] at h
+      exact h
+    have h2 : Pr{let p ← (do let u ← $ᵗ T; let L ← unifList T n; pure (u, L))}[∃ u ∈ p.2, bad u] =
+        Pr{let L ← unifList T n}[∃ u ∈ L, bad u] := by
+      have : Prod.snd <$> (do let u ← $ᵗ T; let L ← unifList T n; pure (u, L)) =ᵈ
+          unifList T n := by
+        simp only [map_bind, map_pure, bind_pure]
+        exact bind_const_eqd _ _
+      have h := this.prEvent_eq (fun L => ∃ u ∈ L, bad u)
+      rw [prEvent_map] at h
+      exact h
+    rw [h1, h2]
+    refine (add_le_add le_rfl (prEvent_unifList_exists_le bad n)).trans (le_of_eq ?_)
+    push_cast
+    ring
+
+/-- **Union bound over a uniform list, averaged over a key.** -/
+theorem prEvent_keyed_unifList_exists_le {K : Type} (kg : ProbComp K) (bad : K → T → Prop) (n : ℕ) :
+    Pr{let k ← kg; let L ← unifList T n}[∃ u ∈ L, bad k u] ≤
+      n * Pr{let k ← kg; let u ← $ᵗ T}[bad k u] := by
+  let : MeasurableSpace K := ⊤
+  have e1 := prEvent_bind_eq_lintegral_of_discrete kg (fun k => unifList T n >>= fun L =>
+    pure (k, L)) (fun r => ∃ u ∈ r.2, bad r.1 u)
+  have e2 := prEvent_bind_eq_lintegral_of_discrete kg (fun k => ($ᵗ T) >>= fun u => pure (k, u))
+    (fun r => bad r.1 r.2)
+  simp only [bind_pure_comp] at e1 e2
+  have e1' : Pr{let k ← kg; let L ← unifList T n}[∃ u ∈ L, bad k u] =
+      ∫⁻ k, Pr{let L ← unifList T n}[∃ u ∈ L, bad k u] ∂𝒟[kg] := by
+    rw [← prEvent_map] at e1
+    simpa [prEvent_map, Function.comp_def] using e1
+  have e2' : Pr{let k ← kg; let u ← $ᵗ T}[bad k u] =
+      ∫⁻ k, Pr{let u ← $ᵗ T}[bad k u] ∂𝒟[kg] := by
+    simpa [prEvent_map, Function.comp_def] using e2
+  rw [e1', e2', ← MeasureTheory.lintegral_const_mul _ measurable_from_top]
+  exact MeasureTheory.lintegral_mono fun k => prEvent_unifList_exists_le (bad k) n
+
+omit [SampleableType T] in
+lemma length_of_mem_unifList' [SampleableType T] :
+    ∀ (m : ℕ) (L : List T), L ∈ support (unifList T m) → L.length = m
+  | 0, L, h => by simp only [unifList, support_pure, Set.mem_singleton_iff] at h; subst h; rfl
+  | m + 1, L, h => by
+    simp only [unifList, mem_support_bind_iff, support_pure, Set.mem_singleton_iff] at h
+    obtain ⟨u, -, L', hL', rfl⟩ := h
+    simp [length_of_mem_unifList' m L' hL']
+
+/-- **A uniform list of length `a + b`** is a uniform list of length `a` followed by an
+independent one of length `b`. -/
+theorem unifList_add (b : ℕ) : ∀ a : ℕ,
+    unifList T (a + b) = (do let L₁ ← unifList T a; let L₂ ← unifList T b; pure (L₁ ++ L₂))
+  | 0 => by simp [unifList]
+  | a + 1 => by
+    rw [Nat.add_right_comm]
+    simp only [unifList, unifList_add b a, bind_assoc, pure_bind, List.cons_append]
+
+end Lists
+
+/-! ## The lazy A-OMPI challenger -/
+
+section Lazy
+
+variable {DR : Type} [DecidableEq DR] {AR : DR → Type} [∀ d, SampleableType (AR d)]
+  {T S : Type} [SampleableType T]
+
+/-- **The lazy A-OMPI challenger**: the state is A-OMPI's (its stream unused) and the number of
+targets still allowed; a target request draws a fresh uniform target. -/
+def ompiLazy (D : T → S) : QueryImpl (specI AR T S) (StateT (OMPISt AR T × ℕ) ProbComp)
+  | .inl d => StateT.mk fun s =>
+      (fun r => (r.1, ({ s.1 with ro := r.2 }, s.2))) <$> ((specR AR).randomOracle d).run s.1.ro
+  | .inr (.inl ()) => StateT.mk fun s => match s.2 with
+      | 0 => pure (none, s)
+      | k + 1 => (fun y => (some y, ({ s.1 with ys := s.1.ys ++ [y] }, k))) <$> ($ᵗ T)
+  | .inr (.inr i) => StateT.mk fun s =>
+      pure ((s.1.ys[i]?).map D, ({ s.1 with opened := i :: s.1.opened, oq := s.1.oq + 1 }, s.2))
+
+/-- The stream challenger's state seen by the lazy one: the stream dropped, its length kept. -/
+def forgetS (c : OMPISt AR T) : OMPISt AR T × ℕ := ({ c with rest := [] }, c.rest.length)
+
+/-- **The lazy challenger is the stream challenger**: with a uniform stream of `m` targets, the
+two have the same joint distribution of output and (projected) state. -/
+theorem ompi_lazy_eqd (D : T → S) {α : Type} (oa : OracleComp (specI AR T S) α) :
+    ∀ (c : OMPISt AR T) (m : ℕ),
+      (do let L ← unifList T m
+          (fun z : α × OMPISt AR T => (z.1, forgetS z.2)) <$>
+            (simulateQ (ompiImpl D) oa).run { c with rest := L }) =ᵈ
+        (simulateQ (ompiLazy D) oa).run ({ c with rest := [] }, m) := by
+  induction oa using OracleComp.inductionOn with
+  | pure x =>
+    intro c m
+    simp only [simulateQ_pure, StateT.run_pure, map_pure, forgetS]
+    refine (EvalDistEq.bind_congr_of_support _ (g := fun _ => pure (x, ({ c with rest := [] }, m)))
+      fun L hL => ?_).trans (bind_const_eqd _ _)
+    rw [length_of_mem_unifList' m L hL]
+  | query_bind q k ih =>
+    intro c m
+    simp only [simulateQ_bind, simulateQ_spec_query, StateT.run_bind, map_bind]
+    rcases q with d | ⟨⟩ | i
+    · simp only [ompiImpl, ompiLazy, StateT.run_mk, bind_map_left]
+      refine (eqd_swap _ _ _).trans (EvalDistEq.bind_right _ fun r => ?_)
+      exact ih r.1 { c with ro := r.2 } m
+    · cases m with
+      | zero =>
+        simp only [unifList, pure_bind, ompiImpl, ompiLazy, StateT.run_mk]
+        simpa only [unifList, pure_bind] using ih none c 0
+      | succ m =>
+        simp only [unifList, bind_assoc, pure_bind, ompiImpl, ompiLazy, StateT.run_mk,
+          bind_map_left]
+        refine EvalDistEq.bind_right _ fun u => ?_
+        exact ih (some u) { c with ys := c.ys ++ [u] } m
+    · simp only [ompiImpl, ompiLazy, StateT.run_mk, pure_bind]
+      exact ih _ { c with opened := i :: c.opened, oq := c.oq + 1 } m
+
+variable {PK SK : Type} (tr : Trapdoor PK SK T S)
+
+/-- **The A-OMPI experiment with the lazy challenger.** -/
+def ompiLazyExp (qT : ℕ) (A : PK → ProbComp (OracleComp (specI AR T S) (ℕ × S))) :
+    ProbComp (PK × (ℕ × S) × OMPISt AR T) := do
+  let kp ← tr.keyGen
+  let a ← A kp.1
+  let r ← (simulateQ (ompiLazy (tr.D kp.2)) a).run (ompi0 [], qT)
+  pure (kp.1, r.1, r.2.1)
+
+/-- **`Adv^{ompi}` with the lazy challenger.** -/
+theorem advOMPI_eq_lazy (qT Q : ℕ) (A : PK → ProbComp (OracleComp (specI AR T S) (ℕ × S))) :
+    advOMPI tr qT Q A = Pr{let r ← ompiLazyExp tr qT A}[OMPIWin tr Q r] := by
+  have h : (fun r : PK × (ℕ × S) × OMPISt AR T => (r.1, r.2.1, { r.2.2 with rest := [] })) <$>
+      ompiExp tr qT A =ᵈ ompiLazyExp tr qT A := by
+    simp only [ompiExp, ompiLazyExp, map_bind, map_pure]
+    refine EvalDistEq.bind_right _ fun kp => EvalDistEq.bind_right _ fun a => ?_
+    have := (ompi_lazy_eqd (tr.D kp.2) a (ompi0 []) qT).bind_left
+      (fun r => (pure (kp.1, r.1, r.2.1) : ProbComp _))
+    simp only [bind_assoc, ompi0, forgetS, bind_map_left] at this ⊢
+    exact this
+  unfold advOMPI
+  rw [← h.prEvent_eq, prEvent_map]
+  rfl
+
+end Lazy
+
+/-! ## Theorem 1 (a): det-FDH ≤ A-OMPI -/
+
+section FDHRed
+
+variable {DR : Type} [DecidableEq DR] {AR : DR → Type} [∀ d, SampleableType (AR d)]
+  {M : Type} [DecidableEq M] {T S : Type} [SampleableType T] [Inhabited T] [Inhabited S]
+
+variable (M T) in
+/-- The reduction's state: each hashed message's index and target, the next index, and (ghosts,
+for the proof) the signed messages and the number of hash queries. -/
+structure FRSt where
+  tbl : M → Option (ℕ × T)
+  next : ℕ
+  signed : List M
+  hq : ℕ
+
+/-- The reduction's initial state. -/
+def fr0 : FRSt M T := ⟨fun _ => none, 0, [], 0⟩
+
+variable (AR T S) in
+/-- A-OMPI's "new target" query. -/
+def qNew : OracleComp (specI AR T S) (Option T) :=
+  liftM ((specI AR T S).query (.inr (.inl ())))
+
+variable (AR T S) in
+/-- A-OMPI's index query. -/
+def qIdx (i : ℕ) : OracleComp (specI AR T S) (Option S) :=
+  liftM ((specI AR T S).query (.inr (.inr i)))
+
+variable (T S) in
+/-- A-OMPI's world query. -/
+def qW (d : DR) : OracleComp (specI AR T S) (AR d) :=
+  liftM ((specI AR T S).query (.inl d))
+
+omit [Inhabited T] [Inhabited S] in
+theorem run_qNew (D : T → S) (s : OMPISt AR T × ℕ) :
+    (simulateQ (ompiLazy D) (qNew AR T S)).run s = match s.2 with
+      | 0 => pure (none, s)
+      | k + 1 => (fun y => (some y, ({ s.1 with ys := s.1.ys ++ [y] }, k))) <$> ($ᵗ T) := by
+  unfold qNew
+  erw [simulateQ_spec_query]
+  rfl
+
+omit [Inhabited T] [Inhabited S] in
+theorem run_qIdx (D : T → S) (i : ℕ) (s : OMPISt AR T × ℕ) :
+    (simulateQ (ompiLazy D) (qIdx AR T S i)).run s =
+      pure ((s.1.ys[i]?).map D, ({ s.1 with opened := i :: s.1.opened, oq := s.1.oq + 1 }, s.2)) := by
+  unfold qIdx
+  erw [simulateQ_spec_query]
+  rfl
+
+omit [Inhabited T] [Inhabited S] in
+theorem run_qW (D : T → S) (d : DR) (s : OMPISt AR T × ℕ) :
+    (simulateQ (ompiLazy D) (qW T S d)).run s =
+      (fun r => (r.1, ({ s.1 with ro := r.2 }, s.2))) <$> ((specR AR).randomOracle d).run s.1.ro := by
+  unfold qW
+  erw [simulateQ_spec_query]
+  rfl
+
+/-- The index and target of `m`, allocated from a fresh challenge target if needed (`none` once
+the targets are used up). -/
+def alloc (m : M) (st : FRSt M T) : OracleComp (specI AR T S) (Option (ℕ × T) × FRSt M T) :=
+  match st.tbl m with
+  | some iy => pure (some iy, st)
+  | none => (fun r : Option T => match r with
+      | some y => (some (st.next, y),
+          { st with tbl := Function.update st.tbl m (some (st.next, y)), next := st.next + 1 })
+      | none => (none, st)) <$> qNew AR T S
+
+/-- **The det-FDH-to-A-OMPI reduction's handler**: the world forwarded, `H(m)` the target of `m`,
+`Sign(m)` the index oracle at `m`'s index. -/
+def fdhRedImpl : QueryImpl (specF AR M T S) (StateT (FRSt M T) (OracleComp (specI AR T S)))
+  | .inl d => StateT.mk fun st => (fun a => (a, st)) <$> qW T S d
+  | .inr (.inl m) => StateT.mk fun st =>
+      (fun r => ((r.1.map Prod.snd).getD default, { r.2 with hq := r.2.hq + 1 })) <$>
+        alloc (AR := AR) (S := S) m st
+  | .inr (.inr m) => StateT.mk fun st => alloc (AR := AR) (S := S) m st >>= fun r =>
+      match r.1 with
+      | some iy => (fun a : Option S => ((a.getD default : S), { r.2 with signed := m :: r.2.signed })) <$>
+          qIdx AR T S iy.1
+      | none => pure ((default : S), { r.2 with signed := m :: r.2.signed })
+
+/-- The forger followed by the hash of its message: `((m*, s*), H(m*))`. -/
+def fwd (a : OracleComp (specF AR M T S) (M × S)) : OracleComp (specF AR M T S) ((M × S) × T) :=
+  a >>= fun r => (fun t => (r, t)) <$>
+    (liftM ((specF AR M T S).query (.inr (.inl r.1))) : OracleComp (specF AR M T S) T)
+
+/-- The reduction's output: the index of `m*` and `s*`. -/
+def outI (z : ((M × S) × T) × FRSt M T) : ℕ × S :=
+  (((z.2.tbl z.1.1.1).map Prod.fst).getD 0, z.1.1.2)
+
+variable (AR) in
+/-- **The A-OMPI adversary `fdhRed A`** of Theorem 1 (a). -/
+def fdhRed {PK : Type} (A : PK → ProbComp (OracleComp (specF AR M T S) (M × S))) (pk : PK) :
+    ProbComp (OracleComp (specI AR T S) (ℕ × S)) :=
+  (fun a => outI <$> (simulateQ fdhRedImpl (fwd a)).run fr0) <$> A pk
+
+/-- The reduction run against the lazy challenger, as one handler. -/
+def fdhComb (D : T → S) :
+    QueryImpl (specF AR M T S) (StateT (FRSt M T × (OMPISt AR T × ℕ)) ProbComp) :=
+  fun q => StateT.mk fun s => (fun r => (r.1.1, (r.1.2, r.2))) <$>
+    (simulateQ (ompiLazy D) ((fdhRedImpl (S := S) q).run s.1)).run s.2
+
+theorem collapseF (D : T → S) {α : Type} (oa : OracleComp (specF AR M T S) α) (s : FRSt M T)
+    (c : OMPISt AR T × ℕ) :
+    (simulateQ (ompiLazy D) ((simulateQ fdhRedImpl oa).run s)).run c =
+      (fun r => ((r.1, r.2.1), r.2.2)) <$> (simulateQ (fdhComb D) oa).run (s, c) := by
+  refine simulateQ_StateT_StateT_compose _ _ _ (fun q s c => ?_) oa s c
+  show _ = _ <$> ((fun r : (_ × _) × _ => (r.1.1, (r.1.2, r.2))) <$> _)
+  rw [Functor.map_map]
+  exact (id_map _).symm
+
+/-- The det-FDH state that a reduction state represents. -/
+def fdhProj (s : FRSt M T × (OMPISt AR T × ℕ)) : FDHSt AR M T :=
+  ⟨s.2.1.ro, fun m => (s.1.tbl m).map Prod.snd, s.1.signed, s.1.hq⟩
+
+/-- The structural invariant of the joint state. -/
+structure FInv (s : FRSt M T × (OMPISt AR T × ℕ)) : Prop where
+  ys_of : ∀ m i y, s.1.tbl m = some (i, y) → s.2.1.ys[i]? = some y
+  inj : ∀ m m' i y y', s.1.tbl m = some (i, y) → s.1.tbl m' = some (i, y') → m = m'
+  op : ∀ i ∈ s.2.1.opened, ∃ m ∈ s.1.signed, ∃ y, s.1.tbl m = some (i, y)
+  oq : s.2.1.oq ≤ s.1.signed.length
+  nx : s.1.next = s.2.1.ys.length
+
+/-- The invariant with a budget: at least `k` targets left. -/
+def FInvK (k : ℕ) (s : FRSt M T × (OMPISt AR T × ℕ)) : Prop := k ≤ s.2.2 ∧ FInv s
+
+/-- Hash and signing queries. -/
+def isHS (q : DR ⊕ (M ⊕ M)) : Prop := q.isRight = true
+
+instance : DecidablePred (isHS (DR := DR) (M := M)) := fun _ => inferInstanceAs (Decidable (_ = _))
+
+variable (D : T → S)
+
+theorem comb_world (d : DR) (s : FRSt M T × (OMPISt AR T × ℕ)) :
+    (fdhComb (S := S) D (.inl d)).run s = (fun r => (r.1, (s.1, ({ s.2.1 with ro := r.2 }, s.2.2)))) <$>
+      ((specR AR).randomOracle d).run s.2.1.ro := by
+  simp [fdhComb, fdhRedImpl, simulateQ_map, run_qW, Functor.map_map]
+
+theorem comb_hash_some (m : M) (s : FRSt M T × (OMPISt AR T × ℕ)) (i : ℕ) (y : T)
+    (h : s.1.tbl m = some (i, y)) :
+    (fdhComb (S := S) D (.inr (.inl m))).run s = pure (y, ({ s.1 with hq := s.1.hq + 1 }, s.2)) := by
+  simp [fdhComb, fdhRedImpl, alloc, h]
+
+theorem comb_hash_none (m : M) (s : FRSt M T × (OMPISt AR T × ℕ)) (k : ℕ)
+    (h : s.1.tbl m = none) (hk : s.2.2 = k + 1) :
+    (fdhComb (S := S) D (.inr (.inl m))).run s = (fun y => (y, ({ s.1 with
+        tbl := Function.update s.1.tbl m (some (s.1.next, y)), next := s.1.next + 1,
+        hq := s.1.hq + 1 }, ({ s.2.1 with ys := s.2.1.ys ++ [y] }, k)))) <$> ($ᵗ T) := by
+  simp [fdhComb, fdhRedImpl, alloc, h, simulateQ_map, run_qNew, hk, Functor.map_map]
+
+theorem comb_sign_some (m : M) (s : FRSt M T × (OMPISt AR T × ℕ)) (i : ℕ) (y : T)
+    (h : s.1.tbl m = some (i, y)) :
+    (fdhComb (S := S) D (.inr (.inr m))).run s =
+      pure (((s.2.1.ys[i]?).map D).getD default, ({ s.1 with signed := m :: s.1.signed },
+        ({ s.2.1 with opened := i :: s.2.1.opened, oq := s.2.1.oq + 1 }, s.2.2))) := by
+  simp [fdhComb, fdhRedImpl, alloc, h, simulateQ_map, run_qIdx]
+
+theorem comb_sign_none (m : M) (s : FRSt M T × (OMPISt AR T × ℕ)) (k : ℕ)
+    (h : s.1.tbl m = none) (hk : s.2.2 = k + 1) :
+    (fdhComb (S := S) D (.inr (.inr m))).run s = (fun y =>
+      ((((s.2.1.ys ++ [y])[s.1.next]?).map D).getD default, ({ s.1 with
+        tbl := Function.update s.1.tbl m (some (s.1.next, y)), next := s.1.next + 1,
+        signed := m :: s.1.signed },
+        ({ s.2.1 with ys := s.2.1.ys ++ [y], opened := s.1.next :: s.2.1.opened, oq := s.2.1.oq + 1 },
+          k)))) <$> ($ᵗ T) := by
+  simp [fdhComb, fdhRedImpl, alloc, h, simulateQ_map, simulateQ_bind, run_qNew, run_qIdx, hk,
+    Functor.map_map, bind_map_left, map_bind]
+
+omit [DecidableEq DR] [∀ d, SampleableType (AR d)] [SampleableType T] [Inhabited T]
+  [Inhabited S] in
+/-- **Allocating a fresh index keeps the invariant.** -/
+theorem finv_alloc {st : FRSt M T} {c : OMPISt AR T} {n : ℕ} (hI : FInv (st, (c, n))) (m : M)
+    (h : st.tbl m = none) (y : T) (hq' : ℕ) (n' : ℕ) :
+    FInv ({ st with tbl := Function.update st.tbl m (some (st.next, y)),
+                    next := st.next + 1, hq := hq' }, ({ c with ys := c.ys ++ [y] }, n')) := by
+  have hlt : ∀ m' i y', st.tbl m' = some (i, y') → i < c.ys.length := fun m' i y' hm =>
+    (List.getElem?_eq_some_iff.1 (hI.ys_of m' i y' hm)).1
+  refine ⟨fun m' i y' hm => ?_, fun m₁ m₂ i y₁ y₂ h₁ h₂ => ?_, fun i hi => ?_, hI.oq, ?_⟩
+  · dsimp only at hm ⊢
+    by_cases hm' : m' = m
+    · subst hm'
+      simp only [Function.update_self, Option.some.injEq, Prod.mk.injEq] at hm
+      obtain ⟨rfl, rfl⟩ := hm
+      rw [hI.nx, List.getElem?_append_right le_rfl]
+      simp
+    · rw [Function.update_of_ne hm'] at hm
+      rw [List.getElem?_append_left (hlt m' i y' hm)]
+      exact hI.ys_of m' i y' hm
+  · dsimp only at h₁ h₂
+    by_cases e₁ : m₁ = m <;> by_cases e₂ : m₂ = m
+    · rw [e₁, e₂]
+    · subst e₁
+      rw [Function.update_self] at h₁
+      rw [Function.update_of_ne e₂] at h₂
+      simp only [Option.some.injEq, Prod.mk.injEq] at h₁
+      have := hlt _ _ _ h₂
+      have hnx : st.next = c.ys.length := hI.nx
+      omega
+    · subst e₂
+      rw [Function.update_self] at h₂
+      rw [Function.update_of_ne e₁] at h₁
+      simp only [Option.some.injEq, Prod.mk.injEq] at h₂
+      have := hlt _ _ _ h₁
+      have hnx : st.next = c.ys.length := hI.nx
+      omega
+    · rw [Function.update_of_ne e₁] at h₁
+      rw [Function.update_of_ne e₂] at h₂
+      exact hI.inj _ _ _ _ _ h₁ h₂
+  · obtain ⟨m', hm', y', hy'⟩ := hI.op i hi
+    refine ⟨m', hm', y', ?_⟩
+    have hne : m' ≠ m := fun e => by rw [e, h] at hy'; cases hy'
+    dsimp only
+    rw [Function.update_of_ne hne]
+    exact hy'
+  · have hnx : st.next = c.ys.length := hI.nx
+    simp [hnx]
+
+omit [DecidableEq DR] [∀ d, SampleableType (AR d)] [SampleableType T] [Inhabited T]
+  [Inhabited S] [DecidableEq M] in
+/-- **Opening an allocated index for a signed message keeps the invariant.** -/
+theorem finv_sign {st : FRSt M T} {c : OMPISt AR T} {n : ℕ} (hI : FInv (st, (c, n))) (m : M)
+    (i : ℕ) (y : T) (h : st.tbl m = some (i, y)) :
+    FInv ({ st with signed := m :: st.signed },
+      ({ c with opened := i :: c.opened, oq := c.oq + 1 }, n)) := by
+  refine ⟨hI.ys_of, hI.inj, fun j hj => ?_, by simpa using hI.oq, hI.nx⟩
+  rcases List.mem_cons.1 hj with rfl | hj
+  · exact ⟨m, List.mem_cons_self, y, h⟩
+  · obtain ⟨m', hm', y', hy'⟩ := hI.op j hj
+    exact ⟨m', List.mem_cons_of_mem _ hm', y', hy'⟩
+
+omit [DecidableEq DR] [∀ d, SampleableType (AR d)] [SampleableType T] [Inhabited T]
+  [Inhabited S] in
+lemma proj_update (st : FRSt M T) (m : M) (i : ℕ) (y : T) :
+    (fun m' => (Function.update st.tbl m (some (i, y)) m').map Prod.snd) =
+      Function.update (fun m' => (st.tbl m').map Prod.snd) m (some y) := by
+  funext m'
+  by_cases h : m' = m
+  · subst h; simp
+  · simp [Function.update_of_ne h]
+
+/-- **The programming is perfect, per query**: on the invariant's states, with a target left for
+each hash or signing query, the reduction against the lazy challenger answers as det-FDH's
+challenger at the projected state. -/
+theorem fdh_step (q : DR ⊕ (M ⊕ M)) (s : FRSt M T × (OMPISt AR T × ℕ)) (k : ℕ)
+    (hI : FInvK k s) (hk : isHS q → 0 < k) :
+    (fun z => (z.1, fdhProj z.2)) <$> (fdhComb D q).run s =ᵈ (fdhImpl D q).run (fdhProj s) := by
+  obtain ⟨st, c, n⟩ := s
+  suffices e : (fun z => (z.1, fdhProj z.2)) <$> (fdhComb D q).run (st, c, n) =
+      (fdhImpl D q).run (fdhProj (st, c, n)) by rw [e]
+  rcases q with d | m | m
+  · rw [comb_world]
+    erw [Functor.map_map]
+    rfl
+  · have hn : 0 < n := lt_of_lt_of_le (hk rfl) hI.1
+    cases h : st.tbl m with
+    | some iy =>
+      rw [comb_hash_some D m _ iy.1 iy.2 h]
+      simp only [fdhImpl, StateT.run_mk, hStep, fdhProj, h, Option.map_some, map_pure]
+      rfl
+    | none =>
+      obtain ⟨n', rfl⟩ : ∃ n', n = n' + 1 := ⟨n - 1, by omega⟩
+      rw [comb_hash_none D m _ n' h rfl]
+      simp only [fdhImpl, StateT.run_mk, hStep, fdhProj, h, Option.map_none]
+      erw [Functor.map_map, Functor.map_map]
+      congr 1
+      funext y
+      simp only [proj_update]
+  · have hn : 0 < n := lt_of_lt_of_le (hk rfl) hI.1
+    cases h : st.tbl m with
+    | some iy =>
+      rw [comb_sign_some D m _ iy.1 iy.2 h]
+      simp only [fdhImpl, StateT.run_mk, hStep, fdhProj, h, Option.map_some, map_pure,
+        hI.2.ys_of m iy.1 iy.2 h, Option.getD_some]
+      rfl
+    | none =>
+      obtain ⟨n', rfl⟩ : ∃ n', n = n' + 1 := ⟨n - 1, by omega⟩
+      rw [comb_sign_none D m _ n' h rfl]
+      have hnx : st.next = c.ys.length := hI.2.nx
+      simp only [fdhImpl, StateT.run_mk, hStep, fdhProj, h, Option.map_none,
+        hnx, List.getElem?_append_right le_rfl, Nat.sub_self, List.getElem?_cons_zero,
+        Option.map_some, Option.getD_some]
+      erw [Functor.map_map, Functor.map_map]
+      congr 1
+      funext y
+      rw [← hnx]
+      simp only [proj_update]
+
+/-- **The invariant is kept**, one target consumed per hash or signing query. -/
+theorem fdh_inv (q : DR ⊕ (M ⊕ M)) (s : FRSt M T × (OMPISt AR T × ℕ)) (k : ℕ)
+    (hI : FInvK k s) (hk : isHS q → 0 < k) :
+    ∀ z ∈ support ((fdhComb D q).run s), FInvK (if isHS q then k - 1 else k) z.2 := by
+  obtain ⟨st, c, n⟩ := s
+  intro z hz
+  rcases q with d | m | m
+  · rw [comb_world] at hz
+    erw [support_map] at hz
+    obtain ⟨r, -, rfl⟩ := hz
+    exact ⟨by simpa [isHS] using hI.1, ⟨hI.2.ys_of, hI.2.inj, hI.2.op, hI.2.oq, hI.2.nx⟩⟩
+  · have hn : 0 < n := lt_of_lt_of_le (hk rfl) hI.1
+    have hif : (if isHS (Sum.inr (Sum.inl m) : DR ⊕ (M ⊕ M)) then k - 1 else k) = k - 1 := by simp [isHS]
+    rw [hif]
+    cases h : st.tbl m with
+    | some iy =>
+      simp only [comb_hash_some D m (st, c, n) iy.1 iy.2 h] at hz
+      subst hz
+      exact ⟨by simpa using le_trans (Nat.sub_le _ _) hI.1,
+        ⟨hI.2.ys_of, hI.2.inj, hI.2.op, hI.2.oq, hI.2.nx⟩⟩
+    | none =>
+      obtain ⟨n', rfl⟩ : ∃ n', n = n' + 1 := ⟨n - 1, by omega⟩
+      rw [comb_hash_none D m (st, c, n' + 1) n' h rfl] at hz
+      erw [support_map] at hz
+      obtain ⟨y, -, rfl⟩ := hz
+      have h1 : k ≤ n' + 1 := hI.1
+      exact ⟨by simp only; omega, finv_alloc hI.2 m h y _ n'⟩
+  · have hn : 0 < n := lt_of_lt_of_le (hk rfl) hI.1
+    have hif : (if isHS (Sum.inr (Sum.inr m) : DR ⊕ (M ⊕ M)) then k - 1 else k) = k - 1 := by simp [isHS]
+    rw [hif]
+    cases h : st.tbl m with
+    | some iy =>
+      simp only [comb_sign_some D m (st, c, n) iy.1 iy.2 h] at hz
+      subst hz
+      exact ⟨by simpa using le_trans (Nat.sub_le _ _) hI.1, finv_sign hI.2 m iy.1 iy.2 h⟩
+    | none =>
+      obtain ⟨n', rfl⟩ : ∃ n', n = n' + 1 := ⟨n - 1, by omega⟩
+      rw [comb_sign_none D m (st, c, n' + 1) n' h rfl] at hz
+      erw [support_map] at hz
+      obtain ⟨y, -, rfl⟩ := hz
+      have h1 : k ≤ n' + 1 := hI.1
+      refine ⟨by simp only; omega, ?_⟩
+      have ha := finv_alloc hI.2 m h y st.hq n'
+      exact finv_sign ha m st.next y (by simp)
+
+end FDHRed
+
+end VoleMole.Assumptions.IdealTag
