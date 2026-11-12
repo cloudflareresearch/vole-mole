@@ -12,6 +12,7 @@ import VoleMole.Privacy.RatatouilleLin
 import VoleMole.Privacy.SeedXOFNC
 import VoleMole.ROM.SpecSound
 import VoleMole.ROM.RatatouilleBalance
+import VoleMole.ROM.RatatouilleProbe
 import VoleMole.ROM.MoussakaUnbound
 import VoleMole.Privacy.PqovDelta
 import VoleMole.Privacy.PqovKeys
@@ -781,6 +782,14 @@ example (σ : IC.RatBalance.Signer) (N : ℕ) (lr : Bool) :=
 example (σ : IC.RatBalance.Signer) (N : ℕ) (lr : Bool) :=
   IC.RatBalance.balance_le_ufTag lr ⟨ByteArray.mk (Array.replicate 32 0), ByteArray.empty⟩ balA0 N σ
     (by decide) (qA := 0) (nA := 0) (eA := 0) (fun _ => trivial)
+    (fun _ => isQueryBoundP_pure _ _ _) (fun _ => isQueryBoundP_pure _ _ _)
+
+/-- The same for `balance_le_noProbe` (a probe-free forger and the signer's failure term), for any
+completion `τ`. -/
+example (σ : IC.RatBalance.Signer) (τ : Spec.Ratatouille.Target → Spec.Ratatouille.Preimage)
+    (N : ℕ) (lr : Bool) :=
+  IC.RatBalance.balance_le_noProbe lr ⟨ByteArray.mk (Array.replicate 32 0), ByteArray.empty⟩ balA0 N
+    σ τ (by decide) (qA := 0) (nA := 0) (eA := 0) (fun _ => trivial)
     (fun _ => isQueryBoundP_pure _ _ _) (fun _ => isQueryBoundP_pure _ _ _)
 /-! ## Privacy: unbound Moussaka, Theorem U5 with adaptive redemption queries
 

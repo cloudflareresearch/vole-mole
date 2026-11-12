@@ -138,6 +138,7 @@ import VoleMole.ROM.PermAdapt
 import VoleMole.ROM.SpecSound
 import VoleMole.ROM.ExtractReduce
 import VoleMole.ROM.RatatouilleBalance
+import VoleMole.ROM.RatatouilleProbe
 import VoleMole.Prob.MoussakaUnbound
 import VoleMole.EndToEnd.MoussakaUnboundSpec
 import VoleMole.ROM.MoussakaUnbound
