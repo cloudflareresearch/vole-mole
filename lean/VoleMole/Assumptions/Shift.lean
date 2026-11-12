@@ -16,7 +16,8 @@ import VCVio.EvalDist.ProbabilityBounds
   requests, answers request `k` with the shift list `δs` by `t − δs[g k]` for a fresh challenge `t`,
   and names each claim by its label and request index. `R` is `OneMore.red addHint` of an adapter;
   the proof uses OneMore's perfect programming (`omuf_good_le`), an exact simulation of the
-  adapter by the shift game (`adSim_eqd`) and a count of the guess vectors (`pr_guess_ge`).
+  adapter by the shift game (`adReal_eqd`, `recCh_eqd`) and a count of the guess vectors
+  (`guess_count`, `pr_guess_ge`). Names live in `VoleMole.Assumptions.Shift`.
 
 **A simulation lemma** (`simulateQ_proj_eqd`): if each query of one stateful handler, projected
 along `π`, is equal in distribution to another handler's on the projected state (under an
