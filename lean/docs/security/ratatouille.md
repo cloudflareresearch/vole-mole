@@ -412,9 +412,9 @@ per `ctx`, because parents share the spender's `ctx` (fact 1). ∎
     `N(n_A + n_V)` hash queries and `N(q_A + q_V)` per kind, for `q_A`, `n_A`, `e_A` per call of
     the adversary and `q_V`, `n_V`, `e_V` per verification (for `verifyIC`: `verifierQueries`
     plus one `mu₁` and one `iv` query, `verifierTotal + 2 = 339`, and `cipherCount p`: two cipher
-    queries per GGM node and per leaf commitment and `voleColBlocks` per leaf). They apply to the `j`-th prover
-    (`proverAt`, `provI`, `provS`): the game up to call `j`, re-run with the Issuer, then the
-    `j`-th request as its proof and statement. `hinj` holds for the Issuer's fixed key with a
+    queries per GGM node and per leaf commitment and `voleColBlocks` per leaf). They apply to
+    the `j`-th prover (`proverAt`, `provI`, `provS`): the game up to call `j`, re-run with the
+    Issuer, then the `j`-th request as its proof and statement. `hinj` holds for the Issuer's fixed key with a
     32-byte digest.
   - `B` (`forgeAdv`, `ForgeEv`): the first accepted spend `j` whose extracted witness has
     `P(s) = Tag(c, x)` for its parent `c = Com(nf, ctx, t, r)`, on a pair `(c, x)` that no call
@@ -459,6 +459,11 @@ state with that pair is no UF-Tag forgery, yet that state was never released, so
 the event `E4`. The Lean forgery event (`Forge`) is stated with released signatures.
 
 ## 5. No theft (N2) and honest clients
+
+Status: paper only. A Lean game for N2a would need simulation-extractability against the Lean
+prover's simulated proofs, which is mechanized only in its deterministic core (`Seed/SimExt.lean`);
+the generic glue of `ROM/ExtractReduce.lean` (per-table comparison, the `j`-th prover) would carry
+over.
 
 **Theorem 3 (N2a).** Fix an honest client's certified state `σ` (a commitment it created, with
 secret `r`). Consider accepted adversarial spend requests whose statements differ from every honest
