@@ -135,6 +135,53 @@ theorem prEvent_bind_le_sum_of_table {ι T : Type} (mT : ProbComp T)
 
 end Table
 
+
+/-! ## The single-proof game, per table, and the extracted witness -/
+
+section Single
+
+variable {ι β : Type}
+
+/-- **Per table, the adaptive game's output**: `P`'s proof, `P`'s statement index, and the
+executable verifier's transcript on them. -/
+theorem gameA_out (T : CrtTables) (stF : ι → Statement) (P : OracleComp specIC (ByteArray × (ι × β)))
+    (E : CTable) (g : Table) :
+    (evalWithAnswerFn (QueryImpl.ofFn g) (gameA T stF P E)).1 =
+        (evalWithAnswerFn (QueryImpl.ofFn (join g E)) P).1 ∧
+      stOut (evalWithAnswerFn (QueryImpl.ofFn g) (gameA T stF P E)) =
+        (evalWithAnswerFn (QueryImpl.ofFn (join g E)) P).2.1 ∧
+      (evalWithAnswerFn (QueryImpl.ofFn g) (gameA T stF P E)).2.2 =
+        @verify (VoleMole.ZK.Sim.icPrg E.cipher) (Hashes.ofTable g) T
+          (stF (evalWithAnswerFn (QueryImpl.ofFn (join g E)) P).2.1)
+          (evalWithAnswerFn (QueryImpl.ofFn (join g E)) P).1 := by
+  refine ⟨?_, stOut_gameA T stF P E g, ?_⟩
+  · rw [evalWithAnswerFn_gameA, gameIC_eq_bind, evalWithAnswerFn_bind, evalWithAnswerFn_map,
+      evalWithAnswerFn_proverIC]
+  · rw [evalWithAnswerFn_gameA, gameIC_eq_bind, evalWithAnswerFn_bind, evalWithAnswerFn_map,
+      evalWithAnswerFn_proverIC]
+    exact @evalWithAnswerFn_verifyQ (VoleMole.ZK.Sim.icPrg E.cipher) g T _ _
+
+variable [HasPrg]
+
+open Classical in
+/-- **The extracted witness** of a game output: the candidate of the first known tree that is a
+witness (`Extracted`), if any. -/
+noncomputable def extWit (st : Statement) (W : ByteArray → (ℕ → Arith.GF128) → Prop) (r : Out β) :
+    Option (ℕ → Arith.GF128) :=
+  if h : Extracted st W r then
+    some (VoleMole.EndToEnd.candidate (F := Arith.GF128) ((outChain r).u st) ((outChain r).dc st)
+      (Classical.choose h))
+  else none
+
+/-- If extraction succeeds, the extracted witness is a witness. -/
+theorem extWit_spec {st : Statement} {W : ByteArray → (ℕ → Arith.GF128) → Prop} {r : Out β}
+    (h : Extracted st W r) : ∃ w, extWit st W r = some w ∧ W r.2.2.chal1 w := by
+  classical
+  refine ⟨_, ?_, (Classical.choose_spec h).2⟩
+  simp only [extWit, h, dite_true]
+
+end Single
+
 /-! ## Query bounds against the hashes and the cipher -/
 
 section Bounds
@@ -319,5 +366,22 @@ theorem isQueryBoundP_proverAt {ι β : Type} (p : DomIC → Prop) [DecidablePre
     isQueryBoundP_bind (hA x.1) fun b _ => isQueryBoundP_pure p _ 0
 
 end Rounds
+
+
+/-! ## A verifier that queries the cipher -/
+
+/-- **A cipher-querying implementation of the executable verifier**: a computation against the
+hashes and the cipher whose decision, on every hash table `g` and cipher table `E`, is the
+executable verifier's (with the ideal-cipher PRG of `E`), with at most `qV k` hash queries of kind
+`k`, `nV` hash queries in all and `eV` cipher queries. An honest party that verifies with it is a
+computation against `specIC`, so the `j`-th prover of a game (`proverAt`) can re-run its
+verifications, and the straight-line extractor sees their cipher queries. -/
+structure VerifierIC (T : CrtTables) (verQ : Statement → ByteArray → OracleComp specIC Bool)
+    (qV : Kind → ℕ) (nV eV : ℕ) : Prop where
+  eval : ∀ (g : Table) (E : CTable) st pf, evalWithAnswerFn (QueryImpl.ofFn (join g E)) (verQ st pf) =
+    (@verify (VoleMole.ZK.Sim.icPrg E.cipher) (Hashes.ofTable g) T st pf).accept
+  kinds : ∀ st pf, IsKindQueryBoundIC (verQ st pf) qV
+  hashes : ∀ st pf, IsQueryBoundP (verQ st pf) (fun t => t.isLeft = true) nV
+  cipher : ∀ st pf, IsQueryBoundP (verQ st pf) (fun t => t.isRight = true) eV
 
 end VoleMole.ROM.IC
