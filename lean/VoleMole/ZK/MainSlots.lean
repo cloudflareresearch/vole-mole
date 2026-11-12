@@ -318,6 +318,153 @@ theorem ideal_sim_close (hm : MainP p) :
   rw [eI, eS, ← e]
   exact h
 
+/-! ## The bad event as a prediction, on simulated proofs -/
+
+/-- The zero block. -/
+def zeroB (n : ℕ) : Bytes n := fun _ => 0
+
+/-- What the predictor uses of a proof: the statement (for its witness prefix, the target), the
+tables, and the shared tape with the corrections and `d`. -/
+abbrev PObs (p : Params) :=
+  Option SW × Vis p × (Shared × (Bytes (16 * p.correctionBytes) × Bytes p.witnessBytes))
+
+/-- The fields with only the corrections and `d` (what `candidates` reads). -/
+def fieldsCD (c : Bytes (16 * p.correctionBytes)) (d : Bytes p.witnessBytes) : SimFields p :=
+  (c, zeroB _, zeroB _, d, zeroB _)
+
+/-- The corrections and `d` of the ideal tape (zero when no statement is proved). -/
+def cdOf (y : Option SW) (u : PadsU p) (z : Sib) :
+    Bytes (16 * p.correctionBytes) × Bytes p.witnessBytes :=
+  match y with
+  | none => (zeroB _, zeroB _)
+  | some y => (corrB (withSib u z), dB y.2 (withSib u z))
+
+/-- The ideal slot with the predictor's observation. -/
+noncomputable def idealP (hm : MainP p) : Slot SW Out (PObs p) where
+  K := (mainH Hb T p hm).Coins
+  run := (mainH Hb T p hm).idealS.run
+  obs y k := (y, (k.2.2.2.1, k.2.2.1, k.2.2.2.2), (k.1.1, cdOf y k.1.2 k.2.1))
+
+/-- The simulator's corrections and `d` (zero when no statement is proved). -/
+def cdSim (y : Option SW) (f : SimFields p) : Bytes (16 * p.correctionBytes) × Bytes p.witnessBytes :=
+  match y with
+  | none => (zeroB _, zeroB _)
+  | some _ => (f.1, f.2.2.2.1)
+
+/-- The simulator with the predictor's observation. -/
+noncomputable def simP (p : Params) : Slot SW Out (PObs p) where
+  K := SimCoins p × Vis p
+  run _ c := simulate p c.1
+  obs y c := (y, c.2, (c.1.1, cdSim y c.1.2))
+
+lemma simulate_eq_outOf (st : Statement) (s : Shared) (f : SimFields st.params) :
+    simulate st.params (s, f) = outOf st s f := by
+  unfold simulate outOf simAssemble
+  rfl
+
+/-- **The prediction of one proof**: its witness prefix is a candidate of the read set `S5`
+(`wPre y.2 ∈ candidates …`, `mem_candidates`; stated through `guessSet`). -/
+def predJ (hm : MainP p) (S5 : Finset (SKey p)) (ω : PObs p) : Prop :=
+  match ω.1 with
+  | some y => thetaMain (pre16 hm.hw ω.2.2.2.2) (wPre y.2) ∈
+      guessSet Hb T (withP y.1 p) S5 ω.2.2.1 (fieldsCD ω.2.2.2.1 ω.2.2.2.2)
+  | none => False
+
+lemma guessSet_congr_fst (Hs : Hashes) (st : Statement) (S : Finset (SKey st.params)) (s : Shared)
+    {f f' : SimFields st.params} (h : f.1 = f'.1) : guessSet Hs T st S s f = guessSet Hs T st S s f' := by
+  unfold guessSet guessOf qcolsF
+  rw [h]
+
+/-- The prediction from one sibling key read (the `some` case of `bad_predJ`). -/
+theorem predJ_of_key (hm : MainP p) (Rs : Finset (SKey p)) (st : Statement) (w : ByteArray)
+    (c : Shared × PadsU p) (z : Sib) (i : Fin 312)
+    (hi : sibKey Hb T (withP st p) c i ∈ proverKeys Hb T (withP st p) (c.1, withSib c.2 fun _ _ => 0) ∨
+      sibKey Hb T (withP st p) c i ∈ Rs) :
+    thetaMain (pre16 hm.hw (dB w (withSib c.2 z))) (wPre w) ∈ guessSet Hb T (withP st p) Rs c.1
+      (fieldsCD (corrB (withSib c.2 z)) (dB w (withSib c.2 z))) := by
+  have hm' := bad_mem_guessSet Hb T (withP st p) w (fun _ _ => []) hm.hlab Hb Rs c.1
+    (withSib c.2 z) ⟨i, Finset.mem_union.2 (by
+      rcases hi with hi | hi
+      · left
+        rw [proverKeys_withSib Hb T (withP st p) c.1 c.2 z fun _ _ => 0]
+        exact hi
+      · exact Or.inr hi)⟩
+  dsimp only [withP_params] at hm'
+  rw [uPre_main_dB hm w] at hm'
+  rw [guessSet_congr_fst T Hb (withP st p) Rs c.1
+    (f := fieldsCD (corrB (withSib c.2 z)) (dB w (withSib c.2 z))) (f' := (fieldsOf Hb T (withP st p) w
+    (fun _ _ => []) c.1 (hitOf c.1).1 (hitOf c.1).2 (withSib c.2 z)).1) rfl]
+  exact hm'
+
+/-- **The bad event of a proof implies its prediction** (`bad_mem_guessSet`, `uPre_main_dB`). -/
+theorem bad_predJ (hm : MainP p) (Rs : Finset (SKey p)) (y : Option SW) (k : (mainH Hb T p hm).Coins)
+    (h : (mainH Hb T p hm).bad Rs ((mainH Hb T p hm).obsOf y k)) :
+    predJ Hb T hm Rs ((idealP Hb T hm).obs y k) := by
+  cases y with
+  | none => exact ((mainH Hb T p hm).not_bad_obsOf_none Rs k h).elim
+  | some yv =>
+    exact Exists.elim (((mainH Hb T p hm).bad_obsOf_some Rs yv k).1 h) fun i hi =>
+      predJ_of_key Hb T hm Rs yv.1 yv.2 k.1 k.2.1 i hi
+
+lemma pr_fst_snd {A X V : Type*} [Fintype A] [Fintype X] [Fintype V] [Nonempty X] (E : A → V → Prop) :
+    pr ((A × X) × V) (fun c => E c.1.1 c.2) = pr (A × V) (fun c => E c.1 c.2) := by
+  let e : (A × V) × X ≃ (A × X) × V :=
+    { toFun := fun c => ((c.1.1, c.2), c.1.2)
+      invFun := fun c => ((c.1.1, c.2), c.1.2)
+      left_inv := fun _ => rfl
+      right_inv := fun _ => rfl }
+  rw [← pr_equiv e]
+  exact pr_prod_fst (fun c : A × V => E c.1 c.2)
+
+/-- **On simulated proofs**: the ideal slot's output, tables, shared tape, corrections and `d` are
+distributed as the simulator's (`upush_fieldsOf`). -/
+theorem ideal_sim_closeP (hm : MainP p) :
+    Slot.Close (fun _ => True) (ValidZK T p) 0 (idealP Hb T hm) (simP p) := by
+  intro y hy D _
+  let Q : (mainH Hb T p hm).Coins → Prop := fun k =>
+    D ((idealP Hb T hm).out y k) ((idealP Hb T hm).obs y k)
+  have eI : pr (mainH Hb T p hm).Coins Q =
+      pr ((Shared × Pads p) × Vis p) (fun c => Q ((coinsEquiv Hb T hm).symm c)) :=
+    (pr_equiv (coinsEquiv Hb T hm).symm Q).symm
+  show |pr (mainH Hb T p hm).Coins Q - pr ((Shared × SimFields p) × Vis p)
+    (fun c => D ((simP p).out y c) ((simP p).obs y c))| ≤ 0
+  rw [eI]
+  refine abs_pr_prod_sub_le' _ _ fun v => abs_pr_prod_sub_le _ _ fun s => ?_
+  rcases y with _ | ⟨st, w⟩
+  · have e1 : pr (Pads p) (fun t => Q ((coinsEquiv Hb T hm).symm ((s, t), v))) =
+        pr (Pads p) (fun _ => D none (none, v, (s, zeroB _, zeroB _))) := pr_congr fun _ => Iff.rfl
+    have e2 : pr (SimFields p) (fun f => D ((simP p).out none ((s, f), v))
+        ((simP p).obs none ((s, f), v))) =
+        pr (SimFields p) (fun _ => D none (none, v, (s, zeroB _, zeroB _))) := pr_congr fun _ => Iff.rfl
+    rw [e1, e2]
+    classical
+    rw [pr_const, pr_const, sub_self, abs_zero]
+  obtain ⟨cs, hzk⟩ := hy (st, w) rfl
+  let X : SimFields p × Bytes (labelBytes p) → Prop := fun x =>
+    D (some (outOf (withP st p) s x.1)) (some (st, w), v, (s, x.1.1, x.1.2.2.2.1))
+  have e1 : pr (Pads p) (fun t => Q ((coinsEquiv Hb T hm).symm ((s, t), v))) =
+      pr (Pads p) (fun t => X (fieldsOf (recP Hb T (withP st p) w v.1 v.2.1) T (withP st p) w cs s
+        (hitOf s).1 (hitOf s).2 t)) := by
+    refine pr_congr fun t => ?_
+    have := proveIdeal_eq_outOf T (withP st p) w cs (recP Hb T (withP st p) w v.1 v.2.1) hzk s t
+    show D (some (proveIdeal (recP Hb T (withP st p) w v.1 v.2.1) T (withP st p) w (s, t)))
+      (some (st, w), v, (s, corrB t, dB w t)) ↔ _
+    rw [this]
+    rfl
+  have e2 := (upush_fieldsOf (recP Hb T (withP st p) w v.1 v.2.1) T (withP st p) w cs s (hitOf s).1
+    (hitOf s).2 hzk.hT hzk.hnm) X
+  dsimp only [withP_params] at e2
+  rw [abs_nonpos_iff, sub_eq_zero] at e2
+  have e3 : pr (SimFields p × Bytes (labelBytes p)) (fun b => X (id b)) = pr (SimFields p) (fun f =>
+      D ((simP p).out (some (st, w)) ((s, f), v)) ((simP p).obs (some (st, w)) ((s, f), v))) := by
+    rw [← pr_prod_fst (β := Bytes (labelBytes p)) (fun f : SimFields p =>
+      D ((simP p).out (some (st, w)) ((s, f), v)) ((simP p).obs (some (st, w)) ((s, f), v)))]
+    refine pr_congr fun x => ?_
+    show _ ↔ D (some (simulate p (s, x.1))) (some (st, w), v, (s, x.1.1, x.1.2.2.2.1))
+    rw [simulate_eq_outOf (withP st p) s x.1]
+    exact Iff.rfl
+  rw [e1, e2, e3, sub_self, abs_zero]
+
 end Slots
 
 end VoleMole.ZK.Sim

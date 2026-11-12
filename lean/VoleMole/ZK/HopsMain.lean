@@ -58,6 +58,9 @@ open VoleMole.Verifier VoleMole.Verifier.Bridge VoleMole.Arith VoleMole.ZK VoleM
 
 attribute [local instance] decEqW128
 
+-- Any CTR PRG (`HasPrg`, `Verifier/Prg.lean`), AES included.
+variable [HasPrg]
+
 /-! ## The label offset on `main` -/
 
 section Theta

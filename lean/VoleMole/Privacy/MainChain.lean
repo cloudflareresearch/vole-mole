@@ -345,8 +345,13 @@ lemma idealS_out (y : Y) (k : H.Coins) :
 prover's keys or the read set `Rs`. -/
 def bad (Rs : Finset H.Kt) (ω : H.Obs) : Prop :=
   match ω with
-  | (some y, (c, _, _)) => ∃ i, H.key y c i ∈ H.pk y c ∪ Rs
+  | (some y, (c, _, _)) => ∃ i, H.key y c i ∈ H.pk y c ∨ H.key y c i ∈ Rs
   | (none, _) => False
+
+lemma bad_obsOf_some (Rs : Finset H.Kt) (y : Y) (k : H.Coins) :
+    H.bad Rs (H.obsOf (some y) k) ↔ ∃ i, H.key y k.1 i ∈ H.pk y k.1 ∨ H.key y k.1 i ∈ Rs := Iff.rfl
+
+lemma not_bad_obsOf_none (Rs : Finset H.Kt) (k : H.Coins) : ¬ H.bad Rs (H.obsOf none k) := id
 
 /-- The observation with the table replaced. -/
 def setTab (ω : H.Obs) (g : H.Kt → H.R) : H.Obs := (ω.1, (ω.2.1, g, ω.2.2.2))
@@ -401,7 +406,9 @@ theorem stage (y : Option Y) (D : Option O → H.Obs → Prop) (Rs : Option O �
       hg k (Finset.mem_union_right _ hk)).symm
   have h := abs_pr_hidden_one (H.key_inj y c) A Q hQ
   rw [← pr_prod_fst (β := H.ι → H.R) (fun g => A (g ∘ H.key y c) g)] at h
-  exact h
+  refine h.trans (le_of_eq (pr_congr fun x => ?_))
+  simp only [Q, Finset.mem_union]
+  rfl
 
 end HSlot
 
