@@ -156,6 +156,28 @@ satisfies the unbound relation, or at most 9 admissible `chall₃` are accepted;
 `moussaka_unbound_redeem_comb_bad` discharges the combination hypothesis except with probability
 `1/|F|`.
 
+[Lean] The probabilistic steps of extraction are mechanized as for the base relations
+(`lean/docs/probabilistic-plan.md` §2j), for any verifier statement with the C++ parameters
+(232 and 559 witness bytes, `QS_DEGREE = 9`), DSTs, combination `(45, "mous\x01l0")` and the
+`Arith/MoussakaUnbound.lean` systems as evaluator (`Unbound.IssueStmt`, `Unbound.RedeemStmt`,
+`Prob/MoussakaUnbound.lean`). In the joint random-oracle and ideal-cipher model (PRF view), for a
+prover with `q_E` cipher queries and `q_k` hash queries of kind `k` (`n` in all), the verifier
+accepts and no known tree's candidate is a witness with probability at most
+
+```
+(q₂₁+1)·2⁻¹⁵⁰ + (q₂₂+1)·ε₂ + (q₂₃+1)·9·2⁻¹²⁸ + 2·q_E²·2⁻²⁵⁶
+  + 2·(openHashEps q + q₁·2⁻²⁵⁶) + 1024·q_E·q₁·2⁻²⁵⁶ + chainHitEps q [+ comb hits],
+ε₂ = ε_QS(3816) (issuance),   ε₂ = ε_QS(7929) + 2⁻¹²⁸ + (n+339)·2⁻⁴⁴⁸ (redemption, ≤ 64 Anchors),
+```
+
+the base relations' bound with the unbound constraint counts (`moussakaUnboundIssue_accept_le_full`,
+`moussakaUnboundRedeem_accept_le_full`); with AES as random permutations and inverse queries
+(`_perm`), for adaptively chosen statements with `stmtBindEps q = (q₀+3)(q₂₁+q₀+4)·2⁻²⁵⁶` added
+(`_adaptive`, `_adaptive_perm`; `hinj` holds for the C++ encodings when `t` has a fixed length,
+resp. the family is injective on `(Anchor digests, nf, ctx_iss, ctx_red, challenge_digest)` with
+fixed lengths), and for the spec relations `Spec.MoussakaUnbound.IssueRel`, `RedeemRel` (`_spec`;
+`|t| = 45`, `|nf| = 24`).
+
 ---
 
 ## 3. Model and assumptions
@@ -501,12 +523,16 @@ the base protocol.
 1. The PRF-with-commitment, key-recovery and key-second-preimage assumptions on Keccak-p[800,12]
    are new and are supported only by generic estimates; structural cryptanalysis of 12-round
    Keccak-p[800] with 128-bit keys and 192-bit truncation is outside this note.
-2. The random-oracle bounds of `lean/ROM/` (and the probabilistic wrappers of the extraction
-   theorems) are mechanized for the five base relations only. For the unbound relations the
-   deterministic end-to-end extraction (`EndToEnd/MoussakaUnbound.lean`), the arithmetization, the
-   domain separation and the byte-level spec (checked against the C++ KAT) are mechanized; the
-   executable verifier and prover (`Verifier/Relations.lean`, so that `lake exe verifier_vectors`
-   also checks the proofs of `unbound_ihat_kat.txt`) are not extended.
+2. The random-oracle and ideal-cipher bounds of `lean/ROM/` and the per-chain probabilistic
+   wrappers (`Prob/`) are mechanized for the unbound relations (§2, Appendix B), but stated for any
+   verifier statement with the properties `Unbound.IssueStmt` / `Unbound.RedeemStmt`, not for a
+   statement of the executable verifier: `Verifier/Relations.lean` (the executable verifier and
+   prover, and `lake exe verifier_vectors` on the proofs of `unbound_ihat_kat.txt`) is extended
+   to the unbound relations on a separate branch. Once both are merged, one lemma per relation
+   (`rfl` for the parameters, `uIssueValues_eq` / `uRedeemValues_eq` for the evaluator, as
+   `Unbound.refIssue_stmt`, `refRedeem_stmt`) instantiates every bound at the executable
+   verifier. The reference statements `Unbound.refIssue`, `refRedeem` show the properties are
+   satisfiable, but nothing ties them to the KAT proofs.
 3. Thm U5(a) is mechanized on the executable spec with non-adaptive redemption queries
    (`Privacy/MoussakaUnbound.lean`); adaptively chosen queries (lazy sampling) and Thm U5(b) are on
    paper only.
@@ -537,3 +563,22 @@ All in `lean/VoleMole/`; no `sorry`, no axioms beyond the standard three.
 - `Privacy/MoussakaUnbound.lean`: Theorem U5(a) on the executable spec (`anonymity`), with
   `close_pi` (`n` independent hops), `simGame_iff`, `prf_hop` and `idealGame_eq` (§6).
 - `Protocols/DomainSeparation.lean`: the unbound rows (`mousU`).
+- `Prob/MoussakaUnbound.lean`: the statement properties `Unbound.IssueStmt`, `Unbound.RedeemStmt`
+  (C++ parameters, DSTs, combination, the Arith systems as evaluator) and the reference statements
+  `refIssue`, `refRedeem` satisfying them; the per-chain extraction from the executable verifier's
+  chains (`Unbound.issue_extract_chain`, `redeem_extract_chain`); one chain with uniform
+  challenges (`Prob.moussakaUnboundIssue_chain_prob`: `≤ 2⁻¹⁵⁰ + ε_QS(3816)`,
+  `moussakaUnboundRedeem_chain_prob`: `≤ 2⁻¹⁵⁰ + ε_QS(7929) + 2⁻¹²⁸`) (§2).
+- `ROM/MoussakaUnbound.lean`: against the random oracle (`ROM.moussakaUnboundIssue_accept_le`,
+  `moussakaUnboundRedeem_accept_le`), in the joint random-oracle and ideal-cipher model with
+  binding explicit (`_accept_le_ic`) and every term explicit (`_accept_le_full`), and with AES as
+  random permutations with inverse queries (`_accept_le_perm`).
+- `ROM/MoussakaUnboundAdapt.lean`: adaptively chosen statements (`_accept_le_adaptive`,
+  `_accept_le_adaptive_perm`), plus `stmtBindEps q`.
+- `EndToEnd/MoussakaUnboundSpec.lean`: arithmetized → spec (`SpecRel.uIssueRel_of_wit`,
+  `uRedeemRel_of_wit`), and `hinj` for the C++ instance encodings (`hinj_unboundIssue`,
+  `hinj_unboundRedeem`).
+- `ROM/MoussakaUnboundSpec.lean`: the eight headline bounds for `Spec.MoussakaUnbound.IssueRel`,
+  `RedeemRel` (`*_spec`).
+- `Audit/UnboundROM.lean`: non-vacuity of the headline bounds (reference statements, families
+  with more than one instance).
