@@ -979,12 +979,13 @@ theorem win_imp (A : RoundAdv S (Op Z) Resp) (N : ℕ) (σ : Signer) {qV : Kind 
 /-- **Theorem 1 (balance), for the executable Issuer, in the random-oracle and ideal-cipher
 model.** For an adversary making `N` calls to the Issuer, with at most `qA k` hash queries of kind
 `k`, `nA` hash queries and `eA` cipher queries per call, and a cipher-querying implementation
-`verQ` of the executable verifier (`VerifierIC`, with `qV`, `nV`, `eV`):
+`verQ` of the executable verifier (`VerifierIC`, with `qV`, `nV`, `eV`; `eVR` the larger cipher
+budget of the issuance and spend statements):
 
     Pr[win BAL] ≤ N·ε_iss + N·ε_spend + Adv^{uf-tag}(B) + Adv^{coll}_{Com}(C),
 
 with `ε_iss`, `ε_spend` the single-proof extraction bounds of `ROM/SpecSound.lean` at the budget
-of `N` rounds (`N(eA + eV)` cipher queries, `N(nA + nV)` hash queries, `N(qA + qV)` per kind),
+of `N` rounds (`N(eA + eVR)` cipher queries, `N(nA + nV)` hash queries, `N(qA + qV)` per kind),
 `B` the forger and `C` the collision finder run by the reduction (`forgeAdv`, `collAdv`). -/
 theorem balance_le (A : RoundAdv S (Op Z) Resp) (N : ℕ) (σ : Signer)
     (hdig : pkU.digest.size = 32) {qV : Kind → ℕ} {nV : ℕ} {eV : Params → ℕ}
