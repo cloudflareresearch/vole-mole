@@ -370,4 +370,287 @@ end AdversaryP
 
 end Step
 
+/-! ## The reduction's budgets -/
+
+section Budgets
+
+variable {N : ℕ}
+
+open VoleMole.Privacy.Moussaka (sreads_fix)
+
+namespace AdversaryP
+
+variable (A : AdversaryP Rw N) (k : Fin N) (c : {j : Fin N // j ≠ k} → PT)
+  (v : {j : Fin N // j ≠ k} → Bool × Bool)
+
+lemma hopS_msg₁ (u : T5) (tr : IssTr ZL) (sl : SlicesR) (s : ShR Rw) :
+    (A.hopS k c v u).msg₁ tr sl s =
+      (fun W => ((A.respondIss (A.trW k tr W) k false, A.respondIss (A.trW k tr W) k true),
+        A.d₁ (A.trW k tr W) k)) (A.issFam k c (toSp s.1 u)) := by
+  simp only [AdversaryRA.msg₁, hopS, hopG, hopTR_eq]
+
+lemma hopS_msg₂ (u : T5) (tr : IssTr ZL) (rq : SReq) (sl : SlicesR) (s : ShR Rw) :
+    (A.hopS k c v u).msg₂ tr rq sl s =
+      A.msg₂W k tr rq (A.issFam k c (toSp s.1 u)) (A.sp1Fam k c v tr (A.issFam k c (toSp s.1 u)) (toSp s.1 u)) := by
+  simp only [AdversaryRA.msg₂, hopS, hopG, hopQ, hopTR_eq, hopRQ_eq, msg₂W]
+
+/-- The other pairs' issuances on the private pair read only `H₂³`. -/
+lemma issFam_fix_sreads (u : T5) :
+    SReads pI (fun t : Tb Rw pI => A.issFam k c (toSp t.2.1 u)) 0
+      (Fintype.card {j : Fin N // j ≠ k} * (nGrind + nGrind)) 0 0 :=
+  sreads_fix (A.issFam_sreads k c) u.1 u.2
+
+lemma sp1Fam_fix_sreads (u : T5) (tr : IssTr ZL) (W : {j : Fin N // j ≠ k} → IssRes × IssRes) :
+    SReads pI (fun t : Tb Rw pI => A.sp1Fam k c v tr W (toSp t.2.1 u)) 0
+      (Fintype.card {j : Fin N // j ≠ k} * nGrind) 0 0 :=
+  sreads_fix (A.sp1Fam_sreads k c v tr W) u.1 u.2
+
+lemma hopS_stage1 (u : T5) (tr : IssTr ZL) (σ : Tb Rw pI → SlicesR) :
+    SReads pI (fun t : Tb Rw pI => (A.hopS k c v u).msg₁ tr (σ t) t.2) 0
+      (3 * (Fintype.card {j : Fin N // j ≠ k} * nGrind)) 0 0 := by
+  have h := (A.issFam_fix_sreads k c u).map fun W =>
+    (((A.respondIss (A.trW k tr W) k false, A.respondIss (A.trW k tr W) k true),
+      A.d₁ (A.trW k tr W) k) : M₁)
+  refine ((congrArg (fun F => SReads pI F _ _ _ _) (funext fun t => ?_)).mp h).mono le_rfl
+    (by rw [Nat.mul_add]; omega) le_rfl le_rfl
+  exact (A.hopS_msg₁ k c v u tr (σ t) t.2).symm
+
+lemma hopS_stage2 (u : T5) (tr : IssTr ZL) (rq : SReq) (σ : Tb Rw pI → SlicesR) :
+    SReads pI (fun t : Tb Rw pI => (A.hopS k c v u).msg₂ tr rq (σ t) t.2) 0
+      (3 * (Fintype.card {j : Fin N // j ≠ k} * nGrind)) 0 0 := by
+  have h := (A.issFam_fix_sreads k c u).bind (g := fun W (t : Tb Rw pI) =>
+      A.msg₂W k tr rq W (A.sp1Fam k c v tr W (toSp t.2.1 u)))
+    fun W => (A.sp1Fam_fix_sreads k c v u tr W).map fun S => A.msg₂W k tr rq W S
+  refine ((congrArg (fun F => SReads pI F _ _ _ _) (funext fun t => ?_)).mp h).mono (by simp)
+    (by rw [Nat.mul_add]; omega) (by simp) (by simp)
+  exact (A.hopS_msg₂ k c v u tr rq (σ t) t.2).symm
+
+/-- **The reduction's interaction reads `H₂³` only.** -/
+theorem hopS_iBudget (u : T5) :
+    (A.hopS k c v u).IBudget 0 (3 * (Fintype.card {j : Fin N // j ≠ k} * nGrind)) 0 0 where
+  a0 tr g₁ g₂ g₃ := A.hopS_stage1 k c v u tr fun t => ((t.1, g₁), (g₂, g₃))
+  a1 tr g₀ g₂ g₃ := A.hopS_stage1 k c v u tr fun t => ((g₀, t.1), (g₂, g₃))
+  a2 tr g₀ g₁ g₃ := A.hopS_stage1 k c v u tr fun t => ((g₀, g₁), (t.1, g₃))
+  a3 tr g₀ g₁ g₂ := A.hopS_stage1 k c v u tr fun t => ((g₀, g₁), (g₂, t.1))
+  b0 tr rq g₁ g₂ g₃ := A.hopS_stage2 k c v u tr rq fun t => ((t.1, g₁), (g₂, g₃))
+  b1 tr rq g₀ g₂ g₃ := A.hopS_stage2 k c v u tr rq fun t => ((g₀, t.1), (g₂, g₃))
+  b2 tr rq g₀ g₁ g₃ := A.hopS_stage2 k c v u tr rq fun t => ((g₀, g₁), (t.1, g₃))
+  b3 tr rq g₀ g₁ g₂ := A.hopS_stage2 k c v u tr rq fun t => ((g₀, g₁), (g₂, t.1))
+
+/-- **The reduction's guess has the Issuer's budget.** -/
+theorem hopS_gBudget {q3 q5 qE : ℕ} (hA : A.Budget q3 q5 qE) (u : T5) :
+    (A.hopS k c v u).GBudget q3 q5 qE := fun mm => by
+  classical
+  let S : {j : Fin N // j ≠ k} → SlicesR := fun j => slOfR (c j)
+  let φ : IssTr ZL → Rounds ZL → ShR Rw → ShR Rw := fun tr y s =>
+    toSp s.1 (mixR (A.RBf k c v tr y s.1 u) u (s.2.1, s.2.2))
+  have hk : ∀ sl : SlicesR, joinK k sl S k = sl := fun sl => joinK_self _ _ _
+  refine ⟨fun tr y g₁ g₂ g₃ s => ?_, fun tr y g₀ g₂ g₃ s => ?_, fun tr y g₀ g₁ g₃ s => ?_,
+    fun tr y g₀ g₁ g₂ s => ?_, fun tr y sl => ?_, fun tr y sl => ?_⟩
+  · have e : (fun g => ((A.hopS k c v u).fixR mm).guess tr y ((g, g₁), (g₂, g₃)) s) = fun g =>
+        A.guess (A.hopTR k c tr (toSp s.1 u)) (A.hopY k c v tr y (toSp s.1 u))
+          (Function.update (joinK k ((g₁, g₁), (g₂, g₃)) S) k
+            ((g, (joinK k ((g₁, g₁), (g₂, g₃)) S k).1.2), (joinK k ((g₁, g₁), (g₂, g₃)) S k).2)) (φ tr y s) := by
+      funext g
+      rw [hk, ← joinK_update]
+      rfl
+    rw [e]; exact hA.h30 _ _ _ _ k
+  · have e : (fun g => ((A.hopS k c v u).fixR mm).guess tr y ((g₀, g), (g₂, g₃)) s) = fun g =>
+        A.guess (A.hopTR k c tr (toSp s.1 u)) (A.hopY k c v tr y (toSp s.1 u))
+          (Function.update (joinK k ((g₀, g₀), (g₂, g₃)) S) k
+            (((joinK k ((g₀, g₀), (g₂, g₃)) S k).1.1, g), (joinK k ((g₀, g₀), (g₂, g₃)) S k).2)) (φ tr y s) := by
+      funext g
+      rw [hk, ← joinK_update]
+      rfl
+    rw [e]; exact hA.h31 _ _ _ _ k
+  · have e : (fun g => ((A.hopS k c v u).fixR mm).guess tr y ((g₀, g₁), (g, g₃)) s) = fun g =>
+        A.guess (A.hopTR k c tr (toSp s.1 u)) (A.hopY k c v tr y (toSp s.1 u))
+          (Function.update (joinK k ((g₀, g₁), (g₃, g₃)) S) k
+            ((joinK k ((g₀, g₁), (g₃, g₃)) S k).1, (g, (joinK k ((g₀, g₁), (g₃, g₃)) S k).2.2))) (φ tr y s) := by
+      funext g
+      rw [hk, ← joinK_update]
+      rfl
+    rw [e]; exact hA.h32 _ _ _ _ k
+  · have e : (fun g => ((A.hopS k c v u).fixR mm).guess tr y ((g₀, g₁), (g₂, g)) s) = fun g =>
+        A.guess (A.hopTR k c tr (toSp s.1 u)) (A.hopY k c v tr y (toSp s.1 u))
+          (Function.update (joinK k ((g₀, g₁), (g₂, g₂)) S) k
+            ((joinK k ((g₀, g₁), (g₂, g₂)) S k).1, ((joinK k ((g₀, g₁), (g₂, g₂)) S k).2.1, g))) (φ tr y s) := by
+      funext g
+      rw [hk, ← joinK_update]
+      rfl
+    rw [e]; exact hA.h33 _ _ _ _ k
+  · choose K hK hf using fun (T : Fin N → IssTr ZL) (Y : Fin N → Rounds ZL) =>
+      hA.h5 T Y (joinK k sl S)
+    refine ⟨fun s => K (A.hopTR k c tr (toSp s.1 u)) (A.hopY k c v tr y (toSp s.1 u)) (φ tr y s),
+      fun s => hK _ _ _, fun s G5 hs => ?_⟩
+    have hp : φ tr y (s.1, G5, s.2.2) =
+        ((φ tr y s).1, (mixR (A.RBf k c v tr y s.1 u) u (G5, s.2.2)).1, (φ tr y s).2.2) := rfl
+    change A.guess (A.hopTR k c tr (toSp s.1 u)) (A.hopY k c v tr y (toSp s.1 u)) (joinK k sl S)
+        (φ tr y (s.1, G5, s.2.2)) =
+      A.guess (A.hopTR k c tr (toSp s.1 u)) (A.hopY k c v tr y (toSp s.1 u)) (joinK k sl S) (φ tr y s)
+    rw [hp]
+    refine hf _ _ (φ tr y s) _ fun k' hk' => ?_
+    show (if k' ∈ (A.RBf k c v tr y s.1 u).1 then u.1 k' else s.2.1 k') =
+      (if k' ∈ (A.RBf k c v tr y s.1 u).1 then u.1 k' else G5 k')
+    rw [hs k' hk']
+  · choose K hK hf using fun (T : Fin N → IssTr ZL) (Y : Fin N → Rounds ZL) =>
+      hA.hE T Y (joinK k sl S)
+    refine ⟨fun s => K (A.hopTR k c tr (toSp s.1 u)) (A.hopY k c v tr y (toSp s.1 u)) (φ tr y s),
+      fun s => hK _ _ _, fun s E hs => ?_⟩
+    have hp : φ tr y (s.1, s.2.1, E) =
+        ((φ tr y s).1, (φ tr y s).2.1, (mixR (A.RBf k c v tr y s.1 u) u (s.2.1, E)).2) := rfl
+    change A.guess (A.hopTR k c tr (toSp s.1 u)) (A.hopY k c v tr y (toSp s.1 u)) (joinK k sl S)
+        (φ tr y (s.1, s.2.1, E)) =
+      A.guess (A.hopTR k c tr (toSp s.1 u)) (A.hopY k c v tr y (toSp s.1 u)) (joinK k sl S) (φ tr y s)
+    rw [hp]
+    refine hf _ _ (φ tr y s) _ fun k' hk' => funext fun z => ?_
+    show (if (A.RBf k c v tr y s.1 u).2 k' z then u.2 k' z else s.2.2 k' z) =
+      (if (A.RBf k c v tr y s.1 u).2 k' z then u.2 k' z else E k' z)
+    rw [hs k' hk']
+
+end AdversaryP
+
+end Budgets
+
+/-! ## The step and the hybrid -/
+
+section Main
+
+variable {N : ℕ}
+
+open VoleMole.Privacy.PomFRIT (abs_pr_prod_sub_le_avg')
+
+/-- **The bad event of the step**, in the split world: pair `k`'s points on the game's pair meet
+the other pairs' points on the private pair. -/
+def badR (A : AdversaryP Rw N) (k : Fin N) (c : {j : Fin N // j ≠ k} → PT)
+    (v : {j : Fin N // j ≠ k} → Bool × Bool) (b₁ b₂ : Bool) (z : ((PT × Tab2G pI) × T5) × T5) : Prop :=
+  ¬ Disj (A.RAR k c v b₁ b₂ z.1.1 z.1.2 z.2) (A.RBR k c v b₁ b₂ z.1.1 z.1.2 z.2)
+
+/-- The game's coins split into the pair's tapes and `H₂³`, and the `(H₅, cipher)` pair. -/
+def splitTR : PT × ShR Rw ≃ (PT × Tab2G pI) × T5 where
+  toFun z := ((z.1, z.2.1), z.2.2)
+  invFun w := (w.1.1, toSp w.1.2 w.2)
+  left_inv _ := rfl
+  right_inv _ := rfl
+
+/-- The split world's coins regrouped: the private pair first. -/
+def regroupTR : ((PT × Tab2G pI) × T5) × T5 ≃ T5 × (PT × ShR Rw) where
+  toFun z := (z.2, (z.1.1.1, toSp z.1.1.2 z.1.2))
+  invFun w := (((w.2.1, w.2.2.1), (w.2.2.2.1, w.2.2.2.2)), w.1)
+  left_inv _ := rfl
+  right_inv _ := rfl
+
+/-- **One world of the step**: the hop's game is the reduction's game averaged over the private
+pair, up to the bad event (`pr_split_le`). -/
+theorem hop_close_hopS (A : AdversaryP Rw N) (k : Fin N) (c : {j : Fin N // j ≠ k} → PT)
+    (v : {j : Fin N // j ≠ k} → Bool × Bool) (b₁ b₂ : Bool) :
+    |pr (PT × ShR Rw) (realGameRA (A.hop k c v) leanPIR leanPSR b₁ b₂) -
+        pr (T5 × (PT × ShR Rw)) (fun w => realGameRA (A.hopS k c v w.1) leanPIR leanPSR b₁ b₂ w.2)| ≤
+      pr (((PT × Tab2G pI) × T5) × T5) (badR A k c v b₁ b₂) := by
+  have h := pr_split_le (C := PT × Tab2G pI) (T := T5) mixR AgR Disj agR_mixR mixR_inv
+    (fun r r' a b h => agR_mixR_of_disj h a b) (A.tauR k c v b₁ b₂) (A.RAR k c v b₁ b₂)
+    (A.RBR k c v b₁ b₂) (fun z a u a' u' hA hB => A.tauR_cons k c v b₁ b₂ z a u a' u' hA hB) (A.guessR k c)
+  have h1 : pr (PT × ShR Rw) (realGameRA (A.hop k c v) leanPIR leanPSR b₁ b₂) =
+      pr ((PT × Tab2G pI) × T5) (fun z => A.guessR k c z.1 (A.tauR k c v b₁ b₂ z.1 z.2 z.2) z.2) := by
+    rw [← pr_equiv splitTR.symm]
+    exact pr_congr fun w => A.realGameRA_hop_iff k c v b₁ b₂ w.1 w.2
+  have h2 : pr (T5 × (PT × ShR Rw)) (fun w => realGameRA (A.hopS k c v w.1) leanPIR leanPSR b₁ b₂ w.2) =
+      pr (((PT × Tab2G pI) × T5) × T5) (fun z => A.guessR k c z.1.1 (A.tauR k c v b₁ b₂ z.1.1 z.1.2 z.2)
+        (mixR (A.RBR k c v b₁ b₂ z.1.1 z.1.2 z.2) z.2 z.1.2)) := by
+    rw [← pr_equiv regroupTR]
+    exact pr_congr fun z => A.realGameRA_hopS_iff k c v b₁ b₂ z.1.1 z.1.2 z.2
+  rw [h1, h2]
+  exact h
+
+/-- **The one-pair error with the other pairs on private tables**: `unlinkabilityRA_lean_num`
+with the Issuer's own guess budget and an interaction that reads only `H₂³`. -/
+noncomputable def εPair0R (q3 q5 qE m : ℕ) (εhide : ℝ) : ℝ :=
+  4 * εRO (2 * 0 + q3) (q5 + 2 * 0 + 1872) (qE + 2 * 0 + 13821) +
+    2 * εAd 9 (0 + q3) (q5 + 0 + 1248) (qE + 0 + 13821) 0 (3 * (m * nGrind)) (0 + 624) (0 + 9214) +
+    2 * εAd 9 q3 (q5 + 936) (qE + 13821) (2 * 0) (2 * (3 * (m * nGrind))) (2 * 0 + 1560) (2 * 0 + 23035) +
+    6 * ((0 : ℕ) / 2 ^ 128) + 4 * (1 / 2 ^ 113 + εROP 0 312 4607 (2 * 0 + 1560) (2 * 0 + 23035)) +
+    6 * noHitProb + 12 / 2 ^ 1024 + 2 * εhide
+
+/-- **The step bound, for fixed tapes of the other pairs.** -/
+theorem hop_step (A : AdversaryP Rw N) {q3 q5 qE : ℕ} {εhide : ℝ} (hA : A.Budget q3 q5 qE) (k : Fin N)
+    (c : {j : Fin N // j ≠ k} → PT) (v : {j : Fin N // j ≠ k} → Bool × Bool)
+    (hhide : ∀ u b₁ b₂ K, hidingAdv (A.hopS k c v u).ctx
+      (reductionRA (A.hopS k c v u) leanSimIR leanSimSR leanProgIR leanProgSR b₁ b₂ K) ≤ εhide)
+    (b₁ b₂ b₁' b₂' : Bool) :
+    |pr (PT × ShR Rw) (realGameRA (A.hop k c v) leanPIR leanPSR b₁ b₂) -
+        pr (PT × ShR Rw) (realGameRA (A.hop k c v) leanPIR leanPSR b₁' b₂')| ≤
+      εPair0R q3 q5 qE (Fintype.card {j : Fin N // j ≠ k}) εhide +
+        pr (((PT × Tab2G pI) × T5) × T5) (badR A k c v b₁ b₂) +
+        pr (((PT × Tab2G pI) × T5) × T5) (badR A k c v b₁' b₂') := by
+  have h0 := hop_close_hopS A k c v b₁ b₂
+  have h1 := hop_close_hopS A k c v b₁' b₂'
+  have hm : |pr (T5 × (PT × ShR Rw)) (fun w => realGameRA (A.hopS k c v w.1) leanPIR leanPSR b₁ b₂ w.2) -
+      pr (T5 × (PT × ShR Rw)) (fun w => realGameRA (A.hopS k c v w.1) leanPIR leanPSR b₁' b₂' w.2)| ≤
+      εPair0R q3 q5 qE (Fintype.card {j : Fin N // j ≠ k}) εhide :=
+    abs_pr_prod_sub_le _ _ fun u => by
+      have h := unlinkabilityRA_lean_num (A.hopS k c v u) (A.hopS_gBudget k c v hA u)
+        (A.hopS_iBudget k c v u) (hhide u) b₁ b₂ b₁' b₂'
+      unfold εPair0R
+      exact h
+  have := abs_sub_le (pr (PT × ShR Rw) (realGameRA (A.hop k c v) leanPIR leanPSR b₁ b₂))
+    (pr (T5 × (PT × ShR Rw)) (fun w => realGameRA (A.hopS k c v w.1) leanPIR leanPSR b₁ b₂ w.2))
+    (pr (PT × ShR Rw) (realGameRA (A.hop k c v) leanPIR leanPSR b₁' b₂'))
+  have := abs_sub_le (pr (T5 × (PT × ShR Rw)) (fun w => realGameRA (A.hopS k c v w.1) leanPIR leanPSR b₁ b₂ w.2))
+    (pr (T5 × (PT × ShR Rw)) (fun w => realGameRA (A.hopS k c v w.1) leanPIR leanPSR b₁' b₂' w.2))
+    (pr (PT × ShR Rw) (realGameRA (A.hop k c v) leanPIR leanPSR b₁' b₂'))
+  rw [abs_sub_comm] at h1
+  linarith
+
+/-- **The hybrid over the pairs, with the steps averaged over the other pairs' tapes.** -/
+lemma realGameP_hybrid_avg {R : Type} [Fintype R] [Nonempty R] [CipherRow R] (A : AdversaryP R N) (ε : ℝ)
+    (h : ∀ (k : Fin N) (v : {j : Fin N // j ≠ k} → Bool × Bool) (b₁ b₂ b₁' b₂' : Bool),
+      |pr (({j : Fin N // j ≠ k} → PT) × (PT × ShR R))
+          (fun q => realGameRA (A.hop k q.1 v) leanPIR leanPSR b₁ b₂ q.2) -
+        pr (({j : Fin N // j ≠ k} → PT) × (PT × ShR R))
+          (fun q => realGameRA (A.hop k q.1 v) leanPIR leanPSR b₁' b₂' q.2)| ≤ ε)
+    (w w' : Fin N → Bool × Bool) :
+    |pr ((Fin N → PT) × ShR R) (realGameP A w) - pr ((Fin N → PT) × ShR R) (realGameP A w')| ≤
+      N * ε := by
+  refine abs_sub_le_mul_of_worlds (fun u => pr ((Fin N → PT) × ShR R) (realGameP A u)) ε
+    (fun k u u' hu => ?_) w w'
+  have hv : (fun j : {j : Fin N // j ≠ k} => u j.1) = fun j => u' j.1 :=
+    funext fun j => hu j.1 j.2
+  show |pr _ (realGameP A u) - pr _ (realGameP A u')| ≤ ε
+  rw [pr_realGameP_eq A k u, pr_realGameP_eq A k u', ← hv]
+  exact h k _ _ _ _ _
+
+/-- **Ratatouille unlinkability with `N` challenge pairs, linear in `N` up to the bad events**:
+if in every step of the hybrid the bad event has probability at most `β` in each world (averaged
+over the other pairs' tapes), any two worlds differ by at most `N·(εPair0R(q₃, q₅, q_E, N − 1) +
+2β)`. -/
+theorem unlinkabilityP_lin (A : AdversaryP Rw N) {q3 q5 qE : ℕ} {εhide β : ℝ} (hA : A.Budget q3 q5 qE)
+    (hhide : ∀ k c v u b₁ b₂ K, hidingAdv (A.hopS k c v u).ctx
+      (reductionRA (A.hopS k c v u) leanSimIR leanSimSR leanProgIR leanProgSR b₁ b₂ K) ≤ εhide)
+    (hβ : ∀ k v b₁ b₂, pr (({j : Fin N // j ≠ k} → PT) × (((PT × Tab2G pI) × T5) × T5))
+      (fun z => badR A k z.1 v b₁ b₂ z.2) ≤ β)
+    (w w' : Fin N → Bool × Bool) :
+    |pr ((Fin N → PT) × ShR Rw) (realGameP A w) - pr ((Fin N → PT) × ShR Rw) (realGameP A w')| ≤
+      N * (εPair0R q3 q5 qE (N - 1) εhide + 2 * β) := by
+  refine realGameP_hybrid_avg A _ (fun k v b₁ b₂ b₁' b₂' => ?_) w w'
+  have h := abs_pr_prod_sub_le_avg' (α := {j : Fin N // j ≠ k} → PT) (β := PT × ShR Rw)
+    (β' := PT × ShR Rw) (fun q => realGameRA (A.hop k q.1 v) leanPIR leanPSR b₁ b₂ q.2)
+    (fun q => realGameRA (A.hop k q.1 v) leanPIR leanPSR b₁' b₂' q.2)
+    (fun c => εPair0R q3 q5 qE (Fintype.card {j : Fin N // j ≠ k}) εhide +
+      pr (((PT × Tab2G pI) × T5) × T5) (badR A k c v b₁ b₂) +
+      pr (((PT × Tab2G pI) × T5) × T5) (badR A k c v b₁' b₂'))
+    fun c => hop_step A hA k c v (hhide k c v) b₁ b₂ b₁' b₂'
+  refine h.trans ?_
+  have hc : (0 : ℝ) < Fintype.card ({j : Fin N // j ≠ k} → PT) := by exact_mod_cast Fintype.card_pos
+  rw [Finset.sum_add_distrib, Finset.sum_add_distrib, Finset.sum_const, Finset.card_univ,
+    nsmul_eq_mul, add_div, add_div, mul_div_cancel_left₀ _ hc.ne',
+    ← pr_prod (α := {j : Fin N // j ≠ k} → PT) (β := ((PT × Tab2G pI) × T5) × T5)
+      (fun z => badR A k z.1 v b₁ b₂ z.2),
+    ← pr_prod (α := {j : Fin N // j ≠ k} → PT) (β := ((PT × Tab2G pI) × T5) × T5)
+      (fun z => badR A k z.1 v b₁' b₂' z.2), card_ne]
+  have h0 := hβ k v b₁ b₂
+  have h1 := hβ k v b₁' b₂'
+  linarith
+
+end Main
+
 end VoleMole.Privacy.Ratatouille
