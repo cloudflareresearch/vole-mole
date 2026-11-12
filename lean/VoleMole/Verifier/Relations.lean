@@ -1,6 +1,7 @@
 import VoleMole.Verifier.Verify
 import VoleMole.Verifier.Keygen
 import VoleMole.Spec.Moussaka
+import VoleMole.Spec.MoussakaUnbound
 import VoleMole.Spec.PomFRIT
 import VoleMole.Arith.Moussaka
 import VoleMole.Arith.Ratatouille
@@ -8,9 +9,9 @@ import VoleMole.Arith.PomFRIT
 import VoleMole.Verifier.UovEval
 
 /-!
-# The five relations as verifier statements
+# The relations as verifier statements
 
-For each of vole-mole's relations, a `Statement` built from the instance: parameters, DST
+For each of vole-mole's relations (the five base relations and unbound Moussaka's two), a `Statement` built from the instance: parameters, DST
 (`src/dst.hpp`), the instance encoding (`hash_instance`), binders, and the constraint evaluator
 (the sharing evaluators of `Arith/*`, instantiated at `F := GF128`, `β := beta`, `K := GF256`;
 for the three UOV relations with the UOV term computed directly over arrays,
@@ -19,6 +20,13 @@ for the three UOV relations with the UOV term computed directly over arrays,
 * Moussaka issuance and redemption: `Spec.Moussaka.IssueInstance.encode`,
   `RedeemInstance.encode`; `Arith.Moussaka.issueValues`, `UovEval.moussakaRedeemValues`
   (`= Arith.Moussaka.redeemValues`).
+* Unbound Moussaka issuance and redemption (PR #63, `src/ihat/unbound_issue.hpp`,
+  `unbound_redeem.hpp`): DSTs `make_dst("mous", 1, 'i'/'r'/'l', '0')`; instances
+  `Spec.MoussakaUnbound.IssueInstance.encode` (`t ‖ ctx_iss`) and, since `UnboundRedeemRelation`
+  calls the bound `hash_redeem_instance`, `Spec.Moussaka.RedeemInstance.encode`;
+  `MoussakaUnbound.uIssueValues`, `UovEval.moussakaUnboundRedeemValues`
+  (`= MoussakaUnbound.uRedeemValues`). Both set `REUSE_CRT_WITNESS`, like the bound relations, so
+  they take Moussaka's layout (`Layouts.moussaka`).
 * Ratatouille issuance and spend: `hash_instance` (`src/ratatouille/issue.hpp:151-155`,
   `spend.hpp:321-327`) is written out here (`Spec/Ratatouille.lean` has no encoding);
   `Arith.Ratatouille.issueValues`, `UovEval.ratatouilleSpendValues` (`= spendValues`).
@@ -100,6 +108,37 @@ def moussakaRedeem (anchors : List UovPk) (nf ctxIss ctxRed challengeDigest : By
   values := fun _ lb w =>
     UovEval.moussakaRedeemValues (anchors.map UovPk.map) (fnOf nf) (fnOf ctxIss) (fnOf ctxRed)
       (combinationOf Moussaka.M lb) w
+
+/-! ## Unbound Moussaka -/
+
+/-- `UnboundIssueRelation` (`src/ihat/unbound_issue.hpp`): witness `r ‖ nf_key ‖ s5 ‖ s9`
+(232 bytes), `QS_DEGREE = 9`. -/
+def moussakaUnboundIssue (t ctxIss : ByteArray) (labelRows := false) : Statement where
+  params := { witnessBytes := 232, qsDegree := 9, labelRows }
+  dst := toBA (makeDst "mous" 1 'i' '0')
+  instEnc := fun _ => toBA (MoussakaUnbound.IssueInstance.encode ⟨toL t, toL ctxIss⟩)
+  values := fun _ _ w =>
+    MoussakaUnbound.uIssueValues (F := GF128) (fun k => fnOf t k.val) (fnOf ctxIss) w
+
+/-- `UnboundRedeemRelation` (`src/ihat/unbound_redeem.hpp`): witness
+`r ‖ nf_key ‖ s ‖ (s5 ‖ s9 of UCom) ‖ (s5 ‖ s9 of Derive) ‖ b` (559 bytes), `QS_DEGREE = 9`; the
+instance is hashed as the bound redemption's (`hash_redeem_instance`). -/
+def moussakaUnboundRedeem (anchors : List UovPk) (nf ctxIss ctxRed challengeDigest : ByteArray)
+    (labelRows := false) : Statement where
+  params := { witnessBytes := 559, qsDegree := 9, labelRows }
+  dst := toBA (makeDst "mous" 1 'r' '0')
+  instEnc := fun _ => toBA (Moussaka.RedeemInstance.encode
+    ⟨anchors.map UovPk.toSpec, toL nf, toL ctxIss, toL ctxRed, toL challengeDigest⟩)
+  comb := some (Moussaka.M, toBA (makeDst "mous" 1 'l' '0'))
+  values := fun _ lb w =>
+    UovEval.moussakaUnboundRedeemValues (anchors.map UovPk.map) (fnOf nf) (fnOf ctxIss)
+      (fnOf ctxRed) (combinationOf Moussaka.M lb) w
+
+-- `UNBOUND_ISSUE_PROOF_BYTES`, `UNBOUND_REDEEM_PROOF_BYTES` (`Spec.MoussakaUnbound`).
+#guard (moussakaUnboundIssue ByteArray.empty ByteArray.empty).params.proofBytes ==
+  MoussakaUnbound.issueProofBytes
+#guard (moussakaUnboundRedeem [] ByteArray.empty ByteArray.empty ByteArray.empty
+  ByteArray.empty).params.proofBytes == MoussakaUnbound.redeemProofBytes
 
 /-! ## Ratatouille -/
 

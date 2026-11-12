@@ -1,5 +1,6 @@
 import VoleMole.EndToEnd.Relations
 import VoleMole.Arith.MoussakaUnbound
+import VoleMole.Arith.ConcreteField
 
 /-!
 # End to end for the unbound Moussaka relations (`security/moussaka-unbound.md` §2)
@@ -17,7 +18,10 @@ Each concludes: some known tree's candidate `w^{(i)} = u^{(i)} + d` is a bit vec
 satisfies the relation, or at most 9 admissible `chall₃` are accepted. The hypotheses are those of
 the bound theorems (see `EndToEnd/Relations.lean`); `hcomb` for redemption is discharged with
 probability `≥ 1 − 1/|F|` over the combination challenge by `moussaka_unbound_redeem_comb_bad`
-(needs `|anchors| ≤ MAX_ANCHORS = 64`).
+(needs `|anchors| ≤ MAX_ANCHORS = 64`); at the concrete GF(2¹²⁸), with `IsEmbedding beta` and
+`beta 0 = 1` discharged, by `moussaka_unbound_redeem_comb_bad_gf128` (at most a `2⁻¹²⁸` fraction of
+the `l`). `Verifier/Bridge/ChainRelations.lean` instantiates both theorems for the executable
+verifier's chains (`moussakaUnboundIssue_extract_chain`, `moussakaUnboundRedeem_extract_chain`).
 -/
 
 set_option linter.unusedSectionVars false
@@ -180,6 +184,18 @@ theorem moussaka_unbound_redeem_comb_bad [Fintype F] {β : Fin 8 → F} {toBits 
     #{l : Fin M → F | (uRedeemSystem β toBits anchors nf ctxIss ctxRed l).Holds w} *
       Fintype.card F ≤ Fintype.card (Fin M → F) := by
   exact (uRedeem_sound_card hι hβ anchors hn nf ctxIss ctxRed w).resolve_left hw
+
+open Classical in
+/-- `moussaka_unbound_redeem_comb_bad` at `F := GF128`, `β := beta`, `K := GF256`. -/
+theorem moussaka_unbound_redeem_comb_bad_gf128 (anchors : List (ℕ → Arith.GF256))
+    (hn : anchors.length ≤ 64) (nf ctxIss ctxRed : ℕ → UInt8) (w : ℕ → Arith.GF128)
+    (hw : ¬moussakaUnboundRedeemWit Arith.GF256.ofBits anchors nf ctxIss ctxRed w) :
+    #{l : Fin M → Arith.GF128 |
+        (uRedeemSystem Arith.beta Arith.GF256.toBits anchors nf ctxIss ctxRed l).Holds w} *
+      2 ^ 128 ≤ (2 ^ 128) ^ M := by
+  have := moussaka_unbound_redeem_comb_bad Arith.isEmbedding Arith.beta_zero anchors hn nf ctxIss
+    ctxRed w hw
+  rwa [Arith.GF128.card_eq, Arith.card_fun_gf128] at this
 
 /-- **Unbound Moussaka redeem, end to end (deterministic).** -/
 theorem moussaka_unbound_redeem_extract {Ch : Type*} (β : Fin 8 → F) (toBits : K → Fin 8 → Bool)

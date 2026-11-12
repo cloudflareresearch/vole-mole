@@ -7,11 +7,19 @@ import VoleMole.Privacy.MoussakaNCFind
 import VoleMole.Privacy.PomFRITInterleaveOC
 import VoleMole.Privacy.RatatouilleInterleaveOC
 import VoleMole.Privacy.PomFRITLin
+import VoleMole.Privacy.MoussakaLin
+import VoleMole.Privacy.RatatouilleLin
 import VoleMole.Privacy.SeedXOFNC
 import VoleMole.ROM.SpecSound
 import VoleMole.ROM.RatatouilleBalance
+import VoleMole.ROM.MoussakaUnbound
 import VoleMole.Privacy.PqovDelta
 import VoleMole.Privacy.PqovKeys
+import VoleMole.Privacy.MoussakaUnboundNC
+import VoleMole.ROM.PrivacyReadsNC
+import VoleMole.Privacy.SeedXOFDS
+import VoleMole.ROM.MoussakaOMUF
+import VoleMole.ROM.OneMorePomfrit
 
 /-!
 # Non-vacuity checks for the headline theorems
@@ -37,6 +45,12 @@ Anchors' Lean verifier). The same for **pqov's real key generation** with any oi
 (`Spec.Pqov.pqovKey O P1 P2`: `P3` computed as `calculate_F2_P3` does; `P` vanishes on the oil
 space, `oilSpace_pqovKey`): `anonymityNC_pqov_pqovKeys`, `anonymityNCRO_pqov_pqovKeys`,
 `pr_refused_NCRO_pqov` and `avg_delta255_pqovKey` instantiated with keys `pqovKey (O c) (P1 c) _`.
+
+Moussaka's one-more unforgeability (`ROM/MoussakaOMUF.lean`, `omuf_le_num`) is instantiated with
+a trivial adversary (no queries; one malformed Issue query and one invalid redemption) and two
+honest Anchors with distinct 32-byte digests; the request lengths its honest checks expect are the
+executable verifier's proof sizes for both layouts (`pfLenI_eq`, `pfLenR_eq`), so the honest
+checks are not vacuous in the sense of the liveness audit.
 
 What is not exhibited here: a redemption or spend witness (it needs a UOV preimage; the KAT
 vectors give instances, checked by `lake exe verifier_vectors`, not by a theorem); `hinj` for a
@@ -116,6 +130,16 @@ example (pk : UovPk) (nf cn ci pf : ByteArray) (d : ℕ) (hd : d < 2 ^ 64) (lr :
 example (pk : UovPk) (sig msg pf : ByteArray) (lr : Bool) :=
   pomfritRedeem_accept_le_adaptive (ι := Unit) (β := Unit) pk (fun _ => sig) (fun _ => msg) lr
     (pure (pf, ((), ()))) 0 trivial 0 trivial 0 trivial
+
+/-! Unbound Moussaka (`ROM/MoussakaUnbound.lean`), fixed statements; more in `Audit/UnboundROM.lean`. -/
+
+example (t c pf : ByteArray) (lr : Bool) :=
+  moussakaUnboundIssue_accept_le_full (β := Unit) (Unbound.moussakaUnboundIssue_stmt t c lr)
+    (pure (pf, ())) 0 trivial 0 trivial
+
+example (A : List UovPk) (hA : A.length ≤ 64) (nf ci cr cd pf : ByteArray) (lr : Bool) :=
+  moussakaUnboundRedeem_accept_le_full (β := Unit) hA
+    (Unbound.moussakaUnboundRedeem_stmt A nf ci cr cd lr) (pure (pf, ())) 0 trivial 0 trivial 0 trivial
 
 /-! The permutation model with inverse queries. -/
 
@@ -310,6 +334,11 @@ example (ι : Type) [Fintype ι] [DecidableEq ι] (idx : AnchorSet → UOVKey �
   anonymityN_lean_le (mN ι) idx (mN_budget ι) (εhide := 0)
     (fun _ _ _ => (hidingAdv_true _ _).le)
 
+/-- With the further Clients on private tables (`Privacy/MoussakaLin.lean`). -/
+example (ι : Type) [Fintype ι] [DecidableEq ι] (idx : AnchorSet → UOVKey → ℕ) :=
+  anonymityN_lin (mN ι) idx (mN_budget ι) (εhide := 0)
+    (fun _ _ _ _ => (hidingAdv_true _ _).le)
+
 /-- The interleaved adversary: no further sessions started, a constant guess. -/
 def mIL {R : Type} : AdversaryILM R :=
   ⟨0, 0, 0, fun _ => .start (0, 0, k0), fun _ => 0, fun _ => 0, fun _ _ => k0, fun _ _ => 0,
@@ -390,6 +419,22 @@ example (n K : ℕ) (b₁ b₂ b₁' b₂' : Bool) :=
   unlinkabilityILO_lean_le (n := n) (K := K) rIL.toO rIL_budget.toO rIL.toO_sBudget
     (εhide := 0) (fun _ _ _ _ => (hidingAdvR_true _).le) b₁ b₂ b₁' b₂'
 
+/-- The `N`-pair Issuer with a constant guess. -/
+noncomputable def rP (N : ℕ) {R : Type} : AdversaryP R N :=
+  ⟨0, 0, 0, fun _ _ _ => default, fun _ _ => default, fun _ _ _ => default, fun _ _ _ => default,
+    fun _ _ _ _ => True⟩
+
+theorem rP_budget (N : ℕ) {R : Type} [Fintype R] [Nonempty R] : (rP N (R := R)).Budget 0 0 0 :=
+  ⟨fun _ _ _ _ _ => Rd3.const _, fun _ _ _ _ _ => Rd3.const _, fun _ _ _ _ _ => Rd3.const _,
+    fun _ _ _ _ _ => Rd3.const _, fun _ _ _ => Rd5.const _, fun _ _ _ => RdE.const _⟩
+
+set_option synthInstance.maxSize 1024 in
+/-- With the other pairs on private tables (`Privacy/RatatouilleLin.lean`; `β = 1` is always
+admissible, `pr_le_one`, so the hypothesis `hβ` is satisfiable; its value is the paper bound). -/
+example (N : ℕ) (w w' : Fin N → Bool × Bool) :=
+  unlinkabilityP_lin_le (rP N) (rP_budget N) (εhide := 0) (β := 1)
+    (fun _ _ _ _ _ _ _ => (hidingAdvR_true _).le) (fun _ _ _ _ => pr_le_one _) w w'
+
 end Ratatouille
 
 /-! ## Privacy: Moussaka 4(b), non-colluding
@@ -443,6 +488,25 @@ example := anonymityNCSh_num nc idxEval (fun _ => skNone) (fun _ => skNone_corre
 example := anonymityNCSh_num_seed idxEval (fun _ => nc) (fun _ _ => skNone)
   (fun _ _ => skNone_correct _) idxEval_sound (fun _ => nc_budget) (fun _ => le_rfl)
   (fun _ _ => RdX.const _)
+
+/-- **Theorem 4(b′) with the Moderator's choices read off the tables**: a setup that reads nothing
+(`KBudget 0 0 0 0`) is admissible. -/
+example := anonymityNCRA_lean_num (⟨fun _ _ => (), fun _ => nc⟩ : AdversaryNCRA (Blk → Blk) Unit)
+  idxEval (fun _ _ => skNone) (fun _ _ => skNone_correct _) idxEval_sound (fun _ => nc_budget)
+  ⟨fun _ _ _ => SReads.const _, fun _ _ _ => SReads.const _, fun _ _ _ => SReads.const _,
+    fun _ _ _ => SReads.const _⟩ (φ := fun _ => 1) fun _ c => le_of_eq (phi_skNone _ c)
+
+/-- A Moderator whose setup is an oracle computation that reads Client `0`'s issuance slice at one
+key (`QBudget 1 0 0 0`) and keeps the answer as its state. -/
+def ncOC {R : Type} : AdversaryNCOC R (VoleMole.ZK.Sim.Bytes 32) :=
+  ⟨liftM ((VoleMole.ROM.Reads.TSpec (Bool × Bool) R (preLen pI)).query
+    (VoleMole.ROM.Reads.TKey.h3 (false, false) 0)), fun _ => nc⟩
+
+/-- **The same with the setup an oracle computation**: the query bound is satisfiable by a setup
+that queries the tables. -/
+example := anonymityNCOC_lean_num idxEval (fun _ _ => skNone) (ncOC (R := Blk → Blk))
+  (fun _ _ => skNone_correct _) idxEval_sound (fun _ => nc_budget)
+  (VoleMole.ROM.Reads.QBudget.query_h3 _ _) (φ := fun _ => 1) fun _ c => le_of_eq (phi_skNone _ c)
 
 end NC
 
@@ -647,5 +711,134 @@ example (σ : IC.RatBalance.Signer) (N : ℕ) (lr : Bool) :=
   IC.RatBalance.balance_le_ufTag lr ⟨ByteArray.mk (Array.replicate 32 0), ByteArray.empty⟩ balA0 N σ
     (by decide) (qA := 0) (nA := 0) (eA := 0) (fun _ => trivial)
     (fun _ => isQueryBoundP_pure _ _ _) (fun _ => isQueryBoundP_pure _ _ _)
+/-! ## Privacy: unbound Moussaka, Theorem U5 with adaptive redemption queries
+
+A colluding adversary with adaptive queries and a constant guess (`uAd`): its PRF reductions are
+constant, so `εprf = 0`. A non-colluding Moderator (`uNC`) whose Anchor Sets hold both issuers'
+keys (`Contains`), with pqov's signer in the vinegar random-oracle model (`hfail` and correctness
+are theorems) and a complete issuance proof system (`piT`, a trivial `NIZK` that accepts every
+proof): `anonymityNC_vinegarRO` applies as stated. -/
+
+section Unbound
+
+open VoleMole.Spec VoleMole.Privacy VoleMole.Privacy.MoussakaUnbound
+open VoleMole.Spec.Pqov VoleMole.Arith
+open VoleMole.Spec.MoussakaUnbound (IssueInstance RedeemInstance IssueRel issueProofBytes)
+open VoleMole.Spec.Moussaka (NIZK)
+open VoleMole.Privacy.Moussaka (P2Part pqovRO pqovRO_correct pqovRO256_hfail)
+
+/-- A query: token `false`, swap flag `true`, the set `S0`, a fixed context. -/
+def uq (S : Spec.Moussaka.AnchorSet) : Query := ⟨false, true, S, fun _ => 0, []⟩
+
+/-- The colluding adversary with adaptive queries and a constant guess. -/
+def uAd : AdversaryAd := ⟨fun _ => 0, fun _ => k0, fun _ _ _ => 0, fun _ _ _ => uq S0,
+  fun _ _ _ => True⟩
+
+example (n : ℕ) {CI CR : Type} [Fintype CI] [Nonempty CI] [Fintype CR] [Nonempty CR]
+    (simI : IssueInstance → CI → Bytes) (simR : RedeemInstance → CR → Bytes)
+    (PI : NIZK IssueInstance) (PR : NIZK RedeemInstance) {εI εR : ℝ} (hεR : 0 ≤ εR)
+    (hI : ZeroKnowledge IssueRelW (proveR PI) simI εI)
+    (hR : ZeroKnowledge RedeemRelW (proveR PR) simR εR) :=
+  anonymityAd (n := n) uAd simI simR PI PR (εprf := 0) hεR hI hR fun _ _ => by
+    simp [prfAdv, reductionAd, hviewAd, uAd, pr_const]
+
+/-- A trivial complete issuance proof system. -/
+def piT : NIZK IssueInstance := ⟨fun _ _ _ => List.replicate issueProofBytes 0, fun _ _ => true⟩
+
+theorem piT_correct : piT.Correct IssueRel issueProofBytes :=
+  fun _ _ _ _ _ => ⟨List.length_replicate, rfl⟩
+
+/-- The non-colluding Moderator: both issuers' keys in every set, a constant guess. -/
+def uNC (P1 : Bool → ℕ → GF256) (P2 : Bool → P2Part) : MoussakaUnbound.AdversaryNC :=
+  ⟨fun _ => 0, pkq P1 P2, fun _ => uq (Sq P1 P2), fun _ => True⟩
+
+theorem contains_uNC (P1 : Bool → ℕ → GF256) (P2 : Bool → P2Part) :
+    MoussakaUnbound.Contains (uNC P1 P2) := fun _ c =>
+  ⟨pkq P1 P2 c, by cases c <;> simp [uNC, uq, Sq], rfl⟩
+
+/-- **Theorem U5(b) with pqov's signer** (all 256 attempts), adaptive queries, `εprf = 0`. -/
+example (n : ℕ) (P1 : Bool → ℕ → GF256) (P2 : Bool → P2Part) {CR : Type} [Fintype CR]
+    [Nonempty CR] (simR : RedeemInstance → CR → Bytes) (PR : NIZK RedeemInstance) {εR : ℝ}
+    (hεR : 0 ≤ εR) (hR : ZeroKnowledge RedeemRelW (proveR PR) simR εR) :=
+  MoussakaUnbound.anonymityNC_vinegarRO (n := n) (fun c v => (sysMat (pkq P1 P2 c) 0 v).det ≠ 0)
+    (uNC P1 P2) piT (pqovRO (uNC P1 P2).pk (fun _ => 0) 256) simR PR (εprf := 0) hεR piT_correct
+    (pqovRO_correct _ _ (fun _ => oilSpace_kq _ _ _) 256) (contains_uNC P1 P2)
+    (fun w c t h i => pqovRO256_hfail _ _ w c t h i) hR fun _ _ => by
+      simp [prfAdvNC, reductionNC, hNC, uNC, pr_const]
+
+end Unbound
+
+/-! ## Lemma DS (c): PomFRIT's seed XOF on the single SHAKE oracle
+
+A party that evaluates SHAKE at one input of the seed-XOF shape (as an honest prover does when a
+proof-system input has that shape, F-DS2) satisfies the read budget with `q = 1`. -/
+
+section SeedDS
+
+open VoleMole.Privacy VoleMole.Privacy.SeedDS
+
+example (k : Seed) (t : Str 46) :=
+  seedXofDS_two_le (m := 46) (Y := Bool) (T := Unit)
+    (fun H u _ => H ((pomfritLayout 46).xof k t) = u false t)
+    fun u _ => Layout.RdXof.read_xof (pomfritLayout 46) k t fun y => y = u false t
+
+end SeedDS
+
+/-! ## Moussaka one-more unforgeability (`ROM/MoussakaOMUF.lean`) -/
+
+section OMUF
+
+open VoleMole.ROM.IC.OMUF
+
+/-- Two honest Anchors with distinct 32-byte digests. -/
+def pkU : Fin 2 → UovPk := fun k => ⟨⟨Array.replicate 32 k.val.toUInt8⟩, ByteArray.empty⟩
+
+theorem pkU_digest (k : Fin 2) : (pkU k).digest.size = 32 := by
+  simp [pkU, ByteArray.size]
+
+theorem pkU_inj : Function.Injective fun k => (pkU k).digest := by
+  intro a b h
+  fin_cases a <;> fin_cases b <;> first | rfl | (simp [pkU] at h)
+
+/-- A trivial OMUF adversary: one Issue query (malformed), one redemption (empty Anchor Set). -/
+def aU : Adversary 2 1 where
+  σ := Unit
+  init := pure ()
+  query _ := pure ((), ⟨0, ByteArray.empty, ByteArray.empty⟩)
+  absorb _ _ := ()
+  final _ := pure fun _ => ⟨[], ByteArray.empty, ByteArray.empty, ByteArray.empty, ByteArray.empty⟩
+
+theorem aU_budget : aU.Budget 0 0 0 := by
+  refine ⟨trivial, trivial, trivial, fun _ => trivial, fun _ => trivial, fun _ => trivial,
+    fun _ => trivial, fun _ => trivial, fun _ => trivial⟩
+
+/-- `omuf_le_num`'s hypotheses hold. -/
+example (lr : Bool) (sk : Fin 2 → Spec.Signer) :=
+  omuf_le_num lr pkU sk 1 aU_budget pkU_digest pkU_inj
+
+end OMUF
+
+/-! ## One-more unforgeability (`ROM/OneMorePomfrit.lean`) -/
+
+section OneMore
+
+open VoleMole.ROM.OneMore VoleMole.ROM.OneMore.Pomfrit
+
+/-- The forger that outputs nothing makes no `hash_to_target` query. -/
+theorem nilForger_bound (pk : UovPk) :
+    IsQueryBoundP ((fun _ => pure []) pk : OracleComp specU (List (ByteArray × ByteArray)))
+      (fun q => isHT q = true) 0 := trivial
+
+/-- U1 with the honest Issuer, any key, any first-phase rule `e1`. -/
+example (pk : UovPk) (sk : VoleMole.Spec.Signer) (ℓ : ℕ) (e1 : CTable → QueryLog specIC → ByteArray → TG) :=
+  pomfrit_U1_bound (pure (pk, sk)) honestPre ℓ 0 CrtGen.tables true (fun _ => pure []) e1
+    nilForger_bound
+
+/-- U2 with the honest Issuer, `τ = 17`, any shift rule. -/
+example (pk : UovPk) (sk : VoleMole.Spec.Signer) (ℓ : ℕ) (sh : CTable → QueryLog specIC → ByteArray → List TG) :=
+  pomfrit_U2_bound (pure (pk, sk)) honestPre ℓ 0 CrtGen.tables true (fun _ => pure []) 17 sh
+    nilForger_bound
+
+end OneMore
 
 end VoleMole.Audit

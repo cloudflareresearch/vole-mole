@@ -1,11 +1,11 @@
 # Unbound Moussaka: security analysis of late redemption-context binding
 
 This note analyses the "unbound token" variant of Moussaka added by PR #63 (merged as `62be5bc`, "moussaka: Add
-support for late redemption context binding"): `include/vole_mole/moussaka.hpp`
+support for late redemption context binding"): `include/vole_mole/ihat.hpp`
 (`UnboundToken`, `PendingUnboundToken`, `unbound_issue_request`, `unbound_issue_response`,
-`unbound_finalize_redeem`), `src/moussaka/commit.hpp` (`UnboundCom`, `Derive`),
-`src/moussaka/unbound_issue.hpp`, `src/moussaka/unbound_redeem.hpp`, the shared circuit pieces in
-`src/moussaka/circuit.hpp`, and `src/moussaka/moussaka.cpp`. It builds on
+`unbound_finalize_redeem`), `src/ihat/commit.hpp` (`UnboundCom`, `Derive`),
+`src/ihat/unbound_issue.hpp`, `src/ihat/unbound_redeem.hpp`, the shared circuit pieces in
+`src/ihat/circuit.hpp`, and `src/ihat/ihat.cpp`. It builds on
 `lean/docs/security/moussaka.md` (the "base note"), whose model, proof-system results and UOV
 assumptions it reuses; only what differs is spelled out. Theorem numbers here carry a `U`.
 
@@ -37,7 +37,7 @@ Contents:
 | No nullifier squatting (Prop U3; base note's F2 does not apply) | **Yes** | `U·(Adv^prf-t + Adv^spr-k)` on top of Thm U1 | PRF of `Derive` with `t` leaked, second preimages of `Derive` in the key |
 | Redemption non-malleability, including no redirect to another `ctx_red` (Thm U4) | **Yes** | `ε_SE^{u-red} + ε_dig + Adv^bind + K·Adv^ct-uf-open + U·Adv^ow-kr + ε_hop` | weak SE, the above, one-wayness of `(nf_key, r)` |
 | Issuer hiding and unlinkability vs Moderators **colluding with all Anchors**, issuance–redemption **and redemption–redemption across contexts** (Thm U5a) | **Yes, computationally** | `2·ε_ZK^joint + 2·Adv^prf-t_2` | ZK of both unbound relations, PRF of `Derive` with `t` leaked (2 keys) |
-| The same vs Moderators that see no issuance (Thm U5b) | **Yes, computationally** (unlike the base note's 4(b)) | `2·ε_ZK^joint|_red + 2·Adv^prf_2 + 2·(φ₀ + φ₁)` | ZK of the redemption proofs, PRF of `Derive` (2 keys) |
+| The same vs Moderators that see no issuance (Thm U5b) | **Yes, computationally** (unlike the base note's 4(b)) | `2·ε_ZK^joint|_red + 2·Adv^prf_2 + 2·(ψ₀ + ψ₁)`, `ψ_c ≤ κ + φ_c` (corrected, §6) | ZK of the redemption proofs, PRF of `Derive` (2 keys), Anchor Sets that contain both issuers; `κ = 0` for a complete issuance proof |
 | Unlinkability of two redemptions of one token **in the same `ctx_red`** | **No, by design** (same `nf`; rejected as a double spend) | — | — |
 | Bound and unbound tokens under the same Anchor keys (§7) | **Yes**: neither variant can be redeemed as the other, and each keeps its own count | as Thm U1 and base Thm 1 | joint binding |
 
@@ -57,6 +57,9 @@ Main findings (§9):
 - **UF6 (cost, informational).** One opening `r` now enters `1 + N` proofs (issuance and every
   redemption). On `main` (CRT masks from the witness) the label term of the joint ZK hop is still
   per `H₅` query, not per proof, but every other per-proof term is summed over the `1 + N` proofs.
+- **UF7 (proof correction).** The earlier proof of Thm U5(b) kept the Anchors' acceptance bits
+  in the refusal bit through the PRF hop. The PRF reduction cannot compute them without the keys.
+  The corrected abort term `ψ_c` also counts a rejected honest issuance proof (§6).
 
 No attack was found on the unbound relations or their implementation.
 
@@ -65,19 +68,19 @@ No attack was found on the unbound relations or their implementation.
 ## 1. The protocol as implemented
 
 **Parameters** (in addition to the base note's): `NF_KEY_BYTES = 16` (`commit.hpp:53`),
-`UNBOUND_ISSUE_PROOF_BYTES = 6864`, `UNBOUND_REDEEM_PROOF_BYTES = 12423` (`moussaka.hpp`), both
+`UNBOUND_ISSUE_PROOF_BYTES = 6864`, `UNBOUND_REDEEM_PROOF_BYTES = 12423` (`ihat.hpp`), both
 with the FAEST-EM-128f v3 parameters and the CRT masks taken from the witness
 (`REUSE_CRT_WITNESS = true`, `unbound_issue.hpp`, `unbound_redeem.hpp`; `circuit.hpp`
 `is_em128f_variant`).
 
-**Commitment** `UCom(k, ctx_iss, r) = KP800(state)[0..45)` (`moussaka.cpp:326-332`), with the
+**Commitment** `UCom(k, ctx_iss, r) = KP800(state)[0..45)` (`ihat.cpp:326-332`), with the
 100-byte state (`commit.hpp:62-81`)
 
 ```
 "mous" ‖ 0x01 ‖ "c0" ‖ r (16) ‖ 0⁹ ‖ ctx_iss (16) ‖ k (16) ‖ 0³⁶       offsets 0, 7, 23, 32, 48, 64
 ```
 
-**Nullifier derivation** `Derive(k, ctx_red) = KP800(state)[0..24)` (`moussaka.cpp:334-340`), with
+**Nullifier derivation** `Derive(k, ctx_red) = KP800(state)[0..24)` (`ihat.cpp:334-340`), with
 (`commit.hpp:83-98`)
 
 ```
@@ -89,7 +92,7 @@ The three Keccak inputs differ in byte 4 or byte 5, so their input sets are disj
 ([Lean] `Arith/MoussakaUnbound.lean`, `encodeUnboundComState_ne_encodeComState`,
 `encodeDeriveState_ne_encodeUnboundComState`, `encodeDeriveState_ne_encodeComState`).
 
-**Issuance** (Client `unbound_issue_request`, `moussaka.cpp:353-367`; Anchor
+**Issuance** (Client `unbound_issue_request`, `ihat.cpp:353-367`; Anchor
 `unbound_issue_response`, `:369-380`; Client `PendingUnboundToken::finalize_issue`, `:393-406`).
 1. `(k, r, ρ) = SHAKE128("mous\x01s0" ‖ seed)` squeezed into 16 + 16 + 16 bytes, `seed` 32 bytes
    from the OS (`expand_unbound_issue_seed`, `:85-100`).
@@ -154,7 +157,53 @@ end-to-end theorems `moussaka_unbound_issue_extract` and `moussaka_unbound_redee
 form of `EndToEnd/Relations.lean`: some known tree's candidate is a bit vector whose decoding
 satisfies the unbound relation, or at most 9 admissible `chall₃` are accepted;
 `moussaka_unbound_redeem_comb_bad` discharges the combination hypothesis except with probability
-`1/|F|`.
+`1/|F|` (`moussaka_unbound_redeem_comb_bad_gf128` at GF(2¹²⁸)).
+
+[Lean] The executable verifier and prover cover both unbound relations
+(`Verifier/Relations.lean`: `moussakaUnboundIssue`, `moussakaUnboundRedeem`; DSTs with version
+byte 1, the bound `hash_redeem_instance` for redemption, Moussaka's proof layout since both set
+`REUSE_CRT_WITNESS`). `lake exe verifier_vectors` accepts all 9 proofs of
+`tests/ihat/unbound_ihat_kat.txt` (3 issuances, 6 redemptions in two contexts each, up to 64
+Anchors), rejects 25 mutations (a flipped byte in each proof field; a changed `t`, `ctx_iss`, `nf`,
+`challenge_digest`, the token's other `ctx_red`; the issuance proof as a bound issuance), and
+compares the intermediate values of one proof per relation with the C++ (`verifier_kat.txt`).
+`lake exe prover_vectors` reproduces all 9 proofs byte for byte and checks the witnesses and `t`,
+`nf` against `Spec/MoussakaUnbound.lean`. The bridge theorems carry over: the verifier's
+evaluators are the systems' values (`moussakaUnboundIssue_values`,
+`moussakaUnboundRedeem_values`), so acceptance gives the accepting equation
+(`moussakaUnboundIssue_accept`, `moussakaUnboundRedeem_accept`), the executable verifier's chains
+give the extraction theorems above at GF(2¹²⁸) (`moussakaUnbound*_extract_chain`), with uniform
+challenges at probability `≤ 2⁻¹⁵⁰ + ε_QS(n) [+ 2⁻¹²⁸]` per chain (`n = 3816`, `7929`;
+`Prob.moussakaUnbound*_chain_prob`), and the prover is complete
+(`moussakaUnbound*_complete_shake`).
+
+[Lean] The probabilistic steps of extraction are mechanized as for the base relations
+(`lean/docs/probabilistic-plan.md` §2j). They are stated once, for any verifier statement with the
+C++ parameters (232 and 559 witness bytes, `QS_DEGREE = 9`), DSTs, combination
+`(45, "mous\x01l0")` and the `Arith/MoussakaUnbound.lean` systems as evaluator
+(`Unbound.IssueStmt`, `Unbound.RedeemStmt`, `Prob/MoussakaUnbound.lean`), and the executable
+verifier's statements have these properties (`Unbound.moussakaUnboundIssue_stmt`,
+`Unbound.moussakaUnboundRedeem_stmt`), so every bound below is about `moussakaUnboundIssue` and
+`moussakaUnboundRedeem`. In the joint random-oracle and ideal-cipher model (PRF view), for a
+prover with `q_E` cipher queries and `q_k` hash queries of kind `k` (`n` in all), the executable
+verifier accepts and the extractor's candidate is not a witness with probability at most
+
+```
+(q₂₁+1)·2⁻¹⁵⁰ + (q₂₂+1)·ε₂ + (q₂₃+1)·9·2⁻¹²⁸ + 2·q_E²·2⁻²⁵⁶
+  + 2·(openHashEps q + q₁·2⁻²⁵⁶) + 1024·q_E·q₁·2⁻²⁵⁶ + chainHitEps q [+ comb hits],
+ε₂ = ε_QS(3816) (issuance),   ε₂ = ε_QS(7929) + 2⁻¹²⁸ + (n+339)·2⁻⁴⁴⁸ (redemption, ≤ 64 Anchors),
+```
+
+the base relations' bound with the unbound constraint counts (`IC.moussakaUnboundIssue_accept_le_full`,
+`IC.moussakaUnboundRedeem_accept_le_full`; with the binding, dead-leaf and chain terms as
+hypotheses, `moussakaUnbound*_accept_le` and `IC.*_accept_le_ic`). The same holds with AES as
+random permutations and inverse queries (`_perm`), for adaptively chosen statements with
+`stmtBindEps q = (q₀+3)(q₂₁+q₀+4)·2⁻²⁵⁶` added (`_adaptive`, `_adaptive_perm`; `hinj` holds for
+the executable statements when `t` has a fixed length, resp. the family is injective on
+`(Anchor digests, nf, ctx_iss, ctx_red, challenge_digest)` with fixed lengths,
+`hinj_moussakaUnboundIssue`, `hinj_moussakaUnboundRedeem`), and for the spec relations
+`Spec.MoussakaUnbound.IssueRel`, `RedeemRel` (`_spec`; `|t| = 45`, `|nf| = 24`). Against one SHAKE
+oracle the side condition is `combOk_moussakaUnbound*`.
 
 ---
 
@@ -389,19 +438,23 @@ contexts: in world 0 they are redemptions of one token, in world 1 of the two di
 
 ```
 (a) colluding:      Adv^anon-u ≤ 2·ε_ZK^joint + 2·Adv^prf-t_2
-(b) non-colluding:  Adv^anon-u ≤ 2·ε_ZK^joint|_red + 2·Adv^prf_2 + 2·(φ₀ + φ₁)
+(b) non-colluding:  Adv^anon-u ≤ 2·ε_ZK^joint|_red + 2·Adv^prf_2 + 2·(ψ₀ + ψ₁),   ψ_c ≤ κ + φ_c
 ```
 
-where `ε_ZK^joint` covers the two issuance proofs and all redemption proofs of the game (§3.1, UF6),
-and in (b) `A` sees only the redemptions, the Anchors are honest, and `φ_c` is the base note's
-abort term (the probability that `DerivePreimage_{sk_c}` fails on the Client's commitment;
-`E[φ_c] ≤ δ_c^{255}` over the vinegar oracle, no assumption on `UCom`).
+where `ε_ZK^joint` covers the two issuance proofs and all redemption proofs of the game (§3.1, UF6).
+In (b) `A` sees only the redemptions, the Anchors are honest, and every queried Anchor Set contains
+both issuers' keys. `ψ_c` is the probability that Anchor `c`'s `unbound_issue_response` returns
+nothing on a fresh honest request. It is at most `κ + φ_c`: `κ` is the completeness error of the
+issuance proof system on honest requests (`0` for a perfectly complete one), and `φ_c` is the base note's abort
+term, the probability that `DerivePreimage_{sk_c}` fails on `UCom(k, ctx_iss, r)` for uniform
+`(k, r)` (`E[φ_c] ≤ δ_c^{255}` over the vinegar oracle, no assumption on `UCom`).
 
 *Proof (a).*
 1. In each world replace every proof by a simulated one (`ε_ZK^joint` per world). The statements
    are adversarially chosen (`S`, `ctx_red`, `cd`, the responses), which the two-phase ZK definition
    allows. The simulator needs only the statements, which contain `nf = Derive(k_j, ctx_red)` for
-   the answering token `j`.
+   the answering token `j`. With adaptive queries the `j`-th hop fixes the coins of every other
+   proof; the statement of proof `j` is then fixed by the earlier answers.
 2. Now `A`'s view is a function of `t₀, t₁`, its own responses, the statements, the answers
    `Derive(k_{i⊕(b∧w)}, ctx_red)` of its queries, and the simulator coins. `r₀, r₁` and the
    preimages `s⁰, s¹` enter nothing else.
@@ -413,33 +466,76 @@ abort term (the probability that `DerivePreimage_{sk_c}` fails on the Client's c
    `σ_W(F₀, F₁) = (F′₀, F′₁)`, `F′_i(c) = F_{i ⊕ W(c)}(c)`, is a bijection on pairs of functions
    (an involution), so it preserves their uniform distribution, and the answers in world 1 under
    `(F₀, F₁)` are the answers in world 0 under `σ_W(F₀, F₁)`. Everything else in the view is the
-   same in both worlds. For an adaptive choice of `W` the same holds by lazy sampling: when a fresh
-   `c` is first queried, its flag is fixed and `(F₀(c), F₁(c))` is drawn fresh, and the pair is
-   exchangeable and independent of the past. ([Lean] for a fixed `W` and any adaptive queries:
-   `Protocols/MoussakaUnbound.lean`, `swap_invariant`, and the assembly `anonymity_unbound`.)
+   same in both worlds. With adaptive queries `W` depends on `(F₀, F₁)` through the earlier
+   answers. Take `W_F` to be the pattern of the run in world 1 on `F` (the flag of the first query
+   in each context). The run in world 0 on `σ_{W_F}(F)` makes the same queries and gets the same
+   answers, so it has the same pattern; hence `F ↦ σ_{W_F}(F)` is still a bijection, with inverse
+   `G ↦ σ_{W'_G}(G)` for the pattern `W'_G` of the run in world 0 on `G`. This is the eager form of
+   the lazy-sampling argument: when a fresh `c` is first queried, its flag is fixed and the
+   exchangeable pair `(F₀(c), F₁(c))` is drawn fresh. ([Lean] for a fixed `W`:
+   `Protocols/MoussakaUnbound.lean`, `swap_invariant`, `anonymity_unbound`; for adaptive `W`:
+   `Privacy/MoussakaUnboundAd.lean`, `run_swapF`, `pr_run_swap`.)
 5. Hence `|Pr[b' = 1 | 1] − Pr[b' = 1 | 0]| ≤ 2·ε_ZK^joint + 2·Adv^prf-t_2`. ∎
 
-**[Lean] `lean/VoleMole/Privacy/MoussakaUnbound.lean`, Theorem U5(a) on the executable spec.** The
-game above on `Spec/MoussakaUnbound.lean`'s `issueRequest`, `finalizeIssue` and `redeemRequest`
-(with the C++ `find_issuer`), with the seed expansions' outputs `(nf_key, r, ρ_iss)` and every
-`ρ_red` uniform, `n` redemption queries `(i, w, S, ctx_red, cd)` chosen after issuance, and the
-refusal rule (both tokens finalized, both redeemable in every queried set, and the context rule).
-`anonymity`: the two worlds differ by at most `4εI + 2n·εR + 2εprf`, from
-- per-proof zero knowledge of both unbound relations (`ZeroKnowledge` for `IssueRelW`, `RedeemRelW`;
-  each hop is one proof, so the joint `ε_ZK^joint` is the sum `2εI + n·εR` per world; on `main` the
-  per-proof hypothesis fails, as for the bound relations, UF6), and
-- the PRF hypothesis for the explicit reductions (`prfAdv`, `reduction`): given `t₀, t₁`,
-  distinguish the table `c, ctx ↦ Derive(k_c, ctx)` from a uniform table.
-
-Step 4 is `idealGame_eq`: the involution `swapF` of the uniform table maps world 1 to world 0. The
-redemption queries are chosen non-adaptively (after issuance, before any redemption); adaptive
-queries need the lazy-sampling argument above, which is on paper only.
-
 *Proof (b).* As (a), but `A` sees neither issuance, so the issuance proofs are never shown and not
-simulated, the `t_i` are not leaked (the PRF hop is `Adv^prf_2`), and the refusal bit must be
-symmetrized as in base (b'): with the Client taking its index from `S`, the refusal bit is
-`acc(x₀) ∧ acc(x₁) ∧ K₀ ∧ K₁` unless a `DerivePreimage` fails, `φ₀ + φ₁` per world. Step 4 is
-unchanged. ∎
+simulated, and the `t_i` are not leaked: the PRF hop is `Adv^prf_2`. Before that hop the refusal bit
+must be removed. With both issuers in every queried set (on `main` the Client finds its Anchor
+itself, so this replaces the base note's "indices the Client takes from `S`"), the bit is "both
+honest issuances succeeded". Replace it by `true`; the worlds are identical until an honest
+issuance fails, `ψ₀ + ψ₁` per world. Step 4 is unchanged. ∎
+
+*Correction (UF7).* An earlier version of this proof replaced the refusal bit by
+`acc(x₀) ∧ acc(x₁) ∧ K₀ ∧ K₁`, with `acc(x_c)` the Anchor's verdict on Client `c`'s issuance proof,
+and paid only `φ₀ + φ₁`. That bit is not available to the PRF reduction: `acc(x_c)` is the verifier
+run on a real proof for the key `k_c`. In the base note's 4(b) this was harmless (no PRF hop
+follows; the final swap exchanges whole tapes). Here `acc` has to go as well, which costs `κ`
+per Client and is `0` for a complete proof system.
+
+**[Lean] Theorem U5(a) on the executable spec.** The game above on `Spec/MoussakaUnbound.lean`'s
+`issueRequest`, `finalizeIssue` and `redeemRequest` (with the C++ `find_issuer`), with the seed
+expansions' outputs `(nf_key, r, ρ_iss)` and every `ρ_red` uniform.
+- `Privacy/MoussakaUnboundAd.lean`, **`anonymityAd`**: `n` **adaptive** redemption queries
+  `(i, w, S, ctx_red, cd)`, each a function of the two issuance requests and the history of earlier
+  queries and answers. If a token does not finalize the guess sees nothing; otherwise each query is
+  answered if both tokens are redeemable in `S` and every earlier query in its context had its
+  flag (`ctxOk`), and refused otherwise. Both conditions are functions of the adversary's view. The
+  two worlds differ by at most `4εI + 2n·εR + 2εprf`. The hops: `gameAd_hop₀`, `gameAd_hop₁`
+  (issuance proofs), `gameAd_hopRed` (all `n` redemption proofs, from the generic adaptive hybrid
+  `interact_close`), `viewAd_redSim` and `prf_hopAd` (the PRF hop), `idealGameAd_eq` (step 4, with
+  the table-dependent involution of `pr_run_swap`).
+- `Privacy/MoussakaUnbound.lean`, `anonymity`: the same bound for `n` queries fixed after issuance
+  (all refused if any breaks the rule). It is the special case of queries that ignore the history,
+  up to that refusal convention.
+
+**The hypotheses** (both files):
+- **Zero knowledge, per proof.** `ZeroKnowledge IssueRelW (proveR PI) simI εI` and
+  `ZeroKnowledge RedeemRelW (proveR PR) simR εR` (`Privacy/Basic.lean`): for every statement and
+  witness in the relation, the prover's output under a uniform 16-byte `ρ` and the simulator's
+  output are `ε`-close against distinguishers that may know the witness. Each hop replaces one
+  proof, so the joint `ε_ZK^joint` of the theorem is the sum `2εI + n·εR` per world. This is the
+  form `lean/docs/zk.md` establishes with **dedicated label rows**. On `main` (CRT masks from the
+  witness, `REUSE_CRT_WITNESS = true`) no efficient simulator meets it: the label term is a joint
+  term over the `H₅` queries (§3.1, UF6), and the joint (PU) hop that replaces it is on paper, as
+  for the base protocol. So the mechanized U5 applies to `main` only through that paper step.
+- **The PRF.** `prfAdv A.ci (reductionAd …) ≤ εprf` (`Adv^prf-t_2`): given `t₀, t₁`, distinguish the
+  table `c, ctx ↦ Derive(k_c, ctx)` from a uniform table. It is stated for the explicit reductions
+  (the adversary with the simulator coins fixed, reading the table at the contexts it queries,
+  adaptively) and is an assumption on Keccak-p[800,12] (§3.2, §10 item 1), not a theorem.
+
+**[Lean] Theorem U5(b) on the executable spec.** `Privacy/MoussakaUnboundNC.lean`: the Moderator
+alone (`AdversaryNC`), with `n` adaptive queries and the rules of (a); honest Anchors run
+`issueResponse` (`unbound_issue_response`, `src/ihat/ihat.cpp:369-380`) with signers correct for
+their keys; every queried Anchor Set contains both issuers' keys (`Contains`). The issuance proof
+system is arbitrary.
+- **`anonymityNC`**: `≤ 2n·εR + 2·(ψ₀ + ψ₁) + 2εprf`, from `real_sim_NC` (`n·εR`), `simNC_iff`
+  (the view reads the keys only through the nullifier table), `sim_hyb_NC` (the abort term `psi`),
+  `prf_hop_NC` (`prfAdvNC`, `Adv^prf_2` of `reductionNC`), `idealNC_eq`.
+- `psi_le`: `ψ_c ≤ κ + φ_c` (`kappa`, `phiU`); `kappa_eq_zero`: `κ = 0` if the issuance proof system
+  is complete (`NIZK.Correct`); **`anonymityNC_complete`**: `≤ 2n·εR + 2·(φ₀ + φ₁) + 2εprf`.
+- **`anonymityNC_vinegarRO`**: averaged over the Anchors' vinegar tables, for signers that fail only
+  if all 256 vinegars at the target are bad, `≤ 2n·εR + 2·(δ₀²⁵⁶ + δ₁²⁵⁶) + 2εprf`.
+  `Audit/Nonvacuous.lean` instantiates it with pqov's signer model.
+The zero-knowledge hypothesis is the per-proof one above, for the redemption relation only.
 
 **Remarks.**
 - The base note's 4(b) needed no Keccak assumption, because the bound nullifiers are uniform seed
@@ -501,17 +597,25 @@ the base protocol.
 1. The PRF-with-commitment, key-recovery and key-second-preimage assumptions on Keccak-p[800,12]
    are new and are supported only by generic estimates; structural cryptanalysis of 12-round
    Keccak-p[800] with 128-bit keys and 192-bit truncation is outside this note.
-2. The random-oracle bounds of `lean/ROM/` (and the probabilistic wrappers of the extraction
-   theorems) are mechanized for the five base relations only. For the unbound relations the
-   deterministic end-to-end extraction (`EndToEnd/MoussakaUnbound.lean`), the arithmetization, the
-   domain separation and the byte-level spec (checked against the C++ KAT) are mechanized; the
-   executable verifier and prover (`Verifier/Relations.lean`, so that `lake exe verifier_vectors`
-   also checks the proofs of `unbound_ihat_kat.txt`) are not extended.
-3. Thm U5(a) is mechanized on the executable spec with non-adaptive redemption queries
-   (`Privacy/MoussakaUnbound.lean`); adaptively chosen queries (lazy sampling) and Thm U5(b) are on
-   paper only.
-4. As for the base protocol, the per-proof zero-knowledge hypothesis of the mechanized Thm U5 holds
-   only with dedicated label rows; on `main` the joint (PU) hop is on paper.
+2. Extraction for the unbound relations is mechanized to the same extent as for the base
+   relations (§2): executable verifier and prover checked against the KATs, bridge, completeness,
+   and the random-oracle and ideal-cipher bounds (fixed and adaptive statements, PRF and
+   permutation views, spec relations) for the executable statements. What remains is what remains
+   for the base relations (`lean/README.md`, Gaps).
+3. Thm U5(a) and (b) are mechanized on the executable spec with adaptive redemption queries
+   (`Privacy/MoussakaUnboundAd.lean`, `anonymityAd`; `Privacy/MoussakaUnboundNC.lean`,
+   `anonymityNC`, `anonymityNC_complete`, `anonymityNC_vinegarRO`). They rest on two hypotheses
+   that stay hypotheses: per-proof zero knowledge (item 4) and the PRF advantage of the explicit
+   reductions (item 1). The proof of (b) needed a correction (UF7). Two modelling restrictions
+   remain: the number `n` of redemption queries is fixed in advance, and in (b) every queried
+   Anchor Set must contain both issuers' keys (as for base 4(b) with `find_issuer`). Further honest
+   sessions around the challenge, as in base `Privacy/MoussakaAdaptive.lean`, are not modelled.
+4. The mechanized Thm U5 takes **per-proof** zero knowledge (`ZeroKnowledge` for `IssueRelW` and
+   `RedeemRelW`, against distinguishers that know the witness). That hypothesis holds with
+   dedicated label rows (`lean/docs/zk.md`). On `main` the CRT masks come from the witness, the
+   label term is joint over the `H₅` queries (§3.1), and no per-proof simulator exists; the joint
+   (PU) hop that replaces it is on paper, as for the base protocol. The theorems do not take the
+   joint hypothesis.
 
 ---
 
@@ -534,6 +638,51 @@ All in `lean/VoleMole/`; no `sorry`, no axioms beyond the standard three.
   `tests/ihat/unbound_ihat_kat.txt` that does not depend on the VOLEitH internals.
 - `EndToEnd/MoussakaUnbound.lean`: degree bounds and the end-to-end extraction theorems for both
   unbound relations (§2).
-- `Privacy/MoussakaUnbound.lean`: Theorem U5(a) on the executable spec (`anonymity`), with
-  `close_pi` (`n` independent hops), `simGame_iff`, `prf_hop` and `idealGame_eq` (§6).
+- `Privacy/MoussakaUnbound.lean`: Theorem U5(a) on the executable spec with queries fixed after
+  issuance (`anonymity`), with `close_pi` (`n` independent hops), `simGame_iff`, `prf_hop` and
+  `idealGame_eq` (§6).
+- `Privacy/MoussakaUnboundAd.lean`: Theorem U5(a) with adaptive redemption queries
+  (`anonymityAd`, `4εI + 2n·εR + 2εprf`). Generic pieces: `interact` (an adaptive interaction with
+  `n` oracles and a refusal rule), `interact_close` (the `n`-step hybrid over independent oracle
+  tapes), `interact_congr_of`, `firstFlag_of_prefix`, `run_swapF` and `pr_run_swap` (step 4 for
+  adaptive queries: a table-dependent involution of the uniform table) (§6).
+- `Privacy/MoussakaUnboundNC.lean`: Theorem U5(b) with adaptive redemption queries, corrected
+  (`anonymityNC`, `2n·εR + 2·(ψ₀ + ψ₁) + 2εprf`; `psi_le`, `kappa_eq_zero`, `anonymityNC_complete`;
+  `anonymityNC_vinegarRO`, `2n·εR + 2·(δ₀²⁵⁶ + δ₁²⁵⁶) + 2εprf`), with the honest Anchor's
+  `issueResponse` (§6).
+- `Audit/Nonvacuous.lean`, section `Unbound`: `anonymityAd` for a constant-guess adversary
+  (`εprf = 0`) and `anonymityNC_vinegarRO` with pqov's signer, a Moderator whose sets contain both
+  issuers, and a complete issuance proof system.
 - `Protocols/DomainSeparation.lean`: the unbound rows (`mousU`).
+- `Verifier/Relations.lean`: the verifier statements `moussakaUnboundIssue`,
+  `moussakaUnboundRedeem`; `Verifier/UovEval.lean`: `moussakaUnboundRedeemValues` (UOV terms over
+  arrays) `= uRedeemValues` (`moussakaUnboundRedeemValues_eq`). `lake exe verifier_vectors`
+  (`Verifier/Kats.lean`, `moussakaUnbound`) verifies every proof of `unbound_ihat_kat.txt` and
+  rejects mutations; `lake exe prover_vectors` (`Verifier/ProverKats.lean`) reproduces them byte
+  for byte, plus random statements of both relations.
+- `Verifier/Bridge/Relations.lean`: `moussakaUnboundIssue_values`, `moussakaUnboundRedeem_values`,
+  `moussakaUnboundIssue_accept`, `moussakaUnboundRedeem_accept`;
+  `Verifier/Bridge/ChainRelations.lean`: `moussakaUnboundIssue_extract_chain`,
+  `moussakaUnboundRedeem_extract_chain`; `Verifier/Bridge/Prover.lean`, `Bridge/Complete.lean`:
+  `moussakaUnbound*_complete`, `*_complete_tables`, `*_complete_shake`;
+  `EndToEnd/MoussakaUnbound.lean`: `moussaka_unbound_redeem_comb_bad_gf128`.
+- `Prob/MoussakaUnbound.lean`: the statement properties `Unbound.IssueStmt`, `Unbound.RedeemStmt`
+  (C++ parameters, DSTs, combination, the Arith systems as evaluator), the link to the executable
+  statements (`Unbound.moussakaUnboundIssue_stmt`, `moussakaUnboundRedeem_stmt`), the per-chain
+  extraction for any such statement (`Unbound.issue_extract_chain`, `redeem_extract_chain`), and
+  one chain with uniform challenges (`Prob.moussakaUnboundIssue_chain_prob`:
+  `≤ 2⁻¹⁵⁰ + ε_QS(3816)`, `moussakaUnboundRedeem_chain_prob`: `≤ 2⁻¹⁵⁰ + ε_QS(7929) + 2⁻¹²⁸`).
+- `ROM/MoussakaUnbound.lean`: against the random oracle (`moussakaUnboundIssue_accept_le`,
+  `moussakaUnboundRedeem_accept_le`), in the joint random-oracle and ideal-cipher model with
+  binding explicit (`IC.*_accept_le_ic`) and every term explicit (`IC.*_accept_le_full`), with AES
+  as random permutations and inverse queries (`IC.*_accept_le_perm`); `combOk_moussakaUnbound*`.
+- `ROM/MoussakaUnboundAdapt.lean`: adaptively chosen statements (`IC.*_accept_le_adaptive`,
+  `IC.*_accept_le_adaptive_perm`), plus `stmtBindEps q`.
+- `EndToEnd/MoussakaUnboundSpec.lean`: arithmetized → spec (`SpecRel.uIssueRel_of_wit`,
+  `uRedeemRel_of_wit`), and `hinj` for the C++ instance encodings (`hinj_unboundIssue`,
+  `hinj_unboundRedeem`; at the executable statements `hinj_moussakaUnboundIssue`,
+  `hinj_moussakaUnboundRedeem`).
+- `ROM/MoussakaUnboundSpec.lean`: the eight headline bounds for `Spec.MoussakaUnbound.IssueRel`,
+  `RedeemRel` (`IC.*_spec`).
+- `Audit/UnboundROM.lean`: non-vacuity of the headline bounds at the executable statements
+  (trivial prover; families with more than one instance).

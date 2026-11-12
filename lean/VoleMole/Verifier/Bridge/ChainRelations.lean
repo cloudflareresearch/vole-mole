@@ -3,7 +3,8 @@ import VoleMole.Verifier.Bridge.Chain
 /-!
 # Bridge, per relation: extraction from the executable verifier's chains
 
-`EndToEnd/Concrete.lean`'s `*_extract_gf128`, with `Claim4Hyp` and the accepting equation on the
+`EndToEnd/Concrete.lean`'s `*_extract_gf128` (and, for unbound Moussaka,
+`EndToEnd/MoussakaUnbound.lean`'s `moussaka_unbound_*_extract` at `GF128`), with `Claim4Hyp` and the accepting equation on the
 whole accepting set discharged for the executable verifier (`chain_claim4`, at faest-arch-opt's CRT
 tables, `liftInvOk_tables`). For a chain `ch` of the relation's statement and a set `A` of
 challenges on the chain (`Chain.OnChain`; `onChain_of_accept` puts every accepted proof of the
@@ -87,6 +88,46 @@ theorem moussakaRedeem_extract_chain {Ch : Type*} (anchors : List UovPk) (nf ctx
   · exact Or.inr (few_of_card_le_one hA1 Z δ hδ acc hclaim1 (by norm_num))
   obtain ⟨uStar, R, hR, hK, hacc⟩ := chain_claim4 liftInvOk_tables (moussakaRedeem anchors nf ctxIss ctxRed challengeDigest labelRows) ch _ hvals (Degree.moussaka_redeem_deg _ _ _ _ _ _ _) hA hAS hkos hL2
   exact moussaka_redeem_extract_gf128 _ _ _ _ _ hK (ch.dc (moussakaRedeem anchors nf ctxIss ctxRed challengeDigest labelRows)) _ _ _ _ R hR hacc
+    (hQS (by omega) uStar hK.consistent) (hcomb (by omega) uStar hK.consistent) Z δ hδ acc hclaim1
+
+/-- **Unbound Moussaka issuance, from the executable verifier's chains.** -/
+theorem moussakaUnboundIssue_extract_chain {Ch : Type*} (t ctxIss : ByteArray) (labelRows : Bool) (ch : Chain)
+    (hvals : ∀ x, ch.vals x = (moussakaUnboundIssueSys t ctxIss).values x) {A : Finset Blocks}
+    (hA : ∀ Δ ∈ A, ch.OnChain (moussakaUnboundIssue t ctxIss labelRows) CrtGen.tables Δ) {S : Set Blocks} (hAS : (A : Set Blocks) ⊆ S)
+    (hkos : Seed.KOSGood ch.kosCh S (lift CrtGen.tables) (ch.kosQ (moussakaUnboundIssue t ctxIss labelRows) CrtGen.tables) (ch.kosD (moussakaUnboundIssue t ctxIss labelRows) CrtGen.tables))
+    {known : Finset (Fin BAVC.tau)} (hL2 : ∀ i ∉ known, IsFixed (A : Set Blocks) i)
+    (hQS : 2 ≤ A.card → ∀ uStar, (∀ j, ∃ v, ∀ Δ ∈ A, ch.Qw (moussakaUnboundIssue t ctxIss labelRows) CrtGen.tables j Δ = v + uStar j * lift CrtGen.tables Δ) →
+      ¬(moussakaUnboundIssueSys t ctxIss).Holds (wStar uStar (ch.dc (moussakaUnboundIssue t ctxIss labelRows))) →
+      Seed.zkHash _ (gfOfBytes ch.chal2 0) (gfOfBytes ch.chal2 16) (gfOfBytes ch.chal2 32) ⟨W128.word ch.chal2 48, 0⟩ (valVec (moussakaUnboundIssueSys t ctxIss) (wStar uStar (ch.dc (moussakaUnboundIssue t ctxIss labelRows)))) ≠ 0)
+    (Z : Finset Ch) (δ : Ch → Blocks) (hδ : Set.InjOn δ Z) (acc : Ch → Prop) [DecidablePred acc]
+    (hclaim1 : ∀ x ∈ Z, acc x → δ x ∈ A) :
+    (∃ i ∈ known, moussakaUnboundIssueWit (fun k => fnOf t k.val) (fnOf ctxIss) (candidate (F := GF128) (ch.u (moussakaUnboundIssue t ctxIss labelRows)) (ch.dc (moussakaUnboundIssue t ctxIss labelRows)) i)) ∨
+      #{x ∈ Z | acc x} ≤ 9 := by
+  by_cases hA1 : A.card ≤ 1
+  · exact Or.inr (few_of_card_le_one hA1 Z δ hδ acc hclaim1 (by norm_num))
+  obtain ⟨uStar, R, hR, hK, hacc⟩ := chain_claim4 liftInvOk_tables (moussakaUnboundIssue t ctxIss labelRows) ch _ hvals (Degree.moussaka_unbound_issue_deg _ _) hA hAS hkos hL2
+  exact moussaka_unbound_issue_extract _ _ hK (ch.dc (moussakaUnboundIssue t ctxIss labelRows)) _ _ _ _ R hR hacc
+    (hQS (by omega) uStar hK.consistent) Z δ hδ acc hclaim1
+
+/-- **Unbound Moussaka redemption, from the executable verifier's chains.** -/
+theorem moussakaUnboundRedeem_extract_chain {Ch : Type*} (anchors : List UovPk) (nf ctxIss ctxRed challengeDigest : ByteArray) (labelRows : Bool) (ch : Chain)
+    (l : Fin Moussaka.M → GF128) (hvals : ∀ x, ch.vals x = (moussakaUnboundRedeemSysL anchors nf ctxIss ctxRed l).values x) {A : Finset Blocks}
+    (hA : ∀ Δ ∈ A, ch.OnChain (moussakaUnboundRedeem anchors nf ctxIss ctxRed challengeDigest labelRows) CrtGen.tables Δ) {S : Set Blocks} (hAS : (A : Set Blocks) ⊆ S)
+    (hkos : Seed.KOSGood ch.kosCh S (lift CrtGen.tables) (ch.kosQ (moussakaUnboundRedeem anchors nf ctxIss ctxRed challengeDigest labelRows) CrtGen.tables) (ch.kosD (moussakaUnboundRedeem anchors nf ctxIss ctxRed challengeDigest labelRows) CrtGen.tables))
+    {known : Finset (Fin BAVC.tau)} (hL2 : ∀ i ∉ known, IsFixed (A : Set Blocks) i)
+    (hQS : 2 ≤ A.card → ∀ uStar, (∀ j, ∃ v, ∀ Δ ∈ A, ch.Qw (moussakaUnboundRedeem anchors nf ctxIss ctxRed challengeDigest labelRows) CrtGen.tables j Δ = v + uStar j * lift CrtGen.tables Δ) →
+      ¬(moussakaUnboundRedeemSysL anchors nf ctxIss ctxRed l).Holds (wStar uStar (ch.dc (moussakaUnboundRedeem anchors nf ctxIss ctxRed challengeDigest labelRows))) →
+      Seed.zkHash _ (gfOfBytes ch.chal2 0) (gfOfBytes ch.chal2 16) (gfOfBytes ch.chal2 32) ⟨W128.word ch.chal2 48, 0⟩ (valVec (moussakaUnboundRedeemSysL anchors nf ctxIss ctxRed l) (wStar uStar (ch.dc (moussakaUnboundRedeem anchors nf ctxIss ctxRed challengeDigest labelRows)))) ≠ 0)
+    (hcomb : 2 ≤ A.card → ∀ uStar, (∀ j, ∃ v, ∀ Δ ∈ A, ch.Qw (moussakaUnboundRedeem anchors nf ctxIss ctxRed challengeDigest labelRows) CrtGen.tables j Δ = v + uStar j * lift CrtGen.tables Δ) →
+      (moussakaUnboundRedeemSysL anchors nf ctxIss ctxRed l).Holds (wStar uStar (ch.dc (moussakaUnboundRedeem anchors nf ctxIss ctxRed challengeDigest labelRows))) → moussakaUnboundRedeemWit GF256.ofBits (anchors.map UovPk.map) (fnOf nf) (fnOf ctxIss) (fnOf ctxRed) (wStar uStar (ch.dc (moussakaUnboundRedeem anchors nf ctxIss ctxRed challengeDigest labelRows))))
+    (Z : Finset Ch) (δ : Ch → Blocks) (hδ : Set.InjOn δ Z) (acc : Ch → Prop) [DecidablePred acc]
+    (hclaim1 : ∀ x ∈ Z, acc x → δ x ∈ A) :
+    (∃ i ∈ known, moussakaUnboundRedeemWit GF256.ofBits (anchors.map UovPk.map) (fnOf nf) (fnOf ctxIss) (fnOf ctxRed) (candidate (F := GF128) (ch.u (moussakaUnboundRedeem anchors nf ctxIss ctxRed challengeDigest labelRows)) (ch.dc (moussakaUnboundRedeem anchors nf ctxIss ctxRed challengeDigest labelRows)) i)) ∨
+      #{x ∈ Z | acc x} ≤ 9 := by
+  by_cases hA1 : A.card ≤ 1
+  · exact Or.inr (few_of_card_le_one hA1 Z δ hδ acc hclaim1 (by norm_num))
+  obtain ⟨uStar, R, hR, hK, hacc⟩ := chain_claim4 liftInvOk_tables (moussakaUnboundRedeem anchors nf ctxIss ctxRed challengeDigest labelRows) ch _ hvals (Degree.moussaka_unbound_redeem_deg _ _ _ _ _ _ _) hA hAS hkos hL2
+  exact moussaka_unbound_redeem_extract beta GF256.toBits GF256.ofBits _ _ _ _ _ hK (ch.dc (moussakaUnboundRedeem anchors nf ctxIss ctxRed challengeDigest labelRows)) _ _ _ _ R hR hacc
     (hQS (by omega) uStar hK.consistent) (hcomb (by omega) uStar hK.consistent) Z δ hδ acc hclaim1
 
 /-- **Ratatouille issuance, from the executable verifier's chains.** -/

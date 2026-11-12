@@ -16,7 +16,9 @@ inverse queries and the extractor reading the forward-and-inverse records (`*_ac
 `*_accept_le_adaptive_perm`, all five relations), with `p = 1/(2¹²⁸ − q_E)` per fresh cipher value
 in place of `2⁻¹²⁸` and a point-tied Post (finding F3); no PRP/PRF switching term. **The spec
 relations (§2i)**: every one of these bounds also holds for the decoded witness and the byte-level
-spec relation, for well-formed instances (`ROM/SpecSound.lean`, `*_spec`). Scope: the classical
+spec relation, for well-formed instances (`ROM/SpecSound.lean`, `*_spec`). **The unbound Moussaka
+relations (§2j)**: all of the above for any statement with the unbound relations' parameters and
+systems (`ROM/MoussakaUnbound*.lean`). Scope: the classical
 (ROM + ideal cipher) proof of knowledge of `docs/extraction/README.md`. Zero knowledge (mechanized
 separately, `ZK/` and `Privacy/`, `docs/zk.md` §10) and the QROM documents (Q1–Q7) are out of
 scope here.
@@ -934,7 +936,61 @@ none for spend and PomFRIT (the spec relation `PomRel`: `P(s) = h ⊕ r` with `h
 target `pomfritTarget` at its `chal1`, which is `Spec.PomFRIT.hashToTarget` in `main`'s layout).
 The adaptive versions keep `hinj` (above).
 
-### 2j. Protocol games from single-proof extraction, as implemented
+### 2j. The unbound Moussaka relations
+
+Files: `Prob/MoussakaUnbound.lean`, `ROM/MoussakaUnbound.lean`, `ROM/MoussakaUnboundAdapt.lean`,
+`EndToEnd/MoussakaUnboundSpec.lean`, `ROM/MoussakaUnboundSpec.lean`, `Audit/UnboundROM.lean` (new; the base relations' files unchanged). `#print axioms` of the headline results: `propext`,
+`Classical.choice`, `Quot.sound`.
+
+Every generic theorem of §2c–§2i is stated for an arbitrary `Statement`; the per-relation
+theorems only add the relation's system, its length, the per-chain extraction and, for the
+combined relations, the `l` failure count. The theorems for the unbound relations
+(`security/moussaka-unbound.md`) are stated once, **for any statement with the properties they use** (`Unbound.IssueStmt`,
+`Unbound.RedeemStmt`): the parameters (232 resp. 559 witness bytes, `QS_DEGREE = 9`, label rows
+`lr`), the DST, non-delayed binding, the combination `(45, "mous\x01l0")` for redemption, and
+`values = System.values` of `Arith.MoussakaUnbound.uIssueSystem` / `uRedeemSystem` at the instance
+(with `l` decoded by `combinationOf`). The per-chain step (`Unbound.issue_extract_chain`,
+`redeem_extract_chain`) destructures the statement and substitutes the parameters, after which
+`chain_claim4` and `moussaka_unbound_*_extract` apply as for the base relations. The results, with
+the base relations' terms and `n' = 3816` (issuance), `7929` (redemption):
+`Prob.moussakaUnbound*_chain_prob`, `ROM.moussakaUnbound*_accept_le`, `_accept_le_ic`,
+`_accept_le_full`, `_accept_le_perm`, `_accept_le_adaptive`, `_accept_le_adaptive_perm`, and the
+`_spec` versions of the last four (spec relations `Spec.MoussakaUnbound.IssueRel`, `RedeemRel`,
+for `|t| = 45` resp. `|nf| = 24`; no context lengths are needed since the spec reads the contexts
+through `fn`). `hinj` is discharged for the C++ encodings (`SpecRel.hinj_unboundIssue`,
+`hinj_unboundRedeem`). The executable verifier's statements `moussakaUnboundIssue`, `moussakaUnboundRedeem`
+(`Verifier/Relations.lean`) satisfy the properties (`Unbound.moussakaUnboundIssue_stmt`,
+`moussakaUnboundRedeem_stmt`: `rfl` and `moussakaUnbound*_values`), so all of these bounds are
+about the executable verifier.
+
+### 2k. Beyond one proof: the one-more reductions (PomFRIT U1, U2), as implemented
+
+Files: `ROM/OneMore.lean` (generic), `ROM/OneMorePomfrit.lean`. `lean/docs/security/pomfrit.md`
+§6.4 states the results; this note records the modelling.
+
+- **Stateful handlers.** The games are VCVio `simulateQ` runs of one composed adversary (the
+  forger, its verifications and the straight-line extractor) against a `StateT … ProbComp`
+  handler: the world (a lazy random oracle on any spec; for PomFRIT the hash oracles of §2b), a
+  target oracle with hints, and an Issuer function. The reduction is a second handler into the
+  experiment adversary's oracles; VCVio's `simulateQ_StateT_StateT_compose` collapses it with the
+  challenger into one handler (`collapse`).
+- **Programming.** The target oracle's fresh answers come from a list of `n` uniform values; the
+  real game and the collapsed reduction have the same joint distribution of output and state
+  (`real_eqd_comb`), by induction on the computation with the list uniform: at a fresh query the
+  real answer `u` and the reduction's `t − e` correspond under `t = u + e`. VCVio's
+  `evalDistEq_simulateQ_run` (per-query equality from every state) does not apply, since the two
+  handlers differ on the list; and its module is not in the shared build, so the induction is
+  done directly.
+- **Ghost state.** The real game records the programmed target `answer + hint` of each label
+  (`Ch.tg`); `TgInv` and `NoFall` (support invariants, VCVio's `simulateQ_run_preservesInv` and an
+  induction with `IsQueryBoundP`) turn the final events into statements about the oracle's answer
+  and the first hint.
+- **Not done**: the extraction term. The PomFRIT bounds of §2g are for `hash_to_target` = SHAKE
+  inside the statement; the one-more game needs it to be a random oracle (`pomfritRedeemT`, a
+  target-function family), and the per-forgery event to be the adaptive game of a derived prover
+  (pomfrit.md G8).
+
+### 2l. Protocol games from single-proof extraction, as implemented
 
 Files: `ROM/ExtractReduce.lean`, `ROM/VerifierIC.lean` (protocol independent),
 `ROM/RatatouilleBalance.lean` (Ratatouille Theorem 1, `docs/security/ratatouille.md` §4). Nothing
@@ -1006,7 +1062,7 @@ Subtlety: the "parse a prefix from `x`" functions must be total functions of the
 the RO cache *before* the query). This is where L1's "committed data" enters. In M5 take it as
 given via a hypothesis that the committed keys are a function of the prior log.
 
-### M6 — Ideal cipher, L1/L2, the "same chain" step (Phase B, ~3–6 weeks, optional) — done (PRF view; adaptive statements; permutation model with inverse queries; spec relations), see §2d, §2e, §2f, §2g, §2h, §2i
+### M6 — Ideal cipher, L1/L2, the "same chain" step (Phase B, ~3–6 weeks, optional) — done (PRF view; adaptive statements; permutation model with inverse queries; spec relations; the unbound Moussaka relations), see §2d, §2e, §2f, §2g, §2h, §2i, §2j
 
 - Model AES as an ideal cipher: a lazy random *permutation* per key, with forward and inverse
   queries. VCVio has no ready-made ideal cipher that I could find; build it as a stateful

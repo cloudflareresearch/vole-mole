@@ -5,7 +5,8 @@ import VoleMole.Verifier.VectorFile
 # Full verification of the KAT proofs
 
 Runs `Verifier.verify` on every proof in `tests/ihat/ihat_kat.txt` (issuance and
-redemption requests), `tests/act/act_kat.txt` (issuance and spend requests) and
+redemption requests), `tests/ihat/unbound_ihat_kat.txt` (unbound issuance and redemption requests,
+each token redeemed in two redemption contexts), `tests/act/act_kat.txt` (issuance and spend requests) and
 `tests/pomfrit/pomfrit_kat.txt` (blind signatures, with PomFRIT's refresher check), building each
 statement from the KAT fields alone: the UOV public keys are generated in Lean from the compact
 secret keys (`Keygen.compressedPk`, pqov's key generation, then `expand_pk`) or, for PomFRIT, expanded
@@ -135,6 +136,66 @@ def moussaka (c : Ctx) (path : String) : IO Bool := do
         verify Hashes.shake c.T (moussakaRedeem anchors nf ctxIss ctxRed (flip cd 0) c.layouts.moussaka) rproof) && ok
   return ok
 
+/-- Unbound Moussaka (`unbound_ihat_kat.txt`): every issuance request `t ‖ proof` and every
+redemption request `nf ‖ proof` of each token, with the redemption's own `ctx_red` and
+`challenge_digest`. -/
+def moussakaUnbound (c : Ctx) (path : String) : IO Bool := do
+  let mut ok := true
+  let recs := records (← readLines path) "issue_seed"
+  for i in [0:recs.size] do
+    let r := recs[i]!
+    let ctxIss := unhex (get r "ctx_iss")
+    let req := unhex (get r "issue_request")
+    let t := req.extract 0 45
+    let proof := req.extract 45 req.size
+    let st := moussakaUnboundIssue t ctxIss c.layouts.moussaka
+    ok := (← run c s!"unbound moussaka {i} issue" true proof fun _ =>
+      verify Hashes.shake c.T st proof) && ok
+    if i == 0 then
+      for (k, off) in mutations st.params do
+        ok := (← run c s!"unbound moussaka {i} issue, mutated {k}" false proof fun _ =>
+          verify Hashes.shake c.T st (flip proof off)) && ok
+      ok := (← run c s!"unbound moussaka {i} issue, wrong ctx_iss" false proof fun _ =>
+        verify Hashes.shake c.T (moussakaUnboundIssue t (flip ctxIss 0) c.layouts.moussaka) proof) && ok
+      ok := (← run c s!"unbound moussaka {i} issue, wrong t" false proof fun _ =>
+        verify Hashes.shake c.T (moussakaUnboundIssue (flip t 0) ctxIss c.layouts.moussaka) proof) && ok
+      -- The bound relation (another DST and witness length) rejects the unbound proof.
+      ok := (← run c s!"unbound moussaka {i} issue, as a bound issuance" false proof fun _ =>
+        verify Hashes.shake c.T (moussakaIssue t ctxIss c.layouts.moussaka) proof) && ok
+    let anchors ← IO.ofExcept ((getAll r "anchor_sk").toList.mapM c.pk)
+    let reqs := getAll r "redeem_request"
+    let ctxReds := getAll r "ctx_red"
+    let cds := getAll r "challenge_digest"
+    for j in [0:reqs.size] do
+      let rreq := unhex reqs[j]!
+      let ctxRed := unhex ctxReds[j]!
+      let cd := unhex cds[j]!
+      let nf := rreq.extract 0 24
+      let rproof := rreq.extract 24 rreq.size
+      let st := moussakaUnboundRedeem anchors nf ctxIss ctxRed cd c.layouts.moussaka
+      ok := (← run c s!"unbound moussaka {i} redeem {j} ({anchors.length} anchors)" true rproof
+        fun _ => verify Hashes.shake c.T st rproof) && ok
+      if i == 0 && j == 0 then
+        for (k, off) in mutations st.params do
+          ok := (← run c s!"unbound moussaka {i} redeem {j}, mutated {k}" false rproof fun _ =>
+            verify Hashes.shake c.T st (flip rproof off)) && ok
+        ok := (← run c s!"unbound moussaka {i} redeem {j}, wrong challenge_digest" false rproof
+          fun _ => verify Hashes.shake c.T
+            (moussakaUnboundRedeem anchors nf ctxIss ctxRed (flip cd 0) c.layouts.moussaka) rproof) && ok
+        ok := (← run c s!"unbound moussaka {i} redeem {j}, wrong nf" false rproof fun _ =>
+          verify Hashes.shake c.T
+            (moussakaUnboundRedeem anchors (flip nf 0) ctxIss ctxRed cd c.layouts.moussaka) rproof) && ok
+        -- The other redemption context of the same token: same `nf_key`, other `nf`.
+        if h : 1 < ctxReds.size then
+          ok := (← run c s!"unbound moussaka {i} redeem {j}, other ctx_red" false rproof fun _ =>
+            verify Hashes.shake c.T
+              (moussakaUnboundRedeem anchors nf ctxIss (unhex ctxReds[1]) cd c.layouts.moussaka)
+              rproof) && ok
+        ok := (← run c s!"unbound moussaka {i} redeem {j}, wrong ctx_iss" false rproof fun _ =>
+          verify Hashes.shake c.T
+            (moussakaUnboundRedeem anchors nf (flip ctxIss 0) ctxRed cd c.layouts.moussaka) rproof) && ok
+  return ok
+
 def ratatouille (c : Ctx) (path : String) : IO Bool := do
   let mut ok := true
   let recs := records (← readLines path) "issue_seed"
@@ -197,8 +258,10 @@ def main (T : CrtTables) (dumpedRecs : Array Vectors.Record) (dir tests filter :
     (layouts : Layouts) : IO Bool := do
   -- UOV keys: generated from every compact secret key in the KAT files.
   let mousPath := s!"{tests}/ihat/ihat_kat.txt"
+  let unboundPath := s!"{tests}/ihat/unbound_ihat_kat.txt"
   let rataPath := s!"{tests}/act/act_kat.txt"
-  let sks := (getAll (← readLines mousPath) "anchor_sk") ++ (getAll (← readLines rataPath) "issuer_sk")
+  let sks := (getAll (← readLines mousPath) "anchor_sk") ++
+    (getAll (← readLines unboundPath) "anchor_sk") ++ (getAll (← readLines rataPath) "issuer_sk")
   let t0 ← IO.monoMsNow
   let mut cpks : Std.HashMap String ByteArray := {}
   for sk in sks do
@@ -238,10 +301,11 @@ def main (T : CrtTables) (dumpedRecs : Array Vectors.Record) (dir tests filter :
       (match c.pk testSk with | .ok pk => pk.expanded == expTest | .error _ => false)) && ok
     IO.println "  expanded `test` key compared with uov_keys.txt"
   let ok1 ← moussaka c mousPath
+  let ok1u ← moussakaUnbound c unboundPath
   let ok2 ← ratatouille c rataPath
   let ok3 ← pomfrit c s!"{tests}/pomfrit/pomfrit_kat.txt"
   IO.println s!"KAT proofs: {← c.accepted.get} accepted, {← c.rejected.get} mutations rejected, \
-    {if ok1 && ok2 && ok3 then "ok" else "FAILED"}"
-  return ok && ok1 && ok2 && ok3
+    {if ok1 && ok1u && ok2 && ok3 then "ok" else "FAILED"}"
+  return ok && ok1 && ok1u && ok2 && ok3
 
 end VoleMole.Verifier.Kats

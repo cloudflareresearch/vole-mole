@@ -28,7 +28,10 @@ The note builds on these proof-system results:
 - the QROM proof of knowledge (`lean/docs/extraction/Q2-qrom-fiat-shamir.md`).
 
 The combinatorial core of the new lemma (Lemma P) is checked in Lean, in
-`lean/VoleMole/Protocols/PomFRIT.lean`.
+`lean/VoleMole/Protocols/PomFRIT.lean`. The reductions of Theorems U1 and U2 (the game, the
+programming of `hash_to_target`, the one-more preimage experiments) are checked in Lean, in
+`lean/VoleMole/ROM/OneMore.lean` (generic) and `lean/VoleMole/ROM/OneMorePomfrit.lean`, with
+Lemma P's failure probability as an explicit term (§6.4).
 
 Line references are to the working tree at commit `6d7113e`.
 
@@ -36,7 +39,7 @@ Line references are to the working tree at commit `6d7113e`.
 
 | Property | On `main` | With the label-row fix | Section |
 |---|---|---|---|
-| One-more unforgeability (paper Def. 2.5), classical ROM + ideal cipher | **Holds.** Tight under a τ-shift variant of UOV one-more preimage resistance (Thm U2). Under the paper's standard assumption (Def. 3.1) the reduction loses an extra `(Q₃+ℓ+1)·2^{−71}` (Thm U1) | Same (ZK is not used) | §5–§6 |
+| One-more unforgeability (paper Def. 2.5), classical ROM + ideal cipher | **Holds.** Tight under a τ-shift variant of UOV one-more preimage resistance (Thm U2). Under the paper's standard assumption (Def. 3.1) the reduction loses an extra `(Q₃+ℓ+1)·2^{−71}` (Thm U1). [Lean] the game, the programming of `hash_to_target` and the reductions to Def. 3.1 and to A-OMPR⊕τ, with Lemma P's failure probability as the remaining term (`ROM/OneMorePomfrit.lean`, `pomfrit_U1_bound`, `pomfrit_U2_bound`; §6.4) | Same (ZK is not used) | §5–§6 |
 | One-more unforgeability, QROM | **On paper, under new quantum-oracle assumptions** (U1-Q, U2-Q of `lean/docs/extraction/Q7-qrom-multi-extraction.md` §4: database-controlled programming replaces the mid-run extractor). From the paper's A-OMPR with the classical reduction: open, since Q2 extracts only after the run | Same | §7 |
 | Blindness against a malicious Issuer (paper Def. 2.4: malicious key, selective-failure form) | **Fails.** An honest-but-curious Issuer links with advantage ≈ 1 using about 310 SHAKE calls per (signature, session) pair (`lean/docs/zk.md` §4) | **Holds** (Thm B), with advantage `≤ ε_ZK^fix(Q_P = 2) + 2Q_X·2^{−256}`. [Lean] from G1 with (ZK-fix) as a hypothesis (`Privacy/PomFRIT.lean`, `blindness`), and with (ZK-fix) derived for the executable Lean prover with label rows down to its tape hypothesis (`Privacy/PomFRITLean.lean`, `blindness_lean`). In the ROM and ideal-cipher model, for the Lean prover with the Issuer seeing the tables and every term explicit: `≈ 2⁻¹⁰³·⁴` plus budget terms (`blindnessRO_lean_num`), `≈ 2⁻¹⁰³·²` with the Issuer's key, messages and responses reading the tables except `H₂³` (`blindnessRA_lean_num`), `≈ 2⁻¹⁰²·³` with them reading `H₂³` too (joint budget, `blindnessRAH_lean_num`); each also with AES as random permutations (`_perm`), with one shared `H₃` and no `2⁻³⁶⁰` term (`blindnessSh_num`, `blindnessRASh_num`, `blindnessRAHSh_num`), and from the real Clients' OS seeds and `XOF_seed` (G0), `+ 2·(2Q_X + 1)·2⁻²⁵⁶` (`blindness*_seed`). With many sessions (`lean/docs/zk.md` §10.8), each plus budget terms: `n` sessions in one concurrent schedule `≤ n·2⁻¹⁰³` (`blindnessN_lean_le`; `2⁻⁸³` at `2²⁰`, `2⁻⁷¹` at `2³²`), adaptively scheduled `≤ n·2⁻¹⁰²` (`blindnessAd_lean_le_pfx`, the collision term counting `H₂³` prefixes; `2⁻⁸²` at `2²⁰`, `2⁻⁷⁰` at `2³²`; `n·2⁻⁹²` counting keys, `blindnessAd_lean_le`), interleaved, the Issuer starting further sessions and answering them in any order, `≤ (n + 2)·2⁻¹⁰²` for `n` further sessions (`blindnessIL_lean_le`; the same numbers), also with a scheduler that reads the tables and places the challenge itself, `+ 52·L·(a₃ + a₂ + a₅ + 221·a_E)·2⁻¹²⁸` for `L` steps of at most `a` queries each (`blindnessILO_lean_le`), `N` challenge pairs `≤ N·(2N·2⁻¹⁰³ + …)` (`blindnessP_lean_le`) and, with `H₄` a random-oracle table, `≤ N·2⁻¹⁰³ + 32·N²·2⁻¹²⁸` (`blindnessPH_lean_le`; `2⁻⁸³` at `2²⁰` sessions, `2⁻⁶⁰` at `2³²`). Formulas: §8.2; theorem names: §13 | §8 |
 | No selective failure via `finalize_issue`'s check (`pomfrit.cpp:207`) | Holds: the abort event is a function of the Issuer's own view | Holds | §8.3 |
@@ -300,6 +303,11 @@ calls. So the term is tight up to the opening-success factor.
 
 ## 6. One-more unforgeability (classical)
 
+*Status.* The reductions below are mechanized (§6.4): the game, the programming of `H_T`, the
+counting and the union over the `ℓ+1` forgeries, with the advantage against Def. 3.1 (or
+A-OMPR⊕τ) and Lemma P's failure probability as explicit terms. Lemma P's probabilistic steps
+remain on paper (G5); its deterministic steps are in Lean (§13).
+
 ### 6.1 Theorem U1 (standard assumption, paper Def. 3.1)
 
 For every classical adversary `A` against Def. 2.5 with the counts of §1, there is a `B` with
@@ -360,6 +368,77 @@ What Theorems U1/U2 do **not** need:
 - ZK or simulated proofs. The Issuer returns only preimages. So unforgeability holds **on `main`**,
   regardless of `lean/docs/zk.md`'s finding.
 - Strong SE. Plain simultaneous straight-line extraction suffices (L8 §8 table).
+
+### 6.4 In Lean
+
+`lean/VoleMole/ROM/OneMore.lean` (generic, protocol-independent) and
+`lean/VoleMole/ROM/OneMorePomfrit.lean` (PomFRIT), classical random-oracle and ideal-cipher model
+(the cipher a random function per key, the PRF view of `ROM/CipherGame.lean`).
+
+**The game** (`game`). A key from any key generation and any Issuer function `pre sk`; the honest
+Issuer is `honestPre` (`derive_preimage` on the target's 45 bytes). The forger (`Forger`) gets the
+public key and queries the proof system's hashes and the cipher, `H_T` and the Issuer. Then each of
+its `ℓ+1` forgeries `(msg, sig)` is verified as `pomfritVerify` does, with `H_T` in place of
+`hash_to_target` (`verOne`: the refresher check, the verifier up to `chal1`, `H_T` at
+`hash_to_target`'s input `tgtIn`, then `verifyQ` at the statement whose target is `H_T`'s answer,
+`pomfritRedeemT`; with SHAKE128 for `H_T` this is `pomfritRedeem`, `pomfritRedeem_eq_T`,
+`pomfritTarget_eq_tgtIn`). The forger wins (`PomWin`) if all `ℓ+1` verify, the messages are
+pairwise distinct, and it made at most `ℓ` Issuer queries.
+
+**Modelling choices.**
+- `H_T` is a lazy random oracle whose fresh answers are drawn from a list of `n` uniform targets,
+  in order. For a forger with at most `Q_T` `H_T` queries and `n = Q_T + ℓ + 1` (the paper's `n`),
+  the list never runs out (`acomp_bound`, `noFall_of_bound`), so it is a random oracle.
+- Def. 3.1 is stated with *labelled* targets requested one at a time (`omExp`, `goodPre`): each
+  request names a label `x` and receives the next of `n` uniform targets; the win is `ℓ+1`
+  preimages of targets with distinct labels after at most `ℓ` preimage queries. An adversary of
+  Def. 3.1 as written (`t_1 … t_n` up front) simulates the request oracle by taking the targets in
+  order, with the same win. A-OMPR⊕τ is the same experiment with the shift list sent with each
+  request (`goodShift τ`).
+- The reduction's coins (including the cipher table) and the random oracle it simulates for the
+  forger are part of the experiment adversary (a uniform sample and random-oracle access that no
+  one else uses). Running times are not modelled.
+
+**The reduction** (`red`). The forger, wrapped so that every `H_T` query carries a *hint* computed
+from the forger's query log so far (`wrapImpl`: U1 the first-phase value `E₁(x)`, U2 the list of
+at most `τ` shifts), and its verifications, are run with the world and the Issuer forwarded; a
+fresh `H_T` query `x` with hint `e` requests the next target `t` for label `x` and answers
+`t − E₁(x)` (U1) or `t` (U2). The forger never sees a hint. Programming is perfect
+(`real_eqd_comb`: by induction over the computation, the bijection `t = u + e` at each fresh
+query). If the forger wins and every forgery's claim (the first extracted candidate `s` that is a
+preimage of the programmed target) is good, the reduction wins (`omuf_good_le`). Accepted
+forgeries on distinct messages have distinct `H_T` inputs, because the fields before `msg` have
+fixed lengths once the proof has the right length (`tgtIn_inj`, `acomp_support`): the paper's
+"the `x_i` contain `msg_i`, so they are distinct" needs the format check.
+
+**The theorems** (`pomfrit_U1_bound`, `pomfrit_U2_bound`; without the query bound, with the list's
+exhaustion folded into the last term, `pomfrit_U1`, `pomfrit_U2`):
+
+    Pr[PomWin] ≤ Adv^{ompr}_{UOV}(B; Q_T + ℓ + 1, ℓ) + Pr[∃ i ≤ ℓ, PFail_i],
+    Pr[PomWin] ≤ Adv^{ompr⊕τ}_{UOV}(B'; Q_T + ℓ + 1, ℓ) + Pr[∃ i ≤ ℓ, ShiftFail_i],
+
+for every first-phase rule `E₁` (a parameter, `e1`) and every shift rule (`sh`, truncated to `τ`).
+`PFail_i`: forgery `i` verifies, but its claim is not a preimage of `H_T(x_i) + E₁(x_i)`, with
+`H_T(x_i)` the oracle's value and `E₁(x_i)` the value at `x_i`'s *first* `H_T` query (the one the
+reduction programmed). The claim is the first candidate of the straight-line extractor's known
+trees that is a preimage of the target computed from the answer the verification received (`pick`);
+that answer is the oracle's value, so `PFail_i` says that no extracted candidate is such a preimage
+(this consistency is by construction of the lazy oracle and is not a separate Lean lemma).
+`ShiftFail_i`: the same with "a preimage of `H_T(x_i) + δ` for one of the shifts `δ`".
+
+**What remains on paper.** The bound on `Pr[∃ i, PFail_i]`, i.e. Lemma P: for Lemma P's `E₁`,
+`ε_ext(N; q₁, q₂, Q₃ + ℓ + 1) + (Q₃ + ℓ + 1)·2^{−71} + Q_T·q₁·2^{−704}` (for U2 the same without
+the `2^{−71}` term). Lean has its deterministic steps (§13) and, separately, the extraction bound
+for one adaptively chosen statement with `hash_to_target` = SHAKE (`ROM/AdaptPomfrit.lean`,
+`pomfritRedeem_accept_le_adaptive_spec`). Joining them needs (i) that bound for a target-function
+family (`pomfritRedeemT` is the statement; the proof of `ROM/AdaptPomfrit.lean` reads the target
+only through the `μ` preimage and the values), (ii) the per-forgery game identified with the
+adaptive game of a derived prover (the forger with `H_T` answered from the target list and the
+Issuer by the key), which needs the lazy random oracle's consistency (the answer a query receives
+is the table's value at the end), and (iii) Lemma P's own steps: `E₁` computed from the log at the
+`H_T` query equals the extractor's known trees at the end (L1 ordering, `Q_T·q₁·2^{−704}`), and the
+`Shift` bound (`2^{57}` accepted challenges per `H₂³` query when the free tree is in a minority
+prefix group, `minority_card_le`). See G5, G8.
 
 ## 7. One-more unforgeability in the QROM
 
@@ -493,8 +572,12 @@ and `d` at 3075 and 3139; at `Layout.main` the definitions are the spec's, by `r
   left/right difference (`blindness*_seed`). The note's `2Q_X·2^{−256}` names the seed collision
   but does not charge it. In the full random-oracle model it is still right, since `µ₀ ≠ µ₁` keeps
   the two inputs apart and `µ₀ = µ₁` makes the worlds equal; the Lean model keys the table by the
-  seed alone and pays `2^{−256}`. On paper: Lemma DS (c) (the seed XOF's independence from the
-  proof-system oracles, F-DS2) and, for an abstract prover, (ZK-fix) itself.
+  seed alone and pays `2^{−256}`. Lemma DS (c) (the seed XOF's independence from the
+  proof-system oracles, F-DS2) is mechanized on one SHAKE oracle read by every party
+  (`Privacy/SeedXOFDS.lean`, `seedXofDS_two_le`: `(2Q + 1)·2^{−256}`, `Q` counting every
+  evaluation at a string of the seed XOF's shape, proof-system ones included); its composition with
+  the games' separate tables is on paper (`lean/docs/zk.md` §10.6). On paper also, for an abstract
+  prover, (ZK-fix) itself.
 - **[Lean] (ZK-fix) for the executable prover** (`lean/VoleMole/Privacy/PomFRITLean.lean`,
   `ZK/TwoPhase.lean`, `lean/docs/zk.md` §10.1). The Lean prover with dedicated label rows, run as
   `issue_request_with_seed` / `finalize_issue` run it (`leanProver`: step 1 with `r` and
@@ -543,7 +626,8 @@ and `d` at 3075 and 3139; at `Layout.main` the definitions are the spec's, by `r
     cipher (with the cipher's rows uniform functions; with uniform permutations read forward and
     inverse, the PRP/PRF switching term included, the same bound with `εROPm` for `εRO`,
     `blindnessRO_lean_num_perm`, and `blindnessRA_lean_num_perm` for the table-reading Issuer below,
-    `lean/docs/zk.md` §10.4), and Lemma DS (c) for `XOF_seed`; G0 → G1 is mechanized
+    `lean/docs/zk.md` §10.4), and the composition of Lemma DS (c) for `XOF_seed` (mechanized on
+    the single SHAKE oracle, `seedXofDS_le`) with the games' tables; G0 → G1 is mechanized
     (`blindnessRO_lean_num_seed`, `blindnessRA_lean_num_seed`, `blindnessRAH_lean_num_seed`,
     `blindnessSh_num_seed`, `blindnessRASh_num_seed`, the `OC` versions and `_perm`;
     `+ 2·(2Q_X + 1)·2^{−256}`, `lean/docs/zk.md` §10.6). The two sessions' slices need not be independent: with one
@@ -764,7 +848,8 @@ dedicated to PomFRIT.
 1. **ROM and ideal cipher.** SHAKE as random oracles (proof and application hashes), and AES-128
    as an ideal cipher (for PoK) or a PRP (for ZK hiding, `lean/docs/zk.md` §8.1).
 2. **Lemma DS.** The proof and application hash families are disjoint (`lean/docs/security/domain-separation.md`
-   §7): the refresher commitment by part (a), the seed XOF by part (c) (up to `n_seed·Q·2⁻²⁵⁶`),
+   §7): the refresher commitment by part (a), the seed XOF by part (c) (up to `n_seed·Q·2⁻²⁵⁶`;
+   in Lean on one random oracle up to `(n_seed·Q + n_seed²)·2⁻²⁵⁶`, `Privacy/SeedXOFDS.lean`),
    and `hash_to_target` only in the restricted form (d), at a cost `ε_MC` per hop, because its
    domain overlaps four proof-system domains (finding F-DS1; a final domain byte would remove it).
 3. **UOV.** A-OMPR (paper Def. 3.1) for U1, or A-OMPR⊕17 for the tight U2. The Issuer key is used
@@ -778,7 +863,7 @@ dedicated to PomFRIT.
 
 | | `main` | label-row fix |
 |---|---|---|
-| U1, U2 (classical one-more unforgeability) | ✓ | ✓ |
+| U1, U2 (classical one-more unforgeability) | ✓ (reductions in Lean, Lemma P's bound on paper, §6.4) | ✓ |
 | QROM one-more unforgeability | paper, new quantum UOV assumptions (Q7 §4) | same |
 | Blindness, honest-but-curious Issuer | ✗ (practical linking) | ✓ (Thm B) |
 | Blindness, malicious Issuer, malicious key, selective failure | ✗ | ✓ (Thm B, §8.3) |
@@ -799,15 +884,21 @@ dedicated to PomFRIT.
   `Θ` uniform and witness-independent) and on `lean/docs/zk.md`'s theorem being re-checked for it. The
   paper's App. B.3 ZK argument should not be relied on (§8.1).
 - **G4.** Lemma DS is proved on paper (`lean/docs/security/domain-separation.md`), but covers
-  `hash_to_target` only in a restricted form (F-DS1), with the extra term `ε_MC`.
+  `hash_to_target` only in a restricted form (F-DS1), with the extra term `ε_MC`. Part (c), for
+  `XOF_seed` (F-DS2), is mechanized in the random-oracle model on one SHAKE oracle
+  (`Privacy/SeedXOFDS.lean`, `seedXofDS_le`, `(n·Q + n²)·2⁻²⁵⁶`); part (d) is not.
 - **G5.** The probabilistic steps of Lemma P (the "fixed before the answer" argument and the
-  union) are on paper. The deterministic steps are in Lean.
+  union) are on paper. The deterministic steps are in Lean. The reductions of U1 and U2 around it
+  are in Lean (§6.4), with Lemma P's failure probability `Pr[∃ i, PFail_i]` (resp. `ShiftFail_i`)
+  as the remaining term, for any first-phase rule `E₁`.
 - **G6.** The 2^{−71} uses the FAEST-EM-128f tree shapes. For other parameter sets, recompute it
   as `2^{−(λ − max_{S,T disjoint, Σ_S ≤ Σ_T} Σ_S)}`.
 - **G7.** Blindness in Lean (§8.2, §13) leaves:
   - the modelling steps: SHAKE as a random oracle and AES as an ideal cipher;
-  - Lemma DS (c) for `XOF_seed`, and contexts beyond the length bound of the finite context type
-    of the seed-XOF model;
+  - for Lemma DS (c) for `XOF_seed` (mechanized on the single SHAKE oracle, `seedXofDS_le`), its
+    composition with the games' separate tables (routing an Issuer's query at a seed-XOF input
+    that is also a proof-system input to that domain's table), and contexts beyond the length
+    bound of the finite context type of the seed-XOF model;
   - the consistency of an Issuer given as a bare function of the tables (a theorem for one
     written as oracle computations);
   - `H₂³` reads under the per-slice budget `IBudget` (covered under the joint budget `IBudgetH`,
@@ -822,13 +913,20 @@ dedicated to PomFRIT.
     `H₄`-table games with AES as random permutations; further sessions in the shared-`H₃` and
     seed-XOF games.
 
-  The unforgeability reductions (U1, U2) are on paper; Lean has Lemma P's deterministic steps and
-  the extraction bounds they build on (`lean/README.md` §9).
+- **G8.** U1/U2's extraction term in Lean (§6.4). The reductions are mechanized; the term
+  `Pr[∃ i, PFail_i]` is not yet bounded in Lean. Three steps remain: the adaptive extraction bound
+  of `ROM/AdaptPomfrit.lean` for a family of target functions (`pomfritRedeemT`) instead of
+  SHAKE's `hash_to_target`; the per-forgery event identified with that bound's game for a derived
+  prover (random-oracle consistency); and Lemma P's ordering and `Shift` steps (G5). The bound is
+  then a union over the `ℓ+1` forgeries unless the extraction bound is redone for simultaneous
+  extraction (the paper's `ε_ext` counts once, L8 §9.1).
 
 ## 13. Lean
 
-`lean/VoleMole/Protocols/PomFRIT.lean` has no `sorry` and no `axiom`. Check it with
-`cd lean && lake env lean VoleMole/Protocols/PomFRIT.lean`.
+`lean/VoleMole/Protocols/PomFRIT.lean`, `lean/VoleMole/ROM/OneMore.lean` and
+`lean/VoleMole/ROM/OneMorePomfrit.lean` have no `sorry` and no `axiom`. Check them with
+`cd lean && lake env lean VoleMole/Protocols/PomFRIT.lean` (and `lake build
+VoleMole.ROM.OneMorePomfrit`).
 
 | Statement | Lean |
 |---|---|
@@ -839,6 +937,9 @@ dedicated to PomFRIT.
 | Disjoint `S, T` with `Σ_S ≤ Σ_T` ⇒ `Σ_S ≤ 57` | `minority_weight_le` |
 | Minority prefix group ⇒ `|A| ≤ 2^{57}` | `minority_card_le` |
 | `2^{57}/2^{128} ≤ 2^{−71}`; loss at `2^{50}`, `2^{64}` | `per_query_bound`, `loss_at_2_50`, `loss_at_2_64` |
+| The generic one-more reduction (`lean/VoleMole/ROM/OneMore.lean`): the real game with a programmable target oracle fed by `n` uniform targets, the labelled one-more preimage experiment (Def. 3.1, A-OMPR⊕τ), the reduction; programming is perfect; forger's win `≤` reduction's advantage `+ Pr[∃` claim accepted and not good`]`; with at most `n` target queries the target list never runs out | `omuf`, `omExp`, `red`, `realImpl`, `chImpl`, `redImpl`, `collapse`, `real_eqd_comb`, `omuf_good_le`, `omuf_le_ex`, `omuf_le`, `goodPre`, `goodShift`, `TgInv`, `tgInv_preserved`, `NoFall`, `noFall_of_bound`, `omuf_le_of_bound` |
+| PomFRIT's one-more forgery game with `hash_to_target` a random oracle and the verifier as `pomfritVerify` (`lean/VoleMole/ROM/OneMorePomfrit.lean`); distinct messages give distinct `H_T` inputs; at most `Q_T + ℓ + 1` target queries | `game`, `PomWin`, `Forger`, `wrapImpl`, `verOne`, `tgtIn`, `pomfritRedeemT`, `pomfritRedeem_eq_T`, `pomfritTarget_eq_tgtIn`, `honestPre`, `relP`, `tgtIn_inj`, `acomp_support`, `pomWin_forges`, `acomp_bound` |
+| Theorems U1 and U2 (§6.4): `Pr[PomWin] ≤ Adv^{ompr}(B; Q_T+ℓ+1, ℓ) + Pr[∃ i, PFail_i]`, and with A-OMPR⊕τ and `ShiftFail_i`; non-vacuity with the honest Issuer (`Audit/Nonvacuous.lean`) | `pomfrit_U1_bound`, `pomfrit_U2_bound`, `pomfrit_U1`, `pomfrit_U2`, `PFail`, `ShiftFail` |
 | Blindness (Thm B, from G1) under (ZK-fix) as a two-phase hypothesis: `≤ 4ε` between the worlds, for either proof layout (`lean/VoleMole/Privacy/PomFRIT.lean`) | `blindness` |
 | (ZK-fix) for the executable Lean prover with label rows, from the two-phase tape hypothesis; blindness with that prover; completeness of `verify` on the final signature (`lean/VoleMole/Privacy/PomFRITLean.lean`) | `lean_zeroKnowledge`, `blindness_lean`, `blindness_lean_shake`, `pomfritVerify_complete`, `pomfritVerify_complete_tables` |
 | G1 → G2 for one session; G3 exactly (one-time pad, then a swap of the sessions' simulator coins) | `sessionClose_real_sim`, `simGame_eq` |
