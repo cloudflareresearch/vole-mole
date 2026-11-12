@@ -493,8 +493,12 @@ and `d` at 3075 and 3139; at `Layout.main` the definitions are the spec's, by `r
   left/right difference (`blindness*_seed`). The note's `2Q_X·2^{−256}` names the seed collision
   but does not charge it. In the full random-oracle model it is still right, since `µ₀ ≠ µ₁` keeps
   the two inputs apart and `µ₀ = µ₁` makes the worlds equal; the Lean model keys the table by the
-  seed alone and pays `2^{−256}`. On paper: Lemma DS (c) (the seed XOF's independence from the
-  proof-system oracles, F-DS2) and, for an abstract prover, (ZK-fix) itself.
+  seed alone and pays `2^{−256}`. Lemma DS (c) (the seed XOF's independence from the
+  proof-system oracles, F-DS2) is mechanized on one SHAKE oracle read by every party
+  (`Privacy/SeedXOFDS.lean`, `seedXofDS_two_le`: `(2Q + 1)·2^{−256}`, `Q` counting every
+  evaluation at a string of the seed XOF's shape, proof-system ones included); its composition with
+  the games' separate tables is on paper (`lean/docs/zk.md` §10.6). On paper also, for an abstract
+  prover, (ZK-fix) itself.
 - **[Lean] (ZK-fix) for the executable prover** (`lean/VoleMole/Privacy/PomFRITLean.lean`,
   `ZK/TwoPhase.lean`, `lean/docs/zk.md` §10.1). The Lean prover with dedicated label rows, run as
   `issue_request_with_seed` / `finalize_issue` run it (`leanProver`: step 1 with `r` and
@@ -543,7 +547,8 @@ and `d` at 3075 and 3139; at `Layout.main` the definitions are the spec's, by `r
     cipher (with the cipher's rows uniform functions; with uniform permutations read forward and
     inverse, the PRP/PRF switching term included, the same bound with `εROPm` for `εRO`,
     `blindnessRO_lean_num_perm`, and `blindnessRA_lean_num_perm` for the table-reading Issuer below,
-    `lean/docs/zk.md` §10.4), and Lemma DS (c) for `XOF_seed`; G0 → G1 is mechanized
+    `lean/docs/zk.md` §10.4), and the composition of Lemma DS (c) for `XOF_seed` (mechanized on
+    the single SHAKE oracle, `seedXofDS_le`) with the games' tables; G0 → G1 is mechanized
     (`blindnessRO_lean_num_seed`, `blindnessRA_lean_num_seed`, `blindnessRAH_lean_num_seed`,
     `blindnessSh_num_seed`, `blindnessRASh_num_seed`, the `OC` versions and `_perm`;
     `+ 2·(2Q_X + 1)·2^{−256}`, `lean/docs/zk.md` §10.6). The two sessions' slices need not be independent: with one
@@ -764,7 +769,8 @@ dedicated to PomFRIT.
 1. **ROM and ideal cipher.** SHAKE as random oracles (proof and application hashes), and AES-128
    as an ideal cipher (for PoK) or a PRP (for ZK hiding, `lean/docs/zk.md` §8.1).
 2. **Lemma DS.** The proof and application hash families are disjoint (`lean/docs/security/domain-separation.md`
-   §7): the refresher commitment by part (a), the seed XOF by part (c) (up to `n_seed·Q·2⁻²⁵⁶`),
+   §7): the refresher commitment by part (a), the seed XOF by part (c) (up to `n_seed·Q·2⁻²⁵⁶`;
+   in Lean on one random oracle up to `(n_seed·Q + n_seed²)·2⁻²⁵⁶`, `Privacy/SeedXOFDS.lean`),
    and `hash_to_target` only in the restricted form (d), at a cost `ε_MC` per hop, because its
    domain overlaps four proof-system domains (finding F-DS1; a final domain byte would remove it).
 3. **UOV.** A-OMPR (paper Def. 3.1) for U1, or A-OMPR⊕17 for the tight U2. The Issuer key is used
@@ -799,15 +805,19 @@ dedicated to PomFRIT.
   `Θ` uniform and witness-independent) and on `lean/docs/zk.md`'s theorem being re-checked for it. The
   paper's App. B.3 ZK argument should not be relied on (§8.1).
 - **G4.** Lemma DS is proved on paper (`lean/docs/security/domain-separation.md`), but covers
-  `hash_to_target` only in a restricted form (F-DS1), with the extra term `ε_MC`.
+  `hash_to_target` only in a restricted form (F-DS1), with the extra term `ε_MC`. Part (c), for
+  `XOF_seed` (F-DS2), is mechanized in the random-oracle model on one SHAKE oracle
+  (`Privacy/SeedXOFDS.lean`, `seedXofDS_le`, `(n·Q + n²)·2⁻²⁵⁶`); part (d) is not.
 - **G5.** The probabilistic steps of Lemma P (the "fixed before the answer" argument and the
   union) are on paper. The deterministic steps are in Lean.
 - **G6.** The 2^{−71} uses the FAEST-EM-128f tree shapes. For other parameter sets, recompute it
   as `2^{−(λ − max_{S,T disjoint, Σ_S ≤ Σ_T} Σ_S)}`.
 - **G7.** Blindness in Lean (§8.2, §13) leaves:
   - the modelling steps: SHAKE as a random oracle and AES as an ideal cipher;
-  - Lemma DS (c) for `XOF_seed`, and contexts beyond the length bound of the finite context type
-    of the seed-XOF model;
+  - for Lemma DS (c) for `XOF_seed` (mechanized on the single SHAKE oracle, `seedXofDS_le`), its
+    composition with the games' separate tables (routing an Issuer's query at a seed-XOF input
+    that is also a proof-system input to that domain's table), and contexts beyond the length
+    bound of the finite context type of the seed-XOF model;
   - the consistency of an Issuer given as a bare function of the tables (a theorem for one
     written as oracle computations);
   - `H₂³` reads under the per-slice budget `IBudget` (covered under the joint budget `IBudgetH`,

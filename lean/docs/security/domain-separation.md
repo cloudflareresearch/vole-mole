@@ -46,7 +46,8 @@ would be a prefix of chal₁ or chal₂, or would begin with a 32-byte H₁/H₃
 **Finding F-DS2 (overlap, harmless by secrecy).** PomFRIT's seed XOF (`pomfrit.cpp:150-161`) also
 ends in `msg`. It overlaps H₁, H₂⁰ (PomFRIT and Ratatouille spend), H₃, H₂¹, H₂² and H₂³ as sets.
 Every honest evaluation contains a fresh uniform 256-bit secret seed, so treating the XOF as an
-independent oracle costs at most n_seed·Q·2⁻²⁵⁶.
+independent oracle costs at most n_seed·Q·2⁻²⁵⁶ (in Lean on one random oracle, with a seed-collision
+term: `Privacy/SeedXOFDS.lean`, §7 (c)).
 
 **Proposed minimal fix (not implemented).** Append one final byte `APP_TAG = 0x20` to the inputs of
 `hash_to_target` and of the PomFRIT seed XOF. The byte must lie outside the proof system's tag set
@@ -513,10 +514,28 @@ probability ε_π ≤ q_π·2⁻²²² + q_π²·2⁻⁴⁴⁰.
 
 **(c) Up to n_seed·Q·2⁻²⁵⁶.** A3, the PomFRIT seed XOF, can be added to the list in (a), except
 with probability n_seed·Q·2⁻²⁵⁶.
-(Separately, the hop that the seed XOFs' outputs are uniform, given the adversary's own XOF
-queries, is mechanized for the privacy games with the XOF an independent table: `lean/docs/zk.md`
-§10.6. Part (c), the independence of A3 from the overlapping proof-system domains, stays on
-paper.)
+Here Q counts every SHAKE128 evaluation at a string of A3's shape (`"pomf\0s0"` ‖ 32 bytes ‖ …)
+other than the honest Clients' own XOF calls: the adversary's queries, and honest provers',
+verifiers' and simulators' evaluations whose proof-system input has that shape (§3.3).
+
+*Mechanized* (`lean/VoleMole/Privacy/SeedXOFDS.lean`, `lean/docs/zk.md` §10.6), in the
+random-oracle model with SHAKE128 one uniform function `H` on a finite input space that every
+party reads. The inputs are laid out as A3 strings `xof(seed, tail)` and the others, bijectively
+(`Layout`; for SHAKE inputs of length 39 + m, `pomfritLayout m` with `xof(c, t) =
+"pomf\0s0" ‖ c ‖ t`, the string `Spec.PomFRIT.expandSeed` hashes). A party's reads of `H` are free
+outside A3 and bounded by Q on A3 (`RdXof`). Then:
+- `abs_pr_xof_le`, `seedXofDS_le`: the game in which the honest Clients' XOF answers are `H` at
+  their A3 strings and the game in which they are uniform and independent of `H` are
+  `≤ (n·Q + n²)·2⁻²⁵⁶` apart (`n` Clients; `(2Q + 1)·2⁻²⁵⁶` for two, `seedXofDS_two_le`);
+- `abs_pr_xof_oracle_le`, `seedXofDS_oracle_le`: the same with the answers taken from an
+  independent oracle at the same A3 strings (part (c) as stated), `≤ (n·Q + 2n²)·2⁻²⁵⁶`.
+
+The `n²·2⁻²⁵⁶` (two Clients with the same seed) is an artifact of the proof, which programs the
+table at distinct seeds; the stated `n_seed·Q·2⁻²⁵⁶` has no such term and is right up to it.
+What stays on paper: the composition with the privacy games' separate tables, i.e. answering an
+adversary query at an A3 string that is also a proof-system input from that domain's table (the
+standard routing, exact once no honest party uses a string in two roles, which the hop provides);
+the privacy games themselves draw the XOF table independently (`lean/docs/zk.md` §10.6).
 
 **(d) PomFRIT `hash_to_target`, as implemented: NOT covered by (a).** O_tgt is a random oracle, and
 it is independent of the oracles in (a) at every string outside the overlap with
@@ -577,6 +596,10 @@ A **length prefix on msg alone does not fix this**: the final byte would still b
   so the exceptions are real;
 - `fixed_pairwise`: with `APP_TAG = 0x20` appended to A2 and A3, all 30 domains are pairwise
   separated.
+
+Part (c) in the random-oracle model is in `lean/VoleMole/Privacy/SeedXOFDS.lean` (§7 (c)):
+`seedXofDS_le`, `seedXofDS_oracle_le`, `seedXofDS_two_le`, with the layout `pomfritLayout` of
+SHAKE inputs (`#print axioms`: `propext`, `Classical.choice`, `Quot.sound`).
 
 The table entries (lengths, tags, DST bytes) are transcribed from §2 and were checked against the
 trace of §2.4. Lean does not check that the C++ code computes these layouts.
