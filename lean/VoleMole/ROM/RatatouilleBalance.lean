@@ -1049,4 +1049,208 @@ theorem balance_le_lean (A : RoundAdv S (Op Z) Resp) (N : ℕ) (σ : Signer)
         forgeAdv lr pkU verQL A N σ + collAdv lr pkU verQL A N σ :=
   balance_le lr pkU verQL A N σ hdig (verifierIC_verifyIC CrtGen.tables) hqA hnA heA
 
+/-! ## The UF-Tag game and the forger `B`
+
+A **UF-Tag forger** (§2.3) gets the signer `σ` (pqov's `derive_preimage` for the secret key, on
+the target `Tag(c, x)`) as an oracle on pairs `(c, x)`; it wins with `(c*, x*, s*)`,
+`P(s*) = Tag(c*, x*)`, if no signing query on `(c*, x*)` was answered. Here the forger is a
+computation against the hash oracle per cipher table (its own coins), given `σ`, that reports its
+signing queries and, besides, the pairs on which it only learned whether `σ` succeeds (a
+*signability probe*: the Issuer's response on the duplicate-nullifier path, F5). `reads` says it
+uses `σ` through these only. -/
+
+/-- A forger's output: a candidate forgery, its signing log and its probe log. -/
+abbrev ForgerOut := Option (Commitment × Credits × Preimage) × List (Commitment × Credits) ×
+  List (Commitment × Credits)
+
+/-- **The forger wins**: a valid signature on a pair none of whose signing queries was answered. -/
+def UFWin (pk : PublicKey) (σ : Signer) (r : ForgerOut) : Prop :=
+  ∃ c x s, r.1 = some (c, x, s) ∧ uovEval pk s = tag c x ∧
+    ∀ q ∈ r.2.1, q = (c, x) → σ (tag c x) = none
+
+/-- **A UF-Tag forger with a signability probe.** -/
+structure TagForger where
+  run : Signer → CTable → OracleComp spec ForgerOut
+  reads : ∀ (σ σ' : Signer) (E : CTable) (g : Table),
+    (∀ q ∈ (evalWithAnswerFn (QueryImpl.ofFn g) (run σ E)).2.1, σ' (tag q.1 q.2) = σ (tag q.1 q.2)) →
+    (∀ q ∈ (evalWithAnswerFn (QueryImpl.ofFn g) (run σ E)).2.2,
+      (σ' (tag q.1 q.2)).isSome = (σ (tag q.1 q.2)).isSome) →
+    evalWithAnswerFn (QueryImpl.ofFn g) (run σ' E) = evalWithAnswerFn (QueryImpl.ofFn g) (run σ E)
+
+/-- **`Adv^{uf-tag}`** of a forger against the signer `σ`, the public map `pk`. -/
+noncomputable def ufTagAdv (pk : PublicKey) (σ : Signer) (B : TagForger) : ℝ≥0∞ :=
+  Pr{let E ← $ᵗ CTable; let r ← (simulateQ randomOracle (B.run σ E)).run' ∅}[UFWin pk σ r]
+
+/-! ### The Issuer's use of the signer, read off the transcript -/
+
+/-- The store key a call adds: an accepted spend's `(ctx, nf)`. -/
+def stRec : Op Z × Resp → List Key
+  | (.spend _ ctx _, .inr (.ok (some out))) => [(ctx, out.nf)]
+  | _ => []
+
+/-- The store after a transcript (newest first, as `issuerSpend` keeps it). -/
+def storeOf (tr : List (Op Z × Resp)) : List Key := (tr.flatMap stRec).reverse
+
+/-- The pair a call signs with its answer used (a verified issuance with `T_init ≠ 0`, a verified
+spend on a fresh nullifier): the responses `.ok (some _)` and `.error .runtime`. -/
+def signRec (st : List Key) : Op Z × Resp → List (Commitment × Credits)
+  | (.issue req _ _, .inl (.ok (some _))) => [(issueReqC req, 0)]
+  | (.issue req _ _, .inl (.error .runtime)) => [(issueReqC req, 0)]
+  | (.spend req ctx refund, .inr (.ok (some _))) =>
+      if (ctx, (SpendReq.parse req).nf) ∈ st then [] else [((SpendReq.parse req).cNext, refund)]
+  | (.spend req ctx refund, .inr (.error .runtime)) =>
+      if (ctx, (SpendReq.parse req).nf) ∈ st then [] else [((SpendReq.parse req).cNext, refund)]
+  | _ => []
+
+/-- The pair a spend on a recorded nullifier probes. -/
+def probeRec (st : List Key) : Op Z × Resp → List (Commitment × Credits)
+  | (.spend req ctx refund, _) =>
+      if (ctx, (SpendReq.parse req).nf) ∈ st then [((SpendReq.parse req).cNext, refund)] else []
+  | _ => []
+
+/-- The signing log of a transcript. -/
+def signLog (tr : List (Op Z × Resp)) : List (Commitment × Credits) :=
+  tr.zipIdx.flatMap fun p => signRec (storeOf (tr.take p.2)) p.1
+
+/-- The probe log of a transcript. -/
+def probeLog (tr : List (Op Z × Resp)) : List (Commitment × Credits) :=
+  tr.zipIdx.flatMap fun p => probeRec (storeOf (tr.take p.2)) p.1
+
+section Signer
+
+variable (ver : Statement → ByteArray → Bool)
+
+/-- **One call depends on the signer only through its signing and probe records.** -/
+theorem serveP_signer (σ σ' : Signer) (st : IssuerState) (op : Op Z)
+    (hsig : ∀ q ∈ signRec st.store (op, (serveP lr pkU ver σ st op).1),
+      σ' (tag q.1 q.2) = σ (tag q.1 q.2))
+    (hpr : ∀ q ∈ probeRec st.store (op, (serveP lr pkU ver σ st op).1),
+      (σ' (tag q.1 q.2)).isSome = (σ (tag q.1 q.2)).isSome) :
+    serveP lr pkU ver σ' st op = serveP lr pkU ver σ st op := by
+  cases op with
+  | issue req tInit ctx =>
+    simp only [serveP] at hsig hpr ⊢
+    by_cases h1 : tInit = 0
+    · simp [issueResponse, h1]
+    cases hv : ver (issStmt lr ⟨issueReqC req, tInit, ctx⟩) (bOf (issueReqProof req))
+    · simp [issueResponse, romPrim, h1, hv]
+    · have := hsig (issueReqC req, 0)
+      cases hσ : σ (tag (issueReqC req) 0) with
+      | none =>
+        simp [issueResponse, romPrim, h1, hv, hσ, signRec] at this
+        simp [issueResponse, romPrim, h1, hv, hσ, this]
+      | some s =>
+        simp [issueResponse, romPrim, h1, hv, hσ, signRec] at this
+        simp [issueResponse, romPrim, h1, hv, hσ, this]
+  | spend req ctx refund =>
+    simp only [serveP] at hsig hpr ⊢
+    cases hv : ver (spStmt lr pkU ⟨pkU.map, (SpendReq.parse req).nf, (SpendReq.parse req).d,
+        (SpendReq.parse req).cNext, ctx⟩) (bOf (SpendReq.parse req).proof)
+    · simp [issuerSpend, spendResponse, romPrim, hv]
+    · by_cases hdup : (ctx, (SpendReq.parse req).nf) ∈ st.store
+      · have := hpr ((SpendReq.parse req).cNext, refund) (by simp [probeRec, hdup])
+        cases hσ : σ (tag (SpendReq.parse req).cNext refund) with
+        | none =>
+          cases hσ' : σ' (tag (SpendReq.parse req).cNext refund) with
+          | none => simp [issuerSpend, spendResponse, romPrim, hv, hσ, hσ']
+          | some s' => simp [hσ, hσ'] at this
+        | some s =>
+          cases hσ' : σ' (tag (SpendReq.parse req).cNext refund) with
+          | none => simp [hσ, hσ'] at this
+          | some s' => simp [issuerSpend, spendResponse, romPrim, hv, hσ, hσ', hdup]
+      · have := hsig ((SpendReq.parse req).cNext, refund)
+        cases hσ : σ (tag (SpendReq.parse req).cNext refund) with
+        | none =>
+          simp [issuerSpend, spendResponse, romPrim, hv, hσ, signRec, hdup] at this
+          simp [issuerSpend, spendResponse, romPrim, hv, hσ, this]
+        | some s =>
+          simp [issuerSpend, spendResponse, romPrim, hv, hσ, signRec, hdup] at this
+          simp [issuerSpend, spendResponse, romPrim, hv, hσ, this, hdup]
+
+end Signer
+
+section SignerRun
+
+variable (ver : Statement → ByteArray → Bool) (nT : S → Op Z × S) (recv : S → Resp → S) (s0 : S)
+
+theorem storeOf_append (tr : List (Op Z × Resp)) (r : Op Z × Resp) :
+    storeOf (tr ++ [r]) = stRec r ++ storeOf tr := by
+  simp only [storeOf, List.flatMap_append, List.flatMap_singleton, List.reverse_append]
+  congr 1
+  rcases r with ⟨op, resp⟩
+  cases op <;> rcases resp with _ | (_ | _ | _) <;> simp [stRec]
+
+/-- The Issuer's store after a call: the accepted spend's key is added. -/
+theorem serveP_store (σ : Signer) (st : IssuerState) (op : Op Z) :
+    (serveP lr pkU ver σ st op).2.store = stRec (op, (serveP lr pkU ver σ st op).1) ++ st.store := by
+  cases op with
+  | issue req tInit ctx => simp [serveP, stRec]
+  | spend req ctx refund =>
+    simp only [serveP]
+    rcases issuerSpend_store (Prod.mk.eta (p := issuerSpend (romPrim lr pkU ver) σ st req ctx
+      refund)).symm with ⟨h1, h2⟩ | ⟨out, h1, -, -, h3⟩
+    · rw [h1]
+      generalize hr : (issuerSpend (romPrim lr pkU ver) σ st req ctx refund).2 = r at h2
+      rcases r with _ | (_ | out) <;> simp [stRec]
+      exact absurd rfl (h2 out)
+    · rw [h1, h3]; simp [stRec]
+
+/-- **The store of the run is the store read off its transcript.** -/
+theorem store_yT (σ : Signer) (k : ℕ) :
+    (yT lr pkU ver σ nT recv s0 k).2.1.store = storeOf (yT lr pkU ver σ nT recv s0 k).2.2 := by
+  induction k with
+  | zero => rfl
+  | succ k ih =>
+    rw [store_succ, serveP_store, ih]
+    show _ = storeOf ((yT lr pkU ver σ nT recv s0 k).2.2 ++ [recT lr pkU ver σ nT recv s0 k])
+    rw [storeOf_append]
+    rfl
+
+theorem mem_log {tr : List (Op Z × Resp)} {J k : ℕ} (hk : k < J) {r : Op Z × Resp}
+    (htr : tr[k]? = some r) {q : Commitment × Credits}
+    (f : List Key → Op Z × Resp → List (Commitment × Credits))
+    (hq : q ∈ f (storeOf (tr.take k)) r) :
+    q ∈ (tr.take J).zipIdx.flatMap fun p => f (storeOf ((tr.take J).take p.2)) p.1 := by
+  refine List.mem_flatMap.2 ⟨(r, k), List.mem_zipIdx_iff_getElem?.2 ?_, ?_⟩
+  · simpa [List.getElem?_take, hk] using htr
+  · simpa [List.take_take, Nat.min_eq_left hk.le] using hq
+
+/-- **The run depends on the signer only through its logs**: if `σ'` agrees with `σ` on the
+signing log and on success on the probe log of the first `J` calls of `σ`'s run, the two runs
+agree for `J` calls. -/
+theorem yT_signer (σ σ' : Signer) {J N : ℕ} (hJ : J ≤ N)
+    (hsig : ∀ q ∈ signLog ((yT lr pkU ver σ nT recv s0 N).2.2.take J),
+      σ' (tag q.1 q.2) = σ (tag q.1 q.2))
+    (hpr : ∀ q ∈ probeLog ((yT lr pkU ver σ nT recv s0 N).2.2.take J),
+      (σ' (tag q.1 q.2)).isSome = (σ (tag q.1 q.2)).isSome) :
+    ∀ k ≤ J, yT lr pkU ver σ' nT recv s0 k = yT lr pkU ver σ nT recv s0 k := by
+  intro k
+  induction k with
+  | zero => intro _; rfl
+  | succ k ih =>
+    intro hk
+    have hkJ : k < J := hk
+    have htr := getElem?_trace lr pkU ver σ nT recv s0 (hkJ.trans_le hJ)
+    have hst := store_yT lr pkU ver nT recv s0 σ k
+    have hsk : storeOf ((yT lr pkU ver σ nT recv s0 N).2.2.take k) =
+        (yT lr pkU ver σ nT recv s0 k).2.1.store := by
+      rw [take_trace _ _ _ _ _ _ _ (hkJ.le.trans hJ), hst]
+    have heq : serveP lr pkU ver σ' (yT lr pkU ver σ nT recv s0 k).2.1
+        (recT lr pkU ver σ nT recv s0 k).1 =
+        serveP lr pkU ver σ (yT lr pkU ver σ nT recv s0 k).2.1 (recT lr pkU ver σ nT recv s0 k).1 :=
+      serveP_signer lr pkU ver σ σ' _ _
+        (fun q hq => hsig q (mem_log hkJ htr signRec (by rw [hsk]; exact hq)))
+        (fun q hq => hpr q (mem_log hkJ htr probeRec (by rw [hsk]; exact hq)))
+    show roundsT nT (serveP lr pkU ver σ') recv (k + 1) (s0, ⟨[]⟩, []) =
+      roundsT nT (serveP lr pkU ver σ) recv (k + 1) (s0, ⟨[]⟩, [])
+    rw [roundsT_succ, roundsT_succ]
+    have ih' := ih hkJ.le
+    simp only [yT] at ih'
+    rw [ih']
+    simp only [recT, recOf, yT] at heq
+    simp only [recOf]
+    rw [heq]
+
+end SignerRun
+
 end VoleMole.ROM.IC.RatBalance
