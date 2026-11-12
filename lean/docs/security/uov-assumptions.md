@@ -35,7 +35,7 @@ checkout `subprojects/pqov` (revision `fac2ec1`, UOV round-3 code, with
 |---|---|---|---|
 | L-D | `derive_preimage` (ROM) is the *ideal deterministic sampler*: `D(y)` uniform on the good preimages of `y`, independently per `y` | `q_v·2^{−256} + ℓ·E[δ^{256}]` | §2 |
 | L-C | Real preimages are never "bad"; uniform ones are bad w.p. `δ ≈ 2^{−7.994}`. q samples: TV `1 − (1−δ)^q` exactly. Every public-key-only simulator is off by at least its mass on bad points | exact | §2, §4 |
-| T1 | A-OMPI ≡ det-FDH EUF-CMA (ROM); `Adv^{euf}_{spec} ≤ Adv^{ompi} ≤ Adv^{suf}_{spec}`; `Adv^{ompi} ≤ Adv^{ompr}` | tight (SUF step: `q_H` signing queries) | §5.1 |
+| T1 | A-OMPI ≡ det-FDH EUF-CMA (ROM); `Adv^{euf}_{spec} ≤ Adv^{ompi} ≤ Adv^{suf}_{spec}`; `Adv^{ompi} ≤ Adv^{ompr}`. [Lean] (a) and (c); (c) needs `q_T + Q` targets and costs `(q_T + Q)·ρ` with a sampler that may fail (corrected) | tight (SUF step: `q_H` signing queries) | §5.1 |
 | T2 | A-OMPI ⇐ GPI + OW, or ⇐ GPI + UOV problem | `q_T` | §5.2 |
 | T3 | EUF-CMA of the **specified** salted UOV ⇐ GPI + UOV problem. (The spec's own proof is for salt-UOV, a different signer.) | `q_H + 1` on UOV, none on GPI | §5.3 |
 | T4 | **Lemma U is incorrect as stated**: CT-UF with an arbitrary-target signing oracle is not shown to follow from OMPR. CT-UF^open ⇐ OMPR, tightly; CT-UF^open ⇐ GPI + OW | tight / `q_π` | §5.4 |
@@ -255,7 +255,10 @@ All games are for one key `(sk, pk) ← KeyGen` unless `K` is given. `D = D_sk` 
 `KeyGen`, the preimage relation of `P` and `D` (`Trapdoor`): `advUOV`, `advUOVn` (1), `advOW` (2),
 `advGPI` (3), `advFDH` (6), `advOMPR` and `advOMPR31` (7), `advOMPRShift` (8), `advOMPI` (9),
 `advCTUF` (10), `advCTUFOpen` (11), `advUFTag` and `advUFTagProbe` (12). The protocol theorems'
-terms are advantages in them (`Assumptions/UOVLinks.lean`). See §10.
+terms are advantages in them (`Assumptions/UOVLinks.lean`). T1(a) and T1(c) are proved between
+them (`Assumptions/IdealTag.lean`), and Ratatouille's balance is stated with `advOMPR`
+(`Assumptions/RatatouilleOMPR.lean`). With `Tag` a random function, item 12 with the strict win is
+item 6 with `H = Tag`. See §10.
 
 ## 4. The 1/255 obstacle, and what can fix it
 
@@ -311,6 +314,41 @@ notion for an unsalted hash-and-sign variant of UOV.
 - Forward the index queries as `D(t_i)`.
 - The `Q` answers plus the forgery are `Q+1` preimages of distinct indices. ∎
 
+*Correction to (c)* (found in the Lean proof). Two details of the one-line proof do not hold as
+written:
+- OMPR's win needs **exactly** `Q + 1` claims after at most `Q` preimage queries. An A-OMPI
+  adversary may make fewer than `Q` index queries, or repeat an index. The reduction must cache
+  repeated indices and **pad**: it requests `Q − (answered indices)` further targets and their
+  preimages. So it uses `q_T + Q` targets, not `q_T`.
+- With the real sampler `D`, an answer may be `⊥` (an abort). A failed index query costs the
+  reduction one preimage query and yields no claim; a failed padding query likewise. So (c) holds
+  up to the event that `D` errs on one of the challenger's `q_T + Q` targets:
+
+      Adv^{ompi}(A; q_T, Q) ≤ Adv^{ompr}(B; q_T + Q, Q) + (q_T + Q)·ρ,    ρ = Pr_{y}[D(y) = ⊥]
+
+  (`ρ = δ(sk)^{255}` for `derive_preimage`, §2; on average `E[δ^{255}] ≤ 2^{−295.8}`). For `D*`
+  (Lemma D), which never aborts, `ρ = 0`; the aborts are the `ℓ·E[δ^{256}]` part of `ε_D`.
+
+**Lean** (`lean/VoleMole/Assumptions/IdealTag.lean`; no `sorry`, no `axiom`). Generic in the
+trapdoor, the messages and the world:
+- **(a)** `advFDH_le_ompi`: for a det-FDH forger with at most `k` hash and signing queries on every
+  path, `Adv^{euf}_{det}(A; q_H, q_S) ≤ Adv^{ompi}(fdhRed A; k + 1, q_S)`. The reduction `fdhRed`
+  programs each fresh `H(m)` with a fresh challenge target (`fdh_step`: the programming is perfect
+  per query, through the projection `fdhProj`; `fdh_inv`: the invariant). The lazy A-OMPI
+  challenger (`ompiLazy`) is the stream one (`ompi_lazy_eqd`, `advOMPI_eq_lazy`). The paper's
+  `q_H + 1` is `k + 1` here because Lean counts signing queries separately from hash queries.
+- **(c)** `advOMPI_le_ompr`: `Adv^{ompi}(A; q_T, Q) ≤ Adv^{ompr}(ompiRed A; q_T + Q, Q) +
+  badTargets(q_T + Q)`, `badTargets(n)` the probability that `D` errs on one of `n` uniform targets;
+  `advOMPI_le_ompr_rate` with `≤ (q_T + Q)·ρ` (`failRate`, `badTargets_le`). The reduction caches
+  (`ompiRedImpl`), caps the targets at `q_T`, and pads (`padC`, `pad_spec`); `ompi_step`,
+  `ompi_inv`, `ompiWin_imp`. Holds for every trapdoor and adversary.
+- **(a) then (c)**: `advFDH_le_ompr`, `advFDH_le_ompr_rate`.
+- Generic tools: `simulateQ_proj_eqd`, `simulateQ_inv_bound` (a simulation through a state
+  projection, with a per-query budget), `prEvent_unifList_exists_le`,
+  `prEvent_keyed_unifList_exists_le` (union bound over uniform targets), `unifList_add`,
+  `prEvent_le_bind`.
+- **(b)** (A-OMPI ≤ det-FDH), (d), (e) are not mechanized.
+
 **(d) spec-EUF ≤ det-FDH:**
 `Adv^{euf}_{spec}(A; q_H, q_S) ≤ Adv^{euf}_{det}(B; q_H + q_S + 1, q_S) + (q_H+q_S+1)²·2^{−361} + ε_D`.
 - `B` sets `H_spec(m‖salt) := H_det(m‖salt)`. It answers `Sign(m)` by picking a salt and calling
@@ -331,7 +369,8 @@ notion for an unsalted hash-and-sign variant of UOV.
 - The `q_v·q_H` term covers `A` querying SHAKE256 at a hidden `m‖salt_m`. ∎
 
 **Consequence.** A-OMPI, and hence Ratatouille's UF-Tag via Lemma 2.1 of `ratatouille.md`, is
-sandwiched:
+sandwiched (with `Tag` a random function, UF-Tag with the strict win *is* det-FDH with `H = Tag`,
+so (a) is Lemma 2.1 in that model, with no loss):
 
     spec-EUF-CMA  ⇐  A-OMPI (= det-FDH)  ⇐  spec-SUF-CMA (with q_T signing queries),
 
@@ -678,6 +717,26 @@ preimage of an unqueried index. Then apply (a) and T1(c). ∎
     game is the Lean proof's interface, and `balance_le_noProbe` converts it.
   - The abort term is about `N·2^{−295.8}`. `ratatouille.md` Theorem 1 omitted it ("negligible");
     it is now explicit.
+  - **[Lean]** `balance_le_ompr`, `balance_le_ompr_rate` (`Assumptions/RatatouilleOMPR.lean`):
+
+        Pr[win] ≤ N·ε_iss + N·ε_spend + Adv^{ompr}(B'; k + 1 + N, N) + (k + 1 + N)·ρ(σ) + failAdv(B) + Adv^{coll}(C),
+
+    at the Issuer's key (`ratTrap pk σ`, the per-key OMPR game), `B' = ompiRed (fdhRed A')`. The
+    steps: `ufTagAdv_le_strict` (`Adv^{uf-tag+probe}(B) ≤ Adv^{uf-tag}_{strict}(B.noProbe τ) +
+    failAdv(B)`, where the strict win is item 12's "never signed"; a win on a failed signing is a
+    failure); then the **modelling hypothesis** `TagIdeal`: the strict UF-Tag advantage of
+    `B.noProbe τ` against the concrete KP800 is at most the det-FDH advantage of an ideal-model
+    forger `A'` (`Tag` a random function) with at most `k` hash and signing queries and `q_S = N`;
+    then (a) and (c) (§5.1). `TagIdeal` is the step "`Tag` is ideal in the standalone game only":
+    `Tag` is evaluated inside the protocol game and its proofs, so it cannot be an oracle there,
+    and no Lean statement can turn the concrete forger into an ideal-model one. It is an explicit
+    hypothesis of the theorem, not proved.
+  - Compared with the paper's statement: the Lean bound has `N` for `N_I + N_S` (one call each),
+    `q_T = k + 1` with the padding's `N` more targets, the term `(k + 1 + N)·ρ` from (c)'s
+    correction, `failAdv(B)` for `(N_I + N_S)·E[δ^{255}] + q_v·2^{−256}` (bounded per table by
+    `pr_failOut_le`), and **no** `q_K·2^{−479} + q_K²·2^{−799}`: those come from KP800 as a
+    permutation with inverse queries (K1, and the permutation/function switch), and the Lean model
+    of `Tag` is a random function. Moving to the permutation model is not mechanized.
 
 **Does R1 remove the issue?** No. R1 is orthogonal to it.
 - The probe comes from the API order (F5), not from Tag's input. With R1, `spend_response` still
@@ -928,10 +987,13 @@ hash-and-sign with retry [KX24]).
 | `17^{−k} ≤ 16^{−k}` | `guess_loss` |
 | One-more counting; wasted calls | `one_more_count`, `wasted_calls` |
 | UF-Tag+probe ≤ UF-Tag of the probe-free forger + failures (P9(a)); failure event read off the total signer; union bound per table; `B` logs ≤ `N` pairs; Theorem 1 with a probe-free forger | `ufTagAdv_le_noProbe`, `failOut_iff_patch`, `pr_failOut_le`, `forger_logs_le`, `balance_le_noProbe` (in `ROM/RatatouilleProbe.lean`) |
+| T1(a) det-FDH ≤ A-OMPI; T1(c) A-OMPI ≤ OMPR (corrected: `q_T + Q` targets, `+ (q_T + Q)·ρ`); both | `advFDH_le_ompi`, `advOMPI_le_ompr`, `advOMPI_le_ompr_rate`, `advFDH_le_ompr_rate` (in `Assumptions/IdealTag.lean`) |
+| P9(b) with `Tag` a random function, and the final statement under A-OMPR (with the modelling hypothesis `TagIdeal`) | `ufTagAdv_le_strict`, `balance_le_ompr`, `balance_le_ompr_rate` (in `Assumptions/RatatouilleOMPR.lean`) |
 | Cores of `uov-open-reductions.md`: combiner forest, lottery accounting, the rewinding supermartingale inequality | `combiner_count`, `lottery_count`, `four_mul_le_pow`, `rewind_supermartingale` |
 | Scaling symmetry of `P` and the one-query CT-UF attack (`Spec/PqovScale.lean`) | `qmap_smul`, `sq_pow_128`, `scaled_preimage`, `ctuf_scaling_attack` |
 
-The probabilistic steps (Lemma D, the hybrid games, the ideal-permutation bookkeeping) are on paper.
+The probabilistic steps (Lemma D, the hybrid games, the ideal-permutation bookkeeping) are on paper,
+except T1(a), T1(c) and the chain of P9(b) (below).
 
 **The assumptions as games** (`lean/VoleMole/Assumptions/UOV.lean`, `UOVLinks.lean`; no `sorry`,
 no `axiom`). A *trapdoor* (`Trapdoor`) is a key generator, the preimage relation `IsPre pk s t`
@@ -966,12 +1028,18 @@ The protocol terms:
   every signed target. The openings may be missing only if an accepted issuance proof was not
   extracted, which is already the term `BadI` (`win_imp_open`), so no term is added.
 - **Ratatouille**: `ufTagAdv` is the UF-Tag-with-probe advantage (`ufTagAdv_eq`);
-  `balance_le_ufTagProbe`.
+  `balance_le_ufTagProbe`. Under OMPR (`Assumptions/RatatouilleOMPR.lean`): `balance_le_ompr`,
+  with the UOV term `Adv^{ompr}` of the explicit reduction `ompiRed (fdhRed A')`, the error term
+  `badTargets` (`≤ (k + 1 + N)·ρ`), `failAdv(B)` and `Adv^{coll}(C)`, under the modelling
+  hypothesis `TagIdeal` (§5.8). Instantiated in `Audit/IdealTag.lean` (every hypothesis but
+  `TagIdeal`, which holds e.g. when the strict UF-Tag advantage is `0`, `tagIdeal_of_eq_zero`).
 - **PomFRIT**: U1's and U2's experiment terms are `advOMPR` and `advOMPRShift τ` of
   `pomTrap KG pre` by definition (`pomfrit_U1_ompr`, `pomfrit_U2_omprShift`), and U1's is at most
   Def. 3.1's advantage of `popAdv` (`advOMPR_le_ompr31`; instantiated in `Audit/Nonvacuous.lean`).
 
-Not mechanized: the reductions between the games (T1–T6, P8), OMPR^free, and items 4 and 5.
+Not mechanized: the reductions between the games except T1(a) and T1(c)
+(`Assumptions/IdealTag.lean`, §5.1), i.e. T1(b, d, e), T2–T6, P8; OMPR^free; items 4 and 5; and the
+permutation model of `Tag` (the terms `q_K·2^{−479} + q_K²·2^{−799}`).
 
 pqov's `derive_preimage` and its keys (§1–2): `Spec/PqovSigner.lean` (`signer_correct`,
 `signer_fail`, 255 attempts), `Spec/PqovKey.lean` (`sysCoef_eq_pqovS`, `qmap_vinVec_eq`,

@@ -31,7 +31,7 @@ Line references are `file:line` at `6d7113e`.
 
 | Notion | Result | Main terms |
 |---|---|---|
-| **Balance** (no inflation): accepted spends ≤ issued + refunded, against adaptive malicious clients, honest clients present | **Proved** (Thm 1), classical. [Lean] as a game on the executable spec and the Lean verifier in the ROM and ideal-cipher model, `N·ε_iss + N·ε_spend + Adv^{uf-tag}(B) + Adv^{coll}(C)` (`ROM/RatatouilleBalance.lean`, `balance_le_ufTag`; §4): `B` a UF-Tag forger (with a signability probe) and `C` a `Com` collision finder, explicit; their advantages stay terms. The probe costs only the Issuer's aborts: `balance_le_noProbe` (`ROM/RatatouilleProbe.lean`) has a probe-free forger plus a failure term `≤ N·δ(sk)^{255}` (`uov-assumptions.md` §5.8) | `ε_ext + Adv^{uf-tag} + q_K²·2^{−257} + N·E[δ^{255}]` |
+| **Balance** (no inflation): accepted spends ≤ issued + refunded, against adaptive malicious clients, honest clients present | **Proved** (Thm 1), classical. [Lean] as a game on the executable spec and the Lean verifier in the ROM and ideal-cipher model, `N·ε_iss + N·ε_spend + Adv^{uf-tag}(B) + Adv^{coll}(C)` (`ROM/RatatouilleBalance.lean`, `balance_le_ufTag`; §4): `B` a UF-Tag forger (with a signability probe) and `C` a `Com` collision finder, explicit; their advantages stay terms. The probe costs only the Issuer's aborts: `balance_le_noProbe` (`ROM/RatatouilleProbe.lean`) has a probe-free forger plus a failure term `≤ N·δ(sk)^{255}` (`uov-assumptions.md` §5.8). Under one-more-UOV: `balance_le_ompr` (`Assumptions/RatatouilleOMPR.lean`), the UOV term `Adv^{ompr}` of an explicit reduction, with `Tag` a random function in the standalone game (the modelling hypothesis `TagIdeal`) | `ε_ext + Adv^{uf-tag} + q_K²·2^{−257} + N·E[δ^{255}]` |
 | **No theft**: an adversary cannot spend an honest client's credits through a request it did not copy verbatim | **Proved** (Thm 3), using weak SE and a ZK hop | `ε_ZK + ε_SE + q_K·2^{−127}` |
 | **No theft by copying** (hijack): anyone who obtains a spend request can redeem it first | **Fails** (F2). Nothing binds a spend to a session, unlike {{ACT}}'s `ctx_spend` and Moussaka's `challenge_digest` | — |
 | **Unlinkability/anonymity** against a malicious Issuer: spends and issuances leak only `(pk, ctx_iss, T_init, d)` and whether the client could afford the spend | **Proved** (Thm 2). On `main` it relies on Keccak one-wayness in `r`; with the fix it is standard NIZK. [Lean] a two-round left/right form, from ZK and hiding hypotheses (`Privacy/Ratatouille.lean`); with the executable Lean prover (label rows) down to its tape hypothesis (`Privacy/RatatouilleLean.lean`, `unlinkability_label_rows`); for the Lean prover in the ROM and ideal-cipher model with every zero-knowledge term explicit, `≈ 2⁻¹⁰²·³` plus budget terms and `2·ε_hide` (`unlinkabilityRO_lean_num`), and `≈ 2⁻¹⁰¹·⁶` with a table-reading Issuer (`unlinkabilityRA_lean_num`; §6); also with AES as random permutations (`_perm`) and with one shared `H₃` (`unlinkabilitySh_num`, `unlinkabilityRASh_num`); from the real Clients' OS seeds and seed XOF, each `+ 2·(2q_H + 2)·2⁻²⁵⁶` with `q_H` the Issuer's XOF queries (`unlinkability*_seed`, `lean/docs/zk.md` §10.6; the note's H1 does not charge seed collisions); with a key stage (the Issuer's key, context and balance) that reads the tables too (`unlinkabilityRAK_lean_num`, `≈ 2⁻¹⁰¹·⁶`); with any number `n` of further honest Clients, `≤ n·2⁻¹⁰¹` plus budget terms and `2·ε_hide` (`unlinkabilityN_lean_num`), also adaptively scheduled, each further session's key, context, balance, response and amount chosen from earlier outcomes and the challenge key, context and balance from the sessions before it (`unlinkabilityAd_lean_num`, the same numbers), and interleaved in any order with each further Client spending up to `K` times along its change tokens (`unlinkabilityIL_lean_num`, `≤ (n(K + 1) + 2)·2⁻¹⁰¹`; with a table-reading scheduler that also places the challenge's stages, `unlinkabilityILO_lean_num`, `+ 46·L·(a₃ + a₂ + a₅ + 221·a_E)·2⁻¹²⁸`), and with `N` challenge pairs (`unlinkabilityP_lean_num`; `lean/docs/zk.md` §10.8, §11) | `ε_ZK + q_K·2^{−127}` |
@@ -193,6 +193,15 @@ assumption, specialized to UOV and to this preimage sampler.
 This is a perfect simulation unless an inverse query returns a Tag-structured input (K1), or two
 allocated outputs collide, which is the permutation-versus-function gap. A forgery on an unsigned
 `(c*, x*)` is a preimage of an unqueried `y_{i*}`. ∎
+
+[Lean] With `Tag` a **random function** (not a permutation), UF-Tag with the strict win "never
+signed" is det-FDH EUF-CMA with `H = Tag`, and the lemma is `uov-assumptions.md` T1(a):
+`advFDH_le_ompi` (`lean/VoleMole/Assumptions/IdealTag.lean`), with no loss and `q_T = k + 1` for
+`k` hash and signing queries. Then T1(c), `advOMPI_le_ompr`, gives OMPR, with `q_T + Q_sig` targets
+and a term `(q_T + Q_sig)·ρ` for the signer's aborts (a correction of T1(c), §5.1 there). The
+permutation terms `q_K·2^{−479} + q_K²·2^{−799}` are not mechanized. The step from the concrete
+KP800 to the ideal `Tag` is a modelling hypothesis (`TagIdeal`, §4), as the paper's "ideal in the
+standalone game only".
 
 **Why not plain UOV inversion?** A guessing reduction (embed one challenge at a random Tag query)
 must answer the other signing queries without `td`. The obvious simulation answers with uniform
@@ -479,6 +488,27 @@ per `ctx`, because parents share the spender's `ctx` (fact 1). ∎
     probe route and the `E4` route give the same bound: Theorem 1 above, with
     `Adv^{ompr}(q_T, N_I + N_S)`. Two steps remain on paper: that pqov's signer in the vinegar ROM
     has this law, and the average over the tables.
+  - *Under one-more-UOV, in Lean* (`Assumptions/RatatouilleOMPR.lean`, `balance_le_ompr`,
+    `balance_le_ompr_rate`):
+
+        Pr[win] ≤ N·ε_iss + N·ε_spend + Adv^{ompr}(B'; k + 1 + N, N) + (k + 1 + N)·ρ(σ)
+                  + failAdv(B) + Adv^{coll}_{Com}(C),
+
+    the OMPR game at the Issuer's key, `B' = ompiRed (fdhRed A')` explicit, `ρ(σ)` the probability
+    that the signer errs on a uniform target (`δ(sk)^{255}` for pqov). The chain:
+    `ufTagAdv_le_strict` (the probe-with-failures win of `B` is a strict win of `B.noProbe τ` or a
+    failure: `Adv^{uf-tag+probe}(B) ≤ Adv^{uf-tag}_{strict}(B.noProbe τ) + failAdv(B)`), then the
+    **modelling hypothesis** `TagIdeal`, then T1(a) and T1(c) of `uov-assumptions.md` §5.1
+    (`advFDH_le_ompr`). `TagIdeal` says that the strict UF-Tag advantage of `B.noProbe τ` against
+    the concrete KP800 is at most the det-FDH advantage (`Tag` a random function) of an
+    ideal-model forger `A'` with at most `k` hash and signing queries and `N` signing queries.
+    It is the paper's "Tag ideal in the standalone game only" made explicit: the protocol game and
+    its proofs evaluate the concrete `Tag`, so no theorem can replace it by an oracle there. It is
+    a hypothesis of the theorem, not proved, and it is the only one left
+    (`Audit/IdealTag.lean` instantiates all the others for `balA0`). Against the paper's Theorem 1
+    with A-OMPR: `N` counts `N_I + N_S`, `q_T` is `k + 1` (plus `N` padding targets), the
+    `(k + 1 + N)·ρ` term is new (T1(c) with an aborting signer), and the permutation terms
+    `q_K·2^{−479} + q_K²·2^{−799}` are absent because `Tag` is modelled as a random function.
   - The bound loses a factor `N` against the paper's single `ε_ext` for all proofs (L8 §9.1): the
     Lean single-proof theorems are applied once per request, with a union bound.
 
@@ -883,9 +913,12 @@ and determinism of `Tag`. The witness satisfies V3 by `change_correct`. ∎
 - Theorem 1 in Lean (`ROM/RatatouilleBalance.lean`, `balance_le_lean`, §4) still leaves:
   - `Adv^{uf-tag}(B)` and `Adv^{coll}(C)` are the explicit reductions' success probabilities,
     for a UF-Tag game with a signability probe (`TagForger`; `B` is mechanized as a forger of
-    it). Lemma 2.1 (UF-Tag from A-OMPI) and the binding bound `ε_bind^K` stay on paper: they
-    need KP800 as an ideal permutation, while the Lean `Com` and `Tag` are the concrete
-    Keccak-p[800]. The probe is no real strengthening: `balance_le_noProbe`
+    it). Lemma 2.1 (UF-Tag from A-OMPI) is in Lean with `Tag` a random function
+    (`advFDH_le_ompi`, and to OMPR `balance_le_ompr`, §4), from the modelling hypothesis
+    `TagIdeal` (concrete KP800 versus the ideal `Tag`), which stays a hypothesis; its permutation
+    terms (`q_K·2^{−479} + q_K²·2^{−799}`, KP800 a permutation with inverse queries) and the
+    binding bound `ε_bind^K` stay on paper: they need KP800 as an ideal permutation, while the
+    Lean `Com` and `Tag` are the concrete Keccak-p[800]. The probe is no real strengthening: `balance_le_noProbe`
     (`ROM/RatatouilleProbe.lean`) removes it at the cost of the signer's failures on at most `N`
     logged pairs, the paper's `E4` (`uov-assumptions.md` §5.8). That pqov's signer fails with
     probability `δ(sk)^{255}` independently per target is the paper step (Lemma D);
@@ -1019,3 +1052,18 @@ and determinism of `Tag`. The witness satisfies V3 by `change_correct`. ∎
 - `signRec_probeRec_le`, `logs_length_le`, `forger_logs_le`: one logged pair per call.
 - `balance_le_noProbe`: Theorem 1 with the probe-free forger and `failAdv(B)`.
 - `Audit/Nonvacuous.lean`: `balance_le_lean`'s hypotheses instantiated (`balA0`).
+
+`lean/VoleMole/Assumptions/IdealTag.lean` (protocol independent; `uov-assumptions.md` §5.1):
+- `ompiLazy`, `ompi_lazy_eqd`, `advOMPI_eq_lazy`: A-OMPI with targets drawn on demand.
+- `fdhRed`, `fdhComb`, `fdh_step`, `fdh_inv`, **`advFDH_le_ompi`**: T1(a), det-FDH (UF-Tag with
+  `Tag` a random function) ≤ A-OMPI.
+- `ompiRed`, `ompiComb`, `padC`, `pad_spec`, `ompi_step`, `ompi_inv`, `ompiWin_imp`,
+  **`advOMPI_le_ompr`**, `advOMPI_le_ompr_rate`, `badTargets`, `failRate`: T1(c), A-OMPI ≤ OMPR.
+- `advFDH_le_ompr`, `advFDH_le_ompr_rate`: both.
+
+`lean/VoleMole/Assumptions/RatatouilleOMPR.lean`:
+- `StrictWin`, `ufTagStrictAdv`, `ufTagStrictAdv_le`, `strictWin_noProbe`, `ufTagAdv_le_strict`:
+  UF-Tag with the strict win, from the probe game.
+- `ratTrap`, `FDHAdv`, `TagIdeal`: the Issuer's trapdoor and the modelling hypothesis.
+- **`balance_le_ompr`**, `balance_le_ompr_rate`: Theorem 1 under one-more-UOV.
+- `Audit/IdealTag.lean`: their hypotheses instantiated, except `TagIdeal` (`tagIdeal_of_eq_zero`).
