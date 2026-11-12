@@ -19,6 +19,10 @@ Two deterministic facts that the written proofs in `lean/docs/security/moussaka.
   injectively to commitments (distinct `(ctx_red, nf)` and binding), and there are more accepted
   redemptions than signed commitments, then some accepted redemption's commitment was never signed.
   This is the pigeonhole step that turns a one-more forger into a UOV-Com forger.
+
+* `collision_or_forgery` (§4, steps 3–4): with an extracted opening for every accepted issuance and
+  redemption, a win yields a `Com` collision among the openings or a redemption opening whose
+  commitment was never signed. `ROM/MoussakaOMUF.lean` uses it for Theorem 1.
 -/
 
 open Finset
