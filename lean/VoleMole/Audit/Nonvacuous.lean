@@ -9,6 +9,7 @@ import VoleMole.Privacy.RatatouilleInterleaveOC
 import VoleMole.Privacy.PomFRITLin
 import VoleMole.Privacy.SeedXOFNC
 import VoleMole.ROM.SpecSound
+import VoleMole.ROM.RatatouilleBalance
 import VoleMole.Privacy.PqovDelta
 import VoleMole.Privacy.PqovKeys
 
@@ -626,5 +627,19 @@ example (O : Bool → OilMat) (P1 : Bool → ℕ → GF256) (P2 : Bool → P2Par
 example (O : OilMat) (P1 : ℕ → GF256) := avg_delta255_pqovKey O P1
 
 end NCPqov
+
+/-! ## Ratatouille balance (`ROM/RatatouilleBalance.lean`) -/
+
+/-- An adversary that makes no queries: every call is the same issuance request. -/
+def balA0 : IC.RoundAdv Unit (Spec.Ratatouille.Op Spec.Ratatouille.Sizes.labelRows)
+    IC.RatBalance.Resp :=
+  ⟨(), fun s => pure (.issue (Vector.replicate _ 0) 1 (Vector.replicate 16 0), s), fun s _ => s⟩
+
+/-- **Theorem 1 (`balance_le_lean`)**: its hypotheses hold for `balA0`, any signer and any number of
+calls, with a key of a 32-byte digest; no hypothesis on the verifier remains (`verifyIC`). -/
+example (σ : IC.RatBalance.Signer) (N : ℕ) (lr : Bool) :=
+  IC.RatBalance.balance_le_lean lr ⟨ByteArray.mk (Array.replicate 32 0), ByteArray.empty⟩ balA0 N σ
+    (by decide) (qA := 0) (nA := 0) (eA := 0) (fun _ => trivial)
+    (fun _ => isQueryBoundP_pure _ _ _) (fun _ => isQueryBoundP_pure _ _ _)
 
 end VoleMole.Audit
