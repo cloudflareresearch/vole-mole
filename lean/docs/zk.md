@@ -820,7 +820,10 @@ All files are under `lean/VoleMole/ZK/` (and `Privacy/LeanProver.lean`, `Privacy
 `Privacy/RatatouilleAdaptive.lean`, `ZK/ReadsPoint.lean`, `Privacy/PomFRITLin.lean`,
 `ZK/ReadsInterleave.lean`, `Privacy/PomFRITInterleave.lean`, `Privacy/MoussakaInterleave.lean`,
 `Privacy/RatatouilleInterleave.lean`, `ZK/ReadsInterleaveOC.lean`, `Privacy/PomFRITInterleaveOC.lean`,
-`Privacy/MoussakaInterleaveOC.lean`, `Privacy/RatatouilleInterleaveOC.lean`, §10.8). There is
+`Privacy/MoussakaInterleaveOC.lean`, `Privacy/RatatouilleInterleaveOC.lean`, §10.8; for `main`'s
+layout without label rows, `ZK/Main.lean`, `ZK/Relations.lean`, §4.1, and `ZK/HopsMain.lean`,
+`Privacy/MainChain.lean`, `ZK/MainSlots.lean`, `ZK/MainGame.lean`, `Privacy/MoussakaMain.lean`,
+`Privacy/RatatouilleMain.lean`, §4.2). There is
 no `sorry` and no `axiom`. `#print axioms` lists
 only `propext`, `Classical.choice` and `Quot.sound`.
 
