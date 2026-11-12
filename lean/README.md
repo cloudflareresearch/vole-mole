@@ -76,29 +76,63 @@ permutations with inverse queries):
   - Moussaka one-more unforgeability (Thm 1, `omuf_le_num`): `Pr[Win] ≤ qI·ε_I + qR·ε_R +
     Adv^bind_Com(B₁) + Adv^ct-uf-open_K(B₂)`, `ε_I`, `ε_R` the adaptive spec soundness bounds at the
     game's budgets; the last term is a CT-UF^open advantage in a standalone game
-    (`omuf_le_num_open`), which follows from one-more-UOV (`uov-assumptions.md` T4; paper). Plain
-    CT-UF, without openings, is false for UOV (`ctuf_pqov_broken`);
+    (`omuf_le_num_open`). **Down to one-more-UOV** (`omuf_le_num_ompr`): with `Com` idealized in
+    that standalone game only (the named modelling hypothesis `hmodel`), it is at most
+    `Σ_k (Adv^ompr_k(B_k; q_f + 2q_S + 1, q_S) + (q_f + 2q_S + 1)·failPr_k)` over the `K` Anchor
+    keys (T4 with `Com` a random function, `advCTUFIdeal1_le_ompr`; the `K`-key step by guessing,
+    `advCTUFIdeal_le_sum`; `Assumptions/CTUFOpenOMPR.lean`). Plain CT-UF, without openings, is
+    false for UOV (`ctuf_pqov_broken`);
   - Ratatouille balance (Thm 1, `balance_le_ufTag`): `N` adaptive issuance and spend calls with
     chosen refunds, `Pr[win] ≤ N·ε_iss + N·ε_spend + Adv^uf-tag(B) + Adv^coll_Com(C)`, `B` an
-    explicit UF-Tag forger (with a signability probe) and `C` an explicit `Com` collision finder;
+    explicit UF-Tag forger (with a signability probe) and `C` an explicit `Com` collision finder.
+    The probe costs only the Issuer's `derive_preimage` aborts (`ufTagAdv_le_noProbe`,
+    `balance_le_noProbe`, `ROM/RatatouilleProbe.lean`; `≤ N·E[δ^{255}] ≈ N·2⁻²⁹⁵·⁸` for pqov, with
+    pqov's failure law a paper step). **Down to one-more-UOV** (`balance_le_ompr`,
+    `Assumptions/RatatouilleOMPR.lean`): with `Tag` idealized in the standalone UF-Tag game only
+    (the named modelling hypothesis `TagIdeal`), the UF-Tag term is at most
+    `Adv^ompr(B'; k + 1 + N, N) + (k + 1 + N)·ρ + failAdv(B)`, through det-FDH ≤ A-OMPI
+    (`advFDH_le_ompi`) and A-OMPI ≤ OMPR (`advOMPI_le_ompr`; `Assumptions/IdealTag.lean`);
   - PomFRIT one-more unforgeability (Thms U1, U2, `pomfrit_U1_bound`, `pomfrit_U2_bound`):
     `hash_to_target` a random oracle that the reduction programs perfectly; the forger's win is at
     most the reduction's advantage against Def. 3.1 (resp. A-OMPR⊕τ) with `Q_T + ℓ + 1` targets
-    and `ℓ` preimage queries, plus Lemma P's failure probability, an explicit term.
+    and `ℓ` preimage queries, plus Lemma P's failure probability, an explicit term; with the
+    standalone games, `pomfrit_U1_ompr`, `pomfrit_U2_omprShift`, and Def. 3.1 literally through
+    `advOMPR_le_ompr31`.
+- *The UOV assumptions* (`docs/security/uov-assumptions.md`, `Assumptions/`): the assumptions of §3
+  of that note as standalone games, generic in key generation, public map and `derive_preimage`
+  (`Assumptions/UOV.lean`), with the protocol theorems' UOV terms as their advantages
+  (`Assumptions/UOVLinks.lean`). Reductions in Lean: det-FDH ≤ A-OMPI and A-OMPI ≤ OMPR (T1(a),
+  T1(c), `Assumptions/IdealTag.lean`); CT-UF^open ≤ OMPR with `Com` a random function, and `K`
+  keys by guessing (T4, `Assumptions/CTUFOpenOMPR.lean`); OMPR ≤ OMPR⊕τ, tight
+  (`advOMPR_le_shift`), and OMPR⊕τ ≤ `τ^{ℓ+1}`·OMPR by guessing the shifts (P8(a),
+  `advOMPRShift_le_guess`, `Assumptions/Shift.lean`); OMPR ≤ one-more forgery plus a completeness
+  term for the blinding forger of any client with distinct session labels (T6, generic core,
+  `ompr_le_blind`, `Assumptions/Blind.lean`); UF-Tag with a signability probe ≤ UF-Tag plus the
+  signer's aborts (P9(a), `ufTagAdv_le_noProbe`). The real sampler can abort, so every "tight"
+  reduction carries a sampler-failure term `n·E[δ^{255}] ≈ n·2⁻²⁹⁵·⁸`.
 - *Audits* (§3, "Audits"). Every headline theorem's hypotheses are instantiated
-  (`Audit/Nonvacuous.lean`), and every privacy game's honest path is shown to reach its
+  (`Audit/Nonvacuous.lean`; for the unbound bounds, the UOV reductions and the shift games also
+  `Audit/UnboundROM.lean`, `Audit/IdealTag.lean`, `Audit/OMPRShift.lean`), and every privacy game's honest path is shown to reach its
   challenge outputs (`Audit/Liveness.lean`).
 - *Also*: the PomFRIT attack on `main` and the (PU) bound for the others (§3); zero knowledge on
   `main` for one proof of the executable prover up to an explicit prediction of `w[0..16)`
   (`zk_rom_ic_main`), and Moussaka 4(a) and Ratatouille unlinkability on `main` with the joint
   (PU) hop, (PU) an explicit term (`anonymity_main`, `unlinkability_main`, §3); Lemma DS (c) on
-  one SHAKE oracle (`seedXofDS_le`, §3); the deterministic cores of the protocol notes (§5);
+  one SHAKE oracle (`seedXofDS_le`, §3); the one-query attack on plain CT-UF from the scaling
+  symmetry `P(λs) = λ²·P(s)` (`Spec/PqovScale.lean`, `qmap_smul`, `ctuf_scaling_attack`) and the
+  counting cores of the OMPR⊕τ and CT-UF^× separations (`combiner_count`, `lottery_count`,
+  `rewind_supermartingale`); the deterministic cores of the protocol notes (§5);
   arithmetizations of all seven relations (§6); executable specs, verifier and prover that match
   the C++ KATs, unbound Moussaka's included (§7, §8).
 
 **On paper only**: Lemma P's bound (the reductions of PomFRIT's U1 and U2 are in Lean);
 Moussaka non-malleability (Thm 3) and the simultaneous-extraction form of its Thm 1; Ratatouille
-no theft, and the bounds on its UF-Tag and `Com`-binding terms (Lemma 2.1, `ε_bind^K`) (§5);
+no theft, its `Com`-binding term `ε_bind^K`, and Lemma 2.1's permutation terms (§5); the UOV
+reductions with `Com` or `Tag` a random permutation with inverse access (Lean: random functions),
+T1(b, d, e), T2, T3, T5, P8(b–d), the PomFRIT instance of T6 (`pomfrit.md` G9) and the converse of
+`advOMPR_le_ompr31` (`docs/security/uov-assumptions.md` §10); the meta-reduction theorems and the
+GPI analysis (`docs/security/uov-open-structure.md`) and the OMPR⊕τ and CT-UF^× separations
+(`docs/security/uov-open-reductions.md`), apart from their counting cores;
 strong simulation-extractability beyond its Lean core (§2); every quantum statement (§4,
 `docs/zk-qrom.md`); the composition of Lemma DS (c) with the privacy games' tables; the bad event
 `β` of the linear `N`-pair bounds (`docs/zk.md` §10.8); and, for ZK on `main`, a bound on the
@@ -108,8 +142,9 @@ collisions.
 **Modelling assumptions**: SHAKE128/256 are random oracles, AES-128 is an ideal cipher (classical
 and quantum); Keccak-p[800,12] one-wayness and binding/hiding of `Com` (computational: `Com` is
 evaluated inside the proofs, so no random-oracle bound applies to it, §3); for Moussaka 4(b)'s
-averaged abort term, the `P2` part of pqov's keys uniform; the protocol-specific UOV assumptions
-(§5, Gap 5); the Lean models are tied to the C++ by tests, not proofs (Gap 2).
+averaged abort term, the `P2` part of pqov's keys uniform; one-more-UOV (OMPR, Def. 3.1 with
+`derive_preimage`) for all three protocols, and for the Lean chains to it, `Com` (`hmodel`) and
+`Tag` (`TagIdeal`) idealized in the standalone UOV games only (§5, Gap 5); the Lean models are tied to the C++ by tests, not proofs (Gap 2).
 
 **Findings and paper corrections** (details in the section or note cited):
 - *ZK fails with FAEST's CRT masks*: PomFRIT's Issuer linked redemptions to issuances; fixed on
@@ -135,6 +170,32 @@ averaged abort term, the `P2` part of pqov's keys uniform; the protocol-specific
   README rewrite (`ef3259e`) dropped the warning that a VOLE-IHAT nullifier record must span every
   accepted Anchor Set; a per-set record allows one redemption per set (F8,
   `docs/security/moussaka.md`).
+- *UOV assumptions* (`docs/security/uov-assumptions.md`, `uov-open-reductions.md`,
+  `uov-open-structure.md`):
+  - **CT-UF as stated is false for UOV.** The public map is homogeneous quadratic and every element
+    of GF(256) is a square, so one signing query on `μ·Com(x*)`, rescaled, forges on the unqueried
+    `Com(x*)` (`ctuf_pqov_broken`). It was this analysis's own intermediate assumption for Moussaka;
+    the draft states one-more-UOV, which is unaffected. Moussaka's proof now goes through
+    CT-UF^open (`docs/security/moussaka.md` §3.3). With freshness up to scalars, CT-UF is
+    equivalent to "OMPR with free non-challenge calls", which no relativizing reduction derives
+    from OMPR (oracle separation, paper).
+  - **The "tight" reductions T1(c) and T4 were not**: they need padding to exactly `q + 1` claims
+    (`q_T + Q` and `q_f + 2q_S + 1` targets) and, with the real aborting sampler, a term
+    `n·E[δ^{255}]`; T4's timing term `q_S·(q_f + q_S + 1)·2⁻³⁵⁹·⁹` is unnecessary.
+  - Ratatouille Thm 1 omitted the Issuer's abort term (`E4`, `(N_I + N_S)·E[δ^{255}]`), which must
+    also cover aborts on forwarded signing calls; T5 lacked the same term; Theorem 4 of
+    `ratatouille.md` had `255⁻²⁵⁶` for `δ(sk)^{255}`. The signability probe of the Lean balance
+    game costs exactly that term (P9); an Issuer salt (R1) does not remove it.
+  - **OMPR ⇒ OMPR⊕τ**: every reduction black-box in the adversary and the trapdoor function, even
+    with rewinding, loses at least `τ^{q+1}/2` in a generic model, so guessing is optimal in that
+    class (paper); PomFRIT's `Q₃·2⁻⁷¹` stays unless a proof uses UOV's algebra.
+  - **The meta-reduction (P7) is now three theorems** (paper): no key-preserving black-box
+    reduction from the UOV problem, OW or EUF/SUF-CMA to OMPR or CT-UF (A1), none fully black-box
+    to any of OMPR, A-OMPI, CT-UF, CT-UF^open (A2, using the determinism of `derive_preimage`), and
+    T2's loss `q_T` is optimal for single-run reductions that use only validity (A3).
+  - **GPI**: reliable badness tests give key recovery (heuristic, checked on toy parameters); no
+    cheaper test is known; GPI ≈ key recovery (≈ 2²⁰¹ bit operations for uov-Ip) is a conjecture.
+    The cost figures are estimates under semi-regularity, and the literature is cited from memory.
 - *Extraction* (§1, §9): the sketch's "alive" leaf admitted an attack; bad challenges must be
   charged per `H₂¹`/`H₂²` query; the L2 interface was wrong (F2); Post (C3) fails against inverse
   cipher queries and is tied to the chains' points (F3, `PostP`); the sketch's "AES-CTR as a
@@ -183,6 +244,12 @@ lean/
     Privacy/                privacy games on the executable specs (blindness, issuer hiding,
                             unlinkability): with zero knowledge and hiding as hypotheses, and
                             for the Lean prover in the random-oracle and ideal-cipher model
+    Assumptions/            the UOV assumptions as standalone games (UOV) and their links to the
+                            protocol theorems (UOVLinks); reductions between them: T1(a)/(c)
+                            (IdealTag), T4 and the K-key step (CTUFOpenOMPR), A1 and P8(a)
+                            (Shift), T6's generic core (Blind); Ratatouille under OMPR
+                            (RatatouilleOMPR); shared lazy-sampling, union-bound and simulation
+                            lemmas (LazyIdeal)
     Audit/                  non-vacuity checks: the headline theorems' hypotheses instantiated,
                             and the games' honest paths shown to reach the challenge outputs
   vectors/                  test vectors dumped by the C++ (untracked; regenerate with the dumpers)
@@ -195,6 +262,7 @@ lean/
       Q1-…Q7-*.md           quantum (QROM) lemmas
     zk.md, zk-qrom.md       zero knowledge, classical and quantum
     security/               protocol-level security notes
+scripts/uov-open-structure/ (repository root) cost estimates and toy experiments for the GPI analysis
 ```
 
 All `file:line` citations in `docs/` are relative to the repository root. Most refer to commit
@@ -1032,12 +1100,14 @@ limitation, not an attack) takes over. Strong simulation-extractability: 2⁻⁶
 
 | Note | Main results | Main findings |
 |---|---|---|
-| `pomfrit.md` | One-more unforgeability (classical: proved; [Lean] the U1/U2 reductions, `pomfrit_U1_bound`, `pomfrit_U2_bound`, with Lemma P's failure probability an explicit term; quantum: Q7, under new quantum UOV assumptions). Blindness: **fails on `main`**, proved with the ZK fix. | The paper's reduction has a gap (its first-phase extractor is not well defined for multi-tree VOLEitH), repaired by Lemma P at a 2⁻⁷¹ per-query loss ([Lean] `Protocols/PomFRIT.lean`). A holder can make many valid signatures per message (non-minimal grinding counter): deduplicate on the message. |
-| `moussaka.md` | One-more unforgeability, double-spend detection, redemption non-malleability, issuer hiding: proved. [Lean] Thm 1 in the ROM and ideal-cipher model (`omuf_le_num`, `ROM/MoussakaOMUF.lean`). | Nullifier squatting (low). The draft's one-more-UOV argument is invalid as written; restructured. `main`'s README no longer says the nullifier record must span every accepted Anchor Set (F8, documentation). |
+| `pomfrit.md` | One-more unforgeability (classical: proved; [Lean] the U1/U2 reductions, `pomfrit_U1_bound`, `pomfrit_U2_bound`, with Lemma P's failure probability an explicit term, stated with OMPR and OMPR⊕τ as standalone games (`pomfrit_U1_ompr`, `pomfrit_U2_omprShift`); quantum: Q7, under new quantum UOV assumptions). Blindness: **fails on `main`**, proved with the ZK fix. | The paper's reduction has a gap (its first-phase extractor is not well defined for multi-tree VOLEitH), repaired by Lemma P at a 2⁻⁷¹ per-query loss ([Lean] `Protocols/PomFRIT.lean`). A holder can make many valid signatures per message (non-minimal grinding counter): deduplicate on the message. |
+| `moussaka.md` | One-more unforgeability, double-spend detection, redemption non-malleability, issuer hiding: proved. [Lean] Thm 1 in the ROM and ideal-cipher model (`omuf_le_num`, `ROM/MoussakaOMUF.lean`), down to one-more-UOV with `Com` idealized in the standalone game (`omuf_le_num_ompr`). | Nullifier squatting (low). The draft's one-more-UOV argument is invalid as written (it programs `Com` inside the protocol); restructured through CT-UF^open. This note's earlier intermediate assumption, plain CT-UF, is false for UOV (scaling); the draft's assumption is unaffected. `main`'s README no longer says the nullifier record must span every accepted Anchor Set (F8, documentation). |
 | `moussaka-unbound.md` | Unbound tokens (late `ctx_red` binding, PR #63, `62be5bc`): one-more unforgeability per `(ctx_iss, ctx_red)`, nullifier determinism, redemption non-malleability (including redirection to another `ctx_red`), issuer hiding and unlinkability, also across redemption contexts. Proved on paper; [Lean] arithmetization soundness and completeness (`Arith/MoussakaUnbound.lean`), end-to-end extraction (`EndToEnd/MoussakaUnbound.lean`), issuer hiding and unlinkability across contexts on the executable spec with `n` adaptively chosen redemption queries: colluding (Thm U5(a)) `≤ 4εI + 2n·εR + 2εprf` (`Privacy/MoussakaUnboundAd.anonymityAd`; non-adaptive: `Privacy/MoussakaUnbound.anonymity`), non-colluding (Thm U5(b), corrected) `≤ 2n·εR + 2·(ψ₀ + ψ₁) + 2εprf` with `ψ_c ≤ κ + φ_c`, and `≤ 2n·εR + 2·(δ₀²⁵⁶ + δ₁²⁵⁶) + 2εprf` over vinegar random oracles (`Privacy/MoussakaUnboundNC.anonymityNC`, `anonymityNC_vinegarRO`), both from per-proof zero knowledge and the PRF advantage of Keccak-p[800,12] as hypotheses; the executable verifier and prover on its KATs and the random-oracle extraction bounds (fixed and adaptive statements, permutation model, spec relations; `ROM/MoussakaUnbound*.lean`), the deterministic cores of unforgeability (`Protocols/MoussakaUnbound.lean`), domain separation. | Squatting is no longer possible (fixes the base note's F2). Privacy against non-colluding Moderators now needs a PRF assumption on Keccak-p[800,12]. A token keeps no record of the contexts it was redeemed in. The paper proof of U5(b) kept the issuance-acceptance bits through the PRF hop; the corrected abort term also counts the issuance proof's completeness error (UF7). |
-| `ratatouille.md` | Balance (no inflation), no theft, unlinkability, correctness: proved. [Lean] Thm 1 (balance) in the ROM and ideal-cipher model (`balance_le_ufTag`, `ROM/RatatouilleBalance.lean`). | Spends are not bound to a session, so a copied spend request can be redeemed first (medium). Thm 1's UF-Tag reduction must not forward the Issuer's signing calls on the duplicate-nullifier path (corrected). |
+| `ratatouille.md` | Balance (no inflation), no theft, unlinkability, correctness: proved. [Lean] Thm 1 (balance) in the ROM and ideal-cipher model (`balance_le_ufTag`, `ROM/RatatouilleBalance.lean`), without the probe (`balance_le_noProbe`), and down to one-more-UOV with `Tag` idealized in the standalone game (`balance_le_ompr`). | Spends are not bound to a session, so a copied spend request can be redeemed first (medium). Thm 1's UF-Tag reduction must not forward the Issuer's signing calls on the duplicate-nullifier path (corrected); Thm 1 omitted the Issuer's abort term (corrected). |
 | `domain-separation.md` | Every hash/XOF/permutation call lies in a disjoint domain, except below. [Lean] `Protocols/DomainSeparation.lean` | PomFRIT's `hash_to_target` overlaps four proof-system domains (no exploit found; fix: a final domain byte). |
-| `uov-assumptions.md` | Relates the protocol-specific UOV assumptions to each other and to standard UOV. [Lean] `Protocols/UOVAssumptions.lean` | Several reductions are unavailable; the note states why. |
+| `uov-assumptions.md` | Relates the protocol-specific UOV assumptions to each other and to standard UOV: all three protocols rest on one-more-UOV (OMPR). [Lean] the counting cores (`Protocols/UOVAssumptions.lean`), the assumptions as games (`Assumptions/UOV.lean`) and T1(a), T1(c), T4 (random-function `Com`), A1, P8(a), T6's generic core, P9(a) (`Assumptions/`). | Several reductions are unavailable; the note states why. Lemma U (CT-UF from OMPR) was wrong; T1(c) and T4 need padding and a sampler-failure term. |
+| `uov-open-reductions.md` | OMPR versus OMPR⊕τ: the tight direction, and no relativizing reduction for the other with loss below `τ^{q+1}/2`; CT-UF up to scalars ≡ OMPR with free non-challenge calls, separated from OMPR. Paper; [Lean] counting cores and the scaling attack (`Spec/PqovScale.lean`). | Plain CT-UF is false for UOV. |
+| `uov-open-structure.md` | Meta-reduction theorems A1–A3 (one-more UOV assumptions do not follow from the UOV problem by key-preserving black-box reductions); first cryptanalysis of GPI. Paper only; scripts in `scripts/uov-open-structure/`. | GPI ≈ key recovery is a conjecture; estimates under semi-regularity, citations from memory; weak two-sided distinguishers and key-changing reductions are open. |
 | Privacy on the specs ([Lean] `VoleMole/Privacy/`) | The privacy theorems as games on `Spec/*`, each hybrid hop mechanized, from per-proof zero knowledge (`Privacy.ZeroKnowledge`: a simulator from the instance alone, `ε`-close for every valid witness) and, for Moussaka 4(a) and Ratatouille, hiding of `Com` for explicit reductions: PomFRIT blindness (`Privacy.PomFRIT.blindness`, `≤ 4ε`); Moussaka issuer hiding and unlinkability against a Moderator colluding with all Anchors (Thm 4a, `Privacy.Moussaka.anonymity`, `≤ 4εI + 4εR + 2εhide`) and against one that sees no issuance (Thm 4b corrected, `Privacy.Moussaka.anonymityNC`, `≤ 4εR + 2·(φ₀ + φ₁)`, no assumption on `Com`), both also for `main`'s Client that finds its Anchor itself (`Privacy.MoussakaFind.anonymity`, `.anonymityNC`; the other Moussaka games take the index-taking Client of the API before `21be618`); Ratatouille unlinkability of spends from issuances and from each other through change tokens (`Privacy.Ratatouille.unlinkability`, `≤ 4εI + 4εS + 2εhide`). With the executable Lean prover (label rows) down to its tape hypothesis (`*_label_rows`, `blindness_lean`; `*_shake` with the hop hypotheses); for 4(a), Ratatouille and PomFRIT also in the random-oracle and ideal-cipher model with every zero-knowledge term explicit (`*RO_lean_num`), with table-reading interactions (`*RA_lean_num`, `blindnessRAH_lean_num`, `*OC*`), with AES as random permutations (`_perm`), with one shared `H₃` (`*Sh_num`, `blindnessRAHSh_num`) and from the real Clients' seeds (`*_seed`); Moussaka 4(b) also in the random-oracle and ideal-cipher model (`anonymityNCRO_lean_num`, `anonymityNCSh_num`, with `_seed`), with the Moderator's choices read off the tables (`anonymityNCRA_lean_num`, `anonymityNCOC_lean_num`), with pqov's signer (`anonymityNC_pqov`, `anonymityNCRO_pqov`; averaged over pqov's keys `anonymityNCRO_pqov_pqovKeys`, abort term `≈ 2⁻²⁹³·⁸`; the model equals the C++ `derive_preimage` on the KAT targets, `spec_kats`) and reaching redemption (`pr_refused_NCRO_le`); 4(a) and Ratatouille also with table-reading key stages (`anonymityRAK_lean_num`, `unlinkabilityRAK_lean_num`); 4(a), Ratatouille and PomFRIT also with many sessions (`*N_lean_num`, `*P_lean_num`, `blindnessPH_lean`, `blindnessAd_lean_num`, `anonymityAd_lean_num`, `unlinkabilityAd_lean_num`; interleaved schedules, Ratatouille's further Clients spending several times: `blindnessIL_lean_num`, `anonymityIL_lean_num`, `unlinkabilityIL_lean_num`; with a table-reading scheduler and a free challenge: `blindnessILO_lean_num`, `anonymityILO_lean_num`, `unlinkabilityILO_lean_num`; Moussaka and Ratatouille with `N` pairs linear up to a bad event, `anonymityP_lin`, `unlinkabilityP_lin`). Bounds and what remains: §3 | The zero-knowledge hypothesis is false on `main` for PomFRIT (`ZK.pomfrit_issuer_hits`, `ZK.pomfrit_attack_test`); for Moussaka and Ratatouille no efficient simulator satisfies it per proof on `main`, and the joint (PU) hop replaces it ([Lean] `anonymity_main`, `unlinkability_main`, (PU) as an explicit term). PomFRIT note §8.3: the "both ⊥" rule is needed. Moussaka Thm 4(a) needs no `2⁻¹⁹²` term; Thm 4(b) misses an abort term `2·(φ₀ + φ₁)` (negligible, bounded with no assumption on `Com`), needs the Client to take its index from `S`, and needs no `2⁻¹⁹²` term either. Its Lean random-oracle games were vacuous until they used the label-row Anchor (fixed); with pqov's signer its abort term is bounded only on average over the keys (§3). Ratatouille H3 needs the Client's validity check against the commitment it sent. Ratatouille's H1 misses the seed collisions, and Moussaka's Thm 4 has no term for the seed-XOF hop (`docs/zk.md` §10.6) |
 
 **Cross-cutting finding (critical, deployment):** PomFRIT's Issuer signs arbitrary targets, and
@@ -1303,10 +1373,19 @@ What is **not** established, roughly in order of importance:
 4. **Idealized models.** AES-128 is an ideal cipher (classical and quantum), SHAKE and Keccak-p are
    random oracles or random permutations. The Keccak-p[800,12] relations additionally need
    one-wayness/binding assumptions on a 12-round permutation that have little cryptanalysis.
-5. **New assumptions.** The protocol proofs use protocol-specific UOV assumptions (one-more
-   preimage resistance and variants; chosen-target unforgeability for Moussaka). The quantum
-   protocol theorems need quantum-oracle versions of these that are new. Whether standard OMPR
-   implies the τ-shift variant used for PomFRIT's tight bound is open.
+5. **New assumptions.** All three protocols rest on one-more-UOV (OMPR, Def. 3.1 with
+   `derive_preimage`), and the map from the protocol-specific notions to it is in
+   `docs/security/uov-assumptions.md`, partly in Lean (`Assumptions/`). What remains:
+   - OMPR itself is not expected to follow from the UOV problem (`uov-open-structure.md` Part A),
+     so it needs its own cryptanalysis; the GPI route (loss `q`) rests on a conjecture (Part B).
+   - The Lean chains to OMPR idealize `Com` (`hmodel`) and `Tag` (`TagIdeal`) as random functions
+     in the standalone games; the permutation versions with inverse access are paper.
+   - PomFRIT's tight bound needs OMPR⊕17; OMPR ⇒ OMPR⊕17 without the `τ^{q+1}` loss has no
+     black-box proof (`uov-open-reductions.md`), and one using UOV's algebra is open.
+   - The PomFRIT instance of T6 (`pomfrit.md` G9) and the converse of `advOMPR_le_ompr31` are not
+     in Lean.
+   - The quantum protocol theorems need quantum-oracle versions of these assumptions, which are
+     new.
 6. **Quantum bounds stop at about 2⁵¹·⁷ queries.** Going further needs a point-level
    multi-collision lemma for the compressed ideal cipher (M1–M3 in `Q6-cipher-binding.md` §7.3);
    none is known. Parallel quantum queries are not treated.
