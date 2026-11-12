@@ -11,7 +11,7 @@
 #include <bit>
 #include <cstddef>
 #include <cstdint>
-#include <cstdio>
+#include <cstdio> // IWYU pragma: keep (for stderr)
 #include <cstdlib>
 #include <optional>
 #include <print>
