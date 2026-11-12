@@ -38,7 +38,7 @@ hash oracles and every coin value `E`, its output depends on `σ` only through `
 points it logs (its *signing log*), and through a view `pv` of `σ`'s values at the points of its
 *probe log*. This is the form of `ROM/RatatouilleBalance.lean`'s `TagForger`, and the form the
 protocol reductions produce (they run a whole protocol game in which an honest party calls the
-signer). An oracle adversary is a semantic one with the same advantage (`SemForger.ofOracle`); the
+signer). An oracle adversary is a semantic one with the same advantage (`ofOracle`); the
 converse is not claimed (a semantic adversary may need more adaptive queries to be realized; the
 CT-UF and UF-Tag wins do not count queries).
 * `advCTUF` (item 10) and `advCTUFOpen` (item 11) for `K` keys: oracle `(k, t) ↦ D(sk_k, t)` on
@@ -61,7 +61,7 @@ keyed ones average them over `keyGen`.
 `comb31_eqd`); `advUOVn_le_sum` (n-target ≤ Σᵢ single-target, embedding at each `i`;
 `unifVec_update`); `advCTUFOpenAt_le`, `advCTUFOpen_le` (CT-UF^open ≤ CT-UF, the same forger);
 `advCTUFXAt_le` (CT-UF^× ≤ CT-UF); `advUFTagAt_eq_probe` (a forger without probe is a probe
-forger); `SemForger.ofOracle`. **Sanity** (the trivial attacks lose): `not_wins_of_iq`,
+forger); `ofOracle`. **Sanity** (the trivial attacks lose): `not_wins_of_iq`,
 `not_ompiWin_of_opened`, `not_fdhWin_of_signed`, `not_ctWin_of_signed`, `not_ufWin_of_answered`.
 Not defined: OMPR^free (`uov-open-reductions.md`), EUF-CMA of the specified and of salt-UOV
 (items 4, 5).

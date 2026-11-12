@@ -786,7 +786,7 @@ no `axiom`). A *trapdoor* (`Trapdoor`) is a key generator, the preimage relation
 CT-UF and UF-Tag are *semantic-oracle* games (`SemForger`, the form of Ratatouille's
 `TagForger`): the forger gets the signer as a function, with a proof (`reads`) that its output
 depends on it only at the points it logs (and, for the probe, only on success there). Every
-oracle forger is one (`SemForger.ofOracle`, same advantage); the converse is not proved. The
+oracle forger is one (`ofOracle`, same advantage); the converse is not proved. The
 trivial attacks lose each game (`not_wins_of_iq`, `not_ompiWin_of_opened`, `not_fdhWin_of_signed`,
 `not_ctWin_of_signed`, `not_ufWin_of_answered`). pqov's trapdoor (keys of
 `Privacy/PqovKeys.lean`, the reference `derive_preimage`) is correct (`Audit.pqovTrap_correct`).
