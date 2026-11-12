@@ -29,8 +29,8 @@ glue:
   `j` rounds and one more request (`isKindQueryBoundIC_proverAt`, `isQueryBoundP_proverAt`).
 
 The honest party here is any computation against `specIC`. For a party that verifies proofs with
-the executable verifier this needs the verifier's cipher evaluations as queries; see
-`ROM/RatatouilleBalance.lean`, `VerifierIC`.
+the executable verifier this needs the verifier's cipher evaluations as queries: `VerifierIC`
+states what is needed, and `ROM/VerifierIC.lean` proves it for `verifyIC`.
 -/
 
 open OracleComp OracleSpec

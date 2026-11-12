@@ -31,7 +31,7 @@ Line references are `file:line` at `6d7113e`.
 
 | Notion | Result | Main terms |
 |---|---|---|
-| **Balance** (no inflation): accepted spends ≤ issued + refunded, against adaptive malicious clients, honest clients present | **Proved** (Thm 1), classical. [Lean] as a game on the executable spec and the Lean verifier in the ROM and ideal-cipher model, `N·ε_iss + N·ε_spend + Adv^{uf-tag}(B) + Adv^{coll}(C)` (`ROM/RatatouilleBalance.lean`, `balance_le`; §4), assuming a cipher-querying implementation of the verifier (`VerifierIC`) | `ε_ext + Adv^{uf-tag} + q_K²·2^{−257}` |
+| **Balance** (no inflation): accepted spends ≤ issued + refunded, against adaptive malicious clients, honest clients present | **Proved** (Thm 1), classical. [Lean] as a game on the executable spec and the Lean verifier in the ROM and ideal-cipher model, `N·ε_iss + N·ε_spend + Adv^{uf-tag}(B) + Adv^{coll}(C)` (`ROM/RatatouilleBalance.lean`, `balance_le_lean`; §4); `B`, `C` explicit reductions whose advantages stay terms | `ε_ext + Adv^{uf-tag} + q_K²·2^{−257}` |
 | **No theft**: an adversary cannot spend an honest client's credits through a request it did not copy verbatim | **Proved** (Thm 3), using weak SE and a ZK hop | `ε_ZK + ε_SE + q_K·2^{−127}` |
 | **No theft by copying** (hijack): anyone who obtains a spend request can redeem it first | **Fails** (F2). Nothing binds a spend to a session, unlike {{ACT}}'s `ctx_spend` and Moussaka's `challenge_digest` | — |
 | **Unlinkability/anonymity** against a malicious Issuer: spends and issuances leak only `(pk, ctx_iss, T_init, d)` and whether the client could afford the spend | **Proved** (Thm 2). On `main` it relies on Keccak one-wayness in `r`; with the fix it is standard NIZK. [Lean] a two-round left/right form, from ZK and hiding hypotheses (`Privacy/Ratatouille.lean`); with the executable Lean prover (label rows) down to its tape hypothesis (`Privacy/RatatouilleLean.lean`, `unlinkability_label_rows`); for the Lean prover in the ROM and ideal-cipher model with every zero-knowledge term explicit, `≈ 2⁻¹⁰²·³` plus budget terms and `2·ε_hide` (`unlinkabilityRO_lean_num`), and `≈ 2⁻¹⁰¹·⁶` with a table-reading Issuer (`unlinkabilityRA_lean_num`; §6); also with AES as random permutations (`_perm`) and with one shared `H₃` (`unlinkabilitySh_num`, `unlinkabilityRASh_num`); from the real Clients' OS seeds and seed XOF, each `+ 2·(2q_H + 2)·2⁻²⁵⁶` with `q_H` the Issuer's XOF queries (`unlinkability*_seed`, `lean/docs/zk.md` §10.6; the note's H1 does not charge seed collisions); with a key stage (the Issuer's key, context and balance) that reads the tables too (`unlinkabilityRAK_lean_num`, `≈ 2⁻¹⁰¹·⁶`); with any number `n` of further honest Clients, `≤ n·2⁻¹⁰¹` plus budget terms and `2·ε_hide` (`unlinkabilityN_lean_num`), also adaptively scheduled, each further session's key, context, balance, response and amount chosen from earlier outcomes and the challenge key, context and balance from the sessions before it (`unlinkabilityAd_lean_num`, the same numbers), and interleaved in any order with each further Client spending up to `K` times along its change tokens (`unlinkabilityIL_lean_num`, `≤ (n(K + 1) + 2)·2⁻¹⁰¹`; with a table-reading scheduler that also places the challenge's stages, `unlinkabilityILO_lean_num`, `+ 46·L·(a₃ + a₂ + a₅ + 221·a_E)·2⁻¹²⁸`), and with `N` challenge pairs (`unlinkabilityP_lean_num`; `lean/docs/zk.md` §10.8, §11) | `ε_ZK + q_K·2^{−127}` |
@@ -401,7 +401,8 @@ per `ctx`, because parents share the spender's `ctx` (fact 1). ∎
   any signer `σ : Target → Option Preimage`. The adversary wins if, in some context,
   `Σ d > Σ T_init + Σ x'` over the accepted calls. Honest Clients are covered: an adversary that
   runs their code is an adversary of the game.
-- *The bound* (`balance_le`):
+- *The bound* (`balance_le`; `balance_le_lean` with the Issuer's verifications re-run by
+  `verifyIC`, no hypothesis on the verifier):
 
       Pr[win] ≤ N·ε_iss(Q) + N·ε_spend(Q) + Adv^{uf-tag}(B) + Adv^{coll}_{Com}(C)
 
@@ -409,7 +410,9 @@ per `ctx`, because parents share the spender's `ctx` (fact 1). ∎
     `ratatouilleIssue_accept_le_adaptive_spec` and `ratatouilleSpend_accept_le_adaptive_spec`
     (`ROM/SpecSound.lean`), at the budget `Q` of `N` calls: `N(e_A + e_V)` cipher queries,
     `N(n_A + n_V)` hash queries and `N(q_A + q_V)` per kind, for `q_A`, `n_A`, `e_A` per call of
-    the adversary and `q_V`, `n_V`, `e_V` per verification. They apply to the `j`-th prover
+    the adversary and `q_V`, `n_V`, `e_V` per verification (for `verifyIC`: `verifierQueries`
+    plus one `mu₁` and one `iv` query, `verifierTotal + 2 = 339`, and `cipherCount p`: two cipher
+    queries per GGM node and per leaf commitment and `voleColBlocks` per leaf). They apply to the `j`-th prover
     (`proverAt`, `provI`, `provS`): the game up to call `j`, re-run with the Issuer, then the
     `j`-th request as its proof and statement. `hinj` holds for the Issuer's fixed key with a
     32-byte digest.
@@ -426,13 +429,15 @@ per `ctx`, because parents share the spender's `ctx` (fact 1). ∎
   spent `≤` issued + refunded. `prEvent_bind_le_sum_of_table` turns the per-table implication into
   the sum: the game and the single-proof games are different computations against one lazy
   random oracle, compared through a common eager table on a finite key set.
+- *The Issuer's verifications inside the `j`-th prover.* The `j`-th prover re-runs the Issuer's
+  verifications, and they must be cipher queries so that the extractor sees them (as the paper's
+  extractor reads the Issuer's queries); the executable verifier reads the cipher as a table
+  (`icPrg E.cipher`). `balance_le` takes any `VerifierIC` implementation; `ROM/VerifierIC.lean`
+  writes one, `verifyIC` (the CTR PRG one cipher query per block, in the BAVC reconstruction and
+  the VOLE expansion), proves that it is the executable verifier on every pair of tables
+  (`evalWithAnswerFn_verifyIC`) and bounds its queries (`verifierIC_verifyIC`). The game itself
+  verifies with the executable verifier (`verifyQ`).
 - *What stays assumed.*
-  - `VerifierIC`: the `j`-th prover must re-run the Issuer's verifications as cipher queries, so
-    that the extractor sees them (as the paper's extractor reads the Issuer's queries); the
-    executable verifier reads the cipher as a table (`icPrg E.cipher`). The hypothesis is a
-    computation against `specIC` that agrees with `verify` on every pair of tables, with query
-    bounds. It is deterministic (no probability), but no such computation is written yet, so the
-    theorem is not yet shown non-vacuous in this hypothesis (§11).
   - `Adv^{uf-tag}(B)` and `Adv^{coll}(C)` are the success probabilities of the two explicit
     reductions, not bounds. That `B` uses the secret key only through signing queries is
     argued, not mechanized: the game takes the signer `σ` as a parameter, `B` re-runs the Issuer
@@ -821,11 +826,7 @@ and determinism of `Tag`. The witness satisfies V3 by `change_correct`. ∎
 
 - A-OMPI is a protocol-specific assumption. There is no reduction to UOV inversion (§2.3); R1
   would give a reduction to standard salted UOV EUF-CMA.
-- Theorem 1 in Lean (`ROM/RatatouilleBalance.lean`, `balance_le`, §4) still assumes:
-  - a cipher-querying implementation of the executable verifier (`VerifierIC`): agreement with
-    `verify` on every pair of tables and query bounds. Writing it (the BAVC reconstruction and
-    the VOLE expansion with each AES-CTR block a cipher query) would remove the hypothesis; until
-    then no instance is exhibited;
+- Theorem 1 in Lean (`ROM/RatatouilleBalance.lean`, `balance_le_lean`, §4) still leaves:
   - `Adv^{uf-tag}(B)` and `Adv^{coll}(C)` are the explicit reductions' success probabilities. The
     UF-Tag game itself, and the fact that `B` is an adversary of it (it reads the signer only on
     its signing queries, plus the duplicate-path abort bit), are on paper; so are Lemma 2.1
@@ -919,7 +920,12 @@ and determinism of `Tag`. The witness satisfies V3 by `change_correct`. ∎
   `isQueryBoundP_proverAt`: the `j`-th prover and its budget.
 - `gameA_out`, `extWit`, `extWit_spec`: the single-proof game's output per table, and the
   extracted witness.
-- `VerifierIC`: the hypothesis on a cipher-querying verifier.
+- `VerifierIC`: a cipher-querying implementation of the executable verifier, as a hypothesis.
+
+`lean/VoleMole/ROM/VerifierIC.lean` (protocol independent):
+- `prgIC`, `deriveStepIC`, `leavesOfIC`, `reconstructIC`, `convertToVoleIC`, `verifyIC`: the
+  verifier with the cipher as queries; `evalWithAnswerFn_verifyIC`: it is `verify` per table.
+- `verifierQueriesIC`, `cipherCount`, `verifierIC_verifyIC`: its budget; `VerifierIC` holds.
 
 `lean/VoleMole/ROM/RatatouilleBalance.lean`:
 - `romPrim`, `serveP`, `serveM`, `balQ`, `balT`, `Win`: the game.
@@ -929,4 +935,5 @@ and determinism of `Tag`. The witness satisfies V3 by `change_correct`. ∎
 - `no_win`: the deterministic core (no failure, no win), through `Spec.Ratatouille.World.step_inv`.
 - `ext_issue`, `ext_spend`, `win_imp`: per table, a win is a failure.
 - `pr_failI_le`, `pr_failS_le`: the single-proof bounds for the `j`-th prover.
-- `balance_le`: Theorem 1.
+- `balance_le`: Theorem 1 for any `VerifierIC`; `balance_le_lean`: with `verifyIC`.
+- `Audit/Nonvacuous.lean`: `balance_le_lean`'s hypotheses instantiated (`balA0`).

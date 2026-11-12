@@ -17,7 +17,8 @@ is an adversary of this game, and balance does not distinguish whose requests th
 
 ## The bound
 
-`balance_le`: `Pr[win] ≤ N·ε_iss + N·ε_spend + Adv^{uf-tag}(B) + Adv^{coll}(C)`, where
+`balance_le`, `balance_le_lean`: `Pr[win] ≤ N·ε_iss + N·ε_spend + Adv^{uf-tag}(B) + Adv^{coll}(C)`,
+where
 * `ε_iss`, `ε_spend` are the single-proof extraction bounds of `ROM/SpecSound.lean`
   (`ratatouilleIssue_accept_le_adaptive_spec`, `ratatouilleSpend_accept_le_adaptive_spec`) at
   the query budget of `N` rounds: one per request, applied to the `j`-th prover
@@ -34,13 +35,14 @@ does not win, every accepted spend satisfies the hypotheses of the deterministic
 state it spends was released earlier with the same opening and refund), so the adversary does not
 win; `prEvent_bind_le_sum_of_table` turns this into the bound.
 
-## The remaining hypothesis
+## The Issuer's verifications inside the extraction provers
 
 The `j`-th prover must re-run the Issuer's verifications as queries to the cipher, so that the
 straight-line extractor sees them (as the paper's extractor reads the Issuer's queries). The
-executable verifier reads the cipher as a table (`icPrg E.cipher`), so the theorem takes a
-cipher-querying implementation of it as the hypothesis `VerifierIC` (agreement with `verify` on
-every table, and query bounds). Nothing probabilistic is assumed about it.
+executable verifier reads the cipher as a table (`icPrg E.cipher`), so `balance_le` takes a
+cipher-querying implementation of it (`VerifierIC`); `balance_le_lean` uses `verifyIC`
+(`ROM/VerifierIC.lean`), for which `VerifierIC` is a theorem. The game itself verifies with the
+executable verifier.
 -/
 
 open OracleComp OracleSpec

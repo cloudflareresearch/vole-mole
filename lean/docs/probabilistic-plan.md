@@ -934,6 +934,37 @@ none for spend and PomFRIT (the spec relation `PomRel`: `P(s) = h ⊕ r` with `h
 target `pomfritTarget` at its `chal1`, which is `Spec.PomFRIT.hashToTarget` in `main`'s layout).
 The adaptive versions keep `hinj` (above).
 
+### 2j. Protocol games from single-proof extraction, as implemented
+
+Files: `ROM/ExtractReduce.lean`, `ROM/VerifierIC.lean` (protocol independent),
+`ROM/RatatouilleBalance.lean` (Ratatouille Theorem 1, `docs/security/ratatouille.md` §4). Nothing
+existing changed.
+
+* **Comparing computations per table** (`prEvent_le_sum_of_table`,
+  `prEvent_bind_le_sum_of_table`). A protocol game and the single-proof games of its requests are
+  different computations against one lazy random oracle. If at every complete hash table the
+  game's event implies that one of the others returns `true`, the game's probability is at most
+  the sum of theirs: restrict all of them to one finite key set (`restrictQueries`), pass to an
+  eager uniform table (`evalDist_simulateQ_randomOracle_run'_eq_completeTable`,
+  `prEvent_eq_extendTable`), take the union bound there. An outer draw (the cipher table) is
+  integrated.
+* **The `j`-th prover** (`RoundAdv`, `roundsM`, `proverAt`). An adversary calling an honest party
+  `n` times, written once for any monad; the `j`-th prover re-runs the first `j` calls and outputs
+  the `j`-th request. Per table it outputs the run's `j`-th request
+  (`evalWithAnswerFn_proverAt`), and its budget is `j + 1` calls (`isKindQueryBoundIC_proverAt`,
+  `isQueryBoundP_proverAt`). The single-proof theorems (`*_accept_le_adaptive_spec`) apply to it
+  as they stand, one request at a time: the composed bound has a factor `N` (no simultaneous
+  extraction).
+* **The honest verifier as cipher queries** (`VerifierIC`, `verifyIC`). Inside the `j`-th prover
+  the honest party's verifications must query the cipher (the extractor reads the cipher log).
+  `verifyIC` is `verifyQ` with the CTR PRG one cipher query per block in the BAVC reconstruction
+  and the VOLE expansion; `evalWithAnswerFn_verifyIC`: it is the executable verifier per table;
+  its budget is `verifierQueries` plus `mu₁` and `iv` once more, `verifierTotal + 2` hash queries,
+  `cipherCount p` cipher queries (`verifierIC_verifyIC`).
+* **Extracted witnesses** (`gameA_out`, `extWit`): per table, the single-proof game's output is the
+  prover's proof and statement with the executable verifier's transcript, and a successful
+  extraction yields a witness of the spec relation.
+
 ### M4 — Mathlib bump and VCVio dependency (Phase B, ~1–3 days, mostly waiting on builds) — done
 
 - Bump to `v4.34.0` (separate commit). Fix the breakage. Then `require VCVio` and add
