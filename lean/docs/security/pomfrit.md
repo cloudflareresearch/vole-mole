@@ -430,6 +430,23 @@ that answer is the oracle's value, so `PFail_i` says that no extracted candidate
 (this consistency is by construction of the lazy oracle and is not a separate Lean lemma).
 `ShiftFail_i`: the same with "a preimage of `H_T(x_i) + δ` for one of the shifts `δ`".
 
+**The converse, and the two assumptions** (`lean/VoleMole/Assumptions/Blind.lean`,
+`Assumptions/Shift.lean`; `uov-assumptions.md` §5.6, §6).
+
+The converse of U1 is mechanized as a generic core (`ompr_le_blind`). In the same one-more game
+(`omuf`, targets `H_T(x) + r`), the blinding forger of any client with distinct session labels
+satisfies `Adv^{ompr}(B; n, ℓ) ≤ Pr[Forges] + Pr[CompFail]`. `CompFail` is a completeness failure
+of the client's finishing phase. With U1 this is the equivalence PomFRIT ⇔ OMPR, up to Lemma P's
+term and the completeness term. The PomFRIT instance is not done. It needs the Lean client as
+oracle computations over the game's oracles, its completeness in the lazy random-oracle model
+(`≤ 2^{−113}` per session is proved in the finite-table model, `pomfritRedeem_complete_rom`), and a
+`Forger` with coins.
+
+U2's assumption relates to U1's in both directions:
+- A-OMPR⊕τ implies A-OMPR tightly (`advOMPR_le_shift`).
+- A-OMPR implies A-OMPR⊕τ with loss `τ^{ℓ+1}` (`advOMPRShift_le_guess`, guessing the shift of each
+  request).
+
 **What remains on paper.** The bound on `Pr[∃ i, PFail_i]`, i.e. Lemma P: for Lemma P's `E₁`,
 `ε_ext(N; q₁, q₂, Q₃ + ℓ + 1) + (Q₃ + ℓ + 1)·2^{−71} + Q_T·q₁·2^{−704}` (for U2 the same without
 the `2^{−71}` term). Lean has its deterministic steps (§13) and, separately, the extraction bound
@@ -878,7 +895,8 @@ dedicated to PomFRIT.
 
 ## 12. Gaps and open items
 
-- **G1.** Is A-OMPR ⇒ A-OMPR⊕τ without the `τ^{ℓ+1}` loss? If so, U1 loses its `Q₃·2^{−71}`
+- **G1.** Is A-OMPR ⇒ A-OMPR⊕τ without the `τ^{ℓ+1}` loss? (With the loss it is Lean
+  `advOMPRShift_le_guess`; the converse, A-OMPR⊕τ ⇒ A-OMPR, is tight, `advOMPR_le_shift`.) If so, U1 loses its `Q₃·2^{−71}`
   term. A protocol change that pins `r` to π₁ would also remove it, but none was explored here.
 - **G2.** QROM unforgeability (§7) needs mid-run extraction, or a different reduction. Q7 §4
   supplies one (database-controlled programming, simultaneous extraction from ℓ+1 proofs by
@@ -924,6 +942,13 @@ dedicated to PomFRIT.
   prover (random-oracle consistency); and Lemma P's ordering and `Shift` steps (G5). The bound is
   then a union over the `ℓ+1` forgeries unless the extraction bound is redone for simultaneous
   extraction (the paper's `ε_ext` counts once, L8 §9.1).
+- **G9.** Theorem 6 (OMPR ≤ PomFRIT, `uov-assumptions.md` §5.6) is in Lean for an abstract client
+  (`ompr_le_blind`). The PomFRIT instance needs three pieces:
+  - `issue_request` and `finalize` of the Lean prover as oracle computations over the one-more
+    game's oracles;
+  - their completeness in the lazy random-oracle model, which bounds `CompFail` by
+    `(ℓ+1)·2^{−113}`;
+  - a `Forger` with coins.
 
 ## 13. Lean
 
@@ -944,6 +969,8 @@ VoleMole.ROM.OneMorePomfrit`).
 | The generic one-more reduction (`lean/VoleMole/ROM/OneMore.lean`): the real game with a programmable target oracle fed by `n` uniform targets, the labelled one-more preimage experiment (Def. 3.1, A-OMPR⊕τ), the reduction; programming is perfect; forger's win `≤` reduction's advantage `+ Pr[∃` claim accepted and not good`]`; with at most `n` target queries the target list never runs out | `omuf`, `omExp`, `red`, `realImpl`, `chImpl`, `redImpl`, `collapse`, `real_eqd_comb`, `omuf_good_le`, `omuf_le_ex`, `omuf_le`, `goodPre`, `goodShift`, `TgInv`, `tgInv_preserved`, `NoFall`, `noFall_of_bound`, `omuf_le_of_bound` |
 | PomFRIT's one-more forgery game with `hash_to_target` a random oracle and the verifier as `pomfritVerify` (`lean/VoleMole/ROM/OneMorePomfrit.lean`); distinct messages give distinct `H_T` inputs; at most `Q_T + ℓ + 1` target queries | `game`, `PomWin`, `Forger`, `wrapImpl`, `verOne`, `tgtIn`, `pomfritRedeemT`, `pomfritRedeem_eq_T`, `pomfritTarget_eq_tgtIn`, `honestPre`, `relP`, `tgtIn_inj`, `acomp_support`, `pomWin_forges`, `acomp_bound` |
 | Theorems U1 and U2 (§6.4): `Pr[PomWin] ≤ Adv^{ompr}(B; Q_T+ℓ+1, ℓ) + Pr[∃ i, PFail_i]`, and with A-OMPR⊕τ and `ShiftFail_i`; non-vacuity with the honest Issuer (`Audit/Nonvacuous.lean`) | `pomfrit_U1_bound`, `pomfrit_U2_bound`, `pomfrit_U1`, `pomfrit_U2`, `PFail`, `ShiftFail` |
+| A-OMPR⊕τ ⇒ A-OMPR, tight; A-OMPR ⇒ A-OMPR⊕τ with loss `τ^{ℓ+1}` (guessing) (`lean/VoleMole/Assumptions/Shift.lean`) | `advOMPR_le_shift`, `advOMPRShift_mono`, `advOMPRShift_le_guess`, `guessRed` |
+| Theorem 6, generic core: OMPR ≤ one-more forgery + completeness failure, for the blinding forger of any client with distinct labels (`lean/VoleMole/Assumptions/Blind.lean`); audited at PomFRIT's trapdoor (`Audit/OMPRShift.lean`). Not the PomFRIT instance (G9) | `ompr_le_blind`, `blindAdv`, `Client`, `Distinct`, `bcomb_eqd`, `win_mid`, `post_pres` |
 | Blindness (Thm B, from G1) under (ZK-fix) as a two-phase hypothesis: `≤ 4ε` between the worlds, for either proof layout (`lean/VoleMole/Privacy/PomFRIT.lean`) | `blindness` |
 | (ZK-fix) for the executable Lean prover with label rows, from the two-phase tape hypothesis; blindness with that prover; completeness of `verify` on the final signature (`lean/VoleMole/Privacy/PomFRITLean.lean`) | `lean_zeroKnowledge`, `blindness_lean`, `blindness_lean_shake`, `pomfritVerify_complete`, `pomfritVerify_complete_tables` |
 | G1 → G2 for one session; G3 exactly (one-time pad, then a swap of the sessions' simulator coins) | `sessionClose_real_sim`, `simGame_eq` |
