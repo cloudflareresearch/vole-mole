@@ -1389,7 +1389,8 @@ What is **not** established, roughly in order of importance:
 6. **Quantum bounds stop at about 2⁵¹·⁷ queries.** Going further needs a point-level
    multi-collision lemma for the compressed ideal cipher (M1–M3 in `Q6-cipher-binding.md` §7.3);
    none is known. Parallel quantum queries are not treated.
-7. **Zero knowledge on `main` is false** for PomFRIT, and the fix is on a branch. For Moussaka and
+7. **Zero knowledge on `main` rests on (PU) for Moussaka and Ratatouille.** PomFRIT's ZK failure is
+   fixed on `main` since `64fd1a4` (dedicated label rows for PomFRIT). For Moussaka and
    Ratatouille on `main`, ZK rests on (PU), i.e. on the one-wayness of Keccak-p[800] in `r`
    (except towards a Moussaka Moderator that never sees `t`); the bad-event bound is in Lean
    (`ZK/Main.lean`, `ZK/Relations.lean`), and so is the hybrid chaining around it (H1–H4, the
