@@ -281,6 +281,10 @@ Let `P_k` be the public maps of `K` honest Anchors and `Sign_k(y) = DerivePreima
   - **Correction (`lean/docs/security/uov-assumptions.md`): Lemma U is wrong as stated.** CT-UF lets the
     adversary ask `Sign` about a target that is not a `Com` image, e.g. `Sign(0)`. The reduction must
     then spend a one-more call that yields no challenge preimage, so it never reaches "one more".
+  - **CT-UF as defined above is false** (`lean/docs/security/uov-open-reductions.md` Theorem B1;
+    Lean `ctuf_scaling_attack`). `P(λs) = λ²·P(s)` and every element of `GF(256)` is a square, so
+    the answer to `Sign_k(μ·Com(x*))`, `μ ∉ {0, 1}`, multiplied by `√(μ^{−1})`, is a preimage of
+    the unqueried `Com(x*)`. Read every use of CT-UF in this note as CT-UF^open.
   - **The fix: use CT-UF^open,** where the adversary must also open every target it had signed.
     Moussaka's `B₂` already extracts those openings, so Theorem 1 holds unchanged with CT-UF^open in
     place of CT-UF. The repaired Lemma U is tight from OMPR (`uov-assumptions.md`).

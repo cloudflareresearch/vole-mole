@@ -281,4 +281,98 @@ theorem one_more_count {ι : Type*} [DecidableEq ι] (S : Finset ι) (j : ι) (h
 
 theorem wasted_calls (h w : ℕ) : h + 1 ≥ (h + w) + 1 ↔ w = 0 := by omega
 
+/-! ## Counting cores of `uov-open-reductions.md` -/
+
+/-- **Lottery accounting** (`uov-open-reductions.md` §4.3). A reduction that made `c` inversion
+calls and completed `K` runs of the adversary needs preimages of `c + 1` challenge targets and of
+`K·q` junk targets; `c` of them come from its calls and `w` from aligned forgeries. So
+`w ≥ K·q + 1`. -/
+theorem lottery_count (c K q w : ℕ) (h : c + 1 + K * q ≤ c + w) : K * q + 1 ≤ w := by linarith
+
+/-- `4·n·(τ − 1) ≤ τ^n` for `τ ≥ 7`, `n ≥ 2`. -/
+theorem four_mul_le_pow (τ : ℝ) (hτ : 7 ≤ τ) (n : ℕ) (hn : 2 ≤ n) :
+    4 * (n : ℝ) * (τ - 1) ≤ τ ^ n := by
+  induction n, hn using Nat.le_induction with
+  | base => norm_num; nlinarith [mul_nonneg (sub_nonneg.mpr hτ) (by linarith : (0 : ℝ) ≤ τ - 1)]
+  | succ n hn ih =>
+    have hn' : (2 : ℝ) ≤ n := by exact_mod_cast hn
+    have h1 : 4 * ((n + 1 : ℕ) : ℝ) * (τ - 1) ≤ 7 * (4 * (n : ℝ) * (τ - 1)) := by
+      push_cast
+      nlinarith [mul_nonneg (by linarith : (0 : ℝ) ≤ 6 * n - 1) (by linarith : (0 : ℝ) ≤ τ - 1)]
+    have h2 : 7 * (4 * (n : ℝ) * (τ - 1)) ≤ τ * τ ^ n :=
+      mul_le_mul hτ ih (by nlinarith) (by linarith)
+    calc 4 * ((n + 1 : ℕ) : ℝ) * (τ - 1) ≤ τ * τ ^ n := h1.trans h2
+      _ = τ ^ (n + 1) := by ring
+
+/-- **The supermartingale inequality of the rewinding bound** (`uov-open-reductions.md` §4.3).
+With `θ = τ^{q+1}/2`, `τ ≥ 7`, `q ≥ 1`: `((τ − 1 + θ)/τ)^{q+1} ≤ θ^q`, i.e.
+`E[θ^{X − q}] ≤ 1` for `X ∼ Bin(q + 1, 1/τ)`. -/
+theorem rewind_supermartingale (τ : ℝ) (hτ : 7 ≤ τ) (q : ℕ) (hq : 1 ≤ q) :
+    ((τ - 1 + τ ^ (q + 1) / 2) / τ) ^ (q + 1) ≤ (τ ^ (q + 1) / 2) ^ q := by
+  have hτ0 : (0 : ℝ) < τ := by linarith
+  have hpow : (0 : ℝ) < τ ^ (q + 1) := pow_pos hτ0 _
+  set θ : ℝ := τ ^ (q + 1) / 2 with hθ
+  have hθ0 : 0 < θ := by positivity
+  set x : ℝ := (τ - 1) / θ with hx
+  have hx0 : 0 ≤ x := div_nonneg (by linarith) hθ0.le
+  have h4 := four_mul_le_pow τ hτ (q + 1) (by omega)
+  have hnx : ((q + 1 : ℕ) : ℝ) * x ≤ 1 / 2 := by
+    rw [hx, ← mul_div_assoc, div_le_iff₀ hθ0, hθ]
+    linarith
+  have hn1 : (1 : ℝ) ≤ ((q + 1 : ℕ) : ℝ) := by exact_mod_cast Nat.succ_le_succ (Nat.zero_le q)
+  have hx1 : x ≤ 1 / 2 := by nlinarith
+  have hb : 1 + ((q + 1 : ℕ) : ℝ) * (-x) ≤ (1 + -x) ^ (q + 1) :=
+    one_add_mul_le_pow (by linarith) _
+  have hprod : (1 + x) ^ (q + 1) * (1 + -x) ^ (q + 1) ≤ 1 := by
+    rw [← mul_pow]
+    exact pow_le_one₀ (by nlinarith) (by nlinarith)
+  have h2 : (1 + x) ^ (q + 1) ≤ 2 := by
+    have hp : (0 : ℝ) ≤ (1 + x) ^ (q + 1) := by positivity
+    nlinarith
+  have key : (τ - 1 + θ) / τ = θ * (1 + x) / τ := by
+    rw [hx]; field_simp; ring
+  have h2θ : 2 * θ = τ ^ (q + 1) := by rw [hθ]; ring
+  rw [key, div_pow, mul_pow, div_le_iff₀ hpow]
+  calc θ ^ (q + 1) * (1 + x) ^ (q + 1) ≤ θ ^ (q + 1) * 2 :=
+        mul_le_mul_of_nonneg_left h2 (by positivity)
+    _ = θ ^ q * τ ^ (q + 1) := by rw [← h2θ]; ring
+
+/-- **Combiner forest** (`uov-open-reductions.md` §3.3). In the world with a combiner, a value is
+inverted either by a call (`Dset`) or by the combiner (`Eset`), which needs both children
+`c₁ y`, `c₂ y` inverted. If the children are pairwise distinct and are not challenge targets, then
+the inverted challenge targets `Ch` number at most `|Dset| − |Eset|`: the combiner never beats one
+call per challenge preimage. -/
+theorem combiner_count {Y : Type*} [DecidableEq Y] (Dset Eset Ch : Finset Y) (c₁ c₂ : Y → Y)
+    (hch : Ch ⊆ Dset ∪ Eset)
+    (h₁ : ∀ y ∈ Eset, c₁ y ∈ Dset ∪ Eset) (h₂ : ∀ y ∈ Eset, c₂ y ∈ Dset ∪ Eset)
+    (inj₁ : Set.InjOn c₁ Eset) (inj₂ : Set.InjOn c₂ Eset)
+    (hdis : ∀ y ∈ Eset, ∀ y' ∈ Eset, c₁ y ≠ c₂ y')
+    (hc₁ : ∀ y ∈ Eset, c₁ y ∉ Ch) (hc₂ : ∀ y ∈ Eset, c₂ y ∉ Ch) :
+    Ch.card + Eset.card ≤ Dset.card := by
+  have hI1 : (Eset.image c₁).card = Eset.card := Finset.card_image_of_injOn inj₁
+  have hI2 : (Eset.image c₂).card = Eset.card := Finset.card_image_of_injOn inj₂
+  have hd12 : Disjoint (Eset.image c₁) (Eset.image c₂) := by
+    rw [Finset.disjoint_left]
+    intro z hz1 hz2
+    obtain ⟨y, hy, rfl⟩ := Finset.mem_image.mp hz1
+    obtain ⟨y', hy', h⟩ := Finset.mem_image.mp hz2
+    exact hdis y hy y' hy' h.symm
+  have hdC : Disjoint Ch (Eset.image c₁ ∪ Eset.image c₂) := by
+    rw [Finset.disjoint_left]
+    intro z hz hz'
+    rcases Finset.mem_union.mp hz' with h | h
+    · obtain ⟨y, hy, rfl⟩ := Finset.mem_image.mp h
+      exact hc₁ y hy hz
+    · obtain ⟨y, hy, rfl⟩ := Finset.mem_image.mp h
+      exact hc₂ y hy hz
+  have hsub : Ch ∪ (Eset.image c₁ ∪ Eset.image c₂) ⊆ Dset ∪ Eset := by
+    intro z hz
+    simp only [Finset.mem_union, Finset.mem_image] at hz
+    rcases hz with h | ⟨y, hy, rfl⟩ | ⟨y, hy, rfl⟩
+    exacts [hch h, h₁ y hy, h₂ y hy]
+  have hle := Finset.card_le_card hsub
+  rw [Finset.card_union_of_disjoint hdC, Finset.card_union_of_disjoint hd12, hI1, hI2] at hle
+  have hu := Finset.card_union_le Dset Eset
+  omega
+
 end VoleMole.UOVAssumptions
