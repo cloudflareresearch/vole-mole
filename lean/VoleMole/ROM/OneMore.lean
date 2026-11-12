@@ -3,6 +3,56 @@ import VCVio.OracleComp.SimSemantics.SimulateQ
 import VCVio.EvalDist.EvalDistEq
 import VCVio.OracleComp.SimSemantics.StateT.PreservesInv
 
+/-!
+# One-more unforgeability from one-more preimage resistance: the generic reduction
+
+Protocol-independent. A one-more forger is turned into a one-more preimage adversary by
+programming the target hash; `ROM/OneMorePomfrit.lean` instantiates it for PomFRIT
+(`lean/docs/security/pomfrit.md` §6, Theorems U1 and U2).
+
+**The composed adversary** (`specA`) is the forger together with whatever the game runs after it
+(verification, straight-line extraction): one oracle computation with three kinds of queries,
+* the *world* (`specR`, any random oracle: for PomFRIT the hash oracles of `ROM/Basic.lean`);
+* the *target oracle* `H_T`, queried at `(x, h)`: `x` the input, `h` a *hint* the adversary
+  attaches (U1: Lemma P's `E₁(x)`; U2: the list of shifts). The answer is `H_T(x)` and the hint of
+  `x`'s first query; the forger itself never sees hints (the instantiation strips them);
+* the *Issuer*, `pre : G → S` (any function: the honest Issuer is the key's preimage function).
+It returns its *claims* (pairs of a label `x` and a preimage) and an acceptance flag.
+
+**The games.**
+* `omuf` (the real game): the world is a lazy random oracle; `H_T` is a lazy random oracle whose
+  fresh answers are drawn from a stream of `n` uniform values (`unifList`; past the stream, `0`:
+  `noFall_of_bound` shows this never happens when the adversary makes at most `n` target queries);
+  the Issuer is `pre sk`. The state also records, as a ghost, the *programmed target* of every
+  label, `φ h u` for the answer `u` and hint `h` (`Ch.tg`).
+* `omExp` (the one-more preimage experiment): the adversary `B` gets the key, may sample coins,
+  queries the world (its coins as a random oracle), a *challenge* oracle (labelled targets: each
+  request `(x, h)` pops the next of `n` uniform targets and records it with the label; `none` once
+  the `n` targets are used) and the preimage oracle `pre sk`. It wins (`Wins`) with `ℓ + 1` claims on
+  distinct labels, each good for its recorded target, after at most `ℓ` preimage queries. With
+  `goodPre` this is Def. 3.1 of the paper (labels name the targets; an adversary of Def. 3.1, given
+  `t_1 … t_n` up front, simulates the challenge oracle by popping them, with the same win); with
+  `goodShift τ` it is A-OMPR⊕τ (shifts submitted with each request, at most `τ` used).
+* `red φ A` (the reduction): `A` with the world and the Issuer forwarded, and each fresh target
+  query `(x, h)` answered by `φ h⁻¹ t` for a fresh challenge `t` (U1, `φ h = (· + h)`: the answer is
+  `t − E₁(x)`; U2, `φ = id`).
+
+**The theorems.**
+* `real_eqd_comb` (**programming is perfect**): the real game and the reduction run against the
+  challenger (`combImpl`, collapsed by VCVio's `simulateQ_StateT_StateT_compose`, `collapse`)
+  have the same joint distribution of output and state. Proof: by induction on the computation,
+  with the stream uniform; at a fresh target query the real answer `u` and the reduction's
+  `φ h⁻¹ t` correspond under the bijection `t = φ h u`.
+* `omuf_good_le`: if the forger wins (`Forges`) and every claim is good for its programmed target,
+  the reduction wins the experiment.
+* `omuf_le_ex`, `omuf_le`: `Pr[Forges] ≤ Pr[reduction wins] + Pr[∃ i, claim i accepted, not good]`
+  (`BadAt`), and with a union over the claims.
+* `omuf_le_of_bound`: with at most `n` target queries, the claims' term is about the answer and
+  first hint of each label (`BadS`; the invariants `TgInv`, `NoFall`).
+
+No `sorry`, no `axiom`.
+-/
+
 open OracleComp OracleSpec
 open scoped ENNReal
 
@@ -12,16 +62,22 @@ section Specs
 
 variable {DR : Type} (AR : DR → Type) (X Hn G S : Type)
 
+/-- The world: a random oracle with domain `DR` and answers `AR`. -/
 abbrev specR : OracleSpec DR := OracleSpec.ofFn AR
 
 abbrev AnsA : DR ⊕ ((X × Hn) ⊕ G) → Type := Sum.elim AR (Sum.elim (fun _ => G × Hn) fun _ => S)
 
+/-- The composed adversary's oracles: the world, the target oracle (input and hint), the Issuer. -/
 abbrev specA : OracleSpec (DR ⊕ ((X × Hn) ⊕ G)) := OracleSpec.ofFn (AnsA AR X Hn G S)
 
 abbrev AnsB : DR ⊕ ((X × Hn) ⊕ G) → Type := Sum.elim AR (Sum.elim (fun _ => Option G) fun _ => S)
 
+/-- The experiment adversary's oracles: the world, the labelled challenge oracle, the preimage
+oracle. -/
 abbrev specB : OracleSpec (DR ⊕ ((X × Hn) ⊕ G)) := OracleSpec.ofFn (AnsB AR X Hn G S)
 
+/-- The challenger's (and the real game's) state: the world's cache, the unused targets, the
+labelled targets with their hints, the number of preimage queries. -/
 structure Ch where
   ro : (specR AR).QueryCache
   rest : List G
@@ -39,6 +95,7 @@ variable {DR : Type} [DecidableEq DR] {AR : DR → Type} [∀ d, SampleableType 
 def roStep (d : DR) (c : Ch AR X Hn G) : ProbComp (AR d × Ch AR X Hn G) :=
   (fun r => (r.1, { c with ro := r.2 })) <$> ((specR AR).randomOracle d).run c.ro
 
+/-- **The challenger**: the world, the labelled challenge oracle, the preimage oracle. -/
 def chImpl (pre : G → S) : QueryImpl (specB AR X Hn G S) (StateT (Ch AR X Hn G) ProbComp)
   | .inl d => StateT.mk (roStep d)
   | .inr (.inl (x, h)) => StateT.mk fun c => pure <| match c.rest with

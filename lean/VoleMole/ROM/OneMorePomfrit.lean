@@ -2,6 +2,53 @@ import VoleMole.ROM.OneMore
 import VoleMole.ROM.SpecSound
 import VoleMole.Arith.GF256Field
 
+/-!
+# PomFRIT: one-more unforgeability (Theorems U1, U2) in the random-oracle and ideal-cipher model
+
+`lean/docs/security/pomfrit.md` §6. The generic reduction (`ROM/OneMore.lean`) at PomFRIT's types.
+
+**The forger** (`Forger`): from the Issuer's public key, a list of message–signature pairs. Its
+oracles (`specU`): the hashes and the cipher cells (`specIC`, the cipher a random function per key,
+the PRF view of `ROM/CipherGame.lean`), `hash_to_target` (`H_T`, byte strings to targets
+`TG = GF(256)^45`) and the Issuer (targets to preimages, `SIss`).
+
+**The game** (`game`, an instance of `OneMore.omuf`): a key from any key generation `KG` and the
+Issuer `pre sk` (the honest one is `honestPre`, pqov's `derive_preimage`); a uniform cipher table
+`E`; the forger, wrapped (`wrapImpl`: hash queries to the random oracle, cipher queries answered by
+`E`, both logged; `H_T` queries to the target oracle with the hint `hint E L x` computed from the
+log `L` so far; Issuer queries forwarded); then, if it output `ℓ + 1` forgeries, each one is
+verified (`verOne`): the refresher check, the verifier up to `chal1` (`chal1Pre`), the target
+oracle at `hash_to_target`'s input (`tgtIn`), the straight-line extractor on the forger's log
+(`extractIC`) and the executable verifier (`verifyQ`) at the statement whose target is the
+oracle's answer (`pomfritRedeemT`). With SHAKE128 for `H_T` this is `pomfritVerify`
+(`pomfritRedeem_eq_T`, `pomfritTarget_eq_tgtIn`). The claim of a forgery is its `H_T` input and
+the first extracted candidate that is a preimage of one of `tgts (H_T(x), hint)` (`pick`).
+
+**The win** (`PomWin`): `ℓ + 1` forgeries that verify, on pairwise distinct messages, after at most
+`ℓ` Issuer queries. Accepted forgeries on distinct messages have distinct `H_T` inputs (fixed-length
+fields before the message: `tgtIn_inj`, `acomp_support`), so this is the generic `Forges`.
+
+**The theorems.** For any key generation, Issuer, forger and first-phase rule:
+* `pomfrit_U1` / `pomfrit_U1_bound` (Def. 3.1, the hint `E₁(x)`, target `H_T(x) + E₁(x)`):
+
+      Pr[PomWin] ≤ Adv^{ompr}(red addHint …; n, ℓ) + Pr[∃ i ≤ ℓ, PFail i],
+
+  with `n = Q_T + ℓ + 1` targets for a forger making at most `Q_T` `H_T` queries (`acomp_bound`:
+  the composed adversary makes at most `Q_T + ℓ + 1`). `PFail i`: forgery `i` verifies but its
+  claim is not a preimage of `H_T(x_i) + E₁(x_i)`, `E₁(x_i)` the hint of `x_i`'s first query.
+* `pomfrit_U2` / `pomfrit_U2_bound` (A-OMPR⊕τ, the hint the first `τ` shifts `sh E L x`):
+  the same with `ShiftFail i` (no shift `δ` with the claim a preimage of `H_T(x_i) + δ`).
+
+**What is not here.** The bound on `Pr[∃ i, PFail i]`: Lemma P (§5) says that for its `E₁` an
+accepted forgery's extracted witness `(r, s)` has `r = E₁(x)` and `P(s) = H_T(x) ⊕ r`, except with
+`ε_ext` and `Shift`; then `pick` finds `s` and `PFail i` fails. The extraction part is bounded in
+`ROM/AdaptPomfrit.lean` for `hash_to_target` = SHAKE (`pomfritTarget`), not for a random oracle
+`H_T`; `pomfritRedeemT` is the statement those bounds would have to be generalized to. Lemma P's
+`E₁` itself is a parameter (`e1`, `sh`).
+
+No `sorry`, no `axiom`.
+-/
+
 open OracleComp OracleSpec
 open scoped ENNReal
 
