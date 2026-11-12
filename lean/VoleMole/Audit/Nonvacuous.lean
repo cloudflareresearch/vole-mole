@@ -11,6 +11,8 @@ import VoleMole.Privacy.SeedXOFNC
 import VoleMole.ROM.SpecSound
 import VoleMole.Privacy.PqovDelta
 import VoleMole.Privacy.PqovKeys
+import VoleMole.Privacy.MoussakaMain
+import VoleMole.Privacy.RatatouilleMain
 
 /-!
 # Non-vacuity checks for the headline theorems
@@ -390,6 +392,75 @@ example (n K : ℕ) (b₁ b₂ b₁' b₂' : Bool) :=
     (εhide := 0) (fun _ _ _ _ => (hidingAdvR_true _).le) b₁ b₂ b₁' b₂'
 
 end Ratatouille
+
+/-! ## Privacy on `main` (the joint (PU) hop)
+
+`anonymity_main` and `unlinkability_main` (`Privacy/MoussakaMain.lean`, `Privacy/RatatouilleMain.lean`)
+for adversaries whose guess is constant and reads no table: the budgets hold at `0`, the empty `H₅`
+read sets are consistent, and the hiding hypotheses hold with `εhide = 0`. The (PU) terms are
+explicit probabilities, not hypotheses. -/
+
+section MainLayout
+
+open VoleMole.Privacy VoleMole.ZK.Sim VoleMole.Privacy.MainChain
+
+/-- A reader that reads no table. -/
+theorem rdV_const {p : Params} (P : Prop) : RdV (p := p) 0 0 fun _ => P :=
+  ⟨⟨fun _ _ _ => ∅, fun _ _ _ => by simp, fun _ _ _ _ _ => Iff.rfl⟩,
+    ⟨fun _ _ _ => ∅, fun _ _ _ => by simp, fun _ _ _ _ _ => Iff.rfl⟩⟩
+
+/-- A constant event with empty read sets is consistent. -/
+theorem vcons_const {S : Type} {p₁ p₂ p₃ p₄ : Params} (P : Prop) :
+    VCons (S := S) (p₁ := p₁) (p₂ := p₂) (p₃ := p₃) (p₄ := p₄) (fun _ _ _ _ _ _ _ _ _ => P)
+      (fun _ _ _ _ _ _ _ _ _ => ∅) (fun _ _ _ _ _ _ _ _ _ => ∅) (fun _ _ _ _ _ _ _ _ _ => ∅)
+      (fun _ _ _ _ _ _ _ _ _ => ∅) :=
+  ⟨fun _ _ _ _ _ _ _ _ _ _ _ => ⟨Iff.rfl, rfl, rfl, rfl, rfl⟩,
+    fun _ _ _ _ _ _ _ _ _ _ _ => ⟨Iff.rfl, rfl, rfl, rfl, rfl⟩,
+    fun _ _ _ _ _ _ _ _ _ _ _ => ⟨Iff.rfl, rfl, rfl, rfl, rfl⟩,
+    fun _ _ _ _ _ _ _ _ _ _ _ => ⟨Iff.rfl, rfl, rfl, rfl, rfl⟩⟩
+
+section MoussakaMain
+
+open VoleMole.Spec VoleMole.Spec.Moussaka VoleMole.Privacy.Moussaka
+
+/-- The colluding adversary on `main` with a constant guess and no table reads. -/
+def mM : AdversaryM :=
+  ⟨fun _ => 0, fun _ => 0, fun _ => k0, fun _ _ _ _ => 0, fun _ _ _ => (S0, []),
+    fun _ _ _ _ => True, fun _ _ _ _ => ∅, fun _ _ _ _ => ∅, fun _ _ _ _ => ∅, fun _ _ _ _ => ∅⟩
+
+theorem mM_budget : mM.Budget 0 0 :=
+  ⟨fun _ _ _ _ _ _ => rdV_const _, fun _ _ _ _ _ _ => rdV_const _, fun _ _ _ _ _ _ => rdV_const _,
+    fun _ _ _ _ _ _ => rdV_const _⟩
+
+theorem mM_cons : mM.Cons := fun _ _ _ => vcons_const True
+
+example [HasPrg] (idx : AnchorSet → UOVKey → ℕ) :=
+  anonymity_main mM idx mM_budget mM_cons (εhide := 0) (fun _ _ _ => (hidingAdv_true _ _).le)
+
+end MoussakaMain
+
+section RatatouilleMain
+
+open VoleMole.Spec VoleMole.Spec.Ratatouille VoleMole.Privacy.Ratatouille
+
+/-- The malicious Issuer on `main` with a constant guess and no table reads. -/
+def rM : AdversaryRM :=
+  ⟨default, default, 0, fun _ _ => default, fun _ => 0, fun _ _ => default, fun _ _ => 0,
+    fun _ _ => True, fun _ _ => ∅, fun _ _ => ∅, fun _ _ => ∅, fun _ _ => ∅⟩
+
+theorem rM_budget : rM.Budget 0 0 :=
+  ⟨fun _ _ _ _ => rdV_const _, fun _ _ _ _ => rdV_const _, fun _ _ _ _ => rdV_const _,
+    fun _ _ _ _ => rdV_const _⟩
+
+theorem rM_cons : rM.Cons := fun _ => vcons_const True
+
+example [HasPrg] (b₁ b₂ b₁' b₂' : Bool) :=
+  unlinkability_main rM rM_budget rM_cons (εhide := 0) (fun _ _ _ _ => (hidingAdvR_true _).le)
+    b₁ b₂ b₁' b₂'
+
+end RatatouilleMain
+
+end MainLayout
 
 /-! ## Privacy: Moussaka 4(b), non-colluding
 

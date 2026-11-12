@@ -81,6 +81,20 @@ theorem abs_pr_prod_sub_le_pr' {α β β' γ : Type*} [Fintype α] [Fintype β] 
     ← pr_equiv (Equiv.prodComm β γ)]
   exact abs_pr_prod_sub_le_pr _ _ _ h
 
+/-- Averaging a per-table closeness over the tables. -/
+lemma avg_close {V X Y : Type*} [Fintype V] [Nonempty V] [Fintype X] [Fintype Y] (P : V → X → Prop)
+    (Q : V → Y → Prop) {ε : ℝ} (h : ∀ v, |pr X (P v) - pr Y (Q v)| ≤ ε) :
+    |pr (V × X) (fun z => P z.1 z.2) - pr (V × Y) (fun z => Q z.1 z.2)| ≤ ε :=
+  abs_pr_prod_sub_le _ _ h
+
+/-- Averaging a per-table equality over the tables. -/
+lemma avg_eq {V X : Type*} [Fintype V] [Fintype X] (P Q : V → X → Prop)
+    (h : ∀ v, pr X (P v) = pr X (Q v)) :
+    pr (V × X) (fun z => P z.1 z.2) = pr (V × X) (fun z => Q z.1 z.2) := by
+  rw [pr_prod, pr_prod]
+  congr 1
+  exact Finset.sum_congr rfl fun v _ => h v
+
 end VoleMole.Privacy
 
 namespace VoleMole.Privacy.MainChain
