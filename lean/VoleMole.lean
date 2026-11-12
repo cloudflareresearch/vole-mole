@@ -185,6 +185,10 @@ import VoleMole.ZK.IdealCipher
 import VoleMole.ZK.HopsH4
 import VoleMole.ZK.HopsH4Ideal
 import VoleMole.ZK.HopsJoint
+import VoleMole.Privacy.MainChain
+import VoleMole.ZK.HopsMain
+import VoleMole.ZK.MainSlots
+import VoleMole.ZK.MainGame
 import VoleMole.ZK.VerifyPre
 import VoleMole.ZK.HopsH23
 import VoleMole.ZK.HopsIC
@@ -202,6 +206,8 @@ import VoleMole.ZK.HopsH4Perm
 import VoleMole.ZK.HopsICPerm
 import VoleMole.ZK.ReadsROPerm
 import VoleMole.Privacy.MoussakaRO
+import VoleMole.Privacy.MoussakaMain
+import VoleMole.Privacy.RatatouilleMain
 import VoleMole.Privacy.RatatouilleRO
 import VoleMole.ZK.TwoPhaseRO
 import VoleMole.ZK.TwoPhaseIC

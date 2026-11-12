@@ -240,7 +240,9 @@ example of the latter is Moussaka, whose targets are KP800 outputs with DST "mou
 
   - On `main`: `ε_lab = (Q₅ + n_mult·Q_V)·Pred_R + Q_P·2^{−128}`, with `Pred_R ≤ Adv^{ow}_{Com}`
     ((PU) holds because `w[0..16) = r`; [Lean] `ZK/Relations.lean` `ratatouille_main_zk`, with
-    (PU) as a hypothesis on explicit predictors, `lean/docs/zk.md` §4.1).
+    (PU) as a hypothesis on explicit predictors, `lean/docs/zk.md` §4.1; for the executable prover
+    in the random-oracle and ideal-cipher model, one proof `zk_rom_ic_main` and the joint hop over
+    the game's four proofs `main_chain_le`, `lean/docs/zk.md` §4.2).
   - On `voleith-label-rows`: `ε_lab = (Q₅ + n_mult·Q_V + Q_P)·2^{−128}`, which is standard
     adaptive NIZK. The labels come from dedicated VOLE rows (`CRT_DEDICATED_LABEL_ROWS`, faest
     patch 0005). This adds 256 bytes per proof (7256 and 17575 bytes).
@@ -550,8 +552,8 @@ and affords the amount, else it is refused for both (feasibility is leakage).
   `Privacy.ZeroKnowledge` (including the grinding abort; the distinguisher may know the witness).
   **On `main` no efficient simulator satisfies this per-proof hypothesis** (a distinguisher that
   knows `r = w[0..16)` runs the test of `lean/docs/zk.md` Prop. 4.1); there the (PU) argument above
-  replaces it and is on paper. With the label-row fix it is `lean/docs/zk.md`'s
-  theorem.
+  replaces it: [Lean] `Privacy/RatatouilleMain.lean` (below). With the label-row fix it is
+  `lean/docs/zk.md`'s theorem.
 - After H2, `simGame_iff` (from `view_map`): the spec world is a *public* world whose tokens hold
   `(nf, t, x, s)` and the commitment the Client sent, with no opening.
 - H3: `hiding_hop`, with `ε_hide^K` as the hypothesis `hidingAdv ≤ εhide` for the explicit
@@ -562,6 +564,19 @@ and affords the amount, else it is refused for both (feasibility is leakage).
 - `unlinkability`: any two worlds differ by at most `4εI + 4εS + 2εhide`. So a spend is unlinkable
   to its issuance (`b₁`) and to an earlier spend of the same Client through the change token
   (`b₂ = b₁` against `b₂ ≠ b₁`).
+- **On `main` (no label rows), with the joint (PU) hop** (`Privacy/RatatouilleMain.lean`,
+  `lean/docs/zk.md` §4.2): the same game with `main`'s statements (proof sizes `Sizes.main`) and
+  the executable prover in the model of `zk_rom_ic` (each proof with its own uniform tables; the
+  Issuer's guess sees each proof's `H₃`, `H₅` and cipher, reads `H₃` and the cipher at `q₃`, `q_E`
+  keys and `H₅` with consistent read sets; its responses, refunds and amounts do not read the
+  tables): `unlinkability_main`, any two worlds differ by at most
+  `8·(q₃·2⁻¹²⁸ + 221·(4607 + q_E)·2⁻¹²⁸) + 15·(PU(b₁, b₂) + PU(b₁', b₂')) + 2·εhide`, where `PU`
+  (`puTermR`) is the probability, with all four proofs simulated, that the guess's `H₅` read set on
+  some proof's table contains a candidate for that proof's witness prefix (the opening of the
+  token it spends or issues, a change token's included). Bounding it is (PU), one-wayness of
+  Keccak-p[800] in the openings, an assumption. The joint hop is needed: round 2 may spend round
+  1's change token, whose opening round 1's proof commits to. Not covered there: cross-proof `iv`
+  and `H₃`-slice collisions and an Issuer reading `H₂³`.
 - The spec's proof sizes are a parameter (`Spec.Ratatouille.Sizes`: `main`'s, or the label-row
   layout's 256 bytes longer proofs). **[Lean] `lean/VoleMole/Privacy/RatatouilleLean.lean`**:
   `unlinkability_label_rows`, the same bound with the executable Lean prover and verifier as the

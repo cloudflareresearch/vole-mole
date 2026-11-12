@@ -675,7 +675,7 @@ Clients is mechanized for the random-oracle games of Appendix B (`lean/docs/zk.m
   witness, against distinguishers that may know the witness). **On `main` no efficient simulator
   satisfies this per-proof hypothesis** (a distinguisher that knows `r = w[0..16)` computes Θ and
   runs the test of `lean/docs/zk.md` Prop. 4.1); there the joint (PU) hop over the four proofs
-  replaces it and stays on paper. With the label-row
+  replaces it: [Lean] `Privacy/MoussakaMain.lean`, `anonymity_main` (below). With the label-row
   fix it is `lean/docs/zk.md`'s theorem. The hypothesis is needed only for well-formed instances
   (`IssueRelW`, `RedeemRelW`: contexts of 16 bytes, `nf` of 24, an Anchor Set of at most 64 keys,
   as the C++ types and the Anchor Set's validation enforce).
@@ -687,6 +687,20 @@ Clients is mechanized for the random-oracle games of Appendix B (`lean/docs/zk.m
 - `anonymity` (both files): `|Pr[A accepts | b = 0] − Pr[A accepts | b = 1]| ≤ 4εI + 4εR + 2εhide`, the
   `2·ε_ZK^joint + 2·Adv^hide_Com` of Theorem 4(a) with `ε_ZK^joint` taken as the sum of the four
   per-proof errors.
+- **On `main` (no label rows), with the joint (PU) hop** (`Privacy/MoussakaMain.lean`,
+  `lean/docs/zk.md` §4.2): the same game with `main`'s statements and the executable prover in
+  the model of `zk_rom_ic` (each proof with its own uniform `H₃`, `H₂³`, `H₅` and cipher tables; the
+  adversary's guess sees each proof's `H₃`, `H₅` and cipher, reads `H₃` and the cipher at `q₃`,
+  `q_E` keys and `H₅` with consistent read sets; its other choices do not read the tables):
+  `anonymity_main`, `|Pr[b = 0] − Pr[b = 1]| ≤ 8·(q₃·2⁻¹²⁸ + 221·(4607 + q_E)·2⁻¹²⁸) +
+  15·(PU₀ + PU₁) + 2·Adv^hide_Com`, where `PU_b` (`puTerm`) is the probability, in world `b` with
+  all four proofs simulated, that the guess's `H₅` read set on some proof's table contains a
+  candidate for that proof's witness prefix `r`. That is this section's `Pred` event, measured
+  where `r` enters the view only through `t₀, t₁`; bounding it is (PU), one-wayness of
+  Keccak-p[800] in `r`, which stays an assumption. The `15` (against the `4` of `ε_ZK^joint(main)`
+  above) is a cost of the mechanized coupling (`lean/docs/zk.md` §4.2). Not covered there: the
+  cross-proof `iv` and `H₃`-slice collisions (`ε_iv`), an adversary reading `H₂³`, `main`'s
+  `find_issuer` Client and the non-colluding mode 4(b).
 
 Remarks from the mechanization:
 - **The `2^{−192}` term of Theorem 4(a) is not needed.** After the hiding hop the two revealed
@@ -731,8 +745,11 @@ only the two redemption requests or the refusal. The refusal rule is that of 4(a
   ε_lab`), `unlinkabilityNC_label_rows`.
 - As in 4(a), the per-proof zero-knowledge hypothesis holds with the label-row fix only. On `main`
   no efficient simulator satisfies it against witness-knowing distinguishers, and the note's joint
-  hop with `Pred = 2^{−128}` (which is valid here, since `r` is independent of `A`'s view) stays
-  on paper.
+  hop with `Pred = 2^{−128}` (which is valid here, since `r` is independent of `A`'s view) is not
+  mechanized for 4(b); the joint hop itself is (`ZK/MainGame.lean`, used for 4(a) on `main`,
+  `anonymity_main`), and for a prefix independent of the predictor's inputs it gives
+  `(q₅ + 1)·2⁻¹²⁸` per proof (`pr_mem_uniform_le`), but the non-colluding game on `main` is not
+  written.
 - **In the random-oracle and ideal-cipher model** (`lean/VoleMole/Privacy/MoussakaNCRO.lean`,
   Appendix B; the analogue of `anonymityRO_lean_num`): `A`'s guess also sees the tables, and the
   honest Anchors run the Lean **verifier** on the issuance proofs over the same tables. In each
@@ -977,7 +994,7 @@ the fix column describes `d5def9c`, where Moussaka used the rows (and what dropp
 | `ε_lab` per proof | `(Q₅ + n_mult·Q_V)·Pred + Q_P·2^{−128}` | `(Q₅ + n_mult·Q_V + Q_P)·2^{−128}` |
 | Thm 4(a), colluding | needs `Adv^ow-r` inside ZK *and* `Adv^hide`. The formal bound is vacuous at `q ≈ 2^{64}` | needs only `Adv^hide` (`≈ 2^{−63}` generic) |
 | Thm 4(b'), non-colluding | `Pred = 2^{−128}`, no Keccak assumption, `+ 2·(φ₀ + φ₁)` | same, with a cleaner bound ([Lean] `anonymityNC`; in the ROM and ideal-cipher model `anonymityNCRO_lean_num`) |
-| Joint hop over proofs sharing `r` | needed (§6) | not needed: the hops are independent |
+| Joint hop over proofs sharing `r` | needed (§6); [Lean] for 4(a), `anonymity_main` (`lean/docs/zk.md` §4.2) | not needed: the hops are independent |
 | Thms 1 and 3 | unchanged (ZK enters Thm 3 only through `ε_hop`) | unchanged |
 | Quantum privacy | AES-128 Grover cap (§8) | same cap |
 

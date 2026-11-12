@@ -51,8 +51,9 @@ requests (or the errors the Clients throw).
   abort `none`), against distinguishers that may know the witness. With the label-row fix this is
   `lean/docs/zk.md`'s theorem. **On `main` no efficient simulator satisfies it**: a distinguisher
   that knows `r = w[0..16)` computes the label offset and runs the test of `lean/docs/zk.md`
-  Prop. 4.1. There the note's (PU) argument (`ZK/Relations.lean`, `ratatouille_main_zk`) replaces
-  it; that hop is on paper.
+  Prop. 4.1. There the note's (PU) argument replaces it, as a joint hop over the four proofs:
+  `Privacy/RatatouilleMain.lean` (`unlinkability_main`, with the executable prover in the
+  random-oracle and ideal-cipher model and the (PU) event as an explicit term).
 * H1 (the seed XOF's output replaced by uniform values, `q_H·Q_P·2⁻²⁵⁶` and Lemma DS) is a
   random-oracle step on paper: the games draw `(nf, r, ρ)` uniformly.
 * Hiding (`hidingAdv ≤ εhide` for the reduction).

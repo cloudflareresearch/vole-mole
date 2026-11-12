@@ -68,6 +68,11 @@ the flag and are unchanged.
 | Ratatouille issue | ZK under (PU), computational [Lean, §4.1] | ZK, statistical in `w` |
 | Ratatouille spend | ZK under (PU), computational [Lean, §4.1] | ZK, statistical in `w` |
 
+On `main`, one proof of the executable prover is close to the simulator up to the success of an
+explicit predictor of `w[0..16)` (`zk_rom_ic_main`), and Moussaka's Theorem 4(a) and Ratatouille's
+Theorem 2 hold with the joint (PU) hop over the proofs that share `r`, with the (PU) event as an
+explicit term (`anonymity_main`, `unlinkability_main`) [Lean, §4.2].
+
 The rest of the construction checks out on both code versions (§§5–7):
 - The 4 + (d − 1) CRT masks hide the VOLE-check and QuickSilver responses.
 - The grinding counter is perfectly simulatable.
@@ -331,24 +336,92 @@ since `r` has exactly 128 bits. Towards an Anchor that also issued the token (it
 issuance (`security/moussaka.md` §3.2), whose generic estimate `(q+1)/2¹²⁸` again has margin
 exactly 2¹²⁸. The remark is accurate, but only for the non-colluding case it is unconditional.
 
+### 4.2 ZK on `main` for the executable prover, and the joint hop, mechanized
+
+The steps that §4.1 listed as paper are now in Lean, for the executable prover in the model of
+`zk_rom_ic` (§10.1: `H₃`, `H₂³`, `H₅` and the BAVC's cipher uniform tables of each proof, the
+distinguisher reading `H₃`, `H₅` and the cipher at `q₃`, `q₅`, `q_E` keys, not `H₂³`).
+
+**One proof** (`ZK/HopsMain.lean`). H1, grinding, H4 and the tape steps of `zk_rom_ic` do not use
+the label rows, and neither does the last step (`proveIdeal_close`). For H6 on `main`
+(`MainP p`: `labelRows = false`, at least 16 witness bytes):
+- the label offset `u_pre` is the first 16 bytes of the witness pad `u₀`, so
+  `u_pre = d[0..16) ⊕ w[0..16)` as a 128-bit block (`uPre_main`, `uPre_main_dB`, `thetaMain`);
+- `lab_rom_main`: the identical-until-bad coupling of H5 and H6 (`lab_rom`: the sibling answers
+  from the table against uniform ones, `≤ Pr[the prover or the distinguisher reads a sibling key]`),
+  and the bad event as a prediction: each read names one candidate for `u_pre` (`guessSet`), the
+  proof's fields are uniform (`upush_fieldsOf`), so the bound is the probability that `w[0..16)`
+  lies in a candidate set (`candidates`, at most `q₅ + 1` elements, `card_candidates_le`) computed
+  from the **simulated** proof and the tables alone;
+- **`zk_rom_ic_main`**: one proof is
+  `q₃·2⁻¹²⁸ + 221·(4607 + q_E)·2⁻¹²⁸ + Pr[mainPred]`-close to the simulator, `mainPred` that
+  explicit prediction. `pr_mem_uniform_le`: for a uniform prefix independent of the predictor's
+  inputs it is `≤ (q₅ + 1)·2⁻¹²⁸`, the label-row term. A distinguisher that knows `w[0..16)` makes
+  it `1` (Prop. 4.1), as it must.
+
+The oracle adversary is reduced to its query function as everywhere in §10: a distinguisher of the
+proof and the tables with read sets (`Q5`), on which it is congruent.
+
+**Several proofs sharing `r`, jointly** (`Privacy/MainChain.lean`, `ZK/MainSlots.lean`,
+`ZK/MainGame.lean`). A game of four proofs in sequence, each statement and witness a function of a
+secret and of the earlier outputs (`MainChain.Game`; the redemption and spend statements depend on
+the issuance requests through the adversary's choices), the adversary seeing every proof's tables:
+- per proof, H1–H4 and the tape steps (`real_fill_close`, `q₃·2⁻¹²⁸ + 221·(4607 + q_E)·2⁻¹²⁸`) and
+  the last step (`ideal_sim_close`, exact), one proof at a time (`hop₁` … `hop₄`);
+- H5 → H6 **for the four proofs at once** (`MainChain.fill_ideal_le`): the four slots go from
+  sibling answers read from their tables to uniform ones in four steps (`stage₄` … `stage₁`), each
+  bounded by its bad event; each bad event is then carried through the remaining steps to the
+  hybrid with all four proofs ideal. That transfer needs the adversary's `H₅` read sets to be
+  **consistent** (changing a table off the read set changes neither the guess nor any read set:
+  `Cons`, `VCons`), which every oracle algorithm satisfies. Result:
+  `|Pr[all fill] − Pr[all ideal]| ≤ 15·Pr_{all ideal}[some sibling key is read]`;
+- in the all-ideal hybrid each slot's bad event implies the prediction of its witness prefix
+  (`bad_predJ`), and the prediction's inputs (output, tables, shared tape, corrections, `d`) are
+  distributed as the simulator's (`ideal_sim_closeP`);
+- **`main_chain_le`**: `|Pr[real] − Pr[sim]| ≤ 4·(q₃·2⁻¹²⁸ + 221·(4607 + q_E)·2⁻¹²⁸) +
+  15·Pr[predAll]`, `predAll` the event, **in the game with all four proofs simulated**, that some
+  proof's witness prefix is a candidate of the adversary's `H₅` read set on that proof's table.
+
+The factor `15 = 1 + 2 + 4 + 8` (each transfer of a bad event across a later hop may double it) is a
+cost of this proof, which programs one table at a time; the paper's lazy sampling would give `1`.
+
+**The privacy theorems on `main`** (`Privacy/MoussakaMain.lean`, `Privacy/RatatouilleMain.lean`).
+The games of `Moussaka.anonymity` (Theorem 4(a), colluding) and `Ratatouille.unlinkability`
+(Theorem 2), with `main`'s statements (`labelRows = false`; Ratatouille's proof sizes
+`Sizes.main`), the executable prover in the model above, and an adversary whose guess also sees
+every proof's tables:
+- **`anonymity_main`**: `|Pr[world 0] − Pr[world 1]| ≤ 8·εRF(q₃, q_E) + 15·(PU₀ + PU₁) + 2·εhide`;
+- **`unlinkability_main`**: for any two worlds `(b₁, b₂)`, `(b₁', b₂')`, the same with
+  `PU(b₁, b₂) + PU(b₁', b₂')`;
+
+with `εRF(q₃, q_E) = q₃·2⁻¹²⁸ + 221·(4607 + q_E)·2⁻¹²⁸` and `PU_b` (`puTerm`, `puTermR`) the
+(PU) event of world `b` on simulated proofs: the adversary's `H₅` read set on some proof's table
+contains a candidate for that proof's witness prefix, which is the opening `r` of the token it
+proves about (`ZK/Relations.lean`: `encodeIssueWitness_take`, `encodeRedeemWitness_take`, and the
+`Arith` layouts). With all proofs simulated, `r` enters the game only through the commitments
+(`Moussaka.post_redSim`, `Ratatouille.simGame_iff`), so `PU_b` is the success probability of a
+predictor of `r` from the commitments, the nullifiers, independent simulator coins and tables:
+**(PU) is the assumption that it is small**. It stays an explicit term, not a hypothesis; in the
+colluding modes it is one-wayness of Keccak-p[800] in `r` (`security/moussaka.md` §3.2), not
+proved. After the joint hop the proofs are the simulator's, and the hiding hop and the final swap
+of `Moussaka.anonymity` and `Ratatouille.unlinkability` apply at every value of the tables
+(`hiding_hop`, `idealGame_eq`). Both theorems are instantiated in `Audit/Nonvacuous.lean`.
+
 **Still on paper, for ZK on `main`:**
-- H1–H4 and H8, unchanged from §6 (`ε_rho`, `ε_prog`, `ε_hide`);
-- the identical-until-bad coupling H5 ≈ H6: that the two hybrids agree off the event "some H₅
-  query hits a sibling label" (lazy sampling of H₅ at the sibling points). Only the inequality it
-  feeds is in Lean (`prU_le_add_of_iff_off`);
-- that, before the first hit, an oracle adversary's queries are functions `Q_k(aux, view, ω)` with
-  `ω` (H₅ answers, the uniform `c_mult` of H6, the uniform responses of H7, the grinding outcome)
-  independent of the secret and the tape: the instantiation of item 3 from an oracle adversary;
-- the per-query selection of one proof via `iv` (`ε_iv`) and the union over proofs that are not
-  modelled jointly; the `Q_P·2^{−λ}` term for `Θ = 0`;
-- that the opened seeds and Δ, on which `forcedOf` depends, are fixed (the Lean bound holds for
-  every value) and that the predictor can sample them as the simulator does;
-- the (PU) bound itself for the colluding cases: one-wayness of Keccak-p[800] in `r`, an
-  assumption (`security/moussaka.md` §3.2, `security/ratatouille.md`);
+- H8 and the global random oracle: each proof has its own uniform tables (the model of §10.1),
+  so the `iv` and `H₃`-slice collisions between proofs (`ε_iv`, the slice term of §10.2) and an
+  adversary that reads `H₂³` (§10.1's `zk_rom_h23`) are not covered on `main`;
+- the adversary's earlier choices (responses, Anchor Sets, amounts) do not read the tables, as in
+  §10.2's games; Moussaka's game is the index-taking Client's (`main`'s `find_issuer` Client, and
+  the non-colluding mode 4(b) with its statistical `Pred = 2⁻¹²⁸`, are not done on `main`);
+- a bound on `PU_b` itself: (PU), one-wayness of Keccak-p[800] in `r`, an assumption
+  (`security/moussaka.md` §3.2, `security/ratatouille.md`); statistically, for a prefix independent
+  of the predictor's inputs, `pr_mem_uniform_le` gives `(q₅ + 1)·2⁻¹²⁸` per proof;
 - the identification of the `main` code with the model (by inspection, `main:` citations above);
+  the Lean prover's KAT match covers `main`'s layout (`lake exe prover_vectors`);
 - for PomFRIT, that `rank F ≤ λ < n_mult` (so `#S/|B|` is small); the bit-level link from
   `Spec/PomFRIT.lean`'s byte `r` to the witness bit vector is a hypothesis (`hw`, the layout of
-  `Arith/PomFRIT.lean`).
+  `Arith/PomFRIT.lean`). PomFRIT's ZK on `main` is false (§4, `pomfrit_attack_test`).
 
 ## 5. The simulator
 
@@ -747,7 +820,10 @@ All files are under `lean/VoleMole/ZK/` (and `Privacy/LeanProver.lean`, `Privacy
 `Privacy/RatatouilleAdaptive.lean`, `ZK/ReadsPoint.lean`, `Privacy/PomFRITLin.lean`,
 `ZK/ReadsInterleave.lean`, `Privacy/PomFRITInterleave.lean`, `Privacy/MoussakaInterleave.lean`,
 `Privacy/RatatouilleInterleave.lean`, `ZK/ReadsInterleaveOC.lean`, `Privacy/PomFRITInterleaveOC.lean`,
-`Privacy/MoussakaInterleaveOC.lean`, `Privacy/RatatouilleInterleaveOC.lean`, §10.8). There is
+`Privacy/MoussakaInterleaveOC.lean`, `Privacy/RatatouilleInterleaveOC.lean`, §10.8; for `main`'s
+layout without label rows, `ZK/Main.lean`, `ZK/Relations.lean`, §4.1, and `ZK/HopsMain.lean`,
+`Privacy/MainChain.lean`, `ZK/MainSlots.lean`, `ZK/MainGame.lean`, `Privacy/MoussakaMain.lean`,
+`Privacy/RatatouilleMain.lean`, §4.2). There is
 no `sorry` and no `axiom`. `#print axioms` lists
 only `propext`, `Classical.choice` and `Quot.sound`.
 

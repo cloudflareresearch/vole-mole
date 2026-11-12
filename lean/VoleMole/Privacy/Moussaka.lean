@@ -33,8 +33,9 @@ is a random-oracle step that stays on paper, as in the note.
   witness. With the label-row
   fix this is `lean/docs/zk.md`'s theorem. **On `main` no efficient simulator satisfies it**: a
   distinguisher that knows `r = w[0..16)` computes the label offset and runs the test of
-  `lean/docs/zk.md` Prop. 4.1. There the note's joint (PU) hop over the four proofs
-  (`ZK/Relations.lean`, `moussaka_main_zk`) replaces it; that hop is on paper.
+  `lean/docs/zk.md` Prop. 4.1. There the note's joint (PU) hop over the four proofs replaces it:
+  `Privacy/MoussakaMain.lean` (`anonymity_main`, with the executable prover in the random-oracle
+  and ideal-cipher model and the (PU) event as an explicit term).
 * Hiding of `Com` in the note's two-instance form (`hidingAdv`): given `t₀ = Com(nf₀, ·, r₀)`,
   `t₁ = Com(nf₁, ·, r₁)`, distinguish `(nf₀, nf₁)` from fresh uniform `(nf₀*, nf₁*)`. It is a
   computational assumption on Keccak-p[800], so it is stated for the explicit reductions
