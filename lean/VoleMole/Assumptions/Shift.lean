@@ -1,4 +1,5 @@
 import VoleMole.Assumptions.UOV
+import VCVio.EvalDist.ProbabilityBounds
 
 /-!
 # OMPR and OMPR⊕τ: the two reductions between them
@@ -500,6 +501,76 @@ theorem recCh_eqd {α : Type} (oa : OracleComp (specB AR X (List G) G S) α)
     | cons u r => rw [recCh_cons pre x δs w u r hr]; simp [chImpl, hr]
   · rw [recCh_iss]; simp [chImpl]
 
+theorem adReal_eqd {α : Type} (oa : OracleComp (specB AR X (List G) G S) α) (w : RSt AR X G)
+    (hw : InvA n g w) :
+    (fun z => (z.1, projA z.2)) <$> (simulateQ (adReal pre n g) oa).run w =ᵈ
+      (simulateQ (recCh pre) oa).run (projA w) :=
+  simulateQ_proj_eqd _ _ projA (InvA n g) (adReal_inv pre n g)
+    (fun q w hw => by rw [adReal_step pre n g q w hw]) oa w hw
+
 end GuessSim
+
+/-! ### Counting the guesses -/
+
+section Count
+
+/-- **A guess vector agrees with a fixed one on `K` with probability `τ^{−|K|}`**; any event that
+this implies is at least as likely. -/
+theorem pr_guess_ge {n τ : ℕ} [NeZero τ] [SampleableType (Fin n → Fin τ)] (K : Finset (Fin n))
+    (a : Fin n → Fin τ) (P : (Fin n → Fin τ) → Prop) (h : ∀ g, (∀ j ∈ K, g j = a j) → P g) :
+    ((τ : ℝ≥0∞) ^ K.card)⁻¹ ≤ Pr{let g ← $ᵗ (Fin n → Fin τ)}[P g] := by
+  classical
+  refine le_trans (le_of_eq ?_) (prEvent_mono _ _ _ fun g hg => h g hg)
+  rw [VoleMole.ROM.prEvent_uniformSample_eq_prU, VoleMole.Prob.prU_eq_card]
+  have hset : (Finset.univ.filter fun g : Fin n → Fin τ => ∀ j ∈ K, g j = a j) =
+      Fintype.piFinset fun j => if j ∈ K then {a j} else Finset.univ := by
+    ext g
+    simp only [Finset.mem_filter, Finset.mem_univ, true_and, Fintype.mem_piFinset]
+    refine ⟨fun hg j => ?_, fun hg j hj => ?_⟩
+    · split_ifs with hj
+      · simp [hg j hj]
+      · simp
+    · simpa [hj] using hg j
+  have hcard : (Finset.univ.filter fun g : Fin n → Fin τ => ∀ j ∈ K, g j = a j).card =
+      τ ^ (n - K.card) := by
+    rw [hset, Fintype.card_piFinset]
+    have : ∀ j, (if j ∈ K then ({a j} : Finset (Fin τ)) else Finset.univ).card =
+        if j ∈ K then 1 else τ := fun j => by split_ifs <;> simp
+    simp only [this, Finset.prod_ite, Finset.prod_const_one, one_mul, Finset.prod_const]
+    congr 1
+    rw [Finset.filter_not, Finset.card_sdiff_of_subset (Finset.filter_subset _ _),
+      Finset.filter_mem_eq_inter, Finset.univ_inter, Finset.card_univ, Fintype.card_fin]
+  have hk : K.card ≤ n := (Finset.card_le_univ K).trans (by simp)
+  rw [hcard, Fintype.card_fun, Fintype.card_fin, Fintype.card_fin]
+  have hτ0 : (τ : ℝ≥0∞) ≠ 0 := by simp [NeZero.ne τ]
+  have hτt : (τ : ℝ≥0∞) ≠ ⊤ := ENNReal.natCast_ne_top τ
+  push_cast
+  rw [show (τ : ℝ≥0∞) ^ n = τ ^ (n - K.card) * τ ^ K.card by
+    rw [← pow_add, Nat.sub_add_cancel hk]]
+  rw [ENNReal.div_eq_inv_mul, ENNReal.mul_inv (Or.inl (pow_ne_zero _ hτ0))
+    (Or.inl (ENNReal.pow_ne_top hτt)), mul_comm, ← mul_assoc,
+    ENNReal.mul_inv_cancel (pow_ne_zero _ hτ0) (ENNReal.pow_ne_top hτt), one_mul]
+
+/-- **A lower bound through a bind**: if the continuation's event has probability at least `c`
+wherever `W` holds on the support, the joint event has probability at least `c · Pr[W]`. -/
+theorem le_prEvent_bind_of_support {α β : Type} (mx : ProbComp α) (f : α → ProbComp β)
+    (W : α → Prop) (q : β → Prop) (c : ℝ≥0∞)
+    (h : ∀ a ∈ support mx, W a → c ≤ Pr{let y ← f a}[q y]) :
+    c * Pr{let a ← mx}[W a] ≤ Pr{let y ← mx >>= f}[q y] := by
+  classical
+  let : MeasurableSpace α := ⊤
+  have hW : Pr{let a ← mx}[W a] ≤ Pr{let a ← mx}[W a ∧ a ∈ support mx] :=
+    prEvent_mono_of_support mx _ _ fun a ha hw => ⟨hw, ha⟩
+  refine (mul_le_mul' le_rfl hW).trans ?_
+  rw [prEvent_bind_eq_lintegral_of_discrete, prEvent_eq_evalDist_of_discrete,
+    ← MeasureTheory.lintegral_indicator_const MeasurableSet.of_discrete]
+  refine MeasureTheory.lintegral_mono fun a => ?_
+  by_cases hw : W a ∧ a ∈ support mx
+  · rw [Set.indicator_of_mem (show a ∈ {x | W x ∧ x ∈ support mx} from hw)]
+    exact h a hw.2 hw.1
+  · rw [Set.indicator_of_notMem (show a ∉ {x | W x ∧ x ∈ support mx} from hw)]
+    exact zero_le
+
+end Count
 
 end VoleMole.Assumptions.UOV
