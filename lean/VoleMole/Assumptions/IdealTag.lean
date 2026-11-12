@@ -764,3 +764,410 @@ theorem advFDH_le_ompi (qH qS k : ℕ) (A : PK → ProbComp (OracleComp (specF A
 end FDHRed
 
 end VoleMole.Assumptions.IdealTag
+
+namespace VoleMole.Assumptions.IdealTag
+
+open VoleMole.Assumptions.UOV
+
+/-! ## Theorem 1 (c): A-OMPI ≤ OMPR -/
+
+section Helpers
+
+/-- With no query of a kind that is never asked, every computation is within budget `0`. -/
+theorem isQueryBoundP_false {ι : Type} {spec : OracleSpec ι} {α : Type} (oa : OracleComp spec α) :
+    IsQueryBoundP oa (fun _ => False) 0 := by
+  induction oa using OracleComp.inductionOn with
+  | pure x => trivial
+  | query_bind t f ih =>
+    rw [isQueryBoundP_query_bind_iff]
+    exact ⟨Or.inl not_false, fun u => by simp [ih u]⟩
+
+/-- **An event of a prefix bounds an event of the whole computation** if every outcome of the
+continuation from a prefix outcome in the first event is in the second. -/
+theorem prEvent_le_bind {α β : Type} (J : ProbComp α) (f : α → ProbComp β) (P : α → Prop)
+    (Q : β → Prop) (h : ∀ x ∈ support J, P x → ∀ w ∈ support (f x), Q w) :
+    Pr{let x ← J}[P x] ≤ Pr{let w ← J >>= f}[Q w] := by
+  let K : ProbComp (α × β) := J >>= fun x => (fun w => (x, w)) <$> f x
+  have h1 : Prod.fst <$> K =ᵈ J := by
+    simp only [K, map_bind, Functor.map_map]
+    refine (EvalDistEq.bind_right _ fun x => EvalDistEq.map_const _ x).trans ?_
+    simp only [bind_pure]
+    exact EvalDistEq.rfl
+  have h2 : Prod.snd <$> K = J >>= f := by
+    simp [K, map_bind, Functor.map_map]
+  have e1 := h1.prEvent_eq P
+  rw [prEvent_map] at e1
+  rw [← e1, ← h2, prEvent_map]
+  refine prEvent_mono_of_support _ _ _ fun p hp hP => ?_
+  simp only [K, mem_support_bind_iff] at hp
+  obtain ⟨x, hx, hw⟩ := hp
+  erw [support_map] at hw
+  obtain ⟨w, hw, rfl⟩ := hw
+  exact h x hx hP w hw
+
+end Helpers
+
+section OMPIRed
+
+variable {DR : Type} [DecidableEq DR] {AR : DR → Type} [∀ d, SampleableType (AR d)]
+  {T S : Type} [SampleableType T]
+
+variable (T S) in
+/-- The OMPR reduction's state: the issued targets (in order), the answered index queries (a
+cache), and (ghosts) the opened indices and the number of index queries. -/
+structure ORSt where
+  ys : List T
+  ans : List (ℕ × S)
+  opened : List ℕ
+  oq : ℕ
+
+/-- The reduction's initial state. -/
+def or0 : ORSt T S := ⟨[], [], [], 0⟩
+
+variable (AR T S) in
+/-- OMPR's challenge query, under the label `x`. -/
+def qChal (x : ℕ) : OracleComp (specB AR ℕ Unit T S) (Option T) :=
+  liftM ((specB AR ℕ Unit T S).query (.inr (.inl (x, ()))))
+
+variable (AR T S) in
+/-- OMPR's preimage query. -/
+def qPre (t : T) : OracleComp (specB AR ℕ Unit T S) S :=
+  liftM ((specB AR ℕ Unit T S).query (.inr (.inr t)))
+
+variable (T S) in
+/-- OMPR's world query. -/
+def qWB (d : DR) : OracleComp (specB AR ℕ Unit T S) (AR d) :=
+  liftM ((specB AR ℕ Unit T S).query (.inl d))
+
+omit [SampleableType T] in
+theorem run_qChal (D : T → S) (x : ℕ) (c : Ch AR ℕ Unit T) :
+    (simulateQ (chImpl D) (qChal AR T S x)).run c = pure (match c.rest with
+      | u :: r => (some u, { c with rest := r, tg := Function.update c.tg x (some (u, ())) })
+      | [] => (none, c)) := by
+  unfold qChal
+  erw [simulateQ_spec_query]
+  rfl
+
+omit [SampleableType T] in
+theorem run_qPre (D : T → S) (t : T) (c : Ch AR ℕ Unit T) :
+    (simulateQ (chImpl D) (qPre AR T S t)).run c = pure (D t, { c with iq := c.iq + 1 }) := by
+  unfold qPre
+  erw [simulateQ_spec_query]
+  rfl
+
+omit [SampleableType T] in
+theorem run_qWB (D : T → S) (d : DR) (c : Ch AR ℕ Unit T) :
+    (simulateQ (chImpl D) (qWB T S d)).run c =
+      (fun r => (r.1, { c with ro := r.2 })) <$> ((specR AR).randomOracle d).run c.ro := by
+  unfold qWB
+  erw [simulateQ_spec_query]
+  rfl
+
+/-- **The A-OMPI-to-OMPR reduction's handler**: the world forwarded; a target request forwarded
+under the next index as label while fewer than `q_T` targets were issued; an index query answered
+from the cache, or by the preimage oracle at the indexed target. -/
+def ompiRedImpl (qT : ℕ) :
+    QueryImpl (specI AR T S) (StateT (ORSt T S) (OracleComp (specB AR ℕ Unit T S)))
+  | .inl d => StateT.mk fun st => (fun a => (a, st)) <$> qWB T S d
+  | .inr (.inl ()) => StateT.mk fun st =>
+      if st.ys.length < qT then
+        (fun r : Option T => match r with
+          | some y => (some y, { st with ys := st.ys ++ [y] })
+          | none => (none, st)) <$> qChal AR T S st.ys.length
+      else pure (none, st)
+  | .inr (.inr i) => StateT.mk fun st =>
+      match st.ans.lookup i with
+      | some a => pure (some a, { st with opened := i :: st.opened, oq := st.oq + 1 })
+      | none => match st.ys[i]? with
+        | some y => (fun a : S => (some a,
+            { st with ans := st.ans ++ [(i, a)], opened := i :: st.opened, oq := st.oq + 1 })) <$>
+              qPre AR T S y
+        | none => pure (none, { st with opened := i :: st.opened, oq := st.oq + 1 })
+
+/-- **Padding**: `j` further targets, under the labels `b, b + 1, …`, and their preimages. -/
+def padC : ℕ → ℕ → OracleComp (specB AR ℕ Unit T S) (List (ℕ × S))
+  | 0, _ => pure []
+  | j + 1, b => qChal AR T S b >>= fun r => match r with
+    | some u => qPre AR T S u >>= fun a => (fun l => (b, a) :: l) <$> padC j (b + 1)
+    | none => pure []
+
+variable (AR) in
+/-- **The OMPR adversary `ompiRed qT Q A`** of Theorem 1 (c): `A` against the reduction's handler,
+then its forgery, the answered index queries and `Q − (answered)` padding claims. -/
+def ompiRed (qT Q : ℕ) {PK : Type} (A : PK → ProbComp (OracleComp (specI AR T S) (ℕ × S)))
+    (pk : PK) : ProbComp (OracleComp (specB AR ℕ Unit T S) (List (ℕ × S))) :=
+  (fun a => (simulateQ (ompiRedImpl qT) a).run or0 >>= fun r =>
+    (fun pads => r.1 :: r.2.ans ++ pads) <$> padC (Q - r.2.ans.length) r.2.ys.length) <$> A pk
+
+/-- The reduction run against OMPR's challenger, as one handler. -/
+def ompiComb (qT : ℕ) (D : T → S) :
+    QueryImpl (specI AR T S) (StateT (ORSt T S × Ch AR ℕ Unit T) ProbComp) :=
+  fun q => StateT.mk fun s => (fun r => (r.1.1, (r.1.2, r.2))) <$>
+    (simulateQ (chImpl D) ((ompiRedImpl qT q).run s.1)).run s.2
+
+omit [SampleableType T] in
+theorem collapseO (qT : ℕ) (D : T → S) {α : Type} (oa : OracleComp (specI AR T S) α)
+    (s : ORSt T S) (c : Ch AR ℕ Unit T) :
+    (simulateQ (chImpl D) ((simulateQ (ompiRedImpl qT) oa).run s)).run c =
+      (fun r => ((r.1, r.2.1), r.2.2)) <$> (simulateQ (ompiComb qT D) oa).run (s, c) := by
+  refine simulateQ_StateT_StateT_compose _ _ _ (fun q s c => ?_) oa s c
+  show _ = _ <$> ((fun r : (_ × _) × _ => (r.1.1, (r.1.2, r.2))) <$> _)
+  rw [Functor.map_map]
+  exact (id_map _).symm
+
+/-- The A-OMPI state that a joint state represents: the challenger's first `q_T − |ys|` remaining
+targets are A-OMPI's stream. -/
+def ompiProj (qT : ℕ) (s : ORSt T S × Ch AR ℕ Unit T) : OMPISt AR T :=
+  ⟨s.2.ro, s.2.rest.take (qT - s.1.ys.length), s.1.ys, s.1.opened, s.1.oq⟩
+
+/-- **The invariant of the joint state**, for the challenger's stream `L`. -/
+structure OInv (D : T → S) (qT : ℕ) (L : List T) (s : ORSt T S × Ch AR ℕ Unit T) : Prop where
+  cache : ∀ p ∈ s.1.ans, (s.1.ys[p.1]?).map D = some p.2
+  nodup : (s.1.ans.map Prod.fst).Nodup
+  opened : ∀ p ∈ s.1.ans, p.1 ∈ s.1.opened
+  iq : s.2.iq = s.1.ans.length
+  oq : s.1.ans.length ≤ s.1.oq
+  tg : ∀ i y, s.1.ys[i]? = some y → s.2.tg i = some (y, ())
+  fresh : ∀ x, s.1.ys.length ≤ x → s.2.tg x = none
+  stream : s.1.ys ++ s.2.rest = L
+  cap : s.1.ys.length ≤ qT
+
+omit [SampleableType T] in
+theorem ocomb_world (qT : ℕ) (D : T → S) (d : DR) (st : ORSt T S) (c : Ch AR ℕ Unit T) :
+    (ompiComb qT D (.inl d)).run (st, c) =
+      (fun r => (r.1, (st, { c with ro := r.2 }))) <$> ((specR AR).randomOracle d).run c.ro := by
+  simp [ompiComb, ompiRedImpl, simulateQ_map, run_qWB, Functor.map_map]
+
+omit [SampleableType T] in
+theorem ocomb_chal (qT : ℕ) (D : T → S) (st : ORSt T S) (c : Ch AR ℕ Unit T) :
+    (ompiComb qT D (.inr (.inl ()))).run (st, c) =
+      if st.ys.length < qT then pure (match c.rest with
+        | u :: r => (some u, ({ st with ys := st.ys ++ [u] },
+            { c with rest := r, tg := Function.update c.tg st.ys.length (some (u, ())) }))
+        | [] => (none, (st, c)))
+      else pure (none, (st, c)) := by
+  by_cases h : st.ys.length < qT
+  · simp only [ompiComb, ompiRedImpl, StateT.run_mk, h, ite_true, simulateQ_map, StateT.run_map,
+      run_qChal, map_pure]
+    cases c.rest <;> rfl
+  · simp [ompiComb, ompiRedImpl, h]
+
+omit [SampleableType T] in
+theorem ocomb_idx (qT : ℕ) (D : T → S) (i : ℕ) (st : ORSt T S) (c : Ch AR ℕ Unit T) :
+    (ompiComb qT D (.inr (.inr i))).run (st, c) = match st.ans.lookup i with
+      | some a => pure (some a, ({ st with opened := i :: st.opened, oq := st.oq + 1 }, c))
+      | none => match st.ys[i]? with
+        | some y => pure (some (D y),
+            ({ st with ans := st.ans ++ [(i, D y)], opened := i :: st.opened, oq := st.oq + 1 },
+              { c with iq := c.iq + 1 }))
+        | none => pure (none, ({ st with opened := i :: st.opened, oq := st.oq + 1 }, c)) := by
+  cases h : st.ans.lookup i with
+  | some a => simp [ompiComb, ompiRedImpl, h]
+  | none =>
+    cases hy : st.ys[i]? with
+    | some y =>
+      simp only [ompiComb, ompiRedImpl, StateT.run_mk, h, hy, simulateQ_map, StateT.run_map,
+        run_qPre, map_pure]
+    | none => simp [ompiComb, ompiRedImpl, h, hy]
+
+omit [SampleableType T] in
+theorem lookup_mem {i : ℕ} {a : S} {l : List (ℕ × S)} (h : l.lookup i = some a) : (i, a) ∈ l := by
+  induction l with
+  | nil => simp at h
+  | cons p l ih =>
+    obtain ⟨j, b⟩ := p
+    by_cases hj : i = j
+    · subst hj; simp [List.lookup] at h; subst h; simp
+    · have : (i == j) = false := by simpa using hj
+      simp [List.lookup, this] at h
+      exact List.mem_cons_of_mem _ (ih h)
+
+omit [SampleableType T] in
+theorem lookup_none {i : ℕ} {l : List (ℕ × S)} (h : l.lookup i = none) : i ∉ l.map Prod.fst := by
+  induction l with
+  | nil => simp
+  | cons p l ih =>
+    obtain ⟨j, b⟩ := p
+    by_cases hj : i = j
+    · subst hj; simp [List.lookup] at h
+    · have : (i == j) = false := by simpa using hj
+      simp only [List.lookup, this] at h
+      simp only [List.map_cons, List.mem_cons, not_or]
+      exact ⟨hj, ih h⟩
+
+omit [SampleableType T] in
+/-- **The reduction answers as A-OMPI's challenger, per query**, at the projected state. -/
+theorem ompi_step (qT : ℕ) (D : T → S) (L : List T) (q : DR ⊕ (Unit ⊕ ℕ))
+    (s : ORSt T S × Ch AR ℕ Unit T) (hI : OInv D qT L s) :
+    (fun z => (z.1, ompiProj qT z.2)) <$> (ompiComb qT D q).run s =ᵈ
+      (ompiImpl D q).run (ompiProj qT s) := by
+  obtain ⟨st, c⟩ := s
+  suffices e : (fun z => (z.1, ompiProj qT z.2)) <$> (ompiComb qT D q).run (st, c) =
+      (ompiImpl D q).run (ompiProj qT (st, c)) by rw [e]
+  rcases q with d | ⟨⟩ | i
+  · rw [ocomb_world]
+    erw [Functor.map_map]
+    rfl
+  · rw [ocomb_chal]
+    by_cases h : st.ys.length < qT
+    · obtain ⟨j, hj⟩ : ∃ j, qT - st.ys.length = j + 1 := ⟨qT - st.ys.length - 1, by omega⟩
+      have hj' : qT - (st.ys.length + 1) = j := by omega
+      cases hr : c.rest with
+      | nil => simp [h, hr, ompiImpl, ompiProj]
+      | cons u r => simp [h, hr, ompiImpl, ompiProj, hj, hj']
+    · have h0 : qT - st.ys.length = 0 := by omega
+      simp [h, ompiImpl, ompiProj, h0]
+  · rw [ocomb_idx]
+    cases hl : st.ans.lookup i with
+    | some a =>
+      have hc := hI.cache _ (lookup_mem hl)
+      simp only [map_pure, ompiImpl, ompiProj, StateT.run_mk]
+      simp only at hc
+      rw [hc]
+    | none =>
+      cases hy : st.ys[i]? with
+      | some y => simp [ompiImpl, ompiProj, hy]
+      | none => simp [ompiImpl, ompiProj, hy]
+
+omit [SampleableType T] in
+/-- **The invariant is kept.** -/
+theorem ompi_inv (qT : ℕ) (D : T → S) (L : List T) (q : DR ⊕ (Unit ⊕ ℕ))
+    (s : ORSt T S × Ch AR ℕ Unit T) (hI : OInv D qT L s) :
+    ∀ z ∈ support ((ompiComb qT D q).run s), OInv D qT L z.2 := by
+  obtain ⟨st, c⟩ := s
+  intro z hz
+  rcases q with d | ⟨⟩ | i
+  · rw [ocomb_world] at hz
+    erw [support_map] at hz
+    obtain ⟨r, -, rfl⟩ := hz
+    exact ⟨hI.cache, hI.nodup, hI.opened, hI.iq, hI.oq, hI.tg, hI.fresh, hI.stream, hI.cap⟩
+  · rw [ocomb_chal] at hz
+    by_cases h : st.ys.length < qT
+    · cases hr : c.rest with
+      | nil =>
+        simp only [h, hr, ite_true] at hz
+        subst hz; exact hI
+      | cons u r =>
+        simp only [h, hr, ite_true] at hz
+        subst hz
+        have hlt : ∀ i y, st.ys[i]? = some y → i < st.ys.length := fun i y hy =>
+          (List.getElem?_eq_some_iff.1 hy).1
+        refine ⟨fun p hp => ?_, hI.nodup, hI.opened, hI.iq, hI.oq, fun i y hy => ?_,
+          fun x hx => ?_, ?_, ?_⟩
+        · have hc := hI.cache p hp
+          obtain ⟨y, hy, -⟩ := Option.map_eq_some_iff.1 hc
+          simp only
+          rw [List.getElem?_append_left (hlt _ _ hy)]
+          exact hc
+        · simp only at hy ⊢
+          by_cases hi : i < st.ys.length
+          · rw [List.getElem?_append_left hi] at hy
+            rw [Function.update_of_ne (by omega)]
+            exact hI.tg i y hy
+          · have hi' : i = st.ys.length := by
+              have := (List.getElem?_eq_some_iff.1 hy).1
+              simp at this; omega
+            subst hi'
+            rw [List.getElem?_append_right le_rfl] at hy
+            simp at hy
+            subst hy
+            simp
+        · simp only at hx ⊢
+          simp only [List.length_append, List.length_singleton] at hx
+          rw [Function.update_of_ne (by omega)]
+          exact hI.fresh x (show st.ys.length ≤ x by omega)
+        · have := hI.stream
+          simp only [hr] at this ⊢
+          simpa using this
+        · simp only [List.length_append, List.length_singleton]; omega
+    · simp only [h, ite_false] at hz
+      subst hz; exact hI
+  · rw [ocomb_idx] at hz
+    cases hl : st.ans.lookup i with
+    | some a =>
+      simp only [hl, support_pure, Set.mem_singleton_iff] at hz
+      subst hz
+      exact ⟨hI.cache, hI.nodup, fun p hp => List.mem_cons_of_mem _ (hI.opened p hp), hI.iq,
+        Nat.le_succ_of_le hI.oq, hI.tg, hI.fresh, hI.stream, hI.cap⟩
+    | none =>
+      cases hy : st.ys[i]? with
+      | some y =>
+        simp only [hl, hy, support_pure, Set.mem_singleton_iff] at hz
+        subst hz
+        refine ⟨fun p hp => ?_, ?_, fun p hp => ?_, ?_, ?_, hI.tg, hI.fresh, hI.stream, hI.cap⟩
+        · rcases List.mem_append.1 hp with hp | hp
+          · exact hI.cache p hp
+          · simp only [List.mem_singleton] at hp; subst hp; simp [hy]
+        · simp only [List.map_append, List.map_cons, List.map_nil]
+          exact List.nodup_append.2 ⟨hI.nodup, List.nodup_singleton _,
+            fun a ha b hb => by simp at hb; subst hb; exact fun e => lookup_none hl (e ▸ ha)⟩
+        · rcases List.mem_append.1 hp with hp | hp
+          · exact List.mem_cons_of_mem _ (hI.opened p hp)
+          · simp only [List.mem_singleton] at hp; subst hp; exact List.mem_cons_self
+        · have h1 : c.iq = st.ans.length := hI.iq
+          simp [h1]
+        · have h1 : st.ans.length ≤ st.oq := hI.oq
+          simp only [List.length_append, List.length_singleton]; omega
+      | none =>
+        simp only [hl, hy, support_pure, Set.mem_singleton_iff] at hz
+        subst hz
+        exact ⟨hI.cache, hI.nodup, fun p hp => List.mem_cons_of_mem _ (hI.opened p hp), hI.iq,
+          Nat.le_succ_of_le hI.oq, hI.tg, hI.fresh, hI.stream, hI.cap⟩
+
+omit [SampleableType T] in
+/-- **What padding produces**: with at least `j` targets left and the labels from `b` on unused,
+`j` claims on the distinct labels `≥ b`, each the preimage oracle's answer `D(u)` at the target `u`
+recorded under its label (one of the remaining targets), after exactly `j` more preimage queries;
+the labels below `b` are untouched. -/
+theorem pad_spec (D : T → S) : ∀ (j b : ℕ) (c : Ch AR ℕ Unit T), j ≤ c.rest.length →
+    (∀ x, b ≤ x → c.tg x = none) →
+    ∀ w ∈ support ((simulateQ (chImpl D) (padC j b)).run c),
+      w.1.length = j ∧ (∀ p ∈ w.1, b ≤ p.1) ∧ (w.1.map Prod.fst).Nodup ∧ w.2.iq = c.iq + j ∧
+        (∀ x < b, w.2.tg x = c.tg x) ∧
+        (∀ p ∈ w.1, ∃ u ∈ c.rest, w.2.tg p.1 = some (u, ()) ∧ p.2 = D u)
+  | 0, b, c, _, _, w, hw => by
+    simp only [padC, simulateQ_pure, StateT.run_pure, support_pure, Set.mem_singleton_iff] at hw
+    subst hw
+    simp
+  | j + 1, b, c, hj, hf, w, hw => by
+    cases hr : c.rest with
+    | nil => rw [hr] at hj; simp at hj
+    | cons u r =>
+      rw [hr] at hj
+      simp only [padC, simulateQ_bind, StateT.run_bind, run_qChal, hr, pure_bind, run_qPre,
+        simulateQ_map, StateT.run_map] at hw
+      erw [support_map] at hw
+      obtain ⟨w', hw', rfl⟩ := hw
+      set c2 : Ch AR ℕ Unit T := ⟨c.ro, r, Function.update c.tg b (some (u, ())), c.iq + 1⟩ with hc2
+      have ih := pad_spec D j (b + 1) c2 (by simp [c2]; simp at hj; omega)
+        (fun x hx => by
+          simp only [c2]
+          rw [Function.update_of_ne (by omega)]
+          exact hf x (by omega)) w' hw'
+      obtain ⟨h1, h2, h3, h4, h5, h6⟩ := ih
+      refine ⟨by simp [h1], ?_, ?_, ?_, ?_, ?_⟩
+      · intro p hp
+        rcases List.mem_cons.1 hp with rfl | hp
+        · exact le_rfl
+        · exact le_trans (Nat.le_succ b) (h2 p hp)
+      · simp only [List.map_cons, List.nodup_cons]
+        refine ⟨fun hb => ?_, h3⟩
+        obtain ⟨p, hp, he⟩ := List.mem_map.1 hb
+        have := h2 p hp
+        omega
+      · simp only [h4, c2]; omega
+      · intro x hx
+        rw [h5 x (by omega)]
+        simp only [c2]
+        rw [Function.update_of_ne (by omega)]
+      · intro p hp
+        rcases List.mem_cons.1 hp with rfl | hp
+        · refine ⟨u, List.mem_cons_self, ?_, rfl⟩
+          rw [h5 b (by omega)]
+          simp [c2]
+        · obtain ⟨u', hu', ht, hd⟩ := h6 p hp
+          exact ⟨u', List.mem_cons_of_mem _ hu', ht, hd⟩
+
+end OMPIRed
+
+end VoleMole.Assumptions.IdealTag
