@@ -334,6 +334,75 @@ noncomputable def semAdv (σ : T → A) (B : SemForger R C Q T A V Out H pv)
 
 end Sem
 
+/-! ## Oracle forgers are semantic forgers -/
+
+section Oracle
+
+variable {D : Type} {R : D → Type} {C Q T A V Out : Type} (H : Q → T) (pv : A → V)
+
+/-- An oracle forger's oracles: the hashes `R` and the signer, answering `A` on queries `Q`. -/
+abbrev specSig (R : D → Type) (Q A : Type) : OracleSpec (D ⊕ Q) :=
+  OracleSpec.ofFn (Sum.elim R fun _ => A)
+
+/-- The hashes forwarded, and the signer `q ↦ σ(H(q))`, logging the signing queries. -/
+def sigImpl (σ : T → A) :
+    QueryImpl (specSig R Q A) (StateT (List Q) (OracleComp (OracleSpec.ofFn R)))
+  | .inl d => StateT.mk fun l => (fun a => (a, l)) <$>
+      (liftM ((OracleSpec.ofFn R).query d) : OracleComp (OracleSpec.ofFn R) (R d))
+  | .inr q => StateT.mk fun l => pure (σ (H q), l ++ [q])
+
+variable {H}
+
+theorem sigImpl_prefix (σ : T → A) (g : (d : D) → R d) {α : Type} :
+    ∀ (oc : OracleComp (specSig R Q A) α) (l : List Q),
+      l <+: (evalWithAnswerFn (QueryImpl.ofFn g) ((simulateQ (sigImpl H σ) oc).run l)).2 := by
+  intro oc
+  induction oc using OracleComp.inductionOn with
+  | pure x => intro l; simp
+  | query_bind t k ih =>
+    intro l
+    rcases t with d | q
+    · simp only [simulateQ_bind, simulateQ_spec_query, StateT.run_bind, sigImpl, StateT.run_mk,
+        evalWithAnswerFn_bind]
+      exact ih _ l
+    · simp only [simulateQ_bind, simulateQ_spec_query, StateT.run_bind, sigImpl, StateT.run_mk,
+        evalWithAnswerFn_bind, evalWithAnswerFn_pure]
+      exact (List.prefix_append l [q]).trans (ih _ _)
+
+theorem sigImpl_reads (σ σ' : T → A) (g : (d : D) → R d) {α : Type} :
+    ∀ (oc : OracleComp (specSig R Q A) α) (l : List Q),
+      (∀ q ∈ (evalWithAnswerFn (QueryImpl.ofFn g) ((simulateQ (sigImpl H σ) oc).run l)).2,
+        σ' (H q) = σ (H q)) →
+      evalWithAnswerFn (QueryImpl.ofFn g) ((simulateQ (sigImpl H σ') oc).run l) =
+        evalWithAnswerFn (QueryImpl.ofFn g) ((simulateQ (sigImpl H σ) oc).run l) := by
+  intro oc
+  induction oc using OracleComp.inductionOn with
+  | pure x => intro l _; simp
+  | query_bind t k ih =>
+    intro l h
+    rcases t with d | q
+    · simp only [simulateQ_bind, simulateQ_spec_query, StateT.run_bind, sigImpl, StateT.run_mk,
+        evalWithAnswerFn_bind] at h ⊢
+      exact ih _ l h
+    · simp only [simulateQ_bind, simulateQ_spec_query, StateT.run_bind, sigImpl, StateT.run_mk,
+        evalWithAnswerFn_bind, evalWithAnswerFn_pure] at h ⊢
+      have hq : σ' (H q) = σ (H q) :=
+        h q ((sigImpl_prefix σ g _ _).subset (List.mem_append_right l (List.mem_singleton_self q)))
+      rw [hq]
+      exact ih _ _ h
+
+/-- **An oracle forger as a semantic forger** (no probe): it gets the signer as an oracle, and its
+signing log is the list of its signing queries, as the challenger records it. Its advantage is the
+oracle game's (`semAdv` of `ofOracle B` is, by definition, the probability that `B` wins against
+the logging signer). -/
+def ofOracle (B : C → OracleComp (specSig R Q A) Out) : SemForger R C Q T A V Out H pv where
+  run σ E := (fun r => (r.1, r.2, [])) <$> (simulateQ (sigImpl H σ) (B E)).run []
+  reads σ σ' E g hs _ := by
+    simp only [evalWithAnswerFn_map] at hs ⊢
+    rw [sigImpl_reads σ σ' g (B E) [] hs]
+
+end Oracle
+
 /-! ## Items 10 and 11: CT-UF_K and CT-UF^open_K -/
 
 section CTUF
