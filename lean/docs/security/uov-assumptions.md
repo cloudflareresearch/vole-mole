@@ -38,8 +38,12 @@ checkout `subprojects/pqov` (revision `fac2ec1`, UOV round-3 code, with
 | T4 | **Lemma U is incorrect as stated**: CT-UF with an arbitrary-target signing oracle is not shown to follow from OMPR. CT-UF^open ⇐ OMPR, tightly; CT-UF^open ⇐ GPI + OW | tight / `q_π` | §5.4 |
 | T5 | With R1, Ratatouille balance ⇐ EUF-CMA of salted UOV with `H = Tag`, which ⇐ GPI + UOV (or ⇐ UOV alone with salt-UOV signing) | `q_K + 1` | §5.5 |
 | T6 | **PomFRIT ⇔ OMPR**: an OMPR breaker *is* a PomFRIT one-more forger. So OMPR ≤ PomFRIT ≤ OMPR⊕17 | tight | §5.6 |
-| P7 | OMPR is not expected to reduce to the UOV problem (meta-reduction sketch); determinism doesn't change that | — | §5.7 |
+| P7 | OMPR does not reduce to the UOV problem, OW or any EUF/SUF-CMA notion by a key-preserving black-box reduction (theorems A1–A3 of `uov-open-structure.md`; §5.7 has the original sketch). Determinism makes a separation easier, not harder (A2) | `k + 1` (runs of the adversary) | §5.7, `uov-open-structure.md` Part A |
 | P8 | OMPR⊕τ ⇐ OMPR loses `τ^{q+1}`. Every *simple-embedding* reduction loses that much against some adversary. In a generic model the two assumptions have the same bound. For PomFRIT's tree shapes, U1's additive `Q₃·2^{−71}` (≈ `2^{−7}` at `2^{64}` queries) is unavoidable for simple-embedding reductions | — | §6 |
+
+**Follow-up.** `uov-open-structure.md` treats two of the open items of §9: the meta-reduction
+(Part A) and the cryptanalysis of GPI (Part B: reliable badness tests are key-recovery attacks;
+conjectured security of GPI ≈ key recovery, `≈ 2^{201}` bit operations for uov-Ip).
 
 **Assessment** (§7).
 - State all three protocols under **one** assumption: **A-OMPR**, i.e. Def. 3.1 instantiated with
@@ -205,7 +209,8 @@ All games are for one key `(sk, pk) ← KeyGen` unless `K` is given. `D = D_sk` 
    - Deciding badness of `s` means deciding whether `𝒪` meets the public 74-dimensional space
      `ker DP_s` nontrivially. We know no way to do that without `𝒪`. This is a structural
      property of `𝒪`, of the kind the intersection attack exploits [Beu21], so GPI needs
-     cryptanalysis like any new assumption.
+     cryptanalysis like any new assumption. A first analysis is in `uov-open-structure.md`
+     Part B.
 4. **EUF-CMA / SUF-CMA of the specified scheme** (UOV spec §3.2; pqov `ov_sign`), ROM.
    - `σ = (s, salt)`, with `salt ← {0,1}^{128}`, `y = SHAKE256(m‖salt)|_{45}`, and `s` from the
      loop above with vinegar `SHAKE256(m‖salt‖sk_seed‖ctr)`.
@@ -538,6 +543,16 @@ Chaum blind signatures and the one-more-RSA problem [BNPS03].
   So this is evidence, not a theorem. OMPR should be treated as an independent assumption, as the
   paper does ("a new hardness assumption is indeed necessary").
 
+  **Update.** `uov-open-structure.md` Part A has the theorems. In short:
+  - the sketch above, with queries on listed targets only, cannot separate OMPR from UOV: for such
+    adversaries OMPR follows from GPI and the UOV problem with loss `n`, as in T2. Made precise,
+    it is a tightness bound (A3: loss `≥ q_T`, with the preimage-obliviousness proviso as the
+    term `Δ_R`);
+  - the separation comes from *off-list* queries: a key-preserving reduction that answers one
+    query on a random target has solved UOV (A1; no proviso, rewinding allowed);
+  - determinism gives a second separation for fully black-box reductions, since `D`'s answers
+    are unique given `pk` and unpredictable (A2).
+
 ## 6. Proposition 8: OMPR versus 17-shift OMPR
 
 **(a) Guessing.** `Adv^{ompr⊕τ}(N, q) ≤ τ^{q+1}·Adv^{ompr}(N, q)`.
@@ -709,10 +724,12 @@ hash-and-sign with retry [KX24]).
 ## 9. Open items
 
 - **GPI** is new. It needs cryptanalysis: is badness of `s` decidable from `pk`, or with a few
-  samples?
+  samples? First analysis: `uov-open-structure.md` Part B. Reliable (certifying) badness tests
+  give key recovery; no cheaper test is known; weak two-sided distinguishers remain open.
 - **OMPR ⇒ OMPR⊕17** (§6), in either direction.
 - **CT-UF with arbitrary targets** versus OMPR: is the "free non-challenge calls" variant implied?
-- Turn the **meta-reduction** (§5.7) into a theorem, with a precise proviso.
+- ~~Turn the **meta-reduction** (§5.7) into a theorem, with a precise proviso.~~ Done for
+  key-preserving reductions: `uov-open-structure.md` Part A. Open: reductions that change the key.
 - **QROM** versions of T2–T5. This needs quantum programming of an invertible permutation for
   Com/Tag. The salted variants are the promising ones.
 - `δ(sk)` for a fixed key is not bounded: `L_v = vᵀS` ranges over a subspace of dimension `≤ 74`,
