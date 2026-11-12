@@ -372,7 +372,8 @@ ideal-cipher model of `lean/VoleMole/ROM/` (SHAKE a random oracle, AES's rows un
   `j`-th proof as output. Per table, a win in which every accepted proof is extracted gives a
   `Com` collision among the extracted openings or a CT-UF forgery (`win_imp`; the deterministic
   steps 3–4 are `Moussaka.collision_or_forgery`, through `exists_unsigned_of_card_lt`). A union
-  bound across the games on one table (`prEvent_le_sum4_of_tables`) gives
+  bound across the games on one table (`prEvent_bind_le_sum4_of_table`, `ROM/ExtractReduce.lean`)
+  gives
 
       Pr[Win] ≤ Σ_{j<qI} Pr[accept ∧ ¬Extracted](P^iss_j) + Σ_{j<qR} Pr[accept ∧ ¬Extracted](P^red_j)
                 + AdvBind(B₁) + AdvCTUF(B₂).
@@ -1088,7 +1089,11 @@ demo2: adversary token with squatted nf ACCEPTED; honest token then REJECTED (do
 
 `lean/VoleMole/ROM/VerifyIC.lean`: the executable verifier as an oracle computation over the
 hashes and the cipher (`verifyIC`, `evalWithAnswerFn_verifyIC`, the cell-level read lemma
-`verify_congr_cells`, query bounds). `lean/VoleMole/ROM/MoussakaOMUF.lean` (Theorem 1, §4 "Status"):
+`verify_congr_cells`, query bounds; `verifierIC_verifyIC`: it meets the generic interface
+`VerifierIC` of `ROM/ExtractReduce.lean`, and Ratatouille's balance game uses it too). The
+generic glue (the union bound across games per table, `prEvent_bind_le_sum4_of_table`;
+`gameA_transcript`; `evalWithAnswerFn_mapM`; `isKindQueryBoundIC_bind`) is in
+`lean/VoleMole/ROM/ExtractReduce.lean`. `lean/VoleMole/ROM/MoussakaOMUF.lean` (Theorem 1, §4 "Status"):
 the game (`game`, `anchorIC`, `moderatorIC`, `Win`; `anchorIC_eq_spec`), the reduction `omuf_le`
 (per table `win_imp`), and `omuf_le_num` with the extraction terms of
 `moussakaIssue_accept_le_adaptive_spec` and `moussakaRedeem_accept_le_adaptive_spec`. `#print

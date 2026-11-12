@@ -30,7 +30,7 @@ glue:
 
 The honest party here is any computation against `specIC`. For a party that verifies proofs with
 the executable verifier this needs the verifier's cipher evaluations as queries: `VerifierIC`
-states what is needed, and `ROM/VerifierIC.lean` proves it for `verifyIC`.
+states what is needed, and `ROM/VerifyIC.lean` proves it for `verifyIC` (`verifierIC_verifyIC`).
 -/
 
 open OracleComp OracleSpec
@@ -91,14 +91,15 @@ theorem prEvent_le_of_table (oa : OracleComp (OracleSpec.ofFn R) α)
   exact prEvent_mono _ _ _ fun G hG => h _ hG
 
 /-- **Per-table union bound across computations.** If at every complete table the event `P` of
-`oa` implies that some `ob i` (`i ∈ J`) returns `true`, then
-`Pr[P | oa] ≤ Σ_{i ∈ J} Pr[ob i = true]` against the lazy random oracle. -/
+`oa` implies the event `Q i` of some `ob i` (`i ∈ J`, each with its own output type), then
+`Pr[P | oa] ≤ Σ_{i ∈ J} Pr[Q i | ob i]` against the lazy random oracle. -/
 theorem prEvent_le_sum_of_table {ι : Type} (oa : OracleComp (OracleSpec.ofFn R) α) (J : Finset ι)
-    (ob : ι → OracleComp (OracleSpec.ofFn R) Bool) (P : α → Prop)
+    {Y : ι → Type} (ob : (i : ι) → OracleComp (OracleSpec.ofFn R) (Y i)) (P : α → Prop)
+    (Q : (i : ι) → Y i → Prop)
     (h : ∀ g : (d : D) → R d, P (evalWithAnswerFn (QueryImpl.ofFn g) oa) →
-      ∃ i ∈ J, evalWithAnswerFn (QueryImpl.ofFn g) (ob i) = true) :
+      ∃ i ∈ J, Q i (evalWithAnswerFn (QueryImpl.ofFn g) (ob i))) :
     Pr{let r ← (simulateQ randomOracle oa).run' ∅}[P r] ≤
-      ∑ i ∈ J, Pr{let b ← (simulateQ randomOracle (ob i)).run' ∅}[b = true] := by
+      ∑ i ∈ J, Pr{let r ← (simulateQ randomOracle (ob i)).run' ∅}[Q i r] := by
   classical
   let S := possibleQueryKeys oa ∪ J.biUnion fun i => possibleQueryKeys (ob i)
   have ha : AllQueriesSatisfy oa (· ∈ S) := (allQueriesSatisfy_possibleQueryKeys oa).mono
@@ -107,32 +108,75 @@ theorem prEvent_le_sum_of_table {ι : Type} (oa : OracleComp (OracleSpec.ofFn R)
     (allQueriesSatisfy_possibleQueryKeys (ob i)).mono fun d hd =>
       Finset.mem_union_right _ (Finset.mem_biUnion.2 ⟨i, hi, hd⟩)
   rw [prEvent_eq_extendTable S oa ha]
-  rw [Finset.sum_congr rfl fun i hi => prEvent_eq_extendTable S (ob i) (hb i hi) (· = true)]
+  rw [Finset.sum_congr rfl fun i hi => prEvent_eq_extendTable S (ob i) (hb i hi) (Q i)]
   refine le_trans (prEvent_mono _ _ (fun G => ∃ i ∈ J,
-    evalWithAnswerFn (QueryImpl.ofFn (extendTable S G)) (ob i) = true) fun G hG => h _ hG) ?_
+    Q i (evalWithAnswerFn (QueryImpl.ofFn (extendTable S G)) (ob i))) fun G hG => h _ hG) ?_
   exact prEvent_exists_finset_le J _ _
 
 /-- **The same, after a common draw** (e.g. the cipher table): if for every draw `E` and every
-complete hash table the event of `oa E` implies that some `ob i E` returns `true`, then the
-probability of the event is at most the sum of the probabilities that each `ob i` returns
-`true`. -/
+complete hash table the event of `oa E` implies the event `Q i E` of some `ob i E`, then the
+probability of the event is at most the sum of theirs. -/
 theorem prEvent_bind_le_sum_of_table {ι T : Type} (mT : ProbComp T)
-    (oa : T → OracleComp (OracleSpec.ofFn R) α) (J : Finset ι)
-    (ob : ι → T → OracleComp (OracleSpec.ofFn R) Bool) (P : T → α → Prop)
+    (oa : T → OracleComp (OracleSpec.ofFn R) α) (J : Finset ι) {Y : ι → Type}
+    (ob : (i : ι) → T → OracleComp (OracleSpec.ofFn R) (Y i)) (P : T → α → Prop)
+    (Q : (i : ι) → T → Y i → Prop)
     (h : ∀ E (g : (d : D) → R d), P E (evalWithAnswerFn (QueryImpl.ofFn g) (oa E)) →
-      ∃ i ∈ J, evalWithAnswerFn (QueryImpl.ofFn g) (ob i E) = true) :
+      ∃ i ∈ J, Q i E (evalWithAnswerFn (QueryImpl.ofFn g) (ob i E))) :
     Pr{let E ← mT; let r ← (simulateQ randomOracle (oa E)).run' ∅}[P E r] ≤
-      ∑ i ∈ J, Pr{let E ← mT; let b ← (simulateQ randomOracle (ob i E)).run' ∅}[b = true] := by
+      ∑ i ∈ J, Pr{let E ← mT; let r ← (simulateQ randomOracle (ob i E)).run' ∅}[Q i E r] := by
   let : MeasurableSpace T := ⊤
   have hle : ∀ E, Pr{let r ← (simulateQ randomOracle (oa E)).run' ∅}[P E r] ≤
-      ∑ i ∈ J, Pr{let b ← (simulateQ randomOracle (ob i E)).run' ∅}[b = true] := fun E =>
-    prEvent_le_sum_of_table (oa E) J (fun i => ob i E) (P E) (h E)
+      ∑ i ∈ J, Pr{let r ← (simulateQ randomOracle (ob i E)).run' ∅}[Q i E r] := fun E =>
+    prEvent_le_sum_of_table (oa E) J (fun i => ob i E) (P E) (fun i => Q i E) (h E)
   rw [prEvent_bind_of_discrete]
   refine le_trans (MeasureTheory.lintegral_mono hle) ?_
   rw [MeasureTheory.lintegral_finsetSum _ fun _ _ => measurable_from_top]
   refine le_of_eq (Finset.sum_congr rfl fun i _ => ?_)
   rw [prEvent_bind_of_discrete]
 
+/-- **Two indexed families and two events of a further computation**: the shape of a protocol
+reduction with two kinds of requests (each charged to its single-proof game) and two further
+assumptions read off one run (e.g. a forgery and a collision). -/
+theorem prEvent_bind_le_sum4_of_table {T X Y₁ Y₂ Z : Type} (mT : ProbComp T)
+    (m₀ : T → OracleComp (OracleSpec.ofFn R) X) (e₀ : T → X → Prop) (s₁ s₂ : Finset ℕ)
+    (m₁ : ℕ → T → OracleComp (OracleSpec.ofFn R) Y₁) (e₁ : T → Y₁ → Prop)
+    (m₂ : ℕ → T → OracleComp (OracleSpec.ofFn R) Y₂) (e₂ : T → Y₂ → Prop)
+    (n : T → OracleComp (OracleSpec.ofFn R) Z) (c d : T → Z → Prop)
+    (h : ∀ E (g : (d : D) → R d), e₀ E (evalWithAnswerFn (QueryImpl.ofFn g) (m₀ E)) →
+      (∃ i ∈ s₁, e₁ E (evalWithAnswerFn (QueryImpl.ofFn g) (m₁ i E))) ∨
+      (∃ i ∈ s₂, e₂ E (evalWithAnswerFn (QueryImpl.ofFn g) (m₂ i E))) ∨
+      c E (evalWithAnswerFn (QueryImpl.ofFn g) (n E)) ∨
+      d E (evalWithAnswerFn (QueryImpl.ofFn g) (n E))) :
+    Pr{let E ← mT; let r ← (simulateQ randomOracle (m₀ E)).run' ∅}[e₀ E r] ≤
+      ∑ i ∈ s₁, Pr{let E ← mT; let r ← (simulateQ randomOracle (m₁ i E)).run' ∅}[e₁ E r] +
+      ∑ i ∈ s₂, Pr{let E ← mT; let r ← (simulateQ randomOracle (m₂ i E)).run' ∅}[e₂ E r] +
+      Pr{let E ← mT; let r ← (simulateQ randomOracle (n E)).run' ∅}[c E r] +
+      Pr{let E ← mT; let r ← (simulateQ randomOracle (n E)).run' ∅}[d E r] := by
+  classical
+  let Y : (ℕ ⊕ ℕ) ⊕ Bool → Type := fun
+    | .inl (.inl _) => Y₁
+    | .inl (.inr _) => Y₂
+    | .inr _ => Z
+  let ob : (i : (ℕ ⊕ ℕ) ⊕ Bool) → T → OracleComp (OracleSpec.ofFn R) (Y i) := fun
+    | .inl (.inl i) => m₁ i
+    | .inl (.inr i) => m₂ i
+    | .inr _ => n
+  let Q : (i : (ℕ ⊕ ℕ) ⊕ Bool) → T → Y i → Prop := fun
+    | .inl (.inl _) => e₁
+    | .inl (.inr _) => e₂
+    | .inr true => c
+    | .inr false => d
+  have key := prEvent_bind_le_sum_of_table mT m₀ ((s₁.disjSum s₂).disjSum Finset.univ) ob e₀ Q
+    fun E g hw => by
+      rcases h E g hw with ⟨i, hi, he⟩ | ⟨i, hi, he⟩ | hc | hd
+      · exact ⟨.inl (.inl i), by simp [hi], he⟩
+      · exact ⟨.inl (.inr i), by simp [hi], he⟩
+      · exact ⟨.inr true, by simp, hc⟩
+      · exact ⟨.inr false, by simp, hd⟩
+  rw [Finset.sum_disjSum, Finset.sum_disjSum, Fintype.sum_bool] at key
+  refine key.trans (le_of_eq ?_)
+  simp only [ob, Q]
+  ring
 
 /-- `mapM` against a complete table is the list of the evaluations. -/
 theorem evalWithAnswerFn_mapM {ι' : Type} {sp : OracleSpec ι'} (f : QueryImpl sp Id) {γ : Type}
@@ -183,6 +227,15 @@ theorem gameA_out (T : CrtTables) (stF : ι → Statement) (P : OracleComp specI
       evalWithAnswerFn_proverIC]
     exact @evalWithAnswerFn_verifyQ (VoleMole.ZK.Sim.icPrg E.cipher) g T _ _
 
+
+/-- **Per table, the adaptive game's transcript** is the executable verifier on `P`'s proof, at
+`P`'s statement (the third component of `gameA_out`, with the statement as `sA`). -/
+theorem gameA_transcript (g : Table) (E : CTable) (T : CrtTables)
+    (stF : ι → Statement) (P : OracleComp specIC (ByteArray × (ι × β))) :
+    (evalWithAnswerFn (QueryImpl.ofFn g) (gameA T stF P E)).2.2 =
+      @verify (VoleMole.ZK.Sim.icPrg E.cipher) (Hashes.ofTable g) T (stF (sA g P E))
+        (evalWithAnswerFn (QueryImpl.ofFn (join g E)) P).1 :=
+  (gameA_out T stF P E g).2.2
 
 /-- **Per table, the adaptive game depends on the prover only through its output and its log.** -/
 theorem gameA_congr (T : CrtTables) (stF : ι → Statement)

@@ -411,9 +411,9 @@ per `ctx`, because parents share the spender's `ctx` (fact 1). ∎
     `ratatouilleIssue_accept_le_adaptive_spec` and `ratatouilleSpend_accept_le_adaptive_spec`
     (`ROM/SpecSound.lean`), at the budget `Q` of `N` calls: `N(e_A + e_V)` cipher queries,
     `N(n_A + n_V)` hash queries and `N(q_A + q_V)` per kind, for `q_A`, `n_A`, `e_A` per call of
-    the adversary and `q_V`, `n_V`, `e_V` per verification (for `verifyIC`: `verifierQueries`
-    plus one `mu₁` and one `iv` query, `verifierTotal + 2 = 339`, and `cipherCount p`: two cipher
-    queries per GGM node and per leaf commitment and `voleColBlocks` per leaf). They apply to
+    the adversary and `q_V`, `n_V`, `e_V` per verification (for `verifyIC`:
+    `extractorQueries + verifierQueries` per kind, `2 + verifierTotal = 339` in all, and
+    `verifyCellBound p = 9212 + 2304·(2 + voleColBlocks)` cipher queries). They apply to
     the `j`-th prover (`proverAt`, `provI`, `provS`): the game up to call `j`, re-run with the
     Issuer, then the `j`-th request as its proof and statement. `hinj` holds for the Issuer's fixed key with a
     32-byte digest.
@@ -441,10 +441,12 @@ per `ctx`, because parents share the spender's `ctx` (fact 1). ∎
 - *The Issuer's verifications inside the `j`-th prover.* The `j`-th prover re-runs the Issuer's
   verifications, and they must be cipher queries so that the extractor sees them (as the paper's
   extractor reads the Issuer's queries); the executable verifier reads the cipher as a table
-  (`icPrg E.cipher`). `balance_le` takes any `VerifierIC` implementation; `ROM/VerifierIC.lean`
-  writes one, `verifyIC` (the CTR PRG one cipher query per block, in the BAVC reconstruction and
-  the VOLE expansion), proves that it is the executable verifier on every pair of tables
-  (`evalWithAnswerFn_verifyIC`) and bounds its queries (`verifierIC_verifyIC`). The game itself
+  (`icPrg E.cipher`). `balance_le` takes any `VerifierIC` implementation; `ROM/VerifyIC.lean`
+  (shared with Moussaka's Theorem 1) writes one, `verifyIC` (it derives the BAVC tree with
+  cipher queries, queries the cells the verifier's PRG reads, then runs the hash-query verifier),
+  proves that it is the executable verifier on every pair of tables
+  (`evalWithAnswerFn_verifyIC`, through `verify_congr_cells`) and bounds its queries
+  (`verifierIC_verifyIC`). The game itself
   verifies with the executable verifier (`verifyQ`).
 - *What stays assumed.*
   - `Adv^{uf-tag}(B)` and `Adv^{coll}(C)` are the success probabilities of the two explicit
@@ -941,14 +943,16 @@ and determinism of `Tag`. The witness satisfies V3 by `change_correct`. ∎
   `n` calls to an honest party, as a computation and per table.
 - `proverAt`, `evalWithAnswerFn_proverAt`, `isKindQueryBoundIC_proverAt`,
   `isQueryBoundP_proverAt`: the `j`-th prover and its budget.
-- `gameA_out`, `extWit`, `extWit_spec`: the single-proof game's output per table, and the
-  extracted witness.
+- `prEvent_bind_le_sum4_of_table`: the same with two indexed families and two events of one
+  further run (Moussaka's `omuf_le` uses it).
+- `gameA_out`, `gameA_transcript`, `extWit`, `extWit_spec`: the single-proof game's output per
+  table, and the extracted witness; `gameA_congr`, `proverAt_congr`: congruences.
 - `VerifierIC`: a cipher-querying implementation of the executable verifier, as a hypothesis.
 
-`lean/VoleMole/ROM/VerifierIC.lean` (protocol independent):
-- `prgIC`, `deriveStepIC`, `leavesOfIC`, `reconstructIC`, `convertToVoleIC`, `verifyIC`: the
-  verifier with the cipher as queries; `evalWithAnswerFn_verifyIC`: it is `verify` per table.
-- `verifierQueriesIC`, `cipherCount`, `verifierIC_verifyIC`: its budget; `VerifierIC` holds.
+`lean/VoleMole/ROM/VerifyIC.lean` (protocol independent, shared with Moussaka):
+- `verifyIC`, `evalWithAnswerFn_verifyIC`, `verify_congr_cells`: the verifier with the cipher as
+  queries, which is `verify` per table.
+- `verifyCellBound`, `verifierIC_verifyIC`: its budget; `VerifierIC` holds.
 
 `lean/VoleMole/ROM/RatatouilleBalance.lean`:
 - `romPrim`, `serveP`, `serveM`, `balQ`, `balT`, `Win`: the game.

@@ -1,4 +1,5 @@
 import VoleMole.ROM.SpecSound
+import VoleMole.ROM.ExtractReduce
 
 /-!
 # The executable verifier as an oracle computation over the hashes and the cipher
@@ -122,13 +123,6 @@ def prgQ (key iv : ByteArray) (t c : UInt32) (n : ℕ) : OracleComp specIC ByteA
       (ctrCells (blk 16 key) iv t c n).mapM cellQ
   else pure (AES.prg key iv t c n)
 
-lemma evalWithAnswerFn_mapM {β γ : Type} (f : QueryImpl specIC Id) (l : List β)
-    (h : β → OracleComp specIC γ) :
-    evalWithAnswerFn f (l.mapM h) = l.map fun x => evalWithAnswerFn f (h x) := by
-  induction l with
-  | nil => rfl
-  | cons x l ih => simp [List.mapM_cons, ih]
-
 @[simp] lemma evalWithAnswerFn_cellQ (g : Table) (E : CTable) (x : Cell) :
     evalWithAnswerFn (QueryImpl.ofFn (join g E)) (cellQ x) = E x := rfl
 
@@ -142,35 +136,6 @@ theorem evalWithAnswerFn_prgQ (g : Table) (E : CTable) (key iv : ByteArray) (t c
     simp only [ctrCells, List.map_map, Function.comp_def, evalWithAnswerFn_cellQ]
     rfl
   · rfl
-
-/-- **Query bounds compose**: hash queries per kind add up under `>>=`. -/
-theorem isKindQueryBoundIC_bind {β : Type} {oa : OracleComp specIC α}
-    {ob : α → OracleComp specIC β} {q₁ q₂ : Kind → ℕ} (h₁ : IsKindQueryBoundIC oa q₁)
-    (h₂ : ∀ a, IsKindQueryBoundIC (ob a) q₂) : IsKindQueryBoundIC (oa >>= ob) (q₁ + q₂) := by
-  refine isQueryBound_bind (combine := (· + ·)) (fun t b₁ b₂ b hb => ?_) (fun t b₁ b₂ b hb => ?_)
-    h₁ h₂
-  · cases t with
-    | inl d => simp only [Pi.add_apply] at hb ⊢; omega
-    | inr x => exact ⟨trivial, trivial⟩
-  · cases t with
-    | inl d =>
-      constructor <;> funext k <;> by_cases hk : k = d.1 <;>
-        simp [hk, Function.update_of_ne, Pi.add_apply] <;> omega
-    | inr x => exact ⟨rfl, rfl⟩
-
-theorem IsKindQueryBoundIC.mono {oa : OracleComp specIC α} {q q' : Kind → ℕ}
-    (h : IsKindQueryBoundIC oa q) (hle : q ≤ q') : IsKindQueryBoundIC oa q' := by
-  induction oa using OracleComp.inductionOn generalizing q q' with
-  | pure a => trivial
-  | query_bind t k ih =>
-    rw [IsKindQueryBoundIC, isQueryBound_query_bind_iff] at h ⊢
-    cases t with
-    | inl d =>
-      refine ⟨lt_of_lt_of_le h.1 (hle d.1), fun u => ih u (h.2 u) fun k => ?_⟩
-      by_cases hk : k = d.1
-      · subst hk; simp only [Function.update_self]; exact Nat.sub_le_sub_right (hle _) 1
-      · simp only [Function.update_of_ne hk]; exact hle k
-    | inr x => exact ⟨trivial, fun u => ih u (h.2 u) hle⟩
 
 theorem isKindQueryBoundIC_map {β : Type} {oa : OracleComp specIC α} (f : α → β)
     {q : Kind → ℕ} (h : IsKindQueryBoundIC oa q) : IsKindQueryBoundIC (f <$> oa) q :=
@@ -673,5 +638,21 @@ theorem isQueryBoundP_right_verifyIC (T : CrtTables) (st : Statement) (proof : B
     fun A _ => ?_
   exact (isQueryBoundP_bind (m := 0) (isQueryBoundP_right_cellsQ _ _ _) fun M _ =>
       isQueryBoundP_right_liftIC _).mono (by simp only [add_zero, le_refl])
+
+/-! ## `verifyIC` satisfies `VerifierIC` (`ROM/ExtractReduce.lean`) -/
+
+/-- **`verifyIC` is a cipher-querying implementation of the executable verifier**: the
+hypothesis `VerifierIC` of the protocol games (`ROM/ExtractReduce.lean`) holds, with
+`extractorQueries + verifierQueries` hash queries per kind, `2 + verifierTotal` in all and
+`verifyCellBound p` cipher queries. -/
+theorem verifierIC_verifyIC (T : CrtTables) :
+    VerifierIC T (fun st pf => (·.accept) <$> verifyIC T st pf)
+      (extractorQueries + verifierQueries) (2 + verifierTotal) verifyCellBound where
+  eval g E st pf := by rw [evalWithAnswerFn_map, evalWithAnswerFn_verifyIC]
+  kinds st pf := isKindQueryBoundIC_map _ (isKindQueryBoundIC_verifyIC T st pf)
+  hashes st pf := by
+    rw [IsQueryBoundP, isQueryBound_map_iff]; exact isQueryBoundP_left_verifyIC T st pf
+  cipher st pf := by
+    rw [IsQueryBoundP, isQueryBound_map_iff]; exact isQueryBoundP_right_verifyIC T st pf
 
 end VoleMole.ROM.IC

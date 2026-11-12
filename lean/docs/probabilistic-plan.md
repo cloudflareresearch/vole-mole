@@ -992,14 +992,28 @@ Files: `ROM/OneMore.lean` (generic), `ROM/OneMorePomfrit.lean`. `lean/docs/secur
 
 ### 2l. Protocol games from single-proof extraction, as implemented
 
-Files: `ROM/ExtractReduce.lean`, `ROM/VerifierIC.lean` (protocol independent),
-`ROM/RatatouilleBalance.lean` (Ratatouille Theorem 1, `docs/security/ratatouille.md` §4). Nothing
-existing changed.
+Files: `ROM/ExtractReduce.lean` (protocol independent), `ROM/RatatouilleBalance.lean`
+(Ratatouille Theorem 1, `docs/security/ratatouille.md` §4); the verifier with cipher queries is
+`ROM/VerifyIC.lean`, shared with Moussaka's Theorem 1 (`ROM/MoussakaOMUF.lean`,
+`docs/security/moussaka.md` §4).
+
+**Shared, after merging.** The two protocol reductions were written in parallel; one copy of each
+generic piece is kept. `ROM/VerifyIC.lean` (Moussaka's; its query bounds are smaller than those
+of the Ratatouille branch's own version, which is removed) now also proves the generic interface
+`VerifierIC` (`verifierIC_verifyIC`). `ROM/ExtractReduce.lean` holds the union bounds across
+games per table (`prEvent_bind_le_sum_of_table` with any output types per game, and
+`prEvent_bind_le_sum4_of_table`, which replaces `MoussakaOMUF`'s `prEvent_le_sum_of_tables` and
+`prEvent_le_sum4_of_tables`), `gameA_transcript`, `evalWithAnswerFn_mapM`,
+`isKindQueryBoundIC_bind` and `IsKindQueryBoundIC.mono`. Not unified: `MoussakaOMUF`'s provers
+`PI`, `PR` are its own (an issue phase, then the redemptions output at the end) rather than
+`proverAt`; and `CipherGame`'s `prEvent_randomOracle_eq_eager` is the `Dom`-indexed case of
+`prEvent_eq_extendTable`. `ROM/OneMore.lean` (PomFRIT's one-more reduction by target
+programming) is a different construction and shares nothing with these.
 
 * **Comparing computations per table** (`prEvent_le_sum_of_table`,
   `prEvent_bind_le_sum_of_table`). A protocol game and the single-proof games of its requests are
   different computations against one lazy random oracle. If at every complete hash table the
-  game's event implies that one of the others returns `true`, the game's probability is at most
+  game's event implies the event of one of the others, the game's probability is at most
   the sum of theirs: restrict all of them to one finite key set (`restrictQueries`), pass to an
   eager uniform table (`evalDist_simulateQ_randomOracle_run'_eq_completeTable`,
   `prEvent_eq_extendTable`), take the union bound there. An outer draw (the cipher table) is
@@ -1013,10 +1027,9 @@ existing changed.
   extraction).
 * **The honest verifier as cipher queries** (`VerifierIC`, `verifyIC`). Inside the `j`-th prover
   the honest party's verifications must query the cipher (the extractor reads the cipher log).
-  `verifyIC` is `verifyQ` with the CTR PRG one cipher query per block in the BAVC reconstruction
-  and the VOLE expansion; `evalWithAnswerFn_verifyIC`: it is the executable verifier per table;
-  its budget is `verifierQueries` plus `mu₁` and `iv` once more, `verifierTotal + 2` hash queries,
-  `cipherCount p` cipher queries (`verifierIC_verifyIC`).
+  `VerifierIC` states what a game needs of such a verifier; `ROM/VerifyIC.lean`'s `verifyIC`
+  meets it (`verifierIC_verifyIC`): `extractorQueries + verifierQueries` per kind,
+  `2 + verifierTotal` hash queries, `verifyCellBound p` cipher queries.
 * **Extracted witnesses** (`gameA_out`, `extWit`): per table, the single-proof game's output is the
   prover's proof and statement with the executable verifier's transcript, and a successful
   extraction yields a witness of the spec relation.

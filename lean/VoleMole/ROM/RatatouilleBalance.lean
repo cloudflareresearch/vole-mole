@@ -1,4 +1,4 @@
-import VoleMole.ROM.VerifierIC
+import VoleMole.ROM.VerifyIC
 import VoleMole.ROM.SpecSound
 
 /-!
@@ -42,7 +42,7 @@ The `j`-th prover must re-run the Issuer's verifications as queries to the ciphe
 straight-line extractor sees them (as the paper's extractor reads the Issuer's queries). The
 executable verifier reads the cipher as a table (`icPrg E.cipher`), so `balance_le` takes a
 cipher-querying implementation of it (`VerifierIC`); `balance_le_lean` uses `verifyIC`
-(`ROM/VerifierIC.lean`), for which `VerifierIC` is a theorem. The game itself verifies with the
+(`ROM/VerifyIC.lean`), for which `VerifierIC` is a theorem. The game itself verifies with the
 executable verifier.
 -/
 
@@ -1004,7 +1004,7 @@ theorem balance_le (A : RoundAdv S (Op Z) Resp) (N : ℕ) (σ : Signer)
   classical
   refine le_trans (prEvent_bind_le_sum_of_table ($ᵗ CTable) (balQ lr pkU A N σ)
     (((Finset.range N).disjSum (Finset.range N)).disjSum Finset.univ)
-    (exps lr pkU verQ A N σ) (fun _ r => Win r.2.2)
+    (exps lr pkU verQ A N σ) (fun _ r => Win r.2.2) (fun _ _ b => b = true)
     (fun E g hw => win_imp lr pkU verQ A N σ hver E g hw)) ?_
   rw [Finset.sum_disjSum, Finset.sum_disjSum]
   have h1 : ∀ k ∈ Finset.range N, prExp lr pkU verQ A N σ (.inl (.inl k)) ≤
@@ -1030,13 +1030,14 @@ theorem balance_le (A : RoundAdv S (Op Z) Resp) (N : ℕ) (σ : Signer)
   rw [Fintype.sum_bool]
   exact h3
 
-/-- The Issuer's verifications re-run with the cipher as queries (`ROM/VerifierIC.lean`). -/
+/-- The Issuer's verifications re-run with the cipher as queries (`ROM/VerifyIC.lean`). -/
 def verQL (st : Statement) (pf : ByteArray) : OracleComp specIC Bool :=
   (·.accept) <$> verifyIC CrtGen.tables st pf
 
 /-- **Theorem 1 (balance), with no hypothesis on the verifier**: `balance_le` with the
-cipher-querying verifier `verifyIC` (`verifierIC_verifyIC`): per verification `verifierQueriesIC`
-hash queries per kind, `verifierTotal + 2` in all, and `cipherCount` cipher queries. -/
+cipher-querying verifier `verifyIC` (`ROM/VerifyIC.lean`, `verifierIC_verifyIC`): per
+verification `extractorQueries + verifierQueries` hash queries per kind, `2 + verifierTotal` in
+all, and `verifyCellBound` cipher queries. -/
 theorem balance_le_lean (A : RoundAdv S (Op Z) Resp) (N : ℕ) (σ : Signer)
     (hdig : pkU.digest.size = 32) {qA : Kind → ℕ} {nA eA : ℕ}
     (hqA : ∀ s, IsKindQueryBoundIC (A.next s) qA)
@@ -1044,9 +1045,9 @@ theorem balance_le_lean (A : RoundAdv S (Op Z) Resp) (N : ℕ) (σ : Signer)
     (heA : ∀ s, IsQueryBoundP (A.next s) (fun t => t.isRight = true) eA) :
     Pr{let E ← $ᵗ CTable; let r ← (simulateQ randomOracle (balQ lr pkU A N σ E)).run' ∅}[
         Win r.2.2] ≤
-      N * epsIss (N * (eA + eVR lr pkU cipherCount)) (N • (qA + verifierQueriesIC)) +
-        N * epsSpend (N * (eA + eVR lr pkU cipherCount)) (N * (nA + (verifierTotal + 2)))
-          (N • (qA + verifierQueriesIC)) +
+      N * epsIss (N * (eA + eVR lr pkU verifyCellBound)) (N • (qA + (extractorQueries + verifierQueries))) +
+        N * epsSpend (N * (eA + eVR lr pkU verifyCellBound)) (N * (nA + (2 + verifierTotal)))
+          (N • (qA + (extractorQueries + verifierQueries))) +
         forgeAdv lr pkU verQL A N σ + collAdv lr pkU verQL A N σ :=
   balance_le lr pkU verQL A N σ hdig (verifierIC_verifyIC CrtGen.tables) hqA hnA heA
 
@@ -1657,9 +1658,9 @@ theorem balance_le_ufTag (A : RoundAdv S (Op Z) Resp) (N : ℕ) (σ : Signer)
     (heA : ∀ s, IsQueryBoundP (A.next s) (fun t => t.isRight = true) eA) :
     Pr{let E ← $ᵗ CTable; let r ← (simulateQ randomOracle (balQ lr pkU A N σ E)).run' ∅}[
         Win r.2.2] ≤
-      N * epsIss (N * (eA + eVR lr pkU cipherCount)) (N • (qA + verifierQueriesIC)) +
-        N * epsSpend (N * (eA + eVR lr pkU cipherCount)) (N * (nA + (verifierTotal + 2)))
-          (N • (qA + verifierQueriesIC)) +
+      N * epsIss (N * (eA + eVR lr pkU verifyCellBound)) (N • (qA + (extractorQueries + verifierQueries))) +
+        N * epsSpend (N * (eA + eVR lr pkU verifyCellBound)) (N * (nA + (2 + verifierTotal)))
+          (N • (qA + (extractorQueries + verifierQueries))) +
         ufTagAdv pkU.map σ (forger lr pkU verQL A N (verifierIC_verifyIC CrtGen.tables)) +
         collAdv lr pkU verQL A N σ := by
   refine le_trans (balance_le_lean lr pkU A N σ hdig hqA hnA heA) ?_

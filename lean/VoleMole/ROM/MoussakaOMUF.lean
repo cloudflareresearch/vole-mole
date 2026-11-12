@@ -197,96 +197,6 @@ def Win (o : GOut K) : Prop :=
   ∃ c, (((issL o).filter (·.2 = c)).map (·.1)).toFinset.card <
     (((redL o).filter (·.1 = c)).map (·.2)).toFinset.card
 
-/-! ## A union bound across computations, per table -/
-
-/-- **A union bound across different games on the same oracles.** If, at every pair of complete
-tables, the event of `m₀` implies the event of one of the games `m i`, `i ∈ s`, then its
-probability is at most the sum of theirs. (For each cipher table the lazy hash oracle of every
-game is the same uniform table on a finite set holding all their queries,
-`prEvent_randomOracle_eq_eager`.) -/
-theorem prEvent_le_sum_of_tables {X : Type} (m₀ : CTable → OracleComp spec X)
-    (e₀ : CTable → X → Prop) {ι : Type} (s : Finset ι) {Y : ι → Type}
-    (m : (i : ι) → CTable → OracleComp spec (Y i)) (e : (i : ι) → CTable → Y i → Prop)
-    (h : ∀ (g : Table) (E : CTable), e₀ E (evalWithAnswerFn (QueryImpl.ofFn g) (m₀ E)) →
-      ∃ i ∈ s, e i E (evalWithAnswerFn (QueryImpl.ofFn g) (m i E))) :
-    Pr{let E ← $ᵗ CTable; let r ← (simulateQ randomOracle (m₀ E)).run' ∅}[e₀ E r] ≤
-      ∑ i ∈ s, Pr{let E ← $ᵗ CTable; let r ← (simulateQ randomOracle (m i E)).run' ∅}[e i E r] := by
-  classical
-  let : MeasurableSpace CTable := ⊤
-  have hint : ∀ {Z : Type} (n : CTable → OracleComp spec Z) (p : CTable → Z → Prop),
-      Pr{let E ← $ᵗ CTable; let r ← (simulateQ randomOracle (n E)).run' ∅}[p E r] =
-        ∫⁻ E, Pr{let r ← (simulateQ randomOracle (n E)).run' ∅}[p E r] ∂𝒟[$ᵗ CTable] :=
-    fun n p => prEvent_bind_of_discrete _ _
-  rw [hint]
-  simp_rw [hint]
-  rw [← MeasureTheory.lintegral_finsetSum _ fun _ _ => measurable_from_top]
-  refine MeasureTheory.lintegral_mono fun E => ?_
-  let S : Finset Dom := possibleQueryKeys (m₀ E) ∪ s.biUnion fun i => possibleQueryKeys (m i E)
-  have hS₀ : AllQueriesSatisfy (m₀ E) (· ∈ S) :=
-    (allQueriesSatisfy_possibleQueryKeys _).mono fun d hd => Finset.mem_union_left _ hd
-  have hS : ∀ i ∈ s, AllQueriesSatisfy (m i E) (· ∈ S) := fun i hi =>
-    (allQueriesSatisfy_possibleQueryKeys _).mono fun d hd =>
-      Finset.mem_union_right _ (Finset.mem_biUnion.2 ⟨i, hi, hd⟩)
-  let _ : SampleableType ((d : S) → Ans d.val) := SampleableType.ofFintype _
-  rw [prEvent_randomOracle_eq_eager _ S hS₀]
-  rw [Finset.sum_congr rfl fun i hi => prEvent_randomOracle_eq_eager _ S (hS i hi) (e i E)]
-  refine (prEvent_mono _ _ _ fun G hG => h _ E hG).trans (prEvent_exists_finset_le s _ _)
-
-/-- The same, for an event implying one of two indexed families of events or one of two events of a
-further game. -/
-theorem prEvent_le_sum4_of_tables {X Y₁ Y₂ Z : Type} (m₀ : CTable → OracleComp spec X)
-    (e₀ : CTable → X → Prop) (s₁ s₂ : Finset ℕ)
-    (m₁ : ℕ → CTable → OracleComp spec Y₁) (e₁ : CTable → Y₁ → Prop)
-    (m₂ : ℕ → CTable → OracleComp spec Y₂) (e₂ : CTable → Y₂ → Prop)
-    (n : CTable → OracleComp spec Z) (c d : CTable → Z → Prop)
-    (h : ∀ (g : Table) (E : CTable), e₀ E (evalWithAnswerFn (QueryImpl.ofFn g) (m₀ E)) →
-      (∃ i ∈ s₁, e₁ E (evalWithAnswerFn (QueryImpl.ofFn g) (m₁ i E))) ∨
-      (∃ i ∈ s₂, e₂ E (evalWithAnswerFn (QueryImpl.ofFn g) (m₂ i E))) ∨
-      c E (evalWithAnswerFn (QueryImpl.ofFn g) (n E)) ∨ d E (evalWithAnswerFn (QueryImpl.ofFn g) (n E))) :
-    Pr{let E ← $ᵗ CTable; let r ← (simulateQ randomOracle (m₀ E)).run' ∅}[e₀ E r] ≤
-      ∑ i ∈ s₁, Pr{let E ← $ᵗ CTable; let r ← (simulateQ randomOracle (m₁ i E)).run' ∅}[e₁ E r] +
-      ∑ i ∈ s₂, Pr{let E ← $ᵗ CTable; let r ← (simulateQ randomOracle (m₂ i E)).run' ∅}[e₂ E r] +
-      Pr{let E ← $ᵗ CTable; let r ← (simulateQ randomOracle (n E)).run' ∅}[c E r] +
-      Pr{let E ← $ᵗ CTable; let r ← (simulateQ randomOracle (n E)).run' ∅}[d E r] := by
-  classical
-  let : MeasurableSpace CTable := ⊤
-  have hint : ∀ {W : Type} (k : CTable → OracleComp spec W) (p : CTable → W → Prop),
-      Pr{let E ← $ᵗ CTable; let r ← (simulateQ randomOracle (k E)).run' ∅}[p E r] =
-        ∫⁻ E, Pr{let r ← (simulateQ randomOracle (k E)).run' ∅}[p E r] ∂𝒟[$ᵗ CTable] :=
-    fun k p => prEvent_bind_of_discrete _ _
-  rw [hint]
-  simp_rw [hint]
-  rw [← MeasureTheory.lintegral_finsetSum _ fun _ _ => measurable_from_top,
-    ← MeasureTheory.lintegral_finsetSum _ fun _ _ => measurable_from_top,
-    ← MeasureTheory.lintegral_add_left measurable_from_top,
-    ← MeasureTheory.lintegral_add_left measurable_from_top,
-    ← MeasureTheory.lintegral_add_left measurable_from_top]
-  refine MeasureTheory.lintegral_mono fun E => ?_
-  let S : Finset Dom := possibleQueryKeys (m₀ E) ∪ (s₁.biUnion fun i => possibleQueryKeys (m₁ i E)) ∪
-    (s₂.biUnion fun i => possibleQueryKeys (m₂ i E)) ∪ possibleQueryKeys (n E)
-  have hS₀ : AllQueriesSatisfy (m₀ E) (· ∈ S) :=
-    (allQueriesSatisfy_possibleQueryKeys _).mono fun d hd => by simp [S, hd]
-  have hS₁ : ∀ i ∈ s₁, AllQueriesSatisfy (m₁ i E) (· ∈ S) := fun i hi =>
-    (allQueriesSatisfy_possibleQueryKeys _).mono fun d hd => by
-      simp only [S, Finset.mem_union, Finset.mem_biUnion]; exact Or.inl (Or.inl (Or.inr ⟨i, hi, hd⟩))
-  have hS₂ : ∀ i ∈ s₂, AllQueriesSatisfy (m₂ i E) (· ∈ S) := fun i hi =>
-    (allQueriesSatisfy_possibleQueryKeys _).mono fun d hd => by
-      simp only [S, Finset.mem_union, Finset.mem_biUnion]; exact Or.inl (Or.inr ⟨i, hi, hd⟩)
-  have hSn : AllQueriesSatisfy (n E) (· ∈ S) :=
-    (allQueriesSatisfy_possibleQueryKeys _).mono fun d hd => by simp [S, hd]
-  let _ : SampleableType ((d : S) → Ans d.val) := SampleableType.ofFintype _
-  rw [prEvent_randomOracle_eq_eager _ S hS₀,
-    Finset.sum_congr rfl fun i hi => prEvent_randomOracle_eq_eager _ S (hS₁ i hi) (e₁ E),
-    Finset.sum_congr rfl fun i hi => prEvent_randomOracle_eq_eager _ S (hS₂ i hi) (e₂ E),
-    prEvent_randomOracle_eq_eager _ S hSn (c E), prEvent_randomOracle_eq_eager _ S hSn (d E)]
-  refine (prEvent_mono _ _ _ fun G hG => h _ E hG).trans ?_
-  refine (prEvent_or_le _ _ _).trans ?_
-  refine (add_le_add_right ((prEvent_or_le _ _ _).trans (add_le_add_right (prEvent_or_le _ _ _) _))
-    _).trans ?_
-  refine (add_le_add (prEvent_exists_finset_le s₁ _ _)
-    (add_le_add (prEvent_exists_finset_le s₂ _ _) le_rfl)).trans (le_of_eq ?_)
-  ring
-
 /-! ## Per table: the honest checks are the executable verifier -/
 
 section PerTable
@@ -454,17 +364,6 @@ def PR (lr : Bool) (pk : Fin K → UovPk) (sk : Fin K → Spec.Signer) (qI : ℕ
 abbrev OutI (K : ℕ) := Out ((ιI × GOut K) × QueryLog specIC)
 abbrev OutR (K : ℕ) := Out ((ιR K × GOut K) × QueryLog specIC)
 
-/-- **Per table, the adaptive game's transcript** is the executable verifier on `P`'s proof, at
-`P`'s statement. -/
-theorem gameA_transcript {ι β : Type} (g : Table) (E : CTable) (T : CrtTables)
-    (stF : ι → Statement) (P : OracleComp specIC (ByteArray × (ι × β))) :
-    (evalWithAnswerFn (QueryImpl.ofFn g) (gameA T stF P E)).2.2 =
-      @verify (icPrg E.cipher) (Hashes.ofTable g) T (stF (sA g P E))
-        (evalWithAnswerFn (QueryImpl.ofFn (join g E)) P).1 := by
-  rw [evalWithAnswerFn_gameA]
-  unfold gameIC
-  rw [@evalWithAnswerFn_game (icPrg E.cipher), evalWithAnswerFn_proverIC]
-
 lemma size_t {lr : Bool} {q : IssQ K} (h : q.WF lr) : q.t.size = 45 := by
   simp only [IssQ.t, ByteArray.size_extract, h.1]; omega
 
@@ -591,12 +490,6 @@ end Ext
 
 /-! ## The reductions `B₁`, `B₂` and the per-table core -/
 
-lemma evalWithAnswerFn_mapM_spec {β γ : Type} (g : Table) (l : List β) (h : β → OracleComp spec γ) :
-    evalWithAnswerFn (QueryImpl.ofFn g) (l.mapM h) = l.map fun x => evalWithAnswerFn (QueryImpl.ofFn g) (h x) := by
-  induction l with
-  | nil => rfl
-  | cons x l ih => simp [List.mapM_cons, ih]
-
 section Red
 
 variable (lr : Bool) (pk : Fin K → UovPk) (sk : Fin K → Spec.Signer) (qI : ℕ) (A : Adversary K qR)
@@ -641,7 +534,7 @@ theorem extAll_eval (g : Table) (E : CTable) :
           evalWithAnswerFn (QueryImpl.ofFn g) (gameA CrtGen.tables (stI lr) (PI lr pk sk qI A j) E)),
         (List.range qR).map (fun j =>
           evalWithAnswerFn (QueryImpl.ofFn g) (gameA CrtGen.tables (stR lr pk) (PR lr pk sk qI A j) E))) := by
-  simp only [extAll, evalWithAnswerFn_bind, evalWithAnswerFn_runE, evalWithAnswerFn_mapM_spec,
+  simp only [extAll, evalWithAnswerFn_bind, evalWithAnswerFn_runE, evalWithAnswerFn_mapM,
     evalWithAnswerFn_pure]
 
 /-- **The per-table core of Theorem 1**: a win means that some accepted proof is not extracted, or
@@ -718,8 +611,8 @@ theorem omuf_le (lr : Bool) (pk : Fin K → UovPk) (sk : Fin K → Spec.Signer) 
         Coll lr pk E v] +
       Pr{let E ← $ᵗ CTable; let v ← (simulateQ randomOracle (extAll lr pk sk qI A E)).run' ∅}[
         Forge lr pk E v] := by
-  refine prEvent_le_sum4_of_tables (fun E => runE E (game lr pk sk qI A)) (fun _ r => Win r.1)
-    (Finset.range qI) (Finset.range qR) _ _ _ _ _ _ _ fun g E hw => ?_
+  refine prEvent_bind_le_sum4_of_table ($ᵗ CTable) (fun E => runE E (game lr pk sk qI A))
+    (fun _ r => Win r.1) (Finset.range qI) (Finset.range qR) _ _ _ _ _ _ _ fun E g hw => ?_
   rw [evalWithAnswerFn_runE] at hw
   exact win_imp lr pk sk qI A g E hw
 
