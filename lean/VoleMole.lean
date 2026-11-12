@@ -294,6 +294,9 @@ import VoleMole.ZK.AcceptVar
 import VoleMole.ZK.CompleteRO
 import VoleMole.Assumptions.UOV
 import VoleMole.Assumptions.UOVLinks
+import VoleMole.Assumptions.Shift
+import VoleMole.Assumptions.Blind
 import VoleMole.Audit.Nonvacuous
 import VoleMole.Audit.Liveness
 import VoleMole.Audit.UnboundROM
+import VoleMole.Audit.OMPRShift
