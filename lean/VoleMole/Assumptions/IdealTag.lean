@@ -1168,6 +1168,201 @@ theorem pad_spec (D : T → S) : ∀ (j b : ℕ) (c : Ch AR ℕ Unit T), j ≤ c
         · obtain ⟨u', hu', ht, hd⟩ := h6 p hp
           exact ⟨u', List.mem_cons_of_mem _ hu', ht, hd⟩
 
+omit [DecidableEq DR] [∀ d, SampleableType (AR d)] [SampleableType T] in
+theorem oinv_init (D : T → S) (qT : ℕ) (L : List T) :
+    OInv D qT L ((or0, ch0 L) : ORSt T S × Ch AR ℕ Unit T) :=
+  ⟨fun _ h => by simp [or0] at h, by simp [or0], fun _ h => by simp [or0] at h, rfl, le_rfl,
+    fun _ _ h => by simp [or0] at h, fun _ _ => rfl, rfl, Nat.zero_le _⟩
+
+variable {PK SK : Type} (tr : Trapdoor PK SK T S)
+
+omit [SampleableType T] in
+/-- **An A-OMPI win, with every target of the challenger good, is an OMPR win after padding.** -/
+theorem ompiWin_imp (qT Q : ℕ) (pk : PK) (sk : SK) (L : List T) (hL : L.length = qT + Q)
+    (z : (ℕ × S) × ORSt T S × Ch AR ℕ Unit T) (hI : OInv (tr.D sk) qT L z.2)
+    (hw : OMPIWin tr Q (pk, z.1, ompiProj qT z.2))
+    (hg : ∀ u ∈ L, tr.IsPre pk (tr.D sk u) u)
+    (w : List (ℕ × S) × Ch AR ℕ Unit T)
+    (hwp : w ∈ support ((simulateQ (chImpl (tr.D sk))
+      (padC (Q - z.2.1.ans.length) z.2.1.ys.length)).run z.2.2)) :
+    Wins Q (goodPre tr.IsPre) pk (z.1 :: z.2.1.ans ++ w.1) w.2 := by
+  obtain ⟨⟨i, s⟩, st, c⟩ := z
+  obtain ⟨y, hy, hno, hpre, hoq⟩ := hw
+  simp only [ompiProj] at hy hno hpre hoq
+  have hans : st.ans.length ≤ Q := le_trans hI.oq hoq
+  have hrest : Q - st.ans.length ≤ c.rest.length := by
+    have h1 := congrArg List.length hI.stream
+    simp only [List.length_append] at h1
+    have h2 : st.ys.length ≤ qT := hI.cap
+    omega
+  obtain ⟨p1, p2, p3, p4, p5, p6⟩ :=
+    pad_spec (tr.D sk) (Q - st.ans.length) st.ys.length c hrest hI.fresh w hwp
+  have hilt : i < st.ys.length := (List.getElem?_eq_some_iff.1 hy).1
+  have halt : ∀ p ∈ st.ans, p.1 < st.ys.length := fun p hp => by
+    obtain ⟨y', hy', -⟩ := Option.map_eq_some_iff.1 (hI.cache p hp)
+    exact (List.getElem?_eq_some_iff.1 hy').1
+  have hmemL : ∀ u ∈ st.ys, u ∈ L := fun u hu => by
+    rw [← hI.stream]; exact List.mem_append_left _ hu
+  have hrestL : ∀ u ∈ c.rest, u ∈ L := fun u hu => by
+    rw [← hI.stream]; exact List.mem_append_right _ hu
+  refine ⟨?_, ?_, ?_, ?_⟩
+  · simp only [List.cons_append, List.length_cons, List.length_append, p1]; omega
+  · simp only [List.cons_append, List.map_cons, List.map_append, List.nodup_cons, List.mem_append,
+      not_or]
+    refine ⟨⟨fun hm => ?_, fun hm => ?_⟩, List.nodup_append.2 ⟨hI.nodup, p3, ?_⟩⟩
+    · obtain ⟨p, hp, he⟩ := List.mem_map.1 hm
+      exact hno (he ▸ hI.opened p hp)
+    · obtain ⟨p, hp, he⟩ := List.mem_map.1 hm
+      have := p2 p hp
+      omega
+    · intro a ha b hb e
+      obtain ⟨p, hp, rfl⟩ := List.mem_map.1 ha
+      obtain ⟨q, hq, rfl⟩ := List.mem_map.1 hb
+      have := halt p hp
+      have := p2 q hq
+      omega
+  · have h1 : c.iq = st.ans.length := hI.iq
+    rw [p4, h1]; omega
+  · intro p hp
+    simp only [List.cons_append, List.mem_cons, List.mem_append] at hp
+    rcases hp with rfl | hp | hp
+    · refine ⟨y, (), ?_, hpre⟩
+      rw [p5 _ hilt]
+      exact hI.tg _ _ hy
+    · obtain ⟨y', hy', he⟩ := Option.map_eq_some_iff.1 (hI.cache p hp)
+      refine ⟨y', (), ?_, ?_⟩
+      · rw [p5 _ (halt p hp)]; exact hI.tg _ _ hy'
+      · rw [← he]; exact hg y' (hmemL y' (List.mem_of_getElem? hy'))
+    · obtain ⟨u, hu, ht, hd⟩ := p6 p hp
+      exact ⟨u, (), ht, hd ▸ hg u (hrestL u hu)⟩
+
+/-- **The probability that `D` errs on one of `n` uniform targets** (for the key of `keyGen`):
+the price of Theorem 1 (c) with a sampler that may fail. -/
+noncomputable def badTargets (n : ℕ) : ℝ≥0∞ :=
+  Pr{let kp ← tr.keyGen; let L ← unifList T n}[∃ u ∈ L, ¬tr.IsPre kp.1 (tr.D kp.2 u) u]
+
+/-- **`ρ`: the probability that `D` errs on one uniform target.** -/
+noncomputable def failRate : ℝ≥0∞ :=
+  Pr{let kp ← tr.keyGen; let u ← $ᵗ T}[¬tr.IsPre kp.1 (tr.D kp.2 u) u]
+
+theorem badTargets_le (n : ℕ) : badTargets tr n ≤ n * failRate tr :=
+  prEvent_keyed_unifList_exists_le tr.keyGen (fun kp u => ¬tr.IsPre kp.1 (tr.D kp.2 u) u) n
+
+/-- **Theorem 1 (c): A-OMPI ≤ OMPR**, for every A-OMPI adversary and every trapdoor:
+
+    Adv^{ompi}(A; q_T, Q) ≤ Adv^{ompr}(ompiRed A; q_T + Q, Q) + Pr[D errs on one of q_T + Q targets].
+
+The reduction caches the index queries (so it makes at most `Q` preimage queries) and pads to
+exactly `Q + 1` claims with fresh targets. -/
+theorem advOMPI_le_ompr (qT Q : ℕ) (A : PK → ProbComp (OracleComp (specI AR T S) (ℕ × S))) :
+    advOMPI tr qT Q A ≤ advOMPR tr (qT + Q) Q (ompiRed AR qT Q A) + badTargets tr (qT + Q) := by
+  let J : ProbComp ((PK × SK) × List T × ((ℕ × S) × ORSt T S × Ch AR ℕ Unit T)) := do
+    let kp ← tr.keyGen
+    let a ← A kp.1
+    let L ← unifList T (qT + Q)
+    let z ← (simulateQ (ompiComb qT (tr.D kp.2)) a).run (or0, ch0 L)
+    pure (kp, L, z)
+  let F : (PK × SK) × List T × ((ℕ × S) × ORSt T S × Ch AR ℕ Unit T) →
+      ProbComp (PK × List (ℕ × S) × Ch AR ℕ Unit T) := fun x =>
+    (fun w => (x.1.1, x.2.2.1 :: x.2.2.2.1.ans ++ w.1, w.2)) <$>
+      (simulateQ (chImpl (tr.D x.1.2))
+        (padC (Q - x.2.2.2.1.ans.length) x.2.2.2.1.ys.length)).run x.2.2.2.2
+  -- the A-OMPI experiment, through the reduction
+  have hE : ompiExp tr qT A =ᵈ (fun x => (x.1.1, x.2.2.1, ompiProj qT x.2.2.2)) <$> J := by
+    simp only [ompiExp, J, map_bind, map_pure]
+    refine EvalDistEq.bind_right _ fun kp => EvalDistEq.bind_right _ fun a => ?_
+    rw [unifList_add, bind_assoc]
+    refine EvalDistEq.symm (EvalDistEq.bind_congr_of_support _ fun L1 hL1 => ?_)
+    simp only [bind_assoc, pure_bind]
+    refine (EvalDistEq.bind_right _ fun L2 => ?_).trans (EvalDistEq.bind_const _ _)
+    have h := (simulateQ_proj_eqd (ompiComb qT (tr.D kp.2)) (ompiImpl (tr.D kp.2)) (ompiProj qT)
+      (fun _ => False) (fun _ s => OInv (tr.D kp.2) qT (L1 ++ L2) s)
+      (fun q s _ hI _ => ompi_step qT _ _ q s hI) (fun q s _ hI _ => by
+        simpa using ompi_inv qT _ _ q s hI) a 0 _ (isQueryBoundP_false a)
+      (oinv_init _ qT (L1 ++ L2))).bind_left (fun z => (pure (kp.1, z.1, z.2) : ProbComp _))
+    have hp : ompiProj qT ((or0, ch0 (L1 ++ L2)) : ORSt T S × Ch AR ℕ Unit T) = ompi0 L1 := by
+      have := length_of_mem_unifList' qT L1 hL1
+      simp [ompiProj, or0, ch0, ompi0, ← this]
+    rw [hp] at h
+    simpa only [bind_map_left] using h
+  -- the OMPR experiment is `J` followed by the padding
+  have hO : omExp tr.keyGen tr.D (qT + Q) (ompiRed AR qT Q A) = J >>= F := by
+    simp only [omExp, ompiRed, J, F, bind_assoc, pure_bind, simulateQ_bind, StateT.run_bind,
+      collapseO, map_eq_bind_pure_comp, Function.comp_def, simulateQ_pure, StateT.run_pure]
+  unfold advOMPI advOMPR
+  rw [hE.prEvent_eq, prEvent_map, hO]
+  refine (prEvent_le_prEvent_add_prEvent_and_not J _
+    (fun x => OMPIWin tr Q (x.1.1, x.2.2.1, ompiProj qT x.2.2.2) ∧
+      ∀ u ∈ x.2.1, tr.IsPre x.1.1 (tr.D x.1.2 u) u)).trans (add_le_add ?_ ?_)
+  · refine prEvent_le_bind J F _ _ fun x hx hw w hwF => ?_
+    simp only [J, mem_support_bind_iff, support_pure, Set.mem_singleton_iff] at hx
+    obtain ⟨kp, -, a, -, L, hL, z, hz, rfl⟩ := hx
+    obtain ⟨-, hI⟩ := simulateQ_inv_bound (ompiComb qT (tr.D kp.2)) (fun _ => False)
+      (fun _ s => OInv (tr.D kp.2) qT L s) (fun q s _ hI _ => by simpa using ompi_inv qT _ _ q s hI)
+      a 0 _ (isQueryBoundP_false a) (oinv_init _ qT L) z hz
+    simp only [F] at hwF
+    erw [support_map] at hwF
+    obtain ⟨w', hw', rfl⟩ := hwF
+    exact ompiWin_imp tr qT Q kp.1 kp.2 L (length_of_mem_unifList' _ L hL) z hI hw.1 hw.2 w' hw'
+  · have hm : (fun x : (PK × SK) × List T × ((ℕ × S) × ORSt T S × Ch AR ℕ Unit T) =>
+        (x.1, x.2.1)) <$> J =ᵈ (do let kp ← tr.keyGen; let L ← unifList T (qT + Q); pure (kp, L)) := by
+      simp only [J, map_bind, map_pure]
+      refine EvalDistEq.bind_right _ fun kp => ?_
+      refine (EvalDistEq.bind_right _ fun a => EvalDistEq.bind_right _ fun L =>
+        EvalDistEq.bind_const _ _).trans (EvalDistEq.bind_const _ _)
+    refine (prEvent_mono _ _ (fun x => ∃ u ∈ x.2.1, ¬tr.IsPre x.1.1 (tr.D x.1.2 u) u)
+      fun x hx => ?_).trans (le_of_eq ?_)
+    · by_contra hn
+      push Not at hn
+      exact hx.2 ⟨hx.1, hn⟩
+    · have := hm.prEvent_eq (fun y => ∃ u ∈ y.2, ¬tr.IsPre y.1.1 (tr.D y.1.2 u) u)
+      rw [prEvent_map] at this
+      rw [this]
+      simp [badTargets, map_bind]
+
+/-- **Theorem 1 (c) with the failure rate**: `+ (q_T + Q)·ρ`. -/
+theorem advOMPI_le_ompr_rate (qT Q : ℕ) (A : PK → ProbComp (OracleComp (specI AR T S) (ℕ × S))) :
+    advOMPI tr qT Q A ≤ advOMPR tr (qT + Q) Q (ompiRed AR qT Q A) + (qT + Q : ℕ) * failRate tr :=
+  (advOMPI_le_ompr tr qT Q A).trans (add_le_add le_rfl (badTargets_le tr _))
+
 end OMPIRed
+
+end VoleMole.Assumptions.IdealTag
+
+namespace VoleMole.Assumptions.IdealTag
+
+open VoleMole.Assumptions.UOV
+
+/-! ## det-FDH (UF-Tag with `Tag` a random function) ≤ OMPR -/
+
+section Chain
+
+variable {DR : Type} [DecidableEq DR] {AR : DR → Type} [∀ d, SampleableType (AR d)]
+  {M : Type} [DecidableEq M] {T S : Type} [SampleableType T] [Inhabited T] [Inhabited S]
+  {PK SK : Type} (tr : Trapdoor PK SK T S)
+
+/-- **det-FDH ≤ OMPR** (Theorem 1 (a) then (c)): for a det-FDH forger with at most `k` hash and
+signing queries on every path,
+
+    Adv^{euf}_{det}(A; q_H, q_S) ≤ Adv^{ompr}(B; k + 1 + q_S, q_S) + Pr[D errs on one of k + 1 + q_S targets],
+
+`B = ompiRed (k + 1) q_S (fdhRed A)`. With `Tag` a random function, UF-Tag (strict win) is det-FDH
+with `H = Tag`, so this is Lemma 2.1 then T1(c). -/
+theorem advFDH_le_ompr (qH qS k : ℕ) (A : PK → ProbComp (OracleComp (specF AR M T S) (M × S)))
+    (hA : ∀ pk, ∀ a ∈ support (A pk), IsQueryBoundP a isHS k) :
+    advFDH tr qH qS A ≤
+      advOMPR tr (k + 1 + qS) qS (ompiRed AR (k + 1) qS (fdhRed AR A)) +
+        badTargets tr (k + 1 + qS) :=
+  (advFDH_le_ompi tr qH qS k A hA).trans (advOMPI_le_ompr tr (k + 1) qS _)
+
+/-- The same with the failure rate `ρ`: `+ (k + 1 + q_S)·ρ`. -/
+theorem advFDH_le_ompr_rate (qH qS k : ℕ) (A : PK → ProbComp (OracleComp (specF AR M T S) (M × S)))
+    (hA : ∀ pk, ∀ a ∈ support (A pk), IsQueryBoundP a isHS k) :
+    advFDH tr qH qS A ≤
+      advOMPR tr (k + 1 + qS) qS (ompiRed AR (k + 1) qS (fdhRed AR A)) +
+        (k + 1 + qS : ℕ) * failRate tr :=
+  (advFDH_le_ompr tr qH qS k A hA).trans (add_le_add le_rfl (badTargets_le tr _))
+
+end Chain
 
 end VoleMole.Assumptions.IdealTag
