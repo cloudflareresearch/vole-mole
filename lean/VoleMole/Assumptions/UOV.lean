@@ -80,10 +80,11 @@ def Trapdoor.ofEval {PK SK T X : Type} (keyGen : ProbComp (PK × SK)) (P : PK �
   IsPre pk s t := ∃ x, s = some x ∧ P pk x = t
   D := D
 
-/-- The sampler is **correct** for the keys `keyGen` outputs: its answer is a preimage, or a
-failure (`fails`). -/
-def Trapdoor.Correct {PK SK T S : Type} (tr : Trapdoor PK SK T S) (fails : S → Prop) : Prop :=
-  ∀ kp ∈ support tr.keyGen, ∀ t, tr.IsPre kp.1 (tr.D kp.2 t) t ∨ fails (tr.D kp.2 t)
+/-- The sampler is **correct** for the keys `keyGen` outputs: on a valid target its answer is a
+preimage, or a failure (`fails`). -/
+def Trapdoor.Correct {PK SK T S : Type} (tr : Trapdoor PK SK T S) (valid : T → Prop)
+    (fails : S → Prop) : Prop :=
+  ∀ kp ∈ support tr.keyGen, ∀ t, valid t → tr.IsPre kp.1 (tr.D kp.2 t) t ∨ fails (tr.D kp.2 t)
 
 /-! ## Item 1: the UOV problem, and its `n`-target version -/
 
@@ -458,5 +459,115 @@ noncomputable def advUFTag (keyGen : ProbComp (PK × SK)) (P : PK → S → T �
   advUFTagProbe H keyGen P Dsk fun pk => (B pk).toProbe
 
 end UFTag
+
+/-! ## n-target UOV from single-target UOV, by embedding -/
+
+section NTarget
+
+variable {PK SK T S : Type} (tr : Trapdoor PK SK T S) [SampleableType T]
+
+/-- **The embedding at position `i`**: a single-target adversary that draws the other targets
+itself and puts its own at `i`. -/
+def embedAt {n : ℕ} (i : Fin n) (A : PK → (Fin n → T) → ProbComp S) (pk : PK) (t : T) :
+    ProbComp S := do
+  let ts ← unifVec T n
+  A pk (Function.update ts i t)
+
+lemma bind_unused {α β : Type} (mx : ProbComp α) (my : ProbComp β) :
+    (mx >>= fun _ => my) =ᵈ my := by
+  let : MeasurableSpace β := ⊤
+  exact EvalDistEq.of_evalDist_eq (OracleComp.evalDist_bind_const mx my)
+
+/-- **Replacing one coordinate of uniform targets by a fresh uniform target keeps them
+uniform.** -/
+theorem unifVec_update : ∀ {n : ℕ} (i : Fin n) {β : Type} (f : (Fin n → T) → ProbComp β),
+    (do let t ← $ᵗ T; let ts ← unifVec T n; f (Function.update ts i t)) =ᵈ
+      (do let ts ← unifVec T n; f ts)
+  | 0, i, _, _ => i.elim0
+  | n + 1, i, β, f => by
+    refine Fin.cases ?_ (fun j => ?_) i
+    · simp only [unifVec, bind_assoc, pure_bind, Fin.update_cons_zero]
+      refine EvalDistEq.bind_right _ fun t => ?_
+      exact bind_unused _ _
+    · simp only [unifVec, bind_assoc, pure_bind, ← Fin.cons_update]
+      refine (eqd_swap _ _ _).trans (EvalDistEq.bind_right _ fun a => ?_)
+      exact unifVec_update j fun v => f (Fin.cons a v)
+
+/-- The `n`-target experiment's outcome. -/
+def nComp (n : ℕ) (A : PK → (Fin n → T) → ProbComp S) : ProbComp ((PK × SK) × (Fin n → T) × S) :=
+  tr.keyGen >>= fun kp => unifVec T n >>= fun ts => A kp.1 ts >>= fun s => pure (kp, ts, s)
+
+/-- The embedding's experiment, with the embedded vector as part of the outcome. -/
+def eComp {n : ℕ} (i : Fin n) (A : PK → (Fin n → T) → ProbComp S) :
+    ProbComp ((PK × SK) × (Fin n → T) × S) :=
+  tr.keyGen >>= fun kp => ($ᵗ T) >>= fun t => unifVec T n >>= fun ts =>
+    A kp.1 (Function.update ts i t) >>= fun s => pure (kp, Function.update ts i t, s)
+
+/-- **`n`-target UOV is at most the sum of `n` single-target advantages** (of the embeddings),
+so `Adv^{uov-n} ≤ n · max_i Adv^{uov}(embedAt i A)`. -/
+theorem advUOVn_le_sum (n : ℕ) (A : PK → (Fin n → T) → ProbComp S) :
+    advUOVn tr n A ≤ ∑ i : Fin n, advUOV tr (embedAt i A) := by
+  have hm : advUOVn tr n A = Pr{let r ← nComp tr n A}[∃ i, tr.IsPre r.1.1 r.2.2 (r.2.1 i)] := by
+    simp [advUOVn, nComp, map_bind]
+  rw [hm]
+  refine (prEvent_exists_le _ _).trans (Finset.sum_le_sum fun i _ => le_of_eq ?_)
+  have hi : advUOV tr (embedAt i A) = Pr{let r ← eComp tr i A}[tr.IsPre r.1.1 r.2.2 (r.2.1 i)] := by
+    simp [advUOV, embedAt, eComp, map_bind]
+  rw [hi]
+  refine (EvalDistEq.prEvent_eq ?_ _).symm
+  unfold eComp nComp
+  refine EvalDistEq.bind_right _ fun kp => ?_
+  exact unifVec_update i fun ts => A kp.1 ts >>= fun s => pure (kp, ts, s)
+
+end NTarget
+
+/-! ## Sanity: the trivial attacks lose
+
+Each win excludes the attack that returns an oracle answer: a one-more claim set needs more claims
+than preimage queries, an A-OMPI or det-FDH forgery must be on an unopened index or unsigned
+message, a CT-UF forgery on an unsigned target, a UF-Tag forgery on a pair whose signing query was
+not answered. (That the games can be won at all, and that their hypotheses hold for the real
+objects, is in `Audit/Nonvacuous.lean`.) -/
+
+section Sanity
+
+/-- An OMPR outcome with more than `ℓ` preimage queries is not a win. -/
+theorem not_wins_of_iq {DR : Type} {AR : DR → Type} {X Hn G S PK : Type} (ℓ : ℕ)
+    (good : PK → S → Option (G × Hn) → Prop) (pk : PK) (cl : List (X × S)) (c : Ch AR X Hn G)
+    (h : ℓ < c.iq) : ¬Wins ℓ good pk cl c :=
+  fun hw => absurd hw.2.2.1 (by omega)
+
+/-- An A-OMPI forgery on an opened index is not a win. -/
+theorem not_ompiWin_of_opened {DR : Type} {AR : DR → Type} {T S PK SK : Type}
+    (tr : Trapdoor PK SK T S) (Q : ℕ) (r : PK × (ℕ × S) × OMPISt AR T)
+    (h : r.2.1.1 ∈ r.2.2.opened) : ¬OMPIWin tr Q r :=
+  fun ⟨_, _, hn, _⟩ => hn h
+
+/-- A det-FDH forgery on a signed message is not a win. -/
+theorem not_fdhWin_of_signed {DR : Type} {AR : DR → Type} {M T S PK SK : Type}
+    (tr : Trapdoor PK SK T S) (qH qS : ℕ) (r : PK × (M × S) × T × FDHSt AR M T)
+    (h : r.2.1.1 ∈ r.2.2.2.signed) : ¬FDHWin tr qH qS r :=
+  fun hw => hw.1 h
+
+/-- A CT-UF forgery whose commitment was signed (under any key) is not a win. -/
+theorem not_ctWin_of_signed {K : ℕ} {T S Xc : Type} (V : Fin K → S → T → Prop) (Com : Xc → T)
+    (DCom : Xc → Prop) (o : CTOut K S Xc) (log pl : List (Fin K × T))
+    (h : ∀ k x s, o.1 = some (k, x, s) → ∃ q ∈ log, q.2 = Com x) :
+    ¬CTWin V Com DCom (o, log, pl) := by
+  rintro ⟨k, x, s, ho, -, -, hn⟩
+  obtain ⟨q, hq, he⟩ := h k x s ho
+  exact hn q hq he
+
+/-- A UF-Tag forgery on a pair whose signing query was answered is not a win. -/
+theorem not_ufWin_of_answered {Q T S S' : Type} (V : S → T → Prop) (H : Q → T)
+    (σ : T → Option S') (m : Q) (s : S) (log pl : List Q) (hm : m ∈ log)
+    (ha : (σ (H m)).isSome) : ¬UFWin V H σ (some (m, s), log, pl) := by
+  rintro ⟨m', s', ho, -, hn⟩
+  simp only [Option.some.injEq, Prod.mk.injEq] at ho
+  obtain ⟨rfl, rfl⟩ := ho
+  rw [hn m hm rfl] at ha
+  exact absurd ha (by simp)
+
+end Sanity
 
 end VoleMole.Assumptions.UOV
