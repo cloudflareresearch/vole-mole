@@ -171,23 +171,29 @@ theorem evalWithAnswerFn_balQ (A : RoundAdv S (Op Z) Resp) (N : ℕ) (σ : Signe
 
 /-! ## Winning: spent beyond issued and refunded, in some context -/
 
-/-- The credits issued per context: `T_init` of every accepted issuance. -/
-def issuedOf : List (Op Z × Resp) → List (Context × ℕ)
-  | [] => []
-  | (.issue _ tInit ctx, .inl (.ok (some _))) :: tr => (ctx, tInit.toNat) :: issuedOf tr
-  | _ :: tr => issuedOf tr
+/-- The credits a round issues: `T_init` of an accepted issuance. -/
+def issRec : Op Z × Resp → List (Context × ℕ)
+  | (.issue _ tInit ctx, .inl (.ok (some _))) => [(ctx, tInit.toNat)]
+  | _ => []
 
-/-- The credits spent per context: `d` of every accepted spend. -/
-def spentOf : List (Op Z × Resp) → List (Context × ℕ)
-  | [] => []
-  | (.spend _ ctx _, .inr (.ok (some out))) :: tr => (ctx, out.d.toNat) :: spentOf tr
-  | _ :: tr => spentOf tr
+/-- The credits a round spends: `d` of an accepted spend. -/
+def spRec : Op Z × Resp → List (Context × ℕ)
+  | (.spend _ ctx _, .inr (.ok (some out))) => [(ctx, out.d.toNat)]
+  | _ => []
 
-/-- The refunds granted per context: `x'` of every accepted spend. -/
-def refundedOf : List (Op Z × Resp) → List (Context × ℕ)
-  | [] => []
-  | (.spend _ ctx refund, .inr (.ok (some _))) :: tr => (ctx, refund.toNat) :: refundedOf tr
-  | _ :: tr => refundedOf tr
+/-- The refund a round grants: `x'` of an accepted spend. -/
+def rfRec : Op Z × Resp → List (Context × ℕ)
+  | (.spend _ ctx refund, .inr (.ok (some _))) => [(ctx, refund.toNat)]
+  | _ => []
+
+/-- The credits issued, per context. -/
+def issuedOf (tr : List (Op Z × Resp)) : List (Context × ℕ) := tr.flatMap issRec
+
+/-- The credits accepted as spent, per context. -/
+def spentOf (tr : List (Op Z × Resp)) : List (Context × ℕ) := tr.flatMap spRec
+
+/-- The refunds granted, per context. -/
+def refundedOf (tr : List (Op Z × Resp)) : List (Context × ℕ) := tr.flatMap rfRec
 
 /-- **The adversary wins BAL**: in some context, the credits accepted as spent exceed the
 credits issued plus the refunds granted. -/
@@ -320,5 +326,310 @@ theorem annS_spec (E : CTable) (r : Out ((SIdx × Unit) × QueryLog specIC))
   have := hW
   simp only [WS, spendInstOf_bOf] at this
   exact this
+
+/-! ## The events of the reduction -/
+
+/-- The pairs `(c, x)` a round released a signature on: `(c, 0)` for an accepted issuance,
+`(c', x')` for an accepted spend. -/
+def relRec : Op Z × Resp → List (Commitment × Credits)
+  | (.issue req _ _, .inl (.ok (some _))) => [(issueReqC req, 0)]
+  | (.spend req _ refund, .inr (.ok (some _))) => [((SpendReq.parse req).cNext, refund)]
+  | _ => []
+
+/-- An opening `(nf, ctx, t, r)` of `Com`. -/
+abbrev Opening4 := Nullifier × Context × Credits × Opening
+
+/-- The commitment of an opening. -/
+def comOf (o : Opening4) : Commitment := com o.1 o.2.1 o.2.2.1 o.2.2.2
+
+/-- What a commitment binds: `(nf, ctx, t)`. -/
+def triOf (o : Opening4) : Nullifier × Context × Credits := (o.1, o.2.1, o.2.2.1)
+
+/-- The openings a round's extracted witnesses give: an accepted issuance's `(nf, ctx, T_init, r)`;
+an accepted spend's parent `(nf, ctx, t, r)` and change `(nf', ctx, t', r')`. -/
+def opensRec (wi : IssueWitness) (ws : SpendWitness) : Op Z × Resp → List Opening4
+  | (.issue _ tInit ctx, .inl (.ok (some _))) => [(wi.nf, ctx, tInit, wi.r)]
+  | (.spend req ctx _, .inr (.ok (some _))) =>
+      [((SpendReq.parse req).nf, ctx, ws.t, ws.r), (ws.nf', ctx, ws.t', ws.r')]
+  | _ => []
+
+/-- All extracted openings of a run, with the extracted witnesses `wI k`, `wS k` of round `k`. -/
+def opens (wI : ℕ → IssueWitness) (wS : ℕ → SpendWitness) (tr : List (Op Z × Resp)) :
+    List Opening4 :=
+  tr.zipIdx.flatMap fun p => opensRec (wI p.2) (wS p.2) p.1
+
+/-- **A `Com` collision among the extracted openings**: two openings with one commitment and
+different `(nf, ctx, t)`. -/
+def ComColl (wI : ℕ → IssueWitness) (wS : ℕ → SpendWitness) (tr : List (Op Z × Resp)) : Prop :=
+  ∃ o ∈ opens wI wS tr, ∃ o' ∈ opens wI wS tr, comOf o = comOf o' ∧ triOf o ≠ triOf o'
+
+/-- **A forgery**: an accepted spend `j` whose extracted witness carries a valid signature `s`,
+`P(s) = Tag(c, x)` for its parent `c = Com(nf, ctx, t, r)`, on a pair `(c, x)` on which no round
+before `j` released a signature. -/
+def Forge (wS : ℕ → SpendWitness) (tr : List (Op Z × Resp)) : Prop :=
+  ∃ j req ctx refund out, tr[j]? = some (.spend req ctx refund, .inr (.ok (some out))) ∧
+    uovEval pkU.map (wS j).s = tag (com (SpendReq.parse req).nf ctx (wS j).t (wS j).r) (wS j).x ∧
+    (com (SpendReq.parse req).nf ctx (wS j).t (wS j).r, (wS j).x) ∉ (tr.take j).flatMap relRec
+
+/-! ## The deterministic core: no failure, no win -/
+
+section Core
+
+variable (ver : Statement → ByteArray → Bool) (σ : Signer) (nT : S → Op Z × S)
+  (recv : S → Resp → S) (s0 : S)
+
+/-- The run's state after `k` rounds. -/
+def yT (k : ℕ) : S × IssuerState × List (Op Z × Resp) :=
+  roundsT nT (serveP lr pkU ver σ) recv k (s0, ⟨[]⟩, [])
+
+/-- Round `k`'s request and response. -/
+def recT (k : ℕ) : Op Z × Resp := recOf nT (serveP lr pkU ver σ) (yT lr pkU ver σ nT recv s0 k)
+
+theorem trace_yT (n : ℕ) :
+    (yT lr pkU ver σ nT recv s0 n).2.2 = (List.range n).map (recT lr pkU ver σ nT recv s0) := by
+  rw [yT, roundsT_trace]; rfl
+
+theorem getElem?_trace {n k : ℕ} (hk : k < n) :
+    (yT lr pkU ver σ nT recv s0 n).2.2[k]? = some (recT lr pkU ver σ nT recv s0 k) := by
+  rw [trace_yT, List.getElem?_map, List.getElem?_range hk]; rfl
+
+theorem take_trace {n k : ℕ} (hk : k ≤ n) :
+    (yT lr pkU ver σ nT recv s0 n).2.2.take k = (yT lr pkU ver σ nT recv s0 k).2.2 := by
+  rw [trace_yT, trace_yT, ← List.map_take, List.take_range, min_eq_left hk]
+
+/-- The store after round `k`. -/
+theorem store_succ (k : ℕ) :
+    (yT lr pkU ver σ nT recv s0 (k + 1)).2.1 =
+      (serveP lr pkU ver σ (yT lr pkU ver σ nT recv s0 k).2.1
+        (recT lr pkU ver σ nT recv s0 k).1).2 := rfl
+
+/-- Round `k`'s response is the Issuer's at the store after `k` rounds. -/
+theorem resp_eq (k : ℕ) :
+    (recT lr pkU ver σ nT recv s0 k).2 =
+      (serveP lr pkU ver σ (yT lr pkU ver σ nT recv s0 k).2.1
+        (recT lr pkU ver σ nT recv s0 k).1).1 := rfl
+
+/-- The ledger's world run on rounds `0 … n - 1`, annotated with the extracted witnesses. -/
+def osT (wI : ℕ → IssueWitness) (wS : ℕ → SpendWitness) (n : ℕ) :
+    List (Op Z × IssueWitness × SpendWitness) :=
+  (List.range n).map fun k => ((recT lr pkU ver σ nT recv s0 k).1, wI k, wS k)
+
+theorem World.run_append (P : Prim Z Signer) (w : World)
+    (l₁ l₂ : List (Op Z × IssueWitness × SpendWitness)) :
+    World.run P σ w (l₁ ++ l₂) = World.run P σ (World.run P σ w l₁) l₂ := by
+  induction l₁ generalizing w with
+  | nil => rfl
+  | cons o l ih => exact ih _
+
+/-- The entries a round releases into the ledger. -/
+def entRec (wi : IssueWitness) (ws : SpendWitness) : Op Z × Resp → List Entry
+  | (.issue _ tInit ctx, .inl (.ok (some _))) => [⟨(ctx, wi.nf), tInit.toNat, 0⟩]
+  | (.spend _ ctx refund, .inr (.ok (some _))) => [⟨(ctx, ws.nf'), ws.t'.toNat, refund.toNat⟩]
+  | _ => []
+
+theorem total_nil (c : Context) : total c [] = 0 := rfl
+
+theorem total_append (c : Context) (l₁ l₂ : List (Context × ℕ)) :
+    total c (l₁ ++ l₂) = total c l₁ + total c l₂ := by
+  simp [total, List.filter_append, List.map_append, List.sum_append]
+
+/-- **One round on the ledger.** Run with the extracted witnesses, the ledger world follows the
+game: same store, the ledger invariant is kept (given the round's hypothesis `World.Hyp`), the
+totals grow by the round's issued, spent and refunded credits, and the released entries by the
+round's. -/
+theorem step_inv (wI : ℕ → IssueWitness) (wS : ℕ → SpendWitness) (n : ℕ) (w : World)
+    (hst : w.st = (yT lr pkU ver σ nT recv s0 n).2.1) (hsk : w.st.store = w.L.spentKeys)
+    (hI : w.L.Inv)
+    (hH : w.Hyp (romPrim lr pkU ver) σ ((recT lr pkU ver σ nT recv s0 n).1, wI n, wS n)) :
+    let w' := World.step (romPrim lr pkU ver) σ w ((recT lr pkU ver σ nT recv s0 n).1, wI n, wS n)
+    w'.st = (yT lr pkU ver σ nT recv s0 (n + 1)).2.1 ∧ w'.st.store = w'.L.spentKeys ∧
+      w'.L.Inv ∧
+      (∀ c, total c w'.L.issued =
+        total c w.L.issued + total c (issRec (recT lr pkU ver σ nT recv s0 n))) ∧
+      (∀ c, total c w'.L.spent =
+        total c w.L.spent + total c (spRec (recT lr pkU ver σ nT recv s0 n))) ∧
+      (∀ c, total c w'.L.refunded =
+        total c w.L.refunded + total c (rfRec (recT lr pkU ver σ nT recv s0 n))) ∧
+      w'.L.released = entRec (wI n) (wS n) (recT lr pkU ver σ nT recv s0 n) ++ w.L.released := by
+  obtain ⟨hsk', hI'⟩ := World.step_inv (romPrim lr pkU ver) σ w _ hsk hH hI
+  refine ⟨?_, hsk', hI', ?_⟩
+  · rw [store_succ, ← hst]
+    generalize (recT lr pkU ver σ nT recv s0 n).1 = op
+    cases op with
+    | issue req tInit ctx =>
+      simp only [World.step, serveP]; split <;> rfl
+    | spend req ctx refund =>
+      simp only [World.step, serveP]; split <;> rename_i h <;> rw [h]
+  · have hr := resp_eq lr pkU ver σ nT recv s0 n
+    rw [← hst] at hr
+    generalize recT lr pkU ver σ nT recv s0 n = rn at hr ⊢
+    obtain ⟨op, resp⟩ := rn
+    simp only at hr
+    subst hr
+    cases op with
+    | issue req tInit ctx =>
+      simp only [World.step, serveP]
+      generalize issueResponse (romPrim lr pkU ver) σ req tInit ctx = r
+      rcases r with e | _ | s <;>
+        simp [Ledger.step, issRec, spRec, rfRec, entRec, total_cons, total_nil, add_comm]
+    | spend req ctx refund =>
+      simp only [World.step, serveP]
+      generalize issuerSpend (romPrim lr pkU ver) σ w.st req ctx refund = q
+      obtain ⟨st', r⟩ := q
+      rcases r with e | _ | out <;>
+        simp [Ledger.step, issRec, spRec, rfRec, entRec, total_cons, total_nil, add_comm]
+
+/-- An accepted spend's response carries the request's nullifier and amount. -/
+theorem issuerSpend_out {P : Prim Z Signer} {st : IssuerState} {req : SpendRequest Z}
+    {ctx : Context} {refund : Credits} {out : SpendResult}
+    (h : (issuerSpend P σ st req ctx refund).2 = .ok (some out)) :
+    out.nf = (SpendReq.parse req).nf ∧ out.d = (SpendReq.parse req).d := by
+  rcases issuerSpend_store (Prod.mk.eta (p := issuerSpend P σ st req ctx refund)).symm with
+    ⟨-, hne⟩ | ⟨out', h₁, hresp, -, -⟩
+  · exact absurd h (hne out)
+  rw [h] at h₁; cases h₁
+  simp only [spendResponse] at hresp
+  split_ifs at hresp
+  · cases hresp
+  · cases hd : P.derive σ (tag (SpendReq.parse req).cNext refund) with
+    | none => rw [hd] at hresp; cases hresp
+    | some s => rw [hd] at hresp; cases hresp; exact ⟨rfl, rfl⟩
+
+theorem mem_opens {wI : ℕ → IssueWitness} {wS : ℕ → SpendWitness} {tr : List (Op Z × Resp)}
+    {k : ℕ} {r : Op Z × Resp} (hk : tr[k]? = some r) {o : Opening4}
+    (ho : o ∈ opensRec (wI k) (wS k) r) : o ∈ opens wI wS tr :=
+  List.mem_flatMap.2 ⟨(r, k), List.mem_zipIdx_iff_getElem?.2 hk, ho⟩
+
+/-- **The deterministic core of Theorem 1.** On a run where every accepted issuance and spend
+has an extracted witness of its relation, no accepted spend's parent is a forgery and the
+extracted openings contain no `Com` collision, the adversary does not win: per context, spent
+`≤` issued + refunded. (Through the ledger world of `Spec/Ratatouille.lean` and its invariant,
+`World.step_inv`.) -/
+theorem no_win (wI : ℕ → IssueWitness) (wS : ℕ → SpendWitness) (N : ℕ)
+    (hI : ∀ k req tInit ctx s, (yT lr pkU ver σ nT recv s0 N).2.2[k]? =
+      some (.issue req tInit ctx, .inl (.ok (some s))) →
+        IssueRel ⟨issueReqC req, tInit, ctx⟩ (wI k))
+    (hS : ∀ k req ctx refund out, (yT lr pkU ver σ nT recv s0 N).2.2[k]? =
+      some (.spend req ctx refund, .inr (.ok (some out))) →
+        SpendRel ⟨pkU.map, (SpendReq.parse req).nf, (SpendReq.parse req).d,
+          (SpendReq.parse req).cNext, ctx⟩ (wS k))
+    (hF : ¬ Forge pkU wS (yT lr pkU ver σ nT recv s0 N).2.2)
+    (hC : ¬ ComColl wI wS (yT lr pkU ver σ nT recv s0 N).2.2) :
+    ¬ Win (yT lr pkU ver σ nT recv s0 N).2.2 := by
+  set tr := (yT lr pkU ver σ nT recv s0 N).2.2 with htr
+  let P : Prim Z Signer := romPrim lr pkU ver
+  let w0 : World := ⟨⟨[]⟩, Ledger.empty⟩
+  -- The invariant after `n` rounds.
+  have inv : ∀ n ≤ N,
+      let w := World.run P σ w0 (osT lr pkU ver σ nT recv s0 wI wS n)
+      w.st = (yT lr pkU ver σ nT recv s0 n).2.1 ∧ w.st.store = w.L.spentKeys ∧ w.L.Inv ∧
+        (∀ c, total c w.L.issued = total c (issuedOf (yT lr pkU ver σ nT recv s0 n).2.2) ∧
+          total c w.L.spent = total c (spentOf (yT lr pkU ver σ nT recv s0 n).2.2) ∧
+          total c w.L.refunded = total c (refundedOf (yT lr pkU ver σ nT recv s0 n).2.2)) ∧
+        (∀ k < n, ∀ e ∈ entRec (wI k) (wS k) ((recT lr pkU ver σ nT recv s0) k), e ∈ w.L.released) := by
+    intro n
+    induction n with
+    | zero =>
+      intro _
+      have h0 : (yT lr pkU ver σ nT recv s0 0).2.2 = [] := rfl
+      refine ⟨rfl, rfl, fun c => by simp [osT, World.run, w0, Ledger.empty, total, Ledger.live,
+        liveSum], fun c => ?_, fun k hk => absurd hk (Nat.not_lt_zero _)⟩
+      rw [h0]
+      simp [osT, World.run, w0, Ledger.empty, issuedOf, spentOf, refundedOf, total]
+    | succ n ih =>
+      intro hn
+      obtain ⟨hst, hsk, hInv, htot, hrel⟩ := ih (Nat.le_of_succ_le hn)
+      have hnN : n < N := hn
+      set w := World.run P σ w0 (osT lr pkU ver σ nT recv s0 wI wS n) with hw
+      have hos : osT lr pkU ver σ nT recv s0 wI wS (n + 1) =
+          osT lr pkU ver σ nT recv s0 wI wS n ++ [(((recT lr pkU ver σ nT recv s0) n).1, wI n, wS n)] := by
+        simp [osT, List.range_succ]
+      -- The round's hypothesis.
+      have hH : w.Hyp P σ (((recT lr pkU ver σ nT recv s0) n).1, wI n, wS n) := by
+        have hr := resp_eq lr pkU ver σ nT recv s0 n
+        have htrn : tr[n]? = some ((recT lr pkU ver σ nT recv s0) n) := getElem?_trace lr pkU ver σ nT recv s0 hnN
+        generalize hrn : (recT lr pkU ver σ nT recv s0) n = rn at hr htrn ⊢
+        obtain ⟨op, resp⟩ := rn
+        cases op with
+        | issue req tInit ctx => trivial
+        | spend req ctx refund =>
+          intro out hout
+          have hresp : resp = .inr (.ok (some out)) := by
+            simp only [serveP] at hr; rw [hr, ← hst]; exact congrArg Sum.inr hout
+          subst hresp
+          obtain ⟨hnf, hd⟩ := issuerSpend_out σ hout
+          have hrel' := hS n req ctx refund out htrn
+          refine ⟨by rw [hnf, hd]; exact hrel', ?_⟩
+          -- The parent was released before round `n`.
+          have hmem : (com (SpendReq.parse req).nf ctx (wS n).t (wS n).r, (wS n).x) ∈
+              (tr.take n).flatMap relRec := by
+            by_contra hnot
+            exact hF ⟨n, req, ctx, refund, out, htrn, hrel'.1, hnot⟩
+          rw [htr, take_trace lr pkU ver σ nT recv s0 hnN.le, trace_yT] at hmem
+          obtain ⟨rk, hrk, hpk⟩ := List.mem_flatMap.1 hmem
+          obtain ⟨k, hk, rfl⟩ := List.mem_map.1 hrk
+          have hkn : k < n := List.mem_range.1 hk
+          have htrk : tr[k]? = some (recT lr pkU ver σ nT recv s0 k) :=
+            getElem?_trace lr pkU ver σ nT recv s0 (hkn.trans hnN)
+          have hpar : ((SpendReq.parse req).nf, ctx, (wS n).t, (wS n).r) ∈ opens wI wS tr :=
+            mem_opens htrn (by simp [opensRec])
+          have hrelk := hrel k hkn
+          generalize hrk' : recT lr pkU ver σ nT recv s0 k = rk' at htrk hpk hrelk
+          rw [hnf]
+          obtain ⟨opk, respk⟩ := rk'
+          cases opk with
+          | issue req' tInit' ctx' =>
+            rcases respk with (_ | _ | s') | _ <;> simp [relRec] at hpk
+            obtain ⟨hc, hx⟩ := hpk
+            have hik := hI k req' tInit' ctx' s' htrk
+            have ho' : ((wI k).nf, ctx', tInit', (wI k).r) ∈ opens wI wS tr :=
+              mem_opens htrk (by simp [opensRec])
+            by_cases htri : triOf ((SpendReq.parse req).nf, ctx, (wS n).t, (wS n).r) =
+                triOf ((wI k).nf, ctx', tInit', (wI k).r)
+            · simp only [triOf, Prod.mk.injEq] at htri
+              obtain ⟨h1, h2, h3⟩ := htri
+              have := hrelk ⟨(ctx', (wI k).nf), tInit'.toNat, 0⟩ (by simp [entRec])
+              rw [h1, h2, h3, hx]; simpa using this
+            · exact absurd ⟨_, hpar, _, ho', by rw [comOf, comOf, hc]; exact hik, htri⟩ hC
+          | spend req' ctx' refund' =>
+            rcases respk with _ | (_ | _ | out') <;> simp [relRec] at hpk
+            obtain ⟨hc, hx⟩ := hpk
+            have hsk' := hS k req' ctx' refund' out' htrk
+            have ho' : ((wS k).nf', ctx', (wS k).t', (wS k).r') ∈ opens wI wS tr :=
+              mem_opens htrk (by simp [opensRec])
+            by_cases htri : triOf ((SpendReq.parse req).nf, ctx, (wS n).t, (wS n).r) =
+                triOf ((wS k).nf', ctx', (wS k).t', (wS k).r')
+            · simp only [triOf, Prod.mk.injEq] at htri
+              obtain ⟨h1, h2, h3⟩ := htri
+              have := hrelk ⟨(ctx', (wS k).nf'), (wS k).t'.toNat, refund'.toNat⟩ (by simp [entRec])
+              rw [h1, h2, h3, hx]; simpa using this
+            · exact absurd ⟨_, hpar, _, ho', by rw [comOf, comOf, hc]; exact hsk'.2.1, htri⟩ hC
+      obtain ⟨hst', hsk', hInv', hi', hs', hr', hrl'⟩ :=
+        step_inv lr pkU ver σ nT recv s0 wI wS n w hst hsk hInv hH
+      rw [hos, World.run_append]
+      refine ⟨hst', hsk', hInv', fun c => ?_, fun k hk e he => ?_⟩
+      · have htrs : (yT lr pkU ver σ nT recv s0 (n + 1)).2.2 =
+            (yT lr pkU ver σ nT recv s0 n).2.2 ++ [(recT lr pkU ver σ nT recv s0) n] := rfl
+        rw [htrs]
+        obtain ⟨t1, t2, t3⟩ := htot c
+        simp only [issuedOf, spentOf, refundedOf] at t1 t2 t3 ⊢
+        simp only [List.flatMap_append, List.flatMap_singleton, total_append, World.run]
+        rw [← hw]
+        exact ⟨by rw [hi' c, t1], by rw [hs' c, t2], by rw [hr' c, t3]⟩
+      · simp only [World.run]
+        rw [← hw]
+        rw [hrl']
+        rcases Nat.lt_succ_iff_lt_or_eq.1 hk with hk | rfl
+        · exact List.mem_append_right _ (hrel k hk e he)
+        · exact List.mem_append_left _ he
+  obtain ⟨-, -, hInv, htot, -⟩ := inv N le_rfl
+  rintro ⟨c, hc⟩
+  have h1 := hInv c
+  obtain ⟨t1, t2, t3⟩ := htot c
+  rw [← htr] at t1 t2 t3
+  rw [t1, t2, t3] at h1
+  omega
+
+end Core
 
 end VoleMole.ROM.IC.RatBalance
