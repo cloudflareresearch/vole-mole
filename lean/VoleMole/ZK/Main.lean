@@ -51,11 +51,11 @@ for several).
 `lean/docs/zk.md` Proposition 4.1 for the right guess of `w[0..λ)`) and `card_attack_test_ideal` (a
 uniform `c_mult` passes for exactly `#S` of the values).
 
-What is not here (paper, `lean/docs/zk.md` §§5–6): that H5 and H6 can be coupled to agree off the
-bad event (lazy sampling of H₅ at the sibling points), that the adaptive queries before the first
-hit are functions of `(aux, view, ω)` with `ω` independent (they see only uniform H₅ answers,
-uniform `c_mult` and uniform responses in H6/H7), the summation over proofs through `iv`
-(`ε_iv`), and H1–H4, H8.
+What is not here: the hybrids around this bad event for the executable prover (H1–H4, the
+coupling of H5 and H6, the reduction of an oracle adversary to its queries), one proof at a time
+in `ZK/HopsMain.lean` (`zk_rom_ic_main`) and for several proofs sharing the prefix in
+`ZK/MainGame.lean` (`main_chain_le`; `lean/docs/zk.md` §4.2); the summation over proofs through
+`iv` (`ε_iv`) and H8 stay on paper.
 -/
 
 open Finset VoleMole.Prob ENNReal
