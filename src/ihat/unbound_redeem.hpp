@@ -1,23 +1,27 @@
 // QuickSilver constraints for the redemption proof of an unbound token:
 //
 //   Instance: P[0], ..., P[N-1] (Anchor Set) where N <= MAX_ANCHORS, nf (nullifier), ctx_iss
-//             (issuance context), ctx_red (redemption context)
-//   Witness:  r (opening), nf_key (nullifier key), s (UOV preimage), b (selector)
+//             (issuance context), ctx_red (redemption context), A (Moderator's share), t (report
+//             tag)
+//   Witness:  r (opening), nf_key (nullifier key), s (UOV preimage), k (report), b (selector)
 //   Constraints:
 //     - Q(s) = UnboundCom(nf_key, ctx_iss, r), where Q = sum_u b[u] * P[u]
 //     - nf = Derive(nf_key, ctx_red)
 //     - sum(b[0..u+1]) * b[u+1] = 0 for u in [N-1] (parity constraints)
 //     - sum(b) = 1 (weight constraint)
+//     - ExpandReport(k) = (b - A mod 2^16) || t (see ihat/report.hpp)
 //
 // Arithmetization is the same as for a standard redemption proof, except that the nullifier is
 // derived from the nullifier key. The witness layout is as follows:
 //
-//     0 ..  16   r
-//    16 ..  32   nf_key
-//    32 .. 151   s
-//   151 .. 351   s5, s9 of UnboundCom
-//   351 .. 551   s5, s9 of Derive
-//   551 .. 559   b, with b[u] at bit u % 8 of byte 551 + u / 8
+//      0 ..   16   r
+//     16 ..   32   nf_key
+//     32 ..  151   s
+//    151 ..  351   s5, s9 of UnboundCom
+//    351 ..  551   s5, s9 of Derive
+//    551 ..  567   k
+//    567 .. 1167   s5, s9 of each of the three blocks of the report expansion
+//   1167 .. 1175   b, with b[u] at bit u % 8 of byte 1167 + u / 8
 
 #ifndef VOLE_MOLE_IHAT_UNBOUND_REDEEM_HPP
 #define VOLE_MOLE_IHAT_UNBOUND_REDEEM_HPP
@@ -28,6 +32,7 @@
 #include "dst.hpp"
 #include "ihat/circuit.hpp"
 #include "ihat/commit.hpp"
+#include "ihat/report.hpp"
 #include "keccak/segmented.hpp"
 #include "voleith.hpp"
 
@@ -53,9 +58,14 @@ constexpr size_t UNBOUND_REDEEM_WIT_OFF_S = UNBOUND_REDEEM_WIT_OFF_NF_KEY + NF_K
 constexpr size_t UNBOUND_REDEEM_WIT_OFF_COM_STATES = UNBOUND_REDEEM_WIT_OFF_S + uov::N;
 constexpr size_t UNBOUND_REDEEM_WIT_OFF_DERIVE_STATES =
     UNBOUND_REDEEM_WIT_OFF_COM_STATES + keccak::detail::COMMITTED_STATES_BYTES;
-constexpr size_t UNBOUND_REDEEM_WIT_OFF_B =
+constexpr size_t UNBOUND_REDEEM_WIT_OFF_K =
     UNBOUND_REDEEM_WIT_OFF_DERIVE_STATES + keccak::detail::COMMITTED_STATES_BYTES;
+constexpr size_t UNBOUND_REDEEM_WIT_OFF_REPORT_STATES = UNBOUND_REDEEM_WIT_OFF_K + REPORT_BYTES;
+constexpr size_t UNBOUND_REDEEM_WIT_OFF_B =
+    UNBOUND_REDEEM_WIT_OFF_REPORT_STATES + REPORT_COMMITTED_STATES_BYTES;
 constexpr size_t UNBOUND_REDEEM_WITNESS_BYTES = UNBOUND_REDEEM_WIT_OFF_B + SELECTOR_BYTES;
+static_assert(UNBOUND_REDEEM_WIT_OFF_K == 551 && UNBOUND_REDEEM_WIT_OFF_B == 1167 &&
+              UNBOUND_REDEEM_WITNESS_BYTES == 1175);
 constexpr size_t UNBOUND_REDEEM_WITNESS_BITS = 8 * UNBOUND_REDEEM_WITNESS_BYTES;
 
 // The witness index of the bit b[u] of the selector.
@@ -91,19 +101,24 @@ static_assert(keccak::detail::input_map_is_valid(UNBOUND_REDEEM_DERIVE_TO_WIT,
                                                  UNBOUND_REDEEM_WIT_OFF_NF_KEY,
                                                  UNBOUND_REDEEM_WIT_OFF_S),
               "UNBOUND_REDEEM_DERIVE_TO_WIT is malformed");
+static_assert(keccak::detail::input_map_is_valid(report_input_map(UNBOUND_REDEEM_WIT_OFF_K),
+                                                 UNBOUND_REDEEM_WIT_OFF_K,
+                                                 UNBOUND_REDEEM_WIT_OFF_K + REPORT_BYTES),
+              "report_input_map(UNBOUND_REDEEM_WIT_OFF_K) is malformed");
 
 constexpr size_t UNBOUND_REDEEM_NUM_CONSTRAINTS =
-    8 * UNBOUND_REDEEM_WIT_OFF_B // bit constraints for r, nf_key, s, and the intermediate states
+    8 * UNBOUND_REDEEM_WIT_OFF_B // bit constraints for r, nf_key, s, k, and the intermediate states
     + SELECTOR_NUM_CONSTRAINTS   // selector constraints
     + 2 * keccak::detail::NUM_SEGMENT_CONSTRAINTS // segments end in a committed state
     + 8 * NF_BYTES                                // Derive ends in nf
-    + 1; // Q(s) = commitment (a random linear combination of the M components)
+    + 1                       // Q(s) = commitment (a random linear combination of the M components)
+    + REPORT_NUM_CONSTRAINTS; // report expansion
 
 // Compute the full witness, including the intermediate Keccak states and the selector for the
 // Anchor at index i.
 inline std::array<uint8_t, UNBOUND_REDEEM_WITNESS_BYTES>
 encode_unbound_redeem_witness(const NfKey& nf_key, const Context& ctx_iss, const Context& ctx_red,
-                              const Opening& r, const uov::Preimage& s, size_t i) {
+                              const Opening& r, const uov::Preimage& s, const Report& k, size_t i) {
     using keccak::detail::COMMITTED_STATES_BYTES;
     using keccak::detail::encode_committed_states;
     std::array<uint8_t, UNBOUND_REDEEM_WITNESS_BYTES> w{};
@@ -116,6 +131,10 @@ encode_unbound_redeem_witness(const NfKey& nf_key, const Context& ctx_iss, const
     encode_committed_states(
         std::span(w).subspan<UNBOUND_REDEEM_WIT_OFF_DERIVE_STATES, COMMITTED_STATES_BYTES>(),
         encode_derive_state(nf_key, ctx_red));
+    std::ranges::copy(k, w.begin() + UNBOUND_REDEEM_WIT_OFF_K);
+    encode_report_states(
+        std::span(w).subspan<UNBOUND_REDEEM_WIT_OFF_REPORT_STATES, REPORT_COMMITTED_STATES_BYTES>(),
+        k);
     encode_selector(std::span(w).subspan<UNBOUND_REDEEM_WIT_OFF_B, SELECTOR_BYTES>(), i);
     return w;
 }
@@ -164,7 +183,7 @@ struct UnboundRedeemRelation {
                             std::span<const uint8_t, params::CONSTS::QS::CHALLENGE_BYTES> chal2) {
         static_assert(QS::max_degree == UNBOUND_REDEEM_QS_DEGREE);
 
-        // Add bit constraints: Every bit of r, nf_key, s, and the intermediate states is a bit.
+        // Add bit constraints: Every bit of r, nf_key, s, k, and the intermediate states is a bit.
         qs_add_bit_constraints(qs, 8 * UNBOUND_REDEEM_WIT_OFF_B);
 
         // Add selector constraints.
@@ -190,6 +209,10 @@ struct UnboundRedeemRelation {
         // Add output constraint: UnboundCom ends in Q(s).
         qs_add_signature_constraint(qs, x.anchors, b, UNBOUND_REDEEM_WIT_OFF_S, com_out, chal2,
                                     UNBOUND_IHAT_REDEEM_COMBINE_DST);
+
+        // Add report constraints: The report expands to (b - A) || t.
+        qs_add_report_constraints(qs, b, x.share, x.tag, UNBOUND_REDEEM_WIT_OFF_K,
+                                  UNBOUND_REDEEM_WIT_OFF_REPORT_STATES);
     }
 };
 
@@ -201,30 +224,30 @@ static_assert(UNBOUND_REDEEM_PROOF_BYTES == PROOF_BYTES<UnboundRedeemRelation>,
 using UnboundRedeemProof = std::span<uint8_t, UNBOUND_REDEEM_PROOF_BYTES>;
 using ConstUnboundRedeemProof = std::span<const uint8_t, UNBOUND_REDEEM_PROOF_BYTES>;
 
-// Compute the redemption proof for the given Anchor Set. The caller must ensure that the witness
-// satisfies the instance.
+// Compute the redemption proof for the given Anchor Set, where `share` and `tag` are the
+// Moderator's share and the tag for report k. The caller must ensure that the witness satisfies the
+// instance.
 //
 // Throws std::bad_alloc if memory allocation fails and std::runtime_error if grinding fails (which
 // happens with negligible probability).
-inline void prove_unbound_redeem_request(UnboundRedeemProof pf_red, AnchorSpan anchors, size_t i,
-                                         const Nullifier& nf, const Context& ctx_iss,
-                                         const Context& ctx_red,
-                                         const ChallengeDigest& challenge_digest,
-                                         const NfKey& nf_key, const Opening& r,
-                                         const uov::Preimage& s,
-                                         const ProveSeed<UnboundRedeemRelation>& rho) {
-    const auto witness = encode_unbound_redeem_witness(nf_key, ctx_iss, ctx_red, r, s, i);
-    voleith_prove<UnboundRedeemRelation>(pf_red, witness,
-                                         {anchors, nf, ctx_iss, ctx_red, challenge_digest}, rho);
+inline void prove_unbound_redeem_request(
+    UnboundRedeemProof pf_red, AnchorSpan anchors, size_t i, const Nullifier& nf,
+    const Context& ctx_iss, const Context& ctx_red, const ChallengeDigest& challenge_digest,
+    const HistogramShare& share, const ReportTag& tag, const NfKey& nf_key, const Opening& r,
+    const uov::Preimage& s, const Report& k, const ProveSeed<UnboundRedeemRelation>& rho) {
+    const auto witness = encode_unbound_redeem_witness(nf_key, ctx_iss, ctx_red, r, s, k, i);
+    voleith_prove<UnboundRedeemRelation>(
+        pf_red, witness, {anchors, nf, ctx_iss, ctx_red, challenge_digest, share, tag}, rho);
 }
 
 // Verify the redemption proof.
 inline bool verify_unbound_redeem_proof(ConstUnboundRedeemProof pf_red, AnchorSpan anchors,
                                         const Nullifier& nf, const Context& ctx_iss,
                                         const Context& ctx_red,
-                                        const ChallengeDigest& challenge_digest) {
-    return voleith_verify<UnboundRedeemRelation>(pf_red,
-                                                 {anchors, nf, ctx_iss, ctx_red, challenge_digest});
+                                        const ChallengeDigest& challenge_digest,
+                                        const HistogramShare& share, const ReportTag& tag) {
+    return voleith_verify<UnboundRedeemRelation>(
+        pf_red, {anchors, nf, ctx_iss, ctx_red, challenge_digest, share, tag});
 }
 
 } // namespace vole_mole::ihat::detail

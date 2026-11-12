@@ -9,6 +9,7 @@
 #include "ihat/commit.hpp"
 #include "ihat/issue.hpp"
 #include "ihat/redeem.hpp"
+#include "ihat/report.hpp"
 #include "ihat/seeded.hpp"
 #include "ihat/token.hpp"
 #include "ihat/unbound_issue.hpp"
@@ -98,19 +99,56 @@ UnboundIssueRandomness expand_unbound_issue_seed(const Seed& seed) {
     return rand;
 }
 
+template <typename Relation> struct RedeemRandomness {
+    Report k;
+    ProveSeed<Relation> rho;
+};
+
 // Expand `seed` into the redeem request randomness for the given relation.
 template <typename Relation>
-ProveSeed<Relation> expand_redeem_seed(const Seed& seed, std::span<const uint8_t> dst) {
+RedeemRandomness<Relation> expand_redeem_seed(const Seed& seed, std::span<const uint8_t> dst) {
     static_assert(Relation::params::secpar_v == faest::secpar::s128);
     faest::hash_state xof;
     xof.init(faest::secpar::s128);
     xof.update(dst);
     xof.update(seed);
 
-    ProveSeed<Relation> rho;
+    RedeemRandomness<Relation> rand;
     Keccak_HashFinal(&xof.ctx, nullptr);
-    Keccak_HashSqueeze(&xof.ctx, rho.data(), 8 * rho.size());
-    return rho;
+    Keccak_HashSqueeze(&xof.ctx, rand.k.data(), 8 * rand.k.size());
+    Keccak_HashSqueeze(&xof.ctx, rand.rho.data(), 8 * rand.rho.size());
+    return rand;
+}
+
+// Redemption request layout (for both standard and unbound tokens): nf || A || tag || proof.
+constexpr size_t REQ_OFF_SHARE = NF_BYTES;
+constexpr size_t REQ_OFF_TAG = REQ_OFF_SHARE + HISTOGRAM_SHARE_BYTES;
+constexpr size_t REQ_OFF_PROOF = REQ_OFF_TAG + REPORT_TAG_BYTES;
+static_assert(REQ_OFF_PROOF + REDEEM_PROOF_BYTES == REDEEM_REQUEST_BYTES);
+static_assert(REQ_OFF_PROOF + UNBOUND_REDEEM_PROOF_BYTES == UNBOUND_REDEEM_REQUEST_BYTES);
+
+// The public part of a redemption: the nullifier, the Moderator's share and the report tag.
+template <size_t N>
+void encode_redemption(std::span<uint8_t, N> request, const Redemption& redemption) {
+    std::ranges::copy(redemption.nf, request.begin());
+    std::ranges::copy(detail::encode_share(redemption.share), request.begin() + REQ_OFF_SHARE);
+    std::ranges::copy(redemption.tag, request.begin() + REQ_OFF_TAG);
+}
+
+template <size_t N> Redemption decode_redemption(std::span<const uint8_t, N> request) {
+    Redemption redemption;
+    std::ranges::copy(request.template first<NF_BYTES>(), redemption.nf.begin());
+    redemption.share =
+        detail::decode_share(request.template subspan<REQ_OFF_SHARE, HISTOGRAM_SHARE_BYTES>());
+    std::ranges::copy(request.template subspan<REQ_OFF_TAG, REPORT_TAG_BYTES>(),
+                      redemption.tag.begin());
+    return redemption;
+}
+
+// Compute the public part of the redemption for report k and the Anchor at index i.
+Redemption make_redemption(const Nullifier& nf, const Report& k, size_t i) {
+    const OpenedReport opened = open_report(k);
+    return {nf, detail::moderator_share(opened.share, i), opened.tag};
 }
 
 // Find the index of the Anchor whose public map takes s to t, in constant time so that this doesn't
@@ -234,10 +272,10 @@ std::optional<Token> PendingToken::finalize_issue(const uov::PublicKey& pk,
     return Token(std::make_unique<Token::Impl>(Token::Impl{impl->nf, impl->r, response}));
 }
 
-RedeemRequest detail::redeem_request_with_seed(Token&& token, const AnchorSet& anchors,
-                                               const Context& ctx_iss, const Context& ctx_red,
-                                               const ChallengeDigest& challenge_digest,
-                                               const Seed& seed) {
+RedeemRequestResult detail::redeem_request_with_seed(Token&& token, const AnchorSet& anchors,
+                                                     const Context& ctx_iss, const Context& ctx_red,
+                                                     const ChallengeDigest& challenge_digest,
+                                                     const Seed& seed) {
     const Nullifier& nf = TokenAccess::nf(token); // throws if the token was moved from
     const Opening& r = TokenAccess::r(token);
     const uov::Preimage& s = TokenAccess::s(token);
@@ -247,17 +285,21 @@ RedeemRequest detail::redeem_request_with_seed(Token&& token, const AnchorSet& a
     // The arguments are valid, so consume the token.
     const Token consumed = std::move(token);
 
-    RedeemRequest request;
-    std::ranges::copy(nf, std::span(request).first<NF_BYTES>().begin());
-    prove_redeem_request(std::span(request).last<REDEEM_PROOF_BYTES>(), anchors.keys(), i, nf,
-                         ctx_iss, ctx_red, challenge_digest, r, s,
-                         expand_redeem_seed<RedeemRelation>(seed, IHAT_REDEEM_SEED_DST));
-    return request;
+    const auto rand = expand_redeem_seed<RedeemRelation>(seed, IHAT_REDEEM_SEED_DST);
+    const Redemption redemption = make_redemption(nf, rand.k, i);
+
+    RedeemRequestResult res;
+    res.report = rand.k;
+    encode_redemption(std::span(res.request), redemption);
+    prove_redeem_request(std::span(res.request).last<REDEEM_PROOF_BYTES>(), anchors.keys(), i, nf,
+                         ctx_iss, ctx_red, challenge_digest, redemption.share, redemption.tag, r, s,
+                         rand.k, rand.rho);
+    return res;
 }
 
-RedeemRequest Token::redeem_request(const AnchorSet& anchors, const Context& ctx_iss,
-                                    const Context& ctx_red,
-                                    const ChallengeDigest& challenge_digest) && {
+RedeemRequestResult Token::redeem_request(const AnchorSet& anchors, const Context& ctx_iss,
+                                          const Context& ctx_red,
+                                          const ChallengeDigest& challenge_digest) && {
     if (!impl_) {
         throw std::logic_error("VOLE-IHAT: token was moved from");
     }
@@ -310,17 +352,21 @@ const Nullifier& detail::TokenAccess::nf(const Token& token) { return checked(to
 const Opening& detail::TokenAccess::r(const Token& token) { return checked(token).impl_->r; }
 const uov::Preimage& detail::TokenAccess::s(const Token& token) { return checked(token).impl_->s; }
 
-std::optional<Nullifier> finalize_redeem(const AnchorSet& anchors, const RedeemRequest& request,
-                                         const Context& ctx_iss, const Context& ctx_red,
-                                         const ChallengeDigest& challenge_digest) {
-    Nullifier nf;
-    std::ranges::copy(std::span(request).first<NF_BYTES>(), nf.begin());
+std::optional<Redemption> finalize_redeem(const AnchorSet& anchors, const RedeemRequest& request,
+                                          const Context& ctx_iss, const Context& ctx_red,
+                                          const ChallengeDigest& challenge_digest) {
+    const Redemption redemption = decode_redemption(std::span(request));
 
     if (!detail::verify_redeem_proof(std::span(request).last<REDEEM_PROOF_BYTES>(), anchors.keys(),
-                                     nf, ctx_iss, ctx_red, challenge_digest)) {
+                                     redemption.nf, ctx_iss, ctx_red, challenge_digest,
+                                     redemption.share, redemption.tag)) {
         return std::nullopt;
     }
-    return nf;
+    return redemption;
+}
+
+OpenedReport open_report(const Report& report) {
+    return detail::open_report_output(detail::expand_report(report));
 }
 
 Commitment detail::unbound_commit(const NfKey& nf_key, const Context& ctx_iss, const Opening& r) {
@@ -405,7 +451,7 @@ std::optional<UnboundToken> PendingUnboundToken::finalize_issue(const uov::Publi
         std::make_unique<UnboundToken::Impl>(UnboundToken::Impl{impl->nf_key, impl->r, response}));
 }
 
-UnboundRedeemRequest detail::unbound_redeem_request_with_seed(
+UnboundRedeemRequestResult detail::unbound_redeem_request_with_seed(
     const UnboundToken& token, const AnchorSet& anchors, const Context& ctx_iss,
     const Context& ctx_red, const ChallengeDigest& challenge_digest, const Seed& seed) {
     const NfKey& nf_key = TokenAccess::nf_key(token); // throws if the token was moved from
@@ -415,18 +461,22 @@ UnboundRedeemRequest detail::unbound_redeem_request_with_seed(
     const size_t i = find_issuer(anchors, unbound_commit(nf_key, ctx_iss, r), s);
     const Nullifier nf = derive(nf_key, ctx_red);
 
-    UnboundRedeemRequest request;
-    std::ranges::copy(nf, std::span(request).first<NF_BYTES>().begin());
-    prove_unbound_redeem_request(
-        std::span(request).last<UNBOUND_REDEEM_PROOF_BYTES>(), anchors.keys(), i, nf, ctx_iss,
-        ctx_red, challenge_digest, nf_key, r, s,
-        expand_redeem_seed<UnboundRedeemRelation>(seed, UNBOUND_IHAT_REDEEM_SEED_DST));
-    return request;
+    const auto rand = expand_redeem_seed<UnboundRedeemRelation>(seed, UNBOUND_IHAT_REDEEM_SEED_DST);
+    const Redemption redemption = make_redemption(nf, rand.k, i);
+
+    UnboundRedeemRequestResult res;
+    res.report = rand.k;
+    encode_redemption(std::span(res.request), redemption);
+    prove_unbound_redeem_request(std::span(res.request).last<UNBOUND_REDEEM_PROOF_BYTES>(),
+                                 anchors.keys(), i, nf, ctx_iss, ctx_red, challenge_digest,
+                                 redemption.share, redemption.tag, nf_key, r, s, rand.k, rand.rho);
+    return res;
 }
 
-UnboundRedeemRequest UnboundToken::redeem_request(const AnchorSet& anchors, const Context& ctx_iss,
-                                                  const Context& ctx_red,
-                                                  const ChallengeDigest& challenge_digest) const {
+UnboundRedeemRequestResult
+UnboundToken::redeem_request(const AnchorSet& anchors, const Context& ctx_iss,
+                             const Context& ctx_red,
+                             const ChallengeDigest& challenge_digest) const {
     if (!impl_) {
         throw std::logic_error("VOLE-IHAT: token was moved from");
     }
@@ -484,19 +534,18 @@ const Opening& detail::TokenAccess::r(const PendingUnboundToken& pending_token) 
     return checked(pending_token).impl_->r;
 }
 
-std::optional<Nullifier> unbound_finalize_redeem(const AnchorSet& anchors,
-                                                 const UnboundRedeemRequest& request,
-                                                 const Context& ctx_iss, const Context& ctx_red,
-                                                 const ChallengeDigest& challenge_digest) {
-    Nullifier nf;
-    std::ranges::copy(std::span(request).first<NF_BYTES>(), nf.begin());
+std::optional<Redemption> unbound_finalize_redeem(const AnchorSet& anchors,
+                                                  const UnboundRedeemRequest& request,
+                                                  const Context& ctx_iss, const Context& ctx_red,
+                                                  const ChallengeDigest& challenge_digest) {
+    const Redemption redemption = decode_redemption(std::span(request));
 
     if (!detail::verify_unbound_redeem_proof(std::span(request).last<UNBOUND_REDEEM_PROOF_BYTES>(),
-                                             anchors.keys(), nf, ctx_iss, ctx_red,
-                                             challenge_digest)) {
+                                             anchors.keys(), redemption.nf, ctx_iss, ctx_red,
+                                             challenge_digest, redemption.share, redemption.tag)) {
         return std::nullopt;
     }
-    return nf;
+    return redemption;
 }
 
 } // namespace vole_mole::ihat
