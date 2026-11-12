@@ -27,7 +27,7 @@ bijection of `GF(256)`. So `s ↦ √μ·s` maps the preimages of `t` onto the p
 | B3 | **Oracle separation.** There is an oracle world with a preimage-sampleable function for which OMPR holds unconditionally (advantage `≤ 2(4W+n)²·2^{−360}`) and OMPR^free, hence CT-UF^× for every `Com`, is broken with 2 free calls. So **no relativizing reduction** (black-box in `(P, D)`) proves CT-UF^× or OMPR^free from OMPR, with any loss | proved; counting core Lean (`combiner_count`) | §3.3 |
 | B4 | OMPR^free ⇐ OMPR **for adversaries whose free calls are fixed before the targets**: by rewinding, with advantage `ε/3`, time `×8(Q_f+1)/ε`. `Q_f = 0` is A-OMPI | proved | §3.4 |
 | B5 | What signatures on non-`Com` targets give for UOV: the class symmetry (B1), 255 preimages per target, and explicit restrictions of `P` to spans. No further combiner is known; the isotropic-pair one costs `≳ 2^{345}` calls | heuristic | §3.5 |
-| A1 | `Adv^{ompr}(n, q) ≤ Adv^{ompr⊕τ}(n, q)`: the easy direction is tight | proved | §4.1 |
+| A1 | `Adv^{ompr}(n, q) ≤ Adv^{ompr⊕τ}(n, q)`: the easy direction is tight | proved, Lean (`advOMPR_le_shift`, `advOMPRShift_mono`) | §4.1 |
 | A2 | The shift cannot be absorbed into the key. `P ⊕ c` is not a UOV map. Its homogenization is a degenerate `(120, 45)` map whose preimage problem is again a shift problem, with one fixed `c` | proved | §4.2 |
 | A3 | Turning a preimage of `y` into a preimage of `y ⊕ Δ`, for uniform `Δ`, **is** the UOV problem (tight) | proved | §4.3 |
 | A4 | **Rewinding does not help in general.** In the generic model, every reduction OMPR⊕τ ⇒ OMPR that is black-box in the adversary and in `(P, D)`, with unlimited rewinding, any embedding and any number of targets and calls, succeeds with probability `≤ 2·τ^{−(q+1)} + V⁴·2^{−360}` against one explicit adversary (`τ ≥ 7`, `q ≥ 1`). Guessing achieves `τ^{−(q+1)}` | proved; inequality and counting Lean (`rewind_supermartingale`, `lottery_count`) | §4.4 |
@@ -331,6 +331,10 @@ Shorter lists are allowed in the larger game. ∎
 
 So OMPR⊕τ ⇒ OMPR without loss, and the only question is the converse.
 
+*Lean* (`lean/VoleMole/Assumptions/Shift.lean`): `advOMPR_le_shift` (`τ ≥ 1`, adversary
+`shiftZero B`, the runs correspond exactly) and `advOMPRShift_mono`. The guessing bound of [UA]
+Prop. 8(a) is `advOMPRShift_le_guess`.
+
 ### 4.2 The shift cannot be absorbed into the key
 
 **Proposition A2 [proved].** Let `c ∈ F^M`, `c ≠ 0`, and `P_c(s) = P(s) ⊕ c`.
@@ -547,10 +551,11 @@ stronger OMPR⊕17. The protocol change [UA] §8 C2 removes the question.
 | `c + 1 + Kq ≤ c + w ⟹ Kq + 1 ≤ w` (A4, step 2) | `lottery_count` | `Protocols/UOVAssumptions.lean` |
 | `4n(τ − 1) ≤ τ^n` for `τ ≥ 7`, `n ≥ 2` | `four_mul_le_pow` | `Protocols/UOVAssumptions.lean` |
 | `((τ − 1 + θ)/τ)^{q+1} ≤ θ^q`, `θ = τ^{q+1}/2` (A4, step 4) | `rewind_supermartingale` | `Protocols/UOVAssumptions.lean` |
+| A1, on the games `advOMPR`, `advOMPRShift`; and [UA] P8(a), `Adv^{ompr⊕τ} ≤ τ^{q+1}·Adv^{ompr}` | `advOMPR_le_shift`, `advOMPRShift_mono`, `advOMPRShift_le_guess` | `Assumptions/Shift.lean` |
 
-On paper only: the games, the lazy-sampling arguments, the bad-event bounds, Ville's inequality,
-the Chernoff steps of B4 and A5, and the ideal-permutation bookkeeping of B2. The goodness part of
-Lemma S (item 3) is on paper; it is not used by B1.
+On paper only (except A1 and the guessing bound): the games, the lazy-sampling arguments, the
+bad-event bounds, Ville's inequality, the Chernoff steps of B4 and A5, and the ideal-permutation
+bookkeeping of B2. The goodness part of Lemma S (item 3) is on paper; it is not used by B1.
 
 ## 7. Open
 

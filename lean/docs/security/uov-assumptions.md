@@ -535,6 +535,34 @@ With `pomfrit.md` U1 and U2:
     Adv^{ompr}(n, ℓ)  ≤  Adv^{omuf}_{PomFRIT}  ≤  Adv^{ompr⊕17}(…) + ε_ext + …   (U2)
                                                ≤  Adv^{ompr}(…) + ε_ext + (Q₃+ℓ+1)·2^{−71} + …   (U1).
 
+**Lean** (`lean/VoleMole/Assumptions/Blind.lean`, `ompr_le_blind`). The forger and its proof
+are mechanized for an abstract client, in the one-more game of U1 (`OneMore.omuf`, programmed
+targets `H_T(x) + r`). The client has coins, a first phase `start` (label `x`, blinding `r`, state,
+over its own oracle), and a finishing phase `post` (over its oracle and `H_T`, no Issuer) that
+returns one acceptance flag. The forger `blindAdv cl n B` answers `B`'s `k`-th request with
+session `k`'s blinded request and forwards `B`'s preimage queries to the Issuer. If the sessions'
+labels are pairwise distinct (`Distinct`, on the supports), then
+
+    Adv^{ompr}(B; n, ℓ) ≤ Pr[Forges] + Pr[CompFail].
+
+`CompFail` is a completeness failure: the forger's `ℓ+1` claims are preimages of their programmed
+targets, on distinct labels, within `ℓ` Issuer queries, but `post` rejects. The proof uses
+OneMore's perfect programming (`real_eqd_comb`): against the challenger, `B` receives
+`(t − r) + r = t`, as in `omExp` (`bcomb_eqd`). The client's runs are integrated out, because they
+read only the client's oracle, which is separate from `B`'s. Then `B`'s win is the forger's
+(`win_mid`). The finishing phase keeps the programmed targets and the Issuer count (`post_pres`).
+The audit instantiates this at PomFRIT's trapdoor with a client whose `CompFail` term is 0
+(`Audit/OMPRShift.lean`).
+
+*Not mechanized: the PomFRIT instance.* It needs three missing pieces:
+- the Lean `issue_request`/`finalize` as oracle computations over the game's oracles;
+- their completeness in this lazy random-oracle model, which bounds `Pr[CompFail]` by
+  `(ℓ+1)·2^{−113}` (`ZK/CompleteRO.lean`, `pomfritRedeem_complete_rom`, proves it in the
+  finite-table model only);
+- a PomFRIT `Forger` with coins (`ROM/OneMorePomfrit.lean`'s `Forger` has none).
+
+Step 1's uniformity is the programming step above; the distinct messages are `Distinct`.
+
 **PomFRIT's unforgeability cannot rest on anything weaker than OMPR**, in particular not on
 EUF-CMA. The Issuer *is* a chosen-target preimage oracle, which blindness requires. This mirrors
 Chaum blind signatures and the one-more-RSA problem [BNPS03].
@@ -725,6 +753,19 @@ imported by `Privacy/PqovDelta.lean`.
 - For `q = 0` the loss is just `τ`, so OMPR⊕τ(N, 0) ≤ `τN·Adv^{uov}`. For τ = 17, the loss is
   `≥ 2^{4(q+1)}` (Lean `guess_loss`).
 
+**Lean** (`lean/VoleMole/Assumptions/Shift.lean`, `advOMPRShift_le_guess`), for `τ ≥ 1`:
+`Adv^{ompr⊕τ}(B; n, ℓ) ≤ τ^{ℓ+1}·Adv^{ompr}(R; n, ℓ)`. `R = guessRed n τ B` draws a uniform guess
+vector `g : [n] → [τ]` up front. It answers request `k` with shift list `δs` by `t − δs[g k]` for a
+fresh challenge `t`, at the fresh label `(x, k)`, so the guess is uniform in `[τ]`, not in
+`[m_k]`. `R` is OneMore's `red addHint` of an adapter. The proof has three parts:
+- perfect programming (`omuf_good_le`);
+- an exact simulation of the adapter by the shift game (`adReal_eqd`, `recCh_eqd`);
+- with the guesses drawn after the run, a count: a winning run's at most `ℓ+1` claimed requests
+  are hit with probability `≥ τ^{−(ℓ+1)}` (`guess_count`, `pr_guess_ge`).
+
+The converse direction, A1 of `uov-open-reductions.md` (`advOMPR_le_shift`, tight), is in the same
+file.
+
 **(b) Simple-embedding reductions lose `τ^{q+1}`.**
 - Call `R` *simple-embedding* if it runs `A` once without rewinding, forwards each of `A`'s preimage
   queries to its own oracle, and answers request `k` with `h_k = t_{j(k)} ⊕ c_k`, where `c_k` is
@@ -892,8 +933,9 @@ hash-and-sign with retry [KX24]).
   samples? First analysis: `uov-open-structure.md` Part B. Reliable (certifying) badness tests
   give key recovery; no cheaper test is known; weak two-sided distinguishers remain open.
 - **OMPR ⇒ OMPR⊕17** (§6). Partly answered in `uov-open-reductions.md` §4: OMPR⊕τ ⇒ OMPR is
-  tight; the converse has no relativizing proof with loss below `τ^{q+1}/2`, even with rewinding;
-  the shift cannot be absorbed into the key. A proof that uses the algebra of `P`, and a
+  tight (Lean `advOMPR_le_shift`), and the `τ^{q+1}` guessing bound is Lean
+  `advOMPRShift_le_guess`; the converse has no relativizing proof with loss below `τ^{q+1}/2`,
+  even with rewinding; the shift cannot be absorbed into the key. A proof that uses the algebra of `P`, and a
   separation, both remain open.
 - **CT-UF with arbitrary targets** versus OMPR. Answered in `uov-open-reductions.md` §2–§3: CT-UF
   as defined is false (scaling); up to scalars it *is* the "free non-challenge calls" variant,
@@ -971,7 +1013,24 @@ The protocol terms:
   `pomTrap KG pre` by definition (`pomfrit_U1_ompr`, `pomfrit_U2_omprShift`), and U1's is at most
   Def. 3.1's advantage of `popAdv` (`advOMPR_le_ompr31`; instantiated in `Audit/Nonvacuous.lean`).
 
-Not mechanized: the reductions between the games (T1–T6, P8), OMPR^free, and items 4 and 5.
+The reductions between the games (`lean/VoleMole/Assumptions/Shift.lean`, `Blind.lean`; audits in
+`Audit/OMPRShift.lean` at PomFRIT's trapdoor, `τ = 17`):
+
+| Statement | Lean |
+|---|---|
+| A1 (`uov-open-reductions.md` §4.1): `Adv^{ompr}(B) ≤ Adv^{ompr⊕τ}(shiftZero B)`, `τ ≥ 1`, tight; `Adv^{ompr⊕τ}` grows with `τ` | `advOMPR_le_shift`, `advOMPRShift_mono` |
+| P8(a): `Adv^{ompr⊕τ}(B) ≤ τ^{ℓ+1}·Adv^{ompr}(guessRed n τ B)` | `advOMPRShift_le_guess`, `guess_count`, `pr_guess_ge`, `adReal_eqd`, `recCh_eqd` |
+| T6, generic core (§5.6): `Adv^{ompr}(B) ≤ Pr[Forges] + Pr[CompFail]` for the blinding forger of any client with distinct session labels | `ompr_le_blind`, `blindAdv`, `Client`, `bcomb_eqd`, `win_mid`, `post_pres` |
+| A simulation along a projection | `simulateQ_proj_eqd` |
+
+Not mechanized:
+- T1–T5 and P8(b)–(d);
+- the PomFRIT instance of T6, which needs the client as oracle computations and its completeness
+  in the lazy random-oracle model (§5.6);
+- the converse of `advOMPR_le_ompr31`. In Def. 3.1 the adversary's coins may depend on the
+  targets, and an on-demand adversary (`omExp`) draws its coins before it sees them. The converse
+  holds for coins-first adversaries, but is not stated;
+- OMPR^free, and items 4 and 5.
 
 pqov's `derive_preimage` and its keys (§1–2): `Spec/PqovSigner.lean` (`signer_correct`,
 `signer_fail`, 255 attempts), `Spec/PqovKey.lean` (`sysCoef_eq_pqovS`, `qmap_vinVec_eq`,
