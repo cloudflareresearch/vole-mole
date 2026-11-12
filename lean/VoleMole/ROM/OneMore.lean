@@ -14,7 +14,7 @@ variable {DR : Type} (AR : DR → Type) (X Hn G S : Type)
 
 abbrev specR : OracleSpec DR := OracleSpec.ofFn AR
 
-abbrev AnsA : DR ⊕ ((X × Hn) ⊕ G) → Type := Sum.elim AR (Sum.elim (fun _ => G) fun _ => S)
+abbrev AnsA : DR ⊕ ((X × Hn) ⊕ G) → Type := Sum.elim AR (Sum.elim (fun _ => G × Hn) fun _ => S)
 
 abbrev specA : OracleSpec (DR ⊕ ((X × Hn) ⊕ G)) := OracleSpec.ofFn (AnsA AR X Hn G S)
 
@@ -55,26 +55,26 @@ variable {DR : Type} [DecidableEq DR] {AR : DR → Type} [∀ d, SampleableType 
 
 /-- The real target oracle and the other oracles, on the state `(H_T table, challenger state)`. -/
 def realImpl (φ : Hn → G ≃ G) (pre : G → S) :
-    QueryImpl (specA AR X Hn G S) (StateT ((X → Option G) × Ch AR X Hn G) ProbComp)
+    QueryImpl (specA AR X Hn G S) (StateT ((X → Option (G × Hn)) × Ch AR X Hn G) ProbComp)
   | .inl d => StateT.mk fun s => (fun r => (r.1, (s.1, r.2))) <$> roStep d s.2
   | .inr (.inl (x, h)) => StateT.mk fun s => pure <| match s.1 x with
       | some a => (a, s)
       | none => match s.2.rest with
-        | u :: r => (u, (Function.update s.1 x (some u),
+        | u :: r => ((u, h), (Function.update s.1 x (some (u, h)),
             { s.2 with rest := r, tg := Function.update s.2.tg x (some (φ h u, h)) }))
-        | [] => ((0 : G), (Function.update s.1 x (some 0), s.2))
+        | [] => (((0 : G), h), (Function.update s.1 x (some (0, h)), s.2))
   | .inr (.inr t) => StateT.mk fun s => pure (pre t, (s.1, { s.2 with iq := s.2.iq + 1 }))
 
 /-- The reduction's handler: world and issuer forwarded, the target oracle programmed. -/
 def redImpl (φ : Hn → G ≃ G) :
-    QueryImpl (specA AR X Hn G S) (StateT (X → Option G) (OracleComp (specB AR X Hn G S)))
+    QueryImpl (specA AR X Hn G S) (StateT (X → Option (G × Hn)) (OracleComp (specB AR X Hn G S)))
   | .inl d => StateT.mk fun s => (fun a => (a, s)) <$>
       (liftM ((specB AR X Hn G S).query (.inl d)) : OracleComp (specB AR X Hn G S) (AR d))
   | .inr (.inl (x, h)) => StateT.mk fun s => match s x with
       | some a => pure (a, s)
       | none => (fun r : Option G => match r with
-          | some t => ((φ h).symm t, Function.update s x (some ((φ h).symm t)))
-          | none => ((0 : G), Function.update s x (some 0))) <$>
+          | some t => (((φ h).symm t, h), Function.update s x (some ((φ h).symm t, h)))
+          | none => (((0 : G), h), Function.update s x (some (0, h)))) <$>
         (liftM ((specB AR X Hn G S).query (.inr (.inl (x, h)))) :
           OracleComp (specB AR X Hn G S) (Option G))
   | .inr (.inr t) => StateT.mk fun s => (fun a => (a, s)) <$>
@@ -82,12 +82,12 @@ def redImpl (φ : Hn → G ≃ G) :
 
 /-- The reduction run against the challenger, as one handler. -/
 def combImpl (φ : Hn → G ≃ G) (pre : G → S) :
-    QueryImpl (specA AR X Hn G S) (StateT ((X → Option G) × Ch AR X Hn G) ProbComp) :=
+    QueryImpl (specA AR X Hn G S) (StateT ((X → Option (G × Hn)) × Ch AR X Hn G) ProbComp) :=
   fun q => StateT.mk fun s => (fun r => (r.1.1, (r.1.2, r.2))) <$>
     (simulateQ (chImpl pre) ((redImpl φ q).run s.1)).run s.2
 
 theorem collapse (φ : Hn → G ≃ G) (pre : G → S) {α : Type}
-    (oa : OracleComp (specA AR X Hn G S) α) (s : X → Option G) (c : Ch AR X Hn G) :
+    (oa : OracleComp (specA AR X Hn G S) α) (s : X → Option (G × Hn)) (c : Ch AR X Hn G) :
     (simulateQ (chImpl pre) ((simulateQ (redImpl φ) oa).run s)).run c =
       (fun r => ((r.1, r.2.1), r.2.2)) <$> (simulateQ (combImpl φ pre) oa).run (s, c) := by
   refine simulateQ_StateT_StateT_compose _ _ _ (fun q s c => ?_) oa s c
@@ -102,45 +102,45 @@ section Steps
 variable {DR : Type} [DecidableEq DR] {AR : DR → Type} [∀ d, SampleableType (AR d)]
   {X : Type} [DecidableEq X] {Hn G S : Type} [AddCommGroup G] (φ : Hn → G ≃ G) (pre : G → S)
 
-lemma comb_inl (d : DR) (p : (X → Option G) × Ch AR X Hn G) :
+lemma comb_inl (d : DR) (p : (X → Option (G × Hn)) × Ch AR X Hn G) :
     (combImpl (S := S) φ pre (.inl d)).run p = (realImpl φ pre (.inl d)).run p := by
   simp [combImpl, realImpl, redImpl]
   erw [simulateQ_spec_query]
   rfl
 
-lemma comb_iss (t : G) (p : (X → Option G) × Ch AR X Hn G) :
+lemma comb_iss (t : G) (p : (X → Option (G × Hn)) × Ch AR X Hn G) :
     (combImpl (S := S) φ pre (.inr (.inr t))).run p = (realImpl φ pre (.inr (.inr t))).run p := by
   simp [combImpl, realImpl, redImpl]
   erw [simulateQ_spec_query]
   simp [chImpl]
 
-lemma comb_cached (x : X) (h : Hn) (s : X → Option G) (a : G) (hx : s x = some a)
+lemma comb_cached (x : X) (h : Hn) (s : X → Option (G × Hn)) (a : G × Hn) (hx : s x = some a)
     (c : Ch AR X Hn G) :
     (combImpl (S := S) φ pre (.inr (.inl (x, h)))).run (s, c) = pure (a, (s, c)) := by
   simp [combImpl, redImpl, hx]
 
-lemma real_cached (x : X) (h : Hn) (s : X → Option G) (a : G) (hx : s x = some a)
+lemma real_cached (x : X) (h : Hn) (s : X → Option (G × Hn)) (a : G × Hn) (hx : s x = some a)
     (c : Ch AR X Hn G) :
     (realImpl (S := S) φ pre (.inr (.inl (x, h)))).run (s, c) = pure (a, (s, c)) := by
   simp [realImpl, hx]
 
-lemma comb_fresh_cons (x : X) (h : Hn) (s : X → Option G) (hx : s x = none)
+lemma comb_fresh_cons (x : X) (h : Hn) (s : X → Option (G × Hn)) (hx : s x = none)
     (u : G) (r : List G) (c : Ch AR X Hn G) :
     (combImpl (S := S) φ pre (.inr (.inl (x, h)))).run (s, { c with rest := u :: r }) =
-      pure ((φ h).symm u, (Function.update s x (some ((φ h).symm u)),
+      pure (((φ h).symm u, h), (Function.update s x (some ((φ h).symm u, h)),
         { c with rest := r, tg := Function.update c.tg x (some (u, h)) })) := by
   simp [combImpl, redImpl, hx]
   erw [simulateQ_spec_query]
   simp [chImpl]
 
-lemma real_fresh_cons (x : X) (h : Hn) (s : X → Option G) (hx : s x = none)
+lemma real_fresh_cons (x : X) (h : Hn) (s : X → Option (G × Hn)) (hx : s x = none)
     (u : G) (r : List G) (c : Ch AR X Hn G) :
     (realImpl (S := S) φ pre (.inr (.inl (x, h)))).run (s, { c with rest := u :: r }) =
-      pure (u, (Function.update s x (some u),
+      pure ((u, h), (Function.update s x (some (u, h)),
         { c with rest := r, tg := Function.update c.tg x (some (φ h u, h)) })) := by
   simp [realImpl, hx]
 
-lemma comb_fresh_nil (x : X) (h : Hn) (s : X → Option G) (hx : s x = none)
+lemma comb_fresh_nil (x : X) (h : Hn) (s : X → Option (G × Hn)) (hx : s x = none)
     (c : Ch AR X Hn G) :
     (combImpl (S := S) φ pre (.inr (.inl (x, h)))).run (s, { c with rest := [] }) =
       (realImpl (S := S) φ pre (.inr (.inl (x, h)))).run (s, { c with rest := [] }) := by
@@ -185,7 +185,7 @@ variable {DR : Type} [DecidableEq DR] {AR : DR → Type} [∀ d, SampleableType 
 (answer `u`, target `φ h u`) and the reduction against the challenger (target `t`, answer
 `(φ h)⁻¹ t`) have the same joint distribution of output and state. -/
 theorem real_eqd_comb {α : Type} (oa : OracleComp (specA AR X Hn G S) α) :
-    ∀ (s : X → Option G) (c : Ch AR X Hn G) (m : ℕ),
+    ∀ (s : X → Option (G × Hn)) (c : Ch AR X Hn G) (m : ℕ),
       (do let L ← unifList G m; (simulateQ (realImpl φ pre) oa).run (s, { c with rest := L })) =ᵈ
         (do let L ← unifList G m; (simulateQ (combImpl φ pre) oa).run (s, { c with rest := L })) := by
   induction oa using OracleComp.inductionOn with
@@ -207,11 +207,11 @@ theorem real_eqd_comb {α : Type} (oa : OracleComp (specA AR X Hn G S) α) :
           simp only [unifList, pure_bind]
           rw [comb_fresh_nil φ pre x h s hx]
           simp only [realImpl, StateT.run_mk, hx, pure_bind]
-          simpa only [unifList, pure_bind] using ih (0 : G) (Function.update s x (some 0)) c 0
+          simpa only [unifList, pure_bind] using ih ((0 : G), h) (Function.update s x (some (0, h))) c 0
         | succ m =>
           simp only [unifList, bind_assoc, pure_bind]
           simp only [comb_fresh_cons φ pre x h s hx, real_fresh_cons φ pre x h s hx]
-          refine (EvalDistEq.bind_right ($ᵗ G) fun u => ih u _
+          refine (EvalDistEq.bind_right ($ᵗ G) fun u => ih (u, h) _
             { c with tg := Function.update c.tg x (some (φ h u, h)) } m).trans ?_
           refine EvalDistEq.trans ?_
             ((SampleableType.map_uniformSample_evalDistEq_of_bijective (φ h).bijective).bind_left _)
@@ -238,7 +238,7 @@ variable (KG : ProbComp (PK × K)) (pre : K → G → S) (n : ℕ)
 /-- **The one-more forgery game.** -/
 def omuf (φ : Hn → G ≃ G)
     (A : PK → ProbComp (OracleComp (specA AR X Hn G S) (List (X × S) × Bool))) :
-    ProbComp (PK × (List (X × S) × Bool) × (X → Option G) × Ch AR X Hn G) := do
+    ProbComp (PK × (List (X × S) × Bool) × (X → Option (G × Hn)) × Ch AR X Hn G) := do
   let kp ← KG
   let a ← A kp.1
   let L ← unifList G n
@@ -327,7 +327,7 @@ variable {DR : Type} [DecidableEq DR] {AR : DR → Type} [∀ d, SampleableType 
 
 /-- The claim at position `i` of the forger's output is accepted but not good. -/
 def BadAt (good : PK → S → Option (G × Hn) → Prop) (i : ℕ)
-    (r : PK × (List (X × S) × Bool) × (X → Option G) × Ch AR X Hn G) : Prop :=
+    (r : PK × (List (X × S) × Bool) × (X → Option (G × Hn)) × Ch AR X Hn G) : Prop :=
   r.2.1.2 = true ∧ ∃ p, r.2.1.1[i]? = some p ∧ ¬good r.1 p.2 (r.2.2.2.tg p.1)
 
 /-- **The generic one-more reduction**: a forger's win probability is at most the advantage of
@@ -378,8 +378,8 @@ variable {DR : Type} [DecidableEq DR] {AR : DR → Type} [∀ d, SampleableType 
   {X : Type} [DecidableEq X] {Hn G S : Type} [AddCommGroup G]
 
 /-- In the real game a labelled target is `φ h` of the answer, `h` the hint of the first query. -/
-def TgInv (φ : Hn → G ≃ G) (p : (X → Option G) × Ch AR X Hn G) : Prop :=
-  ∀ x t h, p.2.tg x = some (t, h) → ∃ a, p.1 x = some a ∧ t = φ h a
+def TgInv (φ : Hn → G ≃ G) (p : (X → Option (G × Hn)) × Ch AR X Hn G) : Prop :=
+  ∀ x t h, p.2.tg x = some (t, h) → ∃ a, p.1 x = some (a, h) ∧ t = φ h a
 
 theorem tgInv_preserved (φ : Hn → G ≃ G) (pre : G → S) :
     QueryImpl.PreservesInv (realImpl (AR := AR) (X := X) (S := S) φ pre) (TgInv φ) := by
@@ -408,7 +408,7 @@ theorem tgInv_preserved (φ : Hn → G ≃ G) (pre : G → S) :
         by_cases hyx : y = x
         · subst hyx
           simp only [Function.update_self, Option.some.injEq, Prod.mk.injEq] at hy ⊢
-          exact ⟨u, rfl, by rw [← hy.1, ← hy.2]⟩
+          exact ⟨u, by simp [hy.2], by rw [← hy.1, ← hy.2]⟩
         · simp only [Function.update_of_ne hyx] at hy ⊢
           exact hp y t' h' hy
   · simp only [realImpl, StateT.run_mk, support_pure, Set.mem_singleton_iff] at hz
