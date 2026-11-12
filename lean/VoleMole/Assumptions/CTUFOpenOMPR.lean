@@ -716,4 +716,290 @@ theorem advCTUFIdeal1_le_ompr
 
 end Main
 
+/-! ## `K` keys to one key, by guessing the forgery's key -/
+
+section Guess
+
+variable {DR : Type} {AR : DR → Type} {K : ℕ} {Xc T S : Type}
+
+/-- **The guessing reduction's handler**: the world and `Com` forwarded, signing queries for key
+`j` forwarded to the one-key signer, the others answered by `σo` (the signers of the keys the
+reduction generated itself). -/
+def guessImpl (j : Fin K) (σo : Fin K × T → S) :
+    QueryImpl (specCI AR K Xc T S) (OracleComp (specCI AR 1 Xc T S))
+  | .inl (.inl d) => liftM ((specCI AR 1 Xc T S).query (.inl (.inl d)))
+  | .inl (.inr q) => if q.1 = j then liftM ((specCI AR 1 Xc T S).query (.inl (.inr (0, q.2))))
+      else pure (σo q)
+  | .inr x => liftM ((specCI AR 1 Xc T S).query (.inr x))
+
+/-- The forgery for key `j`, as a one-key forgery. -/
+def outG (o : CTOut K S Xc) : CTOut 1 S Xc := (o.1.map fun f => (0, f.2), o.2)
+
+/-- **The one-key forger guessing key `j`.** -/
+def guessF (j : Fin K) (σo : Fin K × T → S) (f : OracleComp (specCI AR K Xc T S) (CTOut K S Xc)) :
+    OracleComp (specCI AR 1 Xc T S) (CTOut 1 S Xc) :=
+  outG <$> simulateQ (guessImpl j σo) f
+
+theorem simulateQ_guess_mapM_comQ (j : Fin K) (σo : Fin K × T → S) :
+    ∀ xs : List Xc, simulateQ (guessImpl (AR := AR) j σo) (xs.mapM comQ) = xs.mapM comQ
+  | [] => by simp
+  | x :: xs => by
+    simp only [List.mapM_cons, simulateQ_bind, simulateQ_guess_mapM_comQ j σo xs, simulateQ_pure]
+    simp only [comQ]
+    erw [simulateQ_spec_query]
+    rfl
+
+/-- The challenger's final evaluations commute with the guessing reduction. -/
+theorem guess_final (j : Fin K) (σo : Fin K × T → S)
+    (f : OracleComp (specCI AR K Xc T S) (CTOut K S Xc)) :
+    outG <$> simulateQ (guessImpl j σo) (f >>= ciFinal) = guessF j σo f >>= ciFinal := by
+  simp only [simulateQ_bind, map_bind, guessF, bind_map_left]
+  refine bind_congr fun o => ?_
+  simp only [ciFinal, simulateQ_bind, simulateQ_guess_mapM_comQ, simulateQ_pure, map_bind, map_pure,
+    outG, Option.map_map]
+  rfl
+
+variable [DecidableEq DR] [∀ d, SampleableType (AR d)] [DecidableEq T] [DecidableEq Xc]
+  [SampleableType T]
+
+/-- The one-key challenger's state the `K`-key run represents: key `j`'s signed targets. -/
+def projG (j : Fin K) (s : CISt AR K T × (Xc → Option T)) : CISt AR 1 T × (Xc → Option T) :=
+  (⟨s.1.ro, (s.1.signed.filter fun q => q.1 = j).map fun q => ((0 : Fin 1), q.2)⟩, s.2)
+
+omit [DecidableEq DR] [∀ d, SampleableType (AR d)] [DecidableEq T] [DecidableEq Xc] [SampleableType T] in
+theorem mem_projG (j : Fin K) (l : List (Fin K × T)) (t : T) :
+    ((0 : Fin 1), t) ∈ (l.filter fun q => q.1 = j).map (fun q => ((0 : Fin 1), q.2)) ↔ (j, t) ∈ l := by
+  constructor
+  · intro h
+    obtain ⟨q, hq, hqe⟩ := List.mem_map.1 h
+    obtain ⟨hq, hqj⟩ := List.mem_filter.1 hq
+    simp only [decide_eq_true_eq] at hqj
+    simp only [Prod.mk.injEq, true_and] at hqe
+    rw [← hqj, ← hqe]
+    exact hq
+  · intro h
+    exact List.mem_map.2 ⟨(j, t), List.mem_filter.2 ⟨h, by simp⟩, rfl⟩
+
+theorem guess_step (j : Fin K) (σ : Fin K × T → S) (q : (DR ⊕ (Fin K × T)) ⊕ Xc)
+    (s : CISt AR K T × (Xc → Option T)) :
+    Prod.map id (projG j) <$> (LazyIdeal.rfFresh (ciOther σ) q).run s =
+      ((LazyIdeal.rfFresh (ciOther fun p => σ (j, p.2)) ∘ₛ guessImpl j σ) q).run (projG j s) := by
+  rcases q with (d | ⟨k, t⟩) | x
+  · simp only [QueryImpl.apply_compose, guessImpl]
+    erw [simulateQ_spec_query]
+    simp [LazyIdeal.rfFresh, ciOther, projG, Functor.map_map]
+  · by_cases hk : k = j
+    · subst hk
+      simp only [QueryImpl.apply_compose, guessImpl, ↓reduceIte]
+      erw [simulateQ_spec_query]
+      simp only [LazyIdeal.rfFresh, ciOther, StateT.run_mk, map_pure, projG]
+      by_cases hm : (k, t) ∈ s.1.signed
+      · have hm' := (mem_projG k s.1.signed t).2 hm
+        simp [hm, hm', projG]
+      · have hm' : ¬_ := fun h => hm ((mem_projG k s.1.signed t).1 h)
+        simp [hm, hm', List.filter_append, projG]
+    · simp only [QueryImpl.apply_compose, guessImpl, hk, ↓reduceIte]
+      simp only [LazyIdeal.rfFresh, ciOther, StateT.run_mk, map_pure, projG]
+      split_ifs <;> simp [List.filter_append, hk, projG]
+  · simp only [QueryImpl.apply_compose, guessImpl]
+    erw [simulateQ_spec_query]
+    cases h : s.2 x <;> simp [LazyIdeal.rfFresh, projG, h, Functor.map_map]
+
+/-- **The `K`-key run, seen from key `j`, is the one-key run of the guessing forger.** -/
+theorem guess_run (j : Fin K) (σ : Fin K × T → S)
+    (f : OracleComp (specCI AR K Xc T S) (CTOut K S Xc)) :
+    (fun r : CTOut K S Xc × CISt AR K T × (Xc → Option T) => (outG r.1, projG j r.2)) <$>
+        ciRun σ f = ciRun (fun p => σ (j, p.2)) (guessF j σ f) := by
+  unfold ciRun
+  have h0 : projG j ((⟨∅, []⟩, fun _ => none) : CISt AR K T × (Xc → Option T)) =
+      (⟨∅, []⟩, fun _ => none) := rfl
+  rw [← guess_final, simulateQ_map, StateT.run_map, ← QueryImpl.simulateQ_compose, ← h0,
+    ← map_run_simulateQ_eq_of_query_map_eq _ _ (projG j) (guess_step j σ)]
+  simp only [Functor.map_map]
+  rfl
+
+omit [DecidableEq DR] [∀ d, SampleableType (AR d)] [DecidableEq T] [DecidableEq Xc] [SampleableType T] in
+/-- A `K`-key win with a forgery for key `j` is a one-key win of the guessing forger. -/
+theorem ciWin_guess (V : Fin K → S → T → Prop) (j : Fin K)
+    (r : CTOut K S Xc × CISt AR K T × (Xc → Option T)) (hw : CIWin V r)
+    (hj : ∀ k x s, r.1.1 = some (k, x, s) → k = j) :
+    CIWin (fun _ => V j) (outG r.1, projG j r.2) := by
+  obtain ⟨k, x, s, c, h1, h2, h3, h4, h5⟩ := hw
+  obtain rfl := hj k x s h1
+  refine ⟨0, x, s, c, by simp [outG, h1], h2, h3, ?_, ?_⟩
+  · intro q hq
+    obtain ⟨q', hq', rfl⟩ := List.mem_map.1 hq
+    exact h4 q' (List.mem_filter.1 hq').1
+  · intro q hq
+    obtain ⟨q', hq', rfl⟩ := List.mem_map.1 hq
+    exact h5 q' (List.mem_filter.1 hq').1
+
+/-- **`K` keys to one, at fixed keys**: the ideal CT-UF^open advantage against `K` signers is at
+most the sum over `j` of the one-key advantages of the forgers guessing `j` (which answer the other
+keys' signing queries with the other signers). -/
+theorem advCTUFIdealAt_le_sum (V : Fin K → S → T → Prop) (σ : Fin K × T → S)
+    (F : ProbComp (OracleComp (specCI AR K Xc T S) (CTOut K S Xc))) :
+    advCTUFIdealAt V σ F ≤
+      ∑ j : Fin K, advCTUFIdealAt (fun _ => V j) (fun p => σ (j, p.2)) (guessF j σ <$> F) := by
+  unfold advCTUFIdealAt
+  have h1 : Pr{let f ← F; let r ← ciRun σ f}[CIWin V r] ≤
+      Pr{let x ← (do let f ← F; ciRun σ f)}[∃ j : Fin K, CIWin V x ∧
+        ∀ k y s, x.1.1 = some (k, y, s) → k = j] := by
+    simp only [map_bind]
+    refine prEvent_bind_mono_of_support _ _ _ fun f _ => prEvent_mono _ _ _ fun r hr => ?_
+    obtain ⟨k, y, s, c, h1, -⟩ := id hr
+    refine ⟨k, hr, fun k' y' s' h => ?_⟩
+    rw [h1] at h
+    simp only [Option.some.injEq, Prod.mk.injEq] at h
+    exact h.1.symm
+  refine h1.trans ((prEvent_exists_le _ _).trans (Finset.sum_le_sum fun j _ => ?_))
+  simp only [map_bind, bind_map_left]
+  refine prEvent_bind_mono_of_support _ _ _ fun f _ => ?_
+  rw [← guess_run, prEvent_map]
+  exact prEvent_mono _ _ _ fun r hr => ciWin_guess V j r hr.1 hr.2
+
+omit [DecidableEq DR] [∀ d, SampleableType (AR d)] [DecidableEq T] [DecidableEq Xc] [SampleableType T] in
+theorem guessImpl_congr (j : Fin K) (σ σ' : Fin K × T → S) (h : ∀ q, q.1 ≠ j → σ q = σ' q) :
+    guessImpl (AR := AR) (Xc := Xc) j σ = guessImpl j σ' := by
+  funext q
+  rcases q with (d | q) | x
+  · rfl
+  · by_cases hq : q.1 = j
+    · simp [guessImpl, hq]
+    · simp [guessImpl, hq, h q hq]
+  · rfl
+
+/-- A sum bound on every continuation survives a common draw. -/
+theorem prEvent_bind_le_sum {α ι : Type} (mx : ProbComp α) (s : Finset ι) (f : α → ProbComp Prop)
+    (g : ι → α → ProbComp Prop) (h : ∀ a, prEvent (f a) ≤ ∑ i ∈ s, prEvent (g i a)) :
+    prEvent (mx >>= f) ≤ ∑ i ∈ s, prEvent (mx >>= g i) := by
+  let : MeasurableSpace α := ⊤
+  simp only [prEvent_bind_of_discrete]
+  rw [← MeasureTheory.lintegral_finsetSum _ fun _ _ => Measurable.of_discrete]
+  exact MeasureTheory.lintegral_mono h
+
+variable {PK SK : Type} (tr : Trapdoor PK SK T S)
+
+/-- **The one-key forger guessing key `j`** over key generation: it generates `K` keys, puts the
+challenge public key at `j`, and runs `guessF` with the generated keys' signers. -/
+def guessKey (j : Fin K) (F : (Fin K → PK) → ProbComp (OracleComp (specCI AR K Xc T S) (CTOut K S Xc)))
+    (pk : PK) : ProbComp (OracleComp (specCI AR 1 Xc T S) (CTOut 1 S Xc)) := do
+  let ks ← LazyIdeal.iidVec tr.keyGen K
+  let f ← F (Function.update (fun k => (ks k).1) j pk)
+  pure (guessF j (signers tr.D fun k => (ks k).2) f)
+
+/-- **`K` keys to one, by guessing** (`uov-assumptions.md` §5.4): over `K` independent keys,
+
+    Adv^{ct-uf-open}_K(F) ≤ Σ_j Adv^{ct-uf-open}_1(guessKey j F),
+
+i.e. `K` times the advantage of the forger that guesses `j` uniformly. The reduction generates the
+other `K − 1` keys itself (`LazyIdeal.iidVec_update`). -/
+theorem advCTUFIdeal_le_sum
+    (F : (Fin K → PK) → ProbComp (OracleComp (specCI AR K Xc T S) (CTOut K S Xc))) :
+    advCTUFIdeal tr F ≤ ∑ j : Fin K, advCTUFIdeal1 tr (guessKey tr j F) := by
+  let h : Fin K → (Fin K → PK × SK) → ProbComp Prop := fun j ks => do
+    let f ← F fun k => (ks k).1
+    let r ← ciRun (fun p => tr.D (ks j).2 p.2) (guessF j (signers tr.D fun k => (ks k).2) f)
+    pure (CIWin (fun _ => tr.IsPre (ks j).1) r)
+  have hu1 : ∀ (j : Fin K) (ks : Fin K → PK × SK) (kp : PK × SK),
+      (fun k => (Function.update ks j kp k).1) = Function.update (fun k => (ks k).1) j kp.1 := by
+    intro j ks kp; funext k
+    by_cases hk : k = j
+    · subst hk; simp
+    · simp [hk]
+  have hu2 : ∀ (j : Fin K) (ks : Fin K → PK × SK) (kp : PK × SK),
+      guessF (AR := AR) (Xc := Xc) j (signers tr.D fun k => (Function.update ks j kp k).2) =
+        guessF j (signers tr.D fun k => (ks k).2) := by
+    intro j ks kp; funext f
+    unfold guessF
+    rw [guessImpl_congr j (signers tr.D fun k => (Function.update ks j kp k).2)
+      (signers tr.D fun k => (ks k).2) fun q hq => by simp [signers, Function.update_of_ne hq]]
+  have hj : ∀ j, advCTUFIdeal1 tr (guessKey tr j F) = prEvent (LazyIdeal.iidVec tr.keyGen K >>= h j) := by
+    intro j
+    have := (LazyIdeal.iidVec_update tr.keyGen j (h j)).prEvent_eq (fun p => p)
+    simp only [id_map'] at this
+    rw [← this]
+    unfold advCTUFIdeal1 guessKey
+    simp only [h, bind_assoc, pure_bind, hu1, hu2, Function.update_self, map_eq_bind_pure_comp,
+      Function.comp_def]
+  simp only [hj]
+  unfold advCTUFIdeal
+  refine prEvent_bind_le_sum _ _ _ _ fun ks => ?_
+  have := advCTUFIdealAt_le_sum (fun k => tr.IsPre (ks k).1) (signers tr.D fun k => (ks k).2)
+    (F fun k => (ks k).1)
+  unfold advCTUFIdealAt at this
+  simp only [h, map_eq_bind_pure_comp, Function.comp_def, bind_assoc, pure_bind] at this ⊢
+  exact this
+
+omit [DecidableEq DR] [∀ d, SampleableType (AR d)] [DecidableEq T] [DecidableEq Xc] [SampleableType T] in
+theorem mem_support_simulateQ {ι ι' : Type} {spec : OracleSpec ι} {spec' : OracleSpec ι'} {α : Type}
+    (impl : QueryImpl spec (OracleComp spec')) (oa : OracleComp spec α) :
+    ∀ x ∈ support (simulateQ impl oa), x ∈ support oa := by
+  induction oa using OracleComp.inductionOn with
+  | pure x => intro y hy; simpa using hy
+  | query_bind t k ih =>
+    intro y hy
+    simp only [simulateQ_query_bind, mem_support_bind_iff] at hy
+    obtain ⟨u, -, hu⟩ := hy
+    simp only [mem_support_bind_iff]
+    exact ⟨u, by simp; exact trivial, ih _ y hu⟩
+
+omit [DecidableEq DR] [∀ d, SampleableType (AR d)] [DecidableEq T] [DecidableEq Xc] [SampleableType T] in
+/-- The guessing forger keeps the budget. -/
+theorem guessF_budget {qf qS : ℕ} (j : Fin K) (σo : Fin K × T → S)
+    (f : OracleComp (specCI AR K Xc T S) (CTOut K S Xc)) (hf : CIBudget qf qS f) :
+    CIBudget qf qS (guessF j σo f) := by
+  obtain ⟨h1, h2, h3⟩ := hf
+  refine ⟨?_, ?_, ?_⟩
+  · refine (isQueryBoundP_map_iff _ _ _).2 (h1.simulateQ_of_step (fun t ht => ?_) fun t ht => ?_)
+    all_goals
+      rcases t with (d | q) | x <;> simp only [guessImpl] <;> (try split_ifs) <;>
+        first
+        | exact isQueryBoundP_pure _ _ _
+        | (simp [LazyIdeal.isRF] at ht; done)
+        | exact (isQueryBoundP_query_iff _ _ _).2 (by simp [LazyIdeal.isRF])
+  · refine (isQueryBoundP_map_iff _ _ _).2 (h2.simulateQ_of_step (fun t ht => ?_) fun t ht => ?_)
+    all_goals
+      rcases t with (d | q) | x <;> simp only [guessImpl] <;> (try split_ifs) <;>
+        first
+        | exact isQueryBoundP_pure _ _ _
+        | (simp [isSign] at ht; done)
+        | exact (isQueryBoundP_query_iff _ _ _).2 (by simp [isSign])
+  · intro o ho
+    simp only [guessF, support_map, Set.mem_image] at ho
+    obtain ⟨o', ho', rfl⟩ := ho
+    exact h3 o' (mem_support_simulateQ _ f o' ho')
+
+end Guess
+
+section KMain
+
+variable {DR : Type} [DecidableEq DR] {AR : DR → Type} [∀ d, SampleableType (AR d)] {K : ℕ}
+  {Xc T S : Type} [DecidableEq Xc] [DecidableEq T] [Inhabited T] [SampleableType T]
+  {PK SK : Type} (tr : Trapdoor PK SK T S) (qf qS : ℕ)
+
+/-- **CT-UF^open over `K` keys with an ideal `Com`, from OMPR** (`uov-assumptions.md` §5.4, T4
+and the `K`-key step): for a forger within the budget,
+
+    Adv^{ct-uf-open}_K(F) ≤ Σ_j Adv^{ompr}(B_j; q_f + 2q_S + 1, q_S) + K·(q_f + 2q_S + 1)·failPr,
+
+`B_j = ompRed q_S (guessKey j F)`: guess the forgery's key `j`, generate the other keys, and run
+T4's reduction. -/
+theorem advCTUFIdeal_le_ompr
+    (F : (Fin K → PK) → ProbComp (OracleComp (specCI AR K Xc T S) (CTOut K S Xc)))
+    (hF : ∀ pks, ∀ f ∈ support (F pks), CIBudget qf qS f) :
+    advCTUFIdeal tr F ≤
+      ∑ j : Fin K, advOMPR tr (qf + 2 * qS + 1) qS (ompRed qS (guessKey tr j F)) +
+        (K : ℝ≥0∞) * (((qf + 2 * qS + 1 : ℕ) : ℝ≥0∞) * preFailPr tr) := by
+  refine (advCTUFIdeal_le_sum tr F).trans ?_
+  refine (Finset.sum_le_sum fun j _ => advCTUFIdeal1_le_ompr qf qS tr (guessKey tr j F)
+    fun pk f1 hf1 => ?_).trans (le_of_eq ?_)
+  · simp only [guessKey, mem_support_bind_iff, support_pure, Set.mem_singleton_iff] at hf1
+    obtain ⟨ks, -, f, hf, rfl⟩ := hf1
+    exact guessF_budget j _ f (hF _ f hf)
+  · rw [Finset.sum_add_distrib]
+    simp
+
+end KMain
+
 end VoleMole.Assumptions.UOV.CTUFOpen
