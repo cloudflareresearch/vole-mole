@@ -19,9 +19,10 @@ import VCVio.EvalDist.ProbabilityBounds
   adapter by the shift game (`adReal_eqd`, `recCh_eqd`) and a count of the guess vectors
   (`guess_count`, `pr_guess_ge`). Names live in `VoleMole.Assumptions.Shift`.
 
-**A simulation lemma** (`simulateQ_proj_eqd`): if each query of one stateful handler, projected
-along `π`, is equal in distribution to another handler's on the projected state (under an
-invariant), so is every computation. Used for A1, P8(a) and `Assumptions/Blind.lean`.
+**A simulation lemma** (`LazyIdeal.simulateQ_proj_eqd_inv`, in `Assumptions/LazyIdeal.lean`): if
+each query of one stateful handler, projected along `π`, is equal in distribution to another
+handler's on the projected state (under an invariant), so is every computation. Used for A1, P8(a)
+and `Assumptions/Blind.lean`.
 
 No `sorry`, no `axiom`.
 -/
@@ -31,35 +32,9 @@ open scoped ENNReal
 
 namespace VoleMole.Assumptions.Shift
 
+open VoleMole.Assumptions.LazyIdeal (simulateQ_proj_eqd_inv)
+
 open VoleMole.Assumptions.UOV
-
-/-! ## Projected simulations -/
-
-section SimProj
-
-variable {ι : Type} {spec : OracleSpec ι} {σ₁ σ₂ : Type}
-
-/-- **Simulation along a projection**: stepwise equality in distribution of the projected run
-(under a preserved invariant) gives equality in distribution of every projected run. -/
-theorem simulateQ_proj_eqd (impl₁ : QueryImpl spec (StateT σ₁ ProbComp))
-    (impl₂ : QueryImpl spec (StateT σ₂ ProbComp)) (π : σ₁ → σ₂) (Inv : σ₁ → Prop)
-    (hinv : QueryImpl.PreservesInv impl₁ Inv)
-    (hstep : ∀ q s, Inv s →
-      (fun z => (z.1, π z.2)) <$> (impl₁ q).run s =ᵈ (impl₂ q).run (π s))
-    {α : Type} (oa : OracleComp spec α) :
-    ∀ s, Inv s → (fun z => (z.1, π z.2)) <$> (simulateQ impl₁ oa).run s =ᵈ
-      (simulateQ impl₂ oa).run (π s) := by
-  induction oa using OracleComp.inductionOn with
-  | pure x => intro s _; simp only [simulateQ_pure, StateT.run_pure, map_pure]; exact EvalDistEq.rfl
-  | query_bind q k ih =>
-    intro s hs
-    simp only [simulateQ_bind, simulateQ_spec_query, StateT.run_bind, map_bind]
-    refine (EvalDistEq.bind_congr_of_support _ fun z hz => ih z.1 z.2 (hinv q s hs z hz)).trans ?_
-    rw [← bind_map_left (fun z => (z.1, π z.2)) ((impl₁ q).run s)
-      (fun w => (simulateQ impl₂ (k w.1)).run w.2)]
-    exact (hstep q s hs).bind_left _
-
-end SimProj
 
 /-! ## A1: OMPR from OMPR⊕τ, tightly -/
 
@@ -127,7 +102,7 @@ theorem advOMPR_le_shift {τ : ℕ} (hτ : 1 ≤ τ) (n ℓ : ℕ)
     simp only [omExp, shiftZero, map_bind, map_pure, bind_map_left]
     refine EvalDistEq.bind_right _ fun kp => EvalDistEq.bind_right _ fun b =>
       EvalDistEq.bind_right _ fun L => ?_
-    have h := simulateQ_proj_eqd (chImpl (tr.D kp.2)) (chImpl (tr.D kp.2) ∘ₛ zImpl) zProj
+    have h := simulateQ_proj_eqd_inv (chImpl (tr.D kp.2)) (chImpl (tr.D kp.2) ∘ₛ zImpl) zProj
       (fun _ => True) (fun _ _ _ _ _ => trivial)
       (fun q s _ => by rw [zImpl_step]) b (ch0 L) trivial
     have h0 : zProj (ch0 L : Ch AR X Hn G) = ch0 L := by
@@ -495,7 +470,7 @@ theorem recCh_eqd {α : Type} (oa : OracleComp (specB AR X (List G) G S) α)
     (v : AdSt X G × Ch AR X (List G) G) :
     (fun z => (z.1, z.2.2)) <$> (simulateQ (recCh pre) oa).run v =ᵈ
       (simulateQ (chImpl pre) oa).run v.2 := by
-  refine simulateQ_proj_eqd (recCh pre) (chImpl pre) Prod.snd (fun _ => True)
+  refine simulateQ_proj_eqd_inv (recCh pre) (chImpl pre) Prod.snd (fun _ => True)
     (fun _ _ _ _ _ => trivial) (fun q w _ => ?_) oa v trivial
   rcases q with d | ⟨x, δs⟩ | t
   · rw [recCh_inl]; simp [chImpl, roStep, Functor.map_map]
@@ -508,7 +483,7 @@ theorem adReal_eqd {α : Type} (oa : OracleComp (specB AR X (List G) G S) α) (w
     (hw : InvA n g w) :
     (fun z => (z.1, projA z.2)) <$> (simulateQ (adReal pre n g) oa).run w =ᵈ
       (simulateQ (recCh pre) oa).run (projA w) :=
-  simulateQ_proj_eqd _ _ projA (InvA n g) (adReal_inv pre n g)
+  simulateQ_proj_eqd_inv _ _ projA (InvA n g) (adReal_inv pre n g)
     (fun q w hw => by rw [adReal_step pre n g q w hw]) oa w hw
 
 end GuessSim

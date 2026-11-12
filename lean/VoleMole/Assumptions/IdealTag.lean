@@ -8,13 +8,15 @@ import VoleMole.Assumptions.UOV
 trapdoor (`Trapdoor`: key generation, preimage relation, sampler `D`), the message type `M` and the
 world `specR AR` of the games of `Assumptions/UOV.lean`.
 
-**Generic simulation lemmas.**
+**Generic simulation lemmas** (in `Assumptions/LazyIdeal.lean`, shared with `Shift.lean` and
+`CTUFOpenOMPR.lean`).
 * `simulateQ_proj_eqd`: a handler `comb` simulates a handler `impl` through a projection `proj` of
   its state, if it does so per query on the states of an invariant that may consume a budget (one
   unit per query of a kind `p`); then the whole simulation does, for every computation within the
   budget. `simulateQ_inv_bound`: the invariant on the support. (The step relation is equality of
   distributions, so a fresh uniform sample on one side may match one on the other.)
-* `prEvent_unifList_exists_le`, `prEvent_keyed_unifList_exists_le`: union bound over a uniform list.
+* `prEvent_unifList_exists_le₀` (`LazyIdeal`), `prEvent_keyed_unifList_exists_le`: union bound over
+  a uniform list.
 * `unifList_add`: a uniform list of length `a + b` is a uniform list of length `a` followed by one
   of length `b`.
 
@@ -56,62 +58,10 @@ open scoped ENNReal
 
 namespace VoleMole.Assumptions.IdealTag
 
+open VoleMole.Assumptions.LazyIdeal (simulateQ_proj_eqd simulateQ_inv_bound prEvent_unifList_exists_le₀
+  prEvent_le_bind)
+
 open VoleMole.Assumptions.UOV
-
-/-! ## Generic simulation lemmas -/
-
-section Sim
-
-variable {ι : Type} {spec : OracleSpec ι} {σ τ : Type}
-  (comb : QueryImpl spec (StateT σ ProbComp)) (impl : QueryImpl spec (StateT τ ProbComp))
-  (proj : σ → τ) (p : ι → Prop) [DecidablePred p] (Inv : ℕ → σ → Prop)
-
-/-- **Simulation through a projection, with a budget.** If, on the states of the invariant `Inv k`
-(`k` the remaining budget), every query of `comb` is distributed as the query of `impl` at the
-projected state (`hstep`), and keeps the invariant with one unit consumed per query of kind `p`
-(`hinv`), then every computation within the budget runs the same under both. -/
-theorem simulateQ_proj_eqd
-    (hstep : ∀ q s k, Inv k s → (p q → 0 < k) →
-      (fun z => (z.1, proj z.2)) <$> (comb q).run s =ᵈ (impl q).run (proj s))
-    (hinv : ∀ q s k, Inv k s → (p q → 0 < k) →
-      ∀ z ∈ support ((comb q).run s), Inv (if p q then k - 1 else k) z.2)
-    {α : Type} (oa : OracleComp spec α) :
-    ∀ k s, IsQueryBoundP oa p k → Inv k s →
-      (fun z => (z.1, proj z.2)) <$> (simulateQ comb oa).run s =ᵈ
-        (simulateQ impl oa).run (proj s) := by
-  induction oa using OracleComp.inductionOn with
-  | pure x => intro k s _ _; simp only [simulateQ_pure, StateT.run_pure, map_pure]; exact EvalDistEq.rfl
-  | query_bind q f ih =>
-    intro k s hb hI
-    rw [isQueryBoundP_query_bind_iff] at hb
-    have hk : p q → 0 < k := fun hp => hb.1.resolve_left (not_not.2 hp)
-    simp only [simulateQ_bind, simulateQ_spec_query, StateT.run_bind, map_bind]
-    refine (EvalDistEq.bind_congr_of_support _ fun z hz =>
-      ih z.1 _ z.2 (hb.2 z.1) (hinv q s k hI hk z hz)).trans ?_
-    have := (hstep q s k hI hk).bind_left (fun w => (simulateQ impl (f w.1)).run w.2)
-    simpa only [bind_map_left] using this
-
-/-- **The invariant on the support**, under the same hypotheses. -/
-theorem simulateQ_inv_bound
-    (hinv : ∀ q s k, Inv k s → (p q → 0 < k) →
-      ∀ z ∈ support ((comb q).run s), Inv (if p q then k - 1 else k) z.2)
-    {α : Type} (oa : OracleComp spec α) :
-    ∀ k s, IsQueryBoundP oa p k → Inv k s →
-      ∀ z ∈ support ((simulateQ comb oa).run s), ∃ k', Inv k' z.2 := by
-  induction oa using OracleComp.inductionOn with
-  | pure x =>
-    intro k s _ hI z hz
-    simp only [simulateQ_pure, StateT.run_pure, support_pure, Set.mem_singleton_iff] at hz
-    exact ⟨k, hz ▸ hI⟩
-  | query_bind q f ih =>
-    intro k s hb hI z hz
-    rw [isQueryBoundP_query_bind_iff] at hb
-    have hk : p q → 0 < k := fun hp => hb.1.resolve_left (not_not.2 hp)
-    simp only [simulateQ_bind, simulateQ_spec_query, StateT.run_bind, mem_support_bind_iff] at hz
-    obtain ⟨w, hw, hz⟩ := hz
-    exact ih w.1 _ w.2 (hb.2 w.1) (hinv q s k hI hk w hw) z hz
-
-end Sim
 
 /-! ## Uniform lists -/
 
@@ -123,41 +73,6 @@ lemma bind_const_eqd {α β : Type} (mx : ProbComp α) (my : ProbComp β) :
     (mx >>= fun _ => my) =ᵈ my := by
   let : MeasurableSpace β := ⊤
   exact EvalDistEq.of_evalDist_eq (OracleComp.evalDist_bind_const mx my)
-
-/-- **Union bound over a uniform list.** -/
-theorem prEvent_unifList_exists_le (bad : T → Prop) :
-    ∀ n : ℕ, Pr{let L ← unifList T n}[∃ u ∈ L, bad u] ≤ n * Pr{let u ← $ᵗ T}[bad u]
-  | 0 => by simp [unifList]
-  | n + 1 => by
-    have hμ : unifList T (n + 1) = (fun p : T × List T => p.1 :: p.2) <$>
-        (do let u ← $ᵗ T; let L ← unifList T n; pure (u, L)) := by
-      simp [unifList, map_bind]
-    rw [hμ, prEvent_map]
-    refine (prEvent_mono _ _ (fun p : T × List T => bad p.1 ∨ ∃ u ∈ p.2, bad u)
-      fun p hp => by simpa using hp).trans ((prEvent_or_le _ _ _).trans ?_)
-    have h1 : Pr{let p ← (do let u ← $ᵗ T; let L ← unifList T n; pure (u, L))}[bad p.1] =
-        Pr{let u ← $ᵗ T}[bad u] := by
-      have : Prod.fst <$> (do let u ← $ᵗ T; let L ← unifList T n; pure (u, L)) =ᵈ ($ᵗ T) := by
-        simp only [map_bind, map_pure]
-        refine (EvalDistEq.bind_right _ fun u => bind_const_eqd _ _).trans ?_
-        simp only [bind_pure]
-        exact EvalDistEq.rfl
-      have h := this.prEvent_eq bad
-      rw [prEvent_map] at h
-      exact h
-    have h2 : Pr{let p ← (do let u ← $ᵗ T; let L ← unifList T n; pure (u, L))}[∃ u ∈ p.2, bad u] =
-        Pr{let L ← unifList T n}[∃ u ∈ L, bad u] := by
-      have : Prod.snd <$> (do let u ← $ᵗ T; let L ← unifList T n; pure (u, L)) =ᵈ
-          unifList T n := by
-        simp only [map_bind, map_pure, bind_pure]
-        exact bind_const_eqd _ _
-      have h := this.prEvent_eq (fun L => ∃ u ∈ L, bad u)
-      rw [prEvent_map] at h
-      exact h
-    rw [h1, h2]
-    refine (add_le_add le_rfl (prEvent_unifList_exists_le bad n)).trans (le_of_eq ?_)
-    push_cast
-    ring
 
 /-- **Union bound over a uniform list, averaged over a key.** -/
 theorem prEvent_keyed_unifList_exists_le {K : Type} (kg : ProbComp K) (bad : K → T → Prop) (n : ℕ) :
@@ -177,7 +92,7 @@ theorem prEvent_keyed_unifList_exists_le {K : Type} (kg : ProbComp K) (bad : K �
       ∫⁻ k, Pr{let u ← $ᵗ T}[bad k u] ∂𝒟[kg] := by
     simpa [prEvent_map, Function.comp_def] using e2
   rw [e1', e2', ← MeasureTheory.lintegral_const_mul _ measurable_from_top]
-  exact MeasureTheory.lintegral_mono fun k => prEvent_unifList_exists_le (bad k) n
+  exact MeasureTheory.lintegral_mono fun k => prEvent_unifList_exists_le₀ (bad k) n
 
 omit [SampleableType T] in
 lemma length_of_mem_unifList' [SampleableType T] :
@@ -767,6 +682,9 @@ end VoleMole.Assumptions.IdealTag
 
 namespace VoleMole.Assumptions.IdealTag
 
+open VoleMole.Assumptions.LazyIdeal (simulateQ_proj_eqd simulateQ_inv_bound prEvent_unifList_exists_le₀
+  prEvent_le_bind)
+
 open VoleMole.Assumptions.UOV
 
 /-! ## Theorem 1 (c): A-OMPI ≤ OMPR -/
@@ -781,29 +699,6 @@ theorem isQueryBoundP_false {ι : Type} {spec : OracleSpec ι} {α : Type} (oa :
   | query_bind t f ih =>
     rw [isQueryBoundP_query_bind_iff]
     exact ⟨Or.inl not_false, fun u => by simp [ih u]⟩
-
-/-- **An event of a prefix bounds an event of the whole computation** if every outcome of the
-continuation from a prefix outcome in the first event is in the second. -/
-theorem prEvent_le_bind {α β : Type} (J : ProbComp α) (f : α → ProbComp β) (P : α → Prop)
-    (Q : β → Prop) (h : ∀ x ∈ support J, P x → ∀ w ∈ support (f x), Q w) :
-    Pr{let x ← J}[P x] ≤ Pr{let w ← J >>= f}[Q w] := by
-  let K : ProbComp (α × β) := J >>= fun x => (fun w => (x, w)) <$> f x
-  have h1 : Prod.fst <$> K =ᵈ J := by
-    simp only [K, map_bind, Functor.map_map]
-    refine (EvalDistEq.bind_right _ fun x => EvalDistEq.map_const _ x).trans ?_
-    simp only [bind_pure]
-    exact EvalDistEq.rfl
-  have h2 : Prod.snd <$> K = J >>= f := by
-    simp [K, map_bind, Functor.map_map]
-  have e1 := h1.prEvent_eq P
-  rw [prEvent_map] at e1
-  rw [← e1, ← h2, prEvent_map]
-  refine prEvent_mono_of_support _ _ _ fun p hp hP => ?_
-  simp only [K, mem_support_bind_iff] at hp
-  obtain ⟨x, hx, hw⟩ := hp
-  erw [support_map] at hw
-  obtain ⟨w, hw, rfl⟩ := hw
-  exact h x hx hP w hw
 
 end Helpers
 
@@ -1330,6 +1225,9 @@ end OMPIRed
 end VoleMole.Assumptions.IdealTag
 
 namespace VoleMole.Assumptions.IdealTag
+
+open VoleMole.Assumptions.LazyIdeal (simulateQ_proj_eqd simulateQ_inv_bound prEvent_unifList_exists_le₀
+  prEvent_le_bind)
 
 open VoleMole.Assumptions.UOV
 

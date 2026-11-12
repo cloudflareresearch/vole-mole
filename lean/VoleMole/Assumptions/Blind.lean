@@ -455,7 +455,7 @@ theorem bcomb_eqd (hD : Distinct cl pk κ) {α : Type} (oa : OracleComp (specB A
     (w : CSt AR AC X' X G Hn' St) (hw : InvC cl n pk κ w) :
     (fun z => (z.1, piB z.2)) <$> (simulateQ (bcomb cl n pre pk κ) oa).run w =ᵈ
       (simulateQ (chImpl pre) oa).run (piB w) :=
-  simulateQ_proj_eqd _ _ piB (InvC cl n pk κ) (bcomb_inv cl n pre pk κ hD)
+  LazyIdeal.simulateQ_proj_eqd_inv _ _ piB (InvC cl n pk κ) (bcomb_inv cl n pre pk κ hD)
     (fun q w hw => bcomb_step cl n pre pk κ hD q w hw) oa w hw
 
 end Comb
@@ -571,14 +571,6 @@ set_option linter.unusedSectionVars false
 
 variable [SampleableType G] {SK : Type}
 
-/-- An event that holds on every outcome of the continuations of `W`-outcomes has probability at
-least `Pr[W]`. -/
-lemma prEvent_le_bind_of_support {α β : Type} (mx : ProbComp α) (f : α → ProbComp β)
-    (W : α → Prop) (E : β → Prop) (h : ∀ a ∈ support mx, W a → ∀ y ∈ support (f a), E y) :
-    Pr{let a ← mx}[W a] ≤ Pr{let y ← mx >>= f}[E y] := by
-  simpa using le_prEvent_bind_of_support mx f W E 1 fun a ha hw =>
-    (prEvent_eq_one_of_forall_mem_support _ _ (h a ha hw)).ge
-
 /-- **Theorem 6, generic core** (`uov-assumptions.md` §5.6): for every OMPR adversary `B` and every
 client whose sessions have distinct labels,
 
@@ -629,7 +621,7 @@ theorem ompr_le_blind (tr : Trapdoor PK SK G S) (cl : Client AC X G S St Cn PK) 
         StateT.run_bind, simulateQ_pure, StateT.run_pure, map_eq_bind_pure_comp,
         Function.comp_def]
     rw [hO]
-    refine prEvent_le_bind_of_support _ _ _ _ fun t ht hW y hy => ?_
+    refine LazyIdeal.prEvent_le_bind _ _ _ _ fun t ht hW y hy => ?_
     simp only [M1, RM, mem_support_bind_iff, support_pure, Set.mem_singleton_iff] at ht
     obtain ⟨kp, -, b, -, κ, -, L, -, m, hm, rfl⟩ := ht
     have hT := simulateQ_run_preservesInv (realImpl addHint (tr.D kp.2)) (TgInv addHint)
