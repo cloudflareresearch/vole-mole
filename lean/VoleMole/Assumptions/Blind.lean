@@ -513,6 +513,56 @@ theorem post_pres {β : Type} (oc : OracleComp (specV AC X G) β)
   obtain ⟨h1, h2, -⟩ := simulateQ_run_preservesInv _ I hI oc p ⟨rfl, fun _ _ h => h, hp⟩ z hz
   exact ⟨h1, h2⟩
 
+lemma length_filterMap_of_isSome {α β : Type} (f : α → Option β) :
+    ∀ l : List α, (∀ a ∈ l, (f a).isSome) → (l.filterMap f).length = l.length
+  | [], _ => rfl
+  | a :: l, h => by
+    obtain ⟨b, hb⟩ := Option.isSome_iff_exists.1 (h a List.mem_cons_self)
+    simp [hb,
+      length_filterMap_of_isSome f l fun x hx => h x (List.mem_cons_of_mem _ hx)]
+
+variable (cl : Client AC X G S St Cn PK) (n : ℕ) (pk : PK) (κ : Cn)
+
+/-- **`B`'s win is the forger's**: `B`'s `ℓ + 1` good claims on distinct labels become `ℓ + 1`
+preimages of the programmed targets of its sessions' labels, which are distinct. -/
+theorem win_mid (hD : Distinct cl pk κ) (rel : PK → S → G → Prop) (ℓ : ℕ) (pk' : PK)
+    (z : List (X' × S)) (w : CSt AR AC X' X G Hn' St) (hw : InvC cl n pk κ w)
+    (hW : Wins ℓ (goodPre rel) pk' z (piB w)) :
+    Wins ℓ (goodPre rel) pk' ((claimed (z, w.1)).map fun e => (e.1, e.2.2.2.2)) w.2.2 := by
+  obtain ⟨hlen, hnd, hiq, hg⟩ := hW
+  have hs : ∀ p ∈ z, ∃ e, w.1.ses p.1 = some e ∧ ∃ t h, w.2.2.tg e.x = some (t, h) ∧
+      rel pk' p.2 t := by
+    intro p hp
+    obtain ⟨t, h, ht, hr⟩ := hg p hp
+    simp only [piB, Option.bind_eq_some_iff, Option.map_eq_some_iff, Prod.mk.injEq] at ht
+    obtain ⟨e, he, a, ha, rfl, -⟩ := ht
+    exact ⟨e, he, a.1, a.2, ha, hr⟩
+  refine ⟨?_, ?_, hiq, ?_⟩
+  · simp only [claimed, List.length_map]
+    refine (length_filterMap_of_isSome _ z fun p hp => ?_).trans hlen
+    obtain ⟨e, he, -⟩ := hs p hp
+    simp [he]
+  · have heq : ((claimed (z, w.1)).map fun e => (e.1, e.2.2.2.2)).map Prod.fst =
+        (z.map Prod.fst).filterMap fun x' => (w.1.ses x').map Ses.x := by
+      simp [claimed, List.map_filterMap, List.filterMap_map, Function.comp_def]
+    rw [heq]
+    refine List.Nodup.filterMap (fun x' y' b hx hy => ?_) hnd
+    simp only [Option.mem_def, Option.map_eq_some_iff] at hx hy
+    obtain ⟨e, he, rfl⟩ := hx
+    obtain ⟨e', he', hee⟩ := hy
+    refine hw.inj x' y' e e' he he' ?_
+    by_contra hne
+    obtain ⟨-, a, ha, hax⟩ := hw.ses x' e he
+    obtain ⟨-, a', ha', hax'⟩ := hw.ses y' e' he'
+    exact hD _ _ hne a ha a' ha' (hax.trans (hee.symm.trans hax'.symm) |>.symm ▸ rfl)
+  · intro q hq
+    simp only [claimed, List.mem_map, List.mem_filterMap, Option.map_eq_some_iff] at hq
+    obtain ⟨_, ⟨p, hp, e, he, rfl⟩, rfl⟩ := hq
+    obtain ⟨e', he', t, h, ht, hr⟩ := hs p hp
+    rw [he, Option.some.injEq] at he'
+    subst he'
+    exact ⟨t, h, ht, hr⟩
+
 end Post
 
 end VoleMole.Assumptions.Blind
