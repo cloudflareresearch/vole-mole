@@ -24,6 +24,7 @@ import VoleMole.ROM.OneMorePomfrit
 import VoleMole.Privacy.MoussakaMain
 import VoleMole.Privacy.RatatouilleMain
 import VoleMole.Assumptions.UOVLinks
+import VoleMole.Assumptions.CTUFOpenOMPR
 
 /-!
 # Non-vacuity checks for the headline theorems
@@ -982,6 +983,49 @@ example (pk : UovPk) (sk : VoleMole.Spec.Signer) (ℓ : ℕ)
     (sh : CTable → QueryLog specIC → ByteArray → List OneMore.Pomfrit.TG) :=
   pomfrit_U2_omprShift (pure (pk, sk)) OneMore.Pomfrit.honestPre ℓ 0 CrtGen.tables true
     (fun _ => pure []) 17 sh nilForger_bound
+
+/-! ### CT-UF^open with an ideal `Com` (T4), and Moussaka down to OMPR
+
+A toy trapdoor in which every claim is a preimage, and a forger that makes no query and claims
+`Com(())`: it is within every budget and wins the ideal game with probability one
+(`toyF_wins`), so the ideal game is winnable, T4's and the `K`-key bound's hypotheses hold, and
+the modelling hypothesis of `omuf_le_num_ompr` holds for it (any advantage is at most one). -/
+
+/-- Everything is a preimage. -/
+def toyTrap : Trapdoor Unit Unit Bool Unit := ⟨pure ((), ()), fun _ _ _ => True, fun _ _ => ()⟩
+
+/-- The forger that claims `Com(())` under key `0`, with no query and no opening. -/
+def toyF (K : ℕ) [NeZero K] :
+    ProbComp (OracleComp (specCI (fun _ : Unit => Bool) K Unit Bool Unit) (CTOut K Unit Unit)) :=
+  pure (pure (some (0, (), ()), []))
+
+theorem toyF_budget (K : ℕ) [NeZero K] : ∀ f ∈ support (toyF K), CIBudget 0 0 f := by
+  intro f hf
+  simp only [toyF, support_pure, Set.mem_singleton_iff] at hf
+  subst hf
+  exact ⟨isQueryBoundP_pure _ _ _, isQueryBoundP_pure _ _ _, by simp⟩
+
+theorem toyF_wins (K : ℕ) [NeZero K] :
+    advCTUFIdealAt (fun _ _ _ => True) (fun _ => ()) (toyF K) = 1 := by
+  unfold advCTUFIdealAt
+  refine le_antisymm (prEvent_le_one _) ?_
+  simp [toyF, ciRun, ciFinal, comQ, CIWin]
+  erw [simulateQ_spec_query]
+  simp [Assumptions.LazyIdeal.rfFresh]
+
+/-- T4 applies to the toy forger. -/
+example := CTUFOpen.advCTUFIdeal1_le_ompr 0 0 toyTrap (fun _ => toyF 1)
+  (fun _ => toyF_budget 1)
+
+/-- Moussaka down to OMPR (`omuf_le_num_ompr`): its hypotheses, the modelling one included, hold
+for the toy ideal forger. -/
+example (lr : Bool) (sk : Fin 2 → Spec.Signer) :=
+  omuf_le_num_ompr lr pkU sk 1 toyTrap (fun _ => ((), ())) 0 0 aU_budget pkU_digest pkU_inj
+    (toyF 2) (toyF_budget 2) (by
+      have := toyF_wins 2
+      simp only [toyTrap] at this ⊢
+      rw [this]
+      exact prEvent_le_one _)
 
 end UOVGames
 
