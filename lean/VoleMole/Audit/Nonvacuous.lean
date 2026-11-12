@@ -18,6 +18,7 @@ import VoleMole.Privacy.MoussakaUnboundNC
 import VoleMole.ROM.PrivacyReadsNC
 import VoleMole.Privacy.SeedXOFDS
 import VoleMole.ROM.MoussakaOMUF
+import VoleMole.ROM.OneMorePomfrit
 
 /-!
 # Non-vacuity checks for the headline theorems
@@ -796,5 +797,28 @@ example (lr : Bool) (sk : Fin 2 → Spec.Signer) :=
   omuf_le_num lr pkU sk 1 aU_budget pkU_digest pkU_inj
 
 end OMUF
+
+/-! ## One-more unforgeability (`ROM/OneMorePomfrit.lean`) -/
+
+section OneMore
+
+open VoleMole.ROM.OneMore VoleMole.ROM.OneMore.Pomfrit
+
+/-- The forger that outputs nothing makes no `hash_to_target` query. -/
+theorem nilForger_bound (pk : UovPk) :
+    IsQueryBoundP ((fun _ => pure []) pk : OracleComp specU (List (ByteArray × ByteArray)))
+      (fun q => isHT q = true) 0 := trivial
+
+/-- U1 with the honest Issuer, any key, any first-phase rule `e1`. -/
+example (pk : UovPk) (sk : VoleMole.Spec.Signer) (ℓ : ℕ) (e1 : CTable → QueryLog specIC → ByteArray → TG) :=
+  pomfrit_U1_bound (pure (pk, sk)) honestPre ℓ 0 CrtGen.tables true (fun _ => pure []) e1
+    nilForger_bound
+
+/-- U2 with the honest Issuer, `τ = 17`, any shift rule. -/
+example (pk : UovPk) (sk : VoleMole.Spec.Signer) (ℓ : ℕ) (sh : CTable → QueryLog specIC → ByteArray → List TG) :=
+  pomfrit_U2_bound (pure (pk, sk)) honestPre ℓ 0 CrtGen.tables true (fun _ => pure []) 17 sh
+    nilForger_bound
+
+end OneMore
 
 end VoleMole.Audit

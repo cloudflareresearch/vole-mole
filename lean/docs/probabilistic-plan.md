@@ -963,6 +963,33 @@ through `fn`). `hinj` is discharged for the C++ encodings (`SpecRel.hinj_unbound
 `moussakaUnboundRedeem_stmt`: `rfl` and `moussakaUnbound*_values`), so all of these bounds are
 about the executable verifier.
 
+### 2k. Beyond one proof: the one-more reductions (PomFRIT U1, U2), as implemented
+
+Files: `ROM/OneMore.lean` (generic), `ROM/OneMorePomfrit.lean`. `lean/docs/security/pomfrit.md`
+§6.4 states the results; this note records the modelling.
+
+- **Stateful handlers.** The games are VCVio `simulateQ` runs of one composed adversary (the
+  forger, its verifications and the straight-line extractor) against a `StateT … ProbComp`
+  handler: the world (a lazy random oracle on any spec; for PomFRIT the hash oracles of §2b), a
+  target oracle with hints, and an Issuer function. The reduction is a second handler into the
+  experiment adversary's oracles; VCVio's `simulateQ_StateT_StateT_compose` collapses it with the
+  challenger into one handler (`collapse`).
+- **Programming.** The target oracle's fresh answers come from a list of `n` uniform values; the
+  real game and the collapsed reduction have the same joint distribution of output and state
+  (`real_eqd_comb`), by induction on the computation with the list uniform: at a fresh query the
+  real answer `u` and the reduction's `t − e` correspond under `t = u + e`. VCVio's
+  `evalDistEq_simulateQ_run` (per-query equality from every state) does not apply, since the two
+  handlers differ on the list; and its module is not in the shared build, so the induction is
+  done directly.
+- **Ghost state.** The real game records the programmed target `answer + hint` of each label
+  (`Ch.tg`); `TgInv` and `NoFall` (support invariants, VCVio's `simulateQ_run_preservesInv` and an
+  induction with `IsQueryBoundP`) turn the final events into statements about the oracle's answer
+  and the first hint.
+- **Not done**: the extraction term. The PomFRIT bounds of §2g are for `hash_to_target` = SHAKE
+  inside the statement; the one-more game needs it to be a random oracle (`pomfritRedeemT`, a
+  target-function family), and the per-forgery event to be the adaptive game of a derived prover
+  (pomfrit.md G8).
+
 ### M4 — Mathlib bump and VCVio dependency (Phase B, ~1–3 days, mostly waiting on builds) — done
 
 - Bump to `v4.34.0` (separate commit). Fix the breakage. Then `require VCVio` and add
