@@ -28,7 +28,9 @@ No `sorry`, no `axiom`.
 open OracleComp OracleSpec VoleMole.ROM.OneMore
 open scoped ENNReal
 
-namespace VoleMole.Assumptions.UOV
+namespace VoleMole.Assumptions.Shift
+
+open VoleMole.Assumptions.UOV
 
 /-! ## Projected simulations -/
 
@@ -573,4 +575,214 @@ theorem le_prEvent_bind_of_support {α β : Type} (mx : ProbComp α) (f : α →
 
 end Count
 
-end VoleMole.Assumptions.UOV
+/-! ### Proposition 8(a) -/
+
+section GuessMain
+
+set_option linter.unusedSectionVars false
+
+variable {DR : Type} [DecidableEq DR] {AR : DR → Type} [∀ d, SampleableType (AR d)]
+  {X : Type} [DecidableEq X] {G S : Type} [AddCommGroup G] [SampleableType G] {PK SK : Type}
+
+/-- **The guesses are right** for a run of the shift game (with its record): for every claim,
+the guess for its label's latest request names a shift for which the claim is a preimage. -/
+def GuessOK (rel : PK → S → G → Prop) (g : ℕ → ℕ) (pk : PK)
+    (y : List (X × S) × AdSt X G × Ch AR X (List G) G) : Prop :=
+  ∀ p ∈ y.1, ∃ k δs u δ, y.2.1.idx p.1 = some (k, δs) ∧ y.2.2.tg p.1 = some (u, δs) ∧
+    δs[g k]? = some δ ∧ rel pk p.2 (u + δ)
+
+/-- **A shift win with right guesses is a win of the adapter**: its claims are `ℓ + 1` preimages
+of the programmed targets of distinct labels. -/
+theorem win_of_guess (rel : PK → S → G → Prop) (n : ℕ) (g : ℕ → ℕ) (ℓ τ : ℕ) (pk : PK)
+    (cl : List (X × S)) (w : RSt AR X G) (hw : InvA n g w)
+    (hW : Wins ℓ (goodShift τ rel) pk cl (projA w).2) (hg : GuessOK rel g pk (cl, projA w)) :
+    Forges ℓ (outA (cl, w.1)) w.2.2 ∧
+      ∀ p ∈ (outA (cl, w.1)).1, goodPre rel pk p.2 (w.2.2.tg p.1) := by
+  obtain ⟨hlen, hnd, hiq, -⟩ := hW
+  refine ⟨⟨rfl, by simp [outA, hlen], ?_, hiq⟩, ?_⟩
+  · refine List.Nodup.of_map Prod.fst ?_
+    simpa [outA, List.map_map, Function.comp_def] using hnd
+  · intro p' hp'
+    simp only [outA, List.mem_map] at hp'
+    obtain ⟨⟨x, s⟩, hp, rfl⟩ := hp'
+    obtain ⟨k, δs, u, δ, hidx, htg, hδ, hrel⟩ := hg (x, s) hp
+    have hidx' : w.1.idx x = some (k, δs) := hidx
+    obtain ⟨-, u', hu'⟩ := hw.idx x k δs hidx'
+    have htg' : ((w.1.idx x).bind fun kd => (w.2.1 (x, kd.1)).map fun a => (a.1, kd.2)) =
+        some (u, δs) := htg
+    rw [hidx'] at htg'
+    simp only [Option.bind_some, hu', Option.map_some, Option.some.injEq, Prod.mk.injEq] at htg'
+    obtain ⟨rfl, -⟩ := htg'
+    have hgs : gShift g k δs = δ := by simp [gShift, hδ]
+    have ht := hw.tg (x, k) u' (gShift g k δs) hu'
+    refine ⟨u' + δ, δ, ?_, hrel⟩
+    simp only [hidx', Option.map_some, Option.getD_some]
+    rw [ht, hgs]
+
+/-- **The count for one run**: in a winning run of the shift game, the guesses are right with
+probability at least `τ^{−(ℓ+1)}` (the guess vector must hit one good index at the at most `ℓ + 1`
+claimed requests). -/
+theorem guess_count (rel : PK → S → G → Prop) {n τ : ℕ} [NeZero τ]
+    [SampleableType (Fin n → Fin τ)] (ℓ : ℕ) (pk : PK)
+    (y : List (X × S) × AdSt X G × Ch AR X (List G) G) (hinv : InvB (AR := AR) n y.2)
+    (hW : Wins ℓ (goodShift τ rel) pk y.1 y.2.2) :
+    ((τ : ℝ≥0∞) ^ (ℓ + 1))⁻¹ ≤ Pr{let g ← $ᵗ (Fin n → Fin τ)}[GuessOK rel (gfun g) pk y] := by
+  classical
+  obtain ⟨hlen, hnd, -, hgood⟩ := hW
+  -- the claimed requests
+  let K : Finset (Fin n) := (y.1.filterMap fun p => (y.2.1.idx p.1).bind fun kd =>
+    if h : kd.1 < n then some (⟨kd.1, h⟩ : Fin n) else none).toFinset
+  have hK : K.card ≤ ℓ + 1 :=
+    (List.toFinset_card_le _).trans ((List.length_filterMap_le _ _).trans hlen.le)
+  -- a good index for each claimed request
+  let Good : Fin n → Fin τ → Prop := fun j i => ∀ p ∈ y.1, ∀ δs, y.2.1.idx p.1 = some ((j : ℕ), δs) →
+    ∃ u δ, y.2.2.tg p.1 = some (u, δs) ∧ δs[(i : ℕ)]? = some δ ∧ rel pk p.2 (u + δ)
+  have hex : ∀ j, ∃ i, Good j i := by
+    intro j
+    by_cases hj : ∃ p ∈ y.1, ∃ δs, y.2.1.idx p.1 = some ((j : ℕ), δs)
+    · obtain ⟨p, hp, δs, hidx⟩ := hj
+      obtain ⟨t, δs', htg, hl, δ, hδ, hrel⟩ := hgood p hp
+      obtain ⟨-, u, hu⟩ := hinv.idx p.1 j δs hidx
+      rw [hu, Option.some.injEq, Prod.mk.injEq] at htg
+      obtain ⟨rfl, rfl⟩ := htg
+      obtain ⟨i, hi, hiδ⟩ := List.getElem_of_mem hδ
+      refine ⟨⟨i, lt_of_lt_of_le hi hl⟩, fun q hq δs' hq' => ?_⟩
+      have hqp : q.1 = p.1 := hinv.inj q.1 p.1 j δs' δs hq' hidx
+      have hqp' : q = p := (List.inj_on_of_nodup_map hnd) hq hp hqp
+      subst hqp'
+      rw [hidx, Option.some.injEq, Prod.mk.injEq] at hq'
+      obtain ⟨-, rfl⟩ := hq'
+      exact ⟨u, δ, hu, by simp [hi, hiδ], hrel⟩
+    · exact ⟨⟨0, Nat.pos_of_ne_zero (NeZero.ne τ)⟩, fun p hp δs hidx => absurd ⟨p, hp, δs, hidx⟩ hj⟩
+  let a : Fin n → Fin τ := fun j => Classical.choose (hex j)
+  have hτ1 : (1 : ℝ≥0∞) ≤ τ := by exact_mod_cast Nat.one_le_iff_ne_zero.2 (NeZero.ne τ)
+  refine le_trans (ENNReal.inv_le_inv.2 (pow_le_pow_right₀ hτ1 hK)) (pr_guess_ge K a _ ?_)
+  intro g hg p hp
+  obtain ⟨t, δs, htg, -⟩ := hgood p hp
+  obtain ⟨k, hidx⟩ := hinv.tg p.1 _ htg
+  obtain ⟨hk, -⟩ := hinv.idx p.1 k _ hidx
+  have hkn : k < n := lt_of_lt_of_le hk (by have := hinv.len; omega)
+  have hjK : (⟨k, hkn⟩ : Fin n) ∈ K := by
+    simp only [K, List.mem_toFinset, List.mem_filterMap]
+    exact ⟨p, hp, by simp [hidx, hkn]⟩
+  obtain ⟨u, δ, htg', hδ, hrel⟩ := Classical.choose_spec (hex ⟨k, hkn⟩) p hp δs hidx
+  refine ⟨k, δs, u, δ, hidx, htg', ?_, hrel⟩
+  simp only [gfun, hkn, dite_true]
+  rw [hg _ hjK]
+  exact hδ
+
+variable (tr : Trapdoor PK SK G S)
+
+/-- **Proposition 8(a)** (`uov-assumptions.md` §6): for `τ ≥ 1`,
+
+    Adv^{ompr⊕τ}(B; n, ℓ) ≤ τ^{ℓ+1} · Adv^{ompr}(R; n, ℓ),
+
+with `R = guessRed n τ B`, which guesses the shift of each of the `n` requests (uniformly in
+`[τ]`), embeds its challenge at the guessed shift, and wins whenever all `ℓ + 1` claims used their
+request's guessed shift. -/
+theorem advOMPRShift_le_guess (τ : ℕ) [NeZero τ] (n ℓ : ℕ) [SampleableType (Fin n → Fin τ)]
+    (B : PK → ProbComp (OracleComp (specB AR X (List G) G S) (List (X × S)))) :
+    advOMPRShift tr τ n ℓ B ≤ (τ : ℝ≥0∞) ^ (ℓ + 1) * advOMPR tr n ℓ (guessRed n τ B) := by
+  set c : ℝ≥0∞ := ((τ : ℝ≥0∞) ^ (ℓ + 1))⁻¹ with hc
+  -- the shift game, with the record
+  let mY : PK × SK → ProbComp (List (X × S) × AdSt X G × Ch AR X (List G) G) := fun kp => do
+    let b ← B kp.1
+    let L ← unifList G n
+    (simulateQ (recCh (tr.D kp.2)) b).run (ad0, ch0 L)
+  let M : ProbComp ((PK × SK) × List (X × S) × AdSt X G × Ch AR X (List G) G) := do
+    let kp ← tr.keyGen
+    let y ← mY kp
+    pure (kp, y)
+  have hS : advOMPRShift tr τ n ℓ B =
+      Pr{let r ← M}[Wins ℓ (goodShift τ tr.IsPre) r.1.1 r.2.1 r.2.2.2] := by
+    have hE : omExp tr.keyGen tr.D n B =ᵈ (fun r => (r.1.1, r.2.1, r.2.2.2)) <$> M := by
+      simp only [omExp, M, mY, map_bind, map_pure, bind_assoc]
+      refine EvalDistEq.bind_right _ fun kp => EvalDistEq.bind_right _ fun b =>
+        EvalDistEq.bind_right _ fun L => ?_
+      have := (recCh_eqd (tr.D kp.2) b (ad0, ch0 L)).symm.bind_left (fun r => pure (kp.1, r.1, r.2))
+      simpa only [bind_map_left] using this
+    unfold advOMPRShift
+    rw [hE.prEvent_eq, prEvent_map]
+  -- the guesses, drawn after the run
+  let Ev : (PK × SK) × (Fin n → Fin τ) × (List (X × S) × AdSt X G × Ch AR X (List G) G) → Prop :=
+    fun t => Wins ℓ (goodShift τ tr.IsPre) t.1.1 t.2.2.1 t.2.2.2.2 ∧
+      GuessOK tr.IsPre (gfun t.2.1) t.1.1 t.2.2
+  have hL : c * Pr{let r ← M}[Wins ℓ (goodShift τ tr.IsPre) r.1.1 r.2.1 r.2.2.2] ≤
+      Pr{let t ← M >>= fun r => (do let g ← $ᵗ (Fin n → Fin τ); pure (r.1, g, r.2))}[Ev t] := by
+    refine le_prEvent_bind_of_support _ _ _ _ c fun r hr hW => ?_
+    simp only [M, mY, mem_support_bind_iff, support_pure, Set.mem_singleton_iff] at hr
+    obtain ⟨kp, -, y, ⟨b, -, L, hL, hy⟩, rfl⟩ := hr
+    have hinv := simulateQ_run_preservesInv (recCh (tr.D kp.2)) (InvB (AR := AR) (G := G) n)
+      (recCh_inv (tr.D kp.2) n) b (ad0, ch0 L)
+      ⟨by simp [ch0, ad0, length_of_mem_unifList n L hL], by simp [ad0], by simp [ch0],
+        by simp [ad0]⟩ y hy
+    have hEq : Pr{let t ← (do let g ← $ᵗ (Fin n → Fin τ); pure (kp, g, y))}[Ev t] =
+        Pr{let g ← $ᵗ (Fin n → Fin τ)}[GuessOK tr.IsPre (gfun g) kp.1 y] := by
+      simp only [bind_pure_comp]
+      rw [prEvent_map]
+      simp [Ev, hW]
+    refine le_of_le_of_eq ?_ hEq.symm
+    exact guess_count tr.IsPre ℓ kp.1 y hinv hW
+  -- swapping the guesses before the run
+  let CB : ProbComp ((PK × SK) × (Fin n → Fin τ) × (List (X × S) × AdSt X G × Ch AR X (List G) G)) :=
+    do
+      let kp ← tr.keyGen
+      let g ← $ᵗ (Fin n → Fin τ)
+      let y ← mY kp
+      pure (kp, g, y)
+  have hSw : (M >>= fun r => (do let g ← $ᵗ (Fin n → Fin τ); pure (r.1, g, r.2))) =ᵈ CB := by
+    simp only [M, CB, bind_assoc, pure_bind]
+    refine EvalDistEq.bind_right _ fun kp => ?_
+    exact eqd_swap (mY kp) ($ᵗ (Fin n → Fin τ)) fun y g => pure (kp, g, y)
+  -- the adapter in the real game
+  let CA : ProbComp ((PK × SK) × (Fin n → Fin τ) × (List (X × S) × RSt AR X G)) := do
+    let kp ← tr.keyGen
+    let g ← $ᵗ (Fin n → Fin τ)
+    let b ← B kp.1
+    let L ← unifList G n
+    let w ← (simulateQ (adReal (tr.D kp.2) n (gfun g)) b).run (ad0, (fun _ => none, ch0 L))
+    pure (kp, g, w)
+  have hinitA : ∀ (g : ℕ → ℕ) (L : List G), L ∈ support (unifList G n) →
+      InvA (AR := AR) (X := X) n g (ad0, (fun _ => none, ch0 L)) := fun g L hL =>
+    ⟨fun _ _ _ => rfl, by simp [ch0, ad0, length_of_mem_unifList n L hL], by simp [ad0],
+      by simp⟩
+  have hA : CB =ᵈ (fun t => (t.1, t.2.1, (t.2.2.1, projA t.2.2.2))) <$> CA := by
+    simp only [CB, CA, mY, map_bind, map_pure, bind_assoc]
+    refine EvalDistEq.bind_right _ fun kp => EvalDistEq.bind_right _ fun g =>
+      EvalDistEq.bind_right _ fun b => EvalDistEq.bind_congr_of_support _ fun L hL => ?_
+    have := (adReal_eqd (tr.D kp.2) n (gfun g) b _ (hinitA (gfun g) L hL)).symm.bind_left
+      (fun y => pure (kp, g, y))
+    have hp : projA (AR := AR) (ad0, ((fun _ => none), ch0 L)) =
+        ((ad0, ch0 L) : AdSt X G × Ch AR X (List G) G) := rfl
+    rw [hp] at this
+    simpa only [bind_map_left] using this
+  -- the real game is a map of `CA`
+  have hO : omuf tr.keyGen tr.D n addHint (guessAdv n τ B) =
+      (fun t => (t.1.1, outA (t.2.2.1, t.2.2.2.1), t.2.2.2.2.1, t.2.2.2.2.2)) <$> CA := by
+    simp only [omuf, CA, guessAdv, map_bind, map_pure, bind_assoc, pure_bind, simulateQ_map,
+      StateT.run_map, collapseAd, Functor.map_map, bind_map_left]
+  have hEA : Pr{let t ← CA}[Ev (t.1, t.2.1, (t.2.2.1, projA t.2.2.2))] ≤
+      Pr{let r ← omuf tr.keyGen tr.D n addHint (guessAdv n τ B)}[
+        Forges ℓ r.2.1 r.2.2.2 ∧ ∀ p ∈ r.2.1.1, goodPre tr.IsPre r.1 p.2 (r.2.2.2.tg p.1)] := by
+    rw [hO, prEvent_map]
+    refine prEvent_mono_of_support _ _ _ fun t ht hev => ?_
+    simp only [CA, mem_support_bind_iff, support_pure, Set.mem_singleton_iff] at ht
+    obtain ⟨kp, -, g, -, b, -, L, hL, w, hw, rfl⟩ := ht
+    have hinv := simulateQ_run_preservesInv (adReal (tr.D kp.2) n (gfun g)) (InvA n (gfun g))
+      (adReal_inv (tr.D kp.2) n (gfun g)) b _ (hinitA (gfun g) L hL) w hw
+    exact win_of_guess tr.IsPre n (gfun g) ℓ τ kp.1 w.1 w.2 hinv hev.1 hev.2
+  have h1 := omuf_good_le tr.keyGen tr.D n ℓ addHint (guessAdv n τ B) (goodPre tr.IsPre)
+  have hchain : c * advOMPRShift tr τ n ℓ B ≤ advOMPR tr n ℓ (guessRed n τ B) := by
+    rw [hS]
+    refine hL.trans (le_of_eq_of_le (hSw.prEvent_eq _) ?_)
+    rw [hA.prEvent_eq, prEvent_map]
+    exact hEA.trans h1
+  have hτ0 : (τ : ℝ≥0∞) ^ (ℓ + 1) ≠ 0 := pow_ne_zero _ (by simp [NeZero.ne τ])
+  have hτt : (τ : ℝ≥0∞) ^ (ℓ + 1) ≠ ⊤ := ENNReal.pow_ne_top (ENNReal.natCast_ne_top τ)
+  calc advOMPRShift tr τ n ℓ B = (τ : ℝ≥0∞) ^ (ℓ + 1) * (c * advOMPRShift tr τ n ℓ B) := by
+        rw [hc, ← mul_assoc, ENNReal.mul_inv_cancel hτ0 hτt, one_mul]
+    _ ≤ (τ : ℝ≥0∞) ^ (ℓ + 1) * advOMPR tr n ℓ (guessRed n τ B) := mul_le_mul' le_rfl hchain
+
+end GuessMain
+
+end VoleMole.Assumptions.Shift
