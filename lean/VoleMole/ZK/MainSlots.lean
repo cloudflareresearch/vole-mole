@@ -46,6 +46,10 @@ open VoleMole.Privacy.MainChain
 
 attribute [local instance] decEqW128
 
+-- The provers and the simulator are reasoned about through lemmas only: unfolding them while
+-- unifying (to evaluate the grinding search over `2³²` counters) is never useful.
+attribute [local irreducible] simulate proveIdeal proveE firstHit
+
 variable [HasPrg]
 
 /-- A statement with its parameters set to `p` (so that its tables have the slot's types). -/
@@ -226,8 +230,6 @@ lemma pr_vis_coins (hm : MainP p) (D : Vis p → Prop) :
   rw [← pr_equiv (coinsEquiv Hb T hm).symm]
   exact pr_prod_snd (α := IdealTape p) D
 
--- (Unifying the slots' coin types with the tapes' is slow.)
-set_option maxHeartbeats 4000000 in
 /-- **Real to the ideal tape with the table's sibling answers** (H1, grinding, H4, tape). -/
 theorem real_fill_close (hm : MainP p) (hp : SmallParams p) (q3 qE : ℕ) :
     Slot.Close (fun D : Option Out → Vis p → Prop => ∀ o, RdV q3 qE (D o)) (ValidZK T p)
@@ -241,32 +243,32 @@ theorem real_fill_close (hm : MainP p) (hp : SmallParams p) (q3 qE : ℕ) :
     rw [abs_eq_zero, sub_eq_zero]
     exact e1.trans e2.symm
   obtain ⟨cs, hzk⟩ := hy (st, w) rfl
-  let st' := withP st p
   let D' : Out → Vis p → Prop := fun o v => D (some o) v
   choose Q3 hq3 hQ3 using fun o => (hD (some o)).1
   choose QE hqE hQE using fun o => (hD (some o)).2
-  have h1 := joint_h1 Hb T st' w (preReal Hb st' w T) D' Q3 (fun o G3 G3' G5 E h => hQ3 o G3 G3' G5 E h)
+  have h1 := joint_h1 Hb T (withP st p) w (preReal Hb (withP st p) w T) D' Q3 (fun o G3 G3' G5 E h => hQ3 o G3 G3' G5 E h)
     (fun o => hq3 o)
-  have h2 := joint_grind Hb T st' w (preReal Hb st' w T) D'
-  have h3 := joint_h4 Hb T st' w hp D' QE (fun o G3 G5 E E' h => hQE o G3 G5 E E' h) (fun o => hqE o)
-  have h4 := joint_tape Hb T st' w D'
-  have e : pr (IdealTape p × Vis p) (fun c => D' (proveIdeal (recP Hb T st' w c.2.1 c.2.2.1) T st' w
-      (fillSib (recP Hb T st' w c.2.1 c.2.2.1) T st' c.1)) c.2) =
+  have h2 := joint_grind Hb T (withP st p) w (preReal Hb (withP st p) w T) D'
+  have h3 := joint_h4 Hb T (withP st p) w hp D' QE (fun o G3 G5 E E' h => hQE o G3 G5 E E' h) (fun o => hqE o)
+  have h4 := joint_tape Hb T (withP st p) w D'
+  dsimp only [withP_params] at h1 h2 h3 h4
+  have e : pr (IdealTape p × Vis p) (fun c => D' (proveIdeal (recP Hb T (withP st p) w c.2.1 c.2.2.1) T (withP st p) w
+      (fillSib (recP Hb T (withP st p) w c.2.1 c.2.2.1) T (withP st p) c.1)) c.2) =
       pr (mainH Hb T p hm).Coins (fun k => D ((mainH Hb T p hm).fillS.out (some (st, w)) k)
         (visOf Hb T hm ((mainH Hb T p hm).obsOf (some (st, w)) k))) := by
     rw [← pr_equiv (coinsEquiv Hb T hm)]
     refine pr_congr fun k => ?_
-    show D (some (proveIdeal (recP Hb T st' w k.2.2.2.1 k.2.2.1) T st' w
-      (fillSib (recP Hb T st' w k.2.2.2.1 k.2.2.1) T st' (k.1.1, withSib k.1.2 k.2.1))))
+    show D (some (proveIdeal (recP Hb T (withP st p) w k.2.2.2.1 k.2.2.1) T (withP st p) w
+      (fillSib (recP Hb T (withP st p) w k.2.2.2.1 k.2.2.1) T (withP st p) (k.1.1, withSib k.1.2 k.2.1))))
       (k.2.2.2.1, k.2.2.1, k.2.2.2.2) ↔ _
     rw [HSlot.fillS_out, mainH_out]
     erw [mainOut_fill Hb T st w k.1 k.2.1]
     exact Iff.rfl
   have eR : pr (realSlot Hb T p).K (fun k => D ((realSlot Hb T p).out (some (st, w)) k)
       ((realSlot Hb T p).obs (some (st, w)) k)) =
-      pr ((Bytes 16 × Tab2) × Vis st'.params) (fun c =>
-        D' (proveE (recOf Hb T st' w (preReal Hb st' w T c.2.2.1 c.2.2.2) c.2.1 c.1.2 c.2.2.1) T st' w
-          c.2.2.2 (preReal Hb st' w T c.2.2.1 c.2.2.2) c.1.1) c.2) :=
+      pr ((Bytes 16 × Tab2) × Vis p) (fun c =>
+        D' (proveE (recOf Hb T (withP st p) w (preReal Hb (withP st p) w T c.2.2.1 c.2.2.2) c.2.1 c.1.2 c.2.2.1) T (withP st p) w
+          c.2.2.2 (preReal Hb (withP st p) w T c.2.2.1 c.2.2.2) c.1.1) c.2) :=
     pr_congr fun _ => Iff.rfl
   have eF : pr ((mainH Hb T p hm).fillS.mapObs (visOf Hb T hm)).K (fun k =>
       D (((mainH Hb T p hm).fillS.mapObs (visOf Hb T hm)).out (some (st, w)) k)
@@ -279,8 +281,6 @@ theorem real_fill_close (hm : MainP p) (hp : SmallParams p) (q3 qE : ℕ) :
   have := abs_sub_le_iff.1 h4
   rw [abs_sub_le_iff]; unfold εRF; constructor <;> linarith
 
--- (Unifying the slots' coin types with the tapes' is slow.)
-set_option maxHeartbeats 4000000 in
 /-- **The ideal tape with uniform sibling answers is the simulator** (exact, with the tables). -/
 theorem ideal_sim_close (hm : MainP p) :
     Slot.Close (fun _ => True) (ValidZK T p) 0
@@ -293,15 +293,15 @@ theorem ideal_sim_close (hm : MainP p) :
     rw [abs_nonpos_iff, sub_eq_zero]
     exact e2.trans e1.symm
   obtain ⟨cs, hzk⟩ := hy (st, w) rfl
-  let st' := withP st p
-  have h := joint_sim Hb T st' w hzk (fun o v => D (some o) v)
-  have e : pr (IdealTape p × Vis p) (fun c => D (some (proveIdeal (recP Hb T st' w c.2.1 c.2.2.1) T
-      st' w c.1)) c.2) =
+  have h := joint_sim Hb T (withP st p) w hzk (fun o v => D (some o) v)
+  dsimp only [withP_params] at h
+  have e : pr (IdealTape p × Vis p) (fun c => D (some (proveIdeal (recP Hb T (withP st p) w c.2.1 c.2.2.1) T
+      (withP st p) w c.1)) c.2) =
       pr (mainH Hb T p hm).Coins (fun k => D ((mainH Hb T p hm).idealS.out (some (st, w)) k)
         (visOf Hb T hm ((mainH Hb T p hm).obsOf (some (st, w)) k))) := by
     rw [← pr_equiv (coinsEquiv Hb T hm)]
     refine pr_congr fun k => ?_
-    show D (some (proveIdeal (recP Hb T st' w k.2.2.2.1 k.2.2.1) T st' w
+    show D (some (proveIdeal (recP Hb T (withP st p) w k.2.2.2.1 k.2.2.1) T (withP st p) w
       (k.1.1, withSib k.1.2 k.2.1))) (k.2.2.2.1, k.2.2.1, k.2.2.2.2) ↔ _
     rw [HSlot.idealS_out, mainH_out]
     exact Iff.rfl
@@ -313,7 +313,7 @@ theorem ideal_sim_close (hm : MainP p) :
     pr_congr fun _ => Iff.rfl
   have eS : pr (simSlot p).K (fun k => D ((simSlot p).out (some (st, w)) k)
       ((simSlot p).obs (some (st, w)) k)) =
-      pr (SimCoins st'.params × Vis st'.params) (fun c => D (some (simulate st'.params c.1)) c.2) :=
+      pr (SimCoins p × Vis p) (fun c => D (some (simulate p c.1)) c.2) :=
     pr_congr fun _ => Iff.rfl
   rw [eI, eS, ← e]
   exact h
