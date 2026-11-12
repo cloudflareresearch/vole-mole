@@ -1415,4 +1415,257 @@ theorem forge_ufwin (σ : Signer) (g : Table) (E : CTable)
 
 end Forger
 
+section Reads
+
+variable (A : RoundAdv S (Op Z) Resp) (N : ℕ) {qV : Kind → ℕ} {nV : ℕ} {eV : Params → ℕ}
+
+/-- On a fresh nullifier, a spend's response is an acceptance or a signer failure exactly when
+its proof verifies, whatever the signer. -/
+theorem okRun_iff (ver : Statement → ByteArray → Bool) (σ : Signer) (st : IssuerState)
+    (req : SpendRequest Z) (ctx : Context) (refund : Credits)
+    (hnd : (ctx, (SpendReq.parse req).nf) ∉ st.store) :
+    okRun (issuerSpend (romPrim lr pkU ver) σ st req ctx refund).2 ↔
+      ver (spStmt lr pkU ⟨pkU.map, (SpendReq.parse req).nf, (SpendReq.parse req).d,
+        (SpendReq.parse req).cNext, ctx⟩) (bOf (SpendReq.parse req).proof) = true := by
+  cases hv : ver (spStmt lr pkU ⟨pkU.map, (SpendReq.parse req).nf, (SpendReq.parse req).d,
+      (SpendReq.parse req).cNext, ctx⟩) (bOf (SpendReq.parse req).proof)
+  · simp [issuerSpend, spendResponse, romPrim, okRun, hv]
+  · cases hσ : σ (tag (SpendReq.parse req).cNext refund) <;>
+      simp [issuerSpend, spendResponse, romPrim, okRun, hv, hσ, hnd]
+
+/-- **The extraction games depend on the signer only through the run's first calls.** -/
+theorem games_congr (hver : VerifierIC CrtGen.tables verQ qV nV eV) (σ σ' : Signer) (g : Table)
+    (E : CTable) (k : ℕ) (hy : ∀ k' ≤ k, yG lr pkU A σ' g E k' = yG lr pkU A σ g E k') :
+    evalWithAnswerFn (QueryImpl.ofFn g) (gameI lr pkU verQ A σ' k E) =
+        evalWithAnswerFn (QueryImpl.ofFn g) (gameI lr pkU verQ A σ k E) ∧
+      evalWithAnswerFn (QueryImpl.ofFn g) (gameS lr pkU verQ A σ' k E) =
+        evalWithAnswerFn (QueryImpl.ofFn g) (gameS lr pkU verQ A σ k E) := by
+  have hs : ∀ (τ : Signer) (w : IssuerState) (q : Op Z), evalWithAnswerFn (QueryImpl.ofFn (join g E))
+      (serveM lr pkU verQ τ w q) = serveP lr pkU (verT g E) τ w q := fun τ =>
+    evalWithAnswerFn_serveM lr pkU _ verQ _ (fun st pf => hver.eval g E st pf) τ
+  have hlog : ∀ (w w' : IssuerState) (q : Op Z),
+      tableQueryLog (serveM lr pkU verQ σ' w q) (join g E) =
+      tableQueryLog (serveM lr pkU verQ σ w' q) (join g E) := by
+    intro w w' q
+    simp only [serveM, tableQueryLog_bind, tableQueryLog_pure]
+  have hst : ∀ k' ≤ k, (roundsT (nextT A g E) (serveP lr pkU (verT g E) σ') A.recv k'
+      (A.init, (⟨[]⟩ : IssuerState), [])).1 =
+      (roundsT (nextT A g E) (serveP lr pkU (verT g E) σ) A.recv k'
+      (A.init, (⟨[]⟩ : IssuerState), [])).1 := fun k' hk' => congrArg Prod.fst (hy k' hk')
+  constructor
+  · obtain ⟨h1, h2⟩ := proverAt_congr A (serveM lr pkU verQ σ') (serveM lr pkU verQ σ) (join g E)
+      (nextT A g E) _ _ (fun _ => rfl) (hs σ') (hs σ) hlog _ pickI k hst
+    exact gameA_congr _ _ E g h1 h2
+  · obtain ⟨h1, h2⟩ := proverAt_congr A (serveM lr pkU verQ σ') (serveM lr pkU verQ σ) (join g E)
+      (nextT A g E) _ _ (fun _ => rfl) (hs σ') (hs σ) hlog _ pickS k hst
+    exact gameA_congr _ _ E g h1 h2
+
+/-- `BadB` at `j` reads the run's first `j` calls, call `j`'s request (and, on a fresh nullifier,
+whether it was verified), and the extracted witnesses up to `j`. -/
+theorem badB_congr (E : CTable) (m m' : List (Op Z × Resp) × List OutI × List OutS) (j : ℕ)
+    (htake : m'.1.take j = m.1.take j) (hw : wSof lr pkU E m' j = wSof lr pkU E m j)
+    (hj : ∀ req ctx refund, (ctx, (SpendReq.parse req).nf) ∉ storeOf (m.1.take j) →
+      ((∃ r, m'.1[j]? = some (.spend req ctx refund, .inr r) ∧ okRun r) ↔
+        (∃ r, m.1[j]? = some (.spend req ctx refund, .inr r) ∧ okRun r))) :
+    BadB lr pkU E m' j ↔ BadB lr pkU E m j := by
+  unfold BadB
+  rw [htake, hw]
+  constructor
+  · rintro ⟨req, ctx, refund, r, h1, h2, h3⟩
+    obtain ⟨r', h1', h2'⟩ := (hj req ctx refund h3.1).1 ⟨r, h1, h2⟩
+    exact ⟨req, ctx, refund, r', h1', h2', h3⟩
+  · rintro ⟨req, ctx, refund, r, h1, h2, h3⟩
+    obtain ⟨r', h1', h2'⟩ := (hj req ctx refund h3.1).2 ⟨r, h1, h2⟩
+    exact ⟨req, ctx, refund, r', h1', h2', h3⟩
+
+/-- **`B` uses the signer only through its logs** (`TagForger.reads`). -/
+theorem bOut_reads (hver : VerifierIC CrtGen.tables verQ qV nV eV) (σ σ' : Signer) (g : Table)
+    (E : CTable)
+    (hs : ∀ q ∈ (bOut lr pkU E (evalWithAnswerFn (QueryImpl.ofFn g)
+      (master lr pkU verQ A N σ E))).2.1, σ' (tag q.1 q.2) = σ (tag q.1 q.2))
+    (hp : ∀ q ∈ (bOut lr pkU E (evalWithAnswerFn (QueryImpl.ofFn g)
+      (master lr pkU verQ A N σ E))).2.2, (σ' (tag q.1 q.2)).isSome = (σ (tag q.1 q.2)).isSome) :
+    bOut lr pkU E (evalWithAnswerFn (QueryImpl.ofFn g) (master lr pkU verQ A N σ' E)) =
+      bOut lr pkU E (evalWithAnswerFn (QueryImpl.ofFn g) (master lr pkU verQ A N σ E)) := by
+  classical
+  rw [evalWithAnswerFn_master] at hs hp ⊢
+  rw [evalWithAnswerFn_master]
+  -- The two runs' data.
+  have hwS : ∀ (τ : Signer) k, k < N → wSof lr pkU E ((balT lr pkU A N τ g E).2.2,
+      (List.range N).map (fun k => evalWithAnswerFn (QueryImpl.ofFn g) (gameI lr pkU verQ A τ k E)),
+      (List.range N).map (fun k => evalWithAnswerFn (QueryImpl.ofFn g) (gameS lr pkU verQ A τ k E)))
+        k = annS lr pkU E (evalWithAnswerFn (QueryImpl.ofFn g) (gameS lr pkU verQ A τ k E)) :=
+    fun τ k hk => by simp [wSof, List.getElem?_map, List.getElem?_range hk]
+  have hbal : ∀ τ : Signer, (balT lr pkU A N τ g E).2.2 = (yG lr pkU A τ g E N).2.2 := fun _ => rfl
+  by_cases h : ∃ j, BadB lr pkU E ((balT lr pkU A N σ g E).2.2,
+      (List.range N).map (fun k => evalWithAnswerFn (QueryImpl.ofFn g) (gameI lr pkU verQ A σ k E)),
+      (List.range N).map (fun k => evalWithAnswerFn (QueryImpl.ofFn g) (gameS lr pkU verQ A σ k E))) j
+  · unfold bOut at hs hp
+    rw [dite_eq_left h] at hs hp
+    obtain ⟨j, hjdef⟩ : ∃ j, Nat.find h = j := ⟨_, rfl⟩
+    have hspec := Nat.find_spec h
+    have hmin : ∀ n < j, ¬ BadB lr pkU E ((balT lr pkU A N σ g E).2.2,
+        (List.range N).map (fun k => evalWithAnswerFn (QueryImpl.ofFn g) (gameI lr pkU verQ A σ k E)),
+        (List.range N).map (fun k => evalWithAnswerFn (QueryImpl.ofFn g) (gameS lr pkU verQ A σ k E)))
+          n := fun n hn => Nat.find_min h (by rw [hjdef]; exact hn)
+    rw [hjdef] at hs hp hspec
+    obtain ⟨req0, ctx0, refund0, r0, hj0, -, -, -, -⟩ := id hspec
+    have hjN : j < N := by
+      have := lt_of_getElem? hj0
+      simp only at this
+      have hl : (balT lr pkU A N σ g E).2.2.length = N := by rw [hbal, length_trace]
+      omega
+    have hy := yT_signer lr pkU (verT g E) (nextT A g E) A.recv A.init σ σ' hjN.le
+      (fun q hq => hs q hq) (fun q hq => hp q hq)
+    have hgames : ∀ k ≤ j, _ := fun k hk =>
+      games_congr lr pkU verQ A hver σ σ' g E k fun k' hk' => hy k' (hk'.trans hk)
+    have htake : ∀ k ≤ j, (balT lr pkU A N σ' g E).2.2.take k =
+        (balT lr pkU A N σ g E).2.2.take k := fun k hk => by
+      rw [hbal, hbal, take_trace _ _ _ _ _ _ _ (hk.trans hjN.le),
+        take_trace _ _ _ _ _ _ _ (hk.trans hjN.le), hy k hk]
+    have hw : ∀ k ≤ j, wSof lr pkU E ((balT lr pkU A N σ' g E).2.2,
+        (List.range N).map (fun k => evalWithAnswerFn (QueryImpl.ofFn g) (gameI lr pkU verQ A σ' k E)),
+        (List.range N).map (fun k => evalWithAnswerFn (QueryImpl.ofFn g) (gameS lr pkU verQ A σ' k E)))
+          k = wSof lr pkU E ((balT lr pkU A N σ g E).2.2,
+        (List.range N).map (fun k => evalWithAnswerFn (QueryImpl.ofFn g) (gameI lr pkU verQ A σ k E)),
+        (List.range N).map (fun k => evalWithAnswerFn (QueryImpl.ofFn g) (gameS lr pkU verQ A σ k E)))
+          k := fun k hk => by
+      rw [hwS σ' k (hk.trans_lt hjN), hwS σ k (hk.trans_lt hjN), (hgames k hk).2]
+    -- Calls before `j` are the same in both runs.
+    have hbefore : ∀ k < j, (balT lr pkU A N σ' g E).2.2[k]? =
+        (balT lr pkU A N σ g E).2.2[k]? := fun k hk => by
+      rw [← List.getElem?_take_of_lt (Nat.lt_succ_self k), ← List.getElem?_take_of_lt
+        (Nat.lt_succ_self k) (l := (balT lr pkU A N σ g E).2.2), htake (k + 1) hk]
+    -- Call `j`: the same request; verified on a fresh nullifier in both or in neither.
+    have hat : ∀ req ctx refund, (ctx, (SpendReq.parse req).nf) ∉
+        storeOf ((balT lr pkU A N σ g E).2.2.take (j)) →
+        ((∃ r, (balT lr pkU A N σ' g E).2.2[j]? = some (.spend req ctx refund, .inr r) ∧
+          okRun r) ↔
+        (∃ r, (balT lr pkU A N σ g E).2.2[j]? = some (.spend req ctx refund, .inr r) ∧
+          okRun r)) := by
+      intro req ctx refund hnd
+      rw [hbal, take_trace _ _ _ _ _ _ _ hjN.le, ← store_yT] at hnd
+      rw [hbal, hbal, getElem?_trace _ _ _ _ _ _ _ hjN, getElem?_trace _ _ _ _ _ _ _ hjN]
+      simp only [recT, recOf, Option.some.injEq]
+      rw [hy _ le_rfl]
+      generalize (nextT A g E (yT lr pkU (verT g E) σ (nextT A g E) A.recv A.init j).1).1 = op
+      cases op with
+      | issue rq ti cx => simp [serveP]
+      | spend rq cx rf =>
+        simp only [serveP, Prod.mk.injEq, Op.spend.injEq, Sum.inr.injEq]
+        constructor
+        · rintro ⟨r, ⟨⟨rfl, rfl, rfl⟩, rfl⟩, hok⟩
+          refine ⟨_, ⟨⟨rfl, rfl, rfl⟩, rfl⟩, ?_⟩
+          rw [okRun_iff lr pkU _ σ' _ _ _ _ hnd] at hok
+          rw [okRun_iff lr pkU _ σ _ _ _ _ hnd]
+          exact hok
+        · rintro ⟨r, ⟨⟨rfl, rfl, rfl⟩, rfl⟩, hok⟩
+          refine ⟨_, ⟨⟨rfl, rfl, rfl⟩, rfl⟩, ?_⟩
+          rw [okRun_iff lr pkU _ σ _ _ _ _ hnd] at hok
+          rw [okRun_iff lr pkU _ σ' _ _ _ _ hnd]
+          exact hok
+    have hbad : ∀ k ≤ j, BadB lr pkU E ((balT lr pkU A N σ' g E).2.2,
+        (List.range N).map (fun k => evalWithAnswerFn (QueryImpl.ofFn g) (gameI lr pkU verQ A σ' k E)),
+        (List.range N).map (fun k => evalWithAnswerFn (QueryImpl.ofFn g) (gameS lr pkU verQ A σ' k E)))
+          k ↔ BadB lr pkU E ((balT lr pkU A N σ g E).2.2,
+        (List.range N).map (fun k => evalWithAnswerFn (QueryImpl.ofFn g) (gameI lr pkU verQ A σ k E)),
+        (List.range N).map (fun k => evalWithAnswerFn (QueryImpl.ofFn g) (gameS lr pkU verQ A σ k E)))
+          k := by
+      intro k hk
+      refine badB_congr lr pkU E _ _ k (htake k hk) (hw k hk) fun req ctx refund _ => ?_
+      rcases hk.lt_or_eq with hk | rfl
+      · rw [hbefore k hk]
+      · exact hat req ctx refund ‹_›
+    have h' : ∃ j, BadB lr pkU E ((balT lr pkU A N σ' g E).2.2,
+        (List.range N).map (fun k => evalWithAnswerFn (QueryImpl.ofFn g) (gameI lr pkU verQ A σ' k E)),
+        (List.range N).map (fun k => evalWithAnswerFn (QueryImpl.ofFn g) (gameS lr pkU verQ A σ' k E)))
+          j := ⟨j, (hbad _ le_rfl).2 hspec⟩
+    have hfind : Nat.find h' = j := by
+      rw [Nat.find_eq_iff]
+      exact ⟨(hbad _ le_rfl).2 hspec, fun n hn hb => hmin n hn ((hbad n hn.le).1 hb)⟩
+    unfold bOut
+    rw [dite_eq_left h', dite_eq_left h, hfind, hjdef, htake _ le_rfl]
+    congr 1
+    unfold forgeAt
+    rw [hw _ le_rfl, hbal, hbal, getElem?_trace _ _ _ _ _ _ _ hjN,
+      getElem?_trace _ _ _ _ _ _ _ hjN]
+    simp only [recT, recOf]
+    rw [hy _ le_rfl]
+    generalize (nextT A g E (yT lr pkU (verT g E) σ (nextT A g E) A.recv A.init j).1).1 = op
+    cases op <;> rfl
+  · -- No forgery: the logs cover the whole run, so the two runs agree.
+    unfold bOut at hs hp
+    rw [dite_eq_right h] at hs hp
+    have hlen : (yG lr pkU A σ g E N).2.2.take N = (yG lr pkU A σ g E N).2.2 :=
+      List.take_of_length_le (by rw [length_trace])
+    have hy := yT_signer lr pkU (verT g E) (nextT A g E) A.recv A.init σ σ' le_rfl
+      (fun q hq => hs q (by rw [hlen] at hq; exact hq))
+      (fun q hq => hp q (by rw [hlen] at hq; exact hq))
+    have hdata : ((balT lr pkU A N σ' g E).2.2,
+        (List.range N).map (fun k => evalWithAnswerFn (QueryImpl.ofFn g) (gameI lr pkU verQ A σ' k E)),
+        (List.range N).map (fun k => evalWithAnswerFn (QueryImpl.ofFn g) (gameS lr pkU verQ A σ' k E))) =
+        ((balT lr pkU A N σ g E).2.2,
+        (List.range N).map (fun k => evalWithAnswerFn (QueryImpl.ofFn g) (gameI lr pkU verQ A σ k E)),
+        (List.range N).map (fun k => evalWithAnswerFn (QueryImpl.ofFn g) (gameS lr pkU verQ A σ k E))) := by
+      refine Prod.ext (congrArg (·.2.2) (hy N le_rfl)) (Prod.ext ?_ ?_)
+      · refine List.map_congr_left fun k hk => ?_
+        exact (games_congr lr pkU verQ A hver σ σ' g E k fun k' hk' =>
+          hy k' (hk'.trans (List.mem_range.1 hk).le)).1
+      · refine List.map_congr_left fun k hk => ?_
+        exact (games_congr lr pkU verQ A hver σ σ' g E k fun k' hk' =>
+          hy k' (hk'.trans (List.mem_range.1 hk).le)).2
+    rw [hdata]
+
+end Reads
+
+/-- **The forger `B`** of the reduction: it runs the game and the extraction games with the
+Issuer's signer, and outputs `bOut`. It is a UF-Tag forger with a signability probe
+(`bOut_reads`). -/
+noncomputable def forger (A : RoundAdv S (Op Z) Resp) (N : ℕ) {qV : Kind → ℕ} {nV : ℕ}
+    {eV : Params → ℕ} (hver : VerifierIC CrtGen.tables verQ qV nV eV) : TagForger where
+  run σ E := bOut lr pkU E <$> master lr pkU verQ A N σ E
+  reads σ σ' E g hs hp := by
+    rw [evalWithAnswerFn_map] at hs hp ⊢
+    rw [evalWithAnswerFn_map]
+    exact bOut_reads lr pkU verQ A N hver σ σ' g E hs hp
+
+/-- **The reduction's forgery event is bounded by `B`'s UF-Tag advantage.** -/
+theorem forgeAdv_le_ufTag (A : RoundAdv S (Op Z) Resp) (N : ℕ) (σ : Signer) {qV : Kind → ℕ}
+    {nV : ℕ} {eV : Params → ℕ} (hver : VerifierIC CrtGen.tables verQ qV nV eV) :
+    forgeAdv lr pkU verQ A N σ ≤ ufTagAdv pkU.map σ (forger lr pkU verQ A N hver) := by
+  unfold forgeAdv ufTagAdv
+  let : MeasurableSpace CTable := ⊤
+  rw [prEvent_bind_of_discrete, prEvent_bind_of_discrete]
+  refine MeasureTheory.lintegral_mono fun E => ?_
+  refine prEvent_le_of_table (master lr pkU verQ A N σ E) ((forger lr pkU verQ A N hver).run σ E)
+    _ _ fun g hF => ?_
+  simp only [forger, evalWithAnswerFn_map]
+  exact forge_ufwin lr pkU verQ A N σ g E hF
+
+/-- **Theorem 1 (balance), with the UF-Tag advantage of the explicit forger `B`**:
+
+    Pr[win BAL] ≤ N·ε_iss + N·ε_spend + Adv^{uf-tag}(B) + Adv^{coll}_{Com}(C),
+
+`B = forger … (verifierIC_verifyIC _)` a UF-Tag forger with a signability probe (it uses the
+signer only through its signing log and, on the duplicate-nullifier path, its success bit), `C`
+the collision finder of the reduction. -/
+theorem balance_le_ufTag (A : RoundAdv S (Op Z) Resp) (N : ℕ) (σ : Signer)
+    (hdig : pkU.digest.size = 32) {qA : Kind → ℕ} {nA eA : ℕ}
+    (hqA : ∀ s, IsKindQueryBoundIC (A.next s) qA)
+    (hnA : ∀ s, IsQueryBoundP (A.next s) (fun t => t.isLeft = true) nA)
+    (heA : ∀ s, IsQueryBoundP (A.next s) (fun t => t.isRight = true) eA) :
+    Pr{let E ← $ᵗ CTable; let r ← (simulateQ randomOracle (balQ lr pkU A N σ E)).run' ∅}[
+        Win r.2.2] ≤
+      N * epsIss (N * (eA + eVR lr pkU cipherCount)) (N • (qA + verifierQueriesIC)) +
+        N * epsSpend (N * (eA + eVR lr pkU cipherCount)) (N * (nA + (verifierTotal + 2)))
+          (N • (qA + verifierQueriesIC)) +
+        ufTagAdv pkU.map σ (forger lr pkU verQL A N (verifierIC_verifyIC CrtGen.tables)) +
+        collAdv lr pkU verQL A N σ := by
+  refine le_trans (balance_le_lean lr pkU A N σ hdig hqA hnA heA) ?_
+  have h := forgeAdv_le_ufTag lr pkU verQL A N σ (verifierIC_verifyIC CrtGen.tables)
+  generalize forgeAdv lr pkU verQL A N σ = a at h ⊢
+  generalize ufTagAdv pkU.map σ (forger lr pkU verQL A N (verifierIC_verifyIC CrtGen.tables)) = b
+    at h ⊢
+  gcongr
+
 end VoleMole.ROM.IC.RatBalance

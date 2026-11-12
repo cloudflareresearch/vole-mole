@@ -642,4 +642,10 @@ example (σ : IC.RatBalance.Signer) (N : ℕ) (lr : Bool) :=
     (by decide) (qA := 0) (nA := 0) (eA := 0) (fun _ => trivial)
     (fun _ => isQueryBoundP_pure _ _ _) (fun _ => isQueryBoundP_pure _ _ _)
 
+/-- The same for `balance_le_ufTag` (the forgery term as the UF-Tag advantage of the forger). -/
+example (σ : IC.RatBalance.Signer) (N : ℕ) (lr : Bool) :=
+  IC.RatBalance.balance_le_ufTag lr ⟨ByteArray.mk (Array.replicate 32 0), ByteArray.empty⟩ balA0 N σ
+    (by decide) (qA := 0) (nA := 0) (eA := 0) (fun _ => trivial)
+    (fun _ => isQueryBoundP_pure _ _ _) (fun _ => isQueryBoundP_pure _ _ _)
+
 end VoleMole.Audit
