@@ -270,8 +270,10 @@ lemma bcomb_serve (x' : X') (hB : Hn') (w : CSt AR AC X' X G Hn' St) (hk : w.1.k
 lemma comb_fresh' (x : X) (h : G) (p : (X → Option (G × G)) × Ch (WA AR AC) X G G)
     (hx : p.1 x = none) (t : G) (r : List G) (hr : p.2.rest = t :: r) :
     (combImpl (S := S) addHint pre (.inr (.inl (x, h)))).run p =
-      pure ((t - h, h), (Function.update p.1 x (some (t - h, h)),
-        ⟨p.2.ro, r, Function.update p.2.tg x (some (t, h)), p.2.iq⟩)) := by
+      (pure ((t - h, h), (Function.update p.1 x (some (t - h, h)),
+        ⟨p.2.ro, r, Function.update p.2.tg x (some (t, h)), p.2.iq⟩)) :
+        ProbComp ((specA (WA AR AC) X G G S).Range (.inr (.inl (x, h))) ×
+          ((X → Option (G × G)) × Ch (WA AR AC) X G G))) := by
   simp [combImpl, redImpl, hx]
   erw [simulateQ_spec_query]
   simp [chImpl, hr, addHint, sub_eq_add_neg]
@@ -298,6 +300,89 @@ lemma startRun_supp (w : CSt AR AC X' X G Hn' St) (z) (hz : z ∈ support (start
     obtain ⟨r, hr, rfl⟩ := hy'
     exact ⟨hq.1, hq.2.1, hq.2.2.1, hq.2.2.2.1, (roR_resL _ d r hr).trans hq.2.2.2.2⟩
   exact simulateQ_run_preservesInv _ I hI _ w.2 ⟨rfl, rfl, rfl, rfl, rfl⟩ z hz
+
+/-! ### The forger against the challenger is `B` in `omExp` -/
+
+/-- `y` is a label of session `j` (an output of `start j`). -/
+def Lab (j : ℕ) (y : X) : Prop := ∃ a ∈ support (cl.start pk κ j), a.1 = y
+
+/-- **The sessions' labels are pairwise distinct** (for PomFRIT: distinct messages). -/
+def Distinct : Prop :=
+  ∀ i j, i ≠ j → ∀ a ∈ support (cl.start pk κ i), ∀ b ∈ support (cl.start pk κ j), a.1 ≠ b.1
+
+/-- `B`'s challenger state that the forger's state represents: `B`'s part of the world cache, the
+stream, for each of `B`'s labels the challenge target of its session's label with `B`'s hint, the
+preimage queries. -/
+def piB (w : CSt AR AC X' X G Hn' St) : Ch AR X' Hn' G :=
+  ⟨resL w.2.2.ro, w.2.2.rest,
+    fun x' => (w.1.ses x').bind fun e => (w.2.2.tg e.x).map fun p => (p.1, e.hB), w.2.2.iq⟩
+
+/-- The invariant of the forger's run: one target per remaining session; `red`'s table, the
+challenger's labelled targets and the sessions only hold labels of started sessions; each of `B`'s
+labels has its own session. -/
+structure InvC (w : CSt AR AC X' X G Hn' St) : Prop where
+  len : w.2.2.rest.length + w.1.k = n
+  rt : ∀ y, w.2.1 y ≠ none → ∃ j < w.1.k, Lab cl pk κ j y
+  tg : ∀ y, w.2.2.tg y ≠ none → ∃ j < w.1.k, Lab cl pk κ j y
+  ses : ∀ x' e, w.1.ses x' = some e → e.idx < w.1.k ∧ Lab cl pk κ e.idx e.x
+  inj : ∀ x' y' e e', w.1.ses x' = some e → w.1.ses y' = some e' → e.idx = e'.idx → x' = y'
+
+lemma fresh_of_inv (hD : Distinct cl pk κ) {w : CSt AR AC X' X G Hn' St} (hw : InvC cl n pk κ w)
+    {o : X × G × St} (ho : o ∈ support (cl.start pk κ w.1.k)) :
+    w.2.1 o.1 = none ∧ w.2.2.tg o.1 = none ∧ ∀ x' e, w.1.ses x' = some e → e.x ≠ o.1 := by
+  have hn : ∀ j < w.1.k, ¬ Lab cl pk κ j o.1 := fun j hj ⟨a, ha, he⟩ =>
+    hD j w.1.k (ne_of_lt hj) a ha o ho he
+  refine ⟨?_, ?_, fun x' e he hx => ?_⟩
+  · by_contra h; obtain ⟨j, hj, hl⟩ := hw.rt _ h; exact hn j hj hl
+  · by_contra h; obtain ⟨j, hj, hl⟩ := hw.tg _ h; exact hn j hj hl
+  · obtain ⟨hj, hl⟩ := hw.ses x' e he; exact hn _ hj (hx ▸ hl)
+
+lemma pure_eqd_of_eq {α : Type} {a b : α} (h : a = b) :
+    (pure a : ProbComp α) =ᵈ (pure b : ProbComp α) := by
+  subst h; exact EvalDistEq.rfl
+
+theorem bcomb_step (hD : Distinct cl pk κ) (q : DR ⊕ ((X' × Hn') ⊕ G)) (w : CSt AR AC X' X G Hn' St)
+    (hw : InvC cl n pk κ w) :
+    (fun z => (z.1, piB z.2)) <$> (bcomb cl n pre pk κ q).run w =ᵈ (chImpl pre q).run (piB w) := by
+  rcases q with d | ⟨x', hB⟩ | t
+  · rw [bcomb_inl]
+    show _ =ᵈ roStep d (piB w)
+    simp only [roStep, Functor.map_map]
+    erw [← roL w.2.2.ro d, Functor.map_map]
+    exact EvalDistEq.rfl
+  · by_cases hk : w.1.k < n
+    · cases hr : w.2.2.rest with
+      | nil => have := hw.len; rw [hr] at this; simp at this; omega
+      | cons t r =>
+        rw [bcomb_serve cl n pre pk κ x' hB w hk]
+        erw [map_bind]
+        let C : Ch AR X' Hn' G := ⟨resL w.2.2.ro, r,
+          Function.update (piB w).tg x' (some (t, hB)), w.2.2.iq⟩
+        refine (EvalDistEq.bind_congr_of_support _ fun op hop => ?_ :
+          _ =ᵈ startRun cl pre pk κ w >>= fun _ => pure (some t, C)).trans ?_
+        · obtain ⟨ho, h1, h2, h3, h4, h5⟩ := startRun_supp cl pre pk κ w op hop
+          obtain ⟨hf1, hf2, hf3⟩ := fresh_of_inv cl n pk κ hD hw ho
+          rw [comb_fresh' pre op.1.1 op.1.2.1 op.2 (by rw [h1]; exact hf1) t r (by rw [h2, hr])]
+          simp only [pure_bind, sub_add_cancel]
+          erw [map_pure]
+          refine pure_eqd_of_eq (Prod.ext rfl ?_)
+          simp only [piB, C, h3, h4, h5]
+          congr 1
+          funext y'
+          by_cases hy : y' = x'
+          · subst hy; simp
+          · simp only [Function.update_of_ne hy]
+            cases he : w.1.ses y' with
+            | none => rfl
+            | some e => simp [Function.update_of_ne (hf3 y' e he)]
+        · refine (bind_unused _ _).trans ?_
+          simp [chImpl, piB, C, hr]
+    · have hr : w.2.2.rest = [] := by
+        have := hw.len; exact List.eq_nil_of_length_eq_zero (by omega)
+      rw [bcomb_stop cl n pre pk κ x' hB w hk]
+      simp [chImpl, piB, hr]
+  · rw [bcomb_iss]
+    simp [chImpl, piB]
 
 end Comb
 
