@@ -290,6 +290,8 @@ import VoleMole.Privacy.ComHide
 import VoleMole.ZK.AcceptVarData
 import VoleMole.ZK.AcceptVar
 import VoleMole.ZK.CompleteRO
+import VoleMole.Assumptions.UOV
+import VoleMole.Assumptions.UOVLinks
 import VoleMole.Audit.Nonvacuous
 import VoleMole.Audit.Liveness
 import VoleMole.Audit.UnboundROM
