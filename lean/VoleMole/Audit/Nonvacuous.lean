@@ -12,6 +12,7 @@ import VoleMole.ROM.SpecSound
 import VoleMole.Privacy.PqovDelta
 import VoleMole.Privacy.PqovKeys
 import VoleMole.ROM.PrivacyReadsNC
+import VoleMole.Privacy.SeedXOFDS
 
 /-!
 # Non-vacuity checks for the headline theorems
@@ -646,5 +647,21 @@ example (O : Bool → OilMat) (P1 : Bool → ℕ → GF256) (P2 : Bool → P2Par
 example (O : OilMat) (P1 : ℕ → GF256) := avg_delta255_pqovKey O P1
 
 end NCPqov
+
+/-! ## Lemma DS (c): PomFRIT's seed XOF on the single SHAKE oracle
+
+A party that evaluates SHAKE at one input of the seed-XOF shape (as an honest prover does when a
+proof-system input has that shape, F-DS2) satisfies the read budget with `q = 1`. -/
+
+section SeedDS
+
+open VoleMole.Privacy VoleMole.Privacy.SeedDS
+
+example (k : Seed) (t : Str 46) :=
+  seedXofDS_two_le (m := 46) (Y := Bool) (T := Unit)
+    (fun H u _ => H ((pomfritLayout 46).xof k t) = u false t)
+    fun u _ => Layout.RdXof.read_xof (pomfritLayout 46) k t fun y => y = u false t
+
+end SeedDS
 
 end VoleMole.Audit
