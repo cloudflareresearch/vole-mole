@@ -51,6 +51,11 @@ CT-UF and UF-Tag wins do not count queries).
   CT-UF^open (which the Moussaka corollary uses), and `advCTUFXAt` (CT-UF^×: freshness up to a
   class relation, for UOV nonzero scalars, `Links.uovCls`), which the rescaling forger does not
   win (`Links.not_ctxWin_scale`).
+* `advCTUFIdeal`, `advCTUFIdeal1`, `advCTUFIdealAt` (item 11 with an **ideal `Com`**, §5.4): `Com`
+  is an oracle, a lazy random function (`LazyIdeal.rfFresh`), and the forger an oracle
+  computation (`specCI`); the win `CIWin` reads `Com`'s table after the challenger evaluated it at
+  `x*` and the openings. `preFailPr`: the probability that `D` fails on a uniform target. T4 and
+  the `K`-key step are in `Assumptions/CTUFOpenOMPR.lean`.
 * `advUFTag` (item 12) and `advUFTagProbe` (UF-Tag with a signability probe: the forger also learns,
   at the points of its probe log, whether `σ` succeeds): oracle `m ↦ σ(H(m))`; win: a preimage of
   `H(m*)` for an `m*` none of whose signing queries was answered.

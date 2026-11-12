@@ -38,7 +38,7 @@ checkout `subprojects/pqov` (revision `fac2ec1`, UOV round-3 code, with
 | T1 | A-OMPI ≡ det-FDH EUF-CMA (ROM); `Adv^{euf}_{spec} ≤ Adv^{ompi} ≤ Adv^{suf}_{spec}`; `Adv^{ompi} ≤ Adv^{ompr}` | tight (SUF step: `q_H` signing queries) | §5.1 |
 | T2 | A-OMPI ⇐ GPI + OW, or ⇐ GPI + UOV problem | `q_T` | §5.2 |
 | T3 | EUF-CMA of the **specified** salted UOV ⇐ GPI + UOV problem. (The spec's own proof is for salt-UOV, a different signer.) | `q_H + 1` on UOV, none on GPI | §5.3 |
-| T4 | **Lemma U is incorrect as stated**: CT-UF with an arbitrary-target signing oracle is not shown to follow from OMPR. CT-UF^open ⇐ OMPR, tightly; CT-UF^open ⇐ GPI + OW | tight / `q_π` | §5.4 |
+| T4 | **Lemma U is incorrect as stated**: CT-UF with an arbitrary-target signing oracle is not shown to follow from OMPR. CT-UF^open ⇐ OMPR, tightly ([Lean] with `Com` a random function, plus a sampler-failure term the paper omitted: `advCTUFIdeal1_le_ompr`, `K` keys `advCTUFIdeal_le_ompr`); CT-UF^open ⇐ GPI + OW | tight / `q_π` | §5.4 |
 | T5 | With R1, Ratatouille balance ⇐ EUF-CMA of salted UOV with `H = Tag`, which ⇐ GPI + UOV (or ⇐ UOV alone with salt-UOV signing) | `q_K + 1` | §5.5 |
 | T6 | **PomFRIT ⇔ OMPR**: an OMPR breaker *is* a PomFRIT one-more forger. So OMPR ≤ PomFRIT ≤ OMPR⊕17 | tight | §5.6 |
 | P7 | OMPR does not reduce to the UOV problem, OW or any EUF/SUF-CMA notion by a key-preserving black-box reduction (theorems A1–A3 of `uov-open-structure.md`; §5.7 has the original sketch). Determinism makes a separation easier, not harder (A2) | `k + 1` (runs of the adversary) | §5.7, `uov-open-structure.md` Part A |
@@ -449,6 +449,62 @@ itself.
     `q_S` calls.
 - Runs in which some call missed are runs in which `A` loses (outside the bad events). `B` does not
   need to win those. ∎
+
+**Corrections (found while mechanizing; the Lean statement is below).**
+- *The middle term is not needed.* OMPR does not ask that a call be made after its target was
+  issued, or on a target at all: the win only counts calls and checks the claimed preimages. If a
+  signed `t` is only later the `Com` value of its opening, `B` still holds a preimage of that
+  challenge (the oracle's answer on `t`). So `q_S·(q_f + q_S + 1)·2^{−359.9}` can be dropped. The
+  same holds in the permutation model.
+- *The sampler may fail.* `D = derive_preimage` returns `⊥` after 255 vinegar attempts. A claim
+  from a failed answer is not a preimage, so `B` loses. Add `n·failPr`, the probability that some
+  of the `n` targets is a failure point of `D` (`failPr = E[δ^{255}]`, about `2^{−295.8}` for
+  pqov's key generation, `Privacy/PqovKeys.lean` `avg_delta255_pqovKey`).
+- *Repeated queries and padding.* Def. 3.1 wins with exactly `ℓ + 1` claims on distinct targets
+  after at most `ℓ` calls. `B` must cache repeated `Sign` queries (else it pays twice for one
+  claim), and, if `A` signed `d < q_S` distinct targets, pad with `q_S − d` fresh targets and
+  their preimages. With `B` evaluating `Com` on every opening (at most `q_S`) and then padding,
+  `B` uses up to `q_f + 2q_S + 1` targets. (The note's `q_f + q_S + 1` holds when `A` signs
+  exactly `q_S` distinct targets, or with a `B` that pads with targets of unused openings.)
+
+**Lean (random-function version).** `lean/VoleMole/Assumptions/CTUFOpenOMPR.lean`, with `Com` a
+lazy random function `D_Com → F^{45}` (no inverse queries; the permutation with inverse access is
+not mechanized). The ideal game is `advCTUFIdeal1` / `advCTUFIdeal` / `advCTUFIdealAt`
+(`Assumptions/UOV.lean`: the forger is an oracle computation with the world, the signers and
+`Com`; the challenger evaluates `Com` at `x*` and at every opening; the win `CIWin` reads `Com`'s
+table). For a forger with at most `q_f` `Com` and `q_S` signing queries and `q_S` openings
+(`CIBudget`), `n = q_f + 2q_S + 1` and `failPr = preFailPr`:
+
+    Adv^{ct-uf-open}_1(F) ≤ Adv^{ompr}(ompRed q_S F; n, q_S) + n·failPr          (advCTUFIdeal1_le_ompr)
+    Adv^{ct-uf-open}_K(F) ≤ Σ_j Adv^{ct-uf-open}_1(guessKey j F)                   (advCTUFIdeal_le_sum)
+                         ≤ Σ_j Adv^{ompr}(B_j; n, q_S) + K·n·failPr                (advCTUFIdeal_le_ompr)
+
+`Adv^{ompr}` is the on-demand game `advOMPR`, at most Def. 3.1's advantage of `popAdv`
+(`advOMPR_le_ompr31`). The `K`-key step is also stated at fixed keys (`advCTUFIdealAt_le_sum`,
+`advCTUFIdealAt_le_ompr`, with the OMPR game at a fixed key, `Trapdoor.atKey`), the form the
+Moussaka theorem needs. The proof:
+- `B` (`ompRed`, a `QueryImpl` `rImpl` plus `claimsQ`) answers a fresh `Com(x)` with a fresh
+  challenge target labelled `x`, forwards a new `Sign(t)` to the preimage oracle and caches it,
+  claims `(x*, s*)` and each signed target's answer under the label of the first opening with
+  that `Com` value (`baseCl`), and pads with fresh labels `inr i` (`padQ`).
+- Pre-sampling (`LazyIdeal.rfStream_presample`): with at most `k ≤ m` queries, a lazy random
+  function equals one fed from `m` uniform values.
+- `B` against the OMPR challenger, projected, is the ideal challenger fed from the targets
+  (`combC_run_proj`, step by step under the invariant `InvC`); the stream is long enough
+  (`combC_budget`, from VCVio's cost lemma).
+- On every such run where the forger wins, `B` wins or some target is a failure point of `D`
+  (`win_imp`; the counting is `one_more_count`'s, with the padding `padQ_run`). Union bound over
+  the targets: `LazyIdeal.prEvent_unifList_exists_le`.
+- `K` keys: the guessing forger `guessKey j F` generates `K` keys, puts the challenge key at
+  `j`, and answers the other keys' signing queries itself (`guessImpl`); seen from key `j`, the
+  `K`-key run is its one-key run (`guess_run`), and re-embedding a fresh key keeps the keys iid
+  (`LazyIdeal.iidVec_update`).
+
+**How the concrete game relates.** The CT-UF^open game of `advCTUFOpenAt` (Moussaka's
+`Com = KP800(·)|_{360}`, read by the forger as a function) is not reduced to the ideal one: that
+replacement is the modelling step of this section, and is a hypothesis (`hmodel`) of the Moussaka
+corollary `Links.omuf_le_num_ompr`. It is sound only in the standalone game, which contains no
+proof about `Com`'s circuit.
 
 **CT-UF^open from GPI and OW.**
 
@@ -931,7 +987,8 @@ hash-and-sign with retry [KX24]).
 | Cores of `uov-open-reductions.md`: combiner forest, lottery accounting, the rewinding supermartingale inequality | `combiner_count`, `lottery_count`, `four_mul_le_pow`, `rewind_supermartingale` |
 | Scaling symmetry of `P` and the one-query CT-UF attack (`Spec/PqovScale.lean`) | `qmap_smul`, `sq_pow_128`, `scaled_preimage`, `ctuf_scaling_attack` |
 
-The probabilistic steps (Lemma D, the hybrid games, the ideal-permutation bookkeeping) are on paper.
+The probabilistic steps (Lemma D, the hybrid games, the ideal-permutation bookkeeping) are on paper,
+except T4 with `Com` a random function (below).
 
 **The assumptions as games** (`lean/VoleMole/Assumptions/UOV.lean`, `UOVLinks.lean`; no `sorry`,
 no `axiom`). A *trapdoor* (`Trapdoor`) is a key generator, the preimage relation `IsPre pk s t`
@@ -948,6 +1005,7 @@ no `axiom`). A *trapdoor* (`Trapdoor`) is a key generator, the preimage relation
 | 10 | `advCTUF`, `advCTUFAt` | **false for UOV**: `ctuf_pqov_broken` (the rescaling forger `scaleForger` wins with probability 1, from `ctuf_scaling_attack`) |
 | — | `advCTUFXAt` (CT-UF^×, freshness up to a class; `uovCls`: nonzero scalars) | `advCTUFXAt_le`; the rescaling forger loses it (`not_ctxWin_scale`) |
 | 11 | `advCTUFOpen`, `advCTUFOpenAt` | `advCTUFOpenAt_le`: ≤ CT-UF |
+| 11, ideal `Com` | `advCTUFIdeal`, `advCTUFIdeal1`, `advCTUFIdealAt` (`Com` a lazy random function, `CIWin`) | `advCTUFIdeal1_le_ompr` (T4), `advCTUFIdeal_le_sum` (`K` keys); §5.4 |
 | 12 | `advUFTag`, `advUFTagProbe` (and `…At`) | `advUFTagAt_eq_probe`: a forger without probe is a probe forger |
 
 CT-UF and UF-Tag are *semantic-oracle* games (`SemForger`, the form of Ratatouille's
@@ -971,7 +1029,22 @@ The protocol terms:
   `pomTrap KG pre` by definition (`pomfrit_U1_ompr`, `pomfrit_U2_omprShift`), and U1's is at most
   Def. 3.1's advantage of `popAdv` (`advOMPR_le_ompr31`; instantiated in `Audit/Nonvacuous.lean`).
 
-Not mechanized: the reductions between the games (T1–T6, P8), OMPR^free, and items 4 and 5.
+- **Moussaka down to OMPR** (`Links.omuf_le_num_ompr`): `omuf_le_num_open` with the CT-UF^open
+  term bounded, under the modelling hypothesis `hmodel` (concrete `Com` ≤ ideal `Com` for some
+  forger `F` within the budget), by `Σ_j (Adv^{ompr}_{key j}(B_j; q_f + 2q_S + 1, q_S) +
+  (q_f + 2q_S + 1)·failPr_{key j})` (T4 and the `K`-key step, §5.4). Its hypotheses, `hmodel`
+  included, are met by a toy forger in `Audit/Nonvacuous.lean` (`toyF_wins`: the ideal game is
+  winnable).
+
+**Reductions** (`Assumptions/CTUFOpenOMPR.lean`, generic lemmas in `Assumptions/LazyIdeal.lean`):
+T4 with `Com` a random function, `advCTUFIdeal1_le_ompr`; the `K`-key step,
+`advCTUFIdeal_le_sum`, `advCTUFIdealAt_le_sum`; together, `advCTUFIdeal_le_ompr`,
+`advCTUFIdealAt_le_ompr` (§5.4). Generic: lazy random function = pre-sampled stream
+(`rfStream_presample`, `rfStream_rest_le`), union bound over a uniform stream
+(`prEvent_unifList_exists_le`), embedding a key among iid keys (`iidVec_update`).
+
+Not mechanized: the other reductions between the games (T1–T3, T5, T6, P8), T4 with `Com` a
+random permutation with inverse access, OMPR^free, and items 4 and 5.
 
 pqov's `derive_preimage` and its keys (§1–2): `Spec/PqovSigner.lean` (`signer_correct`,
 `signer_fail`, 255 attempts), `Spec/PqovKey.lean` (`sysCoef_eq_pqovS`, `qmap_vinVec_eq`,

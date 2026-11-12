@@ -38,7 +38,7 @@ Contents:
 
 | Property | Holds? | Bound (classical) | Assumptions |
 |---|---|---|---|
-| One-more unforgeability, per issuance context (Thm 1) | **Yes**; [Lean] in the ROM and ideal-cipher model on the spec, with the Lean verifier as the honest Anchors' and Moderator's check, the extraction terms from the soundness theorems (`ROM/MoussakaOMUF.lean`, `omuf_le_num`; §4 "Status") | `ε_ext^iss + ε_ext^red + ε_dig + Adv^bind_Com + K·Adv^ct-uf-open_UOV,Com`; mechanized: `qI·ε_I + qR·ε_R + Adv^bind_Com(B₁) + Adv^ct-uf-open_K(B₂)` (`omuf_le_num_open`), `ε_dig` a condition on the honest keys | PoK (extraction README), binding of `Com`, chosen-target unforgeability of UOV on `Com`-images with openings (CT-UF^open, implied tightly by one-more-UOV with `Com` ideal in the standalone game, §3.3) |
+| One-more unforgeability, per issuance context (Thm 1) | **Yes**; [Lean] in the ROM and ideal-cipher model on the spec, with the Lean verifier as the honest Anchors' and Moderator's check, the extraction terms from the soundness theorems (`ROM/MoussakaOMUF.lean`, `omuf_le_num`; §4 "Status") | `ε_ext^iss + ε_ext^red + ε_dig + Adv^bind_Com + K·Adv^ct-uf-open_UOV,Com`; mechanized: `qI·ε_I + qR·ε_R + Adv^bind_Com(B₁) + Adv^ct-uf-open_K(B₂)` (`omuf_le_num_open`), `ε_dig` a condition on the honest keys; and, with `Com` a random function in the CT-UF^open game (a modelling hypothesis), the last term down to `Σ_j Adv^{ompr}_j + K·(q_f + 2q_S + 1)·failPr` (`omuf_le_num_ompr`) | PoK (extraction README), binding of `Com`, chosen-target unforgeability of UOV on `Com`-images with openings (CT-UF^open, implied tightly by one-more-UOV with `Com` ideal in the standalone game, §3.3; [Lean] with `Com` a random function) |
 | One nullifier per signed commitment; double-spend detection (Cor 2) | **Yes**, if the Moderator keeps one record per `(ctx_iss, ctx_red)` across all Anchor Sets (`moussaka.hpp:141-146`) | as Thm 1 | as Thm 1 |
 | Redemption non-malleability: no redirect to another `challenge_digest`, Anchor Set or `ctx_red` (Thm 3) | **Yes** | `ε_SE^red + Adv^bind + K·Adv^ct-uf-open + U·Adv^ow-r + ZK hops` | weak SE (L8), plus the above, plus one-wayness in `r` |
 | Issuer hiding and unlinkability vs a Moderator **colluding with all Anchors**, with adversarial keys (Thm 4a) | **Yes, computationally**; [Lean] from uniform seed outputs (`Privacy/Moussaka.lean`, `anonymity`; for `main`'s Client, which finds its index itself, `Privacy/MoussakaFind.lean`); with the executable Lean prover (label rows) down to its tape hypothesis (`Privacy/MoussakaLean.lean`, `anonymity_label_rows`); for the Lean prover in the ROM and ideal-cipher model with every zero-knowledge term explicit, `≈ 2⁻¹⁰²·³` plus budget terms and `2·Adv^hide_Com` (`anonymityRO_lean_num`), and `≈ 2⁻¹⁰¹·⁹` with a table-reading interaction (`anonymityRA_lean_num`; Appendix B); also with AES as random permutations (`_perm`) and with one shared `H₃` (`anonymitySh_num`, `anonymityRASh_num`); from the real Clients' OS seeds and seed XOF, each `+ 2·(2q_X + 2)·2⁻²⁵⁶` (`anonymity*_seed`, `lean/docs/zk.md` §10.6); with a key stage (contexts, keys) that reads the tables too (`anonymityRAK_lean_num`, `≈ 2⁻¹⁰¹·⁹`); with any number `n` of further honest Clients, `≤ n·2⁻¹⁰²` plus budget terms and `2·Adv^hide_Com` (`anonymityN_lean_num`), also adaptively scheduled, each further session's contexts, key, response and Anchor Set chosen from earlier outcomes and the challenge contexts and keys from the sessions before it (`anonymityAd_lean_num`, the same numbers), and interleaved in any order (`anonymityIL_lean_num`, `≤ (n + 2)·2⁻¹⁰¹`; with a table-reading scheduler that also places the challenge, `anonymityILO_lean_num`, `+ 28·L·(a₃ + a₂ + a₅ + 221·a_E)·2⁻¹²⁸`), and with `N` challenge pairs (`anonymityP_lean_num`; linear in `N` up to a bad event bounded on paper, `anonymityP_lin`; `lean/docs/zk.md` §10.8; §11 item 5) | `2·ε_ZK^joint + 2·Adv^hide_Com` (the `2^{−192}` is not needed, §6) | ZK (lean/docs/zk.md), hiding of `Com` |
@@ -267,7 +267,8 @@ extracts them from the issuance proofs.
   - It wins if it outputs `(k, x*, s*)` with `x* ∈ D`, `P_k(s*) = Com(x*)` and `Com(x*)` never
     queried to any `Sign_j`, **and** an opening `x_t ∈ D` with `Com(x_t) = t` for every target `t`
     it queried.
-  - `Adv^{ct-uf-open}_K ≤ K·Adv^{ct-uf-open}_1`: the reduction generates the other `K−1` keys itself.
+  - `Adv^{ct-uf-open}_K ≤ K·Adv^{ct-uf-open}_1`: the reduction generates the other `K−1` keys itself
+    ([Lean] for the ideal-`Com` game, `advCTUFIdeal_le_sum`, as a sum over the guessed key).
 - **Lemma U (CT-UF^open from one-more-UOV; `uov-assumptions.md` §5.4, T4).** Model `Com` as a
   random permutation with inverse access **in the standalone CT-UF^open game only**. This is
   legitimate there, because that game contains no proof that evaluates `Com`'s circuit. With `q_f`
@@ -282,6 +283,18 @@ extracts them from the issuance proofs.
     in the middle bad event. The forgery is a preimage of a fresh challenge, so the reduction has
     `q_S + 1` preimages after `q_S` calls. The full proof is in `uov-assumptions.md` §5.4.
   - The bound is tight: no loss beyond the bad events.
+  - *Corrections* (`uov-assumptions.md` §5.4). The middle term is not needed: OMPR does not ask
+    that a call follow its target's issuance. A term `n·failPr` is: a failed `derive_preimage`
+    answer is not a preimage (`failPr = E[δ^{255}] ≈ 2^{−295.8}` for pqov). And `B` must cache
+    repeated `Sign` queries and pad to exactly `q_S + 1` claims, which may use up to
+    `q_f + 2q_S + 1` targets.
+  - **Status: [Lean], with `Com` a random function** (no inverse queries; the permutation is
+    paper). `Assumptions/CTUFOpenOMPR.lean`: `advCTUFIdeal1_le_ompr`,
+    `Adv^{ct-uf-open}_1 ≤ Adv^{ompr}(B; q_f + 2q_S + 1, q_S) + (q_f + 2q_S + 1)·failPr`, in the
+    ideal-`Com` game `advCTUFIdeal1` (`Assumptions/UOV.lean`); the `K`-key step by guessing,
+    `advCTUFIdeal_le_sum`; together `advCTUFIdeal_le_ompr` (over key generation) and
+    `advCTUFIdealAt_le_ompr` (at fixed keys). Replacing the concrete `Com` by the ideal one stays
+    the modelling step, a hypothesis of `omuf_le_num_ompr` (§4 "Status").
 - **Why not plain CT-UF (no openings).** An earlier version of this note used CT-UF, with a signing
   oracle on arbitrary targets and freshness "`Com(x*)` was never queried", as a weaker intermediate
   assumption. That was a mistake:
@@ -328,7 +341,8 @@ Adv^omuf(A) ≤ ε_ext^iss + ε_ext^red + ε_dig + Adv^bind_Com(B₁) + K·Adv^{
 - `B₁` and `B₂` run `A` once, plus `E` on every accepted proof at the end (straight-line).
 - `B₂` makes exactly as many `Sign` queries as `A` makes accepted `Issue` queries.
 
-With Lemma U, `K·Adv^{ct-uf-open} ≤ K·(Adv^{ompr} + q_i·2^{−223.9} + q²·2^{−359.9} + q²·2^{−800})` (§3.3).
+With Lemma U, `K·Adv^{ct-uf-open} ≤ K·(Adv^{ompr} + q_i·2^{−223.9} + q²·2^{−800} + q·failPr)` (§3.3, corrected: no
+`q²·2^{−359.9}` term, a sampler-failure term).
 
 *Proof.*
 1. **Simulation.** `B₂` gets CT-UF^open keys and oracles. It answers `Issue(k, (t, π), ctx)` by verifying
@@ -413,6 +427,18 @@ ideal-cipher model of `lean/VoleMole/ROM/` (SHAKE a random oracle, AES's rows un
   opening may be missing, but that case is already the `ε_I` term (`win_imp_open`), so nothing is
   added. This is Lemma U's repair (`uov-assumptions.md` §5.4) in Lean, up to the reduction from
   OMPR itself. (CT-UF as stated is false for UOV, `ctuf_pqov_broken`.)
+- *Down to OMPR* (`Assumptions/UOVLinks.lean`, `omuf_le_num_ompr`). Under the modelling hypothesis
+  `hmodel` (the concrete-`Com` advantage of `B₂` is at most the ideal-`Com` advantage of some
+  forger `F` with budget `(q_f, q_S)`; not provable, since `Com` is a fixed function), the last
+  term is at most
+
+      Σ_j (Adv^{ompr}_{key j}(B_j; q_f + 2q_S + 1, q_S) + (q_f + 2q_S + 1)·failPr_{key j}),
+
+  per key, `B_j` the T4 reduction of the forger guessing key `j` (Lemma U and the `K`-key step,
+  §3.3). Over key generation the same chain is `advCTUFIdeal_le_ompr`
+  (`Σ_j Adv^{ompr}(B_j) + K·(q_f + 2q_S + 1)·failPr`); Theorem 1 itself is per key, since its
+  digest condition `hdig`, `hdinj` is a condition on the keys (an average needs the
+  digest-collision probability as a term, not done).
 
   `Audit/Nonvacuous.lean` instantiates the hypotheses; the honest checks' request lengths are the
   verifier's proof sizes (`pfLenI_eq`, `pfLenR_eq`). `#print axioms`: `propext`,
@@ -420,10 +446,13 @@ ideal-cipher model of `lean/VoleMole/ROM/` (SHAKE a random oracle, AES's rows un
 - *Differences from the paper bound.* (1) `qI·ε_I + qR·ε_R` in place of `ε_ext^iss + ε_ext^red`:
   the union bound charges every proof separately, where the paper extracts all proofs of a run at
   once (§3.1, "simultaneous"; L8 §9.1–9.2), which is not mechanized. Each `ε` is a sum of
-  per-query terms, so this costs a factor `qI` or `qR`. (2) `Adv^ct-uf-open` for `K` keys, not
-  `K·Adv^ct-uf-open_1` (the guessing step needs key generation; paper). (3) `Com` binding and
-  CT-UF^open stay assumptions (§3.2, §3.3); `omuf_le_num` names the term `AdvCTUF(B₂)`, and
-  `omuf_le_num_open` shows it is a CT-UF^open advantage. No step of the paper proof was found wrong.
+  per-query terms, so this costs a factor `qI` or `qR`. (2) `Adv^ct-uf-open` for `K` keys; the
+  guessing step to `K·Adv^ct-uf-open_1` is mechanized for the ideal-`Com` game only
+  (`advCTUFIdeal_le_sum`). (3) `Com` binding stays an assumption (§3.2); CT-UF^open stays one for
+  the concrete `Com`, and reduces to OMPR (Lemma U, with `Com` a random function) through the
+  modelling hypothesis of `omuf_le_num_ompr`; `omuf_le_num` names the term `AdvCTUF(B₂)`, and
+  `omuf_le_num_open` shows it is a CT-UF^open advantage. No step of Theorem 1's paper proof was
+  found wrong; Lemma U's needed the corrections of §3.3.
 
 **Remarks.**
 - *Counting refinement.* The same argument bounds, for each `(ctx_iss, ctx_red)`, the accepted
@@ -1083,9 +1112,13 @@ the fix column describes `d5def9c`, where Moussaka used the rows (and what dropp
      non-colluding games.
 6. Whether lean/docs/zk.md's `Pred` product can be made additive on `main`. It is moot with the fix.
 7. Unforgeability in Lean (§4 "Status"). Theorem 1 is mechanized in the ROM and ideal-cipher
-   model on the spec (`omuf_le_num`). What remains: `Com` binding and CT-UF^open as assumptions
-   (items 2, 3; the step CT-UF^open ⇐ one-more-UOV is paper); the simultaneous extraction of all proofs of a run (the Lean bound pays `qI·ε_I + qR·ε_R`
-   by a union bound); the `K·Adv^{ct-uf-open}_1` guessing step; `ε_dig` as a probability over key
+   model on the spec (`omuf_le_num`), and down to OMPR (`omuf_le_num_ompr`) under the modelling
+   hypothesis that the concrete `Com` may be replaced by a random function in the CT-UF^open game.
+   What remains: `Com` binding as an assumption (item 3); that modelling step itself; Lemma U
+   with `Com` a random permutation with inverse access (Lean has a random function, so no
+   inverse-query term); the simultaneous extraction of all proofs of a run (the Lean bound pays
+   `qI·ε_I + qR·ε_R` by a union bound); Theorem 1 averaged over key generation (the Lean theorem is
+   per key; the `K`-key guessing step is mechanized for the ideal game); `ε_dig` as a probability over key
    generation (a condition on the keys in Lean); AES as random permutations (the `_perm`
    soundness theorems exist, but `verifyIC` is written for the cipher as uniform functions).
    Corollary 2 is not stated separately, and Theorem 3 (non-malleability) is paper only (§5.3
@@ -1137,6 +1170,14 @@ the game (`game`, `anchorIC`, `moderatorIC`, `Win`; `anchorIC_eq_spec`), the red
 (per table `win_imp`), and `omuf_le_num` with the extraction terms of
 `moussakaIssue_accept_le_adaptive_spec` and `moussakaRedeem_accept_le_adaptive_spec`. `#print
 axioms`: `propext`, `Classical.choice`, `Quot.sound`.
+
+`lean/VoleMole/Assumptions/UOVLinks.lean` (Theorem 1 against the standalone UOV games, §3.3,
+§4 "Status"): `omuf_le_num_open` (CT-UF^open), `omuf_le_num_ompr` (down to OMPR under the
+ideal-`Com` hypothesis). `lean/VoleMole/Assumptions/CTUFOpenOMPR.lean` (Lemma U with `Com` a random
+function, and the `K`-key step): `advCTUFIdeal1_le_ompr`, `advCTUFIdeal_le_sum`,
+`advCTUFIdealAt_le_sum`, `advCTUFIdeal_le_ompr`, `advCTUFIdealAt_le_ompr`; the ideal game is in
+`Assumptions/UOV.lean` (`advCTUFIdeal`, `CIWin`), the generic simulation lemmas in
+`Assumptions/LazyIdeal.lean`. `#print axioms`: `propext`, `Classical.choice`, `Quot.sound`.
 
 `lean/VoleMole/Privacy/Moussaka.lean` (Theorem 4(a), §6): `anonymity` (`≤ 4εI + 4εR + 2εhide`
 from per-proof zero knowledge and the hiding of `Com` for the explicit reduction), with the hops

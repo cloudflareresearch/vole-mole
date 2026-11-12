@@ -27,6 +27,10 @@ adversary's probability by an assumption term; here each term is an advantage in
   accepted issuance proof is not extracted the opening may be missing; that case is already a term
   of the bound (`BadI`), so the bound is not weakened: a win is a failed extraction, a collision,
   or a CT-UF^open win (`win_imp_open`).
+* **Moussaka down to OMPR** (`omuf_le_num_ompr`): under the modelling hypothesis that `B₂`'s
+  CT-UF^open advantage with the concrete `Com` is at most the ideal-`Com` advantage of some forger
+  within a budget, the term is at most `Σ_j (Adv^{ompr}_{key j} + n·failPr_{key j})`
+  (`CTUFOpen.advCTUFIdealAt_le_ompr`: T4 and the `K`-key step).
 * **CT-UF is false for UOV** (`ctuf_pqov_broken`): for pqov's public map and any signers that
   return preimages, the rescaling forger wins CT-UF with probability 1; it does not win CT-UF^×
   (freshness up to nonzero scalars, `uovCls`, `not_ctxWin_scale`). This is why the Moussaka

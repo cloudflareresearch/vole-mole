@@ -28,6 +28,17 @@ OMPR challenger, projected, is that run (`comb_proj`); on every run where the fo
 target is a failure point of `D`, the reduction wins (`win_imp`); union bound over the targets
 (`LazyIdeal.prEvent_unifList_exists_le`).
 
+**`K` keys** (`advCTUFIdeal_le_sum`, `advCTUFIdealAt_le_sum`): the forger guessing key `j`
+(`guessF`, `guessKey`) answers the other keys' signing queries itself; seen from key `j`, the
+`K`-key run is its one-key run (`guess_run`). With T4: `advCTUFIdeal_le_ompr` (over `K`
+independent keys) and `advCTUFIdealAt_le_ompr` (at fixed keys, OMPR at a fixed key,
+`Trapdoor.atKey`).
+
+**Corrections to the note's T4** (`uov-assumptions.md` §5.4): its middle term
+`q_S·(q_f + q_S + 1)·2^{−359.9}` is not needed (OMPR does not ask that a call follow its
+target's issuance); the term `n·failPr` is (a failed answer of `D` is not a preimage); `B` must
+cache repeated signing queries and pad to exactly `q_S + 1` claims (hence `2q_S`).
+
 No `sorry`, no `axiom`.
 -/
 
