@@ -791,7 +791,10 @@ and determinism of `Tag`. The witness satisfies V3 by `change_correct`. ∎
     §6's rule runs round 1), a hybrid over the pairs, each step a reduction to the table-reading
     game whose Issuer runs the other pairs (`unlinkabilityP_lean_num`, `≤ N·(N·2⁻¹⁰¹ + 2·εhide)`
     plus budget terms: `2⁻⁶³` at `2²⁰` Clients, `2⁻³⁹` at `2³²`; quadratic by an artifact of the
-    proof).
+    proof). A bound linear in `N` up to a birthday term is on paper only (`lean/docs/zk.md` §10.8,
+    "Linear in `N`": the other pairs' issuance and spends moved to private tables with the
+    interleaved lazy-sampling lemma `pr_split_le`, as done in Lean for Moussaka in
+    `Privacy/MoussakaLin.lean`; `≲ N·2⁻¹⁰¹ + 128·N²·2⁻¹²⁸` with `H₄` a random oracle).
   - with a key stage that reads the tables (`Privacy/RatatouilleRAK.lean`, `lean/docs/zk.md`
     §10.3): the Issuer's key, context and balance fixed by a setup that reads the slices and the
     shared tables (`AdversaryRAK`, `KBudget`), the issuance hops adaptive (`hopI0RAK`, `hopI1RAK`,
@@ -819,11 +822,13 @@ and determinism of `Tag`. The witness satisfies V3 by `change_correct`. ∎
     steps, `unlinkabilityILO_lean_le`, `_2pow20`, `_2pow32`).
   - what remains: SHAKE as a random oracle, AES as an ideal cipher, the consistency of a
     table-reading Issuer given as a bare function of the tables, and hiding (computational); a
-    bound linear in `N` (the lazy-sampling reduction of PomFRIT with `H₄` a table,
-    `Privacy/PomFRITLin.lean`, does not apply as it stands, since the further Clients' spend
-    statements are chosen by the Issuer); in the interleaved game, a second challenge Client whose
-    inputs are chosen after the first one's request, and the factor about 2 against the
-    sequential schedule (`lean/docs/zk.md` §10.8 "Open"); further
-    Clients in the shared-`H₃` and seed-XOF games.
+    bound linear in `N` in Lean (on paper above; `pr_split_le` handles the spend statements chosen
+    by the Issuer, as in `Privacy/MoussakaLin.lean`, but the three-stage joint run and the bad
+    event are not mechanized); in the interleaved game, the factor about 2 against the sequential
+    schedule (`lean/docs/zk.md` §10.8 "Open": it would disappear with the further Clients on
+    private tables); a second challenge Client with inputs chosen after the first one's request is
+    not a separate question here, since both challenge Clients share the Issuer's key, context and
+    balance, fixed before the first request (zk.md §10.8 "Open"); further Clients in the
+    shared-`H₃` and seed-XOF games.
 - The Lean file covers the accounting and the 64-bit arithmetic only. Extraction, binding and
   forgery are paper arguments.

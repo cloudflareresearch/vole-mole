@@ -939,7 +939,9 @@ the fix column describes `d5def9c`, where Moussaka used the rows (and what dropp
      interleaved, Clients started and answered in any order (`anonymityIL_lean_num`, `≤ (n + 2)·2⁻¹⁰¹`;
      with a scheduler that reads the tables and places the challenge, `anonymityILO_lean_num`),
      and `N` challenge pairs (`anonymityP_lean_num`, `≤ N·(2N·2⁻¹⁰² + 2·εhide)` plus budget terms:
-     `2⁻⁶³` at `2²⁰` Clients, `2⁻³⁹` at `2³²`; quadratic by an artifact of the proof).
+     `2⁻⁶³` at `2²⁰` Clients, `2⁻³⁹` at `2³²`; quadratic by an artifact of the proof; with the other
+     pairs on private tables `anonymityP_lin`, `≤ N·(2·2⁻¹⁰² + 2(N − 1)·2⁻¹²⁸ + 2β)` plus budget
+     and hiding terms, `β` the split world's bad event).
    - *Theorem 4(b)*, corrected to (b′) with the abort term `2·(φ₀ + φ₁)`, is mechanized for the
      same game from per-proof zero knowledge of the redemption proofs (with the Lean prover down to
      its tape and hop hypotheses; the abort term `≤ 2·(δ₀^{256} + δ₁^{256})` in the vinegar
@@ -956,10 +958,13 @@ the fix column describes `d5def9c`, where Moussaka used the rows (and what dropp
      read the tables (no `RA`/`OC` version) and the abort term for a fixed key (bounded only on
      average over uniform `P2` parts of pqov's keys, F7); in the interleaved game, a second challenge Client
      whose contexts or key are chosen after the first one's request, and the factor about 2
-     against the sequential schedule (`lean/docs/zk.md` §10.8 "Open"); a bound linear in `N` (the lazy-sampling reduction that
-     gives one for PomFRIT with `H₄` a table does not apply as it stands, since the further
-     Clients' redemption statements are chosen after the challenge requests); further Clients in
-     the shared-`H₃`, seed-XOF and non-colluding games.
+     against the sequential schedule (`lean/docs/zk.md` §10.8 "Open": the second Client can
+     differ only in its key, which no request reads, so the late key is a mechanical but
+     stack-wide generalization, not done; the factor 2 would disappear with the further sessions
+     on private tables, not done for the interleaved games); for `N` pairs, the bad event `β` of
+     the linear reduction (`anonymityP_lin` is linear in `N` up to `β`; `β ≲ 64(N − 1)·2⁻¹²⁸`
+     needs `H₄` a random oracle and is on paper); further Clients in the shared-`H₃`, seed-XOF and
+     non-colluding games.
 6. Whether lean/docs/zk.md's `Pred` product can be made additive on `main`. It is moot with the fix.
 7. Timing side channels beyond the index check (OS RNG, allocation) are out of scope.
 
@@ -1317,3 +1322,18 @@ redemptions or the refusal, the four `H₃` slices and the tables, with read bud
   (`anonymityP_lean_le`; `2⁻⁶³` for `2N ≤ 2²⁰` Clients, `2⁻³⁹` for `2N ≤ 2³²`:
   `anonymityP_lean_2pow20`, `_2pow32`); `anonymityP_lean_num_perm`. Quadratic in the number of
   Clients by an artifact of the tree-hiding hop (zk.md §10.8, "Is the quadratic term inherent?").
+- **With `N` challenge pairs, the other pairs on private tables** (`Privacy/MoussakaLin.lean`,
+  `Privacy/Split.lean`, `ZK/ReadsPointRO.lean`; zk.md §10.8, "Linear in `N`"). Each step of the
+  hybrid moves the further Clients (issuance and redemption) to a private `(H₅, cipher)` pair with
+  the interleaved lazy-sampling lemma `pr_split_le`, which allows their redemption statements to
+  be chosen after the challenge requests; the bad event is that a challenge proof and a further
+  proof read a common `H₅` key or cipher point in the split world (the proofs' point read sets,
+  `rdRO_cons`). The step is then the two-Client game of the reduction `A.redS idx c u`, whose
+  interaction reads only `H₂³` and whose guess has the adversary's own budget.
+  **`anonymityP_lin`**: if each step's bad event has probability `≤ β`, `≤ N·(εPair0M + 2β)`; in
+  numbers (`anonymityP_lin_le`) `≤ N·(2·2⁻¹⁰² + 2(N − 1)·2⁻¹²⁸ + 8·(q₃ + q₅ + 221·q_E)·2⁻¹²⁸ +
+  2·εhide + 2β)`; many Clients: `anonymityN_lin`. **`β` is bounded on paper only**: with `H₄` a
+  random oracle, `β ≲ 64(N − 1)·2⁻¹²⁸` (every proof draws a fresh root seed and `iv_pre`, whatever
+  statement the adversary chose), giving `≲ n·2⁻¹⁰² + 33·n²·2⁻¹²⁸` for `n = 2N` Clients (`2⁻⁸¹·⁴`
+  at `2²⁰`, `2⁻⁵⁹` at `2³²`); in the Lean games `H₄` is SHAKE and the two-Client bound is stated
+  for SHAKE only.
