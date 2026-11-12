@@ -632,4 +632,123 @@ theorem no_win (wI : ℕ → IssueWitness) (wS : ℕ → SpendWitness) (N : ℕ)
 
 end Core
 
+/-! ## Acceptance means verification -/
+
+theorem issueResponse_verify {P : Prim Z Signer} {σ : Signer} {req : IssueRequest Z}
+    {tInit : Credits} {ctx : Context} {s : Preimage}
+    (h : issueResponse P σ req tInit ctx = .ok (some s)) :
+    P.verifyIssue ⟨issueReqC req, tInit, ctx⟩ (issueReqProof req) = true := by
+  cases hv : P.verifyIssue ⟨issueReqC req, tInit, ctx⟩ (issueReqProof req)
+  · exfalso
+    revert h
+    simp only [issueResponse, hv, Bool.not_false, ite_true]
+    split_ifs <;> simp
+  · rfl
+
+theorem issuerSpend_verify {P : Prim Z Signer} {σ : Signer} {st : IssuerState}
+    {req : SpendRequest Z} {ctx : Context} {refund : Credits} {out : SpendResult}
+    (h : (issuerSpend P σ st req ctx refund).2 = .ok (some out)) :
+    P.verifySpend ⟨P.pk σ, (SpendReq.parse req).nf, (SpendReq.parse req).d,
+      (SpendReq.parse req).cNext, ctx⟩ (SpendReq.parse req).proof = true := by
+  rcases issuerSpend_store (Prod.mk.eta (p := issuerSpend P σ st req ctx refund)).symm with
+    ⟨-, hne⟩ | ⟨out', h₁, hresp, -, -⟩
+  · exact absurd h (hne out)
+  simp only [spendResponse] at hresp
+  split_ifs at hresp with hv
+  · cases hresp
+  · simpa using hv
+
+/-! ## Per table: the run, the extraction games, the events -/
+
+section PerTable
+
+variable (A : RoundAdv S (Op Z) Resp) (N : ℕ) (σ : Signer) {qV : Kind → ℕ} {nV eV : ℕ}
+
+/-- The game's state after `k` rounds at the tables. -/
+abbrev yG (g : Table) (E : CTable) (k : ℕ) := yT lr pkU (verT g E) σ (nextT A g E) A.recv A.init k
+
+/-- Round `k` at the tables. -/
+abbrev recG (g : Table) (E : CTable) (k : ℕ) :=
+  recT lr pkU (verT g E) σ (nextT A g E) A.recv A.init k
+
+theorem provI_eval (hver : VerifierIC CrtGen.tables verQ qV nV eV) (g : Table) (E : CTable)
+    (k : ℕ) :
+    evalWithAnswerFn (QueryImpl.ofFn (join g E)) (provI lr pkU verQ A σ k) =
+      pickI (recG lr pkU A σ g E k).1 :=
+  evalWithAnswerFn_proverAt A _ (QueryImpl.ofFn (join g E)) (nextT A g E) _ (fun _ => rfl)
+    (evalWithAnswerFn_serveM lr pkU _ verQ _ (fun st pf => hver.eval g E st pf) σ) _ pickI k
+
+theorem provS_eval (hver : VerifierIC CrtGen.tables verQ qV nV eV) (g : Table) (E : CTable)
+    (k : ℕ) :
+    evalWithAnswerFn (QueryImpl.ofFn (join g E)) (provS lr pkU verQ A σ k) =
+      pickS (recG lr pkU A σ g E k).1 :=
+  evalWithAnswerFn_proverAt A _ (QueryImpl.ofFn (join g E)) (nextT A g E) _ (fun _ => rfl)
+    (evalWithAnswerFn_serveM lr pkU _ verQ _ (fun st pf => hver.eval g E st pf) σ) _ pickS k
+
+theorem lt_of_getElem? {tr : List (Op Z × Resp)} {k : ℕ} {r : Op Z × Resp} (h : tr[k]? = some r) :
+    k < tr.length := by
+  by_contra hk; rw [List.getElem?_eq_none (by omega)] at h; cases h
+
+theorem length_trace (g : Table) (E : CTable) : (yG lr pkU A σ g E N).2.2.length = N := by
+  rw [trace_yT]; simp
+
+/-- **An accepted issuance whose extraction game does not fail has an extracted witness.** -/
+theorem ext_issue (hver : VerifierIC CrtGen.tables verQ qV nV eV) (g : Table) (E : CTable)
+    {k : ℕ} {req : IssueRequest Z} {tInit : Credits} {ctx : Context} {s : Preimage}
+    (hk : (yG lr pkU A σ g E N).2.2[k]? = some (.issue req tInit ctx, .inl (.ok (some s))))
+    (hf : ¬ failI lr E (evalWithAnswerFn (QueryImpl.ofFn g) (gameI lr pkU verQ A σ k E))) :
+    IssueRel ⟨issueReqC req, tInit, ctx⟩
+      (annI lr E (evalWithAnswerFn (QueryImpl.ofFn g) (gameI lr pkU verQ A σ k E))) := by
+  have hkN : k < N := length_trace lr pkU A N σ g E ▸ lt_of_getElem? hk
+  rw [getElem?_trace _ _ _ _ _ _ _ hkN, Option.some.injEq] at hk
+  have hresp := resp_eq lr pkU (verT g E) σ (nextT A g E) A.recv A.init k
+  obtain ⟨h1, h2, h3⟩ := gameA_out CrtGen.tables (stI lr) (provI lr pkU verQ A σ k) E g
+  rw [provI_eval lr pkU verQ A σ hver g E k] at h1 h2 h3
+  dsimp only [recG] at h1 h2 h3
+  rw [hk] at h1 h2 h3 hresp
+  simp only [pickI] at h1 h2 h3
+  simp only [serveP, Sum.inl.injEq] at hresp
+  have hv := issueResponse_verify hresp.symm
+  have hacc : (evalWithAnswerFn (QueryImpl.ofFn g) (gameI lr pkU verQ A σ k E)).2.2.accept = true := by
+    rw [gameI, h3]; exact hv
+  have hext : @Extracted (icPrg E.cipher) _ (stI lr (stOut (evalWithAnswerFn (QueryImpl.ofFn g)
+      (gameI lr pkU verQ A σ k E)))) (WI (stOut (evalWithAnswerFn (QueryImpl.ofFn g)
+      (gameI lr pkU verQ A σ k E)))) (evalWithAnswerFn (QueryImpl.ofFn g)
+      (gameI lr pkU verQ A σ k E)) := by
+    by_contra hne; exact hf ⟨hacc, hne⟩
+  have := annI_spec lr E _ hext
+  rw [gameI, h2] at this
+  exact this
+
+/-- **An accepted spend whose extraction game does not fail has an extracted witness.** -/
+theorem ext_spend (hver : VerifierIC CrtGen.tables verQ qV nV eV) (g : Table) (E : CTable)
+    {k : ℕ} {req : SpendRequest Z} {ctx : Context} {refund : Credits} {out : SpendResult}
+    (hk : (yG lr pkU A σ g E N).2.2[k]? = some (.spend req ctx refund, .inr (.ok (some out))))
+    (hf : ¬ failS lr pkU E (evalWithAnswerFn (QueryImpl.ofFn g) (gameS lr pkU verQ A σ k E))) :
+    SpendRel ⟨pkU.map, (SpendReq.parse req).nf, (SpendReq.parse req).d,
+        (SpendReq.parse req).cNext, ctx⟩
+      (annS lr pkU E (evalWithAnswerFn (QueryImpl.ofFn g) (gameS lr pkU verQ A σ k E))) := by
+  have hkN : k < N := length_trace lr pkU A N σ g E ▸ lt_of_getElem? hk
+  rw [getElem?_trace _ _ _ _ _ _ _ hkN, Option.some.injEq] at hk
+  have hresp := resp_eq lr pkU (verT g E) σ (nextT A g E) A.recv A.init k
+  obtain ⟨h1, h2, h3⟩ := gameA_out CrtGen.tables (stS lr pkU) (provS lr pkU verQ A σ k) E g
+  rw [provS_eval lr pkU verQ A σ hver g E k] at h1 h2 h3
+  dsimp only [recG] at h1 h2 h3
+  rw [hk] at h1 h2 h3 hresp
+  simp only [pickS] at h1 h2 h3
+  simp only [serveP, Sum.inr.injEq] at hresp
+  have hv := issuerSpend_verify hresp.symm
+  have hacc : (evalWithAnswerFn (QueryImpl.ofFn g) (gameS lr pkU verQ A σ k E)).2.2.accept = true := by
+    rw [gameS, h3]; exact hv
+  have hext : @Extracted (icPrg E.cipher) _ (stS lr pkU (stOut (evalWithAnswerFn (QueryImpl.ofFn g)
+      (gameS lr pkU verQ A σ k E)))) (WS pkU (stOut (evalWithAnswerFn (QueryImpl.ofFn g)
+      (gameS lr pkU verQ A σ k E)))) (evalWithAnswerFn (QueryImpl.ofFn g)
+      (gameS lr pkU verQ A σ k E)) := by
+    by_contra hne; exact hf ⟨hacc, hne⟩
+  have := annS_spec lr pkU E _ hext
+  rw [gameS, h2] at this
+  exact this
+
+end PerTable
+
 end VoleMole.ROM.IC.RatBalance

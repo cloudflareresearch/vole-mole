@@ -133,6 +133,28 @@ theorem prEvent_bind_le_sum_of_table {ι T : Type} (mT : ProbComp T)
   refine le_of_eq (Finset.sum_congr rfl fun i _ => ?_)
   rw [prEvent_bind_of_discrete]
 
+
+/-- `mapM` against a complete table is the list of the evaluations. -/
+theorem evalWithAnswerFn_mapM {ι' : Type} {sp : OracleSpec ι'} (f : QueryImpl sp Id) {γ : Type}
+    (h : γ → OracleComp sp α) (l : List γ) :
+    evalWithAnswerFn f (l.mapM h) = l.map fun x => evalWithAnswerFn f (h x) := by
+  induction l with
+  | nil => rfl
+  | cons x l ih =>
+    simp only [List.mapM_cons, evalWithAnswerFn_bind, evalWithAnswerFn_pure, ih, List.map_cons]
+
+omit [∀ d, Fintype (R d)] [∀ d, Nonempty (R d)] in
+/-- An event read off a computation through `decide` is the event of the computation. -/
+theorem prEvent_map_decide {T : Type} (mT : ProbComp T) (oa : T → OracleComp (OracleSpec.ofFn R) α)
+    (P : T → α → Prop) [∀ E r, Decidable (P E r)] :
+    Pr{let E ← mT; let b ← (simulateQ randomOracle ((fun r => decide (P E r)) <$> oa E)).run' ∅}[
+      b = true] = Pr{let E ← mT; let r ← (simulateQ randomOracle (oa E)).run' ∅}[P E r] := by
+  let : MeasurableSpace T := ⊤
+  rw [prEvent_bind_of_discrete, prEvent_bind_of_discrete]
+  refine congrArg _ (funext fun E => ?_)
+  rw [simulateQ_map, StateT.run'_map', prEvent_map]
+  simp
+
 end Table
 
 
