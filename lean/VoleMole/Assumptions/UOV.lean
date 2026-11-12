@@ -7,7 +7,7 @@ import VoleMole.ROM.OneMore
 the key generator, the public map (as a preimage relation `IsPre pk s t`, "`P(s) = t`") and the
 deterministic sampler `D = derive_preimage` (`Trapdoor`). The protocol theorems' assumption terms
 are advantages in these games (`Assumptions/UOVLinks.lean`). No reduction between the games is
-proved here, except the trivial ones listed at the end.
+proved here, except the simulations and trivial ones listed at the end.
 
 **The trapdoor** (`Trapdoor PK SK T S`): `keyGen`, `IsPre`, `D`. `S` is both the oracle's answer
 and the type of a claimed preimage, so a failing sampler is `S = Option X` (`Trapdoor.ofEval`:
@@ -25,7 +25,7 @@ Every adversary also gets a *world*, a lazy random oracle `specR AR` (its coins,
   queries.
 * `advOMPR` (item 7, Def. 3.1) and `advOMPRShift` (item 8, OMPR⊕τ): `OneMore.omExp` with
   `goodPre` and `goodShift τ`, i.e. labelled targets on demand (at most `n`), at most `ℓ` preimage
-  queries, `ℓ + 1` good claims on distinct labels. `ompr31` is Def. 3.1 literally (all `n` targets
+  queries, `ℓ + 1` good claims on distinct labels. `advOMPR31` is Def. 3.1 literally (all `n` targets
   given up front, claims by index); `advOMPR_le_ompr31` shows that the on-demand game is no
   stronger: any on-demand adversary is a Def. 3.1 adversary (`popAdv`, which pops the targets) with
   at least the same advantage.
@@ -44,6 +44,12 @@ CT-UF and UF-Tag wins do not count queries).
 * `advCTUF` (item 10) and `advCTUFOpen` (item 11) for `K` keys: oracle `(k, t) ↦ D(sk_k, t)` on
   arbitrary targets; win: `(k, x*, s*)` with `x* ∈ D_Com`, `P_k(s*) = Com(x*)` and `Com(x*)` never
   signed; `CT-UF^open` also requires an opening in `D_Com` of every signed target.
+  **CT-UF is false for UOV**: one query on `μ • Com(x*)` and a rescaling win it with probability 1
+  (`scaleForger`, `advCTUFAt_scaleForger`; for pqov's public map `Links.ctuf_pqov_broken`, from
+  `Spec.Pqov.ctuf_scaling_attack`, `lean/docs/security/uov-open-reductions.md` §2). The repairs:
+  CT-UF^open (which the Moussaka corollary uses), and `advCTUFXAt` (CT-UF^×: freshness up to a
+  class relation, for UOV nonzero scalars, `Links.uovCls`), which the rescaling forger does not
+  win (`Links.not_ctxWin_scale`).
 * `advUFTag` (item 12) and `advUFTagProbe` (UF-Tag with a signability probe: the forger also learns,
   at the points of its probe log, whether `σ` succeeds): oracle `m ↦ σ(H(m))`; win: a preimage of
   `H(m*)` for an `m*` none of whose signing queries was answered.
@@ -51,9 +57,14 @@ CT-UF and UF-Tag wins do not count queries).
 The per-key (`…At`) advantages are what the protocol theorems bound (they hold for every key); the
 keyed ones average them over `keyGen`.
 
-**Trivial reductions.** `advUOVn_le_sum` (n-target ≤ Σᵢ single-target, embedding at each `i`),
-`advCTUFOpen_le` (CT-UF^open ≤ CT-UF, the same forger), `advUFTag_eq_probe` (a forger without
-probe is a probe forger), `advOMPI_le_one`-style sanity bounds are in the audit section.
+**Proved relations.** `advOMPR_le_ompr31` (on-demand OMPR ≤ Def. 3.1, a simulation:
+`comb31_eqd`); `advUOVn_le_sum` (n-target ≤ Σᵢ single-target, embedding at each `i`;
+`unifVec_update`); `advCTUFOpenAt_le`, `advCTUFOpen_le` (CT-UF^open ≤ CT-UF, the same forger);
+`advCTUFXAt_le` (CT-UF^× ≤ CT-UF); `advUFTagAt_eq_probe` (a forger without probe is a probe
+forger); `SemForger.ofOracle`. **Sanity** (the trivial attacks lose): `not_wins_of_iq`,
+`not_ompiWin_of_opened`, `not_fdhWin_of_signed`, `not_ctWin_of_signed`, `not_ufWin_of_answered`.
+Not defined: OMPR^free (`uov-open-reductions.md`), EUF-CMA of the specified and of salt-UOV
+(items 4, 5).
 
 No `sorry`, no `axiom`.
 -/

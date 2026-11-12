@@ -398,6 +398,15 @@ ideal-cipher model of `lean/VoleMole/ROM/` (SHAKE a random oracle, AES's rows un
 
       Pr[Win] ≤ qI·ε_I(q', q'_E) + qR·ε_R(q', q'_E, n') + AdvBind(B₁) + AdvCTUF(B₂).
 
+- *With CT-UF^open* (`Assumptions/UOVLinks.lean`, `omuf_le_num_open`). The same bound with
+  `Adv^{ct-uf-open}_K(B₂)`, the advantage of an explicit forger (`ctufForger`) in the standalone
+  CT-UF^open game (`Assumptions/UOV.lean`, `advCTUFOpenAt`) in place of `AdvCTUF(B₂)`. `B₂` runs
+  the game and the extractions with the signers as its oracle, and outputs, besides the forgery,
+  an extracted opening of every signed target. If an accepted issuance proof is not extracted an
+  opening may be missing, but that case is already the `ε_I` term (`win_imp_open`), so nothing is
+  added. This is Lemma U's repair (`uov-assumptions.md` §5.4) in Lean, up to the reduction from
+  OMPR itself. (CT-UF as stated is false for UOV, `ctuf_pqov_broken`.)
+
   `Audit/Nonvacuous.lean` instantiates the hypotheses; the honest checks' request lengths are the
   verifier's proof sizes (`pfLenI_eq`, `pfLenR_eq`). `#print axioms`: `propext`,
   `Classical.choice`, `Quot.sound`.

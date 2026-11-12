@@ -405,7 +405,8 @@ per `ctx`, because parents share the spender's `ctx` (fact 1). ∎
   runs their code is an adversary of the game.
 - *The bound* (`balance_le`; `balance_le_lean` with the Issuer's verifications re-run by
   `verifyIC`, no hypothesis on the verifier; `balance_le_ufTag` with the forgery term as a UF-Tag
-  advantage):
+  advantage, which is the standalone UF-Tag-with-probe advantage of `Assumptions/UOV.lean`,
+  `ufTagAdv_eq`, `balance_le_ufTagProbe`):
 
       Pr[win] ≤ N·ε_iss(Q) + N·ε_spend(Q) + Adv^{uf-tag}(B) + Adv^{coll}_{Com}(C)
 

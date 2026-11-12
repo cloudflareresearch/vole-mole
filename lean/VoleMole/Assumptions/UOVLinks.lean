@@ -26,6 +26,10 @@ adversary's probability by an assumption term; here each term is an advantage in
   accepted issuance proof is not extracted the opening may be missing; that case is already a term
   of the bound (`BadI`), so the bound is not weakened: a win is a failed extraction, a collision,
   or a CT-UF^open win (`win_imp_open`).
+* **CT-UF is false for UOV** (`ctuf_pqov_broken`): for pqov's public map and any signers that
+  return preimages, the rescaling forger wins CT-UF with probability 1; it does not win CT-UF^×
+  (freshness up to nonzero scalars, `uovCls`, `not_ctxWin_scale`). This is why the Moussaka
+  corollary uses CT-UF^open.
 
 No `sorry`, no `axiom`.
 -/
