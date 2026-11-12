@@ -4,7 +4,33 @@ import VoleMole.Privacy.MoussakaLin
 /-!
 # Ratatouille with `N` challenge pairs: the other pairs on private tables
 
-PLACEHOLDER
+`unlinkabilityP_lean_num` (`Privacy/RatatouilleMany.lean`) is quadratic in `N`: each step of the
+hybrid over the pairs is the two-session table-reading game of the Issuer `A.hop k c v` that runs
+the other `N − 1` pairs itself (issuances and round-1 spends in its stages, round-2 spends in its
+guess), so every hop charges their reads. Here, as for Moussaka (`Privacy/MoussakaLin.lean`), the
+other pairs run on a private `(H₅, cipher)` pair, by the interleaved lazy-sampling lemma
+`Privacy.pr_split_le`: their spends are proved for amounts and tokens that depend on the Issuer's
+answers after pair `k`'s requests, which `pr_resample` does not allow.
+
+* **Point read sets** (`rdIssR_cons`, `rdSpR_cons`, from `ZK.Sim.rdRO_cons`): an issuance and a
+  spend (a proof only when the Client's checks pass) are consistent readers of their points.
+* **The joint run** (`tauR`): pair `k`'s issuances and rounds on `a`, the other pairs' on `u`, the
+  Issuer's stages in between; read sets `RAR`, `RBR` (both rounds of every other pair); jointly
+  consistent (`tauR_cons`); the hop's game is the run with `a = u` (`realGameRA_hop_iff`,
+  `Iff.rfl`).
+* **The reduction** `A.hopS k c v u` (`AdversaryP.hopG` with the guess on the patched tables):
+  its stages read only `H₂³` (`hopS_iBudget`: `(0, 3(N − 1)·2³², 0, 0)`), its guess has the
+  Issuer's own budget (`hopS_gBudget`); its game is the split run (`realGameRA_hopS_iff`,
+  `Iff.rfl`).
+* **The step** (`hop_close_hopS`, `hop_step`) and the hybrid (`realGameP_hybrid_avg`, the steps
+  averaged over the other pairs' tapes): **`unlinkabilityP_lin`**, if each step's bad event
+  (`badR`: pair `k`'s points meet the other pairs' points in the split world) has probability
+  `≤ β`, any two worlds differ by `≤ N·(εPair0R(q₃, q₅, q_E, N − 1) + 2β)`; in numbers
+  (`εPair0R_le`, `unlinkabilityP_lin_le`) `≤ N·(2·2⁻¹⁰² + (N − 1)·2⁻¹²⁸ + 8·(q₃ + q₅ +
+  221·q_E)·2⁻¹²⁸ + 2·εhide + 2β)`.
+
+As for Moussaka, `β` is bounded on paper only (`H₄` a random oracle; `lean/docs/zk.md` §10.8,
+"Linear in `N`": `β ≲ 64(N − 1)·2⁻¹²⁸`); in these games `H₄` is SHAKE.
 -/
 
 open Finset
@@ -649,6 +675,65 @@ theorem unlinkabilityP_lin (A : AdversaryP Rw N) {q3 q5 qE : ℕ} {εhide β : �
       (fun z => badR A k z.1 v b₁' b₂' z.2), card_ne]
   have h0 := hβ k v b₁ b₂
   have h1 := hβ k v b₁' b₂'
+  linarith
+
+/-- **The one-pair error in numbers**: `≤ 2·2⁻¹⁰² + m·2⁻¹²⁸ + 8·(q₃ + q₅ + 221·q_E)·2⁻¹²⁸ +
+2·εhide`; the other pairs enter only through their proofs' `H₂³` grinding keys
+(`36m·2³²·2⁻¹⁰²⁴`, rounded up to `m·2⁻¹²⁸`). -/
+theorem εPair0R_le (q3 q5 qE m : ℕ) (εhide : ℝ) :
+    εPair0R q3 q5 qE m εhide ≤
+      2 / 2 ^ 102 + m / 2 ^ 128 + 8 * (q3 + q5 + 221 * qE : ℕ) / 2 ^ 128 + 2 * εhide := by
+  have hn := noHitProb_le_128
+  have hn0 : 0 ≤ noHitProb := pr_nonneg _
+  have hm : (0 : ℝ) ≤ m := Nat.cast_nonneg _
+  have e1024 : (2 : ℝ) ^ 1024 = 2 ^ 128 * 2 ^ 896 := by rw [← pow_add]
+  have hp : (0 : ℝ) < 2 ^ 128 := by positivity
+  have hG : 36 * ((m : ℝ) * (nGrind : ℝ) / 2 ^ 1024) ≤ m / 2 ^ 128 := by
+    rw [show (nGrind : ℝ) = 2 ^ 32 by simp only [nGrind, Nat.cast_pow, Nat.cast_ofNat], e1024,
+      mul_div_assoc', div_le_div_iff₀ (by positivity) (by positivity)]
+    have hb' : (36 : ℝ) * 2 ^ 32 ≤ 2 ^ 896 := by
+      calc (36 : ℝ) * 2 ^ 32 ≤ 2 ^ 6 * 2 ^ 32 := by norm_num
+        _ = 2 ^ 38 := by rw [← pow_add]
+        _ ≤ 2 ^ 896 := pow_le_pow_right₀ (by norm_num) (by norm_num)
+    calc 36 * ((m : ℝ) * 2 ^ 32) * 2 ^ 128 = ((m : ℝ) * 2 ^ 128) * (36 * 2 ^ 32) := by ring
+      _ ≤ ((m : ℝ) * 2 ^ 128) * 2 ^ 896 := mul_le_mul_of_nonneg_left hb' (mul_nonneg hm hp.le)
+      _ = (m : ℝ) * (2 ^ 128 * 2 ^ 896) := mul_assoc _ _ _
+  have hK : (12 : ℝ) / 2 ^ 1024 ≤ 1 / 2 ^ 128 := by
+    rw [e1024, div_le_div_iff₀ (by positivity) (by positivity)]
+    have hb : (2 : ℝ) ^ 32 ≤ 2 ^ 896 := pow_le_pow_right₀ (by norm_num) (by norm_num)
+    have h16 : (12 : ℝ) ≤ 2 ^ 32 := by norm_num
+    calc (12 : ℝ) * 2 ^ 128 ≤ 2 ^ 896 * 2 ^ 128 :=
+          mul_le_mul_of_nonneg_right (h16.trans hb) hp.le
+      _ = 1 * (2 ^ 128 * 2 ^ 896) := by rw [one_mul, mul_comm]
+  have hκ : (0 : ℝ) < 2 ^ 1024 := by positivity
+  unfold εPair0R εAd h23Term
+  generalize (2 : ℝ) ^ 1024 = κ at hK hG hκ ⊢
+  have e : ∀ x : ℝ, x / 2 ^ 102 = x * 67108864 / 2 ^ 128 := fun x => by
+    rw [div_eq_div_iff (by positivity) (by positivity)]; ring
+  have hG0 : (0 : ℝ) ≤ (m : ℝ) * (nGrind : ℝ) / κ := div_nonneg (mul_nonneg hm (Nat.cast_nonneg _)) hκ.le
+  split_ifs <;>
+  · unfold εROP εRO
+    push_cast
+    rw [e]
+    have : (3 * ((m : ℝ) * (nGrind : ℝ))) / κ = 3 * ((m : ℝ) * (nGrind : ℝ) / κ) := by ring
+    have : (2 * (3 * ((m : ℝ) * (nGrind : ℝ)))) / κ = 6 * ((m : ℝ) * (nGrind : ℝ) / κ) := by ring
+    linarith
+
+/-- **`N` pairs in numbers**: `≤ N·(2·2⁻¹⁰² + (N − 1)·2⁻¹²⁸ + 8·(q₃ + q₅ + 221·q_E)·2⁻¹²⁸ +
+2·εhide + 2β)`. -/
+theorem unlinkabilityP_lin_le (A : AdversaryP Rw N) {q3 q5 qE : ℕ} {εhide β : ℝ} (hA : A.Budget q3 q5 qE)
+    (hhide : ∀ k c v u b₁ b₂ K, hidingAdv (A.hopS k c v u).ctx
+      (reductionRA (A.hopS k c v u) leanSimIR leanSimSR leanProgIR leanProgSR b₁ b₂ K) ≤ εhide)
+    (hβ : ∀ k v b₁ b₂, pr (({j : Fin N // j ≠ k} → PT) × (((PT × Tab2G pI) × T5) × T5))
+      (fun z => badR A k z.1 v b₁ b₂ z.2) ≤ β)
+    (w w' : Fin N → Bool × Bool) :
+    |pr ((Fin N → PT) × ShR Rw) (realGameP A w) - pr ((Fin N → PT) × ShR Rw) (realGameP A w')| ≤
+      N * (2 / 2 ^ 102 + (N - 1 : ℕ) / 2 ^ 128 + 8 * (q3 + q5 + 221 * qE : ℕ) / 2 ^ 128 +
+        2 * εhide + 2 * β) := by
+  have h := unlinkabilityP_lin A hA hhide hβ w w'
+  have h2 := εPair0R_le q3 q5 qE (N - 1) εhide
+  have hN : (0 : ℝ) ≤ N := Nat.cast_nonneg _
+  refine h.trans (mul_le_mul_of_nonneg_left ?_ hN)
   linarith
 
 end Main
