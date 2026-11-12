@@ -964,6 +964,11 @@ existing changed.
 * **Extracted witnesses** (`gameA_out`, `extWit`): per table, the single-proof game's output is the
   prover's proof and statement with the executable verifier's transcript, and a successful
   extraction yields a witness of the spec relation.
+* **Reductions that read an oracle of the honest party** (`gameA_congr`, `proverAt_congr`): the
+  single-proof game depends on its prover only through the prover's output and log, and the `j`-th
+  prover only through the adversary's states in the first `j` calls when the honest party's calls
+  log the same queries. Ratatouille uses this to show that its forger reads the signer only on its
+  logs (`bOut_reads`, a UF-Tag forger as `TagForger`).
 
 ### M4 — Mathlib bump and VCVio dependency (Phase B, ~1–3 days, mostly waiting on builds) — done
 
