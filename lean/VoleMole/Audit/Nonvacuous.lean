@@ -22,6 +22,7 @@ import VoleMole.ROM.MoussakaOMUF
 import VoleMole.ROM.OneMorePomfrit
 import VoleMole.Privacy.MoussakaMain
 import VoleMole.Privacy.RatatouilleMain
+import VoleMole.Assumptions.UOVLinks
 
 /-!
 # Non-vacuity checks for the headline theorems
@@ -911,5 +912,68 @@ example (pk : UovPk) (sk : VoleMole.Spec.Signer) (ℓ : ℕ) (sh : CTable → Qu
     nilForger_bound
 
 end OneMore
+
+/-! ## The UOV games (`Assumptions/UOV.lean`, `Assumptions/UOVLinks.lean`)
+
+The protocol corollaries with the standalone advantages are instantiated with the same trivial
+adversaries as above. The games are instantiated with pqov's real objects: the trapdoor of
+pqov's key generation (any oil matrix `O`, `P1` part, `sk_seed`; `P2` uniform, the modelling
+step of `Privacy/PqovKeys.lean`) with the reference `derive_preimage` (`deriveRef`, 255
+attempts) is correct on 45-byte targets (`pqovTrap_correct`). CT-UF is winnable with probability
+one for pqov's public map (`ctuf_pqov_broken`), so that game is not vacuous, it is false. -/
+
+section UOVGames
+
+open VoleMole.Assumptions.UOV VoleMole.Assumptions.UOV.Links
+open VoleMole.Spec VoleMole.Spec.Pqov VoleMole.Arith VoleMole.Privacy.Moussaka
+
+noncomputable instance : SampleableType P2Part := SampleableType.ofFintype _
+
+/-- **pqov's trapdoor**: keys `pqovKey O P1 P2` with `P2` uniform, the reference signer, and
+`IsPre pk s t ↔ s = some x ∧ |x| = 119 ∧ P(x) = t`. -/
+noncomputable def pqovTrap (O : OilMat) (P1 : ℕ → GF256) (skSeed : Spec.Bytes) :
+    Trapdoor UOVKey Spec.Signer Spec.Bytes (Option Spec.Bytes) where
+  keyGen := (fun P2 => (pqovKey O P1 P2, deriveRef (pqovKey O P1 P2) O skSeed)) <$> ($ᵗ P2Part)
+  IsPre pk s t := ∃ x, s = some x ∧ x.length = uovN ∧ pk.eval x = t
+  D sk t := sk.derivePreimage t
+
+set_option linter.constructorNameAsVariable false in
+/-- **pqov's trapdoor is correct**: on every 45-byte target the signer returns a preimage or
+fails. -/
+theorem pqovTrap_correct (O : OilMat) (P1 : ℕ → GF256) (skSeed : Spec.Bytes) :
+    (pqovTrap O P1 skSeed).Correct (fun t => t.length = uovM) (· = none) := by
+  intro kp hkp t ht
+  simp only [pqovTrap, support_map, Set.mem_image] at hkp
+  obtain ⟨P2, -, rfl⟩ := hkp
+  cases hs : (deriveRef (pqovKey O P1 P2) O skSeed).derivePreimage t with
+  | none => exact Or.inr hs
+  | some x =>
+    obtain ⟨hl, he⟩ := deriveRef_correct _ O skSeed (oilSpace_pqovKey O P1 P2) t x ht hs
+    exact Or.inl ⟨x, hs, hl, he⟩
+
+/-- Theorem 1 of Moussaka with `Adv^{ct-uf-open}` (`omuf_le_num_open`): its hypotheses hold. -/
+example (lr : Bool) (sk : Fin 2 → Spec.Signer) :=
+  omuf_le_num_open lr pkU sk 1 aU_budget pkU_digest pkU_inj
+
+/-- Ratatouille balance with the UF-Tag-with-probe advantage (`balance_le_ufTagProbe`). -/
+example (σ : IC.RatBalance.Signer) (N : ℕ) (lr : Bool) :=
+  balance_le_ufTagProbe lr ⟨ByteArray.mk (Array.replicate 32 0), ByteArray.empty⟩ balA0 N σ
+    (by decide) (qA := 0) (nA := 0) (eA := 0) (fun _ => trivial)
+    (fun _ => isQueryBoundP_pure _ _ _) (fun _ => isQueryBoundP_pure _ _ _)
+
+/-- PomFRIT's U1 with the OMPR advantage, and its reduction to Def. 3.1 literally. -/
+example (pk : UovPk) (sk : VoleMole.Spec.Signer) (ℓ : ℕ)
+    (e1 : CTable → QueryLog specIC → ByteArray → OneMore.Pomfrit.TG) :=
+  (pomfrit_U1_ompr (pure (pk, sk)) OneMore.Pomfrit.honestPre ℓ 0 CrtGen.tables true
+    (fun _ => pure []) e1 nilForger_bound).trans
+    (add_le_add (advOMPR_le_ompr31 _ _ _ _) le_rfl)
+
+/-- PomFRIT's U2 with the OMPR⊕17 advantage. -/
+example (pk : UovPk) (sk : VoleMole.Spec.Signer) (ℓ : ℕ)
+    (sh : CTable → QueryLog specIC → ByteArray → List OneMore.Pomfrit.TG) :=
+  pomfrit_U2_omprShift (pure (pk, sk)) OneMore.Pomfrit.honestPre ℓ 0 CrtGen.tables true
+    (fun _ => pure []) 17 sh nilForger_bound
+
+end UOVGames
 
 end VoleMole.Audit

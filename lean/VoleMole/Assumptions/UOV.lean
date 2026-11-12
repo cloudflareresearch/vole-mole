@@ -707,6 +707,20 @@ target. -/
 def CTOpenWin (r : CTOut K S Xc × List (Fin K × T) × List (Fin K × T)) : Prop :=
   CTWin V Com DCom r ∧ ∀ q ∈ r.2.1, ∃ x ∈ r.1.2, DCom x ∧ Com x = q.2
 
+
+/-- **The CT-UF win with freshness up to a relation** `cls` (CT-UF^×, `uov-open-reductions.md`):
+no signed target is in the class of `Com(x*)`. For UOV, `cls t t' ↔ ∃ μ ≠ 0, t = μ • t'` (the
+public map is homogeneous quadratic and every `GF(256)` element is a square). -/
+def CTXWin (cls : T → T → Prop) (r : CTOut K S Xc × List (Fin K × T) × List (Fin K × T)) : Prop :=
+  ∃ k x s, r.1.1 = some (k, x, s) ∧ DCom x ∧ V k s (Com x) ∧ ∀ q ∈ r.2.1, ¬cls q.2 (Com x)
+
+/-- With a reflexive class relation, a CT-UF^× win is a CT-UF win. -/
+theorem ctWin_of_ctxWin {cls : T → T → Prop} (hrefl : ∀ t, cls t t)
+    {r : CTOut K S Xc × List (Fin K × T) × List (Fin K × T)} (h : CTXWin V Com DCom cls r) :
+    CTWin V Com DCom r := by
+  obtain ⟨k, x, s, h1, h2, h3, h4⟩ := h
+  exact ⟨k, x, s, h1, h2, h3, fun q hq he => h4 q hq (he ▸ hrefl _)⟩
+
 variable [DecidableEq D] [∀ d, SampleableType (R d)] [SampleableType C]
 
 /-- **`Adv^{ct-uf}_K`** at fixed keys (the signers `σ`, the verification `V`). -/
@@ -716,6 +730,42 @@ noncomputable def advCTUFAt (σ : Fin K × T → A) (B : CTForger R C K T A S Xc
 /-- **`Adv^{ct-uf-open}_K`** at fixed keys. -/
 noncomputable def advCTUFOpenAt (σ : Fin K × T → A) (B : CTForger R C K T A S Xc) : ℝ≥0∞ :=
   semAdv σ B (CTOpenWin V Com DCom)
+
+
+/-- **`Adv^{ct-uf-×}_K`** at fixed keys (freshness up to `cls`). -/
+noncomputable def advCTUFXAt (cls : T → T → Prop) (σ : Fin K × T → A)
+    (B : CTForger R C K T A S Xc) : ℝ≥0∞ :=
+  semAdv σ B (CTXWin V Com DCom cls)
+
+theorem advCTUFXAt_le {cls : T → T → Prop} (hrefl : ∀ t, cls t t) (σ : Fin K × T → A)
+    (B : CTForger R C K T A S Xc) :
+    advCTUFXAt V Com DCom cls σ B ≤ advCTUFAt V Com DCom σ B :=
+  prEvent_bind_mono_of_support _ _ _ fun _ _ =>
+    prEvent_mono _ _ _ fun _ h => ctWin_of_ctxWin V Com DCom hrefl h
+
+/-- **The one-query forger of a rescaling attack**: it asks the signer of key `k` at `y` and
+outputs `(k, x, resc s')` for the answer `s'`. -/
+def scaleForger {S' : Type} (k : Fin K) (x : Xc) (y : T) (resc : S' → S) :
+    CTForger R C K T (Option S') S Xc where
+  run σ _ := pure (((σ (k, y)).map fun s' => (k, x, resc s'), []), [(k, y)], [])
+  reads σ σ' E g hs _ := by
+    simp only [evalWithAnswerFn_pure, List.mem_singleton, forall_eq] at hs ⊢
+    simp only [id] at hs
+    rw [hs]
+
+/-- **CT-UF is broken by a rescaling attack** whenever the answer at a query `y ≠ Com(x)` can be
+rescaled into a preimage of `Com(x)`: the forger `scaleForger` wins with probability 1. (For UOV,
+`y = μ • Com(x)`, `resc s' = (μ⁻¹)^128 • s'`: `Spec.Pqov.ctuf_scaling_attack`; see
+`Assumptions/UOVLinks.lean`, `ctuf_pqov_broken`.) -/
+theorem advCTUFAt_scaleForger {S' : Type} (σ : Fin K × T → Option S') (k : Fin K) (x : Xc) (y : T)
+    (resc : S' → S) (s' : S') (hσ : σ (k, y) = some s') (hD : DCom x) (hV : V k (resc s') (Com x))
+    (hy : y ≠ Com x) :
+    advCTUFAt V Com DCom σ (scaleForger (R := R) (C := C) k x y resc) = 1 := by
+  have hw : CTWin V Com DCom ((((σ (k, y)).map fun s' => (k, x, resc s'), []), [(k, y)], []) :
+      CTOut K S Xc × List (Fin K × T) × List (Fin K × T)) :=
+    ⟨k, x, resc s', by simp [hσ], hD, hV, by simpa using hy⟩
+  unfold advCTUFAt semAdv
+  simp [scaleForger, hw]
 
 /-- CT-UF^open is a restriction of CT-UF: the same forger wins less often. -/
 theorem advCTUFOpenAt_le (σ : Fin K × T → A) (B : CTForger R C K T A S Xc) :

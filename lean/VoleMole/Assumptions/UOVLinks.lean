@@ -2,6 +2,7 @@ import VoleMole.Assumptions.UOV
 import VoleMole.ROM.MoussakaOMUF
 import VoleMole.ROM.RatatouilleBalance
 import VoleMole.ROM.OneMorePomfrit
+import VoleMole.Spec.PqovScale
 
 /-!
 # The protocol theorems' UOV terms as advantages in the standalone games
@@ -443,5 +444,58 @@ theorem omuf_le_num_open (hA : A.Budget q qE n) (hdig : ∀ k, (pk k).digest.siz
 end Num
 
 end Moussaka
+
+/-! ## CT-UF is false for UOV; CT-UF^× -/
+
+section Scaling
+
+open VoleMole.Spec VoleMole.Spec.Pqov VoleMole.Arith
+
+/-- UOV targets as vectors. -/
+abbrev Tgt := Fin 45 → GF256
+
+/-- **Same class up to a nonzero scalar**, the freshness of CT-UF^× for UOV. -/
+def uovCls (t t' : Tgt) : Prop := ∃ μ : GF256, μ ≠ 0 ∧ t = μ • t'
+
+theorem uovCls_refl (t : Tgt) : uovCls t t := ⟨1, one_ne_zero, (one_smul _ _).symm⟩
+
+theorem exists_ne_zero_one : ∃ μ : GF256, μ ≠ 0 ∧ μ ≠ 1 := by
+  classical
+  by_contra h
+  push Not at h
+  have hsub : (Finset.univ : Finset GF256) ⊆ {0, 1} := fun μ _ => by
+    by_cases h0 : μ = 0
+    · simp [h0]
+    · simp [h μ h0]
+  have := Finset.card_le_card hsub
+  rw [Finset.card_univ, GF256.card_eq] at this
+  exact absurd (this.trans Finset.card_le_two) (by norm_num)
+
+variable {K : ℕ} {Xc : Type}
+
+/-- **CT-UF (`moussaka.md` §3.3) is false for UOV**: for any keys, any signers that return
+preimages (`P_k(D_k(y)) = y`), any commitment function and any `x*` in its domain with
+`Com(x*) ≠ 0`, the one-query rescaling forger wins CT-UF with probability 1 (it queries
+`μ • Com(x*)`, `μ ∉ {0, 1}`, and rescales the answer by `(μ⁻¹)^128`; `ctuf_scaling_attack`). -/
+theorem ctuf_pqov_broken (pk : Fin K → UOVKey) (D : Fin K → Tgt → ℕ → GF256)
+    (hD : ∀ k y, qmap (pk k) (D k y) = y) (Com : Xc → Tgt) (DCom : Xc → Prop) (k : Fin K)
+    (x : Xc) (hx : DCom x) (hc : Com x ≠ 0) :
+    ∃ B : CTForger Ans CTable K Tgt (Option (ℕ → GF256)) (ℕ → GF256) Xc,
+      advCTUFAt (fun k s t => qmap (pk k) s = t) Com DCom (fun p => some (D p.1 p.2)) B = 1 := by
+  obtain ⟨μ, h0, h1⟩ := exists_ne_zero_one
+  obtain ⟨hne, hpre⟩ := ctuf_scaling_attack (pk k) (D k) (hD k) h0 h1 hc
+  exact ⟨scaleForger k x (μ • Com x) (fun s' => (μ⁻¹) ^ 128 • s'),
+    advCTUFAt_scaleForger _ _ _ _ _ _ _ _ _ rfl hx hpre hne⟩
+
+/-- The rescaling forger does not win CT-UF^×: its query is in the class of `Com(x*)`. -/
+theorem not_ctxWin_scale (pk : Fin K → UOVKey) (Com : Xc → Tgt) (DCom : Xc → Prop) (k : Fin K)
+    (x : Xc) {μ : GF256} (h0 : μ ≠ 0) (o : CTOut K (ℕ → GF256) Xc)
+    (ho : ∀ k' x' s, o.1 = some (k', x', s) → x' = x) :
+    ¬CTXWin (fun k s t => qmap (pk k) s = t) Com DCom uovCls (o, [(k, μ • Com x)], []) := by
+  rintro ⟨k', x', s, h1, -, -, h4⟩
+  obtain rfl := ho _ _ _ h1
+  exact h4 _ List.mem_cons_self ⟨μ, h0, rfl⟩
+
+end Scaling
 
 end VoleMole.Assumptions.UOV.Links
