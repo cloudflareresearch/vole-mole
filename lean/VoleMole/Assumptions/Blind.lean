@@ -460,4 +460,59 @@ theorem bcomb_eqd (hD : Distinct cl pk κ) {α : Type} (oa : OracleComp (specB A
 
 end Comb
 
+/-! ## The finishing phase, and the theorem -/
+
+section Post
+
+set_option linter.unusedSectionVars false
+
+variable (pre : G → S)
+
+set_option linter.unusedSimpArgs false in
+/-- **The finishing phase keeps the preimage count and the programmed targets** (it makes no
+Issuer query, and the target oracle only programs fresh labels). -/
+theorem post_pres {β : Type} (oc : OracleComp (specV AC X G) β)
+    (p : (X → Option (G × G)) × Ch (WA AR AC) X G G) (hp : TgInv addHint p) :
+    ∀ z ∈ support ((simulateQ (realImpl addHint pre)
+        (simulateQ (liftV (AR := AR) (S := S)) oc)).run p),
+      z.2.2.iq = p.2.iq ∧ ∀ y v, p.2.tg y = some v → z.2.2.tg y = some v := by
+  intro z hz
+  rw [← QueryImpl.simulateQ_compose] at hz
+  let I : (X → Option (G × G)) × Ch (WA AR AC) X G G → Prop := fun q =>
+    q.2.iq = p.2.iq ∧ (∀ y v, p.2.tg y = some v → q.2.tg y = some v) ∧ TgInv addHint q
+  have hI : QueryImpl.PreservesInv (realImpl (S := S) addHint pre ∘ₛ
+      (liftV (AR := AR) (S := S))) I := by
+    intro qq q hq y hy
+    have hT := tgInv_preserved (AR := WA AR AC) (X := X) (S := S) addHint pre
+    rcases qq with d | ⟨x, h⟩
+    · simp only [QueryImpl.apply_compose, liftV] at hy
+      erw [simulateQ_spec_query] at hy
+      have hy' : y ∈ support ((fun r => (r.1, (q.1, r.2))) <$>
+          roStep (AR := WA AR AC) (X := X) (Hn := G) (G := G) (Sum.inr d) q.2) := hy
+      simp only [roStep, Functor.map_map, support_map, Set.mem_image] at hy'
+      obtain ⟨r, -, rfl⟩ := hy'
+      exact ⟨hq.1, hq.2.1, hq.2.2⟩
+    · simp only [QueryImpl.apply_compose, liftV] at hy
+      erw [simulateQ_spec_query] at hy
+      have hTy := hT (Sum.inr (Sum.inl (x, h))) q hq.2.2 y hy
+      simp only [realImpl] at hy
+      subst hy
+      refine ⟨?_, fun y' v hv => ?_, hTy⟩
+      · cases hx : q.1 x with
+        | some a => simp [hx, hq.1]
+        | none => cases hr : q.2.rest <;> simp [hx, hr, hq.1]
+      · have hv' := hq.2.1 y' v hv
+        cases hx : q.1 x with
+        | some a => simpa [hx] using hv'
+        | none =>
+          have hne : y' ≠ x := by
+            rintro rfl
+            obtain ⟨a, ha, -⟩ := hq.2.2 y' v.1 v.2 hv'
+            simp [hx] at ha
+          cases hr : q.2.rest <;> simp [hx, hr, Function.update_of_ne hne, hv']
+  obtain ⟨h1, h2, -⟩ := simulateQ_run_preservesInv _ I hI oc p ⟨rfl, fun _ _ h => h, hp⟩ z hz
+  exact ⟨h1, h2⟩
+
+end Post
+
 end VoleMole.Assumptions.Blind
