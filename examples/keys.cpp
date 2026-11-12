@@ -3,7 +3,7 @@
 #include <vole_mole/random.hpp>
 #include <vole_mole/uov.hpp>
 
-#include <cstdio>
+#include <cstdio> // IWYU pragma: keep (for stderr)
 #include <cstdlib>
 #include <print>
 
