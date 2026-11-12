@@ -1253,4 +1253,166 @@ theorem yT_signer (σ σ' : Signer) {J N : ℕ} (hJ : J ≤ N)
 
 end SignerRun
 
+/-! ### The forger `B` -/
+
+/-- A spend's response when it was verified on a fresh nullifier: an acceptance or a signer
+failure. -/
+def okRun : Except Error (Option SpendResult) → Prop
+  | .ok (some _) => True
+  | .error .runtime => True
+  | _ => False
+
+/-- **`B` finds a forgery at call `j`** of the reduction's run: a spend verified on a fresh
+nullifier whose extracted witness is a valid signature on its parent pair, which no call before
+`j` released a signature on. (Only call `j`'s request, not the Issuer's answer, is read.) -/
+def BadB (E : CTable) (m : List (Op Z × Resp) × List OutI × List OutS) (j : ℕ) : Prop :=
+  ∃ req ctx refund r, m.1[j]? = some (.spend req ctx refund, .inr r) ∧ okRun r ∧
+    (ctx, (SpendReq.parse req).nf) ∉ storeOf (m.1.take j) ∧
+    uovEval pkU.map (wSof lr pkU E m j).s = tag (com (SpendReq.parse req).nf ctx
+      (wSof lr pkU E m j).t (wSof lr pkU E m j).r) (wSof lr pkU E m j).x ∧
+    (com (SpendReq.parse req).nf ctx (wSof lr pkU E m j).t (wSof lr pkU E m j).r,
+      (wSof lr pkU E m j).x) ∉ (m.1.take j).flatMap relRec
+
+/-- The forgery `B` outputs at call `j`: the parent pair and the signature of the extracted
+witness. -/
+noncomputable def forgeAt (E : CTable) (m : List (Op Z × Resp) × List OutI × List OutS) (j : ℕ) :
+    Option (Commitment × Credits × Preimage) :=
+  match m.1[j]? with
+  | some (.spend req ctx _, _) => some (com (SpendReq.parse req).nf ctx (wSof lr pkU E m j).t
+      (wSof lr pkU E m j).r, (wSof lr pkU E m j).x, (wSof lr pkU E m j).s)
+  | _ => none
+
+open Classical in
+/-- **`B`'s output**: the forgery at the first call where it finds one, and the logs of the calls
+before it (of all calls, if it finds none). -/
+noncomputable def bOut (E : CTable) (m : List (Op Z × Resp) × List OutI × List OutS) :
+    ForgerOut :=
+  if h : ∃ j, BadB lr pkU E m j then
+    (forgeAt lr pkU E m (Nat.find h), signLog (m.1.take (Nat.find h)),
+      probeLog (m.1.take (Nat.find h)))
+  else (none, signLog m.1, probeLog m.1)
+
+theorem issueResponse_runtime {P : Prim Z Signer} {σ : Signer} {req : IssueRequest Z}
+    {tInit : Credits} {ctx : Context}
+    (h : issueResponse P σ req tInit ctx = .error .runtime) :
+    P.derive σ (tag (issueReqC req) 0) = none := by
+  revert h
+  by_cases h1 : tInit = 0
+  · simp [issueResponse, h1]
+  cases hv : P.verifyIssue ⟨issueReqC req, tInit, ctx⟩ (issueReqProof req)
+  · simp [issueResponse, h1, hv]
+  · cases hd : P.derive σ (tag (issueReqC req) 0) <;> simp [issueResponse, h1, hv, hd]
+
+theorem issuerSpend_runtime {P : Prim Z Signer} {σ : Signer} {st : IssuerState}
+    {req : SpendRequest Z} {ctx : Context} {refund : Credits}
+    (h : (issuerSpend P σ st req ctx refund).2 = .error .runtime) :
+    P.derive σ (tag (SpendReq.parse req).cNext refund) = none := by
+  revert h
+  cases hv : P.verifySpend ⟨P.pk σ, (SpendReq.parse req).nf, (SpendReq.parse req).d,
+      (SpendReq.parse req).cNext, ctx⟩ (SpendReq.parse req).proof
+  · simp [issuerSpend, spendResponse, hv]
+  · cases hd : P.derive σ (tag (SpendReq.parse req).cNext refund) with
+    | none => simp
+    | some s => simp [issuerSpend, spendResponse, hv, hd]; split_ifs <;> simp
+
+section Forger
+
+variable (A : RoundAdv S (Op Z) Resp) (N : ℕ)
+
+/-- **`B` succeeds whenever the reduction's forgery event holds.** -/
+theorem forge_ufwin (σ : Signer) (g : Table) (E : CTable)
+    (hF : ForgeEv lr pkU E (evalWithAnswerFn (QueryImpl.ofFn g) (master lr pkU verQ A N σ E))) :
+    UFWin pkU.map σ (bOut lr pkU E (evalWithAnswerFn (QueryImpl.ofFn g)
+      (master lr pkU verQ A N σ E))) := by
+  classical
+  generalize hm : evalWithAnswerFn (QueryImpl.ofFn g) (master lr pkU verQ A N σ E) = m at hF ⊢
+  have hm1 : m.1 = (yG lr pkU A σ g E N).2.2 := by
+    rw [← hm, evalWithAnswerFn_master]; rfl
+  obtain ⟨j, req, ctx, refund, out, hj, hval, hnot⟩ := hF
+  have hjN : j < N := length_trace lr pkU A N σ g E ▸ (hm1 ▸ lt_of_getElem? hj)
+  -- The Issuer accepted call `j`: its nullifier was fresh.
+  have hrec : recG lr pkU A σ g E j = (.spend req ctx refund, .inr (.ok (some out))) := by
+    have := getElem?_trace lr pkU (verT g E) σ (nextT A g E) A.recv A.init hjN
+    rw [← hm1, hj, Option.some.injEq] at this; exact this.symm
+  have hresp := resp_eq lr pkU (verT g E) σ (nextT A g E) A.recv A.init j
+  dsimp only [recG] at hrec
+  rw [hrec] at hresp
+  simp only [serveP, Sum.inr.injEq] at hresp
+  obtain ⟨hnf, -⟩ := issuerSpend_out σ hresp.symm
+  have hfresh : (ctx, (SpendReq.parse req).nf) ∉ storeOf (m.1.take j) := by
+    rw [hm1, take_trace _ _ _ _ _ _ _ hjN.le, ← store_yT]
+    rcases issuerSpend_store (Prod.mk.eta (p := issuerSpend (romPrim lr pkU (verT g E)) σ
+      (yT lr pkU (verT g E) σ (nextT A g E) A.recv A.init j).2.1 req ctx refund)).symm with
+      ⟨-, hne⟩ | ⟨out', h₁, -, hm', -⟩
+    · exact absurd hresp.symm (hne out)
+    · rw [← hresp] at h₁; cases h₁; rw [← hnf]; exact hm'
+  have h : ∃ j, BadB lr pkU E m j :=
+    ⟨j, req, ctx, refund, _, hj, trivial, hfresh, hval, hnot⟩
+  have hjs : Nat.find h ≤ j :=
+    Nat.find_min' h (show BadB lr pkU E m j from ⟨req, ctx, refund, _, hj, trivial, hfresh, hval, hnot⟩)
+  unfold bOut
+  rw [dite_eq_left h]
+  obtain ⟨req', ctx', refund', r', hj', -, -, hval', hnot'⟩ := Nat.find_spec h
+  refine ⟨_, _, _, by simp only [forgeAt, hj'], hval', ?_⟩
+  intro q hq hqe
+  obtain ⟨⟨r, i⟩, hmem, hqr⟩ := List.mem_flatMap.1 hq
+  have hri := List.mem_zipIdx_iff_getElem?.1 hmem
+  simp only at hri hqr
+  have hij : i < Nat.find h := by
+    by_contra hge
+    have hlen : (m.1.take (Nat.find h)).length ≤ i := by
+      rw [List.length_take]; exact le_trans (Nat.min_le_left _ _) (Nat.le_of_not_lt hge)
+    rw [List.getElem?_eq_none hlen] at hri; cases hri
+  rw [List.getElem?_take_of_lt hij] at hri
+  rw [List.take_take, Nat.min_eq_left hij.le] at hqr
+  have hrelmem : ∀ p ∈ relRec r, p ∈ (m.1.take (Nat.find h)).flatMap relRec := fun p hp =>
+    List.mem_flatMap.2 ⟨r, List.mem_of_getElem? (by rw [List.getElem?_take_of_lt hij]; exact hri), hp⟩
+  have hrecI : recG lr pkU A σ g E i = r := by
+    have := getElem?_trace lr pkU (verT g E) σ (nextT A g E) A.recv A.init
+      ((hij.trans_le hjs).trans hjN)
+    rw [← hm1, hri, Option.some.injEq] at this; exact this.symm
+  have hrespI := resp_eq lr pkU (verT g E) σ (nextT A g E) A.recv A.init i
+  dsimp only [recG] at hrecI
+  rw [hrecI] at hrespI
+  rcases r with ⟨op, resp⟩
+  cases op with
+  | issue rq ti cx =>
+    simp only [serveP] at hrespI
+    rcases resp with e | e
+    · rcases e with (_ | _ | _) | (_ | s')
+      · simp [signRec] at hqr
+      · simp [signRec] at hqr
+      · simp only [signRec, List.mem_singleton] at hqr
+        rw [hqr] at hqe
+        have := issueResponse_runtime (Sum.inl.inj hrespI).symm
+        simp only [Prod.mk.injEq] at hqe; rw [← hqe.1, ← hqe.2]; exact this
+      · simp [signRec] at hqr
+      · simp only [signRec, List.mem_singleton] at hqr
+        rw [hqr] at hqe
+        exact absurd (hqe ▸ hrelmem _ (by simp [relRec])) hnot'
+    · simp at hrespI
+  | spend rq cx rf =>
+    simp only [serveP] at hrespI
+    rcases resp with e | e
+    · simp at hrespI
+    · rcases e with (_ | _ | _) | (_ | o)
+      · simp [signRec] at hqr
+      · simp [signRec] at hqr
+      · simp only [signRec] at hqr
+        split_ifs at hqr
+        · simp at hqr
+        · simp only [List.mem_singleton] at hqr
+          rw [hqr] at hqe
+          have := issuerSpend_runtime (Sum.inr.inj hrespI).symm
+          simp only [Prod.mk.injEq] at hqe; rw [← hqe.1, ← hqe.2]; exact this
+      · simp [signRec] at hqr
+      · simp only [signRec] at hqr
+        split_ifs at hqr
+        · simp at hqr
+        · simp only [List.mem_singleton] at hqr
+          rw [hqr] at hqe
+          exact absurd (hqe ▸ hrelmem _ (by simp [relRec])) hnot'
+
+end Forger
+
 end VoleMole.ROM.IC.RatBalance
