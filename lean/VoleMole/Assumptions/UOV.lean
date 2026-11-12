@@ -235,6 +235,279 @@ noncomputable def advOMPRShift (τ n ℓ : ℕ)
 
 end OMPR
 
+/-! ## Def. 3.1 literally, and the on-demand game reduces to it -/
+
+section Def31
+
+variable {DR : Type} (AR : DR → Type) (T S : Type)
+
+abbrev AnsP : DR ⊕ T → Type := Sum.elim AR fun _ => S
+
+/-- Def. 3.1's oracles: the world and the preimage oracle `SPre`. -/
+abbrev specP : OracleSpec (DR ⊕ T) := OracleSpec.ofFn (AnsP AR T S)
+
+/-- Def. 3.1's challenger state: the world's cache, the number of preimage queries. -/
+structure St31 where
+  ro : (specR AR).QueryCache
+  iq : ℕ
+
+variable (X Hn : Type)
+
+/-- The popping adversary's state: the next target's index, and each label's index and hint. -/
+structure PopSt where
+  next : ℕ
+  tg : X → Option (ℕ × Hn)
+
+end Def31
+
+section Def31Impl
+
+variable {DR : Type} [DecidableEq DR] {AR : DR → Type} [∀ d, SampleableType (AR d)]
+  {X : Type} [DecidableEq X] {Hn T S : Type} [SampleableType T]
+
+/-- **Def. 3.1's challenger.** -/
+def impl31 (pre : T → S) : QueryImpl (specP AR T S) (StateT (St31 AR) ProbComp)
+  | .inl d => StateT.mk fun c =>
+      (fun r => (r.1, { c with ro := r.2 })) <$> ((specR AR).randomOracle d).run c.ro
+  | .inr t => StateT.mk fun c => pure (pre t, { c with iq := c.iq + 1 })
+
+def st31 : St31 AR := ⟨∅, 0⟩
+
+variable {PK SK : Type} (tr : Trapdoor PK SK T S)
+
+/-- **Def. 3.1's experiment** with `n` targets: the adversary gets the key and all targets
+`t_1 … t_n` up front. -/
+def ompr31Exp (n : ℕ) (B : PK → List T → ProbComp (OracleComp (specP AR T S) (List (ℕ × S)))) :
+    ProbComp (PK × List T × List (ℕ × S) × St31 AR) := do
+  let kp ← tr.keyGen
+  let L ← unifList T n
+  let b ← B kp.1 L
+  let r ← (simulateQ (impl31 (tr.D kp.2)) b).run st31
+  pure (kp.1, L, r.1, r.2)
+
+/-- **Def. 3.1's win**: `ℓ + 1` preimages of targets of distinct indices, after at most `ℓ`
+preimage queries. -/
+def Win31 (ℓ : ℕ) (r : PK × List T × List (ℕ × S) × St31 AR) : Prop :=
+  r.2.2.1.length = ℓ + 1 ∧ (r.2.2.1.map Prod.fst).Nodup ∧ r.2.2.2.iq ≤ ℓ ∧
+    ∀ p ∈ r.2.2.1, ∃ t, r.2.1[p.1]? = some t ∧ tr.IsPre r.1 p.2 t
+
+/-- **`Adv^{ompr}(n, ℓ)` of Def. 3.1, literally.** -/
+noncomputable def advOMPR31 (n ℓ : ℕ)
+    (B : PK → List T → ProbComp (OracleComp (specP AR T S) (List (ℕ × S)))) : ℝ≥0∞ :=
+  Pr{let r ← ompr31Exp tr n B}[Win31 tr ℓ r]
+
+/-- The popping adversary's handler: the world and the preimage oracle forwarded; a target request
+`(x, h)` answered by the next target `L[next]`, recorded with its index. -/
+def popImpl (L : List T) :
+    QueryImpl (specB AR X Hn T S) (StateT (PopSt X Hn) (OracleComp (specP AR T S)))
+  | .inl d => StateT.mk fun s => (fun a => (a, s)) <$>
+      (liftM ((specP AR T S).query (.inl d)) : OracleComp (specP AR T S) (AR d))
+  | .inr (.inl (x, h)) => StateT.mk fun s => pure <| match L[s.next]? with
+      | some u => (some u, ⟨s.next + 1, Function.update s.tg x (some (s.next, h))⟩)
+      | none => (none, s)
+  | .inr (.inr t) => StateT.mk fun s => (fun a => (a, s)) <$>
+      (liftM ((specP AR T S).query (.inr t)) : OracleComp (specP AR T S) S)
+
+/-- **The on-demand adversary as a Def. 3.1 adversary**: it pops the given targets on request and
+names each claim by its label's index. -/
+def popAdv (B : PK → ProbComp (OracleComp (specB AR X Hn T S) (List (X × S)))) (pk : PK)
+    (L : List T) : ProbComp (OracleComp (specP AR T S) (List (ℕ × S))) :=
+  (fun b => (fun r : List (X × S) × PopSt X Hn =>
+    r.1.map fun p => (((r.2.tg p.1).map Prod.fst).getD 0, p.2)) <$>
+      (simulateQ (popImpl L) b).run ⟨0, fun _ => none⟩) <$> B pk
+
+/-- The popping adversary run against Def. 3.1's challenger, as one handler. -/
+def comb31 (pre : T → S) (L : List T) :
+    QueryImpl (specB AR X Hn T S) (StateT (PopSt X Hn × St31 AR) ProbComp) :=
+  fun q => StateT.mk fun s => (fun r => (r.1.1, (r.1.2, r.2))) <$>
+    (simulateQ (impl31 pre) ((popImpl L q).run s.1)).run s.2
+
+omit [SampleableType T] in
+theorem collapse31 (pre : T → S) (L : List T) {α : Type} (oa : OracleComp (specB AR X Hn T S) α)
+    (s : PopSt X Hn) (c : St31 AR) :
+    (simulateQ (impl31 pre) ((simulateQ (popImpl L) oa).run s)).run c =
+      (fun r => ((r.1, r.2.1), r.2.2)) <$> (simulateQ (comb31 pre L) oa).run (s, c) := by
+  refine simulateQ_StateT_StateT_compose _ _ _ (fun q s c => ?_) oa s c
+  show _ = _ <$> ((fun r : (_ × _) × _ => (r.1.1, (r.1.2, r.2))) <$> _)
+  rw [Functor.map_map]
+  exact (id_map _).symm
+
+/-- The on-demand challenger's state that a popping state represents. -/
+def proj31 (L : List T) (s : PopSt X Hn × St31 AR) : Ch AR X Hn T :=
+  ⟨s.2.ro, L.drop s.1.next, fun x => (s.1.tg x).bind fun ih => (L[ih.1]?).map (·, ih.2), s.2.iq⟩
+
+/-- The popping state's invariant: recorded indices are below `next` and name one label each. -/
+def Inv31 (s : PopSt X Hn × St31 AR) : Prop :=
+  ∀ x i h, s.1.tg x = some (i, h) → i < s.1.next ∧ ∀ y h', s.1.tg y = some (i, h') → y = x
+
+variable (pre : T → S) (L : List T)
+
+omit [SampleableType T] in
+theorem comb31_step (q : DR ⊕ ((X × Hn) ⊕ T)) (s : PopSt X Hn × St31 AR) :
+    (fun z => (z.1, proj31 L z.2)) <$> (comb31 pre L q).run s = (chImpl pre q).run (proj31 L s) := by
+  rcases q with d | ⟨x, h⟩ | t
+  · simp only [comb31, popImpl, StateT.run_mk]
+    erw [simulateQ_map, simulateQ_spec_query]
+    simp [impl31, chImpl, roStep, proj31]
+  · cases hL : L[s.1.next]? with
+    | none =>
+      have hd : L.drop s.1.next = [] := List.drop_eq_nil_of_le (by
+        simpa using hL)
+      simp [comb31, popImpl, chImpl, proj31, hL, hd]
+    | some u =>
+      have hlt : s.1.next < L.length := (List.getElem?_eq_some_iff.1 hL).1
+      have hd : L.drop s.1.next = u :: L.drop (s.1.next + 1) := by
+        rw [List.drop_eq_getElem_cons hlt, (List.getElem?_eq_some_iff.1 hL).2]
+      simp only [comb31, popImpl, chImpl, proj31, StateT.run_mk, hL, simulateQ_pure,
+        StateT.run_pure, map_pure, hd]
+      congr 3
+      funext y
+      by_cases hy : y = x
+      · subst hy; simp [hL]
+      · simp [Function.update_of_ne hy]
+  · simp only [comb31, popImpl, StateT.run_mk]
+    erw [simulateQ_map, simulateQ_spec_query]
+    simp [impl31, chImpl, proj31]
+
+omit [SampleableType T] in
+theorem comb31_inv : QueryImpl.PreservesInv (comb31 (X := X) (Hn := Hn) (AR := AR) pre L) Inv31 := by
+  intro q s hs z hz
+  rcases q with d | ⟨x, h⟩ | t
+  · simp only [comb31, popImpl, StateT.run_mk] at hz
+    erw [simulateQ_map, simulateQ_spec_query] at hz
+    simp [impl31] at hz
+    obtain ⟨a, b, -, rfl⟩ := hz
+    exact hs
+  · simp only [comb31, popImpl, StateT.run_mk] at hz
+    cases hL : L[s.1.next]? with
+    | none =>
+      simp only [hL, simulateQ_pure, StateT.run_pure, map_pure, support_pure,
+        Set.mem_singleton_iff] at hz
+      subst hz; exact hs
+    | some u =>
+      simp only [hL, simulateQ_pure, StateT.run_pure, map_pure, support_pure,
+        Set.mem_singleton_iff] at hz
+      subst hz
+      intro y i h' hy
+      by_cases hyx : y = x
+      · subst hyx
+        simp only [Function.update_self, Option.some.injEq, Prod.mk.injEq] at hy
+        obtain ⟨rfl, rfl⟩ := hy
+        refine ⟨Nat.lt_succ_self _, fun y' h'' hy' => ?_⟩
+        by_contra hne
+        simp only [Function.update_of_ne hne] at hy'
+        exact absurd (hs y' _ _ hy').1 (lt_irrefl _)
+      · simp only [Function.update_of_ne hyx] at hy
+        obtain ⟨hi, hu⟩ := hs y i h' hy
+        refine ⟨Nat.lt_succ_of_lt hi, fun y' h'' hy' => ?_⟩
+        by_cases hy'x : y' = x
+        · subst hy'x
+          simp only [Function.update_self, Option.some.injEq, Prod.mk.injEq] at hy'
+          exact absurd hy'.1.symm (ne_of_lt hi)
+        · simp only [Function.update_of_ne hy'x] at hy'
+          exact hu y' h'' hy'
+  · simp only [comb31, popImpl, StateT.run_mk] at hz
+    erw [simulateQ_map, simulateQ_spec_query] at hz
+    simp only [impl31] at hz
+    subst hz
+    exact hs
+
+omit [SampleableType T] in
+/-- **The popping simulation is the on-demand challenger**, through `proj31`. -/
+theorem comb31_eqd {α : Type} (oa : OracleComp (specB AR X Hn T S) α) :
+    ∀ s : PopSt X Hn × St31 AR,
+      (fun z => (z.1, proj31 L z.2)) <$> (simulateQ (comb31 pre L) oa).run s =ᵈ
+        (simulateQ (chImpl pre) oa).run (proj31 L s) := by
+  induction oa using OracleComp.inductionOn with
+  | pure x => intro s; simp only [simulateQ_pure, StateT.run_pure, map_pure]; exact EvalDistEq.rfl
+  | query_bind q k ih =>
+    intro s
+    simp only [simulateQ_bind, simulateQ_spec_query, StateT.run_bind, map_bind]
+    rw [← comb31_step pre L q s, bind_map_left]
+    exact EvalDistEq.bind_congr_of_support _ fun z _ => ih z.1 z.2
+
+end Def31Impl
+
+section Def31Red
+
+variable {DR : Type} [DecidableEq DR] {AR : DR → Type} [∀ d, SampleableType (AR d)]
+  {X : Type} [DecidableEq X] {Hn T S : Type} [SampleableType T]
+  {PK SK : Type} (tr : Trapdoor PK SK T S)
+
+/-- The popping adversary's claims, named by index. -/
+def mapcl (z : List (X × S) × PopSt X Hn × St31 AR) : List (ℕ × S) :=
+  z.1.map fun p => (((z.2.1.tg p.1).map Prod.fst).getD 0, p.2)
+
+/-- The joint run: key, adversary, targets, popping simulation against Def. 3.1's challenger. -/
+def jointRun (n : ℕ) (B : PK → ProbComp (OracleComp (specB AR X Hn T S) (List (X × S)))) :
+    ProbComp ((PK × SK) × List T × List (X × S) × PopSt X Hn × St31 AR) :=
+  tr.keyGen >>= fun kp => B kp.1 >>= fun b => unifList T n >>= fun L =>
+    (simulateQ (comb31 (tr.D kp.2) L) b).run (⟨0, fun _ => none⟩, st31) >>= fun z => pure (kp, L, z)
+
+omit [DecidableEq DR] [∀ d, SampleableType (AR d)] [DecidableEq X] [SampleableType T] in
+theorem wins_imp_win31 (ℓ : ℕ) (pk : PK) (L : List T) (z : List (X × S) × PopSt X Hn × St31 AR)
+    (hinv : Inv31 z.2) (hw : Wins ℓ (goodPre tr.IsPre) pk z.1 (proj31 L z.2)) :
+    Win31 tr ℓ (pk, L, mapcl z, z.2.2) := by
+  obtain ⟨hlen, hnd, hiq, hgood⟩ := hw
+  have hidx : ∀ p ∈ z.1, ∃ i h t, z.2.1.tg p.1 = some (i, h) ∧ L[i]? = some t ∧
+      tr.IsPre pk p.2 t := by
+    intro p hp
+    obtain ⟨t, h, htg, hpre⟩ := hgood p hp
+    simp only [proj31, Option.bind_eq_some_iff, Option.map_eq_some_iff, Prod.mk.injEq] at htg
+    obtain ⟨⟨i, h'⟩, hi, t', ht', rfl, rfl⟩ := htg
+    exact ⟨i, h', t', hi, ht', hpre⟩
+  refine ⟨by simp [mapcl, hlen], ?_, hiq, ?_⟩
+  · have : (mapcl z).map Prod.fst =
+        (z.1.map Prod.fst).map fun x => ((z.2.1.tg x).map Prod.fst).getD 0 := by
+      simp [mapcl]
+    rw [this]
+    refine hnd.map_on fun x hx y hy hxy => ?_
+    obtain ⟨p, hp, rfl⟩ := List.mem_map.1 hx
+    obtain ⟨q, hq, rfl⟩ := List.mem_map.1 hy
+    obtain ⟨i, h, -, hpi, -, -⟩ := hidx p hp
+    obtain ⟨j, h', -, hqj, -, -⟩ := hidx q hq
+    simp only [hpi, hqj, Option.map_some, Option.getD_some] at hxy
+    subst hxy
+    exact ((hinv _ _ _ hpi).2 _ _ hqj).symm
+  · intro p hp
+    obtain ⟨q, hq, rfl⟩ := List.mem_map.1 hp
+    obtain ⟨i, h, t, hqi, hit, hpre⟩ := hidx q hq
+    exact ⟨t, by simpa [hqi] using hit, hpre⟩
+
+/-- **The on-demand OMPR game is no easier than Def. 3.1**: every on-demand adversary `B` (labelled
+targets requested one by one) is matched by the Def. 3.1 adversary `popAdv B`, which is given all
+`n` targets and pops them on request, with at least the same advantage. So `advOMPR` (the term of
+PomFRIT's U1) is bounded by Def. 3.1's advantage of an explicit adversary. -/
+theorem advOMPR_le_ompr31 (n ℓ : ℕ)
+    (B : PK → ProbComp (OracleComp (specB AR X Hn T S) (List (X × S)))) :
+    advOMPR tr n ℓ B ≤ advOMPR31 tr n ℓ (popAdv B) := by
+  have h1 : omExp tr.keyGen tr.D n B =ᵈ
+      (fun r => (r.1.1, r.2.2.1, proj31 r.2.1 r.2.2.2)) <$> jointRun tr n B := by
+    simp only [omExp, jointRun, map_bind, map_pure]
+    refine EvalDistEq.bind_right _ fun kp => EvalDistEq.bind_right _ fun b =>
+      EvalDistEq.bind_right _ fun L => ?_
+    have := (comb31_eqd (tr.D kp.2) L b (⟨0, fun _ => none⟩, st31)).symm.bind_left
+      (fun r => pure (kp.1, r.1, r.2))
+    simp only [bind_map_left] at this
+    exact this
+  have h2 : ompr31Exp tr n (popAdv B) =ᵈ
+      (fun r => (r.1.1, r.2.1, mapcl r.2.2, r.2.2.2.2)) <$> jointRun tr n B := by
+    simp only [ompr31Exp, jointRun, popAdv, map_bind, map_pure, bind_map_left, simulateQ_map,
+      StateT.run_map, collapse31]
+    refine EvalDistEq.bind_right _ fun kp => (eqd_swap _ _ _).trans ?_
+    refine EvalDistEq.bind_right _ fun b => EvalDistEq.bind_right _ fun L => ?_
+    exact EvalDistEq.rfl
+  unfold advOMPR advOMPR31
+  rw [h1.prEvent_eq, h2.prEvent_eq, prEvent_map, prEvent_map]
+  refine prEvent_mono_of_support _ _ _ fun r hr hw => ?_
+  simp only [jointRun, mem_support_bind_iff, support_pure, Set.mem_singleton_iff] at hr
+  obtain ⟨kp, -, b, -, L, -, z, hz, rfl⟩ := hr
+  have hinv := simulateQ_run_preservesInv (comb31 (tr.D kp.2) L) Inv31
+    (comb31_inv (tr.D kp.2) L) b _ (fun x i h hx => by simp at hx) z hz
+  exact wins_imp_win31 tr ℓ kp.1 L z hinv hw
+
+end Def31Red
+
 /-! ## Item 9: A-OMPI(q_T, Q) -/
 
 section OMPI
