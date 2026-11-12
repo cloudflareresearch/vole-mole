@@ -340,6 +340,19 @@ theorem run_qW (D : T → S) (d : DR) (s : OMPISt AR T × ℕ) :
   erw [simulateQ_spec_query]
   rfl
 
+variable (AR S) in
+/-- det-FDH's hash query. -/
+def qH (m : M) : OracleComp (specF AR M T S) T :=
+  liftM ((specF AR M T S).query (.inr (.inl m)))
+
+omit [Inhabited T] [Inhabited S] in
+theorem run_qH (D : T → S) (m : M) (c : FDHSt AR M T) :
+    (simulateQ (fdhImpl D) (qH AR S m)).run c =
+      (fun r => (r.1, { r.2 with hq := r.2.hq + 1 })) <$> hStep m c := by
+  unfold qH
+  erw [simulateQ_spec_query]
+  rfl
+
 /-- The index and target of `m`, allocated from a fresh challenge target if needed (`none` once
 the targets are used up). -/
 def alloc (m : M) (st : FRSt M T) : OracleComp (specI AR T S) (Option (ℕ × T) × FRSt M T) :=
@@ -365,8 +378,7 @@ def fdhRedImpl : QueryImpl (specF AR M T S) (StateT (FRSt M T) (OracleComp (spec
 
 /-- The forger followed by the hash of its message: `((m*, s*), H(m*))`. -/
 def fwd (a : OracleComp (specF AR M T S) (M × S)) : OracleComp (specF AR M T S) ((M × S) × T) :=
-  a >>= fun r => (fun t => (r, t)) <$>
-    (liftM ((specF AR M T S).query (.inr (.inl r.1))) : OracleComp (specF AR M T S) T)
+  a >>= fun r => (fun t => (r, t)) <$> qH AR S r.1
 
 /-- The reduction's output: the index of `m*` and `s*`. -/
 def outI (z : ((M × S) × T) × FRSt M T) : ℕ × S :=
@@ -613,6 +625,141 @@ theorem fdh_inv (q : DR ⊕ (M ⊕ M)) (s : FRSt M T × (OMPISt AR T × ℕ)) (k
       refine ⟨by simp only; omega, ?_⟩
       have ha := finv_alloc hI.2 m h y st.hq n'
       exact finv_sign ha m st.next y (by simp)
+
+omit [Inhabited T] [Inhabited S] in
+theorem run_fwd (a : OracleComp (specF AR M T S) (M × S)) (c : FDHSt AR M T) :
+    (simulateQ (fdhImpl D) (fwd a)).run c = (simulateQ (fdhImpl D) a).run c >>= fun r =>
+      (fun w => ((r.1, w.1), { w.2 with hq := w.2.hq + 1 })) <$> hStep r.1.1 r.2 := by
+  simp only [fwd, simulateQ_bind, StateT.run_bind, simulateQ_map, StateT.run_map, run_qH,
+    Functor.map_map]
+
+omit [DecidableEq DR] [∀ d, SampleableType (AR d)] [Inhabited T] [Inhabited S] in
+theorem hStep_support (m : M) (c : FDHSt AR M T) :
+    ∀ w ∈ support (hStep m c), w.2.signed = c.signed ∧ w.2.h m = some w.1 := by
+  intro w hw
+  unfold hStep at hw
+  cases h : c.h m with
+  | some t =>
+    rw [h] at hw
+    simp only [support_pure, Set.mem_singleton_iff] at hw
+    subst hw
+    exact ⟨rfl, h⟩
+  | none =>
+    rw [h] at hw
+    erw [support_map] at hw
+    obtain ⟨t, -, rfl⟩ := hw
+    simp
+
+omit [DecidableEq DR] [∀ d, SampleableType (AR d)] [DecidableEq M] [SampleableType T]
+  [Inhabited T] [Inhabited S] in
+theorem isQueryBoundP_fwd {a : OracleComp (specF AR M T S) (M × S)} {k : ℕ}
+    (ha : IsQueryBoundP a isHS k) : IsQueryBoundP (fwd a) isHS (k + 1) := by
+  refine isQueryBoundP_bind ha fun r _ => ?_
+  rw [isQueryBoundP_map_iff]
+  unfold qH
+  erw [isQueryBoundP_query_iff]
+  intro
+  exact Nat.one_pos
+
+variable {PK SK : Type} (tr : Trapdoor PK SK T S)
+
+/-- The det-FDH win as read off the forger-then-hash run: `m*` unsigned, `s*` a preimage of
+`H(m*)` (recorded in the table), at most `q_S` signing queries. -/
+def WinF (qS : ℕ) (pk : PK) (z : ((M × S) × T) × FDHSt AR M T) : Prop :=
+  z.1.1.1 ∉ z.2.signed ∧ tr.IsPre pk z.1.1.2 z.1.2 ∧ z.2.signed.length ≤ qS ∧ z.2.h z.1.1.1 = some z.1.2
+
+/-- **det-FDH with `H(m*)` queried by the forger itself** (`fwd`): key, forger, the run. -/
+def fdhFwdExp (A : PK → ProbComp (OracleComp (specF AR M T S) (M × S))) :
+    ProbComp (PK × ((M × S) × T) × FDHSt AR M T) := do
+  let kp ← tr.keyGen
+  let a ← A kp.1
+  let z ← (simulateQ (fdhImpl (tr.D kp.2)) (fwd a)).run fdh0
+  pure (kp.1, z)
+
+omit [Inhabited T] [Inhabited S] in
+/-- **det-FDH's win, with `H(m*)` queried by the forger itself.** -/
+theorem advFDH_le_fwd (qH qS : ℕ) (A : PK → ProbComp (OracleComp (specF AR M T S) (M × S))) :
+    advFDH tr qH qS A ≤ Pr{let x ← fdhFwdExp tr A}[WinF tr qS x.1 x.2] := by
+  let G : ProbComp (PK × (M × S) × T × FDHSt AR M T × FDHSt AR M T) := do
+    let kp ← tr.keyGen
+    let a ← A kp.1
+    let r ← (simulateQ (fdhImpl (tr.D kp.2)) a).run fdh0
+    let w ← hStep r.1.1 r.2
+    pure (kp.1, r.1, w.1, r.2, w.2)
+  have h1 : fdhExp tr A = (fun x => (x.1, x.2.1, x.2.2.1, x.2.2.2.1)) <$> G := by
+    simp [G, fdhExp, map_bind]
+  have h2 : fdhFwdExp tr A =
+      (fun x => (x.1, ((x.2.1, x.2.2.1), { x.2.2.2.2 with hq := x.2.2.2.2.hq + 1 }))) <$> G := by
+    simp [G, fdhFwdExp, run_fwd, map_bind]
+  unfold advFDH
+  rw [h1, h2, prEvent_map, prEvent_map]
+  refine prEvent_mono_of_support _ _ _ fun x hx hw => ?_
+  simp only [G, mem_support_bind_iff, support_pure, Set.mem_singleton_iff] at hx
+  obtain ⟨kp, -, a, -, r, -, w, hw', rfl⟩ := hx
+  obtain ⟨hs, hh⟩ := hStep_support r.1.1 r.2 w hw'
+  obtain ⟨hn, hp, -, hq⟩ := hw
+  exact ⟨by simpa [hs] using hn, hp, by simpa [hs] using hq, hh⟩
+
+omit [DecidableEq DR] [∀ d, SampleableType (AR d)] [SampleableType T] [Inhabited T]
+  [Inhabited S] [DecidableEq M] in
+theorem finvK_init (n : ℕ) : FInvK n ((fr0, (ompi0 [], n)) : FRSt M T × (OMPISt AR T × ℕ)) :=
+  ⟨le_rfl, ⟨fun _ _ _ h => (by simp [fr0] at h), fun _ _ _ _ _ h => (by simp [fr0] at h),
+    fun _ h => (by simp [ompi0] at h), le_rfl, rfl⟩⟩
+
+omit [DecidableEq DR] [∀ d, SampleableType (AR d)] [SampleableType T] [Inhabited T]
+  [Inhabited S] [DecidableEq M] in
+theorem fdhProj_init (n : ℕ) :
+    fdhProj ((fr0, (ompi0 [], n)) : FRSt M T × (OMPISt AR T × ℕ)) = fdh0 := rfl
+
+omit [DecidableEq DR] [∀ d, SampleableType (AR d)] [SampleableType T] [Inhabited T]
+  [Inhabited S] [DecidableEq M] in
+/-- **A det-FDH win is an A-OMPI win** of the reduction, on the invariant's states. -/
+theorem winF_imp (qS : ℕ) (pk : PK) (z : ((M × S) × T) × FRSt M T × (OMPISt AR T × ℕ))
+    (hI : FInv z.2) (hw : WinF tr qS pk (z.1, fdhProj z.2)) :
+    OMPIWin tr qS (pk, outI (z.1, z.2.1), z.2.2.1) := by
+  obtain ⟨⟨⟨m, s⟩, t⟩, st, c, n⟩ := z
+  obtain ⟨hn, hp, hl, hh⟩ := hw
+  simp only [fdhProj, Option.map_eq_some_iff] at hn hp hl hh
+  obtain ⟨⟨i, t'⟩, hi, rfl⟩ := hh
+  refine ⟨t', ?_, fun ho => ?_, hp, le_trans hI.oq hl⟩
+  · simp only [outI, hi, Option.map_some, Option.getD_some]
+    exact hI.ys_of m i t' hi
+  · simp only [outI, hi, Option.map_some, Option.getD_some] at ho
+    obtain ⟨m', hm', y', hy'⟩ := hI.op i ho
+    exact hn (hI.inj m' m i y' t' hy' hi ▸ hm')
+
+/-- **Theorem 1 (a): det-FDH ≤ A-OMPI**, tightly. For a det-FDH forger with at most `k` hash and
+signing queries on every path, the reduction `fdhRed AR A` (each fresh hash a fresh challenge
+target, each signing query an index query, the forgery `(m*, s*)` named by `m*`'s index) wins
+A-OMPI with `k + 1` targets and `q_S` index queries at least as often. -/
+theorem advFDH_le_ompi (qH qS k : ℕ) (A : PK → ProbComp (OracleComp (specF AR M T S) (M × S)))
+    (hA : ∀ pk, ∀ a ∈ support (A pk), IsQueryBoundP a isHS k) :
+    advFDH tr qH qS A ≤ advOMPI tr (k + 1) qS (fdhRed AR A) := by
+  refine (advFDH_le_fwd tr qH qS A).trans ?_
+  rw [advOMPI_eq_lazy]
+  let H : ProbComp (PK × (((M × S) × T) × FRSt M T × (OMPISt AR T × ℕ))) := do
+    let kp ← tr.keyGen
+    let a ← A kp.1
+    let z ← (simulateQ (fdhComb (tr.D kp.2)) (fwd a)).run (fr0, (ompi0 [], k + 1))
+    pure (kp.1, z)
+  have e1 : fdhFwdExp tr A =ᵈ (fun x => (x.1, (x.2.1, fdhProj x.2.2))) <$> H := by
+    simp only [fdhFwdExp, H, map_bind, map_pure]
+    refine EvalDistEq.bind_right _ fun kp => EvalDistEq.bind_congr_of_support _ fun a ha => ?_
+    have h := (simulateQ_proj_eqd (fdhComb (tr.D kp.2)) (fdhImpl (tr.D kp.2)) fdhProj isHS FInvK
+      (fdh_step _) (fdh_inv _) (fwd a) (k + 1) _ (isQueryBoundP_fwd (hA kp.1 a ha))
+      (finvK_init (k + 1))).symm.bind_left (fun z => (pure (kp.1, z) : ProbComp _))
+    rw [fdhProj_init] at h
+    simpa only [bind_map_left] using h
+  have e2 : ompiLazyExp tr (k + 1) (fdhRed AR A) =
+      (fun x => (x.1, outI (x.2.1, x.2.2.1), x.2.2.2.1)) <$> H := by
+    simp [ompiLazyExp, fdhRed, H, simulateQ_map, collapseF, map_bind]
+  rw [e1.prEvent_eq, e2, prEvent_map, prEvent_map]
+  refine prEvent_mono_of_support _ _ _ fun x hx hw => ?_
+  simp only [H, mem_support_bind_iff, support_pure, Set.mem_singleton_iff] at hx
+  obtain ⟨kp, -, a, ha, z, hz, rfl⟩ := hx
+  obtain ⟨k', hI⟩ := simulateQ_inv_bound (fdhComb (tr.D kp.2)) isHS FInvK (fdh_inv _) (fwd a)
+    (k + 1) _ (isQueryBoundP_fwd (hA kp.1 a ha)) (finvK_init (k + 1)) z hz
+  exact winF_imp tr qS kp.1 z hI.2 hw
 
 end FDHRed
 
