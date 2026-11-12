@@ -492,6 +492,144 @@ theorem withClients_step {q3 q5 qE : ℕ} {εhide : ℝ} (hA : A.Budget q3 q5 qE
   rw [abs_sub_comm] at h1
   linarith
 
+/-- **The one-pair error in numbers**: `≤ 2·2⁻¹⁰² + m·2⁻¹²⁸ + 8·(q₃ + q₅ + 221·q_E)·2⁻¹²⁸ +
+2·εhide`; the further Clients enter only through the `H₂³` keys of their issuance proofs' grinding
+(`m·2³²·2⁻¹⁰²⁴`, rounded up to `m·2⁻¹²⁸`). -/
+theorem εPair0M_le (q3 q5 qE m : ℕ) (εhide : ℝ) :
+    εPair0M q3 q5 qE m εhide ≤
+      2 / 2 ^ 102 + m / 2 ^ 128 + 8 * (q3 + q5 + 221 * qE : ℕ) / 2 ^ 128 + 2 * εhide := by
+  have hn := noHitProb_le_128
+  have hn0 : 0 ≤ noHitProb := pr_nonneg _
+  have hm : (0 : ℝ) ≤ m := Nat.cast_nonneg _
+  have e1024 : (2 : ℝ) ^ 1024 = 2 ^ 128 * 2 ^ 896 := by rw [← pow_add]
+  have hb : (2 : ℝ) ^ 32 ≤ 2 ^ 896 := pow_le_pow_right₀ (by norm_num) (by norm_num)
+  have hp : (0 : ℝ) < 2 ^ 128 := by positivity
+  have hG : 8 * ((m : ℝ) * (nGrind : ℝ) / 2 ^ 1024) ≤ m / 2 ^ 128 := by
+    rw [show (nGrind : ℝ) = 2 ^ 32 by simp only [nGrind, Nat.cast_pow, Nat.cast_ofNat], e1024,
+      mul_div_assoc', div_le_div_iff₀ (by positivity) (by positivity)]
+    have hb' : (8 : ℝ) * 2 ^ 32 ≤ 2 ^ 896 := by
+      rw [show (8 : ℝ) * 2 ^ 32 = 2 ^ 35 by norm_num]
+      exact pow_le_pow_right₀ (by norm_num) (by norm_num)
+    calc 8 * ((m : ℝ) * 2 ^ 32) * 2 ^ 128 = ((m : ℝ) * 2 ^ 128) * (8 * 2 ^ 32) := by ring
+      _ ≤ ((m : ℝ) * 2 ^ 128) * 2 ^ 896 := mul_le_mul_of_nonneg_left hb' (mul_nonneg hm hp.le)
+      _ = (m : ℝ) * (2 ^ 128 * 2 ^ 896) := mul_assoc _ _ _
+  have hK : (12 : ℝ) / 2 ^ 1024 ≤ 1 / 2 ^ 128 := by
+    rw [e1024, div_le_div_iff₀ (by positivity) (by positivity)]
+    have h16 : (12 : ℝ) ≤ 2 ^ 32 := by norm_num
+    calc (12 : ℝ) * 2 ^ 128 ≤ 2 ^ 896 * 2 ^ 128 :=
+          mul_le_mul_of_nonneg_right (h16.trans hb) hp.le
+      _ = 1 * (2 ^ 128 * 2 ^ 896) := by rw [one_mul, mul_comm]
+  unfold εPair0M εAd h23Term
+  generalize (2 : ℝ) ^ 1024 = κ at hK hG ⊢
+  have e : ∀ x : ℝ, x / 2 ^ 102 = x * 67108864 / 2 ^ 128 := fun x => by
+    rw [div_eq_div_iff (by positivity) (by positivity)]; ring
+  split_ifs with h0
+  · unfold εROP εRO
+    push_cast
+    rw [e]
+    linarith
+  · unfold εROP εRO
+    push_cast
+    rw [e]
+    linarith
+
 end Step
+
+/-! ## Many Clients and `N` pairs -/
+
+section Main
+
+open VoleMole.Privacy.PomFRIT (abs_pr_prod_sub_le_avg' Oth card_oth)
+
+variable {ι : Type} [Fintype ι] [DecidableEq ι]
+
+/-- **The bad event of the many-Client game** in world `b`, over the further Clients' tapes, the
+challenge tapes, `H₂³`, the game's pair and the private pair. -/
+def badN (A : AdversaryN Rw ι) (idx : AnchorSet → UOVKey → ℕ) (b : Bool)
+    (z : (ι → XC) × (((PT × Tab2G pI) × T5) × T5)) : Prop :=
+  badM A idx z.1 b z.2
+
+/-- **Moussaka issuer hiding and unlinkability with `m` further Clients, the further Clients on
+private tables**:
+
+    |Pr[W₀] − Pr[W₁]| ≤ εPair0M(q₃, q₅, q_E, m) + Pr[bad₀] + Pr[bad₁],
+
+`εPair0M` the two-Client bound with the adversary's own guess budget and an interaction that reads
+only `H₂³`, `bad_b` the event that, in world `b`, a challenge proof's points meet a further
+Client's points when the two run on independent `(H₅, cipher)` pairs (`badN`). -/
+theorem anonymityN_lin (A : AdversaryN Rw ι) (idx : AnchorSet → UOVKey → ℕ) {q3 q5 qE : ℕ}
+    {εhide : ℝ} (hA : A.Budget q3 q5 qE)
+    (hhide : ∀ c u b cc, hidingAdv (A.redS idx c u).ctxRO.base.ci (A.redS idx c u).ctxRO.base.cr
+      (reductionRA (A.redS idx c u) idx (leanSim pI) (leanSim pR) leanProgI leanProgR b cc) ≤ εhide) :
+    |pr ((PT × (ι → XC)) × ShM Rw) (realGameN A idx false) -
+        pr ((PT × (ι → XC)) × ShM Rw) (realGameN A idx true)| ≤
+      εPair0M q3 q5 qE (Fintype.card ι) εhide +
+        pr ((ι → XC) × (((PT × Tab2G pI) × T5) × T5)) (badN A idx false) +
+        pr ((ι → XC) × (((PT × Tab2G pI) × T5) × T5)) (badN A idx true) := by
+  rw [← pr_equiv tapeN, ← pr_equiv tapeN]
+  have h := abs_pr_prod_sub_le_avg' (α := ι → XC) (β := PT × ShM Rw) (β' := PT × ShM Rw)
+    (fun z => realGameN A idx false (tapeN z)) (fun z => realGameN A idx true (tapeN z))
+    (fun c => εPair0M q3 q5 qE (Fintype.card ι) εhide +
+      pr (((PT × Tab2G pI) × T5) × T5) (badM A idx c false) +
+      pr (((PT × Tab2G pI) × T5) × T5) (badM A idx c true))
+    fun c => withClients_step A idx hA c (hhide c)
+  refine h.trans (le_of_eq ?_)
+  have hc : (0 : ℝ) < Fintype.card (ι → XC) := by exact_mod_cast Fintype.card_pos
+  rw [Finset.sum_add_distrib, Finset.sum_add_distrib, Finset.sum_const, Finset.card_univ,
+    nsmul_eq_mul, add_div, add_div, mul_div_cancel_left₀ _ hc.ne',
+    ← pr_prod (α := ι → XC) (β := ((PT × Tab2G pI) × T5) × T5) (fun z => badM A idx z.1 false z.2),
+    ← pr_prod (α := ι → XC) (β := ((PT × Tab2G pI) × T5) × T5) (fun z => badM A idx z.1 true z.2)]
+  rfl
+
+variable {N : ℕ}
+
+/-- **Moussaka issuer hiding and unlinkability with `N` challenge pairs, linear in `N` up to the
+bad events**: if in every step of the hybrid over the pairs (pair `k` changes, the other pairs in
+the worlds `v`, their `2(N − 1)` Clients further Clients) the bad event has probability at most
+`β` in each world, any two worlds differ by at most
+
+    N·(εPair0M(q₃, q₅, q_E, 2(N − 1)) + 2β).
+
+`εPair0M` charges no further Client's `H₅` or cipher reads (`εPair0M_le`: `≤ 2·2⁻¹⁰² +
+2(N − 1)·2⁻¹²⁸ + 8·(q₃ + q₅ + 221·q_E)·2⁻¹²⁸ + 2·εhide`); `β` is the probability that a challenge
+proof and a further proof read a common point when they run on independent tables (`badN`). -/
+theorem anonymityP_lin (A : AdversaryP Rw N) (idx : AnchorSet → UOVKey → ℕ) {q3 q5 qE : ℕ}
+    {εhide β : ℝ} (hA : A.Budget q3 q5 qE)
+    (hhide : ∀ k v c u b cc, hidingAdv ((A.hop idx k v).redS idx c u).ctxRO.base.ci
+      ((A.hop idx k v).redS idx c u).ctxRO.base.cr
+      (reductionRA ((A.hop idx k v).redS idx c u) idx (leanSim pI) (leanSim pR) leanProgI leanProgR b cc) ≤
+        εhide)
+    (hβ : ∀ k v b, pr ((Oth k → XC) × (((PT × Tab2G pI) × T5) × T5)) (badN (A.hop idx k v) idx b) ≤ β)
+    (w w' : Fin N → Bool) :
+    |pr ((Fin N → PT) × ShM Rw) (realGameP A idx w) - pr ((Fin N → PT) × ShM Rw) (realGameP A idx w')| ≤
+      N * (εPair0M q3 q5 qE ((N - 1) * 2) εhide + 2 * β) := by
+  refine realGameP_hybrid A idx _ (fun k v => ?_) w w'
+  have h := anonymityN_lin (A.hop idx k v) idx (AdversaryP.hop_budget hA idx k v) (hhide k v)
+  rw [card_oth] at h
+  have h0 := hβ k v false
+  have h1 := hβ k v true
+  linarith
+
+/-- **`N` pairs in numbers**: `≤ N·(2·2⁻¹⁰² + 2(N − 1)·2⁻¹²⁸ + 8·(q₃ + q₅ + 221·q_E)·2⁻¹²⁸ +
+2·εhide + 2β)`, i.e. `n·2⁻¹⁰² + n²·2⁻¹²⁸` for `n = 2N` Clients, plus the budget, hiding and bad
+event terms. -/
+theorem anonymityP_lin_le (A : AdversaryP Rw N) (idx : AnchorSet → UOVKey → ℕ) {q3 q5 qE : ℕ}
+    {εhide β : ℝ} (hA : A.Budget q3 q5 qE)
+    (hhide : ∀ k v c u b cc, hidingAdv ((A.hop idx k v).redS idx c u).ctxRO.base.ci
+      ((A.hop idx k v).redS idx c u).ctxRO.base.cr
+      (reductionRA ((A.hop idx k v).redS idx c u) idx (leanSim pI) (leanSim pR) leanProgI leanProgR b cc) ≤
+        εhide)
+    (hβ : ∀ k v b, pr ((Oth k → XC) × (((PT × Tab2G pI) × T5) × T5)) (badN (A.hop idx k v) idx b) ≤ β)
+    (w w' : Fin N → Bool) :
+    |pr ((Fin N → PT) × ShM Rw) (realGameP A idx w) - pr ((Fin N → PT) × ShM Rw) (realGameP A idx w')| ≤
+      N * (2 / 2 ^ 102 + ((N - 1) * 2 : ℕ) / 2 ^ 128 + 8 * (q3 + q5 + 221 * qE : ℕ) / 2 ^ 128 +
+        2 * εhide + 2 * β) := by
+  have h := anonymityP_lin A idx hA hhide hβ w w'
+  have h2 := εPair0M_le q3 q5 qE ((N - 1) * 2) εhide
+  have hN : (0 : ℝ) ≤ N := Nat.cast_nonneg _
+  refine h.trans (mul_le_mul_of_nonneg_left ?_ hN)
+  linarith
+
+end Main
 
 end VoleMole.Privacy.Moussaka
