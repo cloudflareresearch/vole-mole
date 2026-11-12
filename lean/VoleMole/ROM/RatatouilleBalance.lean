@@ -662,7 +662,7 @@ theorem issuerSpend_verify {P : Prim Z Signer} {σ : Signer} {st : IssuerState}
 
 section PerTable
 
-variable (A : RoundAdv S (Op Z) Resp) (N : ℕ) (σ : Signer) {qV : Kind → ℕ} {nV eV : ℕ}
+variable (A : RoundAdv S (Op Z) Resp) (N : ℕ) (σ : Signer) {qV : Kind → ℕ} {nV : ℕ} {eV : Params → ℕ}
 
 /-- The game's state after `k` rounds at the tables. -/
 abbrev yG (g : Table) (E : CTable) (k : ℕ) := yT lr pkU (verT g E) σ (nextT A g E) A.recv A.init k
@@ -835,7 +835,7 @@ noncomputable def epsSpend (qE n : ℕ) (q : Kind → ℕ) : ℝ≥0∞ :=
 
 section Bounds
 
-variable (A : RoundAdv S (Op Z) Resp) (N : ℕ) (σ : Signer) {qV : Kind → ℕ} {nV eV : ℕ}
+variable (A : RoundAdv S (Op Z) Resp) (N : ℕ) (σ : Signer) {qV : Kind → ℕ} {nV : ℕ} {eV : Params → ℕ}
   (hver : VerifierIC CrtGen.tables verQ qV nV eV) {qA : Kind → ℕ} {nA eA : ℕ}
   (hqA : ∀ s, IsKindQueryBoundIC (A.next s) qA)
   (hnA : ∀ s, IsQueryBoundP (A.next s) (fun t => t.isLeft = true) nA)
@@ -845,6 +845,18 @@ include hver
 theorem serveM_kinds (σ : Signer) (st : IssuerState) (op : Op Z) :
     IsKindQueryBoundIC (serveM lr pkU verQ σ st op) (qV + 0) :=
   isKindQueryBoundIC_bind (hver.kinds _ _) fun _ => isQueryBound_pure _ _ _ _
+
+/-- The cipher budget of one Issuer call: the larger of the issuance and spend verifications'. -/
+def eVR (eV : Params → ℕ) : ℕ :=
+  max (eV (ratatouilleIssue .empty 0 .empty lr).params)
+    (eV (ratatouilleSpend pkU .empty 0 .empty .empty lr).params)
+
+theorem serveM_cipher (σ : Signer) (st : IssuerState) (op : Op Z) :
+    IsQueryBoundP (serveM lr pkU verQ σ st op) (fun t => t.isRight = true) (eVR lr pkU eV + 0) := by
+  refine isQueryBoundP_bind ((hver.cipher _ _).mono ?_) fun _ _ => isQueryBoundP_pure _ _ 0
+  cases op with
+  | issue req tInit ctx => exact le_max_left _ _
+  | spend req ctx refund => exact le_max_right _ _
 
 omit hver in
 theorem serveM_P (p : DomIC → Prop) [DecidablePred p] {v : ℕ}
@@ -861,7 +873,7 @@ theorem prover_bounds {ι β : Type} (pick : Op Z → ByteArray × (ι × β)) {
       IsQueryBoundP (proverAt A (serveM lr pkU verQ σ) (⟨[]⟩ : IssuerState) pick k)
         (fun t => t.isLeft = true) (N * (nA + nV)) ∧
       IsQueryBoundP (proverAt A (serveM lr pkU verQ σ) (⟨[]⟩ : IssuerState) pick k)
-        (fun t => t.isRight = true) (N * (eA + eV)) := by
+        (fun t => t.isRight = true) (N * (eA + eVR lr pkU eV)) := by
   refine ⟨?_, ?_, ?_⟩
   · refine (isKindQueryBoundIC_proverAt A _ hqA (fun st op => by
       simpa using serveM_kinds lr pkU verQ hver σ st op) _ pick k).mono fun j => ?_
@@ -871,14 +883,14 @@ theorem prover_bounds {ι β : Type} (pick : Op Z → ByteArray × (ι × β)) {
       simpa using serveM_P lr pkU verQ _ hver.hashes σ st op) _ pick k).mono
       (Nat.mul_le_mul_right _ hk)
   · exact (isQueryBoundP_proverAt A _ _ heA (fun st op => by
-      simpa using serveM_P lr pkU verQ _ hver.cipher σ st op) _ pick k).mono
+      simpa using serveM_cipher lr pkU verQ hver σ st op) _ pick k).mono
       (Nat.mul_le_mul_right _ hk)
 
 /-- **Extraction of the `k`-th issuance request** (`ratatouilleIssue_accept_le_adaptive_spec`
 applied to the `k`-th prover). -/
 theorem pr_failI_le {k : ℕ} (hk : k < N) :
     Pr{let E ← $ᵗ CTable; let r ← (simulateQ randomOracle (gameI lr pkU verQ A σ k E)).run' ∅}[
-      failI lr E r] ≤ epsIss (N * (eA + eV)) (N • (qA + qV)) := by
+      failI lr E r] ≤ epsIss (N * (eA + eVR lr pkU eV)) (N • (qA + qV)) := by
   obtain ⟨hq, -, hqE⟩ := prover_bounds lr pkU verQ A N σ hver hqA hnA heA pickI hk
   exact ratatouilleIssue_accept_le_adaptive_spec instI (fun s => UInt64.toNat_lt _) lr
     (SpecRel.hinj_ratatouilleIssue_spec (fun i : IIdx => (⟨i.1, i.2.1, i.2.2⟩ : IssueInstance)) lr
@@ -888,7 +900,7 @@ theorem pr_failI_le {k : ℕ} (hk : k < N) :
 /-- **Extraction of the `k`-th spend request** (`ratatouilleSpend_accept_le_adaptive_spec`). -/
 theorem pr_failS_le (hdig : pkU.digest.size = 32) {k : ℕ} (hk : k < N) :
     Pr{let E ← $ᵗ CTable; let r ← (simulateQ randomOracle (gameS lr pkU verQ A σ k E)).run' ∅}[
-      failS lr pkU E r] ≤ epsSpend (N * (eA + eV)) (N * (nA + nV)) (N • (qA + qV)) := by
+      failS lr pkU E r] ≤ epsSpend (N * (eA + eVR lr pkU eV)) (N * (nA + nV)) (N • (qA + qV)) := by
   obtain ⟨hq, hn, hqE⟩ := prover_bounds lr pkU verQ A N σ hver hqA hnA heA pickS hk
   exact ratatouilleSpend_accept_le_adaptive_spec (fun _ => pkU) (fun i : SIdx => bOf i.1)
     (fun i => i.2.1.toNat) (fun i => UInt64.toNat_lt _) (fun i => bOf i.2.2.1)
@@ -918,7 +930,7 @@ noncomputable def prExp (A : RoundAdv S (Op Z) Resp) (N : ℕ) (σ : Signer)
   Pr{let E ← $ᵗ CTable; let b ← (simulateQ randomOracle (exps lr pkU verQ A N σ i E)).run' ∅}[b = true]
 
 /-- **Per table, a win is an extraction failure, a forgery or a collision.** -/
-theorem win_imp (A : RoundAdv S (Op Z) Resp) (N : ℕ) (σ : Signer) {qV : Kind → ℕ} {nV eV : ℕ}
+theorem win_imp (A : RoundAdv S (Op Z) Resp) (N : ℕ) (σ : Signer) {qV : Kind → ℕ} {nV : ℕ} {eV : Params → ℕ}
     (hver : VerifierIC CrtGen.tables verQ qV nV eV) (E : CTable) (g : Table)
     (hw : Win (evalWithAnswerFn (QueryImpl.ofFn g) (balQ lr pkU A N σ E)).2.2) :
     ∃ i ∈ ((Finset.range N).disjSum (Finset.range N)).disjSum (Finset.univ : Finset Bool),
@@ -975,15 +987,15 @@ with `ε_iss`, `ε_spend` the single-proof extraction bounds of `ROM/SpecSound.l
 of `N` rounds (`N(eA + eV)` cipher queries, `N(nA + nV)` hash queries, `N(qA + qV)` per kind),
 `B` the forger and `C` the collision finder run by the reduction (`forgeAdv`, `collAdv`). -/
 theorem balance_le (A : RoundAdv S (Op Z) Resp) (N : ℕ) (σ : Signer)
-    (hdig : pkU.digest.size = 32) {qV : Kind → ℕ} {nV eV : ℕ}
+    (hdig : pkU.digest.size = 32) {qV : Kind → ℕ} {nV : ℕ} {eV : Params → ℕ}
     (hver : VerifierIC CrtGen.tables verQ qV nV eV) {qA : Kind → ℕ} {nA eA : ℕ}
     (hqA : ∀ s, IsKindQueryBoundIC (A.next s) qA)
     (hnA : ∀ s, IsQueryBoundP (A.next s) (fun t => t.isLeft = true) nA)
     (heA : ∀ s, IsQueryBoundP (A.next s) (fun t => t.isRight = true) eA) :
     Pr{let E ← $ᵗ CTable; let r ← (simulateQ randomOracle (balQ lr pkU A N σ E)).run' ∅}[
         Win r.2.2] ≤
-      N * epsIss (N * (eA + eV)) (N • (qA + qV)) +
-        N * epsSpend (N * (eA + eV)) (N * (nA + nV)) (N • (qA + qV)) +
+      N * epsIss (N * (eA + eVR lr pkU eV)) (N • (qA + qV)) +
+        N * epsSpend (N * (eA + eVR lr pkU eV)) (N * (nA + nV)) (N • (qA + qV)) +
         forgeAdv lr pkU verQ A N σ + collAdv lr pkU verQ A N σ := by
   classical
   refine le_trans (prEvent_bind_le_sum_of_table ($ᵗ CTable) (balQ lr pkU A N σ)
@@ -992,12 +1004,12 @@ theorem balance_le (A : RoundAdv S (Op Z) Resp) (N : ℕ) (σ : Signer)
     (fun E g hw => win_imp lr pkU verQ A N σ hver E g hw)) ?_
   rw [Finset.sum_disjSum, Finset.sum_disjSum]
   have h1 : ∀ k ∈ Finset.range N, prExp lr pkU verQ A N σ (.inl (.inl k)) ≤
-      epsIss (N * (eA + eV)) (N • (qA + qV)) := fun k hk => by
+      epsIss (N * (eA + eVR lr pkU eV)) (N • (qA + qV)) := fun k hk => by
     unfold prExp exps
     rw [prEvent_map_decide]
     exact pr_failI_le lr pkU verQ A N σ hver hqA hnA heA (Finset.mem_range.1 hk)
   have h2 : ∀ k ∈ Finset.range N, prExp lr pkU verQ A N σ (.inl (.inr k)) ≤
-      epsSpend (N * (eA + eV)) (N * (nA + nV)) (N • (qA + qV)) := fun k hk => by
+      epsSpend (N * (eA + eVR lr pkU eV)) (N * (nA + nV)) (N • (qA + qV)) := fun k hk => by
     unfold prExp exps
     rw [prEvent_map_decide]
     exact pr_failS_le lr pkU verQ A N σ hver hqA hnA heA hdig (Finset.mem_range.1 hk)

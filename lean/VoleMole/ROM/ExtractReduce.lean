@@ -395,15 +395,16 @@ end Rounds
 /-- **A cipher-querying implementation of the executable verifier**: a computation against the
 hashes and the cipher whose decision, on every hash table `g` and cipher table `E`, is the
 executable verifier's (with the ideal-cipher PRG of `E`), with at most `qV k` hash queries of kind
-`k`, `nV` hash queries in all and `eV` cipher queries. An honest party that verifies with it is a
+`k`, `nV` hash queries in all and `eV p` cipher queries for a statement with parameters `p` (the
+VOLE expansion grows with the witness). An honest party that verifies with it is a
 computation against `specIC`, so the `j`-th prover of a game (`proverAt`) can re-run its
 verifications, and the straight-line extractor sees their cipher queries. -/
 structure VerifierIC (T : CrtTables) (verQ : Statement → ByteArray → OracleComp specIC Bool)
-    (qV : Kind → ℕ) (nV eV : ℕ) : Prop where
+    (qV : Kind → ℕ) (nV : ℕ) (eV : Params → ℕ) : Prop where
   eval : ∀ (g : Table) (E : CTable) st pf, evalWithAnswerFn (QueryImpl.ofFn (join g E)) (verQ st pf) =
     (@verify (VoleMole.ZK.Sim.icPrg E.cipher) (Hashes.ofTable g) T st pf).accept
   kinds : ∀ st pf, IsKindQueryBoundIC (verQ st pf) qV
   hashes : ∀ st pf, IsQueryBoundP (verQ st pf) (fun t => t.isLeft = true) nV
-  cipher : ∀ st pf, IsQueryBoundP (verQ st pf) (fun t => t.isRight = true) eV
+  cipher : ∀ st pf, IsQueryBoundP (verQ st pf) (fun t => t.isRight = true) (eV st.params)
 
 end VoleMole.ROM.IC
