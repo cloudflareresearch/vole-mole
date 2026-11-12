@@ -2185,7 +2185,7 @@ and the Anchors' signers `sk g` may depend on the XOF table; `anonymityNCRO_lean
 **Open.** The adversary's choices (contexts, keys, Anchor Sets, digests) do not read the tables
 (no `RA`/`OC` version).
 
-### 10.8 Many sessions (`ZK/ReadsMany.lean`, `Privacy/PomFRITMany.lean`, `Privacy/MoussakaMany.lean`, `Privacy/RatatouilleMany.lean`, `Privacy/PomFRITAdaptive.lean`, `Privacy/PomFRITAdaptivePfx.lean`, `Privacy/MoussakaAdaptive.lean`, `Privacy/RatatouilleAdaptive.lean`, `ZK/ReadsPoint.lean`, `Privacy/PomFRITLin.lean`, `ZK/ReadsInterleave.lean`, `Privacy/PomFRITInterleave.lean`, `Privacy/MoussakaInterleave.lean`, `Privacy/RatatouilleInterleave.lean`, `ZK/ReadsInterleaveOC.lean`, `Privacy/PomFRITInterleaveOC.lean`, `Privacy/MoussakaInterleaveOC.lean`, `Privacy/RatatouilleInterleaveOC.lean`, `Privacy/Split.lean`, `ZK/ReadsPointRO.lean`, `Privacy/MoussakaLin.lean`)
+### 10.8 Many sessions (`ZK/ReadsMany.lean`, `Privacy/PomFRITMany.lean`, `Privacy/MoussakaMany.lean`, `Privacy/RatatouilleMany.lean`, `Privacy/PomFRITAdaptive.lean`, `Privacy/PomFRITAdaptivePfx.lean`, `Privacy/MoussakaAdaptive.lean`, `Privacy/RatatouilleAdaptive.lean`, `ZK/ReadsPoint.lean`, `Privacy/PomFRITLin.lean`, `ZK/ReadsInterleave.lean`, `Privacy/PomFRITInterleave.lean`, `Privacy/MoussakaInterleave.lean`, `Privacy/RatatouilleInterleave.lean`, `ZK/ReadsInterleaveOC.lean`, `Privacy/PomFRITInterleaveOC.lean`, `Privacy/MoussakaInterleaveOC.lean`, `Privacy/RatatouilleInterleaveOC.lean`, `Privacy/Split.lean`, `ZK/ReadsPointRO.lean`, `Privacy/MoussakaLin.lean`, `Privacy/RatatouilleLin.lean`)
 
 Every game above has the challenge sessions only: two (PomFRIT) or four (Moussaka, Ratatouille)
 requests. A deployment has many sessions on the same random oracle and cipher, and the adversary
@@ -2383,9 +2383,9 @@ as further sessions in their current worlds (`realGameP_iff`, the tape split `sp
   `2⁻⁶³` for `2N ≤ 2²⁰` Clients, `2⁻³⁹` for `2N ≤ 2³²` (`_2pow20`, `_2pow32`).
 
 All three are quadratic in the number of sessions: each of the `N` steps pays, in its H4 hop, for
-the cipher reads of all other sessions. (For PomFRIT with `H₄` a table and for Moussaka with the other
-pairs on private tables, the per-session charge is removed below: `blindnessPH_lean`,
-`anonymityP_lin`.)
+the cipher reads of all other sessions. (For PomFRIT with `H₄` a table, and for Moussaka and Ratatouille with
+the other pairs on private tables, the per-session charge is removed below: `blindnessPH_lean`,
+`anonymityP_lin`, `unlinkabilityP_lin`.)
 
 **Is the quadratic term inherent?** No; it is an artifact of how the H4 hop is charged, together
 with a modelling choice. Precisely:
@@ -2492,7 +2492,7 @@ distinguisher. Permutation rows are not covered (the lazy sampling patches singl
 row).
 
 **Linear in `N` for Moussaka and Ratatouille: interleaved lazy sampling** (`Privacy/Split.lean`,
-`ZK/ReadsPointRO.lean`, `Privacy/MoussakaLin.lean`). The PomFRIT route above moves the further
+`ZK/ReadsPointRO.lean`, `Privacy/MoussakaLin.lean`, `Privacy/RatatouilleLin.lean`). The PomFRIT route above moves the further
 sessions to private tables with `pr_resample`, which needs their read set to be a function of
 their own table. A further Moussaka Client's redemption (a further Ratatouille Client's spends)
 is proved for an Anchor Set and digest (an amount) that the adversary chooses after seeing the
@@ -2542,7 +2542,7 @@ lemma for **two interleaved readers**.
       |Pr[W_w] − Pr[W_w']| ≤ N·(2·2⁻¹⁰² + 2(N − 1)·2⁻¹²⁸ + 8·(q₃ + q₅ + 221·q_E)·2⁻¹²⁸ + 2·εhide + 2β).
 
   Lean, function rows; `#print axioms`: `propext`, `Classical.choice`, `Quot.sound`; non-vacuity
-  in `Audit/Nonvacuous.lean`.
+  in `Audit/Nonvacuous.lean` (`anonymityN_lin`; `unlinkabilityP_lin_le` below).
 - *The bad event, on paper.* In these games `H₄` is SHAKE, so `β` has no proved bound: without the
   `iv`s, a common cipher point needs only a common tree node, `≤ 4607²·2⁻¹²⁸ ≈ 2⁻¹⁰³·⁷` per pair of
   proofs, and the bound is quadratic again. With `H₄` a random oracle (the adversary querying it
@@ -2574,17 +2574,24 @@ lemma for **two interleaved readers**.
   stated for SHAKE; PomFRIT's `blindnessRA` takes any record) and the freshness argument with the
   adversary's choices between the two rounds (PomFRIT's `pr_badQ_le` has no adaptivity: its
   sessions' statements come from their tapes).
-- *Ratatouille, on paper.* The same split applies to the `N`-pair step (`A.hop k c v`,
-  `realGameP_iff`): the other pairs' issuance, round-1 and round-2 spends (`issFam`, `sp1Fam`,
-  `sp2Fam`) on the private `u`, pair `k` on `a`; the hop's stage 1 and stage 2 then read only
-  `H₂³` (the other pairs' grinding), its guess the patched tables with the Issuer's own budget, and
-  `unlinkabilityRA_lean_num` with `i = (0, 3(N − 1)·2³², 0, 0)` gives a step cost `≈ 2⁻¹⁰¹` with no
-  per-pair term. The bad event has `4·4(N − 1)` pairs of proofs (each pair has two issuance
-  proofs and two spends) and the same freshness argument over three rounds (issuance, stage 1,
-  round 1, stage 2, round 2), so `β ≲ 64(N − 1)·2⁻¹²⁸` and the bound is
-  `≲ N·2⁻¹⁰¹ + 128·N²·2⁻¹²⁸` plus budget and hiding terms. Not mechanized: the joint
-  run of the hop's three stages (`roundsW`, `tau1R`, `tau2R`) as a consistent point reader, which
-  is the Moussaka construction with two more rounds, and the bad event as above.
+- *Ratatouille* (`Privacy/RatatouilleLin.lean`). The same split for the `N`-pair step: the hop's
+  joint run `tauR` has pair `k`'s issuances and both rounds on `a` and the other pairs' issuances
+  and both rounds on `u` (jointly consistent, `tauR_cons`; spends read points only when the
+  Client's checks pass, `rdSpR_cons`); the hop's game is the run with `a = u`
+  (`realGameRA_hop_iff`, `Iff.rfl`); the reduction `A.hopS k c v u` runs the other pairs on the
+  private `u`, its stages read only `H₂³` (`hopS_iBudget`: `(0, 3(N − 1)·2³², 0, 0)`) and its guess
+  has the Issuer's own budget (`hopS_gBudget`). With the steps averaged over the other pairs' tapes
+  (`realGameP_hybrid_avg`), if each step's bad event (`badR`) has probability `≤ β`
+  (`unlinkabilityP_lin`, `unlinkabilityP_lin_le`, `εPair0R_le`),
+
+      |Pr[W_w] − Pr[W_w']| ≤ N·(2·2⁻¹⁰² + (N − 1)·2⁻¹²⁸ + 8·(q₃ + q₅ + 221·q_E)·2⁻¹²⁸ + 2·εhide + 2β).
+
+  The bad event has `4·4(N − 1)` pairs of proofs (each pair has two issuance proofs and two
+  spends), and the freshness argument above runs over three rounds (issuance, stage 1, round 1,
+  stage 2, round 2), so on paper `β ≲ 64(N − 1)·2⁻¹²⁸` and the bound is `≲ n·2⁻¹⁰² + 33·n²·2⁻¹²⁸`
+  for `n = 2N` Clients, plus budget and hiding terms (the same numbers as Moussaka; Lean's
+  quadratic `unlinkabilityP_lean_le`: `2⁻⁶³` at `2²⁰`, `2⁻³⁹` at `2³²`). Not mechanized: the bound
+  on `β`, for the same two reasons as for Moussaka.
 
 **Adaptive schedules** (`Privacy/PomFRITAdaptive.lean`; PomFRIT). A session run inside the
 interaction must be a consistent reader of `H₂³` too: **step 2 of the two-phase prover is**.
@@ -2834,8 +2841,8 @@ tables (a worst-case, non-uniform reduction).
   For Moussaka, the reduction is done with the interleaved lazy sampling (`anonymityP_lin`,
   above): Lean gives `N·(2·2⁻¹⁰² + 2(N − 1)·2⁻¹²⁸ + 2β + …)` with `β` the split world's bad
   event; bounding `β` (paper: `≤ 64(N − 1)·2⁻¹²⁸` plus negligible terms) needs `H₄` a random
-  oracle in the Moussaka games and the freshness argument, neither mechanized. For Ratatouille
-  the same reduction is on paper only (above).
+  oracle in the Moussaka games and the freshness argument, neither mechanized. The same for
+  Ratatouille (`unlinkabilityP_lin`, above).
 - *Other games.* Further sessions in the shared-`H₃` games (§10.5: the prover reading its column),
   the seed-XOF games (§10.6: their XOF reads in `q_X`), the non-colluding games (§10.7); the
   `H₄`-table games (`blindnessNH_lean`, `blindnessPH_lean`) with permutation rows (the lazy
