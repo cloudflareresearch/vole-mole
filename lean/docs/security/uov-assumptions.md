@@ -24,7 +24,8 @@ checkout `subprojects/pqov` (revision `fac2ec1`, UOV round-3 code, with
 - **GPI(q)** (*good-preimage indistinguishability*): given `pk`, `q` uniform points of
   `F^119` are hard to tell from `q` uniform *good* points, i.e. points whose vinegar gives an
   invertible oil system;
-- **CT-UF^open**: CT-UF in which the adversary must also open every target it had signed;
+- **CT-UF^open**: CT-UF in which the adversary must also open every target it had signed (plain
+  CT-UF is false for UOV, row O);
 - **det-FDH**: EUF-CMA of deterministic hash-and-sign UOV, `σ = D_sk(H(m))`.
 - **UF-Tag+probe**: UF-Tag with an extra oracle that reveals only whether `D` succeeds on
   `Tag(c, x)`. This is the game of the Lean balance theorem.
@@ -35,31 +36,38 @@ checkout `subprojects/pqov` (revision `fac2ec1`, UOV round-3 code, with
 |---|---|---|---|
 | L-D | `derive_preimage` (ROM) is the *ideal deterministic sampler*: `D(y)` uniform on the good preimages of `y`, independently per `y` | `q_v·2^{−256} + ℓ·E[δ^{256}]` | §2 |
 | L-C | Real preimages are never "bad"; uniform ones are bad w.p. `δ ≈ 2^{−7.994}`. q samples: TV `1 − (1−δ)^q` exactly. Every public-key-only simulator is off by at least its mass on bad points | exact | §2, §4 |
-| T1 | A-OMPI ≡ det-FDH EUF-CMA (ROM); `Adv^{euf}_{spec} ≤ Adv^{ompi} ≤ Adv^{suf}_{spec}`; `Adv^{ompi} ≤ Adv^{ompr}`. [Lean] (a) and (c); (c) needs `q_T + Q` targets and costs `(q_T + Q)·ρ` with a sampler that may fail (corrected) | tight (SUF step: `q_H` signing queries) | §5.1 |
+| T1 | A-OMPI ≡ det-FDH EUF-CMA (ROM); `Adv^{euf}_{spec} ≤ Adv^{ompi} ≤ Adv^{suf}_{spec}`; `Adv^{ompi} ≤ Adv^{ompr}`. [Lean] (a) and (c); (c) needs `q_T + Q` targets and costs `(q_T + Q)·ρ` with a sampler that may fail (corrected) | tight; (c) tight up to the sampler-failure term `(q_T + Q)·E[δ^{255}]` (SUF step: `q_H` signing queries) | §5.1 |
 | T2 | A-OMPI ⇐ GPI + OW, or ⇐ GPI + UOV problem | `q_T` | §5.2 |
 | T3 | EUF-CMA of the **specified** salted UOV ⇐ GPI + UOV problem. (The spec's own proof is for salt-UOV, a different signer.) | `q_H + 1` on UOV, none on GPI | §5.3 |
-| T4 | **Lemma U is incorrect as stated**: CT-UF with an arbitrary-target signing oracle is not shown to follow from OMPR. CT-UF^open ⇐ OMPR, tightly ([Lean] with `Com` a random function, plus a sampler-failure term the paper omitted: `advCTUFIdeal1_le_ompr`, `K` keys `advCTUFIdeal_le_ompr`); CT-UF^open ⇐ GPI + OW | tight / `q_π` | §5.4 |
+| T4 | **Lemma U is incorrect as stated**: CT-UF with an arbitrary-target signing oracle does not follow from OMPR; it is in fact false (row O). CT-UF^open ⇐ OMPR, tight up to the sampler-failure term `n·E[δ^{255}]`, `n = q_f + 2q_S + 1` ([Lean] with `Com` a random function: `advCTUFIdeal1_le_ompr`; the paper's timing term is unnecessary; `K` keys by guessing, `advCTUFIdeal_le_ompr`); CT-UF^open ⇐ GPI + OW | tight up to `n·E[δ^{255}]`, ×K / `q_π` | §5.4 |
 | T5 | With R1, Ratatouille balance ⇐ EUF-CMA of salted UOV with `H = Tag`, which ⇐ GPI + UOV (or ⇐ UOV alone with salt-UOV signing) | `q_K + 1` | §5.5 |
-| T6 | **PomFRIT ⇔ OMPR**: an OMPR breaker *is* a PomFRIT one-more forger. So OMPR ≤ PomFRIT ≤ OMPR⊕17 | tight | §5.6 |
+| T6 | **PomFRIT ⇔ OMPR**: an OMPR breaker *is* a PomFRIT one-more forger. So OMPR ≤ PomFRIT ≤ OMPR⊕17. [Lean] generic core for any client with distinct session labels, plus a completeness term (`ompr_le_blind`); the PomFRIT instance is paper (`pomfrit.md` G9) | tight, plus completeness failures | §5.6 |
 | P7 | OMPR does not reduce to the UOV problem, OW or any EUF/SUF-CMA notion by a key-preserving black-box reduction (theorems A1–A3 of `uov-open-structure.md`; §5.7 has the original sketch). Determinism makes a separation easier, not harder (A2) | `k + 1` (runs of the adversary) | §5.7, `uov-open-structure.md` Part A |
 | O | **Follow-up (`uov-open-reductions.md`).** CT-UF as defined is **false**: `P(λs) = λ²P(s)`, so one query on `μ·Com(x*)` forges. Its repair up to scalars equals "OMPR with free non-challenge calls", which no relativizing reduction derives from OMPR. For OMPR ⇒ OMPR⊕τ, every relativizing reduction, with rewinding, loses `≥ τ^{q+1}/2` | — | `uov-open-reductions.md` |
-| P8 | OMPR⊕τ ⇐ OMPR loses `τ^{q+1}`. Every *simple-embedding* reduction loses that much against some adversary. In a generic model the two assumptions have the same bound. For PomFRIT's tree shapes, U1's additive `Q₃·2^{−71}` (≈ `2^{−7}` at `2^{64}` queries) is unavoidable for simple-embedding reductions | — | §6 |
-| P9 | UF-Tag+probe ≡ UF-Tag up to the aborts of `D` on signed or probed pairs; so UF-Tag+probe ⇐ A-OMPI ⇐ OMPR with no extra oracle calls. The probe and the paper's abort event `E4` cost the same in Ratatouille's balance; R1 does not change this, the F5 fix removes the probe | `(q_S + q_P)·E[δ^{255}] + q_v·2^{−256}` (≈ `N·2^{−295.8}`) | §5.8 |
+| P8 | OMPR⊕τ ⇐ OMPR loses `τ^{q+1}`. Every *simple-embedding* reduction loses that much against some adversary. In a generic model the two assumptions have the same bound. For PomFRIT's tree shapes, U1's additive `Q₃·2^{−71}` (≈ `2^{−7}` at `2^{64}` queries) is unavoidable for simple-embedding reductions, and (row O) for every relativizing reduction up to a factor 2. [Lean] (a) `advOMPRShift_le_guess`; the converse OMPR⊕τ ⇒ OMPR, tight, `advOMPR_le_shift` | — | §6 |
+| P9 | UF-Tag+probe ≡ UF-Tag up to the aborts of `D` on signed or probed pairs; so UF-Tag+probe ⇐ A-OMPI ⇐ OMPR with no extra oracle calls. The probe and the paper's abort event `E4` cost the same in Ratatouille's balance; R1 does not change this, the F5 fix removes the probe. [Lean] (a) `ufTagAdv_le_noProbe`, `balance_le_noProbe` | `(q_S + q_P)·E[δ^{255}] + q_v·2^{−256}` (≈ `N·2^{−295.8}`) | §5.8 |
 
 **Follow-up.** `uov-open-structure.md` treats two of the open items of §9: the meta-reduction
 (Part A) and the cryptanalysis of GPI (Part B: reliable badness tests are key-recovery attacks;
-conjectured security of GPI ≈ key recovery, `≈ 2^{201}` bit operations for uov-Ip).
+conjectured security of GPI ≈ key recovery, `≈ 2^{201}` bit operations for uov-Ip; estimates under
+  semi-regularity, literature cited from memory).
 
 **Assessment** (§7).
 - State all three protocols under **one** assumption: **A-OMPR**, i.e. Def. 3.1 instantiated with
-  uov-Ip and `derive_preimage`, per key. It is *necessary* for PomFRIT (T6) and suffices tightly
-  for Moussaka (via CT-UF^open) and Ratatouille (via A-OMPI).
+  uov-Ip and `derive_preimage`, per key. It is *necessary* for PomFRIT (T6) and suffices tightly, up to
+  the sampler-failure term `n·E[δ^{255}] ≈ n·2^{−295.8}`, for Moussaka (via CT-UF^open) and
+  Ratatouille (via A-OMPI).
+- In Lean, Moussaka and Ratatouille end at OMPR (`omuf_le_num_ompr`, `balance_le_ompr`), each under
+  one named modelling hypothesis that idealizes `Com` (`hmodel`) or `Tag` (`TagIdeal`) in the
+  standalone game only; PomFRIT's U1 and U2 are stated with OMPR and OMPR⊕τ (`pomfrit_U1_ompr`,
+  `pomfrit_U2_omprShift`).
 - Secondary statements: Moussaka and Ratatouille also follow, with loss `q`, from GPI plus the UOV
   problem (or OW). Ratatouille also follows from SUF-CMA of the specified scheme.
 
 **Recommendations** (§8).
 - Documentation:
-  - fix Moussaka's Lemma U by using CT-UF^open (B₂ already has the openings);
+  - fix Moussaka's Lemma U by using CT-UF^open (B₂ already has the openings) — done in
+    `moussaka.md` §3.3;
   - qualify Ratatouille §2.3: the 1/255 gap also affects the *specified* salted UOV, and only
     salt-UOV signing avoids it.
 - R1 (Ratatouille salt) is cheap, and moves the assumption to salted-UOV EUF-CMA.
@@ -310,7 +318,8 @@ All in the ROM, with `D` replaced by `D*` (Lemma D, error `ε_D`) on both sides.
 **So A-OMPI *is* EUF-CMA of deterministic UOV-FDH in the ROM**, which is the standard EUF-CMA
 notion for an unsalted hash-and-sign variant of UOV.
 
-**(c) A-OMPI ≤ OMPR, tightly:** `Adv^{ompi}(q_T, Q) ≤ Adv^{ompr}(q_T, Q)`.
+**(c) A-OMPI ≤ OMPR, tightly (for `D*`; with the real sampler, up to `(q_T + Q)·E[δ^{255}]` and with
+`q_T + Q` targets, see the correction below):** `Adv^{ompi}(q_T, Q) ≤ Adv^{ompr}(q_T, Q)`.
 - Forward the index queries as `D(t_i)`.
 - The `Q` answers plus the forgery are `Q+1` preimages of distinct indices. ∎
 
@@ -344,9 +353,9 @@ trapdoor, the messages and the world:
   `ompi_inv`, `ompiWin_imp`. Holds for every trapdoor and adversary.
 - **(a) then (c)**: `advFDH_le_ompr`, `advFDH_le_ompr_rate`.
 - Generic tools: `simulateQ_proj_eqd`, `simulateQ_inv_bound` (a simulation through a state
-  projection, with a per-query budget), `prEvent_unifList_exists_le`,
-  `prEvent_keyed_unifList_exists_le` (union bound over uniform targets), `unifList_add`,
-  `prEvent_le_bind`.
+  projection, with a per-query budget), `prEvent_unifList_exists_le₀`, `prEvent_le_bind` (all in
+  `Assumptions/LazyIdeal.lean`, shared with T4 and the shift reductions),
+  `prEvent_keyed_unifList_exists_le` (union bound over uniform targets), `unifList_add`.
 - **(b)** (A-OMPI ≤ det-FDH), (d), (e) are not mechanized.
 
 **(d) spec-EUF ≤ det-FDH:**
@@ -951,13 +960,13 @@ Yes: **A-OMPR, i.e. OMPR(n, q) of Def. 3.1 for uov-Ip with `SPre = derive_preima
 
 | Protocol | From A-OMPR | Loss | Best alternative without OMPR |
 |---|---|---|---|
-| PomFRIT | U1 (`pomfrit.md`); **and necessary** (T6) | `(Q₃+ℓ+1)·2^{−71}` | none: equivalent to OMPR; U2 needs OMPR⊕17 |
-| Moussaka | CT-UF^open ⇐ OMPR (T4), in Thm 1 | tight, ×K | GPI + OW, loss `q_π`, ×K (T4) |
-| Ratatouille | A-OMPI ≤ OMPR (T1c), in Lemma 2.1 and Thm 1; the Lean theorem's UF-Tag+probe ≤ A-OMPI + abort term (P9) | tight, plus `(N_I + N_S)·E[δ^{255}] + q_v·2^{−256}` for Issuer aborts (`E4`, or the probe) | spec-SUF-CMA (T1e); GPI + OW (T2), loss `q_T`; both plus the same abort term |
+| PomFRIT | U1 (`pomfrit.md`); **and necessary** (T6). [Lean] U1/U2 with OMPR / OMPR⊕τ (`pomfrit_U1_ompr`, `pomfrit_U2_omprShift`), Lemma P's term explicit; T6 generic core (`ompr_le_blind`) | `(Q₃+ℓ+1)·2^{−71}`; optimal for relativizing reductions (P8, row O) | none: equivalent to OMPR; U2 needs OMPR⊕17 |
+| Moussaka | CT-UF^open ⇐ OMPR (T4), in Thm 1. [Lean] `omuf_le_num_ompr`, with `Com` idealized in the standalone game (`hmodel`) | tight up to `n·E[δ^{255}]`, ×K | GPI + OW, loss `q_π`, ×K (T4) |
+| Ratatouille | A-OMPI ≤ OMPR (T1c), in Lemma 2.1 and Thm 1; the Lean theorem's UF-Tag+probe ≤ A-OMPI + abort term (P9). [Lean] `balance_le_ompr`, with `Tag` idealized in the standalone game (`TagIdeal`) | tight up to `(q_T + Q)·E[δ^{255}]`, plus `(N_I + N_S)·E[δ^{255}] + q_v·2^{−256}` for Issuer aborts (`E4`, or the probe) | spec-SUF-CMA (T1e); GPI + OW (T2), loss `q_T`; both plus the same abort term |
 
 Reasons:
 1. PomFRIT forces it (T6).
-2. It covers the other two tightly.
+2. It covers the other two tightly, up to the sampler-failure term `n·E[δ^{255}] ≈ n·2^{−295.8}`.
 3. It is the paper's published assumption (Def. 3.1) instantiated with the actual sampler.
 4. A single assumption makes the key-separation rule uniform. Each key's oracle answers count in
    that key's one-more budget, so **no key may serve two protocols**. That is `pomfrit.md` F5 and
@@ -965,7 +974,8 @@ Reasons:
    included.
 
 Each protocol note should state its UOV hypothesis as "A-OMPR (`uov-assumptions.md` §3, item 7)".
-- For Moussaka, replace CT-UF by CT-UF^open, with the repaired Lemma U.
+- For Moussaka, replace CT-UF by CT-UF^open, with the repaired Lemma U (done, `moussaka.md` §3.3;
+  plain CT-UF is false, row O of §0).
 - For Ratatouille, keep A-OMPI as the immediate hypothesis, with the chain
   OMPR ⇒ A-OMPI ⇔ det-FDH.
 
@@ -1158,7 +1168,7 @@ The reductions between the games (`lean/VoleMole/Assumptions/Shift.lean`, `Blind
 | A1 (`uov-open-reductions.md` §4.1): `Adv^{ompr}(B) ≤ Adv^{ompr⊕τ}(shiftZero B)`, `τ ≥ 1`, tight; `Adv^{ompr⊕τ}` grows with `τ` | `advOMPR_le_shift`, `advOMPRShift_mono` |
 | P8(a): `Adv^{ompr⊕τ}(B) ≤ τ^{ℓ+1}·Adv^{ompr}(guessRed n τ B)` | `advOMPRShift_le_guess`, `guess_count`, `pr_guess_ge`, `adReal_eqd`, `recCh_eqd` |
 | T6, generic core (§5.6): `Adv^{ompr}(B) ≤ Pr[Forges] + Pr[CompFail]` for the blinding forger of any client with distinct session labels | `ompr_le_blind`, `blindAdv`, `Client`, `bcomb_eqd`, `win_mid`, `post_pres` |
-| A simulation along a projection | `simulateQ_proj_eqd` |
+| A simulation along a projection (shared, `Assumptions/LazyIdeal.lean`) | `simulateQ_proj_eqd_inv` |
 
 Not mechanized:
 - T1(b, d, e), T2, T3, T5 and P8(b)–(d) (T1(a) and T1(c) are in `Assumptions/IdealTag.lean`, §5.1;
