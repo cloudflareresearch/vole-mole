@@ -1,5 +1,6 @@
 import VoleMole.ROM.PrivacyReads
 import VoleMole.Privacy.MoussakaNCRA
+import VoleMole.Privacy.SeedXOFNC
 
 /-!
 # Moussaka's non-colluding game with the Moderator's choices an oracle computation
@@ -14,6 +15,11 @@ the game's tables (`ROM.Reads.runT`), and its budget is the syntactic query boun
 
 **`anonymityNCOC_lean_num`**, **`unlinkabilityNCOC_lean_num`** and their `_perm` versions are the
 `*NCRA_lean_num(_perm)` bounds, unchanged, for `A.toRA`, with `QBudget` in place of `KBudget`.
+
+**With the real Clients' seeds** (`Privacy/SeedXOFNC.lean`'s `seedGameM`): the Moderator at XOF
+table `g` is `A g`, the Anchors' signers `sk g`; `anonymityNCRA_lean_num_seed`,
+`unlinkabilityNCRA_lean_num_seed`, `anonymityNCOC_lean_num_seed` (and `_perm_seed` for anonymity)
+add `2·(2q_g + 2)·2⁻²⁵⁶`, the abort term bounded uniformly in the table and the state.
 -/
 
 open OracleComp OracleSpec
@@ -107,5 +113,70 @@ theorem unlinkabilityNCOC_lean_num_perm (A : AdversaryNCOC (Equiv.Perm Blk) Sg)
       4 * εAdPm pR 9 q3 (q5 + 2496) (qE + 23035) k3 k2 k5 kE + 2 * (noHitProb + 1 / 2 ^ 1024) +
         4 * ((k3 + q3 : ℕ) / 2 ^ 128) :=
   unlinkabilityNCRA_lean_num_perm A.toRA idx sk hsk hpk hs hA (AdversaryNCOC.kBudget hK)
+
+/-! ## With the real Clients' seeds -/
+
+/-- **`realGameNCRA` (the Lean provers and verifier) with the seeds.** -/
+noncomputable def seedGameNCRA {R : Type} [Fintype R] [Nonempty R] [CipherRow R]
+    (A : XofM → AdversaryNCRA R Sg) (sk : XofM → Sg → Bool → Signer) (b : Bool) :
+    (Bool × Bool → SeedB) × (T4 (ShM R) × XofM) → Prop :=
+  seedGameM (fun g => realGameNCRA (A g) idx leanPI leanVI (sk g) leanPR) b
+
+/-- **`anonymityNCRA_lean_num` with the seed XOF.** -/
+theorem anonymityNCRA_lean_num_seed (A : XofM → AdversaryNCRA (Blk → Blk) Sg)
+    (sk : XofM → Sg → Bool → Signer) (hsk : ∀ g σ c, (sk g σ c).Correct (((A g).adv σ).pk c))
+    (hidx : IdxSound idx) {q3 q5 qE k3 k2 k5 kE qg : ℕ} (hA : ∀ g, (A g).Budget q3 q5 qE)
+    (hK : ∀ g, (A g).KBudget k3 k2 k5 kE) {φ : Bool → ℝ}
+    (hφ : ∀ g σ c, phi ((A g).adv σ).nc (sk g σ) c ≤ φ c)
+    (hg : ∀ b z, RdX (fun g => realGameNCRA (A g) idx leanPI leanVI (sk g) leanPR b z) qg) :
+    |pr _ (seedGameNCRA idx A sk false) - pr _ (seedGameNCRA idx A sk true)| ≤
+      4 * εAd 9 q3 (q5 + 2496) (qE + 23035) k3 k2 k5 kE + 2 * (noHitProb + 1 / 2 ^ 1024) +
+        2 * (φ false + φ true) + 4 * ((k3 + q3 : ℕ) / 2 ^ 128) +
+        2 * ((2 * qg + 2 : ℕ) / 2 ^ 256) :=
+  abs_seedGameM_sub_le (fun g => realGameNCRA (A g) idx leanPI leanVI (sk g) leanPR) hg fun g =>
+    anonymityNCRA_lean_num (A g) idx (sk g) (hsk g) hidx (hA g) (hK g) (hφ g)
+
+/-- **`anonymityNCRA_lean_num_perm` with the seed XOF.** -/
+theorem anonymityNCRA_lean_num_perm_seed (A : XofM → AdversaryNCRA (Equiv.Perm Blk) Sg)
+    (sk : XofM → Sg → Bool → Signer) (hsk : ∀ g σ c, (sk g σ c).Correct (((A g).adv σ).pk c))
+    (hidx : IdxSound idx) {q3 q5 qE k3 k2 k5 kE qg : ℕ} (hA : ∀ g, (A g).Budget q3 q5 qE)
+    (hK : ∀ g, (A g).KBudget k3 k2 k5 kE) {φ : Bool → ℝ}
+    (hφ : ∀ g σ c, phi ((A g).adv σ).nc (sk g σ) c ≤ φ c)
+    (hg : ∀ b z, RdX (fun g => realGameNCRA (A g) idx leanPI leanVI (sk g) leanPR b z) qg) :
+    |pr _ (seedGameNCRA idx A sk false) - pr _ (seedGameNCRA idx A sk true)| ≤
+      4 * εAdPm pR 9 q3 (q5 + 2496) (qE + 23035) k3 k2 k5 kE + 2 * (noHitProb + 1 / 2 ^ 1024) +
+        2 * (φ false + φ true) + 4 * ((k3 + q3 : ℕ) / 2 ^ 128) +
+        2 * ((2 * qg + 2 : ℕ) / 2 ^ 256) :=
+  abs_seedGameM_sub_le (fun g => realGameNCRA (A g) idx leanPI leanVI (sk g) leanPR) hg fun g =>
+    anonymityNCRA_lean_num_perm (A g) idx (sk g) (hsk g) hidx (hA g) (hK g) (hφ g)
+
+/-- **`unlinkabilityNCRA_lean_num` with the seed XOF.** -/
+theorem unlinkabilityNCRA_lean_num_seed (A : XofM → AdversaryNCRA (Blk → Blk) Sg)
+    (sk : XofM → Sg → Bool → Signer) (hsk : ∀ g σ c, (sk g σ c).Correct (((A g).adv σ).pk c))
+    (hpk : ∀ g σ, ((A g).adv σ).pk false = ((A g).adv σ).pk true)
+    (hs : ∀ g σ, sk g σ false = sk g σ true)
+    {q3 q5 qE k3 k2 k5 kE qg : ℕ} (hA : ∀ g, (A g).Budget q3 q5 qE)
+    (hK : ∀ g, (A g).KBudget k3 k2 k5 kE)
+    (hg : ∀ b z, RdX (fun g => realGameNCRA (A g) idx leanPI leanVI (sk g) leanPR b z) qg) :
+    |pr _ (seedGameNCRA idx A sk false) - pr _ (seedGameNCRA idx A sk true)| ≤
+      4 * εAd 9 q3 (q5 + 2496) (qE + 23035) k3 k2 k5 kE + 2 * (noHitProb + 1 / 2 ^ 1024) +
+        4 * ((k3 + q3 : ℕ) / 2 ^ 128) + 2 * ((2 * qg + 2 : ℕ) / 2 ^ 256) :=
+  abs_seedGameM_sub_le (fun g => realGameNCRA (A g) idx leanPI leanVI (sk g) leanPR) hg fun g =>
+    unlinkabilityNCRA_lean_num (A g) idx (sk g) (hsk g) (hpk g) (hs g) (hA g) (hK g)
+
+/-- **`anonymityNCOC_lean_num` (the setup an oracle computation) with the seed XOF.** -/
+theorem anonymityNCOC_lean_num_seed (A : XofM → AdversaryNCOC (Blk → Blk) Sg)
+    (sk : XofM → Sg → Bool → Signer) (hsk : ∀ g σ c, (sk g σ c).Correct (((A g).adv σ).pk c))
+    (hidx : IdxSound idx) {q3 q5 qE k3 k2 k5 kE qg : ℕ} (hA : ∀ g, (A g).toRA.Budget q3 q5 qE)
+    (hK : ∀ g, QBudget (A g).setup k3 k2 k5 kE) {φ : Bool → ℝ}
+    (hφ : ∀ g σ c, phi ((A g).adv σ).nc (sk g σ) c ≤ φ c)
+    (hg : ∀ b z, RdX (fun g => realGameNCRA (A g).toRA idx leanPI leanVI (sk g) leanPR b z) qg) :
+    |pr _ (seedGameNCRA idx (fun g => (A g).toRA) sk false) -
+        pr _ (seedGameNCRA idx (fun g => (A g).toRA) sk true)| ≤
+      4 * εAd 9 q3 (q5 + 2496) (qE + 23035) k3 k2 k5 kE + 2 * (noHitProb + 1 / 2 ^ 1024) +
+        2 * (φ false + φ true) + 4 * ((k3 + q3 : ℕ) / 2 ^ 128) +
+        2 * ((2 * qg + 2 : ℕ) / 2 ^ 256) :=
+  anonymityNCRA_lean_num_seed idx (fun g => (A g).toRA) sk hsk hidx hA
+    (fun g => AdversaryNCOC.kBudget (hK g)) hφ hg
 
 end VoleMole.Privacy.Moussaka
