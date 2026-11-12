@@ -1,4 +1,5 @@
 import VoleMole.ROM.OneMore
+import VoleMole.Assumptions.LazyIdeal
 
 /-!
 # The UOV assumptions as standalone security games
@@ -50,6 +51,11 @@ CT-UF and UF-Tag wins do not count queries).
   CT-UF^open (which the Moussaka corollary uses), and `advCTUFXAt` (CT-UF^×: freshness up to a
   class relation, for UOV nonzero scalars, `Links.uovCls`), which the rescaling forger does not
   win (`Links.not_ctxWin_scale`).
+* `advCTUFIdeal`, `advCTUFIdeal1`, `advCTUFIdealAt` (item 11 with an **ideal `Com`**, §5.4): `Com`
+  is an oracle, a lazy random function (`LazyIdeal.rfFresh`), and the forger an oracle
+  computation (`specCI`); the win `CIWin` reads `Com`'s table after the challenger evaluated it at
+  `x*` and the openings. `preFailPr`: the probability that `D` fails on a uniform target. T4 and
+  the `K`-key step are in `Assumptions/CTUFOpenOMPR.lean`.
 * `advUFTag` (item 12) and `advUFTagProbe` (UF-Tag with a signability probe: the forger also learns,
   at the points of its probe log, whether `σ` succeeds): oracle `m ↦ σ(H(m))`; win: a preimage of
   `H(m*)` for an `m*` none of whose signing queries was answered.
@@ -807,6 +813,109 @@ theorem advCTUFOpen_le (keys : ProbComp (Fin K → PK × SK)) (P : PK → S → 
     prEvent_mono _ _ _ fun _ h => h.1
 
 end CTUF
+
+/-! ## Item 11 with an ideal `Com`: CT-UF^open where `Com` is a lazy random function
+
+The standalone game behind `uov-assumptions.md` §5.4 (T4). `Com` is an oracle, a lazy random
+function `Xc → T` on its domain `Xc` (`LazyIdeal.rfFresh`); the forger is an oracle computation
+(`specCI`: the world, the `K` signers on `(k, t)`, `Com`). After the forger returns `(k, x*, s*)`
+and its openings, the challenger evaluates `Com` at `x*` and at every opening (`ciFinal`). The win
+(`CIWin`) is `CTOpenWin` read off `Com`'s final table: `Com(x*)` is defined, `s*` is a preimage of
+it under key `k`, no signed target equals it, and every signed target is `Com` of some opening.
+
+The concrete game `advCTUFOpenAt` (`Com = KP800(·)|_{360}`, the forger reads it as a function) is
+not reduced to this one: replacing `Com` by an oracle is the modelling step of §5.4, as in the
+note (there a random permutation with inverse access; here a random function, without inverse
+queries). -/
+
+section CTUFIdeal
+
+variable {DR : Type} (AR : DR → Type) (K : ℕ) (Xc T S : Type)
+
+abbrev AnsCO : DR ⊕ (Fin K × T) → Type := Sum.elim AR fun _ => S
+
+/-- **The ideal CT-UF forger's oracles**: the world, the `K` signers on `(k, t)`, and `Com`. -/
+abbrev specCI := LazyIdeal.specRF (AnsCO AR K T S) Xc T
+
+/-- The challenger's state besides `Com`'s table: the world's cache and the signed `(k, t)`
+(each recorded once, in order). -/
+structure CISt where
+  ro : (specR AR).QueryCache
+  signed : List (Fin K × T)
+
+variable {AR K Xc T S}
+
+/-- A signing query. -/
+def isSign : (DR ⊕ (Fin K × T)) ⊕ Xc → Bool
+  | .inl (.inr _) => true
+  | _ => false
+
+/-- `Com(x)`, as a query. -/
+def comQ (x : Xc) : OracleComp (specCI AR K Xc T S) T :=
+  liftM ((specCI AR K Xc T S).query (.inr x))
+
+/-- **The challenger's final evaluations**: `Com` at the forgery's `x*` and at every opening. -/
+def ciFinal (o : CTOut K S Xc) : OracleComp (specCI AR K Xc T S) (CTOut K S Xc) := do
+  let _ ← ((o.1.map fun f => f.2.1).toList ++ o.2).mapM comQ
+  pure o
+
+/-- **An ideal forger's budget**: at most `q_f` `Com` and `q_S` signing queries, at most `q_S`
+openings. -/
+def CIBudget (qf qS : ℕ) (f : OracleComp (specCI AR K Xc T S) (CTOut K S Xc)) : Prop :=
+  IsQueryBoundP f (fun q => LazyIdeal.isRF q = true) qf ∧ IsQueryBoundP f (fun q => isSign q = true) qS ∧
+    ∀ o ∈ support f, o.2.length ≤ qS
+
+variable [DecidableEq DR] [∀ d, SampleableType (AR d)] [DecidableEq T]
+
+/-- The world and the signers `σ` (logging each signed `(k, t)` once). -/
+def ciOther (σ : Fin K × T → S) :
+    QueryImpl (OracleSpec.ofFn (AnsCO AR K T S)) (StateT (CISt AR K T) ProbComp)
+  | .inl d => StateT.mk fun c =>
+      (fun r => (r.1, { c with ro := r.2 })) <$> ((specR AR).randomOracle d).run c.ro
+  | .inr q => StateT.mk fun c =>
+      pure (σ q, { c with signed := if q ∈ c.signed then c.signed else c.signed ++ [q] })
+
+variable [DecidableEq Xc] [SampleableType T]
+
+/-- **The ideal CT-UF^open experiment** against the signers `σ`: the forger and the final
+evaluations, with `Com` a lazy random function; the forger's output, the state and `Com`'s
+table. -/
+def ciRun (σ : Fin K × T → S) (f : OracleComp (specCI AR K Xc T S) (CTOut K S Xc)) :
+    ProbComp (CTOut K S Xc × CISt AR K T × (Xc → Option T)) :=
+  (simulateQ (LazyIdeal.rfFresh (ciOther σ)) (f >>= ciFinal)).run (⟨∅, []⟩, fun _ => none)
+
+variable (V : Fin K → S → T → Prop)
+
+/-- **The ideal CT-UF^open win**: `(k, x*, s*)` with `Com(x*)` defined, `s*` a preimage of it
+under key `k`, `Com(x*)` never signed, and every signed target `Com` of an opening. -/
+def CIWin (r : CTOut K S Xc × CISt AR K T × (Xc → Option T)) : Prop :=
+  ∃ k x s c, r.1.1 = some (k, x, s) ∧ r.2.2 x = some c ∧ V k s c ∧
+    (∀ q ∈ r.2.1.signed, q.2 ≠ c) ∧ ∀ q ∈ r.2.1.signed, ∃ x' ∈ r.1.2, r.2.2 x' = some q.2
+
+/-- **`Adv^{ct-uf-open}_K` with an ideal `Com`**, at fixed keys (signers `σ`, verification `V`). -/
+noncomputable def advCTUFIdealAt (σ : Fin K × T → S)
+    (F : ProbComp (OracleComp (specCI AR K Xc T S) (CTOut K S Xc))) : ℝ≥0∞ :=
+  Pr{let f ← F; let r ← ciRun σ f}[CIWin V r]
+
+variable {PK SK : Type} (tr : Trapdoor PK SK T S)
+
+/-- **`Adv^{ct-uf-open}_K` with an ideal `Com`** over `K` independent keys of `tr`. -/
+noncomputable def advCTUFIdeal (F : (Fin K → PK) → ProbComp (OracleComp (specCI AR K Xc T S) (CTOut K S Xc))) :
+    ℝ≥0∞ :=
+  Pr{let ks ← LazyIdeal.iidVec tr.keyGen K; let f ← F fun k => (ks k).1
+     let r ← ciRun (signers tr.D fun k => (ks k).2) f}[CIWin (fun k => tr.IsPre (ks k).1) r]
+
+/-- **`Adv^{ct-uf-open}_1` with an ideal `Com`**: one key of `tr`. -/
+noncomputable def advCTUFIdeal1 (F : PK → ProbComp (OracleComp (specCI AR 1 Xc T S) (CTOut 1 S Xc))) :
+    ℝ≥0∞ :=
+  Pr{let kp ← tr.keyGen; let f ← F kp.1; let r ← ciRun (fun q => tr.D kp.2 q.2) f}[
+    CIWin (fun _ => tr.IsPre kp.1) r]
+
+/-- **The sampler's failure probability** on a uniform target (for pqov, `E[δ^{255}]`). -/
+noncomputable def preFailPr : ℝ≥0∞ :=
+  Pr{let kp ← tr.keyGen; let t ← $ᵗ T}[¬tr.IsPre kp.1 (tr.D kp.2 t) t]
+
+end CTUFIdeal
 
 /-! ## Item 12: UF-Tag, and UF-Tag with a signability probe -/
 
