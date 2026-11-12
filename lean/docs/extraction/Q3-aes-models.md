@@ -408,7 +408,7 @@ in `docs/perf.md`.
     sets: the relations' dedicated gate-label rows (patch 0005) lengthen the corrections. With the
     SHAKE switch it should also say that the leaf commitments use FAEST v1's SHAKE leaf hash.
     Proofs were already not FAEST signatures, and the README already says wire formats may change
-    (`README.md:10`).
+    (`README.md:18-19`).
 - **Optional further patch** (faest-arch-opt, not needed): a TurboSHAKE128 (12-round) leaf hash
   would roughly halve the Keccak cost, at the price of a nonstandard leaf hash and a subproject
   patch (see AGENTS.md on patch refresh).

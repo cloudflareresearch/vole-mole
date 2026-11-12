@@ -9,9 +9,16 @@ them for the code in `src/ratatouille/*` and `include/vole_mole/ratatouille.hpp`
 `REUSE_CRT_WITNESS`, so on `main` Ratatouille is still at the `6d7113e` bounds (PU).
 
 Sources used:
-- the draft, now named `draft-authors-mole-act-ratatouille.md` (the README links to the old name,
-  `draft-authors-mole-vole-act.md`, which returns 404);
-- the generic ACT draft `draft-authors-mole-act.md`, cited as {{ACT}};
+- the VOLE-ACT draft `draft-authors-mole-vole-act.md`, which the README links as `[act]`. It was
+  briefly named `draft-authors-mole-act-ratatouille.md` (draft commit `a8291b0`) and got its old
+  name back in `0af2a67`. This note was written against the draft as of 2026-10-13 and has been
+  rechecked against draft commit `6736ebe` (2026-11-02). The later changes make the credit
+  witnesses bit vectors, with V3 checked by a ripple-carry adder and V4 holding by construction,
+  which matches the implementation (§8). They also add a rationale for the constant bits in the
+  initial states of `Com` and `Tag` (at least 128), and a changelog;
+- the generic ACT draft, now `draft-schlesinger-mole-ec-act.md` (formerly `draft-authors-mole-act.md`,
+  then `draft-authors-mole-ec-act.md`), cited as {{ACT}}. The passages cited here are unchanged in
+  substance at `6736ebe`;
 - `lean/docs/extraction/` (PoK, L7, L8, Q2) and `lean/docs/zk.md` (ZK);
 - `lean/docs/security/domain-separation.md`, which proves Lemma DS (its §7: part (a) for every SHAKE
   call Ratatouille makes, part (b) for `Com` and `Tag`).
@@ -277,8 +284,8 @@ and to spend amounts `d` that it chooses. It must not distinguish:
 In both worlds the clients keep their real states. So whether a client can afford a requested
 `d`, or rejects a malformed response, is identical in both. This captures the draft's goal that a
 spend is unlinkable "to the issuance or to any other spend by the same Client", up to the public
-amounts and feasibility ({{ACT}} says the same: "hides its balance beyond the public amounts and
-the predicates they establish").
+amounts and feasibility ({{ACT}} says the same: "hides its Credential's balance beyond the public
+amounts and the predicates they establish").
 
 **N4 Correctness.** Honest runs succeed:
 - an issued token holds `(T_init, 0)`;
@@ -676,7 +683,7 @@ No issue was found in:
 
 ## 8. Deviations from the drafts
 
-Against `draft-authors-mole-act-ratatouille.md`:
+Against `draft-authors-mole-vole-act.md`:
 
 | Item | Draft | Implementation | Effect |
 |---|---|---|---|
@@ -685,7 +692,7 @@ Against `draft-authors-mole-act-ratatouille.md`:
 | Extra DSTs | — | `l0` (UOV combination), `s0`/`s1` (seed XOFs) | needs Lemma DS |
 | Randomness | `nf, r ← uniform` | squeezed from a 32-byte seed by SHAKE (`ratatouille.cpp:69-84`) | computational (H1 of Thm 2) |
 | DerivePreimage | TODO: `Expand_v(t‖seed_sk‖ctr)` | `H(t‖sk_seed‖"pqov-derive-preimage"‖ctr)` | adds separation from `ov_sign` (good) |
-| Range checks on `d`, `x'` | explicit steps | implicit (fixed 8-byte fields) | none |
+| Range checks on `d`, `x'` | explicit steps; since draft `6fd8ff3`, credits are `8·L`-bit witnesses, so V4 holds by construction and V3 is a ripple-carry adder | implicit (fixed 8-byte fields) | none |
 | SpendRequest checks | `d ≤ t+x`, `t' < 2^{64}` | overflow-aware test, equivalent (Lean `change_correct`) | none |
 | Nullifier check | caller, atomic, record before responding | caller (`ratatouille.hpp:180-182`) | as draft; see F5 |
 | VOLEitH `msg` | optional, unused | none | F2 |

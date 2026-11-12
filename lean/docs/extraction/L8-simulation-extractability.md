@@ -505,7 +505,7 @@ different `mu` in H₂¹ (and in H₄), which makes it a (β) chain with every t
 trees that are dead under the new `iv`.
 
 **What SE does not prevent.** Replaying the identical `(x, b, π)`. The protocols handle this with
-nullifiers (`README.md:122-128`).
+nullifiers (`README.md:115-120`).
 
 **Two completions of one π₁.** lean/docs/zk.md's two-phase ZK game, and any oracle that completes a π₁ more
 than once, are not needed:

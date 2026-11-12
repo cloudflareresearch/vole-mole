@@ -4,12 +4,15 @@
 
 This note states and proves the security properties of vole-mole's Moussaka implementation. It
 covers `src/moussaka/*.{cpp,hpp}` and `include/vole_mole/moussaka.hpp` at commit `6d7113e`
-(`main`). Moussaka is the Issuer-Hiding Anonymous Token (IHAT) of the Moussaka draft. The README
-link (`README.md:24`, `[mous]`) still points to `draft-authors-mole-vole-ihat.md`, which was renamed
-to `draft-authors-mole-ihat-moussaka.md` (draft commit "crypto: Align draft names"). The old link
-now returns 404. This note uses the renamed draft as of 2026-10-13, together with the MoLE
+(`main`). Moussaka is the Issuer-Hiding Anonymous Token (IHAT) of the VOLE-IHAT draft,
+`draft-authors-mole-vole-ihat.md`, which the README links as `[ihat]`. The draft was briefly named
+`draft-authors-mole-ihat-moussaka.md` (draft commit `a8291b0`) and got its old name back in
+`0af2a67`. This note was written against the draft as of 2026-10-13, together with the MOLE
 architecture draft (`draft-jms-mole-architecture.md`), which states the goals that an IHAT must
-meet.
+meet. It has been rechecked against draft commit `6736ebe` (2026-11-02). The later changes pad the
+selector to `MAX_ANCHORS`, which matches the implementation (D2). They also add a rationale for the
+constant bits in `Com`'s initial state (at least 128; this note's binding bounds use the actual
+224, §3 and §8) and a changelog.
 
 Line citations refer to `main`. `moussaka.cpp` is `src/moussaka/moussaka.cpp`.
 
@@ -64,6 +67,9 @@ Main findings (§9):
   vacuous before commit `919a204` (the spec's Anchor checked `main`'s request length); pqov's
   `derive_preimage` uses 255 of its 256 vinegars; and `δ ≤ 1/255` holds only on average over the
   key.
+- **F8 (medium, documentation).** The README rewrite (`ef3259e`) dropped the warning that the
+  nullifier record must span every accepted Anchor Set. A per-set record allows one redemption per
+  set that contains the token's Anchor (§5.1, §9).
 
 No attack was found on the implementation itself: soundness, the selector, constant-time index
 handling, or transcript binding.
@@ -140,7 +146,7 @@ string below (`commit.hpp:33-48`, `moussaka.cpp:89-96`):
 | # | Draft | Implementation | Security effect |
 |---|---|---|---|
 | D1 | `challenge_digest` is a separate "message" input to `VOLEitH.Prove`. The instance encoding omits it | `challenge_digest` is the last field of the hashed instance (`redeem.hpp:199`) | None: both bind it into `mu`. Interoperability: the draft doesn't say where "message" enters, so implementations can disagree on the transcript |
-| D2 | Selector `b ∈ F_q^N` | `b ∈ {0,1}^64`, padded with zero-constrained entries (`redeem.hpp:223-232`). The draft's NOTE anticipates this | None. Lean `selector_one_hot`: the parity and weight constraints force one-hot over **any** field, so the draft's `F_q` version is sound even without bit constraints |
+| D2 | Selector `b ∈ F_2^MAX_ANCHORS` with `b[u] = 0` for `u ≥ N` (since draft `6fd8ff3`; before, `b ∈ F_q^N`) | `b ∈ {0,1}^64`, padded with zero-constrained entries (`redeem.hpp:223-232`) | None; the draft now matches. Lean `selector_one_hot`: the parity and weight constraints force one-hot over **any** field, so the older `F_q^N` version was sound too, even without bit constraints |
 | D3 | `P[i](s) = Com(…)` componentwise | One random linear combination `l` of the 45 components, `l = H(chall₂ ‖ "mous"‖0‖"l0")` (`redeem.hpp:253`) | Soundness loss `2^{−128} + q_c·2^{−448}` (L4) |
 | D4 | `Com` circuit unspecified (TODO) | Two committed intermediate states, after 5 and 9 rounds (`issue.hpp:5-20`) | Covered by L7 (Keccak segments) |
 | D5 | Anchor Set: `0 < N ≤ MAX_ANCHORS` | Also rejects duplicate keys by digest (`moussaka.cpp:138-151`) | Hygiene only (§7) |
@@ -367,7 +373,9 @@ With Lemma U, `K·Adv^ct-uf ≤ K·(Adv^om-uov + q/2^{223.9} + q²/2^{360})`.
    most one redemption per signed `t`.
    - The record must be global across Anchor Sets. A token is valid under every `S` that contains
      an Anchor `u` with `P_u(s) = t`, and the proof hides which set member was used
-     (`moussaka.hpp:141-146`, README "Security considerations").
+     (`moussaka.hpp:141-146`). The README's "Security considerations" said so until `ef3259e`; the
+     current README only says to reject a nullifier already recorded "in a previous presentation"
+     (`README.md:115-120`), which a per-set record appears to satisfy (F8).
    - A per-`S` record allows one redemption per set.
 3. **Honest uniqueness.** `U` honest tokens have pairwise distinct `nf` except with probability
    `U²·2^{−193} + U²·2^{−257}`. The second term is an OS-seed collision. `nf` is the first 24 bytes
@@ -857,6 +865,15 @@ position, are not pinned down by the draft.
 - *`δ` only on average.* `δ ≤ 1/255` is the fraction of singular uniform matrices; for a fixed
   key `δ` is not bounded (`δ = 1` for `S = 0`). On average over the `P2` part of the key (uniform
   `P2` the modelling step) `E[δ^{255}] ≤ 255^{−37} + 1/(255·256^{37}) ≈ 2^{−295.8}`.
+
+**F8 — The README no longer says the nullifier record must span Anchor Sets (medium, documentation).**
+Until `ef3259e` the README said "one record must cover every Anchor Set you accept, since a token is
+valid under any set that contains its Anchor." The rewrite dropped this. It now only asks the caller
+to reject a nullifier recorded "in a previous presentation". A Moderator that keeps a record per
+Anchor Set satisfies that wording, but then a token can be redeemed once per set containing its
+Anchor (Corollary 2, item 2). The header still states the requirement
+(`include/vole_mole/ihat.hpp:149-153` on `main`, also for `unbound_finalize_redeem` at `:246-249`). **Fix:** restore
+the sentence in the README.
 
 **Checked and found sound:**
 - the constant-time index check and witness encoding;

@@ -720,7 +720,8 @@ Consequences:
 
 Fix options:
 - **Documentation:** say "deduplicate on msg" explicitly next to README's nullifier advice
-  (`README.md:122-128`).
+  (`README.md:115-120`). The current text says the verifier should use a nullifier in the message,
+  which points the right way, but it does not warn against deduplicating on σ.
 - **Code:** have `verify` reject a non-minimal counter. That costs the verifier up to `ctr`
   re-hashes and re-opening checks. It closes this route, but does not by itself give strong
   unforgeability against the owner.
