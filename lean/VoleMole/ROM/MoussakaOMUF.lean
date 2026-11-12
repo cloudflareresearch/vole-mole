@@ -230,6 +230,61 @@ theorem prEvent_le_sum_of_tables {X : Type} (m₀ : CTable → OracleComp spec X
   rw [Finset.sum_congr rfl fun i hi => prEvent_randomOracle_eq_eager _ S (hS i hi) (e i E)]
   refine (prEvent_mono _ _ _ fun G hG => h _ E hG).trans (prEvent_exists_finset_le s _ _)
 
+/-- The same, for an event implying one of two indexed families of events or one of two events of a
+further game. -/
+theorem prEvent_le_sum4_of_tables {X Y₁ Y₂ Z : Type} (m₀ : CTable → OracleComp spec X)
+    (e₀ : CTable → X → Prop) (s₁ s₂ : Finset ℕ)
+    (m₁ : ℕ → CTable → OracleComp spec Y₁) (e₁ : CTable → Y₁ → Prop)
+    (m₂ : ℕ → CTable → OracleComp spec Y₂) (e₂ : CTable → Y₂ → Prop)
+    (n : CTable → OracleComp spec Z) (c d : CTable → Z → Prop)
+    (h : ∀ (g : Table) (E : CTable), e₀ E (evalWithAnswerFn (QueryImpl.ofFn g) (m₀ E)) →
+      (∃ i ∈ s₁, e₁ E (evalWithAnswerFn (QueryImpl.ofFn g) (m₁ i E))) ∨
+      (∃ i ∈ s₂, e₂ E (evalWithAnswerFn (QueryImpl.ofFn g) (m₂ i E))) ∨
+      c E (evalWithAnswerFn (QueryImpl.ofFn g) (n E)) ∨ d E (evalWithAnswerFn (QueryImpl.ofFn g) (n E))) :
+    Pr{let E ← $ᵗ CTable; let r ← (simulateQ randomOracle (m₀ E)).run' ∅}[e₀ E r] ≤
+      ∑ i ∈ s₁, Pr{let E ← $ᵗ CTable; let r ← (simulateQ randomOracle (m₁ i E)).run' ∅}[e₁ E r] +
+      ∑ i ∈ s₂, Pr{let E ← $ᵗ CTable; let r ← (simulateQ randomOracle (m₂ i E)).run' ∅}[e₂ E r] +
+      Pr{let E ← $ᵗ CTable; let r ← (simulateQ randomOracle (n E)).run' ∅}[c E r] +
+      Pr{let E ← $ᵗ CTable; let r ← (simulateQ randomOracle (n E)).run' ∅}[d E r] := by
+  classical
+  let : MeasurableSpace CTable := ⊤
+  have hint : ∀ {W : Type} (k : CTable → OracleComp spec W) (p : CTable → W → Prop),
+      Pr{let E ← $ᵗ CTable; let r ← (simulateQ randomOracle (k E)).run' ∅}[p E r] =
+        ∫⁻ E, Pr{let r ← (simulateQ randomOracle (k E)).run' ∅}[p E r] ∂𝒟[$ᵗ CTable] :=
+    fun k p => prEvent_bind_of_discrete _ _
+  rw [hint]
+  simp_rw [hint]
+  rw [← MeasureTheory.lintegral_finsetSum _ fun _ _ => measurable_from_top,
+    ← MeasureTheory.lintegral_finsetSum _ fun _ _ => measurable_from_top,
+    ← MeasureTheory.lintegral_add_left measurable_from_top,
+    ← MeasureTheory.lintegral_add_left measurable_from_top,
+    ← MeasureTheory.lintegral_add_left measurable_from_top]
+  refine MeasureTheory.lintegral_mono fun E => ?_
+  let S : Finset Dom := possibleQueryKeys (m₀ E) ∪ (s₁.biUnion fun i => possibleQueryKeys (m₁ i E)) ∪
+    (s₂.biUnion fun i => possibleQueryKeys (m₂ i E)) ∪ possibleQueryKeys (n E)
+  have hS₀ : AllQueriesSatisfy (m₀ E) (· ∈ S) :=
+    (allQueriesSatisfy_possibleQueryKeys _).mono fun d hd => by simp [S, hd]
+  have hS₁ : ∀ i ∈ s₁, AllQueriesSatisfy (m₁ i E) (· ∈ S) := fun i hi =>
+    (allQueriesSatisfy_possibleQueryKeys _).mono fun d hd => by
+      simp only [S, Finset.mem_union, Finset.mem_biUnion]; exact Or.inl (Or.inl (Or.inr ⟨i, hi, hd⟩))
+  have hS₂ : ∀ i ∈ s₂, AllQueriesSatisfy (m₂ i E) (· ∈ S) := fun i hi =>
+    (allQueriesSatisfy_possibleQueryKeys _).mono fun d hd => by
+      simp only [S, Finset.mem_union, Finset.mem_biUnion]; exact Or.inl (Or.inr ⟨i, hi, hd⟩)
+  have hSn : AllQueriesSatisfy (n E) (· ∈ S) :=
+    (allQueriesSatisfy_possibleQueryKeys _).mono fun d hd => by simp [S, hd]
+  let _ : SampleableType ((d : S) → Ans d.val) := SampleableType.ofFintype _
+  rw [prEvent_randomOracle_eq_eager _ S hS₀,
+    Finset.sum_congr rfl fun i hi => prEvent_randomOracle_eq_eager _ S (hS₁ i hi) (e₁ E),
+    Finset.sum_congr rfl fun i hi => prEvent_randomOracle_eq_eager _ S (hS₂ i hi) (e₂ E),
+    prEvent_randomOracle_eq_eager _ S hSn (c E), prEvent_randomOracle_eq_eager _ S hSn (d E)]
+  refine (prEvent_mono _ _ _ fun G hG => h _ E hG).trans ?_
+  refine (prEvent_or_le _ _ _).trans ?_
+  refine (add_le_add_right ((prEvent_or_le _ _ _).trans (add_le_add_right (prEvent_or_le _ _ _) _))
+    _).trans ?_
+  refine (add_le_add (prEvent_exists_finset_le s₁ _ _)
+    (add_le_add (prEvent_exists_finset_le s₂ _ _) le_rfl)).trans (le_of_eq ?_)
+  ring
+
 /-! ## Per table: the honest checks are the executable verifier -/
 
 section PerTable
@@ -340,5 +395,330 @@ theorem game_eval (qI : ℕ) :
   simpa using hb
 
 end PerTable
+
+/-! ## The provers: the whole game, with one proof as output -/
+
+/-- Issuance statements: `t` of 45 bytes, `ctx_iss` of 16. -/
+abbrev ιI := {p : ByteArray × ByteArray // p.1.size = 45 ∧ p.2.size = 16}
+
+/-- A fixed issuance statement (the output when the `j`-th query is malformed or missing). -/
+def dummyI : ιI := ⟨(⟨Array.replicate 45 0⟩, ⟨Array.replicate 16 0⟩), by simp [ByteArray.size]⟩
+
+/-- The issuance statement family. -/
+abbrev stI (lr : Bool) (s : ιI) : Statement := moussakaIssue s.1.1 s.1.2 lr
+
+/-- The `j`-th issuance proof of a game output, with its statement. -/
+def projI (j : ℕ) (o : GOut K) : ByteArray × (ιI × GOut K) :=
+  match o.1[j]? with
+  | some p => if h : p.1.t.size = 45 ∧ p.1.ctx.size = 16 then (p.1.pf, (⟨(p.1.t, p.1.ctx), h⟩, o))
+      else (ByteArray.empty, (dummyI, o))
+  | none => (ByteArray.empty, (dummyI, o))
+
+/-- **The prover `P^iss_j`**: the whole OMUF game (adversary, honest Anchors, Moderator), with the
+`j`-th issuance proof and its statement as output. It reaches the cipher only through `specIC`. -/
+def PI (lr : Bool) (pk : Fin K → UovPk) (sk : Fin K → Spec.Signer) (qI : ℕ) (A : Adversary K qR)
+    (j : ℕ) : OracleComp specIC (ByteArray × (ιI × GOut K)) :=
+  projI j <$> game lr pk sk qI A
+
+/-- Redemption statements: at most 64 Anchors, `nf` of 24 bytes, contexts of 16. -/
+abbrev ιR (K : ℕ) := {x : List (Fin K) × ByteArray × ByteArray × ByteArray × ByteArray //
+  x.1.length ≤ 64 ∧ x.2.1.size = 24 ∧ x.2.2.1.size = 16 ∧ x.2.2.2.1.size = 16}
+
+def dummyR : ιR K :=
+  ⟨([], ⟨Array.replicate 24 0⟩, ⟨Array.replicate 16 0⟩, ⟨Array.replicate 16 0⟩, ByteArray.empty),
+    by simp [ByteArray.size]⟩
+
+/-- The Anchor Set of a redemption statement. -/
+abbrev ancR (pk : Fin K → UovPk) (s : ιR K) : List UovPk := s.1.1.map pk
+
+/-- The redemption statement family. -/
+abbrev stR (lr : Bool) (pk : Fin K → UovPk) (s : ιR K) : Statement :=
+  moussakaRedeem (ancR pk s) s.1.2.1 s.1.2.2.1 s.1.2.2.2.1 s.1.2.2.2.2 lr
+
+/-- The `j`-th redemption proof of a game output, with its statement. -/
+def projR (j : ℕ) (o : GOut K) : ByteArray × (ιR K × GOut K) :=
+  match o.2[j]? with
+  | some p => if h : p.1.S.length ≤ 64 ∧ p.1.nf.size = 24 ∧ p.1.ci.size = 16 ∧ p.1.cr.size = 16
+      then (p.1.pf, (⟨(p.1.S, p.1.nf, p.1.ci, p.1.cr, p.1.cd), h⟩, o))
+      else (ByteArray.empty, (dummyR, o))
+  | none => (ByteArray.empty, (dummyR, o))
+
+/-- **The prover `P^red_j`**: the whole game, with the `j`-th redemption proof as output. -/
+def PR (lr : Bool) (pk : Fin K → UovPk) (sk : Fin K → Spec.Signer) (qI : ℕ) (A : Adversary K qR)
+    (j : ℕ) : OracleComp specIC (ByteArray × (ιR K × GOut K)) :=
+  projR j <$> game lr pk sk qI A
+
+/-- The adaptive games' outputs. -/
+abbrev OutI (K : ℕ) := Out ((ιI × GOut K) × QueryLog specIC)
+abbrev OutR (K : ℕ) := Out ((ιR K × GOut K) × QueryLog specIC)
+
+/-- **Per table, the adaptive game's transcript** is the executable verifier on `P`'s proof, at
+`P`'s statement. -/
+theorem gameA_transcript {ι β : Type} (g : Table) (E : CTable) (T : CrtTables)
+    (stF : ι → Statement) (P : OracleComp specIC (ByteArray × (ι × β))) :
+    (evalWithAnswerFn (QueryImpl.ofFn g) (gameA T stF P E)).2.2 =
+      @verify (icPrg E.cipher) (Hashes.ofTable g) T (stF (sA g P E))
+        (evalWithAnswerFn (QueryImpl.ofFn (join g E)) P).1 := by
+  rw [evalWithAnswerFn_gameA]
+  unfold gameIC
+  rw [@evalWithAnswerFn_game (icPrg E.cipher), evalWithAnswerFn_proverIC]
+
+lemma size_t {lr : Bool} {q : IssQ K} (h : q.WF lr) : q.t.size = 45 := by
+  simp only [IssQ.t, ByteArray.size_extract, h.1]; omega
+
+lemma size_nf {lr : Bool} {r : RedQ K} (h : r.WF lr) : r.nf.size = 24 := by
+  simp only [RedQ.nf, ByteArray.size_extract, h.2.2.2.1]; omega
+
+section Accepted
+
+variable (g : Table) (E : CTable) (lr : Bool) (pk : Fin K → UovPk) (sk : Fin K → Spec.Signer)
+  (qI : ℕ) (A : Adversary K qR)
+
+/-- **An accepted Issue query is accepted by `P^iss_j`'s verifier, at its statement.** -/
+theorem accepted_I {j : ℕ} {q : IssQ K}
+    (hj : (evalWithAnswerFn (QueryImpl.ofFn (join g E)) (game lr pk sk qI A)).1[j]? = some (q, true)) :
+    let r := evalWithAnswerFn (QueryImpl.ofFn g) (gameA CrtGen.tables (stI lr) (PI lr pk sk qI A j) E)
+    r.2.2.accept = true ∧ (stOut r).1 = (q.t, q.ctx) := by
+  obtain ⟨-, hrec, -⟩ := game_eval g E lr pk sk A qI
+  obtain ⟨hwf, hv⟩ := hrec _ (List.mem_of_getElem? hj) rfl
+  have hsz : q.t.size = 45 ∧ q.ctx.size = 16 := ⟨size_t hwf, hwf.2⟩
+  have hP : evalWithAnswerFn (QueryImpl.ofFn (join g E)) (PI lr pk sk qI A j) =
+      (q.pf, (⟨(q.t, q.ctx), hsz⟩, evalWithAnswerFn (QueryImpl.ofFn (join g E)) (game lr pk sk qI A))) := by
+    simp only [PI, evalWithAnswerFn_map, projI, hj, hsz, and_self, dite_true]
+  refine ⟨?_, ?_⟩
+  · rw [gameA_transcript, sA, hP]; exact hv
+  · rw [stOut_gameA, sA, hP]
+
+/-- **An accepted redemption is accepted by `P^red_j`'s verifier, at its statement.** -/
+theorem accepted_R {j : ℕ} {rq : RedQ K}
+    (hj : (evalWithAnswerFn (QueryImpl.ofFn (join g E)) (game lr pk sk qI A)).2[j]? = some (rq, true)) :
+    let r := evalWithAnswerFn (QueryImpl.ofFn g) (gameA CrtGen.tables (stR lr pk) (PR lr pk sk qI A j) E)
+    r.2.2.accept = true ∧ (stOut r).1 = (rq.S, rq.nf, rq.ci, rq.cr, rq.cd) := by
+  obtain ⟨-, -, -, hrec⟩ := game_eval g E lr pk sk A qI
+  obtain ⟨hwf, hv⟩ := hrec _ (List.mem_of_getElem? hj) rfl
+  have hsz : rq.S.length ≤ 64 ∧ rq.nf.size = 24 ∧ rq.ci.size = 16 ∧ rq.cr.size = 16 :=
+    ⟨hwf.2.1, size_nf hwf, hwf.2.2.2.2.1, hwf.2.2.2.2.2⟩
+  have hP : evalWithAnswerFn (QueryImpl.ofFn (join g E)) (PR lr pk sk qI A j) =
+      (rq.pf, (⟨(rq.S, rq.nf, rq.ci, rq.cr, rq.cd), hsz⟩,
+        evalWithAnswerFn (QueryImpl.ofFn (join g E)) (game lr pk sk qI A))) := by
+    simp only [PR, evalWithAnswerFn_map, projR, hj, hsz, and_self, dite_true]
+  refine ⟨?_, ?_⟩
+  · rw [gameA_transcript, sA, hP]; exact hv
+  · rw [stOut_gameA, sA, hP]
+
+end Accepted
+
+/-! ## Extraction and the extracted openings -/
+
+/-- A commitment opening `(nf, ctx_iss, ctx_red, r)`. -/
+abbrev Opening := Spec.Bytes × Spec.Bytes × Spec.Bytes × Spec.Bytes
+
+/-- `Com` of an opening (`Spec.Moussaka.com`, Keccak-p[800]). -/
+def comO (x : Opening) : Spec.Bytes := Spec.Moussaka.com x.1 x.2.1 x.2.2.1 x.2.2.2
+
+/-- An opening in `Com`'s domain `D` (`nf` 24 bytes, contexts and `r` 16). -/
+def WFO (x : Opening) : Prop :=
+  x.1.length = 24 ∧ x.2.1.length = 16 ∧ x.2.2.1.length = 16 ∧ x.2.2.2.length = 16
+
+section Ext
+
+variable (E : CTable) (lr : Bool) (pk : Fin K → UovPk)
+
+/-- **Extraction of an issuance proof succeeds** (the event of
+`moussakaIssue_accept_le_adaptive_spec`): a known tree's candidate decodes to a witness of the
+spec relation `IssueRelW` at the proof's statement. -/
+def ExtI (r : OutI K) : Prop :=
+  @Extracted (icPrg E.cipher) _ (stI lr (stOut r))
+    (fun _ w => Privacy.Moussaka.IssueRelW ⟨toL (stOut r).1.1, toL (stOut r).1.2⟩
+      (EndToEnd.SpecRel.issueWitOf (toL (stOut r).1.2) w)) r
+
+/-- **Extraction of a redemption proof succeeds** (the event of
+`moussakaRedeem_accept_le_adaptive_spec`). -/
+def ExtR (r : OutR K) : Prop :=
+  @Extracted (icPrg E.cipher) _ (stR lr pk (stOut r))
+    (fun _ w => Privacy.Moussaka.RedeemRelW
+      ⟨(ancR pk (stOut r)).map UovPk.toSpec, toL (stOut r).1.2.1, toL (stOut r).1.2.2.1,
+        toL (stOut r).1.2.2.2.1, toL (stOut r).1.2.2.2.2⟩
+      (EndToEnd.SpecRel.redeemWitOf (toL (stOut r).1.2.1) (toL (stOut r).1.2.2.1)
+        (toL (stOut r).1.2.2.2.1) w)) r
+
+/-- **The openings extracted from an issuance proof**: a known tree's candidate decodes to the
+issuance witness of the opening, which commits to `t` in context `ctx_iss`. -/
+def OpI (r : OutI K) : Set Opening := {x | WFO x ∧ x.2.1 = toL (stOut r).1.2 ∧
+  comO x = toL (stOut r).1.1 ∧
+  @Extracted (icPrg E.cipher) _ (stI lr (stOut r))
+    (fun _ w => EndToEnd.SpecRel.issueWitOf (toL (stOut r).1.2) w =
+      Spec.Moussaka.encodeIssueWitness x.1 x.2.1 x.2.2.1 x.2.2.2) r}
+
+/-- **The openings extracted from a redemption proof, with a key and a preimage**: a known tree's
+candidate decodes to the redemption witness of the opening (at `nf`, `ctx_iss`, `ctx_red`), a
+preimage `s` and a selector `u`, and the Anchor at `u` is an honest Anchor `k` with
+`P_k(s) = Com(opening)`. -/
+def OpR (r : OutR K) : Set Opening := {x | WFO x ∧ x.1 = toL (stOut r).1.2.1 ∧
+  x.2.1 = toL (stOut r).1.2.2.1 ∧ x.2.2.1 = toL (stOut r).1.2.2.2.1 ∧
+  ∃ (s : Spec.Bytes) (u : ℕ) (k : Fin K), (stOut r).1.1[u]? = some k ∧
+    (pk k).toSpec.eval s = comO x ∧
+    @Extracted (icPrg E.cipher) _ (stR lr pk (stOut r))
+      (fun _ w => EndToEnd.SpecRel.redeemWitOf (toL (stOut r).1.2.1) (toL (stOut r).1.2.2.1)
+        (toL (stOut r).1.2.2.2.1) w =
+        Spec.Moussaka.encodeRedeemWitness x.1 x.2.1 x.2.2.1 x.2.2.2 s u) r}
+
+/-- **The extraction failure of an issuance proof**: accepted, and not extracted. -/
+def BadI (r : OutI K) : Prop := r.2.2.accept = true ∧ ¬ExtI E lr r
+
+/-- **The extraction failure of a redemption proof**. -/
+def BadR (r : OutR K) : Prop := r.2.2.accept = true ∧ ¬ExtR E lr pk r
+
+theorem opI_of_ext {r : OutI K} (h : ExtI E lr r) :
+    ∃ x ∈ OpI E lr r, comO x = toL (stOut r).1.1 ∧ x.2.1 = toL (stOut r).1.2 := by
+  obtain ⟨i, hi, ⟨nf, rr, cr, hnf, hr, hcr, hw, ht⟩, hci⟩ := h
+  refine ⟨(nf, toL (stOut r).1.2, cr, rr), ⟨⟨hnf, hci, hcr, hr⟩, rfl, ht.symm, i, hi, hw⟩,
+    ht.symm, rfl⟩
+
+theorem opR_of_ext {r : OutR K} (h : ExtR E lr pk r) :
+    ∃ x ∈ OpR E lr pk r, x.2.1 = toL (stOut r).1.2.2.1 ∧
+      (x.2.2.1, x.1) = (toL (stOut r).1.2.2.2.1, toL (stOut r).1.2.1) := by
+  obtain ⟨i, hi, ⟨rr, s, u, pk', hr, -, hu, hw, he⟩, -, hnf, hci, hcr⟩ := h
+  simp only [ancR, List.map_map, List.getElem?_map, Option.map_eq_some_iff,
+    Function.comp_apply] at hu
+  obtain ⟨k, hk, rfl⟩ := hu
+  exact ⟨(toL (stOut r).1.2.1, toL (stOut r).1.2.2.1, toL (stOut r).1.2.2.2.1, rr),
+    ⟨⟨hnf, hci, hcr, hr⟩, rfl, rfl, rfl, s, u, k, hk, he, i, hi, hw⟩, rfl, rfl⟩
+
+end Ext
+
+/-! ## The reductions `B₁`, `B₂` and the per-table core -/
+
+lemma evalWithAnswerFn_mapM_spec {β γ : Type} (g : Table) (l : List β) (h : β → OracleComp spec γ) :
+    evalWithAnswerFn (QueryImpl.ofFn g) (l.mapM h) = l.map fun x => evalWithAnswerFn (QueryImpl.ofFn g) (h x) := by
+  induction l with
+  | nil => rfl
+  | cons x l ih => simp [List.mapM_cons, ih]
+
+section Red
+
+variable (lr : Bool) (pk : Fin K → UovPk) (sk : Fin K → Spec.Signer) (qI : ℕ) (A : Adversary K qR)
+
+/-- **The reductions' run** (`B₁` and `B₂`): the game, then every issuance and every redemption
+proof's straight-line extraction and verification (`gameA` of `P^iss_j`, `P^red_j`; the adversary
+is deterministic given the oracles, so each re-run is the same run). -/
+def extAll (E : CTable) : OracleComp spec (GOut K × List (OutI K) × List (OutR K)) :=
+  runE E (game lr pk sk qI A) >>= fun o =>
+    (List.range qI).mapM (fun j => gameA CrtGen.tables (stI lr) (PI lr pk sk qI A j) E) >>= fun oi =>
+      (List.range qR).mapM (fun j => gameA CrtGen.tables (stR lr pk) (PR lr pk sk qI A j) E) >>=
+        fun orr => pure (o.1, oi, orr)
+
+/-- The view of the reductions. -/
+abbrev View (K : ℕ) := GOut K × List (OutI K) × List (OutR K)
+
+/-- The openings extracted from the accepted issuance proofs. -/
+def SI (E : CTable) (v : View K) : Set Opening :=
+  {x | ∃ (j : ℕ) (q : IssQ K) (r : OutI K), v.1.1[j]? = some (q, true) ∧ v.2.1[j]? = some r ∧
+    x ∈ OpI E lr r}
+
+/-- The openings, with keys and preimages, extracted from the accepted redemption proofs. -/
+def SR (E : CTable) (v : View K) : Set Opening :=
+  {x | ∃ (j : ℕ) (rq : RedQ K) (r : OutR K), v.1.2[j]? = some (rq, true) ∧ v.2.2[j]? = some r ∧
+    x ∈ OpR E lr pk r}
+
+/-- **`B₁` wins the binding game**: two distinct extracted openings in `Com`'s domain with one
+commitment. (`B₁` outputs such a pair if there is one: the candidates are polynomially many.) -/
+def Coll (E : CTable) (v : View K) : Prop :=
+  ∃ x ∈ SI lr E v ∪ SR lr pk E v, ∃ x' ∈ SI lr E v ∪ SR lr pk E v, x ≠ x' ∧ comO x = comO x'
+
+/-- **`B₂` wins the CT-UF game**: an extracted redemption opening `x`, with an honest Anchor `k` and
+`s` such that `P_k(s) = Com(x)`, whose commitment was never submitted to any Anchor's signer (the
+signer is called exactly on the accepted Issue queries' `t`, `anchorIC`). -/
+def Forge (E : CTable) (v : View K) : Prop :=
+  ∃ x ∈ SR lr pk E v, comO x ∉ (issL v.1).map (·.1)
+
+theorem extAll_eval (g : Table) (E : CTable) :
+    evalWithAnswerFn (QueryImpl.ofFn g) (extAll lr pk sk qI A E) =
+      (evalWithAnswerFn (QueryImpl.ofFn (join g E)) (game lr pk sk qI A),
+        (List.range qI).map (fun j =>
+          evalWithAnswerFn (QueryImpl.ofFn g) (gameA CrtGen.tables (stI lr) (PI lr pk sk qI A j) E)),
+        (List.range qR).map (fun j =>
+          evalWithAnswerFn (QueryImpl.ofFn g) (gameA CrtGen.tables (stR lr pk) (PR lr pk sk qI A j) E))) := by
+  simp only [extAll, evalWithAnswerFn_bind, evalWithAnswerFn_runE, evalWithAnswerFn_mapM_spec,
+    evalWithAnswerFn_pure]
+
+/-- **The per-table core of Theorem 1**: a win means that some accepted proof is not extracted, or
+`B₁` finds a `Com` collision, or `B₂` a CT-UF forgery. -/
+theorem win_imp (g : Table) (E : CTable)
+    (hwin : Win (evalWithAnswerFn (QueryImpl.ofFn (join g E)) (game lr pk sk qI A))) :
+    (∃ j ∈ Finset.range qI, BadI E lr (evalWithAnswerFn (QueryImpl.ofFn g)
+        (gameA CrtGen.tables (stI lr) (PI lr pk sk qI A j) E))) ∨
+    (∃ j ∈ Finset.range qR, BadR E lr pk (evalWithAnswerFn (QueryImpl.ofFn g)
+        (gameA CrtGen.tables (stR lr pk) (PR lr pk sk qI A j) E))) ∨
+    Coll lr pk E (evalWithAnswerFn (QueryImpl.ofFn g) (extAll lr pk sk qI A E)) ∨
+    Forge lr pk E (evalWithAnswerFn (QueryImpl.ofFn g) (extAll lr pk sk qI A E)) := by
+  classical
+  obtain ⟨hlI, -, hlR, -⟩ := game_eval g E lr pk sk A qI
+  rw [extAll_eval]
+  set o := evalWithAnswerFn (QueryImpl.ofFn (join g E)) (game lr pk sk qI A) with ho
+  set oi := (List.range qI).map (fun j =>
+    evalWithAnswerFn (QueryImpl.ofFn g) (gameA CrtGen.tables (stI lr) (PI lr pk sk qI A j) E))
+    with hoi
+  set orr := (List.range qR).map (fun j =>
+    evalWithAnswerFn (QueryImpl.ofFn g) (gameA CrtGen.tables (stR lr pk) (PR lr pk sk qI A j) E))
+    with horr
+  by_contra hno
+  simp only [BadI, BadR, not_or, not_exists, not_and, Finset.mem_range, not_not] at hno
+  obtain ⟨hI, hR, hC, hF⟩ := hno
+  obtain ⟨c, hc⟩ := hwin
+  have key := Moussaka.collision_or_forgery comO (fun x => x.2.1) (fun x => (x.2.2.1, x.1))
+    (SI lr E (o, oi, orr) ∪ SR lr pk E (o, oi, orr)) (SR lr pk E (o, oi, orr)) Set.subset_union_right
+    (issL o) (redL o) ?_ ?_ c hc
+  · rcases key with ⟨x, hx, x', hx', hne, he⟩ | ⟨x, hx, hn⟩
+    · exact hC ⟨x, hx, x', hx', hne, he⟩
+    · exact hF ⟨x, hx, hn⟩
+  · intro q hq
+    simp only [issL, List.mem_map, List.mem_filter] at hq
+    obtain ⟨p, ⟨hp, hpb⟩, rfl⟩ := hq
+    obtain ⟨j, hj⟩ := List.mem_iff_getElem?.1 hp
+    have hjl : j < qI := by rw [← hlI]; exact (List.getElem?_eq_some_iff.1 hj).1
+    have hj' : o.1[j]? = some (p.1, true) := by rw [hj]; cases p; simp_all
+    obtain ⟨hacc, hst⟩ := accepted_I g E lr pk sk qI A hj'
+    obtain ⟨x, hx, hxc, hxt⟩ := opI_of_ext E lr (hI j hjl hacc)
+    refine ⟨x, Or.inl ⟨j, p.1, _, hj', by simp [oi, hjl], hx⟩, ?_, ?_⟩
+    · rw [hxc, hst]
+    · rw [hxt, hst]
+  · intro q hq
+    simp only [redL, List.mem_map, List.mem_filter] at hq
+    obtain ⟨p, ⟨hp, hpb⟩, rfl⟩ := hq
+    obtain ⟨j, hj⟩ := List.mem_iff_getElem?.1 hp
+    have hjl : j < qR := by rw [← hlR]; exact (List.getElem?_eq_some_iff.1 hj).1
+    have hj' : o.2[j]? = some (p.1, true) := by rw [hj]; cases p; simp_all
+    obtain ⟨hacc, hst⟩ := accepted_R g E lr pk sk qI A hj'
+    obtain ⟨x, hx, hxc, hxr⟩ := opR_of_ext E lr pk (hR j hjl hacc)
+    refine ⟨x, ⟨j, p.1, _, hj', by simp [orr, hjl], hx⟩, ?_, ?_⟩
+    · rw [hxc, hst]
+    · rw [hxr, hst]
+
+end Red
+
+/-! ## Theorem 1 -/
+
+/-- **Theorem 1 (one-more unforgeability), the reduction.** For every OMUF adversary, honest
+Anchors with any public keys and signers, and either proof layout (`lr`): the probability that the
+adversary wins is at most the extraction failures of the `qI` issuance and `qR` redemption provers
+(each a prover of the soundness theorems), plus `B₁`'s binding advantage and `B₂`'s CT-UF
+advantage. -/
+theorem omuf_le (lr : Bool) (pk : Fin K → UovPk) (sk : Fin K → Spec.Signer) (qI : ℕ)
+    (A : Adversary K qR) :
+    Pr{let E ← $ᵗ CTable; let r ← (simulateQ randomOracle (runE E (game lr pk sk qI A))).run' ∅}[
+        Win r.1] ≤
+      ∑ j ∈ Finset.range qI, Pr{let E ← $ᵗ CTable; let r ← (simulateQ randomOracle
+        (gameA CrtGen.tables (stI lr) (PI lr pk sk qI A j) E)).run' ∅}[BadI E lr r] +
+      ∑ j ∈ Finset.range qR, Pr{let E ← $ᵗ CTable; let r ← (simulateQ randomOracle
+        (gameA CrtGen.tables (stR lr pk) (PR lr pk sk qI A j) E)).run' ∅}[BadR E lr pk r] +
+      Pr{let E ← $ᵗ CTable; let v ← (simulateQ randomOracle (extAll lr pk sk qI A E)).run' ∅}[
+        Coll lr pk E v] +
+      Pr{let E ← $ᵗ CTable; let v ← (simulateQ randomOracle (extAll lr pk sk qI A E)).run' ∅}[
+        Forge lr pk E v] := by
+  refine prEvent_le_sum4_of_tables (fun E => runE E (game lr pk sk qI A)) (fun _ r => Win r.1)
+    (Finset.range qI) (Finset.range qR) _ _ _ _ _ _ _ fun g E hw => ?_
+  rw [evalWithAnswerFn_runE] at hw
+  exact win_imp lr pk sk qI A g E hw
 
 end VoleMole.ROM.IC.OMUF
