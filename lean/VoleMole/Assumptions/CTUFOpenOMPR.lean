@@ -1000,6 +1000,29 @@ theorem advCTUFIdeal_le_ompr
   · rw [Finset.sum_add_distrib]
     simp
 
+/-- The trapdoor with its key fixed to `kp` (key generation `pure kp`): its OMPR advantage is the
+advantage at that key. -/
+def _root_.VoleMole.Assumptions.UOV.Trapdoor.atKey (kp : PK × SK) : Trapdoor PK SK T S :=
+  { tr with keyGen := pure kp }
+
+/-- **The `K`-key bound at fixed keys** `ks` (the form the Moussaka theorem, which holds for every
+key, needs): the guessing forgers hard-wire the other keys' signers. -/
+theorem advCTUFIdealAt_le_ompr (ks : Fin K → PK × SK)
+    (F : ProbComp (OracleComp (specCI AR K Xc T S) (CTOut K S Xc)))
+    (hF : ∀ f ∈ support F, CIBudget qf qS f) :
+    advCTUFIdealAt (fun k => tr.IsPre (ks k).1) (signers tr.D fun k => (ks k).2) F ≤
+      ∑ j : Fin K, (advOMPR (tr.atKey (ks j)) (qf + 2 * qS + 1) qS
+          (ompRed qS fun _ => guessF j (signers tr.D fun k => (ks k).2) <$> F) +
+        ((qf + 2 * qS + 1 : ℕ) : ℝ≥0∞) * preFailPr (tr.atKey (ks j))) := by
+  refine (advCTUFIdealAt_le_sum _ _ F).trans (Finset.sum_le_sum fun j _ => ?_)
+  have h := advCTUFIdeal1_le_ompr qf qS (tr.atKey (ks j))
+    (fun _ => guessF j (signers tr.D fun k => (ks k).2) <$> F) fun _ f1 hf1 => by
+      simp only [support_map, Set.mem_image] at hf1
+      obtain ⟨f, hf, rfl⟩ := hf1
+      exact guessF_budget j _ f (hF f hf)
+  refine le_trans (le_of_eq ?_) h
+  simp [advCTUFIdeal1, advCTUFIdealAt, Trapdoor.atKey, signers]
+
 end KMain
 
 end VoleMole.Assumptions.UOV.CTUFOpen

@@ -1,4 +1,5 @@
 import VoleMole.Assumptions.UOV
+import VoleMole.Assumptions.CTUFOpenOMPR
 import VoleMole.ROM.MoussakaOMUF
 import VoleMole.ROM.RatatouilleBalance
 import VoleMole.ROM.OneMorePomfrit
@@ -448,6 +449,51 @@ theorem omuf_le_num_open (hA : A.Budget q qE n) (hdig : ∀ k, (pk k).digest.siz
 end Num
 
 end Moussaka
+
+/-! ## Moussaka down to OMPR, through the ideal-`Com` modelling step -/
+
+section MoussakaOMPR
+
+open VoleMole.ROM.IC.OMUF CTUFOpen
+
+variable {K qR : ℕ} (lr : Bool) (pk : Fin K → UovPk) (sk : Fin K → Spec.Signer) (qI : ℕ)
+  {A : Adversary K qR} {q : Kind → ℕ} {qE n : ℕ}
+  {DR : Type} [DecidableEq DR] {AR : DR → Type} [∀ d, SampleableType (AR d)]
+  {Xc T S PK SK : Type} [DecidableEq Xc] [DecidableEq T] [Inhabited T] [SampleableType T]
+  (tr : Trapdoor PK SK T S) (ks : Fin K → PK × SK) (qf qS : ℕ)
+
+/-- **Theorem 1 with the UOV term down to OMPR** (`moussaka.md` §3.3, Lemma U as repaired in
+`uov-assumptions.md` §5.4), at fixed keys. `hmodel` is **the modelling step, a hypothesis**:
+the CT-UF^open advantage of `B₂ = ctufForger` with the concrete `Com = KP800(·)|_{360}` is at
+most the ideal-`Com` advantage (`Com` a random function, `advCTUFIdealAt`) of some forger `F`
+within the budget `(q_f, q_S)` against the signers of keys `ks` of a trapdoor `tr` (for pqov, the
+Anchors' keys and `derive_preimage`). It is not provable: `Com` is a fixed function. Under it,
+
+    Pr[Win] ≤ qI·εI + qR·εR + AdvBind(B₁)
+              + Σ_j (Adv^{ompr}_{key j}(B_j; q_f + 2q_S + 1, q_S) + (q_f + 2q_S + 1)·failPr_{key j}),
+
+`B_j = ompRed q_S (guessF j …)`, the OMPR advantage and the sampler's failure probability at key
+`j` (`Trapdoor.atKey`). -/
+theorem omuf_le_num_ompr (hA : A.Budget q qE n) (hdig : ∀ k, (pk k).digest.size = 32)
+    (hdinj : Function.Injective fun k => (pk k).digest)
+    (F : ProbComp (OracleComp (specCI AR K Xc T S) (CTOut K S Xc)))
+    (hF : ∀ f ∈ support F, CIBudget qf qS f)
+    (hmodel : advCTUFOpenAt (verK pk) comO WFO
+        (signers (fun (sk : Spec.Signer) => sk.derivePreimage) sk) (ctufForger lr pk qI A) ≤
+      advCTUFIdealAt (fun k => tr.IsPre (ks k).1) (signers tr.D fun k => (ks k).2) F) :
+    Pr{let E ← $ᵗ CTable; let r ← (simulateQ randomOracle (runE E (OMUF.game lr pk sk qI A))).run' ∅}[
+        Win r.1] ≤
+      qI * epsI (gameK q qI qR) (gameE lr qE qI qR) +
+      qR * epsR (gameK q qI qR) (gameE lr qE qI qR) (gameH n qI qR) +
+      Pr{let E ← $ᵗ CTable; let v ← (simulateQ randomOracle (extAll lr pk sk qI A E)).run' ∅}[
+        Coll lr pk E v] +
+      ∑ j : Fin K, (advOMPR (tr.atKey (ks j)) (qf + 2 * qS + 1) qS
+          (ompRed qS fun _ => guessF j (signers tr.D fun k => (ks k).2) <$> F) +
+        ((qf + 2 * qS + 1 : ℕ) : ℝ≥0∞) * preFailPr (tr.atKey (ks j))) :=
+  (omuf_le_num_open lr pk sk qI hA hdig hdinj).trans
+    (add_le_add le_rfl (hmodel.trans (advCTUFIdealAt_le_ompr tr qf qS ks F hF)))
+
+end MoussakaOMPR
 
 /-! ## CT-UF is false for UOV; CT-UF^× -/
 
