@@ -12,6 +12,7 @@ import VoleMole.ROM.SpecSound
 import VoleMole.ROM.MoussakaUnbound
 import VoleMole.Privacy.PqovDelta
 import VoleMole.Privacy.PqovKeys
+import VoleMole.Privacy.MoussakaUnboundNC
 
 /-!
 # Non-vacuity checks for the headline theorems
@@ -637,5 +638,62 @@ example (O : Bool → OilMat) (P1 : Bool → ℕ → GF256) (P2 : Bool → P2Par
 example (O : OilMat) (P1 : ℕ → GF256) := avg_delta255_pqovKey O P1
 
 end NCPqov
+
+/-! ## Privacy: unbound Moussaka, Theorem U5 with adaptive redemption queries
+
+A colluding adversary with adaptive queries and a constant guess (`uAd`): its PRF reductions are
+constant, so `εprf = 0`. A non-colluding Moderator (`uNC`) whose Anchor Sets hold both issuers'
+keys (`Contains`), with pqov's signer in the vinegar random-oracle model (`hfail` and correctness
+are theorems) and a complete issuance proof system (`piT`, a trivial `NIZK` that accepts every
+proof): `anonymityNC_vinegarRO` applies as stated. -/
+
+section Unbound
+
+open VoleMole.Spec VoleMole.Privacy VoleMole.Privacy.MoussakaUnbound
+open VoleMole.Spec.Pqov VoleMole.Arith
+open VoleMole.Spec.MoussakaUnbound (IssueInstance RedeemInstance IssueRel issueProofBytes)
+open VoleMole.Spec.Moussaka (NIZK)
+open VoleMole.Privacy.Moussaka (P2Part pqovRO pqovRO_correct pqovRO256_hfail)
+
+/-- A query: token `false`, swap flag `true`, the set `S0`, a fixed context. -/
+def uq (S : Spec.Moussaka.AnchorSet) : Query := ⟨false, true, S, fun _ => 0, []⟩
+
+/-- The colluding adversary with adaptive queries and a constant guess. -/
+def uAd : AdversaryAd := ⟨fun _ => 0, fun _ => k0, fun _ _ _ => 0, fun _ _ _ => uq S0,
+  fun _ _ _ => True⟩
+
+example (n : ℕ) {CI CR : Type} [Fintype CI] [Nonempty CI] [Fintype CR] [Nonempty CR]
+    (simI : IssueInstance → CI → Bytes) (simR : RedeemInstance → CR → Bytes)
+    (PI : NIZK IssueInstance) (PR : NIZK RedeemInstance) {εI εR : ℝ} (hεR : 0 ≤ εR)
+    (hI : ZeroKnowledge IssueRelW (proveR PI) simI εI)
+    (hR : ZeroKnowledge RedeemRelW (proveR PR) simR εR) :=
+  anonymityAd (n := n) uAd simI simR PI PR (εprf := 0) hεR hI hR fun _ _ => by
+    simp [prfAdv, reductionAd, hviewAd, uAd, pr_const]
+
+/-- A trivial complete issuance proof system. -/
+def piT : NIZK IssueInstance := ⟨fun _ _ _ => List.replicate issueProofBytes 0, fun _ _ => true⟩
+
+theorem piT_correct : piT.Correct IssueRel issueProofBytes :=
+  fun _ _ _ _ _ => ⟨List.length_replicate, rfl⟩
+
+/-- The non-colluding Moderator: both issuers' keys in every set, a constant guess. -/
+def uNC (P1 : Bool → ℕ → GF256) (P2 : Bool → P2Part) : MoussakaUnbound.AdversaryNC :=
+  ⟨fun _ => 0, pkq P1 P2, fun _ => uq (Sq P1 P2), fun _ => True⟩
+
+theorem contains_uNC (P1 : Bool → ℕ → GF256) (P2 : Bool → P2Part) :
+    MoussakaUnbound.Contains (uNC P1 P2) := fun _ c =>
+  ⟨pkq P1 P2 c, by cases c <;> simp [uNC, uq, Sq], rfl⟩
+
+/-- **Theorem U5(b) with pqov's signer** (all 256 attempts), adaptive queries, `εprf = 0`. -/
+example (n : ℕ) (P1 : Bool → ℕ → GF256) (P2 : Bool → P2Part) {CR : Type} [Fintype CR]
+    [Nonempty CR] (simR : RedeemInstance → CR → Bytes) (PR : NIZK RedeemInstance) {εR : ℝ}
+    (hεR : 0 ≤ εR) (hR : ZeroKnowledge RedeemRelW (proveR PR) simR εR) :=
+  MoussakaUnbound.anonymityNC_vinegarRO (n := n) (fun c v => (sysMat (pkq P1 P2 c) 0 v).det ≠ 0)
+    (uNC P1 P2) piT (pqovRO (uNC P1 P2).pk (fun _ => 0) 256) simR PR (εprf := 0) hεR piT_correct
+    (pqovRO_correct _ _ (fun _ => oilSpace_kq _ _ _) 256) (contains_uNC P1 P2)
+    (fun w c t h i => pqovRO256_hfail _ _ w c t h i) hR fun _ _ => by
+      simp [prfAdvNC, reductionNC, hNC, uNC, pr_const]
+
+end Unbound
 
 end VoleMole.Audit

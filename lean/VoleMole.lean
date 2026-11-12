@@ -149,6 +149,8 @@ import VoleMole.Privacy.Moussaka
 import VoleMole.Privacy.MoussakaFind
 import VoleMole.Privacy.MoussakaNCFind
 import VoleMole.Privacy.MoussakaUnbound
+import VoleMole.Privacy.MoussakaUnboundAd
+import VoleMole.Privacy.MoussakaUnboundNC
 import VoleMole.Privacy.Ratatouille
 import VoleMole.ZK.Sim
 import VoleMole.ZK.SimKats
