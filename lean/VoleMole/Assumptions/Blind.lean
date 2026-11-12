@@ -258,7 +258,9 @@ lemma bcomb_serve (x' : X') (hB : Hn') (w : CSt AR AC X' X G Hn' St) (hk : w.1.k
         (combImpl (S := S) addHint pre (.inr (.inl (op.1.1, op.1.2.1)))).run op.2 >>= fun ap =>
           pure (some (ap.1.1 + op.1.2.1),
             (BSt.mk (w.1.k + 1) (Function.update w.1.ses x'
-              (some (Ses.mk w.1.k op.1.1 op.1.2.1 op.1.2.2 ap.1.1 hB))), ap.2))) := by
+              (some (Ses.mk w.1.k op.1.1 op.1.2.1 op.1.2.2 ap.1.1 hB))), ap.2)) :
+        ProbComp ((specB AR X' Hn' G S).Range (.inr (.inl (x', hB))) ×
+          CSt AR AC X' X G Hn' St)) := by
   simp only [bcomb, blindImpl, hk, ite_true, StateT.run_mk, startRun]
   rw [simulateQ_bind, StateT.run_bind, ← QueryImpl.simulateQ_compose, map_bind]
   refine bind_congr fun op => ?_
@@ -383,6 +385,78 @@ theorem bcomb_step (hD : Distinct cl pk κ) (q : DR ⊕ ((X' × Hn') ⊕ G)) (w 
       simp [chImpl, piB, hr]
   · rw [bcomb_iss]
     simp [chImpl, piB]
+
+theorem bcomb_inv (hD : Distinct cl pk κ) :
+    QueryImpl.PreservesInv (bcomb (AR := AR) (X' := X') (Hn' := Hn') cl n pre pk κ)
+      (InvC cl n pk κ) := by
+  intro q w hw z hz
+  rcases q with d | ⟨x', hB⟩ | t
+  · rw [bcomb_inl] at hz
+    have hz' : z ∈ support ((fun r => ((r.1 : AR d), (w.1, (w.2.1, r.2)))) <$>
+        (roStep (Sum.inl d) w.2.2 : ProbComp (AR d × Ch (WA AR AC) X G G))) := hz
+    simp only [roStep, Functor.map_map, support_map] at hz'
+    obtain ⟨r, -, rfl⟩ := hz'
+    exact ⟨hw.len, hw.rt, hw.tg, hw.ses, hw.inj⟩
+  · by_cases hk : w.1.k < n
+    · cases hr : w.2.2.rest with
+      | nil => have := hw.len; rw [hr] at this; simp at this; omega
+      | cons t r =>
+        simp only [bcomb_serve cl n pre pk κ x' hB w hk, mem_support_bind_iff] at hz
+        obtain ⟨op, hop, ap, hap, hz⟩ := hz
+        obtain ⟨ho, h1, h2, h3, h4, -⟩ := startRun_supp cl pre pk κ w op hop
+        obtain ⟨hf1, hf2, hf3⟩ := fresh_of_inv cl n pk κ hD hw ho
+        rw [comb_fresh' pre op.1.1 op.1.2.1 op.2 (by rw [h1]; exact hf1) t r (by rw [h2, hr])]
+          at hap
+        simp only [support_pure, Set.mem_singleton_iff] at hap hz
+        subst hap; subst hz
+        have hlen := hw.len
+        rw [hr, List.length_cons] at hlen
+        have hlab : Lab cl pk κ w.1.k op.1.1 := ⟨op.1, ho, rfl⟩
+        refine ⟨by simp; omega, fun y hy => ?_, fun y hy => ?_, fun y' e he => ?_,
+          fun y₁ y₂ e₁ e₂ h₁ h₂ hi => ?_⟩
+        · by_cases hyx : y = op.1.1
+          · exact ⟨w.1.k, Nat.lt_succ_self _, hyx ▸ hlab⟩
+          · simp only [Function.update_of_ne hyx, h1] at hy
+            obtain ⟨j, hj, hl⟩ := hw.rt y hy
+            exact ⟨j, Nat.lt_succ_of_lt hj, hl⟩
+        · by_cases hyx : y = op.1.1
+          · exact ⟨w.1.k, Nat.lt_succ_self _, hyx ▸ hlab⟩
+          · simp only [Function.update_of_ne hyx, h3] at hy
+            obtain ⟨j, hj, hl⟩ := hw.tg y hy
+            exact ⟨j, Nat.lt_succ_of_lt hj, hl⟩
+        · by_cases hy : y' = x'
+          · subst hy
+            simp only [Function.update_self, Option.some.injEq] at he
+            subst he
+            exact ⟨Nat.lt_succ_self _, hlab⟩
+          · simp only [Function.update_of_ne hy] at he
+            obtain ⟨hj, hl⟩ := hw.ses y' e he
+            exact ⟨Nat.lt_succ_of_lt hj, hl⟩
+        · by_cases hy₁ : y₁ = x' <;> by_cases hy₂ : y₂ = x'
+          · rw [hy₁, hy₂]
+          · subst hy₁
+            simp only [Function.update_self, Option.some.injEq, Function.update_of_ne hy₂] at h₁ h₂
+            subst h₁
+            exact absurd ((hw.ses y₂ e₂ h₂).1) (by simp at hi; omega)
+          · subst hy₂
+            simp only [Function.update_self, Option.some.injEq, Function.update_of_ne hy₁] at h₁ h₂
+            subst h₂
+            exact absurd ((hw.ses y₁ e₁ h₁).1) (by simp at hi; omega)
+          · simp only [Function.update_of_ne hy₁, Function.update_of_ne hy₂] at h₁ h₂
+            exact hw.inj y₁ y₂ e₁ e₂ h₁ h₂ hi
+    · simp only [bcomb_stop cl n pre pk κ x' hB w hk] at hz
+      subst hz; exact hw
+  · simp only [bcomb_iss] at hz
+    subst hz
+    exact ⟨hw.len, hw.rt, hw.tg, hw.ses, hw.inj⟩
+
+/-- **The forger against the challenger is `B` in `omExp`**, through `piB`. -/
+theorem bcomb_eqd (hD : Distinct cl pk κ) {α : Type} (oa : OracleComp (specB AR X' Hn' G S) α)
+    (w : CSt AR AC X' X G Hn' St) (hw : InvC cl n pk κ w) :
+    (fun z => (z.1, piB z.2)) <$> (simulateQ (bcomb cl n pre pk κ) oa).run w =ᵈ
+      (simulateQ (chImpl pre) oa).run (piB w) :=
+  simulateQ_proj_eqd _ _ piB (InvC cl n pk κ) (bcomb_inv cl n pre pk κ hD)
+    (fun q w hw => bcomb_step cl n pre pk κ hD q w hw) oa w hw
 
 end Comb
 
