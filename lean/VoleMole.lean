@@ -236,6 +236,8 @@ import VoleMole.ZK.VerifyReadsRO
 import VoleMole.Privacy.MoussakaNCRO
 import VoleMole.Privacy.MoussakaNCSh
 import VoleMole.Privacy.SeedXOFNC
+import VoleMole.Privacy.MoussakaNCRA
+import VoleMole.ROM.PrivacyReadsNC
 import VoleMole.Privacy.MoussakaPqov
 import VoleMole.Privacy.PqovDelta
 import VoleMole.Privacy.PqovKeys

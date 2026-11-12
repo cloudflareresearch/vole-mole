@@ -11,6 +11,7 @@ import VoleMole.Privacy.SeedXOFNC
 import VoleMole.ROM.SpecSound
 import VoleMole.Privacy.PqovDelta
 import VoleMole.Privacy.PqovKeys
+import VoleMole.ROM.PrivacyReadsNC
 
 /-!
 # Non-vacuity checks for the headline theorems
@@ -442,6 +443,25 @@ example := anonymityNCSh_num nc idxEval (fun _ => skNone) (fun _ => skNone_corre
 example := anonymityNCSh_num_seed idxEval (fun _ => nc) (fun _ _ => skNone)
   (fun _ _ => skNone_correct _) idxEval_sound (fun _ => nc_budget) (fun _ => le_rfl)
   (fun _ _ => RdX.const _)
+
+/-- **Theorem 4(b′) with the Moderator's choices read off the tables**: a setup that reads nothing
+(`KBudget 0 0 0 0`) is admissible. -/
+example := anonymityNCRA_lean_num (⟨fun _ _ => (), fun _ => nc⟩ : AdversaryNCRA (Blk → Blk) Unit)
+  idxEval (fun _ _ => skNone) (fun _ _ => skNone_correct _) idxEval_sound (fun _ => nc_budget)
+  ⟨fun _ _ _ => SReads.const _, fun _ _ _ => SReads.const _, fun _ _ _ => SReads.const _,
+    fun _ _ _ => SReads.const _⟩ (φ := fun _ => 1) fun _ c => le_of_eq (phi_skNone _ c)
+
+/-- A Moderator whose setup is an oracle computation that reads Client `0`'s issuance slice at one
+key (`QBudget 1 0 0 0`) and keeps the answer as its state. -/
+def ncOC {R : Type} : AdversaryNCOC R (VoleMole.ZK.Sim.Bytes 32) :=
+  ⟨liftM ((VoleMole.ROM.Reads.TSpec (Bool × Bool) R (preLen pI)).query
+    (VoleMole.ROM.Reads.TKey.h3 (false, false) 0)), fun _ => nc⟩
+
+/-- **The same with the setup an oracle computation**: the query bound is satisfiable by a setup
+that queries the tables. -/
+example := anonymityNCOC_lean_num idxEval (fun _ _ => skNone) (ncOC (R := Blk → Blk))
+  (fun _ _ => skNone_correct _) idxEval_sound (fun _ => nc_budget)
+  (VoleMole.ROM.Reads.QBudget.query_h3 _ _) (φ := fun _ => 1) fun _ c => le_of_eq (phi_skNone _ c)
 
 end NC
 

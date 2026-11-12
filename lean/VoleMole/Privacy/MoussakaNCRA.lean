@@ -637,4 +637,201 @@ theorem unlinkabilityNCRA (hsk : ∀ σ c, (sk σ c).Correct ((A.adv σ).pk c))
 
 end Main
 
+/-! ## With the Lean prover and verifier -/
+
+section Lean
+
+open VoleMole.Verifier VoleMole.Verifier.Bridge
+
+variable [CipherRow R] [Inhabited R] {Sg : Type} (A : AdversaryNCRA R Sg) (idx : AnchorSet → UOVKey → ℕ)
+  (sk : Sg → Bool → Signer)
+
+/-- **The collision term of the right hop**: `deltaNCA b ≤ noHitProb + 2⁻¹⁰²⁴`, as without the
+setup. The right real proof's grinding prefix is a function of the issuance tapes, the slices,
+the tables and its own randomness (the setup reads the slices and the original tables), none of
+which the left simulation's coins enter; so its `ã` is the simulation's uniform `ã` with
+probability `≤ noHitProb + 2⁻¹⁰²⁴` (`pr_simTail_eq_le`), and otherwise the left programming misses
+its grinding block (`realRO_ne_tail`). -/
+theorem deltaNCA_le (hsk : ∀ σ c, (sk σ c).Correct ((A.adv σ).pk c)) (b : Bool) :
+    deltaNCA A idx sk leanPR leanProgR b ≤ noHitProb + 1 / 2 ^ 1024 := by
+  unfold deltaNCA
+  -- The real right proof's tail, a function of the issuance tapes, the left slot's slice, the
+  -- proof's coins and slice, and the tables.
+  let σt : (TIr × TIr) → Tab3 → Coins proveSeedBytes × (Tab3 × ShM R) → Sg := fun xx gl a =>
+    A.setup ((xx.1.2.2, xx.2.2.2), (gl, a.2.1)) a.2.2
+  let tl : (TIr × TIr) → Tab3 → Coins proveSeedBytes × (Tab3 × ShM R) → ByteArray := fun xx gl a =>
+    preTail (blk (preLen pR) (preRO Hashes.shake
+      (stR (xROf (A.adv (σt xx gl a)).ro (ptW (A.adv (σt xx gl a)) idx (sk (σt xx gl a)) b xx.1 xx.2
+        true)))
+      (toBA (wROf (A.adv (σt xx gl a)).ro (ptW (A.adv (σt xx gl a)) idx (sk (σt xx gl a)) b xx.1 xx.2
+        true))) a.1 a.2.1 a.2.2))
+  refine (pr_mono (Q := fun z : ((TIr × TIr) × TRs (SimCoins pR)) × (Coins proveSeedBytes ×
+      (Tab3 × ShM R)) => tl z.1.1 z.1.2.2 z.2 = simTail z.1.2.1) fun z hz => ?_).trans ?_
+  · set σ := SxRN A z.1 z.2.2 with hσ
+    set p := ptW (A.adv σ) idx (sk σ) b z.1.1.1 z.1.1.2 true with hp
+    cases hok : redeemOk (A.adv σ).ro.base.ci (A.adv σ).ro.base.cr p.tok p.anchors p.i
+    · exact absurd (redRealRO_out_not_ok (A.adv σ).ro leanPR _ p hok _ _) hz
+    · have hwf := tokW_wf (A.adv σ) (sk σ) (hsk σ) (b ^^ true)
+        (bif b ^^ true then z.1.1.2 else z.1.1.1)
+      obtain ⟨hrel, hreal, -⟩ := redeem_facts (A.adv σ).ro (leanSim pR) leanPR p hwf.1 hwf.2.1
+        hwf.2.2 hok
+      rw [hreal, hreal, leanPR_ofFn, leanPR_ofFn] at hz
+      have h1 : realRO pR Hashes.shake (stR (xROf (A.adv σ).ro p)) (toBA (wROf (A.adv σ).ro p))
+          z.2.1 z.2.2.1 (LNC (A.adv σ) idx (sk σ) leanProgR b z.1 z.2.2.2) ≠
+          realRO pR Hashes.shake (stR (xROf (A.adv σ).ro p)) (toBA (wROf (A.adv σ).ro p))
+            z.2.1 z.2.2.1 z.2.2.2 :=
+        fun e => hz (by rw [e])
+      have hL := ProgAt.ite (okW (A.adv σ) idx (sk σ) z.1.1.1 z.1.1.2 = true)
+        (progRO_progAt (R := R) Hashes.shake
+          (stR (xROf (A.adv σ).ro (ptW (A.adv σ) idx (sk σ) b z.1.1.1 z.1.1.2 false))) z.1.2.1)
+      have hT : ∀ s : ShM R, ∀ b' ∈ (if okW (A.adv σ) idx (sk σ) z.1.1.1 z.1.1.2 = true then
+          {simBlk Hashes.shake (stR (xROf (A.adv σ).ro (ptW (A.adv σ) idx (sk σ) b z.1.1.1 z.1.1.2
+            false))) z.1.2.1 s}
+          else ∅ : Finset (VoleMole.ZK.Sim.Bytes (preLen pI))),
+          preTail b' ∈ ({simTail z.1.2.1} : Finset ByteArray) := by
+        intro s b' hb
+        by_cases hc : okW (A.adv σ) idx (sk σ) z.1.1.1 z.1.1.2 = true
+        · simp only [hc, ↓reduceIte] at hb
+          rw [Finset.mem_singleton.1 hb]
+          exact Finset.mem_singleton.2 (preTail_simBlk hashesWF_shake rfl _ _)
+        · simp only [hc, Bool.false_eq_true, ↓reduceIte] at hb
+          exact absurd hb (Finset.notMem_empty _)
+      have := realRO_ne_tail (zkHypR _ _ hrel) hashesWF_shake hlab_pR hL hT _ _ _ h1
+      exact Finset.mem_singleton.1 this
+  · refine pr_le_of_snd fun a => pr_le_of_fst fun xx => pr_le_of_snd fun gl => ?_
+    have h := pr_simTail_eq_le (p := pR) (tl xx gl a)
+    rw [tail_pR] at h
+    exact h
+
+/-- **Theorem 4(b′) with the Lean prover and verifier, the Moderator's choices read off the tables,
+for every type of cipher rows** (`ZKPRow R`): the setup reads `(k₃, k₂, k₅, k_E)` (`KBudget`), the
+guess `(q₃, q₅, q_E)` at every state, `φ c` bounds Anchor `c`'s abort probability at every state:
+
+    4·εAd(9; q₃, q₅ + 2496, q_E + 23035; k₃, k₂, k₅, k_E) + 2·(noHitProb + 2⁻¹⁰²⁴)
+      + 2·(φ₀ + φ₁) + 4·(k₃ + q₃)·2⁻¹²⁸. -/
+theorem anonymityNCRA_leanG [ZKPRow R] (hsk : ∀ σ c, (sk σ c).Correct ((A.adv σ).pk c))
+    (hidx : IdxSound idx) {q3 q5 qE k3 k2 k5 kE : ℕ} (hA : A.Budget q3 q5 qE)
+    (hK : A.KBudget k3 k2 k5 kE) {φ : Bool → ℝ} (hφ : ∀ σ c, phi (A.adv σ).nc (sk σ) c ≤ φ c) :
+    |pr _ (realGameNCRA A idx leanPI leanVI sk leanPR false) -
+        pr _ (realGameNCRA A idx leanPI leanVI sk leanPR true)| ≤
+      4 * εAdG R pR 9 q3 (q5 + 2496) (qE + 23035) k3 k2 k5 kE + 2 * (noHitProb + 1 / 2 ^ 1024) +
+        2 * (φ false + φ true) + 4 * ((k3 + q3 : ℕ) / 2 ^ 128) := by
+  have h := anonymityNCRA (A := A) (idx := idx) (PI := leanPI) (V := leanVI) (sk := sk)
+    (PR := leanPR) (simR := leanSim pR) (progR := leanProgR)
+    (AdmS := fun _ Sx => SReads pR Sx k3 k2 k5 kE)
+    (εR := fun a c => εAdG R pR pR.qsDegree q3 a c k3 k2 k5 kE) hsk hidx hA hK
+    leanPI_rd5 leanPI_rdE leanPI_sliceAt leanVI_rd5 leanVI_rdE leanPR_rd5 leanPR_rdE
+    (fun x c => progRO_isProg c) (fun γ => hK.sL _ _ _) (fun γ => hK.sR _ _ _)
+    (fun a c => leanPR_zkROA q3 a c k3 k2 k5 kE) hφ
+  have m1 := εAdG_mono (R := R) pR (d := 9) (q3 := q3) (q3' := q3) (s3 := k3) (s3' := k3)
+    (s2 := k2) (s2' := k2) (s5 := k5) (s5' := k5) (sE := kE) (sE' := kE) le_rfl
+    (show 624 + 312 + (624 + 312) + (0 + 624) + q5 ≤ q5 + 2496 by omega)
+    (show 4607 + 4607 + (4607 + 4607) + (0 + 4607) + qE ≤ qE + 23035 by omega)
+    le_rfl le_rfl le_rfl le_rfl
+  have m2 := εAdG_mono (R := R) pR (d := 9) (q3 := q3) (q3' := q3) (s3 := k3) (s3' := k3)
+    (s2 := k2) (s2' := k2) (s5 := k5) (s5' := k5) (sE := kE) (sE' := kE) le_rfl
+    (show 624 + 312 + (624 + 312) + (0 + 0) + q5 + 312 ≤ q5 + 2496 by omega)
+    (show 4607 + 4607 + (4607 + 4607) + (0 + 0) + qE + 4607 ≤ qE + 23035 by omega)
+    le_rfl le_rfl le_rfl le_rfl
+  have d0 := deltaNCA_le A idx sk hsk false
+  have d1 := deltaNCA_le A idx sk hsk true
+  refine h.trans ?_
+  generalize (2 : ℝ) ^ 1024 = K at d0 d1 ⊢
+  change 2 * (εAdG R pR 9 q3 _ _ k3 k2 k5 kE + εAdG R pR 9 q3 _ _ k3 k2 k5 kE) + _ + _ + _ ≤ _
+  linarith
+
+/-- **Unlinkability with the Lean prover and verifier, the Moderator's choices read off the
+tables**: one Anchor at every state, any index rule,
+`4·εAd(9; q₃, q₅ + 2496, q_E + 23035; k₃, k₂, k₅, k_E) + 2·(noHitProb + 2⁻¹⁰²⁴) + 4·(k₃ + q₃)·2⁻¹²⁸`. -/
+theorem unlinkabilityNCRA_leanG [ZKPRow R] (hsk : ∀ σ c, (sk σ c).Correct ((A.adv σ).pk c))
+    (hpk : ∀ σ, (A.adv σ).pk false = (A.adv σ).pk true) (hs : ∀ σ, sk σ false = sk σ true)
+    {q3 q5 qE k3 k2 k5 kE : ℕ} (hA : A.Budget q3 q5 qE) (hK : A.KBudget k3 k2 k5 kE) :
+    |pr _ (realGameNCRA A idx leanPI leanVI sk leanPR false) -
+        pr _ (realGameNCRA A idx leanPI leanVI sk leanPR true)| ≤
+      4 * εAdG R pR 9 q3 (q5 + 2496) (qE + 23035) k3 k2 k5 kE + 2 * (noHitProb + 1 / 2 ^ 1024) +
+        4 * ((k3 + q3 : ℕ) / 2 ^ 128) := by
+  have h := unlinkabilityNCRA (A := A) (idx := idx) (PI := leanPI) (V := leanVI) (sk := sk)
+    (PR := leanPR) (simR := leanSim pR) (progR := leanProgR)
+    (AdmS := fun _ Sx => SReads pR Sx k3 k2 k5 kE)
+    (εR := fun a c => εAdG R pR pR.qsDegree q3 a c k3 k2 k5 kE) hsk hpk hs hA hK
+    leanPI_rd5 leanPI_rdE leanPI_sliceAt leanVI_rd5 leanVI_rdE leanPR_rd5 leanPR_rdE
+    (fun x c => progRO_isProg c) (fun γ => hK.sL _ _ _) (fun γ => hK.sR _ _ _)
+    (fun a c => leanPR_zkROA q3 a c k3 k2 k5 kE)
+  have m1 := εAdG_mono (R := R) pR (d := 9) (q3 := q3) (q3' := q3) (s3 := k3) (s3' := k3)
+    (s2 := k2) (s2' := k2) (s5 := k5) (s5' := k5) (sE := kE) (sE' := kE) le_rfl
+    (show 624 + 312 + (624 + 312) + (0 + 624) + q5 ≤ q5 + 2496 by omega)
+    (show 4607 + 4607 + (4607 + 4607) + (0 + 4607) + qE ≤ qE + 23035 by omega)
+    le_rfl le_rfl le_rfl le_rfl
+  have m2 := εAdG_mono (R := R) pR (d := 9) (q3 := q3) (q3' := q3) (s3 := k3) (s3' := k3)
+    (s2 := k2) (s2' := k2) (s5 := k5) (s5' := k5) (sE := kE) (sE' := kE) le_rfl
+    (show 624 + 312 + (624 + 312) + (0 + 0) + q5 + 312 ≤ q5 + 2496 by omega)
+    (show 4607 + 4607 + (4607 + 4607) + (0 + 0) + qE + 4607 ≤ qE + 23035 by omega)
+    le_rfl le_rfl le_rfl le_rfl
+  have d0 := deltaNCA_le A idx sk hsk false
+  have d1 := deltaNCA_le A idx sk hsk true
+  refine h.trans ?_
+  generalize (2 : ℝ) ^ 1024 = K at d0 d1 ⊢
+  change 2 * (εAdG R pR 9 q3 _ _ k3 k2 k5 kE + εAdG R pR 9 q3 _ _ k3 k2 k5 kE) + _ + _ ≤ _
+  linarith
+
+end Lean
+
+/-! ## The two cipher row types -/
+
+/-- **Theorem 4(b′) in the random-oracle and ideal-cipher model with the Moderator's choices read
+off the tables** (AES's rows uniform functions, the PRF view): with the Lean prover and verifier,
+
+    4·εAd(9; q₃, q₅ + 2496, q_E + 23035; k₃, k₂, k₅, k_E) + 2·(noHitProb + 2⁻¹⁰²⁴)
+      + 2·(φ₀ + φ₁) + 4·(k₃ + q₃)·2⁻¹²⁸,
+
+about `2⁻¹⁰³·²` plus the budget terms and the abort term (`εAd` at a zero reader budget is
+`εRO + 2⁻¹²⁸`). -/
+theorem anonymityNCRA_lean_num {Sg : Type} (A : AdversaryNCRA (Blk → Blk) Sg)
+    (idx : AnchorSet → UOVKey → ℕ) (sk : Sg → Bool → Signer)
+    (hsk : ∀ σ c, (sk σ c).Correct ((A.adv σ).pk c)) (hidx : IdxSound idx)
+    {q3 q5 qE k3 k2 k5 kE : ℕ} (hA : A.Budget q3 q5 qE) (hK : A.KBudget k3 k2 k5 kE)
+    {φ : Bool → ℝ} (hφ : ∀ σ c, phi (A.adv σ).nc (sk σ) c ≤ φ c) :
+    |pr _ (realGameNCRA A idx leanPI leanVI sk leanPR false) -
+        pr _ (realGameNCRA A idx leanPI leanVI sk leanPR true)| ≤
+      4 * εAd 9 q3 (q5 + 2496) (qE + 23035) k3 k2 k5 kE + 2 * (noHitProb + 1 / 2 ^ 1024) +
+        2 * (φ false + φ true) + 4 * ((k3 + q3 : ℕ) / 2 ^ 128) :=
+  anonymityNCRA_leanG A idx sk hsk hidx hA hK hφ
+
+/-- **`anonymityNCRA_lean_num` with AES as uniformly random permutations** (forward and inverse
+queries): the same with `εAdPm`. -/
+theorem anonymityNCRA_lean_num_perm {Sg : Type} (A : AdversaryNCRA (Equiv.Perm Blk) Sg)
+    (idx : AnchorSet → UOVKey → ℕ) (sk : Sg → Bool → Signer)
+    (hsk : ∀ σ c, (sk σ c).Correct ((A.adv σ).pk c)) (hidx : IdxSound idx)
+    {q3 q5 qE k3 k2 k5 kE : ℕ} (hA : A.Budget q3 q5 qE) (hK : A.KBudget k3 k2 k5 kE)
+    {φ : Bool → ℝ} (hφ : ∀ σ c, phi (A.adv σ).nc (sk σ) c ≤ φ c) :
+    |pr _ (realGameNCRA A idx leanPI leanVI sk leanPR false) -
+        pr _ (realGameNCRA A idx leanPI leanVI sk leanPR true)| ≤
+      4 * εAdPm pR 9 q3 (q5 + 2496) (qE + 23035) k3 k2 k5 kE + 2 * (noHitProb + 1 / 2 ^ 1024) +
+        2 * (φ false + φ true) + 4 * ((k3 + q3 : ℕ) / 2 ^ 128) :=
+  anonymityNCRA_leanG A idx sk hsk hidx hA hK hφ
+
+/-- **Unlinkability with the Moderator's choices read off the tables** (function rows). -/
+theorem unlinkabilityNCRA_lean_num {Sg : Type} (A : AdversaryNCRA (Blk → Blk) Sg)
+    (idx : AnchorSet → UOVKey → ℕ) (sk : Sg → Bool → Signer)
+    (hsk : ∀ σ c, (sk σ c).Correct ((A.adv σ).pk c))
+    (hpk : ∀ σ, (A.adv σ).pk false = (A.adv σ).pk true) (hs : ∀ σ, sk σ false = sk σ true)
+    {q3 q5 qE k3 k2 k5 kE : ℕ} (hA : A.Budget q3 q5 qE) (hK : A.KBudget k3 k2 k5 kE) :
+    |pr _ (realGameNCRA A idx leanPI leanVI sk leanPR false) -
+        pr _ (realGameNCRA A idx leanPI leanVI sk leanPR true)| ≤
+      4 * εAd 9 q3 (q5 + 2496) (qE + 23035) k3 k2 k5 kE + 2 * (noHitProb + 1 / 2 ^ 1024) +
+        4 * ((k3 + q3 : ℕ) / 2 ^ 128) :=
+  unlinkabilityNCRA_leanG A idx sk hsk hpk hs hA hK
+
+/-- Unlinkability with AES as uniformly random permutations: the same with `εAdPm`. -/
+theorem unlinkabilityNCRA_lean_num_perm {Sg : Type} (A : AdversaryNCRA (Equiv.Perm Blk) Sg)
+    (idx : AnchorSet → UOVKey → ℕ) (sk : Sg → Bool → Signer)
+    (hsk : ∀ σ c, (sk σ c).Correct ((A.adv σ).pk c))
+    (hpk : ∀ σ, (A.adv σ).pk false = (A.adv σ).pk true) (hs : ∀ σ, sk σ false = sk σ true)
+    {q3 q5 qE k3 k2 k5 kE : ℕ} (hA : A.Budget q3 q5 qE) (hK : A.KBudget k3 k2 k5 kE) :
+    |pr _ (realGameNCRA A idx leanPI leanVI sk leanPR false) -
+        pr _ (realGameNCRA A idx leanPI leanVI sk leanPR true)| ≤
+      4 * εAdPm pR 9 q3 (q5 + 2496) (qE + 23035) k3 k2 k5 kE + 2 * (noHitProb + 1 / 2 ^ 1024) +
+        4 * ((k3 + q3 : ℕ) / 2 ^ 128) :=
+  unlinkabilityNCRA_leanG A idx sk hsk hpk hs hA hK
+
 end VoleMole.Privacy.Moussaka
