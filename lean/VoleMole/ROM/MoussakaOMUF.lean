@@ -68,6 +68,8 @@ open VoleMole.Prob VoleMole.Verifier VoleMole.Verifier.Bridge VoleMole.ZK.Sim Vo
 
 /-! ## Messages and the adversary -/
 
+-- (`pfLenI_eq`, `pfLenR_eq` below: these are the executable verifier's proof sizes.)
+
 /-- The issuance proof's length (`7272` on `main`, `7528` with label rows). -/
 def pfLenI (lr : Bool) : ℕ := if lr then 7528 else 7272
 
@@ -978,5 +980,24 @@ theorem omuf_le_num (hA : A.Budget q qE n) (hdig : ∀ k, (pk k).digest.size = 3
       (isKindQueryBoundIC_map _ (game_k lr pk sk hA qI))
 
 end Num
+
+/-! ## Liveness: the honest checks' lengths are the verifier's proof sizes -/
+
+/-- The issuance request length the Anchor expects is `45` plus the executable verifier's issuance
+proof size, on `main` and with label rows (so honest requests are not refused as malformed; the
+privacy games had this hazard, `Audit/Liveness.lean`). -/
+theorem pfLenI_eq (lr : Bool) : pfLenI lr = (parI lr).proofBytes := by
+  cases lr <;> decide
+
+/-- The same for the Moderator's redemption request length. -/
+theorem pfLenR_eq (lr : Bool) : pfLenR lr = (parR lr).proofBytes := by
+  cases lr <;> decide
+
+/-- The Anchor's statement has the issuance parameters. -/
+theorem stmt_params (lr : Bool) (q : IssQ K) : (q.stmt lr).params = parI lr := rfl
+
+/-- The Moderator's statement has the redemption parameters. -/
+theorem stmtR_params (lr : Bool) (pk : Fin K → UovPk) (r : RedQ K) :
+    (r.stmt lr pk).params = parR lr := rfl
 
 end VoleMole.ROM.IC.OMUF

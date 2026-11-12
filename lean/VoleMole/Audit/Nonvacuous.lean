@@ -11,6 +11,7 @@ import VoleMole.Privacy.SeedXOFNC
 import VoleMole.ROM.SpecSound
 import VoleMole.Privacy.PqovDelta
 import VoleMole.Privacy.PqovKeys
+import VoleMole.ROM.MoussakaOMUF
 
 /-!
 # Non-vacuity checks for the headline theorems
@@ -36,6 +37,12 @@ Anchors' Lean verifier). The same for **pqov's real key generation** with any oi
 (`Spec.Pqov.pqovKey O P1 P2`: `P3` computed as `calculate_F2_P3` does; `P` vanishes on the oil
 space, `oilSpace_pqovKey`): `anonymityNC_pqov_pqovKeys`, `anonymityNCRO_pqov_pqovKeys`,
 `pr_refused_NCRO_pqov` and `avg_delta255_pqovKey` instantiated with keys `pqovKey (O c) (P1 c) _`.
+
+Moussaka's one-more unforgeability (`ROM/MoussakaOMUF.lean`, `omuf_le_num`) is instantiated with
+a trivial adversary (no queries; one malformed Issue query and one invalid redemption) and two
+honest Anchors with distinct 32-byte digests; the request lengths its honest checks expect are the
+executable verifier's proof sizes for both layouts (`pfLenI_eq`, `pfLenR_eq`), so the honest
+checks are not vacuous in the sense of the liveness audit.
 
 What is not exhibited here: a redemption or spend witness (it needs a UOV preimage; the KAT
 vectors give instances, checked by `lake exe verifier_vectors`, not by a theorem); `hinj` for a
@@ -626,5 +633,39 @@ example (O : Bool → OilMat) (P1 : Bool → ℕ → GF256) (P2 : Bool → P2Par
 example (O : OilMat) (P1 : ℕ → GF256) := avg_delta255_pqovKey O P1
 
 end NCPqov
+
+/-! ## Moussaka one-more unforgeability (`ROM/MoussakaOMUF.lean`) -/
+
+section OMUF
+
+open VoleMole.ROM.IC.OMUF
+
+/-- Two honest Anchors with distinct 32-byte digests. -/
+def pkU : Fin 2 → UovPk := fun k => ⟨⟨Array.replicate 32 k.val.toUInt8⟩, ByteArray.empty⟩
+
+theorem pkU_digest (k : Fin 2) : (pkU k).digest.size = 32 := by
+  simp [pkU, ByteArray.size]
+
+theorem pkU_inj : Function.Injective fun k => (pkU k).digest := by
+  intro a b h
+  fin_cases a <;> fin_cases b <;> first | rfl | (simp [pkU] at h)
+
+/-- A trivial OMUF adversary: one Issue query (malformed), one redemption (empty Anchor Set). -/
+def aU : Adversary 2 1 where
+  σ := Unit
+  init := pure ()
+  query _ := pure ((), ⟨0, ByteArray.empty, ByteArray.empty⟩)
+  absorb _ _ := ()
+  final _ := pure fun _ => ⟨[], ByteArray.empty, ByteArray.empty, ByteArray.empty, ByteArray.empty⟩
+
+theorem aU_budget : aU.Budget 0 0 0 := by
+  refine ⟨trivial, trivial, trivial, fun _ => trivial, fun _ => trivial, fun _ => trivial,
+    fun _ => trivial, fun _ => trivial, fun _ => trivial⟩
+
+/-- `omuf_le_num`'s hypotheses hold. -/
+example (lr : Bool) (sk : Fin 2 → Spec.Signer) :=
+  omuf_le_num lr pkU sk 1 aU_budget pkU_digest pkU_inj
+
+end OMUF
 
 end VoleMole.Audit
