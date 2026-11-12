@@ -31,7 +31,7 @@ Line references are `file:line` at `6d7113e`.
 
 | Notion | Result | Main terms |
 |---|---|---|
-| **Balance** (no inflation): accepted spends ≤ issued + refunded, against adaptive malicious clients, honest clients present | **Proved** (Thm 1), classical. [Lean] as a game on the executable spec and the Lean verifier in the ROM and ideal-cipher model, `N·ε_iss + N·ε_spend + Adv^{uf-tag}(B) + Adv^{coll}(C)` (`ROM/RatatouilleBalance.lean`, `balance_le_lean`; §4); `B`, `C` explicit reductions whose advantages stay terms | `ε_ext + Adv^{uf-tag} + q_K²·2^{−257}` |
+| **Balance** (no inflation): accepted spends ≤ issued + refunded, against adaptive malicious clients, honest clients present | **Proved** (Thm 1), classical. [Lean] as a game on the executable spec and the Lean verifier in the ROM and ideal-cipher model, `N·ε_iss + N·ε_spend + Adv^{uf-tag}(B) + Adv^{coll}(C)` (`ROM/RatatouilleBalance.lean`, `balance_le_ufTag`; §4): `B` a UF-Tag forger (with a signability probe) and `C` a `Com` collision finder, explicit; their advantages stay terms | `ε_ext + Adv^{uf-tag} + q_K²·2^{−257}` |
 | **No theft**: an adversary cannot spend an honest client's credits through a request it did not copy verbatim | **Proved** (Thm 3), using weak SE and a ZK hop | `ε_ZK + ε_SE + q_K·2^{−127}` |
 | **No theft by copying** (hijack): anyone who obtains a spend request can redeem it first | **Fails** (F2). Nothing binds a spend to a session, unlike {{ACT}}'s `ctx_spend` and Moussaka's `challenge_digest` | — |
 | **Unlinkability/anonymity** against a malicious Issuer: spends and issuances leak only `(pk, ctx_iss, T_init, d)` and whether the client could afford the spend | **Proved** (Thm 2). On `main` it relies on Keccak one-wayness in `r`; with the fix it is standard NIZK. [Lean] a two-round left/right form, from ZK and hiding hypotheses (`Privacy/Ratatouille.lean`); with the executable Lean prover (label rows) down to its tape hypothesis (`Privacy/RatatouilleLean.lean`, `unlinkability_label_rows`); for the Lean prover in the ROM and ideal-cipher model with every zero-knowledge term explicit, `≈ 2⁻¹⁰²·³` plus budget terms and `2·ε_hide` (`unlinkabilityRO_lean_num`), and `≈ 2⁻¹⁰¹·⁶` with a table-reading Issuer (`unlinkabilityRA_lean_num`; §6); also with AES as random permutations (`_perm`) and with one shared `H₃` (`unlinkabilitySh_num`, `unlinkabilityRASh_num`); from the real Clients' OS seeds and seed XOF, each `+ 2·(2q_H + 2)·2⁻²⁵⁶` with `q_H` the Issuer's XOF queries (`unlinkability*_seed`, `lean/docs/zk.md` §10.6; the note's H1 does not charge seed collisions); with a key stage (the Issuer's key, context and balance) that reads the tables too (`unlinkabilityRAK_lean_num`, `≈ 2⁻¹⁰¹·⁶`); with any number `n` of further honest Clients, `≤ n·2⁻¹⁰¹` plus budget terms and `2·ε_hide` (`unlinkabilityN_lean_num`), also adaptively scheduled, each further session's key, context, balance, response and amount chosen from earlier outcomes and the challenge key, context and balance from the sessions before it (`unlinkabilityAd_lean_num`, the same numbers), and interleaved in any order with each further Client spending up to `K` times along its change tokens (`unlinkabilityIL_lean_num`, `≤ (n(K + 1) + 2)·2⁻¹⁰¹`; with a table-reading scheduler that also places the challenge's stages, `unlinkabilityILO_lean_num`, `+ 46·L·(a₃ + a₂ + a₅ + 221·a_E)·2⁻¹²⁸`), and with `N` challenge pairs (`unlinkabilityP_lean_num`; `lean/docs/zk.md` §10.8, §11) | `ε_ZK + q_K·2^{−127}` |
@@ -402,7 +402,8 @@ per `ctx`, because parents share the spender's `ctx` (fact 1). ∎
   `Σ d > Σ T_init + Σ x'` over the accepted calls. Honest Clients are covered: an adversary that
   runs their code is an adversary of the game.
 - *The bound* (`balance_le`; `balance_le_lean` with the Issuer's verifications re-run by
-  `verifyIC`, no hypothesis on the verifier):
+  `verifyIC`, no hypothesis on the verifier; `balance_le_ufTag` with the forgery term as a UF-Tag
+  advantage):
 
       Pr[win] ≤ N·ε_iss(Q) + N·ε_spend(Q) + Adv^{uf-tag}(B) + Adv^{coll}_{Com}(C)
 
@@ -416,9 +417,17 @@ per `ctx`, because parents share the spender's `ctx` (fact 1). ∎
     the `j`-th prover (`proverAt`, `provI`, `provS`): the game up to call `j`, re-run with the
     Issuer, then the `j`-th request as its proof and statement. `hinj` holds for the Issuer's fixed key with a
     32-byte digest.
-  - `B` (`forgeAdv`, `ForgeEv`): the first accepted spend `j` whose extracted witness has
-    `P(s) = Tag(c, x)` for its parent `c = Com(nf, ctx, t, r)`, on a pair `(c, x)` that no call
-    before `j` released a signature on.
+  - `B` (`forger`, `bOut`; the event `ForgeEv`, `forgeAdv`): the first spend `j`, verified on a
+    fresh nullifier, whose extracted witness has `P(s) = Tag(c, x)` for its parent
+    `c = Com(nf, ctx, t, r)`, on a pair `(c, x)` that no call before `j` released a signature on.
+    `B` stops there and reports the pairs it signed before `j`. The UF-Tag game (`TagForger`,
+    `UFWin`, `ufTagAdv`): the forger gets the signer `σ` on pairs, wins with a valid signature on
+    a pair none of whose signing queries was answered, and must use `σ` only through its signing
+    log and its *probe log* (pairs on which it only learns whether `σ` succeeds). `B` is such a
+    forger (`bOut_reads`: if `σ'` agrees with `σ` there, `B`'s output is the same; through
+    `yT_signer`, the run's first calls depend on `σ` only through these, and `games_congr`, the
+    extraction games depend on the run only through its first calls), and it wins whenever the
+    reduction's forgery event holds (`forge_ufwin`, `forgeAdv_le_ufTag`).
   - `C` (`collAdv`, `CollEv`): two extracted openings (an issuance's, a spend's parent or change)
     with one commitment and different `(nf, ctx, t)`.
 - *The proof.* Per pair of tables (`win_imp`): if no request's extraction game fails, `B` and `C`
@@ -439,13 +448,12 @@ per `ctx`, because parents share the spender's `ctx` (fact 1). ∎
   verifies with the executable verifier (`verifyQ`).
 - *What stays assumed.*
   - `Adv^{uf-tag}(B)` and `Adv^{coll}(C)` are the success probabilities of the two explicit
-    reductions, not bounds. That `B` uses the secret key only through signing queries is
-    argued, not mechanized: the game takes the signer `σ` as a parameter, `B` re-runs the Issuer
-    with `σ`, and it stops at the forgery. Two points of the argument: `B` signs only the pairs it
-    releases (it checks the store first, see the correction below); and the Issuer's response on
-    the duplicate-nullifier path still reveals whether `derive_preimage` succeeded (an exception
-    against a rejection), so `B` needs that bit (a UF-Tag game with a "signability probe") or the
-    abort term `E4`.
+    reductions, not bounds: UF-Tag (from A-OMPI by Lemma 2.1) and `Com` binding are assumptions.
+    The UF-Tag game has the signability probe: on the duplicate-nullifier path the Issuer computes
+    a signature and withholds it, but its response still reveals whether `derive_preimage`
+    succeeded (an exception against a rejection), so `B` needs that bit. Without the probe, `B`
+    would need the abort term `E4` (the signer fails on a probed target), as the paper discards
+    it.
   - The bound loses a factor `N` against the paper's single `ε_ext` for all proofs (L8 §9.1): the
     Lean single-proof theorems are applied once per request, with a union bound.
 
@@ -456,7 +464,8 @@ forwards that call, `(c', x')` is in `B`'s signing log, and an adversary that la
 state with that pair is no UF-Tag forgery, yet that state was never released, so fact 1 fails.
 `B` must check the store before signing. Its simulation then differs from the Issuer only when
 `derive_preimage` fails on a duplicate-path pair (an exception instead of a rejection), which is
-the event `E4`. The Lean forgery event (`Forge`) is stated with released signatures.
+the event `E4`. The Lean forgery event (`Forge`) is stated with released signatures, and the Lean
+`B` probes the duplicate-path pairs instead of signing them.
 
 ## 5. No theft (N2) and honest clients
 
@@ -832,11 +841,12 @@ and determinism of `Tag`. The witness satisfies V3 by `change_correct`. ∎
 - A-OMPI is a protocol-specific assumption. There is no reduction to UOV inversion (§2.3); R1
   would give a reduction to standard salted UOV EUF-CMA.
 - Theorem 1 in Lean (`ROM/RatatouilleBalance.lean`, `balance_le_lean`, §4) still leaves:
-  - `Adv^{uf-tag}(B)` and `Adv^{coll}(C)` are the explicit reductions' success probabilities. The
-    UF-Tag game itself, and the fact that `B` is an adversary of it (it reads the signer only on
-    its signing queries, plus the duplicate-path abort bit), are on paper; so are Lemma 2.1
-    (UF-Tag from A-OMPI) and the binding bound `ε_bind^K`, which need KP800 as an ideal
-    permutation while the Lean `Com` and `Tag` are the concrete Keccak-p[800];
+  - `Adv^{uf-tag}(B)` and `Adv^{coll}(C)` are the explicit reductions' success probabilities,
+    for a UF-Tag game with a signability probe (`TagForger`; `B` is mechanized as a forger of
+    it). Lemma 2.1 (UF-Tag from A-OMPI) and the binding bound `ε_bind^K` stay on paper: they
+    need KP800 as an ideal permutation, while the Lean `Com` and `Tag` are the concrete
+    Keccak-p[800]. The probe is a (mild) strengthening of UF-Tag; the paper's alternative is the
+    abort term `E4`;
   - the bound is `N·ε_iss + N·ε_spend` for the extraction step, against the paper's one `ε_ext`
     for all proofs (simultaneous extraction is not mechanized);
   - adversaries are deterministic given the oracles (randomized ones by averaging over their
@@ -937,8 +947,12 @@ and determinism of `Tag`. The witness satisfies V3 by `change_correct`. ∎
 - `provI`, `provS`, `gameI`, `gameS`, `failI`, `failS`, `annI`, `annS`: the extraction games of
   the `j`-th request and the extracted witnesses.
 - `Forge`, `ComColl`, `ForgeEv`, `CollEv`, `forgeAdv`, `collAdv`: the reductions' events.
+- `TagForger`, `UFWin`, `ufTagAdv`: the UF-Tag game with a signability probe; `signLog`,
+  `probeLog`, `yT_signer`, `games_congr`, `bOut`, `bOut_reads`, `forger`: `B` and its legitimacy;
+  `forge_ufwin`, `forgeAdv_le_ufTag`: `B` wins on the forgery event.
 - `no_win`: the deterministic core (no failure, no win), through `Spec.Ratatouille.World.step_inv`.
 - `ext_issue`, `ext_spend`, `win_imp`: per table, a win is a failure.
 - `pr_failI_le`, `pr_failS_le`: the single-proof bounds for the `j`-th prover.
-- `balance_le`: Theorem 1 for any `VerifierIC`; `balance_le_lean`: with `verifyIC`.
+- `balance_le`: Theorem 1 for any `VerifierIC`; `balance_le_lean`: with `verifyIC`;
+  `balance_le_ufTag`: with `Adv^{uf-tag}(B)`.
 - `Audit/Nonvacuous.lean`: `balance_le_lean`'s hypotheses instantiated (`balA0`).

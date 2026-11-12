@@ -24,8 +24,9 @@ where
   the query budget of `N` rounds: one per request, applied to the `j`-th prover
   (`ROM/ExtractReduce.lean`, `proverAt`), which runs the game up to round `j` and outputs the
   `j`-th request;
-* `B` is an explicit forger of the UF-Tag game (`ufTagAdv`): it outputs the first accepted spend
-  whose extracted parent `(Com(nf, ctx, t, r), x)` received no signature before;
+* `B` is an explicit forger of the UF-Tag game (`forgeAdv`; as a forger of the UF-Tag game with a
+  signability probe, `TagForger`, `forger`, `balance_le_ufTag`): it outputs the first verified
+  spend whose extracted parent `(Com(nf, ctx, t, r), x)` received no signature before;
 * `C` is an explicit `Com` collision finder (`comCollAdv`): two extracted openings with one
   commitment and different `(nf, ctx, t)`.
 
