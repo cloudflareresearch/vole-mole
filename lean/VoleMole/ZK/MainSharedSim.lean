@@ -318,4 +318,277 @@ theorem pr_sib_hit_le (hm : MainP p) (st : Statement) (E : Cipher) (sh : Shared)
 
 end Sim
 
+
+/-! ## Optional statements: the slots of a game with all proofs simulated -/
+
+section Opt
+
+variable (Hb : Hashes) (p : Params)
+
+/-- The statement and the witness prefix of an optional statement. -/
+def qOf (y : Option SW) : Option (Statement × Bytes 16) := y.map fun y => (y.1, wPre y.2)
+
+/-- The sibling gate inputs of a slot's simulated proof (none without a statement). -/
+noncomputable def sibO (q : Option (Statement × Bytes 16)) (E : Cipher) (c : SimCoins p) :
+    List ByteArray :=
+  match q with
+  | some x => sibL Hb p x.1 E c x.2
+  | none => []
+
+/-- The active gate inputs of a slot's simulated proof. -/
+noncomputable def actO (q : Option (Statement × Bytes 16)) (E : Cipher) (c : SimCoins p) :
+    List ByteArray :=
+  match q with
+  | some x => actL Hb p x.1 E c
+  | none => []
+
+/-- The slot's label offset is zero. -/
+def zeroO (q : Option (Statement × Bytes 16)) (c : SimCoins p) : Prop :=
+  match q with
+  | some x => zeroC p c x.2
+  | none => False
+
+variable {p}
+
+/-- **The slot's witness prefix is a candidate** of the key set `S` on its simulated proof. -/
+def candO (q : Option (Statement × Bytes 16)) (E : Cipher) (c : SimCoins p)
+    (S : Finset (Bytes 37)) : Prop :=
+  match q with
+  | some x => x.2 ∈ candC Hb x.1 E c S
+  | none => False
+
+lemma slotErr_simO (y : Option SW) (c : SimCoins p) :
+    slotErr (y.map fun _ => simulate p c) → errC p c := by
+  rcases y with _ | y
+  · rintro ⟨e, he⟩; cases he
+  · exact (slotErr_sim c).1
+
+lemma slotZero_simO (y : Option SW) (c : SimCoins p) :
+    slotZero p y (y.map fun _ => simulate p c) ↔ zeroO p (qOf y) c := by
+  rcases y with _ | y
+  · exact Iff.rfl
+  · exact slotZero_sim y c
+
+lemma slotHit_simO (y : Option SW) (c : SimCoins p) (E : Cipher) (k : Bytes 37) :
+    slotHit Hb p y (y.map fun _ => simulate p c) E k ↔ enc5 k ∈ sibO Hb p (qOf y) E c := by
+  rcases y with _ | y
+  · show False ↔ enc5 k ∈ ([] : List ByteArray)
+    simp
+  · exact slotHit_sim Hb y c E k
+
+lemma slotKeys_simO (y : Option SW) (c : SimCoins p) (E : Cipher) :
+    slotKeys Hb p y (y.map fun _ => simulate p c) E =
+      (actO Hb p (qOf y) E c).toFinset.image (blk 37) ∪
+        (sibO Hb p (qOf y) E c).toFinset.image (blk 37) := by
+  rcases y with _ | y
+  · show (∅ : Finset (Bytes 37)) = ([] : List ByteArray).toFinset.image (blk 37) ∪
+      ([] : List ByteArray).toFinset.image (blk 37)
+    simp
+  · exact slotKeys_sim Hb y c E
+
+lemma sibO_size (hHb : HashesWF Hb) (q : Option (Statement × Bytes 16)) (E : Cipher)
+    (c : SimCoins p) {x : ByteArray} (hx : x ∈ sibO Hb p q E c) : x.size = 37 := by
+  rcases q with _ | q
+  · simp [sibO] at hx
+  · exact sibL_size Hb hHb _ _ _ _ hx
+
+lemma sibO_length_le (q : Option (Statement × Bytes 16)) (E : Cipher) (c : SimCoins p) :
+    (sibO Hb p q E c).length ≤ 312 := by
+  rcases q with _ | q
+  · simp [sibO]
+  · exact sibL_length_le Hb _ _ _ _
+
+set_option maxRecDepth 8000 in
+lemma candO_of_zero {q : Option (Statement × Bytes 16)} {E : Cipher} {c : SimCoins p}
+    {S : Finset (Bytes 37)} (h : zeroO p q c) : candO Hb q E c S := by
+  rcases q with _ | q
+  · exact h
+  · show q.2 ∈ candC Hb q.1 E c S
+    exact (mem_candC Hb (st := q.1) (E := E) (c := c) (S := S) (r := q.2)).2 (Or.inl h)
+
+set_option maxRecDepth 8000 in
+lemma candO_of_key {q : Option (Statement × Bytes 16)} {E : Cipher} {c : SimCoins p}
+    {S : Finset (Bytes 37)} (h : ∃ k ∈ S, enc5 k ∈ sibO Hb p q E c) : candO Hb q E c S := by
+  rcases q with _ | q
+  · obtain ⟨k, -, hk⟩ := h
+    simp [sibO] at hk
+  · show q.2 ∈ candC Hb q.1 E c S
+    exact (mem_candC Hb (st := q.1) (E := E) (c := c) (S := S) (r := q.2)).2 (Or.inr h)
+
+/-- A key of the event's read set or of three other proofs that is in a list `L`: a key of the
+public set `S` (the read set and the active inputs), or a sibling input of one of the three. -/
+lemma key_split {S R Ka Kb Kc : Finset (Bytes 37)} {la lb lc sa sb sc L : List ByteArray}
+    (hR : R ⊆ S) (hla : la.toFinset.image (blk 37) ⊆ S) (hlb : lb.toFinset.image (blk 37) ⊆ S)
+    (hlc : lc.toFinset.image (blk 37) ⊆ S)
+    (hKa : Ka = la.toFinset.image (blk 37) ∪ sa.toFinset.image (blk 37))
+    (hKb : Kb = lb.toFinset.image (blk 37) ∪ sb.toFinset.image (blk 37))
+    (hKc : Kc = lc.toFinset.image (blk 37) ∪ sc.toFinset.image (blk 37))
+    (hsa : ∀ x ∈ sa, x.size = 37) (hsb : ∀ x ∈ sb, x.size = 37) (hsc : ∀ x ∈ sc, x.size = 37)
+    (h : ∃ k ∈ R ∪ (Ka ∪ Kb ∪ Kc), enc5 k ∈ L) :
+    (∃ k ∈ S, enc5 k ∈ L) ∨ (∃ x ∈ sa, x ∈ L) ∨ (∃ x ∈ sb, x ∈ L) ∨ (∃ x ∈ sc, x ∈ L) := by
+  classical
+  obtain ⟨k, hk, hL⟩ := h
+  have hsib : ∀ {s : List ByteArray}, (∀ x ∈ s, x.size = 37) → k ∈ s.toFinset.image (blk 37) →
+      ∃ x ∈ s, x ∈ L := by
+    intro s hs hks
+    obtain ⟨x, hx, rfl⟩ := mem_image.1 hks
+    rw [List.mem_toFinset] at hx
+    refine ⟨x, hx, ?_⟩
+    have : enc5 (blk 37 x) = x := ba_blk_of_size (hs x hx)
+    rwa [this] at hL
+  subst hKa hKb hKc
+  simp only [mem_union] at hk
+  rcases hk with hk | ((hk | hk) | hk | hk) | hk | hk
+  · exact Or.inl ⟨k, hR hk, hL⟩
+  · exact Or.inl ⟨k, hla hk, hL⟩
+  · exact Or.inr (Or.inl (hsib hsa hk))
+  · exact Or.inl ⟨k, hlb hk, hL⟩
+  · exact Or.inr (Or.inr (Or.inl (hsib hsb hk)))
+  · exact Or.inl ⟨k, hlc hk, hL⟩
+  · exact Or.inr (Or.inr (Or.inr (hsib hsc hk)))
+
+end Opt
+
+/-! ## `bstar` with all four proofs simulated -/
+
+section Bstar
+
+variable {S : Type} {p₁ p₂ p₃ p₄ : Params} (Hb : Hashes) (G : Game S Out SW SW SW SW)
+
+/-- **`bstar` on simulated proofs**: a simulation failed, or some slot's witness prefix is a
+candidate of the public key set `R ∪ (the four proofs' active gate inputs)`, or a sibling gate
+input of an earlier proof is a sibling gate input of a later one. -/
+theorem bstar_sim (hHb : HashesWF Hb) (s : S) (E : Cipher) (c₁ : SimCoins p₁) (c₂ : SimCoins p₂)
+    (c₃ : SimCoins p₃) (c₄ : SimCoins p₄) (R : Finset (Bytes 37))
+    (o₁ o₂ o₃ o₄ : Option Out) (q₁ q₂ q₃ q₄ : Option (Statement × Bytes 16))
+    (ho₁ : o₁ = (G.σ₁ s).map fun _ => simulate p₁ c₁)
+    (ho₂ : o₂ = (G.σ₂ s o₁).map fun _ => simulate p₂ c₂)
+    (ho₃ : o₃ = (G.σ₃ s o₁ o₂).map fun _ => simulate p₃ c₃)
+    (ho₄ : o₄ = (G.σ₄ s o₁ o₂ o₃).map fun _ => simulate p₄ c₄)
+    (hq₁ : q₁ = qOf (G.σ₁ s)) (hq₂ : q₂ = qOf (G.σ₂ s o₁)) (hq₃ : q₃ = qOf (G.σ₃ s o₁ o₂))
+    (hq₄ : q₄ = qOf (G.σ₄ s o₁ o₂ o₃)) (Sp : Finset (Bytes 37))
+    (hSp : Sp = R ∪ ((actO Hb p₁ q₁ E c₁).toFinset.image (blk 37) ∪
+      (actO Hb p₂ q₂ E c₂).toFinset.image (blk 37) ∪ (actO Hb p₃ q₃ E c₃).toFinset.image (blk 37) ∪
+      (actO Hb p₄ q₄ E c₄).toFinset.image (blk 37)))
+    (h : bstarCore (p₁ := p₁) (p₂ := p₂) (p₃ := p₃) (p₄ := p₄) Hb G s o₁ o₂ o₃ o₄ E R) :
+    (errC p₁ c₁ ∨ errC p₂ c₂ ∨ errC p₃ c₃ ∨ errC p₄ c₄) ∨
+    (candO Hb q₁ E c₁ Sp ∨ candO Hb q₂ E c₂ Sp ∨ candO Hb q₃ E c₃ Sp ∨ candO Hb q₄ E c₄ Sp) ∨
+    ((∃ x ∈ sibO Hb p₁ q₁ E c₁, x ∈ sibO Hb p₂ q₂ E c₂) ∨
+      (∃ x ∈ sibO Hb p₁ q₁ E c₁ ++ sibO Hb p₂ q₂ E c₂, x ∈ sibO Hb p₃ q₃ E c₃) ∨
+      (∃ x ∈ sibO Hb p₁ q₁ E c₁ ++ sibO Hb p₂ q₂ E c₂ ++ sibO Hb p₃ q₃ E c₃,
+        x ∈ sibO Hb p₄ q₄ E c₄)) := by
+  classical
+  have hR : R ⊆ Sp := by rw [hSp]; exact subset_union_left
+  have ha₁ : (actO Hb p₁ q₁ E c₁).toFinset.image (blk 37) ⊆ Sp := by
+    rw [hSp]; intro k hk; simp only [mem_union]; tauto
+  have ha₂ : (actO Hb p₂ q₂ E c₂).toFinset.image (blk 37) ⊆ Sp := by
+    rw [hSp]; intro k hk; simp only [mem_union]; tauto
+  have ha₃ : (actO Hb p₃ q₃ E c₃).toFinset.image (blk 37) ⊆ Sp := by
+    rw [hSp]; intro k hk; simp only [mem_union]; tauto
+  have ha₄ : (actO Hb p₄ q₄ E c₄).toFinset.image (blk 37) ⊆ Sp := by
+    rw [hSp]; intro k hk; simp only [mem_union]; tauto
+  have hs₁ := fun x hx => sibO_size Hb hHb q₁ E c₁ (x := x) hx
+  have hs₂ := fun x hx => sibO_size Hb hHb q₂ E c₂ (x := x) hx
+  have hs₃ := fun x hx => sibO_size Hb hHb q₃ E c₃ (x := x) hx
+  have hs₄ := fun x hx => sibO_size Hb hHb q₄ E c₄ (x := x) hx
+  have hK₁ := slotKeys_simO Hb (G.σ₁ s) c₁ E
+  have hK₂ := slotKeys_simO Hb (G.σ₂ s o₁) c₂ E
+  have hK₃ := slotKeys_simO Hb (G.σ₃ s o₁ o₂) c₃ E
+  have hK₄ := slotKeys_simO Hb (G.σ₄ s o₁ o₂ o₃) c₄ E
+  rw [← ho₁, ← hq₁] at hK₁
+  rw [← ho₂, ← hq₂] at hK₂
+  rw [← ho₃, ← hq₃] at hK₃
+  rw [← ho₄, ← hq₄] at hK₄
+  have hH₁ : ∀ k, slotHit Hb p₁ (G.σ₁ s) o₁ E k ↔ enc5 k ∈ sibO Hb p₁ q₁ E c₁ := fun k => by
+    rw [ho₁, hq₁]; exact slotHit_simO Hb _ c₁ E k
+  have hH₂ : ∀ k, slotHit Hb p₂ (G.σ₂ s o₁) o₂ E k ↔ enc5 k ∈ sibO Hb p₂ q₂ E c₂ := fun k => by
+    rw [ho₂, hq₂]; exact slotHit_simO Hb _ c₂ E k
+  have hH₃ : ∀ k, slotHit Hb p₃ (G.σ₃ s o₁ o₂) o₃ E k ↔ enc5 k ∈ sibO Hb p₃ q₃ E c₃ := fun k => by
+    rw [ho₃, hq₃]; exact slotHit_simO Hb _ c₃ E k
+  have hH₄ : ∀ k, slotHit Hb p₄ (G.σ₄ s o₁ o₂ o₃) o₄ E k ↔ enc5 k ∈ sibO Hb p₄ q₄ E c₄ :=
+    fun k => by rw [ho₄, hq₄]; exact slotHit_simO Hb _ c₄ E k
+  have hZ₁ : slotZero p₁ (G.σ₁ s) o₁ → zeroO p₁ q₁ c₁ := by
+    rw [ho₁, hq₁]; exact (slotZero_simO _ c₁).1
+  have hZ₂ : slotZero p₂ (G.σ₂ s o₁) o₂ → zeroO p₂ q₂ c₂ := by
+    rw [ho₂, hq₂]; exact (slotZero_simO _ c₂).1
+  have hZ₃ : slotZero p₃ (G.σ₃ s o₁ o₂) o₃ → zeroO p₃ q₃ c₃ := by
+    rw [ho₃, hq₃]; exact (slotZero_simO _ c₃).1
+  have hZ₄ : slotZero p₄ (G.σ₄ s o₁ o₂ o₃) o₄ → zeroO p₄ q₄ c₄ := by
+    rw [ho₄, hq₄]; exact (slotZero_simO _ c₄).1
+  rcases h with he | h1 | h2 | h3 | h4
+  · left
+    rcases he with he | he | he | he
+    · exact Or.inl (slotErr_simO _ c₁ (ho₁ ▸ he))
+    · exact Or.inr (Or.inl (slotErr_simO _ c₂ (ho₂ ▸ he)))
+    · exact Or.inr (Or.inr (Or.inl (slotErr_simO _ c₃ (ho₃ ▸ he))))
+    · exact Or.inr (Or.inr (Or.inr (slotErr_simO _ c₄ (ho₄ ▸ he))))
+  · right
+    rcases h1 with hz | ⟨k, hk, hx⟩
+    · exact Or.inl (Or.inl (candO_of_zero Hb (hZ₁ hz)))
+    · rcases key_split hR ha₂ ha₃ ha₄ hK₂ hK₃ hK₄ hs₂ hs₃ hs₄ ⟨k, hk, (hH₁ k).1 hx⟩ with
+        h | ⟨x, hx, hx'⟩ | ⟨x, hx, hx'⟩ | ⟨x, hx, hx'⟩
+      · exact Or.inl (Or.inl (candO_of_key Hb h))
+      · exact Or.inr (Or.inl ⟨x, hx', hx⟩)
+      · exact Or.inr (Or.inr (Or.inl ⟨x, List.mem_append_left _ hx', hx⟩))
+      · exact Or.inr (Or.inr (Or.inr ⟨x, List.mem_append_left _ (List.mem_append_left _ hx'), hx⟩))
+  · right
+    rcases h2 with hz | ⟨k, hk, hx⟩
+    · exact Or.inl (Or.inr (Or.inl (candO_of_zero Hb (hZ₂ hz))))
+    · rcases key_split hR ha₁ ha₃ ha₄ hK₁ hK₃ hK₄ hs₁ hs₃ hs₄ ⟨k, hk, (hH₂ k).1 hx⟩ with
+        h | ⟨x, hx, hx'⟩ | ⟨x, hx, hx'⟩ | ⟨x, hx, hx'⟩
+      · exact Or.inl (Or.inr (Or.inl (candO_of_key Hb h)))
+      · exact Or.inr (Or.inl ⟨x, hx, hx'⟩)
+      · exact Or.inr (Or.inr (Or.inl ⟨x, List.mem_append_right _ hx', hx⟩))
+      · exact Or.inr (Or.inr (Or.inr ⟨x, List.mem_append_left _ (List.mem_append_right _ hx'), hx⟩))
+  · right
+    rcases h3 with hz | ⟨k, hk, hx⟩
+    · exact Or.inl (Or.inr (Or.inr (Or.inl (candO_of_zero Hb (hZ₃ hz)))))
+    · rcases key_split hR ha₁ ha₂ ha₄ hK₁ hK₂ hK₄ hs₁ hs₂ hs₄ ⟨k, hk, (hH₃ k).1 hx⟩ with
+        h | ⟨x, hx, hx'⟩ | ⟨x, hx, hx'⟩ | ⟨x, hx, hx'⟩
+      · exact Or.inl (Or.inr (Or.inr (Or.inl (candO_of_key Hb h))))
+      · exact Or.inr (Or.inr (Or.inl ⟨x, List.mem_append_left _ hx, hx'⟩))
+      · exact Or.inr (Or.inr (Or.inl ⟨x, List.mem_append_right _ hx, hx'⟩))
+      · exact Or.inr (Or.inr (Or.inr ⟨x, List.mem_append_right _ hx', hx⟩))
+  · right
+    rcases h4 with hz | ⟨k, hk, hx⟩
+    · exact Or.inl (Or.inr (Or.inr (Or.inr (candO_of_zero Hb (hZ₄ hz)))))
+    · rcases key_split hR ha₁ ha₂ ha₃ hK₁ hK₂ hK₃ hs₁ hs₂ hs₃ ⟨k, hk, (hH₄ k).1 hx⟩ with
+        h | ⟨x, hx, hx'⟩ | ⟨x, hx, hx'⟩ | ⟨x, hx, hx'⟩
+      · exact Or.inl (Or.inr (Or.inr (Or.inr (candO_of_key Hb h))))
+      · exact Or.inr (Or.inr (Or.inr ⟨x, List.mem_append_left _ (List.mem_append_left _ hx), hx'⟩))
+      · exact Or.inr (Or.inr (Or.inr ⟨x, List.mem_append_left _ (List.mem_append_right _ hx), hx'⟩))
+      · exact Or.inr (Or.inr (Or.inr ⟨x, List.mem_append_right _ hx, hx'⟩))
+
+end Bstar
+
+/-! ## Probabilities on a slot's coins -/
+
+section Peel
+
+variable {p : Params}
+
+/-- A bound for every value of the other coins of a slot is a bound over the slot's coins, with
+the simulator's field `d` separated. -/
+theorem pr_KS_d_le (P : KS p → Prop) {ε : ℝ}
+    (h : ∀ (ρ : Bytes 16) (sh : Shared) (c₁ : Bytes (16 * p.correctionBytes))
+      (c₂ : Bytes (p.nMask * p.nMultBytes)) (c₃ : Bytes 64) (c₅ : Bytes (16 * (p.qsDegree - 1)))
+      (V : VP p), pr (Bytes p.witnessBytes) (fun d => P ((ρ, (sh, (c₁, c₂, c₃, d, c₅))), V)) ≤ ε) :
+    pr (KS p) P ≤ ε := by
+  refine pr_le_of_snd fun V => pr_le_of_fst fun ρ => pr_le_of_fst fun sh => pr_le_of_fst fun c₁ =>
+    pr_le_of_fst fun c₂ => pr_le_of_fst fun c₃ => pr_le_of_snd fun c₅ => ?_
+  exact h ρ sh c₁ c₂ c₃ c₅ V
+
+/-- **A simulation fails with probability `noHitProb`** (no accepted grinding answer). -/
+theorem pr_errC_le : pr (KS p) (fun k => errC p k.1.2) ≤ noHitProb := by
+  refine pr_le_of_snd fun V => pr_le_of_fst fun ρ => pr_le_of_snd fun f => pr_le_of_fst fun iv =>
+    pr_le_of_snd fun r => ?_
+  refine le_of_eq (pr_congr fun g => ?_)
+  show errC p (((ρ, ((iv, g, r), f)), V) : KS p).1.2 ↔ firstHit g = none
+  unfold errC simulate
+  rcases hf : firstHit g with _ | ⟨ctr, δ⟩
+  · simp
+  · simp
+
+end Peel
+
 end VoleMole.ZK.Sim
