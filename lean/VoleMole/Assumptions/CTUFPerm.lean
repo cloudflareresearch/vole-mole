@@ -703,6 +703,138 @@ theorem combP_step (q : (DR ⊕ (Fin K × T)) ⊕ (Bool × (T × Z)))
         simp only [map_bind, map_pure, projRO_inr, Functor.map_map] at this ⊢
         exact this
 
+omit [DecidableEq Xc] [∀ d, SampleableType (AR d)] [SampleableType T] [SampleableType Z] in
+theorem fwdFind_append (L : PTab (T × Z)) (e : (T × Z) × (T × Z) × Bool) (b : T × Z) :
+    fwdFind (L ++ [e]) b = match fwdFind L b with
+      | some y => some y
+      | none => if e.1 = b then some e.2.1 else none := by
+  unfold fwdFind
+  rw [List.find?_append]
+  cases h : L.find? (fun e => e.1 = b) <;> simp [List.find?_cons]
+  split_ifs <;> simp_all
+
+omit [DecidableEq Xc] [∀ d, SampleableType (AR d)] [SampleableType T] [SampleableType Z] in
+theorem fwdFind_some {L : PTab (T × Z)} {b y : T × Z} (h : fwdFind L b = some y) :
+    ∃ e ∈ L, e.1 = b ∧ e.2.1 = y := by
+  unfold fwdFind at h
+  obtain ⟨e, he, rfl⟩ := Option.map_eq_some_iff.1 h
+  exact ⟨e, List.mem_of_find?_eq_some he, by simpa using List.find?_some he, rfl⟩
+
+omit [DecidableEq Xc] [∀ d, SampleableType (AR d)] [SampleableType T] [SampleableType Z] in
+theorem fwdFind_append_none {L : PTab (T × Z)} {e : (T × Z) × (T × Z) × Bool} {b : T × Z}
+    (h : fwdFind (L ++ [e]) b = none) : fwdFind L b = none ∧ e.1 ≠ b := by
+  rw [fwdFind_append] at h
+  cases h' : fwdFind L b with
+  | some y => rw [h'] at h; simp at h
+  | none => rw [h'] at h; simp only at h; split_ifs at h with he; exact ⟨rfl, he⟩
+
+omit [DecidableEq Xc] [DecidableEq T] [DecidableEq Z] in
+theorem ro_support (d : DR ⊕ ℕ) (ro : (specR (ARc AR (T × Z))).QueryCache) :
+    ∀ z ∈ support (((specR (ARc AR (T × Z))).randomOracle d).run ro),
+      z.2 = ro ∨ z.2 = ro.cacheQuery d z.1 := by
+  intro z hz
+  rw [randomOracle.run_eq] at hz
+  cases h : ro.toFn d with
+  | some u => rw [h] at hz; simp only [support_pure, Set.mem_singleton_iff] at hz; subst hz; exact .inl rfl
+  | none =>
+    rw [h] at hz
+    simp only [mem_support_bind_iff, support_pure, Set.mem_singleton_iff] at hz
+    obtain ⟨u, -, rfl⟩ := hz; exact .inr rfl
+
+omit [DecidableEq Xc] [∀ d, SampleableType (AR d)] [DecidableEq T] [DecidableEq Z]
+  [SampleableType T] [SampleableType Z] in
+theorem cacheQuery_inr_ne (ro : (specR (ARc AR (T × Z))).QueryCache) (n m : ℕ) (u : T × Z)
+    (h : m ≠ n) : (ro.cacheQuery (.inr n) u) (.inr m) = ro (.inr m) :=
+  QueryCache.cacheQuery_of_ne _ _ (by simpa using h)
+
+/-- **The invariant is preserved.** -/
+theorem combP_inv (hemb : Function.Injective emb) :
+    QueryImpl.PreservesInv (combP σ emb) (InvP (AR := AR) (K := K) emb) := by
+  intro q s hs z hz
+  obtain ⟨⟨L, n⟩, ⟨ro, sg⟩, tab⟩ := s
+  obtain ⟨h1, h2, h3⟩ := hs
+  dsimp only at h1 h2 h3
+  have hro : ro (.inr n) = none := h1 n le_rfl
+  rcases q with (d | q) | ⟨_ | _, b⟩
+  · erw [combP_world] at hz
+    erw [support_map] at hz
+    obtain ⟨r, hr, rfl⟩ := hz
+    refine ⟨fun m hm => ?_, h2, h3⟩
+    rcases ro_support (T := T) (Z := Z) (.inl d) ro r hr with he | he
+    · show r.2 (.inr m) = none; rw [he]; exact h1 m hm
+    · show r.2 (.inr m) = none; rw [he]
+      exact (QueryCache.cacheQuery_of_ne _ _ (by simp)).trans (h1 m hm)
+  · rw [combP_sign] at hz
+    erw [support_pure, Set.mem_singleton_iff] at hz; subst hz
+    exact ⟨h1, h2, h3⟩
+  · cases h : invFind L b with
+    | some x =>
+      rw [combP_inv_found σ emb b x _ h] at hz
+      erw [support_pure, Set.mem_singleton_iff] at hz; subst hz
+      exact ⟨h1, h2, h3⟩
+    | none =>
+      rw [combP_inv_fresh σ emb b L n ro sg tab h hro] at hz
+      erw [support_map] at hz
+      obtain ⟨u, -, rfl⟩ := hz
+      refine ⟨fun m hm => ?_, fun x hx => h2 x (fwdFind_append_none hx).1, fun e he hf x hx => ?_⟩
+      · show (ro.cacheQuery (.inr n) u) (.inr m) = none
+        dsimp only at hm
+        rw [cacheQuery_inr_ne _ _ _ _ (by omega)]
+        exact h1 m (by omega)
+      · simp only [List.mem_append, List.mem_singleton] at he
+        rcases he with he | rfl
+        · exact h3 e he hf x hx
+        · simp at hf
+  · cases h : fwdFind L b with
+    | some y =>
+      rw [combP_fwd_found σ emb b y _ h] at hz
+      erw [support_pure, Set.mem_singleton_iff] at hz; subst hz
+      exact ⟨h1, h2, h3⟩
+    | none =>
+      cases he : embInv emb b with
+      | none =>
+        rw [combP_fwd_coin σ emb b L n ro sg tab h he hro] at hz
+        erw [support_map] at hz
+        obtain ⟨u, -, rfl⟩ := hz
+        refine ⟨fun m hm => ?_, fun x hx => h2 x (fwdFind_append_none hx).1,
+          fun e he' hf x hx => ?_⟩
+        · show (ro.cacheQuery (.inr n) u) (.inr m) = none
+          dsimp only at hm
+          rw [cacheQuery_inr_ne _ _ _ _ (by omega)]
+          exact h1 m (by omega)
+        · simp only [List.mem_append, List.mem_singleton] at he'
+          rcases he' with he' | rfl
+          · exact h3 e he' hf x hx
+          · simp only at hx
+            rw [hx, embInv_emb hemb] at he; cases he
+      | some x =>
+        have hb := embInv_some he
+        have htab : tab x = none := h2 x (by rw [hb]; exact h)
+        rw [combP_fwd_com σ emb b x L n ro sg tab h he htab hro] at hz
+        simp only [mem_support_bind_iff, support_pure, Set.mem_singleton_iff] at hz
+        obtain ⟨t, -, u, -, rfl⟩ := hz
+        refine ⟨fun m hm => ?_, fun x' hx' => ?_, fun e he' hf x' hx' => ?_⟩
+        · show (ro.cacheQuery (.inr n) u) (.inr m) = none
+          dsimp only at hm
+          rw [cacheQuery_inr_ne _ _ _ _ (by omega)]
+          exact h1 m (by omega)
+        · obtain ⟨hL, hne⟩ := fwdFind_append_none hx'
+          have hx'x : x' ≠ x := fun hh => hne (by simp only; rw [hh, hb])
+          show Function.update tab x (some t) x' = none
+          rw [Function.update_of_ne hx'x]; exact h2 x' hL
+        · show Function.update tab x (some t) x' = some e.2.1.1
+          simp only [List.mem_append, List.mem_singleton] at he'
+          rcases he' with he' | rfl
+          · by_cases hx'x : x' = x
+            · subst hx'x
+              exfalso
+              obtain hh := h3 e he' hf x' hx'
+              rw [htab] at hh; cases hh
+            · rw [Function.update_of_ne hx'x]; exact h3 e he' hf x' hx'
+          · simp only at hx'
+            have : x' = x := hemb (by rw [← hx', hb])
+            subst this; simp
+
 end Core
 
 end VoleMole.Assumptions.UOV.CTUFPerm
