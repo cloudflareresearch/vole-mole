@@ -545,7 +545,8 @@ of [BMV08] is not available: it needs to simulate `A**`'s forgeries, and preimag
 
 **Follow-up: `ompr-cryptanalysis.md`** (attacks that use the oracle), and its second pass
 `ompr-cryptanalysis-2.md`: the scaling of Lemma S also serves the forger (`P(s) ∈ F·t` is 44
-quadrics; forgery `≈ 2^{138.5}` multiplications instead of `2^{140.3}`), statistics of the
+quadrics; forgery `≈ 2^{135.1}` multiplications instead of `2^{139.7}` in the model of the
+round-3 specification, its §8), statistics of the
 answers of every degree, quantum estimates, no multi-target gain.
 - OMPR⊕τ has the oracle of OMPR. Every oracle-aided route to the key is common to both games,
   and none beats key recovery from `pk`: vinegar collisions need `2^{292.5}` calls, linear

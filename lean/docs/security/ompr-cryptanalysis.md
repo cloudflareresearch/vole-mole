@@ -30,16 +30,21 @@ cryptanalysis.
 
 **Second pass.** `ompr-cryptanalysis-2.md` (**[OC2]**) reviews this note and treats four of its
 open items. Read the two together. Its findings, in short:
-- **The forgery baseline is `2^{138.5}`, not `2^{140.3}`** ([OC2] P1): `P(s) ∈ F·t` is 44
-  homogeneous quadrics, and a solution scales to a preimage of `t`. Read B0 below as `2^{138.5}`
-  multiplications (`2^{145.6}` bit operations). No attack of this note goes below it.
+- **The forgery baseline is lower than `2^{140.3}`** ([OC2] P1): `P(s) ∈ F·t` is 44
+  homogeneous quadrics, and a solution scales to a preimage of `t`. With Thomae–Wolf this is
+  `2^{138.5}` multiplications (`2^{145.6}` bit operations). In the cost model of the UOV round-3
+  specification, which also uses Hashimoto's reduction, it is **`2^{135.1}` multiplications,
+  `2^{142.2}` bit operations** ([OC2] §8), against `2^{139.7}` (`2^{146.8}`) without P1. Read B0
+  below as `2^{135.1}`. No attack of this note goes below it. P1 is not new: Ostuzzi, ePrint
+  2026/2247.
 - F2 needs two forgeries (the call `D(0)` pays for no target): `2^{139.5}`, above the baseline.
 - K2: zeros of `P` can be tested for being oil vectors; the right statement is that spans of
   answers meet `𝒪` as often as random subspaces do.
 - K3: the largest linear bias is `≤ 2^{−148}·ε^{−1/4}` for all but a fraction `ε` of keys
   (proved); a statistic of any degree fixed before the key has bias `≤ 2^{−296}` in root mean
   square (proved); `X(w)` has an exact formula in the matrices `T` with `L*(T) = w`.
-- S2: with P1 on both sides, 17 collinear shifts cost `2^{138.7}` against `2^{138.5}`.
+- S2: with P1 on both sides, 17 collinear shifts cost `2^{138.7}` against `2^{138.5}` with
+  Thomae–Wolf, and `2^{137.5}` against `2^{135.1}` in the model of the specification.
 - Quantum: Grover-hybrid forgery `≈ 2^{120}` gates; the oracle adds nothing.
 
 ## 0. Summary
@@ -60,7 +65,7 @@ number of challenge targets. "No gain" means: not below the baseline of the same
 
 | # | Attack | Uses | Cost or success probability | Status | Where |
 |---|---|---|---|---|---|
-| B0 | Direct forgery, Thomae–Wolf | `pk` | `2^{140.3}` (`2^{147.4}` bit operations) with 45 equations; **`2^{138.5}` (`2^{145.6}`) with the class attack P1 of [OC2] §3.1. Baseline for forgery** | estimate | [SA] §4.1, [OC2] §3.1 |
+| B0 | Direct forgery, Thomae–Wolf | `pk` | `2^{140.3}` (`2^{147.4}` bit operations) with 45 equations; `2^{138.5}` (`2^{145.6}`) with the class attack P1 of [OC2] §3.1. With Hashimoto's reduction as well (model of the round-3 specification): `2^{139.7}` (`2^{146.8}`) direct, **`2^{135.1}` (`2^{142.2}`) with P1. Baseline for forgery** | estimate | [SA] §4.1, [OC2] §3.1, §8 |
 | B1 | Intersection attack | `pk` | `2^{194}`. **Baseline for key recovery** | estimate | [UOS] B.5 |
 | K1 | Vinegar collision: two answers with proportional vinegars differ by an oil vector | (a) | probability `≤ Q²·2^{−585}`: `2^{−457}` at `Q = 2^64`; needs `2^{292.5}` calls | proved (ideal sampler); Lean `vinegar_reuse`; experimental | §2.1 |
 | K2 | Small sets of answers with dependent vinegars (they exist for `r ≥ 9` at `Q = 2^64`) | (a) | not detectable: a zero of `P` in the span of `r` answers is `2^{232}` times more often not an oil vector | proved count; heuristic | §2.2 |
@@ -523,7 +528,8 @@ have a uniform block `S`, as pqov's keys have for a uniform `P2`.
   which makes no calls; an adversary of running time `T` gains at most `Q²·2^{−585}` (K1) plus
   what it gains against cGPI from its calls. *Basis:* §1 (the oracle is fibre points and
   goodness), §2 (neither leads to the key below `2^{194}`), §3 (no call pays for two targets).
-  *Update:* the direct forgery is P1 of [OC2], `≈ 2^{138.5}` multiplications.
+  *Update:* the direct forgery is P1 of [OC2], `≈ 2^{135.1}` multiplications in the model of
+  the round-3 specification ([OC2] §8).
   *Caveats:* no outside cryptanalysis; cGPI is new and its low-advantage distinguishers are
   bounded only for linear statistics; classical only.
 - **A6.** Unchanged in substance, sharper in scope. The oracles coincide (S1), shifts chosen

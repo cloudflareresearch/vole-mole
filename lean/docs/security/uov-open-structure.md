@@ -451,14 +451,21 @@ Furue–Nakamura–Takagi), which the best forgery attack uses, the same model g
 multiplications (`ompr-shift-algebra.md` §4.1, `scripts/ompr-shift-algebra/c1_experiments.py`),
 and with the class attack of `ompr-cryptanalysis-2.md` §3.1 (44 homogeneous quadrics, then
 scaling) `2^{138.5}`;
-for `(112, 44)` it gives `2^{145.6}` bit operations, close to the direct-attack figure we
-remember from the UOV specification. Use the third row as the forgery cost.
+for `(112, 44)`, the uov-Ip of rounds 1 and 2, it gives `2^{145.6}` bit operations for the
+direct attack. The round-3 specification (August 2026) takes the minimum of Thomae–Wolf and
+Hashimoto's reduction and has `2^{146}` for the direct attack at `(119, 45)`; our script gives
+`2^{146.8}`, and `2^{142.2}` with the class attack (`ompr-cryptanalysis-2.md` §8,
+`scripts/ompr-cryptanalysis/p1_review.py`). Use the fifth row as the forgery cost. The
+specification also has a key-recovery attack that this table lacks: the wedge attack, `2^{144}`
+bit operations in its model.
 
 | Attack | Goal | multiplications | bit operations |
 |---|---|---|---|
 | direct, 45 equations in 45 unknowns (no variable-reduction trick) | forgery | `2^{144}` | `2^{151}` |
 | direct, after Thomae–Wolf variable reduction (one equation removed; `ompr-shift-algebra.md` §4.1) | forgery | `2^{140.3}` | `2^{147.4}` |
 | class attack P1 with Thomae–Wolf (`ompr-cryptanalysis-2.md` §3.1) | forgery | `2^{138.5}` | `2^{145.6}` |
+| direct, Hashimoto's reduction (round-3 specification §4.2) | forgery | `2^{139.7}` | `2^{146.8}` |
+| class attack P1 with Hashimoto's reduction (`ompr-cryptanalysis-2.md` §8) | forgery | `2^{135.1}` | `2^{142.2}` |
 | intersection | key | `2^{194}` | `2^{201}` |
 | Kipnis–Shamir | key | `2^{253}` | `2^{260}` |
 | best dedicated badness system (b) | GPI | `2^{255}` | `2^{262}` |

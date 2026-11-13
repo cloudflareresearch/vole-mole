@@ -55,9 +55,11 @@ conjectured security of GPI ≈ key recovery, `≈ 2^{201}` bit operations for u
 **Cryptanalysis of OMPR.** `ompr-cryptanalysis.md` studies attacks that use the oracle of OMPR
 and OMPR⊕τ (key recovery from the answers, one more preimage, shifts). It finds none below the
 oracle-free attacks: direct forgery `≈ 2^{140}` multiplications, key recovery `≈ 2^{194}`.
-`ompr-cryptanalysis-2.md` is a second pass. It lowers the forgery figure to `≈ 2^{138.5}`
-(`2^{145.6}` bit operations): `P(s) ∈ F·t` is 44 homogeneous quadrics, and a solution scales to a
-preimage of `t`. This is an attack on the UOV problem, without calls. It also bounds statistics
+`ompr-cryptanalysis-2.md` is a second pass. It lowers the forgery figure: `P(s) ∈ F·t` is 44
+homogeneous quadrics, and a solution scales to a preimage of `t` (known: Ostuzzi, ePrint
+2026/2247). In the cost model of the UOV round-3 specification this is `≈ 2^{135.1}`
+multiplications, `2^{142.2}` bit operations, against `2^{146.8}` without it and NIST level 1's
+`2^{143}` (its §8). This is an attack on the UOV problem, without calls. It also bounds statistics
 of the answers of every degree, gives quantum estimates (Grover-hybrid forgery `≈ 2^{120}`
 gates, above AES-128 key search at every depth limit), and finds no multi-target gain.
 
