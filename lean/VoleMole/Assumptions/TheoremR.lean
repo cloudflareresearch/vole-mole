@@ -1241,6 +1241,214 @@ theorem lot_step (hτ : 7 ≤ τ) (hq : 1 ≤ q) (o : Op DR X T S τ) (s : JSt A
               rw [ENNReal.ofReal_mul (by positivity), ENNReal.ofReal_pow (by positivity),
                 ENNReal.ofReal_natCast, ENNReal.inv_mul_cancel_left hτ0 hτt]
 
+omit [DecidableEq DR] [∀ d, SampleableType (AR d)] [NeZero τ] [SampleableType T] in
+/-- **Accounting** (`ompr-shift-algebra.md` §2.2, step 3). At a state of the invariant without a
+bad event and without a win of the lottery, if the reduction's claims win OMPR with `c` calls,
+`M`'s pick wins OMPR^free. -/
+theorem free_of_win (hcls : Equivalence cls) {s : JSt AR τ q X T S} (hI : Inv cls rel pk n s)
+    (cl : List (X × S)) (c J K₀ : ℕ)
+    (hw : Wins c (goodPre rel) pk cl (π s).toCh) (hb : s.1.bad = false) (hh : s.1.hit = false)
+    (hj : s.1.nj ≤ J) (hk : s.1.K ≤ K₀) :
+    ∃ x sg t, pick cls cl s.1 = some (x, sg) ∧ s.2.tg x = some (t, ()) ∧ rel pk sg t ∧ t ≠ 0 ∧
+      (∀ z ∈ s.2.calls, ¬ cls z t) ∧ s.2.nt ≤ n + J ∧ s.2.calls.length ≤ c + (q + 1) * K₀ := by
+  obtain ⟨hlen, hnd, hiq, hgood⟩ := hw
+  set all : List (XM X T × S) := (cl.map fun p => ((Sum.inl p.1 : XM X T), p.2)) ++ s.1.jc
+    with hall
+  have hA : (all.map Prod.fst).Nodup := by
+    rw [hall, List.map_append, List.map_map]
+    refine List.Nodup.append ?_ hI.jc_nd fun x hx₁ hx₂ => ?_
+    · have : (Prod.fst ∘ fun p : X × S => ((Sum.inl p.1 : XM X T), p.2)) =
+          (Sum.inl : X → XM X T) ∘ Prod.fst := rfl
+      rw [this, ← List.map_map]
+      exact hnd.map Sum.inl_injective
+    · obtain ⟨p, -, rfl⟩ := List.mem_map.1 hx₁
+      obtain ⟨p', hp', hpe⟩ := List.mem_map.1 hx₂
+      obtain ⟨H, j, hl, -⟩ := hI.jc_lab p' hp'
+      rw [hl] at hpe
+      simp at hpe
+  have hB : ∀ p ∈ all, ∃ t, s.1.tg p.1 = some t ∧ rel pk p.2 t := by
+    intro p hp
+    rcases List.mem_append.1 hp with hp | hp
+    · obtain ⟨p', hp', rfl⟩ := List.mem_map.1 hp
+      obtain ⟨t, u, ht, hr⟩ := hgood p' hp'
+      have ht' : (s.1.tg (Sum.inl p'.1)).map (fun t => (t, ())) = some (t, u) := ht
+      cases htg : s.1.tg (Sum.inl p'.1) with
+      | none => simp [htg] at ht'
+      | some t₀ =>
+        simp only [htg, Option.map_some, Option.some.injEq, Prod.mk.injEq] at ht'
+        exact ⟨t₀, rfl, ht'.1 ▸ hr⟩
+    · exact hI.jc_good p hp
+  have hC : all.length = c + 1 + q * s.1.K := by
+    simp [hall, hlen, hI.jc_len]
+  have hD : ∃ p ∈ all, ∀ t, s.1.tg p.1 = some t → ∀ z ∈ s.1.calls, ¬ cls z t := by
+    by_contra hcon
+    push_neg at hcon
+    have hch : ∀ x ∈ (all.map Prod.fst).toFinset, ∃ z, z ∈ s.1.chg.toFinset ∧
+        ∃ t, s.1.tg x = some t ∧ cls z t := by
+      intro x hx
+      obtain ⟨p, hp, rfl⟩ := List.mem_map.1 (List.mem_toFinset.1 hx)
+      obtain ⟨t, ht, z, hz, hc⟩ := hcon p hp
+      exact ⟨z, List.mem_toFinset.2 (hI.chgd hb z hz p.1 t ht hc), t, ht, hc⟩
+    choose! f hf using hch
+    have hcard : (all.map Prod.fst).toFinset.card ≤ s.1.chg.toFinset.card := by
+      refine Finset.card_le_card_of_injOn f (fun x hx => (hf x hx).1) fun x₁ hx₁ x₂ hx₂ he => ?_
+      obtain ⟨-, t₁, ht₁, hc₁⟩ := hf x₁ hx₁
+      obtain ⟨-, t₂, ht₂, hc₂⟩ := hf x₂ hx₂
+      rw [he] at hc₁
+      exact hI.inj hb x₁ x₂ t₁ t₂ ht₁ ht₂ (hcls.trans (hcls.symm hc₁) hc₂)
+    rw [List.toFinset_card_of_nodup hA, List.length_map, hC] at hcard
+    have h1 := List.toFinset_card_le s.1.chg
+    have h2 := hI.chg_len
+    have h3 := hI.lot hh
+    have h4 : s.1.iq ≤ c := hiq
+    omega
+  obtain ⟨p₀, hp₀, hfree⟩ := hD
+  obtain ⟨t₀, ht₀, -⟩ := hB p₀ hp₀
+  cases hf : pick cls cl s.1 with
+  | none =>
+    have := List.find?_eq_none.1 hf p₀ hp₀
+    simp only [ht₀, Bool.and_eq_true, decide_eq_true_eq, List.all_eq_true, Bool.not_eq_true',
+      decide_eq_false_iff_not, not_and, not_forall] at this
+    obtain ⟨z, hz, hc⟩ := this (hI.ne0 hb p₀.1 t₀ ht₀)
+    exact absurd (not_not.1 hc) (hfree t₀ ht₀ z hz)
+  | some p₁ =>
+    have hmem : p₁ ∈ all := List.mem_of_find?_eq_some hf
+    have hpred := List.find?_some hf
+    obtain ⟨t₁, ht₁, hr₁⟩ := hB p₁ hmem
+    simp only [ht₁, Bool.and_eq_true, decide_eq_true_eq, List.all_eq_true, Bool.not_eq_true',
+      decide_eq_false_iff_not] at hpred
+    refine ⟨p₁.1, p₁.2, t₁, rfl, ?_, hr₁, hpred.1, ?_, ?_, ?_⟩
+    · rw [hI.tg_eq, ht₁]; rfl
+    · rw [hI.calls_eq]; exact hpred.2
+    · have := hI.nt_eq; omega
+    · rw [hI.calls_eq, hI.calls_len]
+      have h4 : s.1.iq ≤ c := hiq
+      have := Nat.mul_le_mul_left (q + 1) hk
+      omega
+
 end LotteryJoint
+
+/-! ## Theorem R -/
+
+section Main
+
+variable {DR : Type} [DecidableEq DR] {AR : DR → Type} [∀ d, SampleableType (AR d)]
+  {τ q : ℕ} [NeZero τ] {X : Type} [DecidableEq X] {T S : Type} [AddCommGroup T]
+  [SampleableType T] [DecidableEq T]
+  (cls : T → T → Prop) [DecidableRel cls]
+  {PK SK : Type} (tr : Trapdoor PK SK T S) [∀ pk s t, Decidable (tr.IsPre pk s t)] (n : ℕ)
+
+/-- **The joint experiment**: `M` in the OMPR^free game, with `M`'s state. -/
+def jointExp (R : PK → ProbComp (OracleComp (specRed AR τ q X T S) (List (X × S)))) :
+    ProbComp (PK × List (X × S) × JSt AR τ q X T S) := do
+  let kp ← tr.keyGen
+  let r ← R kp.1
+  let z ← (simulateQ (jImpl cls tr.IsPre kp.1 (tr.D kp.2)) (simulateQ prog r)).run (m0 n, f0)
+  pure (kp.1, z.1, z.2)
+
+/-- **The probability of a bad event on values** (E1–E3 of `ompr-shift-algebra.md` §2.2, as
+flagged by `MSt.addT` and `MSt.complete`) in the joint experiment. -/
+noncomputable def badPr (R : PK → ProbComp (OracleComp (specRed AR τ q X T S) (List (X × S)))) :
+    ℝ≥0∞ :=
+  Pr{let r ← jointExp cls tr n R}[r.2.2.1.bad = true]
+
+/-- **The simulation is exact**: the experiment is the joint experiment, projected. -/
+theorem redExp_eqd (R : PK → ProbComp (OracleComp (specRed AR τ q X T S) (List (X × S)))) :
+    redExp tr n R =ᵈ (fun r => (r.1, r.2.1, π r.2.2)) <$> jointExp cls tr n R := by
+  simp only [redExp, jointExp, map_bind, map_pure]
+  refine EvalDistEq.bind_right _ fun kp => EvalDistEq.bind_right _ fun r => ?_
+  have h := LazyIdeal.simulateQ_proj_eqd_inv (jImpl cls tr.IsPre kp.1 (tr.D kp.2))
+    (μR tr.IsPre kp.1 (tr.D kp.2)) π (fun _ => True) (fun _ _ _ _ _ => trivial)
+    (fun o s _ => by rw [proj_step]) (simulateQ prog r) (m0 n, f0) trivial
+  have h0 : π (m0 n, f0) = (r0 n : RSt AR τ q X T S) := rfl
+  rw [h0] at h
+  have := h.symm.bind_left (fun z => pure (kp.1, z.1, z.2))
+  simpa only [bind_map_left] using this
+
+/-- `M`'s OMPR^free experiment is the joint experiment with `M`'s pick. -/
+theorem freeExp_redM (R : PK → ProbComp (OracleComp (specRed AR τ q X T S) (List (X × S)))) :
+    freeExp tr (redM cls tr.IsPre n R) =
+      (fun r => (r.1, pick cls r.2.1 r.2.2.1, r.2.2.2)) <$> jointExp cls tr n R := by
+  simp only [freeExp, redM, jointExp, map_bind, map_pure, bind_map_left, simulateQ_map,
+    StateT.run_map, collapseJ, Functor.map_map, bind_assoc, pure_bind]
+
+/-- The invariant holds at the end of the joint experiment. -/
+theorem jointExp_inv (hsym : ∀ a b, cls a b → cls b a)
+    (R : PK → ProbComp (OracleComp (specRed AR τ q X T S) (List (X × S))))
+    (r : PK × List (X × S) × JSt AR τ q X T S) (hr : r ∈ support (jointExp cls tr n R)) :
+    Inv cls tr.IsPre r.1 n r.2.2 := by
+  simp only [jointExp, mem_support_bind_iff, support_pure, Set.mem_singleton_iff] at hr
+  obtain ⟨kp, -, b, -, z, hz, rfl⟩ := hr
+  exact simulateQ_run_preservesInv _ _ (jImpl_inv cls tr.IsPre (tr.D kp.2) n hsym) _ _
+    (inv_init cls tr.IsPre kp.1 n) z hz
+
+/-- **The lottery bound** (`ompr-shift-algebra.md` §2.2, step 2; [OR] A4, steps 3–4): in the
+joint experiment the lottery is won, `W > q·K` after some completed run, with probability at
+most `2·τ^{−(q+1)}`. -/
+theorem lottery_le (hsym : ∀ a b, cls a b → cls b a) (hτ : 7 ≤ τ) (hq : 1 ≤ q)
+    (R : PK → ProbComp (OracleComp (specRed AR τ q X T S) (List (X × S)))) :
+    Pr{let r ← jointExp cls tr n R}[r.2.2.1.hit = true] ≤ 2 / (τ : ℝ≥0∞) ^ (q + 1) := by
+  have h0 : ENNReal.ofReal (pot (m0 n : MSt τ q X T S)) = 2 / (τ : ℝ≥0∞) ^ (q + 1) := by
+    have hτ0 : (0 : ℝ) < (τ : ℝ) ^ (q + 1) := by
+      have : (0 : ℝ) < τ := by exact_mod_cast (by omega : 0 < τ)
+      positivity
+    have : pot (m0 n : MSt τ q X T S) = 2 / (τ : ℝ) ^ (q + 1) := by
+      simp [pot, m0, θR]
+    rw [this, ENNReal.ofReal_div_of_pos hτ0, ENNReal.ofReal_pow (by positivity),
+      ENNReal.ofReal_natCast, ENNReal.ofReal_ofNat]
+  unfold jointExp
+  refine prEvent_bind_le_of_forall_le _ _ _ fun kp => prEvent_bind_le_of_forall_le _ _ _ fun r => ?_
+  have h := potential_le (jImpl cls tr.IsPre kp.1 (tr.D kp.2)) (Inv cls tr.IsPre kp.1 n)
+    (jImpl_inv cls tr.IsPre (tr.D kp.2) n hsym) (fun s => ENNReal.ofReal (pot s.1))
+    (fun s => s.1.hit = true) (fun s hs => by simp [le_pot_of_hit s.1 hs])
+    (fun o s hI β f p hf => lot_step cls tr.IsPre kp.1 (tr.D kp.2) n hτ hq o s hI β f p hf)
+    (simulateQ prog r) (m0 n, f0) (inv_init cls tr.IsPre kp.1 n)
+  rw [h0] at h
+  have e : (do
+      let z ← (simulateQ (jImpl cls tr.IsPre kp.1 (tr.D kp.2)) (simulateQ prog r)).run (m0 n, f0)
+      pure (kp.1, z.1, z.2)) = (fun z => (kp.1, z.1, z.2)) <$>
+        (simulateQ (jImpl cls tr.IsPre kp.1 (tr.D kp.2)) (simulateQ prog r)).run (m0 n, f0) :=
+    (map_eq_bind_pure_comp _ _ _).symm
+  rw [e, prEvent_map]
+  exact h
+
+/-- **Theorem R** (`ompr-shift-algebra.md` §2). Let `τ ≥ 7`, `q ≥ 1`, and let `cls` be an
+equivalence relation on targets (for UOV: equality up to a nonzero scalar). For every reduction
+`R` that is black-box in the adversary only, the probability that `R` wins OMPR with `n` targets
+and `c` calls when run with `A**_D`, having drawn at most `J` junk targets and completed at most
+`K₀` runs, is at most
+
+    2·τ^{−(q+1)} + Adv^{free}(M; n + J, c + (q + 1)·K₀) + Pr[bad event on values],
+
+with `M = redM cls tr.IsPre n R` an explicit OMPR^free adversary. -/
+theorem thmR (hcls : Equivalence cls) (hτ : 7 ≤ τ) (hq : 1 ≤ q) (c J K₀ : ℕ)
+    (R : PK → ProbComp (OracleComp (specRed AR τ q X T S) (List (X × S)))) :
+    Pr{let r ← redExp tr n R}[Wins c (goodPre tr.IsPre) r.1 r.2.1 r.2.2.toCh ∧
+        r.2.2.nj ≤ J ∧ r.2.2.nc ≤ K₀] ≤
+      2 / (τ : ℝ≥0∞) ^ (q + 1) +
+        advOMPRFree tr cls (n + J) (c + (q + 1) * K₀) (redM cls tr.IsPre n R) +
+        badPr cls tr n R := by
+  have hsym : ∀ a b, cls a b → cls b a := fun _ _ => hcls.symm
+  rw [(redExp_eqd cls tr n R).prEvent_eq, prEvent_map]
+  unfold advOMPRFree badPr
+  rw [freeExp_redM, prEvent_map]
+  refine (prEvent_mono_of_support (jointExp cls tr n R) _
+    (fun r => r.2.2.1.hit = true ∨
+      FreeWin tr cls (n + J) (c + (q + 1) * K₀) (r.1, pick cls r.2.1 r.2.2.1, r.2.2.2) ∨
+      r.2.2.1.bad = true) fun r hr hw => ?_).trans ?_
+  · by_cases hh : r.2.2.1.hit = true
+    · exact Or.inl hh
+    by_cases hb : r.2.2.1.bad = true
+    · exact Or.inr (Or.inr hb)
+    simp only [Bool.not_eq_true] at hh hb
+    obtain ⟨x, sg, t, hp, htg, hrel, ht0, hfree, hnt, hcl⟩ :=
+      free_of_win cls tr.IsPre r.1 n hcls (jointExp_inv cls tr n hsym R r hr) r.2.1 c J K₀
+        hw.1 hb hh hw.2.1 hw.2.2
+    exact Or.inr (Or.inl ⟨x, sg, t, (), hp, htg, hrel, ht0, hfree, hnt, hcl⟩)
+  · refine (prEvent_or_le _ _ _).trans ?_
+    rw [add_assoc]
+    exact add_le_add (lottery_le cls tr n hsym hτ hq R) (prEvent_or_le _ _ _)
+
+end Main
 
 end VoleMole.Assumptions.TheoremR
