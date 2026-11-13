@@ -2,6 +2,7 @@ import VoleMole.Theft.RatatouilleLean
 import VoleMole.Theft.MoussakaLean
 import VoleMole.Theft.SimExtractLean
 import VoleMole.Theft.Tables
+import VoleMole.Theft.ComOW
 
 /-!
 # Audit of the non-malleability theorems (`Theft/`)
@@ -246,5 +247,32 @@ theorem redirect_freshR (A : Moussaka.Thief G S) (o₁ b cd : Bytes) (hcd : cd �
   exact hcd (RedeemInstance.mk.inj heq).2.2.2.2
 
 end Mous
+
+/-! ## One-wayness of `Com` in the random-table model (`Theft/ComOW.lean`) -/
+
+section OW
+
+open VoleMole.Theft.ComOW VoleMole.Privacy.ComHide
+
+lemma card_coins (n : ℕ) : Fintype.card (Coins n) = 2 ^ (8 * n) := by
+  rw [Fintype.card_fun, Fintype.card_fin, Prob.card_uint8, pow_mul]
+
+/-- **`owAdvColRO_num`'s hypotheses hold** at Ratatouille's sizes (24-byte nullifiers, 16-byte
+openings, 8-byte credit values, 32-byte commitments; cells keyed by the pair `(nf, r)`), for an
+inverter that makes one query and outputs the cell it read. -/
+example :
+    owAdvRO (ι := Bool) (N := Coins 24) (R := Coins 16) (K := Coins 24 × Coins 16)
+        (Y := Coins 8 → Coins 32) Prod.mk
+        (fun g _ _ => ((fun _ => 0, fun _ => 0), (g (fun _ => 0, fun _ => 0) (fun _ => 0) 0 == 0,
+          fun _ => 0, fun _ => 0)))
+        (fun v u a => v a.2.2 = u a.1 a.2.1) ≤ (4 * 1 + 8 : ℕ) / 2 ^ 128 :=
+  owAdvColRO_num (card_coins 16) (card_coins 8) (card_coins 32) Prod.mk
+    (fun _ _ _ _ h => ⟨(Prod.mk.inj h).1, (Prod.mk.inj h).2⟩) _ fun _ _ =>
+    QTree.ask (fun _ => 0, fun _ => 0)
+      (fun (v : Coins 8 → Coins 32) _ =>
+        ((fun _ => 0, fun _ => 0), (v (fun _ => 0) 0 == 0, fun _ => 0, fun _ => 0))) 0
+      fun _ => QTree.ret _ 0
+
+end OW
 
 end VoleMole.Audit.Theft
