@@ -362,6 +362,7 @@ import VoleMole.Audit.UnboundROM
 import VoleMole.Audit.IdealTag
 import VoleMole.Audit.SimExtract
 import VoleMole.Audit.UnboundOMUF
+import VoleMole.Audit.UnboundRest
 import VoleMole.Audit.OMPRShift
 import VoleMole.Audit.T6Pomfrit
 import VoleMole.Audit.TheoremR
