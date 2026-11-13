@@ -109,6 +109,75 @@ theorem count_le_per_variant [DecidableEq ι] [DecidableEq γ] (R : Finset ρ) (
   obtain ⟨y, hy, hfy⟩ := hsigned j hj
   exact hne y hy hfy
 
+/-- **The deterministic core of Theorem U1** (`moussaka-unbound.md` §4, steps 3–4), in the form the
+game reduction uses (`ROM/MoussakaUnboundOMUF.lean`).
+
+Inputs `x : X` of either commitment (`isU x`: a `UCom` input; otherwise a bound `Com` input)
+commit to `com x`, carry an issuance context `ctxOf x` and, for `UCom` inputs, a key `keyOf x`.
+`issU` lists the accepted unbound issuances `(t, ctx_iss)`, each with an extracted `UCom` input in
+`S` with that commitment and context; `issB` the accepted bound issuances' `t`, each with an
+extracted bound input in `S`; `red` the accepted unbound redemptions `((ctx_iss, ctx_red), nf)`,
+each with an extracted `UCom` input in `S' ⊆ S` with that context whose key gives the nullifier,
+`D (keyOf x) ctx_red = nf`. If, for some `(ctx_iss, ctx_red)`, more distinct nullifiers were
+accepted than distinct commitments were signed through unbound issuance for `ctx_iss`, then two
+distinct extracted inputs collide (joint binding of `Com ∪ UCom`), or some redemption input
+commits to a target that was never signed, by either variant and for any context. -/
+theorem collision_or_forgery_unbound {X τ C C' ν κ : Type*} [DecidableEq τ] [DecidableEq C]
+    [DecidableEq C'] [DecidableEq ν]
+    (com : X → τ) (isU : X → Prop) (ctxOf : X → C) (keyOf : X → κ) (D : κ → C' → ν)
+    (S S' : Set X) (hS' : S' ⊆ S)
+    (issU : List (τ × C)) (issB : List τ) (red : List ((C × C') × ν))
+    (hissU : ∀ q ∈ issU, ∃ x ∈ S, isU x ∧ com x = q.1 ∧ ctxOf x = q.2)
+    (hissB : ∀ t ∈ issB, ∃ x ∈ S, ¬isU x ∧ com x = t)
+    (hred : ∀ j ∈ red, ∃ x ∈ S', isU x ∧ ctxOf x = j.1.1 ∧ D (keyOf x) j.1.2 = j.2)
+    (c : C) (cr : C') (hwin : ((issU.filter (·.2 = c)).map (·.1)).toFinset.card <
+      ((red.filter (·.1 = (c, cr))).map (·.2)).toFinset.card) :
+    (∃ x ∈ S, ∃ x' ∈ S, x ≠ x' ∧ com x = com x') ∨
+      (∃ x ∈ S', com x ∉ issU.map (·.1) ∧ com x ∉ issB) := by
+  classical
+  by_contra hno
+  have hcoll : ∀ x ∈ S, ∀ x' ∈ S, x ≠ x' → com x ≠ com x' :=
+    fun x hx x' hx' hne he => hno (Or.inl ⟨x, hx, x', hx', hne, he⟩)
+  have hforge : ∀ x ∈ S', com x ∈ issU.map (·.1) ∨ com x ∈ issB := fun x hx => by
+    by_contra h
+    rw [not_or] at h
+    exact hno (Or.inr ⟨x, hx, h.1, h.2⟩)
+  set R := ((red.filter (·.1 = (c, cr))).map (·.2)).toFinset with hR
+  set L := ((issU.filter (·.2 = c)).map (·.1)).toFinset with hL
+  -- an extracted input for every accepted nullifier of `(c, cr)`
+  have hchoose : ∀ n ∈ R, ∃ x ∈ S', isU x ∧ ctxOf x = c ∧ D (keyOf x) cr = n := by
+    intro n hn
+    simp only [hR, List.mem_toFinset, List.mem_map, List.mem_filter, decide_eq_true_eq] at hn
+    obtain ⟨j, ⟨hj, hjc⟩, rfl⟩ := hn
+    obtain ⟨x, hx, hu, h1, h2⟩ := hred j hj
+    refine ⟨x, hx, hu, by rw [h1, hjc], by simpa [hjc] using h2⟩
+  have : Nonempty X := by
+    obtain ⟨n, hn⟩ := Finset.card_pos.1 (lt_of_le_of_lt (Nat.zero_le _) hwin)
+    exact ⟨(hchoose n hn).choose⟩
+  choose! op hop using hchoose
+  -- distinct nullifiers in one context: distinct inputs (`D` is a function), distinct commitments
+  have hinj : Set.InjOn (fun n => com (op n)) R := by
+    intro n hn n' hn' h
+    by_contra hne
+    have hx : op n ≠ op n' := fun e =>
+      hne (by rw [← (hop n hn).2.2.2, ← (hop n' hn').2.2.2, e])
+    exact hcoll _ (hS' (hop n hn).1) _ (hS' (hop n' hn').1) hx h
+  obtain ⟨n, hn, hnot⟩ := VoleMole.Moussaka.exists_unsigned_of_card_lt R L _ hinj hwin
+  obtain ⟨hxS, hxu, hxc, -⟩ := hop n hn
+  rcases hforge _ hxS with hu | hb
+  · -- signed through unbound issuance, but for another context: a collision
+    obtain ⟨q, hq, hqt⟩ := List.mem_map.1 hu
+    obtain ⟨y, hy, -, hyt, hyc⟩ := hissU q hq
+    have hqc : q.2 ≠ c := fun e => hnot (by
+      simp only [hL, List.mem_toFinset, List.mem_map, List.mem_filter, decide_eq_true_eq]
+      exact ⟨q, ⟨hq, e⟩, hqt⟩)
+    have hne : y ≠ op n := fun e => hqc (by rw [← hyc, e, hxc])
+    exact hcoll _ hy _ (hS' hxS) hne (hyt.trans hqt)
+  · -- signed through bound issuance: a bound input and a `UCom` input collide
+    obtain ⟨y, hy, hyu, hyt⟩ := hissB _ hb
+    have hne : y ≠ op n := fun e => hyu (e ▸ hxu)
+    exact hcoll _ hy _ (hS' hxS) hne hyt
+
 end OneMore
 
 /-! ## Corollary U2 and Proposition U3 -/
