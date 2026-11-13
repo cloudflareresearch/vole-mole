@@ -573,6 +573,382 @@ lemma j_fin (H : List T) (δs : List (Fin τ → T)) (ans : List S) (s : JSt AR 
         ((specR (WA AR τ q T)).randomOracle (.inr (.inr H))).run s.2.ro := by
   simp [jImpl, μM, h, ho, sim_fqA, sim_calls']
 
+/-! ### The joint experiment projects to the experiment -/
+
+omit [DecidableEq DR] [∀ d, SampleableType (AR d)] [NeZero τ] [AddCommGroup T] [SampleableType T]
+  [DecidableEq T] in
+lemma map_upd (g : X → Option T) (x : X) (t : T) :
+    (fun y => Option.map (fun t => (t, ())) (Function.update g x (some t) y)) =
+      Function.update (fun y => Option.map (fun t => (t, ())) (g y)) x (some (t, ())) := by
+  funext y
+  by_cases h : y = x
+  · subst h; simp
+  · simp [h]
+
+/-- Every atomic operation of the joint experiment, projected, is the experiment's. -/
+theorem proj_step (o : Op DR X T S τ) (s : JSt AR τ q X T S) :
+    (fun z => (z.1, π z.2)) <$> (jImpl cls rel pk pre o).run s = (μR rel pk pre o).run (π s) := by
+  cases o with
+  | w d => rw [j_w]; simp [μR, π]
+  | lst hs => rw [j_lst]; simp [μR, π]
+  | tgt x =>
+    by_cases h : s.1.rem = 0
+    · rw [j_tgt_zero _ _ _ _ _ _ h]; simp [μR, π, h]
+    · rw [j_tgt _ _ _ _ _ _ h]
+      simp [μR, π, h, MSt.addT, map_upd]
+  | inv t => rw [j_inv]; simp [μR, π]
+  | junk H j =>
+    cases h : s.1.tg (.inr (H, j)) with
+    | some t => rw [j_junk_some _ _ _ _ _ _ _ t h]; simp [μR, π, h]
+    | none =>
+      rw [j_junk _ _ _ _ _ _ _ h]
+      simp [μR, π, h, MSt.addT]
+      rfl
+  | fin H δs ans =>
+    cases h : valid (q := q) rel pk (fun k => s.1.tg (.inr k)) H ans with
+    | false => rw [j_fin_invalid _ _ _ _ _ _ _ _ h]; simp [μR, π, h]
+    | true =>
+      cases ho : s.1.out H with
+      | some o => rw [j_fin_some _ _ _ _ _ _ _ _ h o ho]; simp [μR, π, h, ho]
+      | none =>
+        rw [j_fin _ _ _ _ _ _ _ _ h ho]
+        simp [μR, π, h, ho, MSt.complete]
+
+/-! ### The invariant of the joint experiment -/
+
+variable (n : ℕ)
+
+/-- **The invariant of the joint experiment.** `M`'s record agrees with the challenger's state
+(`tg_eq`, `calls_eq`); the counters (`nt_eq`, `calls_len`, `chg_len`); without a win of the
+lottery, `W ≤ q·K` (`lot`); without a bad event, targets are nonzero and lie in distinct classes
+(`ne0`, `inj`), and every call in the class of a target is in `chg` (`chgd`); the junk claims are
+`q` per completed run, on distinct junk labels, and good (`jc_*`); the choices of a run that is
+not completed are not drawn (`fresh`). -/
+structure Inv (s : JSt AR τ q X T S) : Prop where
+  tg_eq : ∀ x, s.2.tg x = (s.1.tg x).map fun t => (t, ())
+  calls_eq : s.2.calls = s.1.calls
+  nt_eq : s.2.nt + s.1.rem = n + s.1.nj
+  calls_len : s.1.calls.length = s.1.iq + (q + 1) * s.1.K
+  chg_len : s.1.chg.length = s.1.iq + s.1.W
+  lot : s.1.hit = false → s.1.W ≤ q * s.1.K
+  tl_mem : ∀ x t, s.1.tg x = some t → t ∈ s.1.tl
+  ne0 : s.1.bad = false → ∀ x t, s.1.tg x = some t → t ≠ 0
+  inj : s.1.bad = false → ∀ x₁ x₂ t₁ t₂, s.1.tg x₁ = some t₁ → s.1.tg x₂ = some t₂ →
+    cls t₁ t₂ → x₁ = x₂
+  chgd : s.1.bad = false → ∀ z ∈ s.1.calls, ∀ x t, s.1.tg x = some t → cls z t → z ∈ s.1.chg
+  jc_nd : (s.1.jc.map Prod.fst).Nodup
+  jc_len : s.1.jc.length = q * s.1.K
+  jc_lab : ∀ p ∈ s.1.jc, ∃ H j, p.1 = .inr (H, j) ∧ (s.1.out H).isSome
+  jc_good : ∀ p ∈ s.1.jc, ∃ t, s.1.tg p.1 = some t ∧ rel pk p.2 t
+  fresh : ∀ H, s.1.out H = none → s.2.ro (.inr (.inr H)) = none
+
+omit [DecidableEq DR] [∀ d, SampleableType (AR d)] [NeZero τ] [DecidableEq X] [AddCommGroup T]
+  [SampleableType T] [DecidableEq T] in
+lemma valid_iff (jt : List T × ℕ → Option T) (H : List T) (ans : List S) :
+    valid (q := q) rel pk jt H ans = true ↔
+      ans.length = q ∧ ∀ p ∈ ans.zipIdx, ∃ t, jt (H, p.2) = some t ∧ rel pk p.1 t := by
+  simp only [valid, Bool.and_eq_true, decide_eq_true_eq, List.all_eq_true]
+  refine and_congr_right fun _ => forall₂_congr fun p _ => ?_
+  cases jt (H, p.2) <;> simp
+
+omit [DecidableEq DR] [∀ d, SampleableType (AR d)] [NeZero τ] [SampleableType T] in
+theorem inv_init : Inv (AR := AR) (τ := τ) (q := q) (X := X) cls rel pk n (m0 n, f0) where
+  tg_eq _ := rfl
+  calls_eq := rfl
+  nt_eq := by simp [m0, f0]
+  calls_len := by simp [m0]
+  chg_len := by simp [m0]
+  lot _ := by simp [m0]
+  tl_mem x t h := by simp [m0] at h
+  ne0 _ x t h := by simp [m0] at h
+  inj _ x₁ x₂ t₁ t₂ h := by simp [m0] at h
+  chgd _ z hz := by simp [m0] at hz
+  jc_nd := by simp [m0]
+  jc_len := by simp [m0]
+  jc_lab p hp := by simp [m0] at hp
+  jc_good p hp := by simp [m0] at hp
+  fresh _ _ := rfl
+
+variable {cls rel pk n}
+
+omit [DecidableEq DR] [∀ d, SampleableType (AR d)] [NeZero τ] [SampleableType T] in
+/-- The world's cache changes outside the choices of the runs that are not completed. -/
+theorem Inv.ro {s : JSt AR τ q X T S} (hI : Inv cls rel pk n s)
+    (c : (specR (WA AR τ q T)).QueryCache)
+    (hc : ∀ H, s.1.out H = none → c (.inr (.inr H)) = none) :
+    Inv cls rel pk n (s.1, { s.2 with ro := c }) :=
+  { hI with fresh := hc }
+
+omit [DecidableEq DR] [∀ d, SampleableType (AR d)] [NeZero τ] [SampleableType T] in
+lemma addT_bad {m : MSt τ q X T S} {x : XM X T} {t : T} (hb : (m.addT cls x t).bad = false) :
+    m.bad = false ∧ t ≠ 0 ∧ (∀ t' ∈ m.tl, ¬ cls t t') ∧ ∀ z ∈ m.calls, cls z t → z ∈ m.chg := by
+  simp only [MSt.addT, Bool.or_eq_false_iff, decide_eq_false_iff_not, List.any_eq_false,
+    Bool.and_eq_true, decide_eq_true_eq, not_and, not_not] at hb
+  exact ⟨hb.1.1.1, hb.1.1.2, hb.1.2, hb.2⟩
+
+omit [DecidableEq DR] [∀ d, SampleableType (AR d)] [NeZero τ] [SampleableType T] in
+/-- A new target keeps the invariant. -/
+theorem Inv.addT (hsym : ∀ a b, cls a b → cls b a) {s : JSt AR τ q X T S} (hI : Inv cls rel pk n s)
+    (x : XM X T) (t : T) (r' j' : ℕ) (hx : ∀ p ∈ s.1.jc, p.1 ≠ x)
+    (hnum : s.2.nt + 1 + r' = n + j') :
+    Inv cls rel pk n ({ s.1.addT cls x t with rem := r', nj := j' },
+      { s.2 with tg := Function.update s.2.tg x (some (t, ())), nt := s.2.nt + 1 }) where
+  tg_eq y := by
+    by_cases h : y = x
+    · subst h; simp [MSt.addT]
+    · simpa [MSt.addT, h] using hI.tg_eq y
+  calls_eq := hI.calls_eq
+  nt_eq := hnum
+  calls_len := hI.calls_len
+  chg_len := hI.chg_len
+  lot := hI.lot
+  tl_mem y t' h := by
+    by_cases hy : y = x
+    · subst hy
+      simp only [MSt.addT, Function.update_self, Option.some.injEq] at h
+      subst h
+      exact List.mem_cons_self
+    · simp only [MSt.addT, Function.update_of_ne hy] at h
+      exact List.mem_cons_of_mem _ (hI.tl_mem y t' h)
+  ne0 hb y t' h := by
+    obtain ⟨hb0, ht0, -, -⟩ := addT_bad (x := x) hb
+    by_cases hy : y = x
+    · subst hy
+      simp only [MSt.addT, Function.update_self, Option.some.injEq] at h
+      exact h ▸ ht0
+    · simp only [MSt.addT, Function.update_of_ne hy] at h
+      exact hI.ne0 hb0 y t' h
+  inj hb x₁ x₂ t₁ t₂ h₁ h₂ hc := by
+    obtain ⟨hb0, -, htl, -⟩ := addT_bad (x := x) hb
+    by_cases h1 : x₁ = x <;> by_cases h2 : x₂ = x
+    · rw [h1, h2]
+    · subst h1
+      simp only [MSt.addT, Function.update_self, Option.some.injEq, Function.update_of_ne h2]
+        at h₁ h₂
+      subst h₁
+      exact absurd hc (htl t₂ (hI.tl_mem x₂ t₂ h₂))
+    · subst h2
+      simp only [MSt.addT, Function.update_self, Option.some.injEq, Function.update_of_ne h1]
+        at h₁ h₂
+      subst h₂
+      exact absurd (hsym _ _ hc) (htl t₁ (hI.tl_mem x₁ t₁ h₁))
+    · simp only [MSt.addT, Function.update_of_ne h1, Function.update_of_ne h2] at h₁ h₂
+      exact hI.inj hb0 x₁ x₂ t₁ t₂ h₁ h₂ hc
+  chgd hb z hz y t' h hc := by
+    obtain ⟨hb0, -, -, hcl⟩ := addT_bad (x := x) hb
+    by_cases hy : y = x
+    · subst hy
+      simp only [MSt.addT, Function.update_self, Option.some.injEq] at h
+      subst h
+      exact hcl z hz hc
+    · simp only [MSt.addT, Function.update_of_ne hy] at h
+      exact hI.chgd hb0 z hz y t' h hc
+  jc_nd := hI.jc_nd
+  jc_len := hI.jc_len
+  jc_lab := hI.jc_lab
+  jc_good p hp := by
+    obtain ⟨t', h, hr⟩ := hI.jc_good p hp
+    exact ⟨t', by simpa [MSt.addT, Function.update_of_ne (hx p hp)] using h, hr⟩
+  fresh := hI.fresh
+
+omit [DecidableEq DR] [∀ d, SampleableType (AR d)] [NeZero τ] [SampleableType T] in
+/-- A call of the reduction keeps the invariant. -/
+theorem Inv.inv {s : JSt AR τ q X T S} (hI : Inv cls rel pk n s) (t : T) :
+    Inv cls rel pk n
+      ({ s.1 with iq := s.1.iq + 1, calls := t :: s.1.calls, chg := t :: s.1.chg },
+        { s.2 with calls := t :: s.2.calls }) where
+  tg_eq := hI.tg_eq
+  calls_eq := by simp [hI.calls_eq]
+  nt_eq := hI.nt_eq
+  calls_len := by simp [hI.calls_len]; omega
+  chg_len := by simp [hI.chg_len]; omega
+  lot := hI.lot
+  tl_mem := hI.tl_mem
+  ne0 := hI.ne0
+  inj := hI.inj
+  chgd hb z hz y t' h hc := by
+    rcases List.mem_cons.1 hz with rfl | hz
+    · exact List.mem_cons_self
+    · exact List.mem_cons_of_mem _ (hI.chgd hb z hz y t' h hc)
+  jc_nd := hI.jc_nd
+  jc_len := hI.jc_len
+  jc_lab := hI.jc_lab
+  jc_good := hI.jc_good
+  fresh := hI.fresh
+
+omit [DecidableEq DR] [∀ d, SampleableType (AR d)] [NeZero τ] [SampleableType T] in
+lemma complete_bad {m : MSt τ q X T S} {H : List T} {δs : List (Fin τ → T)} {ans : List S}
+    {a : Fin (q + 1) → Fin τ} {ss : List S} (hb : (m.complete cls H δs ans a ss).bad = false) :
+    m.bad = false ∧ ∀ k : Fin (q + 1),
+      useful cls m.tl (H.getD k.val 0 + δs.getD k.val 0 (a k)) = true →
+        firstU cls m.tl H δs k = some (a k) := by
+  simp [MSt.complete] at hb
+  exact hb
+
+omit [DecidableEq DR] [∀ d, SampleableType (AR d)] [NeZero τ] [SampleableType T] in
+/-- A completed run keeps the invariant. -/
+theorem Inv.complete {s : JSt AR τ q X T S} (hI : Inv cls rel pk n s) (H : List T)
+    (δs : List (Fin τ → T)) (ans : List S)
+    (hv : valid (q := q) rel pk (fun k => s.1.tg (.inr k)) H ans = true) (ho : s.1.out H = none)
+    (a : Fin (q + 1) → Fin τ) (ss : List S) (c : (specR (WA AR τ q T)).QueryCache)
+    (hc : ∀ H', H' ≠ H → c (.inr (.inr H')) = s.2.ro (.inr (.inr H'))) :
+    Inv cls rel pk n (s.1.complete cls H δs ans a ss,
+      { s.2 with ro := c, calls := (cands H δs a).reverse ++ s.2.calls }) := by
+  obtain ⟨hlen, hans⟩ := (valid_iff rel pk _ H ans).1 hv
+  have hcl : (cands H δs a).length = q + 1 := by simp [cands]
+  refine
+    { tg_eq := hI.tg_eq
+      calls_eq := by simp [MSt.complete, hI.calls_eq]
+      nt_eq := hI.nt_eq
+      calls_len := by simp [MSt.complete, hcl, hI.calls_len]; ring
+      chg_len := by simp [MSt.complete, hI.chg_len]; ring
+      lot := fun hh => ?_
+      tl_mem := hI.tl_mem
+      ne0 := fun hb => hI.ne0 (complete_bad hb).1
+      inj := fun hb => hI.inj (complete_bad hb).1
+      chgd := fun hb z hz y t' h hcz => ?_
+      jc_nd := ?_
+      jc_len := by simp [MSt.complete, jclaims, hlen, hI.jc_len]; ring
+      jc_lab := fun p hp => ?_
+      jc_good := fun p hp => ?_
+      fresh := fun H' hH' => ?_ }
+  · simp only [MSt.complete, Bool.or_eq_false_iff, decide_eq_false_iff_not, not_lt] at hh
+    exact hh.2
+  · obtain ⟨hb0, hfu⟩ := complete_bad hb
+    simp only [MSt.complete, List.mem_append, List.mem_reverse] at hz ⊢
+    rcases hz with hz | hz
+    · left
+      simp only [cands, List.mem_map, List.mem_finRange, true_and] at hz
+      obtain ⟨k, rfl⟩ := hz
+      have hu : useful cls s.1.tl (H.getD k.val 0 + δs.getD k.val 0 (a k)) = true := by
+        simp only [useful, List.any_eq_true, decide_eq_true_eq]
+        exact ⟨t', hI.tl_mem y t' h, hcz⟩
+      simp only [counted, List.mem_map, List.mem_filter, List.mem_finRange, true_and,
+        decide_eq_true_eq]
+      exact ⟨k, hfu k hu, rfl⟩
+    · exact Or.inr (hI.chgd hb0 z hz y t' h hcz)
+  · simp only [MSt.complete, List.map_append]
+    refine List.Nodup.append ?_ hI.jc_nd fun x hx₁ hx₂ => ?_
+    · have : (jclaims (X := X) H ans).map Prod.fst =
+          (ans.zipIdx.map Prod.snd).map fun j => Sum.inr (H, j) := by
+        simp only [jclaims, List.map_map, Function.comp_def]
+      rw [this]
+      exact (List.nodup_zipIdx_map_snd ans).map fun j j' hj => by simpa using hj
+    · simp only [jclaims, List.map_map, List.mem_map, Function.comp_apply] at hx₁
+      obtain ⟨p, -, rfl⟩ := hx₁
+      obtain ⟨p', hp', hpe⟩ := List.mem_map.1 hx₂
+      obtain ⟨H', j', hl, hs⟩ := hI.jc_lab p' hp'
+      rw [hl] at hpe
+      simp only [Sum.inr.injEq, Prod.mk.injEq] at hpe
+      rw [hpe.1, ho] at hs
+      simp at hs
+  · simp only [MSt.complete, List.mem_append] at hp
+    rcases hp with hp | hp
+    · simp only [jclaims, List.mem_map] at hp
+      obtain ⟨p', -, rfl⟩ := hp
+      exact ⟨H, p'.2, rfl, by simp [MSt.complete]⟩
+    · obtain ⟨H', j', hl, hs⟩ := hI.jc_lab p hp
+      refine ⟨H', j', hl, ?_⟩
+      by_cases hH : H' = H
+      · subst hH; simp [MSt.complete]
+      · simpa [MSt.complete, Function.update_of_ne hH] using hs
+  · simp only [MSt.complete, List.mem_append] at hp
+    rcases hp with hp | hp
+    · simp only [jclaims, List.mem_map] at hp
+      obtain ⟨p', hp', rfl⟩ := hp
+      exact hans p' hp'
+    · exact hI.jc_good p hp
+  · have hne : H' ≠ H := by
+      rintro rfl
+      simp [MSt.complete] at hH'
+    simp only [MSt.complete, Function.update_of_ne hne] at hH'
+    show c (.inr (.inr H')) = none
+    rw [hc H' hne]
+    exact hI.fresh H' hH'
+
+/-- A random-oracle step changes the cache at most at its own point. -/
+lemma ro_other {ι : Type} [DecidableEq ι] {spec : OracleSpec ι}
+    [∀ t : spec.Domain, SampleableType (spec.Range t)] (t : ι) (c : spec.QueryCache)
+    (r : spec.Range t × spec.QueryCache) (hr : r ∈ support ((spec.randomOracle t).run c))
+    (t' : ι) (h : t' ≠ t) : r.2 t' = c t' := by
+  rw [randomOracle.run_eq] at hr
+  cases hc : c t with
+  | some u =>
+    simp only [hc, support_pure, Set.mem_singleton_iff] at hr
+    rw [hr]
+  | none =>
+    simp only [hc, support_bind, support_pure, Set.mem_iUnion, Set.mem_singleton_iff] at hr
+    obtain ⟨u, -, rfl⟩ := hr
+    exact QueryCache.cacheQuery_of_ne c u h
+
+variable (cls rel n) in
+/-- **The invariant is preserved** by every atomic operation of the joint experiment. -/
+theorem jImpl_inv (hsym : ∀ a b, cls a b → cls b a) :
+    QueryImpl.PreservesInv (jImpl (AR := AR) (τ := τ) (q := q) (X := X) cls rel pk pre)
+      (Inv cls rel pk n) := by
+  intro o s hI z hz
+  cases o with
+  | w d =>
+    rw [j_w] at hz
+    erw [support_map] at hz
+    obtain ⟨r, hr, rfl⟩ := hz
+    exact hI.ro _ fun H hH => by
+      rw [ro_other _ _ r hr _ (by simp)]; exact hI.fresh H hH
+  | lst hs =>
+    rw [j_lst] at hz
+    erw [support_map] at hz
+    obtain ⟨r, hr, rfl⟩ := hz
+    exact hI.ro _ fun H hH => by
+      rw [ro_other _ _ r hr _ (by simp)]; exact hI.fresh H hH
+  | tgt x =>
+    by_cases h : s.1.rem = 0
+    · rw [j_tgt_zero _ _ _ _ _ _ h] at hz
+      simp only [support_pure, Set.mem_singleton_iff] at hz
+      rw [hz]; exact hI
+    · rw [j_tgt _ _ _ _ _ _ h] at hz
+      erw [support_map] at hz
+      obtain ⟨t, -, rfl⟩ := hz
+      exact hI.addT hsym (.inl x) t (s.1.rem - 1) s.1.nj
+        (fun p hp => by obtain ⟨H, j, hl, -⟩ := hI.jc_lab p hp; rw [hl]; simp)
+        (by have := hI.nt_eq; omega)
+  | inv t =>
+    rw [j_inv] at hz
+    simp only [support_pure, Set.mem_singleton_iff] at hz
+    rw [hz]; exact hI.inv t
+  | junk H j =>
+    cases h : s.1.tg (.inr (H, j)) with
+    | some t =>
+      rw [j_junk_some _ _ _ _ _ _ _ t h] at hz
+      simp only [support_pure, Set.mem_singleton_iff] at hz
+      rw [hz]; exact hI
+    | none =>
+      rw [j_junk _ _ _ _ _ _ _ h] at hz
+      erw [support_map] at hz
+      obtain ⟨t, -, rfl⟩ := hz
+      exact hI.addT hsym (.inr (H, j)) t s.1.rem (s.1.nj + 1)
+        (fun p hp heq => by
+          obtain ⟨t', ht', -⟩ := hI.jc_good p hp
+          rw [heq, h] at ht'; cases ht')
+        (by have := hI.nt_eq; omega)
+  | fin H δs ans =>
+    cases h : valid (q := q) rel pk (fun k => s.1.tg (.inr k)) H ans with
+    | false =>
+      rw [j_fin_invalid _ _ _ _ _ _ _ _ h] at hz
+      simp only [support_pure, Set.mem_singleton_iff] at hz
+      rw [hz]; exact hI
+    | true =>
+      cases ho : s.1.out H with
+      | some o =>
+        rw [j_fin_some _ _ _ _ _ _ _ _ h o ho] at hz
+        simp only [support_pure, Set.mem_singleton_iff] at hz
+        rw [hz]; exact hI
+      | none =>
+        rw [j_fin _ _ _ _ _ _ _ _ h ho] at hz
+        erw [support_map] at hz
+        obtain ⟨r, hr, rfl⟩ := hz
+        exact hI.complete H δs ans h ho r.1 _ r.2 fun H' hne =>
+          ro_other _ _ r hr _ (by simp [hne])
+
 end Joint
 
 end VoleMole.Assumptions.TheoremR
