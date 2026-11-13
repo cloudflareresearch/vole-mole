@@ -232,6 +232,10 @@ import VoleMole.ZK.MainSlots
 import VoleMole.ZK.MainGame
 import VoleMole.ZK.HopsMainIC
 import VoleMole.ZK.MainPU
+import VoleMole.ZK.MainSharedKeys
+import VoleMole.ZK.MainSharedSlots
+import VoleMole.ZK.MainSharedGame
+import VoleMole.ZK.MainSharedSim
 import VoleMole.ZK.VerifyPre
 import VoleMole.ZK.HopsH23
 import VoleMole.ZK.HopsIC
@@ -254,6 +258,8 @@ import VoleMole.Privacy.RatatouilleMain
 import VoleMole.Privacy.PU
 import VoleMole.Privacy.PUKeccak
 import VoleMole.Privacy.MoussakaMainPU
+import VoleMole.Privacy.MoussakaMainShared
+import VoleMole.Privacy.MoussakaMainSharedPU
 import VoleMole.Privacy.RatatouilleRO
 import VoleMole.ZK.TwoPhaseRO
 import VoleMole.ZK.TwoPhaseIC
@@ -381,3 +387,4 @@ import VoleMole.Audit.SymmetryCount
 import VoleMole.Audit.PomfritLemmaP
 import VoleMole.Audit.Theft
 import VoleMole.Audit.MainPU
+import VoleMole.Audit.MainShared
