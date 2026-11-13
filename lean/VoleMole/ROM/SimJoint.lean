@@ -567,4 +567,322 @@ theorem jointBad_of_adaptBad (N : ℕ) (g : Table) {t : Dom}
 
 end JointBad
 
+/-! ## The two relations together, per cipher table -/
+
+section SimJointE
+
+variable {ιI' ιR' α ιI βI ιR βR : Type} (T : CrtTables) (stI : ιI → Statement)
+  (decI : ByteArray → Option ιI) (stR : ιR → Statement) (decR : ByteArray → Option ιR)
+  (E : CTable)
+
+set_option exponentiation.threshold 500 in
+set_option maxRecDepth 4000 in
+/-- **Simultaneous extraction for an issue-type and a combined relation together, per cipher
+table.** Provers `PI j` (`j ∈ J_I`) of the first relation and `PR j` (`j ∈ J_R`) of the second,
+whose runs are prefixes of reference runs `PI₀`, `PR₀` with the same hash log (`hsame`: one run of
+the protocol, read as a prover of either relation), all within the budgets `q` and `nG`; the
+relations' statements are separated (`hsep`: no `H₂⁰` input decodes in both families). If an
+event implies at every table that some output of either relation is accepted at its statement and
+not extracted, then
+
+    Pr[event] ≤ Σ_k q_k·jointEps_k + Σ_{j ∈ J_I} Σ_k r_k·ε_I,k + Σ_{j ∈ J_R} Σ_k r_k·ε_R,k
+      + Σ_{j ∈ J_I} Pr[fail_I,j] + Σ_{j ∈ J_R} Pr[fail_R,j],
+
+each query of the run charged once (`jointEps`, about the larger of the two relations' charges),
+each output's continuation at its relation's charge (`adaptEps`, `combAdaptEps`). Adding
+`prEvent_sim_le_E` and `prEvent_sim_comb_le_E` charges each query of the run twice. -/
+theorem prEvent_sim_joint_le_E (hT : liftInvOk T = true)
+    (sysI : ιI → System GF128) (stI₀ : Statement) (hparamsI : ∀ s, (stI s).params = stI₀.params)
+    (hdelI : ∀ s, (stI s).delayed = false) (hcombI : ∀ s, (stI s).comb = none)
+    (hdecI : ∀ s, decI (muIn (stI s)) = some s) {n : ℕ} (hn : ∀ s, (sysI s).length = n)
+    {M : ℕ} (sysL : ιR → (Fin M → GF128) → System GF128) (witL : ιR → (ℕ → GF128) → Prop)
+    (dst : ByteArray) (stR₀ : Statement) (hparamsR : ∀ s, (stR s).params = stR₀.params)
+    (hdelR : ∀ s, (stR s).delayed = false) (hcombR : ∀ s, (stR s).comb = some (M, dst))
+    (hdecR : ∀ s, decR (muIn (stR s)) = some s) {n' : ℕ} (hn' : ∀ s l, (sysL s l).length = n')
+    {εc : ℝ≥0∞} (hεc : ∀ s w, prU (Fin M → GF128) (fun l => (sysL s l).Holds w ∧ ¬witL s w) ≤ εc)
+    (hsep : ∀ x, (decI x).isSome → (decR x).isSome → False) (N : ℕ)
+    (WitI : ιI → ByteArray → (ℕ → GF128) → Prop)
+    (hvalsI : ∀ s c1 lb w, (stI s).values c1 lb w = (sysI s).values w)
+    (hdetI : ∀ s, @ChainDet (icPrg E.cipher) T (stI s) (sysI s) N (WitI s))
+    (WitR : ιR → ByteArray → (ℕ → GF128) → Prop)
+    (hvalsR : ∀ s c1 (v : Prob.Bytes (16 * M)) w,
+      (stR s).values c1 v.ba w = (sysL s (combDec v)).values w)
+    (hdetR : ∀ s, @CombDet (icPrg E.cipher) M T (stR s) (sysL s) (witL s) N (WitR s))
+    (PI₀ : OracleComp specIC (ByteArray × (ιI × βI)))
+    (PI : ιI' → OracleComp specIC (ByteArray × (ιI × βI)))
+    (PR₀ : OracleComp specIC (ByteArray × (ιR × βR)))
+    (PR : ιR' → OracleComp specIC (ByteArray × (ιR × βR)))
+    (cfI : Out ((ιI × βI) × QueryLog specIC) → Prop)
+    (hcfI : ∀ j s g, ¬cfI (evalWithAnswerFn (QueryImpl.ofFn g) (gameIC T (stI s) (PI j) E)) →
+      KeysPre (stI s) E (jOf g (PI j) E) (gLog T (stI s) (PI j) E g) g)
+    (cfR : Out ((ιR × βR) × QueryLog specIC) → Prop)
+    (hcfR : ∀ j s g, ¬cfR (evalWithAnswerFn (QueryImpl.ofFn g) (gameIC T (stR s) (PR j) E)) →
+      KeysPre (stR s) E (jOf g (PR j) E) (gLog T (stR s) (PR j) E g) g)
+    (JI : Finset ιI') (JR : Finset ιR') (q : Kind → ℕ)
+    (hqI : ∀ j ∈ JI, IsKindQueryBoundIC (PI j) q) (hqR₀ : IsKindQueryBoundIC PR₀ q)
+    (hqR : ∀ j ∈ JR, IsKindQueryBoundIC (PR j) q) (nG : ℕ)
+    (hnGI : ∀ j ∈ JI, IsQueryBoundP (PI j) (fun t => t.isLeft = true) nG)
+    (hnGR₀ : IsQueryBoundP PR₀ (fun t => t.isLeft = true) nG)
+    (hnGR : ∀ j ∈ JR, IsQueryBoundP (PR j) (fun t => t.isLeft = true) nG)
+    (hpreI : PrefixRuns E PI₀ PI JI) (hpreR : PrefixRuns E PR₀ PR JR)
+    (hsame : ∀ g, tableQueryLog (runE E PI₀) g = tableQueryLog (runE E PR₀) g)
+    (oa : OracleComp spec α) (event : α → Prop)
+    (htr : ∀ g, event (evalWithAnswerFn (QueryImpl.ofFn g) oa) →
+      (∃ j ∈ JI, let r := evalWithAnswerFn (QueryImpl.ofFn g) (gameA T stI (PI j) E)
+        r.2.2.accept = true ∧ ¬@Extracted (icPrg E.cipher) _ (stI (stOut r)) (WitI (stOut r)) r) ∨
+      (∃ j ∈ JR, let r := evalWithAnswerFn (QueryImpl.ofFn g) (gameA T stR (PR j) E)
+        r.2.2.accept = true ∧ ¬@Extracted (icPrg E.cipher) _ (stR (stOut r)) (WitR (stOut r)) r)) :
+    let nn := q + extractorQueries + verifierQueries
+    let ntot := nG + 2 + verifierTotal
+    Pr{let r ← (simulateQ randomOracle oa).run' ∅}[event r] ≤
+      ∑ k ∈ adaptKinds, (q k : ℝ≥0∞) * jointEps (M := M) dst stI₀ stR₀ n n' εc ntot N nn k +
+      ∑ _j ∈ JI, ∑ k ∈ adaptKinds,
+        ((extractorQueries + verifierQueries) k : ℝ≥0∞) * adaptEps stI₀ n N none nn k +
+      ∑ _j ∈ JR, ∑ k ∈ adaptKinds, ((extractorQueries + verifierQueries) k : ℝ≥0∞) *
+        combAdaptEps (M := M) dst stR₀ n' εc ntot N nn k +
+      ∑ j ∈ JI, Pr{let r ← (simulateQ randomOracle (gameA T stI (PI j) E)).run' ∅}[
+        bindFailA stI E r ∨ deadOpenA stI E r ∨ cfI r] +
+      ∑ j ∈ JR, Pr{let r ← (simulateQ randomOracle (gameA T stR (PR j) E)).run' ∅}[
+        bindFailA stR E r ∨ deadOpenA stR E r ∨ cfR r] := by
+  classical
+  intro nn ntot
+  let εJ := jointEps (M := M) dst stI₀ stR₀ n n' εc ntot N nn
+  let εI := adaptEps stI₀ n N none nn
+  let εR := combAdaptEps (M := M) dst stR₀ n' εc ntot N nn
+  let S := simKeys T stI E PI₀ PI oa JI ∪ simKeys T stR E PR₀ PR oa JR ∪
+    Finset.univ.image (combKey M dst)
+  have hKS : ∀ u, combKey M dst u ∈ S := fun u =>
+    Finset.mem_union_right _ (Finset.mem_image_of_mem _ (Finset.mem_univ u))
+  have hsubI : ∀ d, d ∈ simKeys T stI E PI₀ PI oa JI → d ∈ S := fun _ h =>
+    Finset.mem_union_left _ (Finset.mem_union_left _ h)
+  have hsubR : ∀ d, d ∈ simKeys T stR E PR₀ PR oa JR → d ∈ S := fun _ h =>
+    Finset.mem_union_left _ (Finset.mem_union_right _ h)
+  let : SampleableType ((d : S) → Ans d.val) := SampleableType.piOfFintype _
+  have hbadI : ∀ Q : OracleComp specIC (ByteArray × (ιI × βI)), IsKindQueryBoundIC Q q →
+      ∀ (c : (ofFn fun d : S => Ans d.val).QueryCache) (t : S), c t = none →
+      (cachedKeys c).card < ntot →
+      Pr{let g ← $ᵗ ((d : S) → Ans d.val)}[
+        adaptBad T stI decI sysI Q E N none t.val (extendTable S (completeTable c g))] ≤
+        εI t.val.1 := fun Q hQ c t hc _ =>
+    cached_of_cell S (adaptBad T stI decI sysI Q E N none) (fun t => εI t.1)
+      (fun t g => prEvent_adaptBad_le T stI decI sysI Q E hT stI₀ hparamsI hn N none q hQ t g) c t hc
+  have hbadR : ∀ Q : OracleComp specIC (ByteArray × (ιR × βR)), IsKindQueryBoundIC Q q →
+      ∀ (c : (ofFn fun d : S => Ans d.val).QueryCache) (t : S), c t = none →
+      (cachedKeys c).card < ntot →
+      Pr{let g ← $ᵗ ((d : S) → Ans d.val)}[combAdaptBad T stR decR Q E sysL witL dst N
+        t.val (extendTable S (completeTable c g))] ≤ εR t.val.1 := fun Q hQ c t hc hcard =>
+    prEvent_combAdaptBad_le T stR decR Q E sysL witL dst hT stR₀ hparamsR hn' hεc N q hQ S hKS ntot
+      c t hc hcard
+  have hbadJ : ∀ (c : (ofFn fun d : S => Ans d.val).QueryCache) (t : S), c t = none →
+      (cachedKeys c).card < ntot →
+      Pr{let g ← $ᵗ ((d : S) → Ans d.val)}[jointBad T stI decI sysI PI₀ stR decR PR₀ E sysL witL
+        dst N t.val (extendTable S (completeTable c g))] ≤ εJ t.val.1 := fun c t hc hcard =>
+    prEvent_jointBad_le T stI decI sysI PI₀ stR decR PR₀ E sysL witL dst hT stI₀ hparamsI hn stR₀
+      hparamsR hn' hεc hsep N q hqR₀ S hKS ntot c t hc hcard
+  refine prEvent_le_shared_suffix₂ S oa event ((simKeys_oa T stI E PI₀ PI oa JI).mono hsubI)
+    (runE E PR₀) ((simKeys_run T stR E PR₀ PR oa JR).mono hsubR) (fun t => εJ t.1) _
+    (worstCaseCostBound_of_kindQueryBound _ adaptKinds εJ
+      (jointEps_eq_zero dst stI₀ stR₀ n n' εc ntot N nn) q (isKindQueryBound_runE E hqR₀)) nG
+    (isTotalQueryBound_runE E hnGR₀)
+    (jointBad T stI decI sysI PI₀ stR decR PR₀ E sysL witL dst N)
+    JI (fun j => runE E (PI j)) (fun _ => gameK T stI E id) (fun j hj => ?_) (fun t => εI t.1) _
+    (fun _ a => worstCaseCostBound_of_kindQueryBound _ adaptKinds εI
+      (adaptEps_eq_zero stI₀ n N none nn) _ (isKindQueryBound_gameK T stI E id a))
+    nG (2 + verifierTotal) (fun j hj => isTotalQueryBound_runE E (hnGI j hj))
+    (fun _ a => isTotalQueryBound_gameK T stI E id a)
+    (fun j => adaptBad T stI decI sysI (PI j) E N none)
+    JR (fun j => runE E (PR j)) (fun _ => gameK T stR E id) (fun j hj => ?_) (fun t => εR t.1) _
+    (fun _ a => worstCaseCostBound_of_kindQueryBound _ adaptKinds εR
+      (combAdaptEps_eq_zero dst stR₀ n' εc ntot N nn) _ (isKindQueryBound_gameK T stR E id a))
+    nG (2 + verifierTotal) (fun j hj => isTotalQueryBound_runE E (hnGR j hj))
+    (fun _ a => isTotalQueryBound_gameK T stR E id a)
+    (fun j => combAdaptBad T stR decR (PR j) E sysL witL dst N)
+    JI (fun j => gameA T stI (PI j) E) (fun _ r => bindFailA stI E r ∨ deadOpenA stI E r ∨ cfI r)
+    (fun j hj => (simKeys_game T stI E PI₀ PI oa JI j hj).mono hsubI)
+    JR (fun j => gameA T stR (PR j) E) (fun _ r => bindFailA stR E r ∨ deadOpenA stR E r ∨ cfR r)
+    (fun j hj => (simKeys_game T stR E PR₀ PR oa JR j hj).mono hsubR)
+    ntot (by omega) (by omega) (by omega) hbadJ (fun j hj => hbadI (PI j) (hqI j hj))
+    (fun j hj => hbadR (PR j) (hqR j hj)) fun g hev => ?_
+  · rw [← gameA_eq_bind]
+    exact (simKeys_game T stI E PI₀ PI oa JI j hj).mono hsubI
+  · rw [← gameA_eq_bind]
+    exact (simKeys_game T stR E PR₀ PR oa JR j hj).mono hsubR
+  rcases htr g hev with ⟨j, hj, hacc, hnex⟩ | ⟨j, hj, hacc, hnex⟩
+  · -- an output of the issue-type relation
+    by_cases hf : bindFailA stI E (evalWithAnswerFn (QueryImpl.ofFn g)
+        (gameA T stI (PI j) E)) ∨ deadOpenA stI E (evalWithAnswerFn (QueryImpl.ofFn g)
+        (gameA T stI (PI j) E)) ∨ cfI (evalWithAnswerFn (QueryImpl.ofFn g) (gameA T stI (PI j) E))
+    · exact Or.inr (Or.inr (Or.inr (Or.inl ⟨j, hj, hf⟩)))
+    simp only [not_or] at hf
+    obtain ⟨e, he, hb⟩ := adaptBad_trace T stI decI sysI (PI j) E hT hdelI none hcombI hdecI N WitI
+      hvalsI hdetI cfI (hcfI j) g ⟨⟨hacc, hnex⟩, hf.1, hf.2.1, hf.2.2⟩
+    rw [tableQueryLog_gameA_eq] at he
+    by_cases hm : e.1 ∈ (tableQueryLog (runE E (PI j)) g).map Sigma.fst
+    · obtain ⟨⟨Y, hY⟩, hJ⟩ := hpreI j hj g
+      have hm₀ : e.1 ∈ (tableQueryLog (runE E PI₀) g).map Sigma.fst := by
+        rw [hY, List.map_append]; exact List.mem_append_left _ hm
+      have hmR : e.1 ∈ (tableQueryLog (runE E PR₀) g).map Sigma.fst := hsame g ▸ hm₀
+      obtain ⟨e', he', heq⟩ := List.mem_map.1 hmR
+      refine Or.inl ⟨e', he', ?_⟩
+      rw [heq]
+      exact jointBad_of_adaptBad T stI decI sysI PI₀ stR decR PR₀ E sysL witL dst N g (hsame g) hmR
+        ((adaptBad_prefix_congr T stI decI E sysI (PI j) PI₀ N none g e.1 hm ⟨Y, hY⟩ hJ).1 hb)
+    · refine Or.inr (Or.inl ⟨j, hj, e, ?_, hm, hb⟩)
+      exact (List.mem_append.1 he).resolve_left fun h => hm (List.mem_map_of_mem h)
+  · -- an output of the combined relation
+    by_cases hf : bindFailA stR E (evalWithAnswerFn (QueryImpl.ofFn g)
+        (gameA T stR (PR j) E)) ∨ deadOpenA stR E (evalWithAnswerFn (QueryImpl.ofFn g)
+        (gameA T stR (PR j) E)) ∨ cfR (evalWithAnswerFn (QueryImpl.ofFn g) (gameA T stR (PR j) E))
+    · exact Or.inr (Or.inr (Or.inr (Or.inr ⟨j, hj, hf⟩)))
+    simp only [not_or] at hf
+    obtain ⟨e, he, hb⟩ := combAdaptBad_trace T stR decR (PR j) E sysL witL dst hT hdelR hcombR
+      hdecR N WitR hvalsR hdetR cfR (hcfR j) g ⟨⟨hacc, hnex⟩, hf.1, hf.2.1, hf.2.2⟩
+    rw [tableQueryLog_gameA_eq] at he
+    by_cases hm : e.1 ∈ (tableQueryLog (runE E (PR j)) g).map Sigma.fst
+    · obtain ⟨⟨Y, hY⟩, hJ⟩ := hpreR j hj g
+      have hm₀ : e.1 ∈ (tableQueryLog (runE E PR₀) g).map Sigma.fst := by
+        rw [hY, List.map_append]; exact List.mem_append_left _ hm
+      obtain ⟨e', he', heq⟩ := List.mem_map.1 hm₀
+      refine Or.inl ⟨e', he', ?_⟩
+      rw [heq]
+      exact Or.inr ((combAdaptBad_prefix_congr T stR decR E sysL witL dst (PR j) PR₀ N g e.1 hm
+        ⟨Y, hY⟩ hJ).1 hb)
+    · refine Or.inr (Or.inr (Or.inl ⟨j, hj, e, ?_, hm, hb⟩))
+      exact (List.mem_append.1 he).resolve_left fun h => hm (List.mem_map_of_mem h)
+
+end SimJointE
+
+/-! ## The joint experiment -/
+
+section SimJoint
+
+variable {ιI' ιR' α ιI βI ιR βR : Type}
+
+/-- **Averaging a per-cipher-table bound with two families of per-output failure terms.** -/
+theorem prEvent_avg_le_sum3₂ {C X Y Y' : Type} (mE : ProbComp C) (m : C → ProbComp X) (ev : C → X → Prop)
+    (c : ℝ≥0∞) (J : Finset ιI') (m' : ιI' → C → ProbComp Y) (Q₁ Q₂ Q₃ : C → Y → Prop)
+    (J' : Finset ιR') (m'' : ιR' → C → ProbComp Y') (Q₁' Q₂' Q₃' : C → Y' → Prop)
+    (h : ∀ E, Pr{let r ← m E}[ev E r] ≤
+      c + ∑ j ∈ J, Pr{let r ← m' j E}[Q₁ E r ∨ Q₂ E r ∨ Q₃ E r] +
+        ∑ j ∈ J', Pr{let r ← m'' j E}[Q₁' E r ∨ Q₂' E r ∨ Q₃' E r]) :
+    Pr{let E ← mE; let r ← m E}[ev E r] ≤
+      c + ∑ j ∈ J, (Pr{let E ← mE; let r ← m' j E}[Q₁ E r] +
+        Pr{let E ← mE; let r ← m' j E}[Q₂ E r] +
+        Pr{let E ← mE; let r ← m' j E}[Q₃ E r]) +
+      ∑ j ∈ J', (Pr{let E ← mE; let r ← m'' j E}[Q₁' E r] +
+        Pr{let E ← mE; let r ← m'' j E}[Q₂' E r] +
+        Pr{let E ← mE; let r ← m'' j E}[Q₃' E r]) := by
+  let : MeasurableSpace C := ⊤
+  have h3 : ∀ {Z : Type} (mz : ProbComp Z) (P₁ P₂ P₃ : Z → Prop),
+      Pr{let r ← mz}[P₁ r ∨ P₂ r ∨ P₃ r] ≤
+        Pr{let r ← mz}[P₁ r] + Pr{let r ← mz}[P₂ r] + Pr{let r ← mz}[P₃ r] :=
+    fun mz _ _ _ => (prEvent_or_le _ _ _).trans (by
+      rw [add_assoc]; exact add_le_add le_rfl (prEvent_or_le _ _ _))
+  rw [prEvent_bind_of_discrete]
+  simp only [prEvent_bind_of_discrete]
+  calc ∫⁻ E, Pr{let r ← m E}[ev E r] ∂𝒟[mE]
+      ≤ ∫⁻ E, (c + ∑ j ∈ J, (Pr{let r ← m' j E}[Q₁ E r] + Pr{let r ← m' j E}[Q₂ E r] +
+          Pr{let r ← m' j E}[Q₃ E r]) + ∑ j ∈ J', (Pr{let r ← m'' j E}[Q₁' E r] +
+          Pr{let r ← m'' j E}[Q₂' E r] + Pr{let r ← m'' j E}[Q₃' E r])) ∂𝒟[mE] :=
+        MeasureTheory.lintegral_mono fun E => (h E).trans
+          (add_le_add (add_le_add le_rfl (Finset.sum_le_sum fun j _ => h3 _ _ _ _))
+            (Finset.sum_le_sum fun j _ => h3 _ _ _ _))
+    _ = c * 𝒟[mE] Set.univ + ∑ j ∈ J, (∫⁻ E, Pr{let r ← m' j E}[Q₁ E r] ∂𝒟[mE] +
+          ∫⁻ E, Pr{let r ← m' j E}[Q₂ E r] ∂𝒟[mE] +
+          ∫⁻ E, Pr{let r ← m' j E}[Q₃ E r] ∂𝒟[mE]) +
+        ∑ j ∈ J', (∫⁻ E, Pr{let r ← m'' j E}[Q₁' E r] ∂𝒟[mE] +
+          ∫⁻ E, Pr{let r ← m'' j E}[Q₂' E r] ∂𝒟[mE] +
+          ∫⁻ E, Pr{let r ← m'' j E}[Q₃' E r] ∂𝒟[mE]) := by
+        rw [MeasureTheory.lintegral_add_right _ (Finset.measurable_sum _ fun _ _ =>
+            measurable_from_top),
+          MeasureTheory.lintegral_add_left measurable_const, MeasureTheory.lintegral_const,
+          MeasureTheory.lintegral_finsetSum _ fun _ _ => measurable_from_top,
+          MeasureTheory.lintegral_finsetSum _ fun _ _ => measurable_from_top]
+        rw [add_assoc, add_assoc]
+        refine congrArg _ (congrArg₂ (· + ·) (Finset.sum_congr rfl fun j _ => ?_)
+          (Finset.sum_congr rfl fun j _ => ?_))
+        · rw [MeasureTheory.lintegral_add_left measurable_from_top,
+            MeasureTheory.lintegral_add_left measurable_from_top]
+        · rw [MeasureTheory.lintegral_add_left measurable_from_top,
+            MeasureTheory.lintegral_add_left measurable_from_top]
+    _ ≤ _ := add_le_add (add_le_add (mul_le_of_le_one_right' (evalDist_apply_univ_le_one _))
+          le_rfl) le_rfl
+
+
+set_option exponentiation.threshold 500 in
+set_option maxRecDepth 4000 in
+/-- **Simultaneous extraction for an issue-type and a combined relation together, in the joint
+experiment**: `prEvent_sim_joint_le_E` averaged over the cipher table, with `cf` = Post and each
+output's failure terms bounded by `failEps`. -/
+theorem prEvent_sim_joint_le (T : CrtTables) (hT : liftInvOk T = true)
+    (stI : ιI → Statement) (decI : ByteArray → Option ιI)
+    (sysI : ιI → System GF128) (stI₀ : Statement) (hparamsI : ∀ s, (stI s).params = stI₀.params)
+    (hdelI : ∀ s, (stI s).delayed = false) (hcombI : ∀ s, (stI s).comb = none)
+    (hdecI : ∀ s, decI (muIn (stI s)) = some s) {n : ℕ} (hn : ∀ s, (sysI s).length = n)
+    (stR : ιR → Statement) (decR : ByteArray → Option ιR)
+    {M : ℕ} (sysL : ιR → (Fin M → GF128) → System GF128) (witL : ιR → (ℕ → GF128) → Prop)
+    (dst : ByteArray) (stR₀ : Statement) (hparamsR : ∀ s, (stR s).params = stR₀.params)
+    (hdelR : ∀ s, (stR s).delayed = false) (hcombR : ∀ s, (stR s).comb = some (M, dst))
+    (hdecR : ∀ s, decR (muIn (stR s)) = some s) {n' : ℕ} (hn' : ∀ s l, (sysL s l).length = n')
+    {εc : ℝ≥0∞} (hεc : ∀ s w, prU (Fin M → GF128) (fun l => (sysL s l).Holds w ∧ ¬witL s w) ≤ εc)
+    (hsep : ∀ x, (decI x).isSome → (decR x).isSome → False) (N : ℕ)
+    (WitI : ιI → ByteArray → (ℕ → GF128) → Prop)
+    (hvalsI : ∀ s c1 lb w, (stI s).values c1 lb w = (sysI s).values w)
+    (hdetI : ∀ (E : CTable) s, @ChainDet (icPrg E.cipher) T (stI s) (sysI s) N (WitI s))
+    (WitR : ιR → ByteArray → (ℕ → GF128) → Prop)
+    (hvalsR : ∀ s c1 (v : Prob.Bytes (16 * M)) w,
+      (stR s).values c1 v.ba w = (sysL s (combDec v)).values w)
+    (hdetR : ∀ (E : CTable) s, @CombDet (icPrg E.cipher) M T (stR s) (sysL s) (witL s) N (WitR s))
+    (PI₀ : OracleComp specIC (ByteArray × (ιI × βI)))
+    (PI : ιI' → OracleComp specIC (ByteArray × (ιI × βI)))
+    (PR₀ : OracleComp specIC (ByteArray × (ιR × βR)))
+    (PR : ιR' → OracleComp specIC (ByteArray × (ιR × βR)))
+    (JI : Finset ιI') (JR : Finset ιR') (qE : ℕ)
+    (hqEI : ∀ j ∈ JI, IsQueryBoundP (PI j) (fun t => t.isRight = true) qE)
+    (hqER : ∀ j ∈ JR, IsQueryBoundP (PR j) (fun t => t.isRight = true) qE) (q : Kind → ℕ)
+    (hqI : ∀ j ∈ JI, IsKindQueryBoundIC (PI j) q) (hqR₀ : IsKindQueryBoundIC PR₀ q)
+    (hqR : ∀ j ∈ JR, IsKindQueryBoundIC (PR j) q) (nG : ℕ)
+    (hnGI : ∀ j ∈ JI, IsQueryBoundP (PI j) (fun t => t.isLeft = true) nG)
+    (hnGR₀ : IsQueryBoundP PR₀ (fun t => t.isLeft = true) nG)
+    (hnGR : ∀ j ∈ JR, IsQueryBoundP (PR j) (fun t => t.isLeft = true) nG)
+    (hpreI : ∀ E, PrefixRuns E PI₀ PI JI) (hpreR : ∀ E, PrefixRuns E PR₀ PR JR)
+    (hsame : ∀ E g, tableQueryLog (runE E PI₀) g = tableQueryLog (runE E PR₀) g)
+    (oa : CTable → OracleComp spec α) (event : CTable → α → Prop)
+    (htr : ∀ E g, event E (evalWithAnswerFn (QueryImpl.ofFn g) (oa E)) →
+      (∃ j ∈ JI, let r := evalWithAnswerFn (QueryImpl.ofFn g) (gameA T stI (PI j) E)
+        r.2.2.accept = true ∧ ¬@Extracted (icPrg E.cipher) _ (stI (stOut r)) (WitI (stOut r)) r) ∨
+      (∃ j ∈ JR, let r := evalWithAnswerFn (QueryImpl.ofFn g) (gameA T stR (PR j) E)
+        r.2.2.accept = true ∧ ¬@Extracted (icPrg E.cipher) _ (stR (stOut r)) (WitR (stOut r)) r)) :
+    let nn := q + extractorQueries + verifierQueries
+    let ntot := nG + 2 + verifierTotal
+    Pr{let E ← $ᵗ CTable; let r ← (simulateQ randomOracle (oa E)).run' ∅}[event E r] ≤
+      ∑ k ∈ adaptKinds, (q k : ℝ≥0∞) * jointEps (M := M) dst stI₀ stR₀ n n' εc ntot N nn k +
+      ∑ _j ∈ JI, ∑ k ∈ adaptKinds,
+        ((extractorQueries + verifierQueries) k : ℝ≥0∞) * adaptEps stI₀ n N none nn k +
+      ∑ _j ∈ JR, ∑ k ∈ adaptKinds, ((extractorQueries + verifierQueries) k : ℝ≥0∞) *
+        combAdaptEps (M := M) dst stR₀ n' εc ntot N nn k +
+      JI.card * failEps q qE + JR.card * failEps q qE := by
+  intro nn ntot
+  refine (prEvent_avg_le_sum3₂ ($ᵗ CTable) _ _ (∑ k ∈ adaptKinds, (q k : ℝ≥0∞) *
+      jointEps (M := M) dst stI₀ stR₀ n n' εc ntot N nn k +
+    ∑ _j ∈ JI, ∑ k ∈ adaptKinds,
+      ((extractorQueries + verifierQueries) k : ℝ≥0∞) * adaptEps stI₀ n N none nn k +
+    ∑ _j ∈ JR, ∑ k ∈ adaptKinds, ((extractorQueries + verifierQueries) k : ℝ≥0∞) *
+      combAdaptEps (M := M) dst stR₀ n' εc ntot N nn k) JI (fun j E => (simulateQ randomOracle
+    (gameA T stI (PI j) E)).run' ∅) (fun E r => bindFailA stI E r)
+    (fun E r => deadOpenA stI E r) (fun E r => PostOut E r) JR (fun j E => (simulateQ randomOracle
+    (gameA T stR (PR j) E)).run' ∅) (fun E r => bindFailA stR E r)
+    (fun E r => deadOpenA stR E r) (fun E r => PostOut E r) fun E =>
+      prEvent_sim_joint_le_E T stI decI stR decR E hT sysI stI₀ hparamsI hdelI hcombI hdecI
+      hn sysL witL dst stR₀ hparamsR hdelR hcombR hdecR hn' hεc hsep N WitI hvalsI (hdetI E) WitR
+      hvalsR (hdetR E) PI₀ PI PR₀ PR (fun r => PostOut E r)
+      (fun j s g h => keysPre_of_not_postOut T (stI s) (PI j) E g h) (fun r => PostOut E r)
+      (fun j s g h => keysPre_of_not_postOut T (stR s) (PR j) E g h) JI JR q hqI hqR₀ hqR nG hnGI
+      hnGR₀ hnGR (hpreI E) (hpreR E) (hsame E) (oa E) (event E) (htr E)).trans ?_
+  rw [add_assoc _ (∑ j ∈ JI, _) (∑ j ∈ JR, _), add_assoc _ ((JI.card : ℝ≥0∞) * _)]
+  exact add_le_add le_rfl (add_le_add (sum_fail_le T stI stI₀.params hparamsI PI JI qE hqEI q hqI)
+    (sum_fail_le T stR stR₀.params hparamsR PR JR qE hqER q hqR))
+
+end SimJoint
+
 end VoleMole.ROM.IC
