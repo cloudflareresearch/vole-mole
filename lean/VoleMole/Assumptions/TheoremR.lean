@@ -951,4 +951,296 @@ theorem jImpl_inv (hsym : ∀ a b, cls a b → cls b a) :
 
 end Joint
 
+/-! ## The lottery -/
+
+section Lottery
+
+/-- `θ^{#filter}` as a product. -/
+lemma pow_filter_length {α : Type} (θ : ℝ) (p : α → Bool) (l : List α) :
+    θ ^ (l.filter p).length = (l.map fun k => if p k then θ else 1).prod := by
+  induction l with
+  | nil => simp
+  | cons k l ih =>
+    by_cases h : p k
+    · simp [List.filter_cons, h, pow_succ, ih, mul_comm]
+    · simp [List.filter_cons, h, ih]
+
+/-- **The lottery of one run.** Each request `k` has at most one winning shift `b k`; the choices
+are uniform. The sum over all choices of `θ^{number of wins}` is at most `(τ − 1 + θ)^m`, i.e.
+`E[θ^X] ≤ ((τ − 1 + θ)/τ)^m`. -/
+theorem lottery_sum {τ m : ℕ} (θ : ℝ) (hθ : 1 ≤ θ) (b : Fin m → Option (Fin τ)) :
+    ∑ a : Fin m → Fin τ,
+        θ ^ ((List.finRange m).filter fun k => decide (b k = some (a k))).length ≤
+      ((τ : ℝ) - 1 + θ) ^ m := by
+  have h1 : ∀ a : Fin m → Fin τ,
+      θ ^ ((List.finRange m).filter fun k => decide (b k = some (a k))).length =
+        ∏ k, (if b k = some (a k) then θ else 1) := by
+    intro a
+    rw [pow_filter_length, Fin.prod_univ_def]
+    simp
+  simp only [h1]
+  rw [← Fintype.prod_sum (fun k j => if b k = some j then θ else (1 : ℝ))]
+  calc ∏ k, ∑ j, (if b k = some j then θ else (1 : ℝ))
+      ≤ ∏ _k : Fin m, ((τ : ℝ) - 1 + θ) := by
+        refine Finset.prod_le_prod₀ (fun k _ => Finset.sum_nonneg fun j _ => by
+          split_ifs <;> linarith) fun k _ => ?_
+        cases hb : b k with
+        | none => simp; linarith
+        | some j₀ =>
+          have : ∀ j : Fin τ, (if some j₀ = some j then θ else (1 : ℝ)) =
+              1 + if j = j₀ then θ - 1 else 0 := by
+            intro j
+            by_cases h : j = j₀
+            · subst h; simp
+            · have : j₀ ≠ j := fun e => h e.symm
+              simp [h, this]
+          simp only [this, Finset.sum_add_distrib, Finset.sum_ite_eq', Finset.mem_univ, if_true]
+          simp
+          linarith
+    _ = ((τ : ℝ) - 1 + θ) ^ m := by simp
+
+/-- `θ = τ^{q+1}/2`. -/
+noncomputable def θR (τ q : ℕ) : ℝ := (τ : ℝ) ^ (q + 1) / 2
+
+lemma one_le_θR {τ : ℕ} (hτ : 7 ≤ τ) (q : ℕ) : 1 ≤ θR τ q := by
+  have h7 : (7 : ℝ) ≤ τ := by exact_mod_cast hτ
+  have h1 : (τ : ℝ) ≤ (τ : ℝ) ^ (q + 1) := le_self_pow₀ (by linarith) (Nat.succ_ne_zero q)
+  unfold θR
+  linarith
+
+variable {τ q : ℕ} {X T S : Type} [DecidableEq X] [AddCommGroup T] [DecidableEq T]
+  (cls : T → T → Prop) [DecidableRel cls]
+
+/-- **The potential**: `θ^{Z − 1}` with `Z = W − q·K`, and `1` once the lottery is won. -/
+noncomputable def pot (m : MSt τ q X T S) : ℝ :=
+  if m.hit then 1 else θR τ q ^ m.W / θR τ q ^ (q * m.K + 1)
+
+omit [DecidableEq X] [AddCommGroup T] [DecidableEq T] in
+lemma pot_nonneg (hτ : 7 ≤ τ) (m : MSt τ q X T S) : 0 ≤ pot m := by
+  have := one_le_θR hτ q
+  unfold pot
+  split_ifs
+  · norm_num
+  · positivity
+
+omit [DecidableEq X] [AddCommGroup T] [DecidableEq T] in
+lemma le_pot_of_hit (m : MSt τ q X T S) (h : m.hit = true) : pot m = 1 := by
+  simp [pot, h]
+
+/-- **The supermartingale step** (`uov-open-reductions.md` §4.4, steps 3–4): summed over the
+`τ^{q+1}` choices of a completed run, the potential is at most `τ^{q+1}` times the potential
+before. -/
+theorem pot_complete (hτ : 7 ≤ τ) (hq : 1 ≤ q) (m : MSt τ q X T S) (H : List T)
+    (δs : List (Fin τ → T)) (ans : List S) (ss : (Fin (q + 1) → Fin τ) → List S) :
+    ∑ a : Fin (q + 1) → Fin τ, pot (m.complete cls H δs ans a (ss a)) ≤
+      (τ : ℝ) ^ (q + 1) * pot m := by
+  have hθ := one_le_θR hτ q
+  have hθ0 : 0 < θR τ q := by linarith
+  by_cases hh : m.hit = true
+  · have : ∀ a : Fin (q + 1) → Fin τ, pot (m.complete cls H δs ans a (ss a)) = 1 := fun a => by
+      simp [pot, MSt.complete, hh]
+    simp [this, le_pot_of_hit m hh]
+  · simp only [Bool.not_eq_true] at hh
+    have key : ∀ a : Fin (q + 1) → Fin τ, pot (m.complete cls H δs ans a (ss a)) ≤
+        θR τ q ^ m.W / θR τ q ^ (q * (m.K + 1) + 1) *
+          θR τ q ^ ((List.finRange (q + 1)).filter fun k =>
+            decide (firstU cls m.tl H δs k = some (a k))).length := by
+      intro a
+      rw [div_mul_eq_mul_div, ← pow_add]
+      by_cases hd : q * (m.K + 1) < m.W + (counted cls m.tl H δs a).length
+      · have : pot (m.complete cls H δs ans a (ss a)) = 1 := by
+          simp [pot, MSt.complete, hd]
+        rw [this, one_le_div (pow_pos hθ0 _)]
+        exact pow_le_pow_right₀ hθ (by unfold counted at hd; omega)
+      · have : pot (m.complete cls H δs ans a (ss a)) =
+            θR τ q ^ (m.W + (counted cls m.tl H δs a).length) /
+              θR τ q ^ (q * (m.K + 1) + 1) := by
+          simp [pot, MSt.complete, hd, hh]
+        rw [this]
+        rfl
+    have hsm := VoleMole.UOVAssumptions.rewind_supermartingale (τ : ℝ)
+      (by exact_mod_cast hτ) q hq
+    have hτ0 : (0 : ℝ) < (τ : ℝ) ^ (q + 1) := by
+      have : (0 : ℝ) < τ := by exact_mod_cast (by omega : 0 < τ)
+      positivity
+    rw [div_pow, div_le_iff₀ hτ0] at hsm
+    calc ∑ a : Fin (q + 1) → Fin τ, pot (m.complete cls H δs ans a (ss a))
+        ≤ ∑ a : Fin (q + 1) → Fin τ, θR τ q ^ m.W / θR τ q ^ (q * (m.K + 1) + 1) *
+            θR τ q ^ ((List.finRange (q + 1)).filter fun k =>
+              decide (firstU cls m.tl H δs k = some (a k))).length :=
+          Finset.sum_le_sum fun a _ => key a
+      _ = θR τ q ^ m.W / θR τ q ^ (q * (m.K + 1) + 1) *
+            ∑ a : Fin (q + 1) → Fin τ, θR τ q ^ ((List.finRange (q + 1)).filter fun k =>
+              decide (firstU cls m.tl H δs k = some (a k))).length := by
+          rw [Finset.mul_sum]
+      _ ≤ θR τ q ^ m.W / θR τ q ^ (q * (m.K + 1) + 1) * (((τ : ℝ) - 1 + θR τ q) ^ (q + 1)) :=
+          mul_le_mul_of_nonneg_left (lottery_sum _ hθ _) (by positivity)
+      _ ≤ θR τ q ^ m.W / θR τ q ^ (q * (m.K + 1) + 1) * (θR τ q ^ q * (τ : ℝ) ^ (q + 1)) :=
+          mul_le_mul_of_nonneg_left hsm (by positivity)
+      _ = (τ : ℝ) ^ (q + 1) * pot m := by
+          simp only [pot, hh, Bool.false_eq_true, if_false]
+          have : q * (m.K + 1) + 1 = (q * m.K + 1) + q := by ring
+          rw [this, pow_add]
+          field_simp
+
+omit [DecidableEq X] [AddCommGroup T] [DecidableEq T] in
+lemma pot_eq {m m' : MSt τ q X T S} (h₁ : m'.hit = m.hit) (h₂ : m'.W = m.W) (h₃ : m'.K = m.K) :
+    pot m' = pot m := by
+  unfold pot
+  rw [h₁, h₂, h₃]
+
+end Lottery
+
+/-! ## A potential argument for stateful handlers -/
+
+section Potential
+
+/-- **Ville's inequality for a handler.** If every step of `impl` contracts the potential `Φ`
+(`hstep`: any event of a continuation that is bounded by `Φ` of the state after the step is
+bounded by `Φ` of the state before it), and the event `E` of a state forces `Φ ≥ 1`, then for
+every computation the probability of `E` at the final state is at most `Φ` of the initial state. -/
+theorem potential_le {ι : Type} {spec : OracleSpec ι} {σ : Type}
+    (impl : QueryImpl spec (StateT σ ProbComp)) (Inv : σ → Prop)
+    (hinv : QueryImpl.PreservesInv impl Inv) (Φ : σ → ℝ≥0∞) (E : σ → Prop)
+    (hE : ∀ s, E s → 1 ≤ Φ s)
+    (hstep : ∀ o s, Inv s → ∀ (β : Type) (f : spec.Range o × σ → ProbComp β) (p : β → Prop),
+      (∀ z ∈ support ((impl o).run s), Pr{let y ← f z}[p y] ≤ Φ z.2) →
+        Pr{let y ← (impl o).run s >>= f}[p y] ≤ Φ s)
+    {α : Type} (oa : OracleComp spec α) :
+    ∀ s, Inv s → Pr{let z ← (simulateQ impl oa).run s}[E z.2] ≤ Φ s := by
+  induction oa using OracleComp.inductionOn with
+  | pure x =>
+    intro s _
+    simp only [simulateQ_pure, StateT.run_pure]
+    by_cases h : E s
+    · exact (prEvent_le_one _).trans (hE s h)
+    · classical
+      rw [prEvent_pure]
+      simp [h]
+  | query_bind o k ih =>
+    intro s hs
+    simp only [simulateQ_bind, simulateQ_spec_query, StateT.run_bind]
+    exact hstep o s hs _ _ _ fun z hz => ih z.1 z.2 (hinv o s hs z hz)
+
+end Potential
+
+section LotteryJoint
+
+variable {DR : Type} [DecidableEq DR] {AR : DR → Type} [∀ d, SampleableType (AR d)]
+  {τ q : ℕ} [NeZero τ] {X : Type} [DecidableEq X] {T S : Type} [AddCommGroup T]
+  [SampleableType T] [DecidableEq T]
+  (cls : T → T → Prop) [DecidableRel cls]
+  {PK : Type} (rel : PK → S → T → Prop) [∀ pk s t, Decidable (rel pk s t)]
+  (pk : PK) (pre : T → S) (n : ℕ)
+
+/-- **Every atomic operation contracts the potential.** Only the completion of a run changes it;
+there the choices `a(H)` are fresh and uniform (`Inv.fresh`), and `pot_complete` applies. -/
+theorem lot_step (hτ : 7 ≤ τ) (hq : 1 ≤ q) (o : Op DR X T S τ) (s : JSt AR τ q X T S)
+    (hI : Inv cls rel pk n s) (β : Type)
+    (f : AnsOp AR τ q X T S o × JSt AR τ q X T S → ProbComp β) (p : β → Prop)
+    (h : ∀ z ∈ support ((jImpl cls rel pk pre o).run s),
+      Pr{let y ← f z}[p y] ≤ ENNReal.ofReal (pot z.2.1)) :
+    Pr{let y ← (jImpl cls rel pk pre o).run s >>= f}[p y] ≤ ENNReal.ofReal (pot s.1) := by
+  have hconst : (∀ z ∈ support ((jImpl cls rel pk pre o).run s), pot z.2.1 = pot s.1) →
+      Pr{let y ← (jImpl cls rel pk pre o).run s >>= f}[p y] ≤ ENNReal.ofReal (pot s.1) :=
+    fun hc => prEvent_bind_le_of_forall_le_of_support _ _ p fun z hz =>
+      (h z hz).trans (le_of_eq (congrArg ENNReal.ofReal (hc z hz)))
+  cases o with
+  | w d =>
+    refine hconst fun z hz => ?_
+    rw [j_w] at hz
+    erw [support_map] at hz
+    obtain ⟨r, -, rfl⟩ := hz
+    rfl
+  | lst hs =>
+    refine hconst fun z hz => ?_
+    rw [j_lst] at hz
+    erw [support_map] at hz
+    obtain ⟨r, -, rfl⟩ := hz
+    rfl
+  | tgt x =>
+    refine hconst fun z hz => ?_
+    by_cases h0 : s.1.rem = 0
+    · rw [j_tgt_zero _ _ _ _ _ _ h0] at hz
+      simp only [support_pure, Set.mem_singleton_iff] at hz
+      rw [hz]
+    · rw [j_tgt _ _ _ _ _ _ h0] at hz
+      erw [support_map] at hz
+      obtain ⟨t, -, rfl⟩ := hz
+      exact pot_eq rfl rfl rfl
+  | inv t =>
+    refine hconst fun z hz => ?_
+    rw [j_inv] at hz
+    simp only [support_pure, Set.mem_singleton_iff] at hz
+    rw [hz]
+    exact pot_eq rfl rfl rfl
+  | junk H j =>
+    refine hconst fun z hz => ?_
+    cases hj : s.1.tg (.inr (H, j)) with
+    | some t =>
+      rw [j_junk_some _ _ _ _ _ _ _ t hj] at hz
+      simp only [support_pure, Set.mem_singleton_iff] at hz
+      rw [hz]
+    | none =>
+      rw [j_junk _ _ _ _ _ _ _ hj] at hz
+      erw [support_map] at hz
+      obtain ⟨t, -, rfl⟩ := hz
+      exact pot_eq rfl rfl rfl
+  | fin H δs ans =>
+    cases hv : valid (q := q) rel pk (fun k => s.1.tg (.inr k)) H ans with
+    | false =>
+      refine hconst fun z hz => ?_
+      rw [j_fin_invalid _ _ _ _ _ _ _ _ hv] at hz
+      simp only [support_pure, Set.mem_singleton_iff] at hz
+      rw [hz]
+    | true =>
+      cases ho : s.1.out H with
+      | some o =>
+        refine hconst fun z hz => ?_
+        rw [j_fin_some _ _ _ _ _ _ _ _ hv o ho] at hz
+        simp only [support_pure, Set.mem_singleton_iff] at hz
+        rw [hz]
+      | none =>
+        have hfr := hI.fresh H ho
+        have hrun : (jImpl cls rel pk pre (.fin H δs ans)).run s =
+            (fun a : Fin (q + 1) → Fin τ => (some (a, (cands H δs a).map pre),
+              (s.1.complete cls H δs ans a ((cands H δs a).map pre),
+                { s.2 with ro := s.2.ro.cacheQuery (.inr (.inr H)) a,
+                           calls := (cands H δs a).reverse ++ s.2.calls }))) <$>
+              ($ᵗ (Fin (q + 1) → Fin τ)) := by
+          rw [j_fin _ _ _ _ _ _ _ _ hv ho, randomOracle.run_eq]
+          simp only [hfr, map_bind, map_pure]
+          exact (map_eq_bind_pure_comp _ _ _).symm
+        rw [hrun] at h ⊢
+        rw [bind_map_left, prEvent_bind_eq_sum_fintype]
+        have hc : (Fintype.card (Fin (q + 1) → Fin τ) : ℝ≥0∞) = (τ : ℝ≥0∞) ^ (q + 1) := by
+          simp
+        have hτ0 : (τ : ℝ≥0∞) ^ (q + 1) ≠ 0 := by
+          have : τ ≠ 0 := by omega
+          simp [this]
+        have hτt : (τ : ℝ≥0∞) ^ (q + 1) ≠ ⊤ := by simp
+        calc ∑ a : Fin (q + 1) → Fin τ, Pr{let x ← $ᵗ (Fin (q + 1) → Fin τ)}[x = a] *
+              Pr{let y ← f (some (a, (cands H δs a).map pre),
+                (s.1.complete cls H δs ans a ((cands H δs a).map pre),
+                  { s.2 with ro := s.2.ro.cacheQuery (.inr (.inr H)) a,
+                             calls := (cands H δs a).reverse ++ s.2.calls }))}[p y]
+            ≤ ∑ a : Fin (q + 1) → Fin τ, ((τ : ℝ≥0∞) ^ (q + 1))⁻¹ *
+                ENNReal.ofReal (pot (s.1.complete cls H δs ans a ((cands H δs a).map pre))) := by
+              refine Finset.sum_le_sum fun a _ => ?_
+              rw [SampleableType.prEvent_uniformSample_eq_singleton, hc]
+              refine mul_le_mul_right (h _ ?_) _
+              erw [support_map]
+              exact ⟨a, mem_support_uniformSample _, rfl⟩
+          _ = ((τ : ℝ≥0∞) ^ (q + 1))⁻¹ * ENNReal.ofReal (∑ a : Fin (q + 1) → Fin τ,
+                pot (s.1.complete cls H δs ans a ((cands H δs a).map pre))) := by
+              rw [← Finset.mul_sum, ENNReal.ofReal_sum_of_nonneg fun a _ => pot_nonneg hτ _]
+          _ ≤ ((τ : ℝ≥0∞) ^ (q + 1))⁻¹ * ENNReal.ofReal ((τ : ℝ) ^ (q + 1) * pot s.1) :=
+              mul_le_mul_right (ENNReal.ofReal_le_ofReal (pot_complete cls hτ hq s.1 H δs ans
+                fun a => (cands H δs a).map pre)) _
+          _ = ENNReal.ofReal (pot s.1) := by
+              rw [ENNReal.ofReal_mul (by positivity), ENNReal.ofReal_pow (by positivity),
+                ENNReal.ofReal_natCast, ENNReal.inv_mul_cancel_left hτ0 hτt]
+
+end LotteryJoint
+
 end VoleMole.Assumptions.TheoremR
