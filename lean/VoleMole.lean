@@ -341,6 +341,8 @@ import VoleMole.Assumptions.SimLinks
 import VoleMole.Assumptions.UnboundLinks
 import VoleMole.Assumptions.Shift
 import VoleMole.Assumptions.TheoremR
+import VoleMole.Assumptions.TheoremRBad
+import VoleMole.Assumptions.SymmetryCount
 import VoleMole.Assumptions.Blind
 import VoleMole.Assumptions.BlindPomfrit
 import VoleMole.Assumptions.PomfritLemmaP
@@ -370,5 +372,6 @@ import VoleMole.Audit.UnboundRest
 import VoleMole.Audit.OMPRShift
 import VoleMole.Audit.T6Pomfrit
 import VoleMole.Audit.TheoremR
+import VoleMole.Audit.SymmetryCount
 import VoleMole.Audit.PomfritLemmaP
 import VoleMole.Audit.Theft

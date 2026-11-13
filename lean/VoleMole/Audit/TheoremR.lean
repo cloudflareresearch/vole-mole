@@ -1,4 +1,4 @@
-import VoleMole.Assumptions.TheoremR
+import VoleMole.Assumptions.TheoremRBad
 import VoleMole.Assumptions.UOVLinks
 
 /-!
@@ -19,6 +19,11 @@ key) with `τ = 17` and UOV's class relation `Links.uovCls` (equality up to a no
     mechanized; the term shows that the interface (lists, junk, output, with rewinding by
     re-querying) is the one such a reduction needs.
 * `thmR` applies to both at PomFRIT's trapdoor.
+* **The bad events** (`Assumptions/TheoremRBad.lean`): UOV's class relation is `scls GF256 45`
+  (`uovCls_eq_scls`), so `thmR_V4` (Theorem R with `V⁴·2^{−343}`) and `corR'` (Corollary R′)
+  apply at PomFRIT's trapdoor. Their hypothesis, a bound `T` on the messages to `A**_D`, holds for
+  the guessing reduction with `T = q + 3` (`guessR_bound`: `q + 1` shift lists, one junk query,
+  one output query).
 -/
 
 open OracleComp OracleSpec VoleMole.ROM.OneMore VoleMole.ROM.OneMore.Pomfrit
@@ -95,6 +100,80 @@ def guessRed [NeZero τ] {PK : Type} (_ : PK) :
 
 end Guess
 
+/-! ## The query bound of the guessing reduction -/
+
+section GuessBound
+
+variable {DR : Type} {AR : DR → Type} {τ q : ℕ} {T S : Type} [AddCommGroup T]
+
+/-- A message to `A**_D`. -/
+abbrev isAdv : (DR ⊕ ((ℕ × Unit) ⊕ T)) ⊕ (List T ⊕ (List T ⊕ (List T × List S))) → Prop :=
+  fun o => o.isRight = true
+
+omit [AddCommGroup T] in
+theorem qTgt_bound (x : ℕ) :
+    IsQueryBoundP (qTgt (AR := AR) (τ := τ) (q := q) (T := T) (S := S) x) isAdv 0 := by
+  unfold qTgt; exact (isQueryBoundP_query_iff isAdv _ 0).mpr (by simp [isAdv])
+
+omit [AddCommGroup T] in
+theorem qInv_bound (t : T) :
+    IsQueryBoundP (qInv (AR := AR) (τ := τ) (q := q) (S := S) t) isAdv 0 := by
+  unfold qInv; exact (isQueryBoundP_query_iff isAdv _ 0).mpr (by simp [isAdv])
+
+omit [AddCommGroup T] in
+theorem qLst_bound (hs : List T) :
+    IsQueryBoundP (qLst (AR := AR) (τ := τ) (q := q) (S := S) hs) isAdv 1 := by
+  unfold qLst; exact (isQueryBoundP_query_iff isAdv _ 1).mpr (by simp)
+
+omit [AddCommGroup T] in
+theorem qJunk_bound (H : List T) :
+    IsQueryBoundP (qJunk (AR := AR) (τ := τ) (q := q) (S := S) H) isAdv 1 := by
+  unfold qJunk; exact (isQueryBoundP_query_iff isAdv _ 1).mpr (by simp)
+
+omit [AddCommGroup T] in
+theorem qFin_bound (H : List T) (ans : List S) :
+    IsQueryBoundP (qFin (AR := AR) (τ := τ) (q := q) H ans) isAdv 1 := by
+  unfold qFin; exact (isQueryBoundP_query_iff isAdv _ 1).mpr (by simp)
+
+theorem guessRun_bound (g : ℕ → Fin τ) : ∀ (k : ℕ) (hs : List T),
+    IsQueryBoundP (guessRun (AR := AR) (q := q) (S := S) g k hs) isAdv k
+  | 0, hs => by simp [guessRun]
+  | k + 1, hs => by
+    simp only [guessRun]
+    refine (isQueryBoundP_bind (qTgt_bound hs.length) fun t _ =>
+      isQueryBoundP_bind (qLst_bound hs) fun δ _ => guessRun_bound g k _).mono (by omega)
+
+omit [AddCommGroup T] in
+theorem mapM_qInv_bound (L : List T) :
+    IsQueryBoundP (L.mapM (qInv (AR := AR) (τ := τ) (q := q) (S := S))) isAdv 0 := by
+  induction L with
+  | nil => simp
+  | cons t L ih =>
+    rw [List.mapM_cons]
+    exact isQueryBoundP_bind (n := 0) (m := 0) (qInv_bound t) fun _ _ =>
+      isQueryBoundP_bind (n := 0) (m := 0) ih fun _ _ => by simp
+
+/-- **The guessing reduction sends `q + 3` messages to `A**_D`**: `q + 1` shift lists, the junk
+query and the output query. -/
+theorem guessR_bound [NeZero τ] (g : Fin (q + 1) → Fin τ) :
+    IsQueryBoundP (guessR (AR := AR) (T := T) (S := S) g) isAdv (q + 3) := by
+  unfold guessR
+  refine (isQueryBoundP_bind (guessRun_bound (AR := AR) (S := S) _ (q + 1) []) fun H _ =>
+    isQueryBoundP_bind (qJunk_bound H) fun us _ =>
+      isQueryBoundP_bind (mapM_qInv_bound us) fun ans _ =>
+        isQueryBoundP_bind (qFin_bound H ans) fun o _ =>
+          isQueryBoundP_pure isAdv _ 0).mono (by omega)
+
+theorem guessRed_bound [NeZero τ] {PK : Type} (pk : PK) :
+    ∀ r ∈ support (guessRed (AR := AR) (τ := τ) (q := q) (T := T) (S := S) pk),
+      IsQueryBoundP r isAdv (q + 3) := by
+  intro r hr
+  simp only [guessRed, mem_support_bind_iff, support_pure, Set.mem_singleton_iff] at hr
+  obtain ⟨g, -, rfl⟩ := hr
+  exact guessR_bound g
+
+end GuessBound
+
 /-! ## Theorem R at PomFRIT's trapdoor -/
 
 section Pomfrit
@@ -122,6 +201,24 @@ open Classical in
 example (B : VoleMole.Verifier.UovPk →
     ProbComp (OracleComp (specB AB ByteArray Unit TG SIss) (List (ByteArray × SIss)))) :=
   redExp_liftRed (τ := 17) (q := q) (pomTrap (pure (pk, sk)) honestPre) n c B
+
+/-- UOV's class relation is the scalar-class relation of `Assumptions/TheoremRBad.lean`. -/
+theorem uovCls_eq_scls : uovCls = scls VoleMole.Arith.GF256 45 := rfl
+
+open Classical in
+/-- **Theorem R with `V⁴·2^{−343}`** at PomFRIT's trapdoor, `τ = 17`, for every reduction with at
+most `T` messages to `A**_D`. -/
+example (hq : 1 ≤ q) (Tq : ℕ) (R : VoleMole.Verifier.UovPk →
+    ProbComp (OracleComp (specRed AB 17 q ByteArray TG SIss) (List (ByteArray × SIss))))
+    (hR : ∀ pk, ∀ r ∈ support (R pk), IsQueryBoundP r (fun o => o.isRight = true) Tq) :=
+  thmR_V4 (pomTrap (pure (pk, sk)) honestPre) n (by norm_num) hq c Tq R hR
+
+open Classical in
+/-- **Theorem R with `V⁴·2^{−343}` for the guessing reduction**: its query bound holds
+(`guessRed_bound`, `T = q + 3`), so every term is explicit: `V = (q + 1) + q + 18·(q + 1)(q + 3)`. -/
+example (hq : 1 ≤ q) :=
+  thmR_V4 (AR := AB) (pomTrap (pure (pk, sk)) honestPre) (q + 1) (τ := 17) (by norm_num) hq q
+    (q + 3) guessRed fun pk => guessRed_bound pk
 
 end Pomfrit
 

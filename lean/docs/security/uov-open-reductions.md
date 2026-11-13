@@ -356,7 +356,10 @@ Consequences.
   for each request. A reduction to OMPR cannot change its key per request, and its oracle is for
   `P`.
 - The only public maps `(φ, T)` with `P ∘ φ = T ∘ P` are the scalings of Lemma S, for additive or affine `φ` with `φ` bijective or `T` injective and all keys but a fraction `256^{−976}` (`ompr-shift-algebra.md` T3, §8, paper).
-  They act on targets linearly, not by translation.
+  They act on targets linearly, not by translation. That part is in Lean with its count: over
+  pqov's keys (any oil matrix and `P1`, uniform `P2`), an affine pair with `φ` onto and a nonzero
+  translation of targets exists with probability `≤ 256^{−1951} + 256^{−3285}`
+  (`Assumptions/SymmetryCount.lean`, `pr_translation_le`).
 
 ### 4.3 Translating a preimage is the UOV problem
 
@@ -531,10 +534,11 @@ of [BMV08] is not available: it needs to simulate `A**`'s forgeries, and preimag
 **Follow-up: `ompr-shift-algebra.md`.**
 - Theorem R there extends A4 to UOV itself: a reduction that is black-box in the adversary only,
   with any use of `pk`, wins against `A**` (with forgeries `D(z)`) with probability
-  `≤ 2·τ^{−(q+1)} + Adv^{free}_{UOV}(M) + V⁴·2^{−343}`. So item 2 above is closed for this class
-  unless OMPR^free (§3.1) fails.
+  `≤ 2·τ^{−(q+1)} + Adv^{free}_{UOV}(M) + V⁴·2^{−343}` (Lean `thmR_V4`, every term explicit;
+  Corollary R′: `corR'`). So item 2 above is closed for this class unless OMPR^free (§3.1) fails.
 - Its §3 goes through the algebra (symmetries, polar form, kernel and oil translations, spans of
-  preimages): no combiner. An affine symmetry never translates targets (Lean `affine_symmetry`).
+  preimages): no combiner. An affine symmetry never translates targets (Lean `affine_symmetry`;
+  with the count of keys whose radical is not `0`: `pr_translation_le`).
 - Its §4: collinear shifts `λ_a·c` remove one of the 45 equations. That is a gain of `≈ 2^{3.7}`
   for `τ ≥ 256` and none for τ = 17 (`256/17 = 2^{3.9}`). The conjecture is to be read for
   `τ ≤ 17`.
@@ -580,7 +584,9 @@ stronger OMPR⊕17. The protocol change [UA] §8 C2 removes the question.
 On paper only (except A1 and the guessing bound): the games, the lazy-sampling arguments, the
 bad-event bounds, Ville's inequality in the generic model of A4, the Chernoff steps of B4 and A5,
 and the ideal-permutation bookkeeping of B2. The variant of A4 for UOV itself (Theorem R of
-`ompr-shift-algebra.md` §2) is mechanized with its games (`thmR`), up to its bad-event term. The goodness part of Lemma S (item 3) is on paper; it is not used by B1.
+`ompr-shift-algebra.md` §2) is mechanized with its games and its bad-event bound `V⁴·2^{−343}`
+(`thmR`, `thmR_V4`; Corollary R′ `corR'`, with the success of `A**_D` a parameter). The goodness
+part of Lemma S (item 3) is on paper; it is not used by B1.
 
 ## 7. Open
 
@@ -594,4 +600,5 @@ and the ideal-permutation bookkeeping of B2. The variant of A4 for UOV itself (T
 - A4 for `τ < 5` (other constants), and for a PSF that has the scaling symmetry built in.
 - Other public pairs `(φ, T)` with `P ∘ φ = T ∘ P` (§4.2). Settled for additive and affine `φ`
   with `T` injective: for all keys but a fraction `256^{−976}` there are only the scalings
-  (`ompr-shift-algebra.md` Theorem T3, §8). Open for `φ` that is not additive.
+  (`ompr-shift-algebra.md` Theorem T3, §8; in Lean only the translation part and Lemma N,
+  `Assumptions/SymmetryCount.lean`). Open for `φ` that is not additive.

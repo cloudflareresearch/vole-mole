@@ -22,10 +22,10 @@ with a stated unproved hypothesis. *Estimate*: cost figure from the usual hybrid
 
 | # | Statement | Status | Where |
 |---|---|---|---|
-| R | **A4 holds for UOV itself, for every reduction that is black-box in the adversary only.** Such a reduction `R` may use `pk` and the algebra of `P` in any way, and may rewind. Against one explicit adversary it wins OMPR with probability `≤ 2·τ^{−(q+1)} + Adv^{free}_{UOV}(M) + V⁴·2^{−343}`, where `M` is an OMPR^free adversary ([OR] §3.1) of about `R`'s running time. So: a reduction of this kind with loss below `τ^{q+1}/4` **is** an attack on OMPR^free, i.e. it contains a combiner across classes | proved; Lean (`thmR`: the games, the simulation, the lottery and the accounting; the term `V⁴·2^{−343}` is the explicit probability `badPr`, bounded on paper) | §2 |
+| R | **A4 holds for UOV itself, for every reduction that is black-box in the adversary only.** Such a reduction `R` may use `pk` and the algebra of `P` in any way, and may rewind. Against one explicit adversary it wins OMPR with probability `≤ 2·τ^{−(q+1)} + Adv^{free}_{UOV}(M) + V⁴·2^{−343}`, where `M` is an OMPR^free adversary ([OR] §3.1) of about `R`'s running time. So: a reduction of this kind with loss below `τ^{q+1}/4` **is** an attack on OMPR^free, i.e. it contains a combiner across classes | proved; Lean (`thmR`: the games, the simulation, the lottery and the accounting; the bad events `badPr ≤ V⁴·2^{−343}`: `badPr_le_V4`; the statement as here: `thmR_V4`; Corollary R′: `corR'`) | §2 |
 | T1 | Toolbox: polar form, kernel translation, the preimage line through a singular vector (`D(0)` gives one), `P` on the span of two preimages | proved, Lean (`qmap_add_of_polar_eq_zero`, `preimage_line`, `preimage_plane`) | §1 |
-| T2 | An affine symmetry `P(As + a) = T(P(s)) + c` shifts targets only by `c = P(a)` with `a ⊥ im A`. If `A` is onto and `rad B = 0`, then `a = 0`, `c = 0`. `rad B = 0` for every key with `δ < 1` and `v ↦ L_v` injective | proved, first part Lean (`affine_symmetry`) | §3.1 |
-| T3 | **`P` has no symmetries but the scalings.** For every oil space and all but a fraction `≤ 256^{−976} < 2^{−7800}` of the keys: (G) the only linear pairs `(A, T)`, `A` invertible, with `P∘A = T∘P` are `(λI, λ²I)`; (L) the only infinitesimal pairs `B(s, Xs) = Y·P(s)` are `F·(I, 0)`; (S, A) the same for Frobenius-semilinear and for all additive bijections, with an affine part. So a symmetry pair moves a target only inside its class. Checked: (L) at full size on two keys; the full group on toy keys over `F₄` | proved (model: `P1`, `P2` uniform); identities Lean (`symmetry_polar`, `symmetry_eigen`, `infinitesimal_polar`, …); experimental | §3.1, §8 |
+| T2 | An affine symmetry `P(As + a) = T(P(s)) + c` shifts targets only by `c = P(a)` with `a ⊥ im A`. If `A` is onto and `rad B = 0`, then `a = 0`, `c = 0`. `rad B = 0` for every key with `δ < 1` and `v ↦ L_v` injective | proved; Lean (`affine_symmetry`; with `rad B = 0`: `no_translation`; `rad B = 0` with its count over pqov's keys: `pr_not_radTriv`, `pr_translation_le`) | §3.1 |
+| T3 | **`P` has no symmetries but the scalings.** For every oil space and all but a fraction `≤ 256^{−976} < 2^{−7800}` of the keys: (G) the only linear pairs `(A, T)`, `A` invertible, with `P∘A = T∘P` are `(λI, λ²I)`; (L) the only infinitesimal pairs `B(s, Xs) = Y·P(s)` are `F·(I, 0)`; (S, A) the same for Frobenius-semilinear and for all additive bijections, with an affine part. So a symmetry pair moves a target only inside its class. Checked: (L) at full size on two keys; the full group on toy keys over `F₄` | proved (model: `P1`, `P2` uniform); identities Lean (`symmetry_polar`, `symmetry_eigen`, `infinitesimal_polar`, …); Lean with the count, for any `O`, `P1` and uniform `P2`: no affine pair with `A` onto translates targets, all keys but `256^{−1951} + 256^{−3285}` (`pr_translation_le`), and `T` is fixed by `A`, so `(λI, T)` forces `T = λ²I`, all keys but `256^{−3285}` (`pr_not_spanTriv`, `scaling_target`); experimental | §3.1, §8 |
 | T4 | A translator for one fixed shift `Δ₀` is worth exactly one equation: `UOV(119, 45) ≤ UOV-projected(119, 44) ∘ Tr_{Δ₀}`, and `Tr_{Δ₀} ≤ UOV(119, 45)`. In the cost model the gap is `≈ 2^{3.7}`. For uniform shifts translation is the UOV problem ([OR] A3) | proved; figure: estimate | §3.2 |
 | T5 | The linear span of known preimages gives targets `Σ α_i² y_i + Σ α_iα_j B(s_i, s_j)`. The reduction controls the `y_i`, not the cross terms. On toy keys the cross term of two sampler answers is uniform. With the oil space, translation is linear algebra; without it, every route we checked is an MQ instance or a class | proved identities; heuristic conclusion; experimental | §3.3–3.4 |
 | C1 | **Collinear shifts trade one equation for a landing.** With shifts `λ_a·c`, a forgery is a solution of 44 of the 45 equations whose last coordinate `μ(s)` is one of τ values out of 256. In a hybrid solver this is the direct attack with one equation dropped from the solver and τ guesses saved. Its cost is `τ*/τ` times the direct cost, `τ* = 256·U/H` (`H`: direct; `U`: one solution of the 44 equations). Reference model (XL with Wiedemann, after Thomae–Wolf): `H = 2^{140.3}`, C1 at τ = 17 costs `2^{142.4}`, `τ* ≈ 72`. Over ten model variants `τ*` runs from 11 to 72 and C1 at 17 from `2^{0.7}` below to `2^{2.1}` above the direct attack. For `q = 0` no attack gains more than `τ = 2^{4.1}`. On toy keys the degrees, the call counts, the landing rate `τ/q` and the break-even point are as the model predicts | reduction proved; costs: estimate; experimental | §4.1 |
@@ -115,7 +115,7 @@ adversary without `sk`.
 index `j` if its target is in `[t_j]`; `M` wins if it outputs preimages of more distinct indices
 than there are charged indices.
 
-**Theorem R [proved; Lean `thmR`, §2.4].** Let `τ ≥ 7`, `q ≥ 1`. Let `R` be as above, with `c` calls to `D` and `T`
+**Theorem R [proved; Lean `thmR_V4`, §2.4].** Let `τ ≥ 7`, `q ≥ 1`. Let `R` be as above, with `c` calls to `D` and `T`
 messages to `A**_D`. Then there is an OMPR^free adversary `M` with
 
     Pr[R^{A**_D} wins OMPR(n, c)]  ≤  2·τ^{−(q+1)} + Adv^{free}_{UOV}(M) + V⁴·2^{−343},
@@ -123,7 +123,7 @@ messages to `A**_D`. Then there is an OMPR^free adversary `M` with
 where `V = n + c + (τ + 1)(q + 1)·T`. `M` runs `R` once, requests at most `n + q·T` targets,
 makes at most `c + (q + 1)·T` calls, and does `O(V)` further work (lazy sampling, checks).
 
-**Corollary R′ [proved; paper only].** Suppose a reduction of this class has loss `L`: for every adversary
+**Corollary R′ [proved; Lean `corR'` from the loss inequality, §2.4].** Suppose a reduction of this class has loss `L`: for every adversary
 `A`, `Adv^{ompr}(R^A) ≥ Adv^{ompr⊕τ}(A)/L`. If `L ≤ τ^{q+1}/4`, then
 
     Adv^{free}_{UOV}(M) ≥ 1/(2L) − (2q + 1)·δ^{255}/L − V⁴·2^{−343}.
@@ -158,6 +158,12 @@ Targets and lists are uniform values, fresh when revealed. In (E3), the last rev
 `δ_k`, `w`, `w′` must hit one of at most `255²·V³` values fixed before it (if `w = w′`, then
 `μ ≠ μ′` and `w = (δ_{k,a} ⊕ δ_{k,a′})/(μ ⊕ μ′)`). So `Pr[E1 ∨ E2 ∨ E3] ≤ V⁴·2^{−343}`. Assume
 none occurs.
+
+Lean (`badPr_le`, `badNum_le`; §2.4): each value is charged when it is drawn. The union runs over
+every shift list that `R` requests, not only the lists of completed runs, so it needs the bound
+`T` on the messages: at most `NT = n + q·T` targets and `NL = (q + 1)·T` lists are drawn. The
+exact bound is `(NT·cT + NL·cL)/256^{45}` (§2.4). Its main term is
+`2·τ²·256²·NL·NT²·2^{−360}`, and it is at most `V⁴·2^{−343}` when `q ≥ 1`.
 
 *Step 2: the lottery.* Call a value *useful* if it lies in the class of a target revealed so
 far. When a run `H` is completed, let `b_k(H)` be the first shift `a` of request `k` whose
@@ -210,9 +216,10 @@ Hence `Pr[R wins] ≤ Pr[∃ j : Z_j ≥ 1] + Adv^{free}(M) + Pr[bad]`. ∎
 
 ### 2.4 Lean
 
-`VoleMole/Assumptions/TheoremR.lean`; non-vacuity in `VoleMole/Audit/TheoremR.lean`. Generic in
-the trapdoor (`UOV.Trapdoor`) and in the class relation `cls` (any equivalence; for UOV
-`Links.uovCls`).
+`VoleMole/Assumptions/TheoremR.lean`; the bad events in `VoleMole/Assumptions/TheoremRBad.lean`;
+non-vacuity in `VoleMole/Audit/TheoremR.lean`. Generic in the trapdoor (`UOV.Trapdoor`) and in the
+class relation `cls` (any equivalence; for UOV `Links.uovCls`); the bad-event bound is for targets
+in `F^m` up to nonzero scalars.
 
 **The model.**
 - *OMPR^free*: `advOMPRFree tr cls nT Q` (`fImpl`, `freeExp`, `FreeWin`). The oracles of `advOMPR`
@@ -242,7 +249,38 @@ the trapdoor (`UOV.Trapdoor`) and in the class relation `cls` (any equivalence; 
   not counted (`MSt.addT`); a forgery is useful but not counted (`MSt.complete`). They are
   implied by (E1), (E2), (E3), with (E2) read for every target revealed on demand, challenge or
   junk.
-- For `R` with `T` messages to `A**_D`: `J ≤ q·T` and `K₀ ≤ T`.
+- For `R` with `T` messages to `A**_D`: `J ≤ q·T` and `K₀ ≤ T` (`jointExp_counts`).
+
+**With the bad events bounded** (`Assumptions/TheoremRBad.lean`). For targets in `F^m` with the
+class relation "equal up to a nonzero scalar" (`scls`; `Links.uovCls` is `scls GF256 45`) and a
+reduction with at most `T` messages to `A**_D` (`IsQueryBoundP` on the messages; rewinding
+included, every message counts):
+
+    badPr ≤ (NT·cT + NL·cL) / |F|^m,      NT = n + q·T,  NL = (q + 1)·T,  Q = |F|,
+    cT = 1 + NT·Q + NL·Q + NL·τ²·(Q²·NT + Q),     cL = τ²·(1 + Q²·NT²)          (badPr_le)
+
+and at `GF(256)^{45}`, for `q ≥ 1`, this is at most `V⁴·2^{−343}` (`badNum_le`, `badPr_le_V4`).
+So, with no term left implicit (`thmR_num`, `thmR_V4`):
+
+    Pr[R wins OMPR(n, c)] ≤ 2/τ^{q+1} + advOMPRFree(M; n + q·T, c + (q + 1)·T) + V⁴·2^{−343}.
+
+Corollary R′ (`corR'`): if `R` wins with probability `≥ w/L`, where `w` is the OMPR⊕τ advantage of
+`A**_D`, and `4L ≤ τ^{q+1}`, then `w/L ≤ 1/(2L) + Adv^{free}(M) + V⁴·2^{−343}`.
+
+The proof of the bound:
+- The bad states (`Ebad`): `M`'s flag, or (E3) as a property of the state (`E3`): a cached list
+  has two shifts whose difference is `0` or `μ·w − μ'·w'` for targets `w`, `w'` drawn so far.
+- A new target makes the state bad only if it lies in `tgtBad` (`draw_mem`): `0`, the classes of
+  the targets and of the uncharged calls, and for each cached list and pair of shifts the
+  `≤ Q²·|tl| + Q` points that would complete (E3).
+- A new list makes the state bad only if two of its shifts differ by an element of `lstBad`
+  (`lst_mem`); the difference of two coordinates of a uniform function is uniform
+  (`pr_diff_mem`).
+- A completion sets `bad` only if (E3) held for the cached lists of the run (`complete_E3`),
+  which `prog` queries just before (`lsts_step`).
+- The run (`bad_run`): induction on the reduction with the message budget, the invariant `Ival`
+  and the potential `Bnd`; one message costs at most `q` target draws and `q + 1` list draws
+  (`msg_step`).
 
 **Proved in Lean.**
 
@@ -256,13 +294,14 @@ the trapdoor (`UOV.Trapdoor`) and in the class relation `cls` (any equivalence; 
 | `Pr[∃ j : Z_j ≥ 1] ≤ 2·τ^{−(q+1)}` | `lottery_le` |
 | Step 3 | `free_of_win` |
 | Theorem R | `thmR` |
+| Step 1: `badPr ≤ (NT·cT + NL·cL)/|F|^m`, and `≤ V⁴·2^{−343}` at `GF(256)^{45}` | `badPr_le`, `badPr_le_V4` |
+| Theorem R with every term explicit | `thmR_num`, `thmR_V4` |
+| Corollary R′ | `corR'` |
 
 **Not mechanized.**
-- The bound `badPr ≤ V⁴·2^{−343}` (step 1). It is a union bound over fresh uniform values of
-  `F^M`; it uses the class size 255 and `|F^M| = 2^{360}`, which the generic statement does not
-  have.
-- Corollary R′, and the claim that `A**_D` wins OMPR⊕τ except when `D` fails.
-- The query count of `R` is not turned into `J` and `K₀`; they are part of the event.
+- The claim that `A**_D` wins OMPR⊕τ except when `D` fails (`w ≥ 1 − (2q + 1)·δ^{255}` in
+  Corollary R′): `A**_D` is built into `redExp`, not an adversary of a Lean OMPR⊕τ game. `corR'`
+  takes `w` as a parameter.
 
 **Corrections found by the formalization.**
 - *The lottery was conditioned on the bad events.* The first version of step 2 let `X_i` count the
@@ -272,6 +311,11 @@ the trapdoor (`UOV.Trapdoor`) and in the class relation `cls` (any equivalence; 
   unconditionally. (E3) is used once, in step 3: a useful forgery is counted.
 - *"`b_k(H)` is determined when `R` sends `h_k`" is not needed.* `b_k(H)` is read when the run is
   completed, before `a(H)` is drawn. (E2) is used only for targets revealed after that.
+- *The union bound of step 1 runs over every list that `R` requests.* A list is a fresh value
+  when `R` first asks for it, whether or not a run that uses it is completed later, so the count
+  of lists is by the messages `T`, not by the completed runs. The note's `V` already counts
+  `(τ + 1)(q + 1)·T` values; the mechanized bound confirms `V⁴·2^{−343}` (with room `2^{17}`),
+  using `q ≥ 1`.
 - The statement and the bound are unchanged.
 
 **Non-vacuity** (`Audit/TheoremR.lean`).
@@ -282,6 +326,8 @@ the trapdoor (`UOV.Trapdoor`) and in the class relation `cls` (any equivalence; 
   the OMPR game of `Assumptions/UOV.lean`.
 - The guessing reduction of [UA] Prop. 8(a) is a term of the class (`guessRed`): one run,
   `h_k = t_k − δ_{k,g_k}`, `q` calls for the junk. Its success probability is not mechanized.
+- It sends `q + 3` messages to `A**_D` (`guessR_bound`), so `thmR_V4` applies to it with every
+  term explicit; `uovCls_eq_scls` puts UOV's class relation in the form of `badPr_le`.
 
 ## 3. The algebraic tools as combiners
 
@@ -318,6 +364,13 @@ The Lean statement needs only that `A` and `T` are homogeneous of degree 1.
   ([UA] §1). `rad B = 0` is also checkable from `pk` by linear algebra.
 - So a translation of the domain never translates targets ([OR] A2 item 3, now for every affine
   pair): **the symmetries of `P` act linearly on targets.**
+- *Lean* (`Assumptions/SymmetryCount.lean`), over pqov's keys `pqovKey O P1 P2` with any `O` and
+  `P1` and a uniform `P2`. The proof above without `δ(sk)`: for `a = (v, 0) + ι(x)` in the
+  radical, `L_v = 0`, and if `v = 0` then `Σ_j x_j·S_k[i][j] = 0` for all `k, i` (`rad_coords`).
+  Both are kernels of surjective maps of the uniform `S`, so `rad B ≠ 0` on `F^{119}` has
+  probability `≤ 256^{74−2025} + 256^{45−3330}` (`pr_not_radTriv`). With T2 (`no_translation`):
+  a pair with `A` homogeneous and onto and `c ≠ 0` exists with probability
+  `≤ 256^{−1951} + 256^{−3285}` (`pr_translation_le`).
 
 **Which linear pairs exist?** Only the scalings `(λ·I, λ²·I)`.
 
@@ -724,11 +777,16 @@ would also break CT-UF^× ([OR] B2).
 | OMPR^free ([OR] §3.1) | `advOMPRFree`, `FreeWin` | `Assumptions/TheoremR.lean` |
 | Theorem R (§2.4) | `thmR`; `lottery_le`, `free_of_win`, `redExp_eqd`, `freeExp_redM` | `Assumptions/TheoremR.lean` |
 | The class of Theorem R contains OMPR adversaries and the guessing reduction | `redExp_liftRed`, `guessRed` | `Assumptions/TheoremR.lean`, `Audit/TheoremR.lean` |
+| Step 1 of §2.2: `badPr ≤ V⁴·2^{−343}` | `badPr_le`, `badPr_le_V4` | `Assumptions/TheoremRBad.lean` |
+| Theorem R as stated in §2.1; Corollary R′ | `thmR_V4`, `thmR_num`; `corR'` | `Assumptions/TheoremRBad.lean` |
+| The guessing reduction sends `q + 3` messages | `guessR_bound` | `Audit/TheoremR.lean` |
+| T2′ and Lemma N over pqov's keys; no affine pair translates targets | `pr_not_radTriv`, `pr_not_spanTriv`, `pr_translation_le` | `Assumptions/SymmetryCount.lean` |
 
 The rows of `Spec/PqovShift.lean` are for `qmap`, the model of pqov's public map that
 `lake exe spec_kats` checks against the C++. Theorem R is generic in the trapdoor and the class
-relation (§2.4). On paper only: the bound on Theorem R's bad events and Corollary R′ (§2.4),
-T1.4–5, T2′, T4, C1, C3 (C3 is `preimage_line` plus linear algebra).
+relation (§2.4); its bad-event bound is for targets up to scalars in `F^m` (`badPr_le`). On paper
+only: the success of `A**_D` in Corollary R′ (§2.4), T1.4–5, T4, C1, C3 (C3 is `preimage_line`
+plus linear algebra), and of T3 all but the translation part and Lemma N (§8.7).
 
 `scripts/ompr-shift-algebra/shift_algebra_toy.py` (pure Python, about 8 s): the identities of §1
 on toy keys over `F₁₆`, including good ⇔ `𝒪 ∩ K_s = 0`, oil translation and `rad B = 0`; the
@@ -750,6 +808,8 @@ budget, so the counts quoted in §4.1 vary a little between runs and machines.
 
 - A reduction OMPR ⇒ OMPR⊕17 that is not black-box in the adversary, or a proof that the natural
   non-black-box classes also fail.
+- T3 in Lean beyond the translation part and Lemma N: Lemma C, the rank Lemmas E and F, the
+  count of matrices by rank (§8.7).
 - T3 is proved for additive maps (§8). Open there: pairs `(φ, Θ)` with `φ` not additive, beyond
   `φ(s) = γ(P(s))·s`; pairs with `A` not bijective and `T ≠ 0`; a sharper exceptional fraction
   (the bound `256^{−976}` comes from the matrices at distance 1 from the scalars).
@@ -942,6 +1002,15 @@ oil block, each uniform. Union over `h` up to scalars. ∎
 
 This is T2′ with an explicit probability and without the condition on `δ(sk)`.
 
+*Lean* (`Assumptions/SymmetryCount.lean`). In the model with `O`, `P1` arbitrary and `P2` uniform
+(the model of `Privacy/PqovKeys.lean`), with the weaker bounds that this model gives:
+`Pr[rad B ≠ 0 on F^{119}] ≤ 256^{−1951} + 256^{−3285}` (`pr_not_radTriv`) and
+`Pr[the values of B do not span F^{45}] ≤ 256^{45−3330}` (`pr_not_spanTriv`: `h·B = 0` gives
+`h·S = 0` on the `74·45` coefficients of `S`). The last step of (G) and (L) for scalar `Z` is
+`target_unique`: if the values of `B` span, two linear maps that agree on the values of `P` are
+equal; so `P(λs) = T(P(s))` forces `T = λ²·I` (`scaling_target`) and `B(s, λs) = Y(P(s))` forces
+`Y = 0` (`scaling_infinitesimal_target`).
+
 ### 8.5 Characteristic 2
 
 **`B(s, s) = 0`.** It gives the solution `(I, 0)` of (L): `B(s, λs) = 0` (Lean `polar_self`,
@@ -1029,9 +1098,25 @@ For `A` linear this is T2 again, with the hypothesis on `A` and `rad B` discharg
 | `(X, Y)` infinitesimal iff `(X + c, Y)` is | `infinitesimal_add_scalar` |
 | infinitesimal ⟺ first order of the pair `(1 + cX, 1 + cY)` | `infinitesimal_iff_first_order` |
 
-On paper only: Lemma C, the rank counts of Lemmas E and F, the union bound, (S), Lemma I,
-Lemma N and Proposition A. They need the structure theorem for `F[x]`-modules, exterior powers
-and counts of matrices by rank; we did not mechanize them.
+**Lean with the count** (`Assumptions/SymmetryCount.lean`, `Audit/SymmetryCount.lean`; keys
+`pqovKey O P1 P2`, any `O` and `P1`, uniform `P2`):
+
+| Statement | Lean |
+|---|---|
+| T2′: a radical vector has `L_v = 0`, and `S·x = 0` if `v = 0` | `rad_coords`, `not_radTriv_imp` |
+| Lemma N, radical: `Pr[rad B ≠ 0] ≤ 256^{−1951} + 256^{−3285}` | `pr_not_radTriv` |
+| T2 with T2′: no affine pair with `A` onto translates targets | `no_translation`, `pr_translation_le` |
+| Lemma N, span: `Pr[values of B do not span] ≤ 256^{−3285}` | `pr_not_spanTriv` |
+| `T` is determined by `A`; scalar `A` gives `T = λ²I`, scalar `X` gives `Y = 0` | `target_unique`, `scaling_target`, `scaling_infinitesimal_target` |
+| Non-vacuity: good keys exist for every `O`, `P1`; the scalings satisfy the hypotheses | `exists_good_key`, `scaling_pair_hyps` |
+
+On paper only: Lemma C, the rank counts of Lemmas E and F, the union bound over non-scalar `A`
+and `X` (the bound `1.01·256^{−977}` of (G) and (L)), (S), Lemma I and Proposition A. They need
+the structure theorem for `F[x]`-modules, exterior powers and counts of matrices by rank; we did
+not mechanize them. Lemma N is in Lean in the model with `P1` fixed, with the bounds
+`256^{−1951} + 256^{−3285}` and `256^{−3285}` instead of `256^{−3211}` and `256^{−5987}`. This
+covers what the reductions of §3.1 use from T3 to exclude translations of targets: an affine pair
+with `A` onto acts linearly on targets. Theorem R (§2) uses no part of T3.
 
 **Scripts** (`scripts/ompr-shift-algebra/`).
 - `t3_bound.py`: the bounds of §8.1, exactly. With `-v`, `δ_r` and the term for every `r`.
