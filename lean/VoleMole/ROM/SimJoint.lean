@@ -883,6 +883,112 @@ theorem prEvent_sim_joint_le (T : CrtTables) (hT : liftInvOk T = true)
   exact add_le_add le_rfl (add_le_add (sum_fail_le T stI stI₀.params hparamsI PI JI qE hqEI q hqI)
     (sum_fail_le T stR stR₀.params hparamsR PR JR qE hqER q hqR))
 
+/-! ## The terms -/
+
+/-- A per-query charge dominating the two relations' and the joint one: `κ` at `H₂¹`,
+`ε₂ + ntot·2⁻⁴⁴⁸` at `H₂²`, `N·2⁻¹²⁸` at `H₂³`, the hits with the combination targets and the
+statement hits. -/
+noncomputable def jointMaxEps {M : ℕ} (dst : ByteArray) (κ ε₂ : ℝ≥0∞) (ntot N : ℕ)
+    (nn : Kind → ℕ) (k : Kind) : ℝ≥0∞ :=
+  (if k = .h21 then κ else if k = .h22 then ε₂ + (ntot : ℝ≥0∞) / 2 ^ 448
+    else if k = .h23 then (N : ℝ≥0∞) / 2 ^ 128 else 0) +
+  (hitEps nn (combCount (some (M, dst)) nn) k + stmtEps nn k)
+
+set_option exponentiation.threshold 1100 in
+/-- **The joint charge, summed**: with `κ` bounding both relations' `ε_KOS` and `ε₂` both
+relations' `H₂²` charges, the run's queries are charged once and each of the `m_I + m_R` outputs'
+continuations once:
+
+    (q₂₁ + m)·κ + (q₂₂ + m)·(ε₂ + ntot·2⁻⁴⁴⁸) + (q₂₃ + m)·N·2⁻¹²⁸ + chainHitEpsCombSim q M m
+      + stmtBindEpsSim q m,   m = m_I + m_R. -/
+theorem sim_joint_sum_le (stI₀ stR₀ : Statement) (n n' : ℕ) (εc : ℝ≥0∞) (ntot N : ℕ) {M : ℕ}
+    (dst : ByteArray) (q : Kind → ℕ) (JI : Finset ιI') (JR : Finset ιR') (κ ε₂ : ℝ≥0∞)
+    (hκI : epsKOS #chal3Blocks (Chain.kosL stI₀) ≤ κ)
+    (hκR : epsKOS #chal3Blocks (Chain.kosL stR₀) ≤ κ)
+    (h₂I : ENNReal.ofReal (Seed.epsQS (2 ^ 128) (2 ^ 64) n) ≤ ε₂)
+    (h₂R : ENNReal.ofReal (Seed.epsQS (2 ^ 128) (2 ^ 64) n') + εc ≤ ε₂) :
+    let nn := q + extractorQueries + verifierQueries
+    ∑ k ∈ adaptKinds, (q k : ℝ≥0∞) * jointEps (M := M) dst stI₀ stR₀ n n' εc ntot N nn k +
+      ∑ _j ∈ JI, ∑ k ∈ adaptKinds,
+        ((extractorQueries + verifierQueries) k : ℝ≥0∞) * adaptEps stI₀ n N none nn k +
+      ∑ _j ∈ JR, ∑ k ∈ adaptKinds, ((extractorQueries + verifierQueries) k : ℝ≥0∞) *
+        combAdaptEps (M := M) dst stR₀ n' εc ntot N nn k ≤
+      (q .h21 + (JI.card + JR.card)) * κ +
+        (q .h22 + (JI.card + JR.card)) * (ε₂ + (ntot : ℝ≥0∞) / 2 ^ 448) +
+        (q .h23 + (JI.card + JR.card)) * ((N : ℝ≥0∞) / 2 ^ 128) +
+        chainHitEpsCombSim q M (JI.card + JR.card) + stmtBindEpsSim q (JI.card + JR.card) := by
+  intro nn
+  let Est := jointMaxEps (M := M) dst κ ε₂ ntot N nn
+  have hhit : hitEps nn (combCount none nn) .h22 ≤ hitEps nn (combCount (some (M, dst)) nn) .h22 := by
+    simp only [hitEps, combCount]
+    gcongr
+    omega
+  have hJ : ∀ k, jointEps (M := M) dst stI₀ stR₀ n n' εc ntot N nn k ≤ Est k := by
+    intro k
+    cases k
+    case h21 =>
+      simp only [jointEps, Est, jointMaxEps, chainEps, reduceCtorEq, ite_false, ite_true, add_zero]
+      gcongr
+      exact sup_le hκI hκR
+    case h22 =>
+      simp only [jointEps, Est, jointMaxEps, chainEps, reduceCtorEq, ite_false, ite_true]
+      gcongr
+      exact sup_le h₂I h₂R
+    case h23 =>
+      simp only [jointEps, Est, jointMaxEps, chainEps, reduceCtorEq, ite_false, ite_true, add_zero,
+        sup_idem, le_refl]
+    all_goals simp [jointEps, Est, jointMaxEps, chainEps]
+  have hI : ∀ k, adaptEps stI₀ n N none nn k ≤ Est k := by
+    intro k
+    cases k
+    case h21 =>
+      simp only [adaptEps, Est, jointMaxEps, chainEps, reduceCtorEq, ite_false, ite_true]
+      gcongr
+      · simp only [hitEps]; rfl
+    case h22 =>
+      simp only [adaptEps, Est, jointMaxEps, chainEps, reduceCtorEq, ite_false, ite_true]
+      gcongr
+      · exact h₂I.trans le_self_add
+    case h23 =>
+      simp only [adaptEps, Est, jointMaxEps, chainEps, reduceCtorEq, ite_false, ite_true]
+      gcongr
+      simp only [hitEps]; rfl
+    all_goals simp [adaptEps, Est, jointMaxEps, chainEps, hitEps]
+  have hR : ∀ k, combAdaptEps (M := M) dst stR₀ n' εc ntot N nn k ≤ Est k := by
+    intro k
+    cases k
+    case h21 =>
+      simp only [combAdaptEps, Est, jointMaxEps, chainEps, reduceCtorEq, ite_false, ite_true]
+      gcongr
+    case h22 =>
+      simp only [combAdaptEps, Est, jointMaxEps, chainEps, reduceCtorEq, ite_false, ite_true]
+      gcongr
+    case h23 =>
+      simp only [combAdaptEps, Est, jointMaxEps, chainEps, reduceCtorEq, ite_false, ite_true,
+        le_refl]
+    all_goals simp [combAdaptEps, Est, jointMaxEps, chainEps]
+  calc _ ≤ ∑ k ∈ adaptKinds, (q k : ℝ≥0∞) * Est k +
+        ∑ _j ∈ JI, ∑ k ∈ adaptKinds, ((extractorQueries + verifierQueries) k : ℝ≥0∞) * Est k +
+        ∑ _j ∈ JR, ∑ k ∈ adaptKinds, ((extractorQueries + verifierQueries) k : ℝ≥0∞) * Est k := by
+        refine add_le_add (add_le_add (Finset.sum_le_sum fun k _ => ?_)
+          (Finset.sum_le_sum fun _ _ => Finset.sum_le_sum fun k _ => ?_))
+          (Finset.sum_le_sum fun _ _ => Finset.sum_le_sum fun k _ => ?_)
+        · gcongr; exact hJ k
+        · gcongr; exact hI k
+        · gcongr; exact hR k
+    _ = _ := by
+      rw [Finset.sum_const, Finset.sum_const, nsmul_eq_mul, nsmul_eq_mul]
+      simp only [adaptKinds, nn, Est, jointMaxEps]
+      rw [Finset.sum_insert (by decide), Finset.sum_insert (by decide),
+        Finset.sum_insert (by decide), Finset.sum_insert (by decide), Finset.sum_singleton,
+        Finset.sum_insert (by decide), Finset.sum_insert (by decide),
+        Finset.sum_insert (by decide), Finset.sum_insert (by decide), Finset.sum_singleton]
+      simp only [hitEps, stmtEps, combCount, chainHitEpsCombSim, chainHitEpsSim,
+        stmtBindEpsSim, Pi.add_apply, extractorQueries, verifierQueries, reduceCtorEq, or_self,
+        false_or, or_false, ↓reduceIte, add_zero, zero_add, Nat.cast_add, Nat.cast_mul,
+        Nat.cast_ofNat, Nat.cast_one, div_eq_mul_inv]
+      ring
+
 end SimJoint
 
 end VoleMole.ROM.IC
