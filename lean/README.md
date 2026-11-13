@@ -381,7 +381,9 @@ lean/
                             (PU) as a game and its ideal-permutation bound (PU, PUKeccak)
     Theft/                  non-malleability games (no theft, no redirect) on the specs in the
                             zero-knowledge table model, weak SE as a hypothesis; read budgets
-                            (Reads); L8's programming step (SimExtract, SimExtractLean); unbound
+                            (Reads); L8's programming step (SimExtract, SimExtractLean); any base
+                            hash record and the other hashes as tables (LeanHb, Tables);
+                            one-wayness of Com with random tables (ComOW); unbound
                             Moussaka Prop U3 and Thm U4 (MoussakaUnbound)
     Assumptions/            the UOV assumptions as standalone games (UOV) and their links to the
                             protocol theorems (UOVLinks); reductions between them: T1(a)/(c)
@@ -1489,12 +1491,23 @@ What is **not** established, roughly in order of importance:
    extractor that does not read `H₂³` (`weakSE2_of_plain`); the Lean verifier reads `H₂³` only at
    `chal3`'s input (`verRO_h23_eq`), so `ε_hit` is the probability that a fresh forgery's grinding
    prefix equals a simulated proof's (`accOp_moves`), giving `noTheft_lean_plain` and
-   `noRedirect_lean_plain` (`Theft/SimExtract*.lean`). Plain extraction and `ε_hit` stay hypotheses:
-   the zero-knowledge table model fixes `H₂⁰…H₂²` as SHAKE and bounds only table reads, while
-   `ROM/`'s extraction bounds need random oracles and query-bounded adversaries. `Adv^ow ≤
-   q_K·2⁻¹²⁷` is paper; in the table model it is 1 for some inverter (`owAdv_one_ratatouille`,
-   `owAdv_one_moussaka`), since it needs KP800 as an ideal permutation and a query-bounded inverter
-   and extractor. Ratatouille's N2a holds only in its extraction
+   `noRedirect_lean_plain` (`Theft/SimExtract*.lean`). The theft theorems also hold with `H₁`, `H₂⁰…H₂²`, `H₄` and `H_comb` read
+   off uniform tables: the zero-knowledge hops, the read budgets and the programming step hold for
+   every base hash record (`Theft/LeanHb.lean`, `noTheft_leanH_plain`, `noRedirect_leanH_plain`) and
+   lift, by averaging over one more shared table (`zkRO_tables`), to `noTheft_leanX_plain` and
+   `noRedirect_leanX_plain` (`Theft/Tables.lean`), with the same bound. Plain extraction and `ε_hit`
+   stay hypotheses there. `ROM/`'s extraction bounds do not carry over as they stand: `PlainSE`'s
+   extractor does not see the adversary's queries (an adversary that derives its GGM key from an
+   `H₂³` answer is not extractable by it, so the `_plain` theorems say nothing for such
+   adversaries), read budgets are certificate sizes and not query bounds, a cipher read is a row and
+   not a cell, and `ROM/`'s oracle is lazy (`docs/security/ratatouille.md` §5). For `ε_hit` the
+   lazy-sampling bound for decision trees is proved (`Theft/ComOW.lean`, `pr_tree_bad`), the chain
+   structure is not. `Adv^ow` stays the advantage of the explicit inverter, a computational
+   assumption on Keccak-p[800,12]: `Com` is evaluated inside the relations, so it cannot be a table
+   of the game, and some inverter wins with probability 1 (`owAdv_one_ratatouille`,
+   `owAdv_one_moussaka`). In a random-table model of the standalone experiment a `q`-query
+   inverter has advantage `≤ (q+2)·2⁻¹²⁶` (Ratatouille, `owAdvColRO_num`) and
+   `≤ (q+2)·2⁻¹²⁸ + (q+1)·2⁻³⁶⁰` (Moussaka, `owAdvRO_num`). Ratatouille's N2a holds only in its extraction
    form: a relay can burn an honest nullifier by squatting (`security/ratatouille.md` §3). Moussaka's unforgeability and Ratatouille's balance are mechanized with simultaneous
    extraction (`omuf_le_num_sim`, `balance_le_sim_num`; plan §2m). One difference from the paper
    remains: the cipher-side failure terms (binding, opened dead leaf, Post) stay per proof (`m·failEps`,
