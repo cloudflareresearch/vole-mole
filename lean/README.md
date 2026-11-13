@@ -192,9 +192,9 @@ permutations with inverse queries):
     chain, `clsExt` is the free trees' prefix or at most 2⁵⁰ challenges accept (`class_or_small_dec`,
     `extract_or_class`; `per_query_bound_cls`: 2⁻⁷⁸). On paper this gives Lemma P and U1 with
     `(Q₃+ℓ+1)·2⁻⁷⁸ + q₁·2⁻¹³⁴` instead of `(Q₃+ℓ+1)·2⁻⁷¹` (2⁻¹⁴ at 2⁶⁴ queries), with no conjecture
-    and no property of `H₅`. Not mechanized: the affine and two-label structure of the executable
-    verifier's CRT masks on slices (hypotheses `AffineOn`, `TwoLabelOn`; gate model:
-    `translateOn_gate_slice`, `twoLabel_gate`) and the one-more game with `E₁^cls` (G8-cls), so
+    and no property of `H₅`. The mask structure is proved for the executable verifier
+    (`chain_affineOn`, `chain_twoLabelOn`), and so is the adaptive single-statement bound
+    (`pomfritT_accept_le_cls`); not mechanized: the one-more game with `E₁^cls` (G8-cls), so
     `pomfrit_U1_sim` keeps 2⁻⁷¹. The earlier many-label-vector decoding problem was an artefact of
     the widest-group default; the heuristic decoder is needed only below 2⁻⁸⁵, and its wrong-gate
     step rests on an assumption that fails for some level sets of codimension ≥ 4 (`slice.py` R7). Keep `ũ` in `hash_to_target`: it is
@@ -346,24 +346,28 @@ averaged abort term, the `P2` part of pqov's keys uniform; one-more-UOV (OMPR, D
     collinear lists are allowed. They trade one of the 45 equations for a landing on 17 of 256
     points. In the reference cost model (XL–Wiedemann after Thomae–Wolf) this costs `2^142.4`
     against `2^140.3` for direct forgery; the break-even τ is model-dependent (11 to 72), and no use
-    of 17 shifts gains more than `2^4.1`. With the class attack P1 below on both sides: `2^138.7`
-    against `2^138.5`, break-even `τ* ≈ 19` (16 to 72 across models). Checked on toy keys
+    of 17 shifts gains more than `2^4.1`. With P1 on both sides and Hashimoto's reduction: `2^137.5`
+    against `2^135.1`, break-even `τ ≈ 88`. Checked on toy keys
     (`scripts/ompr-shift-algebra/c1_experiments.py`); paper and experiment, not in Lean.
   - Cryptanalysis of OMPR with the oracle (`docs/security/ompr-cryptanalysis.md`): answers of
     `derive_preimage` are uniform points of the good fibre, so they leak the trapdoor only through
     goodness. Two answers sharing a vinegar give an oil vector (`Spec/PqovVinegar.lean`:
     `vinegar_reuse`; good vinegars form a cone, `good_smul_iff`), with probability `2⁻⁴⁵⁷` at
     `2⁶⁴` calls; linear statistics of goodness need `2⁶⁰⁰` answers. No oracle-aided attack beats
-    direct forgery (`≈ 2^138.5`, below); OMPR⊕τ has the same oracle, and shifts chosen after answers add
+    direct forgery (`≈ 2^135.1` with P1, below); OMPR⊕τ has the same oracle, and shifts chosen after answers add
     only the factor τ. Toy experiments `scripts/ompr-cryptanalysis/ompr_toy.py`; on toy keys
     the oracle does give the oil space, with more calls than brute force.
   - Second pass (`docs/security/ompr-cryptanalysis-2.md`, `scripts/ompr-cryptanalysis/ompr_second.py`):
-    (i) **class attack P1**: `P` is homogeneous of degree 2 and every element of GF(256) is a square,
-    so a forgery is 44 homogeneous quadrics plus a scaling (`scaled_preimage`); the forgery baseline
-    at (119, 45) is `≈ 2^138.5` multiplications (`2^145.6` bit operations, against NIST level 1's
-    `2^143`), not `2^140.3`; no oracle call, so this is an attack on UOV itself (for uov-Ip (112, 44)
-    the same model gives `≈ 2^141.9` bit operations, rough at that precision; toy checks show the
-    gain). (ii) Statistics of goodness: the exact Fourier transform of the bad set (Theorem H); any
+    (i) **class attack P1** (known: Ostuzzi, ePrint 2026/2247): `P` is homogeneous of degree 2 and
+    every element of GF(256) is a square, so a forgery is 44 homogeneous quadrics plus a scaling
+    (`scaled_preimage`). The cost model of the UOV round-3 specification (Thomae–Wolf or Hashimoto,
+    hybrid Wiedemann XL) does not include it; applied to that model the forgery at (119, 45) costs
+    `≈ 2^135.1` multiplications (`2^142.2` bit operations) instead of `2^139.7` (`2^146.8`),
+    slightly below NIST level 1's `2^143` in the RAM model (an estimate; the Thomae–Wolf step is
+    checked on toy keys, the Hashimoto step is not; `ompr-cryptanalysis-2.md` §8,
+    `scripts/ompr-cryptanalysis/p1_review.py`). No oracle call: this is an attack on UOV itself.
+    The round-3 specification also lists the wedge key-recovery attack at `2^144` bit operations,
+    below this project's `≈ 2^194` multiplications. (ii) Statistics of goodness: the exact Fourier transform of the bad set (Theorem H); any
     statistic fixed before the key has rms bias `≤ 2⁻²⁹⁶` at any degree (Theorem V); every linear
     character `≤ 2⁻¹⁴⁸·ε^{-1/4}` for all but `ε` of keys (Theorem T); key-dependent degree-d
     statistics heuristic. (iii) Several targets jointly cost more than separate forgeries;
@@ -1335,7 +1339,7 @@ Lean has the numbers (`block_SE_at_q45_QS30`, `block_SE_at_q50_QS30`, `block_mul
 | `domain-separation.md` | Every hash/XOF/permutation call lies in a disjoint domain, except below. [Lean] `Protocols/DomainSeparation.lean` | PomFRIT's `hash_to_target` overlaps four proof-system domains (no exploit found; fix: a final domain byte). |
 | `uov-assumptions.md` | Relates the protocol-specific UOV assumptions to each other and to standard UOV: all three protocols rest on one-more-UOV (OMPR). [Lean] the counting cores (`Protocols/UOVAssumptions.lean`), the assumptions as games (`Assumptions/UOV.lean`) and T1(a), T1(c), T4 (random-function `Com`), A1, P8(a), T6's generic core, P9(a) (`Assumptions/`). | Several reductions are unavailable; the note states why. Lemma U (CT-UF from OMPR) was wrong; T1(c) and T4 need padding and a sampler-failure term. |
 | `ompr-shift-algebra.md` | OMPR versus OMPR⊕17 using UOV's algebra: a reduction black-box in the adversary only (any use of the public map, rewinding) wins with probability `≤ 2·τ^{−(q+1)} + Adv^{free}_{UOV} + V⁴·2⁻³⁴³` (Theorem R; [Lean] `thmR_V4`, `corR'`, `Assumptions/TheoremR*.lean`); collinear shifts trade one equation for a landing on τ of 256 points (at τ = 17 no gain in the reference model, at most `2^4.1` in any; estimates and toy experiments). Theorem T3: no additive or affine symmetry but the scalings, for all keys but `256^{−976}` (paper); [Lean] `t3` (`Assumptions/SymmetryT3.lean`): linear, Frobenius-semilinear and infinitesimal pairs, with affine parts, all keys but `256^{−128}`, `P1` and `P2` uniform; identities in `Spec/PqovSymmetry.lean`; Lemma N for fixed `P1` in `Assumptions/SymmetryCount.lean`; audits `Audit/SymmetryT3.lean`. [Lean] `Spec/PqovShift.lean` (`affine_symmetry`, `preimage_line`, `preimage_plane`), `Assumptions/TheoremR.lean`, `Audit/TheoremR.lean`; toy checks `scripts/ompr-shift-algebra/`. | A6 stays open (attack side: `ompr-cryptanalysis.md`); collinear shifts may gain up to `τ`; at τ = 17 the sign is model-dependent, at most 4 bits. |
-| `ompr-cryptanalysis.md` | Attacks on OMPR and OMPR⊕τ that use the `derive_preimage` oracle: the answers are uniform good fibre points, so they carry the trapdoor only through goodness. Key recovery through the oracle needs `2^292.5` calls (vinegar collision) or `2^600` answers (linear statistics; variance proved for uniform `P2`); no call pays for two targets; the two games share the oracle. [Lean] `Spec/PqovVinegar.lean` (`vinegar_reuse`, `sysMat_smul`, `good_smul_iff`); toy experiments `scripts/ompr-cryptanalysis/ompr_toy.py`. | No attack below the oracle-free ones (direct forgery `≈ 2^138.5` with the class attack of `ompr-cryptanalysis-2.md`, key recovery `≈ 2^194` multiplications). On toy keys the oracle does give the oil space, with `≈ q^(V/2)` or `≈ q^V/δ` calls. Not a proof. Second pass (`ompr-cryptanalysis-2.md`): degree-d statistics, Lemma F's tail, multi-target and quantum attacks. |
+| `ompr-cryptanalysis.md` | Attacks on OMPR and OMPR⊕τ that use the `derive_preimage` oracle: the answers are uniform good fibre points, so they carry the trapdoor only through goodness. Key recovery through the oracle needs `2^292.5` calls (vinegar collision) or `2^600` answers (linear statistics; variance proved for uniform `P2`); no call pays for two targets; the two games share the oracle. [Lean] `Spec/PqovVinegar.lean` (`vinegar_reuse`, `sysMat_smul`, `good_smul_iff`); toy experiments `scripts/ompr-cryptanalysis/ompr_toy.py`. | No attack below the oracle-free ones (direct forgery `≈ 2^135.1` multiplications with the class attack and Hashimoto's reduction, `ompr-cryptanalysis-2.md` §8; key recovery `≈ 2^194` multiplications here, but the round-3 specification's wedge attack is `2^144` bit operations). On toy keys the oracle does give the oil space, with `≈ q^(V/2)` or `≈ q^V/δ` calls. Not a proof. Second pass (`ompr-cryptanalysis-2.md`): degree-d statistics, Lemma F's tail, multi-target and quantum attacks. |
 | `uov-open-reductions.md` | OMPR versus OMPR⊕τ: the tight direction, and no relativizing reduction for the other with loss below `τ^{q+1}/2`; CT-UF up to scalars ≡ OMPR with free non-challenge calls, separated from OMPR. Paper; [Lean] counting cores and the scaling attack (`Spec/PqovScale.lean`). | Plain CT-UF is false for UOV. |
 | `uov-open-structure.md` | Meta-reduction theorems A1–A3 (one-more UOV assumptions do not follow from the UOV problem by key-preserving black-box reductions); first cryptanalysis of GPI. Paper only; scripts in `scripts/uov-open-structure/`. | GPI ≈ key recovery is a conjecture; estimates under semi-regularity, citations from memory; weak two-sided distinguishers and key-changing reductions are open. |
 | Privacy on the specs ([Lean] `VoleMole/Privacy/`) | The privacy theorems as games on `Spec/*`, each hybrid hop mechanized, from per-proof zero knowledge (`Privacy.ZeroKnowledge`: a simulator from the instance alone, `ε`-close for every valid witness) and, for Moussaka 4(a) and Ratatouille, hiding of `Com` for explicit reductions: PomFRIT blindness (`Privacy.PomFRIT.blindness`, `≤ 4ε`); Moussaka issuer hiding and unlinkability against a Moderator colluding with all Anchors (Thm 4a, `Privacy.Moussaka.anonymity`, `≤ 4εI + 4εR + 2εhide`) and against one that sees no issuance (Thm 4b corrected, `Privacy.Moussaka.anonymityNC`, `≤ 4εR + 2·(φ₀ + φ₁)`, no assumption on `Com`), both also for `main`'s Client that finds its Anchor itself (`Privacy.MoussakaFind.anonymity`, `.anonymityNC`; the other Moussaka games take the index-taking Client of the API before `21be618`); Ratatouille unlinkability of spends from issuances and from each other through change tokens (`Privacy.Ratatouille.unlinkability`, `≤ 4εI + 4εS + 2εhide`). With the executable Lean prover (label rows) down to its tape hypothesis (`*_label_rows`, `blindness_lean`; `*_shake` with the hop hypotheses); for 4(a), Ratatouille and PomFRIT also in the random-oracle and ideal-cipher model with every zero-knowledge term explicit (`*RO_lean_num`), with table-reading interactions (`*RA_lean_num`, `blindnessRAH_lean_num`, `*OC*`), with AES as random permutations (`_perm`), with one shared `H₃` (`*Sh_num`, `blindnessRAHSh_num`) and from the real Clients' seeds (`*_seed`); Moussaka 4(b) also in the random-oracle and ideal-cipher model (`anonymityNCRO_lean_num`, `anonymityNCSh_num`, with `_seed`), with the Moderator's choices read off the tables (`anonymityNCRA_lean_num`, `anonymityNCOC_lean_num`), with pqov's signer (`anonymityNC_pqov`, `anonymityNCRO_pqov`; averaged over pqov's keys `anonymityNCRO_pqov_pqovKeys`, abort term `≈ 2⁻²⁹³·⁸`; the model equals the C++ `derive_preimage` on the KAT targets, `spec_kats`) and reaching redemption (`pr_refused_NCRO_le`); 4(a) and Ratatouille also with table-reading key stages (`anonymityRAK_lean_num`, `unlinkabilityRAK_lean_num`); 4(a), Ratatouille and PomFRIT also with many sessions (`*N_lean_num`, `*P_lean_num`, `blindnessPH_lean`, `blindnessAd_lean_num`, `anonymityAd_lean_num`, `unlinkabilityAd_lean_num`; interleaved schedules, Ratatouille's further Clients spending several times: `blindnessIL_lean_num`, `anonymityIL_lean_num`, `unlinkabilityIL_lean_num`; with a table-reading scheduler and a free challenge: `blindnessILO_lean_num`, `anonymityILO_lean_num`, `unlinkabilityILO_lean_num`; Moussaka and Ratatouille with `N` pairs linear up to a bad event, `anonymityP_lin`, `unlinkabilityP_lin`). Bounds and what remains: §3 | The zero-knowledge hypothesis is false on `main` for PomFRIT (`ZK.pomfrit_issuer_hits`, `ZK.pomfrit_attack_test`); for Moussaka and Ratatouille no efficient simulator satisfies it per proof on `main`, and the joint (PU) hop replaces it ([Lean] `anonymity_main`, `unlinkability_main`, (PU) as an explicit term). PomFRIT note §8.3: the "both ⊥" rule is needed. Moussaka Thm 4(a) needs no `2⁻¹⁹²` term; Thm 4(b) misses an abort term `2·(φ₀ + φ₁)` (negligible, bounded with no assumption on `Com`), needs the Client to take its index from `S`, and needs no `2⁻¹⁹²` term either. Its Lean random-oracle games were vacuous until they used the label-row Anchor (fixed); with pqov's signer its abort term is bounded only on average over the keys (§3). Ratatouille H3 needs the Client's validity check against the commitment it sent. Ratatouille's H1 misses the seed collisions, and Moussaka's Thm 4 has no term for the seed-XOF hop (`docs/zk.md` §10.6) |
@@ -1581,8 +1585,18 @@ What is **not** established, roughly in order of importance:
    meets the simulated chain at a first level where the inputs differ and the outputs agree
    (`chain_hit`, `qtree_forger`, `pr_hit_le`). Freshness is under the adversary's key (`FreshOk`),
    because the Lean spend statement does not hash `pk`; in the game this is the game's freshness
-   (`freshOk_stS`). `ε_hit` for Moussaka (non-injective `t ‖ ctx_iss`, unbounded instances) and
-   for the many-client theorems is not done, and plain extraction stays a hypothesis. `ROM/`'s extraction bounds do not carry over as they stand: `PlainSE`'s
+   (`freshOk_stS`). The bound is generic (`Hit.progEv_chain`,
+   `Theft/HitLevel.lean`). For Moussaka with one token, `noRedirect_leanX_hit`
+   (`Theft/MoussakaHit.lean`, `L ≥ 6293`) has the same `ε_hit` term, for the freshness `FreshOk`
+   (well-formed statements that differ in a hashed field; the redemption statement hashes the
+   Anchors' digests, not their maps) and adversaries with `HitWf` (the lengths the C++ types fix;
+   a redemption under a set with the Client's digests is under the Client's set, in C++ collision
+   resistance of the key digest). For Ratatouille with `U` Clients and `M` spends,
+   `noTheftN_leanX_hit` (`Theft/RatatouilleManyHit.lean`, `Theft/ManyTables.lean`,
+   `Theft/HitMany.lean`) has the other hashes as uniform tables and the programmed-point terms
+   bounded: `N·((q₂₂+N+1)·2⁻⁴⁴⁸ + (q₂₁+N+1)·2⁻¹⁰⁸⁸ + (q_μ+N+1)·2⁻²⁵⁶)`, `N = U + M`. `ε_hit` for
+   Moussaka with `U > 1` tokens and for unbound Moussaka is not done. Plain extraction stays a
+   hypothesis. `ROM/`'s extraction bounds do not carry over as they stand: `PlainSE`'s
    extractor does not see the adversary's queries (an adversary that derives its GGM key from an
    `H₂³` answer is not extractable by it, so the `_plain` theorems say nothing for such
    adversaries), read budgets are certificate sizes and not query bounds, a cipher read is a row and
@@ -1597,7 +1611,7 @@ What is **not** established, roughly in order of importance:
    remains: the cipher-side failure terms (binding, opened dead leaf, Post) stay per proof (`m·failEps`,
    negligible at `2⁶⁴` queries). PomFRIT's U1 is mechanized with Lemma P's term bounded
    (`pomfrit_U1_explicit`, and with simultaneous extraction `pomfrit_U1_sim`), and so is U2
-   (`pomfrit_U2_sim`; plan §2n, `docs/security/pomfrit.md` G8). U1 with the class extractor (`2⁻⁷⁸` per `H₂³` query instead of `2⁻⁷¹`) is paper with a mechanized per-chain core; the one-more game with `E₁^cls` is open (`pomfrit.md` G8-cls). For zero knowledge and privacy with the fix, the classical random-oracle
+   (`pomfrit_U2_sim`; plan §2n, `docs/security/pomfrit.md` G8). U1 with the class extractor (`2⁻⁷⁸` per `H₂³` query instead of `2⁻⁷¹`, plus `2⁻¹³⁴` per `H₂¹` query) is a paper theorem; mechanized for the executable verifier: the affine and two-label structure of the CRT masks on slices (`chain_affineOn`, `chain_twoLabelOn`, `Verifier/Bridge/MaskSlices.lean`), the per-chain step with no hypothesis on the response (`pomfritT_extract_class_chain`), the parallelism event at `H₂¹` (`prU_kos_par_le`), and the adaptive bound for one statement (`pomfritT_accept_le_cls`, for provers whose log holds the decoder's `H₅` queries; `ROM/LemmaPCls*.lean`, `Audit/PomfritLemmaPCls.lean`). The one-more game with `E₁^cls` is open (`pomfrit.md` G8-cls); `pomfrit_U1_sim` keeps `2⁻⁷¹`. For zero knowledge and privacy with the fix, the classical random-oracle
    and ideal-cipher arguments are mechanized (§3, Gap 7). The quantum arguments are paper proofs;
    mechanizing them is beyond current tools.
    For the Lean verifier (§8), what the end-to-end extraction theorems still assume about the
