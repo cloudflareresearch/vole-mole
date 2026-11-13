@@ -1237,14 +1237,16 @@ G9).
 | Q3 | Comparison of AES models; the sketch's "AES-CTR as random oracle" model is unfaithful | [paper] |
 | Q4 | Efficient simulation of the quantum ideal cipher (within 2⁻¹⁷²), so the extractor is efficient | [paper] + [Lean] `Seed/CipherSim.lean` |
 | Q5 | Simulation-extractability in the QROM (superseded numerically by Q6/Q7) | [paper] + [Lean] `Seed/QSimExt.lean` |
-| Q6 | Binding of AES leaf commitments for all q; tightness of key-level techniques | [paper] + [Lean] `Seed/CipherBinding.lean` |
+| Q6 | Binding of AES leaf commitments for all q: key-level bound (tight for key-level techniques) and a block-representation bound using point evaluations, `ε_multi ≲ 2⁻¹⁸⁴·q³` | [paper] + [Lean] `Seed/CipherBinding.lean` |
 | Q7 | Extraction from many proofs at once; quantum versions of the protocol theorems | [paper] + [Lean] `Seed/QMulti.lean` |
 
-**Numbers.** Total extraction failure: 2⁻⁶⁰·⁴ at 2³⁰ quantum queries, 2⁻⁴⁰·² at 2⁴⁰, 2⁻²³·³ at 2⁴⁵,
-vacuous beyond about 2⁵¹·⁷. Up to about 2⁴¹ the bound is dominated by the q²/2¹²⁸ term that Grover
-search makes unavoidable for any 128-bit scheme. Beyond that, the AES binding term (a proof
-limitation, not an attack) takes over. Strong simulation-extractability: 2⁻⁶⁰·⁴ at 2³⁰ queries and
-2³⁰ simulated proofs.
+**Numbers.** Total extraction failure: 2⁻⁶⁰·⁴ at 2³⁰ quantum queries, 2⁻⁴⁰·⁴ at 2⁴⁰, 2⁻²⁰·⁴ at 2⁵⁰,
+2⁻¹⁰·⁴ at 2⁵⁵, 2⁻⁴·³ at 2⁵⁸, vacuous beyond about 2⁶⁰·². At every query count the bound is the
+q²/2¹²⁸ term that Grover search makes unavoidable for any 128-bit scheme. The AES binding term is
+now below it throughout (Q6 §11–§13: the "two keys open one commitment" event is a real-world
+event, and a block representation of the ideal cipher bounds it by ≈ 2⁻¹⁸⁴·q³ with forward and
+inverse queries; paper proof, new and not externally reviewed). Strong simulation-extractability:
+2⁻⁶⁰·⁴ at 2³⁰ queries and 2³⁰ simulated proofs.
 
 ### 5. The protocols — `docs/security/`
 
@@ -1562,9 +1564,11 @@ What is **not** established, roughly in order of importance:
      (`pomfrit_T6_lean`, `(ℓ+1)·2⁻¹¹³`; `pomfrit.md` G9); the converse of `advOMPR_le_ompr31` is not in Lean.
    - The quantum protocol theorems need quantum-oracle versions of these assumptions, which are
      new.
-6. **Quantum bounds stop at about 2⁵¹·⁷ queries.** Going further needs a point-level
-   multi-collision lemma for the compressed ideal cipher (M1–M3 in `Q6-cipher-binding.md` §7.3);
-   none is known. Parallel quantum queries are not treated.
+6. **Quantum bounds stop at about 2⁶⁰ queries, the Grover limit of the q²/2¹²⁸ term.** The AES
+   binding term no longer limits them (Q6 Theorems 4–5; paper proof, new and not externally
+   reviewed; numeric cores and toy checks only are machine-checked). A tight point-level bound
+   (Q6 §7.3, M1/M2; conjectured Θ(q³/2²⁵⁶)) is still unknown but would change no number here.
+   Parallel quantum queries are not treated.
 7. **Zero knowledge on `main` rests on (PU) for Moussaka and Ratatouille.** PomFRIT's ZK failure is
    fixed on `main` since `64fd1a4` (dedicated label rows for PomFRIT). For Moussaka and
    Ratatouille on `main`, ZK rests on (PU), i.e. on the one-wayness of Keccak-p[800] in `r`
