@@ -3,6 +3,7 @@ import VoleMole.Theft.MoussakaLean
 import VoleMole.Theft.SimExtractLean
 import VoleMole.Theft.Tables
 import VoleMole.Theft.ComOW
+import VoleMole.Theft.HitTheft
 
 /-!
 # Audit of the non-malleability theorems (`Theft/`)
@@ -35,6 +36,10 @@ import VoleMole.Theft.ComOW
   `noRedirect_leanX_plain` (`Theft/Tables.lean`) are instantiated at the tables `XTab L M` and the
   record `hbX` (`H₁`, `H₂⁰`, `H₂⁴`, `H₄`, `H₂¹`, `H₂²`, `H_comb` uniform on inputs of at most `L`
   bytes), for the same adversaries.
+* **`ε_hit` is bounded with a satisfiable adversary class.** `noTheft_leanX_hit`
+  (`Theft/HitTheft.lean`) is instantiated at the trivial thief, whose last stage reads no chain
+  table (`AdmHit 0 0 0`, `admHit_const`), with `L = 14357`: its `ε_hit` term is `epsHit 0 0 0 =
+  6·(2⁻²⁵⁶ + 2⁻¹⁰⁸⁸ + 2⁻⁴⁴⁸)`.
 
 No `sorry`, no `axiom`.
 -/
@@ -130,6 +135,16 @@ example (L M : ℕ) :=
     (a3 := 0) (a5 := 0) (aE := 0) (x3 := 0) (x5 := 0) (xE := 0)
     (fun _ _ _ => StageBudget.const _) (fun _ _ _ => StageBudget.const _) (ε₀ := 1) (εh := 1)
     (plainSE_one _ _ _ _ _) (progEv_one _ _ _ _ _ _ _) (fun _ _ => trivial)
+    fun _ _ _ _ _ _ => trivial
+
+/-- `noTheft_leanX_hit`'s hypotheses hold for the trivial thief (no chain-table queries) and a
+constant extractor, with `L = Lmin`. -/
+example (M : ℕ) :=
+  noTheft_leanX_hit (R := Blk → Blk) (L := Hit.Rata.Lmin) (M := M) (thief0 _ _ _) le_rfl
+    (e := fun _ _ _ _ _ _ => wit0) (Adm := Hit.Rata.AdmHit 0 0 0) (Adm₀ := fun _ => True)
+    (ε₀ := 1) (a3 := 0) (a5 := 0) (aE := 0) (x3 := 0) (x5 := 0) (xE := 0)
+    (fun _ _ _ => StageBudget.const _) (fun _ _ _ => StageBudget.const _)
+    (plainSE_one _ _ _ _ _) (fun _ _ => Hit.Rata.admHit_const _) (fun _ h => h)
     fun _ _ _ _ _ _ => trivial
 
 /-- **`Adv^ow` is `1` for some inverter** in this model: `Com` is a fixed function, and the

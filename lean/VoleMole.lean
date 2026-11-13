@@ -370,6 +370,9 @@ import VoleMole.Theft.SimExtractLean
 import VoleMole.Theft.LeanHb
 import VoleMole.Theft.Tables
 import VoleMole.Theft.ComOW
+import VoleMole.Theft.HitChain
+import VoleMole.Theft.Hit
+import VoleMole.Theft.HitTheft
 import VoleMole.Audit.Nonvacuous
 import VoleMole.Audit.Liveness
 import VoleMole.Audit.UnboundROM
