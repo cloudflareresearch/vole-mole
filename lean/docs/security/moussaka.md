@@ -300,8 +300,9 @@ extracts them from the issuance proofs.
     answer is not a preimage (`failPr = E[δ^{255}] ≈ 2^{−295.8}` for pqov). And `B` must cache
     repeated `Sign` queries and pad to exactly `q_S + 1` claims, which may use up to
     `q_f + 2q_S + 1` targets.
-  - **Status: [Lean], with `Com` a random function** (no inverse queries; the permutation is
-    paper). `Assumptions/CTUFOpenOMPR.lean`: `advCTUFIdeal1_le_ompr`,
+  - **Status: [Lean], with `Com` a random function, and with `Com` a random permutation with
+    inverse queries** (`Assumptions/CTUFPerm.lean`, `advCTUFPermAt_le_ompr`; see below and
+    `uov-assumptions.md` §5.4). `Assumptions/CTUFOpenOMPR.lean`: `advCTUFIdeal1_le_ompr`,
     `Adv^{ct-uf-open}_1 ≤ Adv^{ompr}(B; q_f + 2q_S + 1, q_S) + (q_f + 2q_S + 1)·failPr`, in the
     ideal-`Com` game `advCTUFIdeal1` (`Assumptions/UOV.lean`); the `K`-key step by guessing,
     `advCTUFIdeal_le_sum`; together `advCTUFIdeal_le_ompr` (over key generation) and
@@ -1254,9 +1255,10 @@ the fix column describes `d5def9c`, where Moussaka used the rows (and what dropp
 7. Unforgeability in Lean (§4 "Status"). Theorem 1 is mechanized in the ROM and ideal-cipher
    model on the spec (`omuf_le_num`), and down to OMPR (`omuf_le_num_ompr`) under the modelling
    hypothesis that the concrete `Com` may be replaced by a random function in the CT-UF^open game.
-   What remains: `Com` binding as an assumption (item 3); that modelling step itself; Lemma U
-   with `Com` a random permutation with inverse access (Lean has a random function, so no
-   inverse-query term); the per-proof failure terms of the simultaneous bound
+   What remains: `Com` binding as an assumption (item 3); that modelling step itself (Lemma U
+   with `Com` a random permutation with inverse access is now in Lean, `omuf_le_num_ompr_perm`,
+   with the permutation terms `(q_f + q_i + q_S + 1)²/2^{800} + q_i·2^{576}/2^{800}` explicit;
+   the hypothesis `hmodelP` replaces `Com` by that permutation); the per-proof failure terms of the simultaneous bound
    (`omuf_le_num_sim`: `(qI + qR)·failEps`, see §4 "Status"); Theorem 1 averaged over key generation (the Lean theorem is
    per key; the `K`-key guessing step is mechanized for the ideal game); `ε_dig` as a probability over key
    generation (a condition on the keys in Lean); AES as random permutations beyond the

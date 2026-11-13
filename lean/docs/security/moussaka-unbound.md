@@ -410,6 +410,10 @@ Status) with a second issuance oracle and the unbound Moderator.
   hypothesis `hmodel` (`Com ∪ UCom` ideal in the standalone CT-UF^open game only; as for
   `omuf_le_num_ompr`, not provable), the last term is at most
   `Σ_j (Adv^{ompr}_{key j}(B_j; q_f + 2q_S + 1, q_S) + (q_f + 2q_S + 1)·failPr_{key j})`.
+  With `Com ∪ UCom` a random permutation of the 800-bit blocks with inverse queries
+  (`omufU_le_num_ompr_perm`, hypothesis `hmodelP`, `Assumptions/PermLinks.lean`) the term is
+  `Σ_j (Adv^{ompr}_{key j}(B_j; n, q_S) + n·failPr_{key j}) + (q_f + q_i + q_S + 1)²/|B| +
+  q_i·|D ∪ D_u|/|B|`, `n = q_f + 3q_S + 2`.
 - *Numbers.* At `q' = 2⁶⁴` queries per kind for the whole run (`q'_E = n' = 2⁶⁴`) and
   `qI = qR = 2³⁰`: per proof `ε_I ≈ ε_UI ≈ 2⁻⁶⁰·⁶⁸`, `ε_UR ≈ 2⁻⁶⁰·⁵⁴`, so the per-proof union
   `qI·ε_I + qI·ε_UI + qR·ε_UR ≈ 2⁻²⁹·⁰⁵`. Simultaneously, `ε_I^sim ≈ 2⁻⁶⁰·⁶⁸`,
@@ -862,7 +866,8 @@ the base protocol.
    advantages of explicit adversaries: joint binding of `Com ∪ UCom` (`AdvBind`, a
    standard-model assumption) and CT-UF^open over `D ∪ D_u`. CT-UF^open reduces to OMPR only
    through the modelling hypothesis `hmodel` (Lemma U with `Com` a random function, no inverse
-   queries; the permutation version is paper). The bound issuance extraction is charged separately
+   queries), or `hmodelP` (`Com ∪ UCom` a random permutation with inverse queries,
+   `omufU_le_num_ompr_perm`). The bound issuance extraction is charged separately
    from the unbound pair. Cor U2 is mechanized on the game of Thm U1 with its bounds
    (`ROM/MoussakaUnboundCor.lean`). Prop U3 and Thm U4 are mechanized together, corrected (UF8),
    for one honest token with one redemption (`Theft/MoussakaUnbound.lean`, `nmU`) and for `U`

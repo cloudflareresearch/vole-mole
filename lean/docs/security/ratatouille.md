@@ -207,7 +207,14 @@ signed" is det-FDH EUF-CMA with `H = Tag`, and the lemma is `uov-assumptions.md`
 `advFDH_le_ompi` (`lean/VoleMole/Assumptions/IdealTag.lean`), with no loss and `q_T = k + 1` for
 `k` hash and signing queries. Then T1(c), `advOMPI_le_ompr`, gives OMPR, with `q_T + Q_sig` targets
 and a term `(q_T + Q_sig)·ρ` for the signer's aborts (a correction of T1(c), §5.1 there). The
-permutation terms `q_K·2^{−479} + q_K²·2^{−799}` are not mechanized. The step from the concrete
+permutation terms `q_K·2^{−479} + q_K²·2^{−799}` are mechanized only up to the hybrid:
+`Assumptions/FDHPerm.lean` defines det-FDH with `Tag` the first component of a random
+permutation with inverse queries (`advFDHPerm`) and proves that it is within
+`(q_f + q_i + q_S + 1)²/2^{800} + q_i·|M|/2^{800}` of a hybrid in which the permutation is a
+two-sided random function whose fresh inverse answers avoid the structured inputs
+(`advFDHPerm_le_hyb`). The last step, that hybrid against the random-function det-FDH game of a
+simulating forger (as `Assumptions/CTUFPerm.lean` does for CT-UF^open), is not finished, so the
+Ratatouille chain to OMPR still uses `TagIdeal`. The step from the concrete
 KP800 to the ideal `Tag` is a modelling hypothesis (`TagIdeal`, §4), as the paper's "ideal in the
 standalone game only".
 

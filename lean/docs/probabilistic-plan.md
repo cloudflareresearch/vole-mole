@@ -1317,8 +1317,42 @@ The `2⁻⁷¹` per `H₂³` query (Lemma P's `Shift`) dominates; it is the pape
 `2⁻⁵⁶·⁰`). The dominant terms are the `H₂²` and `H₂³` charges, `≈ 2⁻⁶³` each at `2⁶⁴`: the
 paper's `ε_ext`.
 
-**Not covered.** In the permutation model, the CT-UF^open, UF-Tag and OMPR corollaries of the
-protocol theorems and PomFRIT's U1 and U2 (above); the quantum setting.
+**Not covered.** In the AES permutation model, the CT-UF^open, UF-Tag and OMPR corollaries of
+the protocol theorems and PomFRIT's U1 and U2 (above); the quantum setting. `Com` (and partly
+`Tag`) as a random permutation in the standalone games: §2o.
+
+### 2o. `Com` and `Tag` as random permutations with inverse queries (standalone games)
+
+Files: `Assumptions/LazyPerm.lean` (generic), `Assumptions/CTUFPerm.lean`,
+`Assumptions/PermLinks.lean`, `Assumptions/FDHPerm.lean`, `Audit/PermOMPR.lean`;
+`lean/docs/security/uov-assumptions.md` §5.4 states the results.
+
+- **The shared step** (`LazyPerm`). A lazily sampled permutation of a finite block type with
+  forward and inverse queries (`rpImpl`), next to other oracles that may read it at one point
+  (`pt`, `implC`: the challenger's evaluation of `Com` or `Tag`). `prEvent_rp_le_rf`: against a
+  two-sided lazy random function (`rfImpl`) every event moves by at most `q·(n₀ + q)/|B|`.
+  `prEvent_invHit_le`: an inverse answer lands in a set `S` with probability `≤ q_i·|S|/|B|`.
+  `prEvent_rf_le_avoid`: fresh inverse answers can be drawn outside `S` at the same cost. The
+  identical-until-a-flag lemmas (`prEvent_and_not_flag_eq`, `prEvent_le_add_flag`) and the union
+  bound over a run (`prEvent_bad_le`) are proved here: VCVio's `SimulateQ/UntilBad` and
+  total-variation modules are not in the built package set.
+- **Moussaka** (`CTUFPerm`, `PermLinks`): T4 in the permutation model, `advCTUFPermAt_le_ompr`,
+  and the Moussaka corollaries `omuf_le_num_ompr_perm`, `omufU_le_num_ompr_perm` (hypothesis
+  `hmodelP`). The reduction simulates the permutation from `Com` and coins drawn from the world's
+  random oracle at fresh indices; its run against the function-model challenger projects onto the
+  random-function hybrid (stepwise, `combP_step`, under `InvP`). Corrections to the paper's
+  statement: the switching term includes the inverse queries; `n` budgets `q_S + 1` more targets.
+- **Ratatouille** (`FDHPerm`): the det-FDH game with `Tag` read off the permutation
+  (`advFDHPerm`), and its distance to the hybrid in which fresh inverse answers avoid the
+  structured inputs (`advFDHPerm_le_hyb`). The simulation of that hybrid by a function-model
+  det-FDH forger (`simCF`, `combF` with its normal forms) is written, but the step lemma, the
+  invariant and the counts are not, so `balance_le_ompr` still takes `TagIdeal`. The signer reads
+  the permutation, so unlike CT-UF^open an inverse record at a structured input changes the
+  forger's view; this is why the hybrid avoids structured inputs on inverse queries.
+- **PomFRIT** U1 and U2 with AES as random permutations with inverse queries are not done: it
+  needs the permutation-model versions of the Lemma P per-table bounds
+  (`prEvent_pfailZ_sim_le_E` averaged with `failEpsP`), as `ROM/MoussakaOMUFSimPerm.lean` does for
+  Moussaka.
 
 ### 2n. Lemma P in the random-oracle model (PomFRIT G8), as implemented
 
