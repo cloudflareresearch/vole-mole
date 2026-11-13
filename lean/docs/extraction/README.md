@@ -381,11 +381,14 @@ union bounds. Every deterministic step is in Lean or is an exhaustive test.
 and ideal-cipher steps are now also in Lean, for the executable verifier: for one proof
 (`*_accept_le_full`, `*_accept_le_adaptive`, `ROM/SpecSound.lean`), and for all accepted proofs
 of one run at once, as this theorem is used by the protocols (`ROM/SimExtract.lean`,
-`ROM/SimSpec.lean`, plan §2m): the bad challenges, hits and statement hits are charged once per
-query of the run and relation, plus per proof the verifier's three chain queries and the failure
-terms `ε_bind`, `ε_dead` and Post, which the Lean development bounds on average over the cipher
-table, not per query (`O(2⁻¹¹⁷)` each at `q = 2⁶⁴`). At `q = 2⁶⁴` and `2³⁰` proofs per relation
-this gives about `2⁻⁶⁰·⁷` per relation, against `2⁻³⁰·⁷` from a union bound over the proofs.
+`ROM/SimSpec.lean`, `ROM/SimJoint.lean`, `ROM/SimJointSpec.lean`, plan §2m): the bad challenges,
+hits and statement hits are charged once per query of the run, for the two relations of a
+protocol together (the relations' DSTs separate the statements committed at a query), plus per
+proof the verifier's three chain queries and the failure terms `ε_bind`, `ε_dead` and Post, which
+the Lean development bounds on average over the cipher table, not per query (`O(2⁻¹¹⁷)` each at
+`q = 2⁶⁴`). At `q = 2⁶⁴` and `2³⁰` proofs per relation this gives about `2⁻⁶⁰·⁵` for both
+relations of a protocol, against `2⁻²⁹·⁶` from a union bound over the proofs. The same holds in
+the permutation model with inverse queries, per relation (`ROM/SimPerm.lean`).
 
 ## Quantum assembly (Q1, Q2, Q4–Q7 proved; extraction non-vacuous up to q ≈ 2^51.7)
 

@@ -14,7 +14,11 @@ of calls, the toy ideal-`Com` forger, the trivial ideal-model forger. Every hypo
 discharged except, for the Ratatouille OMPR corollary, the modelling hypothesis `TagIdeal`, as
 for the per-proof versions. The prefix structure of the outputs' runs (`PrefixRuns`) is not a
 hypothesis of these corollaries: it is proved for Moussaka's projections (`prefixRuns_map`) and
-for Ratatouille's `j`-th provers (`prefixRuns_I`, `prefixRuns_S`).
+for Ratatouille's `j`-th provers (`prefixRuns_I`, `prefixRuns_S`). The protocol corollaries carry
+the joint bound (each query of the run charged once for both relations, `ROM/SimJoint.lean`);
+their separation hypothesis is discharged inside (`decOf_sep`, the relations' DSTs). The unbound
+Moussaka joint bound (`moussakaUnbound_sim_joint_spec`) is instantiated at the executable
+statements with one-instance families and trivial provers.
 
 No `sorry`, no `axiom`.
 -/
