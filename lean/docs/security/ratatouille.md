@@ -683,7 +683,8 @@ honest openings, not about signatures. The table's bound in §0 is the right one
     hops (`StageBudgetX`: the budgets hold at every `x`). `PlainSE` and `ProgEv … HitOpX` are now
     probabilities over uniform `x` too, against classes `Adm₀`, `Adm` of the caller's choice; the
     class for `PlainSE` must contain the last stage composed with both programmings (`hadm`;
-    `StageBudgetX.comp_progT` for the read budgets).
+    `StageBudgetX.comp_progT` for the read budgets). The adversary's choices before its last
+    stage still do not read the tables, so they do not depend on `x`.
   - `XTab L M`, `hbX`: a concrete `X`. `H₁`, `H₂⁰`, `H₂⁴`, `H₄`, `H₂¹`, `H₂²` and `H_comb` are
     uniform tables on all inputs of at most `L` bytes, and SHAKE on longer inputs (`hbX_wf`,
     `hbX_h1`, `hbX_mu`, `hbX_h21`, `hbX_h22`). `Audit/Theft.lean` instantiates

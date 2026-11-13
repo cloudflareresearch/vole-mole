@@ -29,7 +29,8 @@ a function `Hb x` of it:
   `ProgEv … HitOpX` are now statements about uniform `X` as well: plain extraction against an
   admissibility class `Adm₀` of the caller's choice (it may bound the reads of `X`), which must
   contain the adversary's last stage composed with both programmings (`hadm`;
-  `StageBudgetX.comp_progT` for the read budgets).
+  `StageBudgetX.comp_progT` for the read budgets). As before, the adversary's choices before its
+  last stage (key, contexts, responses) do not read the tables, so they do not depend on `x`.
 * **`XTab L`**, **`hbX`**: a concrete extra table. `H₁`, `H₂⁰`, `H₂⁴`, `H₄`, `H₂¹`, `H₂²` are
   uniform tables on all inputs of at most `L` bytes (SHAKE on longer inputs); `hbX_wf`. With it,
   `noTheft_leanX_plain` and `noRedirect_leanX_plain` hold with `chal1`, `chal2`, `mu`, `iv` and the
