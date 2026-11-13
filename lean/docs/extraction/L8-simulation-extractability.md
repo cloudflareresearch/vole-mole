@@ -607,6 +607,16 @@ does not read `H₂³`, where `ε_plain` bounds extraction with no simulated pro
 fresh forgery is accepted on the programmed tables but not on the unprogrammed ones (`ProgMoves`).
 For the Lean verifier, which reads `H₂³` at `chal3`'s input only (`verRO_h23_eq`), that event means
 the forgery's `chal3` input is a programmed point (`accOp_moves`), that is, its prefix
-`chal2 ‖ qs_check ‖ ã` is a simulated proof's (`progRO_moved`). `ε_plain` and `ε_hit` stay
-hypotheses: the zero-knowledge table model fixes `H₂⁰…H₂²` as SHAKE, and both need them random
-(`security/ratatouille.md` §5, "Lean").
+`chal2 ‖ qs_check ‖ ã` is a simulated proof's (`progRO_moved`).
+
+The same holds with the other hashes random. The zero-knowledge theorem, the read budgets and the
+programming step hold for every base hash record (`Theft/LeanHb.lean`), so they lift, by
+averaging, to shared tables with one more uniform component from which `H₁`, `H₂⁰…H₂²`, `H₄` and
+`H_comb` are read (`Theft/Tables.lean`: `zkRO_tables`, `noTheft_leanX_plain`,
+`noRedirect_leanX_plain`, the tables `XTab`, `hbX`). `ε_plain` and `ε_hit` stay hypotheses there.
+For `ε_plain`, `ROM/`'s extraction bounds do not apply as they stand: the extractor of `PlainSE`
+does not see the adversary's queries (the extractor of §2 does), read budgets are certificate
+sizes and not query counts, a cipher read is a whole row and not a cell, and `ROM/`'s oracle is
+lazy. For `ε_hit`, the lazy-sampling bound for a decision tree is proved
+(`Theft/ComOW.lean`, `pr_tree_bad`), the chain structure of the verifier's `chal2` is not
+(`security/ratatouille.md` §5, "What is not covered").
