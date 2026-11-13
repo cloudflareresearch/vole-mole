@@ -436,6 +436,13 @@ theorem pr_le_of_support {β : Type} (mx : ProbComp (β × JSt AR τ q X 𝕋 S)
   rw [prEvent_eq_zero_of_forall_mem_support _ _ h]
   exact bot_le
 
+omit [DecidableEq DR] [∀ d, SampleableType (AR d)] [NeZero τ] [DecidableEq X]
+  [SampleableType (Fin m → F)] [DecidableEq F] [Fintype F] [DecidableRel (scls F m)] in
+theorem pr_le_of_support' (mx : ProbComp (JSt AR τ q X 𝕋 S)) (ε : ℝ≥0∞)
+    (h : ∀ w ∈ support mx, ¬ Ebad w) : Pr{let w ← mx}[Ebad w] ≤ ε := by
+  rw [prEvent_eq_zero_of_forall_mem_support _ _ h]
+  exact bot_le
+
 omit [Fintype F] in
 /-- The world: nothing changes. -/
 theorem step_w (d : DR) (s : JSt AR τ q X 𝕋 S) :
@@ -658,6 +665,259 @@ theorem step_fin (H : List 𝕋) (δs : List (Fin τ → 𝕋)) (ans : List S) (
           obtain ⟨hs, δ, hδ, rest⟩ := h
           refine ⟨hs, δ, by rw [← hro]; exact hδ, ?_⟩
           simpa [MSt.complete] using rest
+
+omit [Fintype F] in
+theorem sim_op (o : Op DR X 𝕋 S τ) :
+    simulateQ (jImpl (scls F m) rel pk pre) (op (AR := AR) (q := q) o) =
+      jImpl (scls F m) rel pk pre o := by
+  unfold op
+  erw [simulateQ_spec_query]
+
+omit [Fintype F] in
+theorem junks_dlt (H : List 𝕋) (js : List ℕ) : ∀ s : JSt AR τ q X 𝕋 S,
+    ∀ z ∈ support ((simulateQ (jImpl (scls F m) rel pk pre)
+      (js.mapM fun j => op (AR := AR) (q := q) (S := S) (X := X) (.junk H j))).run s),
+      Dlt s z.2 js.length 0 0 js.length 0 := by
+  induction js with
+  | nil =>
+    intro s z hz
+    simp only [List.mapM_nil, simulateQ_pure, StateT.run_pure, support_pure,
+      Set.mem_singleton_iff] at hz
+    subst hz
+    exact (same_of rfl fun _ => rfl).2
+  | cons j js ih =>
+    intro s z hz
+    simp only [List.mapM_cons, simulateQ_bind, simulateQ_pure, StateT.run_bind,
+      StateT.run_pure] at hz
+    erw [support_bind] at hz
+    simp only [Set.mem_iUnion] at hz
+    obtain ⟨z1, hz1, hz⟩ := hz
+    erw [support_bind] at hz
+    simp only [Set.mem_iUnion, support_pure, Set.mem_singleton_iff] at hz
+    obtain ⟨z2, hz2, rfl⟩ := hz
+    rw [sim_op] at hz1
+    exact ((step_junk rel pk pre H j s z1 hz1).trans (ih z1.2 z2 hz2)).mono
+      (by simp; omega) le_rfl le_rfl (by simp; omega) le_rfl
+
+theorem junks_pr (H : List 𝕋) (js : List ℕ) {NT NL NC : ℕ} : ∀ s : JSt AR τ q X 𝕋 S, ¬ Ebad s →
+    s.1.tl.length + s.1.rem + js.length ≤ NT → (lists s).encard ≤ NL → nonchg s ≤ NC →
+    Pr{let z ← (simulateQ (jImpl (scls F m) rel pk pre)
+      (js.mapM fun j => op (AR := AR) (q := q) (S := S) (X := X) (.junk H j))).run s}[Ebad z.2] ≤
+      js.length * (cT τ (Fintype.card F) NT NL NC / Fintype.card 𝕋) := by
+  induction js with
+  | nil =>
+    intro s hs _ _ _
+    refine pr_le_of_support _ _ fun z hz => ?_
+    simp only [List.mapM_nil, simulateQ_pure, StateT.run_pure, support_pure,
+      Set.mem_singleton_iff] at hz
+    subst hz
+    exact hs
+  | cons j js ih =>
+    intro s hs hT hL hC
+    simp only [List.mapM_cons, simulateQ_bind, simulateQ_pure, StateT.run_bind, StateT.run_pure]
+    rw [sim_op]
+    refine (prEvent_bind_le_prEvent_add_of_support _ _ (fun z1 => Ebad z1.2) _
+      (ε := js.length * (cT τ (Fintype.card F) NT NL NC / Fintype.card 𝕋))
+      fun z1 hz1 hb1 => ?_).trans ?_
+    · have hd := step_junk rel pk pre H j s z1 hz1
+      simp only [bind_pure_comp, prEvent_map]
+      exact ih z1.2 hb1 (by have := hd.tl; simp at hT; omega)
+        (hd.ls.trans (by simpa using hL)) (by have := hd.nc; omega)
+    · refine (add_le_add (pr_junk rel pk pre H j s (NT := NT) (NL := NL) (NC := NC) hs
+        (by simp at hT; omega) hL hC) le_rfl).trans
+        (le_of_eq ?_)
+      simp only [List.length_cons, Nat.cast_add, Nat.cast_one]
+      ring
+
+omit [Fintype F] in
+/-- The shift-list loop of `prog`: what it changes, and that its answers end up cached. -/
+theorem lsts_step (key : ℕ → List 𝕋) (ks : List ℕ) : ∀ s : JSt AR τ q X 𝕋 S,
+    ∀ z ∈ support ((simulateQ (jImpl (scls F m) rel pk pre)
+      (ks.mapM fun k => op (AR := AR) (q := q) (S := S) (X := X) (.lst (key k)))).run s),
+      Dlt s z.2 0 ks.length 0 0 0 ∧ z.2.1 = s.1 ∧
+      (∀ hs v, lstAt s.2.ro hs = some v → lstAt z.2.2.ro hs = some v) ∧
+      ∀ i < ks.length, lstAt z.2.2.ro (key (ks.getD i 0)) = some (z.1.getD i 0) := by
+  induction ks with
+  | nil =>
+    intro s z hz
+    simp only [List.mapM_nil, simulateQ_pure, StateT.run_pure, support_pure,
+      Set.mem_singleton_iff] at hz
+    subst hz
+    exact ⟨(same_of rfl fun _ => rfl).2, rfl, fun _ _ h => h, fun i hi => by simp at hi⟩
+  | cons k ks ih =>
+    intro s z hz
+    simp only [List.mapM_cons, simulateQ_bind, simulateQ_pure, StateT.run_bind,
+      StateT.run_pure] at hz
+    erw [support_bind] at hz
+    simp only [Set.mem_iUnion] at hz
+    obtain ⟨z1, hz1, hz⟩ := hz
+    erw [support_bind] at hz
+    simp only [Set.mem_iUnion, support_pure, Set.mem_singleton_iff] at hz
+    obtain ⟨z2, hz2, rfl⟩ := hz
+    rw [sim_op] at hz1
+    obtain ⟨e1, c1, o1, k1⟩ := step_lst rel pk pre (key k) s z1 hz1
+    obtain ⟨d2, e2, m2, c2⟩ := ih z1.2 z2 hz2
+    have m1 : ∀ hs v, lstAt s.2.ro hs = some v → lstAt z1.2.2.ro hs = some v := fun hs v h => by
+      by_cases he : hs = key k
+      · subst he; rw [c1, k1 v h]
+      · rw [o1 hs he, h]
+    refine ⟨((step_lst_dlt rel pk pre (key k) s z1 hz1).trans d2).mono le_rfl
+      (by simp; omega) le_rfl le_rfl le_rfl, e2.trans e1, fun hs v h => m2 hs v (m1 hs v h),
+      fun i hi => ?_⟩
+    cases i with
+    | zero => exact m2 _ _ c1
+    | succ i => exact c2 i (by simpa using hi)
+
+theorem lsts_pr (key : ℕ → List 𝕋) (ks : List ℕ) {NT : ℕ} : ∀ s : JSt AR τ q X 𝕋 S, ¬ Ebad s →
+    s.1.tl.length ≤ NT →
+    Pr{let z ← (simulateQ (jImpl (scls F m) rel pk pre)
+      (ks.mapM fun k => op (AR := AR) (q := q) (S := S) (X := X) (.lst (key k)))).run s}[
+        Ebad z.2] ≤ ks.length * (cL τ (Fintype.card F) NT / Fintype.card 𝕋) := by
+  induction ks with
+  | nil =>
+    intro s hs _
+    refine pr_le_of_support _ _ fun z hz => ?_
+    simp only [List.mapM_nil, simulateQ_pure, StateT.run_pure, support_pure,
+      Set.mem_singleton_iff] at hz
+    subst hz
+    exact hs
+  | cons k ks ih =>
+    intro s hs hT
+    simp only [List.mapM_cons, simulateQ_bind, simulateQ_pure, StateT.run_bind, StateT.run_pure]
+    rw [sim_op]
+    refine (prEvent_bind_le_prEvent_add_of_support _ _ (fun z1 => Ebad z1.2) _
+      (ε := ks.length * (cL τ (Fintype.card F) NT / Fintype.card 𝕋))
+      fun z1 hz1 hb1 => ?_).trans ?_
+    · obtain ⟨e1, -, -, -⟩ := step_lst rel pk pre (key k) s z1 hz1
+      simp only [bind_pure_comp, prEvent_map]
+      exact ih z1.2 hb1 (by rw [e1]; exact hT)
+    · refine (add_le_add (pr_lst rel pk pre (key k) s hs hT) le_rfl).trans (le_of_eq ?_)
+      simp only [List.length_cons, Nat.cast_add, Nat.cast_one]
+      ring
+
+omit [Fintype F] in
+/-- The states reached by a computation of atomic operations. -/
+def stOf {β : Type} (c : OracleComp (specOp AR τ q X 𝕋 S) β) (s : JSt AR τ q X 𝕋 S) :
+    ProbComp (JSt AR τ q X 𝕋 S) :=
+  Prod.snd <$> (simulateQ (jImpl (scls F m) rel pk pre) c).run s
+
+omit [Fintype F] in
+theorem mem_stOf {β : Type} (c : OracleComp (specOp AR τ q X 𝕋 S) β) (s w : JSt AR τ q X 𝕋 S) :
+    w ∈ support (stOf rel pk pre c s) ↔
+      ∃ z ∈ support ((simulateQ (jImpl (scls F m) rel pk pre) c).run s), z.2 = w := by
+  unfold stOf
+  erw [support_map]
+  exact Set.mem_image _ _ _
+
+omit [Fintype F] in
+theorem pr_stOf {β : Type} (c : OracleComp (specOp AR τ q X 𝕋 S) β) (s : JSt AR τ q X 𝕋 S)
+    (p : JSt AR τ q X 𝕋 S → Prop) :
+    Pr{let w ← stOf rel pk pre c s}[p w] =
+      Pr{let z ← (simulateQ (jImpl (scls F m) rel pk pre) c).run s}[p z.2] := by
+  unfold stOf
+  rw [prEvent_map]
+
+/-- **One message to `A**_D`**: at most `q` target draws and `q + 1` list draws. -/
+theorem msg_step (o : List 𝕋 ⊕ (List 𝕋 ⊕ (List 𝕋 × List S))) {NT NL NC : ℕ}
+    (s : JSt AR τ q X 𝕋 S) :
+    (∀ w ∈ support (stOf rel pk pre (prog (AR := AR) (X := X) (.inr o)) s),
+      Dlt s w q (q + 1) (q + 1) q 1) ∧
+    (¬ Ebad s → s.1.tl.length + s.1.rem + q ≤ NT → (lists s).encard ≤ NL → nonchg s ≤ NC →
+      Pr{let w ← stOf rel pk pre (prog (AR := AR) (X := X) (.inr o)) s}[Ebad w] ≤
+        q * (cT τ (Fintype.card F) NT NL NC / Fintype.card 𝕋) +
+          (q + 1) * (cL τ (Fintype.card F) NT / Fintype.card 𝕋)) := by
+  have hsame : Dlt s s q (q + 1) (q + 1) q 1 :=
+    (same_of rfl fun _ => rfl).2.mono (by omega) (by omega) (by omega) (by omega) (by omega)
+  have hpure : ∀ {β : Type} (x : β), stOf rel pk pre (pure x) s = pure s := fun x => by
+    simp [stOf]
+  rcases o with hs | H | ⟨H, ans⟩
+  · have e : stOf rel pk pre (prog (AR := AR) (X := X) (.inr (.inl hs))) s =
+        stOf rel pk pre (op (AR := AR) (q := q) (.lst hs)) s := rfl
+    rw [e]
+    refine ⟨fun w hw => ?_, fun hb hT _ _ => ?_⟩
+    · obtain ⟨z, hz, rfl⟩ := (mem_stOf rel pk pre _ s w).mp hw
+      rw [sim_op] at hz
+      exact (step_lst_dlt rel pk pre hs s z hz).mono (by omega) (by omega) (by omega)
+        (by omega) (by omega)
+    · rw [pr_stOf, sim_op]
+      refine (pr_lst rel pk pre hs s (NT := NT) hb (by omega)).trans ?_
+      refine le_add_left (le_mul_of_one_le_left (by positivity) ?_)
+      exact_mod_cast Nat.le_add_left 1 q
+  · have e : stOf rel pk pre (prog (AR := AR) (X := X) (.inr (.inr (.inl H)))) s =
+        stOf rel pk pre (if H.length = q + 1 then (List.range q).mapM fun j =>
+          op (AR := AR) (q := q) (S := S) (X := X) (.junk H j) else pure []) s := rfl
+    rw [e]
+    by_cases hH : H.length = q + 1
+    · simp only [hH, ↓reduceIte]
+      refine ⟨fun w hw => ?_, fun hb hT hL hC => ?_⟩
+      · obtain ⟨z, hz, rfl⟩ := (mem_stOf rel pk pre _ s w).mp hw
+        exact (junks_dlt rel pk pre H _ s z hz).mono (by simp) (by omega) (by omega)
+          (by simp) (by omega)
+      · rw [pr_stOf]
+        refine (junks_pr rel pk pre H _ s hb (by simpa using hT) hL hC).trans ?_
+        simp only [List.length_range]
+        exact le_self_add
+    · simp only [hH, ↓reduceIte, hpure]
+      refine ⟨fun w hw => ?_, fun hb _ _ _ => pr_le_of_support' _ _ fun w hw => ?_⟩
+      · simp only [support_pure, Set.mem_singleton_iff] at hw; subst hw; exact hsame
+      · simp only [support_pure, Set.mem_singleton_iff] at hw; subst hw; exact hb
+  · have e : stOf rel pk pre (prog (AR := AR) (X := X) (.inr (.inr (.inr (H, ans))))) s =
+        stOf rel pk pre (if H.length = q + 1 then do
+          let _ ← (List.range q).mapM fun j => op (AR := AR) (q := q) (S := S) (X := X) (.junk H j)
+          let δs ← (List.range (q + 1)).mapM fun k =>
+            op (AR := AR) (q := q) (S := S) (X := X) (.lst (H.take k))
+          op (.fin H δs ans)
+        else pure none) s := rfl
+    rw [e]
+    by_cases hH : H.length = q + 1
+    · simp only [hH, ↓reduceIte]
+      constructor
+      · intro w hw
+        obtain ⟨z, hz, rfl⟩ := (mem_stOf rel pk pre _ s w).mp hw
+        simp only [simulateQ_bind, StateT.run_bind] at hz
+        erw [support_bind] at hz
+        simp only [Set.mem_iUnion] at hz
+        obtain ⟨z1, hz1, hz⟩ := hz
+        erw [support_bind] at hz
+        simp only [Set.mem_iUnion] at hz
+        obtain ⟨z2, hz2, hz⟩ := hz
+        rw [sim_op] at hz
+        have d1 := junks_dlt rel pk pre H _ s z1 hz1
+        have d2 := (lsts_step rel pk pre (fun k => H.take k) _ z1.2 z2 hz2).1
+        have d3 := (step_fin rel pk pre H z2.1 ans z2.2 z hz).1
+        exact ((d1.trans d2).trans d3).mono (by simp) (by simp) (by simp) (by simp) (by simp)
+      · intro hb hT hL hC
+        rw [pr_stOf]
+        simp only [simulateQ_bind, StateT.run_bind]
+        refine (prEvent_bind_le_prEvent_add_of_support _ _ (fun z1 => Ebad z1.2) _
+          (ε := (q + 1) * (cL τ (Fintype.card F) NT / Fintype.card 𝕋))
+          fun z1 hz1 hb1 => ?_).trans ?_
+        · have d1 := junks_dlt rel pk pre H _ s z1 hz1
+          refine (prEvent_bind_le_prEvent_add_of_support _ _ (fun z2 => Ebad z2.2) _
+            (ε := 0) fun z2 hz2 hb2 => ?_).trans ?_
+          · obtain ⟨-, -, -, hc⟩ := lsts_step rel pk pre (fun k => H.take k) _ z1.2 z2 hz2
+            rw [sim_op]
+            refine pr_le_of_support _ _ fun z hz => ?_
+            refine (step_fin rel pk pre H z2.1 ans z2.2 z hz).2 hb2 fun k => ?_
+            have := hc k (by simp; omega)
+            have e : (List.range (q + 1)).getD k 0 = k := by
+              simp [List.getD_eq_getElem?_getD, List.getElem?_range k.2]
+            rw [e] at this
+            exact this
+          · rw [add_zero]
+            refine (lsts_pr rel pk pre (fun k => H.take k) _ (NT := NT) z1.2 hb1 ?_).trans
+              (by simp)
+            have := d1.tl
+            simp at this
+            omega
+        · have hj := junks_pr rel pk pre H (List.range q) (NT := NT) (NL := NL) (NC := NC) s hb
+            (by simpa using hT) hL hC
+          simp only [List.length_range] at hj
+          exact add_le_add hj le_rfl
+    · simp only [hH, ↓reduceIte, hpure]
+      refine ⟨fun w hw => ?_, fun hb _ _ _ => pr_le_of_support' _ _ fun w hw => ?_⟩
+      · simp only [support_pure, Set.mem_singleton_iff] at hw; subst hw; exact hsame
+      · simp only [support_pure, Set.mem_singleton_iff] at hw; subst hw; exact hb
 
 end Steps
 
