@@ -505,8 +505,8 @@ theorem is instantiated in `Audit/MainShared.lean`, also for a guess that reads 
 table.
 
 **Still on paper, for ZK on `main`:**
-- **one `H₂³` table and one `H₃` for the proofs.** `anonymity_main_shared` shares `H₅` and the
-  cipher; each proof has its own `H₂³` table and `H₃` slice. With one `H₂³` table the hops also
+- **one `H₂³` table and one `H₃` for the proofs.** `anonymity_main_shared` and
+  `unlinkability_main_shared` (§4.3) share `H₅` and the cipher; each proof has its own `H₂³` table and `H₃` slice. With one `H₂³` table the hops also
   cost the programming-collision terms `δ` of §10.2 (a real proof reads a grinding point that an
   earlier simulation programmed); their bound there (`pr_collide_zk`) applies the one-proof
   theorem a second time, which on `main` adds one more (PU) term, statistical here (the
@@ -521,8 +521,7 @@ table.
   once the view is shown to depend on `r` only through the refusal bit);
 - a bound on (PU) for the real permutation: §4.3 states (PU) as a game, reduces Moussaka's
   `PU_b` to it and bounds it in the ideal-permutation model; for Keccak-p[800,12] itself it is an
-  assumption. For Ratatouille `puTermR` is not yet reduced to the game; the commitment with the
-  credit in its public part and its ideal-permutation bound are there (§4.3);
+  assumption (also for Ratatouille's `comI` and `comCh`, §4.3);
 - the identification of the `main` code with the model (by inspection, `main:` citations above);
   the Lean prover's KAT match covers `main`'s layout (`lake exe prover_vectors`);
 - for PomFRIT, that `rank F ≤ λ < n_mult` (so `#S/|B|` is small); the bit-level link from
@@ -604,25 +603,63 @@ assumption that 12-round Keccak-p[800] (12 of 22 rounds) has no structural short
 known. This is the status of `εhide` (§10.9), for the same reason: `Com` is evaluated inside the
 relations, so it is concrete code in the games.
 
-**Ratatouille: the column question is settled, the reduction is not done.** `puTermR`
-(`unlinkability_main`) is not reduced to `puAdv`. The simulated game there is a function of the
-commitment *columns* `t ↦ Com(nf, ctx, t, r)` (`Ratatouille.simGame_iff`). But each column is used
-at one credit: an issued token's at `T_init`, a change token's at
-`t' = clientCheck(τ.t, τ.x, d)`, which depends on the spent token and on the Issuer's amount, not
-on the change token's own `(nf', r')`. So (PU) needs no column version: what determines the credit
-goes into the public part. `comCredit ctx T (nf, b) r = Com(nf, ctx, T b, r)`
-(`Privacy/PUKeccak.lean`) is a commitment in the sense of `puAdv`, with public part `(nf, b)`. It
-is one truncated call of Keccak-p[800,12] on a state that is injective in `r` for every public
-part (`comCredit_eq_comP`), and the ideal-permutation bound is the single-commitment one,
-`(c + q)/(2¹²⁸ − q) + q/(2⁵⁴⁴ − q)` (`puAdvPerm_ratatouille_credit_le`).
+**Ratatouille: `puTermR` is this game, for three predictors** (`Privacy/RatatouilleMainPub.lean`,
+`Privacy/RatatouilleMainPU.lean`, `Audit/MainRata.lean`). The witness prefix of an issuance proof
+is the issued token's opening (`wPre_encI`); of a spend proof, the opening of the token spent
+(`wPre_encS`): Client `b₁`'s issued token in round 1, and in round 2 round 1's change token
+(`b₂ = b₁`) or Client `!b₁`'s issued token (`τ₁ₘ_r`, `τ₂ₘ_r`). The opening of round 2's new token
+is no proof's prefix. With all proofs simulated, the guess's input and the four statements are
+functions of the nullifiers, the commitments, the simulators' coins (`gR_pub`, `σ₃_pub`,
+`σ₄_pub`): the values that `Ratatouille.view` computes (`vG`, …) are preserved by the token map
+`pubOf` (`vG_map` etc., the content of `view_map` value by value), and the public world is
+`pubIss`/`pubSp` (`gP`, `st₃P`, `st₄P`).
 
-What is not mechanized is the reduction itself: the simulated game's `H₅` read sets, spend
-statements and witness prefixes as functions of the four commitment values, the nullifiers, the
-simulators' coins and the tables (the analogue of `yM_sim` and `simS_eq`, through
-`Ratatouille.view_map` and `pubView`), with three predictors (the two issued tokens' openings and
-round 1's change token's). The shared-table version for Ratatouille is not done either: it is an
-instance of `main_shared_le` (§4.2), which is stated for any four-proof game, plus that reduction
-and the simulators' programming as a function of the requests (§10.2's `Vtab`).
+Each commitment column is used at one credit. The issued tokens' at `T_init` (`comI`). Round 1's
+new commitment at `t' = clientCheck(τ₁.t, τ₁.x, d₁)` (`cr₁P`), a function of the issuance part (the
+issued tokens' `(nf, r)` and the issuance simulators' coins), which is independent of the change
+token's `(nf', r')` (`oP_const`, `gP_const`, `st₃P_const`, `st₄P_const`: the public world with
+`cf₂` is the public world with the constant `cf₂ cr₁P`). So the change token's commitment is
+`PU.comCredit` with the issuance part in the public input (`comCh`, `comCh_eq_comP`), and its
+ideal-permutation bound is `puAdvPerm_ratatouille_credit_le`.
+
+The predictors: `predR₀`, `predR₁` (an issued token's opening from `comI`: the candidates of its
+issuance proof, of round 1's spend if it is the spender, of round 2's spend if it spends its
+issued token there; at most `3·(q₅ + 1)` candidates, `card_predI_le`) and `predRC` (the change
+token's opening from `comCh`: the candidates of round 2's spend if `b₂ = b₁`; at most `q₅ + 1`,
+`card_predC_le`). A spend proof of a refused round is computed but not shown, possibly for a
+dummy token; as for Moussaka it costs `(q₅ + 1)·2⁻¹²⁸` through its uniform `d` (`pr_hidR₃_le`,
+`pr_hidR₄_le`). So
+
+    puTermR (b₁, b₂) ≤ puAdv comI predR₀ + puAdv comI predR₁ + puAdv comCh predRC
+                       + 2·(q₅ + 1)·2⁻¹²⁸                                        (puTermR_le)
+
+and **`unlinkability_main_pu`**: Theorem 2 on `main`, for any two worlds,
+
+    8·εRF(q₃, q_E) + 15·(PU(b₁, b₂) + PU(b₁', b₂') + 4·(q₅ + 1)·2⁻¹²⁸) + 2·εhide,
+
+`PU(b₁, b₂)` the three `puAdv` terms of the world.
+
+**Ratatouille with one `H₅` table and one cipher** (`Privacy/RatatouilleMainShared.lean`,
+`Privacy/RatatouilleMainSharedPU.lean`). The instance of `main_shared_le` (§4.2) for Ratatouille's
+four proofs; a spend proof is computed only if its round runs (`gameSR`). With all proofs
+simulated the tables the guess sees are the raw tables with each `H₂³` table programmed for the
+proof's statement. That programming is a function of the requests (`vtab`, §10.2's `Vtab` for
+this model): the statement of an issuance is the request's commitment, of a spend the request's
+nullifier, amount and new commitment (`stIq`, `stSq`, `simVis_iss`, `simVis_sp`), and a failed
+simulation programs independently of its statement (`progRO_of_error`). So the simulated game is
+`Ratatouille.reduction` for the Issuer `A.atS a` that computes `vtab` itself (`simSR_iff`), and
+hiding and the coincidence of the worlds are those of `Privacy/Ratatouille.lean`
+(`hiding_hopSR`, `ideal_eq_at`, `idealSR_eq`). `bstar` on simulated proofs is a failed simulation,
+a prediction by `predSR₀`, `predSR₁`, `predSRC` (candidates for the public key set `spubR`; at
+most `3·(q₅ + 1249)` and `q₅ + 1249`) or a collision of sibling gate inputs (`pr_collR₂_le` …,
+`1875·2⁻¹²⁸`):
+
+    |Pr[world (b₁, b₂)] − Pr[world (b₁', b₂')]| ≤ 30·εS(q₃, q_E + 8·4607)
+        + 15·(PU(b₁, b₂) + PU(b₁', b₂') + 8·noHitProb + 3750·2⁻¹²⁸) + 2·εhide
+                                                              (unlinkability_main_shared)
+
+Every term is a number except the six (PU) advantages and `εhide`. Instantiated in
+`Audit/MainRata.lean`, also for a guess that reads the shared `H₅` table.
 
 ## 5. The simulator
 
