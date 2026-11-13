@@ -228,6 +228,7 @@ import VoleMole.Privacy.MainChain
 import VoleMole.ZK.HopsMain
 import VoleMole.ZK.MainSlots
 import VoleMole.ZK.MainGame
+import VoleMole.ZK.HopsMainIC
 import VoleMole.ZK.VerifyPre
 import VoleMole.ZK.HopsH23
 import VoleMole.ZK.HopsIC
