@@ -160,14 +160,14 @@ theorem noTheft_leanX_hit [Fintype R] [Nonempty R] [ZKRow R]
     (hA : ∀ o₁ o₂, StageBudgetX (A.out o₁ o₂) a3 a5 aE)
     (hX : ∀ o₁ o₂, StageBudgetX (extOf e (stI A o₁) (stS A o₂) (A.out o₁ o₂)) x3 x5 xE)
     (hplain : PlainSE (AccOp A (leanVIRX hbX) (leanVSRX hbX)) (FreshOp A) (RelOp A) e Adm₀ ε₀)
-    (hAdm : ∀ o₁ o₂, Adm (A.out o₁ o₂)) (hAH : ∀ F, Adm F → Hit.Rata.AdmHit qMu q21 q22 F)
+    (hAdm : ∀ o₁ o₂, Adm (A.out o₁ o₂)) (hAH : ∀ F, Adm F → Hit.AdmHit qMu q21 q22 F)
     (hadm : ∀ F x₁ c₁ x₂ c₂, Adm F → Adm₀ (fun g₁ g₂ t =>
       F g₁ g₂ (progT (leanProgIRX hbX) (leanProgSRX hbX) x₁ c₁ x₂ c₂ t))) :
     pr _ (theftReal A (leanPIRX hbX) (leanPSRX hbX) (leanVIRX hbX) (leanVSRX hbX) (extOf e)) ≤
       ZKRow.εz R pI (a3 + x3) (a5 + x5 + 936) (aE + xE + 9214) +
         ZKRow.εz R pS (a3 + x3) (a5 + x5 + 936) (aE + xE + 9214) +
         pr _ (deltaS A (leanPIRX hbX) (leanPSRX hbX) leanSimIR (leanProgIRX hbX)) +
-        (ε₀ + Hit.Rata.epsHit qMu q21 q22) +
+        (ε₀ + Hit.epsHit qMu q21 q22) +
         owAdv A.ctx (inverter A (extOf e) leanSimIR (leanProgIRX hbX) leanSimSR
           (leanProgSRX hbX)) :=
   noTheft_ok (CI := SimCoins pI) (CS := SimCoins pS) A (leanVIRX hbX) (leanVSRX hbX) (extOf e)

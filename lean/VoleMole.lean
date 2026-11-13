@@ -389,6 +389,7 @@ import VoleMole.Theft.LeanHb
 import VoleMole.Theft.Tables
 import VoleMole.Theft.ComOW
 import VoleMole.Theft.HitChain
+import VoleMole.Theft.HitLevel
 import VoleMole.Theft.Hit
 import VoleMole.Theft.HitTheft
 import VoleMole.Theft.ManyPlain

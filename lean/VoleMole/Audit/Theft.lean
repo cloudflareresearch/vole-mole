@@ -141,10 +141,10 @@ example (L M : ℕ) :=
 constant extractor, with `L = Lmin`. -/
 example (M : ℕ) :=
   noTheft_leanX_hit (R := Blk → Blk) (L := Hit.Rata.Lmin) (M := M) (thief0 _ _ _) le_rfl
-    (e := fun _ _ _ _ _ _ => wit0) (Adm := Hit.Rata.AdmHit 0 0 0) (Adm₀ := fun _ => True)
+    (e := fun _ _ _ _ _ _ => wit0) (Adm := Hit.AdmHit 0 0 0) (Adm₀ := fun _ => True)
     (ε₀ := 1) (a3 := 0) (a5 := 0) (aE := 0) (x3 := 0) (x5 := 0) (xE := 0)
     (fun _ _ _ => StageBudget.const _) (fun _ _ _ => StageBudget.const _)
-    (plainSE_one _ _ _ _ _) (fun _ _ => Hit.Rata.admHit_const _) (fun _ h => h)
+    (plainSE_one _ _ _ _ _) (fun _ _ => Hit.admHit_const _) (fun _ h => h)
     fun _ _ _ _ _ _ => trivial
 
 /-- **`Adv^ow` is `1` for some inverter** in this model: `Com` is a fixed function, and the
