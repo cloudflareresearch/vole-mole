@@ -768,6 +768,207 @@ theorem prEvent_invHit_le {α : Type} (oa : OracleComp (specPm A B) α) (qi : �
     erw [support_map] at hz; obtain ⟨r, hr, rfl⟩ := hz
     exact fwdS_invHit _ _ _ _ hb r hr hzb
 
+/-! ### Inverse answers that avoid a set
+
+The second hybrid of the proofs whose challenger reads the permutation (`Assumptions/FDHPerm.lean`):
+fresh inverse answers are uniform on the blocks outside a set `S` (the structured inputs), fresh
+forward answers uniform. It is within `q_i·|S|/|B|` of the two-sided random function. -/
+
+/-- The handler with separate fresh values for forward and inverse steps. -/
+def pmImpl2 (freshF freshI : List B → ProbComp B) :
+    QueryImpl (specPm A B) (StateT (PTab B × σ) ProbComp)
+  | .inl i => StateT.mk fun s => match pt i with
+    | none => (fun u => (u.1, (s.1, u.2))) <$> (implC i none).run s.2
+    | some b => fwdS freshF b s.1 >>= fun r =>
+        (fun u => (u.1, (r.2, u.2))) <$> (implC i (some r.1)).run s.2
+  | .inr (true, b) => StateT.mk fun s => (fun r => (r.1, (r.2, s.2))) <$> fwdS freshF b s.1
+  | .inr (false, c) => StateT.mk fun s => (fun r => (r.1, (r.2, s.2))) <$> invS freshI c s.1
+
+omit [SampleableType B] [Fintype B] in
+theorem pmImpl_eq (fresh : List B → ProbComp B) : pmImpl pt implC fresh = pmImpl2 pt implC fresh fresh := by
+  funext t
+  rcases t with i | ⟨_ | _, b⟩ <;> rfl
+
+/-- The flagged handler with separate fresh values. -/
+def pmImplF2 (freshF freshI : List B → ProbComp (B × Bool)) :
+    QueryImpl (specPm A B) (StateT ((PTab B × σ) × Bool) ProbComp)
+  | .inl i => StateT.mk fun s => match pt i with
+    | none => (fun u => (u.1, ((s.1.1, u.2), s.2))) <$> (implC i none).run s.1.2
+    | some b => fwdF freshF b s.1.1 >>= fun r =>
+        (fun u => (u.1, ((r.2, u.2), s.2 || r.1.2))) <$> (implC i (some r.1.1)).run s.1.2
+  | .inr (true, b) => StateT.mk fun s =>
+      (fun r => (r.1.1, ((r.2, s.1.2), s.2 || r.1.2))) <$> fwdF freshF b s.1.1
+  | .inr (false, c) => StateT.mk fun s =>
+      (fun r => (r.1.1, ((r.2, s.1.2), s.2 || r.1.2))) <$> invF freshI c s.1.1
+
+omit [SampleableType B] [Fintype B] in
+theorem pmImplF2_proj (fF fI : List B → ProbComp (B × Bool)) (gF gI : List B → ProbComp B)
+    (hF : ∀ u, Prod.fst <$> fF u =ᵈ gF u) (hI : ∀ u, Prod.fst <$> fI u =ᵈ gI u)
+    (t : ι ⊕ (Bool × B)) (s : (PTab B × σ) × Bool) :
+    (fun z => (z.1, z.2.1)) <$> ((pmImplF2 pt implC fF fI) t).run s =ᵈ
+      ((pmImpl2 pt implC gF gI) t).run s.1 := by
+  rcases t with i | ⟨_ | _, b⟩
+  · simp only [pmImplF2, pmImpl2, StateT.run_mk]
+    cases hp : pt i with
+    | none => simp only [Functor.map_map]; exact EvalDistEq.rfl
+    | some b =>
+      simp only [map_bind, Functor.map_map]
+      have h1 : (fun r => (r.1.1, r.2)) <$> fwdF fF b s.1.1 =ᵈ fwdS gF b s.1.1 := by
+        rw [fwdF_val]; exact fwdS_congr hF _ _
+      have h2 := h1.bind_left fun r : B × PTab B =>
+        (fun u => (u.1, (r.2, u.2))) <$> (implC i (some r.1)).run s.1.2
+      simp only [bind_map_left] at h2
+      exact h2
+  · simp only [pmImplF2, pmImpl2, StateT.run_mk, Functor.map_map]
+    have h1 := invS_congr hI b s.1.1
+    rw [← invF_val] at h1
+    have h2 := h1.map (fun r => (r.1, (r.2, s.1.2)))
+    simp only [Functor.map_map] at h2
+    exact h2
+  · simp only [pmImplF2, pmImpl2, StateT.run_mk, Functor.map_map]
+    have h1 := fwdS_congr hF b s.1.1
+    rw [← fwdF_val] at h1
+    have h2 := h1.map (fun r => (r.1, (r.2, s.1.2)))
+    simp only [Functor.map_map] at h2
+    exact h2
+
+omit [SampleableType B] [Fintype B] in
+theorem pmImplF2_mono (fF fI : List B → ProbComp (B × Bool)) (t : ι ⊕ (Bool × B))
+    (s : PTab B × σ) :
+    ∀ z ∈ support (((pmImplF2 pt implC fF fI) t).run (s, true)), z.2.2 = true := by
+  intro z hz
+  rcases t with i | ⟨_ | _, b⟩
+  · simp only [pmImplF2, StateT.run_mk] at hz
+    cases hp : pt i with
+    | none =>
+      rw [hp] at hz; erw [support_map] at hz
+      obtain ⟨u, -, rfl⟩ := hz; rfl
+    | some b =>
+      rw [hp] at hz
+      simp only [mem_support_bind_iff] at hz
+      obtain ⟨r, -, hz⟩ := hz
+      erw [support_map] at hz
+      obtain ⟨u, -, rfl⟩ := hz; simp
+  · simp only [pmImplF2, StateT.run_mk] at hz; erw [support_map] at hz
+    obtain ⟨r, -, rfl⟩ := hz; simp
+  · simp only [pmImplF2, StateT.run_mk] at hz; erw [support_map] at hz
+    obtain ⟨r, -, rfl⟩ := hz; simp
+
+omit [SampleableType B] [Fintype B] in
+theorem fwdF_agree' {f₁ f₂ : List B → ProbComp (B × Bool)}
+    (h : ∀ u (P : B × Bool → Prop), Pr{let y ← f₁ u}[P y ∧ ¬y.2 = true] =
+      Pr{let y ← f₂ u}[P y ∧ ¬y.2 = true]) (b : B) (L : PTab B)
+    (P : (B × Bool) × PTab B → Prop) :
+    Pr{let r ← fwdF f₁ b L}[P r ∧ ¬r.1.2 = true] = Pr{let r ← fwdF f₂ b L}[P r ∧ ¬r.1.2 = true] := by
+  unfold fwdF
+  cases fwdFind L b with
+  | some y => rfl
+  | none => simp only [prEvent_map]; exact h _ fun y => P (y, L ++ [(b, y.1, true)])
+
+omit [SampleableType B] [Fintype B] in
+theorem invF_agree' {f₁ f₂ : List B → ProbComp (B × Bool)}
+    (h : ∀ u (P : B × Bool → Prop), Pr{let y ← f₁ u}[P y ∧ ¬y.2 = true] =
+      Pr{let y ← f₂ u}[P y ∧ ¬y.2 = true]) (c : B) (L : PTab B)
+    (P : (B × Bool) × PTab B → Prop) :
+    Pr{let r ← invF f₁ c L}[P r ∧ ¬r.1.2 = true] = Pr{let r ← invF f₂ c L}[P r ∧ ¬r.1.2 = true] := by
+  unfold invF
+  cases invFind L c with
+  | some y => rfl
+  | none => simp only [prEvent_map]; exact h _ fun x => P (x, L ++ [(x.1, c, false)])
+
+omit [SampleableType B] [Fintype B] in
+theorem pmImplF2_agree {fF₁ fF₂ fI₁ fI₂ : List B → ProbComp (B × Bool)}
+    (hF : ∀ u (P : B × Bool → Prop), Pr{let y ← fF₁ u}[P y ∧ ¬y.2 = true] =
+      Pr{let y ← fF₂ u}[P y ∧ ¬y.2 = true])
+    (hI : ∀ u (P : B × Bool → Prop), Pr{let y ← fI₁ u}[P y ∧ ¬y.2 = true] =
+      Pr{let y ← fI₂ u}[P y ∧ ¬y.2 = true])
+    (t : ι ⊕ (Bool × B)) (s : PTab B × σ)
+    (P : (specPm A B).Range t × (PTab B × σ) × Bool → Prop) :
+    Pr{let z ← ((pmImplF2 pt implC fF₁ fI₁) t).run (s, false)}[P z ∧ ¬z.2.2 = true] =
+      Pr{let z ← ((pmImplF2 pt implC fF₂ fI₂) t).run (s, false)}[P z ∧ ¬z.2.2 = true] := by
+  rcases t with i | ⟨_ | _, b⟩
+  · simp only [pmImplF2, StateT.run_mk]
+    cases hp : pt i with
+    | none => rfl
+    | some b =>
+      refine prEvent_bind_agree _ _ (fun r => r.1.2 = true) (fwdF_agree' hF b s.1) _ _ _
+        (fun r hr => ?_) (fun r hr => ?_) fun _ _ => rfl
+      all_goals
+        rw [prEvent_map]
+        exact prEvent_eq_zero_of_forall_mem_support _ _ fun u _ hu => hu.2 (by simp [hr])
+  · simp only [pmImplF2, StateT.run_mk, prEvent_map, Bool.false_or]
+    exact invF_agree' hI b s.1 _
+  · simp only [pmImplF2, StateT.run_mk, prEvent_map, Bool.false_or]
+    exact fwdF_agree' hF b s.1 _
+
+/-- **Inverse answers can avoid a set `S`**: every event of the two-sided random function's run is
+at most as likely when fresh inverse answers are uniform outside `S`, plus `q_i·|S|/|B|`. -/
+theorem prEvent_rf_le_avoid {α : Type} (oa : OracleComp (specPm A B) α) (qi : ℕ)
+    (hq : IsQueryBoundP oa (fun t => isInv t = true) qi) (S : List B) (L₀ : PTab B) (s₀ : σ)
+    (E : α × (PTab B × σ) → Prop) :
+    Pr{let z ← (simulateQ (rfImpl pt implC) oa).run (L₀, s₀)}[E z] ≤
+      Pr{let z ← (simulateQ (pmImpl2 pt implC (fun _ => $ᵗ B) fun _ => unifCompl S) oa).run
+          (L₀, s₀)}[E z] +
+        qi * (S.length / Fintype.card B) := by
+  have hproj : ∀ (fF fI : List B → ProbComp (B × Bool)) (gF gI : List B → ProbComp B),
+      (∀ u, Prod.fst <$> fF u =ᵈ gF u) → (∀ u, Prod.fst <$> fI u =ᵈ gI u) →
+      Pr{let z ← (simulateQ (pmImpl2 pt implC gF gI) oa).run (L₀, s₀)}[E z] =
+        Pr{let z ← (simulateQ (pmImplF2 pt implC fF fI) oa).run ((L₀, s₀), false)}[
+          E (z.1, z.2.1)] := by
+    intro fF fI gF gI hF hI
+    have h := LazyIdeal.simulateQ_proj_eqd_inv (pmImplF2 pt implC fF fI) (pmImpl2 pt implC gF gI)
+      Prod.fst (fun _ => True) (fun _ _ _ _ _ => trivial)
+      (fun t s _ => pmImplF2_proj pt implC fF fI gF gI hF hI t s) oa ((L₀, s₀), false) trivial
+    rw [← h.prEvent_eq, prEvent_map]
+  have hF0 : ∀ u : List B, Prod.fst <$> (fun y => (y, false)) <$> ($ᵗ B : ProbComp B) =ᵈ
+      ($ᵗ B : ProbComp B) := fun _ => by simp only [Functor.map_map, id_map']; exact EvalDistEq.rfl
+  rw [rfImpl, pmImpl_eq, hproj (fun _ => (fun y => (y, false)) <$> ($ᵗ B)) (fun _ => freshRF S) _ _
+    hF0 fun _ => freshRF_fst S, hproj (fun _ => (fun y => (y, false)) <$> ($ᵗ B))
+    (fun _ => freshRP S) _ _ hF0 fun _ => freshRP_fst S]
+  refine (prEvent_le_add_flag _ _ (fun t s => pmImplF2_mono pt implC _ _ t s)
+    (fun t s => pmImplF2_mono pt implC _ _ t s)
+    (pmImplF2_agree pt implC (fun _ _ => rfl) (fun _ P => (fresh_agree S P).symm)) oa (L₀, s₀)
+    E).trans (add_le_add le_rfl ?_)
+  refine prEvent_bad_le (pmImplF2 pt implC _ _) (fun s => s.2 = true)
+    (fun t => isInv t = true) (fun _ _ => True) _ (fun t s k _ hb hk => ?_)
+    (fun _ _ _ _ _ _ _ _ _ => trivial) oa qi _ hq trivial (by simp)
+  obtain ⟨s', f⟩ := s
+  simp only [Bool.not_eq_true] at hb; subst hb
+  rcases t with i | ⟨_ | _, c⟩
+  · simp only [isInv, Bool.false_eq_true, ite_false, nonpos_iff_eq_zero, pmImplF2, StateT.run_mk]
+    split
+    · simp
+    · refine prEvent_eq_zero_of_forall_mem_support _ _ fun z hz hzb => ?_
+      simp only [mem_support_bind_iff] at hz
+      obtain ⟨r, hr, hz⟩ := hz
+      erw [support_map] at hz
+      obtain ⟨u, -, rfl⟩ := hz
+      simp only [Bool.false_or] at hzb
+      unfold fwdF at hr
+      split at hr
+      · simp only [support_pure, Set.mem_singleton_iff] at hr; subst hr; simp at hzb
+      · erw [support_map] at hr; obtain ⟨y, hy, rfl⟩ := hr
+        erw [support_map] at hy; obtain ⟨y', -, rfl⟩ := hy; simp at hzb
+  · simp only [isInv, ite_true, pmImplF2, StateT.run_mk, prEvent_map, Bool.false_or]
+    unfold invF
+    cases invFind s'.1 c with
+    | some x => simp
+    | none =>
+      simp only [prEvent_map]
+      have hRP : ∀ u : List B, Pr{let y ← freshRP u}[y.2 = true] ≤ u.length / Fintype.card B := by
+        intro u
+        unfold freshRP
+        refine (prEvent_bind_le_prEvent_of_forall_eq_zero _ _ (fun y => y ∈ u) _ fun y hy => ?_).trans
+          (prEvent_mem_le u)
+        simp [hy]
+      exact hRP S
+  · simp only [isInv, Bool.false_eq_true, ite_false, nonpos_iff_eq_zero, pmImplF2, StateT.run_mk,
+      prEvent_map, Bool.false_or]
+    unfold fwdF
+    cases fwdFind s'.1 c with
+    | some y => simp
+    | none => simp
+
 end Perm
 
 /-! ## Stateful simulations: query bounds and outputs -/
