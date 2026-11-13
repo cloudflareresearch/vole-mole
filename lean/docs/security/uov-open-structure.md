@@ -446,9 +446,16 @@ multiplication. The bilinear structure of the systems is ignored. For `(112, 44)
 `2^{165.7}` for the intersection attack, which matches the figure we remember from the round-1
 UOV specification (`≈ 2^{166}`); we could not check the round-3 tables.
 
+The first row applies no variable reduction. With Thomae–Wolf preprocessing (and the guesses of
+Furue–Nakamura–Takagi), which the best forgery attack uses, the same model gives `2^{140.3}`
+multiplications (`ompr-shift-algebra.md` §4.1, `scripts/ompr-shift-algebra/c1_experiments.py`);
+for `(112, 44)` it gives `2^{145.6}` bit operations, close to the direct-attack figure we
+remember from the UOV specification. Use the second row as the forgery cost.
+
 | Attack | Goal | multiplications | bit operations |
 |---|---|---|---|
 | direct, 45 equations in 45 unknowns (no variable-reduction trick) | forgery | `2^{144}` | `2^{151}` |
+| direct, after Thomae–Wolf variable reduction (one equation removed; `ompr-shift-algebra.md` §4.1) | forgery | `2^{140.3}` | `2^{147.4}` |
 | intersection | key | `2^{194}` | `2^{201}` |
 | Kipnis–Shamir | key | `2^{253}` | `2^{260}` |
 | best dedicated badness system (b) | GPI | `2^{255}` | `2^{262}` |
