@@ -31,7 +31,10 @@ L8 §9.1), with `ROM/SimUnion.lean`'s shared-run union bound.
 
   `q'`, `q_E'`, `n'` the derived provers' budgets (`qP`, `eP`, `nP`), `r = extractorQueries +
   verifierQueries` the queries of one extraction and verification, `simEps` at the derived games'
-  budget `q' + r`.
+  budget `q' + r`. Written out (`pfailSimEps_eq`), the chain charges are
+  `(q'₂₁ + ℓ + 1)·2⁻¹⁵⁰ + (q'₂₂ + ℓ + 1)·(ε_QS + 2⁻¹²⁸ + …) + (q'₂₃ + ℓ + 1)·2⁻⁷¹`.
+* **Never worse than the union bound** (`pfailSimEps_le`): `pfailSimEps ≤ (ℓ + 1)·pfailEps`;
+  one derived game's charges summed are `majEps` plus its order hits (`sum_simEps_eq`).
 
 No `sorry`, no `axiom`.
 -/
@@ -296,5 +299,258 @@ theorem prEvent_pfailZ_sim_le_E (hd : pk.digest.size = 32) {qA : Kind → ℕ} {
   exact key
 
 end SimE
+
+/-! ## The joint experiment and the game -/
+
+section Joint
+
+/-- **Averaging a per-cipher-table bound with per-output failure events** (four of them; as
+`prEvent_avg_le_sum3`). -/
+theorem prEvent_avg_le_sum4 {ι' X Y : Type} (m : CTable → ProbComp X) (ev : CTable → X → Prop)
+    (c : ℝ≥0∞) (J : Finset ι') (m' : ι' → CTable → ProbComp Y)
+    (Q₁ Q₂ Q₃ Q₄ : CTable → Y → Prop)
+    (h : ∀ E, Pr{let r ← m E}[ev E r] ≤
+      c + ∑ j ∈ J, Pr{let r ← m' j E}[Q₁ E r ∨ Q₂ E r ∨ Q₃ E r ∨ Q₄ E r]) :
+    Pr{let E ← $ᵗ CTable; let r ← m E}[ev E r] ≤
+      c + ∑ j ∈ J, (Pr{let E ← $ᵗ CTable; let r ← m' j E}[Q₁ E r] +
+        Pr{let E ← $ᵗ CTable; let r ← m' j E}[Q₂ E r] +
+        Pr{let E ← $ᵗ CTable; let r ← m' j E}[Q₃ E r] +
+        Pr{let E ← $ᵗ CTable; let r ← m' j E}[Q₄ E r]) := by
+  let : MeasurableSpace CTable := ⊤
+  have h4 : ∀ j E, Pr{let r ← m' j E}[Q₁ E r ∨ Q₂ E r ∨ Q₃ E r ∨ Q₄ E r] ≤
+      Pr{let r ← m' j E}[Q₁ E r] + Pr{let r ← m' j E}[Q₂ E r] + Pr{let r ← m' j E}[Q₃ E r] +
+        Pr{let r ← m' j E}[Q₄ E r] :=
+    fun j E => (prEvent_or_le _ _ _).trans (by
+      rw [add_assoc, add_assoc]
+      exact add_le_add le_rfl ((prEvent_or_le _ _ _).trans
+        (add_le_add le_rfl (prEvent_or_le _ _ _))))
+  rw [prEvent_bind_of_discrete]
+  simp only [prEvent_bind_of_discrete]
+  calc ∫⁻ E, Pr{let r ← m E}[ev E r] ∂𝒟[$ᵗ CTable]
+      ≤ ∫⁻ E, (c + ∑ j ∈ J, (Pr{let r ← m' j E}[Q₁ E r] + Pr{let r ← m' j E}[Q₂ E r] +
+          Pr{let r ← m' j E}[Q₃ E r] + Pr{let r ← m' j E}[Q₄ E r])) ∂𝒟[$ᵗ CTable] :=
+        MeasureTheory.lintegral_mono fun E => (h E).trans
+          (add_le_add le_rfl (Finset.sum_le_sum fun j _ => h4 j E))
+    _ = c * 𝒟[$ᵗ CTable] Set.univ + ∑ j ∈ J, (∫⁻ E, Pr{let r ← m' j E}[Q₁ E r] ∂𝒟[$ᵗ CTable] +
+          ∫⁻ E, Pr{let r ← m' j E}[Q₂ E r] ∂𝒟[$ᵗ CTable] +
+          ∫⁻ E, Pr{let r ← m' j E}[Q₃ E r] ∂𝒟[$ᵗ CTable] +
+          ∫⁻ E, Pr{let r ← m' j E}[Q₄ E r] ∂𝒟[$ᵗ CTable]) := by
+        rw [MeasureTheory.lintegral_add_left measurable_const, MeasureTheory.lintegral_const,
+          MeasureTheory.lintegral_finsetSum _ fun _ _ => measurable_from_top]
+        refine congrArg _ (Finset.sum_congr rfl fun j _ => ?_)
+        rw [MeasureTheory.lintegral_add_left measurable_from_top,
+          MeasureTheory.lintegral_add_left measurable_from_top,
+          MeasureTheory.lintegral_add_left measurable_from_top]
+    _ ≤ _ := add_le_add (mul_le_of_le_one_right' (evalDist_apply_univ_le_one _)) le_rfl
+
+/-- **Lemma P's term with simultaneous extraction, every term explicit**: the shared run's queries
+`q k` and each forgery's extraction and verification queries `r k` at the per-query charge
+`simEps`, and each forgery's failure terms (`failEps`: binding, an opened dead leaf, Post; and
+`2⁻¹²⁸` for the verifier's `H₂³` input unqueried). `q`, `qE`, `n` the derived provers' budgets. -/
+noncomputable def pfailSimEps (q : Kind → ℕ) (qE n ℓ : ℕ) : ℝ≥0∞ :=
+  ∑ k ∈ adaptKinds, ((q k : ℝ≥0∞) + (ℓ + 1) * ((extractorQueries + verifierQueries) k : ℝ≥0∞)) *
+      simEps (n + (2 + verifierTotal)) (q + extractorQueries + verifierQueries) k +
+    (ℓ + 1) * (failEps q qE + (2 ^ 128 : ℝ≥0∞)⁻¹)
+
+set_option exponentiation.threshold 1100 in
+/-- **`pfailSimEps` with the chain charges written out**: Lemma P's `2⁵⁷·2⁻¹²⁸ = 2⁻⁷¹` per `H₂³`
+query of the run and per forgery, `(q₂₃ + ℓ + 1)·2⁻⁷¹` as in the paper's `(Q₃ + ℓ + 1)·2⁻⁷¹`; KOS
+and the combined `H₂²` bound likewise; the hits, statement hits and order hits; and the failure
+terms per forgery. -/
+theorem pfailSimEps_eq (q : Kind → ℕ) (qE n ℓ : ℕ) :
+    pfailSimEps q qE n ℓ =
+      ((q .h21 : ℝ≥0∞) + (ℓ + 1)) * (2 ^ 150 : ℝ≥0∞)⁻¹ +
+      ((q .h22 : ℝ≥0∞) + (ℓ + 1)) * (ENNReal.ofReal (Seed.epsQS (2 ^ 128) (2 ^ 64) 1313) +
+        (2 ^ 128 : ℝ≥0∞)⁻¹ + ((n + (2 + verifierTotal) : ℕ) : ℝ≥0∞) / 2 ^ 448) +
+      ((q .h23 : ℝ≥0∞) + (ℓ + 1)) * ((2 ^ 57 : ℝ≥0∞) / 2 ^ 128) +
+      ∑ k ∈ adaptKinds, ((q k : ℝ≥0∞) + (ℓ + 1) * ((extractorQueries + verifierQueries) k : ℝ≥0∞)) *
+        (hitEps (q + extractorQueries + verifierQueries)
+          (combCount (some (45, dstP)) (q + extractorQueries + verifierQueries)) k +
+          stmtEpsD (q + extractorQueries + verifierQueries) k +
+          orderEps (q + extractorQueries + verifierQueries) k) +
+      (ℓ + 1) * (failEps q qE + (2 ^ 128 : ℝ≥0∞)⁻¹) := by
+  unfold pfailSimEps
+  congr 1
+  have hsplit : ∀ k, simEps (n + (2 + verifierTotal)) (q + extractorQueries + verifierQueries) k =
+      cellEps (n + (2 + verifierTotal)) k +
+        (hitEps (q + extractorQueries + verifierQueries)
+          (combCount (some (45, dstP)) (q + extractorQueries + verifierQueries)) k +
+          stmtEpsD (q + extractorQueries + verifierQueries) k +
+          orderEps (q + extractorQueries + verifierQueries) k) := fun k => by
+    simp only [simEps, add_assoc]
+  simp only [hsplit, mul_add, Finset.sum_add_distrib]
+  congr 1
+  simp only [adaptKinds]
+  rw [Finset.sum_insert (by decide), Finset.sum_insert (by decide),
+    Finset.sum_insert (by decide), Finset.sum_insert (by decide), Finset.sum_singleton]
+  simp only [cellEps, Pi.add_apply, extractorQueries, verifierQueries, reduceCtorEq, or_self,
+    ↓reduceIte, add_zero, mul_zero, Nat.cast_add, Nat.cast_one, Nat.cast_zero]
+  ring
+
+set_option exponentiation.threshold 1100 in
+/-- **One derived game's charges, summed**: the per-query charges over all its queries, with the
+failure terms, are `majEps` (`pomfritT_accept_le_major`'s bound) plus the order hits at `H₂¹`. -/
+theorem sum_simEps_eq (q : Kind → ℕ) (qE n : ℕ) :
+    ∑ k ∈ adaptKinds, ((q + extractorQueries + verifierQueries) k : ℝ≥0∞) *
+        simEps (n + (2 + verifierTotal)) (q + extractorQueries + verifierQueries) k +
+      failEps q qE =
+      majEps q qE n + ((q + extractorQueries + verifierQueries) .h21 : ℝ≥0∞) *
+        orderEps (q + extractorQueries + verifierQueries) .h21 := by
+  simp only [adaptKinds]
+  rw [Finset.sum_insert (by decide), Finset.sum_insert (by decide),
+    Finset.sum_insert (by decide), Finset.sum_insert (by decide), Finset.sum_singleton]
+  simp only [simEps, cellEps, hitEps, stmtEpsD, orderEps, combCount, majEps, failEps,
+    chainHitEpsComb, chainHitEps, stmtBindEpsD, Pi.add_apply, extractorQueries, verifierQueries,
+    reduceCtorEq, or_self, false_or, or_false, ↓reduceIte, add_zero, zero_add, Nat.cast_add,
+    Nat.cast_mul, Nat.cast_ofNat, Nat.cast_one, div_eq_mul_inv]
+  ring
+
+/-- **The simultaneous bound is never worse than the union bound**:
+`pfailSimEps ≤ (ℓ + 1)·pfailEps` (`prEvent_pfail_le`'s bound). The shared queries `q k` are
+charged once instead of `ℓ + 1` times; Post and the chain hits are no longer charged twice. -/
+theorem pfailSimEps_le (q : Kind → ℕ) (qE n ℓ : ℕ) :
+    pfailSimEps q qE n ℓ ≤ (ℓ + 1) * pfailEps q qE n := by
+  set n'' := q + extractorQueries + verifierQueries
+  set ε := simEps (n + (2 + verifierTotal)) n''
+  have h1 : ∑ k ∈ adaptKinds, ((q k : ℝ≥0∞) + (ℓ + 1) *
+      ((extractorQueries + verifierQueries) k : ℝ≥0∞)) * ε k ≤
+      (ℓ + 1) * ∑ k ∈ adaptKinds, (n'' k : ℝ≥0∞) * ε k := by
+    rw [Finset.mul_sum]
+    refine Finset.sum_le_sum fun k _ => ?_
+    rw [← mul_assoc]
+    refine mul_le_mul_of_nonneg_right ?_ zero_le
+    have hn : (n'' k : ℝ≥0∞) = q k + ((extractorQueries + verifierQueries) k : ℝ≥0∞) := by
+      simp only [n'', Pi.add_apply, Nat.cast_add, add_assoc]
+    rw [hn, mul_add]
+    exact add_le_add (le_mul_of_one_le_left zero_le le_add_self) le_rfl
+  have h2 : ((n'' .h21 : ℝ≥0∞)) * orderEps n'' .h21 ≤
+      ∑ k ∈ hitKinds, (n'' k : ℝ≥0∞) * (hitEps n'' (combCount cbP n'') k + orderEps n'' k) :=
+    (mul_le_mul_of_nonneg_left le_add_self zero_le).trans
+      (Finset.single_le_sum (f := fun k => (n'' k : ℝ≥0∞) *
+        (hitEps n'' (combCount cbP n'') k + orderEps n'' k)) (fun _ _ => zero_le)
+        (by decide : Kind.h21 ∈ hitKinds))
+  calc pfailSimEps q qE n ℓ
+      ≤ (ℓ + 1) * ∑ k ∈ adaptKinds, (n'' k : ℝ≥0∞) * ε k +
+          (ℓ + 1) * (failEps q qE + (2 ^ 128 : ℝ≥0∞)⁻¹) := add_le_add h1 le_rfl
+    _ = (ℓ + 1) * ((∑ k ∈ adaptKinds, (n'' k : ℝ≥0∞) * ε k + failEps q qE) +
+          (2 ^ 128 : ℝ≥0∞)⁻¹) := by rw [← mul_add, add_assoc]
+    _ = (ℓ + 1) * ((majEps q qE n + (n'' .h21 : ℝ≥0∞) * orderEps n'' .h21) +
+          (2 ^ 128 : ℝ≥0∞)⁻¹) := by rw [sum_simEps_eq]
+    _ ≤ (ℓ + 1) * pfailEps q qE n := by
+        refine mul_le_mul_of_nonneg_left ?_ zero_le
+        have h3 : majEps q qE n + (2 ^ 128 : ℝ≥0∞)⁻¹ ≤
+            majEps q qE n + ((qE * 2 : ℕ) : ℝ≥0∞) * (((512 * q .h1 : ℕ) : ℝ≥0∞) *
+              (2 ^ 256 : ℝ≥0∞)⁻¹) + (2 ^ 128 : ℝ≥0∞)⁻¹ :=
+          add_le_add le_self_add le_rfl
+        calc majEps q qE n + (n'' .h21 : ℝ≥0∞) * orderEps n'' .h21 + (2 ^ 128 : ℝ≥0∞)⁻¹
+            = (majEps q qE n + (2 ^ 128 : ℝ≥0∞)⁻¹) + (n'' .h21 : ℝ≥0∞) * orderEps n'' .h21 := by
+              ring
+          _ ≤ pfailEps q qE n := add_le_add h3 h2
+
+variable (lr : Bool) (pk : UovPk) (pre : TG → SIss) (A : Forger) (Lst : List TG) (ℓ : ℕ)
+
+set_option exponentiation.threshold 500 in
+set_option maxRecDepth 4000 in
+/-- **Lemma P's term with simultaneous extraction, for a fixed key and target stream**: over the
+cipher table and the hash table, some forgery fails with probability at most `pfailSimEps`. -/
+theorem prEvent_pfailZ_sim_le (hd : pk.digest.size = 32) {qA : Kind → ℕ} {nA qE QT : ℕ}
+    (hA : ForgerBound A qA nA qE QT) :
+    Pr{let E ← $ᵗ CTable; let z ← (simulateQ randomOracle ((simulateQ (htW (AR := Ans) addHint pre)
+        (Acomp CrtGen.tables lr E (e1P lr E) tgts1 pk ℓ A)).run (hs0 Lst))).run' ∅}[
+        ∃ i : Fin (ℓ + 1), PFailZ pk i.val z] ≤
+      pfailSimEps (qP qA QT ℓ) (eP lr qE ℓ) (nP nA QT ℓ) ℓ := by
+  classical
+  set q := qP qA QT ℓ
+  set e := eP lr qE ℓ
+  set ε := simEps (nP nA QT ℓ + (2 + verifierTotal)) (q + extractorQueries + verifierQueries)
+  set c := ∑ k ∈ adaptKinds, (q k : ℝ≥0∞) * ε k +
+      ∑ _j : Fin (ℓ + 1), ∑ k ∈ adaptKinds, ((extractorQueries + verifierQueries) k : ℝ≥0∞) * ε k
+  have hb : ∀ j : Fin (ℓ + 1), IsKindQueryBoundIC (proverP lr pk pre A Lst j.val) q ∧
+      IsQueryBoundP (proverP lr pk pre A Lst j.val) (fun t => t.isLeft = true) (nP nA QT ℓ) ∧
+      IsQueryBoundP (proverP lr pk pre A Lst j.val) (fun t => t.isRight = true) e := fun j =>
+    proverP_bounds lr pre pk hA Lst (Nat.lt_succ_iff.1 j.isLt)
+  have havg := prEvent_avg_le_sum4 _ (fun E z => ∃ i : Fin (ℓ + 1), PFailZ pk i.val z) c
+    (Finset.univ : Finset (Fin (ℓ + 1)))
+    (fun j E => (simulateQ randomOracle (gameDP lr E pk pre A Lst j.val)).run' ∅)
+    (fun E r => bindFailA (stG lr pk) E r) (fun E r => deadOpenA (stG lr pk) E r)
+    (fun E r => PostOut E r)
+    (fun E r => r.2.2.accept = true ∧
+      ((.h23, zOut (stG lr pk (stOut r)) r) : Dom) ∉ hashLog r.2.1.aux.2)
+    (fun E => prEvent_pfailZ_sim_le_E lr pk pre A Lst ℓ hd hA E)
+  refine havg.trans ?_
+  have h3 := sum_fail_le CrtGen.tables (stG lr pk) (pomfritParams lr) (fun _ => rfl)
+    (fun j : Fin (ℓ + 1) => proverP lr pk pre A Lst j.val) Finset.univ e (fun j _ => (hb j).2.2) q
+    (fun j _ => (hb j).1)
+  rw [Finset.sum_add_distrib]
+  refine (add_le_add le_rfl (add_le_add h3
+    (Finset.sum_le_card_nsmul _ _ (2 ^ 128 : ℝ≥0∞)⁻¹ fun j _ => ?_))).trans_eq ?_
+  · exact prEvent_joint_le_of_forall _ _ fun E =>
+      prEvent_zUnqueried_le_A CrtGen.tables (stG lr pk) (proverP lr pk pre A Lst j.val) E
+  simp only [c, pfailSimEps, Finset.card_univ, Fintype.card_fin, Finset.sum_const, nsmul_eq_mul,
+    Nat.cast_add, Nat.cast_one, Finset.mul_sum]
+  rw [← Finset.sum_add_distrib]
+  simp only [add_mul, mul_assoc, mul_add]
+  ring
+
+end Joint
+
+section Game
+
+variable {K : Type} (KG : ProbComp (UovPk × K)) (pre : K → TG → SIss) (lr : Bool) (A : Forger)
+
+/-- **Lemma P's term with simultaneous extraction** (`pomfrit.md` §6.4, G8): in PomFRIT's one-more
+game with Lemma P's `E₁` (`e1P`), for a key generation whose public keys have 32-byte digests and a
+forger with budget `qA`, `nA`, `qE`, `Q_T`, some forgery `i ≤ ℓ` is accepted with a claim that is
+not a preimage of its programmed target with probability at most `pfailSimEps`, for any number `n`
+of targets. Each query of the forger's run is charged once (`prEvent_pfail_le` charges it once per
+forgery). -/
+theorem prEvent_pfail_sim_le (n ℓ : ℕ) (hdig : ∀ kp ∈ support KG, kp.1.digest.size = 32)
+    {qA : Kind → ℕ} {nA qE QT : ℕ} (hA : ForgerBound A qA nA qE QT) :
+    Pr{let r ← game KG pre n ℓ CrtGen.tables lr A addHint (e1P lr) tgts1}[
+        ∃ i : Fin (ℓ + 1), PFail i.val r] ≤
+      pfailSimEps (qP qA QT ℓ) (eP lr qE ℓ) (nP nA QT ℓ) ℓ := by
+  unfold game omuf advC
+  simp only [bind_assoc, pure_bind]
+  apply prEvent_bind_le_of_forall_le_of_support KG _ (fun r => ∃ i : Fin (ℓ + 1), PFail i.val r)
+  intro kp hkp
+  rw [eqd_swap ($ᵗ CTable) (unifList TG n) (fun E L => (do
+    let r ← (simulateQ (realImpl addHint (pre kp.2))
+      (Acomp CrtGen.tables lr E (e1P lr E) tgts1 kp.1 ℓ A)).run (fun _ => none, ch0 L)
+    pure (kp.1, r.1, r.2))) (fun r => ∃ i : Fin (ℓ + 1), PFail i.val r)]
+  apply prEvent_bind_le_of_forall_le _ _ (fun r => ∃ i : Fin (ℓ + 1), PFail i.val r)
+  intro L
+  refine le_trans (le_of_eq ?_) (prEvent_pfailZ_sim_le lr kp.1 (pre kp.2) A L ℓ (hdig kp hkp) hA)
+  have key : ∀ E : CTable, (simulateQ (realImpl addHint (pre kp.2))
+      (Acomp CrtGen.tables lr E (e1P lr E) tgts1 kp.1 ℓ A)).run (fun _ => none, ch0 L) =
+      (fun z => (z.1.1, (z.1.2.1, chOf z.1.2.2 z.2))) <$>
+        (simulateQ randomOracle ((simulateQ (htW (AR := Ans) addHint (pre kp.2))
+          (Acomp CrtGen.tables lr E (e1P lr E) tgts1 kp.1 ℓ A)).run (hs0 L))).run ∅ := fun E =>
+    realImpl_run_eq addHint (pre kp.2) _ (fun _ => none) (ch0 L)
+  simp only [key, StateT.run'_eq, map_bind, Functor.map_map, bind_pure_comp]
+  have hev : ∀ a : ((List (ByteArray × SIss) × Bool) × HTS) × (specR Ans).QueryCache,
+      (∃ i : Fin (ℓ + 1), PFail i.val (kp.1, a.1.1, a.1.2.1, chOf a.1.2.2 a.2)) =
+        (∃ i : Fin (ℓ + 1), PFailZ kp.1 i.val a.1) := fun a => rfl
+  simp only [hev]
+
+/-- **Theorem U1 with simultaneous extraction** (`pomfrit.md` §6.1, §6.4; G8): for a key
+generation with 32-byte key digests, any Issuer and a forger with budget `qA`, `nA`, `qE`, `Q_T`,
+with Lemma P's `E₁` (`e1P`) as the reduction's first-phase rule,
+
+    Pr[PomWin] ≤ Adv^{ompr}(red …; Q_T + ℓ + 1, ℓ) + pfailSimEps(q', q_E', n', ℓ),
+
+the forger's run charged once, each forgery's extraction, verification and failure terms once per
+forgery (`pomfrit_U1_explicit` has `(ℓ + 1)·pfailEps` instead). -/
+theorem pomfrit_U1_sim (ℓ : ℕ) (hdig : ∀ kp ∈ support KG, kp.1.digest.size = 32)
+    {qA : Kind → ℕ} {nA qE QT : ℕ} (hA : ForgerBound A qA nA qE QT) :
+    Pr{let r ← game KG pre (QT + (ℓ + 1)) ℓ CrtGen.tables lr A addHint (e1P lr) tgts1}[PomWin ℓ r] ≤
+      Pr{let r ← omExp KG pre (QT + (ℓ + 1))
+          (red addHint (advC ℓ CrtGen.tables lr A (e1P lr) tgts1))}[
+        Wins ℓ (goodPre relP) r.1 r.2.1 r.2.2] +
+      pfailSimEps (qP qA QT ℓ) (eP lr qE ℓ) (nP nA QT ℓ) ℓ :=
+  (pomfrit_U1_bound KG pre ℓ QT CrtGen.tables lr A (e1P lr) hA.ht).trans
+    (add_le_add le_rfl (prEvent_pfail_sim_le KG pre lr A _ ℓ hdig hA))
+
+end Game
+
 
 end VoleMole.ROM.OneMore.Pomfrit

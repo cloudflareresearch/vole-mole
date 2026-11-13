@@ -1,10 +1,13 @@
 import VoleMole.Assumptions.PomfritLemmaP
+import VoleMole.Assumptions.PomfritLemmaPSim
 
 /-!
 # Non-vacuity of Theorem U1 with Lemma P's term explicit
 
 `ROM/OneMoreLemmaPBound.lean` (`pomfrit_U1_explicit`, `prEvent_pfail_le`) and
-`Assumptions/PomfritLemmaP.lean` (`pomfrit_U1_ompr_explicit`) instantiated with the honest Issuer
+`Assumptions/PomfritLemmaP.lean` (`pomfrit_U1_ompr_explicit`), and their simultaneous versions
+(`ROM/OneMoreLemmaPSim.lean`: `pomfrit_U1_sim`, `prEvent_pfail_sim_le`;
+`Assumptions/PomfritLemmaPSim.lean`: `pomfrit_U1_ompr_sim`) instantiated with the honest Issuer
 (`honestPre`), a key with a 32-byte digest (the size of pqov's `SHAKE256(cpk)`), and two forgers
 within their budgets: the forger that outputs nothing (all budgets `0`) and a forger that makes one
 hash query, one cipher query and one `hash_to_target` query (`oneQ`, budgets `1`). The hypotheses
@@ -71,6 +74,20 @@ example := pomfrit_U1_ompr_explicit (pure (pk32, sk)) honestPre lr oneQ ℓ (pk3
 
 /-- **Lemma P's term**, for any number of targets. -/
 example (n : ℕ) := prEvent_pfail_le (pure (pk32, sk)) honestPre lr oneQ n ℓ (pk32_digest sk)
+  oneQ_bound
+
+/-- **U1 with simultaneous extraction**, honest Issuer, the empty forger. -/
+example := pomfrit_U1_sim (pure (pk32, sk)) honestPre lr (fun _ => pure []) ℓ (pk32_digest sk)
+  nil_bound
+
+/-- **U1 with simultaneous extraction**, honest Issuer, a forger with one query of each kind. -/
+example := pomfrit_U1_sim (pure (pk32, sk)) honestPre lr oneQ ℓ (pk32_digest sk) oneQ_bound
+
+/-- **U1 with simultaneous extraction against the standalone OMPR game**. -/
+example := pomfrit_U1_ompr_sim (pure (pk32, sk)) honestPre lr oneQ ℓ (pk32_digest sk) oneQ_bound
+
+/-- **Lemma P's term with simultaneous extraction**, for any number of targets. -/
+example (n : ℕ) := prEvent_pfail_sim_le (pure (pk32, sk)) honestPre lr oneQ n ℓ (pk32_digest sk)
   oneQ_bound
 
 end VoleMole.Audit.PomfritLemmaP
