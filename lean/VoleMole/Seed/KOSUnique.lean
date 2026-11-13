@@ -23,6 +23,17 @@ into the target `h`. This file proves that `ũ` alone determines the slope of th
   CRT masks when the trees agree on the label rows), `KOSGood` alone gives one slope `(u_Q, u_D)`
   for all level sets of `ũ`.
 
+Hidden slices (§6 of the note), where the trees disagree on the label rows:
+
+* **Structure** (`card_le_of_nonbit_slope`, `claim4Hyp_slice`, `translateOn_gate_slice`). A row
+  whose slope is not a bit confines the accepting set to `2^{⌊w/2⌋}` points. Otherwise the set
+  lies in a slice of a class of trees with the same rows, where the witness rows are affine and
+  (gate model) so are the CRT masks.
+* **Certificates** (`slice_collision_sound`, `slice_collision_sound_affine`). Two challenges of one
+  slice with the same check value determine the witness of every accepted chain with that `ũ`.
+* **Black-box extractors** (`DTree.card_detect_le`). `T` evaluations of a function that hides one
+  of `N` disjoint slices detect at most `T` of them.
+
 No `sorry`, no `axiom`.
 -/
 
@@ -493,7 +504,8 @@ A *class* `C` is a set of alive trees with the same rows `u_C`. Its *slice* at `
 challenges that agree with `g` outside `C`. On a slice the witness rows are affine with slope `u_C`
 (`claim4Hyp_slice`), so any two points of one slice with the same check value certify the witness
 of every accepted chain with that `ũ` (`slice_collision_sound`). A row whose slope is not a bit
-(a label row) confines the accepting set to `|A|² ≤ ∏_{free} |B_i|` (`card_sq_le_of_nonbit_slope`).
+(a label row) confines the accepting set: the blocks of a part of the free trees, and those of
+the other part, determine the challenge (`card_le_of_nonbit_slope`, `card_sq_le_of_nonbit_slope`).
 -/
 
 section Slice
@@ -557,15 +569,17 @@ theorem claim4Hyp_slice {e : (∀ i, B i) →+ F} (he : Function.Injective e) {S
 
 /-- **A row with a slope that is not a bit confines the accepting set.** Under Claim 4's
 hypotheses with any slopes, if the slope of row `j` on `A` is neither `0` nor `1` and every tree
-outside `G` is fixed on `A`, then `|A|² ≤ ∏_{i ∈ G} |B_i|`: the blocks of the trees of `G` with
-`u^{(i)}[j] = 1` determine the challenge, and so do the blocks of the others. (For PomFRIT's label
-rows and `G` a group of width at most 57: `|A| ≤ 2²⁸`.) -/
-theorem card_sq_le_of_nonbit_slope [∀ i, Fintype (B i)] {e : (∀ i, B i) →+ F}
+outside `G` is fixed on `A`, then `G` splits into two parts (the trees with `u^{(i)}[j] = 1` and
+the others), and the blocks of either part determine the challenge on `A`: `|A| ≤ ∏_{i ∈ P} |B_i|`
+and `|A| ≤ ∏_{i ∈ G \ P} |B_i|`. (For PomFRIT's label rows and `G` a group of width at most 57,
+one part has width at most 28: `|A| ≤ 2²⁸`.) -/
+theorem card_le_of_nonbit_slope [∀ i, Fintype (B i)] {e : (∀ i, B i) →+ F}
     {A : Finset (∀ i, B i)} {known : Finset ι} {u : ι → J → Bool} {Q : J → (∀ i, B i) → F}
     {uStar : J → F} (h : Claim4Hyp e (A : Set (∀ i, B i)) known u Q uStar) {j : J}
     (h0 : uStar j ≠ 0) (h1 : uStar j ≠ 1) (G : Finset ι)
     (hfix : ∀ i ∉ G, IsFixed (A : Set (∀ i, B i)) i) :
-    A.card ^ 2 ≤ ∏ i ∈ G, Fintype.card (B i) := by
+    ∃ P ⊆ G, A.card ≤ ∏ i ∈ P, Fintype.card (B i) ∧
+      A.card ≤ ∏ i ∈ G \ P, Fintype.card (B i) := by
   classical
   obtain ⟨c, hc⟩ := h.tree_form j
   obtain ⟨v, hv⟩ := h.consistent j
@@ -640,10 +654,21 @@ theorem card_sq_le_of_nonbit_slope [∀ i, Fintype (B i)] {e : (∀ i, B i) →+
           Finset.card_le_card_of_injOn f (fun _ _ => Finset.mem_coe.2 (Finset.mem_univ _)) hf
       _ = ∏ i : P', Fintype.card (B i) := by rw [Finset.card_univ, Fintype.card_pi]
       _ = ∏ i ∈ P', Fintype.card (B i) := Finset.prod_coe_sort P' (fun i => Fintype.card (B i))
+  exact ⟨P, Finset.filter_subset _ _, card_le _ inj1, card_le _ inj2⟩
+
+/-- The product form of `card_le_of_nonbit_slope`: `|A|² ≤ ∏_{i ∈ G} |B_i|`. -/
+theorem card_sq_le_of_nonbit_slope [∀ i, Fintype (B i)] {e : (∀ i, B i) →+ F}
+    {A : Finset (∀ i, B i)} {known : Finset ι} {u : ι → J → Bool} {Q : J → (∀ i, B i) → F}
+    {uStar : J → F} (h : Claim4Hyp e (A : Set (∀ i, B i)) known u Q uStar) {j : J}
+    (h0 : uStar j ≠ 0) (h1 : uStar j ≠ 1) (G : Finset ι)
+    (hfix : ∀ i ∉ G, IsFixed (A : Set (∀ i, B i)) i) :
+    A.card ^ 2 ≤ ∏ i ∈ G, Fintype.card (B i) := by
+  classical
+  obtain ⟨P, hP, h1', h2'⟩ := card_le_of_nonbit_slope h h0 h1 G hfix
   calc A.card ^ 2 = A.card * A.card := sq _
     _ ≤ (∏ i ∈ G \ P, Fintype.card (B i)) * ∏ i ∈ P, Fintype.card (B i) :=
-        Nat.mul_le_mul (card_le _ inj2) (card_le _ inj1)
-    _ = ∏ i ∈ G, Fintype.card (B i) := Finset.prod_sdiff (Finset.filter_subset _ _)
+        Nat.mul_le_mul h2' h1'
+    _ = ∏ i ∈ G, Fintype.card (B i) := Finset.prod_sdiff hP
 
 variable [Fintype F] [DecidableEq F]
 
