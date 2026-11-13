@@ -22,7 +22,7 @@ the bounds do not charge.
 The permutation model's failure bounds use the normalization's parameters `p_N` in two roles: the
 records (any `p_N`) and N1 (the statement's parameters `p`). Here they are separated:
 
-* `addIV`, `addIV_map`, `normJ_map`, query bounds `isKindQueryBoundP_addIV`,
+* `addIV`, `addIV_map`, `normJ_map`, `normJ_bind`, query bounds `isKindQueryBoundP_addIV`,
   `isQueryBoundP_right_addIV`, `isQueryBoundP_left_addIV`.
 * `IvBefore p L` (N1 at `p` for a log), `ivBefore_normP`, `ivBefore_normP_addIV`.
 * `prEvent_perm_postP_le_iv`: Post at `p` for `normP p_N` (any `p`, `p_N`), `≤ q_E·4608·q₂₁·p²`.
@@ -259,6 +259,53 @@ theorem tableQueryLog_runE_normJ_map {γ α α' : Type} (pI pR : Params) (π : P
     tableQueryLog (runE π.fwd (normJ pI pR π (f <$> G))) g =
       tableQueryLog (runE π.fwd (normJ pI pR π (f' <$> G))) g := by
   rw [normJ_map, normJ_map, tableQueryLog_runE_map, tableQueryLog_runE_map]
+
+/-- **Normalization commutes with binds.** -/
+theorem normP_bind {α β : Type} (p : Params) (π : PTable) (X : OracleComp specP α)
+    (f : α → OracleComp specP β) :
+    normP p π (X >>= f) = normP p π X >>= fun a => normP p π (f a) := by
+  induction X using OracleComp.inductionOn with
+  | pure a => simp
+  | query_bind t k ih =>
+    rw [bind_assoc]
+    rcases t with d | ⟨b, c⟩
+    · rw [normP_inl, normP_inl]
+      split_ifs
+      · simp only [bind_assoc]
+        exact congrArg _ (funext fun _ => congrArg _ (funext fun u => ih u))
+      · simp only [bind_assoc]
+        exact congrArg _ (funext fun u => ih u)
+    · cases b
+      · rw [normP_inv, normP_inv]
+        simp only [bind_assoc]
+        exact congrArg _ (funext fun _ => ih _)
+      · rw [normP_fwd, normP_fwd]
+        simp only [bind_assoc]
+        exact congrArg _ (funext fun u => ih u)
+
+/-- **Adding the `iv` queries commutes with binds.** -/
+theorem addIV_bind {α β : Type} (p : Params) (X : OracleComp specP α)
+    (f : α → OracleComp specP β) :
+    addIV p (X >>= f) = addIV p X >>= fun a => addIV p (f a) := by
+  induction X using OracleComp.inductionOn with
+  | pure a => simp
+  | query_bind t k ih =>
+    rw [bind_assoc]
+    rcases t with d | c
+    · rw [addIV_inl, addIV_inl]
+      split_ifs
+      · simp only [bind_assoc]
+        exact congrArg _ (funext fun _ => congrArg _ (funext fun u => ih u))
+      · simp only [bind_assoc]
+        exact congrArg _ (funext fun u => ih u)
+    · rw [addIV_inr, addIV_inr]
+      simp only [bind_assoc]
+      exact congrArg _ (funext fun u => ih u)
+
+theorem normJ_bind {α β : Type} (pI pR : Params) (π : PTable) (X : OracleComp specP α)
+    (f : α → OracleComp specP β) :
+    normJ pI pR π (X >>= f) = normJ pI pR π X >>= fun a => normJ pI pR π (f a) := by
+  rw [normJ, addIV_bind, normP_bind]
 
 /-! ## N1 at given parameters -/
 

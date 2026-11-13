@@ -162,6 +162,7 @@ import VoleMole.ROM.SimPermJoint
 import VoleMole.ROM.SimPermJointSpec
 import VoleMole.ROM.MoussakaUnboundSimPerm
 import VoleMole.ROM.MoussakaOMUFSimPerm
+import VoleMole.ROM.RatatouilleBalanceSimPerm
 import VoleMole.ROM.MoussakaOMUFSim
 import VoleMole.ROM.RatatouilleBalanceSim
 import VoleMole.ROM.OneMore

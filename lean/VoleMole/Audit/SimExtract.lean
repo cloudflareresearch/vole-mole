@@ -3,6 +3,7 @@ import VoleMole.Assumptions.SimLinks
 import VoleMole.ROM.MoussakaUnboundSim
 import VoleMole.ROM.MoussakaUnboundSimPerm
 import VoleMole.ROM.MoussakaOMUFSimPerm
+import VoleMole.ROM.RatatouilleBalanceSimPerm
 import VoleMole.Audit.UnboundROM
 
 /-!
@@ -27,7 +28,9 @@ The permutation-model joint bounds (`moussaka_sim_joint_specP`, `ratatouille_sim
 executable statements with one-instance families and a prover `invP` that makes one **inverse**
 cipher query (one cipher query, no hash query): the joint normalization, the prefix runs and the
 one hash log are discharged for it. Moussaka Theorem 1 in the permutation model
-(`omuf_le_num_simP`) is instantiated with `aUP`, `aU` with an inverse cipher query first.
+(`omuf_le_num_simP`) is instantiated with `aUP`, `aU` with an inverse cipher query first;
+Ratatouille balance in the permutation model (`balance_le_lean_simP`) with `balA0P`, `balA0`
+with an inverse cipher query before each request.
 
 No `sorry`, no `axiom`.
 -/
@@ -208,5 +211,28 @@ theorem aUP_budget : aUP.Budget 0 1 0 :=
 (`omuf_le_num_simP`): its hypotheses hold for `aUP` (an inverse cipher query). -/
 example (lr : Bool) (sk : Fin 2 → Spec.Signer) :=
   omuf_le_num_simP (lr := lr) (pk := pkU) (sk := sk) (qI := 1) aUP_budget pkU_digest pkU_inj
+
+/-- A balance adversary of the permutation model: `balA0` with an inverse cipher query before each
+request. -/
+def balA0P : RatBalance.RoundAdvP Unit (Spec.Ratatouille.Op Spec.Ratatouille.Sizes.labelRows)
+    RatBalance.Resp :=
+  ⟨(), fun s => invU >>= fun _ =>
+    pure (.issue (Vector.replicate _ 0) 1 (Vector.replicate 16 0), s), fun s _ => s⟩
+
+lemma balA0P_k (s : Unit) : IsKindQueryBoundP (balA0P.next s) 0 :=
+  isKindQueryBoundP_bind (q₂ := 0) invU_k fun _ => isQueryBound_pure _ _ _ _
+
+lemma balA0P_e (s : Unit) : IsQueryBoundP (balA0P.next s) (fun t => t.isRight = true) 1 :=
+  isQueryBoundP_bind (m := 0) invU_e fun _ _ => isQueryBoundP_pure _ _ 0
+
+lemma balA0P_h (s : Unit) : IsQueryBoundP (balA0P.next s) (fun t => t.isLeft = true) 0 :=
+  isQueryBoundP_bind (m := 0) invU_h fun _ _ => isQueryBoundP_pure _ _ 0
+
+/-- Ratatouille balance with simultaneous extraction in the permutation model
+(`balance_le_lean_simP`): its hypotheses hold for `balA0P` (inverse cipher queries), any signer
+and any number of calls. -/
+example (σ : RatBalance.Signer) (N : ℕ) (lr : Bool) :=
+  RatBalance.balance_le_lean_simP lr IdealTag.pk0 balA0P N σ (by decide) balA0P_k balA0P_h
+    balA0P_e
 
 end VoleMole.Audit.SimExtract
