@@ -255,8 +255,8 @@ permutations with inverse queries):
 
 **On paper only**: removing U1's `2⁻⁷¹` term efficiently in general, the affinity of the
 verifier's CRT masks under label agreement, and Lemmas P^∞ / P^lin in the one-more game
-(`pomfrit-lemmap-tight.md`); in the permutation model, the CT-UF^open, UF-Tag and OMPR corollaries of the
-protocol theorems and PomFRIT's U1/U2 with simultaneous extraction; for the many-token forms of Ratatouille's Thm 3, Moussaka's Thm 3 and unbound Moussaka's Prop U3 / Thm U4 (`noTheftN`, `noRedirectN`, `nmUN`): plain extraction with no simulated proofs (`PlainSEN`) and one programmed-point term per simulated proof (`SlotEvN`), to which `WeakSEN` is reduced (the hops' read budgets are proved), and these theorems with the other hashes read off uniform tables; its Thm U1
+(`pomfrit-lemmap-tight.md`); with AES as random permutations, PomFRIT's U1/U2 with simultaneous extraction;
+the equality of the lazily sampled permutation with a uniformly drawn one; for the many-token forms of Ratatouille's Thm 3, Moussaka's Thm 3 and unbound Moussaka's Prop U3 / Thm U4 (`noTheftN`, `noRedirectN`, `nmUN`): plain extraction with no simulated proofs (`PlainSEN`) and one programmed-point term per simulated proof (`SlotEvN`), to which `WeakSEN` is reduced (the hops' read budgets are proved), and these theorems with the other hashes read off uniform tables; its Thm U1
 with inverse queries, and one joint bound over all three extraction families;
 weak simulation-extractability (L8) for the Lean simulators, which Moussaka non-malleability
 (Thm 3) and Ratatouille no theft take as the hypothesis `WeakSE2`, the read budgets of their ZK
@@ -448,7 +448,8 @@ lean/
                             (BlindPomfrit; Lean client: PomClientLean, BlindPomfritT6Lean); Ratatouille under OMPR (RatatouilleOMPR); Theorem T3 (SymmetryProbes,
                             SymmetryTensor, SymmetryScalar, SymmetryT3); `Com`/`Tag` as random
                             permutations with inverse queries (LazyPerm, CTUFPerm, PermLinks,
-                            FDHPerm, RatatouillePerm, PermSimLinks);
+                            FDHPerm, RatatouillePerm, PermSimLinks,
+                            RatatouillePermSim, UnboundPermSimLinks);
                             simultaneous extraction down to OMPR (SimLinks); shared lazy-sampling, union-bound and simulation
                             lemmas (LazyIdeal)
     Audit/                  non-vacuity checks: the headline theorems' hypotheses instantiated,
@@ -1664,9 +1665,15 @@ What is **not** established, roughly in order of importance:
      `balance_le_ompr_sim_perm` (hypothesis `TagIdealP`; `Assumptions/FDHPerm.lean`,
      `Assumptions/RatatouillePerm.lean`, `Audit/PermFDH.lean`). With AES and `Com` both random
      permutations, Moussaka's Theorem 1 goes down to OMPR (`omuf_le_num_ompr_simP`,
-     `Assumptions/PermSimLinks.lean`, `Audit/PermSim.lean`). Not done with AES as permutations:
-     Ratatouille's UF-Tag/OMPR corollaries (`forgeAdvP` is not linked to a UF-Tag forger), unbound
-     Moussaka's protocol theorem, and PomFRIT U1/U2 (no permutation-model one-more game).
+     `Assumptions/PermSimLinks.lean`, `Audit/PermSim.lean`). Ratatouille and unbound Moussaka also
+     reach OMPR with AES as random permutations: `TagForger` is generic in its common randomness and
+     `forgerP : TagForger PTable` bounds `forgeAdvP` (`balance_le_ufTag_simP`,
+     `balance_le_ompr_simP`, `balance_le_ompr_sim_permP`; `Assumptions/RatatouillePermSim.lean`);
+     unbound Moussaka has a permutation-model OMUF-U game (`omufU_le_num_simP`,
+     `ROM/MoussakaUnboundOMUFSimPerm.lean`) and `omufU_le_num_ompr_simP`
+     (`Assumptions/UnboundPermSimLinks.lean`); audits in `Audit/PermSim.lean`. Not done with AES as
+     permutations: PomFRIT U1/U2 (no permutation-model one-more game); the lazy permutation is not
+     proved equal to a uniformly drawn one.
    - PomFRIT's tight bound needs OMPR⊕17; OMPR ⇒ OMPR⊕17 without the `τ^{q+1}` loss has no
      black-box proof (`uov-open-reductions.md`); by Theorem R (`ompr-shift-algebra.md`; Lean `thmR`) a
      proof must be non-black-box in the adversary or break OMPR^free. In Lean every term of
