@@ -34,8 +34,8 @@ Contents:
 |---|---|---|---|
 | One-more unforgeability **per `(ctx_iss, ctx_red)`** (Thm U1): for each pair, accepted distinct nullifiers ≤ unbound issuances for `ctx_iss` | **Yes** ([Lean], ROM and ideal cipher, down to OMPR under `hmodel`; §4 Status) | `ε_ext^{u-iss} + ε_ext^{u-red} + ε_ext^{iss} + ε_dig + Adv^bind_{Com∪UCom} + K·Adv^ct-uf-open` | PoK of the two unbound relations (and of the bound issuance relation, if the Anchor also runs it), joint binding of `Com` and `UCom`, CT-UF^open of UOV |
 | Determinism of the nullifier: each signed commitment and `ctx_red` determine one `nf` (Cor U2) | **Yes** ([Lean], on the game of Thm U1; §5.1 Status) | items 1–2: the bound of Thm U1; item 3: `U²·2^{−193} + Adv^prf_U` | as Thm U1; item 3: PRF of `Derive` (`U` keys) |
-| No nullifier squatting (Prop U3, **corrected**; base note's F2 does not apply) | **Yes** ([Lean], one honest token; §5.2) | `ε_hop + ε_SE^{u-red} + U·(Adv^prf-t_1 + 2^{−192} + Adv^spr-k)` | ZK, weak SE, PRF of `Derive` with `t` leaked, second preimages of `Derive` in the key |
-| Redemption non-malleability, including no redirect to another `ctx_red` (Thm U4, **corrected**) | **Yes** ([Lean], one honest token; §5.3) | `ε_hop + ε_SE^{u-red} + Adv^bind_UCom + U·(Adv^prf-t_1 + 2^{−192})` | ZK, weak SE, binding of `UCom`, PRF of `Derive` with `t` leaked |
+| No nullifier squatting (Prop U3, **corrected**; base note's F2 does not apply) | **Yes** ([Lean], `U` honest tokens, `M` honest redemptions; §5.2) | `ε_hop + ε_SE^{u-red} + U·(Adv^prf-t_1 + (M+1)·2^{−192} + Adv^spr-k)` | ZK, weak SE, PRF of `Derive` with `t` leaked, second preimages of `Derive` in the key |
+| Redemption non-malleability, including no redirect to another `ctx_red` (Thm U4, **corrected**) | **Yes** ([Lean], `U` honest tokens, `M` honest redemptions; §5.3) | `ε_hop + ε_SE^{u-red} + U·(Adv^bind_UCom + Adv^prf-t_1 + (M+1)·2^{−192})` | ZK, weak SE, binding of `UCom`, PRF of `Derive` with `t` leaked |
 | Issuer hiding and unlinkability vs Moderators **colluding with all Anchors**, issuance–redemption **and redemption–redemption across contexts** (Thm U5a) | **Yes, computationally** | `2·ε_ZK^joint + 2·Adv^prf-t_2` | ZK of both unbound relations, PRF of `Derive` with `t` leaked (2 keys) |
 | The same vs Moderators that see no issuance (Thm U5b) | **Yes, computationally** (unlike the base note's 4(b)) | `2·ε_ZK^joint|_red + 2·Adv^prf_2 + 2·(ψ₀ + ψ₁)`, `ψ_c ≤ κ + φ_c` (corrected, §6) | ZK of the redemption proofs, PRF of `Derive` (2 keys), Anchor Sets that contain both issuers; `κ = 0` for a complete issuance proof |
 | Unlinkability of two redemptions of one token **in the same `ctx_red`** | **No, by design** (same `nf`; rejected as a double spend) | — | — |
@@ -268,8 +268,13 @@ random-permutation estimates (forward and inverse queries, `q` of them) are evid
   succeeds. With a uniform table, `F(c*)` is independent of `B`'s view, so it passes with
   probability `2^{−192}`. So `Adv^ow-k(B) ≤ Adv^prf-t_1(D_B) + 2^{−192}` ([Lean]
   `Theft/MoussakaUnbound.lean`, `owkAdv_le`, for adversaries with one oracle query; the
-  distinguisher `owkD` makes two). The PRF assumption with `t` leaked already implies that `t`
-  hides `k`. Generic `≲ (q + 1)·2^{−128}`.
+  distinguisher `owkD` makes two). For an adversary with `M` adaptive oracle queries the
+  distinguisher cannot name an unqueried context in advance. It checks the key at `M + 1` fixed
+  distinct contexts instead; one of them was not queried, so with a uniform table the check passes
+  with probability at most `(M + 1)·2^{−192}`: `Adv^ow-k(B) ≤ Adv^prf-t_1(D_B) + (M + 1)·2^{−192}`
+  ([Lean] `Theft/MoussakaUnboundMany.lean`, `owkAdvN_le`, `pr_guess_unread_le`; the distinguisher
+  `owkDN` makes `B`'s queries and `M + 1` more). The PRF assumption with `t` leaked already
+  implies that `t` hides `k`. Generic `≲ (q + 1)·2^{−128}`.
 - **Second preimages of `Derive` in the key (`Adv^spr-k`).** Given `(t, ctx_red,
   nf = Derive(k, ctx_red))` and the oracle `Derive(k, ·)`, output `k' ≠ k` with
   `Derive(k', ctx_red) = nf`. Generic `≲ q·2^{−192} + (q + 1)·2^{−128}` (a forward query on a fresh
@@ -505,7 +510,9 @@ Binding is not used. The earlier proof also bounded the case `k' = k_h` by "afte
 determines `k_h`. The bound itself holds, by the fresh-context distinguisher of §3.2.
 
 **Status: [Lean]** (`lean/VoleMole/Theft/MoussakaUnbound.lean`), together with Thm U4 in one game
-NM-U (§5.3 Status), for one honest token. **`noSquat`**: the event `Squat` is an accepted
+NM-U (§5.3 Status), for one honest token, and for `U` honest tokens with `M` honest redemptions
+(`Theft/MoussakaUnboundMany.lean`, **`noSquatN`**: the event `SquatN` is the one below for some
+honest token `h`; the bound is `nmUN`'s, §5.3 Status). **`noSquat`**: the event `Squat` is an accepted
 redemption with a statement that differs from the honest one and carries the honest token's
 nullifier **for its own context**, `nf* = Derive(nf_key, ctx_red*)`, revealed or not. The event
 does not mention extraction, and it does not require `t' ≠ t_h`. So it also covers redirecting
@@ -586,11 +593,63 @@ adversary's operations are unbound requests.
   `ε_prf ≈ 2^{−64}`, `Adv^spr-k ≈ 2^{−64}` and `Adv^bind ≈ 2^{−160}`, so the Keccak part of the
   bound is `≈ 2^{−63}`. The hop terms `ε_I`, `ε_R` are `lean/docs/zk.md`'s with dedicated label
   rows (on `main`, the joint (PU) hop of §3.1, on paper). `ε_SE` is L8's, on paper.
-- *Scope.* One honest token with one redemption: the generic two-hop machinery and `WeakSE2` have
-  two simulated proofs. The factor `U` (guessing the attacked token) and several honest
-  redemptions per token remain paper steps. For the unbound proof systems the zero-knowledge
-  hypotheses are not discharged by the Lean prover. The base protocol's `noRedirect_lean` does
-  that through `Privacy/MoussakaRO.lean`, which covers the bound relations only.
+- *Zero knowledge discharged* (`Privacy/MoussakaUnboundLean.lean`,
+  `Theft/MoussakaUnboundLean.lean`). The executable Lean prover is zero-knowledge for both unbound
+  relations in the random-oracle and ideal-cipher table model, per proof and with dedicated label
+  rows: `leanPI_zkRO`, `leanPR_zkRO` (`ZeroKnowledgeRO` for `IssueRelW`, `RedeemRelW`; simulator
+  `Moussaka.leanSim`, programming `leanProgI`, `leanProgR`; error `ZKRow.εz R p q₃ q₅ q_E` at the
+  parameters `pI` with 232 and `pR` with 559 witness bytes, for every type of cipher rows). The
+  deterministic part is `zkHypI`, `zkHypR`: the spec's witness encodings satisfy the
+  arithmetized systems (`issue_holds`, `redeem_holds`, from `uIssue_complete` and
+  `uRedeem_complete`), with faest-arch-opt's CRT tables and degree-9 interpolation. So
+  **`nmU_lean`**, **`noSquat_lean`**, **`noRedirectU_lean`** have `ε_I = εz(pI)`, `ε_R = εz(pR)`
+  as theorems. Their remaining hypotheses are the read budgets of the hops' distinguishers
+  (`Budget`), `WeakSE2` and the PRF bound.
+- *`U` honest tokens and `M` honest redemptions* (`Theft/Many.lean`,
+  `Theft/MoussakaUnboundMany.lean`). The game NM-U^{U,M} (`nmRealNE`): `U` honest Clients with
+  independent coins each request a token for the adversary's `ctx_iss h` (slots `0 … U − 1`).
+  The adversary (`ThiefN`) signs token `h` with a response it chooses from all `U` requests. It
+  then makes `M` redemption queries, one after the other. For each it chooses, from the issuance
+  requests and the redemption requests seen so far, a token, an Anchor Set, a redemption context
+  and a digest; the Client of that token answers as the spec does (`specI_eqN`, `specR_eqN`). So
+  a token is redeemed up to `M` times, in contexts chosen adaptively. These choices do not read
+  the tables; the final operation does. `BadN`: the operation is accepted, its statement differs
+  from every honest statement of its relation (`FreshOpN`), and the extracted witness is not a
+  witness or hits **some** honest token (`hitN`).
+  **`nmUN`**:
+
+      Pr[BadN] ≤ U·ε_I + M·ε_R + Σ_i δ_i + ε_SE
+                   + Σ_h (ε_prf + (M+1)·2^{−192} + Adv^bind(B₁ h) + Adv^spr-k(B₂ h)).
+
+  Steps. (1) `U + M` zero-knowledge hops, in slot order (`hyb_hop`, `real_sim_leN`,
+  `theftN_le`): every slot's tape holds both the prover's randomness and the simulator's coins,
+  so all hybrids live on one tape; hop `i` is `Privacy.hop_ro` with the rest of the tape fixed,
+  and costs the zero-knowledge error plus the collision term `δ_i` (`deltaN`: the real proof `i`
+  reads the tables differently after the earlier simulations' programming; `δ_0 = 0`,
+  `deltaN_zero`). (2) Weak simulation-extractability with `U + M` simulated proofs
+  (**`WeakSEN`, a hypothesis**: L8's game with `q_S = U + M`, statements chosen adaptively from
+  the earlier simulated proofs, without reading the tables; `simGN_le_of_weakSEN`,
+  `sim_se_leN`). (3) The factor `U`: a hit of some token is a hit of token `h` for some `h`
+  (union bound, `sim_hit_leN`). For each `h` the other Clients' coins are fixed, and the
+  simulated world is a function of `t_h` and the table `ctx ↦ Derive(k_h, ctx)` (`viewN`), read
+  at the at most `M` contexts of the redemption queries (`viewN_reads`). A hit is a key
+  recovery, a binding break or a key second preimage for token `h` (`hit_cases`). (4) Key
+  recovery with `M` adaptive nullifier queries reduces to the PRF (`owkAdvN_le`, §3.2), at the
+  cost `(M+1)·2^{−192}` in place of `2^{−192}`.
+  **`noSquatN`** and **`noRedirectUN`** restrict the event. **`nmUN_lean`**, **`noSquatN_lean`**,
+  **`noRedirectUN_lean`**: the same with the Lean prover, `ε_I = εz(pI)`, `ε_R = εz(pR)`.
+- *Differences from the paper bound.* The paper charges binding once (`Adv^bind_UCom`) and the
+  PRF term `U` times. The Lean bound has one explicit collision finder per honest token
+  (`bindBN h`), so `Σ_h Adv^bind(B₁ h)`: each `B₁ h` outputs the opening of token `h` and the
+  extracted one, with the other tokens' coins as its own. The term `(M+1)·2^{−192}` comes from
+  adaptive nullifier queries. The paper's `ε_hop` is `U·ε_I + M·ε_R + Σ_i δ_i` here.
+- *Scope.* The `U` issuances come first, in a fixed order, and `ctx_iss h` and the Anchor key of
+  token `h` are fixed in advance; the redemption queries are adaptive. The number `M` of
+  redemption queries is fixed in advance. `WeakSEN` is a hypothesis (as `WeakSE2`; it is not
+  derived from `WeakSE2` or from plain extraction: `weakSE2_of_plain` covers two simulated
+  proofs). For the many-token theorems the read budgets of the hops' distinguishers are
+  hypotheses (`hAI`, `hAR`); the one-token bound theorem derives them from the parts' budgets
+  (`Theft/Reads.lean`), the unbound ones do not.
 
 A malicious Moderator therefore cannot spend an honest Client's token at another Moderator, even
 though the token is valid there.
@@ -806,10 +865,13 @@ the base protocol.
    queries; the permutation version is paper). The bound issuance extraction is charged separately
    from the unbound pair. Cor U2 is mechanized on the game of Thm U1 with its bounds
    (`ROM/MoussakaUnboundCor.lean`). Prop U3 and Thm U4 are mechanized together, corrected (UF8),
-   for one honest token with one redemption (`Theft/MoussakaUnbound.lean`, `nmU`). They rest on
-   weak simulation-extractability (`WeakSE2`, L8 on paper), per-proof zero knowledge of the two
-   unbound proof systems, the PRF assumption with `t` leaked, `Adv^spr-k` and binding of `UCom`.
-   The factor `U` and several honest redemptions per token are paper steps.
+   for one honest token with one redemption (`Theft/MoussakaUnbound.lean`, `nmU`) and for `U`
+   honest tokens with `M` adaptive honest redemptions (`Theft/MoussakaUnboundMany.lean`, `nmUN`).
+   Per-proof zero knowledge of the two unbound proof systems is a theorem for the Lean prover
+   with dedicated label rows (`Privacy/MoussakaUnboundLean.lean`; `nmU_lean`, `nmUN_lean`). They
+   rest on weak simulation-extractability (`WeakSE2`, for many tokens `WeakSEN` with `U + M`
+   simulated proofs; L8 on paper), the read budgets of the hops' distinguishers, the PRF
+   assumption with `t` leaked, `Adv^spr-k` and binding of `UCom`.
 5. The mechanized Thm U5 takes **per-proof** zero knowledge (`ZeroKnowledge` for `IssueRelW` and
    `RedeemRelW`, against distinguishers that know the witness). That hypothesis holds with
    dedicated label rows (`lean/docs/zk.md`). On `main` the CRT masks come from the witness, the
@@ -908,6 +970,20 @@ All in `lean/VoleMole/`; no `sorry`, no axioms beyond the standard three.
   (`Thief`, `UOp`, `Bad`, `bad_iff`, `nmReal`), the games of §3.2 (`prf1Adv`, `owkAdv`, `sprAdv`,
   `bindAdv`), `owkAdv_le` (key recovery from the PRF), `hit_cases`, `sim_hit_le`, `sim_se_le`,
   **`nmU`**, `noSquat`, `noRedirectU`.
+- `Privacy/MoussakaUnboundLean.lean`: zero knowledge of the Lean prover for the two unbound
+  relations (§5.3 Status): `stI`, `stR`, `issue_holds`, `redeem_holds`, `zkHypI`, `zkHypR`,
+  **`leanPI_zkRO`**, **`leanPR_zkRO`**.
+- `Theft/Many.lean`: non-malleability games with `N` honest proofs: `simPre`, `realFrom`, `hyb`,
+  `hyb_hop`, `real_sim_leN`, `theftN_le`, `deltaN_zero`; `WeakSEN`, `simGN_le_of_weakSEN`.
+- `Theft/MoussakaUnboundMany.lean`: Prop U3 and Thm U4 for `U` honest tokens and `M` honest
+  redemptions: `ThiefN`, `xN`, `xwN`, `specI_eqN`, `specR_eqN`, `BadN`, `SquatN`, `RedirectN`;
+  `ReadsO`, `pr_guess_unread_le`, `owkDN`, `owkAdvN_le`; `viewN`, `viewN_reads`, `sim_hit_leN`,
+  `sim_se_leN`, **`nmUN`**, `noSquatN`, `noRedirectUN`.
+- `Theft/MoussakaUnboundLean.lean`: `nmU_lean`, `noSquat_lean`, `noRedirectU_lean`, `nmUN_lean`,
+  `noSquatN_lean`, `noRedirectUN_lean` (zero knowledge discharged).
+- `Audit/UnboundMany.lean`: the Lean-prover and many-token theorems instantiated for trivial
+  adversaries (budgets discharged; SE and PRF with error `1`); `issueRelW_honest`, `exists_pts`,
+  `replay_not_freshN`, `redirect_ctx_freshN`, `owkN_zero`.
 - `Audit/UnboundRest.lean`: `corU2_le_num_sim`, `corU2_le_num_ompr_sim` with Thm U1's audit
   adversary; `nmU`, `noSquat`, `noRedirectU` with a trivial adversary (ZK, SE and PRF with error
   `1`); the honest replay is not fresh, a redirect to another `ctx_red` is; `squat_of_nf`.

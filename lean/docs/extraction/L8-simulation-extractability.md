@@ -597,7 +597,13 @@ mechanized with weak SE as a hypothesis: `lean/VoleMole/Theft/Basic.lean` states
 need (`WeakSE2`: one simulated proof of each of two relations, statements chosen without reading
 the tables, the extractor on the simulated transcripts, the adversary's last stage and the
 programmed tables, as in §2's log), and `Theft/Ratatouille.lean` and `Theft/Moussaka.lean` reduce
-the two theorems to it (`security/ratatouille.md` §5, `security/moussaka.md` §5.3).
+the two theorems to it (`security/ratatouille.md` §5, `security/moussaka.md` §5.3). For several
+honest tokens and redemptions, `Theft/Many.lean` states the same notion with `N` simulated proofs
+for adaptively chosen statements (`WeakSEN`, this note's game with `q_S = N`, weak form); unbound
+Moussaka's Proposition U3 and Theorem U4 and Moussaka's Theorem 3 for `U` tokens and `M`
+redemptions reduce to it with `N = U + M` (`Theft/MoussakaUnboundMany.lean`,
+`security/moussaka-unbound.md` §5.3; `Theft/MoussakaMany.lean`, `security/moussaka.md` §5.3). `WeakSEN` is
+a hypothesis; the programming step below is mechanized for `WeakSE2` only.
 
 The programming step of the proof (§6: the simulator programs only `H₂³`, at its own grinding
 points, and an accepting fresh forgery avoids them) is mechanized in the table model
