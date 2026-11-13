@@ -482,6 +482,26 @@ theorem uniform_pair :
 
 variable (σ : Fin K × T → S) (emb : Xc → T × Z)
 
+omit [DecidableEq Xc] [DecidableEq T] [DecidableEq Z] in
+/-- **The world's random oracle, seen without the coins.** -/
+theorem ro_proj_inl (d : DR) (ro : (specR (ARc AR (T × Z))).QueryCache) :
+    (fun r : (specR (ARc AR (T × Z))).Range (Sum.inl d) × (specR (ARc AR (T × Z))).QueryCache =>
+        ((r.1 : AR d), projRO r.2)) <$> ((specR (ARc AR (T × Z))).randomOracle (Sum.inl d)).run ro =ᵈ
+      ((specR AR).randomOracle d).run (projRO ro) := by
+  rw [randomOracle.run_eq, randomOracle.run_eq]
+  rw [show (projRO ro).toFn d = ro.toFn (.inl d) from rfl]
+  cases h : ro.toFn (.inl d) with
+  | some u => simp only [map_pure]; exact EvalDistEq.rfl
+  | none =>
+    dsimp only
+    rw [map_bind]
+    simp only [map_pure]
+    show (($ᵗ (AR d) : ProbComp (AR d)) >>= fun u =>
+        (pure (u, projRO (ro.cacheQuery (Sum.inl d) u)) : ProbComp (AR d × (specR AR).QueryCache))) =ᵈ
+      (($ᵗ (AR d) : ProbComp (AR d)) >>= fun u => pure (u, (projRO ro).cacheQuery d u))
+    simp only [projRO_inl]
+    exact EvalDistEq.rfl
+
 theorem combP_world (d : DR) (L : PTab (T × Z)) (n : ℕ) (ro : (specR (ARc AR (T × Z))).QueryCache)
     (sg : List (Fin K × T)) (tab : Xc → Option T) :
     ((combP σ emb) (.inl (.inl d))).run ((L, n), (⟨ro, sg⟩, tab)) =
@@ -597,6 +617,91 @@ theorem combP_fwd_com (b : T × Z) (x : Xc) (L : PTab (T × Z)) (n : ℕ)
   rw [bind_pure_comp, bind_pure_comp]
   repeat erw [Functor.map_map]
   rfl
+
+omit [DecidableEq Xc] in
+theorem cfImpl_world (d : DR) (L : PTab (T × Z)) (ro : (specR AR).QueryCache)
+    (sg : List (Fin K × T)) :
+    ((cfImpl (Z := Z) σ) (.inl (.inl d))).run (L, ⟨ro, sg⟩) =
+      (fun r : AR d × (specR AR).QueryCache => (r.1, (L, ⟨r.2, sg⟩))) <$>
+        ((specR AR).randomOracle d).run ro := by
+  simp only [cfImpl, rfImpl, pmImpl, StateT.run_mk, ciOther]
+  repeat (first | erw [StateT.run_mk] | erw [Functor.map_map])
+  rfl
+
+omit [DecidableEq Xc] in
+theorem cfImpl_sign (q : Fin K × T) (L : PTab (T × Z)) (ro : (specR AR).QueryCache)
+    (sg : List (Fin K × T)) :
+    ((cfImpl (Z := Z) σ) (.inl (.inr q))).run (L, ⟨ro, sg⟩) =
+      pure (σ q, (L, ⟨ro, if q ∈ sg then sg else sg ++ [q]⟩)) := by
+  simp only [cfImpl, rfImpl, pmImpl, StateT.run_mk, ciOther]
+  repeat (first | erw [StateT.run_mk] | erw [Functor.map_map] | erw [map_pure])
+  rfl
+
+omit [DecidableEq Xc] in
+theorem cfImpl_fwd (b : T × Z) (st : PTab (T × Z) × CISt AR K T) :
+    ((cfImpl σ) (.inr (true, b))).run st =
+      (fun r => (r.1, (r.2, st.2))) <$> fwdS (fun _ => ($ᵗ (T × Z) : ProbComp (T × Z))) b st.1 := rfl
+
+omit [DecidableEq Xc] in
+theorem cfImpl_inv (c : T × Z) (st : PTab (T × Z) × CISt AR K T) :
+    ((cfImpl σ) (.inr (false, c))).run st =
+      (fun r => (r.1, (r.2, st.2))) <$> invS (fun _ => ($ᵗ (T × Z) : ProbComp (T × Z))) c st.1 := rfl
+
+theorem map_map_eqd {α β γ : Type} (X : ProbComp α) (g : α → β) (f : β → γ) (h : α → γ)
+    (hfg : ∀ u, f (g u) = h u) : f <$> (g <$> X) =ᵈ h <$> X := by
+  rw [Functor.map_map]; simp only [hfg]; exact EvalDistEq.rfl
+
+theorem map_map_eqd2 {α β β' γ : Type} (X : ProbComp α) (g : α → β) (f : β → γ) (g' : α → β')
+    (f' : β' → γ) (hfg : ∀ u, f (g u) = f' (g' u)) : f <$> (g <$> X) =ᵈ f' <$> (g' <$> X) := by
+  rw [Functor.map_map, Functor.map_map]; simp only [hfg]; exact EvalDistEq.rfl
+
+theorem combP_step (q : (DR ⊕ (Fin K × T)) ⊕ (Bool × (T × Z)))
+    (s : (PTab (T × Z) × ℕ) × CRSt AR K Xc T Z) (hs : InvP emb s) :
+    (fun z => (z.1, projP z.2)) <$> ((combP σ emb) q).run s =ᵈ ((cfImpl σ) q).run (projP s) := by
+  obtain ⟨⟨L, n⟩, ⟨ro, sg⟩, tab⟩ := s
+  obtain ⟨h1, h2, -⟩ := hs
+  have hro : ro (.inr n) = none := h1 n le_rfl
+  rcases q with (d | q) | ⟨_ | _, b⟩
+  · rw [combP_world, projP]
+    erw [cfImpl_world]
+    have := (ro_proj_inl (T := T) (Z := Z) d ro).map (m := ProbComp)
+      (fun p : AR d × (specR AR).QueryCache => (p.1, (L, (⟨p.2, sg⟩ : CISt AR K T))))
+    erw [Functor.map_map] at this
+    erw [Functor.map_map]
+    exact this
+  · rw [combP_sign, projP]
+    erw [cfImpl_sign]
+    simp only [map_pure]; exact EvalDistEq.rfl
+  · rw [cfImpl_inv]
+    simp only [projP, invS]
+    cases h : invFind L b with
+    | some x =>
+      rw [combP_inv_found σ emb b x _ h]
+      simp only [map_pure]; exact EvalDistEq.rfl
+    | none =>
+      rw [combP_inv_fresh σ emb b L n ro sg tab h hro]
+      dsimp only
+      exact map_map_eqd2 _ _ _ _ _ fun u => by simp [projRO_inr]
+  · rw [cfImpl_fwd]
+    simp only [projP, fwdS]
+    cases h : fwdFind L b with
+    | some y =>
+      rw [combP_fwd_found σ emb b y _ h]
+      simp only [map_pure]; exact EvalDistEq.rfl
+    | none =>
+      cases he : embInv emb b with
+      | none =>
+        rw [combP_fwd_coin σ emb b L n ro sg tab h he hro]
+        dsimp only
+        exact map_map_eqd2 _ _ _ _ _ fun u => by simp [projRO_inr]
+      | some x =>
+        have hb := embInv_some he
+        have htab : tab x = none := h2 x (by rw [hb]; exact h)
+        rw [combP_fwd_com σ emb b x L n ro sg tab h he htab hro]
+        have := (uniform_pair (T := T) (Z := Z)).map
+          (fun y => (y, (L ++ [(b, y, true)], (⟨projRO ro, sg⟩ : CISt AR K T))))
+        simp only [map_bind, map_pure, projRO_inr, Functor.map_map] at this ⊢
+        exact this
 
 end Core
 
