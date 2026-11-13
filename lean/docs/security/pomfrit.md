@@ -1286,13 +1286,22 @@ dedicated to PomFRIT.
   (`shP_eq_alive`) and the per-table implication (`shiftFail_events`). Found on the way: the
   game's `chal1Pre` used the AES PRG instead of the ideal cipher's, so the target oracle's input
   was not at the verifier's `chal1` (fixed earlier).
-- **G8-cls (open).** Theorem U1^cls in Lean (`pomfrit-lemmap-tight.md` §6A): U1 with the class
-  extractor and `(Q₃ + ℓ + 1)·2⁻⁷⁸ + q₁·2⁻¹³⁴` for Lemma P's `(Q₃ + ℓ + 1)·2⁻⁷¹`. In Lean: the
-  per-chain step (`class_or_small_dec`, `extract_or_class`) with the decoder as a function of the
-  check value and its evaluation count. Missing: the label rows' tree form and the affine and
-  two-label structure of `Verifier`'s CRT masks on slices; `KOSPar` as a bad event at `H₂¹`;
-  `E₁^cls` on the query log with its `H₅` evaluations as the reduction's queries (the goal of
-  `ROM/LemmaP.lean` reads only the candidates and the alive trees).
+- **G8-cls (open; per-chain step and adaptive bound closed).** Theorem U1^cls in Lean
+  (`pomfrit-lemmap-tight.md` §6A): U1 with the class extractor and `(Q₃ + ℓ + 1)·2⁻⁷⁸ + q₁·2⁻¹³⁴`
+  for Lemma P's `(Q₃ + ℓ + 1)·2⁻⁷¹`. In Lean, for the executable verifier:
+  the affine and two-label structure of the CRT masks on slices and the label rows' tree form
+  (`chain_affineOn`, `chain_twoLabelOn`, `chain_claim4_lab`, `Verifier/Bridge/MaskSlices.lean`),
+  so the per-chain step has no hypothesis on the response (`pomfritT_extract_class_chain`,
+  `ROM/LemmaPClassDet.lean`); `KOSPar` as a bad event at `H₂¹` with `2⁻¹³⁴` per query
+  (`parBad`, `prU_kos_par_le`, `parEps_le`); a goal that reads the label rows, `ũ`, the dead
+  blocks and the check value (`GoalC`, `ClsExtracted`); and the adaptive bound for one statement
+  with any target function, `Pr[accept ∧ ClsCovered ∧ ¬ClsExtracted] ≤ … + (q₁ + 1)·2⁻¹³⁴ +
+  (Q₃ + 1)·2⁻⁷⁸` (`pomfritT_accept_le_cls`, `ROM/LemmaPClsBound.lean`), for provers whose log
+  holds the decoder's `H₅` queries (`ClsCovered`). Missing: the one-more game (§6.4 items 2–9
+  for `E₁^cls`): `E₁^cls` on the query log, the proof that the reduction's (or a wrapped
+  forger's) `H₅` queries give `ClsCovered` for the derived provers, the ordering step,
+  `pfail_events` and the assembly. `pomfrit_U1_explicit` and `pomfrit_U1_sim` are unchanged
+  (`2⁻⁷¹`).
 - **G9 (closed).** Theorem 6 (OMPR ≤ PomFRIT, `uov-assumptions.md` §5.6) is in Lean for the Lean
   client with the completeness term bounded: `compFail ≤ (ℓ+1)·2^{−113}` (`compFail_le`) and
   `Adv^{ompr}(B; n, ℓ) ≤ Pr[PomWin] + (ℓ+1)·2^{−113}` (`pomfrit_T6_lean`, `pomfrit_T6_lean_bound`;
