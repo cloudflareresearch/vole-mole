@@ -487,6 +487,272 @@ theorem fhImpl_sign (m : M) (st : PTab (T × Z) × FPSt AR M) :
   simp only [map_pure, Option.map_some, Option.getD_some]
   rfl
 
+
+theorem projROF_coinF (ro : (specR (ARF AR emb)).QueryCache) (n : ℕ) (u : T × Z) :
+    projROF emb (ro.cacheQuery (.inr (.inl n)) u) = projROF emb ro := projROF_ne emb ro (.inl n) u
+
+theorem projROF_coinI (ro : (specR (ARF AR emb)).QueryCache) (n : ℕ) (x : Bc emb) :
+    projROF emb (ro.cacheQuery (.inr (.inr n)) x) = projROF emb ro := projROF_ne emb ro (.inr n) x
+
+theorem mem_sList (m : M) : emb m ∈ sList emb := by
+  unfold sList
+  rw [Finset.mem_toList]
+  exact Finset.mem_image_of_mem _ (Finset.mem_univ _)
+
+/-- **The forward step.** -/
+theorem combF_step_fwd (b : T × Z) (s : (PTab (T × Z) × ℕ) × FDHSt (ARF AR emb) M T)
+    (hs : InvF emb s) :
+    (fun z => (z.1, projF emb z.2)) <$> ((combF emb D) (.inr (true, b))).run s =ᵈ
+      ((fhImpl (S := S) D emb) (.inr (true, b))).run (projF emb s) := by
+  obtain ⟨⟨L, n⟩, c⟩ := s
+  obtain ⟨h1, h2, -, -⟩ := hs
+  have hro : c.ro (.inr (.inl n)) = none := (h1 n le_rfl).1
+  show _ =ᵈ (fun r => (r.1, (r.2, (⟨projROF emb c.ro, c.signed⟩ : FPSt AR M)))) <$>
+    fwdS (fun _ => ($ᵗ (T × Z) : ProbComp (T × Z))) b L
+  simp only [fwdS]
+  cases h : fwdFind L b with
+  | some y =>
+    rw [combF_fwd_found emb D b y _ h]
+    simp only [map_pure]; exact EvalDistEq.rfl
+  | none =>
+    cases he : CTUFPerm.embInv emb b with
+    | none =>
+      rw [combF_fwd_coin emb D b L n c h he hro]
+      exact CTUFPerm.map_map_eqd2 _ _ _ _ _ fun u => by simp [projF, projROF_coinF]
+    | some m =>
+      have hb := CTUFPerm.embInv_some he
+      have htab : c.h m = none := h2 m (by rw [hb]; exact h)
+      rw [combF_fwd_com emb D b m L n c h he htab hro]
+      have := (CTUFPerm.uniform_pair (T := T) (Z := Z)).map
+        (fun y => (y, (L ++ [(b, y, true)], (⟨projROF emb c.ro, c.signed⟩ : FPSt AR M))))
+      simp only [map_bind, map_pure, Functor.map_map] at this ⊢
+      simp only [projF]
+      refine EvalDistEq.trans (EvalDistEq.bind_congr EvalDistEq.rfl fun a =>
+        EvalDistEq.bind_congr EvalDistEq.rfl fun u => ?_) this
+      rw [projROF_coinF]
+      exact EvalDistEq.rfl
+
+/-- **The forward step records its answer.** -/
+theorem combF_fwd_rec (b : T × Z) (s : (PTab (T × Z) × ℕ) × FDHSt (ARF AR emb) M T)
+    (hs : InvF emb s) :
+    ∀ z ∈ support (((combF emb D) (.inr (true, b))).run s), fwdFind z.2.1.1 b = some z.1 := by
+  intro z hz
+  obtain ⟨⟨L, n⟩, c⟩ := s
+  obtain ⟨h1, h2, -, -⟩ := hs
+  have hro : c.ro (.inr (.inl n)) = none := (h1 n le_rfl).1
+  cases h : fwdFind L b with
+  | some y =>
+    rw [combF_fwd_found emb D b y _ h] at hz
+    erw [support_pure, Set.mem_singleton_iff] at hz; subst hz; exact h
+  | none =>
+    cases he : CTUFPerm.embInv emb b with
+    | none =>
+      rw [combF_fwd_coin emb D b L n c h he hro] at hz
+      erw [support_map] at hz
+      obtain ⟨u, -, rfl⟩ := hz
+      simp [CTUFPerm.fwdFind_append, h]
+    | some m =>
+      have hb := CTUFPerm.embInv_some he
+      have htab : c.h m = none := h2 m (by rw [hb]; exact h)
+      rw [combF_fwd_com emb D b m L n c h he htab hro] at hz
+      simp only [mem_support_bind_iff, support_pure, Set.mem_singleton_iff] at hz
+      obtain ⟨t, -, u, -, rfl⟩ := hz
+      simp [CTUFPerm.fwdFind_append, h]
+
+/-- **Under the invariant, a record at a structured input carries `H`.** -/
+theorem h_of_fwdFind {s : (PTab (T × Z) × ℕ) × FDHSt (ARF AR emb) M T} (hs : InvF emb s)
+    {m : M} {y : T × Z} (h : fwdFind s.1.1 (emb m) = some y) : s.2.h m = some y.1 := by
+  obtain ⟨e, he, he1, he2⟩ := CTUFPerm.fwdFind_some h
+  cases hf : e.2.2
+  · exact absurd (he1 ▸ mem_sList emb m) (hs.2.2.2 e he hf)
+  · rw [hs.2.2.1 e he hf m he1, he2]
+
+/-- **The forward step keeps the invariant.** -/
+theorem combF_inv_fwd (hemb : Function.Injective emb) (b : T × Z)
+    (s : (PTab (T × Z) × ℕ) × FDHSt (ARF AR emb) M T) (hs : InvF emb s) :
+    ∀ z ∈ support (((combF emb D) (.inr (true, b))).run s), InvF emb z.2 := by
+  intro z hz
+  obtain ⟨⟨L, n⟩, c⟩ := s
+  obtain ⟨h1, h2, h3, h4⟩ := hs
+  dsimp only at h1 h2 h3 h4
+  have hro : c.ro (.inr (.inl n)) = none := (h1 n le_rfl).1
+  have hcoin : ∀ (u : T × Z) k, n + 1 ≤ k →
+      (c.ro.cacheQuery (.inr (.inl n)) u) (.inr (.inl k)) = none ∧
+        (c.ro.cacheQuery (.inr (.inl n)) u) (.inr (.inr k)) = none := fun u k hk =>
+    ⟨(QueryCache.cacheQuery_of_ne _ _ (by simp; omega)).trans (h1 k (by omega)).1,
+      (QueryCache.cacheQuery_of_ne _ _ (by simp)).trans (h1 k (by omega)).2⟩
+  cases h : fwdFind L b with
+  | some y =>
+    rw [combF_fwd_found emb D b y _ h] at hz
+    erw [support_pure, Set.mem_singleton_iff] at hz; subst hz
+    exact ⟨h1, h2, h3, h4⟩
+  | none =>
+    cases he : CTUFPerm.embInv emb b with
+    | none =>
+      rw [combF_fwd_coin emb D b L n c h he hro] at hz
+      erw [support_map] at hz
+      obtain ⟨u, -, rfl⟩ := hz
+      refine ⟨hcoin u, fun m hm => h2 m (CTUFPerm.fwdFind_append_none hm).1,
+        fun e he' hf m hm => ?_, fun e he' hf => ?_⟩
+      · simp only [List.mem_append, List.mem_singleton] at he'
+        rcases he' with he' | rfl
+        · exact h3 e he' hf m hm
+        · simp only at hm
+          rw [hm, CTUFPerm.embInv_emb hemb] at he; cases he
+      · simp only [List.mem_append, List.mem_singleton] at he'
+        rcases he' with he' | rfl
+        · exact h4 e he' hf
+        · simp at hf
+    | some m =>
+      have hb := CTUFPerm.embInv_some he
+      have htab : c.h m = none := h2 m (by rw [hb]; exact h)
+      rw [combF_fwd_com emb D b m L n c h he htab hro] at hz
+      simp only [mem_support_bind_iff, support_pure, Set.mem_singleton_iff] at hz
+      obtain ⟨t, -, u, -, rfl⟩ := hz
+      refine ⟨hcoin u, fun m' hm' => ?_, fun e he' hf m' hm' => ?_, fun e he' hf => ?_⟩
+      · obtain ⟨hL, hne⟩ := CTUFPerm.fwdFind_append_none hm'
+        have hm'm : m' ≠ m := fun hh => hne (by simp only; rw [hh, hb])
+        show Function.update c.h m (some t) m' = none
+        rw [Function.update_of_ne hm'm]; exact h2 m' hL
+      · show Function.update c.h m (some t) m' = some e.2.1.1
+        simp only [List.mem_append, List.mem_singleton] at he'
+        rcases he' with he' | rfl
+        · by_cases hm'm : m' = m
+          · subst hm'm
+            exfalso
+            have hh := h3 e he' hf m' hm'
+            rw [htab] at hh; cases hh
+          · rw [Function.update_of_ne hm'm]; exact h3 e he' hf m' hm'
+        · simp only at hm'
+          have : m' = m := hemb (by rw [← hm', hb])
+          subst this; simp
+      · simp only [List.mem_append, List.mem_singleton] at he'
+        rcases he' with he' | rfl
+        · exact h4 e he' hf
+        · simp at hf
+
+/-- **A signing query after the forward step**: `D(H(m))` with `H(m)` the recorded value. -/
+theorem combF_sign_eqd (hemb : Function.Injective emb) (m : M)
+    (s : (PTab (T × Z) × ℕ) × FDHSt (ARF AR emb) M T) (hs : InvF emb s) :
+    ((combF emb D) (.inl (.inr m))).run s =ᵈ
+      (fun r => (D r.1.1, (r.2.1, { r.2.2 with signed := m :: r.2.2.signed }))) <$>
+        ((combF emb D) (.inr (true, emb m))).run s := by
+  rw [combF_sign, ← bind_pure_comp]
+  refine EvalDistEq.bind_congr_of_support _ fun r hr => ?_
+  have hh := h_of_fwdFind emb (combF_inv_fwd emb D hemb _ s hs r hr)
+    (combF_fwd_rec emb D _ s hs r hr)
+  rw [run_sQF]
+  simp only [hStep, hh, map_pure]
+  exact EvalDistEq.rfl
+
+/-- **The step**: one query of the reduction against the det-FDH challenger, projected, is the
+hybrid's. -/
+theorem combF_step (hemb : Function.Injective emb) (q : (DR ⊕ M) ⊕ (Bool × (T × Z)))
+    (s : (PTab (T × Z) × ℕ) × FDHSt (ARF AR emb) M T) (hs : InvF emb s) :
+    (fun z => (z.1, projF emb z.2)) <$> ((combF emb D) q).run s =ᵈ
+      ((fhImpl (S := S) D emb) q).run (projF emb s) := by
+  rcases q with (d | m) | ⟨_ | _, b⟩
+  · obtain ⟨⟨L, n⟩, c⟩ := s
+    rw [combF_world, projF]
+    erw [fhImpl_world]
+    have := (roF_proj_inl emb d c.ro).map (m := ProbComp)
+      (fun p : AR d × (specR AR).QueryCache => (p.1, (L, (⟨p.2, c.signed⟩ : FPSt AR M))))
+    erw [Functor.map_map] at this
+    erw [Functor.map_map]
+    exact this
+  · refine ((combF_sign_eqd emb D hemb m s hs).map _).trans ?_
+    rw [fhImpl_sign, Functor.map_map]
+    have := (combF_step_fwd emb D (emb m) s hs).map (m := ProbComp)
+      (fun r : (T × Z) × PTab (T × Z) × FPSt AR M =>
+        (D r.1.1, (r.2.1, (⟨r.2.2.ro, m :: r.2.2.signed⟩ : FPSt AR M))))
+    erw [Functor.map_map] at this
+    rw [bind_pure_comp]
+    exact this
+  · obtain ⟨⟨L, n⟩, c⟩ := s
+    have hro : c.ro (.inr (.inr n)) = none := (hs.1 n le_rfl).2
+    show _ =ᵈ (fun r => (r.1, (r.2, (⟨projROF emb c.ro, c.signed⟩ : FPSt AR M)))) <$>
+      invS (fun _ => unifCompl (sList emb)) b L
+    simp only [invS]
+    cases h : invFind L b with
+    | some x =>
+      rw [combF_inv_found emb D b x _ h]
+      simp only [map_pure]; exact EvalDistEq.rfl
+    | none =>
+      rw [combF_inv_fresh emb D b L n c h hro]
+      have e2 := (bc_eqd emb).map (m := ProbComp)
+        (fun x : T × Z => (x, (L ++ [(x, b, false)], (⟨projROF emb c.ro, c.signed⟩ : FPSt AR M))))
+      refine EvalDistEq.trans ?_ (e2.trans ?_)
+      · refine CTUFPerm.map_map_eqd2 _ _ _ _ _ fun x => ?_
+        simp [projF, projROF_coinI]
+      · rw [Functor.map_map]
+  · exact combF_step_fwd emb D b s hs
+
+theorem roF_support (d : DR ⊕ (ℕ ⊕ ℕ)) (ro : (specR (ARF AR emb)).QueryCache) :
+    ∀ z ∈ support (((specR (ARF AR emb)).randomOracle d).run ro),
+      z.2 = ro ∨ z.2 = ro.cacheQuery d z.1 := by
+  intro z hz
+  rw [randomOracle.run_eq] at hz
+  cases h : ro.toFn d with
+  | some u => rw [h] at hz; simp only [support_pure, Set.mem_singleton_iff] at hz; subst hz; exact .inl rfl
+  | none =>
+    rw [h] at hz
+    simp only [mem_support_bind_iff, support_pure, Set.mem_singleton_iff] at hz
+    obtain ⟨u, -, rfl⟩ := hz; exact .inr rfl
+
+/-- **The invariant is preserved.** -/
+theorem combF_inv (hemb : Function.Injective emb) :
+    QueryImpl.PreservesInv (combF emb D (S := S)) (InvF (AR := AR) emb) := by
+  intro q s hs z hz
+  rcases q with (d | m) | ⟨_ | _, b⟩
+  · obtain ⟨⟨L, n⟩, c⟩ := s
+    obtain ⟨h1, h2, h3, h4⟩ := hs
+    erw [combF_world] at hz
+    erw [support_map] at hz
+    obtain ⟨r, hr, rfl⟩ := hz
+    refine ⟨fun k hk => ?_, h2, h3, h4⟩
+    have hne : ∀ e : ℕ ⊕ ℕ, (r.2 (.inr e) = c.ro (.inr e)) := by
+      intro e
+      rcases roF_support emb (.inl d) c.ro r hr with he | he
+      · rw [he]
+      · rw [he]; exact QueryCache.cacheQuery_of_ne _ _ (by simp)
+    exact ⟨(hne _).trans (h1 k hk).1, (hne _).trans (h1 k hk).2⟩
+  · rw [combF_sign] at hz
+    erw [mem_support_bind_iff] at hz
+    obtain ⟨r, hr, hz⟩ := hz
+    have hh := h_of_fwdFind emb (combF_inv_fwd emb D hemb _ s hs r hr)
+      (combF_fwd_rec emb D _ s hs r hr)
+    rw [run_sQF] at hz
+    simp only [hStep, hh, map_pure] at hz
+    subst hz
+    exact combF_inv_fwd emb D hemb _ s hs r hr
+  · obtain ⟨⟨L, n⟩, c⟩ := s
+    obtain ⟨h1, h2, h3, h4⟩ := hs
+    dsimp only at h1 h2 h3 h4
+    have hro : c.ro (.inr (.inr n)) = none := (h1 n le_rfl).2
+    cases h : invFind L b with
+    | some x =>
+      rw [combF_inv_found emb D b x _ h] at hz
+      erw [support_pure, Set.mem_singleton_iff] at hz; subst hz
+      exact ⟨h1, h2, h3, h4⟩
+    | none =>
+      rw [combF_inv_fresh emb D b L n c h hro] at hz
+      erw [support_map] at hz
+      obtain ⟨x, -, rfl⟩ := hz
+      refine ⟨fun k hk => ⟨?_, ?_⟩, fun m hm => h2 m (CTUFPerm.fwdFind_append_none hm).1,
+        fun e he hf m hm => ?_, fun e he hf => ?_⟩
+      · exact (QueryCache.cacheQuery_of_ne _ _ (by simp)).trans (h1 k (by simp at hk; omega)).1
+      · exact (QueryCache.cacheQuery_of_ne _ _ (by simp at hk ⊢; omega)).trans
+          (h1 k (by simp at hk; omega)).2
+      · simp only [List.mem_append, List.mem_singleton] at he
+        rcases he with he | rfl
+        · exact h3 e he hf m hm
+        · simp at hf
+      · simp only [List.mem_append, List.mem_singleton] at he
+        rcases he with he | rfl
+        · exact h4 e he hf
+        · exact x.2
+  · exact combF_inv_fwd emb D hemb b s hs z hz
+
 end Core
 
 end VoleMole.Assumptions.UOV.FDHPerm
