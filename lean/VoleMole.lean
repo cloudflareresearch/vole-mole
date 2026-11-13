@@ -350,6 +350,7 @@ import VoleMole.Assumptions.CTUFPerm
 import VoleMole.Assumptions.PermLinks
 import VoleMole.Assumptions.FDHPerm
 import VoleMole.Assumptions.RatatouillePerm
+import VoleMole.Assumptions.PermSimLinks
 import VoleMole.Assumptions.Shift
 import VoleMole.Assumptions.TheoremR
 import VoleMole.Assumptions.TheoremRBad
@@ -392,6 +393,7 @@ import VoleMole.Audit.UnboundMany
 import VoleMole.Audit.TheftMany
 import VoleMole.Audit.PermOMPR
 import VoleMole.Audit.PermFDH
+import VoleMole.Audit.PermSim
 import VoleMole.Audit.OMPRShift
 import VoleMole.Audit.T6Pomfrit
 import VoleMole.Audit.TheoremR
