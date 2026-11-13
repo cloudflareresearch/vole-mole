@@ -507,7 +507,10 @@ by key recovery, which is harder than forgery at these parameters. The multiplie
 
 - **Two-sided, weak distinguishers.** Is there a public statistic of `s` whose law differs
   between bad and good points by more than `2^{−592}`? We found none, and §B.3 cannot exclude
-  one. A worst-case to average-case reduction for badness would close the gap; the lack of
+  one. *Update* (`ompr-cryptanalysis.md` §2.3, Lemma F): for a linear form `w·s` the difference
+  is 0 unless `w ∈ 𝒪^⊥`, and then about `2^{−292}` (root mean square over the key, uniform
+  `P2`); seeing it takes `2^{600}` samples. On toy keys this statistic recovers the oil space
+  from 2 to 5 times `q^V/δ` samples. Statistics of higher degree are open. A worst-case to average-case reduction for badness would close the gap; the lack of
   public symmetries of `Bad` is the obstacle.
 - **(H1)** of §B.3 at the real parameters: prove that `f|_A` is determined by its `F_256`-points
   on a random 3-space, or replace the interpolation.

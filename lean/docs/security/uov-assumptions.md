@@ -52,6 +52,10 @@ checkout `subprojects/pqov` (revision `fac2ec1`, UOV round-3 code, with
 conjectured security of GPI ≈ key recovery, `≈ 2^{201}` bit operations for uov-Ip; estimates under
   semi-regularity, literature cited from memory).
 
+**Cryptanalysis of OMPR.** `ompr-cryptanalysis.md` studies attacks that use the oracle of OMPR
+and OMPR⊕τ (key recovery from the answers, one more preimage, shifts). It finds none below the
+oracle-free attacks: direct forgery `≈ 2^{140}` multiplications, key recovery `≈ 2^{194}`.
+
 **Assessment** (§7).
 - State all three protocols under **one** assumption: **A-OMPR**, i.e. Def. 3.1 instantiated with
   uov-Ip and `derive_preimage`, per key. It is *necessary* for PomFRIT (T6) and suffices tightly, up to
@@ -978,6 +982,8 @@ file.
   black-box in the adversary still loses `τ^{q+1}/4`, unless it breaks OMPR^free
   (`uov-open-reductions.md` §3.1). The only structural use of the shifts found is a list on one
   line `F·c`, which removes one of the 45 equations: no gain at τ = 17, `≈ 2^{3.7}` at `τ ≥ 256`.
+- `ompr-cryptanalysis.md` adds the attacks that use the oracle: none separates the two games,
+  and none beats the direct forgery attack.
 - Keep U1, which is proved and loses at most `2^{−7}` at `2^{64}` queries, as the main statement.
   Cite U2 under the explicitly stronger OMPR⊕17.
 - The cleanest way out is a protocol change, §8 C2. It makes the 17-shift question moot.
@@ -1091,7 +1097,13 @@ hash-and-sign with retry [KX24]).
   even with rewinding; the shift cannot be absorbed into the key. `ompr-shift-algebra.md`: a proof
   that uses the algebra of `P` but the adversary as a black box would break OMPR^free (Theorem R
   there); no attack at τ = 17. A proof that is not black-box in the adversary, and a separation,
-  remain open.
+  remain open. `ompr-cryptanalysis.md`: the two games have the same oracle, and no attack that
+  uses it beats the oracle-free ones; a separation can only be on the forgery side.
+- **OMPR itself** has no proof from the UOV problem (P7) and no outside cryptanalysis. First
+  analysis: `ompr-cryptanalysis.md`. The answers are uniform good fibre points; they give the oil
+  space only by a vinegar collision (`2^{292.5}` calls) or by statistics of goodness (`2^{600}`
+  answers for linear ones). Open: statistics of higher degree (chosen-target GPI), quantum
+  attacks.
 - **CT-UF with arbitrary targets** versus OMPR. Answered in `uov-open-reductions.md` §2–§3: CT-UF
   as defined is false (scaling); up to scalars it *is* the "free non-challenge calls" variant,
   which is not implied by OMPR for relativizing reductions, and is implied when the free calls do

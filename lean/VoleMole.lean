@@ -62,6 +62,7 @@ import VoleMole.Spec.PqovSigner
 import VoleMole.Spec.PqovScale
 import VoleMole.Spec.PqovShift
 import VoleMole.Spec.PqovSymmetry
+import VoleMole.Spec.PqovVinegar
 import VoleMole.Spec.PqovKey
 import VoleMole.Spec.PqovSignerExec
 import VoleMole.Spec.Kats
