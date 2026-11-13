@@ -182,12 +182,22 @@ permutations with inverse queries):
     affine there (`claim4Hyp_slice`, gate model `translateOn_gate_slice`), and any two challenges
     of one slice with the same check value certify the witness (`slice_collision_sound`,
     `slice_collision_sound_affine`). Extractors that only evaluate the check value do not find the
-    slice (`DTree.card_detect_le`). A decoder that reads `c_mult` against the `H₅` table does
-    (paper; `scripts/pomfrit-lemmap-tight/slice.py` with faest-arch-opt's CRT tables): proved for
-    two label classes; in general complete for full slices with a measured cost of about `2⁷` per
-    label class beyond 8. Under the note's conjecture (H-dec) U1's term would be `2⁻⁷⁸`…`2⁻⁹⁹` per
-    `H₂³` query for `2¹⁷`…`≈2³⁵` decoding steps per `H_T` query. Not a new bound for U1: the
-    decoder's completeness against every forger is not proved. Keep `ũ` in `hash_to_target`: it is
+    slice (`DTree.card_detect_le`). **The class extractor** (`pomfrit-lemmap-tight.md` §6A; `Seed/SliceDecode.lean`,
+    `ROM/LemmaPClass.lean`): an accepting set lies in a slice of one class (trees with the same
+    witness and label rows) or has at most `2^{⌊w/2⌋}` points, so the first-phase extractor should
+    output the widest class, not the widest prefix group. Decoding is needed only between two
+    classes of width ≥ 51, which leave at most one tree; `Dec^cls` (< 2¹⁵ linear systems, < 2²²·¹
+    evaluations of the check value: `dec`, `card_decQ_le`, `dec_congr`) is sound without hypothesis
+    and complete for level sets of more than 2⁵⁰ points (`dec_cert_sound`, `dec_cert_complete`). Per
+    chain, `clsExt` is the free trees' prefix or at most 2⁵⁰ challenges accept (`class_or_small_dec`,
+    `extract_or_class`; `per_query_bound_cls`: 2⁻⁷⁸). On paper this gives Lemma P and U1 with
+    `(Q₃+ℓ+1)·2⁻⁷⁸ + q₁·2⁻¹³⁴` instead of `(Q₃+ℓ+1)·2⁻⁷¹` (2⁻¹⁴ at 2⁶⁴ queries), with no conjecture
+    and no property of `H₅`. Not mechanized: the affine and two-label structure of the executable
+    verifier's CRT masks on slices (hypotheses `AffineOn`, `TwoLabelOn`; gate model:
+    `translateOn_gate_slice`, `twoLabel_gate`) and the one-more game with `E₁^cls` (G8-cls), so
+    `pomfrit_U1_sim` keeps 2⁻⁷¹. The earlier many-label-vector decoding problem was an artefact of
+    the widest-group default; the heuristic decoder is needed only below 2⁻⁸⁵, and its wrong-gate
+    step rests on an assumption that fails for some level sets of codimension ≥ 4 (`slice.py` R7). Keep `ũ` in `hash_to_target`: it is
     security-relevant. The converse, OMPR ≤ PomFRIT one-more forgery plus a completeness term, is
     in Lean in PomFRIT's real one-more game for a forger with coins and any client given as oracle
     computations (`pomfrit_T6`, `pomfrit_T6_bound`, `Assumptions/BlindPomfrit.lean`; the game for a
@@ -504,7 +514,7 @@ cipher.
 | L0 | All hash domains are disjoint; AES inputs of different roles never collide | [paper] + [Lean] `Seed/Commitments.lean` |
 | L1 | Committed data (commitment preimages, leaf keys) is well defined and binding | [paper] + [Lean] unique leaf keys and straight-line key extraction from the cipher log (PRF view, forward queries), binding with explicit `ε_bind` `ROM/CipherBind.lean`, `ROM/CipherOpen.lean`; the ordering half of the `H₁` linking, `Coll₁` and Post (C3) `ROM/CipherChain.lean`, `ROM/CipherSame.lean` (PRF view); statement binding for adaptive statements `ROM/StmtBind.lean`, `ROM/AdaptPomfrit.lean` |
 | L2 | A leaf the prover cannot open is always the hidden one | [paper] + [Lean] in the corrected form (accepting set hides the committed dead leaves; L2(c), L2(a)) `ROM/CipherSame.lean` |
-| L3 | KOS consistency check forces affine VOLE correlations (ε_KOS ≈ 2⁻¹⁵⁴) | [paper] + [Lean] `Seed/KOS.lean` (`Seed/KOSUnique.lean`: `ũ` determines the slope across level sets; slice certificates) + [test] |
+| L3 | KOS consistency check forces affine VOLE correlations (ε_KOS ≈ 2⁻¹⁵⁴) | [paper] + [Lean] `Seed/KOS.lean` (`Seed/KOSUnique.lean`: `ũ` determines the slope across level sets; slice certificates; `Seed/SliceDecode.lean`: a decoder for slices with its evaluation count) + [test] |
 | L4 | QuickSilver with challenge-dependent constraints: either the constraints hold or few challenges accept | [paper] + [Lean] `Seed/QuickSilver.lean` + [test] |
 | L5 | A tree whose challenge block varies holds the witness (Claim 4) | [Lean] `SeedExtraction.lean` |
 | L6 | Per-chain case analysis: extract, or accept at most max(d,1) challenges | [Lean] `SeedExtraction.lean` |
@@ -1556,7 +1566,7 @@ What is **not** established, roughly in order of importance:
    remains: the cipher-side failure terms (binding, opened dead leaf, Post) stay per proof (`m·failEps`,
    negligible at `2⁶⁴` queries). PomFRIT's U1 is mechanized with Lemma P's term bounded
    (`pomfrit_U1_explicit`, and with simultaneous extraction `pomfrit_U1_sim`), and so is U2
-   (`pomfrit_U2_sim`; plan §2n, `docs/security/pomfrit.md` G8). For zero knowledge and privacy with the fix, the classical random-oracle
+   (`pomfrit_U2_sim`; plan §2n, `docs/security/pomfrit.md` G8). U1 with the class extractor (`2⁻⁷⁸` per `H₂³` query instead of `2⁻⁷¹`) is paper with a mechanized per-chain core; the one-more game with `E₁^cls` is open (`pomfrit.md` G8-cls). For zero knowledge and privacy with the fix, the classical random-oracle
    and ideal-cipher arguments are mechanized (§3, Gap 7). The quantum arguments are paper proofs;
    mechanizing them is beyond current tools.
    For the Lean verifier (§8), what the end-to-end extraction theorems still assume about the
