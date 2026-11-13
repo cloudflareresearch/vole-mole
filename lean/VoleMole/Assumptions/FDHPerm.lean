@@ -1057,7 +1057,7 @@ theorem advFDHPerm_le_fdh (hemb : Function.Injective emb) (tr : Trapdoor PK SK T
     · exact absurd ⟨hn, ⟨c, rfl, hp⟩, hq, hl⟩ h1
     · exact le_rfl
   · simp only [Function.comp_apply]
-    rw [prEvent_pure_prop]; split_ifs with h; exacts [absurd h hW, bot_le]
+    rw [prEvent_pure_prop]; simp only [hW, ite_false]; exact bot_le
 
 end Final
 
