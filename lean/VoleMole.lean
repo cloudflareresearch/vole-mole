@@ -301,8 +301,10 @@ import VoleMole.Assumptions.IdealTag
 import VoleMole.Assumptions.RatatouilleOMPR
 import VoleMole.Assumptions.Shift
 import VoleMole.Assumptions.Blind
+import VoleMole.Assumptions.BlindPomfrit
 import VoleMole.Audit.Nonvacuous
 import VoleMole.Audit.Liveness
 import VoleMole.Audit.UnboundROM
 import VoleMole.Audit.IdealTag
 import VoleMole.Audit.OMPRShift
+import VoleMole.Audit.T6Pomfrit

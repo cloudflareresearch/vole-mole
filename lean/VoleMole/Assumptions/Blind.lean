@@ -31,10 +31,10 @@ failure of the client. The proof: the target oracle is programmed perfectly
 (`bcomb_eqd`, the client's runs integrated out: they read only the client's oracle).
 
 With U1 (`pomfrit_U1_ompr`) this is the equivalence of §5.6 up to Lemma P's and the completeness
-terms. **Not done**: the PomFRIT instance. It needs the Lean client (`issue_request`, `finalize`)
-as an oracle computation over the game's oracles and its completeness in this lazy random-oracle
-model (`ZK/CompleteRO.lean` proves it, `≤ 2⁻¹¹³` per session, in the finite-table model), and a
-`Forger` with coins.
+terms. The PomFRIT instance, with PomFRIT's real one-more forgery game for a forger with coins, is
+`BlindPomfrit.pomfrit_T6` (`Assumptions/BlindPomfrit.lean`), for any client given as oracle
+computations; its completeness term is not yet bounded for the Lean client (`ZK/CompleteRO.lean`
+proves `≤ 2⁻¹¹³` per session in the finite-table model).
 
 No `sorry`, no `axiom`.
 -/
