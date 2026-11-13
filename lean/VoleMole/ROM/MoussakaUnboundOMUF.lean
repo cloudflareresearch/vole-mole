@@ -1,6 +1,7 @@
 import VoleMole.ROM.MoussakaOMUF
 import VoleMole.ROM.MoussakaUnboundSpec
 import VoleMole.Protocols.MoussakaUnbound
+import VoleMole.Privacy.MoussakaUnboundNC
 
 /-!
 # Unbound Moussaka: unforgeability per redemption context (Theorem U1) in the random-oracle and
@@ -232,6 +233,33 @@ theorem evalWithAnswerFn_uanchorIC (q : IssQ K) :
     simp only [h, decide_true, Bool.true_and]
     split_ifs with ha <;> simp [ha]
   · simp [h]
+
+/-- Per table, the NIZK whose verifier is the executable verifier for unbound issuance. -/
+def nizkUI : Spec.Moussaka.NIZK Spec.MoussakaUnbound.IssueInstance :=
+  ⟨fun _ _ _ => [], fun pf x =>
+    (@verify (icPrg E.cipher) (Hashes.ofTable g) CrtGen.tables
+      (moussakaUnboundIssue (toBA x.t) (toBA x.ctxIss) lr) (toBA pf)).accept⟩
+
+set_option maxRecDepth 20000 in
+/-- **Per table, the unbound Anchor on a well-formed request is `unbound_issue_response`**
+(`Privacy.MoussakaUnbound.issueResponse`, which folds `std::nullopt` and a failed
+`derive_preimage` into `none`) for the NIZK whose verifier is the executable verifier. -/
+theorem uanchorIC_eq_spec (q : IssQ K) (hq : uWFI lr q) :
+    (match (evalWithAnswerFn (QueryImpl.ofFn (join g E)) (uanchorIC lr sk q)).1 with
+      | .ok (some s) => some s
+      | _ => none) =
+      Privacy.MoussakaUnbound.issueResponse (nizkUI g E lr) (sk q.k) (toL q.req) (toL q.ctx) := by
+  have ht : (toL q.req).take 45 = toL q.t := (toL_extract0 _ _).symm
+  have hp : (toL q.req).drop 45 = toL q.pf := (toL_extract_size _ _).symm
+  unfold uanchorIC Privacy.MoussakaUnbound.issueResponse
+  simp only [hq, ↓reduceIte]
+  rw [evalWithAnswerFn_map, evalWithAnswerFn_verifyIC]
+  simp only [Spec.uovM, ht, hp, nizkUI, toBA_toL', ustmtI]
+  by_cases ha : (@verify (icPrg E.cipher) (Hashes.ofTable g) CrtGen.tables
+    (moussakaUnboundIssue q.t q.ctx lr) q.pf).accept = true
+  · simp only [ha, ite_true]
+    cases (sk q.k).derivePreimage (toL q.t) <;> simp
+  · simp only [ha, Bool.false_eq_true, ite_false]
 
 theorem acc_of_anchorU (q : IQ K)
     (h : (evalWithAnswerFn (QueryImpl.ofFn (join g E)) (anchorU lr sk q)).2 = true) :
