@@ -466,7 +466,7 @@ depth `t ≈ j − 7`, after about `2^{7(j−8)+10}` nodes. Measured (real table
 Step 2 costs `2·2^j·312` hash calls.
 
 **Wrong gates [heuristic; experimental].** A forger can make `a` gates wrong. Then
-`N_g = {δ : γ^C_e(δ) = 0 on these gates}` has codimension at most `a`, the forger is accepted
+`N_g ⊇ {δ : γ^C_e(δ) = 0 on these gates}` has codimension at most `a`, the forger is accepted
 `2^a` times less often, and step 1 fails for directions outside `N_g`. With two label classes
 `Dec₂(a)` covers this, with proof. In general we replace step 1: the slopes `ū_m` with
 `ū_m ≡ u_{m,i} mod M_i` for `i ∈ C` and `ũ = H_c(u_C, ℓ_C, ū₀) + (ū₁..ū₄)` are the solution of a
