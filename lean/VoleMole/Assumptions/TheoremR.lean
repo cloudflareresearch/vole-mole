@@ -651,7 +651,8 @@ lemma valid_iff (jt : List T × ℕ → Option T) (H : List T) (ans : List S) :
   refine and_congr_right fun _ => forall₂_congr fun p _ => ?_
   cases jt (H, p.2) <;> simp
 
-omit [DecidableEq DR] [∀ d, SampleableType (AR d)] [NeZero τ] [SampleableType T] in
+omit [DecidableEq DR] [∀ d, SampleableType (AR d)] [NeZero τ] [SampleableType T] [DecidableEq X]
+  [DecidableEq T] [DecidableRel cls] [∀ pk s t, Decidable (rel pk s t)] in
 theorem inv_init : Inv (AR := AR) (τ := τ) (q := q) (X := X) cls rel pk n (m0 n, f0) where
   tg_eq _ := rfl
   calls_eq := rfl
@@ -671,7 +672,8 @@ theorem inv_init : Inv (AR := AR) (τ := τ) (q := q) (X := X) cls rel pk n (m0 
 
 variable {cls rel pk n}
 
-omit [DecidableEq DR] [∀ d, SampleableType (AR d)] [NeZero τ] [SampleableType T] in
+omit [DecidableEq DR] [∀ d, SampleableType (AR d)] [NeZero τ] [SampleableType T] [DecidableEq X]
+  [DecidableEq T] [DecidableRel cls] [∀ pk s t, Decidable (rel pk s t)] in
 /-- The world's cache changes outside the choices of the runs that are not completed. -/
 theorem Inv.ro {s : JSt AR τ q X T S} (hI : Inv cls rel pk n s)
     (c : (specR (WA AR τ q T)).QueryCache)
@@ -686,7 +688,8 @@ lemma addT_bad {m : MSt τ q X T S} {x : XM X T} {t : T} (hb : (m.addT cls x t).
     Bool.and_eq_true, decide_eq_true_eq, not_and, not_not] at hb
   exact ⟨hb.1.1.1, hb.1.1.2, hb.1.2, hb.2⟩
 
-omit [DecidableEq DR] [∀ d, SampleableType (AR d)] [NeZero τ] [SampleableType T] in
+omit [DecidableEq DR] [∀ d, SampleableType (AR d)] [NeZero τ] [SampleableType T]
+  [∀ pk s t, Decidable (rel pk s t)] in
 /-- A new target keeps the invariant. -/
 theorem Inv.addT (hsym : ∀ a b, cls a b → cls b a) {s : JSt AR τ q X T S} (hI : Inv cls rel pk n s)
     (x : XM X T) (t : T) (r' j' : ℕ) (hx : ∀ p ∈ s.1.jc, p.1 ≠ x)
@@ -751,7 +754,8 @@ theorem Inv.addT (hsym : ∀ a b, cls a b → cls b a) {s : JSt AR τ q X T S} (
     exact ⟨t', by simpa [MSt.addT, Function.update_of_ne (hx p hp)] using h, hr⟩
   fresh := hI.fresh
 
-omit [DecidableEq DR] [∀ d, SampleableType (AR d)] [NeZero τ] [SampleableType T] in
+omit [DecidableEq DR] [∀ d, SampleableType (AR d)] [NeZero τ] [SampleableType T] [DecidableEq X]
+  [DecidableEq T] [DecidableRel cls] [∀ pk s t, Decidable (rel pk s t)] in
 /-- A call of the reduction keeps the invariant. -/
 theorem Inv.inv {s : JSt AR τ q X T S} (hI : Inv cls rel pk n s) (t : T) :
     Inv cls rel pk n
@@ -776,7 +780,8 @@ theorem Inv.inv {s : JSt AR τ q X T S} (hI : Inv cls rel pk n s) (t : T) :
   jc_good := hI.jc_good
   fresh := hI.fresh
 
-omit [DecidableEq DR] [∀ d, SampleableType (AR d)] [NeZero τ] [SampleableType T] in
+omit [DecidableEq DR] [∀ d, SampleableType (AR d)] [NeZero τ] [SampleableType T]
+  [DecidableEq X] in
 lemma complete_bad {m : MSt τ q X T S} {H : List T} {δs : List (Fin τ → T)} {ans : List S}
     {a : Fin (q + 1) → Fin τ} {ss : List S} (hb : (m.complete cls H δs ans a ss).bad = false) :
     m.bad = false ∧ ∀ k : Fin (q + 1),
@@ -785,7 +790,8 @@ lemma complete_bad {m : MSt τ q X T S} {H : List T} {δs : List (Fin τ → T)}
   simp [MSt.complete] at hb
   exact hb
 
-omit [DecidableEq DR] [∀ d, SampleableType (AR d)] [NeZero τ] [SampleableType T] in
+omit [DecidableEq DR] [∀ d, SampleableType (AR d)] [NeZero τ] [SampleableType T]
+  [DecidableEq X] in
 /-- A completed run keeps the invariant. -/
 theorem Inv.complete {s : JSt AR τ q X T S} (hI : Inv cls rel pk n s) (H : List T)
     (δs : List (Fin τ → T)) (ans : List S)
@@ -962,8 +968,8 @@ lemma pow_filter_length {α : Type} (θ : ℝ) (p : α → Bool) (l : List α) :
   | nil => simp
   | cons k l ih =>
     by_cases h : p k
-    · simp [List.filter_cons, h, pow_succ, ih, mul_comm]
-    · simp [List.filter_cons, h, ih]
+    · simp [h, pow_succ, ih, mul_comm]
+    · simp [h, ih]
 
 /-- **The lottery of one run.** Each request `k` has at most one winning shift `b k`; the choices
 are uniform. The sum over all choices of `θ^{number of wins}` is at most `(τ − 1 + θ)^m`, i.e.
@@ -994,7 +1000,7 @@ theorem lottery_sum {τ m : ℕ} (θ : ℝ) (hθ : 1 ≤ θ) (b : Fin m → Opti
             · subst h; simp
             · have : j₀ ≠ j := fun e => h e.symm
               simp [h, this]
-          simp only [this, Finset.sum_add_distrib, Finset.sum_ite_eq', Finset.mem_univ, if_true]
+          simp only [this, Finset.sum_add_distrib, Finset.sum_ite_eq', Finset.mem_univ, ite_true]
           simp
           linarith
     _ = ((τ : ℝ) - 1 + θ) ^ m := by simp
@@ -1027,6 +1033,7 @@ omit [DecidableEq X] [AddCommGroup T] [DecidableEq T] in
 lemma le_pot_of_hit (m : MSt τ q X T S) (h : m.hit = true) : pot m = 1 := by
   simp [pot, h]
 
+omit [DecidableEq X] in
 /-- **The supermartingale step** (`uov-open-reductions.md` §4.4, steps 3–4): summed over the
 `τ^{q+1}` choices of a completed run, the potential is at most `τ^{q+1}` times the potential
 before. -/
@@ -1078,7 +1085,7 @@ theorem pot_complete (hτ : 7 ≤ τ) (hq : 1 ≤ q) (m : MSt τ q X T S) (H : L
       _ ≤ θR τ q ^ m.W / θR τ q ^ (q * (m.K + 1) + 1) * (θR τ q ^ q * (τ : ℝ) ^ (q + 1)) :=
           mul_le_mul_of_nonneg_left hsm (by positivity)
       _ = (τ : ℝ) ^ (q + 1) * pot m := by
-          simp only [pot, hh, Bool.false_eq_true, if_false]
+          simp only [pot, hh, Bool.false_eq_true, ite_false]
           have : q * (m.K + 1) + 1 = (q * m.K + 1) + q := by ring
           rw [this, pow_add]
           field_simp
@@ -1241,7 +1248,8 @@ theorem lot_step (hτ : 7 ≤ τ) (hq : 1 ≤ q) (o : Op DR X T S τ) (s : JSt A
               rw [ENNReal.ofReal_mul (by positivity), ENNReal.ofReal_pow (by positivity),
                 ENNReal.ofReal_natCast, ENNReal.inv_mul_cancel_left hτ0 hτt]
 
-omit [DecidableEq DR] [∀ d, SampleableType (AR d)] [NeZero τ] [SampleableType T] in
+omit [DecidableEq DR] [∀ d, SampleableType (AR d)] [NeZero τ] [SampleableType T]
+  [∀ pk s t, Decidable (rel pk s t)] in
 /-- **Accounting** (`ompr-shift-algebra.md` §2.2, step 3). At a state of the invariant without a
 bad event and without a win of the lottery, if the reduction's claims win OMPR with `c` calls,
 `M`'s pick wins OMPR^free. -/
@@ -1282,7 +1290,7 @@ theorem free_of_win (hcls : Equivalence cls) {s : JSt AR τ q X T S} (hI : Inv c
     simp [hall, hlen, hI.jc_len]
   have hD : ∃ p ∈ all, ∀ t, s.1.tg p.1 = some t → ∀ z ∈ s.1.calls, ¬ cls z t := by
     by_contra hcon
-    push_neg at hcon
+    push Not at hcon
     have hch : ∀ x ∈ (all.map Prod.fst).toFinset, ∃ z, z ∈ s.1.chg.toFinset ∧
         ∃ t, s.1.tg x = some t ∧ cls z t := by
       intro x hx
@@ -1370,7 +1378,7 @@ theorem freeExp_redM (R : PK → ProbComp (OracleComp (specRed AR τ q X T S) (L
     freeExp tr (redM cls tr.IsPre n R) =
       (fun r => (r.1, pick cls r.2.1 r.2.2.1, r.2.2.2)) <$> jointExp cls tr n R := by
   simp only [freeExp, redM, jointExp, map_bind, map_pure, bind_map_left, simulateQ_map,
-    StateT.run_map, collapseJ, Functor.map_map, bind_assoc, pure_bind]
+    StateT.run_map, collapseJ, Functor.map_map]
 
 /-- The invariant holds at the end of the joint experiment. -/
 theorem jointExp_inv (hsym : ∀ a b, cls a b → cls b a)
