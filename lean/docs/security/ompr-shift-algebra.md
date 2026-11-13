@@ -25,7 +25,7 @@ with a stated unproved hypothesis. *Estimate*: cost figure from the usual hybrid
 | R | **A4 holds for UOV itself, for every reduction that is black-box in the adversary only.** Such a reduction `R` may use `pk` and the algebra of `P` in any way, and may rewind. Against one explicit adversary it wins OMPR with probability `≤ 2·τ^{−(q+1)} + Adv^{free}_{UOV}(M) + V⁴·2^{−343}`, where `M` is an OMPR^free adversary ([OR] §3.1) of about `R`'s running time. So: a reduction of this kind with loss below `τ^{q+1}/4` **is** an attack on OMPR^free, i.e. it contains a combiner across classes | proved | §2 |
 | T1 | Toolbox: polar form, kernel translation, the preimage line through a singular vector (`D(0)` gives one), `P` on the span of two preimages | proved, Lean (`qmap_add_of_polar_eq_zero`, `preimage_line`, `preimage_plane`) | §1 |
 | T2 | An affine symmetry `P(As + a) = T(P(s)) + c` shifts targets only by `c = P(a)` with `a ⊥ im A`. If `A` is onto and `rad B = 0`, then `a = 0`, `c = 0`. `rad B = 0` for every key with `δ < 1` and `v ↦ L_v` injective | proved, first part Lean (`affine_symmetry`) | §3.1 |
-| T3 | Infinitesimal symmetries `B(s, Xs) = Y·P(s)`: only `(X, Y) ∈ F·(I, 0)` on toy keys. Conjecture: the only public pairs `(A, T)` with `P∘A = T∘P` are the scalings | experimental; conjecture | §3.1 |
+| T3 | **`P` has no symmetries but the scalings.** For every oil space and all but a fraction `≤ 256^{−976} < 2^{−7800}` of the keys: (G) the only linear pairs `(A, T)`, `A` invertible, with `P∘A = T∘P` are `(λI, λ²I)`; (L) the only infinitesimal pairs `B(s, Xs) = Y·P(s)` are `F·(I, 0)`; (S, A) the same for Frobenius-semilinear and for all additive bijections, with an affine part. So a symmetry pair moves a target only inside its class. Checked: (L) at full size on two keys; the full group on toy keys over `F₄` | proved (model: `P1`, `P2` uniform); identities Lean (`symmetry_polar`, `symmetry_eigen`, `infinitesimal_polar`, …); experimental | §3.1, §8 |
 | T4 | A translator for one fixed shift `Δ₀` is worth exactly one equation: `UOV(119, 45) ≤ UOV-projected(119, 44) ∘ Tr_{Δ₀}`, and `Tr_{Δ₀} ≤ UOV(119, 45)`. In the cost model the gap is `≈ 2^{3.7}`. For uniform shifts translation is the UOV problem ([OR] A3) | proved; figure: estimate | §3.2 |
 | T5 | The linear span of known preimages gives targets `Σ α_i² y_i + Σ α_iα_j B(s_i, s_j)`. The reduction controls the `y_i`, not the cross terms. On toy keys the cross term of two sampler answers is uniform. With the oil space, translation is linear algebra; without it, every route we checked is an MQ instance or a class | proved identities; heuristic conclusion; experimental | §3.3–3.4 |
 | C1 | **Collinear shifts remove one equation.** With shifts `λ_a·c`, a forgery is a solution of 44 of the 45 equations that lands on one of the `τ` points of a line of 256. For `τ ≥ 256` this is a real gain of `≈ 2^{3.7}` (model) over any known attack on OMPR with independent targets. For τ = 17 the landing cost `256/17 = 2^{3.9}` exceeds it: `2^{144.2}` against `2^{144.1}` | reduction proved; costs: estimate | §4.1 |
@@ -232,25 +232,37 @@ The Lean statement needs only that `A` and `T` are homogeneous of degree 1.
 - So a translation of the domain never translates targets ([OR] A2 item 3, now for every affine
   pair): **the symmetries of `P` act linearly on targets.**
 
-**Which linear pairs exist?** The scalings `(λ·I, λ²·I)`. For others:
-- *Infinitesimal pairs [experimental].* `A = I + εX`, `T = I + εY` with `ε² = 0` requires
-  `B(s, Xs) = Y·P(s)` for all `s`. This is a linear system in `(X, Y)`: `N² + M²` unknowns,
-  `M·N(N+1)/2` equations. `(I, 0)` is always a solution, because `B(s, s) = 0`. On toy UOV keys
-  over `F₁₆` with `(N, M) = (8, 3), (10, 4), (12, 5)` the solution space has dimension 1 in every
-  trial (script, part 2). At full size the system has 16 186 unknowns and 321 300 equations.
-- *Frobenius.* `P(s^{2^i})^{2^{-i}}` is the map with the coefficients of `P` twisted by Frobenius.
-  The coefficients are uniform bytes, so no twist fixes `P`.
-- *Counting.* A pair `(A, T)` imposes `M·N(N+1)/2 = 321 300` conditions on `N² + M² = 16 186`
-  parameters.
+**Which linear pairs exist?** Only the scalings `(λ·I, λ²·I)`.
 
-**Conjecture T3.** For uov-Ip keys, with overwhelming probability, the only linear `(A, T)` with
-`A` invertible and `P ∘ A = T ∘ P` are the scalings. We did not prove it ([OR] §7, last item,
-stays open); a proof by a union bound over conjugacy classes of `A` looks feasible.
+**Theorem T3 [proved, §8].** Model `P1`, `P2` as uniform ([UA] §1). For every oil matrix `O`, all
+keys but a fraction `≤ 256^{−976}` have the following properties.
+- (G) *Group.* If `A ∈ GL_N(F)`, `T ∈ F^{M×M}` and `P ∘ A = T ∘ P`, then `A = λ·I`, `T = λ²·I`.
+- (L) *Infinitesimal.* If `B(s, Xs) = Y·P(s)` for all `s`, then `X = λ·I`, `Y = 0`.
+- (S) *Frobenius.* No pair of bijective `σ`-semilinear maps, `σ ≠ id`, satisfies
+  `P ∘ A = T ∘ P`.
+- (A) *Additive and affine.* If `φ(s) = A(s) + a`, `Θ(y) = T(y) + c` with `A`, `T` additive
+  (`F₂`-linear), `A` bijective or `T` injective, and `P ∘ φ = Θ ∘ P`, then `a = 0`, `c = 0`,
+  `A = λ·I`, `T = λ²·I`.
 
-**Consequence for target re-randomization.** With T2 and T3, a reduction can re-randomize a
-target only inside its class. It cannot produce two targets with a prescribed difference
-`δ_a ⊕ δ_b` ([OR] §4.6 item 3). The embedding `h = μ·t ⊕ c` aligns a second shift only if
-`δ_a ⊕ δ_b ∈ μ·t ⊕ μ′·t′`, the event (E3).
+(G) and (L) are separate statements: neither implies the other over a finite field (§8.1). The
+proof is a union bound over `A` (or `X`) by its distance `r` from the scalars, with the count
+`256^{M²}` of maps `T` absorbed by a module argument (§8.2–8.4). Characteristic 2 enters in (S),
+(A) and in the solution `(I, 0)` of (L), which exists because `B(s, s) = 0` (§8.5).
+
+- *Experimental.* (L) holds for two uniform keys at the real size `(119, 45)` over `F₂₅₆`: the
+  system has 321 300 equations in 16 186 unknowns and rank 16 185. The full group of linear and
+  semilinear pairs of toy keys over `F₄` with `M ≥ 3` is the three scalings. Toy keys with
+  `M = 2` do have more symmetries (§8.7).
+- *Not covered.* Maps `φ` that are not additive. One family exists: `φ(s) = γ(P(s))·s`,
+  `Θ(y) = γ(y)²·y` for any function `γ : F^M → F`. It stays in the class of the target. Pairs with
+  `A` not bijective and `T` not injective exist too (`A` into a singular line, `T = 0`); they
+  send every target into a proper subgroup (§8.6).
+
+**Consequence for target re-randomization [proved, given T3].** A reduction that moves preimages
+by a public additive or affine pair `(φ, Θ)` with `Θ` injective can re-randomize a target only
+inside its class. It cannot produce two targets with a prescribed difference `δ_a ⊕ δ_b`
+([OR] §4.6 item 3). The embedding `h = μ·t ⊕ c` aligns a second shift only if
+`δ_a ⊕ δ_b ∈ μ·t ⊕ μ′·t′`, the event (E3). The affine-symmetry route to OMPR ⇒ OMPR⊕τ is closed.
 
 ### 3.2 Solving the translation equation
 
@@ -472,13 +484,306 @@ fourth argument sets the count); the cost table of §4.1.
 
 - A reduction OMPR ⇒ OMPR⊕17 that is not black-box in the adversary, or a proof that the natural
   non-black-box classes also fail.
-- Conjecture T3 (no symmetries but scalings), by a union bound.
+- T3 is proved for additive maps (§8). Open there: pairs `(φ, Θ)` with `φ` not additive, beyond
+  `φ(s) = γ(P(s))·s`; pairs with `A` not bijective and `T ≠ 0`; a sharper exceptional fraction
+  (the bound `256^{−976}` comes from the matrices at distance 1 from the scalars).
 - Hypothesis X for the real sampler; the hardness of `P|_{K_s}` (45 quadrics in 74 variables,
   no oil space).
 - Theorem R with the lottery form of the assumption stated as a game, and its relation to
   OMPR^free.
 - A multi-target algebraic attack on MQ would change §4.1 for independent targets as well; we
   know none.
+
+## 8. Theorem T3: `P` has no symmetries but the scalings
+
+This section proves Theorem T3 of §3.1. `q = 256`, `N = 119`, `M = 45`, `V = N − M = 74`.
+
+### 8.1 Statements
+
+**Key model.** Fix the oil matrix `O`. Let `W_𝒪` be the space of `M`-tuples of quadratic forms on
+`F^N` that vanish on `𝒪`. Its dimension is `M·D`, `D = N(N+1)/2 − M(M+1)/2 = 6105`. The map
+`(P1, P2) ↦ P` of pqov's key generation is a linear bijection onto `W_𝒪` ([UA] §1,
+`oilSpace_iff_P3Pqov`). So with `P1`, `P2` uniform, **`P` is uniform on `W_𝒪`**. This is the
+modelling step (AES-128-CTR of `pk_seed` as a random function); all probabilities below are over
+`P`, for a fixed `O`.
+
+**Definitions.** For a matrix `A` over `F` let `r(A) = min_{c ∈ F} rank(A − c·I)`. `A` is scalar
+iff `r(A) = 0`. A *pair* is `(A, T)` with `P ∘ A = T ∘ P`. An *infinitesimal pair* is `(X, Y)`
+with `B(s, Xs) = Y·P(s)` for all `s`.
+
+**Theorem T3.** Each event has probability at most the stated bound.
+
+| | Event | Bound |
+|---|---|---|
+| (G) | a pair `(A, T)`, `A ∈ GL_N(F)` not scalar, `T ∈ F^{M×M}` | `ε_lin ≤ 1.01·q^{−977}` |
+| (L) | an infinitesimal pair `(X, Y)`, `X ∈ F^{N×N}` not scalar, `Y ∈ F^{M×M}` | `ε_lin` |
+| (S) | a pair of `σ`-semilinear maps, `σ ≠ id`, `A` bijective | `ε_semi ≤ 7·q^{−97889}` |
+| (I) | `F^N = R ⊕ R′`, `R, R′ ≠ 0`, `B(R, R′) = 0` | `ε_dec ≤ q^{−3049}` |
+| (N) | `rad B ≠ 0`, or the values `B(s, u)` do not span `F^M` | `q^{−3211} + q^{−5987}` |
+
+Outside these events (total `≤ q^{−976}`):
+- every pair with `A` linear and invertible is `(λI, λ²I)`, `λ ≠ 0`;
+- every infinitesimal pair is `(λI, 0)`;
+- every pair `(φ, Θ)` of §3.1 (A) is a scaling.
+
+The exact values are computed by `scripts/ompr-shift-algebra/t3_bound.py` (integer arithmetic).
+
+**Group versus infinitesimal.** (L) is the equation of (G) for `A = I + εX`, `T = I + εY` over
+the dual numbers `F[ε]/(ε²)` (Lean `infinitesimal_iff_first_order`). Neither implies the other.
+- The pairs form the `F`-points of an algebraic group `G_P ⊂ GL_N × GL_M`. (L) says that its Lie
+  algebra is the line `F·(I, 0)`. A finite group of pairs is invisible to the Lie algebra. Toy
+  keys with `(N, M) = (5, 2)` over `F₄` show it: Lie algebra of dimension 1, 6 or 12 linear
+  pairs (§8.7).
+- Conversely a group scheme can have a large Lie algebra and few points (`μ₂`, `α₂` in
+  characteristic 2). Toy keys with `(N, M) = (6, 2)` have a Lie algebra of dimension 3 and 6 or
+  12 linear pairs. The scalings already show the effect: `λ ↦ (λI, λ²I)` has tangent vector
+  `(I, 2I) = (I, 0)`. The target component of the Lie algebra does not see the scaling.
+
+So both statements are proved, by the same method.
+
+### 8.2 Symmetric tensors and the counting lemma
+
+Let `Γ = Γ²(F^N)` be the symmetric tensors in `F^N ⊗ F^N`, of dimension `N(N+1)/2 = 7140`. It
+is spanned by the squares `s ⊗ s`. Write `s·u = s ⊗ u + u ⊗ s`; these span the alternating
+tensors `Alt ⊂ Γ`, and `s·s = 0`.
+- An `M`-tuple of quadratic forms is a linear map `P : Γ → F^M`, with `P(s ⊗ s) = P(s)` and
+  `P(s·u) = B(s, u)`.
+- `P` vanishes on `𝒪` iff it vanishes on `Γ²(𝒪)`. So `W_𝒪 = Hom(Γ/Γ²(𝒪), F^M)`. Let
+  `π : Γ → Γ/Γ²(𝒪)`; the target has dimension `D`.
+- `P ∘ A = T ∘ P` iff `P ∘ Γ²(A) = T ∘ P`, where `Γ²(A)(s ⊗ s) = As ⊗ As`.
+- `B(s, Xs) = Y·P(s)` iff `P ∘ D_X = Y ∘ P`, where `D_X = X ⊗ 1 + 1 ⊗ X`, so
+  `D_X(s ⊗ s) = s·Xs`.
+
+For a linear map `Φ` of `Γ` define
+
+    δ(Φ) = min over λ in the algebraic closure of F of  rank( π ∘ (Φ − λ) ),
+
+the rank being that of a map `Γ → Γ/Γ²(𝒪)` after extension of scalars.
+
+**Lemma C (counting) [proved].** For every linear `Φ : Γ → Γ`,
+
+    Pr_P[ ∃ T ∈ F^{M×M} : P ∘ Φ = T ∘ P ]  ≤  q^{−M·(δ(Φ) − M)}.
+
+*Proof.* Fix `T`. Let `P ∈ W_𝒪` with `P ∘ Φ = T ∘ P`. Then `P(Φ^i x) = T^i P(x) = 0` for
+`x ∈ Γ²(𝒪)`. So `P` factors through `U = Γ/𝒩`, `𝒩 = Σ_i Φ^i Γ²(𝒪)`. `U` is a module over `F[x]`,
+`x` acting as `Φ`, and `P : U → (F^M, T)` is `F[x]`-linear. Such a map is determined by its values
+on generators of `U`. By the structure theorem, the least number `g` of generators of `U` is the
+number of invariant factors, which is `max_λ dim coker(Φ − λ | U)` over the algebraic closure.
+This cokernel is `Γ/((Φ − λ)Γ + 𝒩)`, a quotient of `Γ/((Φ − λ)Γ + Γ²(𝒪))`, of dimension
+`D − rank(π ∘ (Φ − λ))`. So `g ≤ D − δ(Φ)`. There are at most `q^{Mg}` maps `P` for each `T`,
+and `q^{M²}` maps `T`. Divide by `|W_𝒪| = q^{MD}`. ∎
+
+The lemma replaces the union over `T` by the minimum over `λ`: `λ` plays the role of an
+eigenvalue of `T`. The cost of `T` is the term `−M` next to `δ(Φ)`.
+
+### 8.3 Two rank lemmas
+
+Both lemmas hold for every oil space `𝒪` of dimension `M`, every `λ` in the algebraic closure,
+and in two cases: `Φ = Γ²(A)` with `A ∈ GL_N(F)` (*group*), and `Φ = D_X` with `X ∈ F^{N×N}`
+(*Lie*). Write `Z` for `A` or `X`.
+
+**Lemma E (eigen-probes) [proved].** Let `μ ∈ F` with `E = ker(Z − μ) ≠ 0`. Let
+`e₀ = dim(E ∩ 𝒪)` and `e₁ = dim E − e₀`. Let `r′ = rank(μA − λ)` (group) or
+`r′ = rank(X + μ − λ)` (Lie). Then for every `0 ≤ m ≤ e₁`, with `j = min(m, r′)`,
+
+    rank(π ∘ (Φ − λ))  ≥  m·r′ − j(j+1)/2 + e₀·max(0, r′ − M − m).
+
+*Proof.* For `k ∈ E` and any `u`: `Γ²(A)(k·u) = Ak·Au = μ·(k·Au)`, so
+`(Φ − λ)(k·u) = k·(μA − λ)u`. In the Lie case `D_X(k·u) = Xk·u + k·Xu = k·(X + μ)u`. (The polar
+identity behind this is Lean `symmetry_eigen`, `infinitesimal_eigen`.) Let `R` be the image of
+`μA − λ`, resp. `X + μ − λ`, of dimension `r′`. Choose `K ⊂ E` with `K ∩ 𝒪 = 0`, `dim K = m`,
+and `K₀ = E ∩ 𝒪`. The image of `π ∘ (Φ − λ)` contains `π(K·R + K₀·R)`, where `K·R` is the span
+of the `k·ρ`.
+- `Alt ∩ Γ²(𝒪) = Alt(𝒪)`, and `Alt ≅ Λ²(F^N)`. Choose `C′` with `F^N = K ⊕ 𝒪 ⊕ C′`. Then `Λ²`
+  is the direct sum of `Λ²K`, `K∧𝒪`, `K∧C′`, `Λ²𝒪`, `𝒪∧C′`, `Λ²C′`.
+- `K∧R` has no component in `Λ²𝒪`, `𝒪∧C′`, `Λ²C′`. So `π` is injective on `K·R`, and
+  `dim K·R = m·r′ − j′(j′+1)/2` with `j′ = dim(K ∩ R) ≤ j`: the kernel of `K ⊗ R → Λ²` is the
+  space of symmetric tensors of `K ∩ R`.
+- The projection of `Λ²/Λ²𝒪` onto `𝒪∧C′ ≅ 𝒪 ⊗ C′` kills `K·R`. It maps `K₀·R` onto
+  `K₀ ⊗ (R + K + 𝒪)/(K + 𝒪)`, of dimension `≥ e₀·(r′ − m − M)`. ∎
+
+**Lemma F (free probes) [proved].** Let `r = r(Z) ≥ M + 2` and `ρ = ⌊(r − M)/2⌋`. Then
+`rank(π ∘ (Φ − λ)) ≥ ρ(ρ+1)/2`.
+
+*Proof.* *Existence.* There are `t_1..t_ρ` such that the `2ρ` vectors `t_j`, `Zt_j` are linearly
+independent modulo `𝒪`. Choose them one by one. Let `𝒵 = 𝒪 + span(t_i, Zt_i : i < j)`, of
+dimension `M + 2j`. A vector `t` is bad iff `t ∈ 𝒵` or `(Z − c)t ∈ 𝒵` for some `c ∈ F`. The set
+`(Z − c)^{−1}(𝒵)` has dimension `≤ N − rank(Z − c) + dim 𝒵 ≤ N − r + M + 2j`. So there are at
+most `q^{M+2j} + q^{N−r+M+2j+1} < q^N` bad vectors as long as `2j ≤ r − M − 2`.
+*Rank.* Extend the `t_j` and `a_j = Zt_j` to a basis adapted to `𝒪`. The monomials in these
+vectors are coordinates on `Γ/Γ²(𝒪)`.
+- Group: `(Φ − λ)(t_j·t_{j′}) = a_j·a_{j′} − λ·t_j·t_{j′}` and
+  `(Φ − λ)(t_j ⊗ t_j) = a_j ⊗ a_j − λ·t_j ⊗ t_j`. The monomial `a_j·a_{j′}`, `j ≤ j′`, occurs in
+  one of these `ρ(ρ+1)/2` vectors only.
+- Lie: `D_X(t_j·t_{j′}) = a_j·t_{j′} + t_j·a_{j′}` and `D_X(t_j ⊗ t_j) = t_j·a_j`. The monomial
+  `t_j·a_{j′}`, `j ≤ j′`, occurs in one of them only. ∎
+
+**The value of `r′`.** Let `r = r(Z) < N`, attained at `μ ∈ F`, so `dim E = N − r`. In the group
+case `μ ≠ 0`, because `A` is invertible, and `μA − λ = μ(A − λ/μ)`. For `c ∈ F`,
+`rank(Z − c) ≥ r` by definition. For `c ∉ F` of degree `d ≥ 2` over `F`, the eigenspaces of the
+`d` conjugates of `c` have equal dimension and are independent of each other and of `E`. So
+`dim ker(Z − c) ≤ r/2`. Hence
+
+    r′ ≥ min(r, N − ⌊r/2⌋)   for every λ.
+
+### 8.4 Proof of (G) and (L)
+
+Let `δ_r` be the larger of the two bounds, in the worst case over the position of `𝒪`:
+- Lemma E with `r′ = min(r, N − ⌊r/2⌋)`, minimized over `e₀ ∈ [max(0, N − r − V), min(M, N − r)]`
+  and maximized over `m ≤ N − r − e₀`;
+- Lemma F, `ρ(ρ+1)/2` with `ρ = ⌊(r − M)/2⌋`.
+
+Then `δ(Γ²(A)) ≥ δ_r` and `δ(D_X) ≥ δ_r` for `r = r(A)`, `r = r(X)`. At most `q·R_r` matrices
+have `r(·) = r`, where `R_r ≤ 1.01·q^{2Nr − r²}` is the number of `N × N` matrices of rank `r`.
+By Lemma C,
+
+    ε_lin = Σ_{r=1}^{N} q·R_r·q^{−M·(δ_r − M)}.
+
+| `r` | 1 | 2 | 10 | 45 | 74 | 102 | 119 |
+|---|---|---|---|---|---|---|---|
+| `δ_r ≥` | 72 | 141 | 585 | 870 | 1305 | 406 | 703 |
+| from | E | E | E | E | E | F | F |
+| `log_q` of the count | 238 | 473 | 2281 | 8686 | 12137 | 13873 | 14162 |
+| `log_q` of the term | −977 | −3847 | −22019 | −28439 | −44563 | −2372 | −15448 |
+
+- The largest term is `r = 1`: transvections and pseudo-reflections `μI + wφᵀ`. There
+  `δ_1 = 72`: `ker φ` contains a subspace `K` of dimension 73 with `K ∩ 𝒪 = 0`, and the tensors
+  `k·w`, `k ∈ K`, span a space of dimension `≥ 72` modulo `Γ²(𝒪)`. Each gives `M` conditions on
+  `P`, against `238 + M²` parameters for `(A, T)`.
+- The second largest is `r = 102`, where the two lemmas meet: Lemma E gives the larger bound
+  for `r ≤ 101`, Lemma F for `r ≥ 102`.
+
+For `Z = μI` scalar: `T·P = μ²·P`, resp. `Y·P = 0`, on all values of `P`. These span `F^M`
+outside (N), since `B(s, u) = P(s + u) + P(s) + P(u)`. So `T = μ²·I`, resp. `Y = 0`. ∎
+
+**Lemma N [proved].** `Pr[rad B ≠ 0] ≤ q^{N − MV}`, and
+`Pr[the values of B do not span F^M] ≤ q^{M − (D − V)}`.
+
+*Proof.* For `a ≠ 0`, extend `a` to a basis adapted to `𝒪`. At least `V` of the vectors
+`B(a, e)` are uniform and independent in `F^M`. Union over `a`. For the span: if `h·B = 0` with
+`h ≠ 0`, the form `h·P` has no off-diagonal coefficient; there are `D − V` of them outside the
+oil block, each uniform. Union over `h` up to scalars. ∎
+
+This is T2′ with an explicit probability and without the condition on `δ(sk)`.
+
+### 8.5 Characteristic 2
+
+**`B(s, s) = 0`.** It gives the solution `(I, 0)` of (L): `B(s, λs) = 0` (Lean `polar_self`,
+`scaling_infinitesimal`, `infinitesimal_add_scalar`). In odd characteristic the scalings have the
+tangent vector `(I, 2I)`, and `B(s, s) = 2P(s)`. It is also why the squares `s ⊗ s` are not in
+the span of the `s·u`: `P` is not determined by `B`. Lemma E uses only `B`. Lemma F and Lemma C
+use `Γ`, which carries both.
+
+**Theorem (S): Frobenius-semilinear maps [proved].** Let `σ ≠ id` be a power of the Frobenius
+and `F₀` its fixed field, `|F₀| ≤ 16`. Let `A` be a `σ`-semilinear bijection of `F^N` and `T` a
+`σ`-semilinear map of `F^M`. `Γ²(A)` is a `σ`-semilinear bijection of `Γ`. The map
+`Θ : P ↦ T ∘ P ∘ Γ²(A)^{−1}` is `σ`-semilinear on `Hom_F(Γ, F^M)`, and `(A, T)` is a pair iff
+`Θ(P) = P`. The fixed points of a semilinear map form an `F₀`-space whose `F₀`-independent
+elements are `F`-independent. So there are at most `|F₀|^{7140·M} ≤ q^{3570·M}` fixed points, and
+
+    ε_semi ≤ 7·q^{N² + M²}·q^{3570·M − 6105·M} = 7·q^{−97889}.  ∎
+
+A key with a semilinear pair is, in suitable coordinates, defined over a subfield up to a linear
+map on targets. The bound is small because that is a condition on every coefficient. No rank
+lemma is needed: the fixed space of a semilinear map is at most half the space, while the fixed
+space of a linear map can be all of it.
+
+**Lemma I (indecomposable) [proved].** `Pr[∃ R, R′ ≠ 0 : F^N = R ⊕ R′, B(R, R′) = 0] ≤ ε_dec`.
+
+*Proof.* Let `a = dim R ≤ N/2`, `b = N − a`. For fixed `(R, R′)` the event has probability
+`q^{−M·ρ}`, `ρ = dim π(R·R′)`. As in Lemma E, with `a₀ = dim(R ∩ 𝒪)`, `a₁ = a − a₀`:
+`ρ ≥ max(ab − M(M−1)/2, a₁·b + a₀·max(0, b − a₁ − M))`. There are at most
+`[N choose a]_q·q^{ab}` pairs. The sum over `a` is `ε_dec`; its largest term is `a = 1`
+(`ρ ≥ 73`). ∎
+
+**Proposition A (additive and affine maps) [proved].** Assume none of (G), (S), (I), (N) occurs.
+Let `φ(s) = A(s) + a` and `Θ(y) = T(y) + c` with `A`, `T` additive, and `P ∘ φ = Θ ∘ P`. If `A`
+is bijective or `T` is injective, then `a = 0`, `c = 0`, `A = λ·I`, `T = λ²·I`.
+
+*Proof.* Write `A = Σ_i A_i ∘ φ^i`, `T = Σ_i T_i ∘ φ^i` with `φ` the coordinatewise Frobenius,
+`0 ≤ i < 8`, and `A_i`, `T_i` linear. Both sides of `P(As + a) = T(P(s)) + c` are polynomial
+functions of `s` of degree `< 256` in each variable, so their coefficients agree.
+- `P(As + a) = Σ_i P(A_iφ^i s) + Σ_{i<j} B(A_iφ^i s, A_jφ^j s) + B(As, a) + P(a)`.
+- The monomials `s_a^{2^i}·s_b^{2^j}`, `i < j`, occur only in the cross terms; for `a = b` the
+  exponent `2^i + 2^j` has two bits. So `B(A_i u, A_j w) = 0` for all `u`, `w` and `i ≠ j`.
+- The monomials `(s_a s_b)^{2^i}`, `a < b`, give `B(A_i u, A_i w) = T_i·B^{σ^i}(u, w)`.
+- *`T` injective implies `A` bijective.* If `A(z) = 0` then `T(B(z, u)) = B(Az, Au) = 0`, so
+  `z ∈ rad B = 0` (Lean `symmetry_kernel_radical`, for `a = 0`; the polar identity
+  `B(As, Au) = T(B(s, u))` holds for affine pairs too, as a second difference).
+- *One component.* The images `R_i = im A_i` are pairwise `B`-orthogonal, and `Σ R_i = F^N`
+  because `A` is onto. If two of them are nonzero, let `R′` be the sum of all but `R_1 ≠ 0`.
+  Neither is `F^N`, since `rad B = 0`. A complement `R″ ⊂ R′` of `R_1` contradicts (I). So
+  `A = A_i ∘ φ^i` with `A_i` invertible.
+- *`T`.* For `j ≠ i`, `T_j·B^{σ^j}(u, w) = 0`, so `T_j = 0` by (N).
+- *`a`.* The terms of degree `2^i` are `B(A_i φ^i s, a)`. So `a ∈ rad B = 0` and
+  `c = P(a) = 0`.
+- Now `(A, T)` is a `σ^i`-semilinear pair. By (S) `i = 0`, and by (G) it is a scaling. ∎
+
+For `A` linear this is T2 again, with the hypothesis on `A` and `rad B` discharged.
+
+### 8.6 What T3 says about reductions
+
+- A public pair `(φ, Θ)` moves a preimage of `y` to a preimage of `Θ(y)`. For additive or
+  affine pairs with `Θ` injective, `Θ(y) = λ²·y`: the pair is Lemma S of [OR] and nothing else.
+  In particular `Θ` is never a translation `y ↦ y ⊕ Δ`, `Δ ≠ 0`, and never maps a class to
+  another class. This closes the affine-symmetry route of [OR] §4.2 and §4.6 item 3, for all
+  keys but a fraction `q^{−976}`.
+- *Degenerate pairs.* If `T` is not injective, the pair sends every target into the proper
+  subgroup `im T + c`. Example: `A s = ψ(s)·z₀` with `P(z₀) = 0`, `T = 0`. Such a pair gives
+  preimages of points that the reduction did not choose. T3 does not classify them.
+- *Non-additive `φ`.* `φ(s) = γ(P(s))·s` is a pair with `Θ(y) = γ(y)²·y`, inside classes. We know
+  no other, and no proof that there is none. A pair with `φ` of higher degree is not a symmetry
+  in the sense of [OR] A2; it is closer to a solver for the translated problem (§3.2).
+- *Partial symmetries.* T3 is about identities on all of `F^N`. Maps that satisfy
+  `P(φ(s)) = Θ(P(s))` on a subset only are the subject of §3.2–3.4.
+
+### 8.7 Experiments, Lean, scripts
+
+**Lean** (`Spec/PqovSymmetry.lean`, for `qmap`, `polar`; maps are only assumed additive).
+
+| Statement | Lean |
+|---|---|
+| `B` symmetric, alternating, additive | `polar_comm`, `polar_self`, `polar_add_left/right` |
+| the scalings and their tangent `(I, 0)` | `scaling_symmetry`, `scaling_infinitesimal` |
+| a pair satisfies `B(As, Au) = T(B(s, u))` | `symmetry_polar` |
+| `Ak = μk` ⟹ `μ·B(k, Au) = T(B(k, u))` (Lemma E, group) | `symmetry_eigen` |
+| `T` injective ⟹ `ker A ⊂ rad B` | `symmetry_kernel_radical` |
+| `B(s, Xu) + B(u, Xs) = Y(B(s, u))` | `infinitesimal_polar` |
+| `Xk = μk` ⟹ `B(k, Xu + μu) = Y(B(k, u))` (Lemma E, Lie) | `infinitesimal_eigen` |
+| `(X, Y)` infinitesimal iff `(X + c, Y)` is | `infinitesimal_add_scalar` |
+| infinitesimal ⟺ first order of the pair `(1 + cX, 1 + cY)` | `infinitesimal_iff_first_order` |
+
+On paper only: Lemma C, the rank counts of Lemmas E and F, the union bound, (S), Lemma I,
+Lemma N and Proposition A. They need the structure theorem for `F[x]`-modules, exterior powers
+and counts of matrices by rank; we did not mechanize them.
+
+**Scripts** (`scripts/ompr-shift-algebra/`).
+- `t3_bound.py`: the bounds of §8.1, exactly. With `-v`, `δ_r` and the term for every `r`.
+  For toy parameters the bounds are above 1: the theorem says nothing there.
+- `lie_fullsize.c`: (L) at the real size. A uniform key in normal form over `F₂₅₆`, `(N, M) =
+  (119, 45)`; incremental elimination on the 321 300 equations in scrambled order. For seeds 1
+  and 2 the rank reaches `16 185 = N² + M² − 1` after 16 185 equations (80 to 95 s, 262 MB). So
+  for these two keys the infinitesimal pairs are exactly `F·(I, 0)`.
+- `symmetry_toy.py` (pure Python, about 2 minutes), part A: (L) on toy keys over `F₄`, `F₁₆`, `F₂₅₆` up to `(N, M) = (30, 11)`:
+  dimension 1 in every trial with `M ≥ 3`.
+- Part B: the **full group** of linear and Frobenius-semilinear pairs over `F₄`, by exhaustive
+  backtracking on the images of the basis (`T` is first restricted to the maps that preserve
+  the fibre sizes of `P`).
+  - 32 keys with `M ≥ 3`, `(N, M)` from `(6, 3)` to `(9, 4)`: exactly the three scalings, and no
+    semilinear pair.
+  - 12 keys with `M = 2`, `(5, 2)` and `(6, 2)`: 6 to 18 linear pairs, and for half of the keys
+    as many semilinear ones. A pencil of two quadrics is not generic. The Lie algebra has
+    dimension 1 for five of the six `(5, 2)` keys and dimension 3 for the `(6, 2)` keys.
+- Part C: Lemmas E and F on structured matrices over `F₄` (rank 1 with image in `𝒪`, block
+  matrices that preserve `𝒪`, diagonal, generic) and all `λ ∈ F₁₆`: the true rank of
+  `π ∘ (Φ − λ)` is never below the bound.
+
+### 8.8 Effect on [OR]
+
+[OR] §4.2 (last consequence), §4.6 item 3 and §7 (last item) say that only the scalings are
+known and that their uniqueness is unproved. With T3 the last item of [OR] §7 is settled for
+additive and affine maps. A6 itself is unchanged: T3 removes one route to a reduction and gives
+no attack.
 
 ## References
 

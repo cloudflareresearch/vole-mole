@@ -8,6 +8,9 @@ Everything is integer or rational arithmetic; the output is log_q and log_2 of e
             and, with the same value, Pr[some non-scalar X, some Y, B(s, Xs) = Y P(s)] (Theorem L)
   eps_semi: Pr[some Frobenius-semilinear bijection A, semilinear T, with P∘A = T∘P]  (Theorem S)
   eps_dec : Pr[F^N = R ⊕ R' with R, R' ≠ 0 and B(R, R') = 0]                         (Lemma I)
+  eps_rad, eps_span: Pr[rad B ≠ 0], Pr[the values of B do not span F^M]             (Lemma N)
+
+With -v: the bound on delta and the term of the union bound for every r.
 
 Usage: t3_bound.py [N M [q]]        default 119 45 256
 """
@@ -143,12 +146,17 @@ def main():
     ed, wd = eps_dec(N, M, q)
     print(f"eps_dec  <= q^{logq(ed, q):.1f} = 2^{logq(ed, q)*lq:.0f}   "
           f"(largest term dim R = {wd[0]}: q^{wd[1]:.1f}, rank >= {wd[2]})")
-    # P_1..P_M linearly dependent
-    dep = Fraction((q ** M - 1) // (q - 1), q ** D)
-    print(f"eps_indep<= q^{logq(dep, q):.1f}   (the M forms are linearly dependent)")
-    allb = tot * 2 + es + ed + dep
-    print(f"total (2 eps_lin + eps_semi + eps_dec + eps_indep) <= 2^{logq(allb, q)*lq:.0f}")
-
+    V = N - M
+    # rad B != 0: some a != 0 with B(a, .) = 0; at least V free coefficients B(a, e) in F^M
+    erad = Fraction(q ** N, q ** (M * V))
+    print(f"eps_rad  <= q^{logq(erad, q):.1f}   (rad B != 0)")
+    # the values of B do not span F^M: some h != 0 with h.B = 0; D - V free off-diagonal
+    # coefficients
+    espan = Fraction((q ** M - 1) // (q - 1), q ** (D - V))
+    print(f"eps_span <= q^{logq(espan, q):.1f}   (the values of B do not span F^M)")
+    allb = tot * 2 + es + ed + erad + espan
+    print(f"total (2 eps_lin + eps_semi + eps_dec + eps_rad + eps_span) <= "
+          f"q^{logq(allb, q):.2f} = 2^{logq(allb, q)*lq:.0f}")
 
 if __name__ == "__main__":
     main()

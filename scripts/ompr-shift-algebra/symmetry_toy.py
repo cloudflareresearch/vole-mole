@@ -7,7 +7,8 @@ Pure Python, no dependencies.  Three parts:
      over F_4, F_16 and F_256.  Expected dimension: 1, spanned by (I, 0).
   B. The full symmetry group over F_4: all pairs (A, T), A a bijection that is linear or
      Frobenius-semilinear, T likewise, with P∘A = T∘P.  Exhaustive (backtracking on the images
-     of the basis vectors).  Expected: the 3 scalings (lambda I, lambda^2 I), nothing semilinear.
+     of the basis vectors).  Observed: for M >= 3 the 3 scalings (lambda I, lambda^2 I) and
+     nothing semilinear; for M = 2 (a pencil of two quadrics) there are more pairs.
   C. The rank lemmas behind the proof (Lemma E, Lemma F): for structured matrices A over F_4
      and every lambda in F_16, the rank of  pi∘(Gamma^2 A - lambda)  and of  pi∘(D_X - lambda)
      on symmetric tensors modulo Gamma^2(O) is at least the bound used in the union bound.
@@ -224,32 +225,43 @@ def full_group_F4(F, Qm, verbose=False):
     def frob_packed(x, n):
         return pack([MUL[a][a] for a in unpack(x, n)])
 
-    # candidate T: sigma-semilinear bijections of F^M preserving fibre sizes
+    # candidate T: sigma-semilinear bijections of F^M preserving fibre sizes.  The table of T on
+    # span(f_0..f_{i-1}) is extended one basis vector at a time and checked at once.
     def all_T(twist):
-        cols_cand = [[y for y in range(1, 4 ** M) if nfib[y] == nfib[f[i]]] for i in range(M)]
         out = []
+        mulcol = {}
 
-        def rec(i, cols):
+        def scaled(c, y):
+            key = (c, y)
+            if key not in mulcol:
+                mulcol[key] = smul_packed(c, y, M)
+            return mulcol[key]
+
+        def rec(i, tab):
             if i == M:
-                # table of T on all y
-                tab = [0] * (4 ** M)
-                for y in range(4 ** M):
-                    yy = unpack(y, M)
-                    z = 0
-                    for l in range(M):
-                        c = yy[l]
-                        if twist:
-                            c = MUL[c][c]
-                        if c:
-                            z ^= smul_packed(c, cols[l], M)
-                    tab[y] = z
-                if len(set(tab)) == 4 ** M and all(nfib[tab[y]] == nfib[y] for y in range(4 ** M)):
+                if len(set(tab)) == 4 ** M:
                     out.append(tab)
                 return
-            for y in cols_cand[i]:
-                rec(i + 1, cols + [y])
+            for col in range(1, 4 ** M):
+                if nfib[col] != nfib[f[i]]:
+                    continue
+                new = list(tab)
+                ok = True
+                for c in (1, 2, 3):
+                    cc = MUL[c][c] if twist else c
+                    img = scaled(cc, col)
+                    for y in range(4 ** i):
+                        z = tab[y] ^ img
+                        if nfib[z] != nfib[y | (c << (2 * i))]:
+                            ok = False
+                            break
+                    if not ok:
+                        break
+                    new.extend(tab[y] ^ img for y in range(4 ** i))
+                if ok:
+                    rec(i + 1, new)
 
-        rec(0, [])
+        rec(0, [0])
         return out
 
     found = {False: [], True: []}
@@ -512,15 +524,15 @@ def main():
     if "B" in parts:
         print("B. full symmetry group over F_4 (linear and Frobenius-semilinear bijections)")
         F = GF(2)
-        for (N, M, reps) in [(5, 2, 6), (6, 2, 6), (6, 3, 10), (7, 3, 8), (7, 4, 6), (8, 3, 3), (8, 4, 3)]:
+        for (N, M, reps) in [(5, 2, 6), (6, 2, 6), (6, 3, 10), (7, 3, 10), (8, 3, 4), (8, 4, 6), (9, 4, 2)]:
             res = []
             for _ in range(reps):
                 Qm, _ = toy_key(F, N, M, rng)
                 lin, semi = full_group_F4(F, Qm)
                 extra = [g for g in lin if not is_scaling(g[0], N)]
-                res.append((len(lin), len(extra), len(semi)))
-            print(f"  (N, M) = ({N}, {M}): (linear pairs, non-scaling among them, semilinear "
-                  f"pairs) per key: {res}")
+                res.append((lie_algebra_dim(F, Qm)[0], len(lin), len(extra), len(semi)))
+            print(f"  (N, M) = ({N}, {M}): (dim of the Lie algebra, linear pairs, non-scaling "
+                  f"among them, semilinear pairs) per key: {res}")
     if "C" in parts:
         print("C. rank lemmas E and F: A over F_4, lambda over F_16, O = last M coordinates")
         for (N, M) in [(6, 2), (7, 2), (7, 3)]:
