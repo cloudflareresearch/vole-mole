@@ -43,6 +43,13 @@ with a stated unproved hypothesis. *Estimate*: cost figure from the usual hybrid
   most favourable variant we tried, and it can never be more than `2^{4.1}` cheaper. Conjecture
   A6 of [OR] should be read "up to the factor `τ/τ*` of §4.1" for `τ > τ*`.
 - *Advice.* Unchanged from [UA] §6: U1 as the main statement, U2 under OMPR⊕17.
+- *Update (`ompr-cryptanalysis-2.md` §3.1, §3.5).* The direct attack of §4.1 can drop one
+  equation without any shift: take `c` along the target, `π_h(P(s)) = 0`, and scale the solution
+  (attack P1). So the direct forgery costs `U = 2^{138.5}`, not `H = 2^{140.3}`, and C1 must be
+  compared with it: 43 quadrics and a landing with probability `τ/257`. In the reference model
+  17 collinear shifts then cost `2^{138.7}`, `2^{0.2}` more than P1, with break-even `τ* ≈ 19`
+  (16 to 72 over the models). The bound "never more than `τ = 2^{4.1}` cheaper" is unchanged, and
+  so is the advice. Read the figures of §4 with this shift of one equation.
 
 ---
 
@@ -765,7 +772,7 @@ So `D` improves neither side of the comparison of §4.1 beyond what Thomae–Wol
 | Reduction using a combiner from the algebra of `P` | none found (§3); would break OMPR^free |
 | Reduction that is not black-box in the adversary | open; `E₁` of PomFRIT is the known instance, with additive loss `Q₃·2^{−71}` |
 | Attack separating OMPR⊕17 from OMPR | none found; C1 is below break-even in the reference model, and within `2^{4.1}` in any (§4) |
-| Attack that uses the `D` oracle, on either game | none below the oracle-free attacks (`ompr-cryptanalysis.md`): the games share the oracle; key recovery through it needs `2^{292.5}` calls (vinegar collision) or `2^{600}` (linear statistics); shifts chosen after answers give the factor τ only |
+| Attack that uses the `D` oracle, on either game | none below the oracle-free attacks (`ompr-cryptanalysis.md`, `ompr-cryptanalysis-2.md`): the games share the oracle; key recovery through it needs `2^{292.5}` calls (vinegar collision) or `2^{600}` (linear statistics); shifts chosen after answers give the factor τ only |
 
 The loss `τ^{q+1}` is thus an artefact only in the sense that no attack matches it. No proof
 technique that treats the adversary as a black box removes it, unless UOV has a combiner that

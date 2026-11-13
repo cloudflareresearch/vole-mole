@@ -19,8 +19,13 @@
  * public map.
  *
  * Build:  gcc -O3 -march=native -fopenmp -o c1_toy c1_toy.c -lm
- * Usage:  c1_toy q N M seed jmin jmax target_solutions max_seconds_per_batch [degree_slack]
+ * Usage:  c1_toy q N M seed jmin jmax target_solutions max_seconds_per_batch [degree_slack [cmode]]
  * The driver c1_experiments.py builds and runs it.
+ *
+ * cmode = 1 (used by scripts/ompr-cryptanalysis/ompr_second.py, `scale`): the direction c is the
+ * target h itself.  The projected system is then pi_h(P(s)) = 0, a solution has
+ * P(s) = (1 + mu) h, and it gives a preimage of h by scaling unless mu = 1.  The machine-readable
+ * line ends with `scale <solutions with mu != 1>`.
  */
 #include <math.h>
 #include <omp.h>
@@ -726,7 +731,8 @@ static int min_degree(const Target* tg, int n, int m_proj, int K, int Dmax, uint
 
 int main(int argc, char** argv) {
     if (argc < 9) {
-        fprintf(stderr, "usage: %s q N M seed jmin jmax target_solutions max_seconds [slack]\n",
+        fprintf(stderr,
+                "usage: %s q N M seed jmin jmax target_solutions max_seconds [slack [cmode]]\n",
                 argv[0]);
         return 2;
     }
@@ -738,6 +744,7 @@ int main(int argc, char** argv) {
     int jmin = atoi(argv[5]), jmax = atoi(argv[6]);
     double target = atof(argv[7]), maxsec = atof(argv[8]);
     int slack = argc > 9 ? atoi(argv[9]) : 0;
+    int cmode = argc > 10 ? atoi(argv[10]) : 0;
     if ((q != 16 && q != 256) || N >= MAXN || M >= MAXM || M < 3) {
         fprintf(stderr, "bad parameters\n");
         return 2;
@@ -757,6 +764,20 @@ int main(int argc, char** argv) {
         }
         tg.piv = (int)(rng_next(&r) % (uint64_t)M);
     } while (!tg.c[tg.piv]);
+    if (cmode == 1) { /* c = h: the class of the target itself */
+        memcpy(tg.c, tg.h, sizeof tg.c);
+        tg.piv = -1;
+        for (int k = 0; k < M; k++) {
+            if (tg.h[k]) {
+                tg.piv = k;
+                break;
+            }
+        }
+        if (tg.piv < 0) {
+            fprintf(stderr, "zero target\n");
+            return 2;
+        }
+    }
     tg.cinv = INV[tg.c[tg.piv]];
     /* a fixed random order of F: the list of tau values is its first tau entries */
     uint8_t order[256];
@@ -843,6 +864,9 @@ int main(int argc, char** argv) {
                         t == 64 || t == 128 || t == 256) {
                         printf(" %d:%ld", t, acc);
                     }
+                }
+                if (cmode == 1) {
+                    printf(" scale %ld", bt.nsol - bt.hist[1]);
                 }
             }
             printf("\n");

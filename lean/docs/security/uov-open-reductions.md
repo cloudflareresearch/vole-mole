@@ -543,7 +543,10 @@ of [BMV08] is not available: it needs to simulate `A**`'s forgeries, and preimag
   for `τ ≥ 256` and none for τ = 17 (`256/17 = 2^{3.9}`). The conjecture is to be read for
   `τ ≤ 17`.
 
-**Follow-up: `ompr-cryptanalysis.md`** (attacks that use the oracle).
+**Follow-up: `ompr-cryptanalysis.md`** (attacks that use the oracle), and its second pass
+`ompr-cryptanalysis-2.md`: the scaling of Lemma S also serves the forger (`P(s) ∈ F·t` is 44
+quadrics; forgery `≈ 2^{138.5}` multiplications instead of `2^{140.3}`), statistics of the
+answers of every degree, quantum estimates, no multi-target gain.
 - OMPR⊕τ has the oracle of OMPR. Every oracle-aided route to the key is common to both games,
   and none beats key recovery from `pk`: vinegar collisions need `2^{292.5}` calls, linear
   statistics of the answers `2^{600}`, and a good answer adds no equation to the structural
