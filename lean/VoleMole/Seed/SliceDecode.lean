@@ -27,8 +27,11 @@ points at which it evaluates `K`.
   in the blocks of the trees `T₁` (`TwoLabelOn`: these trees carry one label vector), the base
   points cover the slices, and the accepting set `A`, in one slice of `C`, has
   `|U₀|·|A| > ∏_{i ∈ C} |B_i|`, the decoder outputs a pair.
+* `basePts`, `basePts_cover`, `card_basePts_le`: the decoder's base points (the challenges that
+  vanish on `C ∪ T₁`) cover the slices; there are at most `∏ |B_i|` of them, over the trees with a
+  third label vector.
 * `twoLabel_gate`: the gate model of `translateOn_gate_slice` satisfies `TwoLabelOn`'s identity,
-  for every hash and every `c_mult`.
+  for every hash and every `c_mult`. `twoLabelOn_additive`: additive rows satisfy it.
 
 No `sorry`, no `axiom`.
 -/
@@ -430,6 +433,92 @@ theorem dec_cert_complete [∀ i, Fintype (B i)] [∀ i, DecidableEq (B i)] {T :
   obtain ⟨hQ, hD⟩ := htl r (hRs r hr) δ (hUd δ (Finset.mem_of_mem_erase hδ)) _
     (sum_mem_dirs hgen s) _ (hgen k)
   exact incr_kosValue_twoLabel c e Q D ũ hQ hD
+
+/-! ### The decoder's base points -/
+
+open Classical in
+/-- The decoder's base points for a class `C` with linear unknowns in the blocks of `T₁`: the
+challenges of `Sb` that vanish on `C ∪ T₁`. With `Sb` the challenges with given blocks outside
+`S`, there are at most `∏_{i ∈ S \ (C ∪ T₁)} |B_i|` of them (`card_basePts_le`): the trees with a
+third label vector are exhausted. -/
+noncomputable def basePts [∀ i, Fintype (B i)] [∀ i, DecidableEq (B i)] (Sb : Set (∀ i, B i))
+    (C T₁ : Finset ι) : Finset (∀ i, B i) :=
+  Finset.univ.filter fun r => r ∈ Sb ∧ ∀ i ∈ C ∪ T₁, r i = 0
+
+open Classical in
+lemma mem_basePts [∀ i, Fintype (B i)] [∀ i, DecidableEq (B i)] {Sb : Set (∀ i, B i)}
+    {C T₁ : Finset ι} {r : ∀ i, B i} :
+    r ∈ basePts Sb C T₁ ↔ r ∈ Sb ∧ ∀ i ∈ C ∪ T₁, r i = 0 := by
+  unfold basePts
+  rw [Finset.mem_filter]
+  exact ⟨fun h => h.2, fun h => ⟨Finset.mem_univ _, h⟩⟩
+
+lemma card_basePts_le [∀ i, Fintype (B i)] [∀ i, DecidableEq (B i)] (S C T₁ : Finset ι)
+    (hd : ∀ i, B i) :
+    (basePts {Δ : ∀ i, B i | ∀ i ∉ S, Δ i = hd i} C T₁).card ≤
+      ∏ i ∈ S \ (C ∪ T₁), Fintype.card (B i) := by
+  classical
+  refine card_le_prod_of_fixed _ _ fun i hi Δ hΔ Δ' hΔ' => ?_
+  have h1 := mem_basePts.1 (Finset.mem_coe.1 hΔ)
+  have h2 := mem_basePts.1 (Finset.mem_coe.1 hΔ')
+  by_cases hiS : i ∈ S
+  · have hiU : i ∈ C ∪ T₁ := by
+      by_contra hiU
+      exact hi (Finset.mem_sdiff.2 ⟨hiS, hiU⟩)
+    rw [h1.2 i hiU, h2.2 i hiU]
+  · rw [h1.1 i hiS, h2.1 i hiS]
+
+/-- **The decoder's data exist** (the hypotheses on the points in `dec_cert_sound`,
+`dec_cert_complete`). Let `Sb` be the challenges with given blocks outside `S`, `C` and `T₁`
+sets of trees of `S`, and `gen` generators of the challenges supported on `T₁` (for bit blocks:
+the unit vectors). Then the base points `basePts Sb C T₁` are in `Sb`, the decoder's points are in
+`Sb`, `Sb` is closed under the directions of `C`, and the base points cover every slice of `C`. -/
+theorem basePts_cover [∀ i, Fintype (B i)] [∀ i, DecidableEq (B i)] (S C T₁ : Finset ι)
+    (hd : ∀ i, B i) (hC : C ⊆ S) (hT : T₁ ⊆ S) {gen : Fin n → ∀ i, B i}
+    (hgen : ∀ k, gen k ∈ dirs T₁)
+    (hspan : ∀ v ∈ dirs (B := B) T₁, ∃ s : Finset (Fin n), v = ∑ k ∈ s, gen k) :
+    (∀ r ∈ basePts {Δ : ∀ i, B i | ∀ i ∉ S, Δ i = hd i} C T₁,
+        r ∈ {Δ : ∀ i, B i | ∀ i ∉ S, Δ i = hd i}) ∧
+      (∀ δ ∈ dirs (B := B) C, ∀ r ∈ basePts {Δ : ∀ i, B i | ∀ i ∉ S, Δ i = hd i} C T₁, ∀ s,
+        decPt gen r s ∈ {Δ : ∀ i, B i | ∀ i ∉ S, Δ i = hd i} ∧
+          decPt gen r s + δ ∈ {Δ : ∀ i, B i | ∀ i ∉ S, Δ i = hd i}) ∧
+      (∀ x ∈ {Δ : ∀ i, B i | ∀ i ∉ S, Δ i = hd i}, ∀ δ ∈ dirs (B := B) C,
+        x + δ ∈ {Δ : ∀ i, B i | ∀ i ∉ S, Δ i = hd i}) ∧
+      ∀ Δ ∈ {Δ : ∀ i, B i | ∀ i ∉ S, Δ i = hd i},
+        ∃ r ∈ basePts {Δ : ∀ i, B i | ∀ i ∉ S, Δ i = hd i} C T₁, ∃ s,
+          decPt gen r s ∈ {Δ : ∀ i, B i | ∀ i ∉ S, Δ i = hd i} ∧
+            ∀ i ∉ C, decPt gen r s i = Δ i := by
+  classical
+  have hclC : ∀ x : ∀ i, B i, (∀ i ∉ S, x i = hd i) → ∀ δ ∈ dirs (B := B) C,
+      ∀ i ∉ S, (x + δ) i = hd i := fun x hx δ hδ i hi => by
+    rw [Pi.add_apply, hδ i fun h => hi (hC h), add_zero, hx i hi]
+  have hclT : ∀ x : ∀ i, B i, (∀ i ∉ S, x i = hd i) → ∀ v ∈ dirs (B := B) T₁,
+      ∀ i ∉ S, (x + v) i = hd i := fun x hx v hv i hi => by
+    rw [Pi.add_apply, hv i fun h => hi (hT h), add_zero, hx i hi]
+  have hpt : ∀ r ∈ basePts {Δ : ∀ i, B i | ∀ i ∉ S, Δ i = hd i} C T₁, ∀ s : Finset (Fin n),
+      ∀ i ∉ S, decPt gen r s i = hd i := fun r hr s =>
+    hclT r (mem_basePts.1 hr).1 _ (sum_mem_dirs hgen s)
+  refine ⟨fun r hr => (mem_basePts.1 hr).1,
+    fun δ hδ r hr s => ⟨hpt r hr s, hclC _ (hpt r hr s) δ hδ⟩, hclC, fun Δ hΔ => ?_⟩
+  obtain ⟨s, hs⟩ := hspan (fun i => if i ∈ T₁ then Δ i else 0) fun i hi => by simp [hi]
+  have hr : (fun i => if i ∈ C ∪ T₁ then 0 else Δ i) ∈
+      basePts {Δ : ∀ i, B i | ∀ i ∉ S, Δ i = hd i} C T₁ := by
+    refine mem_basePts.2 ⟨fun i hi => ?_, fun i hi => by simp [hi]⟩
+    have : i ∉ C ∪ T₁ := fun h => hi (Finset.union_subset hC hT h)
+    simp only [this, ite_false]
+    exact hΔ i hi
+  refine ⟨_, hr, s, hpt _ hr s, fun i hi => ?_⟩
+  rw [decPt, ← hs, Pi.add_apply]
+  by_cases hiT : i ∈ T₁
+  · simp [hiT]
+  · simp [hiT, hi]
+
+/-- Additive responses (the witness and label rows) are two-label, trivially. -/
+lemma twoLabelOn_additive {L : ℕ} (Sb : Set (∀ i, B i)) (C T₁ : Finset ι) (vQ : Fin L → F)
+    (fQ : (∀ i, B i) →+ (Fin L → F)) (vD : Fin 4 → F) (fD : (∀ i, B i) →+ (Fin 4 → F)) :
+    TwoLabelOn Sb C T₁ (fun Δ => vQ + fQ Δ) (fun Δ => vD + fD Δ) := by
+  intro x _ δ _ g _ g' _
+  constructor <;> simp only [map_add] <;> abel
 
 end TreeDec
 
