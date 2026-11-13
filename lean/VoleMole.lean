@@ -99,6 +99,7 @@ import VoleMole.Verifier.Bridge.Lift
 import VoleMole.Verifier.Bridge.Columns
 import VoleMole.Verifier.Bridge.Chain
 import VoleMole.Verifier.Bridge.ChainRelations
+import VoleMole.Verifier.Bridge.MaskSlices
 import VoleMole.Verifier.Bridge.Prover
 import VoleMole.Verifier.Bridge.BAVCComplete
 import VoleMole.Verifier.Bridge.CrtCheck
@@ -176,6 +177,9 @@ import VoleMole.ROM.OneMore
 import VoleMole.ROM.OneMorePomfrit
 import VoleMole.ROM.LemmaPDet
 import VoleMole.ROM.LemmaPClass
+import VoleMole.ROM.LemmaPClassDet
+import VoleMole.ROM.LemmaPCls
+import VoleMole.ROM.LemmaPClsBound
 import VoleMole.ROM.LemmaP
 import VoleMole.ROM.OneMoreLemmaP
 import VoleMole.ROM.OneMoreLemmaPIC
@@ -429,3 +433,4 @@ import VoleMole.Audit.PomfritLemmaP
 import VoleMole.Audit.Theft
 import VoleMole.Audit.MainPU
 import VoleMole.Audit.MainShared
+import VoleMole.Audit.PomfritLemmaPCls

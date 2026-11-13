@@ -694,21 +694,60 @@ exhausted, and that is §6.4's search with its conjecture (§6A.6).
 value. `class_or_small_dec` is the per-chain statement: for trees of `2^{width i}` challenges,
 `KOSPar`, Claim 4's hypotheses on the witness rows (bit slopes) and the label rows (any slopes),
 the response affine on the slices of each class (`AffineOn`) and two-label in the blocks of `T₁`
-(`TwoLabelOn`), and decoder data that cover the slices (`basePts_cover`), the output of `clsExt`
+(`TwoLabelOn`; both proved for the executable verifier, below), and decoder data that cover the
+slices (`basePts_cover`), the output of `clsExt`
 is the prefix of every free tree, or `|𝒜| ≤ 2⁵⁰`. `extract_or_class` is `extract_or_major` with
 this conclusion. `per_query_bound_cls`: `2⁵⁰/2¹²⁸ = 2⁻⁷⁸`.
 
+**For the executable verifier** (`Verifier/Bridge/MaskSlices.lean`, `ROM/LemmaPClassDet.lean`).
+`AffineOn` and `TwoLabelOn` are no longer hypotheses:
+- `qMask_form`: mask `m` of `crtReconstructAt` at the blocks `Δ` is
+  `Σ_i treeTerm m i (Δ_i) + Σ_{e < 312} gateF m e Δ`. `treeTerm` is affine in the block
+  (`treeTerm_translate`, from `polyMod_xor`). `gateF` is the gate model: a function of the label
+  `C₀_e + Σ_i γ_{i,e}(Δ_i)·ℓ_i` (`label_form`) plus the selection bit times the `c_mult` bit. For
+  any tables, gate hash, `c_mult` and committed keys.
+- `chain_affineOn`, `chain_twoLabelOn`: Lemma S2 and the two-label identity for a chain of the
+  verifier. One hypothesis: the trees of the set have the same label rows.
+- `chain_claim4_lab`: Claim 4's hypotheses for the label rows (they are hashed rows).
+- `pomfritT_extract_class_chain`: `pomfritT_extract_major_chain` with `clsExt` and `2⁵⁰`, from
+  `KOSGood`, `KOSPar` and the blocks `hd` of the trees outside `S` on the accepting set. The
+  decoder's data are fixed: directions `treeDirs i` (the challenges supported on one tree of the
+  class, `2⁷` or `2⁸`), linear unknowns `clsT1` (the alive trees outside the class with the label
+  rows of the widest class), generators `genOf` (unit vectors), base points `Seed.basePts`. The
+  certificate `clsCert` is "the decoder has a candidate" (`Seed.decCand`). It reads the check
+  value at `clsPts` only (`clsCertK_congr`, `card_clsPts_le`). For the verifier the prediction is
+  exact, so a candidate is a pair (`clsCert_iff_dec`); the two extra evaluations of `Seed.dec` are
+  not needed. The count in Lean uses `2⁸ − 1` directions and 120 generators (zero for the bits
+  outside `clsT1`): at most `255·2⁸·2·121 < 2²⁴` points, against the paper's `2²²·¹`.
+
+**In the random-oracle and ideal-cipher model** (`ROM/LemmaPCls.lean`, `ROM/LemmaPClsBound.lean`):
+- `prU_kos_par_le`, `parEps_le`: a uniform 136-byte `chal1` is not good for parallelism with
+  probability at most `2⁻¹³⁴` (at most 1441 hashed rows). `parBad` is the bad event at `H₂¹`.
+- `combBad_of_acceptC`, `combBad_trace_icDC`: the deterministic step with a goal that reads the
+  chain, with `KOSPar` and with the committed dead leaves that the accepting set hides.
+- `GoalC`, `ClsExtracted`: Lemma P^cls's goal on a chain and on an output of the adaptive game.
+  On an output the gate hash is read off the prover's log (`h5Of`), the dead blocks off its
+  committed dead leaves (`deadR`, `hdOf`). `clsExt` reads its certificate at one tree
+  (`clsTarget`, `clsExt_congr_cert`), and the goal reads `H₅` at the gate inputs of `clsPts` of
+  that tree only (`goalC_withH5`). `ClsCovered`: these inputs are `H₅` queries of the prover's
+  log. `clsExtracted_of_goalC`: for a covered log the goal at the verifier's chain is the goal
+  at the output.
+- **`pomfritT_accept_le_cls`**: for one adaptively chosen statement with any target function of
+  `chal1`, `Pr[accept ∧ ClsCovered ∧ ¬ClsExtracted] ≤` the bound of `pomfritT_accept_le_major`
+  with `(Q₃ + 1)·2⁵⁰/2¹²⁸` for `(Q₃ + 1)·2⁵⁷/2¹²⁸`, plus `(q₁ + 1)·2⁻¹³⁴`.
+- `Audit/PomfritLemmaPCls.lean`: the hypotheses at real objects.
+
 Not mechanized, and why:
-- *The executable verifier's chains.* `ROM/LemmaPDet.lean` gets Claim 4 for `Verifier`'s witness
-  rows from `chain_claim4`. The label rows' tree form and `AffineOn`, `TwoLabelOn` for
-  `Verifier`'s CRT masks (`W_tree`, `W_gate`, the `H₅` gate terms) are not proved for the
-  executable code; the gate model is.
-- *The one-more game.* `ROM/LemmaP.lean`'s goal (`GoalT`) is a predicate of the candidates and
-  the alive trees. `E₁^cls` also reads the label rows, `ũ` and the check value, its evaluations of
-  `H₅` are queries of the reduction at each `H_T` query, and `KOSPar` is a new bad event at `H₂¹`
-  (the count is `card_not_kosPar_le`). So `pomEps`, `e1P` and the chain
-  `OneMoreLemmaP*.lean` would have to be restated. **`pomfrit_U1_explicit` and `pomfrit_U1_sim`
-  are unchanged, with `2⁻⁷¹`.** U1^cls is a paper theorem with a mechanized per-chain core.
+- *The one-more game.* `pomfritT_accept_le_cls` is item (1) of `pomfrit.md` §6.4 for `E₁^cls`.
+  Items (2)–(9) are not done: `E₁^cls` as a function of the log at the `H_T` query (`e1P` with
+  the label rows, `ũ` from `x`, the dead blocks and `h5Of`), the ordering step (the hint at the
+  ghost log is `clsExt` on the output; `e1P_eq_major`), `pfail_events` and the assembly. The
+  decoder's `H₅` evaluations must be in the log. Planned route: the game is unchanged, and the
+  forger is wrapped so that it makes the decoder's `H₅` queries before each `H_T` query and for
+  each forgery before it stops; `ClsCovered` for the derived provers is then an invariant of the
+  wrapped run. This invariant is not proved. **`pomfrit_U1_explicit` and `pomfrit_U1_sim` are
+  unchanged, with `2⁻⁷¹`.** U1^cls is a paper theorem; its per-chain step and its adaptive bound
+  for one statement are mechanized for the executable verifier.
 
 ### 6A.6 What remains of (H-dec), and a correction to §6.4
 
