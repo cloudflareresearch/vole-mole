@@ -1028,7 +1028,12 @@ dedicated to PomFRIT.
   table), Lemma P's ordering step (`E₁` at query time equals the widest group at the end), and the
   probability assembly with the derived provers' query bounds. The bound would then be a union over
   the `ℓ+1` forgeries unless the extraction bound is redone for simultaneous extraction (the
-  paper's `ε_ext` counts once, L8 §9.1). Found on the way: the game's `chal1Pre` used the AES PRG
+  paper's `ε_ext` counts once, L8 §9.1). The generic simultaneous machinery is in Lean
+  (`ROM/SimUnion.lean`'s `prEvent_le_shared_suffix`, used for Moussaka and Ratatouille, plan
+  §2m); for PomFRIT it needs, besides the pieces above, the derived provers' runs as prefixes of
+  one run (`PrefixRuns`) and Lemma P's per-query bad event with its per-query bound and
+  deterministic step as lemmas (as `adaptBad`, `adaptBad_trace` for the other relations). Not
+  done. Found on the way: the game's `chal1Pre` used the AES PRG
   instead of the ideal cipher's, so the target oracle's input was not at the verifier's `chal1`
   (fixed).
 - **G9.** Theorem 6 (OMPR ≤ PomFRIT, `uov-assumptions.md` §5.6) is in Lean in PomFRIT's real

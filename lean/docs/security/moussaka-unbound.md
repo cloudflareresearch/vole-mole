@@ -212,7 +212,19 @@ oracle the side condition is `combOk_moussakaUnbound*`.
 ### 3.1 Proof systems
 
 As base §3.1, for the relations `u-iss` and `u-red`: straight-line simultaneous extraction with
-errors `ε_ext^{u-iss}`, `ε_ext^{u-red}`; weak SE `ε_SE^{u-red}`; ZK as in `lean/docs/zk.md`. With
+errors `ε_ext^{u-iss}`, `ε_ext^{u-red}`; weak SE `ε_SE^{u-red}`; ZK as in `lean/docs/zk.md`.
+Simultaneous extraction is in Lean at the spec relations (`ROM/MoussakaUnboundSim.lean`): per
+relation (`moussakaUnboundIssue_sim_spec`, `moussakaUnboundRedeem_sim_spec`) and for both
+together (`moussakaUnbound_sim_joint_spec`; the DSTs `mous1i0`, `mous1r0` separate the families).
+For `m_I + m_R = m` proofs whose provers share one run, each query of the run is charged once:
+
+    (q₂₁+m)·2⁻¹⁵⁰ + (q₂₂+m)·(ε_QS(7929) + 2⁻¹²⁸ + (n_G+339)·2⁻⁴⁴⁸) + (q₂₃+m)·9·2⁻¹²⁸
+      + chainHitEpsCombSim q M m + stmtBindEpsSim q m + m·failEps q q_E,
+
+about `2⁻⁶⁰·⁵` at `2⁶⁴` queries per kind and `2³⁰` proofs per relation (`m·failEps ≈ 2⁻⁸⁶·⁹`).
+The bound issuance relation (`ε_ext^{iss}` in Thm U1) is a third family, charged by the base
+note's bounds, not jointly with the unbound pair. There is no Lean game for Thm U1, so these are
+the extraction terms for it, not a mechanized Thm U1. With
 the CRT masks taken from the witness (`main`), the label term of the ZK hop is
 `(Q₅ + n_mult·Q_V)·Pred_R`, with `Pred_R` the probability of predicting the opening `r`, the first 16
 witness bytes of both unbound relations. One `r` now enters `1 + N` proofs; each `H₅` query tests
@@ -600,7 +612,8 @@ the base protocol.
 2. Extraction for the unbound relations is mechanized to the same extent as for the base
    relations (§2): executable verifier and prover checked against the KATs, bridge, completeness,
    and the random-oracle and ideal-cipher bounds (fixed and adaptive statements, PRF and
-   permutation views, spec relations) for the executable statements. What remains is what remains
+   permutation views, spec relations, simultaneous extraction from the proofs of one run) for the
+   executable statements. What remains is what remains
    for the base relations (`lean/README.md`, Gaps).
 3. Thm U5(a) and (b) are mechanized on the executable spec with adaptive redemption queries
    (`Privacy/MoussakaUnboundAd.lean`, `anonymityAd`; `Privacy/MoussakaUnboundNC.lean`,
@@ -684,5 +697,9 @@ All in `lean/VoleMole/`; no `sorry`, no axioms beyond the standard three.
   `hinj_moussakaUnboundRedeem`).
 - `ROM/MoussakaUnboundSpec.lean`: the eight headline bounds for `Spec.MoussakaUnbound.IssueRel`,
   `RedeemRel` (`IC.*_spec`).
+- `ROM/MoussakaUnboundSim.lean`: simultaneous extraction (§3.1) per relation
+  (`IC.moussakaUnboundIssue_sim_spec`, `IC.moussakaUnboundRedeem_sim_spec`) and for both
+  relations together (`IC.moussakaUnbound_sim_joint_spec`); `Audit/SimExtract.lean` instantiates
+  the joint one at the executable statements.
 - `Audit/UnboundROM.lean`: non-vacuity of the headline bounds at the executable statements
   (trivial prover; families with more than one instance).

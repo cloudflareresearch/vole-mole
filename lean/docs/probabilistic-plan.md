@@ -1039,8 +1039,10 @@ programming) is a different construction and shares nothing with these.
 ### 2m. Simultaneous extraction: one charge per query of a protocol run, as implemented
 
 Files: `ROM/SimUnion.lean` (generic), `ROM/SimExtract.lean`, `ROM/SimSpec.lean`,
-`ROM/MoussakaOMUFSim.lean`, `ROM/RatatouilleBalanceSim.lean`, `Assumptions/SimLinks.lean`,
-`Audit/SimExtract.lean` (new); changed: `ROM/AdaptChain.lean`, `ROM/AdaptComb.lean` (the bad
+`ROM/SimJoint.lean` (both relations of a protocol together), `ROM/SimJointSpec.lean`,
+`ROM/MoussakaOMUFSim.lean`, `ROM/RatatouilleBalanceSim.lean`, `ROM/MoussakaUnboundSim.lean`,
+`ROM/SimPerm.lean` (permutation model), `Assumptions/SimLinks.lean`, `Audit/SimExtract.lean`;
+changed: `ROM/AdaptChain.lean`, `ROM/AdaptComb.lean` (the bad
 predicate, its per-query bound and the deterministic step of the adaptive union bounds are now
 lemmas, `adaptBad`, `prEvent_adaptBad_le`, `adaptBad_trace`, `combAdaptBad`,
 `prEvent_combAdaptBad_le`, `combAdaptBad_trace`; `prEvent_accept_le_adaptive_E` and
@@ -1101,50 +1103,101 @@ failEps q q_E)` from the union bound (`chainHitEpsSim q 1 = chainHitEps q`,
 `moussakaIssue_sim_spec`, `moussakaRedeem_sim_spec`, `ratatouilleIssue_sim_spec`,
 `ratatouilleSpend_sim_spec`.
 
-**The protocols.** Moussaka Theorem 1: `omuf_le_sim` (the reduction with one extraction event per
-relation, `SimI`, `SimR`, events of the reductions' run `extAll`), `omuf_le_num_sim`
-(`ε_I^sim + ε_R^sim + AdvBind + AdvCTUF`), `omuf_le_num_open_sim`, `omuf_le_num_ompr_sim`.
-Ratatouille Theorem 1: `balance_le_sim` (events `SimIss`, `SimSp` of `master`),
-`balance_le_sim_num`, `balance_le_lean_sim`, `balance_le_ufTag_sim`, `balance_le_ompr_sim`,
-`balance_le_ompr_rate_sim`. The budgets are those of the per-proof theorems (kept unchanged:
+**Both relations of a protocol together** (`ROM/SimJoint.lean`). The above charges each query of
+the run once per relation. A query of the run is bad for a relation only at a statement of that
+relation's family committed at the query (`stmtAt`, the decoded first `H₂⁰` preimage). The two
+relations of a protocol have distinct DSTs of one length, so no `H₂⁰` input decodes in both
+families (`muIn_ne_of_dst`, `decOf_sep`; `stmtAt_eq_bind`, `stmtAt_sep`: the preimage does not
+depend on the decoder). The joint bad event of a query (`jointBad`) is an issue-type relation's
+bad chain query at a committed statement of its family (read off the combined relation's log,
+which agrees with the issue-type game's before a query of the shared run,
+`logBefore_gLogA_joint`), or a bad query of the combined relation (its hits contain the issue-type
+relation's, `mem_hitTargets_of_none`). Its per-query bound (`prEvent_jointBad_le`) weights each
+relation's chain charge by the probability `p_I`, `p_R` that a statement of its family is committed
+at the query, over the background; `p_I + p_R ≤ 1`, so the charge is
+`p_I·ε_I + p_R·ε_R ≤ ε_I ⊔ ε_R` (`mul_add_mul_le_max`). For `H₂¹`, `H₂³` and the issue-type
+relation this is the single-cell bound with a weight (`prEvent_cell_le_mul`); for the combined
+relation at `H₂²` it is `ROM/AdaptComb.lean`'s two-cell bound redone with the weight
+(`prEvent_combBadA_h22_le_mul`, `prEvent_three_le_of_first_mul`,
+`prEvent_three_le_of_second_mul`): `≤ n·2⁻⁴⁴⁸ + p_R·(ε_QS(n') + ε_c)`. So
+
+    jointEps k = (ε_I,k ⊔ ε_R,k) + [k = H₂²]·ntot·2⁻⁴⁴⁸ + hits (with combination) + statement hits.
+
+The union bound has two families of outputs (`prEvent_le_shared_suffix₂`), each continuation at its
+own relation's charge, and the shared run charged once with `jointEps`
+(`prEvent_sim_joint_le_E`, `prEvent_sim_joint_le`, the reference runs having one hash log,
+`hsame`). Summed (`sim_joint_sum_le`), with `κ ≥ ε_KOS` and `ε₂ ≥` both relations' `H₂²`
+charges, `m = m_I + m_R`:
+
+    (q₂₁+m)·κ + (q₂₂+m)·(ε₂ + ntot·2⁻⁴⁴⁸) + (q₂₃+m)·N·2⁻¹²⁸ + chainHitEpsCombSim q M m
+      + stmtBindEpsSim q m + m·failEps.
+
+Spec relations: `moussaka_sim_joint_spec`, `ratatouille_sim_joint_spec` (`ROM/SimJointSpec.lean`),
+`moussakaUnbound_sim_joint_spec` (`ROM/MoussakaUnboundSim.lean`, with the per-relation
+`moussakaUnboundIssue_sim_spec`, `moussakaUnboundRedeem_sim_spec`); `ε₂` is the combined
+relation's `ε_QS(n') + 2⁻¹²⁸`, which dominates the issue relation's `ε_QS(n)`
+(`ofReal_epsQS_mono`).
+
+**The protocols.** Moussaka Theorem 1: `omuf_le_sim` (the reduction with one extraction event for
+both relations, `SimIR = SimI ∨ SimR`, an event of the reductions' run `extAll`),
+`prEvent_simIR_le`, `omuf_le_num_sim` (`ε_IR^sim + AdvBind + AdvCTUF`), `omuf_le_num_open_sim`,
+`omuf_le_num_ompr_sim`; per relation `prEvent_simI_le`, `prEvent_simR_le` are kept.
+Ratatouille Theorem 1: `balance_le_sim` (one event `SimIS = SimIss ∨ SimSp` of `master`),
+`prEvent_simIS_le`, `balance_le_sim_num`, `balance_le_lean_sim`, `balance_le_ufTag_sim`,
+`balance_le_ompr_sim`, `balance_le_ompr_rate_sim` (`ε_bal^sim`); per relation
+`prEvent_simIss_le`, `prEvent_simSp_le` are kept. The `*_sim` theorems' statements changed: they
+now carry the joint bound. The budgets are those of the per-proof theorems (kept unchanged:
 `omuf_le_num`, `balance_le`, …). `Audit/SimExtract.lean` instantiates their hypotheses with the
-audit adversaries of `Audit/Nonvacuous.lean` and `Audit/IdealTag.lean`.
+audit adversaries of `Audit/Nonvacuous.lean` and `Audit/IdealTag.lean`, and the unbound joint
+bound at the executable statements.
+
+**The permutation model** (`ROM/SimPerm.lean`). Per permutation table `π`, the normalized
+provers `normP p π (P j)` are provers of the PRF view at `π.fwd`, so `prEvent_sim_le_E`,
+`prEvent_sim_comb_le_E` apply; averaged over `π` with the permutation model's failure terms
+(`failEpsP`, `sum_fail_leP`): `prEvent_sim_leP`, `prEvent_sim_comb_leP`, at the normalized budget
+`addH4 q`. Normalization commutes with projections (`normP_map`, `prefixRuns_normP_map`).
+Per relation only: the normalization depends on the relation's parameters (`ivIn p`), which
+differ between issuance and redemption (spend), so the two relations' normalized runs do not have
+one hash log; a normalization serving both parameter sets would be needed. No spec-level
+instances (they would follow `ROM/SimSpec.lean` with the `_perm` failure terms).
 
 **Numbers** (`ε_QS(n) = 2⁻¹²⁸ + (n−1)²·2⁻¹⁹² ≈ 2⁻¹²⁸` for all four systems; `q` queries per kind,
-`q_E = q`, `m` proofs per relation; old = union bound, new = simultaneous; Moussaka and
-Ratatouille agree to two decimals):
+`q_E = q`, `n_G = q`, `m` proofs per relation; union = the per-proof union bound, per relation =
+each relation's simultaneous bound added (the previous `*_sim`), joint = the current `*_sim`;
+Moussaka and Ratatouille agree to two decimals):
 
-| `q` | `m` | per proof `ε_I`, `ε_R` | old, both relations | new, both relations | `m·failEps` per relation |
-|---|---|---|---|---|---|
-| `2⁶⁴` | `2²⁰` | `2⁻⁶⁰·⁶⁸`, `2⁻⁶⁰·⁵⁴` | `2⁻³⁹·⁶` | `2⁻⁵⁹·⁶` | `2⁻⁹⁷·⁹` |
-| `2⁶⁴` | `2³⁰` | `2⁻⁶⁰·⁶⁸`, `2⁻⁶⁰·⁵⁴` | `2⁻²⁹·⁶` | `2⁻⁵⁹·⁶` | `2⁻⁸⁷·⁹` |
-| `2⁶⁴` | `2⁴⁰` | `2⁻⁶⁰·⁶⁸`, `2⁻⁶⁰·⁵⁴` | `2⁻¹⁹·⁶` | `2⁻⁵⁹·⁶` | `2⁻⁷⁷·⁹` |
-| `2⁴⁸` | `2³⁰` | `2⁻⁷⁶·⁶⁸`, `2⁻⁷⁶·⁵⁴` | `2⁻⁴⁵·⁶` | `2⁻⁷⁵·⁶` | `2⁻⁹⁷·⁰` |
-| `2⁸⁰` | `2³⁰` | `2⁻⁴⁴·⁶⁸`, `2⁻⁴⁴·⁵⁴` | `2⁻¹³·⁶` | `2⁻⁴³·⁶` | `2⁻⁵⁵·⁹` |
+| `q` | `m` | per proof `ε_I`, `ε_R` | union, both relations | per relation, added | joint | `m·failEps` per relation |
+|---|---|---|---|---|---|---|
+| `2⁶⁴` | `2²⁰` | `2⁻⁶⁰·⁶⁸`, `2⁻⁶⁰·⁵⁴` | `2⁻³⁹·⁶` | `2⁻⁵⁹·⁶` | `2⁻⁶⁰·⁵⁴` | `2⁻⁹⁷·⁹` |
+| `2⁶⁴` | `2³⁰` | `2⁻⁶⁰·⁶⁸`, `2⁻⁶⁰·⁵⁴` | `2⁻²⁹·⁶` | `2⁻⁵⁹·⁶` | `2⁻⁶⁰·⁵⁴` | `2⁻⁸⁷·⁹` |
+| `2⁶⁴` | `2⁴⁰` | `2⁻⁶⁰·⁶⁸`, `2⁻⁶⁰·⁵⁴` | `2⁻¹⁹·⁶` | `2⁻⁵⁹·⁶` | `2⁻⁶⁰·⁵⁴` | `2⁻⁷⁷·⁹` |
+| `2⁴⁸` | `2³⁰` | `2⁻⁷⁶·⁶⁸`, `2⁻⁷⁶·⁵⁴` | `2⁻⁴⁵·⁶` | `2⁻⁷⁵·⁶` | `2⁻⁷⁶·⁵⁴` | `2⁻⁹⁷·⁰` |
+| `2⁸⁰` | `2³⁰` | `2⁻⁴⁴·⁶⁸`, `2⁻⁴⁴·⁵⁴` | `2⁻¹³·⁶` | `2⁻⁴³·⁶` | `2⁻⁴⁴·⁵⁴` | `2⁻⁵⁵·⁹` |
 
-The dominant terms are `(q₂₃ + m)·9·2⁻¹²⁸` and `(q₂₂ + m)·ε₂` (with `2⁻¹²⁸` for the combination
-at `H₂²` in redemption and spend). The new bound is about the paper's `ε_ext ≈ 2⁻⁶⁰·⁸`, once per
-relation.
+The dominant terms are `(q₂₃ + 2m)·9·2⁻¹²⁸` and `(q₂₂ + 2m)·(ε_QS + 2⁻¹²⁸)`. The joint bound is
+`1.91×` smaller than the per-relation sum (not `2×`: at `H₂²` the joint charge is the combined
+relation's `2·2⁻¹²⁸`, larger than the issue relation's `2⁻¹²⁸`), and about the paper's
+`ε_ext ≈ 2⁻⁶⁰·⁸` once for both relations.
 
-**Compared with the paper.** (1) The run is charged once per relation (issuance and redemption,
-resp. issuance and spend, each pay `q·ε`), the paper once for both (its chains are separated by
-the relations' DSTs, so one union bound covers both). A joint version would need one bad
-predicate dispatching on the statement committed at the query across two statement families; not
-done (a factor 2). (2) The failure terms (binding, an opened dead leaf, Post) stay per proof,
-`m·failEps`: in §2d–§2h they are bounded on average over the cipher table (Post and binding are
-events of the prover's cipher records; the opened dead leaf includes the verifier's fresh `H₂³`
-answer, genuinely per proof, `2⁻¹²⁸` each). Lifting the cipher-side events to "some output"
-would need the per-record union bounds of `ROM/CipherBind.lean`, `ROM/CipherChain.lean` and
-`ROM/CipherOpen.lean` redone against the reference run; at `2⁶⁴` queries they cost
-`m·2⁻¹¹⁷·⁹`, negligible against the main term for `m < 2⁵⁷`. (3) The hits and statement hits of
-the verifier's own queries are charged per proof (`chainHitEpsSim`, `stmtBindEpsSim` count
-`18m`, `m`, `m` and `3m` extra queries), as the paper's `(q²+q)` would with `q` including the
-verifications. Nothing in the paper's argument was found wrong.
+**Compared with the paper.** (1) Each query of the run is charged once for both relations, as in
+the paper (its chains are separated by the relations' DSTs; Lean uses the same separation). (2)
+The failure terms (binding, an opened dead leaf, Post) stay per proof, `m·failEps`: in §2d–§2h
+they are bounded on average over the cipher table (Post and binding are events of the prover's
+cipher records; the opened dead leaf includes the verifier's fresh `H₂³` answer, genuinely per
+proof, `2⁻¹²⁸` each). Lifting the cipher-side events to "some output" would need the per-record
+union bounds of `ROM/CipherBind.lean`, `ROM/CipherChain.lean` and `ROM/CipherOpen.lean` redone
+against the reference run; at `2⁶⁴` queries they cost `m·2⁻¹¹⁷·⁹`, negligible against the main
+term for `m < 2⁵⁷`. (3) The hits and statement hits of the verifier's own queries are charged per
+proof (`chainHitEpsSim`, `stmtBindEpsSim` count `18m`, `m`, `m` and `3m` extra queries), as the
+paper's `(q²+q)` would with `q` including the verifications. Nothing in the paper's argument was
+found wrong.
 
-**Not covered.** PomFRIT (its one-more reduction §2k is not tied to the extraction bounds), the
-permutation model (`*_adaptive_perm`: the normalized prover adds one `H₄` query per `H₂¹` query
-and depends on the permutation table; the protocol games use the PRF view, §2l), unbound
-Moussaka, the quantum setting.
+**Not covered.** PomFRIT (its one-more reduction §2k bounds the extraction failures by one event
+`∃ i, PFail i` of the game, `pomfrit_U1_bound`, `pomfrit_U2_bound`; bounding it needs Lemma P's
+term, G8, which is not finished: an `E`-independent derived prover per forgery whose runs are
+prefixes of one run, Lemma P's ordering step, and Lemma P's per-query bad event, per-query bound
+and deterministic step as lemmas; then `prEvent_le_shared_suffix` applies as for the other
+protocols), both relations together in the permutation model (above), the quantum setting.
 
 ### 2n. Lemma P in the random-oracle model (PomFRIT G8), as implemented
 

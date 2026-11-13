@@ -1,5 +1,7 @@
 import VoleMole.Audit.IdealTag
 import VoleMole.Assumptions.SimLinks
+import VoleMole.ROM.MoussakaUnboundSim
+import VoleMole.Audit.UnboundROM
 
 /-!
 # Non-vacuity of the protocol theorems with simultaneous extraction
@@ -12,7 +14,11 @@ of calls, the toy ideal-`Com` forger, the trivial ideal-model forger. Every hypo
 discharged except, for the Ratatouille OMPR corollary, the modelling hypothesis `TagIdeal`, as
 for the per-proof versions. The prefix structure of the outputs' runs (`PrefixRuns`) is not a
 hypothesis of these corollaries: it is proved for Moussaka's projections (`prefixRuns_map`) and
-for Ratatouille's `j`-th provers (`prefixRuns_I`, `prefixRuns_S`).
+for Ratatouille's `j`-th provers (`prefixRuns_I`, `prefixRuns_S`). The protocol corollaries carry
+the joint bound (each query of the run charged once for both relations, `ROM/SimJoint.lean`);
+their separation hypothesis is discharged inside (`decOf_sep`, the relations' DSTs). The unbound
+Moussaka joint bound (`moussakaUnbound_sim_joint_spec`) is instantiated at the executable
+statements with one-instance families and trivial provers.
 
 No `sorry`, no `axiom`.
 -/
@@ -67,5 +73,27 @@ example (σ : RatBalance.Signer) (τ : Target → Preimage) (N : ℕ) (lr : Bool
   balance_le_ompr_rate_sim lr IdealTag.pk0 balA0 N σ τ
     (by decide) (qA := 0) (nA := 0) (eA := 0) (fun _ => trivial)
     (fun _ => isQueryBoundP_pure _ _ _) (fun _ => isQueryBoundP_pure _ _ _) qH 0 a0 a0_bound hTag
+
+/-- Unbound Moussaka, issuance and redemption together (`moussakaUnbound_sim_joint_spec`): its
+hypotheses (statement properties, separated families, prefix runs, one hash log for the two
+reference runs) hold at the executable statements, for one-instance families and the trivial
+prover of each relation. -/
+example (lr : Bool) (ci cr cd pf : ByteArray) :=
+  moussakaUnbound_sim_joint_spec (ιI' := Unit) (ιR' := Unit) (βI := Unit) (βR := Unit)
+    (α := Unit) (fun _ : Unit => moussakaUnboundIssue (toBA (List.replicate 45 0)) ci lr) lr
+    (fun _ => (toBA (List.replicate 45 0), ci))
+    (fun _ => Unbound.moussakaUnboundIssue_stmt _ _ _)
+    (fun _ => by rw [Privacy.size_toBA, List.length_replicate]) (fun _ _ _ => rfl)
+    (fun _ : Unit => moussakaUnboundRedeem [] UnboundROM.nf0 ci cr cd lr) (fun _ => [])
+    (fun _ => by simp) (fun _ => UnboundROM.nf0) (fun _ => ci) (fun _ => cr) (fun _ => cd)
+    (fun _ => Unbound.moussakaUnboundRedeem_stmt _ _ _ _ _ _) (fun _ => UnboundROM.nf0_size)
+    (fun _ _ _ => rfl) (pure (pf, ((), ()))) (fun _ => pure (pf, ((), ())))
+    (pure (pf, ((), ()))) (fun _ => pure (pf, ((), ()))) {()} {()} 0
+    (fun _ _ => isQueryBoundP_pure _ _ _) (fun _ _ => isQueryBoundP_pure _ _ _) 0
+    (fun _ _ => trivial) trivial (fun _ _ => trivial) 0 (fun _ _ => isQueryBoundP_pure _ _ _)
+    (isQueryBoundP_pure _ _ _) (fun _ _ => isQueryBoundP_pure _ _ _)
+    (fun _ _ _ _ => ⟨⟨[], (List.append_nil _).symm⟩, [], (List.append_nil _).symm⟩)
+    (fun _ _ _ _ => ⟨⟨[], (List.append_nil _).symm⟩, [], (List.append_nil _).symm⟩)
+    (fun _ _ => rfl) (fun _ => pure ()) (fun _ _ => False) fun _ _ h => h.elim
 
 end VoleMole.Audit.SimExtract

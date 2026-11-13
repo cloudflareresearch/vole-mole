@@ -31,7 +31,7 @@ Line references are `file:line` at `6d7113e`.
 
 | Notion | Result | Main terms |
 |---|---|---|
-| **Balance** (no inflation): accepted spends ≤ issued + refunded, against adaptive malicious clients, honest clients present | **Proved** (Thm 1), classical. [Lean] as a game on the executable spec and the Lean verifier in the ROM and ideal-cipher model, `N·ε_iss + N·ε_spend + Adv^{uf-tag}(B) + Adv^{coll}(C)` (`ROM/RatatouilleBalance.lean`, `balance_le_ufTag`; §4), and with simultaneous extraction `ε_iss^sim + ε_spend^sim + …` (`balance_le_ufTag_sim`, `balance_le_ompr_sim`: the run's queries charged once, `≈ 2⁻⁵⁹·⁶` against `2⁻²⁹·⁶` at `2⁶⁴` queries and `N = 2³⁰`): `B` a UF-Tag forger (with a signability probe) and `C` a `Com` collision finder, explicit; their advantages stay terms. The probe costs only the Issuer's aborts: `balance_le_noProbe` (`ROM/RatatouilleProbe.lean`) has a probe-free forger plus a failure term `≤ N·δ(sk)^{255}` (`uov-assumptions.md` §5.8). Under one-more-UOV: `balance_le_ompr` (`Assumptions/RatatouilleOMPR.lean`), the UOV term `Adv^{ompr}` of an explicit reduction, with `Tag` a random function in the standalone game (the modelling hypothesis `TagIdeal`) | `ε_ext + Adv^{uf-tag} + q_K²·2^{−257} + N·E[δ^{255}]` |
+| **Balance** (no inflation): accepted spends ≤ issued + refunded, against adaptive malicious clients, honest clients present | **Proved** (Thm 1), classical. [Lean] as a game on the executable spec and the Lean verifier in the ROM and ideal-cipher model, `N·ε_iss + N·ε_spend + Adv^{uf-tag}(B) + Adv^{coll}(C)` (`ROM/RatatouilleBalance.lean`, `balance_le_ufTag`; §4), and with simultaneous extraction `ε_bal^sim + …` (`balance_le_ufTag_sim`, `balance_le_ompr_sim`: each query of the run charged once for both relations, `≈ 2⁻⁶⁰·⁵` against `2⁻²⁹·⁶` at `2⁶⁴` queries and `N = 2³⁰`): `B` a UF-Tag forger (with a signability probe) and `C` a `Com` collision finder, explicit; their advantages stay terms. The probe costs only the Issuer's aborts: `balance_le_noProbe` (`ROM/RatatouilleProbe.lean`) has a probe-free forger plus a failure term `≤ N·δ(sk)^{255}` (`uov-assumptions.md` §5.8). Under one-more-UOV: `balance_le_ompr` (`Assumptions/RatatouilleOMPR.lean`), the UOV term `Adv^{ompr}` of an explicit reduction, with `Tag` a random function in the standalone game (the modelling hypothesis `TagIdeal`) | `ε_ext + Adv^{uf-tag} + q_K²·2^{−257} + N·E[δ^{255}]` |
 | **No theft**: an adversary cannot spend an honest client's credits through a request it did not copy verbatim | **Proved** (Thm 3), using weak SE and a ZK hop | `ε_ZK + ε_SE + q_K·2^{−127}` |
 | **No theft by copying** (hijack): anyone who obtains a spend request can redeem it first | **Fails** (F2). Nothing binds a spend to a session, unlike {{ACT}}'s `ctx_spend` and Moussaka's `challenge_digest` | — |
 | **Unlinkability/anonymity** against a malicious Issuer: spends and issuances leak only `(pk, ctx_iss, T_init, d)` and whether the client could afford the spend | **Proved** (Thm 2). On `main` it relies on Keccak one-wayness in `r`; with the fix it is standard NIZK. [Lean] a two-round left/right form, from ZK and hiding hypotheses (`Privacy/Ratatouille.lean`); with the executable Lean prover (label rows) down to its tape hypothesis (`Privacy/RatatouilleLean.lean`, `unlinkability_label_rows`); for the Lean prover in the ROM and ideal-cipher model with every zero-knowledge term explicit, `≈ 2⁻¹⁰²·³` plus budget terms and `2·ε_hide` (`unlinkabilityRO_lean_num`), and `≈ 2⁻¹⁰¹·⁶` with a table-reading Issuer (`unlinkabilityRA_lean_num`; §6); also with AES as random permutations (`_perm`) and with one shared `H₃` (`unlinkabilitySh_num`, `unlinkabilityRASh_num`); from the real Clients' OS seeds and seed XOF, each `+ 2·(2q_H + 2)·2⁻²⁵⁶` with `q_H` the Issuer's XOF queries (`unlinkability*_seed`, `lean/docs/zk.md` §10.6; the note's H1 does not charge seed collisions); with a key stage (the Issuer's key, context and balance) that reads the tables too (`unlinkabilityRAK_lean_num`, `≈ 2⁻¹⁰¹·⁶`); with any number `n` of further honest Clients, `≤ n·2⁻¹⁰¹` plus budget terms and `2·ε_hide` (`unlinkabilityN_lean_num`), also adaptively scheduled, each further session's key, context, balance, response and amount chosen from earlier outcomes and the challenge key, context and balance from the sessions before it (`unlinkabilityAd_lean_num`, the same numbers), and interleaved in any order with each further Client spending up to `K` times along its change tokens (`unlinkabilityIL_lean_num`, `≤ (n(K + 1) + 2)·2⁻¹⁰¹`; with a table-reading scheduler that also places the challenge's stages, `unlinkabilityILO_lean_num`, `+ 46·L·(a₃ + a₂ + a₅ + 221·a_E)·2⁻¹²⁸`), and with `N` challenge pairs (`unlinkabilityP_lean_num`; `lean/docs/zk.md` §10.8, §11) | `ε_ZK + q_K·2^{−127}` |
@@ -239,9 +239,10 @@ example of the latter is Moussaka, whose targets are KP800 outputs with DST "mou
     `ratatouilleSpend_accept_le_adaptive_spec`, …; adaptive families with injective encodings,
     proved for fixed-length fields and a key fixed by its digest, `EndToEnd/SpecRelations.lean`).
     Simultaneously for all proofs of a run, per relation (`ratatouilleIssue_sim_spec`,
-    `ratatouilleSpend_sim_spec`, `ROM/SimSpec.lean`; §4): one `ε` per relation at the run's
-    budget, plus per proof its verifier's queries and the failure terms. The Lean bound charges the
-    run once per relation, the paper once for both.
+    `ratatouilleSpend_sim_spec`, `ROM/SimSpec.lean`) and for both relations together
+    (`ratatouille_sim_joint_spec`, `ROM/SimJointSpec.lean`; §4): one `ε` at the run's budget, each
+    query charged once for both relations as in the paper, plus per proof its verifier's queries
+    and the failure terms.
 - **L7.** A satisfying witness satisfies V1–V4 exactly: `P(s) = Tag(Com(nf, ctx, t, r), x)`,
   `c' = Com(nf', ctx, t', r')`, and `t + x = t' + d` in ℤ with `t, x, t', d ∈ [0, 2⁶⁴)`. This
   holds because the 65-bit adder is exact (`L7-keccak.md` §4.4). The issue relation gives
@@ -518,22 +519,26 @@ per `ctx`, because parents share the spender's `ctx` (fact 1). ∎
     `balance_le_ompr_rate_sim`, `Assumptions/SimLinks.lean`). The `j`-th prover's run is a prefix
     of the run of all `N` calls (`proverAt_prefix`, `prefixRuns_I`, `prefixRuns_S`), and the
     extraction-failure terms are sums of per-query bad events, so all requests' extraction
-    failures are bounded together, each query of the run charged once per relation
-    (`ROM/SimExtract.lean`, plan §2m):
+    failures, of both relations, are bounded together, each query of the run charged once
+    (`ROM/SimExtract.lean`, `ROM/SimJoint.lean`, plan §2m):
 
-        Pr[win] ≤ ε_iss^sim(Q, N) + ε_spend^sim(Q, N) + Adv^{uf-tag}(B) + Adv^{coll}_{Com}(C),
-        ε_iss^sim = (q₂₁+N)·2⁻¹⁵⁰ + (q₂₂+N)·ε_QS(3776) + (q₂₃+N)·9·2⁻¹²⁸
-                    + chainHitEpsSim q N + stmtBindEpsSim q N + N·failEps q q_E,
+        Pr[win] ≤ ε_bal^sim(Q, N) + Adv^{uf-tag}(B) + Adv^{coll}_{Com}(C),
+        ε_bal^sim = (q₂₁+2N)·2⁻¹⁵⁰ + (q₂₂+2N)·(ε_QS(12282) + 2⁻¹²⁸ + (n+339)·2⁻⁴⁴⁸)
+                    + (q₂₃+2N)·9·2⁻¹²⁸ + chainHitEpsCombSim q M 2N + stmtBindEpsSim q 2N
+                    + 2N·failEps q q_E,
 
-    `ε_spend^sim` likewise with `ε_QS(12282) + 2⁻¹²⁸ + (n+339)·2⁻⁴⁴⁸` at `H₂²`, at the budget `Q`
-    of `N` calls above (`q = N(q_A + q_V)` per kind, `q_E`, `n`). Per request only the extraction
-    game's own verifier queries (`+N`) and the failure terms (binding, an opened dead leaf, Post;
-    `failEps ≈ 2⁻¹¹⁷·⁹` at `2⁶⁴` queries) remain. At `2⁶⁴` queries per kind and `N = 2³⁰` calls:
-    `N·ε_iss + N·ε_spend ≈ 2⁻²⁹·⁶`, `ε_iss^sim + ε_spend^sim ≈ 2⁻⁵⁹·⁶`. Against the paper's single
-    `ε_ext` (L8 §9.1) two differences remain: the run is charged once per relation, not once for
-    both, and the failure terms stay per request (`2N·failEps ≈ 2⁻⁸⁶·⁹` here), because the
-    single-proof development bounds them on average over the cipher table rather than per query.
-    The per-request union bound (`balance_le`, `N·ε_iss + N·ε_spend`) is kept.
+    at the budget `Q` of `N` calls above (`q = N(q_A + q_V)` per kind, `q_E`, `n`). A query of the
+    run is charged by the relation whose statement is committed there (the DSTs `rata0i0`,
+    `rata0p0` make that at most one), so at the larger of the two relations' charges, the spend
+    one at `H₂²`. Per request only the extraction game's own verifier queries (`+2N`) and the
+    failure terms (binding, an opened dead leaf, Post; `failEps ≈ 2⁻¹¹⁷·⁹` at `2⁶⁴` queries)
+    remain. At `2⁶⁴` queries per kind and `N = 2³⁰` calls: `N·ε_iss + N·ε_spend ≈ 2⁻²⁹·⁶`; each
+    relation's simultaneous bound added (`prEvent_simIss_le`, `prEvent_simSp_le`, the run charged
+    once per relation) `≈ 2⁻⁵⁹·⁶`; `ε_bal^sim ≈ 2⁻⁶⁰·⁵⁴`. Against the paper's single `ε_ext` (L8
+    §9.1) one difference remains: the failure terms stay per request (`2N·failEps ≈ 2⁻⁸⁶·⁹`
+    here), because the single-proof development bounds them on average over the cipher table
+    rather than per query. The per-request union bound (`balance_le`, `N·ε_iss + N·ε_spend`) is
+    kept.
 
 **Correction (minor) to the proof of Theorem 1.** "It forwards every Issuer signing call to
 `Sign`": `spend_response` signs before the caller's nullifier check (F5), so on the
@@ -946,7 +951,7 @@ and determinism of `Tag`. The witness satisfies V3 by `change_correct`. ∎
     logged pairs, the paper's `E4` (`uov-assumptions.md` §5.8). That pqov's signer fails with
     probability `δ(sk)^{255}` independently per target is the paper step (Lemma D);
   - the extraction step is simultaneous (`balance_le_sim_num`, §4: each query of the run charged
-    once per relation), but its failure terms (binding, an opened dead leaf, Post) stay per
+    once for both relations), but its failure terms (binding, an opened dead leaf, Post) stay per
     request, `2N·failEps`;
   - adversaries are deterministic given the oracles (randomized ones by averaging over their
     coins) and make a fixed number `N` of calls with a per-call query budget.
@@ -1047,11 +1052,13 @@ and determinism of `Tag`. The witness satisfies V3 by `change_correct`. ∎
   table, and the extracted witness; `gameA_congr`, `proverAt_congr`: congruences.
 - `VerifierIC`: a cipher-querying implementation of the executable verifier, as a hypothesis.
 
-`lean/VoleMole/ROM/SimUnion.lean`, `ROM/SimExtract.lean`, `ROM/SimSpec.lean` (protocol
-independent): simultaneous extraction (`prEvent_le_shared_suffix`, `prEvent_sim_le`,
-`prEvent_sim_comb_le`, `PrefixRuns`, `ratatouilleIssue_sim_spec`, `ratatouilleSpend_sim_spec`).
+`lean/VoleMole/ROM/SimUnion.lean`, `ROM/SimExtract.lean`, `ROM/SimSpec.lean`, `ROM/SimJoint.lean`,
+`ROM/SimJointSpec.lean` (protocol independent): simultaneous extraction
+(`prEvent_le_shared_suffix`, `prEvent_le_shared_suffix₂`, `prEvent_sim_le`,
+`prEvent_sim_comb_le`, `prEvent_sim_joint_le`, `PrefixRuns`, `ratatouilleIssue_sim_spec`,
+`ratatouilleSpend_sim_spec`, `ratatouille_sim_joint_spec`).
 `lean/VoleMole/ROM/RatatouilleBalanceSim.lean`: `proverAt_prefix`, `prefixRuns_I`, `prefixRuns_S`,
-`SimIss`, `SimSp`, `balance_le_sim`, `balance_le_sim_num`, `balance_le_lean_sim`,
+`SimIss`, `SimSp`, `SimIS`, `prEvent_simIS_le`, `balance_le_sim`, `balance_le_sim_num`, `balance_le_lean_sim`,
 `balance_le_ufTag_sim`; `Assumptions/SimLinks.lean`: `balance_le_ompr_sim`,
 `balance_le_ompr_rate_sim`.
 
