@@ -230,4 +230,173 @@ theorem advCTUFPermAt_le_rf (σ : Fin K × T → S) (emb : Xc → T × Z)
 
 end ToRF
 
+/-! ## The reduction to the random-function game
+
+The function-model forger simulates `π` for the permutation-model forger. It keeps the table and
+a counter; a fresh forward query at a structured input `emb x` gets `(Com(x), z)` with `z` the
+second half of a fresh coin, any other fresh answer is a fresh coin. The coins are values of the
+world's random oracle at fresh indices (`ARc`: the world with a coin oracle `ℕ → T × Z`). -/
+
+section Red
+
+variable {DR : Type} (AR : DR → Type) (B : Type)
+
+/-- **The world with coins**: the forger's world `AR`, and a coin oracle `ℕ → B`. -/
+abbrev ARc : DR ⊕ ℕ → Type := Sum.elim AR fun _ => B
+
+instance instARc [∀ d, SampleableType (AR d)] [SampleableType B] :
+    ∀ d, SampleableType (ARc AR B d)
+  | .inl d => inferInstanceAs (SampleableType (AR d))
+  | .inr _ => inferInstanceAs (SampleableType B)
+
+variable {AR B} {K : ℕ} {T Z S Xc : Type}
+
+/-- The function-model oracles of the reduction: `specCI` with the world with coins. -/
+abbrev specCR (AR : DR → Type) (K : ℕ) (Xc T Z S : Type) := specCI (ARc AR (T × Z)) K Xc T S
+
+/-- A world (or coin) query of the reduction. -/
+def wQ (d : DR ⊕ ℕ) : OracleComp (specCR AR K Xc T Z S) (ARc AR (T × Z) d) :=
+  liftM ((specCR AR K Xc T Z S).query (.inl (.inl d)))
+
+/-- A signing query of the reduction. -/
+def sQ (q : Fin K × T) : OracleComp (specCR AR K Xc T Z S) S :=
+  liftM ((specCR AR K Xc T Z S).query (.inl (.inr q)))
+
+/-- A `Com` query of the reduction. -/
+def cQ (x : Xc) : OracleComp (specCR AR K Xc T Z S) T :=
+  liftM ((specCR AR K Xc T Z S).query (.inr x))
+
+open Classical in
+/-- The structured input `b = emb x`, if any. -/
+noncomputable def embInv (emb : Xc → T × Z) (b : T × Z) : Option Xc :=
+  if h : ∃ x, emb x = b then some h.choose else none
+
+theorem embInv_emb {emb : Xc → T × Z} (hemb : Function.Injective emb) (x : Xc) :
+    embInv emb (emb x) = some x := by
+  have h : ∃ x', emb x' = emb x := ⟨x, rfl⟩
+  simp only [embInv, h, dite_true, Option.some.injEq]
+  exact hemb h.choose_spec
+
+theorem embInv_some {emb : Xc → T × Z} {b : T × Z} {x : Xc} (h : embInv emb b = some x) :
+    emb x = b := by
+  unfold embInv at h
+  split_ifs at h with h'
+  · cases h; exact h'.choose_spec
+
+variable [DecidableEq T] [DecidableEq Z]
+
+/-- **The reduction's simulation of the permutation-model oracles.** -/
+noncomputable def simC (emb : Xc → T × Z) :
+    QueryImpl (specCP AR K T Z S) (StateT (PTab (T × Z) × ℕ) (OracleComp (specCR AR K Xc T Z S)))
+  | .inl (.inl d) => StateT.mk fun s => (fun a => (a, s)) <$> wQ (.inl d)
+  | .inl (.inr q) => StateT.mk fun s => (fun a => (a, s)) <$> sQ q
+  | .inr (true, b) => StateT.mk fun s => match fwdFind s.1 b with
+    | some y => pure (y, s)
+    | none => match embInv emb b with
+      | some x => cQ x >>= fun t => (fun c : T × Z => ((t, c.2), (s.1 ++ [(b, (t, c.2), true)],
+          s.2 + 1))) <$> wQ (.inr s.2)
+      | none => (fun c : T × Z => (c, (s.1 ++ [(b, c, true)], s.2 + 1))) <$> wQ (.inr s.2)
+  | .inr (false, c) => StateT.mk fun s => match invFind s.1 c with
+    | some x => pure (x, s)
+    | none => (fun x : T × Z => (x, (s.1 ++ [(x, c, false)], s.2 + 1))) <$> wQ (.inr s.2)
+
+/-- **The function-model forger**: the permutation-model forger and the final evaluations, under
+the simulation. -/
+noncomputable def simF (emb : Xc → T × Z) (f : OracleComp (specCP AR K T Z S) (CTOut K S Xc)) :
+    OracleComp (specCR AR K Xc T Z S) (CTOut K S Xc) :=
+  Prod.fst <$> (simulateQ (simC emb) (f >>= cpFinal emb)).run ([], 0)
+
+/-- **The reduction**, on a distribution of permutation-model forgers. -/
+noncomputable def permRed (emb : Xc → T × Z) (F : ProbComp (OracleComp (specCP AR K T Z S) (CTOut K S Xc))) :
+    ProbComp (OracleComp (specCR AR K Xc T Z S) (CTOut K S Xc)) :=
+  simF emb <$> F
+
+end Red
+
+section RedBudget
+
+variable {DR : Type} {AR : DR → Type} {K : ℕ} {T Z S Xc : Type} [DecidableEq T] [DecidableEq Z]
+
+omit [DecidableEq T] [DecidableEq Z] in
+theorem isQueryBoundP_wQ (p : _ → Prop) [DecidablePred p] (d : DR ⊕ ℕ) (n : ℕ) :
+    IsQueryBoundP (wQ (AR := AR) (K := K) (Xc := Xc) (T := T) (Z := Z) (S := S) d) p n ↔
+      (p (.inl (.inl d)) → 0 < n) := isQueryBoundP_query_iff _ _ _
+
+omit [DecidableEq T] [DecidableEq Z] in
+theorem isQueryBoundP_sQ (p : _ → Prop) [DecidablePred p] (q : Fin K × T) (n : ℕ) :
+    IsQueryBoundP (sQ (AR := AR) (K := K) (Xc := Xc) (T := T) (Z := Z) (S := S) q) p n ↔
+      (p (.inl (.inr q)) → 0 < n) := isQueryBoundP_query_iff _ _ _
+
+omit [DecidableEq T] [DecidableEq Z] in
+theorem isQueryBoundP_cQ (p : _ → Prop) [DecidablePred p] (x : Xc) (n : ℕ) :
+    IsQueryBoundP (cQ (AR := AR) (K := K) (Xc := Xc) (T := T) (Z := Z) (S := S) x) p n ↔
+      (p (.inr x) → 0 < n) := isQueryBoundP_query_iff _ _ _
+
+/-- One step of the simulation makes at most one query of a kind `p₂` that only the queries of
+kind `p₁` can make. -/
+theorem simC_step_bound (emb : Xc → T × Z) (p₁ : _ → Prop) [DecidablePred p₁] (p₂ : _ → Prop)
+    [DecidablePred p₂] (hw : ∀ d, ¬p₂ (.inl (.inl d)))
+    (hs : ∀ q, p₂ (.inl (.inr q)) → p₁ (.inl (.inr q)))
+    (hc : ∀ x b, p₂ (.inr x) → p₁ (.inr (true, b)))
+    (t : (DR ⊕ (Fin K × T)) ⊕ (Bool × (T × Z))) (s : PTab (T × Z) × ℕ) :
+    IsQueryBoundP (((simC (AR := AR) (S := S) emb) t).run s) p₂ (if p₁ t then 1 else 0) := by
+  rcases t with (d | q) | ⟨_ | _, b⟩
+  · simp only [simC, StateT.run_mk]
+    exact (isQueryBoundP_map_iff (p := p₂) _ _ _).2 ((isQueryBoundP_wQ _ _ _).2 fun h => absurd h (hw _))
+  · simp only [simC, StateT.run_mk]
+    exact (isQueryBoundP_map_iff (p := p₂) _ _ _).2 ((isQueryBoundP_sQ _ _ _).2 fun h => by
+      simp [hs q h])
+  · simp only [simC, StateT.run_mk]
+    cases invFind s.1 b with
+    | some y => trivial
+    | none =>
+      exact (isQueryBoundP_map_iff (p := p₂) _ _ _).2 ((isQueryBoundP_wQ _ _ _).2 fun h => absurd h (hw _))
+  · simp only [simC, StateT.run_mk]
+    cases fwdFind s.1 b with
+    | some y => trivial
+    | none =>
+      cases embInv emb b with
+      | none =>
+        exact (isQueryBoundP_map_iff (p := p₂) _ _ _).2 ((isQueryBoundP_wQ _ _ _).2 fun h => absurd h (hw _))
+      | some x =>
+        refine (isQueryBoundP_bind (n := if p₁ (.inr (true, b)) then 1 else 0) (m := 0) ?_
+          fun _ _ => ?_)
+        · rw [isQueryBoundP_cQ]; exact fun h => by simp [hc x b h]
+        · exact (isQueryBoundP_map_iff (p := p₂) _ _ _).2 ((isQueryBoundP_wQ _ _ _).2 fun h => absurd h (hw _))
+
+/-- **The reduction's budget**: `Com` queries at most the forward queries (the forger's and the
+final ones), signing queries the forger's, openings the forger's. -/
+theorem simF_budget (emb : Xc → T × Z) (f : OracleComp (specCP AR K T Z S) (CTOut K S Xc))
+    {qf qi qS : ℕ} (hf : CPBudget qf qi qS f) : CIBudget (qf + qS + 1) qS (simF emb f) := by
+  obtain ⟨hfw, -, hsg, hop⟩ := hf
+  have hfw' : IsQueryBoundP (f >>= cpFinal emb) (fun t => isFwd t = true) (qf + qS + 1) := by
+    rw [add_assoc]
+    exact isQueryBoundP_bind hfw fun o ho =>
+      (cpFinal_bound _ (fun _ => rfl) emb o).mono (by have := hop o ho; omega)
+  have hsg' : IsQueryBoundP (f >>= cpFinal emb) (fun t => isSignP t = true) (qS + 0) :=
+    isQueryBoundP_bind hsg fun o _ => cpFinal_bound_zero _ (fun _ => by simp [isSignP]) emb o
+  refine ⟨?_, ?_, ?_⟩
+  · unfold simF
+    rw [isQueryBoundP_map_iff]
+    exact isQueryBoundP_run_simulateQ (simC emb) _ _
+      (simC_step_bound emb _ _ (fun _ => by simp [LazyIdeal.isRF])
+        (fun _ h => by simp [LazyIdeal.isRF] at h) (fun _ _ _ => rfl)) _ _ _ hfw'
+  · unfold simF
+    rw [isQueryBoundP_map_iff]
+    exact isQueryBoundP_run_simulateQ (simC emb) _ _
+      (simC_step_bound emb _ _ (fun _ => by simp [isSign]) (fun _ _ => rfl)
+        (fun _ _ h => by simp [isSign] at h)) _ _ _ (by simpa using hsg')
+  · intro o ho
+    unfold simF at ho
+    erw [support_map] at ho
+    obtain ⟨z, hz, rfl⟩ := ho
+    have h1 := mem_support_of_run_simulateQ (simC emb) _ _ z hz
+    simp only [mem_support_bind_iff, cpFinal] at h1
+    obtain ⟨o', ho', h2⟩ := h1
+    simp only [support_pure, Set.mem_singleton_iff] at h2
+    obtain ⟨_, _, h3⟩ := h2
+    rw [h3]; exact hop o' ho'
+
+end RedBudget
+
 end VoleMole.Assumptions.UOV.CTUFPerm

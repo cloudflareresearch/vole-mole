@@ -770,4 +770,44 @@ theorem prEvent_invHit_le {α : Type} (oa : OracleComp (specPm A B) α) (qi : �
 
 end Perm
 
+/-! ## Stateful simulations: query bounds and outputs -/
+
+section SimBounds
+
+variable {ι₁ ι₂ : Type} {spec₁ : OracleSpec ι₁} {spec₂ : OracleSpec ι₂} {σ : Type}
+
+/-- **Query bounds through a stateful simulation**: if every query of kind `p₁` makes at most one
+query of kind `p₂` and every other query none, a `p₁`-bound of `k` gives a `p₂`-bound of `k`. -/
+theorem isQueryBoundP_run_simulateQ (red : QueryImpl spec₁ (StateT σ (OracleComp spec₂)))
+    (p₁ : ι₁ → Prop) [DecidablePred p₁] (p₂ : ι₂ → Prop) [DecidablePred p₂]
+    (hstep : ∀ t s, IsQueryBoundP ((red t).run s) p₂ (if p₁ t then 1 else 0)) {α : Type}
+    (oa : OracleComp spec₁ α) :
+    ∀ k s, IsQueryBoundP oa p₁ k → IsQueryBoundP ((simulateQ red oa).run s) p₂ k := by
+  induction oa using OracleComp.inductionOn with
+  | pure x => intro k s _; trivial
+  | query_bind t cont ih =>
+    intro k s hk
+    rw [isQueryBoundP_query_bind_iff] at hk
+    simp only [simulateQ_bind, simulateQ_spec_query, StateT.run_bind]
+    refine (isQueryBoundP_bind (hstep t s) fun z _ => ih z.1 _ z.2 (hk.2 z.1)).mono ?_
+    split_ifs with h
+    · have := hk.1.resolve_left (not_not.2 h); omega
+    · omega
+
+/-- **Outputs of a stateful simulation are outputs of the computation.** -/
+theorem mem_support_of_run_simulateQ (red : QueryImpl spec₁ (StateT σ (OracleComp spec₂)))
+    {α : Type} (oa : OracleComp spec₁ α) :
+    ∀ s, ∀ z ∈ support ((simulateQ red oa).run s), z.1 ∈ support oa := by
+  induction oa using OracleComp.inductionOn with
+  | pure x => intro s z hz; simp only [simulateQ_pure, StateT.run_pure, support_pure,
+      Set.mem_singleton_iff] at hz; subst hz; simp
+  | query_bind t cont ih =>
+    intro s z hz
+    simp only [simulateQ_bind, simulateQ_spec_query, StateT.run_bind, mem_support_bind_iff] at hz
+    obtain ⟨w, -, hz⟩ := hz
+    simp only [mem_support_bind_iff]
+    exact ⟨w.1, by simp, ih w.1 w.2 z hz⟩
+
+end SimBounds
+
 end VoleMole.Assumptions.LazyPerm
