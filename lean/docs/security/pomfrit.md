@@ -216,7 +216,8 @@ trigger verifications and query all oracles.
   - B wins with q+1 triples `(k_i, a_i, s_i)` with distinct `k_i` and
     `P(s_i) = h_{k_i} ⊕ δ_{k_i, a_i}`.
   - The case τ = 1 is A-OMPR. We know no reduction between the two with loss better than
-    `τ^{q+1}` (guessing), and no attack that uses the choice of shift (§6.3).
+    `τ^{q+1}` (guessing), and no attack that uses the choice of shift and gains at τ = 17 (§6.3; collinear shifts,
+    `ompr-shift-algebra.md` §4.1: at most `τ = 2^4.1`, below break-even in the reference model).
 - **(PoK)** The README's classical extraction theorem, with simultaneous extraction (L8 §9.1), and
   L7 for the relation. [Lean] for one proof, classical, in the random-oracle and ideal-cipher
   model, for any family of signatures and messages: the decoded `(r, s)` satisfy `P(s) = h ⊕ r` on
