@@ -712,4 +712,96 @@ theorem pr_level_le {Ω : Type*} [Fintype Ω] [Nonempty Ω] {n : ℕ} (set : (KL
 
 end Level
 
+/-! ## The forgery's points are computed by trees -/
+
+namespace Rata
+
+open VoleMole.Verifier VoleMole.Verifier.Bridge VoleMole.ZK.Sim VoleMole.ZK
+open VoleMole.Privacy.Ratatouille VoleMole.Spec.Ratatouille VoleMole.Theft.Ratatouille
+open VoleMole.Theft.Chain
+open VoleMole.ROM.IC (muIn)
+
+variable {R : Type} [CipherRow R] {L M : ℕ}
+
+/-- **The programmed `H₂³` table depends on the extra table only through the two simulations'
+prefixes.** -/
+lemma progT_fst_congr (x₁ : Option IssueInstance) (c₁ : SimCoins pI) (x₂ : Option SpendInstance)
+    (c₂ : SimCoins pS) (G2 : Tab2G pI) (G5E : Tab5F × (Blk → R)) (x x' : XTab L M)
+    (hp1 : ∀ st o, sd₁ x₁ c₁ = some (st, o) →
+      @simPre (prgT (G2, (G5E, x))) (recT (G2, (G5E, x))) CrtGen.tables st o =
+        @simPre (prgT (G2, (G5E, x'))) (recT (G2, (G5E, x'))) CrtGen.tables st o)
+    (hp2 : ∀ st o, sd₂ x₂ c₂ = some (st, o) →
+      @simPre (prgT (G2, (G5E, x))) (recT (G2, (G5E, x))) CrtGen.tables st o =
+        @simPre (prgT (G2, (G5E, x'))) (recT (G2, (G5E, x'))) CrtGen.tables st o) :
+    (progT (leanProgIRX hbX) (leanProgSRX hbX) x₁ c₁ x₂ c₂ (G2, (G5E, x))).1 =
+      (progT (leanProgIRX hbX) (leanProgSRX hbX) x₁ c₁ x₂ c₂ (G2, (G5E, x'))).1 := by
+  rcases x₁ with _ | i <;> rcases x₂ with _ | j
+  · rfl
+  · have e := hp2 _ _ rfl
+    show (progRO pS (hbX x) _ c₂ (G2, G5E)).1 = (progRO pS (hbX x') _ c₂ (G2, G5E)).1
+    simp only [progRO]
+    rw [outPre_eq (t := (G2, (G5E, x))), outPre_eq (t := (G2, (G5E, x'))), e]
+  · have e := hp1 _ _ rfl
+    show (progRO pI (hbX x) _ c₁ (G2, G5E)).1 = (progRO pI (hbX x') _ c₁ (G2, G5E)).1
+    simp only [progRO]
+    rw [outPre_eq (t := (G2, (G5E, x))), outPre_eq (t := (G2, (G5E, x'))), e]
+  · have e1 := hp1 _ _ rfl
+    have e2 := hp2 _ _ rfl
+    show (progRO pI (hbX x) _ c₁ ((progRO pS (hbX x) _ c₂ (G2, G5E)).1, G5E)).1 =
+      (progRO pI (hbX x') _ c₁ ((progRO pS (hbX x') _ c₂ (G2, G5E)).1, G5E)).1
+    simp only [progRO]
+    rw [outPre_eq (Privacy.Ratatouille.stS j) _ (G2, (G5E, x)),
+      outPre_eq (Privacy.Ratatouille.stS j) _ (G2, (G5E, x')), e2,
+      outPre_eq (Privacy.Ratatouille.stI i) _ (G2, (G5E, x)),
+      outPre_eq (Privacy.Ratatouille.stI i) _ (G2, (G5E, x')), e1]
+
+instance : Inhabited (KL L) := ⟨⟨0, Fin.elim0⟩⟩
+
+/-- **The forgery's point at one level is computed by a tree** with two more queries than the
+adversary's: the two simulations' points (which fix the programmed `H₂³` table), then the
+adversary's tree. -/
+lemma qtree_forger {n : ℕ} (setX : (KL L → ZK.Sim.Bytes n) → XTab L M → XTab L M) {q : ℕ}
+    (Pf : Op Sizes.labelRows → ShT R L M → ByteArray) (Ps : SimD → ShT R L M → ByteArray)
+    (hPf : ∀ op G2 G5E x T T', Pf op (G2, (G5E, setX T x)) = Pf op (G2, (G5E, setX T' x)))
+    (hPs : ∀ d G2 G5E x T T', Ps d (G2, (G5E, setX T x)) = Ps d (G2, (G5E, setX T' x)))
+    (hpre : ∀ (d : SimD) st o G2 G5E x T T', d = some (st, o) →
+      (∀ k, keyL L (Ps d (G2, (G5E, setX T x))) = some k → T k = T' k) →
+      @simPre (prgT (G2, (G5E, setX T x))) (recT (G2, (G5E, setX T x))) CrtGen.tables st o =
+        @simPre (prgT (G2, (G5E, setX T' x))) (recT (G2, (G5E, setX T' x))) CrtGen.tables st o)
+    (F : Tab3 → Tab3 → ShT R L M → Op Sizes.labelRows)
+    (hF : ∀ g₁ g₂ G2 G5E x, QTree (fun T => F g₁ g₂ (G2, (G5E, setX T x))) q)
+    (x₁ : Option IssueInstance) (c₁ : SimCoins pI) (x₂ : Option SpendInstance) (c₂ : SimCoins pS)
+    (g₁ g₂ : Tab3) (G2 : Tab2G pI) (G5E : Tab5F × (Blk → R)) (x : XTab L M) :
+    QTree (fun T => keyL L (Pf (F g₁ g₂ (progT (leanProgIRX hbX) (leanProgSRX hbX) x₁ c₁ x₂ c₂
+      (G2, (G5E, setX T x)))) (G2, (G5E, setX T x)))) (q + 2) := by
+  let T₀ : KL L → ZK.Sim.Bytes n := fun _ _ => 0
+  let a₁ : KL L := (keyL L (Ps (sd₁ x₁ c₁) (G2, (G5E, setX T₀ x)))).getD default
+  let a₂ : KL L := (keyL L (Ps (sd₂ x₂ c₂) (G2, (G5E, setX T₀ x)))).getD default
+  have hag : ∀ (d : SimD) (a : KL L), ∀ T T' : KL L → ZK.Sim.Bytes n,
+      T ((keyL L (Ps d (G2, (G5E, setX T₀ x)))).getD a) =
+        T' ((keyL L (Ps d (G2, (G5E, setX T₀ x)))).getD a) →
+      ∀ k, keyL L (Ps d (G2, (G5E, setX T x))) = some k → T k = T' k := by
+    intro d a T T' hT k hk
+    rw [hPs d G2 G5E x T T₀] at hk
+    rw [hk] at hT
+    exact hT
+  refine QTree.of_two (fun T => (progT (leanProgIRX hbX) (leanProgSRX hbX) x₁ c₁ x₂ c₂
+      (G2, (G5E, setX T x))).1) a₁ a₂ ?_
+    (fun H2 T => keyL L (Pf (F g₁ g₂ (H2, (G5E, setX T x))) (G2, (G5E, setX T₀ x))))
+    (fun H2 => (hF g₁ g₂ H2 G5E x).map fun op => keyL L (Pf op (G2, (G5E, setX T₀ x)))) fun T => ?_
+  · intro T T' h1 h2
+    refine progT_fst_congr x₁ c₁ x₂ c₂ G2 G5E _ _ (fun st o hd => hpre _ st o G2 G5E x T T' hd
+      (hag _ default T T' h1))
+      (fun st o hd => hpre _ st o G2 G5E x T T' hd
+      (hag _ default T T' h2))
+  · have e : progT (leanProgIRX hbX) (leanProgSRX hbX) x₁ c₁ x₂ c₂ (G2, (G5E, setX T x)) =
+        ((progT (leanProgIRX hbX) (leanProgSRX hbX) x₁ c₁ x₂ c₂ (G2, (G5E, setX T x))).1,
+          (G5E, setX T x)) :=
+      Prod.ext rfl (progT_snd (prog₁ := leanProgIRX (R := R) hbX) (prog₂ := leanProgSRX hbX)
+        (fun _ _ _ => rfl) (fun _ _ _ => rfl) _ _ _ _ _)
+    show keyL L (Pf _ _) = keyL L (Pf _ _)
+    rw [e, hPf _ G2 G5E x T T₀]
+
+end Rata
+
 end VoleMole.Theft.Hit
