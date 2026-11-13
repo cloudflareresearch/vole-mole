@@ -177,6 +177,14 @@ noncomputable def qR (b : Bool) (x : GTape SecM pIm pIm pRm pRm) (side : Bool) :
   (stRP A idx b (tM A.toM x.1 false) (tM A.toM x.1 true) (nOf x.1 false) (nOf x.1 true) x.2
     side).map fun st => (st, rOf x.1 (b ^^ side))
 
+/-- The redemption statements depend on the tape only through the secret and the issuance
+simulators' coins. -/
+lemma qR_congr (b : Bool) (x x' : GTape SecM pIm pIm pRm pRm) (side : Bool) (hs : x.1 = x'.1)
+    (h₁ : x.2.2.1.1.2 = x'.2.2.1.1.2) (h₂ : x.2.2.2.1.1.2 = x'.2.2.2.1.1.2) :
+    qR A idx b x side = qR A idx b x' side := by
+  unfold qR stRP okP
+  rw [hs, h₁, h₂]
+
 lemma qOf_iss (s : SecM) (c : Bool) : qOf (some (issStmt A.toM s c)) = qI A s c := by
   unfold qOf qI
   simp only [Option.map_some, Option.some.injEq]
@@ -320,5 +328,197 @@ theorem puS_imp (b : Bool) (x : GTape SecM pIm pIm pRm pRm)
       · exact Or.inr hw
       · exact Or.inl hw
   · exact Or.inr (Or.inr hcoll)
+
+
+/-! ## The probabilities -/
+
+theorem pr_errS₁_le : pr (GTape SecM pIm pIm pRm pRm) (fun x => errC pIm x.2.2.1.1.2) ≤
+    noHitProb :=
+  pr_le_of_fst fun _ => pr_le_of_fst fun _ => pr_le_of_snd fun _ => pr_errC_le
+
+theorem pr_errS₂_le : pr (GTape SecM pIm pIm pRm pRm) (fun x => errC pIm x.2.2.2.1.1.2) ≤
+    noHitProb :=
+  pr_le_of_fst fun _ => pr_le_of_fst fun _ => pr_le_of_fst fun _ => pr_le_of_snd fun _ =>
+    pr_errC_le
+
+theorem pr_errS₃_le : pr (GTape SecM pIm pIm pRm pRm) (fun x => errC pRm x.2.2.2.2.1.1.2) ≤
+    noHitProb :=
+  pr_le_of_fst fun _ => pr_le_of_fst fun _ => pr_le_of_fst fun _ => pr_le_of_fst fun _ =>
+    pr_le_of_snd fun _ => pr_errC_le
+
+theorem pr_errS₄_le : pr (GTape SecM pIm pIm pRm pRm) (fun x => errC pRm x.2.2.2.2.2.1.2) ≤
+    noHitProb :=
+  pr_le_of_fst fun _ => pr_le_of_fst fun _ => pr_le_of_fst fun _ => pr_le_of_fst fun _ =>
+    pr_le_of_fst fun _ => pr_errC_le
+
+set_option maxRecDepth 8192 in
+/-- **The two issuance proofs collide with probability `≤ 313·2⁻¹²⁸`**: the second proof's `d` is
+uniform and independent of the first proof. -/
+theorem pr_coll₂_le : pr (GTape SecM pIm pIm pRm pRm) (coll₂ A) ≤ ((312 : ℕ) + 1) / 2 ^ 128 := by
+  refine pr_le_of_fst fun s => pr_le_of_fst fun u => pr_le_of_fst fun k₁ => pr_le_of_snd fun r =>
+    pr_KS_d_le _ fun ρ sh c1 c2 c3 c5 V => ?_
+  exact pr_sib_hit_le Hashes.shake mainP_pIm (stI ⟨tM A.toM s true, A.toM.int.ci⟩) u.2 sh c1 c2 c3
+    c5 (rOf s true) (sibO Hashes.shake pIm (qI A s false) u.2 k₁.1.2) (sibO_length_le _ _ _ _)
+
+set_option maxRecDepth 8192 in
+/-- **The left redemption proof collides with an issuance proof with probability
+`≤ 625·2⁻¹²⁸`.** -/
+theorem pr_coll₃_le (b : Bool) :
+    pr (GTape SecM pIm pIm pRm pRm) (coll₃ A idx b) ≤ ((624 : ℕ) + 1) / 2 ^ 128 := by
+  refine pr_le_of_fst fun s => pr_le_of_fst fun u => pr_le_of_fst fun k₁ => pr_le_of_fst fun k₂ =>
+    pr_le_of_snd fun k₄ => pr_KS_d_le _ fun ρ sh c1 c2 c3 c5 V => ?_
+  have hlen : (sibO Hashes.shake pIm (qI A s false) u.2 k₁.1.2 ++
+      sibO Hashes.shake pIm (qI A s true) u.2 k₂.1.2).length ≤ 624 := by
+    rw [List.length_append]
+    have := sibO_length_le Hashes.shake (qI A s false) u.2 k₁.1.2
+    have := sibO_length_le Hashes.shake (qI A s true) u.2 k₂.1.2
+    omega
+  have hq : ∀ d : ZK.Sim.Bytes pRm.witnessBytes,
+      qR A idx b (s, u, k₁, k₂, ((ρ, (sh, (c1, c2, c3, d, c5))), V), k₄) false =
+      (stRP A idx b (tM A.toM s false) (tM A.toM s true) (nOf s false) (nOf s true)
+        (u, k₁, k₂, ((ρ, (sh, (c1, c2, c3, fun _ => 0, c5))), V), k₄) false).map
+        fun st => (st, rOf s (b ^^ false)) := fun d => qR_congr A idx b
+          (s, u, k₁, k₂, ((ρ, (sh, (c1, c2, c3, d, c5))), V), k₄)
+          (s, u, k₁, k₂, ((ρ, (sh, (c1, c2, c3, fun _ => 0, c5))), V), k₄) false rfl rfl rfl
+  rcases hst : stRP A idx b (tM A.toM s false) (tM A.toM s true) (nOf s false) (nOf s true)
+    (u, k₁, k₂, ((ρ, (sh, (c1, c2, c3, fun _ => 0, c5))), V), k₄) false with _ | st
+  · refine le_trans (le_of_eq ?_) (by positivity)
+    rw [pr_congr (Q := fun _ => False) fun d => by
+      unfold coll₃
+      rw [hq d, hst]
+      simp [sibO]]
+    exact pr_false
+  · refine le_trans (pr_mono fun d hd => ?_) (pr_sib_hit_le Hashes.shake mainP_pRm st u.2 sh c1 c2
+      c3 c5 (rOf s (b ^^ false)) _ hlen)
+    unfold coll₃ at hd
+    rw [hq d, hst] at hd
+    exact hd
+
+set_option maxRecDepth 8192 in
+/-- **The right redemption proof collides with an earlier proof with probability
+`≤ 937·2⁻¹²⁸`.** -/
+theorem pr_coll₄_le (b : Bool) :
+    pr (GTape SecM pIm pIm pRm pRm) (coll₄ A idx b) ≤ ((936 : ℕ) + 1) / 2 ^ 128 := by
+  refine pr_le_of_fst fun s => pr_le_of_fst fun u => pr_le_of_fst fun k₁ => pr_le_of_fst fun k₂ =>
+    pr_le_of_fst fun k₃ => pr_KS_d_le _ fun ρ sh c1 c2 c3 c5 V => ?_
+  have hlen : (sibO Hashes.shake pIm (qI A s false) u.2 k₁.1.2 ++
+      sibO Hashes.shake pIm (qI A s true) u.2 k₂.1.2 ++
+      sibO Hashes.shake pRm (qR A idx b (s, u, k₁, k₂, k₃,
+        ((ρ, (sh, (c1, c2, c3, fun _ => 0, c5))), V)) false) u.2 k₃.1.2).length ≤ 936 := by
+    rw [List.length_append, List.length_append]
+    have := sibO_length_le Hashes.shake (qI A s false) u.2 k₁.1.2
+    have := sibO_length_le Hashes.shake (qI A s true) u.2 k₂.1.2
+    have := sibO_length_le Hashes.shake (qR A idx b (s, u, k₁, k₂, k₃,
+        ((ρ, (sh, (c1, c2, c3, fun _ => 0, c5))), V)) false) u.2 k₃.1.2
+    omega
+  have hq : ∀ d : ZK.Sim.Bytes pRm.witnessBytes,
+      qR A idx b (s, u, k₁, k₂, k₃, ((ρ, (sh, (c1, c2, c3, d, c5))), V)) true =
+      (stRP A idx b (tM A.toM s false) (tM A.toM s true) (nOf s false) (nOf s true)
+        (u, k₁, k₂, k₃, ((ρ, (sh, (c1, c2, c3, fun _ => 0, c5))), V)) true).map
+        fun st => (st, rOf s (b ^^ true)) := fun d => qR_congr A idx b
+          (s, u, k₁, k₂, k₃, ((ρ, (sh, (c1, c2, c3, d, c5))), V))
+          (s, u, k₁, k₂, k₃, ((ρ, (sh, (c1, c2, c3, fun _ => 0, c5))), V)) true rfl rfl rfl
+  have hq' : ∀ d : ZK.Sim.Bytes pRm.witnessBytes,
+      qR A idx b (s, u, k₁, k₂, k₃, ((ρ, (sh, (c1, c2, c3, d, c5))), V)) false =
+      qR A idx b (s, u, k₁, k₂, k₃, ((ρ, (sh, (c1, c2, c3, fun _ => 0, c5))), V)) false :=
+    fun d => qR_congr A idx b (s, u, k₁, k₂, k₃, ((ρ, (sh, (c1, c2, c3, d, c5))), V))
+      (s, u, k₁, k₂, k₃, ((ρ, (sh, (c1, c2, c3, fun _ => 0, c5))), V)) false rfl rfl rfl
+  rcases hst : stRP A idx b (tM A.toM s false) (tM A.toM s true) (nOf s false) (nOf s true)
+    (u, k₁, k₂, k₃, ((ρ, (sh, (c1, c2, c3, fun _ => 0, c5))), V)) true with _ | st
+  · refine le_trans (le_of_eq ?_) (by positivity)
+    rw [pr_congr (Q := fun _ => False) fun d => by
+      unfold coll₄
+      rw [hq d, hst]
+      simp [sibO]]
+    exact pr_false
+  · refine le_trans (pr_mono fun d hd => ?_) (pr_sib_hit_le Hashes.shake mainP_pRm st u.2 sh c1 c2
+      c3 c5 (rOf s (b ^^ true)) _ hlen)
+    unfold coll₄ at hd
+    rw [hq d, hq' d, hst] at hd
+    exact hd
+
+/-- **The predictor for Client `false`** in the game `PU.puAdv`: public part `nf₀`, commitment
+`t₀`, auxiliary coins the other Client's `(nf₁, r₁)`, the simulators' coins and the tables. -/
+noncomputable def predS₀ (b : Bool) (n : Coins nfBytes) (t : Bytes)
+    (a : (Coins nfBytes × Coins rBytes) × AuxS) : Finset (Coins rBytes) :=
+  predS A idx b t (comM A.toM a.1.1 a.1.2) (List.ofFn n) (List.ofFn a.1.1) a.2 false
+
+/-- **The predictor for Client `true`.** -/
+noncomputable def predS₁ (b : Bool) (n : Coins nfBytes) (t : Bytes)
+    (a : (Coins nfBytes × Coins rBytes) × AuxS) : Finset (Coins rBytes) :=
+  predS A idx b (comM A.toM a.1.1 a.1.2) t (List.ofFn a.1.1) (List.ofFn n) a.2 true
+
+theorem pr_winS_false (b : Bool) :
+    pr (GTape SecM pIm pIm pRm pRm) (winS A idx b false) =
+      puAdv (comM A.toM) (predS₀ A idx b) := by
+  let e : (Coins nfBytes × Coins rBytes) × ((Coins nfBytes × Coins rBytes) × AuxS) ≃
+      GTape SecM pIm pIm pRm pRm :=
+    { toFun := fun z => ((z.1, z.2.1), z.2.2)
+      invFun := fun x => (x.1.1, (x.1.2, x.2))
+      left_inv := fun _ => rfl
+      right_inv := fun _ => rfl }
+  rw [← pr_equiv e]
+  rfl
+
+theorem pr_winS_true (b : Bool) :
+    pr (GTape SecM pIm pIm pRm pRm) (winS A idx b true) =
+      puAdv (comM A.toM) (predS₁ A idx b) := by
+  let e : (Coins nfBytes × Coins rBytes) × ((Coins nfBytes × Coins rBytes) × AuxS) ≃
+      GTape SecM pIm pIm pRm pRm :=
+    { toFun := fun z => ((z.2.1, z.1), z.2.2)
+      invFun := fun x => (x.1.2, (x.1.1, x.2))
+      left_inv := fun _ => rfl
+      right_inv := fun _ => rfl }
+  rw [← pr_equiv e]
+  rfl
+
+/-- **The (PU) term with shared tables is at most the advantage of the two explicit predictors**,
+plus `4·noHitProb` (failed simulations) and `1875·2⁻¹²⁸` (collisions between simulated
+proofs). -/
+theorem puTermS_le (b : Bool) :
+    puTermS A idx b ≤ 4 * noHitProb + puAdv (comM A.toM) (predS₀ A idx b) +
+      puAdv (comM A.toM) (predS₁ A idx b) + 1875 / 2 ^ 128 := by
+  unfold puTermS hyb
+  have h := (pr_mono (puS_imp A idx b)).trans ((pr_or_le _ _).trans (add_le_add
+    ((pr_or_le _ _).trans (add_le_add le_rfl ((pr_or_le _ _).trans (add_le_add le_rfl
+      (pr_or_le _ _)))))
+    ((pr_or_le _ _).trans (add_le_add (pr_or_le _ _) ((pr_or_le _ _).trans
+      (add_le_add le_rfl (pr_or_le _ _)))))))
+  rw [pr_winS_false, pr_winS_true] at h
+  have e₁ := pr_errS₁_le
+  have e₂ := pr_errS₂_le
+  have e₃ := pr_errS₃_le
+  have e₄ := pr_errS₄_le
+  have c₂ := pr_coll₂_le A
+  have c₃ := pr_coll₃_le A idx b
+  have c₄ := pr_coll₄_le A idx b
+  have hn : (((312 : ℕ) + 1 : ℝ) / 2 ^ 128) + (((624 : ℕ) + 1 : ℝ) / 2 ^ 128) +
+      (((936 : ℕ) + 1 : ℝ) / 2 ^ 128) = 1875 / 2 ^ 128 := by norm_num
+  linarith
+
+/-! ## Theorem 4(a) on `main`, shared tables, with (PU) as a game -/
+
+/-- **Theorem 4(a) on `main` (no label rows) with one `H₅` table and one cipher for the four
+proofs, with the (PU) advantage of explicit predictors.** For the colluding adversary whose guess
+reads each `H₃` slice at `q3` keys, the cipher at `qE` keys and `H₅` at the consistent read set
+`R5` (`AdversaryS.Cons`),
+
+    |Pr[world 0] − Pr[world 1]| ≤ 30·εS(q3, qE + 8·4607)
+      + 15·(Σ_{b, c} puAdv Com (predS_c b) + 8·noHitProb + 3750·2⁻¹²⁸) + 2·εhide.
+
+The four `puAdv` terms are (PU), an assumption on Keccak-p[800,12], and `εhide` is hiding of
+`Com`; every other term is a number (`noHitProb ≤ 2^{−2¹⁵}`). Each predictor outputs at most
+`2·(q5 + 1249)` candidates if `R5` has at most `q5` keys (`card_predS_le`). -/
+theorem anonymity_main_shared {q3 qE : ℕ} (hC : A.Cons q3 qE) {εhide : ℝ}
+    (hhide : ∀ b a, hidingAdv A.toM.int.ci A.toM.int.cr (redS A idx b a) ≤ εhide) :
+    |realS A idx false - realS A idx true| ≤
+      30 * εS q3 (qE + 8 * 4607) + 15 * (puAdv (comM A.toM) (predS₀ A idx false) +
+        puAdv (comM A.toM) (predS₁ A idx false) + puAdv (comM A.toM) (predS₀ A idx true) +
+        puAdv (comM A.toM) (predS₁ A idx true) + 8 * noHitProb + 3750 / 2 ^ 128) +
+        2 * εhide := by
+  have h := anonymity_main_shared0 A idx hC hhide
+  have p0 := puTermS_le A idx false
+  have p1 := puTermS_le A idx true
+  linarith
 
 end VoleMole.Privacy.Moussaka
