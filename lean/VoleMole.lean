@@ -357,6 +357,8 @@ import VoleMole.Theft.Ratatouille
 import VoleMole.Theft.RatatouilleLean
 import VoleMole.Theft.Moussaka
 import VoleMole.Theft.MoussakaLean
+import VoleMole.Theft.MoussakaMany
+import VoleMole.Theft.MoussakaManyLean
 import VoleMole.Theft.Many
 import VoleMole.Theft.MoussakaUnbound
 import VoleMole.Theft.MoussakaUnboundMany
@@ -372,6 +374,7 @@ import VoleMole.Audit.SimExtract
 import VoleMole.Audit.UnboundOMUF
 import VoleMole.Audit.UnboundRest
 import VoleMole.Audit.UnboundMany
+import VoleMole.Audit.TheftMany
 import VoleMole.Audit.OMPRShift
 import VoleMole.Audit.T6Pomfrit
 import VoleMole.Audit.TheoremR
