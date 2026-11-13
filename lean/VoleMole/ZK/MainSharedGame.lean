@@ -453,6 +453,70 @@ structure Rd {X : Sort*} (f : GView S p₁ p₂ p₃ p₄ → X)
   h3₄ : ∃ Q : GView S p₁ p₂ p₃ p₄ → Finset (Bytes 16), (∀ v, (Q v).card ≤ q3) ∧
     ∀ v (G3 : Tab3), (∀ k ∈ Q v, v.v₄.1 k = G3 k) → f (v.with3₄ G3) = f v
 
+/-- **The tables of a view**: the shared tables and the four slots' tables. -/
+abbrev GVis (p₁ p₂ p₃ p₄ : Params) := USh × (VP p₁ × VP p₂ × VP p₃ × VP p₄)
+
+/-- The tables of a view. -/
+def GView.vis (v : GView S p₁ p₂ p₃ p₄) : GVis p₁ p₂ p₃ p₄ := (v.u, (v.v₁, v.v₂, v.v₃, v.v₄))
+
+/-- **`f` reads the tables within explicit sets** (`Rd` for a function of the tables alone): the
+`H₅` table only at `R`, the cipher at `qE` keys, each `H₃` slice at `q3` keys. This is what an
+oracle algorithm with these query budgets satisfies. -/
+structure RdT {X : Sort*} (f : GVis p₁ p₂ p₃ p₄ → X)
+    (R : GVis p₁ p₂ p₃ p₄ → Finset (Bytes 37)) (q3 qE : ℕ) : Prop where
+  h5 : ∀ t (G5 : Tab5F), (∀ k ∈ R t, t.1.1 k = G5 k) → f ((G5, t.1.2), t.2) = f t
+  hE : ∃ Q : GVis p₁ p₂ p₃ p₄ → Finset Blk, (∀ t, (Q t).card ≤ qE) ∧
+    ∀ t (E : Cipher), (∀ k ∈ Q t, t.1.2 k = E k) → f ((t.1.1, E), t.2) = f t
+  h3₁ : ∃ Q : GVis p₁ p₂ p₃ p₄ → Finset (Bytes 16), (∀ t, (Q t).card ≤ q3) ∧
+    ∀ t (G3 : Tab3), (∀ k ∈ Q t, t.2.1.1 k = G3 k) → f (t.1, ((G3, t.2.1.2), t.2.2)) = f t
+  h3₂ : ∃ Q : GVis p₁ p₂ p₃ p₄ → Finset (Bytes 16), (∀ t, (Q t).card ≤ q3) ∧
+    ∀ t (G3 : Tab3), (∀ k ∈ Q t, t.2.2.1.1 k = G3 k) →
+      f (t.1, (t.2.1, ((G3, t.2.2.1.2), t.2.2.2))) = f t
+  h3₃ : ∃ Q : GVis p₁ p₂ p₃ p₄ → Finset (Bytes 16), (∀ t, (Q t).card ≤ q3) ∧
+    ∀ t (G3 : Tab3), (∀ k ∈ Q t, t.2.2.2.1.1 k = G3 k) →
+      f (t.1, (t.2.1, t.2.2.1, ((G3, t.2.2.2.1.2), t.2.2.2.2))) = f t
+  h3₄ : ∃ Q : GVis p₁ p₂ p₃ p₄ → Finset (Bytes 16), (∀ t, (Q t).card ≤ q3) ∧
+    ∀ t (G3 : Tab3), (∀ k ∈ Q t, t.2.2.2.2.1 k = G3 k) →
+      f (t.1, (t.2.1, t.2.2.1, t.2.2.2.1, (G3, t.2.2.2.2.2))) = f t
+
+/-- **An event that reads the tables through an `RdT` function**, the rest of its input (`key`:
+the outputs and the secret) fixed, is `Rd`. -/
+theorem Rd.ofT {Y : Type} {X : Sort*} (key : GView S p₁ p₂ p₃ p₄ → Y)
+    (hkU : ∀ v u, key (v.withU u) = key v) (hk₁ : ∀ v G3, key (v.with3₁ G3) = key v)
+    (hk₂ : ∀ v G3, key (v.with3₂ G3) = key v) (hk₃ : ∀ v G3, key (v.with3₃ G3) = key v)
+    (hk₄ : ∀ v G3, key (v.with3₄ G3) = key v) (f : Y → GVis p₁ p₂ p₃ p₄ → X)
+    (R : Y → GVis p₁ p₂ p₃ p₄ → Finset (Bytes 37)) {q3 qE : ℕ}
+    (h : ∀ y, RdT (f y) (R y) q3 qE) :
+    Rd (fun v => f (key v) v.vis) (fun v => R (key v) v.vis) q3 qE := by
+  choose QE hQEc hQE using fun y => (h y).hE
+  choose Q₁ hQ₁c hQ₁ using fun y => (h y).h3₁
+  choose Q₂ hQ₂c hQ₂ using fun y => (h y).h3₂
+  choose Q₃ hQ₃c hQ₃ using fun y => (h y).h3₃
+  choose Q₄ hQ₄c hQ₄ using fun y => (h y).h3₄
+  refine ⟨fun v G5 hk => ?_, ⟨fun v => QE (key v) v.vis, fun v => hQEc _ _, fun v E hk => ?_⟩,
+    ⟨fun v => Q₁ (key v) v.vis, fun v => hQ₁c _ _, fun v G3 hk => ?_⟩,
+    ⟨fun v => Q₂ (key v) v.vis, fun v => hQ₂c _ _, fun v G3 hk => ?_⟩,
+    ⟨fun v => Q₃ (key v) v.vis, fun v => hQ₃c _ _, fun v G3 hk => ?_⟩,
+    ⟨fun v => Q₄ (key v) v.vis, fun v => hQ₄c _ _, fun v G3 hk => ?_⟩⟩
+  · show f (key (v.withU _)) _ = _
+    rw [hkU]
+    exact (h (key v)).h5 v.vis G5 hk
+  · show f (key (v.withU _)) _ = _
+    rw [hkU]
+    exact hQE (key v) v.vis E hk
+  · show f (key (v.with3₁ _)) _ = _
+    rw [hk₁]
+    exact hQ₁ (key v) v.vis G3 hk
+  · show f (key (v.with3₂ _)) _ = _
+    rw [hk₂]
+    exact hQ₂ (key v) v.vis G3 hk
+  · show f (key (v.with3₃ _)) _ = _
+    rw [hk₃]
+    exact hQ₃ (key v) v.vis G3 hk
+  · show f (key (v.with3₄ _)) _ = _
+    rw [hk₄]
+    exact hQ₄ (key v) v.vis G3 hk
+
 variable (Hb : Hashes)
 
 /-- The cipher keys that the keys of a slot's proof read (the reconstruction's nodes). -/
