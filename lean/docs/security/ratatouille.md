@@ -742,8 +742,9 @@ and affords the amount, else it is refused for both (feasibility is leakage).
   `t ↦ Com(nf, ctx, t, r)` (`simGame_iff`) and the change token's credit value is the Issuer's
   choice, so the reduction needs the game's single use of each column made explicit. As for
   Moussaka, the spend proofs that are computed but not shown (a failed finalization, a refused
-  round) are not predictions of a secret; their part of `puTermR` is at most `(q₅ + 1)·2⁻¹²⁸` each
-  by the argument of `pr_thetaMain_le`.
+  round) are not predictions of a secret; their part of `puTermR` would be bounded by
+  `(q₅ + 1)·2⁻¹²⁸` each through the simulator's uniform `d` (`pr_thetaMain_le`; mechanized for
+  Moussaka only).
 - The spec's proof sizes are a parameter (`Spec.Ratatouille.Sizes`: `main`'s, or the label-row
   layout's 256 bytes longer proofs). **[Lean] `lean/VoleMole/Privacy/RatatouilleLean.lean`**:
   `unlinkability_label_rows`, the same bound with the executable Lean prover and verifier as the

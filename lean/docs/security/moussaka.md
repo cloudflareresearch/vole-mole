@@ -880,7 +880,13 @@ only the two redemption requests or the refusal. The refusal rule is that of 4(a
   mechanized for 4(b); the joint hop itself is (`ZK/MainGame.lean`, used for 4(a) on `main`,
   `anonymity_main`), and for a prefix independent of the predictor's inputs it gives
   `(q₅ + 1)·2⁻¹²⁸` per proof (`pr_mem_uniform_le`), but the non-colluding game on `main` is not
-  written.
+  written. What it needs: this file's game with the honest Anchor checking `main`'s request
+  length (`issueResponseN issueRequestBytes`; `respNC` is fixed to the label-row length), the two
+  redemption proofs as slots of `main_chain_le`, and the (PU) term bounded statistically: with
+  both proofs simulated the view depends on the openings only through the refusal bit
+  (`simNC_iff`), so the candidates are independent of `r` when the redemptions run
+  (`pr_mem_uniform_le`) and of the simulator's `d` when they do not (`pr_thetaMain_le`,
+  `ZK/MainPU.lean`, as for 4(a) in `puTerm_le`).
 - **In the random-oracle and ideal-cipher model** (`lean/VoleMole/Privacy/MoussakaNCRO.lean`,
   Appendix B; the analogue of `anonymityRO_lean_num`): `A`'s guess also sees the tables, and the
   honest Anchors run the Lean **verifier** on the issuance proofs over the same tables. In each
