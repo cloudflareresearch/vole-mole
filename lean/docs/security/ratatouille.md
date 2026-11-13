@@ -1014,22 +1014,22 @@ and affords the amount, else it is refused for both (feasibility is leakage).
   predictor with `q` forward and inverse queries has advantage at most
   `(c + q)/(2¹²⁸ − q) + q/(2⁵⁴⁴ − q)` (`puAdvPerm_ratatouille_le`): the generic `(q + 1)·2⁻¹²⁸`
   of the (PU) paragraph below, for one commitment. For Keccak-p[800,12] itself (PU) is an
-  assumption. Unlike for Moussaka (`anonymity_main_pu`), `puTermR` is **not** yet reduced to
-  `puAdv`: with all proofs simulated the game is a function of the commitment columns
-  `t ↦ Com(nf, ctx, t, r)` (`simGame_iff`). Each column is used at one credit (`T_init` for an
-  issued token, `clientCheck(τ.t, τ.x, d)` for a change token, which does not depend on the
-  change token's `(nf', r')`), so no column version of (PU) is needed: `comCredit ctx T (nf, b) r
-  = Com(nf, ctx, T b, r)` puts what determines the credit into the public part, and the
-  ideal-permutation bound is unchanged (`puAdvPerm_ratatouille_credit_le`,
-  `Privacy/PUKeccak.lean`). The reduction of `puTermR` to three such predictors is not
-  mechanized. Nor is the shared-table version: Moussaka's is `anonymity_main_shared`
-  (`lean/docs/zk.md` §4.2), and its joint hop `main_shared_le` is stated for any four-proof game,
-  so what Ratatouille lacks is the reduction above and the simulators' programming as a function
-  of the requests. As for
-  Moussaka, the spend proofs that are computed but not shown (a failed finalization, a refused
-  round) are not predictions of a secret; their part of `puTermR` would be bounded by
-  `(q₅ + 1)·2⁻¹²⁸` each through the simulator's uniform `d` (`pr_thetaMain_le`; mechanized for
-  Moussaka only).
+  assumption. `puTermR` is reduced to `puAdv` (`Privacy/RatatouilleMainPU.lean`): with all
+  proofs simulated the guess's input and the statements are functions of the nullifiers, the
+  commitments and the simulators' coins (`gR_pub`, `Privacy/RatatouilleMainPub.lean`). Each
+  commitment column is used at one credit (`T_init` for an issued token,
+  `clientCheck(τ.t, τ.x, d)` for round 1's change token, which does not depend on the change
+  token's `(nf', r')`; `gP_const`), so no column version of (PU) is needed: `comCh` is
+  `comCredit` with the issuance part in the public input. Three predictors: the two issued
+  tokens' openings (`predR₀`, `predR₁`, at most `3·(q₅ + 1)` candidates) and the change token's
+  (`predRC`, at most `q₅ + 1`). The spend proofs of a refused round are computed but not shown;
+  they cost `(q₅ + 1)·2⁻¹²⁸` each through the simulator's uniform `d` (`pr_hidR₃_le`,
+  `pr_hidR₄_le`). **`unlinkability_main_pu`**: any two worlds differ by at most
+  `8·εRF + 15·(Σ six puAdv + 4·(q₅ + 1)·2⁻¹²⁸) + 2·εhide`. With one `H₅` table and one cipher
+  for the four proofs (`Privacy/RatatouilleMainShared.lean`, `RatatouilleMainSharedPU.lean`; the
+  simulators' programming is a function of the requests, `vtab`): **`unlinkability_main_shared`**,
+  `30·εS(q₃, q_E + 8·4607) + 15·(Σ six puAdv + 8·noHitProb + 3750·2⁻¹²⁸) + 2·εhide`
+  (`lean/docs/zk.md` §4.3). Each proof still has its own `H₂³` table and `H₃` slice.
 - The spec's proof sizes are a parameter (`Spec.Ratatouille.Sizes`: `main`'s, or the label-row
   layout's 256 bytes longer proofs). **[Lean] `lean/VoleMole/Privacy/RatatouilleLean.lean`**:
   `unlinkability_label_rows`, the same bound with the executable Lean prover and verifier as the
