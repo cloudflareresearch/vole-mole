@@ -28,8 +28,9 @@ It is `ROM/MoussakaOMUF.lean`'s game with a second issuance oracle and the unbou
   Anchor runs **both** variants with one key (§7 of the note): an Issue query (`IQ`) is either a
   bound one (`inl`, the bound Anchor `OMUF.anchorIC`, `issue_response`) or an unbound one (`inr`,
   `uanchorIC`, `unbound_issue_response`: request `t ‖ π_iss` of `45 + 6864` bytes on `main`, the
-  unbound issuance proof verified for `(t, ctx_iss)`, then `derive_preimage(sk_k, t)`). An
-  accepted proof of either variant puts `t` into the signed set.
+  unbound issuance proof verified for `(t, ctx_iss)`, then `derive_preimage(sk_k, t)`; per table
+  it is `Privacy.MoussakaUnbound.issueResponse` with the executable verifier,
+  `uanchorIC_eq_spec`). An accepted proof of either variant puts `t` into the signed set.
 * The adversary makes `qI` Issue queries one after the other (each seeing the earlier answers),
   then outputs `qR` unbound redemptions with Anchor Sets of honest Anchors. The Moderator
   (`umoderatorIC`) is `unbound_finalize_redeem` with the Lean verifier (`moussakaUnboundRedeem`),

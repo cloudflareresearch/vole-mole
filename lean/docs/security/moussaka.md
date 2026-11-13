@@ -480,6 +480,7 @@ ideal-cipher model of `lean/VoleMole/ROM/` (SHAKE a random oracle, AES's rows un
   modelling hypothesis of `omuf_le_num_ompr`; `omuf_le_num` names the term `AdvCTUF(B₂)`, and
   `omuf_le_num_open` shows it is a CT-UF^open advantage. No step of Theorem 1's paper proof was
   found wrong; Lemma U's needed the corrections of §3.3.
+- *Unbound tokens:* Thm U1 is mechanized the same way (`moussaka-unbound.md` §4 Status).
 
 **Remarks.**
 - *Counting refinement.* The same argument bounds, for each `(ctx_iss, ctx_red)`, the accepted

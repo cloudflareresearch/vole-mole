@@ -15,7 +15,10 @@ injectivity hypothesis on the inputs the extractor returns.
   nullifier in one context gives distinct keys, distinct commitment inputs and (under binding)
   distinct commitments; `exists_unsigned_per_context`: if there are more of them than unbound
   issuances for the issuance context, some redemption's commitment was never signed, by either
-  variant and for any issuance context; `count_le_per_variant`: the contrapositive count.
+  variant and for any issuance context; `count_le_per_variant`: the contrapositive count;
+  `collision_or_forgery_unbound`: steps 3–4 in the form the game reduction uses
+  (`ROM/MoussakaUnboundOMUF.lean`, `win_imp`): a win with every accepted proof extracted gives a
+  collision of `Com ∪ UCom` or an unsigned commitment.
 * Corollary U2: `nf_determined` (a signed commitment and a context determine the nullifier).
 * Proposition U3: `squat_cases` (a squatter's key is the honest key or a second preimage).
 * Theorem U5, step 4: `swap_invariant`: answering each query `(i, c)` with `F (i ⊕ W c) c` instead
