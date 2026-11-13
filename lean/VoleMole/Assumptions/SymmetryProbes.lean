@@ -181,6 +181,12 @@ lemma exists_indep_ker {κ : Type*} [Fintype κ] [DecidableEq κ] (c : ℕ) (Φ 
   rw [LinearMap.mem_ker] at this
   exact congrFun this a
 
+/-- The common kernel of fewer than `|κ|` functionals contains a nonzero vector. -/
+lemma exists_ker_ne_zero {κ : Type*} [Fintype κ] [DecidableEq κ] {c : ℕ} (Φ : Fin c → κ → F)
+    (hc : c < Fintype.card κ) : ∃ u : κ → F, u ≠ 0 ∧ ∀ a, Φ a ⬝ᵥ u = 0 := by
+  obtain ⟨y, hy, hyΦ⟩ := exists_indep_ker c Φ
+  exact ⟨y ⟨0, by omega⟩, hy.ne_zero _, hyΦ _⟩
+
 /-! ## Arrays with three indices -/
 
 section Tri
@@ -345,6 +351,30 @@ lemma bil_zero_left (L : ι₁ → ι₂ → ι₃ → F) (x : ι₃ → F) : bi
 omit [Fintype ι₁] in
 lemma bil_zero_right (L : ι₁ → ι₂ → ι₃ → F) (v : ι₂ → F) : bil L v 0 = 0 := by
   funext k; simp only [bil, ev_zero, Pi.zero_apply]
+
+lemma tri_add₁ (L : ι₁ → ι₂ → ι₃ → F) (h h' : ι₁ → F) (v : ι₂ → F) (x : ι₃ → F) :
+    tri L (h + h') v x = tri L h v x + tri L h' v x := by
+  simp only [tri_eq_dot, add_dotProduct]
+
+lemma tri_smul₁ (L : ι₁ → ι₂ → ι₃ → F) (c : F) (h : ι₁ → F) (v : ι₂ → F) (x : ι₃ → F) :
+    tri L (c • h) v x = c * tri L h v x := by
+  simp only [tri_eq_dot, smul_dotProduct, smul_eq_mul]
+
+lemma tri_add₂ (L : ι₁ → ι₂ → ι₃ → F) (h : ι₁ → F) (v v' : ι₂ → F) (x : ι₃ → F) :
+    tri L h (v + v') x = tri L h v x + tri L h v' x := by
+  simp only [tri_eq_dot, bil_add_left, dotProduct_add]
+
+lemma tri_smul₂ (L : ι₁ → ι₂ → ι₃ → F) (c : F) (h : ι₁ → F) (v : ι₂ → F) (x : ι₃ → F) :
+    tri L h (c • v) x = c * tri L h v x := by
+  simp only [tri_eq_dot, bil_smul_left, dotProduct_smul, smul_eq_mul]
+
+lemma tri_add₃ (L : ι₁ → ι₂ → ι₃ → F) (h : ι₁ → F) (v : ι₂ → F) (x x' : ι₃ → F) :
+    tri L h v (x + x') = tri L h v x + tri L h v x' := by
+  simp only [tri_eq_dot, bil_add_right, dotProduct_add]
+
+lemma tri_smul₃ (L : ι₁ → ι₂ → ι₃ → F) (c : F) (h : ι₁ → F) (v : ι₂ → F) (x : ι₃ → F) :
+    tri L h v (c • x) = c * tri L h v x := by
+  simp only [tri_eq_dot, bil_smul_right, dotProduct_smul, smul_eq_mul]
 
 /-- The array with the legs rotated: `(rot L)_{ijk} = L_{kij}`. -/
 def rot (L : ι₁ → ι₂ → ι₃ → F) : ι₂ → ι₃ → ι₁ → F := fun i j k => L k i j
