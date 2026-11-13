@@ -24,6 +24,7 @@ No `sorry`, no `axiom`.
 -/
 
 open OracleComp OracleSpec VoleMole.Assumptions.LazyPerm VoleMole.ROM.OneMore
+open VoleMole.Assumptions.UOV.CTUFOpen
 open scoped ENNReal
 
 namespace VoleMole.Assumptions.UOV.CTUFPerm
@@ -671,7 +672,7 @@ theorem combP_step (q : (DR ⊕ (Fin K × T)) ⊕ (Bool × (T × Z)))
     exact this
   · rw [combP_sign, projP]
     erw [cfImpl_sign]
-    simp only [map_pure]; exact EvalDistEq.rfl
+    exact EvalDistEq.rfl
   · rw [cfImpl_inv]
     simp only [projP, invS]
     cases h : invFind L b with
@@ -835,6 +836,172 @@ theorem combP_inv (hemb : Function.Injective emb) :
             have : x' = x := hemb (by rw [← hx', hb])
             subst this; simp
 
+omit [DecidableEq DR] [DecidableEq Xc] [∀ d, SampleableType (AR d)] [SampleableType T]
+  [SampleableType Z] in
+/-- **Without an inverse answer at a structured input, `Com` read off the table is the function's
+value.** -/
+theorem comP_tab {s : (PTab (T × Z) × ℕ) × CRSt AR K Xc T Z} (hs : InvP emb s)
+    (hI : ¬InvHit (Set.range emb) s.1.1) {x : Xc} {c : T} (h : comP emb s.1.1 x = some c) :
+    s.2.2 x = some c := by
+  unfold comP at h
+  obtain ⟨y, hy, rfl⟩ := Option.map_eq_some_iff.1 h
+  obtain ⟨e, he, he1, he2⟩ := fwdFind_some hy
+  cases hf : e.2.2
+  · exact absurd ⟨e, he, hf, he1 ▸ ⟨x, rfl⟩⟩ hI
+  · rw [hs.2.2 e he hf x he1, he2]
+
+omit [DecidableEq Z] in
+/-- **The final evaluations only extend `Com`'s table.** -/
+theorem mapM_comQ_mono (xs : List Xc) (st : CRSt AR K Xc T Z) :
+    ∀ w ∈ support ((simulateQ (frImpl (S := S) σ) (xs.mapM (comQ (AR := ARc AR (T × Z)) (K := K)
+        (S := S)))).run st),
+      w.2.1 = st.1 ∧ ∀ x t, st.2 x = some t → w.2.2 x = some t := by
+  induction xs generalizing st with
+  | nil =>
+    intro w hw
+    simp only [List.mapM_nil, simulateQ_pure, StateT.run_pure, support_pure,
+      Set.mem_singleton_iff] at hw
+    subst hw; exact ⟨rfl, fun _ _ h => h⟩
+  | cons x xs ih =>
+    intro w hw
+    rw [List.mapM_cons] at hw
+    simp only [simulateQ_bind, StateT.run_bind, mem_support_bind_iff] at hw
+    obtain ⟨a, ha, w', hw', hw⟩ := hw
+    erw [comQ, simulateQ_spec_query] at ha
+    simp only [frImpl, LazyIdeal.rfFresh] at ha
+    erw [StateT.run_mk] at ha
+    have hst : a.2.1 = st.1 ∧ ∀ x t, st.2 x = some t → a.2.2 x = some t := by
+      split at ha
+      · erw [support_pure, Set.mem_singleton_iff] at ha
+        subst ha; exact ⟨rfl, fun _ _ h => h⟩
+      · next h =>
+        erw [support_map] at ha
+        obtain ⟨t, -, rfl⟩ := ha
+        refine ⟨rfl, fun x' t' h' => ?_⟩
+        have hx : x' ≠ x := fun hh => by rw [hh, h] at h'; cases h'
+        simp only [Function.update_of_ne hx, h']
+    obtain ⟨h1, h2⟩ := ih a.2 w' hw'
+    simp only [simulateQ_pure, StateT.run_pure, support_pure, Set.mem_singleton_iff] at hw
+    subst hw
+    exact ⟨h1.trans hst.1, fun x t h => h2 x t (hst.2 x t h)⟩
+
+omit [DecidableEq Z] in
+/-- **The ideal win survives the final evaluations.** -/
+theorem ciWin_ciFinal (V : Fin K → S → T → Prop) (o : CTOut K S Xc) (st : CRSt AR K Xc T Z)
+    (hW : CIWin V (o, st)) :
+    ∀ w ∈ support ((simulateQ (frImpl σ) (ciFinal (AR := ARc AR (T × Z)) o)).run st), CIWin V w := by
+  intro w hw
+  unfold ciFinal at hw
+  simp only [simulateQ_bind, StateT.run_bind, mem_support_bind_iff, simulateQ_pure,
+    StateT.run_pure, support_pure, Set.mem_singleton_iff] at hw
+  obtain ⟨a, ha, rfl⟩ := hw
+  obtain ⟨h1, h2⟩ := mapM_comQ_mono σ _ st a ha
+  obtain ⟨k, x, s', c, hk, hx, hV, hn, hop⟩ := hW
+  refine ⟨k, x, s', c, hk, h2 x c hx, hV, ?_, fun q hq => ?_⟩
+  · rw [h1]; exact hn
+  · rw [h1] at hq
+    obtain ⟨x', hx', hc⟩ := hop q hq
+    exact ⟨x', hx', h2 x' _ hc⟩
+
+omit [DecidableEq DR] [∀ d, SampleableType (AR d)] [DecidableEq T] [DecidableEq Z]
+  [SampleableType T] [SampleableType Z] in
+theorem projRO_empty : projRO (∅ : (specR (ARc AR (T × Z))).QueryCache) = ∅ :=
+  QueryCache.ext fun _ => rfl
+
+variable [Fintype T] [Fintype Z] [Fintype Xc] (V : Fin K → S → T → Prop)
+
+/-- **T4's first step in the permutation model**: the permutation-model CT-UF^open advantage is
+at most the random-function advantage (`advCTUFIdealAt`, world with coins) of the reduction
+`permRed emb F`, plus the switching term (`q = q_f + q_i + q_S + 1` queries read the permutation)
+and the inverse hits:
+
+    Adv^{perm}(F) ≤ Adv^{ideal}(permRed F) + q²/|T × Z| + q_i·|Xc|/|T × Z|. -/
+theorem advCTUFPermAt_le_ideal (hemb : Function.Injective emb)
+    (F : ProbComp (OracleComp (specCP AR K T Z S) (CTOut K S Xc))) {qf qi qS : ℕ}
+    (hF : ∀ f ∈ support F, CPBudget qf qi qS f) :
+    advCTUFPermAt V σ emb F ≤
+      advCTUFIdealAt V σ (permRed emb F) +
+        ((qf + qi + qS + 1 : ℕ) : ℝ≥0∞) * ((qf + qi + qS + 1 : ℕ) / Fintype.card (T × Z)) +
+        (qi : ℝ≥0∞) * (Fintype.card Xc / Fintype.card (T × Z)) := by
+  refine (advCTUFPermAt_le_rf V σ emb F hF).trans ?_
+  refine add_le_add (add_le_add ?_ le_rfl) le_rfl
+  unfold advCTUFIdealAt permRed
+  rw [bind_map_left]
+  refine prEvent_bind_mono_of_support F _ _ fun f _ => ?_
+  set G := f >>= cpFinal emb
+  set s₀ : (PTab (T × Z) × ℕ) × CRSt AR K Xc T Z := (([], 0), (⟨∅, []⟩, fun _ => none))
+  have hs₀ : InvP emb s₀ := ⟨fun _ _ => rfl, fun _ _ => rfl, fun e he => by
+    simp only [s₀] at he; cases he⟩
+  have hproj := LazyIdeal.simulateQ_proj_eqd_inv (combP σ emb) (cfImpl σ) projP (InvP emb)
+    (combP_inv σ emb hemb) (fun q s hs => combP_step σ emb q s hs) G s₀ hs₀
+  have hp0 : projP s₀ = (([] : PTab (T × Z)), (⟨∅, []⟩ : CISt AR K T)) := by
+    simp only [projP, s₀, projRO_empty]
+  rw [hp0] at hproj
+  have e1 := hproj.prEvent_eq fun r => CPWin V emb (r.1, r.2.1, r.2.2) ∧ ¬InvHit (Set.range emb) r.2.1
+  rw [prEvent_map] at e1
+  show Pr{let r ← (simulateQ (cfImpl σ) G).run ([], ⟨∅, []⟩)}[
+      CPWin V emb (r.1, r.2.1, r.2.2) ∧ ¬InvHit (Set.range emb) r.2.1] ≤ _
+  rw [← e1]
+  have hInv := simulateQ_run_preservesInv (combP σ emb) (InvP emb) (combP_inv σ emb hemb) G s₀ hs₀
+  have hcol : (simulateQ (frImpl σ) (simF emb f)).run (⟨∅, []⟩, fun _ => none) =
+      (fun r => (r.1, r.2.2)) <$> (simulateQ (combP σ emb) G).run s₀ := by
+    unfold simF
+    rw [simulateQ_map, StateT.run_map, collapseP, Functor.map_map]
+  calc _ ≤ Pr{let z ← (simulateQ (combP σ emb) G).run s₀}[CIWin V (z.1, z.2.2)] := by
+        refine prEvent_mono_of_support _ _ _ fun z hz hW => ?_
+        obtain ⟨⟨k, x, s', c, hk, hx, hV, hn, hop⟩, hI⟩ := hW
+        have hz' := hInv z hz
+        refine ⟨k, x, s', c, hk, comP_tab emb hz' hI hx, hV, hn, fun q hq => ?_⟩
+        obtain ⟨x', hx', hc⟩ := hop q hq
+        exact ⟨x', hx', comP_tab emb hz' hI hc⟩
+    _ = Pr{let w ← (simulateQ (frImpl σ) (simF emb f)).run (⟨∅, []⟩, fun _ => none)}[CIWin V w] := by
+        rw [hcol, prEvent_map]
+    _ ≤ _ := by
+        unfold ciRun
+        rw [simulateQ_bind, StateT.run_bind]
+        exact LazyIdeal.prEvent_le_bind _ _ _ _ fun w _ hW => ciWin_ciFinal σ V w.1 w.2 hW
+
 end Core
+
+/-! ## Down to OMPR -/
+
+section OMPR
+
+variable {DR : Type} [DecidableEq DR] {AR : DR → Type} [∀ d, SampleableType (AR d)] {K : ℕ}
+  {T Z S Xc : Type} [DecidableEq T] [DecidableEq Z] [SampleableType T] [SampleableType Z]
+  [DecidableEq Xc] [Inhabited T] [Fintype T] [Fintype Z] [Fintype Xc]
+  {PK SK : Type} (tr : Trapdoor PK SK T S)
+
+/-- **The permutation terms**: `q²/|B| + q_i·|Xc|/|B|` (the switch from the permutation to the
+random function with `q` queries reading it, and an inverse answer at a structured input). -/
+noncomputable def permEps (q qi nX nB : ℕ) : ℝ≥0∞ := (q : ℝ≥0∞) * (q / nB) + qi * (nX / nB)
+
+/-- **T4 in the permutation model, at fixed keys** (`uov-assumptions.md` §5.4): for a
+permutation-model forger with at most `q_f` forward, `q_i` inverse and `q_S` signing queries and
+`q_S` openings, and an injective encoding `emb` of the openings into the blocks,
+
+    Adv^{perm}_K(F) ≤ Σ_j (Adv^{ompr}_{key j}(B_j; n, q_S) + n·failPr_{key j})
+                      + (q_f + q_i + q_S + 1)²/|T × Z| + q_i·|Xc|/|T × Z|,
+
+`n = (q_f + q_S + 1) + 2q_S + 1`, `B_j = ompRed q_S (guessF j (permRed emb F))`: the reduction
+simulates the permutation from `Com` and coins and runs T4's function-model reduction. -/
+theorem advCTUFPermAt_le_ompr (ks : Fin K → PK × SK) {emb : Xc → T × Z}
+    (hemb : Function.Injective emb) (F : ProbComp (OracleComp (specCP AR K T Z S) (CTOut K S Xc)))
+    {qf qi qS : ℕ} (hF : ∀ f ∈ support F, CPBudget qf qi qS f) :
+    advCTUFPermAt (fun k => tr.IsPre (ks k).1) (signers tr.D fun k => (ks k).2) emb F ≤
+      ∑ j : Fin K, (advOMPR (tr.atKey (ks j)) ((qf + qS + 1) + 2 * qS + 1) qS
+          (ompRed qS fun _ => guessF j (signers tr.D fun k => (ks k).2) <$> permRed emb F) +
+        (((qf + qS + 1) + 2 * qS + 1 : ℕ) : ℝ≥0∞) * preFailPr (tr.atKey (ks j))) +
+        permEps (qf + qi + qS + 1) qi (Fintype.card Xc) (Fintype.card (T × Z)) := by
+  refine (advCTUFPermAt_le_ideal _ emb _ hemb F hF).trans ?_
+  rw [add_assoc, permEps]
+  refine add_le_add (advCTUFIdealAt_le_ompr tr (qf + qS + 1) qS ks (permRed emb F) fun g hg => ?_)
+    le_rfl
+  unfold permRed at hg
+  erw [support_map] at hg
+  obtain ⟨f, hf, rfl⟩ := hg
+  exact simF_budget emb f (hF f hf)
+
+end OMPR
 
 end VoleMole.Assumptions.UOV.CTUFPerm
