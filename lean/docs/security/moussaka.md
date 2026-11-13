@@ -230,6 +230,14 @@ below are evidence for these assumptions. They are not part of any reduction.
     for uniform `r` and `t = Com(nf, ctx_iss, ctx_red, r)`, where `A` chooses
     `nf, ctx_iss, ctx_red` first.
   - Generic: `≲ (q+1)/2^{128}`.
+  - [Lean] `lean/VoleMole/Privacy/PU.lean`, `Privacy/PUKeccak.lean` (`lean/docs/zk.md` §4.3). The
+    form used for zero knowledge on `main` is (PU): `puAdv Com P = Pr[r ∈ P(nf, t, aux)]` for a
+    predictor that outputs `c` candidates (uniform `nf`; `c = 1` and a check of the candidate is
+    the notion above). With a uniformly random permutation in place of Keccak-p[800] and a
+    predictor that makes `q` forward and inverse queries, `puAdv ≤ (c + q)/(2^{128} − q) +
+    q/(2^{440} − q)` (`puAdvPerm_moussaka_le`): the generic estimate, with the inverse-query term.
+    For the concrete `Com` the exhaustive predictor has advantage `1` (`puAdv_bruteForce`), so the
+    assumption is computational, as it must be.
 - **Hiding (2-instance).**
   - `Adv^hide_Com(A)`: `A` chooses `(ctx_iss, ctx_red)`. For uniform `r₀, r₁, nf₀, nf₁`, it gets
     `t_c = Com(nf_c, ctx_iss, ctx_red, r_c)` for `c ∈ {0,1}`.
@@ -813,8 +821,16 @@ Clients is mechanized for the random-oracle games of Appendix B (`lean/docs/zk.m
   candidate for that proof's witness prefix `r`. That is this section's `Pred` event, measured
   where `r` enters the view only through `t₀, t₁`; bounding it is (PU), one-wayness of
   Keccak-p[800] in `r`, which stays an assumption. The `15` (against the `4` of `ε_ZK^joint(main)`
-  above) is a cost of the mechanized coupling (`lean/docs/zk.md` §4.2). Not covered there: the
-  cross-proof `iv` and `H₃`-slice collisions (`ε_iv`), an adversary reading `H₂³`, `main`'s
+  above) is a cost of the mechanized coupling (`lean/docs/zk.md` §4.2).
+  **With (PU) as a game** (`Privacy/MoussakaMainPU.lean`, `lean/docs/zk.md` §4.3):
+  `anonymity_main_pu`, for a guess whose `H₅` read sets have at most `q₅` keys,
+  `≤ 8·εRF(q₃, q_E) + 15·(Σ_{b,c} puAdv Com (predM_c b) + 4·(q₅ + 1)·2⁻¹²⁸) + 2·Adv^hide_Com`,
+  `predM_c b` the explicit predictor of Client `c`'s opening from `t₀, t₁`, the nullifiers, the
+  simulators' coins and the tables (at most `2(q₅ + 1)` candidates). This is `Pred ≤ Adv^ow-r_Com`
+  of this section, with `c` guesses. The `4·(q₅ + 1)·2⁻¹²⁸` is for the redemption proofs of a
+  failed finalization (a dummy token, never shown), which the paper argument does not mention.
+  Not covered: several proofs on **shared** tables (the cross-proof `iv` collisions `ε_iv`; for
+  one proof the shared-table model with `H₂³` visible is `zk_rom_ic_h23_main`), `main`'s
   `find_issuer` Client and the non-colluding mode 4(b).
 
 Remarks from the mechanization:
