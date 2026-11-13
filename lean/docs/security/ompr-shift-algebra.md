@@ -28,17 +28,20 @@ with a stated unproved hypothesis. *Estimate*: cost figure from the usual hybrid
 | T3 | Infinitesimal symmetries `B(s, Xs) = Y·P(s)`: only `(X, Y) ∈ F·(I, 0)` on toy keys. Conjecture: the only public pairs `(A, T)` with `P∘A = T∘P` are the scalings | experimental; conjecture | §3.1 |
 | T4 | A translator for one fixed shift `Δ₀` is worth exactly one equation: `UOV(119, 45) ≤ UOV-projected(119, 44) ∘ Tr_{Δ₀}`, and `Tr_{Δ₀} ≤ UOV(119, 45)`. In the cost model the gap is `≈ 2^{3.7}`. For uniform shifts translation is the UOV problem ([OR] A3) | proved; figure: estimate | §3.2 |
 | T5 | The linear span of known preimages gives targets `Σ α_i² y_i + Σ α_iα_j B(s_i, s_j)`. The reduction controls the `y_i`, not the cross terms. On toy keys the cross term of two sampler answers is uniform. With the oil space, translation is linear algebra; without it, every route we checked is an MQ instance or a class | proved identities; heuristic conclusion; experimental | §3.3–3.4 |
-| C1 | **Collinear shifts remove one equation.** With shifts `λ_a·c`, a forgery is a solution of 44 of the 45 equations that lands on one of the `τ` points of a line of 256. For `τ ≥ 256` this is a real gain of `≈ 2^{3.7}` (model) over any known attack on OMPR with independent targets. For τ = 17 the landing cost `256/17 = 2^{3.9}` exceeds it: `2^{144.2}` against `2^{144.1}` | reduction proved; costs: estimate | §4.1 |
-| C2 | No other structured shift list (subfield lines, `F₂`-subspaces, higher-dimensional `F`-subspaces), and no use of the `D` oracle together with the shifts, gives more than the counting factor τ | heuristic, estimate | §4.2–4.3 |
+| C1 | **Collinear shifts trade one equation for a landing.** With shifts `λ_a·c`, a forgery is a solution of 44 of the 45 equations whose last coordinate `μ(s)` is one of τ values out of 256. In a hybrid solver this is the direct attack with one equation dropped from the solver and τ guesses saved. Its cost is `τ*/τ` times the direct cost, `τ* = 256·U/H` (`H`: direct; `U`: one solution of the 44 equations). Reference model (XL with Wiedemann, after Thomae–Wolf): `H = 2^{140.3}`, C1 at τ = 17 costs `2^{142.4}`, `τ* ≈ 72`. Over ten model variants `τ*` runs from 11 to 72 and C1 at 17 from `2^{0.7}` below to `2^{2.1}` above the direct attack. For `q = 0` no attack gains more than `τ = 2^{4.1}`. On toy keys the degrees, the call counts, the landing rate `τ/q` and the break-even point are as the model predicts | reduction proved; costs: estimate; experimental | §4.1 |
+| C2 | No other structured shift list (subfield lines, `F₂`-subspaces, higher-dimensional `F`-subspaces, curves), and no use of the `D` oracle together with the shifts, gives more than the counting factor τ. One call serves two requests only with probability `≤ 255·τ²·256^{−45}` per pair | heuristic, estimate; last part proved | §4.2–4.3 |
+| C3 | **A singular vector lands for free, without shifts.** For `P(z) = 0` (`z₀ = D(0)`: one call) and any `c ≠ 0`, a preimage of any `t` is a zero of 44 quadrics on a 74-dimensional space: the landing on the line `t + F·c` is solved by `s ↦ s + λz`. This is the saving of Thomae–Wolf by another route. The two do not stack at `(119, 45)`, and neither stacks with C1 beyond `τ*/τ` | proved; non-stacking: count of dimensions; experimental (identity) | §4.3 |
 
 **Answer.** We found neither a polynomial-loss reduction nor an attack at τ = 17.
 - *Reductions.* The obstacle A4 is not an artefact of the generic model. For UOV, a better
   adversary-black-box reduction exists only if OMPR^free fails (R). The algebraic tools at hand
   (T1–T5) give no combiner across classes. What remains is a reduction that is not black-box in
   the adversary.
-- *Attacks.* The one structural use of the shifts is C1. It is below break-even at τ = 17 and
-  small for every τ. Conjecture A6 of [OR] should be read "up to the factor of §4.1" for
-  `τ ≳ 20`.
+- *Attacks.* The one structural use of the shifts is C1. PomFRIT does not choose the shifts: they
+  are the tree prefixes of a forger, so collinear lists are allowed (§4). At τ = 17, C1 costs
+  `2^{2.1}` more than the direct attack in the reference model. It is `2^{0.7}` cheaper in the
+  most favourable variant we tried, and it can never be more than `2^{4.1}` cheaper. Conjecture
+  A6 of [OR] should be read "up to the factor `τ/τ*` of §4.1" for `τ > τ*`.
 - *Advice.* Unchanged from [UA] §6: U1 as the main statement, U2 under OMPR⊕17.
 
 ---
@@ -362,6 +365,23 @@ advantage about `1/(2L)`.
 Generically they give the counting factor only: OMPR⊕τ with `N` requests is OMPR with `Nτ`
 targets ([UA] Prop. 8(c)). An attack that separates the two must use the fixed differences.
 
+**Which shifts PomFRIT has [from the code].** None of its own.
+- The honest Client has one mask `r` per issuance, squeezed from `XOF_seed`
+  (`src/pomfrit/pomfrit.cpp:149-160`) and committed as the witness prefix of all 17 trees
+  (`:167`, `src/voleith.hpp:234-238`). Its target is `h ⊕ r`: one shift.
+- 17 is the number of VOLEitH trees (`src/pomfrit/redeem.hpp:74`). The shift list of A-OMPR⊕17
+  appears only in the reduction of U2 (`pomfrit.md` §6.2): it is the list of prefixes `r^{(i)}` of
+  the alive trees of a *forger's* commitment (`pomfrit.md` §5, step 4). The forger sets the
+  corrections between trees, so it sets the `r^{(i)}` freely. They are fixed before `h`, because
+  `chal1` and the prefix correction enter `H_T` (`pomfrit.cpp:96-111`).
+- So the list is the adversary's: any 17 points, collinear ones included. No choice of PomFRIT's
+  makes it non-collinear, and pqov plays no part (it sees one target per `derive_preimage`).
+- A PomFRIT forger pays for distinct prefixes, on top of the algebra. To complete a proof with the
+  prefix of a group of trees of total width `w` it needs at least `2^{128−w}` `H₂³` queries
+  (`pomfrit.md` §5, steps 4–7). For 17 distinct prefixes this is `2^{120}` or `2^{121}`; for two
+  groups, `2^{65}` and `2^{71}`. The cost adds to the cost of §4.1 and is below it, so it does not
+  rule C1 out. It is absent from A-OMPR⊕17 itself.
+
 ### 4.1 Collinear shifts
 
 **Proposition C1 [proved].** Let request `k` have the shifts `λ_a·c`, `a ≤ τ`, with `c ≠ 0` and
@@ -374,30 +394,118 @@ distinct `λ_a ∈ F`. Let `π_c : F^M → F^M/F·c`. Then `s` is a forgery for 
 - If `{λ_a} = F`, which needs `τ ≥ 256`, the second condition is void: OMPR⊕256(N, 0) is at
   most as hard as that 44-equation problem. This is [OR] A2 item 2 read as an attack.
 - If `τ < 256`, a solution of the first condition lands with probability `τ/256` (heuristically,
-  for a solver that returns an unstructured solution).
+  for a solver that returns an unstructured solution; measured below).
 
-**Costs [estimate].** Hybrid XL, the model of `scripts/uov-open-structure/mq_estimates.py`
-(script, part 4), field multiplications:
+**C1 inside a hybrid solver.** Write `S(n, m)` for the cost of solving `m` quadrics in `n < m`
+variables, and `q = 256`. Both attacks fix variables until `n = M − j` are left; `j` of the fixed
+values are guesses.
 
-| System | Cost |
-|---|---|
-| 45 quadrics (direct forgery, [UOS] B.5) | `2^{144.1}` |
-| 44 quadrics | `2^{140.3}` |
-| 44 quadrics, landing on 17 of 256 points | `2^{140.3}·256/17 = 2^{144.2}` |
-| 44 quadrics and the equation `∏_a (μ(s) − λ_a) = 0` of degree 34 | `2^{148.3}` |
+    direct:     H     = min_j  q^j      · S(M − j, M)        one solution of M equations
+    C1 at τ:    U·q/τ = min_j  q^j / τ  · S(M − j, M − 1)    U: one solution of the M − 1 equations
 
-- At τ = 17 there is no gain: `2^{144.2}` against `2^{144.1}`. The step from 44 to 45 equations
-  is large in this model (`2^{3.7}`; the average step is `2^{2.65}`), so break-even is at
-  `τ ≈ 20` here and at `τ ≈ 41` for an average step.
-- At `τ ≥ 256` the gain is `≈ 2^{3.7}`. For OMPR with `256·N` independent targets we know no
-  gain at all over one target for algebraic solvers. So **for large τ, OMPR⊕τ is easier than
-  OMPR with `τN` targets, by a small factor**, in the best attacks we know. This is consistent
-  with [UA] Prop. 8(a): for `q = 0` the gain is at most τ.
+- For the same `j` the two solvers see the same number of variables. The `M − 1` equations have
+  a solution `q` times as often as the `M` equations, and a solution is a forgery with
+  probability `τ/q`. So C1 needs τ times fewer calls, and each call runs a solver with one
+  equation less.
+- **Break-even.** C1 at τ costs `τ*/τ` times the direct attack, with `τ* = q·U/H = 2^{8 − step}`,
+  `step = log₂(H/U)`. C1 gains iff `τ > τ*`, and the gain `τ/τ*` is at most τ.
+- In XL the cost `S` depends on `(n, m)` only through the operating degree `D`. Where
+  `D(n, M − 1) = D(n, M)` the gain is the full factor τ. Where the degree goes up by one, the
+  loss is far more than `τ = 17`. So `τ*` is decided by the grid of degrees near the optimum, and
+  it moves in jumps with the parameters.
+
+**Costs [estimate].** `scripts/ompr-shift-algebra/c1_experiments.py estimates`, in `log₂` field
+multiplications over `F₂₅₆` for `(N, M) = (119, 45)`; add 7.1 for bit operations. Formulas are
+quoted from memory.
+- Solver models. *XL*: Wiedemann on the Macaulay matrix, `3·T²·binom(n+2, 2)`, `T = binom(n+D,
+  D)`, `D` the first degree with a non-positive coefficient in `(1−t²)^m/(1−t)^{n+1}`. This is the
+  model of [UOS] B.5 and, as we remember it, of the UOV specification. *F5, ω*:
+  `binom(n+d−1, d)^ω` with `d` from `(1−t²)^m/(1−t)^n` [BFP09].
+- Preprocessing of the underdetermined system. *Plain*: fix `N − m` variables. *TW*: Thomae–Wolf
+  [TW12] with the guesses of Furue–Nakamura–Takagi [FNT21]: after `k` guesses, `m − a` equations
+  in `m − k − a` variables, `a = ⌊(N−k)/(m−k)⌋ − 1`. At `(119, 45)` and `(119, 44)`, `a = 1` for
+  `k = 0`. Hashimoto's refinement [Has21] and the crossbred algorithm are not modelled.
+
+| Solver | Prep. | Direct `H` | `U` (44 eqs) | step | `τ*` | C1 at τ = 17 | C1(17) / direct |
+|---|---|---|---|---|---|---|---|
+| XL | plain | 144.1 | 140.3 | 3.74 | 19.1 | 144.3 | `2^{+0.17}` |
+| XL | TW | **140.3** | 138.5 | 1.84 | 71.5 | **142.4** | `2^{+2.07}` |
+| F5, ω = 2 | plain | 124.5 | 120.9 | 3.61 | 21.0 | 124.9 | `2^{+0.30}` |
+| F5, ω = 2 | TW | 120.9 | 119.1 | 1.84 | 71.5 | 123.0 | `2^{+2.07}` |
+| F5, ω = 2.37 | plain | 143.4 | 139.4 | 4.00 | 16.0 | 143.3 | `2^{−0.09}` |
+| F5, ω = 2.37 | TW | 139.4 | 136.9 | 2.46 | 46.4 | 140.8 | `2^{+1.45}` |
+| F5, ω = 2.81 | plain | 162.3 | 159.4 | 2.88 | 34.7 | 163.4 | `2^{+1.03}` |
+| F5, ω = 2.81 | TW | 159.4 | 154.9 | 4.59 | 10.6 | 158.8 | `2^{−0.68}` |
+
+XL with the criterion "coefficient `≤ 1`" (which is what plain XL needs, see the experiments)
+gives the same figures as XL. The row in bold is the reference: it is the cheapest realistic
+attack, and for `(112, 44)` it gives `2^{138.5}` multiplications, `2^{145.6}` bit operations,
+which matches the direct-attack figure we remember from the UOV specification (`≈ 2^{145}`).
+
+- **Direct forgery with Thomae–Wolf costs `2^{140.3}`**, not the `2^{144.1}` of [UOS] B.5, which
+  applies no variable reduction. The best forgery attack removes one equation whether or not
+  there are shifts.
+- **τ = 17 in the reference model: C1 costs `2^{142.4}` against `2^{140.3}`.** It is `2^{2.1}`
+  dearer. Break-even is `τ* ≈ 72`.
+- **Sensitivity.** `τ* = 2^{8 − step}`, and the step is a property of the degree grid. In the XL
+  model it alternates with the parity of the number of equations: 1.84 and 3.74 for 44 and 45
+  (script: `m = 36..46`), up to 4.38 for larger `m`. So one equation more or less in the
+  preprocessing moves `τ*` between 72 and 19. Its mean over `m = 36..55` is 2.66 (`τ* ≈ 40`); for
+  the F5 models the means give `τ*` = 42, 33, 25.
+  - Over the eight rows, `τ*` runs from 10.6 to 71.5.
+  - C1 at τ = 17 is dearer than the direct attack in six rows, among them all rows of XL and of
+    F5 with ω = 2. It is cheaper in two rows. F5 with ω = 2.37, plain: by `2^{0.09}`; but the
+    same solver with TW is `2^{4}` cheaper, and there C1 is `2^{1.45}` dearer. F5 with ω = 2.81
+    and TW: by `2^{0.68}`; this solver costs `2^{19}` more than the reference.
+  - The claim of the earlier version of this note, "`2^{144.2}` against `2^{144.1}`", was the
+    row XL/plain. Its margin of `2^{0.17}` is not meaningful. The margin with TW is.
+- **Bound that needs no model.** For `q = 0`, OMPR⊕τ loses at most τ against OMPR ([UA]
+  Prop. 8(a)). So C1, or any other use of 17 shifts, gains at most `2^{4.09}` on one forgery.
+- At `τ ≥ 256` the landing is free and the gain is the step: `2^{1.8}` in the reference model. For
+  OMPR with `256·N` independent targets we know no gain at all over one target for algebraic
+  solvers. So **for `τ > τ*`, OMPR⊕τ is easier than OMPR with `τN` targets, by the factor
+  `τ/τ*`**, in the best attacks we know.
 - Shifts in a `d`-dimensional `F`-subspace remove `d` equations and land with probability
   `τ/256^d`. For τ = 17 this is worse for every `d ≥ 2`.
+- The landing as an equation, `∏_a (μ(s) − λ_a) = 0` of degree 34 next to the 44 quadrics, is
+  worse than both: `2^{148.3}` (`shift_algebra_toy.py`, part 4; XL, plain).
 
-Two reasons why 17 is safe here: `17 < 256`, so a shift list contains no affine line; and
-`256/17` exceeds the worth of one equation.
+**Experiments [experimental].** `c1_experiments.py toy` builds `c1_toy.c`: toy UOV keys over `F₁₆`
+and `F₂₅₆`, the direct attack and C1 by XL with dense elimination, every solution checked
+against the public map. Seven keys, 49 pairs (attack, `j`).
+- *Degrees.* The smallest degree at which XL decides a system is the model's in all 49 cases, for
+  the 45-type and for the projected 44-type systems alike, with the criterion "coefficient
+  `≤ 1`": with corank one XL still isolates one candidate point. This differs from "`≤ 0`" in 4
+  cases, all with `m = n + 1` or `n ≤ 3`. The projection `π_c` does not disturb semi-regularity.
+- *Calls.* Solutions per call are `q^{−j}` (direct) and `q^{−(j−1)}` (C1): e.g. 773 found for
+  762.0 expected, 752 for 767.6, 733 for 768.0; C1: 679 for 672.0, 748 for 767.6, 770 for 768.0.
+- *Landing.* `μ` is uniform over the solutions of the projected system. Pooled chi-square over
+  the 16 batches with `q = 16`: 268.8 on 240 degrees of freedom; 22 further keys: 364.9 on 330.
+  For `q = 256`: 229.8, 263.9, 231.7 on 255. Landings in a fixed list of 17 of 256 values: 31,
+  30, 4 for 23.4, 27.2, 3.9 expected. Lists of 1, 2, 4, 8 of 16 values behave the same.
+- *Break-even.* Work per forgery is multiplications per solution, times `q/τ` for C1. Where a
+  batch found fewer than 30 solutions it is multiplications per call times `q^j` (the call
+  counts above justify this).
+
+| `q` | `(N, M)` | Direct: best `j`, `D` | C1: best `j`, `D` | `τ*` measured | `τ*`, `T^{2.81}` | `τ*`, `3T²·binom(n+2,2)` |
+|---|---|---|---|---|---|---|
+| 16 | (21, 8) | 4, 3 | 4, 3 | 0.78 | 1.00 | 1.00 |
+| 16 | (24, 9) | 3, 4 | 5, 3 | 1.90 | 2.11 | 3.81 |
+| 16 | (26, 10) | 5, 3 | 4, 4 | 3.41 | 2.56 | 1.17 |
+| 16 | (29, 11) | 4, 4 | 6, 3 | 1.58 | 1.75 | 4.30 |
+| 256 | (16, 6) | 2, 4 | 2, 5 | 4.96 | 5.22 | 3.24 |
+| 256 | (24, 9) | 2, 5 | 3, 5 | 56.9 | 56.3 | 67.8 |
+| 256 | (29, 11) | 2, 6 | 3, 6 | 59.3 | 60.9 | 75.4 |
+
+  - Dense elimination costs about `T^{2.8}` to `T^{2.9}` here (`T = 35..5005`), so the column
+    `T^{2.81}` is the model that fits this solver. It predicts `τ*` within a factor 1.35. The
+    Wiedemann formula, which the toy solver does not implement, is within a factor 3.
+  - The scaling in τ is exact: the same batch of solutions serves every τ.
+  - The toys show both regimes. Over `F₁₆` guesses are cheap, the optimum sits where the degree
+    does not move, and C1 gains almost the full τ (`τ* ≈ 1..3`). Over `F₂₅₆` with `M ≥ 9` the
+    direct attack is best at `j = 2`, C1 needs `j = 3`, and `τ* ≈ 57..59`. The real parameters
+    are of the second kind (`j = 3` against `j = 2` in the reference row, `τ* ≈ 72`).
+- *Not tested:* the Thomae–Wolf step, Wiedemann, and sizes where `D > 6`.
 
 ### 4.2 Other structured lists [heuristic]
 
@@ -409,6 +517,14 @@ Two reasons why 17 is safe here: `17 < 256`, so a shift list contains no affine 
 - *`F₂`-subspace of 16 shifts.* It removes 4 of 360 equations over `F₂`. Same conclusion.
 - *Shifts of the form `P(u_a)` or `B(u_a, ·)`.* `P(s) = h + P(u_a)` is `Q_{u_a}(s + u_a) = h`: the
   translated problem again.
+
+- *Why a line.* Any list gives τ times as many forgeries as one target. To use this, one relaxed
+  system must contain them all. A list spanning a `d`-flat gives `45 − d` quadrics and a landing
+  rate `τ/256^d`. A list on a plane curve of degree `e` gives 43 quadrics, one equation of degree
+  `2e` and the rate `τ/256`, which the line beats. So `d = 1` is the best relaxation we see.
+- *Choice of `c`.* `π_c ∘ P` runs over the 44-dimensional subspaces of the span of the 45 public
+  quadrics. One of them is easier only if it contains special quadrics, e.g. of low rank. For UOV
+  none are known (MinRank is not an attack on UOV). The experiments of §4.1 use random `c`.
 
 We found no list for which the candidates are jointly easier than τ independent targets, apart
 from §4.1.
@@ -425,15 +541,64 @@ of chosen `y_i`, and through them the lines and planes of T1 and the span of §3
   aimed at a cross term.
 - Larger spans are MQ instances, as in §3.3, with τ right-hand sides instead of one.
 
-So the calls do not combine with the shifts beyond the factor τ.
+So the calls do not combine with the shifts beyond the factor τ. Two points can be made exact.
+
+**One call, two requests [proved].** Scaling turns a preimage of `y` into preimages of the class
+`F^×·y`. A call serves requests `k < k′` in this way only if two candidates are proportional:
+`h_{k′} + δ_{k′,b} ∈ F^×·(h_k + δ_{k,a})` for some `a, b`. The right-hand sides and the list
+`δ_{k′,·}` are fixed before `h_{k′}`, which is uniform. So this has probability
+`≤ 255·τ²·256^{−45}` per pair of requests, whatever the lists.
+
+**Lemma C3 (landing by a singular vector) [proved].** Let `z ≠ 0` with `P(z) = 0`, and `c ≠ 0`.
+Let `W_c = {s : B(s, z) ∈ F·c}`, a subspace of dimension `≥ N − M + 1 = 75` that contains `z`.
+1. On `W_c`, `π_c ∘ P` is invariant under `s ↦ s + λz`: it is a system of 44 quadrics on
+   `W_c/F·z`, of dimension 74 (generically).
+2. If `s ∈ W_c`, `π_c(P(s)) = π_c(t)` and `B(s, z) ≠ 0`, then `P(s + λz) = t` for exactly one `λ`.
+
+*Proof.* T1.2: `P(s + λz) = P(s) + λ·B(s, z)`, and `B(s, z) = β·c` on `W_c`. `z ∈ W_c` because
+`B(z, z) = 0`. For 2, `P(s) = t + μ·c`, so `λ = μ/β`. ∎
+
+- `z₀ = D(0)` is such a vector (T1.2), for one call. Finding one without the oracle is a forgery
+  for the target 0.
+- **No shift is used.** With `z₀`, a preimage of *any* target is a zero of 44 quadrics in 74
+  variables: the landing on the line `t + F·c` costs nothing. In the model this is `2^{140.3}`:
+  `U` of the plain XL row of §4.1, i.e. C1 at τ = 256, obtained for τ = 1. It is also `H` of the
+  TW row, and for a reason: both routes spend about `M` of the `N − M` spare variables to remove
+  one equation.
+- **It does not stack [count of dimensions].** After the 44 linear conditions of `W_c`, 74
+  variables are left for 44 quadrics, and Thomae–Wolf needs `2·44`. With guesses ([FNT21]) it
+  needs `k ≥ 14`. So the direct attack stays at `H` of the TW rows of §4.1.
+- **With C1.** Shifts along `c` and a singular line along `c′`: 43 linear conditions
+  `B(s, z) ∈ span(c, c′)`, 43 quadrics in 75 variables, `λ` removes the `c′` component, and the
+  `c` component lands with probability `τ/256`. This is `U·256/τ` of the TW rows again. A
+  singular line along `c` itself makes the shifts useless.
+- Checked on toy keys (`c1_experiments.py line`): `dim W_c = N − M + 1`, and every `s` as in 2
+  gives a preimage.
+
+So `D` improves neither side of the comparison of §4.1 beyond what Thomae–Wolf already gives.
 
 ### 4.4 Verdict on attacks
 
-- No attack on OMPR⊕17 that fails for OMPR. The one structural effect (C1) is `≤ 2^{3.7}` for
-  any τ and absent at τ = 17.
-- **Conjecture A6, restated.** For UOV and `τ ≤ 17`, the best attack on OMPR⊕τ(N, q) is the best
-  attack on OMPR(τN, q). For `τ ≥ 256` this is false by the factor of C1 in the model, and the
-  right comparison is with the map `π_c ∘ P`.
+- **The shifts are the forger's.** PomFRIT has no shift list to choose (§4, first paragraph).
+  A-OMPR⊕17 must be read with adversarial lists, collinear ones included.
+- **τ = 17.** No attack on OMPR⊕17 that beats the best attack on OMPR.
+  - Reference model (XL with Wiedemann, Thomae–Wolf): direct forgery `2^{140.3}`
+    multiplications, C1 `2^{142.4}`. C1 is `2^{2.1}` dearer; break-even is `τ* ≈ 72`.
+  - The margin is not robust in sign: `τ*` moves between 11 and 72 with the solver model and
+    the preprocessing. It is robust in size: over the variants C1 is between `2^{0.7}` cheaper
+    and `2^{2.1}` dearer.
+  - Without any model: for `q = 0` at most `2^{4.09}` cheaper ([UA] Prop. 8(a)). The direct
+    attack is at `2^{147.4}` bit operations, so this bound leaves `2^{143.3}`.
+  - In PomFRIT the forger also needs `2^{120}` `H₂³` queries to use 17 distinct prefixes (§4).
+- **Recommendation: no change.** Non-collinear shifts cannot be imposed: the list comes from the
+  forger's commitment and is hidden from the verifier. Nothing needs to be imposed either, since
+  the effect is within `2^{4.1}` in the worst case and absent in the reference model. For the
+  concrete security of U2, take the direct forgery cost of UOV and subtract at most 4 bits.
+  U1 does not use shifts and is not affected.
+- **Conjecture A6, restated.** For UOV and `τ ≤ τ*`, the best attack on OMPR⊕τ(N, q) is the best
+  attack on OMPR(τN, q). For `τ > τ*` it is cheaper by the factor `τ/τ* ≤ τ` of C1, and for
+  `τ ≥ 256` the right comparison is with the map `π_c ∘ P`. `τ* = 256·U/H` depends on the cost
+  model; at `(119, 45)` it is 72 in the reference model and at least 11 in all variants.
 
 ## 5. Where this leaves A6
 
@@ -443,7 +608,7 @@ So the calls do not combine with the shifts beyond the factor τ.
 | Reduction, black-box in the adversary, any use of `P` | impossible below `τ^{q+1}/4` unless OMPR^free fails (Theorem R) |
 | Reduction using a combiner from the algebra of `P` | none found (§3); would break OMPR^free |
 | Reduction that is not black-box in the adversary | open; `E₁` of PomFRIT is the known instance, with additive loss `Q₃·2^{−71}` |
-| Attack separating OMPR⊕17 from OMPR | none found; C1 is below break-even (§4) |
+| Attack separating OMPR⊕17 from OMPR | none found; C1 is below break-even in the reference model, and within `2^{4.1}` in any (§4) |
 
 The loss `τ^{q+1}` is thus an artefact only in the sense that no attack matches it. No proof
 technique that treats the adversary as a black box removes it, unless UOV has a combiner that
@@ -461,12 +626,24 @@ would also break CT-UF^× ([OR] B2).
 
 All are for `qmap`, the model of pqov's public map that `lake exe spec_kats` checks against the
 C++. On paper only: Theorem R (its inequality is [OR]'s `rewind_supermartingale`; the games, the
-simulation and the bad events are not mechanized), T1.4–5, T2′, T4, C1.
+simulation and the bad events are not mechanized), T1.4–5, T2′, T4, C1, C3 (C3 is `preimage_line`
+plus linear algebra).
 
 `scripts/ompr-shift-algebra/shift_algebra_toy.py` (pure Python, about 8 s): the identities of §1
 on toy keys over `F₁₆`, including good ⇔ `𝒪 ∩ K_s = 0`, oil translation and `rad B = 0`; the
 infinitesimal symmetries; the chi-square test of Hypothesis X (40 000 samples by default; a
-fourth argument sets the count); the cost table of §4.1.
+fourth argument sets the count); the cost of the degree-34 landing equation of §4.1.
+
+`scripts/ompr-shift-algebra/c1_experiments.py` (Python; the toy part needs gcc and builds
+`c1_toy.c`):
+- `estimates` (seconds): the cost table of §4.1 for `(119, 45)` and `(112, 44)`, the cost per
+  number of guesses, the step for `m = 36..55`, key-recovery figures, and the `H₂³` cost of
+  distinct prefixes;
+- `line` (8 s): Lemma C3 on toy keys over `F₁₆`;
+- `toy` (about 20 minutes on 24 cores; `toy quick`: 2 minutes): the experiments of §4.1.
+  `c1_toy q N M seed jmin jmax solutions seconds` runs one key.
+Run them under a memory cap. Peak memory is about 1 GB on 24 cores. Batch sizes follow a time
+budget, so the counts quoted in §4.1 vary a little between runs and machines.
 
 ## 7. Open
 
@@ -479,9 +656,24 @@ fourth argument sets the count); the cost table of §4.1.
   OMPR^free.
 - A multi-target algebraic attack on MQ would change §4.1 for independent targets as well; we
   know none.
+- The break-even `τ*` of C1 at `(119, 45)`. It is fixed by the degree grid of the solver, and our
+  models place it between 11 and 72. Not modelled: Hashimoto's reduction [Has21], the crossbred
+  algorithm, XL with corank above one, and constants of the linear algebra. A reduction that
+  removes a second equation from the direct attack and not from C1, or the reverse, changes the
+  sign of the margin; none can make the gain exceed τ.
+- C1 with Thomae–Wolf on toy keys (the experiments use plain fixing of variables), and at sizes
+  where the operating degree exceeds 6.
+- C1 and C3 in Lean. Both are short: C1 is a change of coordinates in the target space, C3 is
+  `preimage_line` on a subspace.
 
 ## References
 
 - [OR] `lean/docs/security/uov-open-reductions.md`. [UA] `lean/docs/security/uov-assumptions.md`.
   [UOS] `lean/docs/security/uov-open-structure.md`, and the references there ([Péb24a], [Beu21],
   [KPG99]).
+- [TW12] Thomae, Wolf, *Solving underdetermined systems of multivariate quadratic equations
+  revisited*, PKC 2012. [FNT21] Furue, Nakamura, Takagi, *Improving Thomae–Wolf algorithm for
+  solving underdetermined multivariate quadratic polynomial problem*, PQCrypto 2021. [Has21]
+  Hashimoto, *An improvement of algorithms to solve under-defined systems of multivariate
+  quadratic equations*, 2021. [BFP09] Bettale, Faugère, Perret, *Hybrid approach for solving
+  multivariate systems over finite fields*, J. Math. Cryptology 2009. All from memory.
