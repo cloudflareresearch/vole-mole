@@ -337,6 +337,9 @@ import VoleMole.Assumptions.IdealTag
 import VoleMole.Assumptions.RatatouilleOMPR
 import VoleMole.Assumptions.SimLinks
 import VoleMole.Assumptions.UnboundLinks
+import VoleMole.Assumptions.LazyPerm
+import VoleMole.Assumptions.CTUFPerm
+import VoleMole.Assumptions.PermLinks
 import VoleMole.Assumptions.Shift
 import VoleMole.Assumptions.TheoremR
 import VoleMole.Assumptions.Blind
@@ -360,6 +363,7 @@ import VoleMole.Audit.UnboundROM
 import VoleMole.Audit.IdealTag
 import VoleMole.Audit.SimExtract
 import VoleMole.Audit.UnboundOMUF
+import VoleMole.Audit.PermOMPR
 import VoleMole.Audit.OMPRShift
 import VoleMole.Audit.T6Pomfrit
 import VoleMole.Audit.TheoremR
