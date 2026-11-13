@@ -337,11 +337,25 @@ every extractor that does not read `ũ` (there: A1, A2). But `hash_to_target` bi
 `Seed/KOSUnique.lean`, `witness_determined`). For first messages whose trees agree on the label
 rows an efficient extractor has no `Shift` at all (Theorem L). For the others the group hides in
 a slice of the challenge space. There (§6 of that note): any two challenges of one slice with the
-same check value certify the witness (Lean `slice_collision_sound`); a decoder that reads `c_mult`
-against the `H₅` table finds the slice, with proof for two label classes and, in general, at a
-measured cost of about `2⁷` per further label class; under the stated conjecture (H-dec) the term
-would be `2⁻⁷⁸` to `2⁻⁹⁹` per `H₂³` query for `2¹⁷` to `≈ 2³⁵` decoding steps per `H_T` query. The
-decoder's completeness is not proved, so the bound above stands.
+same check value certify the witness (Lean `slice_collision_sound`).
+
+**Lemma P^cls (`pomfrit-lemmap-tight.md` §6A; paper, with a mechanized per-chain core).** `E₁`'s
+default is the wrong one. An accepting set lies in a slice of one *class* (alive trees with the
+same witness and label rows), or it has at most `2^{⌊w/2⌋}` points for the width `w` of its prefix
+group. The extractor `E₁^cls` outputs the prefix of the widest class; if a second class of width
+`≥ 51` has another prefix (then at most one tree is left over), it first runs a decoder
+`Dec^cls` (fewer than `2¹⁵` linear systems of 512 equations in at most 64 unknowns) and outputs
+that class's prefix if the decoder finds two challenges of one of its slices with the same check
+value. Lemma P holds for `E₁^cls` with
+
+    Pr[Shift^cls] ≤ q₁·2^{−134} + (Q₃ + n_out)·2^{−78} + Q_T·q₁·2^{−704},
+
+with no conjecture and no property of `H₅` (`2⁻⁷⁹` for `2²²` systems, `2⁻⁸⁵` for `2³⁶`). In Lean:
+the per-chain step `class_or_small_dec`, `extract_or_class` (`ROM/LemmaPClass.lean`,
+`Seed/SliceDecode.lean`), with the structure of the CRT masks on slices as hypotheses (read off
+the code; proved for a gate model). Not in Lean: these hypotheses for the executable verifier, and
+the one-more game with `E₁^cls`. So **the mechanized Lemma P and U1 below keep `2⁻⁷¹`**; the
+`2⁻⁷⁸` is Theorem U1^cls of that note, a paper theorem.
 
 ## 6. One-more unforgeability (classical)
 
@@ -402,7 +416,11 @@ For d = 2 at the README's operating point:
   - `2^{−7}` at `Q₃ = 2^{64}` (Lean `loss_at_2_50`, `loss_at_2_64`).
 
 So, *proved from the standard assumption*, PomFRIT's unforgeability has a 71-bit margin in H₂³
-work. From A-OMPR⊕17 it has the full extraction margin.
+work. From A-OMPR⊕17 it has the full extraction margin. With the class extractor
+(`pomfrit-lemmap-tight.md` §6A, Theorem U1^cls; paper, the per-chain step in Lean) the term is
+`(Q₃ + ℓ + 1)·2^{−78} + q₁·2^{−134}`: `2^{−28}` at `Q₃ = 2^{50}`, `2^{−14}` at `2^{64}` (Lean
+`loss_cls_at_2_50`, `loss_cls_at_2_64`), for a reduction that solves fewer than `2¹⁵` small
+linear systems per `H_T` query.
 
 We believe the 2^{−71} is an artifact. Choosing among ≤ 17 targets `{h ⊕ δ_a}` (whose
 differences are fixed before `h`) after seeing `h` does not yield an extra preimage. Each forgery
@@ -1198,8 +1216,9 @@ dedicated to PomFRIT.
   term. A protocol change that pins `r` to π₁ would also remove it, but none was explored here.
   `pomfrit-lemmap-tight.md`: `ũ` in `hash_to_target` already pins `r` information-theoretically
   (§4 there); for first messages whose trees disagree on the label rows, extraction is reduced to
-  finding a slice, and a decoder is given, proved for two label classes and conjectured complete
-  in general (§6 there); protocol options are in §8 there.
+  finding a slice (§6 there); the class extractor finds it whenever more than `2⁵⁰` challenges
+  accept, which gives `2⁻⁷⁸` per `H₂³` query on paper, unconditionally (§6A there; per-chain step
+  in Lean, the one-more game with it not mechanized); protocol options are in §8 there.
 - **G2.** QROM unforgeability (§7) needs mid-run extraction, or a different reduction. Q7 §4
   supplies one (database-controlled programming, simultaneous extraction from ℓ+1 proofs by
   Theorem M), on paper and under the new assumptions A-OMPR-RO and A-OMPR⊕τ-RO; from the
@@ -1267,6 +1286,13 @@ dedicated to PomFRIT.
   (`shP_eq_alive`) and the per-table implication (`shiftFail_events`). Found on the way: the
   game's `chal1Pre` used the AES PRG instead of the ideal cipher's, so the target oracle's input
   was not at the verifier's `chal1` (fixed earlier).
+- **G8-cls (open).** Theorem U1^cls in Lean (`pomfrit-lemmap-tight.md` §6A): U1 with the class
+  extractor and `(Q₃ + ℓ + 1)·2⁻⁷⁸ + q₁·2⁻¹³⁴` for Lemma P's `(Q₃ + ℓ + 1)·2⁻⁷¹`. In Lean: the
+  per-chain step (`class_or_small_dec`, `extract_or_class`) with the decoder as a function of the
+  check value and its evaluation count. Missing: the label rows' tree form and the affine and
+  two-label structure of `Verifier`'s CRT masks on slices; `KOSPar` as a bad event at `H₂¹`;
+  `E₁^cls` on the query log with its `H₅` evaluations as the reduction's queries (the goal of
+  `ROM/LemmaP.lean` reads only the candidates and the alive trees).
 - **G9 (closed).** Theorem 6 (OMPR ≤ PomFRIT, `uov-assumptions.md` §5.6) is in Lean for the Lean
   client with the completeness term bounded: `compFail ≤ (ℓ+1)·2^{−113}` (`compFail_le`) and
   `Adv^{ompr}(B; n, ℓ) ≤ Pr[PomWin] + (ℓ+1)·2^{−113}` (`pomfrit_T6_lean`, `pomfrit_T6_lean_bound`;
@@ -1304,6 +1330,7 @@ VoleMole.ROM.OneMorePomfrit`).
 | `2^{57}/2^{128} ≤ 2^{−71}`; loss at `2^{50}`, `2^{64}` | `per_query_bound`, `loss_at_2_50`, `loss_at_2_64` |
 | Lemma P per chain: the widest prefix group (`majP`, ties by least index) extracts, or `≤ 2⁵⁷` accepted `chal3` (`lean/VoleMole/ROM/LemmaPDet.lean`) | `grpW`, `majP`, `majP_spec`, `majP_congr`, `extract_or_major`, `pomfritT_extract_major_chain` |
 | Lemma P for one adaptively chosen statement with any target function: the deterministic step with a general goal, the alive trees of an output, the bound with `(Q₃+1)·2⁻⁷¹` (`lean/VoleMole/ROM/LemmaP.lean`) | `pomfritRedeemT`, `pomfritRedeemT_values`, `combBad_of_acceptG`, `CombDetG`, `combBad_trace_icDG`, `aliveR`, `dead_of_not_mem_aliveR`, `GoalP`, `MajorExtracted`, `prEvent_accept_le_adaptive_pomfritT_E`, `prEvent_accept_le_adaptive_pomfritT`, `combDetG_pomfritT`, `pomfritT_accept_le_major` |
+| Lemma P with the class extractor, per chain (generic; `lean/VoleMole/ROM/LemmaPClass.lean`, `lean/VoleMole/Seed/SliceDecode.lean`; `pomfrit-lemmap-tight.md` §6A): `2⁵⁰` in place of `2⁵⁷`, the decoder and its evaluation count. Not joined to the one-more game | `clsExt`, `class_or_small`, `class_or_small_dec`, `extract_or_class`, `dec`, `dec_sound`, `dec_cert_sound`, `dec_cert_complete`, `card_decQ_le`, `dec_congr`, `basePts_cover`, `twoLabel_gate`, `per_query_bound_cls`, `loss_cls_at_2_64` |
 | The one-more game against Lemma P (`lean/VoleMole/ROM/OneMoreLemmaP.lean`): the game as a lazy random oracle; `E₁`; the forger with the cipher as queries; verification and a failed forgery table by table; Lemma P's goal gives the claim | `realImpl_run_eq`, `htW`, `tStep`, `e1P`, `wrapIC`, `eval_forger`, `log_forger`, `wrapP`, `tStep_sameT`, `eval_forgerP`, `eval_verOne`, `eval_verAll_split`, `eval_htW_persist`, `proverI`, `pfail_table`, `not_noPick` |
 | A derived prover with the cipher as queries (`lean/VoleMole/ROM/OneMoreLemmaPIC.lean`): `chal1` by cipher queries; the forger with a void hint and the hints as ghost logs; the derived prover, its output, log and ghost logs per table | `chal1PreIC`, `evalWithAnswerFn_chal1PreIC`, `InvH`, `eval_wrapIC_hint`, `verPreIC`, `verPreAll`, `verLastIC`, `proverP`, `eval_proverP`, `contP`, `log_proverP`, `GhostI`, `GhostV`, `aux_proverP` |
 | The extraction from a prefix of the prover's log (`lean/VoleMole/ROM/OneMoreLemmaPIdent.lean`): the verifier's chain in the prefix; same keys and known trees outside hits and Post; the alive trees are known | `extractKey_sandwich`, `mem_x_of_mem_z`, `keysOf_knownOf_prefix`, `aliveR_eq_filter`, `aliveR_subset_known` |
