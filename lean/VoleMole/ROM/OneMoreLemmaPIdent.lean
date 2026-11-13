@@ -136,6 +136,156 @@ theorem mem_x_of_mem_z (hh : NoHit (gameIC T st P E) (chainHit T st P E) g)
   obtain ⟨e, he, he1⟩ := List.mem_map.1 hO3
   exact mem_hashEnt_iff.1 (List.mem_map.2 ⟨e, mem_of_mem_logBefore he, he1⟩)
 
+/-- **The extraction from a prefix of `P`'s log is the extraction from the whole log** when the
+prefix contains the verifier's `H₂¹` input, outside the hits and Post (`KeysPre`): every commitment
+the extractor looks up is committed at that input, and its key is found before it. -/
+theorem keysOf_knownOf_prefix (hh : NoHit (gameIC T st P E) (chainHit T st P E) g)
+    (hkp : KeysPre st E (jOf g P E) (gLog T st P E g) g)
+    (hacc : (@verify (icPrg E.cipher) (Hashes.ofTable g) T st (πOf g P E)).accept = true)
+    {leaves : BAVC.Leaves}
+    (hr : @BAVC.reconstruct (icPrg E.cipher) (ivE g st P E) (Proof.opening ⟨st.params, πOf g P E⟩)
+      (Proof.delta ⟨st.params, πOf g P E⟩) = some leaves)
+    {L : QueryLog specIC} (hL : L <+: jOf g P E)
+    (hx : ((.h21, runX (Hashes.ofTable g) st (πOf g P E) leaves) : Dom) ∈ hashLog L) :
+    keysOf (cipherLog L) E (ivE g st P E) (Proof.opening ⟨st.params, πOf g P E⟩)
+        (Proof.delta ⟨st.params, πOf g P E⟩) =
+      keysOf (cipherLog (jOf g P E)) E (ivE g st P E) (Proof.opening ⟨st.params, πOf g P E⟩)
+        (Proof.delta ⟨st.params, πOf g P E⟩) ∧
+    knownOf (cipherLog L) E (ivE g st P E) (Proof.opening ⟨st.params, πOf g P E⟩) =
+      knownOf (cipherLog (jOf g P E)) E (ivE g st P E) (Proof.opening ⟨st.params, πOf g P E⟩) := by
+  let _ : HasPrg := icPrg E.cipher
+  obtain ⟨hf, leaves', hr0, -⟩ := (accept_iff _ T st (πOf g P E)).1 hacc
+  have hHs : ∀ k w, ((Hashes.ofTable g).hash k w).size = k.outLen := fun k w => by simp
+  obtain ⟨hcom, hwH, -⟩ := chain_ident T st P E g hh (fun _ _ => ByteArray.empty) hacc hr
+  set x := runX (Hashes.ofTable g) st (πOf g P E) leaves
+  have hivX : ivX st x g = ivE g st P E := by
+    simp only [x, ivX, ivE, ivOf, runX]
+    rw [xIvPre_chal1Input hf (size_mu1 _ hHs st) (hHs _ _)]
+  have hxmu : x.extract 0 32 = st.mu1 (Hashes.ofTable g) := by
+    simp only [x, runX]
+    exact extract_mu_chal1Input (size_mu1 _ hHs st)
+  -- the sandwich of cipher logs
+  obtain ⟨V, hV⟩ := hL
+  have hxL : (.inl (.h21, x) : DomIC) ∈ L.map Sigma.fst := mem_hashLog.1 hx
+  have hB : logBefore (.inl (.h21, x)) (jOf g P E) = logBefore (.inl (.h21, x)) L := by
+    rw [← hV]; exact logBefore_append_of_mem _ hxL
+  have hAB : cipherLog (logBefore (.inl (.h21, x)) (jOf g P E)) <+: cipherLog L := by
+    rw [hB]; exact cipherLog_prefix (logBefore_prefix _ _)
+  have hBC : cipherLog L <+: cipherLog (jOf g P E) := cipherLog_prefix ⟨V, hV⟩
+  have key : ∀ i < BAVC.tau, ∀ j < 2 ^ BAVC.kOf i,
+      extractKey (cipherLog L) E (ivE g st P E) i (comAt leaves.coms i j) =
+        extractKey (cipherLog (jOf g P E)) E (ivE g st P E) i (comAt leaves.coms i j) := by
+    intro i hi j hj
+    have h := hkp x hxmu i hi j hj _ (hcom i hi j hj) (fun hxJ => hwH hxJ i hi j hj)
+    rw [hivX] at h
+    exact extractKey_sandwich hAB hBC E _ i _ h
+  refine ⟨?_, ?_⟩
+  · funext i j
+    by_cases hv : i < BAVC.tau ∧ j < 2 ^ BAVC.kOf i
+    · rw [keysOf_of_reconstruct hr hv.1 hv.2, keysOf_of_reconstruct hr hv.1 hv.2, key i hv.1 j hv.2]
+    · rw [keysOf_of_not_valid _ _ _ _ _ hv, keysOf_of_not_valid _ _ _ _ _ hv]
+  · ext i
+    simp only [knownOf, Finset.mem_filter, Finset.mem_univ, true_and]
+    rw [← comAt_reconstruct_hidden hr i.isLt,
+      key i i.isLt _ (show BAVC.deltaIndex _ i < 2 ^ BAVC.kOf i from hiddenIndex_lt _ _)]
+
+lemma firstIn_isSome {k : Kind} {ok : ByteArray → Bool} {a : ByteArray} {L : QueryLog spec}
+    {e : (t : Dom) × Ans t} (he : e ∈ L) (hk : e.1.1 = k) (hok : ok e.1.2 = true)
+    (ha : (e.2 : Ans e.1).ba = a) : (firstIn k ok a L).isSome := by
+  unfold firstIn
+  rw [Option.isSome_map]
+  exact List.find?_isSome.2 ⟨e, he, by simp [hk, hok, ha]⟩
+
+/-- **The alive trees of the output are the trees with no committed dead leaf** at the verifier's
+`H₂¹` input, when `P` queried that input, without hits. -/
+theorem aliveR_eq_filter (hh : NoHit (gameIC T st P E) (chainHit T st P E) g)
+    (hacc : (evalWithAnswerFn (QueryImpl.ofFn g) (gameIC T st P E)).2.2.accept = true)
+    {leaves : BAVC.Leaves}
+    (hr : @BAVC.reconstruct (icPrg E.cipher) (ivE g st P E) (Proof.opening ⟨st.params, πOf g P E⟩)
+      (Proof.delta ⟨st.params, πOf g P E⟩) = some leaves)
+    (hx : ((.h21, runX (Hashes.ofTable g) st (πOf g P E) leaves) : Dom) ∈ hashLog (jOf g P E)) :
+    aliveR E (evalWithAnswerFn (QueryImpl.ofFn g) (gameIC T st P E)) =
+      univ.filter fun i => deadOf T st P E g i = ∅ := by
+  classical
+  let _ : HasPrg := icPrg E.cipher
+  set r := evalWithAnswerFn (QueryImpl.ofFn g) (gameIC T st P E)
+  set Hs := Hashes.ofTable g
+  set π := πOf g P E
+  have hr2 : r.2.2 = verify Hs T st π := by
+    simp only [r, gameIC]
+    rw [evalWithAnswerFn_game, proverIC_fst]
+    rfl
+  have hJ : r.2.1.aux.2 = jOf g P E := aux_gameIC T st P E g
+  rw [hr2] at hacc
+  obtain ⟨hf, leaves', hrec, -⟩ := (accept_iff _ T st π).1 hacc
+  have hrec' : BAVC.reconstruct (ivE g st P E) (Proof.opening ⟨st.params, π⟩)
+      (Proof.delta ⟨st.params, π⟩) = some leaves' := hrec
+  rw [hr] at hrec'
+  cases hrec'
+  obtain ⟨hiv, hc1⟩ := verify_iv_chal1 _ T st π hacc hrec
+  have hdead : deadOf T st P E g = deadAtX T st P E (runX Hs st π leaves) g := by
+    unfold deadOf; rw [hr]
+  rw [hdead]
+  obtain ⟨rest, hG⟩ := gLog_eq_hashEnt_append T st P E g
+  have hxH : ((.h21, runX Hs st π leaves) : Dom) ∈ (hashEnt (jOf g P E)).map Sigma.fst :=
+    mem_hashEnt_iff.2 hx
+  have hlog : logBefore (.h21, runX Hs st π leaves) (gLog T st P E g) =
+      logBefore (.h21, runX Hs st π leaves) (hashEnt (jOf g P E)) := by
+    rw [hG]; exact logBefore_append_of_mem rest hxH
+  have hivX : ivX st (runX Hs st π leaves) g = (verify Hs T st π).iv := by
+    rw [hiv]
+    unfold ivX ivOf runX
+    rw [xIvPre_chal1Input hf]
+    · exact size_mu1 Hs (fun k w => by simp [Hs]) st
+    · exact Prob.Bytes.size_ba _
+  -- the first `H₂¹` preimage of `chal1` in `P`'s log is the verifier's input
+  have hfirst : firstIn .h21 (fun _ => true) r.2.2.chal1 (hashEnt r.2.1.aux.2) =
+      some (runX Hs st π leaves) := by
+    rw [hJ, hr2, hc1]
+    obtain ⟨e, he, he1⟩ := List.mem_map.1 hxH
+    have hsub : ∀ e ∈ hashEnt (jOf g P E), e ∈ gLog T st P E g := fun e he => by
+      rw [hG]; exact List.mem_append_left _ he
+    exact firstIn_gLog T st P E g hh (Or.inr (Or.inl rfl)) (d := (.h21, runX Hs st π leaves)) rfl
+      hsub hxH rfl
+  unfold aliveR
+  rw [hfirst]
+  dsimp only
+  rw [hJ, hr2]
+  unfold deadAtX
+  rw [hlog, hivX]
+
+/-- **Outside Post and the hits, the alive trees are known** (L2(c)), when `P` queried the
+verifier's `H₂¹` input. -/
+theorem aliveR_subset_known (hh : NoHit (gameIC T st P E) (chainHit T st P E) g)
+    (hpost : ¬PostOut E (evalWithAnswerFn (QueryImpl.ofFn g) (gameIC T st P E)))
+    (hacc : (evalWithAnswerFn (QueryImpl.ofFn g) (gameIC T st P E)).2.2.accept = true)
+    {leaves : BAVC.Leaves}
+    (hr : @BAVC.reconstruct (icPrg E.cipher) (ivE g st P E) (Proof.opening ⟨st.params, πOf g P E⟩)
+      (Proof.delta ⟨st.params, πOf g P E⟩) = some leaves)
+    (hx : ((.h21, runX (Hashes.ofTable g) st (πOf g P E) leaves) : Dom) ∈ hashLog (jOf g P E)) :
+    aliveR E (evalWithAnswerFn (QueryImpl.ofFn g) (gameIC T st P E)) ⊆
+      (evalWithAnswerFn (QueryImpl.ofFn g) (gameIC T st P E)).2.1.known := by
+  intro i hi
+  rw [aliveR_eq_filter T st P E g hh hacc hr hx, Finset.mem_filter] at hi
+  by_contra hk
+  have hs := sameChainHyp_ic T st P E g hacc hpost hh
+  have hr' : @BAVC.reconstruct (icPrg E.cipher)
+      (evalWithAnswerFn (QueryImpl.ofFn g) (gameIC T st P E)).2.2.iv
+      (Proof.opening ⟨st.params, (evalWithAnswerFn (QueryImpl.ofFn g) (gameIC T st P E)).1⟩)
+      (Proof.delta ⟨st.params, (evalWithAnswerFn (QueryImpl.ofFn g) (gameIC T st P E)).1⟩) =
+      some leaves := by
+    have e1 := gameIC_fst T st P g E
+    have etr := gameIC_tr T st P g E
+    have hacc' := hacc
+    rw [etr] at hacc' ⊢
+    rw [e1]
+    obtain ⟨-, leaves', hrec, -⟩ := (@accept_iff (icPrg E.cipher) _ T st (πOf g P E)).1 hacc'
+    rw [(@verify_iv_chal1 (icPrg E.cipher) _ T st _ hacc' _ hrec).1]
+    exact hr
+  have := (hs leaves hr').2 i hk
+  rw [hi.2] at this
+  exact Finset.not_nonempty_empty this
+
 end Chain
 
 end VoleMole.ROM.IC
