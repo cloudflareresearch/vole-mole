@@ -28,7 +28,13 @@ import VoleMole.Theft.ComOW
 * **`Adv^ow` is not small in this model** (`owAdv_one_ratatouille`, `owAdv_one_moussaka`): `Com` is
   a fixed function here and the inverter any function, so an inverter that picks a preimage of the
   commitment it is given wins with probability `1`. The note's `q_K·2⁻¹²⁷` needs `KP800` as an
-  ideal permutation (a random table) and an inverter with a bounded number of queries to it.
+  ideal permutation (a random table) and an inverter with a bounded number of queries to it;
+  `Theft/ComOW.lean` proves that bound for the standalone experiment, instantiated here at
+  Ratatouille's sizes.
+* **The versions with the other hashes random can hold.** `noTheft_leanX_plain` and
+  `noRedirect_leanX_plain` (`Theft/Tables.lean`) are instantiated at the tables `XTab L M` and the
+  record `hbX` (`H₁`, `H₂⁰`, `H₂⁴`, `H₄`, `H₂¹`, `H₂²`, `H_comb` uniform on inputs of at most `L`
+  bytes), for the same adversaries.
 
 No `sorry`, no `axiom`.
 -/
