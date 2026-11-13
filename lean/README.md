@@ -354,7 +354,8 @@ lean/
                             unlinkability): with zero knowledge and hiding as hypotheses, and
                             for the Lean prover in the random-oracle and ideal-cipher model
     Theft/                  non-malleability games (no theft, no redirect) on the specs in the
-                            zero-knowledge table model, weak SE as a hypothesis; unbound
+                            zero-knowledge table model, weak SE as a hypothesis; read budgets
+                            (Reads); L8's programming step (SimExtract, SimExtractLean); unbound
                             Moussaka Prop U3 and Thm U4 (MoussakaUnbound)
     Assumptions/            the UOV assumptions as standalone games (UOV) and their links to the
                             protocol theorems (UOVLinks); reductions between them: T1(a)/(c)
@@ -1443,8 +1444,18 @@ What is **not** established, roughly in order of importance:
    redemption non-malleability (Moussaka Thm 3) are mechanized as games on the specs in the
    zero-knowledge table model (`Theft/`, `noTheft`, `noRedirect`; with the Lean prover's zero
    knowledge `noTheft_lean`, `noRedirect_lean`): `Pr ≤ ε_I + ε_S + δ + ε_SE + Adv^ow` for one honest
-   Client. Weak simulation-extractability (`WeakSE2`, L8) and the hops' read budgets are
-   hypotheses, and `Adv^ow ≤ q_K·2⁻¹²⁷` is paper. Ratatouille's N2a holds only in its extraction
+   Client. The hops' read budgets are proved from the adversary's and the
+   extractor's budgets, with the Lean verifiers (`noTheft_lean_reads`, `noRedirect_lean_reads`;
+   `Theft/Reads.lean`). L8's programming step is mechanized: `WeakSE2 ≤ ε_plain + ε_hit` for an
+   extractor that does not read `H₂³` (`weakSE2_of_plain`); the Lean verifier reads `H₂³` only at
+   `chal3`'s input (`verRO_h23_eq`), so `ε_hit` is the probability that a fresh forgery's grinding
+   prefix equals a simulated proof's (`accOp_moves`), giving `noTheft_lean_plain` and
+   `noRedirect_lean_plain` (`Theft/SimExtract*.lean`). Plain extraction and `ε_hit` stay hypotheses:
+   the zero-knowledge table model fixes `H₂⁰…H₂²` as SHAKE and bounds only table reads, while
+   `ROM/`'s extraction bounds need random oracles and query-bounded adversaries. `Adv^ow ≤
+   q_K·2⁻¹²⁷` is paper; in the table model it is 1 for some inverter (`owAdv_one_ratatouille`,
+   `owAdv_one_moussaka`), since it needs KP800 as an ideal permutation and a query-bounded inverter
+   and extractor. Ratatouille's N2a holds only in its extraction
    form: a relay can burn an honest nullifier by squatting (`security/ratatouille.md` §3). Moussaka's unforgeability and Ratatouille's balance are mechanized with simultaneous
    extraction (`omuf_le_num_sim`, `balance_le_sim_num`; plan §2m). One difference from the paper
    remains: the cipher-side failure terms (binding, opened dead leaf, Post) stay per proof (`m·failEps`,
