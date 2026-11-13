@@ -1,9 +1,36 @@
 import VoleMole.Assumptions.SymmetryScalar
 
 /-!
-# Theorem T3 over pqov's keys
+# Theorem T3 over pqov's keys: `P` has no symmetries but the scalings
 
-WIP header.
+`lean/docs/security/ompr-shift-algebra.md` §3.1, §8. `P = qmap pk` on `F^{119}` (`P119`), `B` its
+polar form (`B119`).
+
+**`t3`.** For every oil matrix `O`, over uniform `P1` and `P2` parts (`P1Part`: the `124875`
+bytes of the `P1` block; `P2Part`), the key `pqovKey O P1 P2` satisfies `T3Good` except with
+probability `≤ 256^{−128} = 2^{−1024}`:
+* every pair `φ(s) = A s + a`, `Θ(y) = T y + c` with `P ∘ φ = Θ ∘ P`, `A` and `T` additive and
+  `σ`-semilinear (`σ` a ring endomorphism of `GF(256)`: linear and Frobenius-semilinear maps),
+  `A` bijective or `T` injective, has `σ = id`, `a = 0`, `c = 0`, `A = λ·I`, `T = λ²·I`, `λ ≠ 0`;
+* every infinitesimal pair `B(s, X s) = Y(P s)` with `X`, `Y` linear is `(λ·I, 0)`.
+
+This is (G), (L), (S) and the affine part of (A) of Theorem T3. The model is the note's:
+`(P1, P2) ↦ (P1, S)` is a bijection for every `O` (`sEquiv`), so the vinegar part `P₁` and the
+tensor `S` are uniform and independent. **`P1` cannot be fixed**: for `P1 = 0` and every `P2` the
+key has non-scalar symmetries (`Audit/SymmetryT3.lean`, `not_t3Good_p1_zero`).
+
+**Proof.** `adEquiv O`: the coordinates `(v, x)` of the oil space, in which
+`P(v, x) = P₁(v) + L(v, x)` (`qmap_emb`, `polar_emb`). Then `adapted_affine` and `adapted_lie`
+(`Assumptions/SymmetryScalar.lean`) for keys outside `BadKey`, and `pr_badKey`: eleven events on
+`S` (`pr_not_goodS`) and two on `P1` given `S` (`pr_isoQ`, `pr_detQ`), each `≤ 256^{−129}`.
+
+**Differences with the note.** The route is not the note's (Lemma C on `F[x]`-modules, the rank
+Lemmas E and F, counts of matrices by rank): it goes through the oil space and the tensor `S`,
+with unions over a few vectors and functionals. The bound `256^{−128}` is weaker than the note's
+`256^{−976}`. Not mechanized: the note's bound; Lemma I and Proposition A for additive maps that
+are sums of several Frobenius-semilinear components (the pairs here have one component).
+
+No `sorry`, no `axiom`.
 -/
 
 open Finset

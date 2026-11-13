@@ -2,9 +2,37 @@ import VoleMole.Assumptions.SymmetryTensor
 import VoleMole.Assumptions.SymmetryCount
 
 /-!
-# Theorem T3: the symmetries of a UOV key are scalar
+# Theorem T3: the symmetries of a UOV key are scalar, in the coordinates of the oil space
 
-WIP header.
+`lean/docs/security/ompr-shift-algebra.md` §8.7. A key in the coordinates of its oil space is
+`PA Q S (v, x) = Q(v) + L(v, x)`: `Q` a quadratic map on the vinegars with polar form `BQ`
+(`QuadV`), `L = bil S` the tensor of `Assumptions/SymmetryTensor.lean`. The oil space is
+`0 × Oil`.
+
+**Events on the vinegar part**, given the tensor:
+* `IsoQ BQ S`: there are `18` vectors, independent modulo the oil space, whose polar values
+  `B(z_i, z'_j)` (`81` of them) vanish. Over a uniform `P1`: `≤ 256^{−1503}` (`pr_isoQ`).
+* `DetQ BQ S`: `δ·BQ(v, v') = L(v, C v') + L(v', C v)` for some `δ ≠ 0` and matrix `C`: the
+  polar form of the vinegar part is a function of the tensor. `≤ 256^{−314}` (`pr_detQ`).
+
+Both bounds hold for every `S`. They use `bqHom_surjective`: the values `B₁(v_i, v'_j)` of the
+polar form of a uniform `P1` part on `18` independent vinegars are uniform and independent
+(`bq p` is the polar form of pqov's `P1` block, `polar_vinVec`; `off1_inj`: the layout of `P1`).
+
+**Theorems** for a good tensor (`GoodS S`) and a vinegar part outside `IsoQ`, `DetQ`:
+* `adapted_group`: if `P ∘ A = T ∘ P` with `A`, `T` additive and `σ`-semilinear and `A`
+  bijective, then `σ = id`, `A = λ`, `T = λ²`.
+  1. `A` maps the oil space into itself: its image is a space on which `P` vanishes; if it has
+     `18` vectors independent modulo the oil space, `IsoQ` holds, else `BoxV`.
+  2. So `A` acts on the vinegars modulo oil (`g₁`) and on the oil space (`g₂`), and
+     `L(g₁ v, g₂ x) = T(L(v, x))`: `tensor_group` gives `σ = id`, `g₁ = α`, `g₂ = β`, `T = αβ`.
+  3. With `A(v, 0) = (α v, C v)`: `L(v, C v) = (β − α)·Q(v)`. So `β = α` (else `DetQ`) and
+     `C = 0` (`vo_eq_zero`: else `PairVO` or `BoxO`).
+* `adapted_affine`: the same for `P(A s + a) = T(P s) + c` with `A` bijective or `T` injective:
+  also `a = 0`, `c = 0` (`rad_trivial`: the radical of a good key is `0`).
+* `adapted_lie`: if `B(s, X s) = Y(P s)` with `X`, `Y` linear, then `X = λ`, `Y = 0`.
+
+No `sorry`, no `axiom`.
 -/
 
 open Finset

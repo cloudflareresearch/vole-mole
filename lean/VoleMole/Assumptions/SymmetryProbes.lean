@@ -1,7 +1,36 @@
 import VoleMole.Privacy.PqovDelta
 
 /-!
-# Probes
+# Probes for the symmetry count (Theorem T3)
+
+Tools for `Assumptions/SymmetryTensor.lean`, `SymmetryScalar.lean` and `SymmetryT3.lean`
+(`lean/docs/security/ompr-shift-algebra.md` §8.7), over any finite field `F`. A uniform array
+`L : ι → S` is a uniform linear map `F^ι → S`, `a ↦ ev L a = Σ_i a_i • L_i`.
+
+**Probabilities.**
+* `evHom_surjective` (interpolation): the values of `L` at linearly independent vectors can be
+  prescribed. So they are uniform and independent (`pr_fiber`, `pr_comp_addHom`).
+* `pr_free` (free probes): if `t_j`, `a_j` (`2ρ` vectors) are independent and a relation
+  determines the slice at `a_j` from the slice at `t_j`, the relation holds for all `j` with
+  probability `≤ |S|^{−ρ}`. The relation is any function: it covers semilinear maps.
+* `pr_vanish_fixed`, `pr_vanish` (boxes): a uniform array with three indices vanishes on
+  `w × ker Φ × ker Ψ` for some `w ≠ 0` and `c₂`, `c₃` functionals with probability
+  `≤ |F|^{n₁ + c₂n₂ + c₃n₃ − (n₂ − c₂)(n₃ − c₃)}`.
+* `pr_paired` (paired probes): `L(v_i, o'_j) + L(v'_j, o_i) = 0` for `2n` independent `v` and
+  `2n` independent `o` with probability `|F|^{−n₁n²}`.
+* `pr_union`: the union bound over a witness type of at most `q^a` elements.
+
+**Linear algebra.**
+* `FreeFam`, `near_scalar`: an additive `σ`-semilinear map `g` without `ρ` vectors `t_j` such
+  that the `t_j`, `g t_j` are independent is a scalar `c` up to a subspace of dimension
+  `≤ 2(ρ − 1)`; and `c = 0` or `σ = id`. `near_scalar_lin`: a linear `g` is then `c` on the
+  common kernel of `d ≥ 2(ρ − 1)` functionals.
+* `exists_functionals`, `exists_functionals_of_finrank`, `exists_indep_ker`,
+  `exists_ker_ne_zero`: subspaces of small codimension and kernels of few functionals.
+* `tri`, `bil`, `rot`, `sw`, `app`, `app₂`: the trilinear form of an array with three indices,
+  its permutations and its slices.
+
+No `sorry`, no `axiom`.
 -/
 
 open Finset

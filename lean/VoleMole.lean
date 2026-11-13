@@ -343,6 +343,10 @@ import VoleMole.Assumptions.Shift
 import VoleMole.Assumptions.TheoremR
 import VoleMole.Assumptions.TheoremRBad
 import VoleMole.Assumptions.SymmetryCount
+import VoleMole.Assumptions.SymmetryProbes
+import VoleMole.Assumptions.SymmetryTensor
+import VoleMole.Assumptions.SymmetryScalar
+import VoleMole.Assumptions.SymmetryT3
 import VoleMole.Assumptions.Blind
 import VoleMole.Assumptions.BlindPomfrit
 import VoleMole.Assumptions.PomfritLemmaP
@@ -373,5 +377,6 @@ import VoleMole.Audit.OMPRShift
 import VoleMole.Audit.T6Pomfrit
 import VoleMole.Audit.TheoremR
 import VoleMole.Audit.SymmetryCount
+import VoleMole.Audit.SymmetryT3
 import VoleMole.Audit.PomfritLemmaP
 import VoleMole.Audit.Theft

@@ -3,7 +3,37 @@ import VoleMole.Assumptions.SymmetryProbes
 /-!
 # Theorem T3: the symmetries of the vinegar-oil tensor
 
-WIP header.
+`lean/docs/security/ompr-shift-algebra.md` §8.7. In the coordinates of the oil space a UOV key is
+`P(v, x) = P₁(v) + L(v, x)` with `L(v, x)_k = Σ v_i x_j S_k[i][j]`, `S : Coef` the system
+coefficients (`Privacy/PqovDelta.lean`), uniform when `P2` is. This file is about the tensor `S`
+alone: its symmetries are scalar, except with probability `11·256^{−129}`.
+
+**Events** (`GoodS S`: none holds; `pr_not_goodS`).
+
+| Event | Meaning | Bound |
+|---|---|---|
+| `BoxV`, `BoxO`, `BoxH` | the trilinear form `h·L(v, x)` vanishes on `w × K × K'`, `w ≠ 0` in one leg, `K`, `K'` of codimension `≤ 17` and `≤ 4` (`≤ 4`, `≤ 4` for `BoxH`) in the others | `256^{−129}`, `256^{−854}`, `256^{−2349}` |
+| `FreeV`, `FreeO`, `FreeH` | a pair `L(g₁ v, g₂ x) = T(L(v, x))` whose map on one leg has three free vectors | `256^{−1325}`, `256^{−2219}`, `256^{−2219}` |
+| `FreeLV`, `FreeLO`, `FreeLH` | the same for `L(X₁ v, x) + L(v, X₂ x) = Y(L(v, x))` | `256^{−1581}`, `256^{−2219}`, `256^{−2219}` |
+| `PairVO`, `PairOV` | `L(v, C v) = 0` for all `v` (`L(C x, x) = 0` for all `x`) with `C` of rank `≥ 18` | `256^{−315}` each |
+
+`FreeV` is stated for `σ`-semilinear maps (`σ` any function in the event): it is what excludes
+the Frobenius-semilinear pairs.
+
+**Theorems.** For a good tensor:
+* `tensor_group`: if `L(g₁ v, g₂ x) = T(L(v, x))` with `g₁`, `g₂`, `T` additive and
+  `σ`-semilinear and `g₁`, `g₂` onto, then `σ = id`, `g₁ = α`, `g₂ = β`, `T = αβ`.
+* `tensor_lie`: if `L(X₁ v, x) + L(v, X₂ x) = Y(L(v, x))` with linear maps, then `X₁ = α`,
+  `X₂ = β`, `Y = α + β`.
+
+*Proof.* A map on a leg with three free vectors `t_j`, `g t_j` gives a `Free` event: the slices
+of `S` at `g t_j` are determined by those at `t_j`. Otherwise the map is a scalar on a subspace
+of codimension `≤ 4` (`near_scalar`). On the product of the three subspaces the scalars are
+related, or `BoxH` holds. A vector `w = g u − c u ≠ 0` on one leg gives a `Box` event. No count
+of matrices by rank and no module structure is used: the union is over the free vectors and the
+other two maps, or over `w` and a few functionals.
+
+No `sorry`, no `axiom`.
 -/
 
 open Finset
