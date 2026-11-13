@@ -248,4 +248,165 @@ lemma hbX_22_eq (x : XTab L M) (b : ByteArray) :
 
 end XTab
 
+/-! ## Ratatouille: the event of a hit -/
+
+namespace Rata
+
+open VoleMole.Verifier VoleMole.Verifier.Bridge VoleMole.ZK.Sim VoleMole.ZK
+open VoleMole.Privacy.Ratatouille VoleMole.Spec.Ratatouille VoleMole.Theft.Ratatouille
+open VoleMole.Theft.Chain
+open VoleMole.ROM.IC (muIn)
+
+variable {R : Type} [CipherRow R] {L M : ℕ}
+
+/-- The shared tables with the extra table `XTab L M`. -/
+abbrev ShT (R : Type) (L M : ℕ) := ShX R pI (XTab L M)
+
+/-- **The record the chain is computed with**: the base record `hbX x` with the `H₅` table. -/
+noncomputable def recT (t : ShT R L M) : Hashes := rec5 (hbX t.2.2) t.2.1.1
+
+/-- The PRG of the tables' cipher. -/
+noncomputable abbrev prgT (t : ShT R L M) : HasPrg := icPrg (rowFn t.2.1.2)
+
+variable (A : Thief Sizes.labelRows Tab3 (ShT R L M))
+
+/-- **The forgery's statement** (the spend's with the adversary's key). -/
+def fSt : Op Sizes.labelRows → Statement
+  | .issue q t c => Privacy.Ratatouille.stI (opXI q t c)
+  | .spend q c _ => Privacy.Ratatouille.stS (opXS A q c)
+
+/-- The forgery's proof bytes. -/
+def fPf : Op Sizes.labelRows → ByteArray
+  | .issue q _ _ => bOf (issueReqProof q)
+  | .spend q _ _ => bOf (SpendReq.parse q).proof
+
+/-- **A simulation**: its statement and its output (none if no statement). -/
+abbrev SimD := Option (Statement × Except String ByteArray)
+
+/-- The issuance simulation. -/
+noncomputable def sd₁ (x : Option IssueInstance) (c : SimCoins pI) : SimD :=
+  x.map fun i => (Privacy.Ratatouille.stI i, simulate pI c)
+
+/-- The spend simulation. -/
+noncomputable def sd₂ (x : Option SpendInstance) (c : SimCoins pS) : SimD :=
+  x.map fun i => (Privacy.Ratatouille.stS i, simulate pS c)
+
+/-- The forgery's chain points: `H₂²`, `H₂¹`, `H₂⁰`. -/
+noncomputable def fPt22 (op : Op Sizes.labelRows) (t : ShT R L M) : ByteArray :=
+  @cin2 (prgT t) (recT t) CrtGen.tables (fSt A op) (fPf op)
+noncomputable def fPt21 (op : Op Sizes.labelRows) (t : ShT R L M) : ByteArray :=
+  @cin1 (prgT t) (recT t) (fSt A op) (fPf op)
+def fPtMu (op : Op Sizes.labelRows) : ByteArray := muIn (fSt A op)
+
+/-- A simulation's chain points. -/
+noncomputable def sPt22 (d : SimD) (t : ShT R L M) : ByteArray :=
+  match d with
+  | some (st, o) => @sim2 (prgT t) (recT t) CrtGen.tables st o
+  | none => ByteArray.empty
+noncomputable def sPt21 (d : SimD) (t : ShT R L M) : ByteArray :=
+  match d with
+  | some (st, o) => @sim1 (prgT t) (recT t) st o
+  | none => ByteArray.empty
+def sPtMu (d : SimD) : ByteArray :=
+  match d with
+  | some (st, _) => muIn st
+  | none => ByteArray.empty
+
+/-- A simulation's targets: the first 56 bytes of its programmed block, and its `H₂¹`, `H₂⁰`
+answers. -/
+noncomputable def sTau22 (d : SimD) (t : ShT R L M) : ByteArray :=
+  match d with
+  | some (st, o) => (ba (blk (preLen pI) (@simPre (prgT t) (recT t) CrtGen.tables st o))).extract 0 56
+  | none => ByteArray.empty
+noncomputable def sTau21 (d : SimD) (t : ShT R L M) : ByteArray :=
+  (recT t).hash .h21 (sPt21 d t)
+noncomputable def sTauMu (d : SimD) (t : ShT R L M) : ByteArray :=
+  (recT t).hash .mu (sPtMu d)
+
+/-- **A hit at one level**: the forgery's point `Pf` is a short input other than the simulation's
+`Ps`, and the table answers it with the target `τ`. -/
+def Ev {n : ℕ} (Pf Ps τ : ByteArray) (G : KL L → ZK.Sim.Bytes n) : Prop :=
+  ∃ k, encL k = Pf ∧ Pf ≠ Ps ∧ ba (G k) = τ
+
+/-- **The weak freshness of the theft game with the adversary's key**: a spend is compared with
+the simulated spend's statement with its key replaced by the adversary's. In the game the
+Client's spend statement has the adversary's key (`stS`), so this is `FreshOp` there
+(`freshOk_stS`); it never holds where `FreshOp` fails (`FreshOk.freshOp`). The Lean spend
+statement does not hash the key (`Privacy.Ratatouille.stS`), so two spend statements that differ
+only in the key have the same chain. -/
+def FreshOk {Z : Sizes} {G S : Type} (A : Thief Z G S) (p₁ : Option (IssueInstance × IssueProof Z))
+    (p₂ : Option (SpendInstance × SpendProof Z)) (op : Op Z) : Prop :=
+  FreshOp A p₁ (p₂.map fun y => ({ y.1 with pk := A.pk }, y.2)) op
+
+/-! ### Helpers -/
+
+omit [CipherRow R] in
+lemma recT_hash_ne (t : ShT R L M) {k : Kind} (hk : k ≠ .h5) :
+    (recT t).hash k = (hbX t.2.2).hash k :=
+  funext (Hashes.withTable_ne _ .h5 k hk enc5 t.2.1.1)
+
+omit [CipherRow R] in
+lemma recT_wf (t : ShT R L M) : HashesWF (recT t) := (hbX_wf t.2.2).withTable .h5 enc5 t.2.1.1
+
+/-- The forger's verifier point is computed with the `H₅` record (`vPre` does not read `H₂³`). -/
+lemma vPoint_eq {p : Params} (Hb : Hashes) (st : Statement) (pf : ByteArray) (s : ShG R p) :
+    vPoint Hb st pf s =
+      (@vPre (icPrg (rowFn s.2.2)) (rec5 Hb s.2.1) CrtGen.tables st pf ++ (pfOf st pf).ctr).push 11 := by
+  unfold vPoint
+  have hA : (recV p Hb s.1 s.2.1).AgreeOff .h23 (rec5 Hb s.2.1) :=
+    agreeOff_withTable (fun k hk => funext (Hashes.withTable_ne Hb .h23 k hk _ _)) _ _
+  rw [@vPre_agreeOff (icPrg (rowFn s.2.2)) _ _ _ unread_h23 hA]
+  rfl
+
+/-- The simulator's `outPre` is `simPre` with `recT`. -/
+lemma outPre_eq (st : Statement) (o : Except String ByteArray) (t : ShT R L M) :
+    @outPre (prgT t) (hbX t.2.2) CrtGen.tables st t.2.1.1 o =
+      @simPre (prgT t) (recT t) CrtGen.tables st o := by
+  cases o <;> rfl
+
+lemma progRO_moved_at {p : Params} (st : Statement) (c : SimCoins p) (s : ShG R p) (u : ShT R L M)
+    (hs : s.2 = u.2.1) (k : K2 p) (h : (progRO p (hbX u.2.2) st c s).1 k ≠ s.1 k) :
+    k.1 = blk (preLen p) (@simPre (prgT u) (recT u) CrtGen.tables st (simulate p c)) := by
+  obtain ⟨s1, s2⟩ := s
+  simp only at hs
+  subst hs
+  rw [progRO_moved (hbX u.2.2) st c _ k h]
+  exact congrArg _ (outPre_eq st _ u)
+
+/-- **The keys both programmings change** are grinding keys of one of the two simulations'
+prefixes. -/
+lemma progT_moved (x₁ : Option IssueInstance) (c₁ : SimCoins pI) (x₂ : Option SpendInstance)
+    (c₂ : SimCoins pS) (t : ShT R L M) (k : K2 pI)
+    (h : (progT (leanProgIRX hbX) (leanProgSRX hbX) x₁ c₁ x₂ c₂ t).1 k ≠ t.1 k) :
+    (∃ st o, sd₁ x₁ c₁ = some (st, o) ∧
+        k.1 = blk (preLen pI) (@simPre (prgT t) (recT t) CrtGen.tables st o)) ∨
+      (∃ st o, sd₂ x₂ c₂ = some (st, o) ∧
+        k.1 = blk (preLen pI) (@simPre (prgT t) (recT t) CrtGen.tables st o)) := by
+  -- the spend programming acts first, on `t`; the issuance programming on its output
+  have h2 : (progO (leanProgSRX (R := R) hbX) x₂ c₂ t).2 = t.2 := by
+    rcases x₂ with _ | i <;> rfl
+  by_cases hk : (progO (leanProgSRX (R := R) hbX) x₂ c₂ t).1 k = t.1 k
+  · left
+    rcases x₁ with _ | i
+    · exact absurd (by rw [← hk]; rfl) h
+    · refine ⟨_, _, rfl, ?_⟩
+      have hx : (progO (leanProgSRX (R := R) hbX) x₂ c₂ t).2.2 = t.2.2 := by rw [h2]
+      have hm : (progRO pI (hbX t.2.2) (Privacy.Ratatouille.stI i) c₁
+          (shOf (progO (leanProgSRX (R := R) hbX) x₂ c₂ t))).1 k ≠
+          (shOf (progO (leanProgSRX (R := R) hbX) x₂ c₂ t)).1 k := by
+        intro he
+        apply h
+        show (progRO pI (hbX (progO (leanProgSRX (R := R) hbX) x₂ c₂ t).2.2)
+          (Privacy.Ratatouille.stI i) c₁ (shOf (progO (leanProgSRX (R := R) hbX) x₂ c₂ t))).1 k =
+          t.1 k
+        rw [hx, he, ← hk]
+        rfl
+      exact progRO_moved_at _ c₁ _ t (by simp only [shOf, h2]) k hm
+  · right
+    rcases x₂ with _ | i
+    · exact absurd rfl hk
+    · exact ⟨_, _, rfl, progRO_moved_at (p := pS) _ c₂ (shOf t) t rfl k hk⟩
+
+end Rata
+
 end VoleMole.Theft.Hit
