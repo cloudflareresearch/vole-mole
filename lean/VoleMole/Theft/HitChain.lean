@@ -176,6 +176,16 @@ lemma cin1_congr {k : Kind} (h : Hs.AgreeOff k Hs') (h1 : k ≠ .mu) (h2 : k ≠
   simp only [cin1, vLeaves_congr st proof h h1 h2 h4]
   split <;> simp only [in1Of_congr st proof h h1 h2 h3]
 
+/-- A domain the chain does not read (`H₃`, `H₂³`): neither chain input reads it. -/
+lemma cin2_congr_unread {k : Kind} (hu : Unread k) (h : Hs.AgreeOff k Hs') :
+    cin2 Hs T st proof = cin2 Hs' T st proof := by
+  simp only [cin2, vLeaves_congr st proof h hu.1 hu.2.1 hu.2.2.1]
+  split
+  · rfl
+  · simp only [in2Of, in1Of_congr st proof h hu.1 hu.2.1 hu.2.2.2.1,
+      h.mu1 hu.1 hu.2.1 st, h .h21 (Ne.symm hu.2.2.2.2.1), h .h4 (Ne.symm hu.2.2.1),
+      h .h5 (Ne.symm hu.2.2.2.2.2.2.1), h.muDelayed hu.1 st, crtReconstruct, ivOf]
+
 /-- **`H₂²`**: `cin2` does not read it. -/
 lemma cin2_congr22 (h : Hs.AgreeOff .h22 Hs') : cin2 Hs T st proof = cin2 Hs' T st proof := by
   simp only [cin2, vLeaves_congr st proof h (by decide) (by decide) (by decide)]
@@ -291,5 +301,177 @@ lemma vPre_congrMu (h : Hs.AgreeOff .mu Hs')
       h .h22 (by decide), hr]
 
 end Congr
+
+/-! ## Sizes -/
+
+section Sizes
+
+variable (Hs : Hashes) (T : CrtTables) (st : Statement) (proof : ByteArray)
+
+lemma size_field_le (pf : Proof) {k : String} {off n : ℕ} (hk : pf.params.field? k = some (off, n)) :
+    (pf.field k).size ≤ n := by
+  rw [field_eq pf hk, ByteArray.size_extract]
+  omega
+
+lemma size_hb (h : Array VoleMole.Arith.GF128) (h4 : h.size = 4) :
+    (h.foldl (fun acc x => acc ++ gfToBytes x) ByteArray.empty).size = 64 := by
+  have e4 : h = #[h[0]!, h[1]!, h[2]!, h[3]!] := by
+    apply Array.ext
+    · simp [h4]
+    · intro i h1 h2
+      simp only [h4] at h1
+      interval_cases i <;> simp [getElem!_pos, h4]
+  rw [e4]
+  show (ByteArray.empty ++ gfToBytes _ ++ gfToBytes _ ++ gfToBytes _ ++ gfToBytes _).size = 64
+  simp only [ByteArray.size_append, size_gfToBytes]
+  rfl
+
+/-- **The size of the verifier's `H₂¹` input.** -/
+lemma size_cin1_le (hwf : HashesWF Hs) :
+    (cin1 Hs st proof).size ≤ 64 + 16 * st.params.correctionBytes +
+      st.params.nMask * st.params.nMultBytes + 16 + st.binder1.size + 1 := by
+  unfold cin1
+  split
+  · simp
+  · rename_i leaves _
+    have hmu : (st.mu1 Hs).size = 32 := by
+      unfold Statement.mu1 mu
+      split <;> exact hwf _ _
+    have hc : (BAVC.check (Hs.hash .h1) leaves.coms).size = 32 := hwf _ _
+    have h1 := size_field_le (pfOf st proof) (Params.field_corrections st.params)
+    have h2 := size_field_le (pfOf st proof) (Params.field_cmult st.params)
+    have h3 := size_field_le (pfOf st proof) (Params.field_ivPre st.params)
+    simp only [in1Of, chal1Input, ByteArray.size_push, ByteArray.size_append, hmu, hc]
+    simp only [Proof.corrections, Proof.cmult, Proof.ivPre] at *
+    omega
+
+/-- **The size of the verifier's `H₂²` input.** -/
+lemma size_cin2_le (hwf : HashesWF Hs) (hd : st.delayed = false) :
+    (cin2 Hs T st proof).size ≤ 264 + st.binder2.size + st.params.witnessBytes + 1 := by
+  unfold cin2
+  split
+  · simp
+  · rename_i leaves _
+    have h1 := size_field_le (pfOf st proof) (Params.field_voleCheck st.params)
+    have h2 := size_field_le (pfOf st proof) (Params.field_correction st.params)
+    have hmd : ∀ c, (st.muDelayed Hs c).size = 0 := fun c => by simp [Statement.muDelayed, hd]
+    simp only [in2Of, chal2Input, ByteArray.size_push, ByteArray.size_append, hwf .h21,
+      Kind.outLen, size_hb _ (voleHashReceiver_size _ _ _ _ _ _), hmd]
+    simp only [Proof.voleCheck, Proof.correction] at *
+    omega
+
+/-- The counter field has at most four bytes. -/
+lemma size_ctr_le (pf : Proof) : pf.ctr.size ≤ 4 :=
+  size_field_le pf (Params.field_ctr pf.params)
+
+end Sizes
+
+/-! ## A hit on a simulated proof's prefix -/
+
+section HitChain
+
+variable (Hs : Hashes) (T : CrtTables)
+
+/-- The simulator's recomputed prefix of an output (`outPre`, for a record `Hs`). -/
+def simPre (st : Statement) (o : Except String ByteArray) : ByteArray :=
+  match o with
+  | .ok b => vPre Hs T st b
+  | .error _ => ByteArray.empty
+
+/-- The simulator's `H₂²` input. -/
+def sim2 (st : Statement) (o : Except String ByteArray) : ByteArray :=
+  match o with
+  | .ok b => cin2 Hs T st b
+  | .error _ => ByteArray.empty
+
+/-- The simulator's `H₂¹` input. -/
+def sim1 (st : Statement) (o : Except String ByteArray) : ByteArray :=
+  match o with
+  | .ok b => cin1 Hs st b
+  | .error _ => ByteArray.empty
+
+/-- **The chain of a hit.** If the verifier's grinding point of a proof `pf` for `stf` is the
+grinding point of a `preLen`-byte block `blk pre` of a simulator's prefix `pre = simPre sts o`
+(both non-delayed), then the forgery's reconstruction succeeds, and at the first level where the
+inputs differ the outputs agree:
+
+* `H₂²`: `cin2 ≠ sim2` and `H₂²(cin2) = (blk pre)[0, 56)`, or
+* `H₂¹`: `cin1 ≠ sim1` and `H₂¹(cin1) = H₂¹(sim1)`, or
+* `H₂⁰`: `muIn stf ≠ muIn sts` and `H₂⁰(muIn stf) = H₂⁰(muIn sts)`, or
+* the two statements have the same `H₂⁰` input. -/
+theorem chain_hit (hwf : HashesWF Hs) {p : Params} (stf sts : Statement) (pf : ByteArray)
+    (o : Except String ByteArray) (hdf : stf.delayed = false) (hds : sts.delayed = false)
+    (k : K2 p) (hk : enc2 p k = (vPre Hs T stf pf ++ (pfOf stf pf).ctr).push 11)
+    (hkp : k.1 = blk (preLen p) (simPre Hs T sts o)) :
+    (vLeaves Hs stf pf).isSome ∧
+    ((cin2 Hs T stf pf ≠ sim2 Hs T sts o ∧
+        Hs.hash .h22 (cin2 Hs T stf pf) = (ba (blk (preLen p) (simPre Hs T sts o))).extract 0 56) ∨
+      (cin1 Hs stf pf ≠ sim1 Hs sts o ∧
+        Hs.hash .h21 (cin1 Hs stf pf) = Hs.hash .h21 (sim1 Hs sts o)) ∨
+      (muIn stf ≠ muIn sts ∧ Hs.hash .mu (muIn stf) = Hs.hash .mu (muIn sts)) ∨
+      muIn stf = muIn sts) := by
+  have hpl : 56 ≤ preLen p := by unfold preLen; omega
+  -- the grinding point: `vPre ‖ ctr = blk pre ‖ c`
+  have he : vPre Hs T stf pf ++ (pfOf stf pf).ctr =
+      ba k.1 ++ AES.pushLE32 ByteArray.empty k.2.val.toUInt32 := by
+    have := hk.symm
+    simp only [enc2, grindInput] at this
+    rw [← pushLE32_eq]
+    exact push_injective 11 this
+  have hsz := congrArg ByteArray.size he
+  have hctr := size_ctr_le (pfOf stf pf)
+  simp only [ByteArray.size_append, size_ba, size_pushLE32, ByteArray.size_empty] at hsz
+  rcases hv : vLeaves Hs stf pf with _ | leaves
+  · rw [vPre_none Hs T stf pf hv] at hsz
+    have h0 : ByteArray.empty.size = 0 := rfl
+    omega
+  refine ⟨rfl, ?_⟩
+  -- the first 56 bytes: `chal2`
+  have hc2 : Hs.hash .h22 (cin2 Hs T stf pf) = (ba (blk (preLen p) (simPre Hs T sts o))).extract 0 56 := by
+    have e : (vPre Hs T stf pf ++ (pfOf stf pf).ctr).extract 0 56 =
+        (ba k.1 ++ AES.pushLE32 ByteArray.empty k.2.val.toUInt32).extract 0 56 := by rw [he]
+    rw [vPre_some Hs T stf pf hv, ByteArray.append_assoc,
+      ByteArray.extract_append_eq_left (show (Hs.hash .h22 _).size = 56 from hwf .h22 _).symm] at e
+    rw [e, ← hkp, ROM.extract_append_of_le (by rw [size_ba]; exact hpl)]
+  by_cases h2 : cin2 Hs T stf pf = sim2 Hs T sts o
+  swap
+  · exact Or.inl ⟨h2, hc2⟩
+  right
+  -- the simulator's reconstruction succeeded
+  have hne := cin2_ne_empty Hs T stf pf hv
+  rcases o with e | b
+  · exact absurd h2 hne
+  simp only [sim2, sim1] at h2 ⊢
+  have hvs : (vLeaves Hs sts b).isSome := (cin2_ne_empty_iff Hs T sts b).1 (h2 ▸ hne)
+  obtain ⟨ls, hls⟩ := Option.isSome_iff_exists.1 hvs
+  -- `chal1`
+  obtain ⟨r, er⟩ := cin2_some Hs T stf pf hv
+  obtain ⟨r', er'⟩ := cin2_some Hs T sts b hls
+  have hc1 : Hs.hash .h21 (cin1 Hs stf pf) = Hs.hash .h21 (cin1 Hs sts b) := by
+    have e := congrArg (fun b : ByteArray => b.extract 0 136) h2
+    simp only [er, er'] at e
+    have h136 : ∀ x, (Hs.hash .h21 x).size = 136 := fun x => hwf .h21 x
+    rwa [extract_zero_append_push _ _ _ (h136 _), extract_zero_append_push _ _ _ (h136 _)] at e
+  by_cases h1 : cin1 Hs stf pf = cin1 Hs sts b
+  swap
+  · exact Or.inl ⟨h1, hc1⟩
+  right
+  -- `mu₁`
+  obtain ⟨u, eu⟩ := cin1_some Hs stf pf hv
+  obtain ⟨u', eu'⟩ := cin1_some Hs sts b hls
+  have hm : Hs.hash .mu (muIn stf) = Hs.hash .mu (muIn sts) := by
+    have e := congrArg (fun b : ByteArray => b.extract 0 32) h1
+    simp only [eu, eu'] at e
+    have h32 : ∀ st : Statement, (st.mu1 Hs).size = 32 := fun st => by
+      unfold Statement.mu1 mu
+      split <;> exact hwf _ _
+    rw [extract_zero_append_push _ _ _ (h32 _), extract_zero_append_push _ _ _ (h32 _),
+      mu1_eq Hs stf hdf, mu1_eq Hs sts hds] at e
+    exact e
+  by_cases hmu : muIn stf = muIn sts
+  · exact Or.inr hmu
+  · exact Or.inl ⟨hmu, hm⟩
+
+end HitChain
 
 end VoleMole.Theft.Chain
