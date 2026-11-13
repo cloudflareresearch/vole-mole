@@ -36,7 +36,9 @@ the random-oracle and ideal-cipher model, with the `Shift` term (`lean/VoleMole/
 Lemma P's failure probability as an explicit term (§6.4). For Theorem U1 that term is bounded in
 Lean too, every term explicit (`ROM/OneMoreLemmaPBound.lean`, `prEvent_pfail_le`,
 `pomfrit_U1_explicit`, §6.4), and with simultaneous extraction, each query of the forger's run
-charged once (`ROM/OneMoreLemmaPSim.lean`, `pomfrit_U1_sim`); for Theorem U2 it is not (G8).
+charged once (`ROM/OneMoreLemmaPSim.lean`, `pomfrit_U1_sim`). For Theorem U2 it is bounded the
+same way, without Lemma P's `2⁻⁷¹` term (`ROM/OneMoreShiftBound.lean`, `pomfrit_U2_explicit`;
+`ROM/OneMoreShiftSim.lean`, `pomfrit_U2_sim`; §6.4 item 10).
 
 Line references are to the working tree at commit `6d7113e`.
 
@@ -44,7 +46,7 @@ Line references are to the working tree at commit `6d7113e`.
 
 | Property | On `main` | With the label-row fix | Section |
 |---|---|---|---|
-| One-more unforgeability (paper Def. 2.5), classical ROM + ideal cipher | **Holds.** Tight under a τ-shift variant of UOV one-more preimage resistance (Thm U2). Under the paper's standard assumption (Def. 3.1) the reduction loses an extra `(Q₃+ℓ+1)·2^{−71}` (Thm U1). [Lean] the game, the programming of `hash_to_target` and the reductions to Def. 3.1 and to A-OMPR⊕τ, with Lemma P's failure probability as an explicit term (`ROM/OneMorePomfrit.lean`, `pomfrit_U1_bound`, `pomfrit_U2_bound`; §6.4). For U1 that term is bounded too, with simultaneous extraction: `Pr[PomWin] ≤ Adv^{ompr} + pfailSimEps` with every term explicit, the forger's queries charged once (`pomfrit_U1_sim`, `pomfrit_U1_ompr_sim`; the union over forgeries, `(ℓ+1)·pfailEps`, is `pomfrit_U1_explicit`); for U2 it stays a term (G8) | Same (ZK is not used) | §5–§6 |
+| One-more unforgeability (paper Def. 2.5), classical ROM + ideal cipher | **Holds.** Tight under a τ-shift variant of UOV one-more preimage resistance (Thm U2). Under the paper's standard assumption (Def. 3.1) the reduction loses an extra `(Q₃+ℓ+1)·2^{−71}` (Thm U1). [Lean] the game, the programming of `hash_to_target` and the reductions to Def. 3.1 and to A-OMPR⊕τ, with Lemma P's failure probability as an explicit term (`ROM/OneMorePomfrit.lean`, `pomfrit_U1_bound`, `pomfrit_U2_bound`; §6.4). For U1 that term is bounded too, with simultaneous extraction: `Pr[PomWin] ≤ Adv^{ompr} + pfailSimEps` with every term explicit, the forger's queries charged once (`pomfrit_U1_sim`, `pomfrit_U1_ompr_sim`; the union over forgeries, `(ℓ+1)·pfailEps`, is `pomfrit_U1_explicit`); for U2 likewise, with no `2^{−71}` term: `Pr[PomWin] ≤ Adv^{ompr⊕17} + sfailSimEps`, `2⁻⁶²` at `2⁶⁴` queries and `ℓ = 2³⁰` (`pomfrit_U2_sim`, `pomfrit_U2_omprShift_sim`; union: `pomfrit_U2_explicit`) | Same (ZK is not used) | §5–§6 |
 | One-more unforgeability, QROM | **On paper, under new quantum-oracle assumptions** (U1-Q, U2-Q of `lean/docs/extraction/Q7-qrom-multi-extraction.md` §4: database-controlled programming replaces the mid-run extractor). From the paper's A-OMPR with the classical reduction: open, since Q2 extracts only after the run | Same | §7 |
 | Blindness against a malicious Issuer (paper Def. 2.4: malicious key, selective-failure form) | **Fails.** An honest-but-curious Issuer links with advantage ≈ 1 using about 310 SHAKE calls per (signature, session) pair (`lean/docs/zk.md` §4) | **Holds** (Thm B), with advantage `≤ ε_ZK^fix(Q_P = 2) + 2Q_X·2^{−256}`. [Lean] from G1 with (ZK-fix) as a hypothesis (`Privacy/PomFRIT.lean`, `blindness`), and with (ZK-fix) derived for the executable Lean prover with label rows down to its tape hypothesis (`Privacy/PomFRITLean.lean`, `blindness_lean`). In the ROM and ideal-cipher model, for the Lean prover with the Issuer seeing the tables and every term explicit: `≈ 2⁻¹⁰³·⁴` plus budget terms (`blindnessRO_lean_num`), `≈ 2⁻¹⁰³·²` with the Issuer's key, messages and responses reading the tables except `H₂³` (`blindnessRA_lean_num`), `≈ 2⁻¹⁰²·³` with them reading `H₂³` too (joint budget, `blindnessRAH_lean_num`); each also with AES as random permutations (`_perm`), with one shared `H₃` and no `2⁻³⁶⁰` term (`blindnessSh_num`, `blindnessRASh_num`, `blindnessRAHSh_num`), and from the real Clients' OS seeds and `XOF_seed` (G0), `+ 2·(2Q_X + 1)·2⁻²⁵⁶` (`blindness*_seed`). With many sessions (`lean/docs/zk.md` §10.8), each plus budget terms: `n` sessions in one concurrent schedule `≤ n·2⁻¹⁰³` (`blindnessN_lean_le`; `2⁻⁸³` at `2²⁰`, `2⁻⁷¹` at `2³²`), adaptively scheduled `≤ n·2⁻¹⁰²` (`blindnessAd_lean_le_pfx`, the collision term counting `H₂³` prefixes; `2⁻⁸²` at `2²⁰`, `2⁻⁷⁰` at `2³²`; `n·2⁻⁹²` counting keys, `blindnessAd_lean_le`), interleaved, the Issuer starting further sessions and answering them in any order, `≤ (n + 2)·2⁻¹⁰²` for `n` further sessions (`blindnessIL_lean_le`; the same numbers), also with a scheduler that reads the tables and places the challenge itself, `+ 52·L·(a₃ + a₂ + a₅ + 221·a_E)·2⁻¹²⁸` for `L` steps of at most `a` queries each (`blindnessILO_lean_le`), `N` challenge pairs `≤ N·(2N·2⁻¹⁰³ + …)` (`blindnessP_lean_le`) and, with `H₄` a random-oracle table, `≤ N·2⁻¹⁰³ + 32·N²·2⁻¹²⁸` (`blindnessPH_lean_le`; `2⁻⁸³` at `2²⁰` sessions, `2⁻⁶⁰` at `2³²`). Formulas: §8.2; theorem names: §13 | §8 |
 | No selective failure via `finalize_issue`'s check (`pomfrit.cpp:207`) | Holds: the abort event is a function of the Issuer's own view | Holds | §8.3 |
@@ -333,8 +335,9 @@ counting and the union over the `ℓ+1` forgeries, with the advantage against De
 A-OMPR⊕τ) and Lemma P's failure probability as explicit terms. Lemma P's extraction and `Shift`
 bound is in Lean for one adaptively chosen statement with any target function (§5), and joined to
 the one-more game for Theorem U1, so U1 is in Lean with every term explicit (§6.4,
-`pomfrit_U1_explicit`), also with simultaneous extraction (`pomfrit_U1_sim`). For Theorem U2 the
-join is not done (G8).
+`pomfrit_U1_explicit`), also with simultaneous extraction (`pomfrit_U1_sim`). Theorem U2 is in
+Lean with every term explicit too, from Lemma P without `Shift` (§6.4 item 10, `pomfrit_U2_explicit`,
+`pomfrit_U2_sim`).
 
 ### 6.1 Theorem U1 (standard assumption, paper Def. 3.1)
 
@@ -532,7 +535,7 @@ U2's assumption relates to U1's in both directions:
 **Lemma P's term** (`ROM/LemmaP.lean`, `ROM/OneMoreLemmaP.lean`; G8). The target is
 `Pr[∃ i, PFail_i] ≤ ε_ext(N; q₁, q₂, Q₃ + ℓ + 1) + (Q₃ + ℓ + 1)·2^{−71} + Q_T·q₁·2^{−704}` (for U2
 without the `2^{−71}` term). Mechanized first as a union over the `ℓ + 1` forgeries (items 1–8),
-then with simultaneous extraction (item 9). Mechanized:
+then with simultaneous extraction (item 9), and for U2 (item 10). Mechanized:
 - *(1) The extraction bound for a family of target functions* (`pomfritT_accept_le_major`, §5):
   the adaptive bound of `ROM/AdaptPomfrit.lean` for `pomfritRedeemT` with any target function,
   with Lemma P's goal (the widest group of the alive trees extracts) and `Shift` (`2⁵⁷` accepted
@@ -675,15 +678,68 @@ Compared with the paper's term `ε_ext + (Q₃ + ℓ + 1)·2^{−71} + Q_T·q₁
 - The key generation must give 32-byte key digests (pqov's `SHAKE256(cpk)` does): the reduction
   reads `chal1` and `d[0..45)` off `hash_to_target`'s input at fixed offsets.
 
-Not mechanized: **Lemma P's term for Theorem U2** (`Pr[∃ i, ShiftFail_i]`). Two pieces are missing:
-- the game machinery of `ROM/OneMoreLemmaP.lean` and of this section for U2's hints (lists of
-  shifts, `noHint`): the table-by-table failure (`pfail_table`), the derived prover's hint ghost
-  (`eval_proverP`) and the assembly are stated for U1's hints (one target, `addHint`), and a shift
-  rule computing the alive trees' prefixes at query time (the analogue of `e1P`);
-- the extraction bound without the `Shift` term: for U2 the goal is that *some* alive tree
-  extracts (its prefix is then one of the submitted shifts), whose per-chain step has `N = 2`
-  (`extract_or_few`); `pomfritT_accept_le_major` is stated for Lemma P's goal (the widest group)
-  and charges `2⁻⁷¹` per `H₂³` query. With it, U2 would be tight as in §6.2.
+- *(10) Theorem U2* (`ROM/LemmaPSome.lean`, `ROM/OneMoreShiftTable.lean`,
+  `ROM/OneMoreShiftFail.lean`, `ROM/OneMoreShiftBound.lean`, `ROM/OneMoreShiftSim.lean`,
+  `Assumptions/PomfritShift.lean`, `Assumptions/PomfritShiftSim.lean`; `Pr[∃ i, ShiftFail_i]`
+  bounded). The pieces:
+  - *The shift rule* (`shP`, `hintS = hint2 17 shP`): as `e1P`, the alive trees at the first `H₂¹`
+    preimage of `x`'s `chal1` in the log at `x`'s first target query, and the list of **all** their
+    prefixes `u ⊕ d`, in tree order (at most `17`, so `take 17` cuts nothing, `hintS_eq`).
+  - *Lemma P without `Shift`* (`ROM/LemmaPSome.lean`). U2's goal on an output is that some alive
+    tree has a candidate in the relation (`GoalS`, `SomeExtracted`; Lemma P's `MajorExtracted` is
+    the same with the widest-group condition added). The deterministic step and the union bound of
+    `ROM/LemmaP.lean` read the goal only through the per-chain hypothesis; they are restated with
+    the goal a parameter (`pomBad_traceG`, `prEvent_accept_le_adaptive_pomfritT_EG`,
+    `prEvent_accept_le_adaptive_pomfritTG`). The per-chain step is `extract_or_few` for the target
+    family (`pomfritT_extract_some_chain`, `combDetG_pomfritT_some`): some tree outside the fixed
+    ones extracts, or at most `2` admissible `chal3` are accepted. So `pomfritT_accept_le_some`
+    is `pomfritT_accept_le_major` with the `H₂³` term `(Q₃ + 1)·2·2⁻¹²⁸` in place of
+    `(Q₃ + 1)·2⁻⁷¹`.
+  - *The game with any hint type, table by table* (`ROM/OneMoreShiftTable.lean`). The derived
+    prover `proverP … i` of item 4 reads neither the hint rule nor the target rule, so U2 uses it
+    unchanged. What was specific to U1 is the relation between the game and it. `InvG` (`InvH` for
+    any hint type `Hn` and programming `φ`): the game's state and the void-hint state have the same
+    answers, stream and Issuer count, and the hint stored at each answered input is the hint rule at
+    that input's ghost log. The game's forger keeps it (`eval_forgerG`), and so do the verifications
+    (`eval_verOneG`, `eval_verAll_splitG`, `eval_verPreAllG`). `ver_tableG`: an accepted forgery
+    `i` with claim `(x, σ)` passed the refresher check; `proverP … i` outputs `x` and a ghost log
+    `Lx`; the game's table holds at `x` the derived prover's answer `a` and the hint rule at `Lx`;
+    the verifier accepts at the derived prover's statement; and `σ` is the first candidate
+    extracted from the forger's log that is a preimage of one of `tgts (a, hint Lx x)`.
+  - *The ordering step* (`shP_eq_alive`): the proof of `e1P_eq_major` with the list of all prefixes
+    in place of the widest group's. *The per-table implication* (`shiftFail_events`): `ShiftFail_i`
+    gives, in the game of `proverP … i`, the verifier accepting with no alive tree extracting, Post,
+    the verifier's `H₂³` input unqueried, a chain hit or an order hit; otherwise the extracting
+    tree is known (`aliveR_subset_known`), its prefix is a shift (`shP_eq_alive`), and its decoded
+    `σ` is a preimage of `a + δ` for that shift `δ`, so the claim is good (`rel_pick`).
+  - *The bounds*, as items 8 and 9 with `N = 2`: `prEvent_shiftFail_le`, `pomfrit_U2_explicit`,
+    `pomfrit_U2_omprShift_explicit` (union over forgeries, `(ℓ + 1)·sfailEps`, `sfailEps` =
+    `pfailEps` with `someEps` for `majEps`); with simultaneous extraction `prefix_of_shiftFail`,
+    `simBadS` (`pomBad` with `N = 2`, or an order hit), `prEvent_shiftFail_sim_le`,
+    `pomfrit_U2_sim`, `pomfrit_U2_omprShift_sim`:
+
+        Pr[PomWin] ≤ Adv^{ompr⊕17}(red noHint …; Q_T + ℓ + 1, ℓ) + sfailSimEps(q', q_E', n', ℓ),
+        sfailSimEps = (q'₂₁ + ℓ + 1)·2⁻¹⁵⁰ + (q'₂₂ + ℓ + 1)·(ε_QS + 2⁻¹²⁸ + (n' + 339)·2⁻⁴⁴⁸)
+                      + (q'₂₃ + ℓ + 1)·2·2⁻¹²⁸ + hits + (ℓ + 1)·(failEps(q', q_E') + 2⁻¹²⁸)
+
+    (`sfailSimEps_eq`), never worse than the union (`sfailSimEps_le`). Hypotheses as for U1:
+    32-byte key digests and the forger's budget (`Audit/PomfritLemmaP.lean`).
+
+  Numbers (`q` queries of each hash kind, `n_A = q_E = Q_T = q`), U1's for comparison:
+
+  | `q` | `ℓ` | U1 union | U1 simultaneous | U2 union `(ℓ+1)·sfailEps` | U2 simultaneous `sfailSimEps` |
+  |---|---|---|---|---|---|
+  | `2⁶⁴` | `2³⁰` | `2²³` | `2⁻⁷·⁰` | `2⁻³²·⁰` | `2⁻⁶²·⁰` |
+  | `2⁶⁴` | `2²⁰` | `2¹³` | `2⁻⁷·⁰` | `2⁻⁴²·⁰` | `2⁻⁶²·⁰` |
+  | `2⁴⁸` | `2³⁰` | `2⁷` | `2⁻²³·⁰` | `2⁻⁴⁸·⁰` | `2⁻⁷⁸·⁰` |
+  | `2⁴⁰` | `2³⁰` | `2⁻¹·⁰` | `2⁻³¹·⁰` | `2⁻⁵⁶·⁰` | `2⁻⁸⁶·⁰` |
+
+  At `2⁶⁴` and `ℓ = 2³⁰` the U2 bound is dominated by the `H₂²` and `H₂³` charges, `≈ 2⁻⁶³` each
+  (`q'₂₂·(ε_QS + 2⁻¹²⁸)` and `q'₂₃·2·2⁻¹²⁸`): the paper's `ε_ext ≈ (2Q₃ + 2q₂)·2⁻¹²⁸ = 2⁻⁶²`
+  (§6.3). The per-forgery terms are about `2⁻⁸⁸`. So Theorem U2 is tight in Lean as in §6.2: the
+  forger's advantage is the reduction's A-OMPR⊕17 advantage up to `2⁻⁶²`. Nothing in the paper's
+  argument for U2 was found wrong; the mechanized term adds, as for U1, the order hits and the
+  per-forgery failure terms (binding, an opened dead leaf, Post, the unqueried `H₂³` input).
 
 ## 7. One-more unforgeability in the QROM
 
@@ -1108,7 +1164,7 @@ dedicated to PomFRIT.
 
 | | `main` | label-row fix |
 |---|---|---|
-| U1, U2 (classical one-more unforgeability) | ✓ (reductions in Lean; U1 with every term explicit, Lemma P's term bounded with simultaneous extraction, §6.4; for U2 Lemma P's term is still a term, G8) | ✓ |
+| U1, U2 (classical one-more unforgeability) | ✓ (reductions in Lean; U1 and U2 with every term explicit, the extraction term bounded with simultaneous extraction, U2 without the `2⁻⁷¹` term, §6.4) | ✓ |
 | T6 (OMPR ≤ one-more unforgeability) | ✓ (in Lean, for the Lean client: `pomfrit_T6_lean`, §6.4, G9) | ✓ |
 | QROM one-more unforgeability | paper, new quantum UOV assumptions (Q7 §4) | same |
 | Blindness, honest-but-curious Issuer | ✗ (practical linking) | ✓ (Thm B) |
@@ -1159,7 +1215,7 @@ dedicated to PomFRIT.
     `H₄`-table games with AES as random permutations; further sessions in the shared-`H₃` and
     seed-XOF games.
 
-- **G8.** U1/U2's extraction term in Lean (§6.4). **Closed for U1**: `Pr[∃ i ≤ ℓ, PFail_i] ≤
+- **G8 (closed).** U1/U2's extraction term in Lean (§6.4). **Closed for U1**: `Pr[∃ i ≤ ℓ, PFail_i] ≤
   (ℓ + 1)·pfailEps(q', q_E', n')` with every term explicit (`prEvent_pfail_le`), so
   `Pr[PomWin] ≤ Adv^{ompr} + (ℓ + 1)·pfailEps` (`pomfrit_U1_explicit`, `pomfrit_U1_ompr_explicit`;
   `ROM/OneMoreLemmaPIC.lean` … `ROM/OneMoreLemmaPBound.lean`). The pieces: a derived prover that
@@ -1180,11 +1236,16 @@ dedicated to PomFRIT.
   the refresher check fails, which a failed forgery passed), and Lemma P's per-query bad event with
   its per-query bound and deterministic step as lemmas (`pomBad`, `prEvent_pomBad_le`,
   `pomBad_trace` in `ROM/LemmaP.lean`; with the order hit, `simBadP`, `prEvent_simBadP_le`,
-  `simBadP_prefix_congr`). **Open for U2**: `Pr[∃ i, ShiftFail_i]` is still a term of
-  `pomfrit_U2_bound`; it needs the game machinery for U2's shift-list hints and the extraction bound
-  for "some alive tree extracts" without `Shift` (§6.4). Found on the way: the game's `chal1Pre`
-  used the AES PRG instead of the ideal cipher's, so the target oracle's input was not at the
-  verifier's `chal1` (fixed earlier).
+  `simBadP_prefix_congr`). **Closed for U2** (§6.4 item 10): `Pr[PomWin] ≤ Adv^{ompr⊕17} +
+  sfailSimEps(q', q_E', n', ℓ)` (`pomfrit_U2_sim`, `pomfrit_U2_omprShift_sim`; union
+  `(ℓ + 1)·sfailEps`, `pomfrit_U2_explicit`, `pomfrit_U2_omprShift_explicit`), with U2's shift
+  rule `hintS` (all alive trees' prefixes) and no `2⁻⁷¹` term: `2⁻⁶²` at `2⁶⁴` queries and
+  `ℓ = 2³⁰`. The pieces: Lemma P without `Shift`, `N = 2` per chain (`pomfritT_accept_le_some`,
+  `ROM/LemmaPSome.lean`); the game with any hint type related to the same derived prover
+  (`InvG`, `ver_tableG`, `ROM/OneMoreShiftTable.lean`); the ordering step for the list of shifts
+  (`shP_eq_alive`) and the per-table implication (`shiftFail_events`). Found on the way: the
+  game's `chal1Pre` used the AES PRG instead of the ideal cipher's, so the target oracle's input
+  was not at the verifier's `chal1` (fixed earlier).
 - **G9 (closed).** Theorem 6 (OMPR ≤ PomFRIT, `uov-assumptions.md` §5.6) is in Lean for the Lean
   client with the completeness term bounded: `compFail ≤ (ℓ+1)·2^{−113}` (`compFail_le`) and
   `Adv^{ompr}(B; n, ℓ) ≤ Pr[PomWin] + (ℓ+1)·2^{−113}` (`pomfrit_T6_lean`, `pomfrit_T6_lean_bound`;
@@ -1204,7 +1265,10 @@ dedicated to PomFRIT.
 `ROM/OneMoreLemmaP.lean`, `ROM/OneMoreLemmaPIC.lean`, `ROM/OneMoreLemmaPIdent.lean`,
 `ROM/OneMoreLemmaPOrder.lean`, `ROM/OneMoreLemmaPQueries.lean`, `ROM/OneMoreLemmaPFail.lean`,
 `ROM/OneMoreLemmaPBound.lean`, `Assumptions/PomfritLemmaP.lean`, `ROM/OneMoreLemmaPPrefix.lean`,
-`ROM/OneMoreLemmaPSim.lean` and `Assumptions/PomfritLemmaPSim.lean` have no `sorry` and no `axiom`. Check them with
+`ROM/OneMoreLemmaPSim.lean`, `Assumptions/PomfritLemmaPSim.lean`, `ROM/LemmaPSome.lean`,
+`ROM/OneMoreShiftTable.lean`, `ROM/OneMoreShiftFail.lean`, `ROM/OneMoreShiftBound.lean`,
+`ROM/OneMoreShiftSim.lean`, `Assumptions/PomfritShift.lean` and `Assumptions/PomfritShiftSim.lean`
+have no `sorry` and no `axiom`. Check them with
 `cd lean && lake env lean VoleMole/Protocols/PomFRIT.lean` (and `lake build
 VoleMole.ROM.OneMorePomfrit`).
 
@@ -1229,6 +1293,11 @@ VoleMole.ROM.OneMorePomfrit`).
 | Lemma P's per-query bad event, its bound and its deterministic step as lemmas (`lean/VoleMole/ROM/LemmaP.lean`) | `pomBad`, `pomEps`, `pomBad_trace`, `prEvent_pomBad_le` |
 | The derived provers' runs are prefixes of the last one's where a forgery fails (`lean/VoleMole/ROM/OneMoreLemmaPPrefix.lean`) | `RefreshOk`, `log_verPreIC_state`, `log_verPreIC_eq_last`, `log_verPreAll_state`, `log_verPreAll_append`, `log_contP`, `log_contP_prefix`, `jOf_proverP_prefix`, `runE_proverP_prefix`, `pfail_refresh`, `prefix_of_pfail` |
 | Theorem U1 with simultaneous extraction: each query of the forger's run charged once; never worse than the union over forgeries (`lean/VoleMole/ROM/OneMoreLemmaPSim.lean`, `lean/VoleMole/Assumptions/PomfritLemmaPSim.lean`; non-vacuity in `Audit/PomfritLemmaP.lean`) | `simBadP`, `simBadP_prefix_congr`, `cellEps`, `simEps`, `prEvent_simBadP_le`, `failP`, `prEvent_pfailZ_sim_le_E`, `prEvent_avg_le_sum4`, `pfailSimEps`, `pfailSimEps_eq`, `sum_simEps_eq`, `pfailSimEps_le`, `prEvent_pfailZ_sim_le`, `prEvent_pfail_sim_le`, `pomfrit_U1_sim`, `pomfrit_U1_ompr_sim` |
+| Lemma P without `Shift` (for U2): some alive tree extracts, `N = 2` per chain, the `H₂³` term `(Q₃+1)·2·2⁻¹²⁸`; the deterministic step and union bound with any goal (`lean/VoleMole/ROM/LemmaPSome.lean`) | `GoalT`, `GoalS`, `GoalOut`, `SomeExtracted`, `someExtracted_of_major`, `pomBad_traceG`, `prEvent_accept_le_adaptive_pomfritT_EG`, `prEvent_accept_le_adaptive_pomfritTG`, `pomfritT_extract_some_chain`, `combDetG_pomfritT_some`, `pomfritT_accept_le_some` |
+| The one-more game with any hint type, table by table, against the derived prover `proverP` (`lean/VoleMole/ROM/OneMoreShiftTable.lean`) | `HTSG`, `hs0G`, `SameG`, `tStep_sameG`, `InvG`, `InvG.step`, `eval_forgerG`, `eval_verOneG`, `eval_verAll_splitG`, `eval_htW_persistG`, `eval_verPreAllG`, `runG`, `ver_tableG` |
+| U2's shift rule, its ordering step, a failed forgery of U2 as a bad event of the derived game (`lean/VoleMole/ROM/OneMoreShiftFail.lean`) | `shP`, `hintS`, `hintS_eq`, `shP_eq_alive`, `extractIC_keys_known`, `rel_pick`, `ShiftFailZ`, `shiftFail_events` |
+| Theorem U2 with every term explicit, union over forgeries (`lean/VoleMole/ROM/OneMoreShiftBound.lean`, `lean/VoleMole/Assumptions/PomfritShift.lean`; non-vacuity in `Audit/PomfritLemmaP.lean`) | `someEps`, `sfailEps`, `evJS`, `prEvent_shiftFailZ_le`, `prEvent_shiftFail_le`, `pomfrit_U2_explicit`, `pomfrit_U2_omprShift_explicit` |
+| Theorem U2 with simultaneous extraction (`lean/VoleMole/ROM/OneMoreShiftSim.lean`, `lean/VoleMole/Assumptions/PomfritShiftSim.lean`; non-vacuity in `Audit/PomfritLemmaP.lean`) | `simBadS`, `simBadS_prefix_congr`, `cellEpsS`, `simEpsS`, `prEvent_simBadS_le`, `prefix_of_shiftFail`, `prEvent_shiftFailZ_sim_le_E`, `sfailSimEps`, `sfailSimEps_eq`, `sum_simEpsS_eq`, `sfailSimEps_le`, `prEvent_shiftFailZ_sim_le`, `prEvent_shiftFail_sim_le`, `pomfrit_U2_sim`, `pomfrit_U2_omprShift_sim` |
 | The generic one-more reduction (`lean/VoleMole/ROM/OneMore.lean`): the real game with a programmable target oracle fed by `n` uniform targets, the labelled one-more preimage experiment (Def. 3.1, A-OMPR⊕τ), the reduction; programming is perfect; forger's win `≤` reduction's advantage `+ Pr[∃` claim accepted and not good`]`; with at most `n` target queries the target list never runs out | `omuf`, `omExp`, `red`, `realImpl`, `chImpl`, `redImpl`, `collapse`, `real_eqd_comb`, `omuf_good_le`, `omuf_le_ex`, `omuf_le`, `goodPre`, `goodShift`, `TgInv`, `tgInv_preserved`, `NoFall`, `noFall_of_bound`, `omuf_le_of_bound` |
 | PomFRIT's one-more forgery game with `hash_to_target` a random oracle and the verifier as `pomfritVerify` (`lean/VoleMole/ROM/OneMorePomfrit.lean`); distinct messages give distinct `H_T` inputs; at most `Q_T + ℓ + 1` target queries | `game`, `PomWin`, `Forger`, `wrapImpl`, `verOne`, `tgtIn`, `pomfritRedeemT`, `pomfritRedeem_eq_T`, `pomfritTarget_eq_tgtIn`, `honestPre`, `relP`, `tgtIn_inj`, `acomp_support`, `pomWin_forges`, `acomp_bound` |
 | Theorems U1 and U2 (§6.4): `Pr[PomWin] ≤ Adv^{ompr}(B; Q_T+ℓ+1, ℓ) + Pr[∃ i, PFail_i]`, and with A-OMPR⊕τ and `ShiftFail_i`; non-vacuity with the honest Issuer (`Audit/Nonvacuous.lean`) | `pomfrit_U1_bound`, `pomfrit_U2_bound`, `pomfrit_U1`, `pomfrit_U2`, `PFail`, `ShiftFail` |

@@ -985,7 +985,9 @@ Files: `ROM/OneMore.lean` (generic), `ROM/OneMorePomfrit.lean`. `lean/docs/secur
   (`Ch.tg`); `TgInv` and `NoFall` (support invariants, VCVio's `simulateQ_run_preservesInv` and an
   induction with `IsQueryBoundP`) turn the final events into statements about the oracle's answer
   and the first hint.
-- **The extraction term**: done for U1 (every term explicit, `pomfrit_U1_explicit`), open for U2, §2n (pomfrit.md G8).
+- **The extraction term**: done for U1 and U2 (every term explicit, `pomfrit_U1_explicit`,
+  `pomfrit_U2_explicit`, and with simultaneous extraction `pomfrit_U1_sim`, `pomfrit_U2_sim`), §2n
+  (pomfrit.md G8).
 
 ### 2l. Protocol games from single-proof extraction, as implemented
 
@@ -1242,7 +1244,16 @@ The `2⁻⁷¹` per `H₂³` query (Lemma P's `Shift`) dominates; it is the pape
 `(Q₃ + ℓ + 1)·2^{−71}`, inherent in U1 (U2 has no such term). The per-forgery terms are about
 `2⁻⁴¹` at `ℓ = 2³⁰`. As for Moussaka and Ratatouille, the failure terms stay per forgery.
 
-**Not covered.** PomFRIT's Theorem U2 (`ShiftFail`, §2n), both relations together in the
+**PomFRIT, Theorem U2** (`ROM/OneMoreShiftSim.lean`; §2n). The same with `N = 2` for `2⁵⁷`
+(`simBadS`, `simEpsS`: `2·2⁻¹²⁸` at `H₂³`), the trace through `shiftFail_events` and
+`pomBad_traceG` with U2's goal, and the prefix runs through `ver_tableG` (`prefix_of_shiftFail`):
+`pomfrit_U2_sim`, `pomfrit_U2_omprShift_sim`, `Pr[PomWin] ≤ Adv^{ompr⊕17} + sfailSimEps`,
+`sfailSimEps ≤ (ℓ + 1)·sfailEps` (`sfailSimEps_le`). Numbers (as above): `2⁻⁶²·⁰` at `q = 2⁶⁴`,
+`ℓ = 2³⁰` or `2²⁰`; `2⁻⁷⁸·⁰` at `2⁴⁸`; `2⁻⁸⁶·⁰` at `2⁴⁰` (union `2⁻³²·⁰`, `2⁻⁴²·⁰`, `2⁻⁴⁸·⁰`,
+`2⁻⁵⁶·⁰`). The dominant terms are the `H₂²` and `H₂³` charges, `≈ 2⁻⁶³` each at `2⁶⁴`: the
+paper's `ε_ext`.
+
+**Not covered.** Both relations together in the
 permutation model (above), the quantum setting.
 
 ### 2n. Lemma P in the random-oracle model (PomFRIT G8), as implemented
@@ -1315,9 +1326,28 @@ Files: `ROM/LemmaPDet.lean`, `ROM/LemmaP.lean`, `ROM/OneMoreLemmaP.lean`,
   where a forgery fails (`prefix_of_pfail`), then `prEvent_le_shared_suffix`: `pomfrit_U1_sim`,
   `Pr[PomWin] ≤ Adv^{ompr} + pfailSimEps`, each query of the forger's run charged once,
   `pfailSimEps ≤ (ℓ + 1)·pfailEps`.
-- **Not done (U2).** `pomfrit_U2_bound`'s term `Pr[∃ i, ShiftFail_i]`: the game machinery above is
-  for U1's hints (`addHint`, one target), and the extraction bound needed (some alive tree
-  extracts, `N = 2` per chain, no `Shift`) is not stated for the target family `pomfritRedeemT`.
+- **Theorem U2** (`ROM/LemmaPSome.lean`, `ROM/OneMoreShiftTable.lean`, `ROM/OneMoreShiftFail.lean`,
+  `ROM/OneMoreShiftBound.lean`, `ROM/OneMoreShiftSim.lean`, `Assumptions/PomfritShift.lean`,
+  `Assumptions/PomfritShiftSim.lean`). Generalized rather than copied where the U1 pieces allowed:
+  - *Any goal.* `pomBad_trace` and the union bound of `ROM/LemmaP.lean` read Lemma P's goal only
+    through `hdet`; `pomBad_traceG`, `prEvent_accept_le_adaptive_pomfritT_EG`,
+    `prEvent_accept_le_adaptive_pomfritTG` take the goal as a parameter (`GoalT`; `MajorExtracted`
+    is `GoalOut GoalP`). U2's goal `GoalS` (some alive tree extracts) with
+    `pomfritT_extract_some_chain` (`extract_or_few` for the target family, `N = 2`) gives
+    `pomfritT_accept_le_some`. `prEvent_pomBad_le` does not read the goal and is reused.
+  - *Any hint type.* The derived prover `proverP` reads neither hints nor targets, so it serves U2
+    unchanged; the game's side is restated for any `Hn`, `φ`, hint and target rules
+    (`InvG`, `eval_forgerG`, `eval_verOneG`, `eval_verPreAllG`), and `ver_tableG` relates an
+    accepted forgery of the game directly to `proverP` (U1 went through `proverI`, which is
+    U1-specific).
+  - *U2's shift rule* `shP` (all alive trees' prefixes), its ordering step `shP_eq_alive` (the proof
+    of `e1P_eq_major`, the list in place of the widest group), `shiftFail_events` (the proof of
+    `pfail_events` with `ver_tableG`), and the assembly as for U1 (`prEvent_shiftFail_le`,
+    `prEvent_shiftFail_sim_le`).
+  - Copies rather than generalizations: `shP_eq_alive` (of `e1P_eq_major`), the U2 bounds (of
+    `ROM/OneMoreLemmaPBound.lean`, `ROM/OneMoreLemmaPSim.lean`) and `simBadS` (of `simBadP`, with
+    `N = 2`), to leave the U1 files untouched while `ROM/LemmaP*.lean` is being worked on. Making
+    the U1 statements corollaries of the general ones is a refactor, not new mathematics.
 
 ### M4 — Mathlib bump and VCVio dependency (Phase B, ~1–3 days, mostly waiting on builds) — done
 
