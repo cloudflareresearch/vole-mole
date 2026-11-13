@@ -398,7 +398,7 @@ inputs differ the outputs agree:
 * `H₂²`: `cin2 ≠ sim2` and `H₂²(cin2) = (blk pre)[0, 56)`, or
 * `H₂¹`: `cin1 ≠ sim1` and `H₂¹(cin1) = H₂¹(sim1)`, or
 * `H₂⁰`: `muIn stf ≠ muIn sts` and `H₂⁰(muIn stf) = H₂⁰(muIn sts)`, or
-* the two statements have the same `H₂⁰` input. -/
+* the simulation produced a proof and the two statements have the same `H₂⁰` input. -/
 theorem chain_hit (hwf : HashesWF Hs) {p : Params} (stf sts : Statement) (pf : ByteArray)
     (o : Except String ByteArray) (hdf : stf.delayed = false) (hds : sts.delayed = false)
     (k : K2 p) (hk : enc2 p k = (vPre Hs T stf pf ++ (pfOf stf pf).ctr).push 11)
@@ -409,7 +409,7 @@ theorem chain_hit (hwf : HashesWF Hs) {p : Params} (stf sts : Statement) (pf : B
       (cin1 Hs stf pf ≠ sim1 Hs sts o ∧
         Hs.hash .h21 (cin1 Hs stf pf) = Hs.hash .h21 (sim1 Hs sts o)) ∨
       (muIn stf ≠ muIn sts ∧ Hs.hash .mu (muIn stf) = Hs.hash .mu (muIn sts)) ∨
-      muIn stf = muIn sts) := by
+      ((∃ b, o = .ok b) ∧ muIn stf = muIn sts)) := by
   have hpl : 56 ≤ preLen p := by unfold preLen; omega
   -- the grinding point: `vPre ‖ ctr = blk pre ‖ c`
   have he : vPre Hs T stf pf ++ (pfOf stf pf).ctr =
@@ -469,7 +469,7 @@ theorem chain_hit (hwf : HashesWF Hs) {p : Params} (stf sts : Statement) (pf : B
       mu1_eq Hs stf hdf, mu1_eq Hs sts hds] at e
     exact e
   by_cases hmu : muIn stf = muIn sts
-  · exact Or.inr hmu
+  · exact Or.inr ⟨⟨b, rfl⟩, hmu⟩
   · exact Or.inl ⟨hmu, hm⟩
 
 end HitChain

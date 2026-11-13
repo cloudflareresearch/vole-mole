@@ -407,6 +407,272 @@ lemma progT_moved (x₁ : Option IssueInstance) (c₁ : SimCoins pI) (x₂ : Opt
     · exact absurd rfl hk
     · exact ⟨_, _, rfl, progRO_moved_at (p := pS) _ c₂ (shOf t) t rfl k hk⟩
 
+/-! ### The statements' `H₂⁰` inputs -/
+
+lemma size_bOf {n : ℕ} (v : Spec.Ratatouille.Bytes n) : (bOf v).size = n := by
+  simp [bOf, size_toBA]
+
+lemma bOf_inj {n : ℕ} {v w : Spec.Ratatouille.Bytes n} (h : bOf v = bOf w) : v = w :=
+  Vector.toList_inj.1 (EndToEnd.SpecRel.toBA_inj h)
+
+lemma append_split {a b a' b' : ByteArray} (h : a ++ b = a' ++ b') (hs : a.size = a'.size) :
+    a = a' ∧ b = b' := by
+  have ha : a = a' := by
+    have e : (a ++ b).extract 0 a.size = (a' ++ b').extract 0 a.size := by rw [h]
+    rwa [ByteArray.extract_append_eq_left rfl, ByteArray.extract_append_eq_left hs] at e
+  subst ha
+  exact ⟨rfl, (ByteArray.append_right_inj _).1 h⟩
+
+lemma le64_toNat_inj {a b : UInt64} (h : le64 a.toNat = le64 b.toNat) : a = b :=
+  UInt64.toNat_inj.1 (EndToEnd.SpecRel.le64_inj (UInt64.toNat_lt a) (UInt64.toNat_lt b) h)
+
+lemma muIn_stI (x : IssueInstance) : muIn (Privacy.Ratatouille.stI x) =
+    (bOf x.c ++ le64 x.tInit.toNat ++ bOf x.ctx ++ toBA (Spec.makeDst "rata" 0 'i' '0')).push 8 :=
+  rfl
+
+lemma muIn_stS (x : SpendInstance) : muIn (Privacy.Ratatouille.stS x) =
+    (bOf x.nf ++ le64 x.d.toNat ++ bOf x.cNext ++ bOf x.ctx ++
+      toBA (Spec.makeDst "rata" 0 'p' '0')).push 8 :=
+  rfl
+
+lemma size_muIn_stI (x : IssueInstance) : (muIn (Privacy.Ratatouille.stI x)).size = 64 := by
+  rw [muIn_stI]
+  simp only [ByteArray.size_push, ByteArray.size_append, size_bOf, EndToEnd.SpecRel.size_le64]
+  have : (toBA (Spec.makeDst "rata" 0 'i' '0')).size = 7 := by decide
+  omega
+
+lemma size_muIn_stS (x : SpendInstance) : (muIn (Privacy.Ratatouille.stS x)).size = 88 := by
+  rw [muIn_stS]
+  simp only [ByteArray.size_push, ByteArray.size_append, size_bOf, EndToEnd.SpecRel.size_le64]
+  have : (toBA (Spec.makeDst "rata" 0 'p' '0')).size = 7 := by decide
+  omega
+
+/-- **The issuance statement is determined by its `H₂⁰` input.** -/
+lemma muIn_stI_inj {x y : IssueInstance}
+    (h : muIn (Privacy.Ratatouille.stI x) = muIn (Privacy.Ratatouille.stI y)) : x = y := by
+  rw [muIn_stI, muIn_stI] at h
+  have h1 := (ByteArray.append_left_inj _).1 (push_injective 8 h)
+  obtain ⟨h2, hctx⟩ := append_split h1 (by simp [size_bOf, EndToEnd.SpecRel.size_le64])
+  obtain ⟨hc, ht⟩ := append_split h2 (by simp [size_bOf])
+  cases x
+  cases y
+  simp only at hc ht hctx
+  rw [bOf_inj hc, le64_toNat_inj ht, bOf_inj hctx]
+
+/-- **The spend statement is determined by its `H₂⁰` input, but for the key.** -/
+lemma muIn_stS_inj {x y : SpendInstance}
+    (h : muIn (Privacy.Ratatouille.stS x) = muIn (Privacy.Ratatouille.stS y)) :
+    { x with pk := y.pk } = y := by
+  rw [muIn_stS, muIn_stS] at h
+  have h1 := (ByteArray.append_left_inj _).1 (push_injective 8 h)
+  obtain ⟨h2, hctx⟩ := append_split h1
+    (by simp [size_bOf, EndToEnd.SpecRel.size_le64])
+  obtain ⟨h3, hcn⟩ := append_split h2 (by simp [size_bOf, EndToEnd.SpecRel.size_le64])
+  obtain ⟨hnf, hd⟩ := append_split h3 (by simp [size_bOf])
+  cases x
+  cases y
+  simp only at hnf hd hcn hctx ⊢
+  rw [bOf_inj hnf, le64_toNat_inj hd, bOf_inj hcn, bOf_inj hctx]
+
+/-! ### Freshness with the adversary's key -/
+
+section Fresh
+
+variable {Z : Sizes} {G S : Type} (B : Thief Z G S)
+
+lemma FreshOk.freshOp {p₁ : Option (IssueInstance × IssueProof Z)}
+    {p₂ : Option (SpendInstance × SpendProof Z)} {op : Op Z} (h : FreshOk B p₁ p₂ op) :
+    FreshOp B p₁ p₂ op := by
+  cases op with
+  | issue q t c => exact h
+  | spend q c x =>
+    intro y hy he
+    refine h ({ y.1 with pk := B.pk }, y.2) (by rw [hy]; rfl) ?_
+    rw [he]
+    simp only [opXS] at he ⊢
+    rw [← he]
+
+lemma freshOk_stS (p₁ : Option (IssueInstance × IssueProof Z)) (o₂ : Except Error (SpendRequest Z))
+    (op : Op Z) : FreshOk B p₁ (Theft.Ratatouille.stS B o₂) op ↔
+      FreshOp B p₁ (Theft.Ratatouille.stS B o₂) op := by
+  have e : (Theft.Ratatouille.stS B o₂).map (fun y => ({ y.1 with pk := B.pk }, y.2)) =
+      Theft.Ratatouille.stS B o₂ := by
+    unfold Theft.Ratatouille.stS
+    cases o₂ <;> rfl
+  unfold FreshOk
+  rw [e]
+
+end Fresh
+
+/-! ### The cases of a hit -/
+
+/-- **A hit on one simulation**, at one of the three levels. -/
+def HitAt (op : Op Sizes.labelRows) (t : ShT R L M) (d : SimD) : Prop :=
+  Ev (fPt22 A op t) (sPt22 d t) (sTau22 d t) (get22 t.2.2) ∨
+    Ev (fPt21 A op t) (sPt21 d t) (sTau21 d t) (get21 t.2.2) ∨
+    Ev (fPtMu A op) (sPtMu d) (sTauMu d t) (getMu t.2.2)
+
+/-- The shortest table length that holds every chain input of the forgeries:
+`H₂¹` inputs of the spend relation (`14357` bytes). -/
+def Lmin : ℕ := 14357
+
+omit [CipherRow R] in
+lemma fSt_facts (op : Op Sizes.labelRows) :
+    (fSt A op).delayed = false ∧ (fSt A op).binder1.size = 0 ∧ (fSt A op).binder2.size = 0 ∧
+      64 + 16 * (fSt A op).params.correctionBytes +
+        (fSt A op).params.nMask * (fSt A op).params.nMultBytes + 16 + 0 + 1 ≤ Lmin ∧
+      264 + 0 + (fSt A op).params.witnessBytes + 1 ≤ Lmin ∧ (muIn (fSt A op)).size ≤ Lmin := by
+  cases op with
+  | issue q t c =>
+    refine ⟨rfl, rfl, rfl, ?_, ?_, ?_⟩
+    · show 64 + 16 * pI.correctionBytes + pI.nMask * pI.nMultBytes + 16 + 0 + 1 ≤ Lmin
+      decide
+    · show 264 + 0 + pI.witnessBytes + 1 ≤ Lmin
+      decide
+    · simp only [fSt, size_muIn_stI, Lmin]
+      omega
+  | spend q c x =>
+    refine ⟨rfl, rfl, rfl, ?_, ?_, ?_⟩
+    · show 64 + 16 * pS.correctionBytes + pS.nMask * pS.nMultBytes + 16 + 0 + 1 ≤ Lmin
+      decide
+    · show 264 + 0 + pS.witnessBytes + 1 ≤ Lmin
+      decide
+    · simp only [fSt, size_muIn_stS, Lmin]
+      omega
+
+omit [CipherRow R] in
+lemma recT_22 (t : ShT R L M) (k : KL L) : (recT t).hash .h22 (encL k) = ba (get22 t.2.2 k) := by
+  rw [recT_hash_ne t (by decide), hbX_22_eq, keyL_encL]
+  rfl
+
+omit [CipherRow R] in
+lemma recT_21 (t : ShT R L M) (k : KL L) : (recT t).hash .h21 (encL k) = ba (get21 t.2.2 k) := by
+  rw [recT_hash_ne t (by decide), hbX_21_eq, keyL_encL]
+  rfl
+
+omit [CipherRow R] in
+lemma recT_mu (t : ShT R L M) (k : KL L) : (recT t).hash .mu (encL k) = ba (getMu t.2.2 k) := by
+  rw [recT_hash_ne t (by decide), hbX_mu_eq, keyL_encL]
+  rfl
+
+/-- **A hit on one simulation's prefix** (`chain_hit` with the tables' record): one of the three
+level events, unless the simulation produced a proof whose statement has the forgery's `H₂⁰`
+input. -/
+lemma hitAt_of (hL : Lmin ≤ L) {p : Params} (op : Op Sizes.labelRows) (t : ShT R L M)
+    (st : Statement) (o : Except String ByteArray) (hds : st.delayed = false) (k : K2 p)
+    (hk : enc2 p k = (@vPre (prgT t) (recT t) CrtGen.tables (fSt A op) (fPf op) ++
+      (pfOf (fSt A op) (fPf op)).ctr).push 11)
+    (hkp : ba (blk (preLen p) (@simPre (prgT t) (recT t) CrtGen.tables st o)) =
+      ba (blk (preLen pI) (@simPre (prgT t) (recT t) CrtGen.tables st o)))
+    (hkp' : k.1 = blk (preLen p) (@simPre (prgT t) (recT t) CrtGen.tables st o))
+    (hne : (∃ b, o = .ok b) → muIn (fSt A op) ≠ muIn st) :
+    HitAt A op t (some (st, o)) := by
+  obtain ⟨hdf, hb1, hb2, hl1, hl2, hlm⟩ := fSt_facts A op
+  obtain ⟨hv, hc⟩ := @chain_hit (prgT t) (recT t) CrtGen.tables (recT_wf t) p (fSt A op) st (fPf op)
+    o hdf hds k hk hkp'
+  rcases hc with ⟨h2, he⟩ | ⟨h1, he⟩ | ⟨hm, he⟩ | ⟨hok, hm⟩
+  · left
+    have hs := @size_cin2_le (prgT t) (recT t) CrtGen.tables (fSt A op) (fPf op) (recT_wf t) hdf
+    obtain ⟨a, ha⟩ := exists_encL (L := L)
+      (b := @cin2 (prgT t) (recT t) CrtGen.tables (fSt A op) (fPf op)) (by omega)
+    refine ⟨a, ha, h2, ?_⟩
+    rw [← recT_22, ha, he, hkp]
+    rfl
+  · right; left
+    have hs := @size_cin1_le (prgT t) (recT t) (fSt A op) (fPf op) (recT_wf t)
+    obtain ⟨a, ha⟩ := exists_encL (L := L)
+      (b := @cin1 (prgT t) (recT t) (fSt A op) (fPf op)) (by omega)
+    refine ⟨a, ha, h1, ?_⟩
+    rw [← recT_21, ha]
+    exact he
+  · right; right
+    obtain ⟨a, ha⟩ := exists_encL (L := L) (b := muIn (fSt A op)) (by omega)
+    refine ⟨a, ha, hm, ?_⟩
+    rw [← recT_mu, ha]
+    exact he
+  · exact absurd hm (hne hok)
+
+lemma simO_some_I {i : IssueInstance} {c : SimCoins pI} {b : ByteArray} (h : simulate pI c = .ok b) :
+    ∃ π, simO leanSimIR (some i) c = some π := by
+  rcases h' : leanSimIR i c with _ | π
+  · have h'' : vecOf Sizes.labelRows.issue (simulate pI c) = none := h'
+    rw [h] at h''
+    have hn : pI.proofBytes = Sizes.labelRows.issue := by decide
+    simp only [vecOf, simulate_ok_size h, hn, ↓reduceDIte, reduceCtorEq] at h''
+  · exact ⟨π, by simp only [simO]; exact h'⟩
+
+lemma simO_some_S {i : SpendInstance} {c : SimCoins pS} {b : ByteArray} (h : simulate pS c = .ok b) :
+    ∃ π, simO leanSimSR (some i) c = some π := by
+  rcases h' : leanSimSR i c with _ | π
+  · have h'' : vecOf Sizes.labelRows.spend (simulate pS c) = none := h'
+    rw [h] at h''
+    have hn : pS.proofBytes = Sizes.labelRows.spend := by decide
+    simp only [vecOf, simulate_ok_size h, hn, ↓reduceDIte, reduceCtorEq] at h''
+  · exact ⟨π, by simp only [simO]; exact h'⟩
+
+/-- **The cases of a hit.** A fresh forgery (`FreshOk`) whose verifier's `H₂³` point is a point
+the simulators programmed hits one of the two simulations at one of the three levels. -/
+theorem hit_cases (hL : Lmin ≤ L) (x₁ : Option IssueInstance) (c₁ : SimCoins pI)
+    (x₂ : Option SpendInstance) (c₂ : SimCoins pS) (op : Op Sizes.labelRows) (t : ShT R L M)
+    (hfr : FreshOk A (pairO x₁ (simO leanSimIR x₁ c₁)) (pairO x₂ (simO leanSimSR x₂ c₂)) op)
+    (hhit : HitOpX (Hb := hbX) A op (progT (leanProgIRX hbX) (leanProgSRX hbX) x₁ c₁ x₂ c₂ t) t) :
+    HitAt A op t (sd₁ x₁ c₁) ∨ HitAt A op t (sd₂ x₂ c₂) := by
+  cases op with
+  | issue q tc c =>
+    obtain ⟨k, hk, hmv⟩ := hhit
+    rw [vPoint_eq] at hk
+    rcases progT_moved x₁ c₁ x₂ c₂ t k hmv with ⟨st, o, hd, hkp⟩ | ⟨st, o, hd, hkp⟩
+    · left
+      rw [hd]
+      rcases x₁ with _ | i
+      · cases hd
+      simp only [sd₁, Option.map_some, Option.some.injEq, Prod.mk.injEq] at hd
+      obtain ⟨rfl, rfl⟩ := hd
+      refine hitAt_of A hL (.issue q tc c) t _ _ rfl k hk rfl hkp ?_
+      rintro ⟨b, hb⟩ hm
+      obtain ⟨π, hπ⟩ := simO_some_I (i := i) hb
+      refine hfr (i, π) (by rw [hπ]; rfl) ?_
+      exact muIn_stI_inj hm
+    · right
+      rw [hd]
+      rcases x₂ with _ | i
+      · cases hd
+      simp only [sd₂, Option.map_some, Option.some.injEq, Prod.mk.injEq] at hd
+      obtain ⟨rfl, rfl⟩ := hd
+      refine hitAt_of A hL (.issue q tc c) t _ _ rfl k hk rfl hkp ?_
+      intro _ hm
+      have := congrArg ByteArray.size hm
+      simp only [fSt, size_muIn_stI, size_muIn_stS] at this
+      omega
+  | spend q c x =>
+    obtain ⟨k, hk, hmv⟩ := hhit
+    have hk := hk.trans (vPoint_eq (p := pS) _ _ _ (shOf t))
+    rcases progT_moved x₁ c₁ x₂ c₂ t k hmv with ⟨st, o, hd, hkp⟩ | ⟨st, o, hd, hkp⟩
+    · left
+      rw [hd]
+      rcases x₁ with _ | i
+      · cases hd
+      simp only [sd₁, Option.map_some, Option.some.injEq, Prod.mk.injEq] at hd
+      obtain ⟨rfl, rfl⟩ := hd
+      refine hitAt_of A hL (.spend q c x) t _ _ rfl k hk rfl hkp ?_
+      intro _ hm
+      have := congrArg ByteArray.size hm
+      simp only [fSt, size_muIn_stI, size_muIn_stS] at this
+      omega
+    · right
+      rw [hd]
+      rcases x₂ with _ | i
+      · cases hd
+      simp only [sd₂, Option.map_some, Option.some.injEq, Prod.mk.injEq] at hd
+      obtain ⟨rfl, rfl⟩ := hd
+      refine hitAt_of A hL (.spend q c x) t _ _ rfl k hk rfl hkp ?_
+      rintro ⟨b, hb⟩ hm
+      obtain ⟨π, hπ⟩ := simO_some_S (i := i) hb
+      refine hfr ({ i with pk := A.pk }, π) (by rw [hπ]; rfl) ?_
+      have := muIn_stS_inj hm.symm
+      rw [← this]
+      rfl
+
 end Rata
 
 end VoleMole.Theft.Hit
