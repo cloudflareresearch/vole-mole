@@ -24,6 +24,8 @@ No `sorry`, no `axiom`.
 open OracleComp OracleSpec VoleMole.Assumptions.LazyPerm VoleMole.ROM.OneMore
 open scoped ENNReal
 
+set_option linter.unusedSectionVars false
+
 namespace VoleMole.Assumptions.UOV.FDHPerm
 
 open CTUFPerm (comP)
@@ -125,7 +127,6 @@ variable {DR : Type} [DecidableEq DR] {AR : DR → Type} [∀ d, SampleableType 
 /-- The structured inputs, as a list. -/
 noncomputable def sList (emb : M → T × Z) : List (T × Z) := (Finset.univ.image emb).toList
 
-omit [Inhabited T] [SampleableType T] [SampleableType Z] [Fintype T] [Fintype Z] in
 theorem sList_length (emb : M → T × Z) : (sList emb).length ≤ Fintype.card M := by
   unfold sList
   rw [Finset.length_toList]
@@ -137,8 +138,6 @@ noncomputable def fhImpl (D : T → S) (emb : M → T × Z) :
     QueryImpl (specFP AR M T Z S) (StateT (PTab (T × Z) × FPSt AR M) ProbComp) :=
   pmImpl2 (ptF emb) (fpC D) (fun _ => $ᵗ (T × Z)) fun _ => unifCompl (sList emb)
 
-omit [DecidableEq DR] [∀ d, SampleableType (AR d)] [Inhabited T] [DecidableEq T] [DecidableEq Z]
-  [SampleableType T] [SampleableType Z] [Fintype T] [Fintype Z] [Fintype M] in
 theorem fpFinal_bound (p : (DR ⊕ M) ⊕ (Bool × (T × Z)) → Prop) [DecidablePred p]
     (emb : M → T × Z) (o : M × S) (k : ℕ) (hk : ∀ b, p (.inr (true, b)) → 0 < k) :
     IsQueryBoundP (fpFinal (AR := AR) emb o) p k := by
@@ -415,6 +414,78 @@ theorem combF_sign (m : M) (s : (PTab (T × Z) × ℕ) × FDHSt (ARF AR emb) M T
   erw [bind_map_left]
   refine bind_congr fun r => ?_
   erw [simulateQ_map, StateT.run_map, Functor.map_map]
+
+theorem projROF_ne (c : (specR (ARF AR emb)).QueryCache) (e : ℕ ⊕ ℕ) (u : ARF AR emb (.inr e)) :
+    projROF emb (c.cacheQuery (.inr e) u) = projROF emb c := by
+  refine QueryCache.ext fun d => ?_
+  show (c.cacheQuery (.inr e) u) (.inl d) = c (.inl d)
+  exact QueryCache.cacheQuery_of_ne _ _ (by simp)
+
+theorem roF_proj_inl (d : DR) (ro : (specR (ARF AR emb)).QueryCache) :
+    (fun r : (specR (ARF AR emb)).Range (Sum.inl d) × (specR (ARF AR emb)).QueryCache =>
+        ((r.1 : AR d), projROF emb r.2)) <$> ((specR (ARF AR emb)).randomOracle (Sum.inl d)).run ro =ᵈ
+      ((specR AR).randomOracle d).run (projROF emb ro) := by
+  rw [randomOracle.run_eq, randomOracle.run_eq]
+  rw [show (projROF emb ro).toFn d = ro.toFn (.inl d) from rfl]
+  cases h : ro.toFn (.inl d) with
+  | some u => simp only [map_pure]; exact EvalDistEq.rfl
+  | none =>
+    dsimp only
+    rw [map_bind]
+    simp only [map_pure]
+    have e : ∀ u : AR d, projROF emb (ro.cacheQuery (Sum.inl d) u) = (projROF emb ro).cacheQuery d u := by
+      intro u
+      refine QueryCache.ext fun d' => ?_
+      show (ro.cacheQuery (.inl d) u) (.inl d') = ((projROF emb ro).cacheQuery d u) d'
+      by_cases hd : d' = d
+      · subst hd
+        rw [show ((projROF emb ro).cacheQuery d' u) d' = some u from QueryCache.cacheQuery_self _ _ _]
+        exact QueryCache.cacheQuery_self (spec := specR (ARF AR emb)) ro (.inl d') u
+      · rw [show ((projROF emb ro).cacheQuery d u) d' = (projROF emb ro) d' from
+          QueryCache.cacheQuery_of_ne _ _ hd]
+        exact QueryCache.cacheQuery_of_ne (spec := specR (ARF AR emb)) ro (t := Sum.inl d) u
+          (by simpa using hd)
+    show (($ᵗ (AR d) : ProbComp (AR d)) >>= fun u =>
+        (pure (u, projROF emb (ro.cacheQuery (Sum.inl d) u)) : ProbComp (AR d × (specR AR).QueryCache))) =ᵈ
+      (($ᵗ (AR d) : ProbComp (AR d)) >>= fun u => pure (u, (projROF emb ro).cacheQuery d u))
+    simp only [e]
+    exact EvalDistEq.rfl
+
+/-- **The inverse coins are a fresh value outside the structured inputs.** -/
+theorem bc_eqd : Subtype.val <$> ($ᵗ (Bc emb) : ProbComp (Bc emb)) =ᵈ unifCompl (sList emb) := by
+  have hne : ∃ y, y ∉ sList emb := by
+    obtain ⟨⟨y, hy⟩⟩ := SampleableType.nonempty (Bc emb); exact ⟨y, hy⟩
+  refine evalDistEq_of_forall_prEvent_eq_output fun a => ?_
+  rw [prEvent_unifCompl_eq _ hne, prEvent_map, SampleableType.prEvent_uniformSample]
+  have hc : Fintype.card (Bc emb) = (Finset.univ.filter (· ∉ sList emb)).card :=
+    Fintype.card_subtype _
+  split_ifs with ha
+  · have : (Finset.univ.filter fun x : Bc emb => x.val = a) = ∅ := by
+      ext x; simp only [Finset.mem_filter, Finset.mem_univ, true_and, Finset.notMem_empty,
+        iff_false]
+      intro hx; exact x.2 (hx ▸ ha)
+    rw [this]; simp
+  · have : (Finset.univ.filter fun x : Bc emb => x.val = a) = {⟨a, ha⟩} := by
+      ext x; simp [Subtype.ext_iff]
+    rw [this, Finset.card_singleton, hc]; simp only [Nat.cast_one, one_div]
+    convert rfl
+
+theorem fhImpl_world (d : DR) (L : PTab (T × Z)) (fs : FPSt AR M) :
+    ((fhImpl (S := S) D emb) (.inl (.inl d))).run (L, fs) =
+      (fun r : AR d × (specR AR).QueryCache => (r.1, (L, (⟨r.2, fs.signed⟩ : FPSt AR M)))) <$>
+        ((specR AR).randomOracle d).run fs.ro := by
+  simp only [fhImpl, pmImpl2, ptF, StateT.run_mk, fpC]
+  repeat (first | erw [StateT.run_mk] | erw [Functor.map_map])
+  rfl
+
+theorem fhImpl_sign (m : M) (st : PTab (T × Z) × FPSt AR M) :
+    ((fhImpl (S := S) D emb) (.inl (.inr m))).run st =
+      ((fhImpl (S := S) D emb) (.inr (true, emb m))).run st >>= fun r =>
+        pure (D r.1.1, (r.2.1, (⟨r.2.2.ro, m :: r.2.2.signed⟩ : FPSt AR M))) := by
+  simp only [fhImpl, pmImpl2, ptF, StateT.run_mk, fpC, bind_map_left]
+  refine bind_congr fun r => ?_
+  simp only [map_pure, Option.map_some, Option.getD_some]
+  rfl
 
 end Core
 
