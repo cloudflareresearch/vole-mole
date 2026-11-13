@@ -153,9 +153,19 @@ permutations with inverse queries):
     prefix group is determined by the first message and `ũ` (`witness_determined`,
     `card_not_kosPar_le`, `pomfrit_disjQuads_le`, `pomfrit_par_count`; bad `chall₁` at most
     `2⁻¹³⁴`); for trees agreeing on the label rows an efficient extractor has no `Shift` term
-    (`exists_slope_of_kosGood_affine`, `witness_determined_affine`). Not a new bound for U1: an
-    efficient extractor for first messages whose trees disagree on the label rows is open (hidden
-    slices). Keep `ũ` in `hash_to_target`: it is security-relevant. The converse, OMPR ≤ PomFRIT one-more forgery plus a completeness term, is
+    (`exists_slope_of_kosGood_affine`, `witness_determined_affine`). Hidden slices (trees that disagree on the label rows; `pomfrit-lemmap-tight.md` §6): an
+    accepting set of a minority group has at most `2²⁸` points or lies in one slice of a class of
+    trees with the same rows (`card_le_of_nonbit_slope`, `subset_slice_of_fixed`), the response is
+    affine there (`claim4Hyp_slice`, gate model `translateOn_gate_slice`), and any two challenges
+    of one slice with the same check value certify the witness (`slice_collision_sound`,
+    `slice_collision_sound_affine`). Extractors that only evaluate the check value do not find the
+    slice (`DTree.card_detect_le`). A decoder that reads `c_mult` against the `H₅` table does
+    (paper; `scripts/pomfrit-lemmap-tight/slice.py` with faest-arch-opt's CRT tables): proved for
+    two label classes; in general complete for full slices with a measured cost of about `2⁷` per
+    label class beyond 8. Under the note's conjecture (H-dec) U1's term would be `2⁻⁷⁸`…`2⁻⁹⁹` per
+    `H₂³` query for `2¹⁷`…`≈2³⁵` decoding steps per `H_T` query. Not a new bound for U1: the
+    decoder's completeness against every forger is not proved. Keep `ũ` in `hash_to_target`: it is
+    security-relevant. The converse, OMPR ≤ PomFRIT one-more forgery plus a completeness term, is
     in Lean in PomFRIT's real one-more game for a forger with coins and any client given as oracle
     computations (`pomfrit_T6`, `pomfrit_T6_bound`, `Assumptions/BlindPomfrit.lean`; the game for a
     forger with coins is `game` for one without, `gameB_liftF`; the client carries the game's query
@@ -453,7 +463,7 @@ cipher.
 | L0 | All hash domains are disjoint; AES inputs of different roles never collide | [paper] + [Lean] `Seed/Commitments.lean` |
 | L1 | Committed data (commitment preimages, leaf keys) is well defined and binding | [paper] + [Lean] unique leaf keys and straight-line key extraction from the cipher log (PRF view, forward queries), binding with explicit `ε_bind` `ROM/CipherBind.lean`, `ROM/CipherOpen.lean`; the ordering half of the `H₁` linking, `Coll₁` and Post (C3) `ROM/CipherChain.lean`, `ROM/CipherSame.lean` (PRF view); statement binding for adaptive statements `ROM/StmtBind.lean`, `ROM/AdaptPomfrit.lean` |
 | L2 | A leaf the prover cannot open is always the hidden one | [paper] + [Lean] in the corrected form (accepting set hides the committed dead leaves; L2(c), L2(a)) `ROM/CipherSame.lean` |
-| L3 | KOS consistency check forces affine VOLE correlations (ε_KOS ≈ 2⁻¹⁵⁴) | [paper] + [Lean] `Seed/KOS.lean` (`Seed/KOSUnique.lean`: `ũ` determines the slope across level sets) + [test] |
+| L3 | KOS consistency check forces affine VOLE correlations (ε_KOS ≈ 2⁻¹⁵⁴) | [paper] + [Lean] `Seed/KOS.lean` (`Seed/KOSUnique.lean`: `ũ` determines the slope across level sets; slice certificates) + [test] |
 | L4 | QuickSilver with challenge-dependent constraints: either the constraints hold or few challenges accept | [paper] + [Lean] `Seed/QuickSilver.lean` + [test] |
 | L5 | A tree whose challenge block varies holds the witness (Claim 4) | [Lean] `SeedExtraction.lean` |
 | L6 | Per-chain case analysis: extract, or accept at most max(d,1) challenges | [Lean] `SeedExtraction.lean` |
