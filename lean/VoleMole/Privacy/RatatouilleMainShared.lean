@@ -219,16 +219,16 @@ def gameSR (b₁ b₂ : Bool) : Game SecR Out SW SW SW SW where
     spStmt A.toM (τ₂ₘ A.toM b₁ b₂ s o₁ o₂ o₃) (d₂ₘ A.toM b₁ s o₁ o₂ o₃) s.2.2 else none
 
 /-- What the guess gets besides the tables (`gR`). -/
-def keySR (b₁ b₂ : Bool) (v : GView SecR pIr pIr pSr pSr) : GIn :=
+def keyMS (b₁ b₂ : Bool) (v : GView SecR pIr pIr pSr pSr) : GIn :=
   gR A.toM b₁ b₂ v.s v.o₁ v.o₂ v.o₃ v.o₄
 
 /-- **The final event of world `(b₁, b₂)`**: the guess, on the view. -/
 def evSR (b₁ b₂ : Bool) (v : GView SecR pIr pIr pSr pSr) : Prop :=
-  A.guess (keySR A b₁ b₂ v) v.vis
+  A.guess (keyMS A b₁ b₂ v) v.vis
 
 /-- The `H₅` read set of the final event. -/
 def r5SR (b₁ b₂ : Bool) (v : GView SecR pIr pIr pSr pSr) : Finset (ZK.Sim.Bytes 37) :=
-  A.R5 (keySR A b₁ b₂ v) v.vis
+  A.R5 (keyMS A b₁ b₂ v) v.vis
 
 /-- **The real game on `main` with shared tables** in world `(b₁, b₂)`: the executable prover for
 `main`'s statements, one `H₅` table and one cipher for the four proofs, SHAKE for the hashes that
@@ -262,12 +262,12 @@ lemma gvalidSR (b₁ b₂ : Bool) : GValid (gameSR A b₁ b₂) pIr pIr pSr pSr 
 
 lemma rd_evSR {q3 qE : ℕ} (hC : A.Cons q3 qE) (b₁ b₂ : Bool) :
     Rd (evSR A b₁ b₂) (r5SR A b₁ b₂) q3 qE :=
-  Rd.ofT (keySR A b₁ b₂) (fun _ _ => rfl) (fun _ _ => rfl) (fun _ _ => rfl) (fun _ _ => rfl)
+  Rd.ofT (keyMS A b₁ b₂) (fun _ _ => rfl) (fun _ _ => rfl) (fun _ _ => rfl) (fun _ _ => rfl)
     (fun _ _ => rfl) (fun y t => A.guess y t) (fun y t => A.R5 y t) fun y => hC.g y
 
 lemma rd_r5SR {q3 qE : ℕ} (hC : A.Cons q3 qE) (b₁ b₂ : Bool) :
     Rd (r5SR A b₁ b₂) (r5SR A b₁ b₂) q3 qE :=
-  Rd.ofT (keySR A b₁ b₂) (fun _ _ => rfl) (fun _ _ => rfl) (fun _ _ => rfl) (fun _ _ => rfl)
+  Rd.ofT (keyMS A b₁ b₂) (fun _ _ => rfl) (fun _ _ => rfl) (fun _ _ => rfl) (fun _ _ => rfl)
     (fun _ _ => rfl) (fun y t => A.R5 y t) (fun y t => A.R5 y t) fun y => hC.r y
 
 /-- **The joint hop in each world**: real against simulated, `15·εS + 15·PU`. -/
@@ -403,7 +403,7 @@ end SimView
 input and the tables is the same function of `gS` and `vtab`. -/
 theorem simSR_eq {X : Sort*} (f : GIn → VisSR → X) (b₁ b₂ : Bool)
     (x : GTape SecR pIr pIr pSr pSr) :
-    f (keySR A b₁ b₂ (hybV Hashes.shake (gameSR A b₁ b₂) true true true true x))
+    f (keyMS A b₁ b₂ (hybV Hashes.shake (gameSR A b₁ b₂) true true true true x))
         (hybV Hashes.shake (gameSR A b₁ b₂) true true true true x).vis =
       f (gS A b₁ b₂ x.1 x.2) (vtab A (gS A b₁ b₂ x.1 x.2) x.2) := by
   obtain ⟨s, a⟩ := x

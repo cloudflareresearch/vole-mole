@@ -258,6 +258,10 @@ import VoleMole.ZK.ReadsROPerm
 import VoleMole.Privacy.MoussakaRO
 import VoleMole.Privacy.MoussakaMain
 import VoleMole.Privacy.RatatouilleMain
+import VoleMole.Privacy.RatatouilleMainPub
+import VoleMole.Privacy.RatatouilleMainPU
+import VoleMole.Privacy.RatatouilleMainShared
+import VoleMole.Privacy.RatatouilleMainSharedPU
 import VoleMole.Privacy.PU
 import VoleMole.Privacy.PUKeccak
 import VoleMole.Privacy.MoussakaMainPU
@@ -425,3 +429,4 @@ import VoleMole.Audit.PomfritLemmaP
 import VoleMole.Audit.Theft
 import VoleMole.Audit.MainPU
 import VoleMole.Audit.MainShared
+import VoleMole.Audit.MainRata
