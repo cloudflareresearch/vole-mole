@@ -31,6 +31,13 @@ the same leaf commitment, Q1 §5) gives `≈ 2^{−70}` at `q_E = 2^{30}` and `2
 `q_E = 2^{40}`, and is vacuous beyond. So with the key-level ideal cipher, the theorem is
 meaningful for `q_E ≲ 2^{37}` cipher queries and `q ≲ 2^{55}` hash queries.
 
+**Update (Q6).** Q6 Theorem 1 replaced these `ε_multi` values (non-vacuous to `2^{51.7}`). Q6
+Theorems 4 and 5 (§11–§13 there) then give `ε_multi ≲ 2^{−184.2}·Q_E³` for all `Q_E`, with free
+iv: `2^{−34}` at `2^{50}`, `2^{−10}` at `2^{58}`, `2^{−4}` at `2^{60}`. This is below `200q²/N`
+wherever the theorem is non-vacuous. So Theorem 7.1 is now limited by its Grover-inherent main
+term alone: `2^{−20.4}` at `q = 2^{50}`, `2^{−10.4}` at `2^{55}`, `2^{−4.3}` at `2^{58}`, vacuous
+at `q ≈ 2^{60.2}`. The table below and §6.3 keep the original numbers for the record.
+
 **Main new ingredient: Lemma T (§4).** It is a two-sided transition-capacity bound. It combines
 CFHL's telescoping (Chung–Fehr–Huang–Liao, EUROCRYPT 2021, Lemma 5.6) with DFMS's *local*
 commutator (Don–Fehr–Majenz–Schaffner, EUROCRYPT 2022, Lemma 3.3), or Q1's Lemma 3.1 for the
@@ -459,6 +466,12 @@ the accepted chain's iv. That iv is an `H₄` output recorded by `V`. This is Q1
 - **Using H₄.** Q1 Thm 5.2, with `q₄ := q₄ + 2q₂₁ + 1` because §3.1 adds H₄ queries:
   `≈ 1.8·10⁷·(2Q_E + q₄ + 2q₂₁ + 1)⁵·2^{−256} + 2^{−127}`, valid while Q1's `θ ≤ 1/2`, i.e.
   `≲ 2^{37}`.
+
+- **Point evaluations (Q6 §11–§13, current best for `Q_E ≳ 2^{42}`).** `MULTI_end` is, up to
+  `O(Q_E/N)`, the real-world event "two keys open a hidden-leaf commitment of the accepted
+  chain" (Q6 Theorem 4). Representing the cipher as `E_k = Q_k ∘ G_k` with block-wise independent
+  `G_k` and key-dependent block partitions, and running Lemma T's argument on block registers,
+  gives `ε_multi ≤ ((4√2/3)Q_E^{3/2}√μ_B + c)²` with `μ_B ≈ 2^{−186}` (Q6 Theorem 5).
 
 **Why `multi` is not in P.** Putting "two keys aligned with a target" into `P` would make the
 `H₂¹'` transition non-neutral for *every* `r` whenever the label's iv hits an agreement point.
