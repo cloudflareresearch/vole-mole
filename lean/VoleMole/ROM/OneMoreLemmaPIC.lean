@@ -346,6 +346,188 @@ theorem eval_proverP (A : Forger) (Lst : List TG) (i : ℕ) :
     rw [hLy, Option.getD_some]
     exact he
 
+/-! ### The derived prover's log and ghost -/
+
+/-- The part of the derived prover after the forger. -/
+noncomputable def contP (pk : UovPk) (i : ℕ)
+    (r : List (ByteArray × ByteArray) × QueryLog specIC × HTS × Gh) :
+    OracleComp specIC (ByteArray × ((TG × ByteArray × ByteArray) × AuxP)) :=
+  verPreAll lr pk r.2.1 (r.1.take i) (r.2.2.1, r.2.2.2) >>= fun s =>
+    verLastIC lr pk r.2.1 (r.1.getD i (ByteArray.empty, ByteArray.empty)) s
+
+lemma proverP_eq (A : Forger) (Lst : List TG) (i : ℕ) :
+    proverP lr pk pre A Lst i =
+      (simulateQ (wrapIC lr hint0 pre) (A pk)).run ([], hs0 Lst, fun _ => none) >>=
+        contP lr pk i := rfl
+
+/-- **The derived prover's joint log** is the forger's log followed by the verifications'. -/
+theorem log_proverP (A : Forger) (Lst : List TG) (i : ℕ) :
+    tableQueryLog (proverP lr pk pre A Lst i) (join g E) =
+      (evalWithAnswerFn (QueryImpl.ofFn (join g E))
+        ((simulateQ (wrapIC lr hint0 pre) (A pk)).run ([], hs0 Lst, fun _ => none))).2.1 ++
+      tableQueryLog (contP lr pk i (evalWithAnswerFn (QueryImpl.ofFn (join g E))
+        ((simulateQ (wrapIC lr hint0 pre) (A pk)).run ([], hs0 Lst, fun _ => none)))) (join g E) := by
+  rw [proverP_eq, tableQueryLog_bind, log_forger, List.nil_append]
+
+/-- **The ghost invariant**: every answered input has a ghost log, and every ghost log is a log
+`Pfx` followed by the reduction's queries at that input, a prefix of the current log. -/
+def GhostI (g : Table) (lr : Bool) (cur : QueryLog specIC) (hs : HTS) (gh : Gh) : Prop :=
+  (∀ y, hs.1 y ≠ none → ∃ Ly, gh y = some Ly) ∧
+    ∀ y Ly, gh y = some Ly → ∃ Pfx, Ly = Pfx ++ axT g lr Pfx y ∧ Ly <+: cur
+
+lemma tStep_ne_none {hs : HTS} {x y : ByteArray} (h : (tStep addHint x 0 hs).2.1 y ≠ none) :
+    hs.1 y ≠ none ∨ (y = x ∧ hs.1 x = none) := by
+  by_cases hx : hs.1 x = none
+  · by_cases hyx : y = x
+    · exact Or.inr ⟨hyx, hx⟩
+    · left
+      obtain ⟨t, l, tg, n⟩ := hs
+      simp only at hx
+      cases l <;> simpa [tStep, hx, Function.update_of_ne hyx] using h
+  · left
+    obtain ⟨t, l, tg, n⟩ := hs
+    cases hx' : t x with
+    | none => exact absurd hx' hx
+    | some a => simpa [tStep, hx'] using h
+
+/-- **The forger keeps the ghost invariant.** -/
+theorem ghost_wrapIC {α : Type} (oa : OracleComp specU α) :
+    ∀ (L : QueryLog specIC) (hs : HTS) (gh : Gh), GhostI g lr L hs gh →
+      GhostI g lr (evalWithAnswerFn (QueryImpl.ofFn (join g E))
+          ((simulateQ (wrapIC lr hint0 pre) oa).run (L, hs, gh))).2.1
+        (evalWithAnswerFn (QueryImpl.ofFn (join g E))
+          ((simulateQ (wrapIC lr hint0 pre) oa).run (L, hs, gh))).2.2.1
+        (evalWithAnswerFn (QueryImpl.ofFn (join g E))
+          ((simulateQ (wrapIC lr hint0 pre) oa).run (L, hs, gh))).2.2.2 := by
+  induction oa using OracleComp.inductionOn with
+  | pure a => intro L hs gh h; simpa using h
+  | query_bind q k ih =>
+    intro L hs gh h
+    simp only [simulateQ_bind, simulateQ_spec_query, StateT.run_bind]
+    rcases q with d | (x | t)
+    · simp only [wrapIC, StateT.run_mk, evalWithAnswerFn_bind]
+      refine ih _ _ _ _ ⟨h.1, fun y Ly hy => ?_⟩
+      obtain ⟨Pfx, h1, h2⟩ := h.2 y Ly hy
+      exact ⟨Pfx, h1, h2.trans (List.prefix_append _ _)⟩
+    · simp only [wrapIC, StateT.run_mk, evalWithAnswerFn_bind, evalWithAnswerFn_pure]
+      rw [eval_toHIC_auxSpec]
+      refine ih _ _ _ _ ⟨fun y hy => ?_, fun y Ly hy => ?_⟩
+      · rcases tStep_ne_none hy with hy' | ⟨rfl, hx⟩
+        · obtain ⟨Ly, hLy⟩ := h.1 y hy'
+          by_cases hyx : hs.1 x = none
+          · by_cases hxy : y = x
+            · subst hxy; exact absurd hyx hy'
+            · exact ⟨Ly, by rw [ite_eq_left hyx, Function.update_of_ne hxy]; exact hLy⟩
+          · exact ⟨Ly, by rw [ite_eq_right hyx]; exact hLy⟩
+        · exact ⟨_, by rw [ite_eq_left hx, Function.update_self]⟩
+      · by_cases hx : hs.1 x = none
+        · rw [ite_eq_left hx] at hy
+          by_cases hyx : y = x
+          · subst hyx
+            rw [Function.update_self] at hy
+            cases hy
+            exact ⟨L, rfl, List.prefix_refl _⟩
+          · rw [Function.update_of_ne hyx] at hy
+            obtain ⟨Pfx, h1, h2⟩ := h.2 y Ly hy
+            exact ⟨Pfx, h1, h2.trans (List.prefix_append _ _)⟩
+        · rw [ite_eq_right hx] at hy
+          obtain ⟨Pfx, h1, h2⟩ := h.2 y Ly hy
+          exact ⟨Pfx, h1, h2.trans (List.prefix_append _ _)⟩
+    · simp only [wrapIC, StateT.run_mk, evalWithAnswerFn_bind, evalWithAnswerFn_pure]
+      exact ih _ _ _ _ h
+
+/-- The ghost invariant after the forger: ghost logs are prefixes of the forger's log `L`, or `L`
+followed by the reduction's queries. -/
+def GhostV (g : Table) (lr : Bool) (L : QueryLog specIC) (hs : HTS) (gh : Gh) : Prop :=
+  (∀ y, hs.1 y ≠ none → ∃ Ly, gh y = some Ly) ∧
+    ∀ y Ly, gh y = some Ly → ∃ Pfx, Ly = Pfx ++ axT g lr Pfx y ∧ (Ly <+: L ∨ Pfx = L)
+
+lemma GhostV.step {L : QueryLog specIC} {hs : HTS} {gh : Gh} (h : GhostV g lr L hs gh)
+    (x : ByteArray) :
+    GhostV g lr L (tStep addHint x 0 hs).2 (ghStep hs gh x (L ++ axT g lr L x)) := by
+  refine ⟨fun y hy => ?_, fun y Ly hy => ?_⟩
+  · rcases tStep_ne_none hy with hy' | ⟨rfl, hx⟩
+    · obtain ⟨Ly, hLy⟩ := h.1 y hy'
+      unfold ghStep
+      by_cases hyx : hs.1 x = none
+      · by_cases hxy : y = x
+        · subst hxy; exact absurd hyx hy'
+        · exact ⟨Ly, by rw [ite_eq_left hyx, Function.update_of_ne hxy]; exact hLy⟩
+      · exact ⟨Ly, by rw [ite_eq_right hyx]; exact hLy⟩
+    · exact ⟨_, by rw [ghStep, ite_eq_left hx, Function.update_self]⟩
+  · unfold ghStep at hy
+    by_cases hx : hs.1 x = none
+    · rw [ite_eq_left hx] at hy
+      by_cases hyx : y = x
+      · subst hyx
+        rw [Function.update_self] at hy
+        cases hy
+        exact ⟨L, rfl, Or.inr rfl⟩
+      · rw [Function.update_of_ne hyx] at hy
+        exact h.2 y Ly hy
+    · rw [ite_eq_right hx] at hy
+      exact h.2 y Ly hy
+
+theorem ghost_verPreAll (L : QueryLog specIC) :
+    ∀ (l : List (ByteArray × ByteArray)) (s : HTS × Gh), GhostV g lr L s.1 s.2 →
+      GhostV g lr L (evalWithAnswerFn (QueryImpl.ofFn (join g E)) (verPreAll lr pk L l s)).1
+        (evalWithAnswerFn (QueryImpl.ofFn (join g E)) (verPreAll lr pk L l s)).2
+  | [], s, h => by simpa [verPreAll] using h
+  | (m, sg) :: rest, s, h => by
+    simp only [verPreAll, evalWithAnswerFn_bind]
+    refine ghost_verPreAll L rest _ ?_
+    unfold verPreIC
+    split_ifs
+    · simpa using h
+    · simp only [evalWithAnswerFn_bind, eval_chal1PreIC_st0]
+      cases c1T g lr E pk sg with
+      | none => simpa using h
+      | some c1 =>
+        simp only [evalWithAnswerFn_bind, evalWithAnswerFn_pure, eval_toHIC_auxSpec]
+        exact h.step g lr _
+
+/-- **The derived prover's auxiliary output**: the `i`-th forgery's `hash_to_target` input at its
+`chal1`, and a ghost log that is a log `Pfx` followed by the reduction's queries at that input,
+either a prefix of the forger's log `L` or with `Pfx = L`. -/
+theorem aux_proverP (A : Forger) (Lst : List TG) (i : ℕ) :
+    let b0 := evalWithAnswerFn (QueryImpl.ofFn (join g E))
+      ((simulateQ (wrapIC lr hint0 pre) (A pk)).run ([], hs0 Lst, fun _ => none))
+    let ms := b0.1.getD i (ByteArray.empty, ByteArray.empty)
+    let p := evalWithAnswerFn (QueryImpl.ofFn (join g E)) (proverP lr pk pre A Lst i)
+    (p.2.2 = none → c1T g lr E pk ms.2 = none) ∧
+    ∀ x Lx, p.2.2 = some (x, Lx) → ∃ c1 Pfx, c1T g lr E pk ms.2 = some c1 ∧
+      x = tgtIn pk lr ms.2 ms.1 c1 ∧ Lx = Pfx ++ axT g lr Pfx x ∧ (Lx <+: b0.2.1 ∨ Pfx = b0.2.1) := by
+  intro b0 ms p
+  have h0 : GhostI g lr [] (hs0 Lst) (fun _ => none) :=
+    ⟨fun y hy => by simp [hs0] at hy, fun y Ly hy => by simp at hy⟩
+  have hI := ghost_wrapIC g lr E pre (A pk) [] _ _ h0
+  have hV0 : GhostV g lr b0.2.1 b0.2.2.1 b0.2.2.2 :=
+    ⟨hI.1, fun y Ly hy => by
+      obtain ⟨Pfx, h1, h2⟩ := hI.2 y Ly hy
+      exact ⟨Pfx, h1, Or.inl h2⟩⟩
+  have hV := ghost_verPreAll g lr E pk b0.2.1 (b0.1.take i) (b0.2.2.1, b0.2.2.2) hV0
+  have hp : p = evalWithAnswerFn (QueryImpl.ofFn (join g E)) (verLastIC lr pk b0.2.1 ms
+      (evalWithAnswerFn (QueryImpl.ofFn (join g E))
+        (verPreAll lr pk b0.2.1 (b0.1.take i) (b0.2.2.1, b0.2.2.2)))) := by
+    simp only [p, proverP, evalWithAnswerFn_bind]
+    rfl
+  set sP := evalWithAnswerFn (QueryImpl.ofFn (join g E))
+    (verPreAll lr pk b0.2.1 (b0.1.take i) (b0.2.2.1, b0.2.2.2))
+  rw [hp]
+  unfold verLastIC
+  simp only [evalWithAnswerFn_bind, eval_chal1PreIC_st0]
+  cases hc : c1T g lr E pk ms.2 with
+  | none => simp
+  | some c1 =>
+    simp only [evalWithAnswerFn_bind, evalWithAnswerFn_pure, eval_toHIC_auxSpec,
+      reduceCtorEq, false_implies, Option.some.injEq, Prod.mk.injEq, true_and]
+    rintro x Lx ⟨rfl, rfl⟩
+    have hst := hV.step g lr (tgtIn pk lr ms.2 ms.1 c1)
+    obtain ⟨Ly, hLy⟩ := hst.1 _ (by rw [tStep_get]; simp)
+    obtain ⟨Pfx, h1, h2⟩ := hst.2 _ Ly hLy
+    rw [hLy, Option.getD_some]
+    exact ⟨c1, Pfx, rfl, rfl, h1, h1 ▸ h2⟩
+
 end Eval
 
 end VoleMole.ROM.OneMore.Pomfrit
