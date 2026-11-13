@@ -335,8 +335,13 @@ calls. So the term is tight up to the opening-success factor.
 every extractor that does not read `ũ` (there: A1, A2). But `hash_to_target` binds `ũ` (D2), and
 `ũ` determines the prefix group up to `2⁻¹³⁴` per `H₂¹` query (Theorem D, Lean
 `Seed/KOSUnique.lean`, `witness_determined`). For first messages whose trees agree on the label
-rows an efficient extractor has no `Shift` at all (Theorem L). For the others, finding the group
-efficiently is open, so the bound above stands.
+rows an efficient extractor has no `Shift` at all (Theorem L). For the others the group hides in
+a slice of the challenge space. There (§6 of that note): any two challenges of one slice with the
+same check value certify the witness (Lean `slice_collision_sound`); a decoder that reads `c_mult`
+against the `H₅` table finds the slice, with proof for two label classes and, in general, at a
+measured cost of about `2⁷` per further label class; under the stated conjecture (H-dec) the term
+would be `2⁻⁷⁸` to `2⁻⁹⁹` per `H₂³` query for `2¹⁷` to `≈ 2³⁵` decoding steps per `H_T` query. The
+decoder's completeness is not proved, so the bound above stands.
 
 ## 6. One-more unforgeability (classical)
 
@@ -1192,8 +1197,9 @@ dedicated to PomFRIT.
   `advOMPRShift_le_guess`; the converse, A-OMPR⊕τ ⇒ A-OMPR, is tight, `advOMPR_le_shift`.) If so, U1 loses its `Q₃·2^{−71}`
   term. A protocol change that pins `r` to π₁ would also remove it, but none was explored here.
   `pomfrit-lemmap-tight.md`: `ũ` in `hash_to_target` already pins `r` information-theoretically
-  (§4 there); what is open is an efficient first-phase extractor for first messages whose trees
-  disagree on the label rows (§6 there); protocol options are in §8 there.
+  (§4 there); for first messages whose trees disagree on the label rows, extraction is reduced to
+  finding a slice, and a decoder is given, proved for two label classes and conjectured complete
+  in general (§6 there); protocol options are in §8 there.
 - **G2.** QROM unforgeability (§7) needs mid-run extraction, or a different reduction. Q7 §4
   supplies one (database-controlled programming, simultaneous extraction from ℓ+1 proofs by
   Theorem M), on paper and under the new assumptions A-OMPR-RO and A-OMPR⊕τ-RO; from the
