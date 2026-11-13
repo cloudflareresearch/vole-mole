@@ -1317,15 +1317,16 @@ The `2⁻⁷¹` per `H₂³` query (Lemma P's `Shift`) dominates; it is the pape
 `2⁻⁵⁶·⁰`). The dominant terms are the `H₂²` and `H₂³` charges, `≈ 2⁻⁶³` each at `2⁶⁴`: the
 paper's `ε_ext`.
 
-**Not covered.** In the AES permutation model, the CT-UF^open, UF-Tag and OMPR corollaries of
-the protocol theorems and PomFRIT's U1 and U2 (above); the quantum setting. `Com` (and partly
-`Tag`) as a random permutation in the standalone games: §2o.
+**Not covered.** In the AES permutation model, the UF-Tag and OMPR corollaries of Ratatouille's
+balance theorem and PomFRIT's U1 and U2 (above; Moussaka's are in §2o); the quantum setting.
+`Com` and `Tag` as random permutations in the standalone games: §2o.
 
 ### 2o. `Com` and `Tag` as random permutations with inverse queries (standalone games)
 
 Files: `Assumptions/LazyPerm.lean` (generic), `Assumptions/CTUFPerm.lean`,
-`Assumptions/PermLinks.lean`, `Assumptions/FDHPerm.lean`, `Audit/PermOMPR.lean`;
-`lean/docs/security/uov-assumptions.md` §5.4 states the results.
+`Assumptions/PermLinks.lean`, `Assumptions/FDHPerm.lean`, `Assumptions/RatatouillePerm.lean`,
+`Assumptions/PermSimLinks.lean`, `Audit/PermOMPR.lean`, `Audit/PermFDH.lean`,
+`Audit/PermSim.lean`; `lean/docs/security/uov-assumptions.md` §5.4 and §5.8 state the results.
 
 - **The shared step** (`LazyPerm`). A lazily sampled permutation of a finite block type with
   forward and inverse queries (`rpImpl`), next to other oracles that may read it at one point
@@ -1342,17 +1343,43 @@ Files: `Assumptions/LazyPerm.lean` (generic), `Assumptions/CTUFPerm.lean`,
   random oracle at fresh indices; its run against the function-model challenger projects onto the
   random-function hybrid (stepwise, `combP_step`, under `InvP`). Corrections to the paper's
   statement: the switching term includes the inverse queries; `n` budgets `q_S + 1` more targets.
-- **Ratatouille** (`FDHPerm`): the det-FDH game with `Tag` read off the permutation
-  (`advFDHPerm`), and its distance to the hybrid in which fresh inverse answers avoid the
-  structured inputs (`advFDHPerm_le_hyb`). The simulation of that hybrid by a function-model
-  det-FDH forger (`simCF`, `combF` with its normal forms) is written, but the step lemma, the
-  invariant and the counts are not, so `balance_le_ompr` still takes `TagIdeal`. The signer reads
-  the permutation, so unlike CT-UF^open an inverse record at a structured input changes the
-  forger's view; this is why the hybrid avoids structured inputs on inverse queries.
-- **PomFRIT** U1 and U2 with AES as random permutations with inverse queries are not done: it
-  needs the permutation-model versions of the Lemma P per-table bounds
-  (`prEvent_pfailZ_sim_le_E` averaged with `failEpsP`), as `ROM/MoussakaOMUFSimPerm.lean` does for
-  Moussaka.
+- **Ratatouille** (`FDHPerm`, `RatatouillePerm`): the det-FDH game with `Tag` read off the
+  permutation (`advFDHPerm`); the hybrid in which fresh inverse answers avoid the structured
+  inputs (`advFDHPerm_le_hyb`); its simulation by a function-model det-FDH forger (`simCF`,
+  `combF`): the step (`combF_step`), the invariant (`InvF`, `combF_inv`: coins unused from the
+  counter on; `H` defined only at recorded structured inputs; a forward record at `emb m` carries
+  `H(m)`; no inverse record at a structured input), the win transfer (`hyb_le_fdh`, through
+  `h_of_fwdFind`) and the counts (`simA_budget`; `fdhImpl_hq`, `fdhImpl_signed` from the generic
+  `count_le`). Then `advFDHPerm_le_fdh`:
+  `Adv^{perm}(A) ≤ Adv^{euf}_{det}(fdhPermRed A; q_f + 1 + q_S, q_S) + permEps`, and with T1(a, c)
+  `advFDHPerm_le_ompr`. The signer reads the permutation, so unlike CT-UF^open an inverse record at
+  a structured input changes the forger's view; this is why the hybrid avoids structured inputs on
+  inverse queries. Ratatouille under OMPR with the modelling hypothesis `TagIdealP`:
+  `balance_le_ompr_perm`, `balance_le_ompr_sim_perm` (and `_rate`); the permutation terms are
+  the paper's `q_K²·2^{−799} + q_K·2^{−479}` (here `(q_f + q_i + q_S + 1)²·2^{−800} + q_i·2^{−480}`).
+- **AES as random permutations, Moussaka** (`PermSimLinks`): `omuf_le_num_simP`'s forgery term is
+  the CT-UF^open advantage of `ctufForgerP` (common randomness the permutation table;
+  `omuf_le_open_simP`, `omuf_le_num_open_simP`), and with `hmodelP` the headline
+  `omuf_le_num_ompr_simP` (AES and `Com` both random permutations with inverse queries). The
+  forger's `reads` property comes from `gameP_congr` (the permutation-model game reads the
+  signers only at accepted Issue queries) and the log lemmas `tableQueryLog_liftP`,
+  `tableQueryLog_normJ` (a jointly normalized computation's log is a function of the original's).
+- **Not done.**
+  - Ratatouille with AES as random permutations: `forgeAdvP` (`balance_le_sim_numP`) is not
+    linked to a UF-Tag forger. It needs a UF-Tag forger whose common randomness is the
+    permutation table (`TagForger` fixes `CTable`), the strict-win and failure steps
+    (`ufTagAdv_le_strict`) for it, and `bOut_reads` (about 140 lines on `master`'s structure) redone
+    for `masterP` with the jointly normalized provers, via `tableQueryLog_normJ` as for Moussaka.
+  - Unbound Moussaka with AES as random permutations: only the joint extraction bound
+    (`moussakaUnbound_sim_joint_specP`) is in the permutation model, not the protocol game.
+  - PomFRIT U1 and U2 with AES as random permutations with inverse queries: there is no
+    permutation-model one-more game. It needs the game with a forger making inverse cipher
+    queries, the derived provers (`wrapIC`, `wrapP`) per permutation table normalized as in
+    `ROM/PermJoint.lean`, and the per-table Lemma P bounds (`prEvent_pfailZ_sim_le_E`,
+    `prEvent_shiftFailZ_sim_le_E`) averaged with `failEpsP` instead of `failEps`, as
+    `ROM/MoussakaOMUFSimPerm.lean` does for Moussaka.
+  - The lazily sampled permutation is taken as the ideal one; its equality with a uniformly drawn
+    permutation (standard) is not proved.
 
 ### 2n. Lemma P in the random-oracle model (PomFRIT G8), as implemented
 

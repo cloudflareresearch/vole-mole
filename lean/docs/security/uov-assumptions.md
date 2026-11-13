@@ -65,8 +65,11 @@ oracle-free attacks: direct forgery `≈ 2^{140}` multiplications, key recovery 
   one named modelling hypothesis that idealizes `Com` (`hmodel`) or `Tag` (`TagIdeal`) in the
   standalone game only. For Moussaka (both variants) the hypothesis can instead be taken with
   `Com` a random permutation with inverse queries (`hmodelP`; `omuf_le_num_ompr_perm`,
-  `omufU_le_num_ompr_perm`), the permutation terms explicit (§5.4); PomFRIT's U1 and U2 are stated with OMPR and OMPR⊕τ (`pomfrit_U1_ompr`,
-  `pomfrit_U2_omprShift`).
+  `omufU_le_num_ompr_perm`), the permutation terms explicit (§5.4), and also with AES as random
+  permutations (`omuf_le_num_ompr_simP`). For Ratatouille the hypothesis can be taken with `Tag`
+  a random permutation with inverse queries (`TagIdealP`; `balance_le_ompr_perm`,
+  `balance_le_ompr_sim_perm`, §5.8). PomFRIT's U1 and U2 are stated with OMPR and OMPR⊕τ
+  (`pomfrit_U1_ompr`, `pomfrit_U2_omprShift`).
 - Secondary statements: Moussaka and Ratatouille also follow, with loss `q`, from GPI plus the UOV
   problem (or OW). Ratatouille also follows from SUF-CMA of the specified scheme.
 
@@ -594,6 +597,22 @@ with `n = (q_f + q_S + 1) + 2q_S + 1`. The proof:
   CT-UF^open of `B₂` ≤ `advCTUFPermAt` of some forger within budget):
   `omuf_le_num_ompr_perm`, `omufU_le_num_ompr_perm`. Non-vacuity: `Audit/PermOMPR.lean` (a toy
   forger wins the permutation-model game with probability one and meets `hmodelP`).
+- *AES as random permutations too* (`Assumptions/PermSimLinks.lean`). Moussaka's Theorem 1 with AES
+  as random permutations and an adversary with inverse cipher queries (`omuf_le_num_simP`,
+  `ROM/MoussakaOMUFSimPerm.lean`) has its forgery term as the CT-UF^open advantage of the forger
+  `ctufForgerP`, whose common randomness is the permutation table (`omuf_le_open_simP`,
+  `omuf_le_num_open_simP`). Its `reads` property (it uses its signers only on its signing log)
+  needs the logs of the jointly normalized provers: they are a function of the permutation-model
+  game's log (`tableQueryLog_normJ`, `tableQueryLog_liftP`), which reads the signers only at the
+  accepted Issue queries (`gameP_congr`). With `hmodelP` for `ctufForgerP`:
+
+      Pr[Win] ≤ εIR^simP(q', q'_E, n', qI, qR) + Pr[Coll]
+                + Σ_j (Adv^{ompr}_{key j}(B_j; n, q_S) + n·failPr_{key j})
+                + (q_f + q_i + q_S + 1)²/|T × Z| + q_i·|Xc|/|T × Z|       (omuf_le_num_ompr_simP)
+
+  Non-vacuity: `Audit/PermSim.lean`. Unbound Moussaka has the permutation-model joint extraction
+  bound (`moussakaUnbound_sim_joint_specP`) but no permutation-model protocol theorem yet, so it
+  has no such corollary.
 
 **How the concrete game relates.** The CT-UF^open game of `advCTUFOpenAt` (Moussaka's
 `Com = KP800(·)|_{360}`, read by the forger as a function) is not reduced to the ideal one: that
@@ -900,7 +919,55 @@ preimage of an unqueried index. Then apply (a) and T1(c). ∎
     correction, `failAdv(B)` for `(N_I + N_S)·E[δ^{255}] + q_v·2^{−256}` (bounded per table by
     `pr_failOut_le`), and **no** `q_K·2^{−479} + q_K²·2^{−799}`: those come from KP800 as a
     permutation with inverse queries (K1, and the permutation/function switch), and the Lean model
-    of `Tag` is a random function. Moving to the permutation model is not mechanized.
+    of `Tag` in `TagIdeal` is a random function.
+  - **[Lean] `Tag` a random permutation with inverse queries** (`Assumptions/FDHPerm.lean`,
+    `Assumptions/RatatouillePerm.lean`). `KP800` is a lazily sampled random permutation `π` of the
+    blocks `T × Z` with forward and inverse queries; `Tag(m)` is the first component of
+    `π(emb m)` for an injective encoding `emb` of the pairs `m = (c, x)`; the signer evaluates `π`
+    itself. The game is `advFDHPerm` (the challenger evaluates `π(emb m*)`; the win `FPWin`: `m*`
+    never signed and `s*` a preimage of `Tag(m*)`). For a forger with at most `q_f` forward, `q_i`
+    inverse and `q_S` signing queries:
+
+        Adv^{perm}(A) ≤ Adv^{euf}_{det}(fdhPermRed A; q_f + 1 + q_S, q_S)
+                        + (q_f + q_i + q_S + 1)²/|T × Z| + q_i·|M|/|T × Z|        (advFDHPerm_le_fdh)
+                      ≤ Adv^{ompr}(B'; k + 1 + q_S, q_S) + Pr[D errs on one of k + 1 + q_S targets]
+                        + (the same two terms),   k = q_f + 1 + 2q_S             (advFDHPerm_le_ompr)
+
+    The proof:
+    - *Two hybrids* (`advFDHPerm_le_hyb`): the permutation becomes the two-sided random function
+      (`LazyPerm.prEvent_rp_le_rf`; `q = q_f + q_i + q_S + 1` queries read it), and fresh inverse
+      answers are drawn outside the structured inputs (`LazyPerm.prEvent_rf_le_avoid`,
+      `q_i·|M|/|B|`). Unlike CT-UF^open, the signer reads the permutation, so an inverse record at
+      a structured input would change what the signer answers; the hybrid excludes it.
+    - *The reduction* (`simCF`, `fdhPermRed`): a det-FDH forger with `H` a random function
+      simulates the hybrid's permutation: a fresh forward query at `emb m` gets `(H(m), z)`, every
+      other fresh forward answer is a coin, a fresh inverse answer a coin outside the structured
+      inputs, the coins values of the world's random oracle at fresh indices; `Sign(m)` evaluates
+      `π(emb m)` first, then asks the signing oracle. Against the det-FDH challenger its run,
+      projected, is the hybrid (`combF_step`, under the invariant `InvF`: coins unused from the
+      counter on, `H` defined only at recorded structured inputs, a forward record at `emb m`
+      carries `H(m)`, no inverse record at a structured input). So `Tag(m*)` read off the table is
+      `H(m*)` (`h_of_fwdFind`), and a hybrid win is a det-FDH win (`hyb_le_fdh`); the reduction
+      makes at most `q_f + 1 + q_S` hash and `q_S` signing queries (`simA_budget`, counted in the
+      challenger's state, `fdhImpl_hq`, `fdhImpl_signed`).
+    - Ratatouille (`balance_le_ompr_perm`, `balance_le_ompr_rate_perm`, and with simultaneous
+      extraction `balance_le_ompr_sim_perm`, `balance_le_ompr_rate_sim_perm`) takes the modelling
+      hypothesis in this form, `TagIdealP`: the strict UF-Tag advantage of `B.noProbe τ` is at most
+      `advFDHPerm` of some forger `A'` within `(q_f, q_i, q_S)`. For KP800, `|T × Z| = 2^{800}`
+      and `|M| = 2^{320}` (32-byte commitment, 8-byte credits), so the terms are
+      `(q_f + q_i + q_S + 1)²·2^{−800} + q_i·2^{−480}`: the paper's `q_K²·2^{−799} + q_K·2^{−479}`,
+      with the inverse queries in the switching term as in §5.4. The OMPR target count is
+      `k + 1 + q_S` with `k = q_f + 1 + 2q_S` (the reduction's hash and signing queries; the
+      signer's forward evaluations are hash queries of the reduction). Non-vacuity:
+      `Audit/PermFDH.lean` (a toy forger wins `advFDHPerm` with probability one; the balance
+      corollaries instantiated for `balA0`, with `TagIdealP` an argument,
+      `tagIdealP_of_eq_zero`).
+    - The lazily sampled permutation is taken as the ideal permutation, as in §5.4.
+    - With AES as random permutations (`ROM/RatatouilleBalanceSimPerm.lean`) the balance theorem's
+      forgery term is the probability `forgeAdvP` of the permutation-model run. It is not yet
+      bounded by a UF-Tag forger: that needs a UF-Tag forger whose common randomness is the
+      permutation table, with the `reads` property of `forger` (`bOut_reads`) redone for the
+      jointly normalized provers.
 
 **Does R1 remove the issue?** No. R1 is orthogonal to it.
 - The probe comes from the API order (F5), not from Tag's input. With R1, `spend_response` still
@@ -1183,7 +1250,8 @@ hash-and-sign with retry [KX24]).
 | T1(a) det-FDH ≤ A-OMPI; T1(c) A-OMPI ≤ OMPR (corrected: `q_T + Q` targets, `+ (q_T + Q)·ρ`); both | `advFDH_le_ompi`, `advOMPI_le_ompr`, `advOMPI_le_ompr_rate`, `advFDH_le_ompr_rate` (in `Assumptions/IdealTag.lean`) |
 | P9(b) with `Tag` a random function, and the final statement under A-OMPR (with the modelling hypothesis `TagIdeal`) | `ufTagAdv_le_strict`, `balance_le_ompr`, `balance_le_ompr_rate` (in `Assumptions/RatatouilleOMPR.lean`) |
 | T4 with `Com` a random permutation with inverse queries; the switch permutation/function; Moussaka and unbound Moussaka down to OMPR with it | `advCTUFPermAt_le_ompr`, `advCTUFPermAt_le_ideal` (`Assumptions/CTUFPerm.lean`), `prEvent_rp_le_rf`, `prEvent_invHit_le`, `prEvent_rf_le_avoid` (`Assumptions/LazyPerm.lean`), `omuf_le_num_ompr_perm`, `omufU_le_num_ompr_perm` (`Assumptions/PermLinks.lean`) |
-| det-FDH with `Tag` a random permutation: the game and the hybrids | `advFDHPerm`, `advFDHPerm_le_hyb` (`Assumptions/FDHPerm.lean`) |
+| det-FDH with `Tag` a random permutation: the game, the hybrids, the reduction to det-FDH and to OMPR; Ratatouille balance under OMPR with it | `advFDHPerm`, `advFDHPerm_le_hyb`, `combF_step`, `combF_inv`, `hyb_le_fdh`, `advFDHPerm_le_fdh`, `advFDHPerm_le_ompr` (`Assumptions/FDHPerm.lean`), `balance_le_ompr_perm`, `balance_le_ompr_sim_perm` (`Assumptions/RatatouillePerm.lean`) |
+| Moussaka with AES and `Com` both random permutations with inverse queries, down to OMPR | `ctufForgerP`, `gameP_congr`, `tableQueryLog_normJ`, `omuf_le_open_simP`, `omuf_le_num_ompr_simP` (`Assumptions/PermSimLinks.lean`) |
 | Cores of `uov-open-reductions.md`: combiner forest, lottery accounting, the rewinding supermartingale inequality | `combiner_count`, `lottery_count`, `four_mul_le_pow`, `rewind_supermartingale` |
 | Scaling symmetry of `P` and the one-query CT-UF attack (`Spec/PqovScale.lean`) | `qmap_smul`, `sq_pow_128`, `scaled_preimage`, `ctuf_scaling_attack` |
 
@@ -1262,10 +1330,8 @@ The reductions between the games (`lean/VoleMole/Assumptions/Shift.lean`, `Blind
 Not mechanized:
 - T1(b, d, e), T2, T3, T5 and P8(b)–(d) (T1(a) and T1(c) are in `Assumptions/IdealTag.lean`, §5.1;
   T4 with `Com` a random function in `Assumptions/CTUFOpenOMPR.lean`, §5.4);
-- the permutation model of `Tag` (the terms `q_K·2^{−479} + q_K²·2^{−799}`) beyond the hybrid:
-  `Assumptions/FDHPerm.lean` has the game (`advFDHPerm`) and its distance to the hybrid
-  (`advFDHPerm_le_hyb`, `≤ (q_f + q_i + q_S + 1)²/|B| + q_i·|M|/|B|`), not the final simulation
-  step to `advFDH` (T4 with `Com` a random permutation is mechanized, §5.4);
+- the equality of the lazily sampled permutation with an eagerly drawn uniform permutation (the
+  permutation models of `Com`, §5.4, and of `Tag`, §5.8, use the lazy one);
 - the completeness term of T6 at PomFRIT for the Lean client, which needs the Lean prover as
   oracle computations and its completeness in the lazy random-oracle model (§5.6);
 - the converse of `advOMPR_le_ompr31`. In Def. 3.1 the adversary's coins may depend on the

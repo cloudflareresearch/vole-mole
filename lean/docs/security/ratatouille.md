@@ -207,16 +207,21 @@ signed" is det-FDH EUF-CMA with `H = Tag`, and the lemma is `uov-assumptions.md`
 `advFDH_le_ompi` (`lean/VoleMole/Assumptions/IdealTag.lean`), with no loss and `q_T = k + 1` for
 `k` hash and signing queries. Then T1(c), `advOMPI_le_ompr`, gives OMPR, with `q_T + Q_sig` targets
 and a term `(q_T + Q_sig)·ρ` for the signer's aborts (a correction of T1(c), §5.1 there). The
-permutation terms `q_K·2^{−479} + q_K²·2^{−799}` are mechanized only up to the hybrid:
+permutation terms `q_K·2^{−479} + q_K²·2^{−799}` are mechanized too:
 `Assumptions/FDHPerm.lean` defines det-FDH with `Tag` the first component of a random
-permutation with inverse queries (`advFDHPerm`) and proves that it is within
-`(q_f + q_i + q_S + 1)²/2^{800} + q_i·|M|/2^{800}` of a hybrid in which the permutation is a
-two-sided random function whose fresh inverse answers avoid the structured inputs
-(`advFDHPerm_le_hyb`). The last step, that hybrid against the random-function det-FDH game of a
-simulating forger (as `Assumptions/CTUFPerm.lean` does for CT-UF^open), is not finished, so the
-Ratatouille chain to OMPR still uses `TagIdeal`. The step from the concrete
-KP800 to the ideal `Tag` is a modelling hypothesis (`TagIdeal`, §4), as the paper's "ideal in the
-standalone game only".
+permutation with inverse queries (`advFDHPerm`), and reduces it to the random-function det-FDH
+game of a forger that simulates the permutation (`advFDHPerm_le_fdh`), then to OMPR
+(`advFDHPerm_le_ompr`):
+
+    Adv^{perm}(A) ≤ Adv^{euf}_{det}(fdhPermRed A; q_f + 1 + q_S, q_S)
+                    + (q_f + q_i + q_S + 1)²/2^{800} + q_i·2^{320}/2^{800}
+
+for `q_f` forward, `q_i` inverse and `q_S` signing queries (`uov-assumptions.md` §5.8). The
+inverse term is the paper's `q_K·2^{−479}` (here `2^{−480}`, `M` the 40-byte pairs); the switching
+term counts the inverse queries too. The step from the concrete KP800 to the ideal `Tag` is a
+modelling hypothesis, as the paper's "ideal in the standalone game only": `TagIdeal` (§4) with
+`Tag` a random function, or `TagIdealP` with `Tag` a random permutation
+(`balance_le_ompr_perm`).
 
 **Why not plain UOV inversion?** A guessing reduction (embed one challenge at a random Tag query)
 must answer the other signing queries without `td`. The obvious simulation answers with uniform
@@ -538,6 +543,16 @@ per `ctx`, because parents share the spender's `ctx` (fact 1). ∎
     with A-OMPR: `N` counts `N_I + N_S`, `q_T` is `k + 1` (plus `N` padding targets), the
     `(k + 1 + N)·ρ` term is new (T1(c) with an aborting signer), and the permutation terms
     `q_K·2^{−479} + q_K²·2^{−799}` are absent because `Tag` is modelled as a random function.
+  - *`Tag` a random permutation with inverse queries* (`Assumptions/RatatouillePerm.lean`,
+    `balance_le_ompr_perm`, `balance_le_ompr_rate_perm`; with simultaneous extraction
+    `balance_le_ompr_sim_perm`, `balance_le_ompr_rate_sim_perm`). The same chain with the
+    modelling hypothesis `TagIdealP`: the strict UF-Tag advantage of `B.noProbe τ` is at most the
+    det-FDH advantage of a forger `A'` with `Tag` the first component of a random permutation of
+    `T × Z` (forward and inverse queries, `q_f`, `q_i`, `q_S`), then `advFDHPerm_le_ompr`
+    (`uov-assumptions.md` §5.8). The OMPR term has `k + 1 + q_S` targets with
+    `k = q_f + 1 + 2q_S`, and the permutation terms
+    `(q_f + q_i + q_S + 1)²·2^{−800} + q_i·2^{−480}` (the paper's `q_K²·2^{−799} + q_K·2^{−479}`)
+    appear. `TagIdealP` stays a hypothesis (`Audit/PermFDH.lean` instantiates the others).
   - *Simultaneous extraction* (`ROM/RatatouilleBalanceSim.lean`, `balance_le_sim_num`,
     `balance_le_lean_sim`, `balance_le_ufTag_sim`; under OMPR `balance_le_ompr_sim`,
     `balance_le_ompr_rate_sim`, `Assumptions/SimLinks.lean`). The `j`-th prover's run is a prefix
@@ -571,7 +586,9 @@ per `ctx`, because parents share the spender's `ctx` (fact 1). ∎
     hash count `n + 2q₂₁` in the `2⁻⁴⁴⁸` term: `≈ 2⁻⁶⁰·⁵⁴` at `2⁶⁴` queries and `N = 2³⁰`
     (`2N·failEpsP ≈ 2⁻⁸⁴·⁸`). The forger's and collision finder's terms stay as probabilities
     of the permutation-model run (`forgeAdvP`, `collAdvP`); the UF-Tag and OMPR corollaries are
-    not redone there.
+    not redone there: they need a UF-Tag forger whose common randomness is the permutation table,
+    with `bOut_reads` redone for the jointly normalized provers (Moussaka's analogue is done,
+    `Assumptions/PermSimLinks.lean`).
 
 **Correction (minor) to the proof of Theorem 1.** "It forwards every Issuer signing call to
 `Sign`": `spend_response` signs before the caller's nullifier check (F5), so on the
@@ -1254,10 +1271,11 @@ and determinism of `Tag`. The witness satisfies V3 by `change_correct`. ∎
     for a UF-Tag game with a signability probe (`TagForger`; `B` is mechanized as a forger of
     it). Lemma 2.1 (UF-Tag from A-OMPI) is in Lean with `Tag` a random function
     (`advFDH_le_ompi`, and to OMPR `balance_le_ompr`, §4), from the modelling hypothesis
-    `TagIdeal` (concrete KP800 versus the ideal `Tag`), which stays a hypothesis; its permutation
-    terms (`q_K·2^{−479} + q_K²·2^{−799}`, KP800 a permutation with inverse queries) and the
-    binding bound `ε_bind^K` stay on paper: they need KP800 as an ideal permutation, while the
-    Lean `Com` and `Tag` are the concrete Keccak-p[800]. The probe is no real strengthening: `balance_le_noProbe`
+    `TagIdeal` (concrete KP800 versus the ideal `Tag`), which stays a hypothesis; with `Tag` a
+    random permutation with inverse queries, its permutation terms
+    (`q_K·2^{−479} + q_K²·2^{−799}`) are in Lean too (`balance_le_ompr_perm`, hypothesis
+    `TagIdealP`). The binding bound `ε_bind^K` stays on paper: it needs KP800 as an ideal
+    permutation, while the Lean `Com` is the concrete Keccak-p[800]. The probe is no real strengthening: `balance_le_noProbe`
     (`ROM/RatatouilleProbe.lean`) removes it at the cost of the signer's failures on at most `N`
     logged pairs, the paper's `E4` (`uov-assumptions.md` §5.8). That pqov's signer fails with
     probability `δ(sk)^{255}` independently per target is the paper step (Lemma D);
@@ -1417,3 +1435,13 @@ and determinism of `Tag`. The witness satisfies V3 by `change_correct`. ∎
 - `ratTrap`, `FDHAdv`, `TagIdeal`: the Issuer's trapdoor and the modelling hypothesis.
 - **`balance_le_ompr`**, `balance_le_ompr_rate`: Theorem 1 under one-more-UOV.
 - `Audit/IdealTag.lean`: their hypotheses instantiated, except `TagIdeal` (`tagIdeal_of_eq_zero`).
+
+`lean/VoleMole/Assumptions/FDHPerm.lean`, `Assumptions/RatatouillePerm.lean` (`Tag` a random
+permutation with inverse queries):
+- `advFDHPerm`, `advFDHPerm_le_hyb`: the game and its hybrids.
+- `simCF`, `fdhPermRed`, `combF_step`, `combF_inv`, `hyb_le_fdh`, **`advFDHPerm_le_fdh`**,
+  `advFDHPerm_le_ompr`, `advFDHPerm_le_ompr_rate`: down to det-FDH and OMPR.
+- `TagIdealP`, **`balance_le_ompr_perm`**, `balance_le_ompr_rate_perm`,
+  `balance_le_ompr_sim_perm`, `balance_le_ompr_rate_sim_perm`: Theorem 1 under OMPR.
+- `Audit/PermFDH.lean`: their hypotheses instantiated, except `TagIdealP`
+  (`tagIdealP_of_eq_zero`).

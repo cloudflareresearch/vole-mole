@@ -34,7 +34,8 @@ of a probe-free forger `B.noProbe τ` plus the signer's failure term `failAdv(B)
 
 The OMPR game is the per-key one (the key fixed, as the balance theorem's). The terms
 `q_K·2^{−479} + q_K²·2^{−799}` of the paper's Lemma 2.1 (KP800 a permutation with inverse queries)
-are not here: `Tag` is modelled as a random function.
+are not here: `Tag` is modelled as a random function (with `Tag` a random permutation:
+`Assumptions/RatatouillePerm.lean`).
 
 No `sorry`, no `axiom`.
 -/
