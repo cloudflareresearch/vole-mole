@@ -1459,4 +1459,174 @@ theorem thmR (hcls : Equivalence cls) (hτ : 7 ≤ τ) (hq : 1 ≤ q) (c J K₀ 
 
 end Main
 
+/-! ## An OMPR adversary is a reduction, with the same advantage -/
+
+section LiftB
+
+variable {DR : Type} [DecidableEq DR] {AR : DR → Type} [∀ d, SampleableType (AR d)]
+  {τ q : ℕ} [NeZero τ] {X : Type} [DecidableEq X] {T S : Type} [AddCommGroup T]
+  [SampleableType T] [DecidableEq T]
+  {PK SK : Type} (rel : PK → S → T → Prop) [∀ pk s t, Decidable (rel pk s t)]
+  (pk : PK) (pre : T → S)
+
+/-- **An OMPR adversary as a reduction** that never talks to `A**_D`. -/
+def liftRed (B : PK → ProbComp (OracleComp (specB AR X Unit T S) (List (X × S)))) (pk : PK) :
+    ProbComp (OracleComp (specRed AR τ q X T S) (List (X × S))) :=
+  simulateQ liftB <$> B pk
+
+/-- The experiment's handler on the OMPR oracles. -/
+def μB (pre : T → S) : QueryImpl (specB AR X Unit T S) (StateT (RSt AR τ q X T S) ProbComp)
+  | .inl d => StateT.mk fun s =>
+      match s.ro (.inl d) with
+      | some u => pure (u, s)
+      | none => (fun u => (u, { s with ro := s.ro.cacheQuery (.inl d) u })) <$> ($ᵗ (AR d))
+  | .inr (.inl (x, _)) => StateT.mk fun s =>
+      if s.rem = 0 then pure (none, s) else
+        (fun t => (some t,
+          { s with tg := Function.update s.tg x (some (t, ())), rem := s.rem - 1 })) <$> ($ᵗ T)
+  | .inr (.inr t) => StateT.mk fun s => pure (pre t, { s with iq := s.iq + 1 })
+
+lemma μR_w_run (d : DR) (s : RSt AR τ q X T S) :
+    (μR rel pk pre (.w d)).run s = (μB pre (.inl d)).run s := by
+  simp only [μR, μB, StateT.run_mk, randomOracle.run_eq]
+  cases h : s.ro (.inl d) with
+  | some u => simp
+  | none =>
+    simp only [map_bind, map_pure]
+    exact (map_eq_bind_pure_comp _ _ _).symm
+
+lemma sim_liftB (o : DR ⊕ ((X × Unit) ⊕ T)) :
+    simulateQ (μR rel pk pre) (simulateQ prog (liftB (AR := AR) (τ := τ) (q := q) o)) =
+      μB pre o := by
+  unfold liftB
+  erw [simulateQ_spec_query]
+  rcases o with d | ⟨x, u⟩ | t
+  · show simulateQ _ (op (.w d)) = _
+    unfold op
+    erw [simulateQ_spec_query]
+    exact StateT.ext fun s => μR_w_run rel pk pre d s
+  · show simulateQ _ (op (.tgt x)) = _
+    unfold op
+    erw [simulateQ_spec_query]
+    rfl
+  · show simulateQ _ (op (.inv t)) = _
+    unfold op
+    erw [simulateQ_spec_query]
+    rfl
+
+/-- An OMPR adversary run as a reduction uses only the OMPR oracles. -/
+theorem liftB_sim {α : Type} (b : OracleComp (specB AR X Unit T S) α) :
+    simulateQ (μR rel pk pre) (simulateQ prog (simulateQ (liftB (τ := τ) (q := q)) b)) =
+      simulateQ (μB pre) b := by
+  induction b using OracleComp.inductionOn with
+  | pure x => simp
+  | query_bind o k ih =>
+    simp only [simulateQ_bind, simulateQ_spec_query, ih]
+    rw [sim_liftB]
+
+omit [NeZero τ] [AddCommGroup T] in
+/-- **The experiment restricted to the OMPR oracles is the OMPR experiment** (`omExp`'s
+challenger `chImpl` with a uniform stream of `rem` targets): same joint distribution of the
+output, the labelled targets and the number of calls; no junk target is drawn and no run is
+completed. -/
+theorem liftB_eqd {α : Type} (b : OracleComp (specB AR X Unit T S) α) :
+    ∀ (s : RSt AR τ q X T S) (cr : (specR AR).QueryCache), (∀ d, s.ro (.inl d) = cr d) →
+      (fun z => (z.1, z.2.tg, z.2.iq, z.2.nj, z.2.nc)) <$> (simulateQ (μB pre) b).run s =ᵈ
+        (do let L ← unifList T s.rem
+            (fun z : α × Ch AR X Unit T => (z.1, z.2.tg, z.2.iq, s.nj, s.nc)) <$>
+              (simulateQ (chImpl pre) b).run ⟨cr, L, s.tg, s.iq⟩) := by
+  induction b using OracleComp.inductionOn with
+  | pure x =>
+    intro s cr _
+    simp only [simulateQ_pure, StateT.run_pure, map_pure]
+    exact (LazyIdeal.eqd_bind_unused _ _).symm
+  | query_bind o k ih =>
+    intro s cr hro
+    simp only [simulateQ_bind, simulateQ_spec_query, StateT.run_bind, map_bind]
+    rcases o with d | ⟨x, u⟩ | t
+    · have hch : ∀ c : Ch AR X Unit T, (chImpl (S := S) pre (.inl d)).run c = roStep d c :=
+        fun _ => rfl
+      simp only [μB, StateT.run_mk, hch, roStep, randomOracle.run_eq]
+      have hd := hro d
+      cases hc : cr d with
+      | some u =>
+        rw [hc] at hd
+        simp only [hd, pure_bind, map_pure]
+        exact ih u s cr hro
+      | none =>
+        rw [hc] at hd
+        simp only [hd]
+        have hro' : ∀ (u : AR d) (d' : DR),
+            (s.ro.cacheQuery (.inl d) u) (.inl d') = (cr.cacheQuery d u) d' := by
+          intro u d'
+          by_cases h : d' = d
+          · subst h
+            exact (QueryCache.cacheQuery_self s.ro (.inl d') u).trans
+              (QueryCache.cacheQuery_self cr d' u).symm
+          · exact (QueryCache.cacheQuery_of_ne s.ro (t := Sum.inl d) u
+              (fun e => h (Sum.inl.inj e))).trans
+              ((hro d').trans (QueryCache.cacheQuery_of_ne cr u h).symm)
+        have h1 := EvalDistEq.bind_right ($ᵗ (AR d)) fun u =>
+          ih u { s with ro := s.ro.cacheQuery (.inl d) u } (cr.cacheQuery d u) (hro' u)
+        dsimp only at h1
+        refine EvalDistEq.trans ?_ (h1.trans ((eqd_swap _ _ _).trans ?_))
+        · erw [bind_map_left]
+          exact EvalDistEq.rfl
+        · refine EvalDistEq.bind_right _ fun L => ?_
+          erw [bind_map_left, bind_assoc]
+          simp only [pure_bind]
+          exact EvalDistEq.rfl
+    · cases u
+      simp only [μB, chImpl, StateT.run_mk]
+      cases hm : s.rem with
+      | zero =>
+        simp only [unifList, ite_true, pure_bind]
+        have := ih none s cr hro
+        rw [hm] at this
+        simpa only [unifList, pure_bind] using this
+      | succ m =>
+        simp only [unifList, Nat.succ_ne_zero, ite_false, bind_map_left, bind_assoc, pure_bind,
+          Nat.add_sub_cancel]
+        refine EvalDistEq.bind_right _ fun t => ?_
+        exact ih (some t) { s with tg := Function.update s.tg x (some (t, ())), rem := m } cr hro
+    · simp only [μB, chImpl, StateT.run_mk, pure_bind]
+      exact ih _ { s with iq := s.iq + 1 } cr hro
+
+variable (tr : Trapdoor PK SK T S) [∀ pk s t, Decidable (tr.IsPre pk s t)]
+
+/-- **The reduction class contains every OMPR adversary, with its OMPR advantage**: run as a
+reduction (`liftRed`), an adversary `B` wins the experiment of Theorem R, with no junk target
+drawn and no run completed, with probability `Adv^{ompr}(B; n, c)`. So the experiment's
+challenger is the OMPR challenger of `Assumptions/UOV.lean` (`omExp`). -/
+theorem redExp_liftRed (n c : ℕ)
+    (B : PK → ProbComp (OracleComp (specB AR X Unit T S) (List (X × S)))) :
+    Pr{let r ← redExp tr n (liftRed (τ := τ) (q := q) B)}[
+        Wins c (goodPre tr.IsPre) r.1 r.2.1 r.2.2.toCh ∧ r.2.2.nj ≤ 0 ∧ r.2.2.nc ≤ 0] =
+      advOMPR tr n c B := by
+  let W : PK × List (X × S) × (X → Option (T × Unit)) × ℕ × ℕ × ℕ → Prop := fun r =>
+    Wins c (goodPre tr.IsPre) r.1 r.2.1 (⟨∅, [], r.2.2.1, r.2.2.2.1⟩ : Ch AR X Unit T) ∧
+      r.2.2.2.2.1 ≤ 0 ∧ r.2.2.2.2.2 ≤ 0
+  have hE : (fun r => (r.1, r.2.1, r.2.2.tg, r.2.2.iq, r.2.2.nj, r.2.2.nc)) <$>
+        redExp tr n (liftRed (τ := τ) (q := q) B) =ᵈ
+      (fun r => (r.1, r.2.1, r.2.2.tg, r.2.2.iq, 0, 0)) <$> omExp tr.keyGen tr.D n B := by
+    simp only [redExp, liftRed, omExp, map_bind, map_pure, bind_map_left]
+    refine EvalDistEq.bind_right _ fun kp => EvalDistEq.bind_right _ fun b => ?_
+    rw [liftB_sim]
+    have h := liftB_eqd (τ := τ) (q := q) (tr.D kp.2) b (r0 n) ∅ fun _ => rfl
+    have := h.bind_left (fun z => pure (kp.1, z.1, z.2))
+    simpa only [bind_map_left, bind_assoc, r0, ch0] using this
+  have h1 : Pr{let r ← redExp tr n (liftRed (τ := τ) (q := q) B)}[
+        Wins c (goodPre tr.IsPre) r.1 r.2.1 r.2.2.toCh ∧ r.2.2.nj ≤ 0 ∧ r.2.2.nc ≤ 0] =
+      Pr{let r ← (fun r => (r.1, r.2.1, r.2.2.tg, r.2.2.iq, r.2.2.nj, r.2.2.nc)) <$>
+        redExp tr n (liftRed (τ := τ) (q := q) B)}[W r] := by
+    rw [prEvent_map]
+    rfl
+  rw [h1, hE.prEvent_eq, prEvent_map]
+  unfold advOMPR
+  refine prEvent_congr _ _ _ fun r => ?_
+  simp only [W, le_refl, and_true]
+  rfl
+
+end LiftB
+
 end VoleMole.Assumptions.TheoremR
