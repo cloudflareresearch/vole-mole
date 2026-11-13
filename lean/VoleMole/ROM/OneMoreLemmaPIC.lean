@@ -13,11 +13,11 @@ builds such a prover, `proverP … i`, and relates it to the game table by table
   `ROM/VerifyIC.lean`'s `verifyIC`: `mu₁`, `iv`, the tree derivation and the needed cells queried,
   then `chal1Pre` with the PRG of the queried cells); per table it is `chal1Pre` with the ideal
   cipher's PRG (`evalWithAnswerFn_chal1PreIC`).
-* **The forger with a void hint** (`wrapIC lr hint0`): the target oracle's answers do not depend on
+* **The forger with a void hint** (`wrapIC lr hintVoid`): the target oracle's answers do not depend on
   the hints, and the ghost of `wrapIC` records, for each target input, the log at its first query.
   So the hint the game stores at `x` is the hint rule at the ghost log of `x`
   (`InvH`, `eval_wrapIC_hint`).
-* **The derived prover** (`proverP … i`): the forger (`wrapIC lr hint0`), the verifications of the
+* **The derived prover** (`proverP … i`): the forger (`wrapIC lr hintVoid`), the verifications of the
   earlier forgeries up to their target queries (`verPreAll`, with `chal1PreIC`, the reduction's own
   queries `auxSpec` and the target oracle's step), then the `i`-th forgery's `chal1`, the
   reduction's queries and its target query. It outputs the `i`-th forgery's proof, its statement
@@ -105,7 +105,7 @@ end Chal1
 section Hint
 
 /-- The void hint rule. -/
-def hint0 : QueryLog specIC → ByteArray → TG := fun _ _ => 0
+def hintVoid : QueryLog specIC → ByteArray → TG := fun _ _ => 0
 
 /-- **The game's state and the void-hint state**: they differ only in the hints (`SameT`), and the
 hint the game stores at each answered input is the hint rule at the ghost log of that input. -/
@@ -169,7 +169,7 @@ theorem eval_wrapIC_hint {α : Type} (oa : OracleComp specU α) :
       let a := evalWithAnswerFn (QueryImpl.ofFn (join g E))
         ((simulateQ (wrapIC lr hint pre) oa).run (L, hsH, gh))
       let b := evalWithAnswerFn (QueryImpl.ofFn (join g E))
-        ((simulateQ (wrapIC lr hint0 pre) oa).run (L, hsP, gh))
+        ((simulateQ (wrapIC lr hintVoid pre) oa).run (L, hsP, gh))
       a.1 = b.1 ∧ a.2.1 = b.2.1 ∧ a.2.2.2 = b.2.2.2 ∧ InvH hint a.2.2.1 b.2.2.1 a.2.2.2 := by
   induction oa using OracleComp.inductionOn with
   | pure a => intro L hsH hsP gh h; simpa using h
@@ -190,7 +190,7 @@ theorem eval_wrapIC_hint {α : Type} (oa : OracleComp specU α) :
       have := ih ((tStep addHint x (hint (L ++ ax) x) hsH).1.1) (L ++ ax) _ _ _ e2
       rw [ghStep] at this
       rw [← hgh]
-      simp only [hint0] at this ⊢
+      simp only [hintVoid] at this ⊢
       rw [e1] at this ⊢
       exact this
     · simp only [wrapIC, StateT.run_mk, evalWithAnswerFn_bind, evalWithAnswerFn_pure]
@@ -249,12 +249,12 @@ noncomputable def verLastIC (L : QueryLog specIC) (ms : ByteArray × ByteArray) 
       some (x, ((ghStep s.1 s.2 x (L ++ ax)) x).getD [])))
 
 /-- **The derived prover of the `i`-th forgery** for the target stream `Lst` and the Issuer `pre`:
-the forger with the void hint (`wrapIC lr hint0`), the earlier forgeries' verifications up to their
+the forger with the void hint (`wrapIC lr hintVoid`), the earlier forgeries' verifications up to their
 target queries, then the `i`-th forgery's. It reaches the hashes and the cipher only through
 `specIC`. -/
 noncomputable def proverP (pre : TG → SIss) (A : Forger) (Lst : List TG) (i : ℕ) :
     OracleComp specIC (ByteArray × ((TG × ByteArray × ByteArray) × AuxP)) := do
-  let r ← (simulateQ (wrapIC lr hint0 pre) (A pk)).run ([], hs0 Lst, fun _ => none)
+  let r ← (simulateQ (wrapIC lr hintVoid pre) (A pk)).run ([], hs0 Lst, fun _ => none)
   let s ← verPreAll lr pk r.2.1 (r.1.take i) (r.2.2.1, r.2.2.2)
   verLastIC lr pk r.2.1 (r.1.getD i (ByteArray.empty, ByteArray.empty)) s
 
@@ -310,7 +310,7 @@ theorem eval_proverP (A : Forger) (Lst : List TG) (i : ℕ) :
   set b := evalWithAnswerFn (QueryImpl.ofFn (join g E))
     ((simulateQ (wrapIC lr hint pre) (A pk)).run ([], hs0 Lst, fun _ => none)) with hb
   set b0 := evalWithAnswerFn (QueryImpl.ofFn (join g E))
-    ((simulateQ (wrapIC lr hint0 pre) (A pk)).run ([], hs0 Lst, fun _ => none)) with hb0
+    ((simulateQ (wrapIC lr hintVoid pre) (A pk)).run ([], hs0 Lst, fun _ => none)) with hb0
   have h0 : InvH hint (hs0 Lst) (hs0 Lst) (fun _ => none) :=
     ⟨SameT.refl _, fun x a e hx => by simp [hs0] at hx⟩
   obtain ⟨e1, e2, e3, e4⟩ := eval_wrapIC_hint g E lr hint pre (A pk) [] _ _ _ h0
@@ -357,16 +357,16 @@ noncomputable def contP (pk : UovPk) (i : ℕ)
 
 lemma proverP_eq (A : Forger) (Lst : List TG) (i : ℕ) :
     proverP lr pk pre A Lst i =
-      (simulateQ (wrapIC lr hint0 pre) (A pk)).run ([], hs0 Lst, fun _ => none) >>=
+      (simulateQ (wrapIC lr hintVoid pre) (A pk)).run ([], hs0 Lst, fun _ => none) >>=
         contP lr pk i := rfl
 
 /-- **The derived prover's joint log** is the forger's log followed by the verifications'. -/
 theorem log_proverP (A : Forger) (Lst : List TG) (i : ℕ) :
     tableQueryLog (proverP lr pk pre A Lst i) (join g E) =
       (evalWithAnswerFn (QueryImpl.ofFn (join g E))
-        ((simulateQ (wrapIC lr hint0 pre) (A pk)).run ([], hs0 Lst, fun _ => none))).2.1 ++
+        ((simulateQ (wrapIC lr hintVoid pre) (A pk)).run ([], hs0 Lst, fun _ => none))).2.1 ++
       tableQueryLog (contP lr pk i (evalWithAnswerFn (QueryImpl.ofFn (join g E))
-        ((simulateQ (wrapIC lr hint0 pre) (A pk)).run ([], hs0 Lst, fun _ => none)))) (join g E) := by
+        ((simulateQ (wrapIC lr hintVoid pre) (A pk)).run ([], hs0 Lst, fun _ => none)))) (join g E) := by
   rw [proverP_eq, tableQueryLog_bind, log_forger, List.nil_append]
 
 /-- **The ghost invariant**: every answered input has a ghost log, and every ghost log is a log
@@ -394,11 +394,11 @@ lemma tStep_ne_none {hs : HTS} {x y : ByteArray} (h : (tStep addHint x 0 hs).2.1
 theorem ghost_wrapIC {α : Type} (oa : OracleComp specU α) :
     ∀ (L : QueryLog specIC) (hs : HTS) (gh : Gh), GhostI g lr L hs gh →
       GhostI g lr (evalWithAnswerFn (QueryImpl.ofFn (join g E))
-          ((simulateQ (wrapIC lr hint0 pre) oa).run (L, hs, gh))).2.1
+          ((simulateQ (wrapIC lr hintVoid pre) oa).run (L, hs, gh))).2.1
         (evalWithAnswerFn (QueryImpl.ofFn (join g E))
-          ((simulateQ (wrapIC lr hint0 pre) oa).run (L, hs, gh))).2.2.1
+          ((simulateQ (wrapIC lr hintVoid pre) oa).run (L, hs, gh))).2.2.1
         (evalWithAnswerFn (QueryImpl.ofFn (join g E))
-          ((simulateQ (wrapIC lr hint0 pre) oa).run (L, hs, gh))).2.2.2 := by
+          ((simulateQ (wrapIC lr hintVoid pre) oa).run (L, hs, gh))).2.2.2 := by
   induction oa using OracleComp.inductionOn with
   | pure a => intro L hs gh h; simpa using h
   | query_bind q k ih =>
@@ -491,7 +491,7 @@ theorem ghost_verPreAll (L : QueryLog specIC) :
 either a prefix of the forger's log `L` or with `Pfx = L`. -/
 theorem aux_proverP (A : Forger) (Lst : List TG) (i : ℕ) :
     let b0 := evalWithAnswerFn (QueryImpl.ofFn (join g E))
-      ((simulateQ (wrapIC lr hint0 pre) (A pk)).run ([], hs0 Lst, fun _ => none))
+      ((simulateQ (wrapIC lr hintVoid pre) (A pk)).run ([], hs0 Lst, fun _ => none))
     let ms := b0.1.getD i (ByteArray.empty, ByteArray.empty)
     let p := evalWithAnswerFn (QueryImpl.ofFn (join g E)) (proverP lr pk pre A Lst i)
     (p.2.2 = none → c1T g lr E pk ms.2 = none) ∧

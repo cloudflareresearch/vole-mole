@@ -84,7 +84,7 @@ lemma cipherLog_prefix {A B : QueryLog specIC} (h : A <+: B) : cipherLog A <+: c
   obtain ⟨C, rfl⟩ := h
   exact ⟨cipherLog C, (List.filterMap_append ..).symm⟩
 
-lemma logBefore_prefix {D : Type} [DecidableEq D] {R : D → Type} (d : D) (L : QueryLog (ofFn R)) :
+lemma logBefore_isPrefix {D : Type} [DecidableEq D] {R : D → Type} (d : D) (L : QueryLog (ofFn R)) :
     logBefore d L <+: L :=
   ⟨_, (exists_append_logBefore d L).choose_spec.symm⟩
 
@@ -170,7 +170,7 @@ theorem keysOf_knownOf_prefix (hh : NoHit (gameIC T st P E) (chainHit T st P E) 
   have hB : logBefore (.inl (.h21, x)) (jOf g P E) = logBefore (.inl (.h21, x)) L := by
     rw [← hV]; exact logBefore_append_of_mem _ hxL
   have hAB : cipherLog (logBefore (.inl (.h21, x)) (jOf g P E)) <+: cipherLog L := by
-    rw [hB]; exact cipherLog_prefix (logBefore_prefix _ _)
+    rw [hB]; exact cipherLog_prefix (logBefore_isPrefix _ _)
   have hBC : cipherLog L <+: cipherLog (jOf g P E) := cipherLog_prefix ⟨V, hV⟩
   have key : ∀ i < BAVC.tau, ∀ j < 2 ^ BAVC.kOf i,
       extractKey (cipherLog L) E (ivE g st P E) i (comAt leaves.coms i j) =

@@ -112,7 +112,7 @@ lemma gameA_keys_known {ι β : Type} (stF : ι → Statement) (P : OracleComp s
 /-- The derived prover outputs the `i`-th forgery's proof and binders. -/
 lemma out_proverP :
     let b0 := evalWithAnswerFn (QueryImpl.ofFn (join g E))
-      ((simulateQ (wrapIC lr hint0 pre) (A pk)).run ([], hs0 Lst, fun _ => none))
+      ((simulateQ (wrapIC lr hintVoid pre) (A pk)).run ([], hs0 Lst, fun _ => none))
     let ms := b0.1.getD i (ByteArray.empty, ByteArray.empty)
     let p := evalWithAnswerFn (QueryImpl.ofFn (join g E)) (proverP lr pk pre A Lst i)
     p.1 = sProof lr ms.2 ∧ p.2.1.2 = (sB1 lr ms.2, sB2 lr ms.2) := by
@@ -147,7 +147,7 @@ variable (g : Table) (lr : Bool) (E : CTable) (pk : UovPk) (pre : TG → SIss) (
   (Lst : List TG) (ℓ i : ℕ)
 
 /-- The derived prover's adaptive game. -/
-noncomputable abbrev gameP : OracleComp spec (Out (((TG × ByteArray × ByteArray) × AuxP) ×
+noncomputable abbrev gameDP : OracleComp spec (Out (((TG × ByteArray × ByteArray) × AuxP) ×
     QueryLog specIC)) :=
   gameA CrtGen.tables (stG lr pk) (proverP lr pk pre A Lst i) E
 
@@ -158,14 +158,14 @@ theorem pfail_events (hd : pk.digest.size = 32)
     (h : PFailZ pk i (evalWithAnswerFn (QueryImpl.ofFn g)
       ((simulateQ (htW (AR := Ans) addHint pre)
         (Acomp CrtGen.tables lr E (e1P lr E) tgts1 pk ℓ A)).run (hs0 Lst)))) :
-    let r := evalWithAnswerFn (QueryImpl.ofFn g) (gameP lr E pk pre A Lst i)
+    let r := evalWithAnswerFn (QueryImpl.ofFn g) (gameDP lr E pk pre A Lst i)
     (r.2.2.accept = true ∧ ¬MajorExtracted E (stG lr pk (stOut r))
       (witKT pk hG (some (stOut r))) r) ∨
     PostOut E r ∨
     (r.2.2.accept = true ∧ ((.h23, zOut (stG lr pk (stOut r)) r) : Dom) ∉ hashLog r.2.1.aux.2) ∨
-    ∃ e ∈ tableQueryLog (gameP lr E pk pre A Lst i) g,
-      chainHitL cbP (tableQueryLog (gameP lr E pk pre A Lst i)) e.1 g ∨
-        orderHitL (tableQueryLog (gameP lr E pk pre A Lst i)) e.1 g := by
+    ∃ e ∈ tableQueryLog (gameDP lr E pk pre A Lst i) g,
+      chainHitL cbP (tableQueryLog (gameDP lr E pk pre A Lst i)) e.1 g ∨
+        orderHitL (tableQueryLog (gameDP lr E pk pre A Lst i)) e.1 g := by
   classical
   intro r
   let _ : HasPrg := icPrg E.cipher
@@ -195,12 +195,12 @@ theorem pfail_events (hd : pk.digest.size = 32)
   have hz := hzq hacc
   -- the fixed game
   have hrg : r = evalWithAnswerFn (QueryImpl.ofFn g) (gameIC T st P E) := evalWithAnswerFn_gameA _ _ _ _ _
-  have hlogA : tableQueryLog (gameP lr E pk pre A Lst i) g = gLog T st P E g :=
+  have hlogA : tableQueryLog (gameDP lr E pk pre A Lst i) g = gLog T st P E g :=
     tableQueryLog_gameA _ _ _ _ _
   have hh : NoHit (gameIC T st P E) (chainHit T st P E) g := by
     intro e he hc
     exact (hhit e (by rw [hlogA]; exact he)).1 (by
-      show (g e.1).ba ∈ hitTargets cbP (logBefore e.1 (tableQueryLog (gameP lr E pk pre A Lst i) g))
+      show (g e.1).ba ∈ hitTargets cbP (logBefore e.1 (tableQueryLog (gameDP lr E pk pre A Lst i) g))
         e.1.1
       rw [hlogA]; exact hc)
   have hkp : KeysPre st E (jOf g P E) (gLog T st P E g) g :=
@@ -215,7 +215,7 @@ theorem pfail_events (hd : pk.digest.size = 32)
     hrec
   -- the logs
   set b0 := evalWithAnswerFn (QueryImpl.ofFn (join g E))
-    ((simulateQ (wrapIC lr hint0 pre) (A pk)).run ([], hs0 Lst, fun _ => none)) with hb0
+    ((simulateQ (wrapIC lr hintVoid pre) (A pk)).run ([], hs0 Lst, fun _ => none)) with hb0
   set b := evalWithAnswerFn (QueryImpl.ofFn (join g E))
     ((simulateQ (wrapIC lr (e1P lr E) pre) (A pk)).run ([], hs0 Lst, fun _ => none)) with hb
   have hinv0 : InvH (e1P lr E) (hs0 Lst) (hs0 Lst) (fun _ => none) :=

@@ -220,7 +220,7 @@ theorem prEvent_pfailZ_le (hd : pk.digest.size = 32) {qA : Kind → ℕ} {nA qE 
   set e := eP lr qE ℓ
   set n := nP nA QT ℓ
   refine (prEvent_bind_le_sum_of_table ($ᵗ CTable) _ (Finset.univ : Finset (Fin (ℓ + 1) × Fin 4))
-    (fun ij E => withLogQ (gameP lr E pk pre A Lst ij.1.val)) _
+    (fun ij E => withLogQ (gameDP lr E pk pre A Lst ij.1.val)) _
     (fun ij E o => evJ E lr pk ij.2.val o) fun E g h => ?_).trans ?_
   · obtain ⟨i, hi⟩ := h
     have hev := pfail_events g lr E pk pre A Lst ℓ i.val hd hi

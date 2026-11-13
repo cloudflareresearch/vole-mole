@@ -467,11 +467,11 @@ theorem proverP_bounds {A : Forger} {qA : Kind → ℕ} {nA qE QT : ℕ} (hA : F
   have hv : ∀ r, VBound (contP lr pk i r) (ℓ + 1) lr := fun r =>
     (vBound_contP lr pk i r).mono lr (by omega)
   rw [proverP_eq]
-  refine ⟨isKindQueryBoundIC_bind (kinds_wrapIC lr hint0 pre (A pk) qA QT _ (hA.kinds pk) (hA.ht pk))
+  refine ⟨isKindQueryBoundIC_bind (kinds_wrapIC lr hintVoid pre (A pk) qA QT _ (hA.kinds pk) (hA.ht pk))
       fun r => (hv r).kinds, ?_, ?_⟩
-  · exact isQueryBoundP_bind (left_wrapIC lr hint0 pre (A pk) nA QT _ (hA.hashes pk) (hA.ht pk))
+  · exact isQueryBoundP_bind (left_wrapIC lr hintVoid pre (A pk) nA QT _ (hA.hashes pk) (hA.ht pk))
       fun r _ => (hv r).left
-  · exact isQueryBoundP_bind (right_wrapIC lr hint0 pre (A pk) qE _ (hA.cipher pk))
+  · exact isQueryBoundP_bind (right_wrapIC lr hintVoid pre (A pk) qE _ (hA.cipher pk))
       fun r _ => (hv r).right
 
 end Forger
