@@ -179,7 +179,10 @@ Let `q` be the adversary's total number of oracle queries, with the per-oracle c
   `RedeemRelW`) except with the bounds of `lean/VoleMole/ROM/SpecSound.lean`
   (`moussakaIssue_accept_le_full_spec`, `moussakaRedeem_accept_le_adaptive_spec`, …; for `t` of 45
   bytes, `nf` of 24, contexts of 16; adaptive families with injective encodings, proved for
-  fixed-length fields and fixed Anchors' digests, `EndToEnd/SpecRelations.lean`).
+  fixed-length fields and fixed Anchors' digests, `EndToEnd/SpecRelations.lean`). Simultaneously
+  for all proofs of a run, per relation (`moussakaIssue_sim_spec`, `moussakaRedeem_sim_spec`,
+  `ROM/SimSpec.lean`): the run's queries charged once, the per-proof verifier queries and failure
+  terms once per proof (§4 "Status").
 - **Weak SE w.r.t. adaptively chosen statements** (L8, Theorem L8): `ε_SE^R = ε_ext^R + ε_prog +
   ε_hk + ε_H + ε_eq`.
 - **ZK** (lean/docs/zk.md §3). On `main`:
@@ -419,6 +422,22 @@ ideal-cipher model of `lean/VoleMole/ROM/` (SHAKE a random oracle, AES's rows un
 
       Pr[Win] ≤ qI·ε_I(q', q'_E) + qR·ε_R(q', q'_E, n') + AdvBind(B₁) + AdvCTUF(B₂).
 
+- *With simultaneous extraction* (`ROM/MoussakaOMUFSim.lean`, `omuf_le_num_sim`; down to OMPR
+  `omuf_le_num_ompr_sim`, `Assumptions/SimLinks.lean`). All proofs come from one run of the game
+  (`PI j`, `PR j` are projections of `game`), and every extraction-failure term of the
+  single-proof bound is a sum of per-query bad events. So the extraction failures of all `qI`
+  issuance proofs are bounded together, charging each query of the run once
+  (`ROM/SimExtract.lean`, plan §2m):
+
+      Pr[Win] ≤ ε_I^sim(q', q'_E, qI) + ε_R^sim(q', q'_E, n', qR) + AdvBind(B₁) + AdvCTUF(B₂),
+      ε_I^sim(q', q'_E, m) = (q'₂₁+m)·2⁻¹⁵⁰ + (q'₂₂+m)·ε_QS(4008) + (q'₂₃+m)·9·2⁻¹²⁸
+                             + chainHitEpsSim q' m + stmtBindEpsSim q' m + m·failEps q' q'_E,
+
+  `ε_R^sim` likewise with the redemption relation's `H₂²` charge `ε_QS(4409) + 2⁻¹²⁸ +
+  (n'+339)·2⁻⁴⁴⁸`, at the same budgets as `omuf_le_num`. Per proof only the extraction game's own
+  verifier queries (`+m`) and the failure terms (binding, an opened dead leaf, Post:
+  `failEps ≈ 2⁻¹¹⁷·⁹` at `2⁶⁴` queries) remain. At `q' = 2⁶⁴` queries per kind and
+  `qI = qR = 2³⁰`: `qI·ε_I + qR·ε_R ≈ 2⁻²⁹·⁶`, `ε_I^sim + ε_R^sim ≈ 2⁻⁵⁹·⁶`.
 - *With CT-UF^open* (`Assumptions/UOVLinks.lean`, `omuf_le_num_open`). The same bound with
   `Adv^{ct-uf-open}_K(B₂)`, the advantage of an explicit forger (`ctufForger`) in the standalone
   CT-UF^open game (`Assumptions/UOV.lean`, `advCTUFOpenAt`) in place of `AdvCTUF(B₂)`. `B₂` runs
@@ -443,10 +462,13 @@ ideal-cipher model of `lean/VoleMole/ROM/` (SHAKE a random oracle, AES's rows un
   `Audit/Nonvacuous.lean` instantiates the hypotheses; the honest checks' request lengths are the
   verifier's proof sizes (`pfLenI_eq`, `pfLenR_eq`). `#print axioms`: `propext`,
   `Classical.choice`, `Quot.sound`.
-- *Differences from the paper bound.* (1) `qI·ε_I + qR·ε_R` in place of `ε_ext^iss + ε_ext^red`:
-  the union bound charges every proof separately, where the paper extracts all proofs of a run at
-  once (§3.1, "simultaneous"; L8 §9.1–9.2), which is not mechanized. Each `ε` is a sum of
-  per-query terms, so this costs a factor `qI` or `qR`. (2) `Adv^ct-uf-open` for `K` keys; the
+- *Differences from the paper bound.* (1) Simultaneous extraction (§3.1; L8 §9.1–9.2) is
+  mechanized (`omuf_le_num_sim`): `ε_I^sim + ε_R^sim` in place of `ε_ext^iss + ε_ext^red`. Two
+  differences remain, both small: the run's queries are charged once *per relation* (the paper
+  once for both), and the failure terms (binding, an opened dead leaf, Post) stay per proof,
+  `(qI + qR)·failEps`, since in the single-proof development they are bounded on average over the
+  cipher table rather than per query (`2⁻⁸⁶·⁹` at `2⁶⁴` queries and `2³⁰ + 2³⁰` proofs). The
+  per-proof union bound `omuf_le_num` (`qI·ε_I + qR·ε_R`) is kept. (2) `Adv^ct-uf-open` for `K` keys; the
   guessing step to `K·Adv^ct-uf-open_1` is mechanized for the ideal-`Com` game only
   (`advCTUFIdeal_le_sum`). (3) `Com` binding stays an assumption (§3.2); CT-UF^open stays one for
   the concrete `Com`, and reduces to OMPR (Lemma U, with `Com` a random function) through the
@@ -1116,8 +1138,8 @@ the fix column describes `d5def9c`, where Moussaka used the rows (and what dropp
    hypothesis that the concrete `Com` may be replaced by a random function in the CT-UF^open game.
    What remains: `Com` binding as an assumption (item 3); that modelling step itself; Lemma U
    with `Com` a random permutation with inverse access (Lean has a random function, so no
-   inverse-query term); the simultaneous extraction of all proofs of a run (the Lean bound pays
-   `qI·ε_I + qR·ε_R` by a union bound); Theorem 1 averaged over key generation (the Lean theorem is
+   inverse-query term); the per-proof failure terms of the simultaneous bound
+   (`omuf_le_num_sim`: `(qI + qR)·failEps`, see §4 "Status"); Theorem 1 averaged over key generation (the Lean theorem is
    per key; the `K`-key guessing step is mechanized for the ideal game); `ε_dig` as a probability over key
    generation (a condition on the keys in Lean); AES as random permutations (the `_perm`
    soundness theorems exist, but `verifyIC` is written for the cipher as uniform functions).
@@ -1170,6 +1192,11 @@ the game (`game`, `anchorIC`, `moderatorIC`, `Win`; `anchorIC_eq_spec`), the red
 (per table `win_imp`), and `omuf_le_num` with the extraction terms of
 `moussakaIssue_accept_le_adaptive_spec` and `moussakaRedeem_accept_le_adaptive_spec`. `#print
 axioms`: `propext`, `Classical.choice`, `Quot.sound`.
+`lean/VoleMole/ROM/MoussakaOMUFSim.lean` (§4 "Status"): `omuf_le_sim` (the reduction with one
+extraction event per relation, `SimI`, `SimR`), `omuf_le_num_sim` with the simultaneous bounds
+of `ROM/SimSpec.lean` (`moussakaIssue_sim_spec`, `moussakaRedeem_sim_spec`; generic:
+`ROM/SimExtract.lean`, `ROM/SimUnion.lean`); `Assumptions/SimLinks.lean`: `omuf_le_num_open_sim`,
+`omuf_le_num_ompr_sim`. `#print axioms`: `propext`, `Classical.choice`, `Quot.sound`.
 
 `lean/VoleMole/Assumptions/UOVLinks.lean` (Theorem 1 against the standalone UOV games, §3.3,
 §4 "Status"): `omuf_le_num_open` (CT-UF^open), `omuf_le_num_ompr` (down to OMPR under the

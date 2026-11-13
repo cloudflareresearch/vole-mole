@@ -217,6 +217,97 @@ theorem prEvent_chainBadA_le (hT : liftInvOk T = true) (st₀ : Statement)
 /-- The kinds charged by the adaptive union bound: the chain's, and `H₂⁰`. -/
 def adaptKinds : Finset Kind := {.h1, .h21, .h22, .h23, .mu}
 
+/-- **The bad queries of the adaptive union bound** (issue relations): a bad chain query at its
+committed statement, a chain hit, or a statement hit, against the adaptive game's log. -/
+def adaptBad (N : ℕ) (cb : Option (ℕ × ByteArray)) (t : Dom) (g : Table) : Prop :=
+  chainBadA T stF dec sys P E N t g ∨ chainHitL cb (tableQueryLog (gameA T stF P E)) t g ∨
+    stmtHit (tableQueryLog (gameA T stF P E)) t g
+
+/-- The per-query charge of `adaptBad`: the chain bound, the hit bound and the statement-hit
+bound, for a game with `n'` queries per kind. -/
+noncomputable def adaptEps (st₀ : Statement) (n N : ℕ) (cb : Option (ℕ × ByteArray))
+    (n' : Kind → ℕ) (k : Kind) : ℝ≥0∞ :=
+  chainEps st₀ chal3Blocks n N k + (hitEps n' (combCount cb n') k + stmtEps n' k)
+
+lemma adaptEps_eq_zero (st₀ : Statement) (n N : ℕ) (cb : Option (ℕ × ByteArray))
+    (n' : Kind → ℕ) : ∀ k ∉ adaptKinds, adaptEps st₀ n N cb n' k = 0 := by
+  intro k hk
+  cases k <;> simp_all [adaptKinds, adaptEps, chainEps, hitEps, stmtEps]
+
+/-- **The per-query bound of `adaptBad`** when the cell alone is resampled. -/
+theorem prEvent_adaptBad_le (hT : liftInvOk T = true) (st₀ : Statement)
+    (hparams : ∀ s, (stF s).params = st₀.params) {n : ℕ} (hn : ∀ s, (sys s).length = n) (N : ℕ)
+    (cb : Option (ℕ × ByteArray)) (q : Kind → ℕ) (hq : IsKindQueryBoundIC P q) (t : Dom)
+    (g : Table) :
+    Pr{let u ← $ᵗ (Ans t)}[adaptBad T stF dec sys P E N cb t (Function.update g t u)] ≤
+      adaptEps st₀ n N cb (q + extractorQueries + verifierQueries) t.1 :=
+  (prEvent_or_le _ _ _).trans (add_le_add
+    (prEvent_chainBadA_le T stF dec sys P E hT st₀ hparams hn N t g)
+    ((prEvent_or_le _ _ _).trans (add_le_add
+      (prEvent_chainHitL_le cb (gameA T stF P E) _ (isKindQueryBound_gameA T stF P E hq) t g)
+      (prEvent_stmtHit_le (gameA T stF P E) _ (isKindQueryBound_gameA T stF P E hq) t g))))
+
+/-- **The deterministic step of the adaptive union bound** (issue relations): at a table where the
+adaptive game accepts, extraction fails at the chosen statement, and no binding failure, opened
+dead leaf or failure event `cf` occurs, some query of the game's log is `adaptBad`. -/
+theorem adaptBad_trace (hT : liftInvOk T = true) (hdel : ∀ s, (stF s).delayed = false)
+    (cb : Option (ℕ × ByteArray)) (hcomb : ∀ s, (stF s).comb = cb)
+    (hdec : ∀ s, dec (muIn (stF s)) = some s) (N : ℕ)
+    (Wit : ι → ByteArray → (ℕ → GF128) → Prop)
+    (hvals : ∀ s c1 lb w, (stF s).values c1 lb w = (sys s).values w)
+    (hdet : ∀ s, @ChainDet (icPrg E.cipher) T (stF s) (sys s) N (Wit s))
+    (cf : Out ((ι × β) × QueryLog specIC) → Prop)
+    (hcf : ∀ s g, ¬cf (evalWithAnswerFn (QueryImpl.ofFn g) (gameIC T (stF s) P E)) →
+      KeysPre (stF s) E (jOf g P E) (gLog T (stF s) P E g) g) (g : Table)
+    (h : let r := evalWithAnswerFn (QueryImpl.ofFn g) (gameA T stF P E)
+      (r.2.2.accept = true ∧ ¬@Extracted (icPrg E.cipher) _ (stF (stOut r)) (Wit (stOut r)) r) ∧
+        ¬bindFailA stF E r ∧ ¬deadOpenA stF E r ∧ ¬cf r) :
+    ∃ e ∈ tableQueryLog (gameA T stF P E) g, adaptBad T stF dec sys P E N cb e.1 g := by
+  classical
+  let _ : HasPrg := icPrg E.cipher
+  set oa := gameA T stF P E
+  simp only [bindFailA, deadOpenA, oa, evalWithAnswerFn_gameA, stOut_gameIC] at h
+  obtain ⟨⟨hacc, hnex⟩, hnb, hnd, hnp⟩ := h
+  set s := sA g P E
+  set st := stF s
+  have hlog : tableQueryLog oa g = gLog T st P E g := tableQueryLog_gameA T stF P E g
+  by_cases hh : NoHit (gameIC T st P E) (chainHit T st P E) g
+  swap
+  · simp only [NoHit, not_forall, not_not] at hh
+    obtain ⟨e, he, hhit⟩ := hh
+    refine ⟨e, hlog ▸ he, Or.inr (Or.inl ?_)⟩
+    unfold chainHitL
+    rw [hlog, ← hcomb s]
+    exact hhit
+  by_cases hs : NoStmtHit T st P E g
+  swap
+  · simp only [NoStmtHit, not_forall, not_not] at hs
+    obtain ⟨e, he, hhit⟩ := hs
+    refine ⟨e, hlog ▸ he, Or.inr (Or.inr ?_)⟩
+    unfold stmtHit
+    rw [hlog]
+    exact hhit
+  obtain ⟨leaves, hr, hacc', hbad⟩ := chainBad_trace_ic hT st (sys s) N (Wit s) (hvals s) P E
+    (hdet s) cf (hcf s) g hacc hnex hnp hnb hnd hh
+  set keys := (evalWithAnswerFn (QueryImpl.ofFn g) (proverIC st E P)).2.keys
+  obtain ⟨h1, h2, h3⟩ := stmtAt_ident dec T st P E g (hdel s) (hdec s) hh hs keys hacc' hr
+  have hr0 : BAVC.reconstruct (ivOf (Hashes.ofTable g) ⟨st.params, πOf g P E⟩
+      (st.mu1 (Hashes.ofTable g))) (Proof.opening ⟨st.params, πOf g P E⟩)
+      (Proof.delta ⟨st.params, πOf g P E⟩) = some leaves := hr
+  obtain ⟨hxL, hyL, hzL⟩ := inLog_verifyQ g T st (πOf g P E) hacc' hr0 keys
+  have hmk : ∀ t, InLog (verifyQ T st (πOf g P E)) g t → stmtAt dec (gLog T st P E g) t = some s →
+      chainBad (chainDataA T stF sys P E s) T chal3Blocks N t g →
+      ∃ e ∈ tableQueryLog oa g, adaptBad T stF dec sys P E N cb e.1 g := by
+    intro t ht hst hb
+    obtain ⟨e, he, rfl⟩ := List.mem_map.1 (inLog_gLog T st P E g ht)
+    refine ⟨e, hlog ▸ he, Or.inl ⟨s, ?_, hb⟩⟩
+    rw [hlog]
+    exact hst
+  rcases hbad with hb | hb | hb
+  · exact hmk _ hxL h1 hb
+  · exact hmk _ hyL h2 hb
+  · exact hmk _ hzL h3 hb
+
 /-- **The adaptive union bound for the issue relations, per cipher table.** A family `stF` of
 non-delayed statements with common parameters (those of `st₀`) and combination `cb`, an encoding
 that determines the statement (`dec (muIn (stF s)) = some s`), systems `sys s` of a common
@@ -257,65 +348,15 @@ theorem prEvent_accept_le_adaptive_E (hT : liftInvOk T = true) (st₀ : Statemen
   set mx := (simulateQ randomOracle oa).run' ∅
   let ev : Out ((ι × β) × QueryLog specIC) → Prop := fun r =>
     r.2.2.accept = true ∧ ¬Extracted (stF (stOut r)) (Wit (stOut r)) r
-  let bad : Dom → Table → Prop := fun t g =>
-    chainBadA T stF dec sys P E N t g ∨ chainHitL cb (tableQueryLog oa) t g ∨
-      stmtHit (tableQueryLog oa) t g
-  let ε : Kind → ℝ≥0∞ := fun k =>
-    chainEps st₀ chal3Blocks n N k + (hitEps n' (combCount cb n') k + stmtEps n' k)
-  have hK : ∀ k ∉ adaptKinds, ε k = 0 := by
-    intro k hk
-    cases k <;> simp_all [adaptKinds, ε, chainEps, hitEps, stmtEps]
+  let bad : Dom → Table → Prop := adaptBad T stF dec sys P E N cb
+  let ε : Kind → ℝ≥0∞ := adaptEps st₀ n N cb n'
+  have hK : ∀ k ∉ adaptKinds, ε k = 0 := adaptEps_eq_zero st₀ n N cb n'
   have hbad : ∀ t g, Pr{let u ← $ᵗ (Ans t)}[bad t (Function.update g t u)] ≤ ε t.1 := fun t g =>
-    (prEvent_or_le _ _ _).trans (add_le_add
-      (prEvent_chainBadA_le T stF dec sys P E hT st₀ hparams hn N t g)
-      ((prEvent_or_le _ _ _).trans (add_le_add
-        (prEvent_chainHitL_le cb oa n' (isKindQueryBound_gameA T stF P E hq) t g)
-        (prEvent_stmtHit_le oa n' (isKindQueryBound_gameA T stF P E hq) t g))))
+    prEvent_adaptBad_le T stF dec sys P E hT st₀ hparams hn N cb q hq t g
   have htrace : ∀ g : Table, (fun r => ev r ∧ ¬bindFailA stF E r ∧ ¬deadOpenA stF E r ∧
       ¬cf r) (evalWithAnswerFn (QueryImpl.ofFn g) oa) →
-      ∃ e ∈ tableQueryLog oa g, bad e.1 g := by
-    intro g h
-    simp only [ev, bindFailA, deadOpenA, oa, evalWithAnswerFn_gameA, stOut_gameIC] at h
-    obtain ⟨⟨hacc, hnex⟩, hnb, hnd, hnp⟩ := h
-    set s := sA g P E
-    set st := stF s
-    have hlog : tableQueryLog oa g = gLog T st P E g := tableQueryLog_gameA T stF P E g
-    by_cases hh : NoHit (gameIC T st P E) (chainHit T st P E) g
-    swap
-    · simp only [NoHit, not_forall, not_not] at hh
-      obtain ⟨e, he, hhit⟩ := hh
-      refine ⟨e, hlog ▸ he, Or.inr (Or.inl ?_)⟩
-      unfold chainHitL
-      rw [hlog, ← hcomb s]
-      exact hhit
-    by_cases hs : NoStmtHit T st P E g
-    swap
-    · simp only [NoStmtHit, not_forall, not_not] at hs
-      obtain ⟨e, he, hhit⟩ := hs
-      refine ⟨e, hlog ▸ he, Or.inr (Or.inr ?_)⟩
-      unfold stmtHit
-      rw [hlog]
-      exact hhit
-    obtain ⟨leaves, hr, hacc', hbad⟩ := chainBad_trace_ic hT st (sys s) N (Wit s) (hvals s) P E
-      (hdet s) cf (hcf s) g hacc hnex hnp hnb hnd hh
-    set keys := (evalWithAnswerFn (QueryImpl.ofFn g) (proverIC st E P)).2.keys
-    obtain ⟨h1, h2, h3⟩ := stmtAt_ident dec T st P E g (hdel s) (hdec s) hh hs keys hacc' hr
-    have hr0 : BAVC.reconstruct (ivOf (Hashes.ofTable g) ⟨st.params, πOf g P E⟩
-        (st.mu1 (Hashes.ofTable g))) (Proof.opening ⟨st.params, πOf g P E⟩)
-        (Proof.delta ⟨st.params, πOf g P E⟩) = some leaves := hr
-    obtain ⟨hxL, hyL, hzL⟩ := inLog_verifyQ g T st (πOf g P E) hacc' hr0 keys
-    have hmk : ∀ t, InLog (verifyQ T st (πOf g P E)) g t → stmtAt dec (gLog T st P E g) t = some s →
-        chainBad (chainDataA T stF sys P E s) T chal3Blocks N t g →
-        ∃ e ∈ tableQueryLog oa g, bad e.1 g := by
-      intro t ht hst hb
-      obtain ⟨e, he, rfl⟩ := List.mem_map.1 (inLog_gLog T st P E g ht)
-      refine ⟨e, hlog ▸ he, Or.inl ⟨s, ?_, hb⟩⟩
-      rw [hlog]
-      exact hst
-    rcases hbad with hb | hb | hb
-    · exact hmk _ hxL h1 hb
-    · exact hmk _ hyL h2 hb
-    · exact hmk _ hzL h3 hb
+      ∃ e ∈ tableQueryLog oa g, bad e.1 g := fun g h =>
+    adaptBad_trace T stF dec sys P E hT hdel cb hcomb hdec N Wit hvals hdet cf hcf g h
   have hgood := prEvent_exists_bad_query_le oa n' (isKindQueryBound_gameA T stF P E hq)
     (fun r => ev r ∧ ¬bindFailA stF E r ∧ ¬deadOpenA stF E r ∧ ¬cf r) bad
     adaptKinds ε hK hbad htrace
@@ -324,7 +365,7 @@ theorem prEvent_accept_le_adaptive_E (hT : liftInvOk T = true) (st₀ : Statemen
         n' .h22 * ENNReal.ofReal (Seed.epsQS (2 ^ 128) (2 ^ 64) n) +
         n' .h23 * ((N : ℝ≥0∞) / 2 ^ 128) + hitSum n' (hitEps n' (combCount cb n')) +
         n' .mu * stmtEps n' .mu := by
-    simp only [adaptKinds, ε]
+    simp only [adaptKinds, ε, adaptEps]
     rw [Finset.sum_insert (by decide), Finset.sum_insert (by decide),
       Finset.sum_insert (by decide), Finset.sum_insert (by decide), Finset.sum_singleton]
     simp only [chainEps, hitEps, stmtEps, hitSum, zero_add, add_zero, mul_add]

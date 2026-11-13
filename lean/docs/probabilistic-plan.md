@@ -1023,8 +1023,8 @@ programming) is a different construction and shares nothing with these.
   the `j`-th request. Per table it outputs the run's `j`-th request
   (`evalWithAnswerFn_proverAt`), and its budget is `j + 1` calls (`isKindQueryBoundIC_proverAt`,
   `isQueryBoundP_proverAt`). The single-proof theorems (`*_accept_le_adaptive_spec`) apply to it
-  as they stand, one request at a time: the composed bound has a factor `N` (no simultaneous
-  extraction).
+  as they stand, one request at a time: the composed bound has a factor `N` (simultaneous
+  extraction, without it: §2m).
 * **The honest verifier as cipher queries** (`VerifierIC`, `verifyIC`). Inside the `j`-th prover
   the honest party's verifications must query the cipher (the extractor reads the cipher log).
   `VerifierIC` states what a game needs of such a verifier; `ROM/VerifyIC.lean`'s `verifyIC`
@@ -1038,6 +1038,116 @@ programming) is a different construction and shares nothing with these.
   prover only through the adversary's states in the first `j` calls when the honest party's calls
   log the same queries. Ratatouille uses this to show that its forger reads the signer only on its
   logs (`bOut_reads`, a UF-Tag forger as `TagForger`).
+
+### 2m. Simultaneous extraction: one charge per query of a protocol run, as implemented
+
+Files: `ROM/SimUnion.lean` (generic), `ROM/SimExtract.lean`, `ROM/SimSpec.lean`,
+`ROM/MoussakaOMUFSim.lean`, `ROM/RatatouilleBalanceSim.lean`, `Assumptions/SimLinks.lean`,
+`Audit/SimExtract.lean` (new); changed: `ROM/AdaptChain.lean`, `ROM/AdaptComb.lean` (the bad
+predicate, its per-query bound and the deterministic step of the adaptive union bounds are now
+lemmas, `adaptBad`, `prEvent_adaptBad_le`, `adaptBad_trace`, `combAdaptBad`,
+`prEvent_combAdaptBad_le`, `combAdaptBad_trace`; `prEvent_accept_le_adaptive_E` and
+`prEvent_accept_le_adaptive_comb_E` use them, statements unchanged). No executable definition
+changed. `#print axioms` of the headline results: `propext`, `Classical.choice`, `Quot.sound`.
+
+**The problem.** §2l bounds a protocol game's extraction failures by a union bound over its
+proofs: `qI·ε_I + qR·ε_R` (Moussaka), `N·ε_iss + N·ε_spend` (Ratatouille), each `ε` the
+single-proof bound at the whole run's budget `q`, so each query of the run is charged once per
+proof. The paper (`extraction/README.md` main theorem, `L8` §9.1–9.2, `moussaka.md` §3.1) charges
+each query once: the bad events (a bad `chal1` at an `H₂¹` query, a bad `chal2` at an `H₂²` query,
+an accepted `chal3` at an `H₂³` query, the hits) are properties of the query and the log before
+it, whichever proof later uses the query.
+
+**The generic lemma** (`ROM/SimUnion.lean`, `prEvent_le_shared_suffix`). An event of any
+computation that implies, at every table, (i) a bad query of a shared run `A` (predicate `badA`,
+charged once at `A`'s weighted budget `B_A`), or (ii) for some output `j ∈ J` a query of its
+continuation `K j` after a prefix `A' j` that the prefix did not make, bad for `badK j` (charged at
+the continuation's budget `B_K`, the prefix free), or (iii) some further event of another
+computation, has probability `≤ B_A + |J|·B_K + Σ Pr[(iii)]`. The core is
+`prEvent_suffixBad_le`: on a finite key set, from any cache, the fresh bad queries of a
+continuation after a prefix cost only the continuation's budget. Proof by induction on the prefix,
+exposing and caching each of its fresh answers without charge (VCVio's
+`prEvent_freshBadQuery_le_weighted` charges it), then `ROM/Fresh.lean`'s
+`prEvent_freshBadQuery_le_of_cached` for the continuation from the prefix's cache (the cache-size
+form, so the combined relations' two-cell `H₂²` bound applies). The lazy random oracle on `Dom`
+is reached through one finite key set (`restrictQueries`, `extendTable`).
+
+**The relations** (`ROM/SimExtract.lean`). The `j`-th output is the adaptive game of a prover
+`P j`; the reference run `P₀` is a prover whose hash log and joint log extend every `P j`'s
+(`PrefixRuns`: Moussaka's provers are projections `proj j <$> G` of one run, `prefixRuns_map`;
+Ratatouille's `proverAt` is the run up to the `j`-th request, a prefix of the run of `N` calls,
+`proverAt_prefix`, `prefixRuns_I`, `prefixRuns_S`). The game of `P` is `runE E P` followed by the
+extractor and the verifier (`gameA_eq_bind`, `gameK`). At a hash query of `P j`, the logs before it
+of `P j`'s and `P₀`'s games agree (`logBefore_prefix`: the adaptive game's, each fixed game's,
+the joint log's), and the bad events read only those (`adaptBad_prefix_congr`,
+`combAdaptBad_prefix_congr`; `chainBad_congr_at`: `chainBad` at a query reads the chain data at
+that query's input only). So the single-proof trace (`adaptBad_trace`: an accepted, unextracted
+output with no failure event has a bad query in its game's log) gives either a bad query of `P₀`'s
+run (charged once) or a fresh query of the continuation (the extractor's two and the verifier's,
+`r = extractorQueries + verifierQueries`). Per cipher table (`prEvent_sim_le_E`,
+`prEvent_sim_comb_le_E`):
+
+    Pr[event] ≤ Σ_k q_k·ε_k + |J|·Σ_k r_k·ε_k + Σ_{j ∈ J} Pr[bindFail_j ∨ deadOpen_j ∨ cf_j],
+
+`ε = adaptEps` (`combAdaptEps`), the single-proof bound's per-query charge at the games' budget
+`q + r`. In the joint experiment (`prEvent_sim_le`, `prEvent_sim_comb_le`), with `cf` = Post and
+each output's failure terms bounded by `§2g`'s adaptive bounds (`failEps q q_E =
+2q_E²·2⁻²⁵⁶ + 2·(openHashEps q + q₁·2⁻²⁵⁶) + 1024·q_E·q₁·2⁻²⁵⁶`); summed (`sim_sum_eq`,
+`sim_comb_sum_eq`) for `m = |J|`:
+
+    (q₂₁+m)·ε_KOS + (q₂₂+m)·ε₂ + (q₂₃+m)·N·2⁻¹²⁸ + chainHitEpsSim q m + stmtBindEpsSim q m
+      + m·failEps q q_E,
+
+against `m·((q₂₁+1)·ε_KOS + (q₂₂+1)·ε₂ + (q₂₃+1)·N·2⁻¹²⁸ + chainHitEps q + stmtBindEps q +
+failEps q q_E)` from the union bound (`chainHitEpsSim q 1 = chainHitEps q`,
+`stmtBindEpsSim q 1 = stmtBindEps q`). Spec relations (`ROM/SimSpec.lean`):
+`moussakaIssue_sim_spec`, `moussakaRedeem_sim_spec`, `ratatouilleIssue_sim_spec`,
+`ratatouilleSpend_sim_spec`.
+
+**The protocols.** Moussaka Theorem 1: `omuf_le_sim` (the reduction with one extraction event per
+relation, `SimI`, `SimR`, events of the reductions' run `extAll`), `omuf_le_num_sim`
+(`ε_I^sim + ε_R^sim + AdvBind + AdvCTUF`), `omuf_le_num_open_sim`, `omuf_le_num_ompr_sim`.
+Ratatouille Theorem 1: `balance_le_sim` (events `SimIss`, `SimSp` of `master`),
+`balance_le_sim_num`, `balance_le_lean_sim`, `balance_le_ufTag_sim`, `balance_le_ompr_sim`,
+`balance_le_ompr_rate_sim`. The budgets are those of the per-proof theorems (kept unchanged:
+`omuf_le_num`, `balance_le`, …). `Audit/SimExtract.lean` instantiates their hypotheses with the
+audit adversaries of `Audit/Nonvacuous.lean` and `Audit/IdealTag.lean`.
+
+**Numbers** (`ε_QS(n) = 2⁻¹²⁸ + (n−1)²·2⁻¹⁹² ≈ 2⁻¹²⁸` for all four systems; `q` queries per kind,
+`q_E = q`, `m` proofs per relation; old = union bound, new = simultaneous; Moussaka and
+Ratatouille agree to two decimals):
+
+| `q` | `m` | per proof `ε_I`, `ε_R` | old, both relations | new, both relations | `m·failEps` per relation |
+|---|---|---|---|---|---|
+| `2⁶⁴` | `2²⁰` | `2⁻⁶⁰·⁶⁸`, `2⁻⁶⁰·⁵⁴` | `2⁻³⁹·⁶` | `2⁻⁵⁹·⁶` | `2⁻⁹⁷·⁹` |
+| `2⁶⁴` | `2³⁰` | `2⁻⁶⁰·⁶⁸`, `2⁻⁶⁰·⁵⁴` | `2⁻²⁹·⁶` | `2⁻⁵⁹·⁶` | `2⁻⁸⁷·⁹` |
+| `2⁶⁴` | `2⁴⁰` | `2⁻⁶⁰·⁶⁸`, `2⁻⁶⁰·⁵⁴` | `2⁻¹⁹·⁶` | `2⁻⁵⁹·⁶` | `2⁻⁷⁷·⁹` |
+| `2⁴⁸` | `2³⁰` | `2⁻⁷⁶·⁶⁸`, `2⁻⁷⁶·⁵⁴` | `2⁻⁴⁵·⁶` | `2⁻⁷⁵·⁶` | `2⁻⁹⁷·⁰` |
+| `2⁸⁰` | `2³⁰` | `2⁻⁴⁴·⁶⁸`, `2⁻⁴⁴·⁵⁴` | `2⁻¹³·⁶` | `2⁻⁴³·⁶` | `2⁻⁵⁵·⁹` |
+
+The dominant terms are `(q₂₃ + m)·9·2⁻¹²⁸` and `(q₂₂ + m)·ε₂` (with `2⁻¹²⁸` for the combination
+at `H₂²` in redemption and spend). The new bound is about the paper's `ε_ext ≈ 2⁻⁶⁰·⁸`, once per
+relation.
+
+**Compared with the paper.** (1) The run is charged once per relation (issuance and redemption,
+resp. issuance and spend, each pay `q·ε`), the paper once for both (its chains are separated by
+the relations' DSTs, so one union bound covers both). A joint version would need one bad
+predicate dispatching on the statement committed at the query across two statement families; not
+done (a factor 2). (2) The failure terms (binding, an opened dead leaf, Post) stay per proof,
+`m·failEps`: in §2d–§2h they are bounded on average over the cipher table (Post and binding are
+events of the prover's cipher records; the opened dead leaf includes the verifier's fresh `H₂³`
+answer, genuinely per proof, `2⁻¹²⁸` each). Lifting the cipher-side events to "some output"
+would need the per-record union bounds of `ROM/CipherBind.lean`, `ROM/CipherChain.lean` and
+`ROM/CipherOpen.lean` redone against the reference run; at `2⁶⁴` queries they cost
+`m·2⁻¹¹⁷·⁹`, negligible against the main term for `m < 2⁵⁷`. (3) The hits and statement hits of
+the verifier's own queries are charged per proof (`chainHitEpsSim`, `stmtBindEpsSim` count
+`18m`, `m`, `m` and `3m` extra queries), as the paper's `(q²+q)` would with `q` including the
+verifications. Nothing in the paper's argument was found wrong.
+
+**Not covered.** PomFRIT (its one-more reduction §2k is not tied to the extraction bounds), the
+permutation model (`*_adaptive_perm`: the normalized prover adds one `H₄` query per `H₂¹` query
+and depends on the permutation table; the protocol games use the PRF view, §2l), unbound
+Moussaka, the quantum setting.
 
 ### M4 — Mathlib bump and VCVio dependency (Phase B, ~1–3 days, mostly waiting on builds) — done
 

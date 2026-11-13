@@ -525,6 +525,136 @@ theorem combBad_fixed_to_A (N : ℕ) (g : Table) (t : Dom) :
     change preCells T (stF (sA g P E)) P E y g = preCellsA T stF P E y g
     exact (preCellsA_eq T stF P E g y).symm
 
+/-- **The bad queries of the adaptive union bound** (combined relations): a bad query at its
+committed statement, a chain hit, or a statement hit, against the adaptive game's log. -/
+def combAdaptBad (N : ℕ) (t : Dom) (g : Table) : Prop :=
+  combBadA T stF dec P E sysL witL dst N t g ∨
+    chainHitL (some (M, dst)) (tableQueryLog (gameA T stF P E)) t g ∨
+      stmtHit (tableQueryLog (gameA T stF P E)) t g
+
+/-- The per-query charge of `combAdaptBad`: at `H₂²` `ε_QS(n') + ε_c + n·2⁻⁴⁴⁸` (`n` the total
+hash queries), elsewhere the chain bound; plus the hit and statement-hit bounds for a game with
+`nn` queries per kind. -/
+noncomputable def combAdaptEps (st₀ : Statement) (n' : ℕ) (εc : ℝ≥0∞) (ntot N : ℕ)
+    (nn : Kind → ℕ) (k : Kind) : ℝ≥0∞ :=
+  (if k = .h22 then ENNReal.ofReal (Seed.epsQS (2 ^ 128) (2 ^ 64) n') + εc +
+      (ntot : ℝ≥0∞) / 2 ^ 448 else chainEps st₀ chal3Blocks 0 N k) +
+    (hitEps nn (combCount (some (M, dst)) nn) k + stmtEps nn k)
+
+lemma combAdaptEps_eq_zero (st₀ : Statement) (n' : ℕ) (εc : ℝ≥0∞) (ntot N : ℕ)
+    (nn : Kind → ℕ) : ∀ k ∉ adaptKinds, combAdaptEps (M := M) dst st₀ n' εc ntot N nn k = 0 := by
+  intro k hk
+  cases k <;> simp_all [adaptKinds, combAdaptEps, chainEps, hitEps, stmtEps]
+
+set_option exponentiation.threshold 500 in
+set_option maxRecDepth 4000 in
+/-- **The per-query bound of `combAdaptBad`**, over the uncached cells of a cache with fewer than
+`n` keys (the cache-size form of `ROM/Fresh.lean`), on a finite key set `K` containing the
+combination cells. -/
+theorem prEvent_combAdaptBad_le (hT : liftInvOk T = true) (st₀ : Statement)
+    (hparams : ∀ s, (stF s).params = st₀.params) {n' : ℕ} (hn' : ∀ s l, (sysL s l).length = n')
+    {εc : ℝ≥0∞}
+    (hεc : ∀ s w, prU (Fin M → GF128) (fun l => (sysL s l).Holds w ∧ ¬witL s w) ≤ εc)
+    (N : ℕ) (q : Kind → ℕ) (hq : IsKindQueryBoundIC P q)
+    (K : Finset Dom) [SampleableType ((d : K) → Ans d.val)] (hK : ∀ u, combKey M dst u ∈ K)
+    (n : ℕ) (c : (ofFn fun d : K => Ans d.val).QueryCache) (t : K) (hc : c t = none)
+    (hcard : (cachedKeys c).card < n) :
+    Pr{let g ← $ᵗ ((d : K) → Ans d.val)}[
+      combAdaptBad T stF dec P E sysL witL dst N t.val (extendTable K (completeTable c g))] ≤
+      combAdaptEps (M := M) dst st₀ n' εc n N (q + extractorQueries + verifierQueries) t.val.1 := by
+  classical
+  let _ : HasPrg := icPrg E.cipher
+  have hq'' := isKindQueryBound_gameA T stF P E hq
+  obtain ⟨⟨k, x⟩, hx⟩ := t
+  refine (prEvent_or_le _ _ _).trans (add_le_add ?_ ((prEvent_or_le _ _ _).trans
+    (add_le_add ?_ ?_)))
+  · by_cases hk : k = .h22
+    · subst hk
+      simp only [ite_true]
+      exact prEvent_combBadA_h22_le T stF dec P E sysL witL dst N hn' hεc K hK hx c hc hcard
+    · refine prEvent_completeTable_cell_le c _ hc
+        (fun t G => combBadA T stF dec P E sysL witL dst N t.val (extendTable K G)) _
+        fun G => ?_
+      simp only [extendTable_update]
+      simp only [hk, ite_false]
+      exact prEvent_combBadA_cell_le T stF dec P E sysL witL dst hT st₀ hparams N (k, x) hk _
+  · refine prEvent_completeTable_cell_le c _ hc
+      (fun t G => chainHitL (some (M, dst)) (tableQueryLog (gameA T stF P E)) t.val
+        (extendTable K G)) _ fun G => ?_
+    simp only [extendTable_update]
+    exact prEvent_chainHitL_le _ (gameA T stF P E) _ hq'' _ _
+  · refine prEvent_completeTable_cell_le c _ hc
+      (fun t G => stmtHit (tableQueryLog (gameA T stF P E)) t.val (extendTable K G)) _
+      fun G => ?_
+    simp only [extendTable_update]
+    exact prEvent_stmtHit_le (gameA T stF P E) _ hq'' _ _
+
+set_option maxRecDepth 4000 in
+/-- **The deterministic step of the adaptive union bound** (combined relations), as
+`adaptBad_trace`. -/
+theorem combAdaptBad_trace (hT : liftInvOk T = true) (hdel : ∀ s, (stF s).delayed = false)
+    (hcomb : ∀ s, (stF s).comb = some (M, dst)) (hdec : ∀ s, dec (muIn (stF s)) = some s)
+    (N : ℕ) (Wit : ι → ByteArray → (ℕ → GF128) → Prop)
+    (hvals : ∀ s c1 (v : Prob.Bytes (16 * M)) w,
+      (stF s).values c1 v.ba w = (sysL s (combDec v)).values w)
+    (hdet : ∀ s, @CombDet (icPrg E.cipher) M T (stF s) (sysL s) (witL s) N (Wit s))
+    (cf : Out ((ι × β) × QueryLog specIC) → Prop)
+    (hcf : ∀ s g, ¬cf (evalWithAnswerFn (QueryImpl.ofFn g) (gameIC T (stF s) P E)) →
+      KeysPre (stF s) E (jOf g P E) (gLog T (stF s) P E g) g) (g : Table)
+    (h : let r := evalWithAnswerFn (QueryImpl.ofFn g) (gameA T stF P E)
+      (r.2.2.accept = true ∧ ¬@Extracted (icPrg E.cipher) _ (stF (stOut r)) (Wit (stOut r)) r) ∧
+        ¬bindFailA stF E r ∧ ¬deadOpenA stF E r ∧ ¬cf r) :
+    ∃ e ∈ tableQueryLog (gameA T stF P E) g, combAdaptBad T stF dec P E sysL witL dst N e.1 g := by
+  classical
+  let _ : HasPrg := icPrg E.cipher
+  set oa := gameA T stF P E
+  simp only [bindFailA, deadOpenA, oa, evalWithAnswerFn_gameA, stOut_gameIC] at h
+  obtain ⟨⟨hacc, hnex⟩, hnb, hnd, hnp⟩ := h
+  set s := sA g P E
+  set st := stF s
+  have hlog : tableQueryLog oa g = gLog T st P E g := tableQueryLog_gameA T stF P E g
+  by_cases hh : NoHit (gameIC T st P E) (chainHit T st P E) g
+  swap
+  · simp only [NoHit, not_forall, not_not] at hh
+    obtain ⟨e, he, hhit⟩ := hh
+    refine ⟨e, hlog ▸ he, Or.inr (Or.inl ?_)⟩
+    unfold chainHitL
+    rw [hlog, ← hcomb s]
+    exact hhit
+  by_cases hs : NoStmtHit T st P E g
+  swap
+  · simp only [NoStmtHit, not_forall, not_not] at hs
+    obtain ⟨e, he, hhit⟩ := hs
+    refine ⟨e, hlog ▸ he, Or.inr (Or.inr ?_)⟩
+    unfold stmtHit
+    rw [hlog]
+    exact hhit
+  obtain ⟨leaves, hr, hacc', hbad⟩ := combBad_trace_ic hT st (sysL s) (witL s) dst (hcomb s) N
+    (Wit s) (hvals s) P E (hdet s) cf (hcf s) g hacc hnex hnp hnb hnd hh
+  set keys := (evalWithAnswerFn (QueryImpl.ofFn g) (proverIC st E P)).2.keys
+  obtain ⟨h1, h2, h3⟩ := stmtAt_ident dec T st P E g (hdel s) (hdec s) hh hs keys hacc' hr
+  have hr0 : BAVC.reconstruct (ivOf (Hashes.ofTable g) ⟨st.params, πOf g P E⟩
+      (st.mu1 (Hashes.ofTable g))) (Proof.opening ⟨st.params, πOf g P E⟩)
+      (Proof.delta ⟨st.params, πOf g P E⟩) = some leaves := hr
+  obtain ⟨hxL, hyL, hzL⟩ := inLog_verifyQ g T st (πOf g P E) hacc' hr0 keys
+  have hconv := combBad_fixed_to_A T stF P E sysL witL dst N g
+  have hmk : ∀ t, InLog (verifyQ T st (πOf g P E)) g t →
+      stmtAt dec (gLog T st P E g) t = some s →
+      combBad (CombData.ofSys (st := st) (preOf T st P E) (midOf T st P E)
+        (sysL s) (witL s) (accOf T st P E) dst (preCells T st P E)) T chal3Blocks N t g →
+      ∃ e ∈ tableQueryLog oa g, combAdaptBad T stF dec P E sysL witL dst N e.1 g := by
+    intro t ht hst hb
+    obtain ⟨e, he, rfl⟩ := List.mem_map.1 (inLog_gLog T st P E g ht)
+    refine ⟨e, hlog ▸ he, Or.inl ⟨s, ?_, hconv _ hb⟩⟩
+    show stmtAt dec (gLogA T stF P E g) e.1 = some s
+    unfold gLogA
+    rw [hlog]
+    exact hst
+  rcases hbad with hb | hb | hb
+  · exact hmk _ hxL h1 hb
+  · exact hmk _ hyL h2 hb
+  · exact hmk _ hzL h3 hb
+
 set_option exponentiation.threshold 500 in
 -- `Finset.univ : Finset (Bytes 56)` (the combination cells) needs a deeper recursion to elaborate.
 set_option maxRecDepth 4000 in
@@ -562,19 +692,11 @@ theorem prEvent_accept_le_adaptive_comb_E (hT : liftInvOk T = true) (st₀ : Sta
   set oa := gameA T stF P E
   set mx := (simulateQ randomOracle oa).run' ∅
   set ntot := n + 2 + verifierTotal
-  let cb : Option (ℕ × ByteArray) := some (M, dst)
   let ev : Out ((ι × β) × QueryLog specIC) → Prop := fun r =>
     r.2.2.accept = true ∧ ¬Extracted (stF (stOut r)) (Wit (stOut r)) r
-  let bad : Dom → Table → Prop := fun t g =>
-    combBadA T stF dec P E sysL witL dst N t g ∨ chainHitL cb (tableQueryLog oa) t g ∨
-      stmtHit (tableQueryLog oa) t g
-  let combE : Kind → ℝ≥0∞ := fun k => if k = .h22 then
-    ENNReal.ofReal (Seed.epsQS (2 ^ 128) (2 ^ 64) n') + εc + (ntot : ℝ≥0∞) / 2 ^ 448
-    else chainEps st₀ chal3Blocks 0 N k
-  let ε : Kind → ℝ≥0∞ := fun k => combE k + (hitEps n'' (combCount cb n'') k + stmtEps n'' k)
-  have hKε : ∀ k ∉ adaptKinds, ε k = 0 := by
-    intro k hk
-    cases k <;> simp_all [adaptKinds, ε, combE, chainEps, hitEps, stmtEps]
+  let bad : Dom → Table → Prop := combAdaptBad T stF dec P E sysL witL dst N
+  let ε : Kind → ℝ≥0∞ := combAdaptEps (M := M) dst st₀ n' εc ntot N n''
+  have hKε : ∀ k ∉ adaptKinds, ε k = 0 := combAdaptEps_eq_zero dst st₀ n' εc ntot N n''
   let K : Finset Dom := possibleQueryKeys oa ∪ Finset.univ.image (combKey M dst)
   have hK : ∀ u, combKey M dst u ∈ K := fun u =>
     Finset.mem_union_right _ (Finset.mem_image_of_mem _ (Finset.mem_univ u))
@@ -584,53 +706,8 @@ theorem prEvent_accept_le_adaptive_comb_E (hT : liftInvOk T = true) (st₀ : Sta
   have hq'' := isKindQueryBound_gameA T stF P E hq
   have htrace : ∀ g : Table, (fun r => ev r ∧ ¬bindFailA stF E r ∧ ¬deadOpenA stF E r ∧
       ¬cf r) (evalWithAnswerFn (QueryImpl.ofFn g) oa) →
-      ∃ e ∈ tableQueryLog oa g, bad e.1 g := by
-    intro g h
-    simp only [ev, bindFailA, deadOpenA, oa, evalWithAnswerFn_gameA, stOut_gameIC] at h
-    obtain ⟨⟨hacc, hnex⟩, hnb, hnd, hnp⟩ := h
-    set s := sA g P E
-    set st := stF s
-    have hlog : tableQueryLog oa g = gLog T st P E g := tableQueryLog_gameA T stF P E g
-    by_cases hh : NoHit (gameIC T st P E) (chainHit T st P E) g
-    swap
-    · simp only [NoHit, not_forall, not_not] at hh
-      obtain ⟨e, he, hhit⟩ := hh
-      refine ⟨e, hlog ▸ he, Or.inr (Or.inl ?_)⟩
-      unfold chainHitL
-      rw [hlog, show cb = st.comb from (hcomb s).symm]
-      exact hhit
-    by_cases hs : NoStmtHit T st P E g
-    swap
-    · simp only [NoStmtHit, not_forall, not_not] at hs
-      obtain ⟨e, he, hhit⟩ := hs
-      refine ⟨e, hlog ▸ he, Or.inr (Or.inr ?_)⟩
-      unfold stmtHit
-      rw [hlog]
-      exact hhit
-    obtain ⟨leaves, hr, hacc', hbad⟩ := combBad_trace_ic hT st (sysL s) (witL s) dst (hcomb s) N
-      (Wit s) (hvals s) P E (hdet s) cf (hcf s) g hacc hnex hnp hnb hnd hh
-    set keys := (evalWithAnswerFn (QueryImpl.ofFn g) (proverIC st E P)).2.keys
-    obtain ⟨h1, h2, h3⟩ := stmtAt_ident dec T st P E g (hdel s) (hdec s) hh hs keys hacc' hr
-    have hr0 : BAVC.reconstruct (ivOf (Hashes.ofTable g) ⟨st.params, πOf g P E⟩
-        (st.mu1 (Hashes.ofTable g))) (Proof.opening ⟨st.params, πOf g P E⟩)
-        (Proof.delta ⟨st.params, πOf g P E⟩) = some leaves := hr
-    obtain ⟨hxL, hyL, hzL⟩ := inLog_verifyQ g T st (πOf g P E) hacc' hr0 keys
-    have hconv := combBad_fixed_to_A T stF P E sysL witL dst N g
-    have hmk : ∀ t, InLog (verifyQ T st (πOf g P E)) g t →
-        stmtAt dec (gLog T st P E g) t = some s →
-        combBad (CombData.ofSys (st := st) (preOf T st P E) (midOf T st P E)
-          (sysL s) (witL s) (accOf T st P E) dst (preCells T st P E)) T chal3Blocks N t g →
-        ∃ e ∈ tableQueryLog oa g, bad e.1 g := by
-      intro t ht hst hb
-      obtain ⟨e, he, rfl⟩ := List.mem_map.1 (inLog_gLog T st P E g ht)
-      refine ⟨e, hlog ▸ he, Or.inl ⟨s, ?_, hconv _ hb⟩⟩
-      show stmtAt dec (tableQueryLog oa g) e.1 = some s
-      rw [hlog]
-      exact hst
-    rcases hbad with hb | hb | hb
-    · exact hmk _ hxL h1 hb
-    · exact hmk _ hyL h2 hb
-    · exact hmk _ hzL h3 hb
+      ∃ e ∈ tableQueryLog oa g, bad e.1 g := fun g h =>
+    combAdaptBad_trace T stF dec P E sysL witL dst hT hdel hcomb hdec N Wit hvals hdet cf hcf g h
   have hgood := prEvent_randomOracle_le_of_fresh_bad_queries oa K hS (fun t => ε t.1) _
     (worstCaseCostBound_of_kindQueryBound oa adaptKinds ε hKε n'' hq'') ntot
     (isTotalQueryBound_gameA T stF E hn)
@@ -641,7 +718,7 @@ theorem prEvent_accept_le_adaptive_comb_E (hT : liftInvOk T = true) (st₀ : Sta
             ((n + 2 + verifierTotal : ℕ) : ℝ≥0∞) / 2 ^ 448) +
           n'' .h23 * ((N : ℝ≥0∞) / 2 ^ 128) +
           hitSum n'' (hitEps n'' (combCount (some (M, dst)) n'')) + n'' .mu * stmtEps n'' .mu := by
-      simp only [adaptKinds, ε, combE]
+      simp only [adaptKinds, ε, combAdaptEps]
       rw [Finset.sum_insert (by decide), Finset.sum_insert (by decide),
         Finset.sum_insert (by decide), Finset.sum_insert (by decide), Finset.sum_singleton]
       simp only [chainEps, hitEps, stmtEps, hitSum, reduceCtorEq, ite_true, ite_false, zero_add,
@@ -660,29 +737,9 @@ theorem prEvent_accept_le_adaptive_comb_E (hT : liftInvOk T = true) (st₀ : Sta
           rw [← hsum]
           refine (add_le_add hgood le_rfl).trans_eq ?_
           ring
-  · rintro c ⟨⟨k, x⟩, hx⟩ hc hcard
-    refine (prEvent_or_le _ _ _).trans (add_le_add ?_ ((prEvent_or_le _ _ _).trans
-      (add_le_add ?_ ?_)))
-    · by_cases hk : k = .h22
-      · subst hk
-        show _ ≤ combE .h22
-        simp only [combE, ite_true]
-        exact prEvent_combBadA_h22_le T stF dec P E sysL witL dst N hn' hεc K hK hx c hc hcard
-      · refine prEvent_completeTable_cell_le c _ hc
-          (fun t G => combBadA T stF dec P E sysL witL dst N t.val (extendTable K G)) _
-          fun G => ?_
-        simp only [extendTable_update]
-        show _ ≤ combE k
-        rw [show combE k = chainEps st₀ chal3Blocks 0 N k from by simp only [combE, hk, ite_false]]
-        exact prEvent_combBadA_cell_le T stF dec P E sysL witL dst hT st₀ hparams N (k, x) hk _
-    · refine prEvent_completeTable_cell_le c _ hc
-        (fun t G => chainHitL cb (tableQueryLog oa) t.val (extendTable K G)) _ fun G => ?_
-      simp only [extendTable_update]
-      exact prEvent_chainHitL_le cb oa n'' hq'' _ _
-    · refine prEvent_completeTable_cell_le c _ hc
-        (fun t G => stmtHit (tableQueryLog oa) t.val (extendTable K G)) _ fun G => ?_
-      simp only [extendTable_update]
-      exact prEvent_stmtHit_le oa n'' hq'' _ _
+  · intro c t hc hcard
+    exact prEvent_combAdaptBad_le T stF dec P E sysL witL dst hT st₀ hparams hn' hεc N q hq K hK
+      ntot c t hc hcard
 
 end UnionComb
 
