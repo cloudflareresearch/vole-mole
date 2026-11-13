@@ -1,5 +1,6 @@
 import VoleMole.Assumptions.PomfritLemmaP
 import VoleMole.Assumptions.PomfritLemmaPSim
+import VoleMole.Assumptions.PomfritShiftSim
 
 /-!
 # Non-vacuity of Theorem U1 with Lemma P's term explicit
@@ -7,7 +8,11 @@ import VoleMole.Assumptions.PomfritLemmaPSim
 `ROM/OneMoreLemmaPBound.lean` (`pomfrit_U1_explicit`, `prEvent_pfail_le`) and
 `Assumptions/PomfritLemmaP.lean` (`pomfrit_U1_ompr_explicit`), and their simultaneous versions
 (`ROM/OneMoreLemmaPSim.lean`: `pomfrit_U1_sim`, `prEvent_pfail_sim_le`;
-`Assumptions/PomfritLemmaPSim.lean`: `pomfrit_U1_ompr_sim`) instantiated with the honest Issuer
+`Assumptions/PomfritLemmaPSim.lean`: `pomfrit_U1_ompr_sim`), and Theorem U2's
+(`ROM/OneMoreShiftBound.lean`: `pomfrit_U2_explicit`, `prEvent_shiftFail_le`;
+`ROM/OneMoreShiftSim.lean`: `pomfrit_U2_sim`, `prEvent_shiftFail_sim_le`;
+`Assumptions/PomfritShift.lean`, `Assumptions/PomfritShiftSim.lean`:
+`pomfrit_U2_omprShift_explicit`, `pomfrit_U2_omprShift_sim`) instantiated with the honest Issuer
 (`honestPre`), a key with a 32-byte digest (the size of pqov's `SHAKE256(cpk)`), and two forgers
 within their budgets: the forger that outputs nothing (all budgets `0`) and a forger that makes one
 hash query, one cipher query and one `hash_to_target` query (`oneQ`, budgets `1`). The hypotheses
@@ -89,5 +94,39 @@ example := pomfrit_U1_ompr_sim (pure (pk32, sk)) honestPre lr oneQ ℓ (pk32_dig
 /-- **Lemma P's term with simultaneous extraction**, for any number of targets. -/
 example (n : ℕ) := prEvent_pfail_sim_le (pure (pk32, sk)) honestPre lr oneQ n ℓ (pk32_digest sk)
   oneQ_bound
+
+/-- **U2 with every term explicit**, honest Issuer, the empty forger. -/
+example := pomfrit_U2_explicit (pure (pk32, sk)) honestPre lr (fun _ => pure []) ℓ (pk32_digest sk)
+  nil_bound
+
+/-- **U2 with every term explicit**, honest Issuer, a forger with one query of each kind. -/
+example := pomfrit_U2_explicit (pure (pk32, sk)) honestPre lr oneQ ℓ (pk32_digest sk) oneQ_bound
+
+/-- **U2 against the standalone OMPR⊕17 game, every term explicit**. -/
+example := pomfrit_U2_omprShift_explicit (pure (pk32, sk)) honestPre lr oneQ ℓ (pk32_digest sk)
+  oneQ_bound
+
+/-- **U2's term**, for any number of targets. -/
+example (n : ℕ) := prEvent_shiftFail_le (pure (pk32, sk)) honestPre lr oneQ n ℓ (pk32_digest sk)
+  oneQ_bound
+
+/-- **U2 with simultaneous extraction**, honest Issuer, the empty forger. -/
+example := pomfrit_U2_sim (pure (pk32, sk)) honestPre lr (fun _ => pure []) ℓ (pk32_digest sk)
+  nil_bound
+
+/-- **U2 with simultaneous extraction**, honest Issuer, a forger with one query of each kind. -/
+example := pomfrit_U2_sim (pure (pk32, sk)) honestPre lr oneQ ℓ (pk32_digest sk) oneQ_bound
+
+/-- **U2 with simultaneous extraction against the standalone OMPR⊕17 game**. -/
+example := pomfrit_U2_omprShift_sim (pure (pk32, sk)) honestPre lr oneQ ℓ (pk32_digest sk)
+  oneQ_bound
+
+/-- **U2's term with simultaneous extraction**, for any number of targets. -/
+example (n : ℕ) := prEvent_shiftFail_sim_le (pure (pk32, sk)) honestPre lr oneQ n ℓ
+  (pk32_digest sk) oneQ_bound
+
+/-- The shift lists of U2's hint rule have at most `17 = τ` entries: no shift is truncated. -/
+example (E : VoleMole.ROM.IC.CTable) (L : QueryLog VoleMole.ROM.IC.specIC) (x : ByteArray) :
+    hintS lr E L x = shP lr E L x := hintS_eq lr E L x
 
 end VoleMole.Audit.PomfritLemmaP

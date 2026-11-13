@@ -172,6 +172,11 @@ import VoleMole.ROM.OneMoreLemmaPFail
 import VoleMole.ROM.OneMoreLemmaPBound
 import VoleMole.ROM.OneMoreLemmaPPrefix
 import VoleMole.ROM.OneMoreLemmaPSim
+import VoleMole.ROM.LemmaPSome
+import VoleMole.ROM.OneMoreShiftTable
+import VoleMole.ROM.OneMoreShiftFail
+import VoleMole.ROM.OneMoreShiftBound
+import VoleMole.ROM.OneMoreShiftSim
 import VoleMole.ROM.TableReads
 import VoleMole.ROM.PrivacyReads
 import VoleMole.Privacy.Basic
@@ -332,6 +337,8 @@ import VoleMole.Assumptions.BlindPomfritGrind
 import VoleMole.Assumptions.BlindPomfritComplete
 import VoleMole.Assumptions.BlindPomfritT6Lean
 import VoleMole.Assumptions.PomfritLemmaPSim
+import VoleMole.Assumptions.PomfritShift
+import VoleMole.Assumptions.PomfritShiftSim
 import VoleMole.Audit.Nonvacuous
 import VoleMole.Audit.Liveness
 import VoleMole.Audit.UnboundROM

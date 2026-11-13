@@ -164,7 +164,7 @@ theorem prEvent_shiftFail_le (n ℓ : ℕ) (hdig : ∀ kp ∈ support KG, kp.1.d
         (∃ i : Fin (ℓ + 1), ShiftFailZ kp.1 i.val a.1) := fun a => rfl
   simp only [hev]
 
-/-- **Theorem U2 with every term explicit** (`pomfrit.md` §6.2, §6.4; G8 closed for U2): for a
+/-- **Theorem U2 with every term explicit** (`pomfrit.md` §6.2, §6.4; G8): for a
 key generation with 32-byte key digests, any Issuer and a forger with budget `qA` (hash queries per
 kind), `nA` (hash queries), `qE` (cipher queries), `Q_T` (`hash_to_target` queries), with U2's
 shift rule (`hintS`: the prefixes of all alive trees, at most `τ = 17`) as the reduction's hint,
