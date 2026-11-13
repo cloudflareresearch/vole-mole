@@ -16,6 +16,7 @@ import VoleMole.ZK.Grinding
 import VoleMole.Seed.Commitments
 import VoleMole.Seed.KOS
 import VoleMole.Seed.KOSUnique
+import VoleMole.Seed.SliceDecode
 import VoleMole.Seed.QuickSilver
 import VoleMole.Seed.SimExt
 import VoleMole.Seed.QuantumCipher
@@ -173,6 +174,7 @@ import VoleMole.ROM.RatatouilleBalanceSim
 import VoleMole.ROM.OneMore
 import VoleMole.ROM.OneMorePomfrit
 import VoleMole.ROM.LemmaPDet
+import VoleMole.ROM.LemmaPClass
 import VoleMole.ROM.LemmaP
 import VoleMole.ROM.OneMoreLemmaP
 import VoleMole.ROM.OneMoreLemmaPIC
