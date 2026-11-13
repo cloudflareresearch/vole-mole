@@ -198,6 +198,7 @@ import VoleMole.Privacy.MoussakaNCFind
 import VoleMole.Privacy.MoussakaUnbound
 import VoleMole.Privacy.MoussakaUnboundAd
 import VoleMole.Privacy.MoussakaUnboundNC
+import VoleMole.Privacy.MoussakaUnboundLean
 import VoleMole.Privacy.Ratatouille
 import VoleMole.ZK.Sim
 import VoleMole.ZK.SimKats
@@ -357,6 +358,7 @@ import VoleMole.Theft.RatatouilleLean
 import VoleMole.Theft.Moussaka
 import VoleMole.Theft.MoussakaLean
 import VoleMole.Theft.MoussakaUnbound
+import VoleMole.Theft.MoussakaUnboundLean
 import VoleMole.Theft.Reads
 import VoleMole.Theft.SimExtract
 import VoleMole.Theft.SimExtractLean
