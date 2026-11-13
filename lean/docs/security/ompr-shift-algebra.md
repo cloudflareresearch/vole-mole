@@ -22,7 +22,7 @@ with a stated unproved hypothesis. *Estimate*: cost figure from the usual hybrid
 
 | # | Statement | Status | Where |
 |---|---|---|---|
-| R | **A4 holds for UOV itself, for every reduction that is black-box in the adversary only.** Such a reduction `R` may use `pk` and the algebra of `P` in any way, and may rewind. Against one explicit adversary it wins OMPR with probability `≤ 2·τ^{−(q+1)} + Adv^{free}_{UOV}(M) + V⁴·2^{−343}`, where `M` is an OMPR^free adversary ([OR] §3.1) of about `R`'s running time. So: a reduction of this kind with loss below `τ^{q+1}/4` **is** an attack on OMPR^free, i.e. it contains a combiner across classes | proved | §2 |
+| R | **A4 holds for UOV itself, for every reduction that is black-box in the adversary only.** Such a reduction `R` may use `pk` and the algebra of `P` in any way, and may rewind. Against one explicit adversary it wins OMPR with probability `≤ 2·τ^{−(q+1)} + Adv^{free}_{UOV}(M) + V⁴·2^{−343}`, where `M` is an OMPR^free adversary ([OR] §3.1) of about `R`'s running time. So: a reduction of this kind with loss below `τ^{q+1}/4` **is** an attack on OMPR^free, i.e. it contains a combiner across classes | proved; Lean (`thmR`: the games, the simulation, the lottery and the accounting; the term `V⁴·2^{−343}` is the explicit probability `badPr`, bounded on paper) | §2 |
 | T1 | Toolbox: polar form, kernel translation, the preimage line through a singular vector (`D(0)` gives one), `P` on the span of two preimages | proved, Lean (`qmap_add_of_polar_eq_zero`, `preimage_line`, `preimage_plane`) | §1 |
 | T2 | An affine symmetry `P(As + a) = T(P(s)) + c` shifts targets only by `c = P(a)` with `a ⊥ im A`. If `A` is onto and `rad B = 0`, then `a = 0`, `c = 0`. `rad B = 0` for every key with `δ < 1` and `v ↦ L_v` injective | proved, first part Lean (`affine_symmetry`) | §3.1 |
 | T3 | Infinitesimal symmetries `B(s, Xs) = Y·P(s)`: only `(X, Y) ∈ F·(I, 0)` on toy keys. Conjecture: the only public pairs `(A, T)` with `P∘A = T∘P` are the scalings | experimental; conjecture | §3.1 |
@@ -112,7 +112,7 @@ adversary without `sk`.
 index `j` if its target is in `[t_j]`; `M` wins if it outputs preimages of more distinct indices
 than there are charged indices.
 
-**Theorem R [proved].** Let `τ ≥ 7`, `q ≥ 1`. Let `R` be as above, with `c` calls to `D` and `T`
+**Theorem R [proved; Lean `thmR`, §2.4].** Let `τ ≥ 7`, `q ≥ 1`. Let `R` be as above, with `c` calls to `D` and `T`
 messages to `A**_D`. Then there is an OMPR^free adversary `M` with
 
     Pr[R^{A**_D} wins OMPR(n, c)]  ≤  2·τ^{−(q+1)} + Adv^{free}_{UOV}(M) + V⁴·2^{−343},
@@ -120,7 +120,7 @@ messages to `A**_D`. Then there is an OMPR^free adversary `M` with
 where `V = n + c + (τ + 1)(q + 1)·T`. `M` runs `R` once, requests at most `n + q·T` targets,
 makes at most `c + (q + 1)·T` calls, and does `O(V)` further work (lazy sampling, checks).
 
-**Corollary R′ [proved].** Suppose a reduction of this class has loss `L`: for every adversary
+**Corollary R′ [proved; paper only].** Suppose a reduction of this class has loss `L`: for every adversary
 `A`, `Adv^{ompr}(R^A) ≥ Adv^{ompr⊕τ}(A)/L`. If `L ≤ τ^{q+1}/4`, then
 
     Adv^{free}_{UOV}(M) ≥ 1/(2L) − (2q + 1)·δ^{255}/L − V⁴·2^{−343}.
@@ -156,19 +156,28 @@ Targets and lists are uniform values, fresh when revealed. In (E3), the last rev
 `μ ≠ μ′` and `w = (δ_{k,a} ⊕ δ_{k,a′})/(μ ⊕ μ′)`). So `Pr[E1 ∨ E2 ∨ E3] ≤ V⁴·2^{−343}`. Assume
 none occurs.
 
-*Step 2: the lottery.* Call a candidate *useful* if it lies in the class of a target. By (E3)
-each request of each run has at most one useful shift `b_k(H)`. By (E2) it is determined when `R`
-sends `h_k`. `a(H)` is drawn after that, uniformly. Let `X_i` be the number of useful forgeries of
-the `i`-th completed run, and `Z_j = Σ_{i ≤ j}(X_i − q)`. As in [OR] A4, steps 3–4 (Lean
-`rewind_supermartingale`, Ville's inequality):
+*Step 2: the lottery.* Call a value *useful* if it lies in the class of a target revealed so
+far. When a run `H` is completed, let `b_k(H)` be the first shift `a` of request `k` whose
+candidate `h_k ⊕ δ_{k,a}` is useful, if there is one. It is a function of the values revealed
+before `a(H)` is drawn, and `a(H)` is then uniform. Call the forgery of request `k` *counted* if
+`a_k = b_k(H)`. Let `X_i` be the number of counted forgeries of the `i`-th completed run, and
+`Z_j = Σ_{i ≤ j}(X_i − q)`.
+- Given the past, `X_i` is dominated by `Bin(q + 1, 1/τ)`. This holds with no condition on the bad
+  events: each request has at most one winning shift by definition.
+- So, as in [OR] A4, steps 3–4 (Lean `lottery_sum`, `rewind_supermartingale`, `pot_complete`;
+  Ville's inequality is `potential_le`):
 
-    Pr[∃ j ≥ 1 : Z_j ≥ 1] ≤ 2·τ^{−(q+1)}.
+      Pr[∃ j ≥ 1 : Z_j ≥ 1] ≤ 2·τ^{−(q+1)}          (Lean `lottery_le`).
+
+- By (E3) a forgery that is useful when drawn is counted. By (E2) a candidate that is not useful
+  when its run is completed never lies in the class of a target revealed later.
 
 *Step 3: accounting.* Suppose `R` wins and `Z_K ≤ 0`.
 - `M` outputs preimages of `c + 1 + K·q` distinct indices.
 - Its calls are `R`'s `c` calls and the `K(q + 1)` candidate calls. By (E1) a call is charged to
-  at most one index. A candidate call is charged only if the candidate is useful.
-- So at most `c + Σ X_i = c + K·q + Z_K ≤ c + K·q` indices are charged, and `M` wins.
+  at most one index. A candidate call is charged only if its forgery is counted (step 2).
+- So at most `c + Σ X_i = c + K·q + Z_K ≤ c + K·q` indices are charged, and `M` wins
+  (Lean `free_of_win`, with `lottery_count`).
 
 Hence `Pr[R wins] ≤ Pr[∃ j : Z_j ≥ 1] + Adv^{free}(M) + Pr[bad]`. ∎
 
@@ -195,6 +204,81 @@ Hence `Pr[R wins] ≤ Pr[∃ j : Z_j ≥ 1] + Adv^{free}(M) + Pr[bad]`. ∎
 - **Direction.** R is one-directional. A combiner for lottery calls would not by itself give a
   reduction for all adversaries, since an adversary may choose `a_k` as a function of `h_k`.
 - For `q = 0` there is no junk, and guessing loses only τ.
+
+### 2.4 Lean
+
+`VoleMole/Assumptions/TheoremR.lean`; non-vacuity in `VoleMole/Audit/TheoremR.lean`. Generic in
+the trapdoor (`UOV.Trapdoor`) and in the class relation `cls` (any equivalence; for UOV
+`Links.uovCls`).
+
+**The model.**
+- *OMPR^free*: `advOMPRFree tr cls nT Q` (`fImpl`, `freeExp`, `FreeWin`). The oracles of `advOMPR`
+  (`OneMore.specB`): world, labelled targets on demand, `D`. The challenger logs the calls. The
+  win is the form of [OR] §3.1's definition: one preimage of a nonzero target with no call in its
+  class, at most `nT` targets and `Q` calls. Sanity: `not_freeWin_of_called`.
+- *The reduction*: an oracle computation over `specRed`, the oracles of the OMPR experiment plus
+  `A**_D` as a stateless next-message function: the shift list after a prefix `h_1..h_{k−1}`, the
+  junk targets of a run `H`, the output of `H` given answers to the junk queries. `R` gets `pk`
+  and rewinds by choosing its queries.
+- *The experiment*: `redExp tr n R` (handler `μR` over the atomic operations `Op`; `prog` maps
+  `R`'s queries to them). `A**_D` is §2.1: `S_k` and `a` are values of a lazy random oracle that
+  `R` cannot query, junk is drawn lazily, answers are checked with `P` (`valid`), forgeries are
+  `D` on the candidates (`cands`). The output of a completed run is memoized; it is a function
+  of `H`. Targets are on demand, as in `advOMPR`.
+- *`M`*: `redM cls tr.IsPre n R` (handler `μM`, final step `pick`), as in §2.2. It outputs one
+  claim whose target has no call in its class.
+
+**The statement** (`thmR`). For `τ ≥ 7`, `q ≥ 1`, `cls` an equivalence, every `R` and all
+`c, J, K₀`:
+
+    Pr[R wins OMPR(n, c) in redExp, with ≤ J junk targets drawn and ≤ K₀ runs completed]
+      ≤ 2/τ^{q+1} + advOMPRFree(M; n + J, c + (q + 1)·K₀) + badPr.
+
+- `badPr` is the probability, in `M`'s run, of the bad events that the proof uses: a new target
+  is `0`, or in the class of an earlier target, or in the class of an earlier candidate that was
+  not counted (`MSt.addT`); a forgery is useful but not counted (`MSt.complete`). They are
+  implied by (E1), (E2), (E3), with (E2) read for every target revealed on demand, challenge or
+  junk.
+- For `R` with `T` messages to `A**_D`: `J ≤ q·T` and `K₀ ≤ T`.
+
+**Proved in Lean.**
+
+| Step of §2.2 | Lean |
+|---|---|
+| The simulation is exact | `proj_step`, `redExp_eqd`; `collapseJ`, `freeExp_redM` |
+| Invariant of `M`'s run | `Inv`, `jImpl_inv`, `jointExp_inv` |
+| Step 2, one run: `Σ_a θ^{X(a)} ≤ (τ − 1 + θ)^{q+1}` | `lottery_sum` |
+| Step 2, the potential `θ^{Z−1}` is a supermartingale | `pot_complete`, `lot_step` |
+| Ville's inequality, for a stateful handler | `potential_le` |
+| `Pr[∃ j : Z_j ≥ 1] ≤ 2·τ^{−(q+1)}` | `lottery_le` |
+| Step 3 | `free_of_win` |
+| Theorem R | `thmR` |
+
+**Not mechanized.**
+- The bound `badPr ≤ V⁴·2^{−343}` (step 1). It is a union bound over fresh uniform values of
+  `F^M`; it uses the class size 255 and `|F^M| = 2^{360}`, which the generic statement does not
+  have.
+- Corollary R′, and the claim that `A**_D` wins OMPR⊕τ except when `D` fails.
+- The query count of `R` is not turned into `J` and `K₀`; they are part of the event.
+
+**Corrections found by the formalization.**
+- *The lottery was conditioned on the bad events.* The first version of step 2 let `X_i` count the
+  useful forgeries and assumed that no bad event occurs. Then `X_i` is dominated by a binomial
+  only outside (E3), and a supermartingale cannot be conditioned on an event of the whole run.
+  Step 2 now counts a forgery only if its shift is the *first* useful one. This lottery is fair
+  unconditionally. (E3) is used once, in step 3: a useful forgery is counted.
+- *"`b_k(H)` is determined when `R` sends `h_k`" is not needed.* `b_k(H)` is read when the run is
+  completed, before `a(H)` is drawn. (E2) is used only for targets revealed after that.
+- The statement and the bound are unchanged.
+
+**Non-vacuity** (`Audit/TheoremR.lean`).
+- `Links.uovCls` is an equivalence (`uovCls_equiv`); the theorem is instantiated at PomFRIT's
+  trapdoor with τ = 17.
+- Every OMPR adversary is a reduction of the class (`liftRed`), and in `redExp` it wins with
+  probability exactly `advOMPR` (`redExp_liftRed`, from `liftB_eqd`). So the experiment contains
+  the OMPR game of `Assumptions/UOV.lean`.
+- The guessing reduction of [UA] Prop. 8(a) is a term of the class (`guessRed`): one run,
+  `h_k = t_k − δ_{k,g_k}`, `q` calls for the junk. Its success probability is not mechanized.
 
 ## 3. The algebraic tools as combiners
 
@@ -458,10 +542,14 @@ would also break CT-UF^× ([OR] B2).
 | T1.2 singular line | `preimage_line` | `Spec/PqovShift.lean` |
 | (P3), T1.3 | `preimage_plane` | `Spec/PqovShift.lean` |
 | T2 affine symmetries | `affine_symmetry` | `Spec/PqovShift.lean` |
+| OMPR^free ([OR] §3.1) | `advOMPRFree`, `FreeWin` | `Assumptions/TheoremR.lean` |
+| Theorem R (§2.4) | `thmR`; `lottery_le`, `free_of_win`, `redExp_eqd`, `freeExp_redM` | `Assumptions/TheoremR.lean` |
+| The class of Theorem R contains OMPR adversaries and the guessing reduction | `redExp_liftRed`, `guessRed` | `Assumptions/TheoremR.lean`, `Audit/TheoremR.lean` |
 
-All are for `qmap`, the model of pqov's public map that `lake exe spec_kats` checks against the
-C++. On paper only: Theorem R (its inequality is [OR]'s `rewind_supermartingale`; the games, the
-simulation and the bad events are not mechanized), T1.4–5, T2′, T4, C1.
+The rows of `Spec/PqovShift.lean` are for `qmap`, the model of pqov's public map that
+`lake exe spec_kats` checks against the C++. Theorem R is generic in the trapdoor and the class
+relation (§2.4). On paper only: the bound on Theorem R's bad events and Corollary R′ (§2.4),
+T1.4–5, T2′, T4, C1.
 
 `scripts/ompr-shift-algebra/shift_algebra_toy.py` (pure Python, about 8 s): the identities of §1
 on toy keys over `F₁₆`, including good ⇔ `𝒪 ∩ K_s = 0`, oil translation and `rad B = 0`; the
