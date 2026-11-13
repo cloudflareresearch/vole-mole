@@ -1260,8 +1260,16 @@ G9).
 q²/2¹²⁸ term that Grover search makes unavoidable for any 128-bit scheme. The AES binding term is
 now below it throughout (Q6 §11–§13: the "two keys open one commitment" event is a real-world
 event, and a block representation of the ideal cipher bounds it by ≈ 2⁻¹⁸⁴·q³ with forward and
-inverse queries; paper proof, new and not externally reviewed). Strong simulation-extractability:
-2⁻⁶⁰·⁴ at 2³⁰ queries and 2³⁰ simulated proofs.
+inverse queries; paper proof, new, reviewed by a second independent pass in Q6 §14 but not
+externally). The review found Theorems 4–5 sound and corrected one term: the transfer term is
+`5√(|𝒯|/N)` for `|𝒯|` target commitments, independent of the query count (Theorems 4′/5′; Lean
+`openers_le_one_add_pairs`, `transfer_solve`); the original grew like `√(17n·Q_E/N)` for `n`
+outputs. Toy checks in `scripts/qrom-block-binding/` (`block_sim_toy.py`: commutator norms on all
+blocks, exact state simulation). Weak and strong simulation-extractability at `Q_S = 2³⁰`
+simulated proofs (`ε_bind^C ≤ min(Theorem 2, Theorem 5′)`, Q5 §13): 2⁻⁶⁰·⁴ at 2³⁰ queries,
+2⁻³⁹·³ at 2⁴⁰, 2⁻³⁰·⁴ at 2⁴⁵, 2⁻²⁰·⁴ at 2⁵⁰, 2⁻⁴·³ at 2⁵⁸ (previously vacuous from about 2⁵⁰);
+multi-proof extraction (Q7 Theorem M) at `n = 2²⁰` equals its main term at every `q` tabulated.
+Lean has the numbers (`block_SE_at_q45_QS30`, `block_SE_at_q50_QS30`, `block_multiM_at_q50_n20`).
 
 ### 5. The protocols — `docs/security/`
 
@@ -1592,8 +1600,8 @@ What is **not** established, roughly in order of importance:
    - The quantum protocol theorems need quantum-oracle versions of these assumptions, which are
      new.
 6. **Quantum bounds stop at about 2⁶⁰ queries, the Grover limit of the q²/2¹²⁸ term.** The AES
-   binding term no longer limits them (Q6 Theorems 4–5; paper proof, new and not externally
-   reviewed; numeric cores and toy checks only are machine-checked). A tight point-level bound
+   binding term no longer limits them (Q6 Theorems 4–5, 4′–5′; paper proof, new, reviewed in Q6 §14 but
+   not externally; numeric cores and toy checks only are machine-checked). A tight point-level bound
    (Q6 §7.3, M1/M2; conjectured Θ(q³/2²⁵⁶)) is still unknown but would change no number here.
    Parallel quantum queries are not treated.
 7. **Zero knowledge on `main` rests on (PU) for Moussaka and Ratatouille.** PomFRIT's ZK failure is
