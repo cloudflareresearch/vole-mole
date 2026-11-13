@@ -380,6 +380,12 @@ import VoleMole.Theft.SimExtractLean
 import VoleMole.Theft.LeanHb
 import VoleMole.Theft.Tables
 import VoleMole.Theft.ComOW
+import VoleMole.Theft.ManyPlain
+import VoleMole.Theft.ManyReads
+import VoleMole.Theft.RatatouilleMany
+import VoleMole.Theft.RatatouilleManyLean
+import VoleMole.Theft.MoussakaManyReads
+import VoleMole.Theft.MoussakaUnboundManyReads
 import VoleMole.Audit.Nonvacuous
 import VoleMole.Audit.Liveness
 import VoleMole.Audit.UnboundROM
@@ -390,6 +396,7 @@ import VoleMole.Audit.UnboundRest
 import VoleMole.Audit.UnboundMany
 import VoleMole.Audit.TheftMany
 import VoleMole.Audit.PermOMPR
+import VoleMole.Audit.TheftManyR
 import VoleMole.Audit.OMPRShift
 import VoleMole.Audit.T6Pomfrit
 import VoleMole.Audit.TheoremR

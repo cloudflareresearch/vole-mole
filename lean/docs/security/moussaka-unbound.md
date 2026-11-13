@@ -649,11 +649,21 @@ adversary's operations are unbound requests.
   adaptive nullifier queries. The paper's `ε_hop` is `U·ε_I + M·ε_R + Σ_i δ_i` here.
 - *Scope.* The `U` issuances come first, in a fixed order, and `ctx_iss h` and the Anchor key of
   token `h` are fixed in advance; the redemption queries are adaptive. The number `M` of
-  redemption queries is fixed in advance. `WeakSEN` is a hypothesis (as `WeakSE2`; it is not
-  derived from `WeakSE2` or from plain extraction: `weakSE2_of_plain` covers two simulated
-  proofs). For the many-token theorems the read budgets of the hops' distinguishers are
-  hypotheses (`hAI`, `hAR`); the one-token bound theorem derives them from the parts' budgets
-  (`Theft/Reads.lean`), the unbound ones do not.
+  redemption queries is fixed in advance. `WeakSEN` is a hypothesis of `nmUN` and `nmUN_lean`,
+  as are the read budgets of the hops' distinguishers (`hAI`, `hAR`).
+- *Hop budgets and plain extraction for many tokens* (`Theft/MoussakaUnboundManyReads.lean`).
+  With the Lean verifiers of the unbound relations (`verILU`, `verRLU`: `verRO`), the hops'
+  budgets are proved from the budgets of the adversary's last stage `(a₃, a₅, a_E)`
+  (`StageBudgetN`) and of the extractor `(x₃, x₅, x_E)`: every hop has the budget
+  `(a₃ + x₃, a₅ + x₅ + 312 + (U + M − 1)·624, a_E + x_E + (U + M)·4607)` (`distPN_budgetLI`,
+  `distPN_budgetLR`, from the generic `distN_budget`, `Theft/ManyReads.lean`). This gives
+  **`nmUN_lean_reads`**, `noSquatN_lean_reads`, `noRedirectUN_lean_reads`. `WeakSEN` is then
+  proved from plain extraction (`PlainSEN`) and one programmed-point term per simulated proof
+  (`SlotEvN i … HitKeyU`), by `weakSEN_moussakaU` (generic: `weakSEN_of_plain`,
+  `progMovesN_of_slots`, `Theft/ManyPlain.lean`): **`nmUN_lean_plain`**, `noSquatN_lean_plain`,
+  `noRedirectUN_lean_plain`, with `ε_SE = ε_plain + Σ_i ε_hit,i`. `PlainSEN` and the `SlotEvN`
+  terms are hypotheses (`security/ratatouille.md` §5 says why). The one-token unbound theorems
+  (`nmU_lean`) still take the hops' budgets and `WeakSE2` as hypotheses.
 
 A malicious Moderator therefore cannot spend an honest Client's token at another Moderator, even
 though the token is valid there.
@@ -876,7 +886,9 @@ the base protocol.
    with dedicated label rows (`Privacy/MoussakaUnboundLean.lean`; `nmU_lean`, `nmUN_lean`). They
    rest on weak simulation-extractability (`WeakSE2`, for many tokens `WeakSEN` with `U + M`
    simulated proofs; L8 on paper), the read budgets of the hops' distinguishers, the PRF
-   assumption with `t` leaked, `Adv^spr-k` and binding of `UCom`.
+   assumption with `t` leaked, `Adv^spr-k` and binding of `UCom`. For many tokens the hops'
+   budgets are proved and `WeakSEN` is reduced to plain extraction and one programmed-point term
+   per simulated proof, both hypotheses (`nmUN_lean_reads`, `nmUN_lean_plain`).
 5. The mechanized Thm U5 takes **per-proof** zero knowledge (`ZeroKnowledge` for `IssueRelW` and
    `RedeemRelW`, against distinguishers that know the witness). That hypothesis holds with
    dedicated label rows (`lean/docs/zk.md`). On `main` the CRT masks come from the witness, the
@@ -986,6 +998,13 @@ All in `lean/VoleMole/`; no `sorry`, no axioms beyond the standard three.
   `sim_se_leN`, **`nmUN`**, `noSquatN`, `noRedirectUN`.
 - `Theft/MoussakaUnboundLean.lean`: `nmU_lean`, `noSquat_lean`, `noRedirectU_lean`, `nmUN_lean`,
   `noSquatN_lean`, `noRedirectUN_lean` (zero knowledge discharged).
+- `Theft/ManyPlain.lean`, `Theft/ManyReads.lean`: `weakSE2_of_weakSEN`, `PlainSEN`,
+  `weakSEN_of_plain`, `SlotEvN`, `progMovesN_of_slots`; `StageBudgetN`, `distN_budget`.
+- `Theft/MoussakaUnboundManyReads.lean`: `verILU`, `verRLU`, `distPN_budgetLI`,
+  `distPN_budgetLR`, **`nmUN_lean_reads`**, `noSquatN_lean_reads`, `noRedirectUN_lean_reads`;
+  `HitKeyU`, `weakSEN_moussakaU`, **`nmUN_lean_plain`**, `noSquatN_lean_plain`,
+  `noRedirectUN_lean_plain`. `Audit/TheftManyR.lean` instantiates `nmUN_lean_reads` and
+  `nmUN_lean_plain` for a trivial adversary.
 - `Audit/UnboundMany.lean`: the Lean-prover and many-token theorems instantiated for trivial
   adversaries (budgets discharged; SE and PRF with error `1`); `issueRelW_honest`, `exists_pts`,
   `replay_not_freshN`, `redirect_ctx_freshN`, `owkN_zero`.
