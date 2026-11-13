@@ -23,7 +23,7 @@ structured inputs: 576 free bits, 224 fixed).
 No `sorry`, no `axiom`.
 -/
 
-open OracleComp OracleSpec VoleMole.Assumptions.LazyPerm
+open OracleComp OracleSpec VoleMole.Assumptions.LazyPerm VoleMole.ROM.OneMore
 open scoped ENNReal
 
 namespace VoleMole.Assumptions.UOV.CTUFPerm
@@ -398,5 +398,206 @@ theorem simF_budget (emb : Xc → T × Z) (f : OracleComp (specCP AR K T Z S) (C
     rw [h3]; exact hop o' ho'
 
 end RedBudget
+
+/-! ## The reduction against the function-model challenger -/
+
+section Core
+
+variable {DR : Type} [DecidableEq DR] {AR : DR → Type} [∀ d, SampleableType (AR d)] {K : ℕ}
+  {T Z S Xc : Type} [DecidableEq T] [DecidableEq Z] [SampleableType T] [SampleableType Z]
+  [DecidableEq Xc]
+
+/-- The function-model challenger's state (world with coins). -/
+abbrev CRSt (AR : DR → Type) (K : ℕ) (Xc T Z : Type) :=
+  CISt (ARc AR (T × Z)) K T × (Xc → Option T)
+
+/-- The function-model challenger for the reduction's oracles. -/
+def frImpl (σ : Fin K × T → S) :
+    QueryImpl (specCR AR K Xc T Z S) (StateT (CRSt AR K Xc T Z) ProbComp) :=
+  LazyIdeal.rfFresh (ciOther σ)
+
+/-- **The reduction run against the function-model challenger, as one handler.** -/
+noncomputable def combP (σ : Fin K × T → S) (emb : Xc → T × Z) :
+    QueryImpl (specCP AR K T Z S)
+      (StateT ((PTab (T × Z) × ℕ) × CRSt AR K Xc T Z) ProbComp) :=
+  fun q => StateT.mk fun s => (fun r => (r.1.1, (r.1.2, r.2))) <$>
+    (simulateQ (frImpl σ) ((simC emb q).run s.1)).run s.2
+
+theorem collapseP (σ : Fin K × T → S) (emb : Xc → T × Z) {α : Type}
+    (oa : OracleComp (specCP AR K T Z S) α) (s : PTab (T × Z) × ℕ) (c : CRSt AR K Xc T Z) :
+    (simulateQ (frImpl σ) ((simulateQ (simC emb) oa).run s)).run c =
+      (fun r => ((r.1, r.2.1), r.2.2)) <$> (simulateQ (combP σ emb) oa).run (s, c) := by
+  refine simulateQ_StateT_StateT_compose _ _ _ (fun q s c => ?_) oa s c
+  show _ = _ <$> ((fun r : (_ × _) × _ => (r.1.1, (r.1.2, r.2))) <$> _)
+  rw [Functor.map_map]
+  exact (id_map _).symm
+
+/-- The world's cache without the coins. -/
+def projRO (c : (specR (ARc AR (T × Z))).QueryCache) : (specR AR).QueryCache :=
+  QueryCache.ofFn fun d => c (.inl d)
+
+/-- **The hybrid's state that the reduction's run represents**: the table, and the world's cache
+without the coins with the signed targets. -/
+def projP (s : (PTab (T × Z) × ℕ) × CRSt AR K Xc T Z) : PTab (T × Z) × CISt AR K T :=
+  (s.1.1, ⟨projRO s.2.1.ro, s.2.1.signed⟩)
+
+/-- **The invariant**: the coins from the counter on are unused; `Com` is defined only at
+structured inputs with a record; a forward record at a structured input has its `Com` value. -/
+def InvP (emb : Xc → T × Z) (s : (PTab (T × Z) × ℕ) × CRSt AR K Xc T Z) : Prop :=
+  (∀ m, s.1.2 ≤ m → s.2.1.ro (.inr m) = none) ∧
+  (∀ x, fwdFind s.1.1 (emb x) = none → s.2.2 x = none) ∧
+  (∀ e ∈ s.1.1, e.2.2 = true → ∀ x, e.1 = emb x → s.2.2 x = some e.2.1.1)
+
+omit [DecidableEq Xc] [∀ d, SampleableType (AR d)] [DecidableEq T] [DecidableEq Z]
+  [SampleableType T] [SampleableType Z] in
+theorem projRO_inr (c : (specR (ARc AR (T × Z))).QueryCache) (n : ℕ) (u : T × Z) :
+    projRO (c.cacheQuery (.inr n) u) = projRO c := by
+  refine QueryCache.ext fun d => ?_
+  show (c.cacheQuery (.inr n) u) (.inl d) = c (.inl d)
+  exact QueryCache.cacheQuery_of_ne _ _ (by simp)
+
+omit [DecidableEq Xc] [∀ d, SampleableType (AR d)] [DecidableEq T] [DecidableEq Z]
+  [SampleableType T] [SampleableType Z] in
+theorem projRO_inl (c : (specR (ARc AR (T × Z))).QueryCache) (d : DR) (u : AR d) :
+    projRO (c.cacheQuery (.inl d) u) = (projRO c).cacheQuery d u := by
+  refine QueryCache.ext fun d' => ?_
+  show (c.cacheQuery (.inl d) u) (.inl d') = ((projRO c).cacheQuery d u) d'
+  by_cases h : d' = d
+  · subst h
+    rw [show ((projRO c).cacheQuery d' u) d' = some u from QueryCache.cacheQuery_self _ _ _]
+    exact QueryCache.cacheQuery_self (spec := specR (ARc AR (T × Z))) c (.inl d') u
+  · rw [show ((projRO c).cacheQuery d u) d' = (projRO c) d' from
+      QueryCache.cacheQuery_of_ne _ _ h]
+    exact QueryCache.cacheQuery_of_ne (spec := specR (ARc AR (T × Z))) c (t := Sum.inl d) u
+      (by simpa using h)
+
+omit [DecidableEq Xc] [DecidableEq T] [DecidableEq Z] in
+theorem uniform_pair :
+    (do let t ← ($ᵗ T : ProbComp T); let c ← ($ᵗ (T × Z) : ProbComp (T × Z)); pure (t, c.2)) =ᵈ
+      ($ᵗ (T × Z) : ProbComp (T × Z)) := by
+  rw [SampleableType.uniformSample_prod_eq_bind]
+  refine EvalDistEq.bind_right _ fun t => ?_
+  simp only [bind_assoc, pure_bind]
+  exact LazyIdeal.eqd_bind_unused _ _
+
+variable (σ : Fin K × T → S) (emb : Xc → T × Z)
+
+theorem combP_world (d : DR) (L : PTab (T × Z)) (n : ℕ) (ro : (specR (ARc AR (T × Z))).QueryCache)
+    (sg : List (Fin K × T)) (tab : Xc → Option T) :
+    ((combP σ emb) (.inl (.inl d))).run ((L, n), (⟨ro, sg⟩, tab)) =
+      (fun r : AR d × (specR (ARc AR (T × Z))).QueryCache => (r.1, ((L, n), (⟨r.2, sg⟩, tab)))) <$>
+        ((specR (ARc AR (T × Z))).randomOracle (Sum.inl d)).run ro := by
+  simp only [combP, simC, frImpl, StateT.run_mk, wQ]
+  erw [simulateQ_map, simulateQ_spec_query]
+  erw [StateT.run_map]
+  simp only [LazyIdeal.rfFresh, ciOther]
+  repeat (first | erw [StateT.run_mk] | erw [Functor.map_map])
+  rfl
+
+theorem combP_sign (q : Fin K × T) (L : PTab (T × Z)) (n : ℕ)
+    (ro : (specR (ARc AR (T × Z))).QueryCache) (sg : List (Fin K × T)) (tab : Xc → Option T) :
+    ((combP σ emb) (.inl (.inr q))).run ((L, n), (⟨ro, sg⟩, tab)) =
+      pure (σ q, ((L, n), (⟨ro, if q ∈ sg then sg else sg ++ [q]⟩, tab))) := by
+  simp only [combP, simC, frImpl, StateT.run_mk, sQ]
+  erw [simulateQ_map, simulateQ_spec_query]
+  erw [StateT.run_map]
+  simp only [LazyIdeal.rfFresh, ciOther]
+  repeat (first | erw [StateT.run_mk] | erw [Functor.map_map] | erw [map_pure])
+  rfl
+
+theorem combP_fwd_found (b y : T × Z) (s : (PTab (T × Z) × ℕ) × CRSt AR K Xc T Z)
+    (h : fwdFind s.1.1 b = some y) :
+    ((combP σ emb) (.inr (true, b))).run s = pure (y, s) := by
+  simp only [combP, simC, StateT.run_mk, h]
+  erw [simulateQ_pure]
+  rfl
+
+theorem combP_inv_found (c x : T × Z) (s : (PTab (T × Z) × ℕ) × CRSt AR K Xc T Z)
+    (h : invFind s.1.1 c = some x) :
+    ((combP σ emb) (.inr (false, c))).run s = pure (x, s) := by
+  simp only [combP, simC, StateT.run_mk, h]
+  erw [simulateQ_pure]
+  rfl
+
+theorem combP_inv_fresh (c : T × Z) (L : PTab (T × Z)) (n : ℕ)
+    (ro : (specR (ARc AR (T × Z))).QueryCache) (sg : List (Fin K × T)) (tab : Xc → Option T)
+    (h : invFind L c = none) (hro : ro (.inr n) = none) :
+    ((combP σ emb) (.inr (false, c))).run ((L, n), (⟨ro, sg⟩, tab)) =
+      (fun u : T × Z => (u, ((L ++ [(u, c, false)], n + 1), (⟨ro.cacheQuery (.inr n) u, sg⟩, tab)))) <$>
+        ($ᵗ (T × Z) : ProbComp (T × Z)) := by
+  simp only [combP, simC, StateT.run_mk, h, frImpl, wQ]
+  erw [simulateQ_map, simulateQ_spec_query]
+  erw [StateT.run_map]
+  simp only [LazyIdeal.rfFresh, ciOther]
+  erw [StateT.run_mk]
+  dsimp only
+  erw [StateT.run_mk]
+  dsimp only
+  erw [randomOracle.run_eq]
+  rw [show ro.toFn (Sum.inr n) = none from hro]
+  dsimp only
+  rw [map_bind]
+  simp only [map_pure]
+  rw [bind_pure_comp]
+  repeat erw [Functor.map_map]
+  rfl
+
+theorem combP_fwd_coin (b : T × Z) (L : PTab (T × Z)) (n : ℕ)
+    (ro : (specR (ARc AR (T × Z))).QueryCache) (sg : List (Fin K × T)) (tab : Xc → Option T)
+    (h : fwdFind L b = none) (he : embInv emb b = none) (hro : ro (.inr n) = none) :
+    ((combP σ emb) (.inr (true, b))).run ((L, n), (⟨ro, sg⟩, tab)) =
+      (fun u : T × Z => (u, ((L ++ [(b, u, true)], n + 1), (⟨ro.cacheQuery (.inr n) u, sg⟩, tab)))) <$>
+        ($ᵗ (T × Z) : ProbComp (T × Z)) := by
+  simp only [combP, simC, StateT.run_mk, h, he, frImpl, wQ]
+  erw [simulateQ_map, simulateQ_spec_query]
+  erw [StateT.run_map]
+  simp only [LazyIdeal.rfFresh, ciOther]
+  erw [StateT.run_mk]
+  dsimp only
+  erw [StateT.run_mk]
+  dsimp only
+  erw [randomOracle.run_eq]
+  rw [show ro.toFn (Sum.inr n) = none from hro]
+  dsimp only
+  rw [map_bind]
+  simp only [map_pure]
+  rw [bind_pure_comp]
+  repeat erw [Functor.map_map]
+  rfl
+
+theorem combP_fwd_com (b : T × Z) (x : Xc) (L : PTab (T × Z)) (n : ℕ)
+    (ro : (specR (ARc AR (T × Z))).QueryCache) (sg : List (Fin K × T)) (tab : Xc → Option T)
+    (h : fwdFind L b = none) (he : embInv emb b = some x) (htab : tab x = none)
+    (hro : ro (.inr n) = none) :
+    ((combP σ emb) (.inr (true, b))).run ((L, n), (⟨ro, sg⟩, tab)) =
+      (do let t ← ($ᵗ T : ProbComp T); let u ← ($ᵗ (T × Z) : ProbComp (T × Z))
+          pure ((t, u.2), ((L ++ [(b, (t, u.2), true)], n + 1),
+            (⟨ro.cacheQuery (.inr n) u, sg⟩, Function.update tab x (some t))))) := by
+  simp only [combP, simC, StateT.run_mk, h, he, frImpl, wQ, cQ]
+  erw [simulateQ_bind, simulateQ_spec_query]
+  erw [StateT.run_bind]
+  simp only [LazyIdeal.rfFresh]
+  erw [StateT.run_mk]
+  dsimp only
+  rw [htab]
+  dsimp only
+  erw [bind_map_left, map_bind]
+  refine bind_congr fun (t : T) => ?_
+  erw [simulateQ_map, simulateQ_spec_query, StateT.run_map]
+  simp only [LazyIdeal.rfFresh, ciOther]
+  erw [StateT.run_mk]
+  dsimp only
+  erw [StateT.run_mk]
+  dsimp only
+  erw [randomOracle.run_eq]
+  rw [show ro.toFn (Sum.inr n) = none from hro]
+  dsimp only
+  rw [map_bind]
+  simp only [map_pure]
+  rw [bind_pure_comp, bind_pure_comp]
+  repeat erw [Functor.map_map]
+  rfl
+
+end Core
 
 end VoleMole.Assumptions.UOV.CTUFPerm
