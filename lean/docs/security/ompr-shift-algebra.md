@@ -587,6 +587,9 @@ quoted from memory.
   [TW12] with the guesses of Furue–Nakamura–Takagi [FNT21]: after `k` guesses, `m − a` equations
   in `m − k − a` variables, `a = ⌊(N−k)/(m−k)⌋ − 1`. At `(119, 45)` and `(119, 44)`, `a = 1` for
   `k = 0`. Hashimoto's refinement [Has21] and the crossbred algorithm are not modelled.
+  *Later:* the UOV round-3 specification uses Hashimoto's refinement. With it the direct attack
+  at `(119, 45)` costs `2^{139.7}`, the 44-equation system `2^{135.1}` and the 43-equation
+  system `2^{133.5}`; the step is 4.6 and then 1.6 (`ompr-cryptanalysis-2.md` §8). The table below is without it.
 
 | Solver | Prep. | Direct `H` | `U` (44 eqs) | step | `τ*` | C1 at τ = 17 | C1(17) / direct |
 |---|---|---|---|---|---|---|---|
