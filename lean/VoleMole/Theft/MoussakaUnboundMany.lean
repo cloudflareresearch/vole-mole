@@ -736,7 +736,7 @@ def seEvN (ω : SecN U) (l : Log) (g : Fin (U + M) → G) (s : S) : Prop :=
   accN A verI verR ω l g s ∧ freshN A ω l g s ∧ ¬ relN A ext ω l g s
 
 /-- **Weak simulation-extractability step.** -/
-theorem sim_se_leN {AdmE : ((Fin (U + M) → G) → S → UOp) → Prop} {εSE : ℝ} [Nonempty (SecN U)]
+theorem sim_se_leN {AdmE : ((Fin (U + M) → G) → S → UOp) → Prop} {εSE : ℝ}
     (hse : WeakSEN (U + M) (simU simI simR) (progU progI progR) (AccOp verI verR) FreshOpN RelOp
       ext AdmE εSE)
     (hAE : ∀ l, AdmE (opN A l)) :
@@ -751,7 +751,7 @@ simulated proofs, and the PRF assumption for the key-recovery distinguishers:
 
     Pr[BadN] ≤ U·ε_I + M·ε_R + Σ_i δ_i + ε_SE
                  + Σ_h (ε_prf + (M+1)·2⁻¹⁹² + Adv^bind(B₁ h) + Adv^spr-k(B₂ h)). -/
-theorem nmUN [Nonempty S] [Nonempty (SecN U)]
+theorem nmUN [Nonempty S]
     {AdmI : (Bytes → G → S → Prop) → Prop} {AdmR : (Bytes → G → S → Prop) → Prop}
     {AdmE : ((Fin (U + M) → G) → S → UOp) → Prop} {εI εR εSE εprf : ℝ}
     (hzkI : ZeroKnowledgeRO IssueRelW
@@ -862,7 +862,7 @@ theorem nmUN [Nonempty S] [Nonempty (SecN U)]
 /-- **Proposition U3 (no nullifier squatting) for `U` honest tokens and `M` honest redemptions**:
 the probability that an accepted redemption with a fresh statement carries the nullifier of some
 honest token for its context is at most the bound of `nmUN`. -/
-theorem noSquatN [Nonempty S] [Nonempty (SecN U)]
+theorem noSquatN [Nonempty S]
     {AdmI : (Bytes → G → S → Prop) → Prop} {AdmR : (Bytes → G → S → Prop) → Prop}
     {AdmE : ((Fin (U + M) → G) → S → UOp) → Prop} {εI εR εSE εprf : ℝ}
     (hzkI : ZeroKnowledgeRO IssueRelW
@@ -895,7 +895,7 @@ theorem noSquatN [Nonempty S] [Nonempty (SecN U)]
 /-- **Theorem U4 (redemption non-malleability, no redirect to another digest, Anchor Set or
 redemption context) for `U` honest tokens and `M` honest redemptions**: the probability of
 `RedirectN` is at most the bound of `nmUN`. -/
-theorem noRedirectUN [Nonempty S] [Nonempty (SecN U)]
+theorem noRedirectUN [Nonempty S]
     {AdmI : (Bytes → G → S → Prop) → Prop} {AdmR : (Bytes → G → S → Prop) → Prop}
     {AdmE : ((Fin (U + M) → G) → S → UOp) → Prop} {εI εR εSE εprf : ℝ}
     (hzkI : ZeroKnowledgeRO IssueRelW
