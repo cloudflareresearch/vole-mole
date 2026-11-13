@@ -235,7 +235,7 @@ theorem prEvent_le_shared_suffix {ι κ γ' δ' α₂ : Type} (S : Finset D)
     (J : Finset ι) (A' : ι → OracleComp (ofFn R) γ') (K : ι → γ' → OracleComp (ofFn R) δ')
     (hSK : ∀ j ∈ J, AllQueriesSatisfy (A' j >>= K j) (· ∈ S)) (BK : ℝ≥0∞)
     (hBK : ∀ j a, WorstCaseCostBound (K j a) ⟨error⟩ BK) (nA nK : ℕ)
-    (hnA : ∀ j, IsTotalQueryBound (A' j) nA) (hnK : ∀ j a, IsTotalQueryBound (K j a) nK)
+    (hnA : ∀ j ∈ J, IsTotalQueryBound (A' j) nA) (hnK : ∀ j a, IsTotalQueryBound (K j a) nK)
     (badK : ι → D → (∀ d, R d) → Prop)
     (I : Finset κ) (ob : κ → OracleComp (ofFn R) α₂) (Q : κ → α₂ → Prop)
     (hSI : ∀ i ∈ I, AllQueriesSatisfy (ob i) (· ∈ S))
@@ -289,7 +289,7 @@ theorem prEvent_le_shared_suffix {ι κ γ' δ' α₂ : Type} (S : Finset D)
       (fun _ => hBA) 0 n₀ trivial (fun _ => hn₀) N badA hbadA ∅ 0
       (by rw [card_cachedKeys_empty]) (by omega)
   · refine (prEvent_exists_finset_le J mG X₂).trans (Finset.sum_le_sum fun j hj => ?_)
-    exact prEvent_suffixBad_le S (A' j) (K j) (hSK j hj) error BK (hBK j) nA nK (hnA j)
+    exact prEvent_suffixBad_le S (A' j) (K j) (hSK j hj) error BK (hBK j) nA nK (hnA j hj)
       (hnK j) N (badK j) (hbadK j hj) ∅ 0 (by rw [card_cachedKeys_empty]) (by omega)
 
 /-- **The single-cell form of the bad-event hypothesis gives the cache-size form**: a bound when

@@ -44,11 +44,11 @@ theorem moussakaIssue_sim_spec (inst : ι → ByteArray × ByteArray)
     (hinj : Function.Injective fun s =>
       (moussakaIssue (inst s).1 (inst s).2 labelRows).instEnc ByteArray.empty)
     (P₀ : OracleComp specIC (ByteArray × (ι × β))) (P : ι' → OracleComp specIC (ByteArray × (ι × β)))
-    (qE : ℕ) (hqE : ∀ j, IsQueryBoundP (P j) (fun t => t.isRight = true) qE) (q : Kind → ℕ)
-    (hq₀ : IsKindQueryBoundIC P₀ q) (hq : ∀ j, IsKindQueryBoundIC (P j) q) (nG : ℕ)
-    (hnG₀ : IsQueryBoundP P₀ (fun t => t.isLeft = true) nG)
-    (hnG : ∀ j, IsQueryBoundP (P j) (fun t => t.isLeft = true) nG)
-    (J : Finset ι') (hpre : ∀ E, PrefixRuns E P₀ P J) (oa : CTable → OracleComp spec α)
+    (J : Finset ι') (qE : ℕ) (hqE : ∀ j ∈ J, IsQueryBoundP (P j) (fun t => t.isRight = true) qE)
+    (q : Kind → ℕ) (hq₀ : IsKindQueryBoundIC P₀ q) (hq : ∀ j ∈ J, IsKindQueryBoundIC (P j) q)
+    (nG : ℕ) (hnG₀ : IsQueryBoundP P₀ (fun t => t.isLeft = true) nG)
+    (hnG : ∀ j ∈ J, IsQueryBoundP (P j) (fun t => t.isLeft = true) nG)
+    (hpre : ∀ E, PrefixRuns E P₀ P J) (oa : CTable → OracleComp spec α)
     (event : CTable → α → Prop)
     (htr : ∀ E g, event E (evalWithAnswerFn (QueryImpl.ofFn g) (oa E)) → ∃ j ∈ J,
       let r := evalWithAnswerFn (QueryImpl.ofFn g) (gameA CrtGen.tables
@@ -78,7 +78,7 @@ theorem moussakaIssue_sim_spec (inst : ι → ByteArray × ByteArray)
       exact fun ch known acc hv A hA hAS hkos hQS hP =>
         moussakaIssue_extract_chain (inst s).1 (inst s).2 labelRows ch hv hA hAS hkos hP.1 hQS
           admissible deltaBlocks deltaBlocks_injOn acc hP.2)
-    P₀ P qE hqE q hq₀ hq nG hnG₀ hnG J hpre oa event fun E g hev => by
+    P₀ P J qE hqE q hq₀ hq nG hnG₀ hnG hpre oa event fun E g hev => by
       obtain ⟨j, hj, hacc, hnex⟩ := htr E g hev
       exact ⟨j, hj, hacc, fun he => hnex (extracted_mono (fun c1 w hw =>
         SpecRel.issueRelW_of_wit _ _ (ht _) (hci _) w hw) he)⟩
@@ -101,11 +101,11 @@ theorem moussakaRedeem_sim_spec (anc : ι → List UovPk)
       (moussakaRedeem (anc s) (nf s) (ctxIss s) (ctxRed s) (cd s) labelRows).instEnc
         ByteArray.empty)
     (P₀ : OracleComp specIC (ByteArray × (ι × β))) (P : ι' → OracleComp specIC (ByteArray × (ι × β)))
-    (qE : ℕ) (hqE : ∀ j, IsQueryBoundP (P j) (fun t => t.isRight = true) qE) (q : Kind → ℕ)
-    (hq₀ : IsKindQueryBoundIC P₀ q) (hq : ∀ j, IsKindQueryBoundIC (P j) q) (nG : ℕ)
-    (hnG₀ : IsQueryBoundP P₀ (fun t => t.isLeft = true) nG)
-    (hnG : ∀ j, IsQueryBoundP (P j) (fun t => t.isLeft = true) nG)
-    (J : Finset ι') (hpre : ∀ E, PrefixRuns E P₀ P J) (oa : CTable → OracleComp spec α)
+    (J : Finset ι') (qE : ℕ) (hqE : ∀ j ∈ J, IsQueryBoundP (P j) (fun t => t.isRight = true) qE)
+    (q : Kind → ℕ) (hq₀ : IsKindQueryBoundIC P₀ q) (hq : ∀ j ∈ J, IsKindQueryBoundIC (P j) q)
+    (nG : ℕ) (hnG₀ : IsQueryBoundP P₀ (fun t => t.isLeft = true) nG)
+    (hnG : ∀ j ∈ J, IsQueryBoundP (P j) (fun t => t.isLeft = true) nG)
+    (hpre : ∀ E, PrefixRuns E P₀ P J) (oa : CTable → OracleComp spec α)
     (event : CTable → α → Prop)
     (htr : ∀ E g, event E (evalWithAnswerFn (QueryImpl.ofFn g) (oa E)) → ∃ j ∈ J,
       let r := evalWithAnswerFn (QueryImpl.ofFn g) (gameA CrtGen.tables
@@ -149,7 +149,7 @@ theorem moussakaRedeem_sim_spec (anc : ι → List UovPk)
       exact fun ch known acc l hv A hA hAS hkos hQS hcb hP =>
         moussakaRedeem_extract_chain (anc s) (nf s) (ctxIss s) (ctxRed s) (cd s) labelRows ch l hv
           hA hAS hkos hP.1 hQS hcb admissible deltaBlocks deltaBlocks_injOn acc hP.2)
-    P₀ P qE hqE q hq₀ hq nG hnG₀ hnG J hpre oa event fun E g hev => by
+    P₀ P J qE hqE q hq₀ hq nG hnG₀ hnG hpre oa event fun E g hev => by
       obtain ⟨j, hj, hacc, hnex⟩ := htr E g hev
       exact ⟨j, hj, hacc, fun he => hnex (extracted_mono (fun c1 w hw =>
         SpecRel.redeemRelW_of_wit _ (hn64 _) _ _ _ _ (hnf _) (hci _) (hcr _) w hw) he)⟩
@@ -167,11 +167,11 @@ theorem ratatouilleIssue_sim_spec (inst : ι → ByteArray × ℕ × ByteArray)
     (hinj : Function.Injective fun s =>
       (ratatouilleIssue (inst s).1 (inst s).2.1 (inst s).2.2 labelRows).instEnc ByteArray.empty)
     (P₀ : OracleComp specIC (ByteArray × (ι × β))) (P : ι' → OracleComp specIC (ByteArray × (ι × β)))
-    (qE : ℕ) (hqE : ∀ j, IsQueryBoundP (P j) (fun t => t.isRight = true) qE) (q : Kind → ℕ)
-    (hq₀ : IsKindQueryBoundIC P₀ q) (hq : ∀ j, IsKindQueryBoundIC (P j) q) (nG : ℕ)
-    (hnG₀ : IsQueryBoundP P₀ (fun t => t.isLeft = true) nG)
-    (hnG : ∀ j, IsQueryBoundP (P j) (fun t => t.isLeft = true) nG)
-    (J : Finset ι') (hpre : ∀ E, PrefixRuns E P₀ P J) (oa : CTable → OracleComp spec α)
+    (J : Finset ι') (qE : ℕ) (hqE : ∀ j ∈ J, IsQueryBoundP (P j) (fun t => t.isRight = true) qE)
+    (q : Kind → ℕ) (hq₀ : IsKindQueryBoundIC P₀ q) (hq : ∀ j ∈ J, IsKindQueryBoundIC (P j) q)
+    (nG : ℕ) (hnG₀ : IsQueryBoundP P₀ (fun t => t.isLeft = true) nG)
+    (hnG : ∀ j ∈ J, IsQueryBoundP (P j) (fun t => t.isLeft = true) nG)
+    (hpre : ∀ E, PrefixRuns E P₀ P J) (oa : CTable → OracleComp spec α)
     (event : CTable → α → Prop)
     (htr : ∀ E g, event E (evalWithAnswerFn (QueryImpl.ofFn g) (oa E)) → ∃ j ∈ J,
       let r := evalWithAnswerFn (QueryImpl.ofFn g) (gameA CrtGen.tables
@@ -203,7 +203,7 @@ theorem ratatouilleIssue_sim_spec (inst : ι → ByteArray × ℕ × ByteArray)
       exact fun ch known acc hv A hA hAS hkos hQS hP =>
         ratatouilleIssue_extract_chain (inst s).1 (inst s).2.1 (inst s).2.2 labelRows ch hv hA hAS
           hkos hP.1 hQS admissible deltaBlocks deltaBlocks_injOn acc hP.2)
-    P₀ P qE hqE q hq₀ hq nG hnG₀ hnG J hpre oa event fun E g hev => by
+    P₀ P J qE hqE q hq₀ hq nG hnG₀ hnG hpre oa event fun E g hev => by
       obtain ⟨j, hj, hacc, hnex⟩ := htr E g hev
       exact ⟨j, hj, hacc, fun he => hnex (extracted_mono (fun c1 w hw =>
         SpecRel.issueRel_of_witB _ _ _ (ht _) w hw) he)⟩
@@ -225,11 +225,11 @@ theorem ratatouilleSpend_sim_spec (pk : ι → UovPk) (nf : ι → ByteArray) (d
       (ratatouilleSpend (pk s) (nf s) (d s) (cNext s) (ctxIss s) labelRows).instEnc
         ByteArray.empty)
     (P₀ : OracleComp specIC (ByteArray × (ι × β))) (P : ι' → OracleComp specIC (ByteArray × (ι × β)))
-    (qE : ℕ) (hqE : ∀ j, IsQueryBoundP (P j) (fun t => t.isRight = true) qE) (q : Kind → ℕ)
-    (hq₀ : IsKindQueryBoundIC P₀ q) (hq : ∀ j, IsKindQueryBoundIC (P j) q) (nG : ℕ)
-    (hnG₀ : IsQueryBoundP P₀ (fun t => t.isLeft = true) nG)
-    (hnG : ∀ j, IsQueryBoundP (P j) (fun t => t.isLeft = true) nG)
-    (J : Finset ι') (hpre : ∀ E, PrefixRuns E P₀ P J) (oa : CTable → OracleComp spec α)
+    (J : Finset ι') (qE : ℕ) (hqE : ∀ j ∈ J, IsQueryBoundP (P j) (fun t => t.isRight = true) qE)
+    (q : Kind → ℕ) (hq₀ : IsKindQueryBoundIC P₀ q) (hq : ∀ j ∈ J, IsKindQueryBoundIC (P j) q)
+    (nG : ℕ) (hnG₀ : IsQueryBoundP P₀ (fun t => t.isLeft = true) nG)
+    (hnG : ∀ j ∈ J, IsQueryBoundP (P j) (fun t => t.isLeft = true) nG)
+    (hpre : ∀ E, PrefixRuns E P₀ P J) (oa : CTable → OracleComp spec α)
     (event : CTable → α → Prop)
     (htr : ∀ E g, event E (evalWithAnswerFn (QueryImpl.ofFn g) (oa E)) → ∃ j ∈ J,
       let r := evalWithAnswerFn (QueryImpl.ofFn g) (gameA CrtGen.tables
@@ -272,7 +272,7 @@ theorem ratatouilleSpend_sim_spec (pk : ι → UovPk) (nf : ι → ByteArray) (d
       exact fun ch known acc l hv A hA hAS hkos hQS hcb hP =>
         ratatouilleSpend_extract_chain (pk s) (nf s) (d s) (cNext s) (ctxIss s) labelRows ch l hv
           hA hAS hkos hP.1 hQS hcb admissible deltaBlocks deltaBlocks_injOn acc hP.2)
-    P₀ P qE hqE q hq₀ hq nG hnG₀ hnG J hpre oa event fun E g hev => by
+    P₀ P J qE hqE q hq₀ hq nG hnG₀ hnG hpre oa event fun E g hev => by
       obtain ⟨j, hj, hacc, hnex⟩ := htr E g hev
       exact ⟨j, hj, hacc, fun he => hnex (extracted_mono (fun c1 w hw =>
         SpecRel.spendRel_of_witB _ _ _ (hd _) _ _ w hw) he)⟩

@@ -332,10 +332,11 @@ theorem prEvent_sim_le_E (sys : ι → System GF128) (hT : liftInvOk T = true) (
     (cf : Out ((ι × β) × QueryLog specIC) → Prop)
     (hcf : ∀ j s g, ¬cf (evalWithAnswerFn (QueryImpl.ofFn g) (gameIC T (stF s) (P j) E)) →
       KeysPre (stF s) E (jOf g (P j) E) (gLog T (stF s) (P j) E g) g)
-    (q : Kind → ℕ) (hq₀ : IsKindQueryBoundIC P₀ q) (hq : ∀ j, IsKindQueryBoundIC (P j) q) (nG : ℕ)
+    (J : Finset ι') (q : Kind → ℕ) (hq₀ : IsKindQueryBoundIC P₀ q)
+    (hq : ∀ j ∈ J, IsKindQueryBoundIC (P j) q) (nG : ℕ)
     (hnG₀ : IsQueryBoundP P₀ (fun t => t.isLeft = true) nG)
-    (hnG : ∀ j, IsQueryBoundP (P j) (fun t => t.isLeft = true) nG)
-    (J : Finset ι') (hpre : PrefixRuns E P₀ P J) (oa : OracleComp spec α) (event : α → Prop)
+    (hnG : ∀ j ∈ J, IsQueryBoundP (P j) (fun t => t.isLeft = true) nG)
+    (hpre : PrefixRuns E P₀ P J) (oa : OracleComp spec α) (event : α → Prop)
     (htr : ∀ g, event (evalWithAnswerFn (QueryImpl.ofFn g) oa) → ∃ j ∈ J,
       let r := evalWithAnswerFn (QueryImpl.ofFn g) (gameA T stF (P j) E)
       r.2.2.accept = true ∧ ¬@Extracted (icPrg E.cipher) _ (stF (stOut r)) (Wit (stOut r)) r) :
@@ -367,11 +368,11 @@ theorem prEvent_sim_le_E (sys : ι → System GF128) (hT : liftInvOk T = true) (
     (fun j => runE E (P j)) (fun _ => gameK T stF E id) (fun j hj => ?_) _
     (fun _ a => worstCaseCostBound_of_kindQueryBound _ adaptKinds ε hK _
       (isKindQueryBound_gameK T stF E id a)) nG (2 + verifierTotal)
-    (fun j => isTotalQueryBound_runE E (hnG j)) (fun _ a => isTotalQueryBound_gameK T stF E id a)
+    (fun j hj => isTotalQueryBound_runE E (hnG j hj)) (fun _ a => isTotalQueryBound_gameK T stF E id a)
     (fun j => adaptBad T stF dec sys (P j) E N cb) J
     (fun j => gameA T stF (P j) E) (fun _ r => bindFailA stF E r ∨ deadOpenA stF E r ∨ cf r)
     (fun j hj => simKeys_game T stF E P₀ P oa J j hj) (nG + (2 + verifierTotal)) (by omega)
-    le_rfl (hbad P₀ hq₀) (fun j _ => hbad (P j) (hq j)) fun g hev => ?_
+    le_rfl (hbad P₀ hq₀) (fun j hj => hbad (P j) (hq j hj)) fun g hev => ?_
   · rw [← gameA_eq_bind]
     exact simKeys_game T stF E P₀ P oa J j hj
   obtain ⟨j, hj, hacc, hnex⟩ := htr g hev
@@ -412,10 +413,11 @@ theorem prEvent_sim_comb_le_E {M : ℕ} (sysL : ι → (Fin M → GF128) → Sys
     (cf : Out ((ι × β) × QueryLog specIC) → Prop)
     (hcf : ∀ j s g, ¬cf (evalWithAnswerFn (QueryImpl.ofFn g) (gameIC T (stF s) (P j) E)) →
       KeysPre (stF s) E (jOf g (P j) E) (gLog T (stF s) (P j) E g) g)
-    (q : Kind → ℕ) (hq₀ : IsKindQueryBoundIC P₀ q) (hq : ∀ j, IsKindQueryBoundIC (P j) q) (nG : ℕ)
+    (J : Finset ι') (q : Kind → ℕ) (hq₀ : IsKindQueryBoundIC P₀ q)
+    (hq : ∀ j ∈ J, IsKindQueryBoundIC (P j) q) (nG : ℕ)
     (hnG₀ : IsQueryBoundP P₀ (fun t => t.isLeft = true) nG)
-    (hnG : ∀ j, IsQueryBoundP (P j) (fun t => t.isLeft = true) nG)
-    (J : Finset ι') (hpre : PrefixRuns E P₀ P J) (oa : OracleComp spec α) (event : α → Prop)
+    (hnG : ∀ j ∈ J, IsQueryBoundP (P j) (fun t => t.isLeft = true) nG)
+    (hpre : PrefixRuns E P₀ P J) (oa : OracleComp spec α) (event : α → Prop)
     (htr : ∀ g, event (evalWithAnswerFn (QueryImpl.ofFn g) oa) → ∃ j ∈ J,
       let r := evalWithAnswerFn (QueryImpl.ofFn g) (gameA T stF (P j) E)
       r.2.2.accept = true ∧ ¬@Extracted (icPrg E.cipher) _ (stF (stOut r)) (Wit (stOut r)) r) :
@@ -451,11 +453,11 @@ theorem prEvent_sim_comb_le_E {M : ℕ} (sysL : ι → (Fin M → GF128) → Sys
     (fun j => runE E (P j)) (fun _ => gameK T stF E id) (fun j hj => ?_) _
     (fun _ a => worstCaseCostBound_of_kindQueryBound _ adaptKinds ε hK _
       (isKindQueryBound_gameK T stF E id a)) nG (2 + verifierTotal)
-    (fun j => isTotalQueryBound_runE E (hnG j)) (fun _ a => isTotalQueryBound_gameK T stF E id a)
+    (fun j hj => isTotalQueryBound_runE E (hnG j hj)) (fun _ a => isTotalQueryBound_gameK T stF E id a)
     (fun j => combAdaptBad T stF dec (P j) E sysL witL dst N) J
     (fun j => gameA T stF (P j) E) (fun _ r => bindFailA stF E r ∨ deadOpenA stF E r ∨ cf r)
     (fun j hj => (simKeys_game T stF E P₀ P oa J j hj).mono hsub) ntot (by omega)
-    (by omega) (hbad P₀ hq₀) (fun j _ => hbad (P j) (hq j)) fun g hev => ?_
+    (by omega) (hbad P₀ hq₀) (fun j hj => hbad (P j) (hq j hj)) fun g hev => ?_
   · rw [← gameA_eq_bind]
     exact (simKeys_game T stF E P₀ P oa J j hj).mono hsub
   obtain ⟨j, hj, hacc, hnex⟩ := htr g hev
@@ -535,8 +537,8 @@ noncomputable def failEps (q : Kind → ℕ) (qE : ℕ) : ℝ≥0∞ :=
 /-- The per-output failure terms of the provers `Pv j`, each within the budgets `q`, `qE`. -/
 theorem sum_fail_le (T : CrtTables) (stF : ι → Statement) (p : Params)
     (hparams : ∀ s, (stF s).params = p) (Pv : ι' → OracleComp specIC (ByteArray × (ι × β)))
-    (J : Finset ι') (qE : ℕ) (hqE : ∀ j, IsQueryBoundP (Pv j) (fun t => t.isRight = true) qE)
-    (q : Kind → ℕ) (hq : ∀ j, IsKindQueryBoundIC (Pv j) q) :
+    (J : Finset ι') (qE : ℕ) (hqE : ∀ j ∈ J, IsQueryBoundP (Pv j) (fun t => t.isRight = true) qE)
+    (q : Kind → ℕ) (hq : ∀ j ∈ J, IsKindQueryBoundIC (Pv j) q) :
     ∑ j ∈ J, (Pr{let E ← $ᵗ CTable; let r ← (simulateQ randomOracle
         (gameA T stF (Pv j) E)).run' ∅}[bindFailA stF E r] +
       Pr{let E ← $ᵗ CTable; let r ← (simulateQ randomOracle
@@ -545,12 +547,12 @@ theorem sum_fail_le (T : CrtTables) (stF : ι → Statement) (p : Params)
         (gameA T stF (Pv j) E)).run' ∅}[PostOut E r]) ≤
       J.card * failEps q qE := by
   rw [← nsmul_eq_mul]
-  refine Finset.sum_le_card_nsmul _ _ _ fun j _ => ?_
-  have hdo := prEvent_joint_deadOpen_le_A T stF (Pv j) p hparams q (hq j)
+  refine Finset.sum_le_card_nsmul _ _ _ fun j hj => ?_
+  have hdo := prEvent_joint_deadOpen_le_A T stF (Pv j) p hparams q (hq j hj)
   unfold failEps
   gcongr
-  · exact (prEvent_joint_bindFail_le_A T stF (Pv j) qE (hqE j)).trans (add_le_add le_rfl hdo)
-  · exact prEvent_joint_postOut_le_A T stF (Pv j) qE (hqE j) q (hq j)
+  · exact (prEvent_joint_bindFail_le_A T stF (Pv j) qE (hqE j hj)).trans (add_le_add le_rfl hdo)
+  · exact prEvent_joint_postOut_le_A T stF (Pv j) qE (hqE j hj) q (hq j hj)
 
 /-- **Simultaneous extraction for the issue relations in the joint experiment** (the cipher table
 uniform, then the lazy hash oracle): `prEvent_sim_le_E` averaged over the cipher table, with
@@ -564,11 +566,12 @@ theorem prEvent_sim_le (T : CrtTables) (stF : ι → Statement) (dec : ByteArray
     (hvals : ∀ s c1 lb w, (stF s).values c1 lb w = (sys s).values w)
     (hdet : ∀ (E : CTable) s, @ChainDet (icPrg E.cipher) T (stF s) (sys s) N (Wit s))
     (P₀ : OracleComp specIC (ByteArray × (ι × β))) (P : ι' → OracleComp specIC (ByteArray × (ι × β)))
-    (qE : ℕ) (hqE : ∀ j, IsQueryBoundP (P j) (fun t => t.isRight = true) qE)
-    (q : Kind → ℕ) (hq₀ : IsKindQueryBoundIC P₀ q) (hq : ∀ j, IsKindQueryBoundIC (P j) q) (nG : ℕ)
+    (J : Finset ι') (qE : ℕ) (hqE : ∀ j ∈ J, IsQueryBoundP (P j) (fun t => t.isRight = true) qE)
+    (q : Kind → ℕ) (hq₀ : IsKindQueryBoundIC P₀ q) (hq : ∀ j ∈ J, IsKindQueryBoundIC (P j) q)
+    (nG : ℕ)
     (hnG₀ : IsQueryBoundP P₀ (fun t => t.isLeft = true) nG)
-    (hnG : ∀ j, IsQueryBoundP (P j) (fun t => t.isLeft = true) nG)
-    (J : Finset ι') (hpre : ∀ E, PrefixRuns E P₀ P J) (oa : CTable → OracleComp spec α)
+    (hnG : ∀ j ∈ J, IsQueryBoundP (P j) (fun t => t.isLeft = true) nG)
+    (hpre : ∀ E, PrefixRuns E P₀ P J) (oa : CTable → OracleComp spec α)
     (event : CTable → α → Prop)
     (htr : ∀ E g, event E (evalWithAnswerFn (QueryImpl.ofFn g) (oa E)) → ∃ j ∈ J,
       let r := evalWithAnswerFn (QueryImpl.ofFn g) (gameA T stF (P j) E)
@@ -585,7 +588,7 @@ theorem prEvent_sim_le (T : CrtTables) (stF : ι → Statement) (dec : ByteArray
     (fun E r => deadOpenA stF E r) (fun E r => PostOut E r) fun E =>
       prEvent_sim_le_E T stF dec E P₀ P sys hT st₀ hparams hdel cb hcomb hdec hn N Wit hvals
         (hdet E) (fun r => PostOut E r)
-        (fun j s g h => keysPre_of_not_postOut T (stF s) (P j) E g h) q hq₀ hq nG hnG₀ hnG J
+        (fun j s g h => keysPre_of_not_postOut T (stF s) (P j) E g h) J q hq₀ hq nG hnG₀ hnG
         (hpre E) (oa E) (event E) (htr E)).trans ?_
   exact add_le_add le_rfl (sum_fail_le T stF st₀.params hparams P J qE hqE q hq)
 
@@ -604,11 +607,12 @@ theorem prEvent_sim_comb_le (T : CrtTables) (stF : ι → Statement) (dec : Byte
       (stF s).values c1 v.ba w = (sysL s (combDec v)).values w)
     (hdet : ∀ (E : CTable) s, @CombDet (icPrg E.cipher) M T (stF s) (sysL s) (witL s) N (Wit s))
     (P₀ : OracleComp specIC (ByteArray × (ι × β))) (P : ι' → OracleComp specIC (ByteArray × (ι × β)))
-    (qE : ℕ) (hqE : ∀ j, IsQueryBoundP (P j) (fun t => t.isRight = true) qE)
-    (q : Kind → ℕ) (hq₀ : IsKindQueryBoundIC P₀ q) (hq : ∀ j, IsKindQueryBoundIC (P j) q) (nG : ℕ)
+    (J : Finset ι') (qE : ℕ) (hqE : ∀ j ∈ J, IsQueryBoundP (P j) (fun t => t.isRight = true) qE)
+    (q : Kind → ℕ) (hq₀ : IsKindQueryBoundIC P₀ q) (hq : ∀ j ∈ J, IsKindQueryBoundIC (P j) q)
+    (nG : ℕ)
     (hnG₀ : IsQueryBoundP P₀ (fun t => t.isLeft = true) nG)
-    (hnG : ∀ j, IsQueryBoundP (P j) (fun t => t.isLeft = true) nG)
-    (J : Finset ι') (hpre : ∀ E, PrefixRuns E P₀ P J) (oa : CTable → OracleComp spec α)
+    (hnG : ∀ j ∈ J, IsQueryBoundP (P j) (fun t => t.isLeft = true) nG)
+    (hpre : ∀ E, PrefixRuns E P₀ P J) (oa : CTable → OracleComp spec α)
     (event : CTable → α → Prop)
     (htr : ∀ E g, event E (evalWithAnswerFn (QueryImpl.ofFn g) (oa E)) → ∃ j ∈ J,
       let r := evalWithAnswerFn (QueryImpl.ofFn g) (gameA T stF (P j) E)
@@ -626,7 +630,7 @@ theorem prEvent_sim_comb_le (T : CrtTables) (stF : ι → Statement) (dec : Byte
     (fun E r => deadOpenA stF E r) (fun E r => PostOut E r) fun E =>
       prEvent_sim_comb_le_E T stF dec E P₀ P sysL witL dst hT st₀ hparams hdel hcomb hdec hn'
         hεc N Wit hvals (hdet E) (fun r => PostOut E r)
-        (fun j s g h => keysPre_of_not_postOut T (stF s) (P j) E g h) q hq₀ hq nG hnG₀ hnG J
+        (fun j s g h => keysPre_of_not_postOut T (stF s) (P j) E g h) J q hq₀ hq nG hnG₀ hnG
         (hpre E) (oa E) (event E) (htr E)).trans ?_
   exact add_le_add le_rfl (sum_fail_le T stF st₀.params hparams P J qE hqE q hq)
 
