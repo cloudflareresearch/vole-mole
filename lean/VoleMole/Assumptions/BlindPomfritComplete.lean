@@ -494,6 +494,161 @@ lemma eval_gameW (G : (d : DR ⊕ Dom) → WB AR d) :
   rw [collapseH]
   simp only [evalWithAnswerFn_map, simulateQ_pure, StateT.run_pure, evalWithAnswerFn_pure, phaseB]
 
+omit [DecidableEq DR] [DecidableEq X'] in
+/-- **A claimed session's signature verifies at a table** if `B`'s preimage is good for the
+session's answer, the answer is cached at the label, and the session's grinding answers are not
+`GrindBad`. -/
+theorem sess_verOne (G : (d : DR ⊕ Dom) → WB AR d) (s1 : HTS) (k : ℕ) (u : TG) (σ : Spec.Bytes)
+    (hrel : relP pk (some σ) u) (L' : QueryLog specIC)
+    (hx : s1.1 (label pk lr k (soOf (leanClient CrtGen.tables lr) pk κ G k).1
+      (soOf (leanClient CrtGen.tables lr) pk κ G k).2.1) = some (u, 0))
+    (hg : ¬ GrindBad CrtGen.tables (realGrind (Hashes.ofTable (gHof G))
+      (realPre (Hashes.ofTable (gHof G))
+        (pomStmt pk lr u (soOf (leanClient CrtGen.tables lr) pk κ G k).2.2.2.1
+          (soOf (leanClient CrtGen.tables lr) pk κ G k).2.2.2.2)
+        (soOf (leanClient CrtGen.tables lr) pk κ G k).2.2.1 (zeroPre ++ toBA σ)))) :
+    evalWithAnswerFn (QueryImpl.ofFn G) ((simulateQ (htH (AR := AR) pre') (simulateQ
+      (liftV (AR := AR) (S := SIss)) (verOneV CrtGen.tables lr κ.1 pk L' (msgOf k)
+        (evalWithAnswerFn (QueryImpl.ofFn (join (gHof G) κ.1))
+          ((leanClient CrtGen.tables lr).finish pk κ.2 k
+            (soOf (leanClient CrtGen.tables lr) pk κ G k).2.2 u (some σ)))))).run s1) = (true, s1) := by
+  set Hs := Hashes.ofTable (gHof G)
+  have hso : soOf (leanClient CrtGen.tables lr) pk κ G k =
+      let s := @pendOf (icPrg κ.1.cipher) Hs CrtGen.tables lr (sessOf pk κ.2 k).1 (sessOf pk κ.2 k).2.1
+      (s.proof, s.chal1, (s, (sessOf pk κ.2 k).2.1, (sessOf pk κ.2 k).2.2)) :=
+    eval_start (gHof G) κ.1 CrtGen.tables lr pk κ.2 k
+  rw [hso] at hx hg ⊢
+  dsimp only at hx hg ⊢
+  set rho := (sessOf pk κ.2 k).1
+  set b1 := (sessOf pk κ.2 k).2.1
+  set b2 := (sessOf pk κ.2 k).2.2
+  set s := @pendOf (icPrg κ.1.cipher) Hs CrtGen.tables lr rho b1
+  obtain ⟨hb1, hb2⟩ := sessOf_sizes pk κ.2 k
+  obtain ⟨proof, hok, hacc⟩ := @pom_complete (icPrg κ.1.cipher) Hs pk lr rho b1 b2 u σ hrel
+    (hashesWF_ofTable _) hg
+  rw [eval_finish, hok]
+  simp only [Except.toOption, Option.getD_some]
+  have hc1 := @chal1Pre_honest (icPrg κ.1.cipher) (gHof G) CrtGen.tables (pomStmt0 pk lr b1 b2)
+    (pomStmt pk lr u b1 b2) zeroPre rho (toBA σ) proof hok
+  have hps : proof.size = (pomfritParams lr).proofBytes := by rw [proveCommit_size hok]; rfl
+  have hcom : toBA (Spec.PomFRIT.commitRefresher (toL b2)) = b1 := by
+    simp only [b1, b2, sessOf, EndToEnd.SpecRel.toL_toBA]
+  refine verOne_ok G pre' CrtGen.tables lr κ.1 pk L' (msgOf k) proof b1 b2 s.chal1 u s1
+    hps hb1 hb2 hcom hc1 ?_ hacc
+  rw [@tgtIn_final (icPrg κ.1.cipher) Hs (hashesWF_ofTable _) pk lr k rho b1 b2 hb1 hb2 _ _ proof hok]
+  exact hx
+
+/-- **A completeness failure at a table is a `GrindBad` of a claimed session** (`fail_table`):
+if `B`'s claims win and the flag is `false`, then for one of the `ℓ + 1` claimed sessions the
+grinding answers at its prefix are `GrindBad`. -/
+theorem fail_table (G : (d : DR ⊕ Dom) → WB AR d)
+    (h : Wins ℓ (goodPre relP) pk (evalWithAnswerFn (QueryImpl.ofFn G)
+        ((simulateQ (htH pre') (gameA lr ℓ n pk κ b)).run (s0 L))).1.1
+        (chOf (AR := WB AR) (evalWithAnswerFn (QueryImpl.ofFn G)
+          ((simulateQ (htH pre') (gameA lr ℓ n pk κ b)).run (s0 L))).2.2 ∅) ∧
+      (evalWithAnswerFn (QueryImpl.ofFn G)
+        ((simulateQ (htH pre') (gameA lr ℓ n pk κ b)).run (s0 L))).1.2 = false) :
+    ∃ p ∈ Finset.range (ℓ + 1), GrindBad CrtGen.tables
+      (evalWithAnswerFn (QueryImpl.ofFn G) (pfxB lr ℓ n pk pre' κ b L p >>= blockW)) := by
+  classical
+  by_contra hno
+  push_neg at hno
+  rw [eval_gameW] at h
+  dsimp only at h
+  set r := evalWithAnswerFn (QueryImpl.ofFn G) (phaseB lr ℓ n pk pre' κ b L) with hr
+  have hinv : InvH lr (leanClient CrtGen.tables lr) pk κ G r.2 :=
+    invH_run pre' CrtGen.tables lr ℓ _ n pk κ G b L
+  obtain ⟨⟨-, hH2⟩, hses⟩ := hinv
+  set cs := claimed (r.1, r.2.1) with hcs
+  set so := soOf (leanClient CrtGen.tables lr) pk κ G
+  set s1 := r.2.2
+  -- the claimed entries are sessions
+  have hcl : ∀ e ∈ cs, ∃ x' es, r.2.1.ses x' = some es ∧ ∃ sB, e = (es.x, es.r, es.st, es.u, sB) := by
+    intro e he
+    simp only [hcs, claimed, List.mem_filterMap, Option.map_eq_some_iff] at he
+    obtain ⟨p, -, es, hes, rfl⟩ := he
+    exact ⟨p.1, es, hes, p.2, rfl⟩
+  -- the finishing phase
+  have hpost : (CC lr ℓ).post pk κ r.2.1.cs cs = toV ((finLog (leanClient CrtGen.tables lr) pk κ
+      cs).run r.2.1.cs) >>= fun rr => flagV CrtGen.tables lr ℓ κ.1 pk rr.2 rr.1 := rfl
+  rw [hpost, eval_htH_liftV_toV_bind] at h
+  set fl := evalWithAnswerFn (QueryImpl.ofFn (gHof G))
+    ((finLog (leanClient CrtGen.tables lr) pk κ cs).run r.2.1.cs) with hfl
+  have hsigs : fl.1 = cs.map fun e => (msgOf e.2.2.1.1, evalWithAnswerFn
+      (QueryImpl.ofFn (join (gHof G) κ.1))
+      ((leanClient CrtGen.tables lr).finish pk κ.2 e.2.2.1.1 e.2.2.1.2 e.2.2.2.1 e.2.2.2.2)) :=
+    eval_finLog _ pk κ (gHof G) cs _
+  obtain ⟨⟨hlen, hnd, -, hgood⟩, hf⟩ := h
+  -- programmed targets at the claims are the sessions' answers
+  have hkeep := fun y hy => post_keep G pre' (flagV CrtGen.tables lr ℓ κ.1 pk fl.2 fl.1) s1 y hy
+  have hrel : ∀ x' es, r.2.1.ses x' = some es → ∀ sB, (es.x, sB) ∈ cs.map
+      (fun e => (e.1, e.2.2.2.2)) → relP pk sB es.u := by
+    intro x' es hes sB hm
+    obtain ⟨hx1, -, -, -⟩ := hses x' es hes
+    obtain ⟨t, hh, ht, hrl⟩ := hgood _ hm
+    have hne : s1.1 es.x ≠ none := by rw [hx1]; simp
+    have ht' : s1.2.2.1 es.x = some (t, hh) := by
+      rw [← (hkeep es.x hne).2]; exact ht
+    have := hH2 _ _ ht'
+    rw [hx1, Option.some.injEq, Prod.mk.injEq] at this
+    rw [this.1]; exact hrl
+  -- each verification accepts
+  have hok : ∀ p ∈ fl.1, evalWithAnswerFn (QueryImpl.ofFn G) ((simulateQ (htH (AR := AR) pre')
+      (simulateQ (liftV (AR := AR) (S := SIss)) (verOneV CrtGen.tables lr κ.1 pk fl.2 p.1 p.2))).run
+        s1) = (true, s1) := by
+    intro p hp
+    rw [hsigs, List.mem_map] at hp
+    obtain ⟨e, he, rfl⟩ := hp
+    obtain ⟨i, hi⟩ := List.mem_iff_getElem?.1 he
+    have hilt : i < ℓ + 1 := by
+      have := (List.getElem?_eq_some_iff.1 hi).1
+      rw [← hlen, List.length_map]; exact this
+    obtain ⟨x', es, hes, sB, rfl⟩ := hcl _ he
+    obtain ⟨hx1, -, hlab, hst⟩ := hses x' es hes
+    have hr' := hrel x' es hes sB (List.mem_map.2 ⟨_, he, rfl⟩)
+    obtain ⟨σ, rfl, hσl, hσe⟩ := hr'
+    have hg := hno i (Finset.mem_range.2 hilt)
+    simp only [pfxB, evalWithAnswerFn_bind, ← hr, ← hcs, hi, eval_toW, eval_preGQ,
+      eval_blockW] at hg
+    dsimp only at hg ⊢
+    rw [hst] at hg ⊢
+    dsimp only at hg ⊢
+    refine sess_verOne lr pk pre' κ G s1 es.idx es.u σ ⟨σ, rfl, hσl, hσe⟩ fl.2 ?_ ?_
+    · rw [← hlab]; exact hx1
+    · intro hb
+      apply hg
+      convert hb using 1
+      funext c
+      simp only [realGrind, Hashes.ofTable_hash]
+      exact (blk_ba _).symm
+  obtain ⟨vs, hvs, hev⟩ := verAll_ok G pre' CrtGen.tables lr κ.1 pk fl.2 s1 fl.1 hok
+  -- so the flag is `true`
+  have hlen' : fl.1.length = ℓ + 1 := by rw [hsigs, List.length_map]; rw [List.length_map] at hlen; exact hlen
+  have hnd' : (fl.1.map Prod.fst).Nodup := by
+    rw [hsigs, List.map_map]
+    have hidx : ∀ e ∈ cs, e.1 = label pk lr e.2.2.1.1 (so e.2.2.1.1).1 (so e.2.2.1.1).2.1 := by
+      intro e he
+      obtain ⟨x', es, hes, sB, rfl⟩ := hcl _ he
+      obtain ⟨-, -, hlab, hst⟩ := hses x' es hes
+      simp only [hst]; exact hlab
+    have h1 : (cs.map fun e => e.1).Nodup := by
+      rw [List.map_map] at hnd; exact hnd
+    rw [List.map_congr_left hidx] at h1
+    have h2 : (cs.map fun e => e.2.2.1.1).Nodup := by
+      have := h1
+      rw [show (fun e : ByteArray × TG × (ℕ × PSt) × TG × SIss =>
+          label pk lr e.2.2.1.1 (so e.2.2.1.1).1 (so e.2.2.1.1).2.1) =
+        (fun k => label pk lr k (so k).1 (so k).2.1) ∘ (fun e => e.2.2.1.1) from rfl,
+        ← List.map_map] at this
+      exact this.of_map _
+    have := h2.map msgOf_injective
+    rw [List.map_map] at this
+    exact this
+  apply Bool.false_ne_true
+  rw [← hf]
+  simp only [flagV, hlen', ite_true, simulateQ_map, StateT.run_map, evalWithAnswerFn_map, hev]
+  simp [hvs, hnd']
+
 end Game
 
 end VoleMole.Assumptions.BlindPomfrit
