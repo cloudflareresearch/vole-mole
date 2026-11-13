@@ -1184,4 +1184,158 @@ theorem hop₄ (hm : MainP p₄) (hp : SmallParams p₄) (hHb : HashesWF Hb)
 
 end Hops
 
+
+/-! ## The hybrids on one tape, and the result -/
+
+section Chain
+
+variable {S : Type} [Fintype S] [Nonempty S] {p₁ p₂ p₃ p₄ : Params} (Hb : Hashes)
+  (G : Game S Out SW SW SW SW)
+
+/-- **A slot's behaviour in a hybrid**: simulated iff `m`, on the slot's coins. -/
+noncomputable def modeB (p : Params) (m : Bool) (k : KS p) : Beh p :=
+  bif m then simB Hb p k.1.2 k.2 else realB Hb p k.1.1 k.2
+
+variable {Hb}
+
+lemma modeB_ok {p : Params} (hHb : HashesWF Hb) (m : Bool) (k : KS p) : (modeB Hb p m k).OK := by
+  cases m
+  · exact realB_ok Hb hHb _ _
+  · exact simB_ok Hb _ _
+
+lemma modeB_cov {p : Params} (hm : MainP p) (hHb : HashesWF Hb) (m : Bool) (k : KS p) :
+    (modeB Hb p m k).Cov Hb := by
+  cases m
+  · exact realB_cov Hb hm hHb _ _
+  · exact simB_cov Hb _ _
+
+variable (Hb)
+
+/-- **The tape of the game**: the secret, the shared tables, the four slots' coins. -/
+abbrev GTape (S : Type) (p₁ p₂ p₃ p₄ : Params) := S × USh × KS p₁ × KS p₂ × KS p₃ × KS p₄
+
+/-- **The view in the hybrid** where slot `j` is simulated iff `mⱼ`. -/
+noncomputable def hybV (m₁ m₂ m₃ m₄ : Bool) (x : GTape S p₁ p₂ p₃ p₄) : GView S p₁ p₂ p₃ p₄ :=
+  viewOf G x.1 x.2.1 (modeB Hb p₁ m₁ x.2.2.1) (modeB Hb p₂ m₂ x.2.2.2.1)
+    (modeB Hb p₃ m₃ x.2.2.2.2.1) (modeB Hb p₄ m₄ x.2.2.2.2.2)
+
+/-- **The probability of an event of the view in a hybrid.** -/
+noncomputable def hyb (m₁ m₂ m₃ m₄ : Bool) (Ψ : GView S p₁ p₂ p₃ p₄ → Prop) : ℝ :=
+  pr (GTape S p₁ p₂ p₃ p₄) (fun x => Ψ (hybV Hb G m₁ m₂ m₃ m₄ x))
+
+variable {Hb G}
+
+theorem step₁ (hm₁ : MainP p₁) (hm₂ : MainP p₂) (hm₃ : MainP p₃) (hm₄ : MainP p₄)
+    (hp : SmallParams p₁) (hHb : HashesWF Hb) (hv : GValid G p₁ p₂ p₃ p₄)
+    (Ψ : GView S p₁ p₂ p₃ p₄ → Prop) (R5 : GView S p₁ p₂ p₃ p₄ → Finset (Bytes 37)) {q3 qE : ℕ}
+    (hΨ : Rd Ψ R5 q3 qE) :
+    |hyb Hb G false false false false Ψ - hyb Hb G true false false false Ψ| ≤
+      εS q3 (qE + 4 * 4607) + hyb Hb G true false false false (bstar Hb G R5) := by
+  let e : (S × KS p₂ × KS p₃ × KS p₄) × (USh × KS p₁) ≃ GTape S p₁ p₂ p₃ p₄ :=
+    { toFun := fun a => (a.1.1, a.2.1, a.2.2, a.1.2.1, a.1.2.2.1, a.1.2.2.2)
+      invFun := fun x => ((x.1, x.2.2.2.1, x.2.2.2.2.1, x.2.2.2.2.2), (x.2.1, x.2.2.1))
+      left_inv := fun _ => rfl
+      right_inv := fun _ => rfl }
+  unfold hyb
+  rw [← pr_equiv e, ← pr_equiv e, ← pr_equiv e]
+  refine abs_pr_fiber_le _ _ _ fun a => ?_
+  exact hop₁ Hb G hm₁ hp hHb hv Ψ R5 hΨ a.1 (modeB Hb p₂ false a.2.1) (modeB Hb p₃ false a.2.2.1)
+    (modeB Hb p₄ false a.2.2.2) (modeB_ok hHb _ _) (modeB_ok hHb _ _) (modeB_ok hHb _ _)
+    (modeB_cov hm₂ hHb _ _) (modeB_cov hm₃ hHb _ _) (modeB_cov hm₄ hHb _ _)
+
+theorem step₂ (hm₁ : MainP p₁) (hm₂ : MainP p₂) (hm₃ : MainP p₃) (hm₄ : MainP p₄)
+    (hp : SmallParams p₂) (hHb : HashesWF Hb) (hv : GValid G p₁ p₂ p₃ p₄)
+    (Ψ : GView S p₁ p₂ p₃ p₄ → Prop) (R5 : GView S p₁ p₂ p₃ p₄ → Finset (Bytes 37)) {q3 qE : ℕ}
+    (hΨ : Rd Ψ R5 q3 qE) :
+    |hyb Hb G true false false false Ψ - hyb Hb G true true false false Ψ| ≤
+      εS q3 (qE + 4 * 4607) + hyb Hb G true true false false (bstar Hb G R5) := by
+  let e : (S × KS p₁ × KS p₃ × KS p₄) × (USh × KS p₂) ≃ GTape S p₁ p₂ p₃ p₄ :=
+    { toFun := fun a => (a.1.1, a.2.1, a.1.2.1, a.2.2, a.1.2.2.1, a.1.2.2.2)
+      invFun := fun x => ((x.1, x.2.2.1, x.2.2.2.2.1, x.2.2.2.2.2), (x.2.1, x.2.2.2.1))
+      left_inv := fun _ => rfl
+      right_inv := fun _ => rfl }
+  unfold hyb
+  rw [← pr_equiv e, ← pr_equiv e, ← pr_equiv e]
+  refine abs_pr_fiber_le _ _ _ fun a => ?_
+  exact hop₂ Hb G hm₂ hp hHb hv Ψ R5 hΨ a.1 (modeB Hb p₁ true a.2.1) (modeB Hb p₃ false a.2.2.1)
+    (modeB Hb p₄ false a.2.2.2) (modeB_ok hHb _ _) (modeB_ok hHb _ _) (modeB_ok hHb _ _)
+    (modeB_cov hm₁ hHb _ _) (modeB_cov hm₃ hHb _ _) (modeB_cov hm₄ hHb _ _)
+    ((G.σ₁ a.1).map fun _ => simulate p₁ a.2.1.1.2) (fun _ => rfl)
+
+theorem step₃ (hm₁ : MainP p₁) (hm₂ : MainP p₂) (hm₃ : MainP p₃) (hm₄ : MainP p₄)
+    (hp : SmallParams p₃) (hHb : HashesWF Hb) (hv : GValid G p₁ p₂ p₃ p₄)
+    (Ψ : GView S p₁ p₂ p₃ p₄ → Prop) (R5 : GView S p₁ p₂ p₃ p₄ → Finset (Bytes 37)) {q3 qE : ℕ}
+    (hΨ : Rd Ψ R5 q3 qE) :
+    |hyb Hb G true true false false Ψ - hyb Hb G true true true false Ψ| ≤
+      εS q3 (qE + 4 * 4607) + hyb Hb G true true true false (bstar Hb G R5) := by
+  let e : (S × KS p₁ × KS p₂ × KS p₄) × (USh × KS p₃) ≃ GTape S p₁ p₂ p₃ p₄ :=
+    { toFun := fun a => (a.1.1, a.2.1, a.1.2.1, a.1.2.2.1, a.2.2, a.1.2.2.2)
+      invFun := fun x => ((x.1, x.2.2.1, x.2.2.2.1, x.2.2.2.2.2), (x.2.1, x.2.2.2.2.1))
+      left_inv := fun _ => rfl
+      right_inv := fun _ => rfl }
+  unfold hyb
+  rw [← pr_equiv e, ← pr_equiv e, ← pr_equiv e]
+  refine abs_pr_fiber_le _ _ _ fun a => ?_
+  exact hop₃ Hb G hm₃ hp hHb hv Ψ R5 hΨ a.1 (modeB Hb p₁ true a.2.1) (modeB Hb p₂ true a.2.2.1)
+    (modeB Hb p₄ false a.2.2.2) (modeB_ok hHb _ _) (modeB_ok hHb _ _) (modeB_ok hHb _ _)
+    (modeB_cov hm₁ hHb _ _) (modeB_cov hm₂ hHb _ _) (modeB_cov hm₄ hHb _ _)
+    ((G.σ₁ a.1).map fun _ => simulate p₁ a.2.1.1.2)
+    ((G.σ₂ a.1 ((G.σ₁ a.1).map fun _ => simulate p₁ a.2.1.1.2)).map fun _ =>
+      simulate p₂ a.2.2.1.1.2) (fun _ => rfl) (fun _ => rfl)
+
+theorem step₄ (hm₁ : MainP p₁) (hm₂ : MainP p₂) (hm₃ : MainP p₃) (hm₄ : MainP p₄)
+    (hp : SmallParams p₄) (hHb : HashesWF Hb) (hv : GValid G p₁ p₂ p₃ p₄)
+    (Ψ : GView S p₁ p₂ p₃ p₄ → Prop) (R5 : GView S p₁ p₂ p₃ p₄ → Finset (Bytes 37)) {q3 qE : ℕ}
+    (hΨ : Rd Ψ R5 q3 qE) :
+    |hyb Hb G true true true false Ψ - hyb Hb G true true true true Ψ| ≤
+      εS q3 (qE + 4 * 4607) + hyb Hb G true true true true (bstar Hb G R5) := by
+  let e : (S × KS p₁ × KS p₂ × KS p₃) × (USh × KS p₄) ≃ GTape S p₁ p₂ p₃ p₄ :=
+    { toFun := fun a => (a.1.1, a.2.1, a.1.2.1, a.1.2.2.1, a.1.2.2.2, a.2.2)
+      invFun := fun x => ((x.1, x.2.2.1, x.2.2.2.1, x.2.2.2.2.1), (x.2.1, x.2.2.2.2.2))
+      left_inv := fun _ => rfl
+      right_inv := fun _ => rfl }
+  unfold hyb
+  rw [← pr_equiv e, ← pr_equiv e, ← pr_equiv e]
+  refine abs_pr_fiber_le _ _ _ fun a => ?_
+  exact hop₄ Hb G hm₄ hp hHb hv Ψ R5 hΨ a.1 (modeB Hb p₁ true a.2.1) (modeB Hb p₂ true a.2.2.1)
+    (modeB Hb p₃ true a.2.2.2) (modeB_ok hHb _ _) (modeB_ok hHb _ _) (modeB_ok hHb _ _)
+    (modeB_cov hm₁ hHb _ _) (modeB_cov hm₂ hHb _ _) (modeB_cov hm₃ hHb _ _)
+    ((G.σ₁ a.1).map fun _ => simulate p₁ a.2.1.1.2)
+    ((G.σ₂ a.1 ((G.σ₁ a.1).map fun _ => simulate p₁ a.2.1.1.2)).map fun _ =>
+      simulate p₂ a.2.2.1.1.2)
+    ((G.σ₃ a.1 ((G.σ₁ a.1).map fun _ => simulate p₁ a.2.1.1.2)
+      ((G.σ₂ a.1 ((G.σ₁ a.1).map fun _ => simulate p₁ a.2.1.1.2)).map fun _ =>
+        simulate p₂ a.2.2.1.1.2)).map fun _ => simulate p₃ a.2.2.2.1.2)
+    (fun _ => rfl) (fun _ => rfl) (fun _ => rfl)
+
+variable (Hb G)
+
+/-- **The joint zero-knowledge hop on `main` with a shared `H₅` table and cipher**, for four proofs
+in sequence. See the module docstring. -/
+theorem main_shared_le (hm₁ : MainP p₁) (hm₂ : MainP p₂) (hm₃ : MainP p₃) (hm₄ : MainP p₄)
+    (hp₁ : SmallParams p₁) (hp₂ : SmallParams p₂) (hp₃ : SmallParams p₃) (hp₄ : SmallParams p₄)
+    (hHb : HashesWF Hb) (hv : GValid G p₁ p₂ p₃ p₄) (F : GView S p₁ p₂ p₃ p₄ → Prop)
+    (R5 : GView S p₁ p₂ p₃ p₄ → Finset (Bytes 37)) {q3 qE : ℕ} (hF : Rd F R5 q3 qE)
+    (hR : Rd R5 R5 q3 qE) :
+    |hyb Hb G false false false false F - hyb Hb G true true true true F| ≤
+      15 * εS q3 (qE + 8 * 4607) + 15 * hyb Hb G true true true true (bstar Hb G R5) := by
+  have hB := rd_bstar Hb G hR
+  have e8 : qE + 4 * 4607 + 4 * 4607 = qE + 8 * 4607 := by omega
+  have hε : εS q3 (qE + 4 * 4607) ≤ εS q3 (qE + 8 * 4607) := εS_mono le_rfl (by omega)
+  have f1 := step₁ hm₁ hm₂ hm₃ hm₄ hp₁ hHb hv F R5 hF
+  have f2 := step₂ hm₁ hm₂ hm₃ hm₄ hp₂ hHb hv F R5 hF
+  have f3 := step₃ hm₁ hm₂ hm₃ hm₄ hp₃ hHb hv F R5 hF
+  have f4 := step₄ hm₁ hm₂ hm₃ hm₄ hp₄ hHb hv F R5 hF
+  have g2 := step₂ hm₁ hm₂ hm₃ hm₄ hp₂ hHb hv _ R5 hB
+  have g3 := step₃ hm₁ hm₂ hm₃ hm₄ hp₃ hHb hv _ R5 hB
+  have g4 := step₄ hm₁ hm₂ hm₃ hm₄ hp₄ hHb hv _ R5 hB
+  rw [e8] at g2 g3 g4
+  have := abs_sub_le_iff.1 f1; have := abs_sub_le_iff.1 f2; have := abs_sub_le_iff.1 f3
+  have := abs_sub_le_iff.1 f4; have := abs_sub_le_iff.1 g2; have := abs_sub_le_iff.1 g3
+  have := abs_sub_le_iff.1 g4
+  rw [abs_sub_le_iff]
+  constructor <;> linarith
+
+end Chain
+
 end VoleMole.ZK.Sim
