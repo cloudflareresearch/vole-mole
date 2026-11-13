@@ -102,7 +102,17 @@ permutations with inverse queries):
     `noSquat`, `noRedirectU`): one honest token, a fresh accepted operation that is not extracted,
     opens `t`, or carries `Derive(nf_key, ctx_red*)`: `≤ ε_I + ε_R + δ_R + ε_SE + ε_prf + 2⁻¹⁹² +
     Adv^bind_UCom + Adv^spr-k`, weak SE and the PRF (`Adv^prf-t_1`) as hypotheses; key recovery
-    reduces to the PRF (`owkAdv_le`). Audit: `Audit/UnboundRest.lean`;
+    reduces to the PRF (`owkAdv_le`). For `U` honest tokens with `M` adaptive honest redemptions
+    (`Theft/MoussakaUnboundMany.lean`, `nmUN`, `noSquatN`, `noRedirectUN`): `Pr ≤ U·ε_I + M·ε_R +
+    Σ_i δ_i + ε_SE + Σ_h (ε_prf + (M+1)·2⁻¹⁹² + Adv^bind(B₁ h) + Adv^spr-k(B₂ h))`, `ε_SE` weak
+    simulation-extractability with `U+M` simulated proofs (`WeakSEN`, `Theft/Many.lean`, a
+    hypothesis); key recovery with `M` adaptive nullifier queries reduces to the PRF
+    (`owkAdvN_le`). With the Lean prover the zero-knowledge hypotheses are theorems for the unbound
+    relations (`Privacy/MoussakaUnboundLean.lean`, `leanPI_zkRO`, `leanPR_zkRO`; `nmU_lean`,
+    `nmUN_lean`, …). Bound Moussaka Thm 3 likewise for `U` tokens and `M` redemptions
+    (`Theft/MoussakaMany.lean`, `noRedirectN`, `noRedirectN_lean`): `U·ε_I + M·ε_R + Σ_i δ_i +
+    ε_SE + Σ_h Adv^ow(inverter h)`. Audits: `Audit/UnboundRest.lean`, `Audit/UnboundMany.lean`,
+    `Audit/TheftMany.lean`;
   - Ratatouille balance (Thm 1, `balance_le_ufTag`): `N` adaptive issuance and spend calls with
     chosen refunds, `Pr[win] ≤ N·ε_iss + N·ε_spend + Adv^uf-tag(B) + Adv^coll_Com(C)`, `B` an
     explicit UF-Tag forger (with a signability probe) and `C` an explicit `Com` collision finder.
@@ -221,7 +231,7 @@ permutations with inverse queries):
 **On paper only**: removing U1's `2⁻⁷¹` term efficiently in general, the affinity of the
 verifier's CRT masks under label agreement, and Lemmas P^∞ / P^lin in the one-more game
 (`pomfrit-lemmap-tight.md`); in the permutation model, the CT-UF^open, UF-Tag and OMPR corollaries of the
-protocol theorems and PomFRIT's U1/U2 with simultaneous extraction; for unbound Moussaka's Prop U3 and Thm U4, the factor `U` over honest tokens and several honest redemptions per token (Lean: one token, one redemption), its Thm U1
+protocol theorems and PomFRIT's U1/U2 with simultaneous extraction; for the many-token forms of unbound Moussaka's Prop U3 / Thm U4 and Moussaka's Thm 3 (`nmUN`, `noRedirectN`), weak simulation-extractability with `U+M` simulated proofs (`WeakSEN`) and the read budgets of the hops' distinguishers (hypotheses); Ratatouille no theft for more than one honest Client, its Thm U1
 with inverse queries, and one joint bound over all three extraction families;
 weak simulation-extractability (L8) for the Lean simulators, which Moussaka non-malleability
 (Thm 3) and Ratatouille no theft take as the hypothesis `WeakSE2`, the read budgets of their ZK
@@ -378,13 +388,16 @@ lean/
     Privacy/                privacy games on the executable specs (blindness, issuer hiding,
                             unlinkability): with zero knowledge and hiding as hypotheses, and
                             for the Lean prover in the random-oracle and ideal-cipher model;
-                            (PU) as a game and its ideal-permutation bound (PU, PUKeccak)
+                            (PU) as a game and its ideal-permutation bound (PU, PUKeccak);
+                            Lean prover ZK for the unbound relations (MoussakaUnboundLean)
     Theft/                  non-malleability games (no theft, no redirect) on the specs in the
                             zero-knowledge table model, weak SE as a hypothesis; read budgets
                             (Reads); L8's programming step (SimExtract, SimExtractLean); any base
                             hash record and the other hashes as tables (LeanHb, Tables);
                             one-wayness of Com with random tables (ComOW); unbound
-                            Moussaka Prop U3 and Thm U4 (MoussakaUnbound)
+                            Moussaka Prop U3 and Thm U4 (MoussakaUnbound, MoussakaUnboundLean);
+                            `N` honest proofs and `WeakSEN` (Many); `U` tokens and `M`
+                            redemptions (MoussakaMany, MoussakaManyLean, MoussakaUnboundMany)
     Assumptions/            the UOV assumptions as standalone games (UOV) and their links to the
                             protocol theorems (UOVLinks); reductions between them: T1(a)/(c)
                             (IdealTag), T4 and the K-key step (CTUFOpenOMPR), A1 and P8(a)
@@ -1485,7 +1498,8 @@ What is **not** established, roughly in order of importance:
    redemption non-malleability (Moussaka Thm 3) are mechanized as games on the specs in the
    zero-knowledge table model (`Theft/`, `noTheft`, `noRedirect`; with the Lean prover's zero
    knowledge `noTheft_lean`, `noRedirect_lean`): `Pr ≤ ε_I + ε_S + δ + ε_SE + Adv^ow` for one honest
-   Client. The hops' read budgets are proved from the adversary's and the
+   Client; for Moussaka and unbound Moussaka also for `U` honest tokens and `M` honest
+   redemptions (`noRedirectN`, `nmUN`), with `WeakSEN` in place of `WeakSE2`. The hops' read budgets are proved from the adversary's and the
    extractor's budgets, with the Lean verifiers (`noTheft_lean_reads`, `noRedirect_lean_reads`;
    `Theft/Reads.lean`). L8's programming step is mechanized: `WeakSE2 ≤ ε_plain + ε_hit` for an
    extractor that does not read `H₂³` (`weakSE2_of_plain`); the Lean verifier reads `H₂³` only at
