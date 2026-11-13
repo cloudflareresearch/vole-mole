@@ -60,22 +60,22 @@
 // (`preimage`, `secret_input`, `mixed_input`; for keccak, the segment constraints vanish) and a
 // record `random`.
 
-#include "vole_mole/keccak.hpp"
-#include "vole_mole/ihat.hpp"
 #include "vole_mole/act.hpp"
+#include "vole_mole/ihat.hpp"
+#include "vole_mole/keccak.hpp"
 #include "vole_mole/uov.hpp"
 
-#include "dst.hpp"                // internal
-#include "keccak/segmented.hpp"   // internal
-#include "ihat/commit.hpp"    // internal
-#include "ihat/issue.hpp"     // internal
-#include "ihat/redeem.hpp"    // internal
-#include "pomfrit/redeem.hpp"     // internal
-#include "act/commit.hpp" // internal
-#include "act/issue.hpp"  // internal
-#include "act/spend.hpp"  // internal
-#include "uov/circuit.hpp"        // internal
-#include "uov/public_key.hpp"     // internal
+#include "act/commit.hpp"       // internal
+#include "act/issue.hpp"        // internal
+#include "act/spend.hpp"        // internal
+#include "dst.hpp"              // internal
+#include "ihat/commit.hpp"      // internal
+#include "ihat/issue.hpp"       // internal
+#include "ihat/redeem.hpp"      // internal
+#include "keccak/segmented.hpp" // internal
+#include "pomfrit/redeem.hpp"   // internal
+#include "uov/circuit.hpp"      // internal
+#include "uov/public_key.hpp"   // internal
 
 #include "test.hpp"
 
@@ -622,8 +622,7 @@ void dump_ihat(const std::string& dir) {
     namespace md = ihat::detail;
     const ihat::Context ctx_iss = filled<ihat::CTX_BYTES>(0x10);
     const ihat::Context ctx_red = filled<ihat::CTX_BYTES>(0x20);
-    const ihat::ChallengeDigest challenge_digest =
-        filled<ihat::CHALLENGE_DIGEST_BYTES>(0x70);
+    const ihat::ChallengeDigest challenge_digest = filled<ihat::CHALLENGE_DIGEST_BYTES>(0x70);
     const ihat::Nullifier nf = filled<ihat::NF_BYTES>(0x30);
     const md::Opening r = filled<md::R_BYTES>(0x40);
     const md::Commitment t = md::commit(nf, ctx_iss, ctx_red, r);
@@ -649,8 +648,7 @@ void dump_ihat(const std::string& dir) {
                      "the Anchor Set.");
         std::mt19937_64 rng(0x6d726564);
         // Two Anchors; the issuer (the fixed test key pair) is at index 1.
-        const std::array<ihat::AnchorRef, 2> anchors = {alt_key_pair().pk,
-                                                            test::uov_key_pair().pk};
+        const std::array<ihat::AnchorRef, 2> anchors = {alt_key_pair().pk, test::uov_key_pair().pk};
         const uov::Preimage s = test::uov_key_pair().sk.derive_preimage(t);
         const auto chal2 = chal2_bytes<Rel::params::CONSTS::QS::CHALLENGE_BYTES>();
         dump_relation<Rel, md::REDEEM_QS_DEGREE>(

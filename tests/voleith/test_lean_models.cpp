@@ -6,17 +6,17 @@
 #include "vole_mole/ihat.hpp"
 #include "vole_mole/uov.hpp"
 
-#include "dst.hpp"               // internal
-#include "ihat/commit.hpp"   // internal
-#include "ihat/issue.hpp"    // internal
-#include "ihat/redeem.hpp"   // internal
+#include "act/issue.hpp"           // internal
+#include "act/spend.hpp"           // internal
+#include "dst.hpp"                 // internal
+#include "ihat/commit.hpp"         // internal
+#include "ihat/issue.hpp"          // internal
+#include "ihat/redeem.hpp"         // internal
 #include "ihat/unbound_issue.hpp"  // internal
 #include "ihat/unbound_redeem.hpp" // internal
-#include "pomfrit/redeem.hpp"    // internal
-#include "act/issue.hpp" // internal
-#include "act/spend.hpp" // internal
-#include "uov/circuit.hpp"       // internal
-#include "voleith.hpp"           // internal
+#include "pomfrit/redeem.hpp"      // internal
+#include "uov/circuit.hpp"         // internal
+#include "voleith.hpp"             // internal
 
 #include "test.hpp"
 
@@ -872,8 +872,8 @@ TEST(LeanModels, PomfritCheckPolynomialTopCoefficient) {
 // As above, for VOLE-IHAT issue (d = 9, with the Keccak constraints).
 TEST(LeanModels, IhatIssueCheckPolynomialTopCoefficient) {
     std::mt19937_64 rng(10);
-    const mo::IssueRelation::instance x = {
-        mo::commit(IHAT_NF, IHAT_CTX_ISS, IHAT_CTX_RED, IHAT_R), IHAT_CTX_ISS};
+    const mo::IssueRelation::instance x = {mo::commit(IHAT_NF, IHAT_CTX_ISS, IHAT_CTX_RED, IHAT_R),
+                                           IHAT_CTX_ISS};
     auto w = mo::encode_issue_witness(IHAT_NF, IHAT_CTX_ISS, IHAT_CTX_RED, IHAT_R);
     EXPECT_EQ(check_relation_top_coefficient<mo::IssueRelation>(x, w, rng), Gf{});
 
@@ -883,7 +883,8 @@ TEST(LeanModels, IhatIssueCheckPolynomialTopCoefficient) {
 }
 
 // ---------------------------------------------------------------------------------------------
-// 4. Constraint counts (lean/docs/extraction/L4-quicksilver.md §7: n in `zkCoeff` is NUM_CONSTRAINTS)
+// 4. Constraint counts (lean/docs/extraction/L4-quicksilver.md §7: n in `zkCoeff` is
+// NUM_CONSTRAINTS)
 // ---------------------------------------------------------------------------------------------
 
 namespace {

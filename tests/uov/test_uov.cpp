@@ -3,8 +3,8 @@
 #include "vole_mole/ihat.hpp"
 #include "vole_mole/uov.hpp"
 
+#include "ihat/commit.hpp"      // internal
 #include "keccak/segmented.hpp" // internal
-#include "ihat/commit.hpp"  // internal
 #include "uov/circuit.hpp"      // internal
 #include "uov/public_key.hpp"   // internal
 

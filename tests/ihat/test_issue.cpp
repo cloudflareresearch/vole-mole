@@ -1,12 +1,12 @@
 // Tests for the issuance proof relation.
 
-#include "vole_mole/keccak.hpp"
 #include "vole_mole/ihat.hpp"
+#include "vole_mole/keccak.hpp"
 #include "vole_mole/uov.hpp"
 
+#include "ihat/commit.hpp"      // internal
+#include "ihat/issue.hpp"       // internal
 #include "keccak/segmented.hpp" // internal
-#include "ihat/commit.hpp"  // internal
-#include "ihat/issue.hpp"   // internal
 
 #include "test.hpp"
 

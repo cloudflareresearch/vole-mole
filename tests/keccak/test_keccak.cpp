@@ -191,8 +191,8 @@ TEST(Keccak, InverseCircuitInvertsLanes) {
     EXPECT_EQ(to_hex(recovered), to_hex(input));
 }
 
-// Soundness of the arithmetization in keccak/segmented.hpp (see lean/docs/extraction/L7-keccak.md). The
-// tests below evaluate the QuickSilver circuit itself, instantiated with the plaintext stand-in
+// Soundness of the arithmetization in keccak/segmented.hpp (see lean/docs/extraction/L7-keccak.md).
+// The tests below evaluate the QuickSilver circuit itself, instantiated with the plaintext stand-in
 // PlainQS, so they test the very chi and chi^-1 lambdas that generate the constraints.
 namespace {
 
