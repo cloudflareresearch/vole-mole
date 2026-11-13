@@ -26,11 +26,10 @@ with probability `≤ 256^{−3285}`. Then **the target map of a symmetry is det
 (`target_unique`): a scaling `A = λ·I` forces `T = λ²·I` (`scaling_target`), and a scalar
 infinitesimal pair `X = λ·I` forces `Y = 0` (`scaling_infinitesimal_target`).
 
-**Not mechanized** (§8 of the note): that `A` (or `X`) must be scalar, for linear `A` (G) and
-infinitesimal `X` (L), with the bound `≤ 1.01·256^{−977}` (Lemma C on `F[x]`-modules, the rank
-Lemmas E and F, the count of matrices by rank); (S) for semilinear maps; Lemma I; Proposition A
-for additive maps. The bounds here are weaker than the note's Lemma N (`256^{−3211}`,
-`256^{−5987}`) because only `P2` is random: they hold for every `P1`.
+**That `A` (or `X`) must be scalar** is `Assumptions/SymmetryT3.lean` (`t3`), with `P1` uniform
+as well: it is false for a fixed `P1` (`Audit/SymmetryT3.lean`, `not_t3Good_p1_zero`). The bounds
+here are weaker than the note's Lemma N (`256^{−3211}`, `256^{−5987}`) because only `P2` is
+random: they hold for every `P1`.
 
 No `sorry`, no `axiom`.
 -/

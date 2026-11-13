@@ -600,5 +600,5 @@ part of Lemma S (item 3) is on paper; it is not used by B1.
 - A4 for `τ < 5` (other constants), and for a PSF that has the scaling symmetry built in.
 - Other public pairs `(φ, T)` with `P ∘ φ = T ∘ P` (§4.2). Settled for additive and affine `φ`
   with `T` injective: for all keys but a fraction `256^{−976}` there are only the scalings
-  (`ompr-shift-algebra.md` Theorem T3, §8; in Lean only the translation part and Lemma N,
-  `Assumptions/SymmetryCount.lean`). Open for `φ` that is not additive.
+  (`ompr-shift-algebra.md` Theorem T3, §8; in Lean for maps with one Frobenius component and
+  all keys but `256^{−128}`: `t3`, `Assumptions/SymmetryT3.lean`). Open for `φ` that is not additive.

@@ -4,8 +4,11 @@ Status: **[paper]**, with **[Lean]** for the linear-algebra and counting steps
 (`lean/VoleMole/Seed/QMulti.lean`, no `sorry`, no `axiom`; check with
 `cd lean && lake env lean VoleMole/Seed/QMulti.lean`). This continues README §L9 after Q2
 (single-proof QROM extraction) and Q5 (QROM simulation-extractability). Notation, counts, oracle
-names and lemma names follow Q2 and Q1. `ε_multi` is kept symbolic. Its current values are Q1's
-Thms 5.1 and 5.2; Q6 (`Q6-cipher-binding.md`, in progress) may improve them.
+names and lemma names follow Q2 and Q1. `ε_multi` is kept symbolic. The tables below use Q1's
+Thms 5.1 and 5.2. The current bound is
+`ε_multi^{(n)} ≤ min(Q6 Theorem 1 [fetches], Q6 Theorem 5′ [evaluations])` (§7;
+`Q6-cipher-binding.md` §14.5, Corollary 14.2). With it, Theorem M equals its main term for all
+`q` up to the Grover limit when `n ≤ 2^{20}`.
 
 ## 0. Summary
 
@@ -321,8 +324,8 @@ gives the same increment, `4√(2ρ)·√Pr + 8ρ`.
   `ε_multi^{H₄} ≈ 2^{−41.8}` and `ε_multi^{free} ≈ 2^{−15.1}`.
 - `n·ε_rec ≈ n·2^{−127}`.
 - **Where `n` hurts:** only through `ε_multi`, because each verification touches about `2^{12.2}`
-  keys. With Q1's key-level bounds, `n·K_V` must stay below about `2^{36}`. Q6's improvement would
-  lift this.
+  keys. With Q1's key-level bounds, `n·K_V` must stay below about `2^{36}`. Q6 lifts this (§7):
+  `n = 2^{20}` costs nothing at any `q`; at `n = q = 2^{30}` the total is `2^{−56.2}`.
 
 (Numbers: `scratchpad/q7/nums.py`. **[Lean]**: `main_term_multi_at_2_30_n_2_20`,
 `main_term_multi_at_n_eq_q`, `multi_free_fetch_at_n_2_20`, `multi_free_blocks_at_n_2_20`.)
@@ -777,11 +780,31 @@ accepted `Issue` queries.
 - `n` enters only through the counts and the readback term.
 - A point-level bound from Q6 plugs in unchanged, as long as it bounds this same event for an
   algorithm with `Q_E` (fetch-counted) cipher queries.
-- Q6 Theorems 4–5 (§11–§13 there) bound the same event by `≈ 2^{−184.2}·Q_E³`, with `Q_E`
-  counting every cipher *evaluation* (about `2^{18}` per verification, not Lemma K's 4607
-  fetches). Q6 Theorem 4 needs all `Ext` measurements at the end of the experiment, as in Q2; for
-  mid-run `Ext`s first move them to the end at the cost already in `ε_Sim` ((I1), `nδ`). Use the
-  smaller of this and Theorem 1.
+- Q6 Theorems 4–5 (§11–§13 there) bound `MULTI_end` for all `n` outputs (which is all that
+  Lemma F^{(n)} uses of `¬Bad_end`) by `≈ 2^{−184.2}·Q_E³`, with `Q_E` counting every cipher
+  *evaluation* (about `2^{18}` per verification, not Lemma K's 4607 fetches). Q6 Theorem 4 needs
+  all `Ext` measurements at the end of the experiment, as in Q2; for mid-run `Ext`s first move
+  them to the end at the cost already in `ε_Sim` ((I1), `nδ`). Use the smaller of this and
+  Theorem 1.
+- **Many outputs need Q6 Theorem 4′.** Theorem 4's additive term is `6√(τ(Q_E+1)/N)` with
+  `τ = 17n` points; at `n = 2^{20}`, `q = 2^{30}` its square is `2^{−60.7}`, as large as the main
+  term. Q6 §14.3 replaces it by `5√(nL/N)` (`2^{−92}` squared at `n = 2^{20}`). Precisely
+  (Q6 Corollary 14.2):
+
+      ε_multi^{(n)} ≤ min( Theorem 1 with Q_E = q_E + n·4607,
+                           ((1+2^{−61})(a + c_atyp) + 5√(nL/N))²,  a² ≈ 2^{−184.15}·(q_E + n·2^{18})³ ).
+
+  | `q` | `n` | `(Σ^{(n)})²` | Theorem 1 | Theorem 5′ | total |
+  |---|---|---|---|---|---|
+  | `2^{30}` | `2^{20}` | `2^{−60.4}` | `2^{−86.5}` | `2^{−70.1}` | `2^{−60.4}` |
+  | `2^{30}` | `2^{30}` | `2^{−57.8}` | `2^{−56.7}` | `2^{−40.2}` | `2^{−56.2}` |
+  | `2^{50}` | `2^{20}` | `2^{−20.4}` | `2^{−5.8}` | `2^{−34.2}` | `2^{−20.4}` |
+  | `2^{58}` | `2^{20}` | `2^{−4.4}` | vacuous | `2^{−10.2}` | `2^{−4.3}` |
+
+  (`scripts/qrom-block-binding/nums.py`; **[Lean]** `CipherBinding.block_multiM_at_q50_n20`.)
+- U1-Q and U2-Q evaluate `ε_multi` in world R (the real game), not in world S, whose
+  database-controlled programming reads the cipher database mid-run. So Q6 Theorem 4′ applies
+  to them as well (Q6 §14.2).
 - The PomFRIT reductions' coherent `E₁` evaluations make no cipher queries. They read `D_o`.
 
 ---
@@ -833,8 +856,9 @@ and the union bounds), as in Q2 and Q5.
 | R-Q, MO-Q | direct lift | high (given their assumptions) |
 
 **Gaps, stated plainly.**
-1. **`ε_multi`** is still Q1's key-level bound. Every theorem here is vacuous at `q_E ≳ 2^{40}`, or
-   at `q_E + n·4607 ≳ 2^{37}` for the H₄ version. Q6's work would remove this.
+1. **`ε_multi`** in the tables of §0, §2.7 and §4.5 is still Q1's key-level bound, which is
+   vacuous at `q_E ≳ 2^{40}`, or at `q_E + n·4607 ≳ 2^{37}` for the H₄ version. Q6 removes this
+   (§7): with `min(Theorem 1, Theorem 5′)` every theorem here is limited by its other terms.
 2. **QROM assumptions.**
    - A-OMPR-RO and A-OMPR⊕τ-RO (PomFRIT) and UF-Tag-Q (Ratatouille) are quantum-oracle
      assumptions. Their classical forms are the protocols' stated assumptions.

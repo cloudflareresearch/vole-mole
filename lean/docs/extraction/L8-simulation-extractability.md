@@ -597,7 +597,16 @@ mechanized with weak SE as a hypothesis: `lean/VoleMole/Theft/Basic.lean` states
 need (`WeakSE2`: one simulated proof of each of two relations, statements chosen without reading
 the tables, the extractor on the simulated transcripts, the adversary's last stage and the
 programmed tables, as in §2's log), and `Theft/Ratatouille.lean` and `Theft/Moussaka.lean` reduce
-the two theorems to it (`security/ratatouille.md` §5, `security/moussaka.md` §5.3).
+the two theorems to it (`security/ratatouille.md` §5, `security/moussaka.md` §5.3). For several
+honest tokens and redemptions, `Theft/Many.lean` states the same notion with `N` simulated proofs
+for adaptively chosen statements (`WeakSEN`, this note's game with `q_S = N`, weak form); unbound
+Moussaka's Proposition U3 and Theorem U4 and Moussaka's Theorem 3 for `U` tokens and `M`
+redemptions reduce to it with `N = U + M` (`Theft/MoussakaUnboundMany.lean`,
+`security/moussaka-unbound.md` §5.3; `Theft/MoussakaMany.lean`, `security/moussaka.md` §5.3), and
+so does Ratatouille's Theorem 3 for `U` clients and `M` spends (`Theft/RatatouilleMany.lean`,
+`security/ratatouille.md` §5). `WeakSEN` is a hypothesis of those theorems. At `N = 2`, for the sum
+of two proof systems, it implies `WeakSE2` with the same error (`Theft/ManyPlain.lean`,
+`weakSE2_of_weakSEN`). The programming step below is mechanized for `WeakSE2` and for `WeakSEN`.
 
 The programming step of the proof (§6: the simulator programs only `H₂³`, at its own grinding
 points, and an accepting fresh forgery avoids them) is mechanized in the table model
@@ -609,7 +618,17 @@ For the Lean verifier, which reads `H₂³` at `chal3`'s input only (`verRO_h23_
 the forgery's `chal3` input is a programmed point (`accOp_moves`), that is, its prefix
 `chal2 ‖ qs_check ‖ ã` is a simulated proof's (`progRO_moved`).
 
-The same holds with the other hashes random. The zero-knowledge theorem, the read budgets and the
+For `N` simulated proofs the step is `weakSEN_of_plain` (`Theft/ManyPlain.lean`):
+`WeakSEN ≤ ε_plain + ε_moves`, with `ε_plain` plain extraction against the last stage composed
+with `N` programmings (`PlainSEN`). The programming term splits over the simulated proofs
+(`progMovesN_of_slots`): a key that the composition of the `N` programmings moves is moved by one
+of them (`simPre_moved`), so `ε_moves ≤ Σ_i ε_hit,i`, where `ε_hit,i` bounds the event that the
+fresh forgery's verifier reads `H₂³` at a grinding key of simulated proof `i`'s recomputed prefix
+(`SlotEvN i`). It is instantiated for the Lean simulators and verifiers of Ratatouille, Moussaka
+and unbound Moussaka (`weakSEN_ratatouille`, `weakSEN_moussaka`, `weakSEN_moussakaU`), with SHAKE
+for the other hashes. `PlainSEN` and the `SlotEvN` terms are hypotheses.
+
+The same holds with the other hashes random, for two simulated proofs. The zero-knowledge theorem, the read budgets and the
 programming step hold for every base hash record (`Theft/LeanHb.lean`), so they lift, by
 averaging, to shared tables with one more uniform component from which `H₁`, `H₂⁰…H₂²`, `H₄` and
 `H_comb` are read (`Theft/Tables.lean`: `zkRO_tables`, `noTheft_leanX_plain`,

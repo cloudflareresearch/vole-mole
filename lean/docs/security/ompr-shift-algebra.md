@@ -25,7 +25,7 @@ with a stated unproved hypothesis. *Estimate*: cost figure from the usual hybrid
 | R | **A4 holds for UOV itself, for every reduction that is black-box in the adversary only.** Such a reduction `R` may use `pk` and the algebra of `P` in any way, and may rewind. Against one explicit adversary it wins OMPR with probability `≤ 2·τ^{−(q+1)} + Adv^{free}_{UOV}(M) + V⁴·2^{−343}`, where `M` is an OMPR^free adversary ([OR] §3.1) of about `R`'s running time. So: a reduction of this kind with loss below `τ^{q+1}/4` **is** an attack on OMPR^free, i.e. it contains a combiner across classes | proved; Lean (`thmR`: the games, the simulation, the lottery and the accounting; the bad events `badPr ≤ V⁴·2^{−343}`: `badPr_le_V4`; the statement as here: `thmR_V4`; Corollary R′: `corR'`) | §2 |
 | T1 | Toolbox: polar form, kernel translation, the preimage line through a singular vector (`D(0)` gives one), `P` on the span of two preimages | proved, Lean (`qmap_add_of_polar_eq_zero`, `preimage_line`, `preimage_plane`) | §1 |
 | T2 | An affine symmetry `P(As + a) = T(P(s)) + c` shifts targets only by `c = P(a)` with `a ⊥ im A`. If `A` is onto and `rad B = 0`, then `a = 0`, `c = 0`. `rad B = 0` for every key with `δ < 1` and `v ↦ L_v` injective | proved; Lean (`affine_symmetry`; with `rad B = 0`: `no_translation`; `rad B = 0` with its count over pqov's keys: `pr_not_radTriv`, `pr_translation_le`) | §3.1 |
-| T3 | **`P` has no symmetries but the scalings.** For every oil space and all but a fraction `≤ 256^{−976} < 2^{−7800}` of the keys: (G) the only linear pairs `(A, T)`, `A` invertible, with `P∘A = T∘P` are `(λI, λ²I)`; (L) the only infinitesimal pairs `B(s, Xs) = Y·P(s)` are `F·(I, 0)`; (S, A) the same for Frobenius-semilinear and for all additive bijections, with an affine part. So a symmetry pair moves a target only inside its class. Checked: (L) at full size on two keys; the full group on toy keys over `F₄` | proved (model: `P1`, `P2` uniform); identities Lean (`symmetry_polar`, `symmetry_eigen`, `infinitesimal_polar`, …); Lean with the count, for any `O`, `P1` and uniform `P2`: no affine pair with `A` onto translates targets, all keys but `256^{−1951} + 256^{−3285}` (`pr_translation_le`), and `T` is fixed by `A`, so `(λI, T)` forces `T = λ²I`, all keys but `256^{−3285}` (`pr_not_spanTriv`, `scaling_target`); experimental | §3.1, §8 |
+| T3 | **`P` has no symmetries but the scalings.** For every oil space and all but a fraction `≤ 256^{−976} < 2^{−7800}` of the keys: (G) the only linear pairs `(A, T)`, `A` invertible, with `P∘A = T∘P` are `(λI, λ²I)`; (L) the only infinitesimal pairs `B(s, Xs) = Y·P(s)` are `F·(I, 0)`; (S, A) the same for Frobenius-semilinear and for all additive bijections, with an affine part. So a symmetry pair moves a target only inside its class. Checked: (L) at full size on two keys; the full group on toy keys over `F₄` | proved (model: `P1`, `P2` uniform); **Lean (`t3`, same model, any `O`): (G), (L), (S) and affine pairs with one Frobenius component, all keys but `256^{−128}`**, by another route (§8.7); identities Lean (`symmetry_polar`, `symmetry_eigen`, `infinitesimal_polar`, …); Lean for any `O`, `P1` and uniform `P2`: no affine pair with `A` onto translates targets, all keys but `256^{−1951} + 256^{−3285}` (`pr_translation_le`), and `(λI, T)` forces `T = λ²I` (`scaling_target`); paper only: the bound `256^{−976}` and (A) for sums of several Frobenius components; experimental | §3.1, §8 |
 | T4 | A translator for one fixed shift `Δ₀` is worth exactly one equation: `UOV(119, 45) ≤ UOV-projected(119, 44) ∘ Tr_{Δ₀}`, and `Tr_{Δ₀} ≤ UOV(119, 45)`. In the cost model the gap is `≈ 2^{3.7}`. For uniform shifts translation is the UOV problem ([OR] A3) | proved; figure: estimate | §3.2 |
 | T5 | The linear span of known preimages gives targets `Σ α_i² y_i + Σ α_iα_j B(s_i, s_j)`. The reduction controls the `y_i`, not the cross terms. On toy keys the cross term of two sampler answers is uniform. With the oil space, translation is linear algebra; without it, every route we checked is an MQ instance or a class | proved identities; heuristic conclusion; experimental | §3.3–3.4 |
 | C1 | **Collinear shifts trade one equation for a landing.** With shifts `λ_a·c`, a forgery is a solution of 44 of the 45 equations whose last coordinate `μ(s)` is one of τ values out of 256. In a hybrid solver this is the direct attack with one equation dropped from the solver and τ guesses saved. Its cost is `τ*/τ` times the direct cost, `τ* = 256·U/H` (`H`: direct; `U`: one solution of the 44 equations). Reference model (XL with Wiedemann, after Thomae–Wolf): `H = 2^{140.3}`, C1 at τ = 17 costs `2^{142.4}`, `τ* ≈ 72`. Over ten model variants `τ*` runs from 11 to 72 and C1 at 17 from `2^{0.7}` below to `2^{2.1}` above the direct attack. For `q = 0` no attack gains more than `τ = 2^{4.1}`. On toy keys the degrees, the call counts, the landing rate `τ/q` and the break-even point are as the model predicts | reduction proved; costs: estimate; experimental | §4.1 |
@@ -388,6 +388,12 @@ keys but a fraction `≤ 256^{−976}` have the following properties.
 proof is a union bound over `A` (or `X`) by its distance `r` from the scalars, with the count
 `256^{M²}` of maps `T` absorbed by a module argument (§8.2–8.4). Characteristic 2 enters in (S),
 (A) and in the solution `(I, 0)` of (L), which exists because `B(s, s) = 0` (§8.5).
+
+*Lean.* `t3` (`Assumptions/SymmetryT3.lean`): for every `O`, over uniform `P1` and `P2`, all keys
+but a fraction `≤ 256^{−128}` satisfy (G), (L), (S) and (A) for maps `A`, `T` that are
+`σ`-semilinear for one `σ`, with the affine part and with `A` bijective or `T` injective. The
+proof is not the one of §8.2–8.4; see §8.7. `P1` must be random: for `P1 = 0` the key has
+non-scalar pairs for every `P2` (`not_t3Good_p1_zero`).
 
 - *Experimental.* (L) holds for two uniform keys at the real size `(119, 45)` over `F₂₅₆`: the
   system has 321 300 equations in 16 186 unknowns and rank 16 185. The full group of linear and
@@ -781,12 +787,14 @@ would also break CT-UF^× ([OR] B2).
 | Theorem R as stated in §2.1; Corollary R′ | `thmR_V4`, `thmR_num`; `corR'` | `Assumptions/TheoremRBad.lean` |
 | The guessing reduction sends `q + 3` messages | `guessR_bound` | `Audit/TheoremR.lean` |
 | T2′ and Lemma N over pqov's keys; no affine pair translates targets | `pr_not_radTriv`, `pr_not_spanTriv`, `pr_translation_le` | `Assumptions/SymmetryCount.lean` |
+| Theorem T3 over pqov's keys (`P1`, `P2` uniform): only the scalings, all keys but `256^{−128}` | `t3`, `t3Good_of_not_bad`, `pr_badKey`; `tensor_group`, `tensor_lie`; audits `exists_t3Good`, `not_t3Good_p1_zero` | `Assumptions/SymmetryT3.lean`, `SymmetryScalar.lean`, `SymmetryTensor.lean`, `SymmetryProbes.lean`, `Audit/SymmetryT3.lean` |
 
 The rows of `Spec/PqovShift.lean` are for `qmap`, the model of pqov's public map that
 `lake exe spec_kats` checks against the C++. Theorem R is generic in the trapdoor and the class
 relation (§2.4); its bad-event bound is for targets up to scalars in `F^m` (`badPr_le`). On paper
 only: the success of `A**_D` in Corollary R′ (§2.4), T1.4–5, T4, C1, C3 (C3 is `preimage_line`
-plus linear algebra), and of T3 all but the translation part and Lemma N (§8.7).
+plus linear algebra), and of T3 the bound `256^{−976}` with its Lemmas C, E, F, Lemma I and
+Proposition A for maps with several Frobenius components (§8.7).
 
 `scripts/ompr-shift-algebra/shift_algebra_toy.py` (pure Python, about 8 s): the identities of §1
 on toy keys over `F₁₆`, including good ⇔ `𝒪 ∩ K_s = 0`, oil translation and `rad B = 0`; the
@@ -808,8 +816,9 @@ budget, so the counts quoted in §4.1 vary a little between runs and machines.
 
 - A reduction OMPR ⇒ OMPR⊕17 that is not black-box in the adversary, or a proof that the natural
   non-black-box classes also fail.
-- T3 in Lean beyond the translation part and Lemma N: Lemma C, the rank Lemmas E and F, the
-  count of matrices by rank (§8.7).
+- T3 in Lean with the bound `256^{−976}` (Lemma C, the rank Lemmas E and F, the count of
+  matrices by rank), and Proposition A for additive maps with several Frobenius components
+  (Lemma I). `t3` has `256^{−128}` and one component (§8.7).
 - T3 is proved for additive maps (§8). Open there: pairs `(φ, Θ)` with `φ` not additive, beyond
   `φ(s) = γ(P(s))·s`; pairs with `A` not bijective and `T ≠ 0`; a sharper exceptional fraction
   (the bound `256^{−976}` comes from the matrices at distance 1 from the scalars).
@@ -1110,13 +1119,85 @@ For `A` linear this is T2 again, with the hypothesis on `A` and `rad B` discharg
 | `T` is determined by `A`; scalar `A` gives `T = λ²I`, scalar `X` gives `Y = 0` | `target_unique`, `scaling_target`, `scaling_infinitesimal_target` |
 | Non-vacuity: good keys exist for every `O`, `P1`; the scalings satisfy the hypotheses | `exists_good_key`, `scaling_pair_hyps` |
 
-On paper only: Lemma C, the rank counts of Lemmas E and F, the union bound over non-scalar `A`
-and `X` (the bound `1.01·256^{−977}` of (G) and (L)), (S), Lemma I and Proposition A. They need
-the structure theorem for `F[x]`-modules, exterior powers and counts of matrices by rank; we did
-not mechanize them. Lemma N is in Lean in the model with `P1` fixed, with the bounds
-`256^{−1951} + 256^{−3285}` and `256^{−3285}` instead of `256^{−3211}` and `256^{−5987}`. This
-covers what the reductions of §3.1 use from T3 to exclude translations of targets: an affine pair
-with `A` onto acts linearly on targets. Theorem R (§2) uses no part of T3.
+**Lean: `A` and `X` are scalar** (`Assumptions/SymmetryT3.lean`, `SymmetryScalar.lean`,
+`SymmetryTensor.lean`, `SymmetryProbes.lean`; `Audit/SymmetryT3.lean`).
+
+*Statement* (`t3`). For every oil matrix `O`, over uniform `P1` and `P2` parts (`P1Part`: the
+`124875` bytes of the `P1` block), the key `pqovKey O P1 P2` satisfies `T3Good` except with
+probability `≤ 256^{−128} = 2^{−1024}`. `T3Good pk`, for `P = qmap pk` on `F^{119}`:
+- if `P(A s + a) = T(P s) + c` for all `s`, with `A`, `T` additive and `σ`-semilinear for a ring
+  endomorphism `σ` of `F`, and `A` bijective or `T` injective, then `σ = id`, `a = 0`, `c = 0`,
+  `A = λ·I`, `T = λ²·I`, `λ ≠ 0`;
+- if `B(s, X s) = Y(P s)` for all `s`, with `X`, `Y` linear, then `X = λ·I`, `Y = 0`.
+
+The ring endomorphisms of `F₂₅₆` are the powers of the Frobenius. So this is (G), (L), (S) and
+(A) for maps with one Frobenius component, in the model of §8.1.
+
+*The model.* For fixed `O`, `(P1, P2) ↦ (P1, S)` is a bijection (`sEquiv`), `S = (P1 + P1ᵀ)·O +
+P2`. In the coordinates `(v, x)` of the oil space (`adEquiv`), `P(v, x) = P₁(v) + L(v, x)` with
+`L(v, x)_k = vᵀ S_k x` (`qmap_emb`). So the vinegar part `P₁` and the tensor `S` are uniform and
+independent. **`P1` cannot be fixed**: for `P1 = 0`, `P(v, x) = L(v, x)` is bilinear and
+`(v, x) ↦ (v, βx)`, `T = β·I` is a pair for every `P2` (`not_t3Good_p1_zero`). Likewise
+`X(v, x) = (0, x)`, `Y = I` is an infinitesimal pair (not in Lean). So T3 does not hold in the
+model of `Assumptions/SymmetryCount.lean` (`P1` arbitrary).
+
+*The route.* It is not the one of §8.2–8.4. No module structure, exterior power or count of
+matrices by rank is used. Each event is a union over a few vectors and functionals, and a
+probability computed by interpolation: the values of a uniform linear map at independent
+vectors are uniform and independent (`evHom_surjective`, `bqHom_surjective`).
+1. *`A` maps `𝒪` into `𝒪`.* `A(𝒪)` is a space of dimension `M` on which `P` vanishes. If it
+   has 18 vectors `z_i`, `z'_j` independent modulo `𝒪`, the 81 values `B(z_i, z'_j)` vanish;
+   they are uniform in `P1`: `IsoQ`, `≤ 256^{−1503}` (`pr_isoQ`). Otherwise `A(𝒪) ∩ 𝒪` has
+   codimension `≤ 17` in `𝒪` and `L(w, ·)` vanishes on it for some vinegar `w ≠ 0`: `BoxV`. In
+   the infinitesimal case `X(𝒪) ⊂ 𝒪` follows from `L(X̄x, x) = 0`: `PairOV` or `BoxV`
+   (`ov_eq_zero`).
+2. *The tensor.* `A` induces `g₁` on `F^N/𝒪` and `g₂` on `𝒪`, and `L(g₁v, g₂x) = T(L(v, x))`.
+   With `g₃ = Tᵀ` the trilinear form `h·L(v, x)` satisfies `ℓ(g₃h, v, x) = ℓ(h, g₁v, g₂x)`. For
+   each leg: if the map has three vectors `t_j` with `t_j`, `g t_j` independent (*free
+   probes*), the slices of `S` at `g t_j` are functions of those at `t_j`: a `Free` event,
+   probability `|slice|^{−3}` against a union over the six vectors and the other two maps
+   (`pr_free`). If not, the map is a scalar `c` on a subspace of codimension `≤ 4`
+   (`near_scalar`); for a `σ`-semilinear map, `c = 0` or `σ = id`, and `c = 0` contradicts
+   surjectivity. This is how (S) is proved: a semilinear bijection of the vinegars always has
+   free vectors. On the three subspaces `c₃ = c₁c₂` (else `BoxH`), and a vector
+   `w = g u − c u ≠ 0` on one leg gives `ℓ = 0` on `w` times the two subspaces: a `Box` event.
+   So `g₁ = α`, `g₂ = β`, `T = αβ` (`tensor_group`); in the infinitesimal case `X₁ = α`,
+   `X₂ = β`, `Y = α + β` (`tensor_lie`).
+3. *The vinegar part.* With `A(v, 0) = (αv, Cv)`: `L(v, Cv) = (β − α)·P₁(v)`. If `β ≠ α`, the
+   polar form of `P₁` is a function of `S` and `C`: `DetQ`, `≤ 256^{−314}` (`pr_detQ`). So
+   `β = α` and `L(v, Cv) = 0` for all `v`, which gives `C = 0`: `PairVO` if `C` has rank `≥ 18`,
+   `BoxO` otherwise (`vo_eq_zero`). In the infinitesimal case `L(v, Cv) = (α + β)·P₁(v)`, and
+   `β = −α = α`.
+4. *Affine part, and `T` injective.* As in T2, with the radical trivial by `BoxV` and `BoxO`
+   (`rad_trivial`, `adapted_affine`).
+
+| Event | Lean | Bound |
+|---|---|---|
+| `ℓ = 0` on `w × K × K'`, `w ≠ 0` a vinegar, an oil vector, a functional on targets | `pr_boxV`, `pr_boxO`, `pr_boxH` | `256^{−129}`, `256^{−854}`, `256^{−2349}` |
+| free probes, group, on the three legs | `pr_freeV`, `pr_freeO`, `pr_freeH` | `256^{−1325}`, `256^{−2219}`, `256^{−2219}` |
+| free probes, infinitesimal | `pr_freeLV`, `pr_freeLO`, `pr_freeLH` | `256^{−1581}`, `256^{−2219}`, `256^{−2219}` |
+| `L(v, Cv) = 0`, `L(Cx, x) = 0`, rank `C ≥ 18` | `pr_pairVO`, `pr_pairOV` | `256^{−315}` each |
+| a second isotropic space; `P₁` determined by `S` | `pr_isoQ`, `pr_detQ` | `256^{−1503}`, `256^{−314}` |
+
+The sum is `≤ 13·256^{−129} ≤ 256^{−128}` (`pr_badKey`). The largest term is `BoxV`: 74 + 17·45
++ 4·45 parameters against `28·41` conditions. Sharper parameters would lower it; we kept one
+box event per leg.
+
+*Audits* (`Audit/SymmetryT3.lean`): good keys exist for every `O` (`exists_t3Good`); the
+scalings satisfy the hypotheses (`scaling_group_hyps`, `scaling_inf_hyps`);
+`not_t3Good_p1_zero`.
+
+On paper only:
+- the bound `256^{−976}` of §8.1, with Lemma C, the rank Lemmas E and F and the counts of
+  matrices by rank (Lean: `256^{−128}`, by the route above);
+- Lemma I and Proposition A for additive maps `A = Σ_i A_i ∘ φ^i` with several Frobenius
+  components. `t3` covers the maps with one component, which is the last step of the proof of
+  Proposition A; the reduction to one component (comparison of coefficients of polynomial
+  functions, then Lemma I) is not mechanized;
+- Lemma N with the bounds `256^{−3211}` and `256^{−5987}` (`P1` random). `t3` does not use it:
+  the radical and the span are handled by the box events.
+
+Theorem R (§2) uses no part of T3.
 
 **Scripts** (`scripts/ompr-shift-algebra/`).
 - `t3_bound.py`: the bounds of §8.1, exactly. With `-v`, `δ_r` and the term for every `r`.
