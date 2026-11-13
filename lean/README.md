@@ -139,7 +139,15 @@ permutations with inverse queries):
     alive trees' prefixes as shifts (`hintS`), and Lemma P's goal weakens to "some alive tree
     extracts", `N = 2` per chain (`pomfritT_accept_le_some`; `ROM/LemmaPSome.lean`,
     `ROM/OneMoreShift{Table,Fail,Bound,Sim}.lean`, `Assumptions/PomfritShift{,Sim}.lean`). G8 is
-    closed (`pomfrit.md`). The converse, OMPR ≤ PomFRIT one-more forgery plus a completeness term, is
+    closed (`pomfrit.md`). **Lemma P's `2⁵⁷`** (`docs/security/pomfrit-lemmap-tight.md`,
+    `Seed/KOSUnique.lean`): U1's `(Q₃+ℓ+1)·2⁻⁷¹` is tight for the widest-group extractor `E₁` and
+    for every extractor that does not read `ũ` (paper). Because `hash_to_target` binds `ũ`, the
+    prefix group is determined by the first message and `ũ` (`witness_determined`,
+    `card_not_kosPar_le`, `pomfrit_disjQuads_le`, `pomfrit_par_count`; bad `chall₁` at most
+    `2⁻¹³⁴`); for trees agreeing on the label rows an efficient extractor has no `Shift` term
+    (`exists_slope_of_kosGood_affine`, `witness_determined_affine`). Not a new bound for U1: an
+    efficient extractor for first messages whose trees disagree on the label rows is open (hidden
+    slices). Keep `ũ` in `hash_to_target`: it is security-relevant. The converse, OMPR ≤ PomFRIT one-more forgery plus a completeness term, is
     in Lean in PomFRIT's real one-more game for a forger with coins and any client given as oracle
     computations (`pomfrit_T6`, `pomfrit_T6_bound`, `Assumptions/BlindPomfrit.lean`; the game for a
     forger with coins is `game` for one without, `gameB_liftF`; the client carries the game's query
@@ -185,7 +193,9 @@ permutations with inverse queries):
   arithmetizations of all seven relations (§6); executable specs, verifier and prover that match
   the C++ KATs, unbound Moussaka's included (§7, §8).
 
-**On paper only**: in the permutation model, the CT-UF^open, UF-Tag and OMPR corollaries of the
+**On paper only**: removing U1's `2⁻⁷¹` term efficiently in general, the affinity of the
+verifier's CRT masks under label agreement, and Lemmas P^∞ / P^lin in the one-more game
+(`pomfrit-lemmap-tight.md`); in the permutation model, the CT-UF^open, UF-Tag and OMPR corollaries of the
 protocol theorems and PomFRIT's U1/U2 with simultaneous extraction; unbound Moussaka's Cor U2, Prop U3 and Thm U4 (Lean cores only), its Thm U1
 with inverse queries, and one joint bound over all three extraction families;
 weak simulation-extractability (L8) for the Lean simulators, which Moussaka non-malleability
@@ -425,7 +435,7 @@ cipher.
 | L0 | All hash domains are disjoint; AES inputs of different roles never collide | [paper] + [Lean] `Seed/Commitments.lean` |
 | L1 | Committed data (commitment preimages, leaf keys) is well defined and binding | [paper] + [Lean] unique leaf keys and straight-line key extraction from the cipher log (PRF view, forward queries), binding with explicit `ε_bind` `ROM/CipherBind.lean`, `ROM/CipherOpen.lean`; the ordering half of the `H₁` linking, `Coll₁` and Post (C3) `ROM/CipherChain.lean`, `ROM/CipherSame.lean` (PRF view); statement binding for adaptive statements `ROM/StmtBind.lean`, `ROM/AdaptPomfrit.lean` |
 | L2 | A leaf the prover cannot open is always the hidden one | [paper] + [Lean] in the corrected form (accepting set hides the committed dead leaves; L2(c), L2(a)) `ROM/CipherSame.lean` |
-| L3 | KOS consistency check forces affine VOLE correlations (ε_KOS ≈ 2⁻¹⁵⁴) | [paper] + [Lean] `Seed/KOS.lean` + [test] |
+| L3 | KOS consistency check forces affine VOLE correlations (ε_KOS ≈ 2⁻¹⁵⁴) | [paper] + [Lean] `Seed/KOS.lean` (`Seed/KOSUnique.lean`: `ũ` determines the slope across level sets) + [test] |
 | L4 | QuickSilver with challenge-dependent constraints: either the constraints hold or few challenges accept | [paper] + [Lean] `Seed/QuickSilver.lean` + [test] |
 | L5 | A tree whose challenge block varies holds the witness (Claim 4) | [Lean] `SeedExtraction.lean` |
 | L6 | Per-chain case analysis: extract, or accept at most max(d,1) challenges | [Lean] `SeedExtraction.lean` |
