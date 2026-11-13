@@ -399,6 +399,9 @@ import VoleMole.Theft.RatatouilleMany
 import VoleMole.Theft.RatatouilleManyLean
 import VoleMole.Theft.MoussakaManyReads
 import VoleMole.Theft.MoussakaUnboundManyReads
+import VoleMole.Theft.ManyTables
+import VoleMole.Theft.HitMany
+import VoleMole.Theft.RatatouilleManyHit
 import VoleMole.Audit.Nonvacuous
 import VoleMole.Audit.Liveness
 import VoleMole.Audit.UnboundROM

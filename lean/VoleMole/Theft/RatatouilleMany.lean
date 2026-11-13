@@ -800,24 +800,20 @@ theorem sim_se_leN {AdmE : ((Fin (U + M) → G) → S → Op Z) → Prop} {εSE 
   simGN_le_of_weakSEN (ρ := Coins 16) hse (fun ω l => xN A (pubOf ω) l)
     (fun ω l => opN A (pubOf ω) l) fun _ _ => hAE _ _
 
-/-- **No theft for `U` honest Clients and `M` honest spends (Theorem 3, N2a in its extraction
-form).** For every adversary, with zero knowledge of both proof systems at the hops'
-distinguishers and weak simulation-extractability with `U + M` simulated proofs:
-
-    Pr[BadN] ≤ U·ε_I + M·ε_S + Σ_i δ_i + ε_SE + Σ_j Adv^ow(inverter j). -/
-theorem noTheftN [Nonempty S]
+/-- **No theft for `U` Clients and `M` spends, from a bound on the simulated game's
+`Acc ∧ Fresh ∧ ¬ Rel` event** (`hse'`; `noTheftN` gets it from `WeakSEN`). -/
+theorem noTheftN_of_se [Nonempty S]
     {AdmI : (Option (IssueProof Z) → G → S → Prop) → Prop}
     {AdmS : (Option (SpendProof Z) → G → S → Prop) → Prop}
-    {AdmE : ((Fin (U + M) → G) → S → Op Z) → Prop} {εI εS εSE : ℝ}
+    {εI εS εSE : ℝ}
     (hzkI : ZeroKnowledgeRO IssueRel (PI' PI) simI progI AdmI εI) (hεI : 0 ≤ εI)
     (hzkS : ZeroKnowledgeRO SpendRel (PS' PS) simS progS AdmS εS) (hεS : 0 ≤ εS)
     (hAI : ∀ i : Fin (U + M), i.val < U → ∀ ω τ,
       AdmI (distPI A PI PS simI progI simS progS verI verS ext i ω τ))
     (hAS : ∀ i : Fin (U + M), U ≤ i.val → ∀ ω τ,
       AdmS (distPS A PI PS simI progI simS progS verI verS ext i ω τ))
-    (hse : WeakSEN (U + M) (simM simI simS) (progM progI progS) (AccOp A.base verI verS)
-      (FreshOpN A) (RelOp A.base) ext AdmE εSE)
-    (hAE : ∀ iss sp, AdmE (A.out iss sp)) :
+    (hse' : pr (TapeN U M CI CS G S)
+      (theftSimN A simI progI simS progS (seEvN A verI verS ext)) ≤ εSE) :
     pr (TapeN U M CI CS G S) (theftRealN A PI PS verI verS ext) ≤
       U * εI + M * εS + ∑ i, pr (TapeN U M CI CS G S) (deltaNR A PI PS simI progI simS progS i) +
         εSE + ∑ j : Fin (U + M), owAdvK (inverterN A simI progI simS progS ext j) := by
@@ -865,7 +861,6 @@ theorem noTheftN [Nonempty S]
         simp only [hi, ↓reduceIte]
         rw [xwN_fst] at this
         exact this)
-  have hse' := sim_se_leN A simI progI simS progS verI verS ext hse hAE
   have hop := sim_opens_leN A simI progI simS progS ext
   have hε : ∑ i : Fin (U + M), (if i.val < U then εI else εS) = U * εI + M * εS := by
     rw [Fin.sum_univ_add]
@@ -894,6 +889,30 @@ theorem noTheftN [Nonempty S]
   rw [e2] at hse'
   rw [e3] at hop
   linarith
+
+/-- **No theft for `U` honest Clients and `M` honest spends (Theorem 3, N2a in its extraction
+form).** For every adversary, with zero knowledge of both proof systems at the hops'
+distinguishers and weak simulation-extractability with `U + M` simulated proofs:
+
+    Pr[BadN] ≤ U·ε_I + M·ε_S + Σ_i δ_i + ε_SE + Σ_j Adv^ow(inverter j). -/
+theorem noTheftN [Nonempty S]
+    {AdmI : (Option (IssueProof Z) → G → S → Prop) → Prop}
+    {AdmS : (Option (SpendProof Z) → G → S → Prop) → Prop}
+    {AdmE : ((Fin (U + M) → G) → S → Op Z) → Prop} {εI εS εSE : ℝ}
+    (hzkI : ZeroKnowledgeRO IssueRel (PI' PI) simI progI AdmI εI) (hεI : 0 ≤ εI)
+    (hzkS : ZeroKnowledgeRO SpendRel (PS' PS) simS progS AdmS εS) (hεS : 0 ≤ εS)
+    (hAI : ∀ i : Fin (U + M), i.val < U → ∀ ω τ,
+      AdmI (distPI A PI PS simI progI simS progS verI verS ext i ω τ))
+    (hAS : ∀ i : Fin (U + M), U ≤ i.val → ∀ ω τ,
+      AdmS (distPS A PI PS simI progI simS progS verI verS ext i ω τ))
+    (hse : WeakSEN (U + M) (simM simI simS) (progM progI progS) (AccOp A.base verI verS)
+      (FreshOpN A) (RelOp A.base) ext AdmE εSE)
+    (hAE : ∀ iss sp, AdmE (A.out iss sp)) :
+    pr (TapeN U M CI CS G S) (theftRealN A PI PS verI verS ext) ≤
+      U * εI + M * εS + ∑ i, pr (TapeN U M CI CS G S) (deltaNR A PI PS simI progI simS progS i) +
+        εSE + ∑ j : Fin (U + M), owAdvK (inverterN A simI progI simS progS ext j) :=
+  noTheftN_of_se A PI PS simI progI simS progS verI verS ext hzkI hεI hzkS hεS hAI hAS
+    (sim_se_leN A simI progI simS progS verI verS ext hse hAE)
 
 end Red
 

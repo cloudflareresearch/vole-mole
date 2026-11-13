@@ -14,12 +14,17 @@ the model with the extra table `XTab L M` (`hbX`), as `Theft/HitLevel.lean` does
   through the `n` simulations' prefixes.
 * `qtree_forgerN`: the forgery's point at one level is computed by a tree with `N` more queries
   than the adversary's (`QTree.of_cells`: the `N` simulations' points).
+* `sumD`, `SimProg.sum`: two simulations and their programmings as one, on the sum of the
+  instance types.
 * **`slotEvN_chain`**: for a simulator whose programming is `SimProg`, a freshness under which a
   forgery has chain inputs of at most `L` bytes and an `H₂⁰` input other than those of the logged
   simulated statements, and adversaries whose last stage reads the chain tables with `q_μ`, `q₂₁`,
   `q₂₂` queries (`AdmHitN`),
 
       ε_hit,i ≤ (q₂₂+N+1)·2⁻⁴⁴⁸ + (q₂₁+N+1)·2⁻¹⁰⁸⁸ + (q_μ+N+1)·2⁻²⁵⁶   (`epsHitN`).
+
+* **`progMovesN_chain`**: the programming term of `weakSEN_of_plain`, `ε_moves ≤ N·epsHitN`, for
+  a verifier that the programming moves only at the forgery's `H₂³` point.
 -/
 
 -- (The coin types are large products: their `Fintype` instances exceed the default size.)
@@ -212,6 +217,72 @@ theorem slotEvN_chain [Fintype R] [Nonempty R] {I P Out G C : Type} [Fintype C] 
     exact hm
   · simp only [epsHitN, show 8 * 56 = 448 from rfl, show 8 * 136 = 1088 from rfl,
       show 8 * 32 = 256 from rfl]
+
+/-- Two simulations as one, on the sum of the instance types. -/
+def sumD {I₁ I₂ : Type*} {C₁ C₂ : Type} (D₁ : I₁ → C₁ → SD) (D₂ : I₂ → C₂ → SD) :
+    I₁ ⊕ I₂ → C₁ × C₂ → SD
+  | .inl x, c => D₁ x c.1
+  | .inr x, c => D₂ x c.2
+
+omit [CipherRow R] in
+lemma sumD_inl {I₁ I₂ : Type*} {C₁ C₂ : Type} (D₁ : I₁ → C₁ → SD) (D₂ : I₂ → C₂ → SD) (x : I₁)
+    (c : C₁ × C₂) : sumD D₁ D₂ (.inl x) c = D₁ x c.1 := rfl
+
+omit [CipherRow R] in
+lemma sumD_inr {I₁ I₂ : Type*} {C₁ C₂ : Type} (D₁ : I₁ → C₁ → SD) (D₂ : I₂ → C₂ → SD) (x : I₂)
+    (c : C₁ × C₂) : sumD D₁ D₂ (.inr x) c = D₂ x c.2 := rfl
+
+/-- **Two programmings of simulations as one**, on the sum of the instance types. -/
+lemma SimProg.sum {I₁ I₂ : Type*} {C₁ C₂ : Type} {prog₁ : I₁ → C₁ → ShT R p L M → ShT R p L M}
+    {prog₂ : I₂ → C₂ → ShT R p L M → ShT R p L M} {D₁ : I₁ → C₁ → SD} {D₂ : I₂ → C₂ → SD}
+    (h₁ : SimProg prog₁ D₁) (h₂ : SimProg prog₂ D₂) :
+    SimProg (sumProg prog₁ prog₂) (sumD D₁ D₂) := by
+  refine ⟨fun x c t => ?_, fun x c t k h => ?_, fun x c G2 G5E y y' e => ?_, fun x c => ?_⟩
+  · rcases x with x | x
+    · exact h₁.1 x c.1 t
+    · exact h₂.1 x c.2 t
+  · rcases x with x | x
+    · exact h₁.2.1 x c.1 t k h
+    · exact h₂.2.1 x c.2 t k h
+  · rcases x with x | x
+    · exact h₁.2.2.1 x c.1 G2 G5E y y' e
+    · exact h₂.2.2.1 x c.2 G2 G5E y y' e
+  · rcases x with x | x
+    · exact h₁.2.2.2 x c.1
+    · exact h₂.2.2.2 x c.2
+
+/-- **The programming term for `N` simulated proofs, with the chain hashes random tables.** For
+a simulator whose programming is `SimProg`, a verifier that the programming moves only at the
+forgery's `H₂³` point (`hAcc`), and a freshness as in `slotEvN_chain`: the fresh output is
+accepted on the programmed tables and rejected on the unprogrammed ones with probability
+
+    ≤ N·((q₂₂+N+1)·2⁻⁴⁴⁸ + (q₂₁+N+1)·2⁻¹⁰⁸⁸ + (q_μ+N+1)·2⁻²⁵⁶)
+
+(`progMovesN_of_slots`, `slotEvN_chain`). -/
+theorem progMovesN_chain [Fintype R] [Nonempty R] {I P Out G C : Type} [Fintype C] [Nonempty C]
+    [Fintype G] [Nonempty G] {N : ℕ} {sim : I → C → Option P}
+    {prog : I → C → ShT R p L M → ShT R p L M} {D : I → C → SD} (hp : SimProg prog D)
+    (fd : Out → FD) {Acc : Out → ShT R p L M → Prop}
+    {Fresh : List (Option (I × P)) → Out → Prop}
+    (hfd : ∀ l op, Fresh l op → FOk L (fd op).1)
+    (hAcc : ∀ o t' t, t'.2 = t.2 → Acc o t' → ¬ Acc o t → HitG (fd o) t' t)
+    (hfr : ∀ l op xi c, Fresh l op → pairO (some xi) (sim xi c) ∈ l →
+      (∃ b, (D xi c).2 = .ok b) → muIn (fd op).1 ≠ muIn (D xi c).1)
+    (qMu q21 q22 : ℕ) :
+    ProgMovesN N sim prog Acc Fresh (AdmHitN (N := N) (G := G) qMu q21 q22)
+      (N * epsHitN N qMu q21 q22) := by
+  have h := progMovesN_of_slots (N := N) (sim := sim) (prog := prog) (Acc := Acc) (Fresh := Fresh)
+    (Pt := fun o t k => enc2 p k = (@vPre (prgT t) (recT t) CrtGen.tables (fd o).1 (fd o).2 ++
+      (pfOf (fd o).1 (fd o).2).ctr).push 11)
+    (Mv := fun x c b k => ∀ G2 : Tab2G p, k.1 = blk (preLen p) (simPreT (G2, b) (D x c)))
+    (Adm := AdmHitN (N := N) (G := G) qMu q21 q22) (εh := fun _ => epsHitN N qMu q21 q22)
+    hp.1 (fun o t' t h2 ha hn => hAcc o t' t h2 ha hn)
+    (fun x c t k hk G2 => by
+      rw [hp.2.1 x c t k hk]
+      exact congrArg _ (simPreT_congr (t' := (G2, t.2)) (t := t) rfl _).symm)
+    (fun i => slotEvN_chain i hp fd hfd (fun xi c op t ⟨k, hk, hmv⟩ => ⟨k, hk, hmv t.1⟩) hfr
+      qMu q21 q22)
+  simpa using h
 
 end Hit
 
