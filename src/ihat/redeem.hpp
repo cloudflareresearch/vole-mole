@@ -1,12 +1,14 @@
 // QuickSilver constraints for the redemption proof:
 //
 //   Instance: P[0], ..., P[N-1] (Anchor Set) where N <= MAX_ANCHORS, nf (nullifier), ctx_iss
-//             (issuance context), ctx_red (redemption context)
-//   Witness:  r (opening), s (UOV preimage), b (selector)
+//             (issuance context), ctx_red (redemption context), A (Moderator's share), t (report
+//             tag)
+//   Witness:  r (opening), s (UOV preimage), k (report), b (selector)
 //   Constraints:
 //     - Q(s) = Com(nf, ctx_iss, ctx_red, r), where Q = sum_u b[u] * P[u]
 //     - sum(b[0..u+1]) * b[u+1] = 0 for u in [N-1] (parity constraints)
 //     - sum(b) = 1 (weight constraint)
+//     - ExpandReport(k) = (b - A mod 2^16) || t (see ihat/report.hpp)
 //
 // Arithmetization: The commitment is evaluated as described in keccak/segmented.hpp, which adds
 // 800 constraints of degree at most 9 for each of the two committed intermediate states. Rather
@@ -22,15 +24,21 @@
 // zero if it's beyond the end of the Anchor Set. Since every b[u] is a bit, the parity constraints
 // (degree 2) and the weight constraint (degree 1) imply that exactly one bit is set: if b[v] = 1,
 // then the parity constraint for v - 1 implies that an even number of bits below v are set; if v is
-// the second-lowest set bit, then this is a contradiction. The witness layout is as follows:
+// the second-lowest set bit, then this is a contradiction.
+//
+// The report is expanded with three evaluations of Keccak-p[800, 12], each with its own committed
+// intermediate states, and each output bit is constrained to be an affine function of b or a bit of
+// t (degree 8; see ihat/report.hpp). The witness layout is as follows:
 //
 //     0 ..  16   r
 //    16 .. 135   s
 //   135 .. 235   s5, the state after 5 rounds of the commitment
 //   235 .. 335   s9, the state after 9 rounds of the commitment
-//   335 .. 343   b, with b[u] at bit u % 8 of byte 335 + u / 8
+//   335 .. 351   k
+//   351 .. 951   s5, s9 of each of the three blocks of the report expansion
+//   951 .. 959   b, with b[u] at bit u % 8 of byte 951 + u / 8
 //
-// Every bit of r, s, and the intermediate states is constrained to be a bit, adding 2680
+// Every bit of r, s, k, and the intermediate states is constrained to be a bit, adding 7608
 // constraints of degree 2.
 //
 // We use the VOLE-in-the-Head parameters of FAEST-EM-128f v3.
@@ -44,6 +52,7 @@
 #include "dst.hpp"
 #include "ihat/circuit.hpp"
 #include "ihat/commit.hpp"
+#include "ihat/report.hpp"
 #include "keccak/segmented.hpp"
 #include "voleith.hpp"
 
@@ -66,8 +75,11 @@ static_assert(REDEEM_QS_DEGREE - 1 + 4 <= 32, "faest-arch-opt supports at most 3
 constexpr size_t REDEEM_WIT_OFF_R = 0;
 constexpr size_t REDEEM_WIT_OFF_S = REDEEM_WIT_OFF_R + R_BYTES;
 constexpr size_t REDEEM_WIT_OFF_STATES = REDEEM_WIT_OFF_S + uov::N;
-constexpr size_t REDEEM_WIT_OFF_B = REDEEM_WIT_OFF_STATES + keccak::detail::COMMITTED_STATES_BYTES;
+constexpr size_t REDEEM_WIT_OFF_K = REDEEM_WIT_OFF_STATES + keccak::detail::COMMITTED_STATES_BYTES;
+constexpr size_t REDEEM_WIT_OFF_REPORT_STATES = REDEEM_WIT_OFF_K + REPORT_BYTES;
+constexpr size_t REDEEM_WIT_OFF_B = REDEEM_WIT_OFF_REPORT_STATES + REPORT_COMMITTED_STATES_BYTES;
 constexpr size_t REDEEM_WITNESS_BYTES = REDEEM_WIT_OFF_B + SELECTOR_BYTES;
+static_assert(REDEEM_WIT_OFF_K == 335 && REDEEM_WIT_OFF_B == 951 && REDEEM_WITNESS_BYTES == 959);
 constexpr size_t REDEEM_WITNESS_BITS = 8 * REDEEM_WITNESS_BYTES;
 
 // The witness index of the bit b[u] of the selector.
@@ -86,24 +98,31 @@ constexpr keccak::detail::InputMap REDEEM_COM_TO_WIT = [] {
 static_assert(keccak::detail::input_map_is_valid(REDEEM_COM_TO_WIT, REDEEM_WIT_OFF_R,
                                                  REDEEM_WIT_OFF_R + R_BYTES),
               "REDEEM_COM_TO_WIT is malformed");
+static_assert(keccak::detail::input_map_is_valid(report_input_map(REDEEM_WIT_OFF_K),
+                                                 REDEEM_WIT_OFF_K, REDEEM_WIT_OFF_K + REPORT_BYTES),
+              "report_input_map(REDEEM_WIT_OFF_K) is malformed");
 
 constexpr size_t REDEEM_NUM_CONSTRAINTS =
-    8 * REDEEM_WIT_OFF_B       // bit constraints for r, s, and the intermediate states
+    8 * REDEEM_WIT_OFF_B       // bit constraints for r, s, k, and the intermediate states
     + SELECTOR_NUM_CONSTRAINTS // selector constraints
     + keccak::detail::NUM_SEGMENT_CONSTRAINTS // segment ends in a committed state
-    + 1; // Q(s) = commitment (a random linear combination of the M components)
+    + 1                       // Q(s) = commitment (a random linear combination of the M components)
+    + REPORT_NUM_CONSTRAINTS; // report expansion
 
 // Compute the full witness, including the intermediate Keccak states and the selector for the
 // Anchor at index i.
 inline std::array<uint8_t, REDEEM_WITNESS_BYTES>
 encode_redeem_witness(const Nullifier& nf, const Context& ctx_iss, const Context& ctx_red,
-                      const Opening& r, const uov::Preimage& s, size_t i) {
+                      const Opening& r, const uov::Preimage& s, const Report& k, size_t i) {
     std::array<uint8_t, REDEEM_WITNESS_BYTES> w{};
     std::ranges::copy(r, w.begin() + REDEEM_WIT_OFF_R);
     std::ranges::copy(s, w.begin() + REDEEM_WIT_OFF_S);
     keccak::detail::encode_committed_states(
         std::span(w).subspan<REDEEM_WIT_OFF_STATES, keccak::detail::COMMITTED_STATES_BYTES>(),
         encode_com_state(nf, ctx_iss, ctx_red, r));
+    std::ranges::copy(k, w.begin() + REDEEM_WIT_OFF_K);
+    encode_report_states(
+        std::span(w).subspan<REDEEM_WIT_OFF_REPORT_STATES, REPORT_COMMITTED_STATES_BYTES>(), k);
     encode_selector(std::span(w).subspan<REDEEM_WIT_OFF_B, SELECTOR_BYTES>(), i);
     return w;
 }
@@ -153,7 +172,7 @@ struct RedeemRelation {
                             std::span<const uint8_t, params::CONSTS::QS::CHALLENGE_BYTES> chal2) {
         static_assert(QS::max_degree == REDEEM_QS_DEGREE);
 
-        // Add bit constraints: Every bit of r, s, and the intermediate states is a bit.
+        // Add bit constraints: Every bit of r, s, k, and the intermediate states is a bit.
         qs_add_bit_constraints(qs, 8 * REDEEM_WIT_OFF_B);
 
         // Add selector constraints.
@@ -169,6 +188,10 @@ struct RedeemRelation {
         // Add output constraint: The last segment ends in Q(s).
         qs_add_signature_constraint(qs, x.anchors, b, REDEEM_WIT_OFF_S, out, chal2,
                                     IHAT_REDEEM_COMBINE_DST);
+
+        // Add report constraints: The report expands to (b - A) || t.
+        qs_add_report_constraints(qs, b, x.share, x.tag, REDEEM_WIT_OFF_K,
+                                  REDEEM_WIT_OFF_REPORT_STATES);
     }
 };
 
@@ -180,27 +203,30 @@ static_assert(REDEEM_PROOF_BYTES == PROOF_BYTES<RedeemRelation>,
 using RedeemProof = std::span<uint8_t, REDEEM_PROOF_BYTES>;
 using ConstRedeemProof = std::span<const uint8_t, REDEEM_PROOF_BYTES>;
 
-// Compute the redemption proof for the given Anchor Set. The caller must ensure that the witness
-// satisfies the instance.
+// Compute the redemption proof for the given Anchor Set, where `share` and `tag` are the
+// Moderator's share and the tag for report k. The caller must ensure that the witness satisfies the
+// instance.
 //
 // Throws std::bad_alloc if memory allocation fails and std::runtime_error if grinding fails (which
 // happens with negligible probability).
 inline void prove_redeem_request(RedeemProof pf_red, AnchorSpan anchors, size_t i,
                                  const Nullifier& nf, const Context& ctx_iss,
                                  const Context& ctx_red, const ChallengeDigest& challenge_digest,
-                                 const Opening& r, const uov::Preimage& s,
+                                 const HistogramShare& share, const ReportTag& tag,
+                                 const Opening& r, const uov::Preimage& s, const Report& k,
                                  const ProveSeed<RedeemRelation>& rho) {
-    const auto witness = encode_redeem_witness(nf, ctx_iss, ctx_red, r, s, i);
-    voleith_prove<RedeemRelation>(pf_red, witness,
-                                  {anchors, nf, ctx_iss, ctx_red, challenge_digest}, rho);
+    const auto witness = encode_redeem_witness(nf, ctx_iss, ctx_red, r, s, k, i);
+    voleith_prove<RedeemRelation>(
+        pf_red, witness, {anchors, nf, ctx_iss, ctx_red, challenge_digest, share, tag}, rho);
 }
 
 // Verify the redemption proof (steps 2-3 of FinalizeRedeem).
 inline bool verify_redeem_proof(ConstRedeemProof pf_red, AnchorSpan anchors, const Nullifier& nf,
                                 const Context& ctx_iss, const Context& ctx_red,
-                                const ChallengeDigest& challenge_digest) {
-    return voleith_verify<RedeemRelation>(pf_red,
-                                          {anchors, nf, ctx_iss, ctx_red, challenge_digest});
+                                const ChallengeDigest& challenge_digest,
+                                const HistogramShare& share, const ReportTag& tag) {
+    return voleith_verify<RedeemRelation>(
+        pf_red, {anchors, nf, ctx_iss, ctx_red, challenge_digest, share, tag});
 }
 
 } // namespace vole_mole::ihat::detail
