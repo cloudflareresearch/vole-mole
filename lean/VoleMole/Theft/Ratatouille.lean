@@ -171,9 +171,9 @@ def xwS (ω : Sec) (req : Except Error (IssueRequest Z)) : Option (SpendInstance
     else none
 
 /-- The provers with uniform randomness. -/
-def PI' (x : IssueInstance) (w : IssueWitness) (ρ : Coins 16) (g : G) (s : S) :
+abbrev PI' (x : IssueInstance) (w : IssueWitness) (ρ : Coins 16) (g : G) (s : S) :
     Option (IssueProof Z) := PI x w (vec ρ) g s
-def PS' (x : SpendInstance) (w : SpendWitness) (ρ : Coins 16) (g : G) (s : S) :
+abbrev PS' (x : SpendInstance) (w : SpendWitness) (ρ : Coins 16) (g : G) (s : S) :
     Option (SpendProof Z) := PS x w (vec ρ) g s
 
 theorem xwI_fst (ω : Sec) : (xwI A ω).map Prod.fst = xIo A (K₁ A ω) := by
