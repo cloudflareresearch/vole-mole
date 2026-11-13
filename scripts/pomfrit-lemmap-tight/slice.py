@@ -12,12 +12,14 @@ R0  the tables' bilinear identity; an honest first message passes on all of S.
 R1  the forger of section 6.1 (two label classes, slice hidden among 2^63): the slice is a level
     set, E_1^lin off the slice finds nothing; the decoder finds the slice by linear algebra.
 R2  j fixed trees with j different label vectors: gate-bit recovery, candidate sets, search;
-    with wrong gates: mask slopes from ut, search that tolerates the wrong gates.
+    with wrong gates: mask slopes from ut, search that tolerates the wrong gates; label classes
+    of several trees: linear algebra on the gates with one candidate pattern.
 R3  table facts used by the decoder: uniqueness of the effective gate bits for several classes.
 R4  wrong gates: the level set shrinks to a subspace; kernel guessing still decodes.
 R5  black-box extractors: evaluations of the check value off the slice show no collision.
 
-Usage: slice.py [seed] [--quick] [--j10]
+Usage: slice.py [seed] [--quick] [--masks=N] [--j=J ... [--wrong=A]]
+(--j: only R0, R1, R3 and R2 for J fixed trees, with A wrong gates)
 """
 import hashlib, os, random, re, sys, time
 from math import log2
@@ -44,6 +46,10 @@ OFF = [sum(K[:i]) for i in range(17)]
 ND = sum(K)                                       # 120
 NG = len(TAB["gHex"])                             # 312
 NM = 5                                            # masks: 1 hashed (QuickSilver), 4 direct
+for _a in sys.argv[1:]:                           # --masks=N: N - 1 direct masks (section 8)
+    if _a.startswith("--masks="):
+        NM = int(_a.split("=")[1])
+NO = NM - 1                                       # outputs of the check hash
 FROW, GROW = TAB["fHex"], TAB["gHex"]             # per gate: a form on u, a form on Delta'
 
 
@@ -146,8 +152,8 @@ def h5(e, lab):
     key = (e, lab)
     v = _h5.get(key)
     if v is None:
-        v = hashlib.blake2b(e.to_bytes(2, "little") + lab.to_bytes(16, "little"),
-                            digest_size=1).digest()[0] & 31
+        v = int.from_bytes(hashlib.blake2b(e.to_bytes(2, "little") + lab.to_bytes(16, "little"),
+                            digest_size=2).digest(), "little") & ((1 << NM) - 1)
         _h5[key] = v
     return v
 
@@ -268,23 +274,23 @@ class Model:
         return q + [mk[0]], mk[1:]
 
     def hash(self, rows):
-        r, s = self.chal[:4], self.chal[4:]
+        r, s = self.chal[:NO], self.chal[NO:]
         ys = []
         for sk in s:
             acc = 0
             for x in rows:
                 acc = mul(acc, sk) ^ x
             ys.append(acc)
-        return [mul(r[i], ys[0]) ^ ys[1 + i] for i in range(4)]
+        return [mul(r[i], ys[0]) ^ ys[1 + i] for i in range(NO)]
 
     def K0(self, d):
         q, dm = self.rows(d)
         h = self.hash(q)
-        return [h[i] ^ dm[i] for i in range(4)]
+        return [h[i] ^ dm[i] for i in range(NO)]
 
     def Kv(self, d, ut):
         k, e = self.K0(d), elift(d)
-        return tuple(k[i] ^ mul(e, ut[i]) for i in range(4))
+        return tuple(k[i] ^ mul(e, ut[i]) for i in range(NO))
 
     def slope_rows(self, uwbits, labbits, u0):
         return [(uwbits >> j) & 1 for j in range(self.NW)] + \
@@ -292,7 +298,7 @@ class Model:
 
     def ut_of(self, uwbits, labbits, ub):
         h = self.hash(self.slope_rows(uwbits, labbits, ub[0]))
-        return [h[i] ^ ub[1 + i] for i in range(4)]
+        return [h[i] ^ ub[1 + i] for i in range(NO)]
 
 
 _TREE = [i for i in range(17) for _ in range(K[i])]
@@ -328,11 +334,11 @@ class Decoder:
         self.cbits = [c for c in range(ND) if (self.cm >> c) & 1]
         self.lc = M.lab[C[0]]
         self.fixed = [i for i in range(17) if i not in C and M.lab[i] != self.lc]
-        r = M.chal[:4]
-        self.coef = [r[i] ^ 1 for i in range(4)]
+        r = M.chal[:NO]
+        self.coef = [r[i] ^ 1 for i in range(NO)]
         h = M.hash(M.slope_rows(M.uw[C[0]], self.lc, 0))
-        self.wc = [h[i] ^ ut[i] for i in range(4)]
-        self.cw = [[mul(self.coef[i], WGATE[e]) for e in range(NG)] for i in range(4)]
+        self.wc = [h[i] ^ ut[i] for i in range(NO)]
+        self.cw = [[mul(self.coef[i], WGATE[e]) for e in range(NG)] for i in range(NO)]
 
     def tau(self, m, dl):
         q = 0
@@ -344,7 +350,7 @@ class Decoder:
         """Lambda(dl; a = 0): 4 field elements."""
         e = elift(dl)
         t = [self.tau(m, dl) for m in range(NM)]
-        return [mul(e, self.wc[i]) ^ mul(self.coef[i], t[0]) ^ t[1 + i] for i in range(4)]
+        return [mul(e, self.wc[i]) ^ mul(self.coef[i], t[0]) ^ t[1 + i] for i in range(NO)]
 
     def lam(self, dl, a):
         """Lambda(dl; a): the increment of the check value along dl on a slice whose effective
@@ -352,7 +358,7 @@ class Decoder:
         gm = gamma(dl)
         mu = [lin(WGATE, gm & a[m]) for m in range(NM)]
         c = self.const(dl)
-        return [c[i] ^ mul(self.coef[i], mu[0]) ^ mu[1 + i] for i in range(4)]
+        return [c[i] ^ mul(self.coef[i], mu[0]) ^ mu[1 + i] for i in range(NO)]
 
     def rand_dirs(self, t):
         rng = self.M.rng
@@ -377,8 +383,8 @@ class Decoder:
             for c in gbits:                          # effect of g_c = 1
                 sel = gm & GCOL[c]
                 mu = [lin(WGATE, sel & dd[m]) for m in range(NM)]
-                colv.append([mul(self.coef[i], mu[0]) ^ mu[1 + i] for i in range(4)])
-            for i in range(4):
+                colv.append([mul(self.coef[i], mu[0]) ^ mu[1 + i] for i in range(NO)])
+            for i in range(NO):
                 for bit in range(128):
                     r = ((base[i] >> bit) & 1) << len(gbits)
                     for k in range(len(gbits)):
@@ -400,7 +406,7 @@ class Decoder:
             gm = gamma(dl)
             c = self.const(dl)
             es = [e for e in range(NG) if (gm >> e) & 1]
-            for i in range(4):
+            for i in range(NO):
                 for bit in range(128):
                     r = ((c[i] >> bit) & 1) << n
                     for e in es:
@@ -436,11 +442,11 @@ class Decoder:
                 base[m] ^= lin(WCRT, M.um[m][i] << OFF[i])
         def resid(t0):
             u0 = base[0] ^ clmul(mc, t0)
-            return [pmod(self.wc[i] ^ mul(self.coef[i], u0) ^ base[1 + i], mc) for i in range(4)]
+            return [pmod(self.wc[i] ^ mul(self.coef[i], u0) ^ base[1 + i], mc) for i in range(NO)]
         r0 = resid(0)
         cs = [resid(1 << k) for k in range(nt)]
         rows = []
-        for i in range(4):
+        for i in range(NO):
             for b in range(w):
                 r = ((r0[i] >> b) & 1) << nt
                 for k in range(nt):
@@ -450,7 +456,7 @@ class Decoder:
         if sol is None:
             return None
         u0 = base[0] ^ clmul(mc, sol[0])
-        return [u0] + [self.wc[i] ^ mul(self.coef[i], u0) for i in range(4)], len(sol[1])
+        return [u0] + [self.wc[i] ^ mul(self.coef[i], u0) for i in range(NO)], len(sol[1])
 
     def search(self, a, det, tol=0, max_nodes=1 << 26):
         """Find g (blocks of the fixed trees) with h5-differences matching the gate bits a on all
@@ -502,6 +508,42 @@ class Decoder:
                     stack.append((t + 1, vv))
         return sols, nodes, sizes
 
+    def classes_linear(self, a, det):
+        """Label classes with several trees each: gates with one candidate pattern give linear
+        equations on the fixed blocks. Returns (g, number of such gates, dim of solutions)."""
+        M, fx = self.M, self.fixed
+        labs = sorted({M.lab[i] for i in fx})
+        cls = [[i for i in fx if M.lab[i] == l] for l in labs]
+        gbits = [c for c in range(ND) if (tree_mask(fx) >> c) & 1]
+        pos = {c: k for k, c in enumerate(gbits)}
+        n = len(gbits)
+        rows, used = [], 0
+        for e in range(NG):
+            want = sum((((a[m] ^ M.cmult[m]) >> e) & 1) << m for m in range(NM))
+            msk = sum(((det[m] >> e) & 1) << m for m in range(NM))
+            cand = []
+            for b in range(1 << len(labs)):
+                base = M.C0[e]
+                for t in range(len(labs)):
+                    if (b >> t) & 1:
+                        base ^= labs[t]
+                if (gate_diff(M, e, base, self.lc) ^ want) & msk == 0:
+                    cand.append(b)
+            if len(cand) != 1:
+                continue
+            used += 1
+            for t, trees in enumerate(cls):
+                r = ((cand[0] >> t) & 1) << n
+                for c in gbits:
+                    if _TREE[c] in trees and (GROW[e] >> c) & 1:
+                        r |= 1 << pos[c]
+                rows.append(r)
+        sol = solve(rows, n)
+        if sol is None:
+            return None, used, -1
+        g = sum(1 << gbits[k] for k in range(n) if (sol[0] >> k) & 1)
+        return g, used, len(sol[1])
+
     def certify(self, g):
         """E_1^lin on the slice of g: log2 of the size of the level set through its base point
         (the kernel of the F_2-linear part of the check value in the directions of C)."""
@@ -512,8 +554,8 @@ class Decoder:
         cols_ = []
         for c in self.cbits:
             k1 = M.Kv(base ^ (1 << c), self.ut)
-            cols_.append(sum((k0[i] ^ k1[i]) << (128 * i) for i in range(4)))
-        rows = [sum(((cols_[k] >> b) & 1) << k for k in range(n)) for b in range(512)]
+            cols_.append(sum((k0[i] ^ k1[i]) << (128 * i) for i in range(NO)))
+        rows = [sum(((cols_[k] >> b) & 1) << k for k in range(n)) for b in range(128 * NO)]
         return len(solve(rows, n)[1])
 
 
@@ -545,7 +587,7 @@ def main():
         bad += mul(u, elift(d)) != lin(WTREE, r) ^ lin(WGATE, g)
     w, l = rng.getrandbits(8), rng.getrandbits(128)
     M = setup(rng, [(range(17), w, l)])
-    M.chal = [rng.getrandbits(128) for _ in range(9)]
+    M.chal = [rng.getrandbits(128) for _ in range(2 * NO + 1)]
     ub = forge(M, list(range(17)), 0)
     ut = M.ut_of(w, l, ub)
     vals = {M.Kv(rng.getrandbits(ND), ut) for _ in range(6)}
@@ -556,7 +598,7 @@ def main():
     # R1
     wA, wB, lA, lB = 0x5A, 0xC3, rng.getrandbits(128), rng.getrandbits(128)
     M = setup(rng, [(GA, wA, lA), (GB, wB, lB)])
-    M.chal = [rng.getrandbits(128) for _ in range(9)]
+    M.chal = [rng.getrandbits(128) for _ in range(2 * NO + 1)]
     gstar = rng.getrandbits(ND) & tree_mask(GA)
     ub = forge(M, GB, gstar)
     ut = M.ut_of(wB, lB, ub)
@@ -575,7 +617,7 @@ def main():
     print(f"R1 two label classes, slice hidden among 2^{sum(K[i] for i in GA)}: on the slice"
           f" {len(on)} check value, off it {len(off)} of 6; E_1^lin off the slice: {lin_off}"
           f" kernel directions")
-    print(f"   decoder (512 equations in 63 unknowns): slice found = {res is not None and res[0] == gstar},"
+    print(f"   decoder ({128 * NO} equations in 63 unknowns): slice found = {res is not None and res[0] == gstar},"
           f" other solutions 2^{res[1] if res else '?'}, {t1:.2f} s; E_1^lin on that slice: level set of"
           f" 2^{cert} points")
     ok &= len(on) == 1 and len(off) == 6 and lin_off == 0 and res is not None \
@@ -587,14 +629,14 @@ def main():
     ok &= resA is None
 
     # R3 (before R2: uses the same forger shape)
-    print("R3 effective gate bits from Lambda(delta; a) = 0 (1560 unknowns), real tables:")
+    print(f"R3 effective gate bits from Lambda(delta; a) = 0 ({NM * NG} unknowns), real tables:")
     for C, nd in ((GB, 16), ([0, 10, 11, 12, 13], 16), ([10, 11, 12, 13], 16), ([10, 11, 12], 16),
                   ([0, 10], 15), ([10], 7)):
         fx = [i for i in range(17) if i not in C]
         labs = {i: rng.getrandbits(128) for i in fx}
         lC, wC = rng.getrandbits(128), 0x0F
         Mc = setup(rng, [(C, wC, lC)] + [([i], 0xF0, labs[i]) for i in fx])
-        Mc.chal = [rng.getrandbits(128) for _ in range(9)]
+        Mc.chal = [rng.getrandbits(128) for _ in range(2 * NO + 1)]
         g = rng.getrandbits(ND) & ~tree_mask(C)
         ubc = forge(Mc, C, g)
         utc = Mc.ut_of(wC, lC, ubc)
@@ -607,7 +649,7 @@ def main():
         good = all((a[m] ^ true[m]) & det[m] == 0 for m in range(NM))
         ndet = sum(bin(det[m]).count('1') for m in range(NM))
         print(f"   class width {sum(K[i] for i in C):2d}, {nd:2d} directions: solution space dim"
-              f" {dim}, determined bits {ndet}/1560, equal to F*ubar there: {good}")
+              f" {dim}, determined bits {ndet}/{NM * NG}, equal to F*ubar there: {good}")
         ok &= good
 
     # R2
@@ -616,7 +658,7 @@ def main():
         C = [i for i in range(17) if i not in fx]
         labs = [rng.getrandbits(128) for _ in fx]
         M = setup(rng, [(C, wB, lB)] + [([fx[k]], wA, labs[k]) for k in range(j)])
-        M.chal = [rng.getrandbits(128) for _ in range(9)]
+        M.chal = [rng.getrandbits(128) for _ in range(2 * NO + 1)]
         gstar = rng.getrandbits(ND) & tree_mask(fx)
         ub = forge(M, C, gstar, rng.sample(range(NG), wrong))
         ut = M.ut_of(wB, lB, ub)
@@ -641,13 +683,34 @@ def main():
         return sols == [gstar] and cert == wC - wrong
 
     print("R2 many label classes among the fixed trees (slice among 2^(7j)):")
-    for j in ([3, 5] if quick else [5, 7, 8, 9] + ([10] if "--j10" in sys.argv else [])):
+    js = [int(a.split("=")[1]) for a in sys.argv[1:] if a.startswith("--j=")]
+    wr = [int(a.split("=")[1]) for a in sys.argv[1:] if a.startswith("--wrong=")]
+    if js:
+        for j in js:
+            ok &= multi(j, wrong=wr[0] if wr else 0)
+        print("OK" if ok else "FAILED")
+        sys.exit(0 if ok else 1)
+    for j in ([3, 5] if quick else [5, 7, 8, 9]):
         ok &= multi(j)
     ok &= multi(5 if quick else 9, wrong=2)
+    for shape in ([[1, 2, 3], [4, 5, 6], [7, 8, 9]], [[1, 2], [3, 4], [5, 6], [7, 8], [9]]):
+        C = GB
+        M = setup(rng, [(C, wB, lB)] + [(t, wA, rng.getrandbits(128)) for t in shape])
+        M.chal = [rng.getrandbits(128) for _ in range(2 * NO + 1)]
+        gstar = rng.getrandbits(ND) & tree_mask(GA)
+        ub = forge(M, C, gstar)
+        ut = M.ut_of(wB, lB, ub)
+        D = Decoder(M, C, ut)
+        a, det, dim = D.gate_bits(D.rand_dirs(12))
+        g, used, sdim = D.classes_linear(a, det)
+        print(f"   {len(shape)} label classes on 9 fixed trees {[len(t) for t in shape]}: {used} gates"
+              f" with one candidate pattern, linear system in 63 unknowns: slice found ="
+              f" {g == gstar}, other solutions 2^{sdim}")
+        ok &= g == gstar and sdim == 0
 
     # R4
     M = setup(rng, [(GA, wA, lA), (GB, wB, lB)])
-    M.chal = [rng.getrandbits(128) for _ in range(9)]
+    M.chal = [rng.getrandbits(128) for _ in range(2 * NO + 1)]
     gstar = rng.getrandbits(ND) & tree_mask(GA)
     wrong = rng.sample(range(NG), 3)
     ub = forge(M, GB, gstar, wrong)
