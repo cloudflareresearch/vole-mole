@@ -273,6 +273,78 @@ theorem invH_step (q : DR ⊕ ((X' × Hn') ⊕ TG)) (p : BS St X' Hn')
     simp only [htW]
     exact hp
 
+/-- **`B`'s phase keeps the invariant at every table.** -/
+theorem invH_run (b : OracleComp (specB AR X' Hn' TG SIss) (List (X' × SIss))) (L : List TG) :
+    InvH lr cl pk κ G (evalWithAnswerFn (QueryImpl.ofFn G)
+      ((simulateQ (combH pre' T lr ℓ cl n pk κ) b).run
+        (bs0 (toClient T lr ℓ cl).init, ((fun _ => none), (L, fun _ => none, 0))))).2 :=
+  eval_run_inv G _ _ (fun q p hp => invH_step pre' T lr ℓ cl n pk κ G q p hp) b _
+    ⟨⟨fun _ _ h => by simp at h, fun _ _ h => by simp at h⟩, fun _ _ h => by simp [bs0] at h⟩
+
 end BPhase
+
+/-! ## The finishing phase at a table -/
+
+section Post
+
+variable {DR : Type} {AR : DR → Type} (G : (d : DR ⊕ Dom) → WB AR d) (pre' : TG → SIss)
+
+lemma eval_htH_liftV_toV_bind {α β : Type} (oc : OracleComp spec α)
+    (k : α → OracleComp (specV Ans ByteArray TG) β) (s : HTS) :
+    evalWithAnswerFn (QueryImpl.ofFn G) ((simulateQ (htH (AR := AR) pre') (simulateQ
+      (liftV (AR := AR) (S := SIss)) (toV oc >>= k))).run s) =
+      evalWithAnswerFn (QueryImpl.ofFn G) ((simulateQ (htH pre') (simulateQ
+        (liftV (AR := AR) (S := SIss)) (k (evalWithAnswerFn (QueryImpl.ofFn (gHof G)) oc)))).run s) := by
+  rw [simulateQ_bind, simulateQ_bind, StateT.run_bind, evalWithAnswerFn_bind,
+    eval_htH_liftV_toV]
+
+lemma eval_htH_liftV_tq {β : Type} (x : ByteArray) (h : TG)
+    (k : TG × TG → OracleComp (specV Ans ByteArray TG) β) (s : HTS) :
+    evalWithAnswerFn (QueryImpl.ofFn G) ((simulateQ (htH (AR := AR) pre') (simulateQ
+      (liftV (AR := AR) (S := SIss))
+        (liftM ((specV Ans ByteArray TG).query (.inr (x, h))) >>= k))).run s) =
+      evalWithAnswerFn (QueryImpl.ofFn G) ((simulateQ (htH pre') (simulateQ
+        (liftV (AR := AR) (S := SIss)) (k (tStep addHint x h s).1))).run (tStep addHint x h s).2) := by
+  rfl
+
+lemma eval_htH_liftV_pure {β : Type} (a : β) (s : HTS) :
+    evalWithAnswerFn (QueryImpl.ofFn G) ((simulateQ (htH (AR := AR) pre') (simulateQ
+      (liftV (AR := AR) (S := SIss)) (pure a : OracleComp (specV Ans ByteArray TG) β))).run s) =
+      (a, s) := rfl
+
+variable (T : CrtTables) (lr : Bool) (E : CTable) (pk : UovPk)
+
+/-- **One verification at a table accepts** if the signature's parts are a proof and the
+refresher with its commitment, the verifier's `chal1` gives the input `x`, `x`'s answer is cached
+as `(u, 0)` and the verifier accepts with the target `u`; the target oracle's state is unchanged. -/
+theorem verOne_ok (L : QueryLog specIC) (msg proof b1 b2 c1 : ByteArray) (u : TG) (s : HTS)
+    (hp : proof.size = (pomfritParams lr).proofBytes) (hb1 : b1.size = 32) (hb2 : b2.size = 32)
+    (hcom : toBA (Spec.PomFRIT.commitRefresher (toL b2)) = b1)
+    (hc1 : evalWithAnswerFn (QueryImpl.ofFn (gHof G)) (@chal1Pre (icPrg E.cipher)
+      (pomfritRedeemT pk (fun _ => ByteArray.empty) b1 b2 lr) proof) = some c1)
+    (hx : s.1 (tgtIn pk lr (proof ++ b1 ++ b2) msg c1) = some (u, 0))
+    (hacc : (@verify (icPrg E.cipher) (Hashes.ofTable (gHof G)) T
+      (pomfritRedeemT pk (fun _ => encT u) b1 b2 lr) proof).accept = true) :
+    evalWithAnswerFn (QueryImpl.ofFn G) ((simulateQ (htH (AR := AR) pre') (simulateQ
+      (liftV (AR := AR) (S := SIss)) (verOneV T lr E pk L msg (proof ++ b1 ++ b2)))).run s) =
+      (true, s) := by
+  obtain ⟨e0, e1, e2⟩ := Privacy.PomFRIT.sig_parts hp hb1 hb2
+  unfold verOneV
+  dsimp only
+  rw [e0, e1, e2, hcom]
+  have hne : (b1 != b1) = false := by
+    show (!(ByteArray.beq b1 b1)) = false
+    simp [ByteArray.beq]
+  rw [hne, if_neg (by simp)]
+  rw [eval_htH_liftV_toV_bind, hc1]
+  dsimp only
+  rw [eval_htH_liftV_toV_bind]
+  erw [eval_htH_liftV_tq]
+  rw [tStep_cached _ _ _ hx]
+  rw [eval_htH_liftV_toV_bind, eval_htH_liftV_toV_bind, @evalWithAnswerFn_verifyQ (icPrg E.cipher)]
+  dsimp only
+  rw [eval_htH_liftV_pure, hacc]
+
+end Post
 
 end VoleMole.Assumptions.BlindPomfrit
