@@ -34,6 +34,19 @@ lemma ev_zero (L : ι → S) : ev L (0 : ι → F) = 0 := by
 lemma ev_sub (L : ι → S) (a b : ι → F) : ev L (a - b) = ev L a - ev L b := by
   simp only [ev, Pi.sub_apply, sub_smul, Finset.sum_sub_distrib]
 
+lemma ev_add_arr (L L' : ι → S) (a : ι → F) : ev (L + L') a = ev L a + ev L' a := by
+  simp only [ev, Pi.add_apply, smul_add, Finset.sum_add_distrib]
+
+lemma ev_smul_arr (c : F) (L : ι → S) (a : ι → F) : ev (c • L) a = c • ev L a := by
+  simp only [ev, Pi.smul_apply, Finset.smul_sum, smul_comm c]
+
+lemma ev_single [DecidableEq ι] (L : ι → S) (i : ι) : ev L (Pi.single i (1 : F)) = L i := by
+  simp only [ev, Pi.single_apply, ite_smul, one_smul, zero_smul, Finset.sum_ite_eq',
+    Finset.mem_univ, ↓reduceIte]
+
+lemma ev_zero_arr (a : ι → F) : ev (0 : ι → S) a = 0 := by
+  simp [ev]
+
 /-- The slices of `L` at the vectors of a family, as an additive map of `L`. -/
 def evHom {α : Type*} (u : α → ι → F) : (ι → S) →+ (α → S) where
   toFun L a := ev L (u a)
@@ -129,6 +142,24 @@ theorem pr_free {ι S : Type*} [Fintype ι] [DecidableEq ι] [AddCommGroup S] [M
     have : (Fintype.card (Fin ρ → S) : ℝ) = (Fintype.card S : ℝ) ^ ρ := by simp
     rw [← this]; exact_mod_cast hc
   exact mul_le_mul_of_nonneg_right hc' (by positivity)
+
+/-- **The union bound over a witness type** of at most `q^a` elements. -/
+lemma pr_union {α W : Type*} [Fintype α] [Fintype W] {q : ℕ} (hq : 1 ≤ q) (P : W → α → Prop)
+    (a b : ℕ) (hW : Fintype.card W ≤ q ^ a) (h : ∀ w, pr α (P w) ≤ 1 / (q : ℝ) ^ (a + b)) :
+    pr α (fun x => ∃ w, P w x) ≤ 1 / (q : ℝ) ^ b := by
+  have hq' : (0 : ℝ) < q := by exact_mod_cast hq
+  refine (pr_exists_le_sum P).trans ((Finset.sum_le_sum fun w _ => h w).trans ?_)
+  rw [Finset.sum_const, Finset.card_univ, nsmul_eq_mul, pow_add, one_div, one_div, mul_inv]
+  have hW' : (Fintype.card W : ℝ) ≤ (q : ℝ) ^ a := by exact_mod_cast hW
+  calc (Fintype.card W : ℝ) * (((q : ℝ) ^ a)⁻¹ * ((q : ℝ) ^ b)⁻¹)
+      ≤ (q : ℝ) ^ a * (((q : ℝ) ^ a)⁻¹ * ((q : ℝ) ^ b)⁻¹) :=
+        mul_le_mul_of_nonneg_right hW' (by positivity)
+    _ = ((q : ℝ) ^ b)⁻¹ := by
+        rw [← mul_assoc, mul_inv_cancel₀ (by positivity), one_mul]
+
+lemma pr_false {α : Type*} [Fintype α] : pr α (fun _ => False) = 0 := by
+  classical
+  rw [pr_def, Finset.filter_false, Finset.card_empty, Nat.cast_zero, zero_div]
 
 /-! ## Kernels of a few functionals -/
 
@@ -236,6 +267,152 @@ theorem pr_paired {n : ℕ} (v v' : Fin n → ι₂ → F) (o o' : Fin n → ι�
   · rw [pr_fiber G hG]
     simp only [Fintype.card_pi, Finset.prod_const, Finset.card_univ, Fintype.card_fin,
       Nat.cast_pow, ← pow_mul]
+
+/-- **The union over `w`, `Φ`, `Ψ`** of `pr_vanish_fixed`. -/
+theorem pr_vanish (c₂ c₃ a b : ℕ)
+    (ha : Fintype.card ι₁ + Fintype.card ι₂ * c₂ + Fintype.card ι₃ * c₃ ≤ a)
+    (hb : a + b ≤ (Fintype.card ι₃ - c₃) * (Fintype.card ι₂ - c₂)) :
+    pr (ι₁ → ι₂ → ι₃ → F) (fun L => ∃ w : ι₁ → F, w ≠ 0 ∧ ∃ (Φ : Fin c₂ → ι₂ → F)
+      (Ψ : Fin c₃ → ι₃ → F), ∀ y z, (∀ i, Φ i ⬝ᵥ y = 0) → (∀ i, Ψ i ⬝ᵥ z = 0) →
+        tri L w y z = 0) ≤ 1 / (Fintype.card F : ℝ) ^ b := by
+  classical
+  have hq : 1 ≤ Fintype.card F := Fintype.card_pos
+  have hq' : (1 : ℝ) ≤ Fintype.card F := by exact_mod_cast hq
+  refine (pr_mono (Q := fun L => ∃ w : (ι₁ → F) × (Fin c₂ → ι₂ → F) × (Fin c₃ → ι₃ → F),
+      w.1 ≠ 0 ∧ ∀ y z, (∀ i, w.2.1 i ⬝ᵥ y = 0) → (∀ i, w.2.2 i ⬝ᵥ z = 0) →
+        tri L w.1 y z = 0) fun L ⟨w, hw, Φ, Ψ, h⟩ => ⟨(w, Φ, Ψ), hw, h⟩).trans ?_
+  refine pr_union hq _ a b ?_ fun w => ?_
+  · simp only [Fintype.card_prod, Fintype.card_pi, Finset.prod_const, Finset.card_univ,
+      Fintype.card_fin, ← pow_mul, ← pow_add]
+    exact Nat.pow_le_pow_right hq (by omega)
+  · by_cases hw : w.1 = 0
+    · rw [pr_congr (Q := fun _ => False) fun L => ⟨fun h => h.1 hw, False.elim⟩, pr_false]
+      positivity
+    · refine (pr_mono fun L h => h.2).trans ((pr_vanish_fixed hw w.2.1 w.2.2).trans ?_)
+      exact one_div_le_one_div_of_le (by positivity) (pow_le_pow_right₀ hq' hb)
+
+/-! ### Explicit sums and permutations of the legs -/
+
+omit [DecidableEq ι₁] [DecidableEq ι₂] [DecidableEq ι₃] [Fintype F]
+
+lemma tri_eq_sum (L : ι₁ → ι₂ → ι₃ → F) (a : ι₁ → F) (b : ι₂ → F) (c : ι₃ → F) :
+    tri L a b c = ∑ i, ∑ j, ∑ k, a i * b j * c k * L i j k := by
+  have e : tri L a b c = ∑ k, ∑ j, ∑ i, a i * b j * c k * L i j k := by
+    simp only [tri, ev, Finset.sum_apply, Pi.smul_apply, smul_eq_mul, Finset.mul_sum]
+    exact Finset.sum_congr rfl fun k _ => Finset.sum_congr rfl fun j _ =>
+      Finset.sum_congr rfl fun i _ => by ring
+  rw [e, Finset.sum_comm]
+  rw [Finset.sum_congr rfl fun j _ => Finset.sum_comm, Finset.sum_comm]
+
+omit [Fintype ι₁] in
+lemma bil_eq_sum (L : ι₁ → ι₂ → ι₃ → F) (v : ι₂ → F) (x : ι₃ → F) (k : ι₁) :
+    bil L v x k = ∑ i, ∑ j, v i * x j * L k i j := by
+  simp only [bil, ev, Finset.sum_apply, Pi.smul_apply, smul_eq_mul, Finset.mul_sum]
+  rw [Finset.sum_comm]
+  exact Finset.sum_congr rfl fun i _ => Finset.sum_congr rfl fun j _ => by ring
+
+/-- `h · L(v, x)` is the trilinear form. -/
+lemma tri_eq_dot (L : ι₁ → ι₂ → ι₃ → F) (h : ι₁ → F) (v : ι₂ → F) (x : ι₃ → F) :
+    tri L h v x = h ⬝ᵥ bil L v x := by
+  simp only [tri_eq_sum, dotProduct, bil_eq_sum, Finset.mul_sum]
+  exact Finset.sum_congr rfl fun k _ => Finset.sum_congr rfl fun i _ =>
+    Finset.sum_congr rfl fun j _ => by ring
+
+omit [Fintype ι₁] in
+lemma bil_add_left (L : ι₁ → ι₂ → ι₃ → F) (v v' : ι₂ → F) (x : ι₃ → F) :
+    bil L (v + v') x = bil L v x + bil L v' x := by
+  funext k; simp only [bil, ev_add, ev_add_arr, Pi.add_apply]
+
+omit [Fintype ι₁] in
+lemma bil_add_right (L : ι₁ → ι₂ → ι₃ → F) (v : ι₂ → F) (x x' : ι₃ → F) :
+    bil L v (x + x') = bil L v x + bil L v x' := by
+  funext k; simp only [bil, ev_add, Pi.add_apply]
+
+omit [Fintype ι₁] in
+lemma bil_smul_left (L : ι₁ → ι₂ → ι₃ → F) (c : F) (v : ι₂ → F) (x : ι₃ → F) :
+    bil L (c • v) x = c • bil L v x := by
+  funext k; simp only [bil, ev_smul, ev_smul_arr, Pi.smul_apply]
+
+omit [Fintype ι₁] in
+lemma bil_smul_right (L : ι₁ → ι₂ → ι₃ → F) (c : F) (v : ι₂ → F) (x : ι₃ → F) :
+    bil L v (c • x) = c • bil L v x := by
+  funext k; simp only [bil, ev_smul, Pi.smul_apply]
+
+omit [Fintype ι₁] in
+lemma bil_zero_left (L : ι₁ → ι₂ → ι₃ → F) (x : ι₃ → F) : bil L 0 x = 0 := by
+  funext k; simp only [bil, ev_zero, ev_zero_arr, Pi.zero_apply]
+
+omit [Fintype ι₁] in
+lemma bil_zero_right (L : ι₁ → ι₂ → ι₃ → F) (v : ι₂ → F) : bil L v 0 = 0 := by
+  funext k; simp only [bil, ev_zero, Pi.zero_apply]
+
+/-- The array with the legs rotated: `(rot L)_{ijk} = L_{kij}`. -/
+def rot (L : ι₁ → ι₂ → ι₃ → F) : ι₂ → ι₃ → ι₁ → F := fun i j k => L k i j
+
+/-- The array with the last two legs swapped. -/
+def sw (L : ι₁ → ι₂ → ι₃ → F) : ι₁ → ι₃ → ι₂ → F := fun k j i => L k i j
+
+/-- `rot` as a bijection. -/
+def rotEquiv : (ι₁ → ι₂ → ι₃ → F) ≃ (ι₂ → ι₃ → ι₁ → F) where
+  toFun := rot
+  invFun L k i j := L i j k
+  left_inv _ := rfl
+  right_inv _ := rfl
+
+/-- `sw` as a bijection. -/
+def swEquiv : (ι₁ → ι₂ → ι₃ → F) ≃ (ι₁ → ι₃ → ι₂ → F) where
+  toFun := sw
+  invFun L k i j := L k j i
+  left_inv _ := rfl
+  right_inv _ := rfl
+
+lemma tri_rot (L : ι₁ → ι₂ → ι₃ → F) (a : ι₁ → F) (b : ι₂ → F) (c : ι₃ → F) :
+    tri (rot L) b c a = tri L a b c := by
+  simp only [tri_eq_sum, rot]
+  rw [Finset.sum_comm, Finset.sum_congr rfl fun j _ => Finset.sum_comm, Finset.sum_comm]
+  rw [Finset.sum_congr rfl fun j _ => Finset.sum_comm]
+  exact Finset.sum_congr rfl fun k _ => Finset.sum_congr rfl fun i _ =>
+    Finset.sum_congr rfl fun j _ => by ring
+
+lemma tri_sw (L : ι₁ → ι₂ → ι₃ → F) (a : ι₁ → F) (b : ι₂ → F) (c : ι₃ → F) :
+    tri (sw L) a c b = tri L a b c := by
+  simp only [tri_eq_sum, sw]
+  refine Finset.sum_congr rfl fun k _ => ?_
+  rw [Finset.sum_comm]
+  exact Finset.sum_congr rfl fun i _ => Finset.sum_congr rfl fun j _ => by ring
+
+/-- A matrix of coefficients applied to a vector on its first index. -/
+def app {κ μ : Type*} [Fintype κ] (X : κ → μ → F) (y : κ → F) : μ → F :=
+  fun k => ∑ j, y j * X j k
+
+lemma app_injective {κ μ : Type*} [Fintype κ] [DecidableEq κ] {X X' : κ → μ → F}
+    (h : ∀ y, app X y = app X' y) : X = X' := by
+  funext j k
+  have := congrFun (h (Pi.single j 1)) k
+  simpa [app, Pi.single_apply] using this
+
+omit [Fintype ι₁] in
+lemma bil_eq_app_rot (L : ι₁ → ι₂ → ι₃ → F) (v : ι₂ → F) (x : ι₃ → F) :
+    bil L v x = app (ev (rot L) v) x := by
+  funext k
+  simp only [bil, app, ev, Finset.sum_apply, Pi.smul_apply, smul_eq_mul, rot]
+
+omit [Fintype ι₁] in
+lemma bil_eq_app_rot_sw (L : ι₁ → ι₂ → ι₃ → F) (v : ι₂ → F) (x : ι₃ → F) :
+    bil L v x = app (ev (rot (sw L)) x) v := by
+  funext k
+  simp only [bil_eq_sum, app, ev, Finset.sum_apply, Pi.smul_apply, smul_eq_mul, rot, sw,
+    Finset.mul_sum]
+  exact Finset.sum_congr rfl fun i _ => Finset.sum_congr rfl fun j _ => by ring
+
+/-- A bilinear form of coefficients applied to two vectors. -/
+def app₂ (X : ι₂ → ι₃ → F) (v : ι₂ → F) (x : ι₃ → F) : F := ev (ev X v) x
+
+lemma app₂_injective [DecidableEq ι₂] [DecidableEq ι₃] {X X' : ι₂ → ι₃ → F}
+    (h : ∀ v x, app₂ X v x = app₂ X' v x) : X = X' := by
+  funext i j
+  have := h (Pi.single i 1) (Pi.single j 1)
+  simpa only [app₂, ev_single] using this
 
 end Tri
 
@@ -448,6 +625,22 @@ lemma exists_functionals {κ W : Type*} [Fintype κ] [DecidableEq κ] [AddCommGr
   have h1 : b.equivFun (R.rangeRestrict u) = 0 := hE (by simpa [j] using hj)
   have h2 : R.rangeRestrict u = 0 := by simpa using h1
   simpa using congrArg Subtype.val h2
+
+/-- **A linear map without `ρ` free vectors** is a scalar `c` on the common kernel of `d`
+functionals, for every `d ≥ 2(ρ − 1)`. -/
+lemma near_scalar_lin {κ : Type*} [Fintype κ] [DecidableEq κ] (G : (κ → F) →ₗ[F] (κ → F))
+    {ρ : ℕ} (hρ : 2 * ρ + 1 ≤ Fintype.card κ) (hfree : ¬ FreeFam (F := F) (⇑G) ρ) :
+    ∃ c : F, ∀ d, 2 * (ρ - 1) ≤ d →
+      ∃ Φ : Fin d → κ → F, ∀ u, (∀ a, Φ a ⬝ᵥ u = 0) → G u = c • u := by
+  obtain ⟨c, Z, hZ, hall, -⟩ := near_scalar (RingHom.id F) (⇑G) (map_add G)
+    (fun c u => by simp) (by simpa using hρ) hfree
+  refine ⟨c, fun d hd => ?_⟩
+  have hr : LinearMap.range (G - c • LinearMap.id) ≤ Z := by
+    rintro _ ⟨u, rfl⟩
+    simpa using hall u
+  obtain ⟨Φ, hΦ⟩ := exists_functionals (G - c • LinearMap.id)
+    ((Submodule.finrank_mono hr).trans (hZ.trans hd))
+  exact ⟨Φ, fun u hu => by simpa [sub_eq_zero] using hΦ u hu⟩
 
 /-- A subspace of `F^κ` of codimension `≤ d` contains the common kernel of `d` functionals. -/
 lemma exists_functionals_of_finrank {κ : Type*} [Fintype κ] [DecidableEq κ]
