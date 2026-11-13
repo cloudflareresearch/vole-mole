@@ -197,7 +197,11 @@ permutations with inverse queries):
 - *Also*: the PomFRIT attack on `main` and the (PU) bound for the others (§3); zero knowledge on
   `main` for one proof of the executable prover up to an explicit prediction of `w[0..16)`
   (`zk_rom_ic_main`), and Moussaka 4(a) and Ratatouille unlinkability on `main` with the joint
-  (PU) hop, (PU) an explicit term (`anonymity_main`, `unlinkability_main`, §3); Lemma DS (c) on
+  (PU) hop, (PU) an explicit term (`anonymity_main`, `unlinkability_main`, §3); one proof on
+  `main` with shared tables, `H₂³` visible and a global cipher (`zk_rom_ic_h23_main`); (PU) as a
+  game (`PU.puAdv`), Moussaka 4(a) on `main` with the (PU) advantage of explicit predictors as the
+  only non-numeric ZK term (`anonymity_main_pu`), and the ideal-permutation bound
+  `(c+q)/(2¹²⁸−q) + q/(2⁴⁴⁰−q)` for `Com` (`puAdvPerm_moussaka_le`; Ratatouille `…2⁵⁴⁴…`); Lemma DS (c) on
   one SHAKE oracle (`seedXofDS_le`, §3); the one-query attack on plain CT-UF from the scaling
   symmetry `P(λs) = λ²·P(s)` (`Spec/PqovScale.lean`, `qmap_smul`, `ctuf_scaling_attack`) and the
   counting cores of the OMPR⊕τ and CT-UF^× separations (`combiner_count`, `lottery_count`,
@@ -373,7 +377,8 @@ lean/
                             RatatouilleBalanceSim); Lemma P (LemmaPDet, LemmaP, OneMoreLemmaP)
     Privacy/                privacy games on the executable specs (blindness, issuer hiding,
                             unlinkability): with zero knowledge and hiding as hypotheses, and
-                            for the Lean prover in the random-oracle and ideal-cipher model
+                            for the Lean prover in the random-oracle and ideal-cipher model;
+                            (PU) as a game and its ideal-permutation bound (PU, PUKeccak)
     Theft/                  non-malleability games (no theft, no redirect) on the specs in the
                             zero-knowledge table model, weak SE as a hypothesis; read budgets
                             (Reads); L8's programming step (SimExtract, SimExtractLean); unbound
@@ -524,9 +529,19 @@ to the simulator, where `mainPred` is an explicit witness-free predictor of `w[0
 coupling for all four at once, factor 15, for consistent `H₅` read sets). This gives
 `anonymity_main` (Moussaka 4(a): `8·εRF + 15·(PU₀ + PU₁) + 2·εhide`) and `unlinkability_main`
 (Ratatouille: the same with `PU(b₁, b₂) + PU(b₁', b₂')`), `PU` the explicit terms `puTerm`,
-`puTermR`. Still [paper]: H8, the `ε_iv` and `H₃`-slice collisions (the games give each proof its
-own tables), an adversary reading `H₂³`, Moussaka's `find_issuer` Client and 4(b) on `main`, and a
-bound on the (PU) term.
+`puTermR`. [Lean] `ZK/HopsMainIC.lean`: one proof on `main` in the shared-table model of
+`zk_rom_ic_h23` (`H₅` on every 37-byte input, `H₂³` programmed and read freely, global cipher):
+`zk_rom_ic_h23_main_num`, `q₃·2⁻¹²⁸ + 2⁻¹¹³ + 221·(4607+q_E+4607)·2⁻¹²⁸ + Pr[mainPredIC]`, the last
+term `≤ (q₅+1)·2⁻¹²⁸` for a uniform independent prefix. [Lean] `Privacy/PU.lean`,
+`Privacy/PUKeccak.lean`, `Privacy/MoussakaMainPU.lean`: (PU) as the game `puAdv`;
+`anonymity_main_pu`: `8·εRF + 15·(Σ_{b,c} puAdv Com (predM_c b) + 4(q₅+1)·2⁻¹²⁸) + 2·εhide`; with a
+uniform permutation for Keccak-p[800] and a predictor with `q` forward and inverse queries and `c`
+candidates, `puAdv ≤ (c+q)/(2¹²⁸−q) + q/(2⁴⁴⁰−q)` (Ratatouille: `2⁵⁴⁴`). A finalization the
+adversary makes fail still computes an unshown redemption proof for a dummy token, so `PU_b` is not
+exactly a prediction of `r`: the extra `2(q₅+1)·2⁻¹²⁸` per world (`docs/zk.md` §4.2, corrected).
+Still [paper]: several proofs on shared tables on `main` (`ε_iv`), the reduction of Ratatouille's
+`puTermR` to `puAdv`, Moussaka's `find_issuer` Client and 4(b) on `main`, and (PU) for the real
+Keccak-p[800,12], which is an assumption.
 
 **Statement (with the fix).** Adaptive, multi-proof, statistical-in-the-witness zero knowledge in
 the classical ROM [paper] + [Lean] `ZK/`. Against quantum distinguishers [paper], with a bound of
@@ -1557,7 +1572,13 @@ What is **not** established, roughly in order of importance:
    (`ZK/Main.lean`, `ZK/Relations.lean`), and so is the hybrid chaining around it (H1–H4, the
    H5/H6 coupling for one proof and jointly for a token's proofs, the oracle adversary as read
    sets; `ZK/HopsMain.lean`, `ZK/MainGame.lean`; `docs/zk.md` §4.2), with per-proof tables;
-   `ε_iv`, H8 and a bound on the (PU) term are not. The QROM ZK bound
+   for one proof the shared-table model with `H₂³` visible and a global cipher is mechanized on
+   `main` (`zk_rom_ic_h23_main`); (PU) is a game (`PU.puAdv`), Moussaka's (PU) term is the
+   advantage of explicit predictors in it (`anonymity_main_pu`), and it is bounded in the
+   ideal-permutation model (`puAdvPerm_moussaka_le`, `puAdvPerm_ratatouille_le`). Not done: the
+   joint hop over several proofs on shared tables (`ε_iv`), Ratatouille's `puTermR` as `puAdv`,
+   and (PU) for the real 12-round permutation (an assumption; the exhaustive predictor has
+   advantage 1). The QROM ZK bound
    is loose (2⁻¹⁹ at 2³⁰) until the 256-bit `rho` and salt are added.
    With the fix, zero knowledge of the executable Lean prover and the three protocols' privacy
    games are mechanized in the classical random-oracle and ideal-cipher model, with every
