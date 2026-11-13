@@ -42,8 +42,12 @@ computation. Plain extraction rests on `chal1` and `chal2` being random (L3, L4)
 on collision resistance of the chain (`chal2` determines the statement); neither can be proved
 for a fixed function against unbounded adversaries. They are proved in the random-oracle model of
 `ROM/` (`*_accept_le_adaptive`, `omuf_le_num_sim`, `balance_le_sim_num`), where every hash is a
-random oracle and adversaries make bounded queries; carrying those bounds into this model needs
-`H₂⁰`–`H₂²` as random tables here (or the simulators in `ROM/`), which is not done.
+random oracle and adversaries make bounded queries. `Theft/Tables.lean` makes those hashes
+uniform tables in this model (`noTheft_leanX_plain`, `noRedirect_leanX_plain`: the hops lift by
+averaging, since they hold for every `Hb`, `Theft/LeanHb.lean`). Carrying `ROM/`'s bounds over
+is not done: it needs an extractor that sees the last stage's queries (`extOf e` does not, and
+`ROM/`'s extractor reads the cipher-query log), the last stage as an oracle computation with
+cell queries, and the lazy-to-eager step (`docs/security/ratatouille.md` §5).
 -/
 
 -- (The coin types are large products: their `Fintype` instances exceed the default size.)

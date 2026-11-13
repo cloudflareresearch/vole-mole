@@ -1,6 +1,8 @@
 import VoleMole.Theft.RatatouilleLean
 import VoleMole.Theft.MoussakaLean
 import VoleMole.Theft.SimExtractLean
+import VoleMole.Theft.Tables
+import VoleMole.Theft.ComOW
 
 /-!
 # Audit of the non-malleability theorems (`Theft/`)
@@ -26,10 +28,19 @@ import VoleMole.Theft.SimExtractLean
 * **`Adv^ow` is not small in this model** (`owAdv_one_ratatouille`, `owAdv_one_moussaka`): `Com` is
   a fixed function here and the inverter any function, so an inverter that picks a preimage of the
   commitment it is given wins with probability `1`. The note's `q_K·2⁻¹²⁷` needs `KP800` as an
-  ideal permutation (a random table) and an inverter with a bounded number of queries to it.
+  ideal permutation (a random table) and an inverter with a bounded number of queries to it;
+  `Theft/ComOW.lean` proves that bound for the standalone experiment, instantiated here at
+  Ratatouille's sizes.
+* **The versions with the other hashes random can hold.** `noTheft_leanX_plain` and
+  `noRedirect_leanX_plain` (`Theft/Tables.lean`) are instantiated at the tables `XTab L M` and the
+  record `hbX` (`H₁`, `H₂⁰`, `H₂⁴`, `H₄`, `H₂¹`, `H₂²`, `H_comb` uniform on inputs of at most `L`
+  bytes), for the same adversaries.
 
 No `sorry`, no `axiom`.
 -/
+
+-- (The coin types are large products: their `Fintype` instances exceed the default size.)
+set_option synthInstance.maxSize 1024
 
 namespace VoleMole.Audit.Theft
 
@@ -109,6 +120,17 @@ example :=
     (a3 := 0) (a5 := 0) (aE := 0) (x3 := 0) (x5 := 0) (xE := 0)
     (fun _ _ => StageBudget.const _) (fun _ _ => StageBudget.const _)
     (plainSE_one _ _ _ _ _) (progEv_one _ _ _ _ _ _ _)
+
+/-- `noTheft_leanX_plain`'s hypotheses hold for the trivial thief and a constant extractor, with
+`H₁`, `H₂⁰`, `H₂⁴`, `H₄`, `H₂¹`, `H₂²` and `H_comb` read off uniform tables (`hbX`, inputs of at
+most `L` bytes). -/
+example (L M : ℕ) :=
+  noTheft_leanX_plain (R := Blk → Blk) (X := XTab L M) (Hb := hbX) (thief0 _ _ _) hbX_wf
+    (e := fun _ _ _ _ _ _ => wit0) (Adm := fun _ => True) (Adm₀ := fun _ => True)
+    (a3 := 0) (a5 := 0) (aE := 0) (x3 := 0) (x5 := 0) (xE := 0)
+    (fun _ _ _ => StageBudget.const _) (fun _ _ _ => StageBudget.const _) (ε₀ := 1) (εh := 1)
+    (plainSE_one _ _ _ _ _) (progEv_one _ _ _ _ _ _ _) (fun _ _ => trivial)
+    fun _ _ _ _ _ _ => trivial
 
 /-- **`Adv^ow` is `1` for some inverter** in this model: `Com` is a fixed function, and the
 inverter that picks an opening of the first commitment at `t = 0` always succeeds. -/
@@ -194,6 +216,16 @@ example :=
     (fun _ _ => StageBudget.const _) (fun _ _ => StageBudget.const _)
     (plainSE_one _ _ _ _ _) (progEv_one _ _ _ _ _ _ _)
 
+/-- `noRedirect_leanX_plain`'s hypotheses hold for the trivial adversary and a constant
+extractor, with the other hashes read off uniform tables (`hbX`). -/
+example (L M : ℕ) :=
+  noRedirect_leanX_plain (R := Blk → Blk) (X := XTab L M) (Hb := hbX) (thiefM _ _) hbX_wf
+    (e := fun _ _ _ _ _ _ => []) (Adm := fun _ => True) (Adm₀ := fun _ => True)
+    (a3 := 0) (a5 := 0) (aE := 0) (x3 := 0) (x5 := 0) (xE := 0)
+    (fun _ _ _ => StageBudget.const _) (fun _ _ _ => StageBudget.const _) (ε₀ := 1) (εh := 1)
+    (plainSE_one _ _ _ _ _) (progEv_one _ _ _ _ _ _ _) (fun _ _ => trivial)
+    fun _ _ _ _ _ _ => trivial
+
 /-- **`Adv^ow` is `1` for some inverter** in this model (Moussaka): the inverter that picks an
 opening of the commitment it is given always succeeds. -/
 theorem owAdv_one_moussaka (ci cr : Bytes) :
@@ -221,5 +253,32 @@ theorem redirect_freshR (A : Moussaka.Thief G S) (o₁ b cd : Bytes) (hcd : cd �
   exact hcd (RedeemInstance.mk.inj heq).2.2.2.2
 
 end Mous
+
+/-! ## One-wayness of `Com` in the random-table model (`Theft/ComOW.lean`) -/
+
+section OW
+
+open VoleMole.Theft.ComOW VoleMole.Privacy.ComHide
+
+lemma card_coins (n : ℕ) : Fintype.card (Coins n) = 2 ^ (8 * n) := by
+  rw [Fintype.card_fun, Fintype.card_fin, Prob.card_uint8, pow_mul]
+
+/-- **`owAdvColRO_num`'s hypotheses hold** at Ratatouille's sizes (24-byte nullifiers, 16-byte
+openings, 8-byte credit values, 32-byte commitments; cells keyed by the pair `(nf, r)`), for an
+inverter that makes one query and outputs the cell it read. -/
+example :
+    owAdvRO (ι := Bool) (N := Coins 24) (R := Coins 16) (K := Coins 24 × Coins 16)
+        (Y := Coins 8 → Coins 32) Prod.mk
+        (fun g _ _ => ((fun _ => 0, fun _ => 0), (g (fun _ => 0, fun _ => 0) (fun _ => 0) 0 == 0,
+          fun _ => 0, fun _ => 0)))
+        (fun v u a => v a.2.2 = u a.1 a.2.1) ≤ (4 * 1 + 8 : ℕ) / 2 ^ 128 :=
+  owAdvColRO_num (card_coins 16) (card_coins 8) (card_coins 32) Prod.mk
+    (fun _ _ _ _ h => ⟨(Prod.mk.inj h).1, (Prod.mk.inj h).2⟩) _ fun _ _ =>
+    QTree.ask (fun _ => 0, fun _ => 0)
+      (fun (v : Coins 8 → Coins 32) _ =>
+        ((fun _ => 0, fun _ => 0), (v (fun _ => 0) 0 == 0, fun _ => 0, fun _ => 0))) 0
+      fun _ => QTree.ret _ 0
+
+end OW
 
 end VoleMole.Audit.Theft
