@@ -23,6 +23,11 @@ the real-number and counting cores that the paper's operator arguments reduce to
   argument with an atypical-database correction), `chernoff_tail_num` and `typical_union_num`
   (the tail of the exposure count at `δ = 3`, mean `≥ 128`), `nbar_ok`, and the numbers
   `block_multi_at_2_50` … `block_multi_at_2_60`, `q2_total_at_2_58`, `q2_total_at_2_60_lt_one`.
+* Review of Theorems 4 and 5 (paper §14): `openers_le_one_add_pairs` and `transfer_solve` (the
+  transfer between the database and the real world costs `O(√(|𝒯|/N))`, independent of the query
+  count), `transfer_refined_const`, `transfer_refined_sq_at_L`, and the numbers for
+  simulation-extractability and multi-proof extraction with every cipher evaluation counted
+  (`block_SE_at_q45_QS30`, `block_SE_at_q50_QS30`, `block_multiM_at_q50_n20`).
 -/
 
 open Finset
@@ -301,6 +306,78 @@ theorem q2_total_at_2_60_lt_one :
     let q : ℚ := 2 ^ 60
     200 * q ^ 2 / N + 2 * ((32 : ℚ) / 9 * q ^ 3 * (1037 / (B * (B - 1)))) + 2 * (1 / 2 ^ 58)
       < 1 := by
+  norm_num
+
+/-! ## Review of Theorems 4 and 5 (paper §14) -/
+
+/-- A target with `m` opening keys has at most `1 + C(m,2)` of them: the number of
+(target, opening key) incidences is at most the number of targets plus the number of
+(target, opening key pair) incidences. -/
+theorem openers_le_one_add_pairs (m : ℕ) : m ≤ 1 + m.choose 2 := by
+  induction m with
+  | zero => simp
+  | succ n ih =>
+    rw [Nat.choose_succ_succ, Nat.choose_one_right]
+    rcases n with _ | n
+    · simp
+    · omega
+
+/-- The refined transfer step (paper §14.3). `x` and `A` are the square roots of the two pair
+counts (real world and database, in either order), `r = √|𝒯|`, and `s = √ε` with `ε` the total
+opening density of a uniform register. The three-term split and `openers_le_one_add_pairs` give
+the hypothesis; the conclusion has no query count in it. -/
+theorem transfer_solve {x A r s : ℝ} (hx : 0 ≤ x) (hA : 0 ≤ A) (hr : 0 ≤ r) (hs0 : 0 ≤ s)
+    (hs1 : s < 1)
+    (h : x ≤ A + s * Real.sqrt (r ^ 2 + x ^ 2) + s * Real.sqrt (r ^ 2 + A ^ 2)) :
+    x ≤ ((1 + s) * A + 2 * s * r) / (1 - s) := by
+  have hsq : ∀ {u v : ℝ}, 0 ≤ u → 0 ≤ v → Real.sqrt (u ^ 2 + v ^ 2) ≤ u + v := by
+    intro u v hu hv
+    rw [Real.sqrt_le_left (by positivity)]
+    nlinarith
+  have h1 := hsq hr hx
+  have h2 := hsq hr hA
+  rw [le_div_iff₀ (by linarith)]
+  nlinarith [mul_le_mul_of_nonneg_left h1 hs0, mul_le_mul_of_nonneg_left h2 hs0]
+
+/-- The constant of the refined transfer: with `√ε ≤ (1001/1000)/√N` at key level
+(`ε = 1/(N−1)`) and `√ε' ≤ (1418/1000)/√N` at block level (`ε' = 2(1+2^{−8})/N`), the two
+`2√(ε|𝒯|)` terms, each inflated by `1001/1000` for the factors `(1±√ε)^{±1}`, add up to at most
+`5·√(|𝒯|/N)`. -/
+theorem transfer_refined_const :
+    (2 : ℚ) * (1 + 1 / 2 ^ 8) ≤ (1418 / 1000) ^ 2 ∧
+    (2 : ℚ) ^ 128 / (2 ^ 128 - 1) ≤ (1001 / 1000) ^ 2 ∧
+    (2 : ℚ) * (1418 / 1000) * (1001 / 1000) + 2 * (1001 / 1000) * (1001 / 1000) ≤ 5 := by
+  norm_num
+
+/-- The refined transfer term for one proof (`|𝒯| ≤ L = 2304`): `c_R'² = 25·L/N ≤ 2^{−112}`,
+for every query count. (The original `c_R²` was `≈ 2^{−58.7}` at `q = 2^{60}`.) -/
+theorem transfer_refined_sq_at_L : (25 : ℚ) * 2304 / 2 ^ 128 ≤ 1 / 2 ^ 112 := by
+  norm_num
+
+/-- Simulation-extractability with Theorem 5, every cipher evaluation counted
+(`2^{18}` per simulated proof and per verification): at `q = 2^{45}`, `Q_S = 2^{30}`,
+`a² ≤ 2^{−39}`, below the main term `2^{−30.4}`. (Theorem 2 gives only `2^{−22.6}` here.) -/
+theorem block_SE_at_q45_QS30 :
+    let B : ℚ := 2 ^ 98
+    let QE : ℚ := 2 ^ 45 + (2 ^ 30 + 1) * 2 ^ 18
+    (32 : ℚ) / 9 * QE ^ 3 * (1037 / (B * (B - 1))) ≤ 1 / 2 ^ 39 := by
+  norm_num
+
+/-- The same at `q = 2^{50}`, `Q_S = 2^{30}`: `a² ≤ 2^{−33}` (main term `2^{−20.4}`; Theorems 1
+and 2 are vacuous or nearly so). -/
+theorem block_SE_at_q50_QS30 :
+    let B : ℚ := 2 ^ 98
+    let QE : ℚ := 2 ^ 50 + (2 ^ 30 + 1) * 2 ^ 18
+    (32 : ℚ) / 9 * QE ^ 3 * (1037 / (B * (B - 1))) ≤ 1 / 2 ^ 33 := by
+  norm_num
+
+/-- Multi-proof extraction (Q7 Theorem M) with Theorem 5 at `q = 2^{50}`, `n = 2^{20}` outputs:
+`a² ≤ 2^{−34}`, and the refined transfer term `25·nL/N ≤ 2^{−92}`. -/
+theorem block_multiM_at_q50_n20 :
+    let B : ℚ := 2 ^ 98
+    let QE : ℚ := 2 ^ 50 + 2 ^ 20 * 2 ^ 18
+    (32 : ℚ) / 9 * QE ^ 3 * (1037 / (B * (B - 1))) ≤ 1 / 2 ^ 34 ∧
+    (25 : ℚ) * (2 ^ 20 * 2304) / 2 ^ 128 ≤ 1 / 2 ^ 92 := by
   norm_num
 
 end VoleMole.Seed.CipherBinding

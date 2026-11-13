@@ -7,6 +7,12 @@ quantum adversaries. Hashes are quantum random oracles, and AES is a quantum ide
 key-level compressed oracle. Notation, counts and lemma names follow Q2 and Q1. `L8` means
 `L8-simulation-extractability.md`.
 
+**Update (Q6).** The verdict below ("vacuous at `Q_S = 2^{30}`") is superseded. `ε_bind^C` is now
+bounded by the smaller of Q6 Theorem 2 (mixed classical/quantum, with Q7's Lemma K) and Q6
+Theorem 5′ (block representation). §13 states the result: strong and weak SE are `2^{−60.4}` at
+`Q_S = q = 2^{30}` and equal the main term `≈ 200q²/N` for all larger `q` up to the Grover limit
+(within one bit near `q = 2^{40}`, `Q_S = 2^{30}`). §0–§12 keep the original text and numbers.
+
 ## 0. Verdict
 
 **What is proved (Theorem Q5, §3).** In the strong-SE game, a quantum adversary gets simulated
@@ -634,6 +640,52 @@ R), Lemma F' and the union bounds.
    known to me. Whatever it is, Theorem Q5 needs only (S1')–(S5) and §8.3.
 6. **Literature.** The Unruh 2015 attribution is from memory. The paper named in the brief
    ("DFM, simulation-sound extractability") was not found. GHHM and Majenz–Sharma were read.
+
+## 13. `ε_bind^C` with Q6 (current numbers)
+
+Theorem Q5 is unchanged except for the bound on `ε_bind^C`. Two bounds are available, and the
+theorem holds with their minimum.
+
+**(a) Q6 Theorem 2** (key level, H₄, hybrid representation). The simulator's cipher work is
+`Q_C = Q_S·4607` classical key fetches (Q7 Lemma K) and enters probability-additively. Tweak set
+`T` (weak) or `T'` (strong).
+
+**(b) Q6 Theorem 5′** (block representation, free iv; Q6 §14.5, Corollary 14.1).
+- Lemma F' uses `¬Bad_{T'}` only through two events: `MULTI_end` on the outputs (case non-P),
+  and "`V`'s key and `Sim_s`'s key differ at a node or leaf of a simulated tree but their two
+  output blocks agree" (case P, co-path). Under `Rec` (Lemma R) both say: some target has two
+  aligned database keys. The targets are classical values: the leaf commitments `V` recomputes
+  on the outputs, and the output blocks `Sim` computed at each node and leaf of its trees. There
+  are at most `T_max = (n_out + 2Q_S)·L` of them.
+- No measurement or control on the cipher database precedes the end (§1.2), so Q6 Theorem 4′
+  applies: the event is, up to `5√(T_max/N)` in amplitude, the real-world event "two keys open
+  one of these targets". Q6 Theorem 5 bounds that event.
+- Result, for weak and strong SE alike (the tweak set does not enter):
+
+      ε_bind^C ≤ ( (1+2^{−61})·(a + c_atyp) + 5√(T_max/N) )²,   a² = (32/9)·μ_B·(Q_E^{ev})³ ≈ 2^{−184.15}·(Q_E^{ev})³,
+      Q_E^{ev} := q_E + (Q_S + n_out)·c_E      (every cipher evaluation; c_E ≤ 2^{18}).
+
+  Lemma K's fetch count does not apply here: a fetch is not a single block query.
+
+**Numbers** (`scripts/qrom-block-binding/nums.py`; `q` on every oracle, `n_out = 1`, `Sim°`;
+**[Lean]** `CipherBinding.thm2_SE_weak_at_2_30`, `thm2_SE_strong_at_2_30`,
+`block_SE_at_q45_QS30`, `block_SE_at_q50_QS30`).
+
+| `q` | `Q_S` | `Σ_SE² ≈ 200q²/N` | (a) weak / strong | (b) | **total, weak / strong** |
+|---|---|---|---|---|---|
+| `2^{30}` | `2^{20}` | `2^{−60.4}` | `2^{−90.3}` / `2^{−83.2}` | `2^{−70.1}` | `2^{−60.4}` / `2^{−60.4}` |
+| `2^{30}` | `2^{30}` | `2^{−60.4}` | `2^{−77.7}` / `2^{−70.6}` | `2^{−40.2}` | `2^{−60.4}` / `2^{−60.4}` |
+| `2^{35}` | `2^{30}` | `2^{−50.4}` | `2^{−60.4}` / `2^{−53.3}` | `2^{−40.2}` | `2^{−50.4}` / `2^{−50.2}` |
+| `2^{40}` | `2^{30}` | `2^{−40.4}` | `2^{−40.3}` / `2^{−33.2}` | `2^{−40.1}` | `2^{−39.3}` / `2^{−39.2}` |
+| `2^{45}` | `2^{30}` | `2^{−30.4}` | `2^{−22.7}` / `2^{−15.6}` | `2^{−39.6}` | `2^{−30.4}` / `2^{−30.4}` |
+| `2^{50}` | `2^{30}` | `2^{−20.4}` | `2^{−5.2}` / vacuous | `2^{−33.2}` | `2^{−20.4}` / `2^{−20.4}` |
+| `2^{58}` | `2^{30}` | `2^{−4.4}` | vacuous | `2^{−10.2}` | `2^{−4.3}` / `2^{−4.3}` |
+
+- (a) is the better bound for `q ≲ 2^{40}`; (b) for larger `q`. With both, SE is limited by the
+  Grover-inherent main term for every `Q_S ≤ 2^{30}`.
+- §12 gap 1 (lemma (M)) is closed by (a). The remaining gaps of §12 are unchanged.
+- `ε_Sim` for an efficient extractor is as in Q6 §8.
+- Status: paper. Q6 §14 reviews Theorems 4 and 5 and derives (b).
 
 ## References
 

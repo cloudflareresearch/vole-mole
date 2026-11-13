@@ -8,6 +8,11 @@ the blocks of a key-dependent partition P_k of X into blocks of size B (unions o
     a^2    = (32/9) Q^3 mu_B               bound on the expected number of agreement triples
     eps    = (a + c_R)^2                   bound on Pr[MULTI_end]   (c_R: real-world transfer)
 
+Review (Q6 §14): the transfer term is c_R' = 5 sqrt(|T|/N), with |T| the number of targets; it
+does not grow with the query count (the original c_R = 6 sqrt(tau (Q+1)/N) is kept for comparison).
+The last two tables apply Theorem 5 to simulation-extractability (Q5) and to multi-proof
+extraction (Q7), next to Q6 Theorems 1 and 2.
+
 Pure Python, exact where it matters (logs in floating point for the table only).
 """
 from math import log, log2, sqrt, exp
@@ -49,6 +54,80 @@ def c_R(lq, lb):
     return key + blk
 
 
+def c_R_refined(n_targets):
+    """Review, Q6 §14.3: both transfer steps together cost 5 sqrt(|T|/N) in amplitude."""
+    return 5 * sqrt(n_targets / float(N))
+
+
+def thm5(lq_E, n_targets, nbar=1037, lb=98):
+    """Theorem 5 with the refined transfer: ((1+2^-61) a + c_R')^2 (c_atyp, eps_Theta negligible)."""
+    a = sqrt(2.0 ** a2_log2(lq_E, nbar, lb))
+    return ((1 + 2.0 ** -61) * a + c_R_refined(n_targets)) ** 2
+
+
+def thm1(QE, q4, T):
+    """Q6 Theorem 1 (key level, H4)."""
+    a = (4 * sqrt(2) / 3) * QE ** 1.5 / sqrt(N - 1)
+    ez = min(a * a, 1.0005 * a)
+    return (q4 * sqrt(8 * T * ez / N) + 2 * sqrt(2) * QE * sqrt(QE * q4 * T / (N * (N - 1)))) ** 2
+
+
+def thm2(QA, QC, q4, T):
+    """Q6 Theorem 2 (mixed classical/quantum, key level, H4)."""
+    S = QA + QC
+    G = QC * S / (N - 1)
+    X = 2 ** 9 * G
+    aA = 2 * sqrt(2) * QA * sqrt(S / (N - 1))
+    ez = min((aA + sqrt(G + X)) ** 2, 1.0005 * aA + G + X)
+    p = 1.0 / (N * (N - 1))
+    GB = QC * S * q4 * T * p
+    return (q4 * sqrt(8 * T * ez / N) + 2 * sqrt(2) * QA * sqrt(S * q4 * T * p)
+            + sqrt(GB * (1 + 2 ** 9))) ** 2
+
+
+L_LEAVES = 2304
+K_FETCH = 4607          # Lemma K: key fetches per proof / verification
+C_EVAL = 2 ** 18        # cipher evaluations per simulated proof / verification (Q5 section 1.1)
+
+
+def fmt(v):
+    return "vacuous" if v >= 1 else f"2^{log2(v):7.2f}"
+
+
+def se_table():
+    print("\n== SE (Q5): eps_bind = min(Theorem 2 [fetches, H4], Theorem 5 [evaluations]) ==")
+    print(" log2 q | log2 Q_S | main 200q^2/N | Thm2 weak | Thm2 strong | Thm5 (both) | total weak | total strong")
+    n_out = 1
+    for lq, lqs in ((30, 20), (30, 30), (35, 30), (40, 20), (40, 30), (45, 20), (45, 30),
+                    (50, 20), (50, 30), (55, 30), (58, 30)):
+        q, QS = 2.0 ** lq, 2.0 ** lqs
+        main_t = 200 * q * q / N
+        QA = q + n_out * K_FETCH
+        QC = QS * K_FETCH
+        q4 = q + 2 * (q + QS + n_out) + 3 * QS + n_out + 1
+        t2w, t2s = thm2(QA, QC, q4, 17), thm2(QA, QC, q4, 2320)
+        QEev = q + (QS + n_out) * C_EVAL
+        t5 = thm5(log2(QEev), (n_out + 2 * QS) * L_LEAVES)
+        print(f" {lq:6} | {lqs:8} | {fmt(main_t):9} | {fmt(t2w):9} | {fmt(t2s):9} | {fmt(t5):9} "
+              f"(Q_E=2^{log2(QEev):.1f}) | {fmt(main_t + min(t2w, t5)):9} | {fmt(main_t + min(t2s, t5)):9}")
+
+
+def multi_table():
+    print("\n== Theorem M (Q7): eps_multi = min(Theorem 1 [fetches, H4], Theorem 5 [evaluations]) ==")
+    print(" log2 q | log2 n | main 8(5q+7n)^2/N | Thm1 | Thm5 | old c_R^2 (tau=17n) | total")
+    for lq, ln in ((30, 0), (30, 20), (30, 30), (40, 20), (45, 20), (50, 20), (50, 30), (55, 20), (58, 20)):
+        q, n = 2.0 ** lq, 2.0 ** ln
+        main_t = 8 * (5 * q + 7 * n) ** 2 / N
+        QEf = q + n * K_FETCH
+        q4 = 3 * q + n + 1
+        t1 = thm1(QEf, q4, 17)
+        QEev = q + n * C_EVAL
+        t5 = thm5(log2(QEev), n * L_LEAVES)
+        old_cr = 36 * 17 * n * (QEev + 1) / N
+        print(f" {lq:6} | {ln:6} | {fmt(main_t):9} | {fmt(t1):9} | {fmt(t5):9} | {fmt(old_cr):9} "
+              f"| {fmt(main_t + min(t1, t5)):9}")
+
+
 def main():
     print("== choice of block size B (tail per half-sum <= 2^-460, eps_T <= 2^-301) ==")
     for lb in (96, 97, 98, 99, 100):
@@ -73,11 +152,13 @@ def main():
         ez = min(a * a, 1.0005 * a)
         old = (q4 * sqrt(8 * TAU * ez / N) + 2 * sqrt(2) * q * sqrt(q * q4 * TAU / (N * (N - 1)))) ** 2
         anew = sqrt(2.0 ** a2_log2(lq, nbar, lb))
-        new = (anew + c_R(lq, lb)) ** 2
+        orig = (anew + c_R(lq, lb)) ** 2
+        new = thm5(lq, L_LEAVES)
         best = min(old, new)
         tot = main_t + best
-        f = lambda v: "vacuous" if v >= 1 else f"2^{log2(v):7.2f}"
-        print(f" {lq:6} | {f(main_t):9} | {f(old):9} | {f(new):9} | {f(tot):9}")
+        f = fmt
+        print(f" {lq:6} | {f(main_t):9} | {f(old):9} | {f(new):9} | {f(tot):9}   "
+              f"(with the original c_R: {f(orig)})")
 
     print("\ncrossover new eps_multi = main term at log2 q =",
           (log2(200) - LN - a2_log2(0, nbar, lb)))
@@ -85,6 +166,9 @@ def main():
     lq = 61
     corr = 3 + 2 * lq + 0.5 * (1 + lq - LN - 301)
     print("atypical correction (amplitude) at Q=2^61: 2^%.1f" % corr)
+    print("refined transfer c_R'^2 = 25 |T|/N at |T| = L: 2^%.1f" % log2(25 * L_LEAVES / float(N)))
+    se_table()
+    multi_table()
 
 
 if __name__ == "__main__":
