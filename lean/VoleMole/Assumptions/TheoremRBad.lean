@@ -919,6 +919,177 @@ theorem msg_step (o : List 𝕋 ⊕ (List 𝕋 ⊕ (List 𝕋 × List S))) {NT N
       · simp only [support_pure, Set.mem_singleton_iff] at hw; subst hw; exact hsame
       · simp only [support_pure, Set.mem_singleton_iff] at hw; subst hw; exact hb
 
+/-- **The invariant of the run** with budget `b` of messages to `A**_D` left: room for the target,
+list and uncharged-call draws still to come, and for the counters. -/
+def Ival (NT NL NC Tq : ℕ) (s : JSt AR τ q X 𝕋 S) (b : ℕ) : Prop :=
+  s.1.tl.length + s.1.rem + q * b ≤ NT ∧ (∃ a : ℕ, (lists s).encard ≤ a ∧ a + (q + 1) * b ≤ NL) ∧
+    nonchg s + (q + 1) * b ≤ NC ∧ s.1.nj + q * b ≤ q * Tq ∧ s.1.K + b ≤ Tq
+
+omit [DecidableEq DR] [∀ d, SampleableType (AR d)] [NeZero τ] [DecidableEq X] [Field F] [Fintype F]
+  [SampleableType (Fin m → F)] [DecidableRel (scls F m)] in
+theorem Ival.same {NT NL NC Tq b : ℕ} {s s' : JSt AR τ q X 𝕋 S} (h : Ival NT NL NC Tq s b)
+    (d : Dlt s s' 0 0 0 0 0) : Ival NT NL NC Tq s' b := by
+  obtain ⟨h1, ⟨a, ha, ha'⟩, h3, h4, h5⟩ := h
+  refine ⟨by have := d.tl; omega, ⟨a, d.ls.trans (by simpa using ha), ha'⟩,
+    by have := d.nc; omega, by have := d.nj; omega, by have := d.K; omega⟩
+
+omit [DecidableEq DR] [∀ d, SampleableType (AR d)] [NeZero τ] [DecidableEq X] [Field F] [Fintype F]
+  [SampleableType (Fin m → F)] [DecidableRel (scls F m)] in
+theorem Ival.msg {NT NL NC Tq b : ℕ} {s s' : JSt AR τ q X 𝕋 S} (h : Ival NT NL NC Tq s (b + 1))
+    (d : Dlt s s' q (q + 1) (q + 1) q 1) : Ival NT NL NC Tq s' b := by
+  obtain ⟨h1, ⟨a, ha, ha'⟩, h3, h4, h5⟩ := h
+  simp only [mul_add, mul_one] at h1 ha' h3 h4
+  refine ⟨by have := d.tl; omega, ⟨a + (q + 1), d.ls.trans (by push_cast; gcongr), by omega⟩,
+    by have := d.nc; omega, by have := d.nj; omega, by have := d.K; omega⟩
+
+/-- **The bound on the bad events still to come**: `pT` per target draw (`rem` challenge targets
+and `q` junk targets per message) and `pL` per list draw (`q + 1` per message). -/
+noncomputable def Bnd (pT pL : ℝ≥0∞) (s : JSt AR τ q X 𝕋 S) (b : ℕ) : ℝ≥0∞ :=
+  pT * ((s.1.rem + q * b : ℕ) : ℝ≥0∞) + pL * (((q + 1) * b : ℕ) : ℝ≥0∞)
+
+omit [DecidableEq DR] [∀ d, SampleableType (AR d)] [NeZero τ] [DecidableEq X] [Field F]
+  [DecidableEq F] [Fintype F] [SampleableType (Fin m → F)] [DecidableRel (scls F m)] in
+theorem Bnd_mono (pT pL : ℝ≥0∞) {s s' : JSt AR τ q X 𝕋 S} {b : ℕ} (h : s'.1.rem ≤ s.1.rem) :
+    Bnd pT pL s' b ≤ Bnd pT pL s b := by
+  unfold Bnd
+  gcongr
+
+/-- **The bad-event bound for a run of the reduction** with at most `b` messages to `A**_D`
+left, by induction on the reduction: the invariant holds at the end, and the bad events occur
+with probability at most `Bnd`. -/
+theorem bad_run {NT NL NC Tq : ℕ} {α : Type} (r : OracleComp (specRed AR τ q X 𝕋 S) α) :
+    ∀ (b : ℕ) (s : JSt AR τ q X 𝕋 S), IsQueryBoundP r (fun o => o.isRight = true) b →
+      Ival NT NL NC Tq s b →
+      (∀ z ∈ support ((simulateQ (jImpl (scls F m) rel pk pre) (simulateQ prog r)).run s),
+        ∃ b', Ival NT NL NC Tq z.2 b') ∧
+      (¬ Ebad s → Pr{let z ← (simulateQ (jImpl (scls F m) rel pk pre)
+          (simulateQ prog r)).run s}[Ebad z.2] ≤
+        Bnd (cT τ (Fintype.card F) NT NL NC / Fintype.card 𝕋)
+          (cL τ (Fintype.card F) NT / Fintype.card 𝕋) s b) := by
+  set pT := (cT τ (Fintype.card F) NT NL NC : ℝ≥0∞) / Fintype.card 𝕋
+  set pL := (cL τ (Fintype.card F) NT : ℝ≥0∞) / Fintype.card 𝕋
+  induction r using OracleComp.inductionOn with
+  | pure x =>
+    intro b s _ hI
+    simp only [simulateQ_pure, StateT.run_pure]
+    refine ⟨fun z hz => ⟨b, ?_⟩, fun hs => pr_le_of_support _ _ fun z hz => ?_⟩
+    · simp only [support_pure, Set.mem_singleton_iff] at hz; subst hz; exact hI
+    · simp only [support_pure, Set.mem_singleton_iff] at hz; subst hz; exact hs
+  | query_bind o k ih =>
+    intro b s hb hI
+    rw [isQueryBoundP_query_bind_iff] at hb
+    obtain ⟨hcan, hk⟩ := hb
+    simp only [simulateQ_bind, simulateQ_spec_query, StateT.run_bind]
+    -- the generic shape of one query of the reduction
+    have key : ∀ (b' : ℕ) (P : JSt AR τ q X 𝕋 S → Prop) (ρ ε : ℝ≥0∞),
+        (∀ u, IsQueryBoundP (k u) (fun o => o.isRight = true) b') →
+        (∀ w ∈ support (stOf rel pk pre (prog o) s), Ival NT NL NC Tq w b' ∧ P w) →
+        (¬ Ebad s → Pr{let w ← stOf rel pk pre (prog o) s}[Ebad w] ≤ ρ) →
+        (∀ w, P w → Bnd pT pL w b' ≤ ε) → ρ + ε ≤ Bnd pT pL s b →
+        (∀ z ∈ support ((simulateQ (jImpl (scls F m) rel pk pre) (prog o)).run s >>= fun z =>
+            (simulateQ (jImpl (scls F m) rel pk pre) (simulateQ prog (k z.1))).run z.2),
+          ∃ b', Ival NT NL NC Tq z.2 b') ∧
+        (¬ Ebad s → Pr{let z ← (simulateQ (jImpl (scls F m) rel pk pre) (prog o)).run s >>=
+            fun z => (simulateQ (jImpl (scls F m) rel pk pre) (simulateQ prog (k z.1))).run z.2}[
+              Ebad z.2] ≤ Bnd pT pL s b) := by
+      intro b' P ρ ε hk' hw hρ hε hsum
+      have hw' : ∀ z ∈ support ((simulateQ (jImpl (scls F m) rel pk pre) (prog o)).run s),
+          Ival NT NL NC Tq z.2 b' ∧ P z.2 := fun z hz =>
+        hw z.2 ((mem_stOf rel pk pre _ s _).mpr ⟨z, hz, rfl⟩)
+      refine ⟨fun z hz => ?_, fun hs => ?_⟩
+      · rw [mem_support_bind_iff] at hz
+        obtain ⟨z1, hz1, hz⟩ := hz
+        exact (ih z1.1 b' z1.2 (hk' z1.1) (hw' z1 hz1).1).1 z hz
+      · refine (prEvent_bind_le_prEvent_add_of_support _ _ (fun z => Ebad z.2) _ (ε := ε)
+          fun z1 hz1 hb1 => ?_).trans ?_
+        · exact ((ih z1.1 b' z1.2 (hk' z1.1) (hw' z1 hz1).1).2 hb1).trans (hε _ (hw' z1 hz1).2)
+        · rw [← pr_stOf]
+          exact (add_le_add (hρ hs) le_rfl).trans hsum
+    rcases o with (d | ⟨x, u⟩ | t) | o
+    · -- the world
+      have e : stOf rel pk pre (prog (AR := AR) (τ := τ) (q := q) (S := S) (X := X) (.inl (.inl d))) s =
+          stOf rel pk pre (op (AR := AR) (q := q) (.w d)) s := rfl
+      refine key b (fun w => w.1.rem ≤ s.1.rem) 0 (Bnd pT pL s b) (by simpa using hk)
+        (fun w hw => ?_) (fun hs => ?_) (fun w hw => Bnd_mono pT pL hw) (by simp)
+      · rw [e] at hw
+        obtain ⟨z, hz, rfl⟩ := (mem_stOf rel pk pre _ s w).mp hw
+        rw [sim_op] at hz
+        have := (step_w rel pk pre d s z hz).2
+        exact ⟨hI.same this, this.rem⟩
+      · rw [e]
+        refine pr_le_of_support' _ _ fun w hw => ?_
+        obtain ⟨z, hz, rfl⟩ := (mem_stOf rel pk pre _ s w).mp hw
+        rw [sim_op] at hz
+        exact fun h => hs ((step_w rel pk pre d s z hz).1.mp h)
+    · -- a challenge target
+      have e : stOf rel pk pre
+          (prog (AR := AR) (τ := τ) (q := q) (S := S) (X := X) (.inl (.inr (.inl (x, u))))) s =
+          stOf rel pk pre (op (AR := AR) (q := q) (S := S) (.tgt x)) s := rfl
+      by_cases h0 : s.1.rem = 0
+      · refine key b (fun w => w.1.rem ≤ s.1.rem) 0 (Bnd pT pL s b) (by simpa using hk)
+          (fun w hw => ?_) (fun hs => ?_) (fun w hw => Bnd_mono pT pL hw) (by simp)
+        · rw [e] at hw
+          obtain ⟨z, hz, rfl⟩ := (mem_stOf rel pk pre _ s w).mp hw
+          rw [sim_op] at hz
+          have := (step_tgt rel pk pre x s z hz).1
+          exact ⟨hI.same this, this.rem⟩
+        · rw [e]
+          refine pr_le_of_support' _ _ fun w hw => ?_
+          obtain ⟨z, hz, rfl⟩ := (mem_stOf rel pk pre _ s w).mp hw
+          rw [sim_op] at hz
+          exact fun h => hs (((step_tgt rel pk pre x s z hz).2.1 h0).mp h)
+      · refine key b (fun w => w.1.rem + 1 = s.1.rem) pT
+          (pT * ((s.1.rem - 1 + q * b : ℕ) : ℝ≥0∞) + pL * (((q + 1) * b : ℕ) : ℝ≥0∞))
+          (by simpa using hk) (fun w hw => ?_) (fun hs => ?_) (fun w hw => ?_) ?_
+        · rw [e] at hw
+          obtain ⟨z, hz, rfl⟩ := (mem_stOf rel pk pre _ s w).mp hw
+          rw [sim_op] at hz
+          have := step_tgt rel pk pre x s z hz
+          exact ⟨hI.same this.1, this.2.2 h0⟩
+        · rw [e, pr_stOf, sim_op]
+          obtain ⟨h1, ⟨a, ha, ha'⟩, h3, -, -⟩ := hI
+          exact pr_tgt rel pk pre x s hs (by omega) (ha.trans (by exact_mod_cast (by omega)))
+            (by omega) h0
+        · unfold Bnd
+          rw [show w.1.rem + q * b = s.1.rem - 1 + q * b by omega]
+        · unfold Bnd
+          rw [← add_assoc]
+          refine add_le_add (le_of_eq ?_) le_rfl
+          rw [show s.1.rem + q * b = (s.1.rem - 1 + q * b) + 1 by omega]
+          push_cast
+          ring
+    · -- a call
+      have e : stOf rel pk pre
+          (prog (AR := AR) (τ := τ) (q := q) (S := S) (X := X) (.inl (.inr (.inr t)))) s =
+          stOf rel pk pre (op (AR := AR) (q := q) (X := X) (S := S) (.inv t)) s := rfl
+      refine key b (fun w => w.1.rem ≤ s.1.rem) 0 (Bnd pT pL s b) (by simpa using hk)
+        (fun w hw => ?_) (fun hs => ?_) (fun w hw => Bnd_mono pT pL hw) (by simp)
+      · rw [e] at hw
+        obtain ⟨z, hz, rfl⟩ := (mem_stOf rel pk pre _ s w).mp hw
+        rw [sim_op] at hz
+        have := (step_inv rel pk pre t s z hz).2
+        exact ⟨hI.same this, this.rem⟩
+      · rw [e]
+        refine pr_le_of_support' _ _ fun w hw => ?_
+        obtain ⟨z, hz, rfl⟩ := (mem_stOf rel pk pre _ s w).mp hw
+        rw [sim_op] at hz
+        exact fun h => hs ((step_inv rel pk pre t s z hz).1.mp h)
+    · -- a message to `A**_D`
+      obtain ⟨b', rfl⟩ : ∃ b', b = b' + 1 := ⟨b - 1, by simp at hcan; omega⟩
+      have hm := msg_step rel pk pre o (NT := NT) (NL := NL) (NC := NC) s
+      have hI' := hI
+      obtain ⟨h1, ⟨a, ha, ha'⟩, h3, -, -⟩ := hI'
+      refine key b' (fun w => w.1.rem ≤ s.1.rem)
+        (q * pT + (q + 1) * pL) (Bnd pT pL s b') (by simpa using hk)
+        (fun w hw => ⟨hI.msg (hm.1 w hw), (hm.1 w hw).rem⟩)
+        (fun hs => hm.2 hs (by simp only [mul_add, mul_one] at h1; omega)
+          (ha.trans (by exact_mod_cast (by simp only [mul_add, mul_one] at ha'; omega)))
+          (by simp only [mul_add, mul_one] at h3; omega))
+        (fun w hw => Bnd_mono pT pL hw) (le_of_eq ?_)
+      unfold Bnd
+      push_cast
+      ring
+
 end Steps
 
 end VoleMole.Assumptions.TheoremR
