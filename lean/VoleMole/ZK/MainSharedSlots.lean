@@ -125,6 +125,11 @@ theorem progRO_congrE (c : SimCoins p) (s : Sh p) (E : Cipher)
     exact (vPre_ic_congr _ _ _ _ fun k hk => rowFn_congr (h k hk)).symm
   · rfl
 
+/-- The programmed `H₂³` table is `simTab`'s. -/
+lemma progRO_fst (st : Statement) (c : SimCoins st.params) (s : Sh st.params) :
+    (progRO st.params Hb st c s).1 = @simTab (icPrg s.2.2) Hb CrtGen.tables st s.2.1
+      (simulate st.params c) c.1.2.1 s.1 := rfl
+
 lemma card_progKeysE (o : Except String ByteArray) (s : Sh p) :
     (progKeysE Hb st o s).card ≤ 4607 := by
   unfold progKeysE

@@ -699,4 +699,489 @@ theorem pred_imp [HasPrg] {p : Params} (hm : MainP p) (y : SW) (c : SimCoins p)
 
 end Ctx
 
+
+/-! ## The four hops -/
+
+section Hops
+
+variable {S : Type} {p₁ p₂ p₃ p₄ : Params} (Hb : Hashes) (G : Game S Out SW SW SW SW)
+
+/-- **Every statement of the game is valid** (some system for which the deterministic hypotheses
+hold). -/
+structure GValid (G : Game S Out SW SW SW SW) (p₁ p₂ p₃ p₄ : Params) : Prop where
+  v₁ : ∀ s, ∀ y ∈ G.σ₁ s, ValidZK CrtGen.tables p₁ y
+  v₂ : ∀ s o₁, ∀ y ∈ G.σ₂ s o₁, ValidZK CrtGen.tables p₂ y
+  v₃ : ∀ s o₁ o₂, ∀ y ∈ G.σ₃ s o₁ o₂, ValidZK CrtGen.tables p₃ y
+  v₄ : ∀ s o₁ o₂ o₃, ∀ y ∈ G.σ₄ s o₁ o₂ o₃, ValidZK CrtGen.tables p₄ y
+
+variable {Hb}
+
+/-- A behaviour's `H₅` keys on a statement are keys of its proof, or the proof failed. -/
+lemma cov_view {p : Params} {b : Beh p} (hk : b.OK) (hc : b.Cov Hb) (y : Option SW)
+    (hy : ∀ sw ∈ y, ValidZK CrtGen.tables p sw) (u : USh) {k : Bytes 37} (h : k ∈ b.k5 y u) :
+    slotErr (y.map (b.run · u)) ∨ k ∈ slotKeys Hb p y (y.map (b.run · u)) u.2 := by
+  rcases y with _ | sw
+  · rw [hk.k5none] at h; simp at h
+  · exact hc sw (hy sw rfl) u k h
+
+lemma slotHit_of {p : Params} (y : SW) (o : Out) (E : Cipher) (k : Bytes 37)
+    (h : enc5 k ∈ match o with
+      | .ok b => @vInOff (icPrg E) Hb CrtGen.tables (withP y.1 p) b (thetaMain (dPre p b) (wPre y.2))
+      | .error _ => []) : slotHit Hb p (some y) (some o) E k := by
+  rcases o with e | b
+  · simp at h
+  · exact h
+
+/-- A hit by a key of the event's read set or of the other slots' reads is a hit by a key of the
+read set or of the other slots' proofs, unless one of them failed. -/
+lemma hit_others {R T Kx Ky Kz : Finset (Bytes 37)} {P : Bytes 37 → Prop} {ex ey ez : Prop}
+    (h : ∃ k ∈ R ∪ T, P k) (hT : ∀ k ∈ T, ex ∨ ey ∨ ez ∨ k ∈ Kx ∪ Ky ∪ Kz) :
+    (ex ∨ ey ∨ ez) ∨ ∃ k ∈ R ∪ (Kx ∪ Ky ∪ Kz), P k := by
+  obtain ⟨k, hk, hP⟩ := h
+  rcases mem_union.1 hk with hk | hk
+  · exact Or.inr ⟨k, mem_union_left _ hk, hP⟩
+  · rcases hT k hk with h | h | h | h
+    · exact Or.inl (Or.inl h)
+    · exact Or.inl (Or.inr (Or.inl h))
+    · exact Or.inl (Or.inr (Or.inr h))
+    · exact Or.inr ⟨k, mem_union_right _ h, hP⟩
+
+lemma withU_self (v : GView S p₁ p₂ p₃ p₄) : v.withU v.u = v := rfl
+
+variable (Hb)
+
+set_option maxRecDepth 8000 in
+/-- **Replacing the first proof**. -/
+theorem hop₁ (hm : MainP p₁) (hp : SmallParams p₁) (hHb : HashesWF Hb)
+    (hv : GValid G p₁ p₂ p₃ p₄) (Ψ : GView S p₁ p₂ p₃ p₄ → Prop)
+    (R5 : GView S p₁ p₂ p₃ p₄ → Finset (Bytes 37)) {q3 qE : ℕ} (hΨ : Rd Ψ R5 q3 qE) (s : S)
+    (b₂ : Beh p₂) (b₃ : Beh p₃) (b₄ : Beh p₄) (k₂ : b₂.OK) (k₃ : b₃.OK) (k₄ : b₄.OK)
+    (c₂ : b₂.Cov Hb) (c₃ : b₃.Cov Hb) (c₄ : b₄.Cov Hb) :
+    |pr (USh × KS p₁) (fun z => Ψ (viewOf G s z.1 (realB Hb p₁ z.2.1.1 z.2.2) b₂ b₃ b₄)) -
+      pr (USh × KS p₁) (fun z => Ψ (viewOf G s z.1 (simB Hb p₁ z.2.1.2 z.2.2) b₂ b₃ b₄))| ≤
+      εS q3 (qE + 4 * 4607) + pr (USh × KS p₁) (fun z =>
+        bstar Hb G R5 (viewOf G s z.1 (simB Hb p₁ z.2.1.2 z.2.2) b₂ b₃ b₄)) := by
+  classical
+  rcases hy : G.σ₁ s with _ | y
+  · have e : ∀ z : USh × KS p₁, viewOf G s z.1 (simB Hb p₁ z.2.1.2 z.2.2) b₂ b₃ b₄ =
+        viewOf G s z.1 (realB Hb p₁ z.2.1.1 z.2.2) b₂ b₃ b₄ := by
+      intro z
+      refine viewOf_agree G s z.1 z.1 (realB Hb p₁ z.2.1.1 z.2.2)
+        (simB Hb p₁ z.2.1.2 z.2.2) b₂ b₂ b₃ b₃ b₄ b₄
+        ⟨fun sw hsw => ?_, ?_⟩ (Beh.Agree.refl _ _ _) (Beh.Agree.refl _ _ _) (Beh.Agree.refl _ _ _)
+      · have : sw ∈ G.σ₁ s := hsw
+        rw [hy] at this; cases this
+      · show simVis Hb p₁ z.2.1.2 z.2.2 (G.σ₁ s) z.1 = z.2.2
+        rw [hy]; rfl
+    simp only [e, sub_self, abs_zero]
+    exact add_nonneg (εS_nonneg _ _) (pr_nonneg _)
+  · set C : Out → VP p₁ → USh → GView S p₁ p₂ p₃ p₄ :=
+      fun o V u => viewOf G s u (givenB p₁ o V) b₂ b₃ b₄ with hC
+    have eR : ∀ z : USh × KS p₁, viewOf G s z.1 (realB Hb p₁ z.2.1.1 z.2.2) b₂ b₃ b₄ =
+        C (realRO p₁ Hb (withP y.1 p₁) y.2 z.2.1.1 z.2.2.1 (shOf z.2.2.2 z.1)) z.2.2 z.1 := by
+      intro z
+      refine (viewOf_agree G s z.1 z.1 (realB Hb p₁ z.2.1.1 z.2.2)
+        (givenB p₁ (realRO p₁ Hb (withP y.1 p₁) y.2 z.2.1.1 z.2.2.1 (shOf z.2.2.2 z.1)) z.2.2) b₂ b₂ b₃ b₃ b₄ b₄
+        ⟨fun sw hsw => ?_, rfl⟩ (Beh.Agree.refl _ _ _) (Beh.Agree.refl _ _ _) (Beh.Agree.refl _ _ _)).symm
+      have : sw ∈ G.σ₁ s := hsw
+      rw [hy] at this; cases this; rfl
+    have eS : ∀ z : USh × KS p₁, viewOf G s z.1 (simB Hb p₁ z.2.1.2 z.2.2) b₂ b₃ b₄ =
+        C (simulate p₁ z.2.1.2)
+          (z.2.2.1, (progRO p₁ Hb (withP y.1 p₁) z.2.1.2 (shOf z.2.2.2 z.1)).1) z.1 := by
+      intro z
+      refine (viewOf_agree G s z.1 z.1 (simB Hb p₁ z.2.1.2 z.2.2)
+        (givenB p₁ (simulate p₁ z.2.1.2)
+          (z.2.2.1, (progRO p₁ Hb (withP y.1 p₁) z.2.1.2 (shOf z.2.2.2 z.1)).1)) b₂ b₂ b₃ b₃ b₄ b₄
+        ⟨fun sw hsw => rfl, ?_⟩ (Beh.Agree.refl _ _ _) (Beh.Agree.refl _ _ _) (Beh.Agree.refl _ _ _)).symm
+      show _ = simVis Hb p₁ z.2.1.2 z.2.2 (G.σ₁ s) z.1
+      rw [hy]; rfl
+    have key := ctx_hop Hb hm hp hHb y (hv.v₁ s y hy) Ψ R5 C
+      (fun o V u => traceK5 G (givenB p₁ o V) b₂ b₃ b₄ (C o V u))
+      (fun o V u => traceKE G (givenB p₁ o V) b₂ b₃ b₄ (C o V u)) (fun _ _ _ => rfl)
+      (fun o V u G5 h => viewOf_G5 G s u (givenB_ok o V) k₂ k₃ k₄ G5 h)
+      (fun o V u E h => viewOf_E G s u (givenB_ok o V) k₂ k₃ k₄ E h)
+      (fun o V u => card_traceKE G (givenB_ok o V) k₂ k₃ k₄ _)
+      GView.with3₁ (fun v => v.v₁.1) (fun o G3 G3' G2 u => ⟨rfl, rfl⟩) hΨ.h5 hΨ.hE hΨ.h3₁
+    simp only [eR, eS]
+    refine key.trans (add_le_add le_rfl (pr_mono fun z hz => ?_))
+    have eP := progRO_fst Hb (withP y.1 p₁) z.2.1.2 (shOf z.2.2.2 z.1)
+    rw [eP]
+    unfold mainPredIC mainPred2 at hz
+    set v := C (simulate p₁ z.2.1.2) (z.2.2.1, @simTab (icPrg z.1.2) Hb CrtGen.tables
+      (withP y.1 p₁) z.1.1 (simulate p₁ z.2.1.2) z.2.1.2.1.2.1 z.2.2.2) z.1 with hvdef
+    set V' : VP p₁ := (z.2.2.1, @simTab (icPrg z.1.2) Hb CrtGen.tables
+      (withP y.1 p₁) z.1.1 (simulate p₁ z.2.1.2) z.2.1.2.1.2.1 z.2.2.2) with hV'
+    have hz' : (letI : HasPrg := icPrg z.1.2
+        wPre y.2 ∈ candidatesG Hb CrtGen.tables (withP y.1 p₁) enc5 hm
+        (R5 v ∪ traceK5 G (givenB p₁ (simulate p₁ z.2.1.2) V') b₂ b₃ b₄ v)
+        z.2.1.2.1 z.2.1.2.2) := hz
+    have hs : v.s = s := rfl
+    have hy' : G.σ₁ v.s = some y := hy
+    have ho : v.o₁ = some (simulate p₁ z.2.1.2) := by
+      show (G.σ₁ s).map _ = _
+      rw [hy]; rfl
+    have hT : ∀ k ∈ traceK5 G (givenB p₁ (simulate p₁ z.2.1.2) V') b₂ b₃ b₄ v,
+        slotErr v.o₂ ∨ slotErr v.o₃ ∨ slotErr v.o₄ ∨
+          k ∈ slotKeys Hb p₂ (yv₂ G v) v.o₂ v.u.2 ∪ slotKeys Hb p₃ (yv₃ G v) v.o₃ v.u.2 ∪ slotKeys Hb p₄ (yv₄ G v) v.o₄ v.u.2 := by
+      intro k hk
+      unfold traceK5 at hk
+      simp only [mem_union] at hk ⊢
+      rcases hk with ((hk | hk) | hk) | hk
+      · simp [givenB] at hk
+      · rcases cov_view k₂ c₂ (yv₂ G v) (hv.v₂ _ _) v.u hk with h | h
+        · exact Or.inl h
+        · exact Or.inr (Or.inr (Or.inr (Or.inl (Or.inl h))))
+      · rcases cov_view k₃ c₃ (yv₃ G v) (hv.v₃ _ _ _) v.u hk with h | h
+        · exact Or.inr (Or.inl h)
+        · exact Or.inr (Or.inr (Or.inr (Or.inl (Or.inr h))))
+      · rcases cov_view k₄ c₄ (yv₄ G v) (hv.v₄ _ _ _ _) v.u hk with h | h
+        · exact Or.inr (Or.inr (Or.inl h))
+        · exact Or.inr (Or.inr (Or.inr (Or.inr h)))
+    show bstarCore Hb G v.s v.o₁ v.o₂ v.o₃ v.o₄ v.u.2 (R5 v)
+    rcases @pred_imp Hb (icPrg z.1.2) p₁ hm y z.2.1.2 _ hz' with h | h | h
+    · exact Or.inl (Or.inl (ho ▸ h))
+    · refine Or.inr (Or.inl (Or.inl ?_))
+      rw [hy', ho]; exact h
+    · have h' : ∃ k ∈ R5 v ∪ traceK5 G (givenB p₁ (simulate p₁ z.2.1.2) V') b₂ b₃ b₄ v,
+          slotHit Hb p₁ (G.σ₁ v.s) v.o₁ v.u.2 k := by
+        obtain ⟨k, hk, hx⟩ := h
+        refine ⟨k, hk, ?_⟩
+        rw [hy', ho]
+        exact slotHit_of y _ _ k hx
+      rcases hit_others h' hT with h | h
+      · rcases h with h | h | h
+        · exact Or.inl (Or.inr (Or.inl h))
+        · exact Or.inl (Or.inr (Or.inr (Or.inl h)))
+        · exact Or.inl (Or.inr (Or.inr (Or.inr h)))
+      · exact Or.inr (Or.inl (Or.inr h))
+
+set_option maxRecDepth 8000 in
+/-- **Replacing the second proof** (the earlier outputs do not depend on the shared tables). -/
+theorem hop₂ (hm : MainP p₂) (hp : SmallParams p₂) (hHb : HashesWF Hb)
+    (hv : GValid G p₁ p₂ p₃ p₄) (Ψ : GView S p₁ p₂ p₃ p₄ → Prop)
+    (R5 : GView S p₁ p₂ p₃ p₄ → Finset (Bytes 37)) {q3 qE : ℕ} (hΨ : Rd Ψ R5 q3 qE) (s : S)
+    (b₁ : Beh p₁) (b₃ : Beh p₃) (b₄ : Beh p₄) (k₁ : b₁.OK) (k₃ : b₃.OK) (k₄ : b₄.OK)
+    (c₁ : b₁.Cov Hb) (c₃ : b₃.Cov Hb) (c₄ : b₄.Cov Hb) (oa : Option Out)
+    (ho₁ : ∀ u, (G.σ₁ s).map (b₁.run · u) = oa) :
+    |pr (USh × KS p₂) (fun z => Ψ (viewOf G s z.1 b₁ (realB Hb p₂ z.2.1.1 z.2.2) b₃ b₄)) -
+      pr (USh × KS p₂) (fun z => Ψ (viewOf G s z.1 b₁ (simB Hb p₂ z.2.1.2 z.2.2) b₃ b₄))| ≤
+      εS q3 (qE + 4 * 4607) + pr (USh × KS p₂) (fun z =>
+        bstar Hb G R5 (viewOf G s z.1 b₁ (simB Hb p₂ z.2.1.2 z.2.2) b₃ b₄)) := by
+  classical
+  rcases hy : G.σ₂ s oa with _ | y
+  · have e : ∀ z : USh × KS p₂, viewOf G s z.1 b₁ (simB Hb p₂ z.2.1.2 z.2.2) b₃ b₄ =
+        viewOf G s z.1 b₁ (realB Hb p₂ z.2.1.1 z.2.2) b₃ b₄ := by
+      intro z
+      refine viewOf_agree G s z.1 z.1 b₁ b₁ (realB Hb p₂ z.2.1.1 z.2.2)
+        (simB Hb p₂ z.2.1.2 z.2.2) b₃ b₃ b₄ b₄
+        (Beh.Agree.refl _ _ _) ⟨fun sw hsw => ?_, ?_⟩ (Beh.Agree.refl _ _ _) (Beh.Agree.refl _ _ _)
+      · have : sw ∈ G.σ₂ s ((G.σ₁ s).map (b₁.run · z.1)) := hsw
+        rw [ho₁ z.1, hy] at this; cases this
+      · show simVis Hb p₂ z.2.1.2 z.2.2 (G.σ₂ s ((G.σ₁ s).map (b₁.run · z.1))) z.1 = z.2.2
+        rw [ho₁ z.1, hy]; rfl
+    simp only [e, sub_self, abs_zero]
+    exact add_nonneg (εS_nonneg _ _) (pr_nonneg _)
+  · set C : Out → VP p₂ → USh → GView S p₁ p₂ p₃ p₄ :=
+      fun o V u => viewOf G s u b₁ (givenB p₂ o V) b₃ b₄ with hC
+    have eR : ∀ z : USh × KS p₂, viewOf G s z.1 b₁ (realB Hb p₂ z.2.1.1 z.2.2) b₃ b₄ =
+        C (realRO p₂ Hb (withP y.1 p₂) y.2 z.2.1.1 z.2.2.1 (shOf z.2.2.2 z.1)) z.2.2 z.1 := by
+      intro z
+      refine (viewOf_agree G s z.1 z.1 b₁ b₁ (realB Hb p₂ z.2.1.1 z.2.2)
+        (givenB p₂ (realRO p₂ Hb (withP y.1 p₂) y.2 z.2.1.1 z.2.2.1 (shOf z.2.2.2 z.1)) z.2.2) b₃ b₃ b₄ b₄
+        (Beh.Agree.refl _ _ _) ⟨fun sw hsw => ?_, rfl⟩ (Beh.Agree.refl _ _ _) (Beh.Agree.refl _ _ _)).symm
+      have : sw ∈ G.σ₂ s ((G.σ₁ s).map (b₁.run · z.1)) := hsw
+      rw [ho₁ z.1, hy] at this; cases this; rfl
+    have eS : ∀ z : USh × KS p₂, viewOf G s z.1 b₁ (simB Hb p₂ z.2.1.2 z.2.2) b₃ b₄ =
+        C (simulate p₂ z.2.1.2)
+          (z.2.2.1, (progRO p₂ Hb (withP y.1 p₂) z.2.1.2 (shOf z.2.2.2 z.1)).1) z.1 := by
+      intro z
+      refine (viewOf_agree G s z.1 z.1 b₁ b₁ (simB Hb p₂ z.2.1.2 z.2.2)
+        (givenB p₂ (simulate p₂ z.2.1.2)
+          (z.2.2.1, (progRO p₂ Hb (withP y.1 p₂) z.2.1.2 (shOf z.2.2.2 z.1)).1)) b₃ b₃ b₄ b₄
+        (Beh.Agree.refl _ _ _) ⟨fun sw hsw => rfl, ?_⟩ (Beh.Agree.refl _ _ _) (Beh.Agree.refl _ _ _)).symm
+      show _ = simVis Hb p₂ z.2.1.2 z.2.2 (G.σ₂ s ((G.σ₁ s).map (b₁.run · z.1))) z.1
+      rw [ho₁ z.1, hy]; rfl
+    have key := ctx_hop Hb hm hp hHb y (hv.v₂ s oa y hy) Ψ R5 C
+      (fun o V u => traceK5 G b₁ (givenB p₂ o V) b₃ b₄ (C o V u))
+      (fun o V u => traceKE G b₁ (givenB p₂ o V) b₃ b₄ (C o V u)) (fun _ _ _ => rfl)
+      (fun o V u G5 h => viewOf_G5 G s u k₁ (givenB_ok o V) k₃ k₄ G5 h)
+      (fun o V u E h => viewOf_E G s u k₁ (givenB_ok o V) k₃ k₄ E h)
+      (fun o V u => card_traceKE G k₁ (givenB_ok o V) k₃ k₄ _)
+      GView.with3₂ (fun v => v.v₂.1) (fun o G3 G3' G2 u => ⟨rfl, rfl⟩) hΨ.h5 hΨ.hE hΨ.h3₂
+    simp only [eR, eS]
+    refine key.trans (add_le_add le_rfl (pr_mono fun z hz => ?_))
+    have eP := progRO_fst Hb (withP y.1 p₂) z.2.1.2 (shOf z.2.2.2 z.1)
+    rw [eP]
+    unfold mainPredIC mainPred2 at hz
+    set v := C (simulate p₂ z.2.1.2) (z.2.2.1, @simTab (icPrg z.1.2) Hb CrtGen.tables
+      (withP y.1 p₂) z.1.1 (simulate p₂ z.2.1.2) z.2.1.2.1.2.1 z.2.2.2) z.1 with hvdef
+    set V' : VP p₂ := (z.2.2.1, @simTab (icPrg z.1.2) Hb CrtGen.tables
+      (withP y.1 p₂) z.1.1 (simulate p₂ z.2.1.2) z.2.1.2.1.2.1 z.2.2.2) with hV'
+    have hz' : (letI : HasPrg := icPrg z.1.2
+        wPre y.2 ∈ candidatesG Hb CrtGen.tables (withP y.1 p₂) enc5 hm
+        (R5 v ∪ traceK5 G b₁ (givenB p₂ (simulate p₂ z.2.1.2) V') b₃ b₄ v)
+        z.2.1.2.1 z.2.1.2.2) := hz
+    have hs : v.s = s := rfl
+    have hy' : G.σ₂ v.s v.o₁ = some y := by
+      show G.σ₂ s ((G.σ₁ s).map (b₁.run · z.1)) = _
+      rw [ho₁ z.1, hy]
+    have ho : v.o₂ = some (simulate p₂ z.2.1.2) := by
+      show (G.σ₂ s ((G.σ₁ s).map (b₁.run · z.1))).map _ = _
+      rw [ho₁ z.1, hy]; rfl
+    have hT : ∀ k ∈ traceK5 G b₁ (givenB p₂ (simulate p₂ z.2.1.2) V') b₃ b₄ v,
+        slotErr v.o₁ ∨ slotErr v.o₃ ∨ slotErr v.o₄ ∨
+          k ∈ slotKeys Hb p₁ (yv₁ G v) v.o₁ v.u.2 ∪ slotKeys Hb p₃ (yv₃ G v) v.o₃ v.u.2 ∪ slotKeys Hb p₄ (yv₄ G v) v.o₄ v.u.2 := by
+      intro k hk
+      unfold traceK5 at hk
+      simp only [mem_union] at hk ⊢
+      rcases hk with ((hk | hk) | hk) | hk
+      · rcases cov_view k₁ c₁ (yv₁ G v) (hv.v₁ _) v.u hk with h | h
+        · exact Or.inl h
+        · exact Or.inr (Or.inr (Or.inr (Or.inl (Or.inl h))))
+      · simp [givenB] at hk
+      · rcases cov_view k₃ c₃ (yv₃ G v) (hv.v₃ _ _ _) v.u hk with h | h
+        · exact Or.inr (Or.inl h)
+        · exact Or.inr (Or.inr (Or.inr (Or.inl (Or.inr h))))
+      · rcases cov_view k₄ c₄ (yv₄ G v) (hv.v₄ _ _ _ _) v.u hk with h | h
+        · exact Or.inr (Or.inr (Or.inl h))
+        · exact Or.inr (Or.inr (Or.inr (Or.inr h)))
+    show bstarCore Hb G v.s v.o₁ v.o₂ v.o₃ v.o₄ v.u.2 (R5 v)
+    rcases @pred_imp Hb (icPrg z.1.2) p₂ hm y z.2.1.2 _ hz' with h | h | h
+    · exact Or.inl (Or.inr (Or.inl (ho ▸ h)))
+    · refine Or.inr (Or.inr (Or.inl (Or.inl ?_)))
+      rw [hy', ho]; exact h
+    · have h' : ∃ k ∈ R5 v ∪ traceK5 G b₁ (givenB p₂ (simulate p₂ z.2.1.2) V') b₃ b₄ v,
+          slotHit Hb p₂ (G.σ₂ v.s v.o₁) v.o₂ v.u.2 k := by
+        obtain ⟨k, hk, hx⟩ := h
+        refine ⟨k, hk, ?_⟩
+        rw [hy', ho]
+        exact slotHit_of y _ _ k hx
+      rcases hit_others h' hT with h | h
+      · rcases h with h | h | h
+        · exact Or.inl (Or.inl h)
+        · exact Or.inl (Or.inr (Or.inr (Or.inl h)))
+        · exact Or.inl (Or.inr (Or.inr (Or.inr h)))
+      · exact Or.inr (Or.inr (Or.inl (Or.inr h)))
+
+set_option maxRecDepth 8000 in
+/-- **Replacing the third proof** (the earlier outputs do not depend on the shared tables). -/
+theorem hop₃ (hm : MainP p₃) (hp : SmallParams p₃) (hHb : HashesWF Hb)
+    (hv : GValid G p₁ p₂ p₃ p₄) (Ψ : GView S p₁ p₂ p₃ p₄ → Prop)
+    (R5 : GView S p₁ p₂ p₃ p₄ → Finset (Bytes 37)) {q3 qE : ℕ} (hΨ : Rd Ψ R5 q3 qE) (s : S)
+    (b₁ : Beh p₁) (b₂ : Beh p₂) (b₄ : Beh p₄) (k₁ : b₁.OK) (k₂ : b₂.OK) (k₄ : b₄.OK)
+    (c₁ : b₁.Cov Hb) (c₂ : b₂.Cov Hb) (c₄ : b₄.Cov Hb) (oa : Option Out) (ob : Option Out)
+    (ho₁ : ∀ u, (G.σ₁ s).map (b₁.run · u) = oa)
+    (ho₂ : ∀ u, (G.σ₂ s oa).map (b₂.run · u) = ob) :
+    |pr (USh × KS p₃) (fun z => Ψ (viewOf G s z.1 b₁ b₂ (realB Hb p₃ z.2.1.1 z.2.2) b₄)) -
+      pr (USh × KS p₃) (fun z => Ψ (viewOf G s z.1 b₁ b₂ (simB Hb p₃ z.2.1.2 z.2.2) b₄))| ≤
+      εS q3 (qE + 4 * 4607) + pr (USh × KS p₃) (fun z =>
+        bstar Hb G R5 (viewOf G s z.1 b₁ b₂ (simB Hb p₃ z.2.1.2 z.2.2) b₄)) := by
+  classical
+  rcases hy : G.σ₃ s oa ob with _ | y
+  · have e : ∀ z : USh × KS p₃, viewOf G s z.1 b₁ b₂ (simB Hb p₃ z.2.1.2 z.2.2) b₄ =
+        viewOf G s z.1 b₁ b₂ (realB Hb p₃ z.2.1.1 z.2.2) b₄ := by
+      intro z
+      refine viewOf_agree G s z.1 z.1 b₁ b₁ b₂ b₂ (realB Hb p₃ z.2.1.1 z.2.2)
+        (simB Hb p₃ z.2.1.2 z.2.2) b₄ b₄
+        (Beh.Agree.refl _ _ _) (Beh.Agree.refl _ _ _) ⟨fun sw hsw => ?_, ?_⟩ (Beh.Agree.refl _ _ _)
+      · have : sw ∈ G.σ₃ s ((G.σ₁ s).map (b₁.run · z.1)) ((G.σ₂ s ((G.σ₁ s).map (b₁.run · z.1))).map (b₂.run · z.1)) := hsw
+        rw [ho₁ z.1, ho₂ z.1, hy] at this; cases this
+      · show simVis Hb p₃ z.2.1.2 z.2.2 (G.σ₃ s ((G.σ₁ s).map (b₁.run · z.1)) ((G.σ₂ s ((G.σ₁ s).map (b₁.run · z.1))).map (b₂.run · z.1))) z.1 = z.2.2
+        rw [ho₁ z.1, ho₂ z.1, hy]; rfl
+    simp only [e, sub_self, abs_zero]
+    exact add_nonneg (εS_nonneg _ _) (pr_nonneg _)
+  · set C : Out → VP p₃ → USh → GView S p₁ p₂ p₃ p₄ :=
+      fun o V u => viewOf G s u b₁ b₂ (givenB p₃ o V) b₄ with hC
+    have eR : ∀ z : USh × KS p₃, viewOf G s z.1 b₁ b₂ (realB Hb p₃ z.2.1.1 z.2.2) b₄ =
+        C (realRO p₃ Hb (withP y.1 p₃) y.2 z.2.1.1 z.2.2.1 (shOf z.2.2.2 z.1)) z.2.2 z.1 := by
+      intro z
+      refine (viewOf_agree G s z.1 z.1 b₁ b₁ b₂ b₂ (realB Hb p₃ z.2.1.1 z.2.2)
+        (givenB p₃ (realRO p₃ Hb (withP y.1 p₃) y.2 z.2.1.1 z.2.2.1 (shOf z.2.2.2 z.1)) z.2.2) b₄ b₄
+        (Beh.Agree.refl _ _ _) (Beh.Agree.refl _ _ _) ⟨fun sw hsw => ?_, rfl⟩ (Beh.Agree.refl _ _ _)).symm
+      have : sw ∈ G.σ₃ s ((G.σ₁ s).map (b₁.run · z.1)) ((G.σ₂ s ((G.σ₁ s).map (b₁.run · z.1))).map (b₂.run · z.1)) := hsw
+      rw [ho₁ z.1, ho₂ z.1, hy] at this; cases this; rfl
+    have eS : ∀ z : USh × KS p₃, viewOf G s z.1 b₁ b₂ (simB Hb p₃ z.2.1.2 z.2.2) b₄ =
+        C (simulate p₃ z.2.1.2)
+          (z.2.2.1, (progRO p₃ Hb (withP y.1 p₃) z.2.1.2 (shOf z.2.2.2 z.1)).1) z.1 := by
+      intro z
+      refine (viewOf_agree G s z.1 z.1 b₁ b₁ b₂ b₂ (simB Hb p₃ z.2.1.2 z.2.2)
+        (givenB p₃ (simulate p₃ z.2.1.2)
+          (z.2.2.1, (progRO p₃ Hb (withP y.1 p₃) z.2.1.2 (shOf z.2.2.2 z.1)).1)) b₄ b₄
+        (Beh.Agree.refl _ _ _) (Beh.Agree.refl _ _ _) ⟨fun sw hsw => rfl, ?_⟩ (Beh.Agree.refl _ _ _)).symm
+      show _ = simVis Hb p₃ z.2.1.2 z.2.2 (G.σ₃ s ((G.σ₁ s).map (b₁.run · z.1)) ((G.σ₂ s ((G.σ₁ s).map (b₁.run · z.1))).map (b₂.run · z.1))) z.1
+      rw [ho₁ z.1, ho₂ z.1, hy]; rfl
+    have key := ctx_hop Hb hm hp hHb y (hv.v₃ s oa ob y hy) Ψ R5 C
+      (fun o V u => traceK5 G b₁ b₂ (givenB p₃ o V) b₄ (C o V u))
+      (fun o V u => traceKE G b₁ b₂ (givenB p₃ o V) b₄ (C o V u)) (fun _ _ _ => rfl)
+      (fun o V u G5 h => viewOf_G5 G s u k₁ k₂ (givenB_ok o V) k₄ G5 h)
+      (fun o V u E h => viewOf_E G s u k₁ k₂ (givenB_ok o V) k₄ E h)
+      (fun o V u => card_traceKE G k₁ k₂ (givenB_ok o V) k₄ _)
+      GView.with3₃ (fun v => v.v₃.1) (fun o G3 G3' G2 u => ⟨rfl, rfl⟩) hΨ.h5 hΨ.hE hΨ.h3₃
+    simp only [eR, eS]
+    refine key.trans (add_le_add le_rfl (pr_mono fun z hz => ?_))
+    have eP := progRO_fst Hb (withP y.1 p₃) z.2.1.2 (shOf z.2.2.2 z.1)
+    rw [eP]
+    unfold mainPredIC mainPred2 at hz
+    set v := C (simulate p₃ z.2.1.2) (z.2.2.1, @simTab (icPrg z.1.2) Hb CrtGen.tables
+      (withP y.1 p₃) z.1.1 (simulate p₃ z.2.1.2) z.2.1.2.1.2.1 z.2.2.2) z.1 with hvdef
+    set V' : VP p₃ := (z.2.2.1, @simTab (icPrg z.1.2) Hb CrtGen.tables
+      (withP y.1 p₃) z.1.1 (simulate p₃ z.2.1.2) z.2.1.2.1.2.1 z.2.2.2) with hV'
+    have hz' : (letI : HasPrg := icPrg z.1.2
+        wPre y.2 ∈ candidatesG Hb CrtGen.tables (withP y.1 p₃) enc5 hm
+        (R5 v ∪ traceK5 G b₁ b₂ (givenB p₃ (simulate p₃ z.2.1.2) V') b₄ v)
+        z.2.1.2.1 z.2.1.2.2) := hz
+    have hs : v.s = s := rfl
+    have hy' : G.σ₃ v.s v.o₁ v.o₂ = some y := by
+      show G.σ₃ s ((G.σ₁ s).map (b₁.run · z.1)) ((G.σ₂ s ((G.σ₁ s).map (b₁.run · z.1))).map (b₂.run · z.1)) = _
+      rw [ho₁ z.1, ho₂ z.1, hy]
+    have ho : v.o₃ = some (simulate p₃ z.2.1.2) := by
+      show (G.σ₃ s ((G.σ₁ s).map (b₁.run · z.1)) ((G.σ₂ s ((G.σ₁ s).map (b₁.run · z.1))).map (b₂.run · z.1))).map _ = _
+      rw [ho₁ z.1, ho₂ z.1, hy]; rfl
+    have hT : ∀ k ∈ traceK5 G b₁ b₂ (givenB p₃ (simulate p₃ z.2.1.2) V') b₄ v,
+        slotErr v.o₁ ∨ slotErr v.o₂ ∨ slotErr v.o₄ ∨
+          k ∈ slotKeys Hb p₁ (yv₁ G v) v.o₁ v.u.2 ∪ slotKeys Hb p₂ (yv₂ G v) v.o₂ v.u.2 ∪ slotKeys Hb p₄ (yv₄ G v) v.o₄ v.u.2 := by
+      intro k hk
+      unfold traceK5 at hk
+      simp only [mem_union] at hk ⊢
+      rcases hk with ((hk | hk) | hk) | hk
+      · rcases cov_view k₁ c₁ (yv₁ G v) (hv.v₁ _) v.u hk with h | h
+        · exact Or.inl h
+        · exact Or.inr (Or.inr (Or.inr (Or.inl (Or.inl h))))
+      · rcases cov_view k₂ c₂ (yv₂ G v) (hv.v₂ _ _) v.u hk with h | h
+        · exact Or.inr (Or.inl h)
+        · exact Or.inr (Or.inr (Or.inr (Or.inl (Or.inr h))))
+      · simp [givenB] at hk
+      · rcases cov_view k₄ c₄ (yv₄ G v) (hv.v₄ _ _ _ _) v.u hk with h | h
+        · exact Or.inr (Or.inr (Or.inl h))
+        · exact Or.inr (Or.inr (Or.inr (Or.inr h)))
+    show bstarCore Hb G v.s v.o₁ v.o₂ v.o₃ v.o₄ v.u.2 (R5 v)
+    rcases @pred_imp Hb (icPrg z.1.2) p₃ hm y z.2.1.2 _ hz' with h | h | h
+    · exact Or.inl (Or.inr (Or.inr (Or.inl (ho ▸ h))))
+    · refine Or.inr (Or.inr (Or.inr (Or.inl (Or.inl ?_))))
+      rw [hy', ho]; exact h
+    · have h' : ∃ k ∈ R5 v ∪ traceK5 G b₁ b₂ (givenB p₃ (simulate p₃ z.2.1.2) V') b₄ v,
+          slotHit Hb p₃ (G.σ₃ v.s v.o₁ v.o₂) v.o₃ v.u.2 k := by
+        obtain ⟨k, hk, hx⟩ := h
+        refine ⟨k, hk, ?_⟩
+        rw [hy', ho]
+        exact slotHit_of y _ _ k hx
+      rcases hit_others h' hT with h | h
+      · rcases h with h | h | h
+        · exact Or.inl (Or.inl h)
+        · exact Or.inl (Or.inr (Or.inl h))
+        · exact Or.inl (Or.inr (Or.inr (Or.inr h)))
+      · exact Or.inr (Or.inr (Or.inr (Or.inl (Or.inr h))))
+
+set_option maxRecDepth 8000 in
+/-- **Replacing the fourth proof** (the earlier outputs do not depend on the shared tables). -/
+theorem hop₄ (hm : MainP p₄) (hp : SmallParams p₄) (hHb : HashesWF Hb)
+    (hv : GValid G p₁ p₂ p₃ p₄) (Ψ : GView S p₁ p₂ p₃ p₄ → Prop)
+    (R5 : GView S p₁ p₂ p₃ p₄ → Finset (Bytes 37)) {q3 qE : ℕ} (hΨ : Rd Ψ R5 q3 qE) (s : S)
+    (b₁ : Beh p₁) (b₂ : Beh p₂) (b₃ : Beh p₃) (k₁ : b₁.OK) (k₂ : b₂.OK) (k₃ : b₃.OK)
+    (c₁ : b₁.Cov Hb) (c₂ : b₂.Cov Hb) (c₃ : b₃.Cov Hb) (oa : Option Out) (ob : Option Out) (oc : Option Out)
+    (ho₁ : ∀ u, (G.σ₁ s).map (b₁.run · u) = oa)
+    (ho₂ : ∀ u, (G.σ₂ s oa).map (b₂.run · u) = ob)
+    (ho₃ : ∀ u, (G.σ₃ s oa ob).map (b₃.run · u) = oc) :
+    |pr (USh × KS p₄) (fun z => Ψ (viewOf G s z.1 b₁ b₂ b₃ (realB Hb p₄ z.2.1.1 z.2.2))) -
+      pr (USh × KS p₄) (fun z => Ψ (viewOf G s z.1 b₁ b₂ b₃ (simB Hb p₄ z.2.1.2 z.2.2)))| ≤
+      εS q3 (qE + 4 * 4607) + pr (USh × KS p₄) (fun z =>
+        bstar Hb G R5 (viewOf G s z.1 b₁ b₂ b₃ (simB Hb p₄ z.2.1.2 z.2.2))) := by
+  classical
+  rcases hy : G.σ₄ s oa ob oc with _ | y
+  · have e : ∀ z : USh × KS p₄, viewOf G s z.1 b₁ b₂ b₃ (simB Hb p₄ z.2.1.2 z.2.2) =
+        viewOf G s z.1 b₁ b₂ b₃ (realB Hb p₄ z.2.1.1 z.2.2) := by
+      intro z
+      refine viewOf_agree G s z.1 z.1 b₁ b₁ b₂ b₂ b₃ b₃ (realB Hb p₄ z.2.1.1 z.2.2)
+        (simB Hb p₄ z.2.1.2 z.2.2)
+        (Beh.Agree.refl _ _ _) (Beh.Agree.refl _ _ _) (Beh.Agree.refl _ _ _) ⟨fun sw hsw => ?_, ?_⟩
+      · have : sw ∈ G.σ₄ s ((G.σ₁ s).map (b₁.run · z.1)) ((G.σ₂ s ((G.σ₁ s).map (b₁.run · z.1))).map (b₂.run · z.1)) ((G.σ₃ s ((G.σ₁ s).map (b₁.run · z.1)) ((G.σ₂ s ((G.σ₁ s).map (b₁.run · z.1))).map (b₂.run · z.1))).map (b₃.run · z.1)) := hsw
+        rw [ho₁ z.1, ho₂ z.1, ho₃ z.1, hy] at this; cases this
+      · show simVis Hb p₄ z.2.1.2 z.2.2 (G.σ₄ s ((G.σ₁ s).map (b₁.run · z.1)) ((G.σ₂ s ((G.σ₁ s).map (b₁.run · z.1))).map (b₂.run · z.1)) ((G.σ₃ s ((G.σ₁ s).map (b₁.run · z.1)) ((G.σ₂ s ((G.σ₁ s).map (b₁.run · z.1))).map (b₂.run · z.1))).map (b₃.run · z.1))) z.1 = z.2.2
+        rw [ho₁ z.1, ho₂ z.1, ho₃ z.1, hy]; rfl
+    simp only [e, sub_self, abs_zero]
+    exact add_nonneg (εS_nonneg _ _) (pr_nonneg _)
+  · set C : Out → VP p₄ → USh → GView S p₁ p₂ p₃ p₄ :=
+      fun o V u => viewOf G s u b₁ b₂ b₃ (givenB p₄ o V) with hC
+    have eR : ∀ z : USh × KS p₄, viewOf G s z.1 b₁ b₂ b₃ (realB Hb p₄ z.2.1.1 z.2.2) =
+        C (realRO p₄ Hb (withP y.1 p₄) y.2 z.2.1.1 z.2.2.1 (shOf z.2.2.2 z.1)) z.2.2 z.1 := by
+      intro z
+      refine (viewOf_agree G s z.1 z.1 b₁ b₁ b₂ b₂ b₃ b₃ (realB Hb p₄ z.2.1.1 z.2.2)
+        (givenB p₄ (realRO p₄ Hb (withP y.1 p₄) y.2 z.2.1.1 z.2.2.1 (shOf z.2.2.2 z.1)) z.2.2)
+        (Beh.Agree.refl _ _ _) (Beh.Agree.refl _ _ _) (Beh.Agree.refl _ _ _) ⟨fun sw hsw => ?_, rfl⟩).symm
+      have : sw ∈ G.σ₄ s ((G.σ₁ s).map (b₁.run · z.1)) ((G.σ₂ s ((G.σ₁ s).map (b₁.run · z.1))).map (b₂.run · z.1)) ((G.σ₃ s ((G.σ₁ s).map (b₁.run · z.1)) ((G.σ₂ s ((G.σ₁ s).map (b₁.run · z.1))).map (b₂.run · z.1))).map (b₃.run · z.1)) := hsw
+      rw [ho₁ z.1, ho₂ z.1, ho₃ z.1, hy] at this; cases this; rfl
+    have eS : ∀ z : USh × KS p₄, viewOf G s z.1 b₁ b₂ b₃ (simB Hb p₄ z.2.1.2 z.2.2) =
+        C (simulate p₄ z.2.1.2)
+          (z.2.2.1, (progRO p₄ Hb (withP y.1 p₄) z.2.1.2 (shOf z.2.2.2 z.1)).1) z.1 := by
+      intro z
+      refine (viewOf_agree G s z.1 z.1 b₁ b₁ b₂ b₂ b₃ b₃ (simB Hb p₄ z.2.1.2 z.2.2)
+        (givenB p₄ (simulate p₄ z.2.1.2)
+          (z.2.2.1, (progRO p₄ Hb (withP y.1 p₄) z.2.1.2 (shOf z.2.2.2 z.1)).1))
+        (Beh.Agree.refl _ _ _) (Beh.Agree.refl _ _ _) (Beh.Agree.refl _ _ _) ⟨fun sw hsw => rfl, ?_⟩).symm
+      show _ = simVis Hb p₄ z.2.1.2 z.2.2 (G.σ₄ s ((G.σ₁ s).map (b₁.run · z.1)) ((G.σ₂ s ((G.σ₁ s).map (b₁.run · z.1))).map (b₂.run · z.1)) ((G.σ₃ s ((G.σ₁ s).map (b₁.run · z.1)) ((G.σ₂ s ((G.σ₁ s).map (b₁.run · z.1))).map (b₂.run · z.1))).map (b₃.run · z.1))) z.1
+      rw [ho₁ z.1, ho₂ z.1, ho₃ z.1, hy]; rfl
+    have key := ctx_hop Hb hm hp hHb y (hv.v₄ s oa ob oc y hy) Ψ R5 C
+      (fun o V u => traceK5 G b₁ b₂ b₃ (givenB p₄ o V) (C o V u))
+      (fun o V u => traceKE G b₁ b₂ b₃ (givenB p₄ o V) (C o V u)) (fun _ _ _ => rfl)
+      (fun o V u G5 h => viewOf_G5 G s u k₁ k₂ k₃ (givenB_ok o V) G5 h)
+      (fun o V u E h => viewOf_E G s u k₁ k₂ k₃ (givenB_ok o V) E h)
+      (fun o V u => card_traceKE G k₁ k₂ k₃ (givenB_ok o V) _)
+      GView.with3₄ (fun v => v.v₄.1) (fun o G3 G3' G2 u => ⟨rfl, rfl⟩) hΨ.h5 hΨ.hE hΨ.h3₄
+    simp only [eR, eS]
+    refine key.trans (add_le_add le_rfl (pr_mono fun z hz => ?_))
+    have eP := progRO_fst Hb (withP y.1 p₄) z.2.1.2 (shOf z.2.2.2 z.1)
+    rw [eP]
+    unfold mainPredIC mainPred2 at hz
+    set v := C (simulate p₄ z.2.1.2) (z.2.2.1, @simTab (icPrg z.1.2) Hb CrtGen.tables
+      (withP y.1 p₄) z.1.1 (simulate p₄ z.2.1.2) z.2.1.2.1.2.1 z.2.2.2) z.1 with hvdef
+    set V' : VP p₄ := (z.2.2.1, @simTab (icPrg z.1.2) Hb CrtGen.tables
+      (withP y.1 p₄) z.1.1 (simulate p₄ z.2.1.2) z.2.1.2.1.2.1 z.2.2.2) with hV'
+    have hz' : (letI : HasPrg := icPrg z.1.2
+        wPre y.2 ∈ candidatesG Hb CrtGen.tables (withP y.1 p₄) enc5 hm
+        (R5 v ∪ traceK5 G b₁ b₂ b₃ (givenB p₄ (simulate p₄ z.2.1.2) V') v)
+        z.2.1.2.1 z.2.1.2.2) := hz
+    have hs : v.s = s := rfl
+    have hy' : G.σ₄ v.s v.o₁ v.o₂ v.o₃ = some y := by
+      show G.σ₄ s ((G.σ₁ s).map (b₁.run · z.1)) ((G.σ₂ s ((G.σ₁ s).map (b₁.run · z.1))).map (b₂.run · z.1)) ((G.σ₃ s ((G.σ₁ s).map (b₁.run · z.1)) ((G.σ₂ s ((G.σ₁ s).map (b₁.run · z.1))).map (b₂.run · z.1))).map (b₃.run · z.1)) = _
+      rw [ho₁ z.1, ho₂ z.1, ho₃ z.1, hy]
+    have ho : v.o₄ = some (simulate p₄ z.2.1.2) := by
+      show (G.σ₄ s ((G.σ₁ s).map (b₁.run · z.1)) ((G.σ₂ s ((G.σ₁ s).map (b₁.run · z.1))).map (b₂.run · z.1)) ((G.σ₃ s ((G.σ₁ s).map (b₁.run · z.1)) ((G.σ₂ s ((G.σ₁ s).map (b₁.run · z.1))).map (b₂.run · z.1))).map (b₃.run · z.1))).map _ = _
+      rw [ho₁ z.1, ho₂ z.1, ho₃ z.1, hy]; rfl
+    have hT : ∀ k ∈ traceK5 G b₁ b₂ b₃ (givenB p₄ (simulate p₄ z.2.1.2) V') v,
+        slotErr v.o₁ ∨ slotErr v.o₂ ∨ slotErr v.o₃ ∨
+          k ∈ slotKeys Hb p₁ (yv₁ G v) v.o₁ v.u.2 ∪ slotKeys Hb p₂ (yv₂ G v) v.o₂ v.u.2 ∪ slotKeys Hb p₃ (yv₃ G v) v.o₃ v.u.2 := by
+      intro k hk
+      unfold traceK5 at hk
+      simp only [mem_union] at hk ⊢
+      rcases hk with ((hk | hk) | hk) | hk
+      · rcases cov_view k₁ c₁ (yv₁ G v) (hv.v₁ _) v.u hk with h | h
+        · exact Or.inl h
+        · exact Or.inr (Or.inr (Or.inr (Or.inl (Or.inl h))))
+      · rcases cov_view k₂ c₂ (yv₂ G v) (hv.v₂ _ _) v.u hk with h | h
+        · exact Or.inr (Or.inl h)
+        · exact Or.inr (Or.inr (Or.inr (Or.inl (Or.inr h))))
+      · rcases cov_view k₃ c₃ (yv₃ G v) (hv.v₃ _ _ _) v.u hk with h | h
+        · exact Or.inr (Or.inr (Or.inl h))
+        · exact Or.inr (Or.inr (Or.inr (Or.inr h)))
+      · simp [givenB] at hk
+    show bstarCore Hb G v.s v.o₁ v.o₂ v.o₃ v.o₄ v.u.2 (R5 v)
+    rcases @pred_imp Hb (icPrg z.1.2) p₄ hm y z.2.1.2 _ hz' with h | h | h
+    · exact Or.inl (Or.inr (Or.inr (Or.inr (ho ▸ h))))
+    · refine Or.inr (Or.inr (Or.inr (Or.inr (Or.inl ?_))))
+      rw [hy', ho]; exact h
+    · have h' : ∃ k ∈ R5 v ∪ traceK5 G b₁ b₂ b₃ (givenB p₄ (simulate p₄ z.2.1.2) V') v,
+          slotHit Hb p₄ (G.σ₄ v.s v.o₁ v.o₂ v.o₃) v.o₄ v.u.2 k := by
+        obtain ⟨k, hk, hx⟩ := h
+        refine ⟨k, hk, ?_⟩
+        rw [hy', ho]
+        exact slotHit_of y _ _ k hx
+      rcases hit_others h' hT with h | h
+      · rcases h with h | h | h
+        · exact Or.inl (Or.inl h)
+        · exact Or.inl (Or.inr (Or.inl h))
+        · exact Or.inl (Or.inr (Or.inr (Or.inl h)))
+      · exact Or.inr (Or.inr (Or.inr (Or.inr (Or.inr h))))
+
+end Hops
+
 end VoleMole.ZK.Sim
