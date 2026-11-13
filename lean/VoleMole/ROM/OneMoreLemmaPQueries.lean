@@ -293,4 +293,156 @@ theorem not_mem_hashLog_contP (i : ℕ) (r : List (ByteArray × ByteArray) × Qu
 
 end Ver
 
+/-! ## The forger's budget, and the wrapped forger's queries -/
+
+section Forger
+
+/-- A hash query of the forger. -/
+def isHashU : DomIC ⊕ (ByteArray ⊕ TG) → Bool
+  | .inl (.inl _) => true
+  | _ => false
+
+/-- A cipher query of the forger. -/
+def isCipherU : DomIC ⊕ (ByteArray ⊕ TG) → Bool
+  | .inl (.inr _) => true
+  | _ => false
+
+/-- **The forger's hash queries per kind** are within `q`. -/
+def IsKindQueryBoundU {α : Type} (oa : OracleComp specU α) (q : Kind → ℕ) : Prop :=
+  IsQueryBound oa q (fun t b => match t with | .inl (.inl d) => 0 < b d.1 | _ => True)
+    (fun t b => match t with | .inl (.inl d) => Function.update b d.1 (b d.1 - 1) | _ => b)
+
+/-- **The forger's budget**: at most `qA k` hash queries of kind `k`, `nA` hash queries in all,
+`qE` cipher queries and `Q_T` `hash_to_target` queries (Issuer queries are free here; the win
+condition bounds them). -/
+structure ForgerBound (A : Forger) (qA : Kind → ℕ) (nA qE QT : ℕ) : Prop where
+  kinds : ∀ pk, IsKindQueryBoundU (A pk) qA
+  hashes : ∀ pk, IsQueryBoundP (A pk) (fun t => isHashU t = true) nA
+  cipher : ∀ pk, IsQueryBoundP (A pk) (fun t => isCipherU t = true) qE
+  ht : ∀ pk, IsQueryBoundP (A pk) (fun t => isHT t = true) QT
+
+variable (lr : Bool) (hint : QueryLog specIC → ByteArray → TG) (pre : TG → SIss)
+
+lemma update_add_le (q a : Kind → ℕ) (k : Kind) (hq : 0 < q k) :
+    Function.update q k (q k - 1) + a ≤ Function.update (q + a) k ((q + a) k - 1) := by
+  intro j
+  by_cases hj : j = k
+  · subst hj; simp only [Pi.add_apply, Function.update_self]; omega
+  · simp only [Pi.add_apply, Function.update_of_ne hj, le_refl]
+
+lemma isKindQueryBoundIC_map_hash {β : Type} (d : Dom) (f : Ans d → β) :
+    IsKindQueryBoundIC (f <$> (liftM (specIC.query (.inl d)) : OracleComp specIC (Ans d)))
+      (Function.update 0 d.1 1) := by
+  rw [IsKindQueryBoundIC, isQueryBound_map_iff]
+  exact (isQueryBound_query_iff _ _ _ _).2 (by simp)
+
+lemma isKindQueryBoundIC_map_cipher {β : Type} (x : Cell) (f : Blk → β) :
+    IsKindQueryBoundIC (f <$> (liftM (specIC.query (.inr x)) : OracleComp specIC Blk)) 0 := by
+  rw [IsKindQueryBoundIC, isQueryBound_map_iff]
+  exact (isQueryBound_query_iff _ _ _ _).2 trivial
+
+/-- **The wrapped forger's hash queries per kind**: the forger's, and the reduction's own three
+queries (`auxQueries`) per `hash_to_target` query. -/
+theorem kinds_wrapIC {α : Type} (oa : OracleComp specU α) :
+    ∀ (q : Kind → ℕ) (k : ℕ) (s : QueryLog specIC × HTS × Gh), IsKindQueryBoundU oa q →
+      IsQueryBoundP oa (fun t => isHT t = true) k →
+      IsKindQueryBoundIC ((simulateQ (wrapIC lr hint pre) oa).run s) (q + fun j => k * auxQueries j) := by
+  induction oa using OracleComp.inductionOn with
+  | pure a => intro q k s _ _; trivial
+  | query_bind t cont ih =>
+    intro q k s hq hk
+    rw [IsKindQueryBoundU, isQueryBound_query_bind_iff] at hq
+    rw [isQueryBoundP_query_bind_iff] at hk
+    simp only [simulateQ_bind, simulateQ_spec_query, StateT.run_bind]
+    rcases t with (d | x) | (x | t)
+    · simp only [wrapIC, StateT.run_mk]
+      have hq0 : 0 < q d.1 := hq.1
+      have hk' : ∀ u, IsQueryBoundP (cont u) (fun t => isHT t = true) k := hk.2
+      refine (isKindQueryBoundIC_bind (isKindQueryBoundIC_map_hash d _)
+        fun (p : Ans d × (QueryLog specIC × HTS × Gh)) =>
+          ih p.1 _ k p.2 (hq.2 p.1) (hk' p.1)).mono fun j => ?_
+      by_cases hj : j = d.1
+      · subst hj; simp only [Pi.add_apply, Function.update_self]; omega
+      · simp [Pi.add_apply, Function.update_of_ne hj]
+    · simp only [wrapIC, StateT.run_mk]
+      have hk' : ∀ u, IsQueryBoundP (cont u) (fun t => isHT t = true) k := hk.2
+      refine (isKindQueryBoundIC_bind (q₁ := 0) (isKindQueryBoundIC_map_cipher x _)
+        fun (p : Blk × (QueryLog specIC × HTS × Gh)) => ih p.1 _ k p.2 (hq.2 p.1) (hk' p.1)).mono ?_
+      simp only [zero_add, le_refl]
+    · simp only [wrapIC, StateT.run_mk, bind_assoc, pure_bind]
+      have hk0 : 0 < k := hk.1.resolve_left (by simp [isHT])
+      have hk' : ∀ u, IsQueryBoundP (cont u) (fun t => isHT t = true) (k - 1) := hk.2
+      refine (isKindQueryBoundIC_bind (isKindQueryBoundIC_toHIC_auxSpec lr s.1 x) fun ax =>
+        ih _ q (k - 1) _ (hq.2 _) (hk' _)).mono fun j => ?_
+      simp only [Pi.add_apply]
+      have : (k - 1) * auxQueries j + auxQueries j = k * auxQueries j := by
+        rw [← Nat.succ_mul, Nat.succ_eq_add_one, Nat.sub_add_cancel hk0]
+      omega
+    · simp only [wrapIC, StateT.run_mk, pure_bind]
+      have hk' : IsQueryBoundP (cont (pre t)) (fun t => isHT t = true) k := hk.2 (pre t)
+      exact ih _ q k _ (hq.2 _) hk'
+
+/-- **The wrapped forger's hash queries in all**: the forger's, and three per `hash_to_target`
+query. -/
+theorem left_wrapIC {α : Type} (oa : OracleComp specU α) :
+    ∀ (n k : ℕ) (s : QueryLog specIC × HTS × Gh),
+      IsQueryBoundP oa (fun t => isHashU t = true) n →
+      IsQueryBoundP oa (fun t => isHT t = true) k →
+      IsQueryBoundP ((simulateQ (wrapIC lr hint pre) oa).run s) (fun t => t.isLeft = true)
+        (n + 3 * k) := by
+  induction oa using OracleComp.inductionOn with
+  | pure a => intro n k s _ _; exact isQueryBoundP_pure _ _ _
+  | query_bind t cont ih =>
+    intro n k s hn hk
+    rw [isQueryBoundP_query_bind_iff] at hn hk
+    simp only [simulateQ_bind, simulateQ_spec_query, StateT.run_bind]
+    rcases t with (d | x) | (x | t)
+    · simp only [wrapIC, StateT.run_mk]
+      have hn0 : 0 < n := hn.1.resolve_left (by simp [isHashU])
+      refine (isQueryBoundP_bind (n := 1) (m := n - 1 + 3 * k) ?_ fun p _ =>
+        ih p.1 (n - 1) k p.2 (hn.2 p.1)
+          (hk.2 p.1)).mono (by omega)
+      exact (isQueryBoundP_map_iff _ _ _).2 ((isQueryBoundP_query_iff _ _ _).2 fun _ => Nat.one_pos)
+    · simp only [wrapIC, StateT.run_mk]
+      refine (isQueryBoundP_bind (n := 0) (m := n + 3 * k) ?_ fun p _ =>
+        ih p.1 n k p.2 (hn.2 p.1)
+          (hk.2 p.1)).mono (by omega)
+      exact (isQueryBoundP_map_iff _ _ _).2 ((isQueryBoundP_query_iff _ _ _).2 (by simp))
+    · simp only [wrapIC, StateT.run_mk, bind_assoc, pure_bind]
+      have hk0 : 0 < k := hk.1.resolve_left (by simp [isHT])
+      refine (isQueryBoundP_bind (isQueryBoundP_left_toHIC_auxSpec lr s.1 x) fun ax _ =>
+        ih _ n (k - 1) _ (hn.2 _) (hk.2 _)).mono ?_
+      omega
+    · simp only [wrapIC, StateT.run_mk, pure_bind]
+      exact ih _ n k _ (hn.2 _) (hk.2 _)
+
+/-- **The wrapped forger's cipher queries** are the forger's. -/
+theorem right_wrapIC {α : Type} (oa : OracleComp specU α) :
+    ∀ (m : ℕ) (s : QueryLog specIC × HTS × Gh),
+      IsQueryBoundP oa (fun t => isCipherU t = true) m →
+      IsQueryBoundP ((simulateQ (wrapIC lr hint pre) oa).run s) (fun t => t.isRight = true) m := by
+  induction oa using OracleComp.inductionOn with
+  | pure a => intro m s _; exact isQueryBoundP_pure _ _ _
+  | query_bind t cont ih =>
+    intro m s hm
+    rw [isQueryBoundP_query_bind_iff] at hm
+    simp only [simulateQ_bind, simulateQ_spec_query, StateT.run_bind]
+    rcases t with (d | x) | (x | t)
+    · simp only [wrapIC, StateT.run_mk]
+      refine (isQueryBoundP_bind (n := 0) (m := m) ?_ fun p _ =>
+        ih p.1 m p.2 (hm.2 p.1)).mono (by omega)
+      exact (isQueryBoundP_map_iff _ _ _).2 ((isQueryBoundP_query_iff _ _ _).2 (by simp))
+    · simp only [wrapIC, StateT.run_mk]
+      have hm0 : 0 < m := hm.1.resolve_left (by simp [isCipherU])
+      refine (isQueryBoundP_bind (n := 1) (m := m - 1) ?_ fun p _ =>
+        ih p.1 (m - 1) p.2 (hm.2 p.1)).mono (by omega)
+      exact (isQueryBoundP_map_iff _ _ _).2 ((isQueryBoundP_query_iff _ _ _).2 fun _ => Nat.one_pos)
+    · simp only [wrapIC, StateT.run_mk, bind_assoc, pure_bind]
+      exact (isQueryBoundP_bind (n := 0) (isQueryBoundP_right_toHIC_auxSpec lr s.1 x) fun ax _ =>
+        ih _ m _ (hm.2 _)).mono (by omega)
+    · simp only [wrapIC, StateT.run_mk, pure_bind]
+      exact ih _ m _ (hm.2 _)
+
+end Forger
+
 end VoleMole.ROM.OneMore.Pomfrit
