@@ -165,8 +165,8 @@ permutations with inverse queries):
   the C++ KATs, unbound Moussaka's included (§7, §8).
 
 **On paper only**: U2's Lemma P term `Pr[∃ i, ShiftFail_i]` (shift-list hints and an extraction
-bound without `Shift`; `pomfrit.md` G8); 
-simultaneous extraction for PomFRIT (needs G8), and for both relations together in the
+bound without `Shift`; `pomfrit.md` G8);
+simultaneous extraction for PomFRIT (U1 is a union over the `ℓ+1` forgeries), and for both relations together in the
 permutation model;
 Moussaka non-malleability (Thm 3); Ratatouille
 no theft, its `Com`-binding term `ε_bind^K`, and Lemma 2.1's permutation terms (§5); the UOV
