@@ -345,6 +345,155 @@ theorem verOne_ok (L : QueryLog specIC) (msg proof b1 b2 c1 : ByteArray) (u : TG
   dsimp only
   rw [eval_htH_liftV_pure, hacc]
 
+/-- `flagV`'s verifications all accept, the state unchanged, if each one does. -/
+theorem verAll_ok (L : QueryLog specIC) (s : HTS) :
+    ∀ sigs : List (ByteArray × ByteArray),
+      (∀ p ∈ sigs, evalWithAnswerFn (QueryImpl.ofFn G) ((simulateQ (htH (AR := AR) pre')
+        (simulateQ (liftV (AR := AR) (S := SIss)) (verOneV T lr E pk L p.1 p.2))).run s) =
+          (true, s)) →
+      ∃ vs, (∀ v ∈ vs, v = true) ∧ evalWithAnswerFn (QueryImpl.ofFn G)
+        ((simulateQ (htH (AR := AR) pre') (simulateQ (liftV (AR := AR) (S := SIss))
+          (verAllV T lr E pk L sigs))).run s) = (vs, s)
+  | [], _ => ⟨[], by simp, rfl⟩
+  | (m, sg) :: rest, h => by
+    obtain ⟨vs, hvs, he⟩ := verAll_ok L s rest fun p hp => h p (List.mem_cons_of_mem _ hp)
+    refine ⟨true :: vs, fun v hv => ?_, ?_⟩
+    · rcases List.mem_cons.1 hv with rfl | hv
+      · rfl
+      · exact hvs v hv
+    · simp only [verAllV, simulateQ_bind, StateT.run_bind, evalWithAnswerFn_bind]
+      rw [h (m, sg) List.mem_cons_self]
+      dsimp only
+      rw [he]
+      rfl
+
 end Post
+
+section FinLog
+
+variable {Cn St : Type} (cl : PomClient Cn St) (pk : UovPk) (κ : CTable × Cn)
+
+/-- **The claimed sessions' signatures at a table**: each is the client's step 2 at the table. -/
+theorem eval_finLog (gH : Table) :
+    ∀ (cs : List (ByteArray × TG × (ℕ × St) × TG × SIss)) (L : QueryLog specIC),
+      (evalWithAnswerFn (QueryImpl.ofFn gH) ((finLog cl pk κ cs).run L)).1 =
+        cs.map fun e => (msgOf e.2.2.1.1, evalWithAnswerFn (QueryImpl.ofFn (join gH κ.1))
+          (cl.finish pk κ.2 e.2.2.1.1 e.2.2.1.2 e.2.2.2.1 e.2.2.2.2))
+  | [], L => rfl
+  | e :: cs, L => by
+    have ih := eval_finLog gH cs
+    simp only [finLog, List.mapM_cons, StateT.run_bind, evalWithAnswerFn_bind, StateT.run_map,
+      evalWithAnswerFn_map, StateT.run_pure, evalWithAnswerFn_pure, List.map_cons] at ih ⊢
+    rw [ih, eval_logImpl_fst]
+
+end FinLog
+
+section Keep
+
+variable {DR : Type} {AR : DR → Type} (G : (d : DR ⊕ Dom) → WB AR d) (pre' : TG → SIss)
+
+/-- **The finishing phase keeps the target oracle's entries at cached inputs.** -/
+theorem post_keep {β : Type} (oc : OracleComp (specV Ans ByteArray TG) β) (s : HTS) (y : ByteArray)
+    (hy : s.1 y ≠ none) :
+    (evalWithAnswerFn (QueryImpl.ofFn G) ((simulateQ (htH (AR := AR) pre')
+        (simulateQ (liftV (AR := AR) (S := SIss)) oc)).run s)).2.1 y = s.1 y ∧
+      (evalWithAnswerFn (QueryImpl.ofFn G) ((simulateQ (htH (AR := AR) pre')
+        (simulateQ (liftV (AR := AR) (S := SIss)) oc)).run s)).2.2.2.1 y = s.2.2.1 y := by
+  rw [← QueryImpl.simulateQ_compose]
+  refine eval_run_inv G _ (fun s' : HTS => s'.1 y = s.1 y ∧ s'.2.2.1 y = s.2.2.1 y)
+    (fun q s' hs' => ?_) oc s ⟨rfl, rfl⟩
+  rw [QueryImpl.apply_compose]
+  rcases q with d | ⟨x, h⟩
+  · simp only [liftV]
+    erw [simulateQ_spec_query]
+    simp only [htW]
+    erw [evalWithAnswerFn_map]
+    exact hs'
+  · simp only [liftV]
+    erw [simulateQ_spec_query]
+    simp only [htW]
+    show (tStep addHint x h s').2.1 y = s.1 y ∧ (tStep addHint x h s').2.2.2.1 y = s.2.2.1 y
+    have hy' : s'.1 y ≠ none := hs'.1 ▸ hy
+    obtain ⟨v, hv⟩ := Option.ne_none_iff_exists'.1 hy'
+    exact ⟨(tStep_keep x h s' hv).trans (hv.symm.trans hs'.1),
+      (tStep_tg_keep x h s' hy').trans hs'.2⟩
+
+end Keep
+
+/-! ## Sizes -/
+
+lemma sessOf_sizes (pk : UovPk) (κ : Prob.Bytes 32) (k : ℕ) :
+    (sessOf pk κ k).2.1.size = 32 ∧ (sessOf pk κ k).2.2.size = 32 := by
+  refine ⟨?_, ?_⟩
+  · simp only [sessOf, Privacy.size_toBA, Spec.PomFRIT.length_commitRefresher]
+  · simp only [sessOf, Privacy.size_toBA, (Spec.PomFRIT.length_expandSeed _ _ _).2.1]
+
+lemma proveCommit_size [HasPrg] {Hs : Hashes} {st : Statement} {wSuffix : ByteArray}
+    {s : Prover.Pending} {proof : ByteArray} (h : Prover.proveCommit Hs st wSuffix s = .ok proof) :
+    proof.size = s.params.proofBytes := by
+  obtain ⟨-, check, aT, ctr, delta, opening, -, -, hproof⟩ := proveCommit_inv h
+  rw [hproof]
+  exact (fields_assemble _ _).2.2.2.2.2.2.2.2.2
+
+/-! ## The game at a table -/
+
+section Game
+
+variable {DR : Type} [DecidableEq DR] {AR : DR → Type} (lr : Bool) (ℓ n : ℕ) {X' Hn' : Type}
+  [DecidableEq X'] (pk : UovPk) (pre' : TG → SIss) (κ : CTable × Prob.Bytes 32)
+  (b : OracleComp (specB AR X' Hn' TG SIss) (List (X' × SIss))) (L : List TG)
+
+/-- The Lean client as a blind-preimage client. -/
+noncomputable abbrev CC := toClient CrtGen.tables lr ℓ (leanClient CrtGen.tables lr)
+
+/-- The target oracle's initial reduced state. -/
+def s0 : HTS := (fun _ => none, (L, fun _ => none, 0))
+
+/-- **The blinding forger's composed computation** (`blindAdv`'s, for fixed coins). -/
+noncomputable def gameA : OracleComp (specA (WB AR) ByteArray TG TG SIss) (List (ByteArray × SIss) × Bool) := do
+  let z ← (simulateQ (blindImpl (CC lr ℓ) n pk κ) b).run (bs0 (CC lr ℓ).init)
+  let f ← simulateQ liftV ((CC lr ℓ).post pk κ z.2.cs (claimed z))
+  pure ((claimed z).map fun e => (e.1, e.2.2.2.2), f)
+
+/-- `B`'s phase with the target oracle, one handler. -/
+noncomputable def phaseB : OracleComp (ofFn (WB AR)) (List (X' × SIss) × BS PSt X' Hn') :=
+  (simulateQ (combH pre' CrtGen.tables lr ℓ (leanClient CrtGen.tables lr) n pk κ) b).run
+    (bs0 (CC lr ℓ).init, s0 L)
+
+/-- A hash query in the game's world. -/
+def toW : QueryImpl spec (OracleComp (ofFn (WB AR))) := fun d => liftM ((ofFn (WB AR)).query (.inr d))
+
+/-- **The grinding prefix of the `p`-th claimed session**, reached without `H₂³` queries: `B`'s
+phase, then step 2's prefix (`preGQ`) of that session with `B`'s preimage. -/
+noncomputable def pfxB (p : ℕ) : OracleComp (ofFn (WB AR)) ByteArray := do
+  let r ← phaseB lr ℓ n pk pre' κ b L
+  match (claimed (r.1, r.2.1))[p]? with
+  | none => pure ByteArray.empty
+  | some e => simulateQ toW (preGQ (pomStmt pk lr e.2.2.2.1 e.2.2.1.2.2.1 e.2.2.1.2.2.2)
+      e.2.2.1.2.1 (zeroPre ++ toBA (e.2.2.2.2.getD [])))
+
+omit [DecidableEq DR] in
+lemma eval_toW (G : (d : DR ⊕ Dom) → WB AR d) {α : Type} (oc : OracleComp spec α) :
+    evalWithAnswerFn (QueryImpl.ofFn G) (simulateQ toW oc) =
+      evalWithAnswerFn (QueryImpl.ofFn (gHof G)) oc := by
+  induction oc using OracleComp.inductionOn with
+  | pure a => rfl
+  | query_bind t k ih =>
+    simp only [simulateQ_bind, simulateQ_spec_query, evalWithAnswerFn_bind]
+    erw [evalWithAnswerFn_liftM_query]
+    exact ih _
+
+omit [DecidableEq DR] in
+lemma eval_gameW (G : (d : DR ⊕ Dom) → WB AR d) :
+    evalWithAnswerFn (QueryImpl.ofFn G) ((simulateQ (htH pre') (gameA lr ℓ n pk κ b)).run (s0 L)) =
+      let r := evalWithAnswerFn (QueryImpl.ofFn G) (phaseB lr ℓ n pk pre' κ b L)
+      let r' := evalWithAnswerFn (QueryImpl.ofFn G) ((simulateQ (htH pre') (simulateQ
+        (liftV (AR := AR) (S := SIss)) ((CC lr ℓ).post pk κ r.2.1.cs (claimed (r.1, r.2.1))))).run r.2.2)
+      (((claimed (r.1, r.2.1)).map fun e => (e.1, e.2.2.2.2), r'.1), r'.2) := by
+  simp only [gameA, simulateQ_bind, StateT.run_bind, evalWithAnswerFn_bind]
+  rw [collapseH]
+  simp only [evalWithAnswerFn_map, simulateQ_pure, StateT.run_pure, evalWithAnswerFn_pure, phaseB]
+
+end Game
 
 end VoleMole.Assumptions.BlindPomfrit
