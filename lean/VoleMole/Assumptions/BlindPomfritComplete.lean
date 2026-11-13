@@ -651,4 +651,105 @@ theorem fail_table (G : (d : DR ⊕ Dom) → WB AR d)
 
 end Game
 
+/-! ## `B`'s phase makes no `H₂³` query -/
+
+section Queries
+
+variable {DR : Type} {AR : DR → Type} (pre' : TG → SIss)
+
+/-- The composed adversary's queries that are not `H₂³` queries of the world. -/
+def NoH23A : (DR ⊕ Dom) ⊕ ((ByteArray × TG) ⊕ TG) → Prop
+  | .inl d => NoH23W d
+  | .inr _ => True
+
+lemma allQ_htH {α : Type} (oa : OracleComp (specA (WB AR) ByteArray TG TG SIss) α)
+    (h : AllQueriesSatisfy oa NoH23A) (s : HTS) :
+    AllQueriesSatisfy ((simulateQ (htH (AR := AR) pre') oa).run s) NoH23W := by
+  induction oa using OracleComp.inductionOn generalizing s with
+  | pure a => exact allQueriesSatisfy_pure _ _
+  | query_bind q k ih =>
+    rw [allQueriesSatisfy_query_bind_iff] at h
+    simp only [simulateQ_bind, simulateQ_spec_query, StateT.run_bind]
+    refine allQueriesSatisfy_bind ?_ fun p => ih p.1 (h.2 p.1) p.2
+    rcases q with d | ⟨x, hh⟩ | t
+    · exact allQ_map _ ((allQueriesSatisfy_query_iff _ _).2 h.1)
+    · exact allQueriesSatisfy_pure _ _
+    · exact allQueriesSatisfy_pure _ _
+
+lemma allQ_toW {α : Type} {oc : OracleComp spec α} (h : AllQueriesSatisfy oc NoH23) :
+    AllQueriesSatisfy (simulateQ (toW (AR := AR)) oc) NoH23W := by
+  induction oc using OracleComp.inductionOn with
+  | pure a => exact allQueriesSatisfy_pure _ _
+  | query_bind t k ih =>
+    rw [allQueriesSatisfy_query_bind_iff] at h
+    simp only [simulateQ_bind, simulateQ_spec_query]
+    exact allQueriesSatisfy_bind ((allQueriesSatisfy_query_iff _ _).2 h.1) fun u => ih u (h.2 u)
+
+lemma allQ_liftC {α : Type} (oc : OracleComp (specR Ans) α) (h : AllQueriesSatisfy oc NoH23) :
+    AllQueriesSatisfy (simulateQ (liftC (AR := WB AR) (X := ByteArray) (G := TG) (S := SIss)) oc)
+      NoH23A := by
+  induction oc using OracleComp.inductionOn with
+  | pure a => exact allQueriesSatisfy_pure _ _
+  | query_bind t k ih =>
+    rw [allQueriesSatisfy_query_bind_iff] at h
+    simp only [simulateQ_bind, simulateQ_spec_query]
+    exact allQueriesSatisfy_bind ((allQueriesSatisfy_query_iff _ _).2 h.1) fun u => ih u (h.2 u)
+
+lemma allQ_logImpl (E : CTable) {α : Type} (oc : OracleComp specIC α) (h : AllQueriesSatisfy oc NoH23IC)
+    (L : QueryLog specIC) : AllQueriesSatisfy ((simulateQ (logImpl E) oc).run L) NoH23 := by
+  induction oc using OracleComp.inductionOn generalizing L with
+  | pure a => exact allQueriesSatisfy_pure _ _
+  | query_bind t k ih =>
+    rw [allQueriesSatisfy_query_bind_iff] at h
+    simp only [simulateQ_bind, simulateQ_spec_query, StateT.run_bind]
+    rcases t with d | x
+    · exact allQueriesSatisfy_bind (allQ_map _ ((allQueriesSatisfy_query_iff _ _).2 h.1))
+        fun p => ih p.1 (h.2 p.1) p.2
+    · exact allQueriesSatisfy_bind (allQueriesSatisfy_pure _ _) fun p => ih p.1 (h.2 p.1) p.2
+
+lemma allQ_auxSpec (lr : Bool) (L : QueryLog specIC) (x : ByteArray) :
+    AllQueriesSatisfy (auxSpec lr L x) NoH23 := by
+  unfold auxSpec
+  refine allQueriesSatisfy_bind ((allQueriesSatisfy_query_iff _ _).2 (by decide)) fun _ => ?_
+  refine allQueriesSatisfy_bind ((allQueriesSatisfy_query_iff _ _).2 (by decide)) fun _ => ?_
+  split
+  · exact allQueriesSatisfy_bind ((allQueriesSatisfy_query_iff _ _).2 (by decide)) fun _ =>
+      allQueriesSatisfy_pure _ _
+  · exact allQueriesSatisfy_pure _ _
+
+lemma allQ_leanStart (lr : Bool) (pk : UovPk) (κ : Prob.Bytes 32) (k : ℕ) :
+    AllQueriesSatisfy ((leanClient CrtGen.tables lr).start pk κ k) NoH23IC :=
+  allQueriesSatisfy_bind (allQ_liftIC (allQ_mu1Q _)) fun _ =>
+    allQueriesSatisfy_bind (allQ_step1Q _ _ _ _ _ _) fun _ => allQueriesSatisfy_pure _ _
+
+variable (lr : Bool) (ℓ n : ℕ) {X' Hn' : Type} [DecidableEq X'] (pk : UovPk)
+  (κ : CTable × Prob.Bytes 32) (b : OracleComp (specB AR X' Hn' TG SIss) (List (X' × SIss)))
+  (L : List TG)
+
+lemma allQ_combH (q : DR ⊕ ((X' × Hn') ⊕ TG)) (p : BS PSt X' Hn') :
+    AllQueriesSatisfy ((combH pre' CrtGen.tables lr ℓ (leanClient CrtGen.tables lr) n pk κ q).run p)
+      NoH23W := by
+  refine allQ_map _ (allQ_htH pre' _ ?_ _)
+  rcases q with d | ⟨x', hB⟩ | t
+  · exact allQ_map _ ((allQueriesSatisfy_query_iff _ _).2 trivial)
+  · simp only [blindImpl, StateT.run_mk]
+    split_ifs
+    · refine allQueriesSatisfy_bind (allQ_liftC _ ?_) fun _ =>
+        allQueriesSatisfy_bind ((allQueriesSatisfy_query_iff _ _).2 trivial) fun _ =>
+          allQueriesSatisfy_pure _ _
+      exact allQueriesSatisfy_bind (allQ_logImpl _ _ (allQ_leanStart lr pk κ.2 _) _) fun _ =>
+        allQueriesSatisfy_bind (allQ_auxSpec _ _ _) fun _ => allQueriesSatisfy_pure _ _
+    · exact allQueriesSatisfy_pure _ _
+  · exact allQ_map _ ((allQueriesSatisfy_query_iff _ _).2 trivial)
+
+/-- **The `p`-th claimed session's grinding prefix is reached without `H₂³` queries.** -/
+theorem allQ_pfxB (p : ℕ) : AllQueriesSatisfy (pfxB lr ℓ n pk pre' κ b L p) NoH23W := by
+  refine allQueriesSatisfy_bind (allQ_simulateQ_run _ (fun q p => allQ_combH pre' lr ℓ n pk κ q p)
+    b _) fun r => ?_
+  split
+  · exact allQueriesSatisfy_pure _ _
+  · exact allQ_toW (allQ_preGQ _ _ _)
+
+end Queries
+
 end VoleMole.Assumptions.BlindPomfrit
