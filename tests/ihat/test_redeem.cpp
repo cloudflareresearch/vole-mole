@@ -11,6 +11,7 @@
 
 #include "test.hpp"
 
+#include "parameters.hpp"  // from faest-arch-opt
 #include "polynomials.hpp" // from faest-arch-opt
 
 #include <gtest/gtest.h>
@@ -20,6 +21,7 @@
 #include <bit>
 #include <cstddef>
 #include <cstdint>
+#include <ios>
 #include <random>
 #include <utility>
 #include <vector>

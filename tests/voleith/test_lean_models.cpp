@@ -21,6 +21,8 @@
 #include "test.hpp"
 
 #include "block.hpp"          // from faest-arch-opt
+#include "constants.hpp"      // from faest-arch-opt
+#include "faest.hpp"          // from faest-arch-opt
 #include "faest_sig.hpp"      // from faest-arch-opt
 #include "hash.hpp"           // from faest-arch-opt
 #include "kos_vole_check.hpp" // from faest-arch-opt
@@ -29,9 +31,11 @@
 #include "quicksilver.hpp"    // from faest-arch-opt
 #include "universal_hash.hpp" // from faest-arch-opt
 #include "vector_com.hpp"     // from faest-arch-opt
+#include "vector_com.inc"     // from faest-arch-opt
 
 #include <gtest/gtest.h>
 
+#include <algorithm>
 #include <array>
 #include <cmath>
 #include <cstddef>

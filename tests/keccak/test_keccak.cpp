@@ -2,8 +2,13 @@
 
 #include "keccak/circuit.hpp"   // internal
 #include "keccak/segmented.hpp" // internal
+#include "keccak/tables.hpp"    // internal
 
 #include "test.hpp"
+
+#include "parameters.hpp"  // from faest-arch-opt
+#include "polynomials.hpp" // from faest-arch-opt
+#include "quicksilver.hpp" // from faest-arch-opt
 
 #include <gtest/gtest.h>
 
