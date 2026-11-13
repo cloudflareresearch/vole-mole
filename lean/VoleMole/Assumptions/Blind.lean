@@ -10,9 +10,10 @@ import VoleMole.Assumptions.Shift
 oracle (`specR AC`, the protocol's hashes) and coins `κ`, a label `x` (the `H_T` input), a blinding
 `r` and a state (`start`); the blinded request is `H_T(x) + r`; after the Issuer's answer `s` the
 sessions are finished and verified by `post` (any oracle computation over the client's oracle and
-`H_T`, no Issuer), which returns one acceptance flag. For PomFRIT, `start` is `issue_request` up
-to `hash_to_target`'s input, `r` the client's blinding, `post` the finalization and `pomfritVerify`
-of every session.
+`H_T`, no Issuer), which returns one acceptance flag. The client carries a state across sessions
+(`init`, passed through `start` and on to `post`; for PomFRIT the game wrapper's log of queries). For
+PomFRIT, `start` is `issue_request` up to `hash_to_target`'s input, `r` the client's blinding,
+`post` the finalization and `pomfritVerify` of every session (`Assumptions/BlindPomfrit.lean`).
 
 **The forger** (`blindAdv`): from an OMPR adversary `B` (labelled targets on demand, `omExp`),
 it runs `B` with its world forwarded (`B`'s world is separate from the client's: the composed
@@ -72,27 +73,32 @@ structure Ses where
   u : G
   hB : Hn'
 
-variable (X' : Type)
+variable (X' Sg : Type)
 
-/-- The forger's state: the number of sessions started, and the session of each of `B`'s labels. -/
+/-- The forger's state: the number of sessions started, the session of each of `B`'s labels, and
+the client's state across sessions. -/
 structure BSt where
   k : ℕ
   ses : X' → Option (Ses X G Hn' St)
+  cs : Sg
 
 end Defs
 
 variable {DR DC : Type} [DecidableEq DR] [DecidableEq DC] {AR : DR → Type} {AC : DC → Type}
   [∀ d, SampleableType (AR d)] [∀ d, SampleableType (AC d)]
-  {X' Hn' X G S St Cn PK : Type} [DecidableEq X'] [DecidableEq X] [AddCommGroup G]
+  {X' Hn' X G S St Cn PK Sg : Type} [DecidableEq X'] [DecidableEq X] [AddCommGroup G]
 
-variable (AC X G S St Cn PK) in
-/-- **An honest blind-preimage client**: coins, the first phase of session `k` (label, blinding,
-state) over its oracle, and the finishing phase of the claimed sessions `(x, r, st, u, s)` (`u`
-the `H_T` answer, `s` the Issuer's preimage) with one acceptance flag. -/
+variable (AC X G S St Cn PK Sg) in
+/-- **An honest blind-preimage client**: coins, an initial state `init` carried across sessions
+(e.g. a log of its queries), the first phase of session `k` (label, blinding, state; and the next
+carried state) over its oracle, and the finishing phase of the claimed sessions `(x, r, st, u, s)`
+(`u` the `H_T` answer, `s` the Issuer's preimage) with the carried state, with one acceptance
+flag. -/
 structure Client where
   coins : ProbComp Cn
-  start : PK → Cn → ℕ → OracleComp (specR AC) (X × G × St)
-  post : PK → Cn → List (X × G × St × G × S) → OracleComp (specV AC X G) Bool
+  init : Sg
+  start : PK → Cn → Sg → ℕ → OracleComp (specR AC) ((X × G × St) × Sg)
+  post : PK → Cn → Sg → List (X × G × St × G × S) → OracleComp (specV AC X G) Bool
 
 /-- The client's oracle inside the composed adversary. -/
 def liftC : QueryImpl (specR AC) (OracleComp (specA (WA AR AC) X G G S)) := fun d =>
@@ -103,32 +109,34 @@ def liftV : QueryImpl (specV AC X G) (OracleComp (specA (WA AR AC) X G G S))
   | .inl d => liftM ((specA (WA AR AC) X G G S).query (.inl (.inr d)))
   | .inr q => liftM ((specA (WA AR AC) X G G S).query (.inr (.inl q)))
 
-variable (cl : Client AC X G S St Cn PK) (n : ℕ)
+variable (cl : Client AC X G S St Cn PK Sg) (n : ℕ)
 
 /-- **The blinding forger's handler** for `B`'s queries. -/
 def blindImpl (pk : PK) (κ : Cn) :
-    QueryImpl (specB AR X' Hn' G S) (StateT (BSt X G Hn' St X') (OracleComp (specA (WA AR AC) X G G S)))
+    QueryImpl (specB AR X' Hn' G S)
+      (StateT (BSt X G Hn' St X' Sg) (OracleComp (specA (WA AR AC) X G G S)))
   | .inl d => StateT.mk fun s => (fun a => (a, s)) <$>
       (liftM ((specA (WA AR AC) X G G S).query (.inl (.inl d))) :
         OracleComp (specA (WA AR AC) X G G S) (AR d))
   | .inr (.inl (x', hB)) => StateT.mk fun s =>
       if s.k < n then do
-        let o ← simulateQ liftC (cl.start pk κ s.k)
-        let a ← (liftM ((specA (WA AR AC) X G G S).query (.inr (.inl (o.1, o.2.1)))) :
+        let og ← simulateQ liftC (cl.start pk κ s.cs s.k)
+        let a ← (liftM ((specA (WA AR AC) X G G S).query (.inr (.inl (og.1.1, og.1.2.1)))) :
           OracleComp (specA (WA AR AC) X G G S) (G × G))
-        pure (some (a.1 + o.2.1),
-          ⟨s.k + 1, Function.update s.ses x' (some ⟨s.k, o.1, o.2.1, o.2.2, a.1, hB⟩)⟩)
+        pure (some (a.1 + og.1.2.1),
+          ⟨s.k + 1, Function.update s.ses x' (some ⟨s.k, og.1.1, og.1.2.1, og.1.2.2, a.1, hB⟩),
+            og.2⟩)
       else pure (none, s)
   | .inr (.inr t) => StateT.mk fun s => (fun a => (a, s)) <$>
       (liftM ((specA (WA AR AC) X G G S).query (.inr (.inr t))) :
         OracleComp (specA (WA AR AC) X G G S) S)
 
-/-- The initial forger state. -/
-def bs0 : BSt X G Hn' St X' := ⟨0, fun _ => none⟩
+/-- The initial forger state, with the client's carried state `g`. -/
+def bs0 (g : Sg) : BSt X G Hn' St X' Sg := ⟨0, fun _ => none, g⟩
 
 /-- The claimed sessions: for each claim `(x', s)` of `B` with a session, the session's data and
 `s`. -/
-def claimed (z : List (X' × S) × BSt X G Hn' St X') : List (X × G × St × G × S) :=
+def claimed (z : List (X' × S) × BSt X G Hn' St X' Sg) : List (X × G × St × G × S) :=
   z.1.filterMap fun p => (z.2.ses p.1).map fun e => (e.x, e.r, e.st, e.u, p.2)
 
 /-- **The blinding forger** (a composed adversary of `OneMore.omuf`, hints the blindings): `B`
@@ -139,8 +147,8 @@ def blindAdv (B : PK → ProbComp (OracleComp (specB AR X' Hn' G S) (List (X' ×
   let b ← B pk
   let κ ← cl.coins
   pure do
-    let z ← (simulateQ (blindImpl cl n pk κ) b).run bs0
-    let f ← simulateQ liftV (cl.post pk κ (claimed z))
+    let z ← (simulateQ (blindImpl cl n pk κ) b).run (bs0 cl.init)
+    let f ← simulateQ liftV (cl.post pk κ z.2.cs (claimed z))
     pure ((claimed z).map fun e => (e.1, e.2.2.2.2), f)
 
 /-! ## The forger against the challenger (`red` of `OneMore`), collapsed -/
@@ -152,15 +160,15 @@ set_option linter.unusedSectionVars false
 variable (pre : G → S) (pk : PK) (κ : Cn)
 
 /-- The state of the forger run by `red` against the challenger. -/
-abbrev CSt {DR DC : Type} (AR : DR → Type) (AC : DC → Type) (X' X G Hn' St : Type) :=
-  BSt X G Hn' St X' × ((X → Option (G × G)) × Ch (WA AR AC) X G G)
+abbrev CSt {DR DC : Type} (AR : DR → Type) (AC : DC → Type) (X' X G Hn' St Sg : Type) :=
+  BSt X G Hn' St X' Sg × ((X → Option (G × G)) × Ch (WA AR AC) X G G)
 
 /-- The forger, `red` and the challenger as one handler. -/
-def bcomb : QueryImpl (specB AR X' Hn' G S) (StateT (CSt AR AC X' X G Hn' St) ProbComp) :=
+def bcomb : QueryImpl (specB AR X' Hn' G S) (StateT (CSt AR AC X' X G Hn' St Sg) ProbComp) :=
   fun q => StateT.mk fun s => (fun r => (r.1.1, (r.1.2, r.2))) <$>
     (simulateQ (combImpl addHint pre) ((blindImpl cl n pk κ q).run s.1)).run s.2
 
-theorem collapseB {α : Type} (oa : OracleComp (specB AR X' Hn' G S) α) (s : BSt X G Hn' St X')
+theorem collapseB {α : Type} (oa : OracleComp (specB AR X' Hn' G S) α) (s : BSt X G Hn' St X' Sg)
     (c : (X → Option (G × G)) × Ch (WA AR AC) X G G) :
     (simulateQ (combImpl addHint pre) ((simulateQ (blindImpl cl n pk κ) oa).run s)).run c =
       (fun r => ((r.1, r.2.1), r.2.2)) <$> (simulateQ (bcomb cl n pre pk κ) oa).run (s, c) := by
@@ -225,42 +233,42 @@ lemma roR_resL (c : (specR (WA AR AC)).QueryCache) (d : DC) :
 
 /-! ### The steps -/
 
-lemma bcomb_inl (d : DR) (w : CSt AR AC X' X G Hn' St) :
+lemma bcomb_inl (d : DR) (w : CSt AR AC X' X G Hn' St Sg) :
     (bcomb cl n pre pk κ (.inl d)).run w =
       ((fun r => ((r.1 : AR d), (w.1, (w.2.1, r.2)))) <$>
         (roStep (Sum.inl d) w.2.2 : ProbComp (AR d × Ch (WA AR AC) X G G)) :
-        ProbComp ((specB AR X' Hn' G S).Range (.inl d) × CSt AR AC X' X G Hn' St)) := by
+        ProbComp ((specB AR X' Hn' G S).Range (.inl d) × CSt AR AC X' X G Hn' St Sg)) := by
   simp only [bcomb, blindImpl, StateT.run_mk]
   erw [simulateQ_map, simulateQ_spec_query, StateT.run_map, comb_inl]
   simp only [realImpl, StateT.run_mk]
   erw [Functor.map_map, Functor.map_map]
 
-lemma bcomb_iss (t : G) (w : CSt AR AC X' X G Hn' St) :
+lemma bcomb_iss (t : G) (w : CSt AR AC X' X G Hn' St Sg) :
     (bcomb cl n pre pk κ (.inr (.inr t))).run w =
       pure (pre t, (w.1, (w.2.1, { w.2.2 with iq := w.2.2.iq + 1 }))) := by
   simp only [bcomb, blindImpl, StateT.run_mk]
   erw [simulateQ_map, simulateQ_spec_query, StateT.run_map, comb_iss]
   simp [realImpl]
 
-lemma bcomb_stop (x' : X') (hB : Hn') (w : CSt AR AC X' X G Hn' St) (hk : ¬ w.1.k < n) :
+lemma bcomb_stop (x' : X') (hB : Hn') (w : CSt AR AC X' X G Hn' St Sg) (hk : ¬ w.1.k < n) :
     (bcomb cl n pre pk κ (.inr (.inl (x', hB)))).run w = pure (none, w) := by
   simp [bcomb, blindImpl, hk]
 
 /-- The client's first phase, run against `red` and the challenger. -/
-def startRun (w : CSt AR AC X' X G Hn' St) :
-    ProbComp ((X × G × St) × ((X → Option (G × G)) × Ch (WA AR AC) X G G)) :=
+def startRun (w : CSt AR AC X' X G Hn' St Sg) :
+    ProbComp (((X × G × St) × Sg) × ((X → Option (G × G)) × Ch (WA AR AC) X G G)) :=
   (simulateQ (combImpl addHint pre ∘ₛ (liftC (AR := AR) (X := X) (G := G) (S := S)))
-    (cl.start pk κ w.1.k)).run w.2
+    (cl.start pk κ w.1.cs w.1.k)).run w.2
 
-lemma bcomb_serve (x' : X') (hB : Hn') (w : CSt AR AC X' X G Hn' St) (hk : w.1.k < n) :
+lemma bcomb_serve (x' : X') (hB : Hn') (w : CSt AR AC X' X G Hn' St Sg) (hk : w.1.k < n) :
     (bcomb cl n pre pk κ (.inr (.inl (x', hB)))).run w =
       (startRun cl pre pk κ w >>= fun op =>
-        (combImpl (S := S) addHint pre (.inr (.inl (op.1.1, op.1.2.1)))).run op.2 >>= fun ap =>
-          pure (some (ap.1.1 + op.1.2.1),
+        (combImpl (S := S) addHint pre (.inr (.inl (op.1.1.1, op.1.1.2.1)))).run op.2 >>= fun ap =>
+          pure (some (ap.1.1 + op.1.1.2.1),
             (BSt.mk (w.1.k + 1) (Function.update w.1.ses x'
-              (some (Ses.mk w.1.k op.1.1 op.1.2.1 op.1.2.2 ap.1.1 hB))), ap.2)) :
+              (some (Ses.mk w.1.k op.1.1.1 op.1.1.2.1 op.1.1.2.2 ap.1.1 hB))) op.1.2, ap.2)) :
         ProbComp ((specB AR X' Hn' G S).Range (.inr (.inl (x', hB))) ×
-          CSt AR AC X' X G Hn' St)) := by
+          CSt AR AC X' X G Hn' St Sg)) := by
   simp only [bcomb, blindImpl, hk, ite_true, StateT.run_mk, startRun]
   rw [simulateQ_bind, StateT.run_bind, ← QueryImpl.simulateQ_compose, map_bind]
   refine bind_congr fun op => ?_
@@ -282,11 +290,11 @@ lemma comb_fresh' (x : X) (h : G) (p : (X → Option (G × G)) × Ch (WA AR AC) 
 
 /-- **The client's first phase changes only its own oracle's cache**, and outputs a value of
 `start`. -/
-lemma startRun_supp (w : CSt AR AC X' X G Hn' St) (z) (hz : z ∈ support (startRun cl pre pk κ w)) :
-    z.1 ∈ support (cl.start pk κ w.1.k) ∧ z.2.1 = w.2.1 ∧ z.2.2.rest = w.2.2.rest ∧
+lemma startRun_supp (w : CSt AR AC X' X G Hn' St Sg) (z) (hz : z ∈ support (startRun cl pre pk κ w)) :
+    z.1 ∈ support (cl.start pk κ w.1.cs w.1.k) ∧ z.2.1 = w.2.1 ∧ z.2.2.rest = w.2.2.rest ∧
       z.2.2.tg = w.2.2.tg ∧ z.2.2.iq = w.2.2.iq ∧ resL z.2.2.ro = resL w.2.2.ro := by
   refine ⟨support_simulateQ_run'_subset (combImpl (S := S) addHint pre ∘ₛ
-      (liftC (AR := AR) (X := X) (G := G) (S := S))) (cl.start pk κ w.1.k) w.2 (by
+      (liftC (AR := AR) (X := X) (G := G) (S := S))) (cl.start pk κ w.1.cs w.1.k) w.2 (by
     rw [StateT.run'_eq, support_map]; exact ⟨z, hz, rfl⟩), ?_⟩
   let I : (X → Option (G × G)) × Ch (WA AR AC) X G G → Prop := fun q =>
     q.1 = w.2.1 ∧ q.2.rest = w.2.2.rest ∧ q.2.tg = w.2.2.tg ∧ q.2.iq = w.2.2.iq ∧
@@ -305,35 +313,37 @@ lemma startRun_supp (w : CSt AR AC X' X G Hn' St) (z) (hz : z ∈ support (start
 
 /-! ### The forger against the challenger is `B` in `omExp` -/
 
-/-- `y` is a label of session `j` (an output of `start j`). -/
-def Lab (j : ℕ) (y : X) : Prop := ∃ a ∈ support (cl.start pk κ j), a.1 = y
+/-- `y` is a label of session `j` (an output of `start j`, at some carried state). -/
+def Lab (j : ℕ) (y : X) : Prop := ∃ g, ∃ a ∈ support (cl.start pk κ g j), a.1.1 = y
 
-/-- **The sessions' labels are pairwise distinct** (for PomFRIT: distinct messages). -/
+/-- **The sessions' labels are pairwise distinct**, whatever the carried states (for PomFRIT: distinct
+messages). -/
 def Distinct : Prop :=
-  ∀ i j, i ≠ j → ∀ a ∈ support (cl.start pk κ i), ∀ b ∈ support (cl.start pk κ j), a.1 ≠ b.1
+  ∀ i j, i ≠ j → ∀ g, ∀ a ∈ support (cl.start pk κ g i), ∀ g', ∀ b ∈ support (cl.start pk κ g' j),
+    a.1.1 ≠ b.1.1
 
 /-- `B`'s challenger state that the forger's state represents: `B`'s part of the world cache, the
 stream, for each of `B`'s labels the challenge target of its session's label with `B`'s hint, the
 preimage queries. -/
-def piB (w : CSt AR AC X' X G Hn' St) : Ch AR X' Hn' G :=
+def piB (w : CSt AR AC X' X G Hn' St Sg) : Ch AR X' Hn' G :=
   ⟨resL w.2.2.ro, w.2.2.rest,
     fun x' => (w.1.ses x').bind fun e => (w.2.2.tg e.x).map fun p => (p.1, e.hB), w.2.2.iq⟩
 
 /-- The invariant of the forger's run: one target per remaining session; `red`'s table, the
 challenger's labelled targets and the sessions only hold labels of started sessions; each of `B`'s
 labels has its own session. -/
-structure InvC (w : CSt AR AC X' X G Hn' St) : Prop where
+structure InvC (w : CSt AR AC X' X G Hn' St Sg) : Prop where
   len : w.2.2.rest.length + w.1.k = n
   rt : ∀ y, w.2.1 y ≠ none → ∃ j < w.1.k, Lab cl pk κ j y
   tg : ∀ y, w.2.2.tg y ≠ none → ∃ j < w.1.k, Lab cl pk κ j y
   ses : ∀ x' e, w.1.ses x' = some e → e.idx < w.1.k ∧ Lab cl pk κ e.idx e.x
   inj : ∀ x' y' e e', w.1.ses x' = some e → w.1.ses y' = some e' → e.idx = e'.idx → x' = y'
 
-lemma fresh_of_inv (hD : Distinct cl pk κ) {w : CSt AR AC X' X G Hn' St} (hw : InvC cl n pk κ w)
-    {o : X × G × St} (ho : o ∈ support (cl.start pk κ w.1.k)) :
-    w.2.1 o.1 = none ∧ w.2.2.tg o.1 = none ∧ ∀ x' e, w.1.ses x' = some e → e.x ≠ o.1 := by
-  have hn : ∀ j < w.1.k, ¬ Lab cl pk κ j o.1 := fun j hj ⟨a, ha, he⟩ =>
-    hD j w.1.k (ne_of_lt hj) a ha o ho he
+lemma fresh_of_inv (hD : Distinct cl pk κ) {w : CSt AR AC X' X G Hn' St Sg}
+    (hw : InvC cl n pk κ w) {o : (X × G × St) × Sg} (ho : o ∈ support (cl.start pk κ w.1.cs w.1.k)) :
+    w.2.1 o.1.1 = none ∧ w.2.2.tg o.1.1 = none ∧ ∀ x' e, w.1.ses x' = some e → e.x ≠ o.1.1 := by
+  have hn : ∀ j < w.1.k, ¬ Lab cl pk κ j o.1.1 := fun j hj ⟨g, a, ha, he⟩ =>
+    hD j w.1.k (ne_of_lt hj) g a ha w.1.cs o ho he
   refine ⟨?_, ?_, fun x' e he hx => ?_⟩
   · by_contra h; obtain ⟨j, hj, hl⟩ := hw.rt _ h; exact hn j hj hl
   · by_contra h; obtain ⟨j, hj, hl⟩ := hw.tg _ h; exact hn j hj hl
@@ -343,7 +353,7 @@ lemma pure_eqd_of_eq {α : Type} {a b : α} (h : a = b) :
     (pure a : ProbComp α) =ᵈ (pure b : ProbComp α) := by
   subst h; exact EvalDistEq.rfl
 
-theorem bcomb_step (hD : Distinct cl pk κ) (q : DR ⊕ ((X' × Hn') ⊕ G)) (w : CSt AR AC X' X G Hn' St)
+theorem bcomb_step (hD : Distinct cl pk κ) (q : DR ⊕ ((X' × Hn') ⊕ G)) (w : CSt AR AC X' X G Hn' St Sg)
     (hw : InvC cl n pk κ w) :
     (fun z => (z.1, piB z.2)) <$> (bcomb cl n pre pk κ q).run w =ᵈ (chImpl pre q).run (piB w) := by
   rcases q with d | ⟨x', hB⟩ | t
@@ -364,7 +374,7 @@ theorem bcomb_step (hD : Distinct cl pk κ) (q : DR ⊕ ((X' × Hn') ⊕ G)) (w 
           _ =ᵈ startRun cl pre pk κ w >>= fun _ => pure (some t, C)).trans ?_
         · obtain ⟨ho, h1, h2, h3, h4, h5⟩ := startRun_supp cl pre pk κ w op hop
           obtain ⟨hf1, hf2, hf3⟩ := fresh_of_inv cl n pk κ hD hw ho
-          rw [comb_fresh' pre op.1.1 op.1.2.1 op.2 (by rw [h1]; exact hf1) t r (by rw [h2, hr])]
+          rw [comb_fresh' pre op.1.1.1 op.1.1.2.1 op.2 (by rw [h1]; exact hf1) t r (by rw [h2, hr])]
           simp only [pure_bind, sub_add_cancel]
           erw [map_pure]
           refine pure_eqd_of_eq (Prod.ext rfl ?_)
@@ -405,21 +415,21 @@ theorem bcomb_inv (hD : Distinct cl pk κ) :
         obtain ⟨op, hop, ap, hap, hz⟩ := hz
         obtain ⟨ho, h1, h2, h3, h4, -⟩ := startRun_supp cl pre pk κ w op hop
         obtain ⟨hf1, hf2, hf3⟩ := fresh_of_inv cl n pk κ hD hw ho
-        rw [comb_fresh' pre op.1.1 op.1.2.1 op.2 (by rw [h1]; exact hf1) t r (by rw [h2, hr])]
+        rw [comb_fresh' pre op.1.1.1 op.1.1.2.1 op.2 (by rw [h1]; exact hf1) t r (by rw [h2, hr])]
           at hap
         simp only [support_pure, Set.mem_singleton_iff] at hap hz
         subst hap; subst hz
         have hlen := hw.len
         rw [hr, List.length_cons] at hlen
-        have hlab : Lab cl pk κ w.1.k op.1.1 := ⟨op.1, ho, rfl⟩
+        have hlab : Lab cl pk κ w.1.k op.1.1.1 := ⟨w.1.cs, op.1, ho, rfl⟩
         refine ⟨by simp; omega, fun y hy => ?_, fun y hy => ?_, fun y' e he => ?_,
           fun y₁ y₂ e₁ e₂ h₁ h₂ hi => ?_⟩
-        · by_cases hyx : y = op.1.1
+        · by_cases hyx : y = op.1.1.1
           · exact ⟨w.1.k, Nat.lt_succ_self _, hyx ▸ hlab⟩
           · simp only [Function.update_of_ne hyx, h1] at hy
             obtain ⟨j, hj, hl⟩ := hw.rt y hy
             exact ⟨j, Nat.lt_succ_of_lt hj, hl⟩
-        · by_cases hyx : y = op.1.1
+        · by_cases hyx : y = op.1.1.1
           · exact ⟨w.1.k, Nat.lt_succ_self _, hyx ▸ hlab⟩
           · simp only [Function.update_of_ne hyx, h3] at hy
             obtain ⟨j, hj, hl⟩ := hw.tg y hy
@@ -452,7 +462,7 @@ theorem bcomb_inv (hD : Distinct cl pk κ) :
 
 /-- **The forger against the challenger is `B` in `omExp`**, through `piB`. -/
 theorem bcomb_eqd (hD : Distinct cl pk κ) {α : Type} (oa : OracleComp (specB AR X' Hn' G S) α)
-    (w : CSt AR AC X' X G Hn' St) (hw : InvC cl n pk κ w) :
+    (w : CSt AR AC X' X G Hn' St Sg) (hw : InvC cl n pk κ w) :
     (fun z => (z.1, piB z.2)) <$> (simulateQ (bcomb cl n pre pk κ) oa).run w =ᵈ
       (simulateQ (chImpl pre) oa).run (piB w) :=
   LazyIdeal.simulateQ_proj_eqd_inv _ _ piB (InvC cl n pk κ) (bcomb_inv cl n pre pk κ hD)
@@ -521,12 +531,12 @@ lemma length_filterMap_of_isSome {α β : Type} (f : α → Option β) :
     simp [hb,
       length_filterMap_of_isSome f l fun x hx => h x (List.mem_cons_of_mem _ hx)]
 
-variable (cl : Client AC X G S St Cn PK) (n : ℕ) (pk : PK) (κ : Cn)
+variable (cl : Client AC X G S St Cn PK Sg) (n : ℕ) (pk : PK) (κ : Cn)
 
 /-- **`B`'s win is the forger's**: `B`'s `ℓ + 1` good claims on distinct labels become `ℓ + 1`
 preimages of the programmed targets of its sessions' labels, which are distinct. -/
 theorem win_mid (hD : Distinct cl pk κ) (rel : PK → S → G → Prop) (ℓ : ℕ) (pk' : PK)
-    (z : List (X' × S)) (w : CSt AR AC X' X G Hn' St) (hw : InvC cl n pk κ w)
+    (z : List (X' × S)) (w : CSt AR AC X' X G Hn' St Sg) (hw : InvC cl n pk κ w)
     (hW : Wins ℓ (goodPre rel) pk' z (piB w)) :
     Wins ℓ (goodPre rel) pk' ((claimed (z, w.1)).map fun e => (e.1, e.2.2.2.2)) w.2.2 := by
   obtain ⟨hlen, hnd, hiq, hg⟩ := hW
@@ -552,9 +562,9 @@ theorem win_mid (hD : Distinct cl pk κ) (rel : PK → S → G → Prop) (ℓ : 
     obtain ⟨e', he', hee⟩ := hy
     refine hw.inj x' y' e e' he he' ?_
     by_contra hne
-    obtain ⟨-, a, ha, hax⟩ := hw.ses x' e he
-    obtain ⟨-, a', ha', hax'⟩ := hw.ses y' e' he'
-    exact hD _ _ hne a ha a' ha' (hax.trans (hee.symm.trans hax'.symm) |>.symm ▸ rfl)
+    obtain ⟨-, g, a, ha, hax⟩ := hw.ses x' e he
+    obtain ⟨-, g', a', ha', hax'⟩ := hw.ses y' e' he'
+    exact hD _ _ hne g a ha g' a' ha' (hax.trans (hee.symm.trans hax'.symm) |>.symm ▸ rfl)
   · intro q hq
     simp only [claimed, List.mem_map, List.mem_filterMap, Option.map_eq_some_iff] at hq
     obtain ⟨_, ⟨p, hp, e, he, rfl⟩, rfl⟩ := hq
@@ -579,7 +589,7 @@ client whose sessions have distinct labels,
 in the one-more game (`OneMore.omuf`, programmed targets `H_T(x) + r`) of the blinding forger
 `blindAdv cl n B`; `CompFail`: the forger's claims are `ℓ + 1` preimages of the programmed targets
 of distinct labels within `ℓ` Issuer queries, and the client's finishing phase rejects. -/
-theorem ompr_le_blind (tr : Trapdoor PK SK G S) (cl : Client AC X G S St Cn PK) (n ℓ : ℕ)
+theorem ompr_le_blind (tr : Trapdoor PK SK G S) (cl : Client AC X G S St Cn PK Sg) (n ℓ : ℕ)
     (B : PK → ProbComp (OracleComp (specB AR X' Hn' G S) (List (X' × S))))
     (hD : ∀ pk, ∀ κ ∈ support cl.coins, Distinct cl pk κ) :
     advOMPR tr n ℓ B ≤
@@ -598,9 +608,9 @@ theorem ompr_le_blind (tr : Trapdoor PK SK G S) (cl : Client AC X G S St Cn PK) 
   refine le_trans ?_ hsplit
   -- the blinding phase in the real game
   let RM : PK × SK → Cn → OracleComp (specB AR X' Hn' G S) (List (X' × S)) → List G →
-      ProbComp ((List (X' × S) × BSt X G Hn' St X') × ((X → Option (G × G)) × Ch (WA AR AC) X G G)) :=
+      ProbComp ((List (X' × S) × BSt X G Hn' St X' Sg) × ((X → Option (G × G)) × Ch (WA AR AC) X G G)) :=
     fun kp κ b L => (simulateQ (realImpl addHint (tr.D kp.2))
-      ((simulateQ (blindImpl cl n kp.1 κ) b).run bs0)).run (fun _ => none, ch0 L)
+      ((simulateQ (blindImpl cl n kp.1 κ) b).run (bs0 cl.init))).run (fun _ => none, ch0 L)
   let M1 := do
     let kp ← tr.keyGen
     let b ← B kp.1
@@ -608,14 +618,14 @@ theorem ompr_le_blind (tr : Trapdoor PK SK G S) (cl : Client AC X G S St Cn PK) 
     let L ← unifList G n
     let m ← RM kp κ b L
     pure (kp, κ, m)
-  let Wmid : (PK × SK) × Cn × ((List (X' × S) × BSt X G Hn' St X') ×
+  let Wmid : (PK × SK) × Cn × ((List (X' × S) × BSt X G Hn' St X' Sg) ×
       ((X → Option (G × G)) × Ch (WA AR AC) X G G)) → Prop :=
     fun t => Wins ℓ (goodPre tr.IsPre) t.1.1 ((claimed t.2.2.1).map fun e => (e.1, e.2.2.2.2))
       t.2.2.2.2
   have h1 : Pr{let t ← M1}[Wmid t] ≤ Pr{let r ← O}[Wins ℓ (goodPre tr.IsPre) r.1 r.2.1.1 r.2.2.2] := by
     have hO : O = M1 >>= fun t => (fun r => (t.1.1, ((claimed t.2.2.1).map fun e => (e.1, e.2.2.2.2),
         r.1), r.2)) <$> (simulateQ (realImpl addHint (tr.D t.1.2))
-          (simulateQ (liftV (AR := AR) (S := S)) (cl.post t.1.1 t.2.1 (claimed t.2.2.1)))).run
+          (simulateQ (liftV (AR := AR) (S := S)) (cl.post t.1.1 t.2.1 t.2.2.1.2.cs (claimed t.2.2.1)))).run
             t.2.2.2 := by
       simp only [hOdef, omuf, M1, RM, blindAdv, bind_assoc, pure_bind, simulateQ_bind,
         StateT.run_bind, simulateQ_pure, StateT.run_pure, map_eq_bind_pure_comp,
@@ -635,9 +645,9 @@ theorem ompr_le_blind (tr : Trapdoor PK SK G S) (cl : Client AC X G S St Cn PK) 
     exact ⟨t', h', htg _ _ ht', hrel⟩
   -- programming is perfect
   let CM : PK × SK → Cn → OracleComp (specB AR X' Hn' G S) (List (X' × S)) → List G →
-      ProbComp ((List (X' × S) × BSt X G Hn' St X') × ((X → Option (G × G)) × Ch (WA AR AC) X G G)) :=
+      ProbComp ((List (X' × S) × BSt X G Hn' St X' Sg) × ((X → Option (G × G)) × Ch (WA AR AC) X G G)) :=
     fun kp κ b L => (simulateQ (combImpl addHint (tr.D kp.2))
-      ((simulateQ (blindImpl cl n kp.1 κ) b).run bs0)).run (fun _ => none, ch0 L)
+      ((simulateQ (blindImpl cl n kp.1 κ) b).run (bs0 cl.init))).run (fun _ => none, ch0 L)
   let M2 := do
     let kp ← tr.keyGen
     let b ← B kp.1
@@ -649,7 +659,7 @@ theorem ompr_le_blind (tr : Trapdoor PK SK G S) (cl : Client AC X G S St Cn PK) 
     simp only [M1, M2, RM, CM]
     refine EvalDistEq.bind_right _ fun kp => EvalDistEq.bind_right _ fun b =>
       EvalDistEq.bind_right _ fun κ => ?_
-    have := (real_eqd_comb addHint (tr.D kp.2) ((simulateQ (blindImpl cl n kp.1 κ) b).run bs0)
+    have := (real_eqd_comb addHint (tr.D kp.2) ((simulateQ (blindImpl cl n kp.1 κ) b).run (bs0 cl.init))
       (fun _ => none) (ch0 []) n).bind_left (fun m => pure (kp, κ, m))
     simpa only [bind_assoc, pure_bind, ch0] using this
   -- the forger against the challenger
@@ -658,12 +668,12 @@ theorem ompr_le_blind (tr : Trapdoor PK SK G S) (cl : Client AC X G S St Cn PK) 
     let b ← B kp.1
     let κ ← cl.coins
     let L ← unifList G n
-    let w ← (simulateQ (bcomb cl n (tr.D kp.2) kp.1 κ) b).run (bs0, (fun _ => none, ch0 L))
+    let w ← (simulateQ (bcomb cl n (tr.D kp.2) kp.1 κ) b).run (bs0 cl.init, (fun _ => none, ch0 L))
     pure (kp, κ, w)
   have h3 : M2 = (fun t => (t.1, t.2.1, ((t.2.2.1, t.2.2.2.1), t.2.2.2.2))) <$> M3 := by
     simp only [M2, M3, CM, collapseB, map_bind, map_pure, bind_map_left]
   have hinit : ∀ kp κ L, L ∈ support (unifList G n) →
-      InvC (AR := AR) (Hn' := Hn') (X' := X') cl n kp κ (bs0, (fun _ => none, ch0 L)) :=
+      InvC (AR := AR) (Hn' := Hn') (X' := X') cl n kp κ (bs0 cl.init, (fun _ => none, ch0 L)) :=
     fun kp κ L hL => ⟨by simp [ch0, bs0, length_of_mem_unifList n L hL], by simp,
       by simp [ch0], by simp [bs0], by simp [bs0]⟩
   have h4 : Pr{let t ← M3}[Wins ℓ (goodPre tr.IsPre) t.1.1 t.2.2.1 (piB t.2.2.2)] ≤
@@ -685,7 +695,7 @@ theorem ompr_le_blind (tr : Trapdoor PK SK G S) (cl : Client AC X G S St Cn PK) 
       refine (bind_unused cl.coins _).symm.trans (EvalDistEq.bind_congr_of_support _ fun κ hκ => ?_)
       refine EvalDistEq.bind_congr_of_support _ fun L hL => ?_
       have hp : piB (AR := AR) (AC := AC) (X' := X') (Hn' := Hn') (St := St) (X := X)
-          (bs0, (fun _ => none, ch0 L)) = ch0 L := by
+          (bs0 cl.init, (fun _ => none, ch0 L)) = ch0 L := by
         simp only [piB, ch0, bs0]
         congr 1
       have := (bcomb_eqd cl n (tr.D kp.2) kp.1 κ (hD kp.1 κ hκ) b _

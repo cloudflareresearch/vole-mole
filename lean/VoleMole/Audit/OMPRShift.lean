@@ -35,14 +35,15 @@ example (B : VoleMole.Verifier.UovPk →
   advOMPRShift_le_guess (pomTrap (pure (pk, sk)) honestPre) 17 n ℓ B
 
 /-- A client whose session `k` has label `k`, blinding `0`, and whose finishing phase accepts. -/
-def idClient : Client (fun _ : Empty => Unit) ℕ TG SIss Unit Unit VoleMole.Verifier.UovPk where
+def idClient : Client (fun _ : Empty => Unit) ℕ TG SIss Unit Unit VoleMole.Verifier.UovPk Unit where
   coins := pure ()
-  start _ _ k := pure (k, 0, ())
-  post _ _ _ := pure true
+  init := ()
+  start _ _ _ k := pure ((k, 0, ()), ())
+  post _ _ _ _ := pure true
 
 theorem idClient_distinct (pk : VoleMole.Verifier.UovPk) (κ : Unit) :
     Distinct idClient pk κ := by
-  intro i j hij a ha b hb
+  intro i j hij _ a ha _ b hb
   simp only [idClient, support_pure, Set.mem_singleton_iff] at ha hb
   subst ha; subst hb
   exact hij

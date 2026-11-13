@@ -30,14 +30,18 @@ then the claimed sessions are finished with `B`'s preimages. It makes at most as
 queries as `B` makes target requests (`blindForger_bound`).
 
 **The reduction to `ompr_le_blind`.** The client as a `Blind.Client` (`toClient`): coins are the
-cipher table and the client's coins; `start` is step 1 with the cipher answered by the table
-(`cellsBy`); `post` finishes the claimed sessions and runs PomFRIT's verification of the
-signatures (`flagV`: `Pomfrit.verOne`'s decision, `verOneV`). Its labels are distinct for all keys
-and coins (`distinct_toClient`). The blind game of `ompr_le_blind` and `gameB` with the blinding
-forger have the same key, flag and final state (`projF_eqd`), because the two composed adversaries
-have the same flag as oracle computations (`star`): with hint `0` the wrapper's log is write-only
-(`wrapB_fst`), the verifier's decision does not read the log (`verOne_snd`), and the forger's
-handler under the wrapper is `Blind.blindImpl` of `toClient` (`blindU_step`).
+cipher table and the client's coins; its state carried across sessions is the game wrapper's log;
+`start` is step 1 with the cipher answered by the table and every query logged (`logImpl`, as
+`Pomfrit.wrapImpl` does), followed by the reduction's own queries at the label (`auxSpec`,
+logged); `post` finishes the claimed sessions (logged, `finLog`) and runs PomFRIT's verification
+of the signatures at the final log (`flagV`: `Pomfrit.verOne`'s decision, `verOneV`). Its labels
+are distinct for all keys, coins and logs (`distinct_toClient`). The blind game of
+`ompr_le_blind` and `gameB` with the blinding forger have the same key, flag and final state
+(`projF_eqd`), because the two composed adversaries have the same flag as oracle computations
+(`star`): the forger's handler under the wrapper is `Blind.blindImpl` of `toClient`, with the
+wrapper's log as the client's carried state (`collapseU`, `blindB_step`, `fS`), the client's
+queries under the wrapper are its logged queries (`wrapB_liftU`, `wrapB_finU`), and the
+verifier's decision does not depend on the claim rule (`verOne_snd`).
 
 **Theorems.**
 * `pomfrit_T6`: for every OMPR adversary `B`, every client `cl`, every `n`, `ℓ`,
@@ -101,11 +105,11 @@ def liftWB : QueryImpl (specC Hn) (OracleComp (specCB AR Hn))
 /-- **The wrapper**: the forger's own random oracle forwarded to the world, everything else as
 `Pomfrit.wrapImpl` (hashes to the world, the cipher by `E`, both logged; `H_T` with the hint;
 the Issuer). -/
-def wrapImplB (E : CTable) (hint : QueryLog specIC → ByteArray → Hn) :
+def wrapImplB (lr : Bool) (E : CTable) (hint : QueryLog specIC → ByteArray → Hn) :
     QueryImpl (specUB AR) (StateT (QueryLog specIC) (OracleComp (specCB AR Hn)))
   | .inl d => StateT.mk fun L => (fun a => (a, L)) <$>
       (liftM ((specCB AR Hn).query (.inl (.inl d))) : OracleComp (specCB AR Hn) (AR d))
-  | .inr q => StateT.mk fun L => simulateQ liftWB ((wrapImpl E hint q).run L)
+  | .inr q => StateT.mk fun L => simulateQ liftWB ((wrapImpl lr E hint q).run L)
 
 variable (T : CrtTables) (lr : Bool) (E : CTable) (hint : QueryLog specIC → ByteArray → Hn)
   (tgts : TG × Hn → List TG) (pk : UovPk) (ℓ : ℕ)
@@ -114,7 +118,7 @@ variable (T : CrtTables) (lr : Bool) (E : CTable) (hint : QueryLog specIC → By
 (wrapped), then, if it output `ℓ + 1` forgeries, their verification and extraction. -/
 noncomputable def AcompB (f : OracleComp (specUB AR) (List (ByteArray × ByteArray))) :
     OracleComp (specCB AR Hn) (List (ByteArray × SIss) × Bool) := do
-  let r ← (simulateQ (wrapImplB E hint) f).run []
+  let r ← (simulateQ (wrapImplB lr E hint) f).run []
   if r.1.length = ℓ + 1 then
     let vs ← simulateQ liftWB (verAll T lr E hint tgts pk r.2 r.1)
     pure (vs.map Prod.fst, decide ((∀ v ∈ vs, v.2 = true) ∧ (r.1.map Prod.fst).Nodup))
@@ -209,74 +213,93 @@ def liftVW : QueryImpl spec (OracleComp (specV Ans ByteArray TG)) := fun d =>
 def toV {α : Type} (oa : OracleComp spec α) : OracleComp (specV Ans ByteArray TG) α :=
   simulateQ liftVW oa
 
-lemma bind_const_congr {α β γ : Type} {ι : Type} {sp : OracleSpec ι} (X : OracleComp sp α)
-    (Y : OracleComp sp β) (K : OracleComp sp γ)
-    (h : (fun _ => ()) <$> X = (fun _ => ()) <$> Y) : (X >>= fun _ => K) = (Y >>= fun _ => K) := by
-  have h1 : (X >>= fun _ => K) = ((fun _ => ()) <$> X) >>= fun _ => K := by rw [bind_map_left]
-  rw [h1, h, bind_map_left]
+/-- The hint `0`. -/
+def hint0 : QueryLog specIC → ByteArray → TG := fun _ _ => 0
 
-/-- **The verifier's decision on one forgery** (`Pomfrit.verOne`'s flag, with the hint `0` and
-the empty log; the extractor's queries kept), against the hashes and `H_T`. -/
-noncomputable def verOneV (E : CTable) (pk : UovPk) (msg sig : ByteArray) :
+/-- **The client's queries as the game's wrapper treats them**: the cipher answered by the table
+`E`, every hash and cipher query logged (`Pomfrit.wrapImpl`'s first two cases). -/
+def logImpl (E : CTable) : QueryImpl specIC (StateT (QueryLog specIC) (OracleComp spec))
+  | .inl d => StateT.mk fun L => (fun u => (u, L ++ [⟨.inl d, u⟩])) <$>
+      (liftM (spec.query d) : OracleComp spec (Ans d))
+  | .inr x => StateT.mk fun L => pure (E x, L ++ [⟨.inr x, E x⟩])
+
+/-- **The verifier's decision on one forgery** (`Pomfrit.verOne`'s flag, with the hint `0`, at the
+log `L`; the reduction's queries `auxSpec` and the extractor's queries kept), against the hashes
+and `H_T`. -/
+noncomputable def verOneV (E : CTable) (pk : UovPk) (L : QueryLog specIC) (msg sig : ByteArray) :
     OracleComp (specV Ans ByteArray TG) Bool := do
   let n := (pomfritParams lr).proofBytes
   let proof := sig.extract 0 n
   let b1 := sig.extract n (n + 32)
   let b2 := sig.extract (n + 32) (n + 64)
   if toBA (Spec.PomFRIT.commitRefresher (toL b2)) != b1 then return false
-  let oc1 ← toV (chal1Pre (pomfritRedeemT pk (fun _ => ByteArray.empty) b1 b2 lr) proof)
+  let oc1 ← toV (@chal1Pre (VoleMole.ZK.Sim.icPrg E.cipher)
+    (pomfritRedeemT pk (fun _ => ByteArray.empty) b1 b2 lr) proof)
   match oc1 with
   | none => return false
   | some c1 =>
     let x := tgtIn pk lr sig msg c1
-    let ah ← (liftM ((specV Ans ByteArray TG).query (.inr (x, 0))) :
+    let ax ← toV (auxSpec lr L x)
+    let ah ← (liftM ((specV Ans ByteArray TG).query (.inr (x, hint0 (L ++ ax) x))) :
       OracleComp (specV Ans ByteArray TG) (TG × TG))
-    let _ ← toV (extractIC (pomfritRedeemT pk (fun _ => encT ah.1) b1 b2 lr) E ((proof, ()), []))
+    let _ ← toV (extractIC (pomfritRedeemT pk (fun _ => encT ah.1) b1 b2 lr) E ((proof, ()), L))
     let t ← toV (@verifyQ (VoleMole.ZK.Sim.icPrg E.cipher) T
       (pomfritRedeemT pk (fun _ => encT ah.1) b1 b2 lr) proof)
     pure t.accept
 
 /-- Every forgery's decision, in order. -/
-noncomputable def verAllV (E : CTable) (pk : UovPk) :
+noncomputable def verAllV (E : CTable) (pk : UovPk) (L : QueryLog specIC) :
     List (ByteArray × ByteArray) → OracleComp (specV Ans ByteArray TG) (List Bool)
   | [] => pure []
   | (m, sg) :: rest => do
-    let v ← verOneV T lr E pk m sg
-    let vs ← verAllV E pk rest
+    let v ← verOneV T lr E pk L m sg
+    let vs ← verAllV E pk L rest
     pure (v :: vs)
 
-/-- **The acceptance flag of `Pomfrit.Acomp`** on the signatures `sigs`: there are `ℓ + 1`, every
-one verifies, and their messages are pairwise distinct. -/
-noncomputable def flagV (E : CTable) (pk : UovPk) (sigs : List (ByteArray × ByteArray)) :
-    OracleComp (specV Ans ByteArray TG) Bool :=
+/-- **The acceptance flag of `Pomfrit.Acomp`** on the signatures `sigs` at the log `L`: there are
+`ℓ + 1`, every one verifies, and their messages are pairwise distinct. -/
+noncomputable def flagV (E : CTable) (pk : UovPk) (L : QueryLog specIC)
+    (sigs : List (ByteArray × ByteArray)) : OracleComp (specV Ans ByteArray TG) Bool :=
   if sigs.length = ℓ + 1 then
     (fun vs => decide ((∀ v ∈ vs, v = true) ∧ (sigs.map Prod.fst).Nodup)) <$>
-      verAllV T lr E pk sigs
+      verAllV T lr E pk L sigs
   else pure false
 
-/-- **The PomFRIT client as a blind-preimage client** (`Blind.Client`), with the blinding `0`:
-its coins are the cipher table and the client's coins; session `k` is step 1 for `msgOf k` (the
-cipher answered by the table), labelled by `hash_to_target`'s input; the finishing phase makes
-the signatures of the claimed sessions and runs PomFRIT's verification on them (`flagV`). -/
-noncomputable def toClient : Client Ans ByteArray TG SIss (ℕ × St) (CTable × Cn) UovPk where
+/-- The claimed sessions' signatures with the client's queries logged. -/
+def finLog (pk : UovPk) (κ : CTable × Cn) (cs : List (ByteArray × TG × (ℕ × St) × TG × SIss)) :
+    StateT (QueryLog specIC) (OracleComp spec) (List (ByteArray × ByteArray)) :=
+  cs.mapM fun e => (fun sg => (msgOf e.2.2.1.1, sg)) <$>
+    simulateQ (logImpl κ.1) (cl.finish pk κ.2 e.2.2.1.1 e.2.2.1.2 e.2.2.2.1 e.2.2.2.2)
+
+/-- **The PomFRIT client as a blind-preimage client** (`Blind.Client`), with the blinding `0`: its
+coins are the cipher table and the client's coins; its carried state is the game wrapper's log
+(the client's queries and the reduction's own); session `k` is step 1 for `msgOf k` (the cipher
+answered by the table, queries logged), labelled by `hash_to_target`'s input, followed by the
+reduction's queries at the label (`auxSpec`, logged); the finishing phase makes the signatures of
+the claimed sessions (logged) and runs PomFRIT's verification on them at the final log
+(`flagV`). -/
+noncomputable def toClient :
+    Client Ans ByteArray TG SIss (ℕ × St) (CTable × Cn) UovPk (QueryLog specIC) where
   coins := do
     let E ← $ᵗ CTable
     let κ ← cl.coins
     pure (E, κ)
-  start pk κ k := (fun o => (label pk lr k o.1 o.2.1, (0 : TG), (k, o.2.2))) <$>
-    cellsBy κ.1 (cl.start pk κ.2 k)
-  post pk κ cs := do
-    let sigs ← cs.mapM fun e => (fun sg => (msgOf e.2.2.1.1, sg)) <$>
-      toV (cellsBy κ.1 (cl.finish pk κ.2 e.2.2.1.1 e.2.2.1.2 e.2.2.2.1 e.2.2.2.2))
-    flagV T lr ℓ κ.1 pk sigs
+  init := []
+  start pk κ L k := do
+    let r ← (simulateQ (logImpl κ.1) (cl.start pk κ.2 k)).run L
+    let ax ← auxSpec lr r.2 (label pk lr k r.1.1 r.1.2.1)
+    pure ((label pk lr k r.1.1 r.1.2.1, (0 : TG), (k, r.1.2.2)), r.2 ++ ax)
+  post pk κ L cs := do
+    let r ← toV ((finLog cl pk κ cs).run L)
+    flagV T lr ℓ κ.1 pk r.2 r.1
 
 /-- **Labels of distinct sessions are distinct** (`Blind.Distinct`), for every key and coins. -/
 theorem distinct_toClient (pk : UovPk) (κ : CTable × Cn) :
     Distinct (toClient T lr ℓ cl) pk κ := by
-  intro i j hij a ha b hb
-  simp only [toClient, support_map, Set.mem_image] at ha hb
-  obtain ⟨o, -, rfl⟩ := ha
-  obtain ⟨o', -, rfl⟩ := hb
+  intro i j hij g a ha g' b hb
+  simp only [toClient, mem_support_bind_iff, support_pure, Set.mem_singleton_iff] at ha hb
+  obtain ⟨r, -, ax, -, rfl⟩ := ha
+  obtain ⟨r', -, ax', -, rfl⟩ := hb
   exact label_ne hij _ _ _ _
 
 variable {DR : Type} {AR : DR → Type}
@@ -290,9 +313,9 @@ variable {X' Hn' : Type} [DecidableEq X'] (n : ℕ)
 /-- **The blinding forger's handler** of `B`'s queries (as `Blind.blindImpl`, against the
 forger's oracles): `B`'s world to the forger's random oracle; `B`'s `k`-th target request
 (`k < n`) by step 1 of session `k` and an `H_T` query at its label, whose answer `B` gets; `B`'s
-preimage queries to the Issuer. -/
+preimage queries to the Issuer. (No carried state: the log is the game's.) -/
 def blindImplU (pk : UovPk) (κ : Cn) : QueryImpl (specB AR X' Hn' TG SIss)
-    (StateT (BSt ByteArray TG Hn' (ℕ × St) X') (OracleComp (specUB AR)))
+    (StateT (BSt ByteArray TG Hn' (ℕ × St) X' Unit) (OracleComp (specUB AR)))
   | .inl d => StateT.mk fun s => (fun a => (a, s)) <$>
       (liftM ((specUB AR).query (.inl d)) : OracleComp (specUB AR) (AR d))
   | .inr (.inl (x', hB)) => StateT.mk fun s =>
@@ -301,7 +324,7 @@ def blindImplU (pk : UovPk) (κ : Cn) : QueryImpl (specB AR X' Hn' TG SIss)
           simulateQ liftU (cl.start pk κ s.k)
         let a ← (liftM ((specUB AR).query (.inr (.inr (.inl o.1)))) : OracleComp (specUB AR) TG)
         pure (some (a + o.2.1),
-          ⟨s.k + 1, Function.update s.ses x' (some ⟨s.k, o.1, o.2.1, o.2.2, a, hB⟩)⟩)
+          ⟨s.k + 1, Function.update s.ses x' (some ⟨s.k, o.1, o.2.1, o.2.2, a, hB⟩), s.cs⟩)
       else pure (none, s)
   | .inr (.inr t) => StateT.mk fun s => (fun a => (a, s)) <$>
       (liftM ((specUB AR).query (.inr (.inr (.inr t)))) : OracleComp (specUB AR) SIss)
@@ -321,7 +344,7 @@ def blindForger (B : UovPk → ProbComp (OracleComp (specB AR X' Hn' TG SIss) (L
   let b ← B pk
   let κ ← cl.coins
   pure do
-    let z ← (simulateQ (blindImplU lr cl n pk κ) b).run bs0
+    let z ← (simulateQ (blindImplU lr cl n pk κ) b).run (bs0 ())
     finU cl pk κ (claimed z)
 
 end Inst
@@ -343,87 +366,20 @@ theorem simulateQ_run_comm {ι ι' ι'' σ : Type} {sp : OracleSpec ι} {sp' : O
     simp only [simulateQ_bind, simulateQ_spec_query, StateT.run_bind, hij]
     exact bind_congr fun p => ih p.1 p.2
 
-theorem simulateQ_mapM {ι ι' β γ : Type} {sp : OracleSpec ι} {sp' : OracleSpec ι'}
-    (h : QueryImpl sp (OracleComp sp')) (f : β → OracleComp sp γ) :
-    ∀ l : List β, simulateQ h (l.mapM f) = l.mapM fun b => simulateQ h (f b)
-  | [] => by simp
-  | b :: l => by simp [List.mapM_cons, simulateQ_mapM h f l]
-
-variable {DR : Type} {AR : DR → Type} (E : CTable)
-
-/-- The hint `0`. -/
-def hint0 : QueryLog specIC → ByteArray → TG := fun _ _ => 0
-
-/-- The wrapper with the hint `0`, without its log. -/
-def wrap0 : QueryImpl (specUB AR) (OracleComp (specCB AR TG))
-  | .inl d => liftM ((specCB AR TG).query (.inl (.inl d)))
-  | .inr (.inl (.inl d)) => liftM ((specCB AR TG).query (.inl (.inr d)))
-  | .inr (.inl (.inr x)) => pure (E x)
-  | .inr (.inr (.inl x)) => Prod.fst <$>
-      (liftM ((specCB AR TG).query (.inr (.inl (x, 0)))) : OracleComp (specCB AR TG) (TG × TG))
-  | .inr (.inr (.inr t)) => liftM ((specCB AR TG).query (.inr (.inr t)))
-
-lemma wrapB_step (q : DR ⊕ (DomIC ⊕ (ByteArray ⊕ TG))) (L : QueryLog specIC) :
-    Prod.fst <$> (wrapImplB (AR := AR) E hint0 q).run L = wrap0 E q := by
-  rcases q with d | (d | x) | (x | t)
-  · simp [wrapImplB, wrap0]
-  · simp [wrapImplB, wrapImpl, wrap0]
-    rfl
-  · simp [wrapImplB, wrapImpl, wrap0]
-  · simp [wrapImplB, wrapImpl, wrap0, hint0]
-    rfl
-  · simp [wrapImplB, wrapImpl, wrap0]
-    rfl
-
-/-- **With the hint `0` the wrapper's log is write-only.** -/
-theorem wrapB_fst {α : Type} (oc : OracleComp (specUB AR) α) :
-    ∀ L, Prod.fst <$> (simulateQ (wrapImplB E hint0) oc).run L = simulateQ (wrap0 E) oc := by
-  induction oc using OracleComp.inductionOn with
-  | pure x => intro L; simp
+/-- Two stateful handlers related by a map of states run the same, up to that map. -/
+theorem simulateQ_run_fmap {ι ι' σ₁ σ₂ : Type} {sp : OracleSpec ι} {sp' : OracleSpec ι'}
+    (i₁ : QueryImpl sp (StateT σ₁ (OracleComp sp'))) (i₂ : QueryImpl sp (StateT σ₂ (OracleComp sp')))
+    (f : σ₁ → σ₂) (h : ∀ q s, (i₂ q).run (f s) = (fun r => (r.1, f r.2)) <$> (i₁ q).run s)
+    {α : Type} (oa : OracleComp sp α) :
+    ∀ s, (simulateQ i₂ oa).run (f s) = (fun r => (r.1, f r.2)) <$> (simulateQ i₁ oa).run s := by
+  induction oa using OracleComp.inductionOn with
+  | pure x => intro s; simp
   | query_bind q k ih =>
-    intro L
-    simp only [simulateQ_bind, simulateQ_spec_query, StateT.run_bind, map_bind]
-    rw [← wrapB_step E q L, bind_map_left]
+    intro s
+    simp only [simulateQ_bind, simulateQ_spec_query, StateT.run_bind, h, bind_map_left, map_bind]
     exact bind_congr fun p => ih p.1 p.2
 
-/-- The client's oracle with the cipher answered by `E`, in the composed world. -/
-def icB : QueryImpl specIC (OracleComp (specCB AR TG))
-  | .inl d => liftM ((specCB AR TG).query (.inl (.inr d)))
-  | .inr x => pure (E x)
-
-theorem wrap0_liftU {α : Type} (oc : OracleComp specIC α) :
-    simulateQ (wrap0 (AR := AR) E) (simulateQ liftU oc) = simulateQ (icB E) oc := by
-  rw [← QueryImpl.simulateQ_compose]
-  congr 1
-  funext q
-  rw [QueryImpl.apply_compose]
-  simp only [liftU]
-  erw [simulateQ_spec_query]
-  rcases q with d | x <;> rfl
-
-theorem liftC_cellsBy {α : Type} (oc : OracleComp specIC α) :
-    simulateQ (liftC (AR := AR) (X := ByteArray) (G := TG) (S := SIss)) (cellsBy E oc) =
-      simulateQ (icB E) oc := by
-  rw [cellsBy, ← QueryImpl.simulateQ_compose]
-  congr 1
-  funext q
-  rcases q with d | x
-  · simp [QueryImpl.apply_compose, liftC, cellImpl, icB]
-  · simp [QueryImpl.apply_compose, cellImpl, icB]
-
-theorem liftV_toV_cellsBy {α : Type} (oc : OracleComp specIC α) :
-    simulateQ (liftV (AR := AR) (S := SIss)) (toV (cellsBy E oc)) = simulateQ (icB E) oc := by
-  rw [toV, cellsBy, ← QueryImpl.simulateQ_compose, ← QueryImpl.simulateQ_compose]
-  congr 1
-  funext q
-  rcases q with d | x
-  · rw [QueryImpl.apply_compose]
-    simp only [cellImpl]
-    erw [simulateQ_spec_query, QueryImpl.apply_compose]
-    simp only [liftVW]
-    erw [simulateQ_spec_query]
-    rfl
-  · simp [QueryImpl.apply_compose, cellImpl, icB]
+variable {DR : Type} {AR : DR → Type} (lr : Bool) (E : CTable)
 
 /-- A hash computation in the composed world. -/
 def hashB : QueryImpl spec (OracleComp (specCB AR TG)) := fun d =>
@@ -439,6 +395,40 @@ theorem liftV_toV {α : Type} (oa : OracleComp spec α) :
   rw [toV, ← QueryImpl.simulateQ_compose]
   congr 1
 
+theorem liftC_eq {α : Type} (oa : OracleComp spec α) :
+    simulateQ (liftC (AR := AR) (X := ByteArray) (G := TG) (S := SIss)) oa =
+      simulateQ hashB oa := rfl
+
+/-- **The client's queries under the game's wrapper** are its logged queries (`logImpl`). -/
+theorem wrapB_liftU {α : Type} (oc : OracleComp specIC α) (L : QueryLog specIC) :
+    (simulateQ (wrapImplB (AR := AR) lr E hint0) (simulateQ liftU oc)).run L =
+      simulateQ hashB ((simulateQ (logImpl E) oc).run L) := by
+  rw [← QueryImpl.simulateQ_compose]
+  refine (simulateQ_run_comm hashB (logImpl E) _ (fun q s => ?_) oc L).symm
+  rw [QueryImpl.apply_compose]
+  simp only [liftU]
+  erw [simulateQ_spec_query]
+  rcases q with d | x
+  · simp only [logImpl, wrapImplB, wrapImpl, StateT.run_mk]
+    rfl
+  · simp [logImpl, wrapImplB, wrapImpl]
+
+variable {Cn St : Type} (cl : PomClient Cn St) (pk : UovPk) (κ : Cn)
+
+theorem wrapB_finU (cs : List (ByteArray × TG × (ℕ × St) × TG × SIss)) (L : QueryLog specIC) :
+    (simulateQ (wrapImplB (AR := AR) lr E hint0) (finU cl pk κ cs)).run L =
+      simulateQ hashB ((finLog cl pk (E, κ) cs).run L) := by
+  induction cs generalizing L with
+  | nil => simp [finU, finLog]
+  | cons e cs ih =>
+    simp only [finU, finLog, List.mapM_cons, simulateQ_bind, simulateQ_pure,
+      StateT.run_bind, StateT.run_pure, bind_map_left]
+    rw [wrapB_liftU]
+    refine bind_congr fun p => ?_
+    have := ih p.2
+    simp only [finU, finLog] at this
+    rw [this]
+
 end Same
 
 section Ver
@@ -446,15 +436,10 @@ section Ver
 variable {DR : Type} {AR : DR → Type} (T : CrtTables) (lr : Bool) (E : CTable)
   (tgts : TG × TG → List TG) (pk : UovPk)
 
-/-- The extractor's queries do not depend on the log. -/
-lemma extractIC_unit {β : Type} (st : Statement) (p : ByteArray) (b : β) (L L' : QueryLog specIC) :
-    (fun _ => ()) <$> extractIC st E ((p, b), L) = (fun _ => ()) <$> extractIC st E ((p, b), L') := by
-  simp [extractIC, map_bind]
-
-/-- **The verifier's decision on one forgery does not depend on the log or the claim rule.** -/
+/-- **The verifier's decision on one forgery does not depend on the claim rule.** -/
 theorem verOne_snd (L : QueryLog specIC) (m sg : ByteArray) :
     Prod.snd <$> simulateQ (liftWB (AR := AR)) (verOne T lr E hint0 tgts pk L m sg) =
-      simulateQ (liftV (AR := AR) (S := SIss)) (verOneV T lr E pk m sg) := by
+      simulateQ (liftV (AR := AR) (S := SIss)) (verOneV T lr E pk L m sg) := by
   unfold verOne verOneV
   dsimp only
   split_ifs with hc
@@ -464,17 +449,16 @@ theorem verOne_snd (L : QueryLog specIC) (m sg : ByteArray) :
     cases oc1 with
     | none => simp
     | some c1 =>
-      simp only [simulateQ_bind, map_bind, liftWB_toC, liftV_toV, verTail, tQ, hint0]
+      simp only [simulateQ_bind, map_bind, liftWB_toC, liftV_toV, verTail, tQ, auxC]
+      refine bind_congr fun ax => ?_
       erw [simulateQ_spec_query]
       refine bind_congr fun a => ?_
       simp only [simulateQ_pure, map_pure]
-      refine bind_const_congr _ _ _ ?_
-      rw [← simulateQ_map, ← simulateQ_map, extractIC_unit]
 
 theorem verAll_snd (L : QueryLog specIC) :
     ∀ outs : List (ByteArray × ByteArray),
       List.map Prod.snd <$> simulateQ (liftWB (AR := AR)) (verAll T lr E hint0 tgts pk L outs) =
-        simulateQ (liftV (AR := AR) (S := SIss)) (verAllV T lr E pk outs)
+        simulateQ (liftV (AR := AR) (S := SIss)) (verAllV T lr E pk L outs)
   | [] => by simp [verAll, verAllV]
   | (m, sg) :: rest => by
     simp only [verAll, verAllV, simulateQ_bind, simulateQ_pure, map_bind, map_pure]
@@ -491,7 +475,7 @@ theorem acomp_flag (r : List (ByteArray × ByteArray) × QueryLog specIC) :
         let vs ← simulateQ (liftWB (AR := AR)) (verAll T lr E hint0 tgts pk r.2 r.1)
         pure (vs.map Prod.fst, decide ((∀ v ∈ vs, v.2 = true) ∧ (r.1.map Prod.fst).Nodup))
       else pure ([], false)) =
-      simulateQ (liftV (AR := AR) (S := SIss)) (flagV T lr ℓ E pk r.1) := by
+      simulateQ (liftV (AR := AR) (S := SIss)) (flagV T lr ℓ E pk r.2 r.1) := by
   unfold flagV
   split_ifs with h
   · rw [simulateQ_map, ← verAll_snd T lr E tgts pk r.2 r.1, map_bind, Functor.map_map]
@@ -513,34 +497,64 @@ variable {DR : Type} {AR : DR → Type} (T : CrtTables) (lr : Bool) (ℓ : ℕ) 
   (cl : PomClient Cn St) {X' Hn' : Type} [DecidableEq X'] (n : ℕ) (pk : UovPk) (E : CTable)
   (κ : Cn)
 
-theorem blindU_step (q : DR ⊕ ((X' × Hn') ⊕ TG)) (s : BSt ByteArray TG Hn' (ℕ × St) X') :
-    simulateQ (wrap0 (AR := AR) E) ((blindImplU lr cl n pk κ q).run s) =
-      (blindImpl (AR := AR) (X' := X') (Hn' := Hn') (toClient T lr ℓ cl) n pk (E, κ) q).run s := by
-  rcases q with d | ⟨x', hB⟩ | t
-  · simp only [blindImplU, blindImpl, StateT.run_mk]
-    erw [simulateQ_map, simulateQ_spec_query]
-    rfl
-  · by_cases hk : s.k < n
-    · simp only [blindImplU, blindImpl, hk, ite_true, StateT.run_mk, simulateQ_bind,
-        simulateQ_map, wrap0_liftU, toClient, liftC_cellsBy]
-      simp only [bind_map_left]
-      refine bind_congr fun o => ?_
-      erw [simulateQ_spec_query]
-      simp only [wrap0, simulateQ_pure]
-      rfl
-    · simp [blindImplU, blindImpl, hk]
-  · simp only [blindImplU, blindImpl, StateT.run_mk]
-    erw [simulateQ_map, simulateQ_spec_query]
-    rfl
+/-- The blinding forger's handler and the game's wrapper as one handler. -/
+def combU : QueryImpl (specB AR X' Hn' TG SIss)
+    (StateT (BSt ByteArray TG Hn' (ℕ × St) X' Unit × QueryLog specIC) (OracleComp (specCB AR TG))) :=
+  fun q => StateT.mk fun p => (fun r => (r.1.1, (r.1.2, r.2))) <$>
+    (simulateQ (wrapImplB lr E hint0) ((blindImplU lr cl n pk κ q).run p.1)).run p.2
 
-theorem finU_eq (cs : List (ByteArray × TG × (ℕ × St) × TG × SIss)) :
-    simulateQ (wrap0 (AR := AR) E) (finU cl pk κ cs) =
-      simulateQ (liftV (AR := AR) (S := SIss)) (cs.mapM fun e => (fun sg => (msgOf e.2.2.1.1, sg)) <$>
-        toV (cellsBy E (cl.finish pk κ e.2.2.1.1 e.2.2.1.2 e.2.2.2.1 e.2.2.2.2))) := by
-  rw [finU, simulateQ_mapM, simulateQ_mapM]
-  congr 1
-  funext e
-  rw [simulateQ_map, simulateQ_map, wrap0_liftU, liftV_toV_cellsBy]
+theorem collapseU {α : Type} (oa : OracleComp (specB AR X' Hn' TG SIss) α)
+    (s : BSt ByteArray TG Hn' (ℕ × St) X' Unit) (L : QueryLog specIC) :
+    (simulateQ (wrapImplB lr E hint0) ((simulateQ (blindImplU lr cl n pk κ) oa).run s)).run L =
+      (fun r => ((r.1, r.2.1), r.2.2)) <$> (simulateQ (combU lr cl n pk E κ) oa).run (s, L) := by
+  refine simulateQ_StateT_StateT_compose _ _ _ (fun q s c => ?_) oa s L
+  show _ = _ <$> ((fun r : (_ × _) × _ => (r.1.1, (r.1.2, r.2))) <$> _)
+  rw [Functor.map_map]
+  exact (id_map _).symm
+
+omit [DecidableEq X'] in
+lemma wrapB_ht (x : ByteArray) (L : QueryLog specIC) :
+    (wrapImplB (AR := AR) lr E hint0 (.inr (.inr (.inl x)))).run L = (do
+      let ax ← simulateQ hashB (auxSpec lr L x)
+      (fun a => (a.1, L ++ ax)) <$>
+        (liftM ((specCB AR TG).query (.inr (.inl (x, 0)))) : OracleComp (specCB AR TG) (TG × TG))) := by
+  simp only [wrapImplB, wrapImpl, auxC, StateT.run_mk, hint0]
+  erw [simulateQ_bind, liftWB_toC]
+  refine bind_congr fun ax => ?_
+  erw [simulateQ_map, simulateQ_spec_query]
+  rfl
+
+omit [DecidableEq X'] in
+lemma assoc_aux {ι α β γ δ : Type} {sp : OracleSpec ι} (X : OracleComp sp α) (Q : OracleComp sp β)
+    (F : α → β → γ) (f : α → β → δ) (G : δ → OracleComp sp γ) (h : ∀ x a, G (f x a) = pure (F x a)) :
+    (X >>= fun x => Q >>= fun a => pure (F x a)) = (X >>= fun x => f x <$> Q) >>= G := by
+  simp [bind_assoc, bind_map_left, h]
+
+/-- The blind client's forger state: the game's log as the carried state. -/
+def fS (p : BSt ByteArray TG Hn' (ℕ × St) X' Unit × QueryLog specIC) :
+    BSt ByteArray TG Hn' (ℕ × St) X' (QueryLog specIC) :=
+  ⟨p.1.k, p.1.ses, p.2⟩
+
+theorem blindB_step (q : DR ⊕ ((X' × Hn') ⊕ TG))
+    (p : BSt ByteArray TG Hn' (ℕ × St) X' Unit × QueryLog specIC) :
+    (blindImpl (AR := AR) (toClient T lr ℓ cl) n pk (E, κ) q).run (fS p) =
+      (fun r => (r.1, fS r.2)) <$> (combU lr cl n pk E κ q).run p := by
+  rcases q with d | ⟨x', hB⟩ | t
+  · simp only [combU, blindImplU, blindImpl, StateT.run_mk, Functor.map_map]
+    erw [simulateQ_map, StateT.run_map, Functor.map_map]
+  · by_cases hk : p.1.k < n
+    · have hk' : (fS p).k < n := hk
+      simp only [combU, blindImplU, blindImpl, hk, hk', ite_true, StateT.run_mk, simulateQ_bind,
+        StateT.run_bind, wrapB_liftU, toClient, liftC_eq,
+        map_bind, bind_map_left, bind_assoc, Functor.map_map]
+      simp only [fS, simulateQ_pure, pure_bind]
+      refine bind_congr fun r => ?_
+      erw [simulateQ_spec_query, wrapB_ht]
+      exact assoc_aux _ _ _ _ _ fun _ _ => rfl
+    · have hk' : ¬ (fS p).k < n := hk
+      simp [combU, blindImplU, blindImpl, hk, hk']
+  · simp only [combU, blindImplU, blindImpl, StateT.run_mk, Functor.map_map]
+    erw [simulateQ_map, StateT.run_map, Functor.map_map]
 
 variable (tgts : TG × TG → List TG)
 
@@ -550,24 +564,24 @@ blinding forger of `Blind` (with the client `toClient`) have the same flag, as o
 computations. -/
 theorem star (b : OracleComp (specB AR X' Hn' TG SIss) (List (X' × SIss))) :
     Prod.snd <$> AcompB T lr E hint0 tgts pk ℓ (do
-        let z ← (simulateQ (blindImplU lr cl n pk κ) b).run bs0
+        let z ← (simulateQ (blindImplU lr cl n pk κ) b).run (bs0 ())
         finU cl pk κ (claimed z)) =
       Prod.snd <$> (do
-        let z ← (simulateQ (blindImpl (toClient T lr ℓ cl) n pk (E, κ)) b).run bs0
-        let f ← simulateQ liftV ((toClient T lr ℓ cl).post pk (E, κ) (claimed z))
+        let z ← (simulateQ (blindImpl (toClient T lr ℓ cl) n pk (E, κ)) b).run
+          (bs0 (toClient T lr ℓ cl).init)
+        let f ← simulateQ liftV ((toClient T lr ℓ cl).post pk (E, κ) z.2.cs (claimed z))
         pure ((claimed z).map fun e => (e.1, e.2.2.2.2), f)) := by
   rw [AcompB, map_bind]
   simp only [acomp_flag]
-  have h1 : ∀ (x : OracleComp (specCB AR TG) (List (ByteArray × ByteArray) × QueryLog specIC)),
-      (x >>= fun r => simulateQ (liftV (AR := AR) (S := SIss)) (flagV T lr ℓ E pk r.1)) =
-        (Prod.fst <$> x) >>= fun a => simulateQ liftV (flagV T lr ℓ E pk a) := fun x => by
-    rw [bind_map_left]
-  rw [h1, wrapB_fst, simulateQ_bind,
-    simulateQ_run_comm _ _ _ (blindU_step T lr ℓ cl n pk E κ) b bs0, bind_assoc]
-  simp only [map_bind, map_pure, bind_pure]
-  refine bind_congr fun z => ?_
-  rw [finU_eq]
-  simp only [toClient, simulateQ_bind]
+  have e0 : (bs0 (toClient T lr ℓ cl).init : BSt ByteArray TG Hn' (ℕ × St) X' _) =
+      fS (bs0 (), []) := rfl
+  rw [e0, simulateQ_run_fmap _ _ fS (fun q s => blindB_step T lr ℓ cl n pk E κ q s) b,
+    simulateQ_bind, StateT.run_bind, collapseU, bind_map_left, bind_assoc]
+  simp only [map_bind, bind_map_left, map_pure, bind_pure]
+  refine bind_congr fun r => ?_
+  rw [wrapB_finU]
+  simp only [toClient, simulateQ_bind, liftV_toV]
+  rfl
 
 end Star
 
@@ -662,10 +676,10 @@ omit [DecidableEq DR] [∀ d, SampleableType (AR d)] in
 theorem acompB_liftF (A : Forger) :
     AcompB (AR := AR) T lr E hint tgts pk ℓ (simulateQ liftUB (A pk)) =
       simulateQ liftWB (Acomp T lr E hint tgts pk ℓ A) := by
-  have h : ∀ L, (simulateQ (wrapImplB (AR := AR) E hint) (simulateQ liftUB (A pk))).run L =
-      simulateQ liftWB ((simulateQ (wrapImpl E hint) (A pk)).run L) := fun L => by
+  have h : ∀ L, (simulateQ (wrapImplB (AR := AR) lr E hint) (simulateQ liftUB (A pk))).run L =
+      simulateQ liftWB ((simulateQ (wrapImpl lr E hint) (A pk)).run L) := fun L => by
     rw [← QueryImpl.simulateQ_compose]
-    refine (simulateQ_run_comm liftWB (wrapImpl E hint) _ (fun q s => ?_) (A pk) L).symm
+    refine (simulateQ_run_comm liftWB (wrapImpl lr E hint) _ (fun q s => ?_) (A pk) L).symm
     rw [QueryImpl.apply_compose]
     simp only [liftUB]
     erw [simulateQ_spec_query]
@@ -894,7 +908,7 @@ variable (lr : Bool) {Cn St : Type} (cl : PomClient Cn St) {X' Hn' : Type} [Deci
   (pk : UovPk) (κ : Cn)
 
 lemma blindU_bound {α : Type} (b : OracleComp (specB AR X' Hn' TG SIss) α) :
-    ∀ (k : ℕ) (s : BSt ByteArray TG Hn' (ℕ × St) X'),
+    ∀ (k : ℕ) (s : BSt ByteArray TG Hn' (ℕ × St) X' Unit),
       IsQueryBoundP b (fun q => isTgt q = true) k →
         IsQueryBoundP ((simulateQ (blindImplU lr cl n pk κ) b).run s) (fun q => isHTB q = true) k := by
   induction b using OracleComp.inductionOn with
@@ -933,7 +947,7 @@ theorem blindForger_bound (Q : ℕ)
   intro f hf
   simp only [blindForger, mem_support_bind_iff, support_pure, Set.mem_singleton_iff] at hf
   obtain ⟨b, hb, κ, -, rfl⟩ := hf
-  refine (isQueryBoundP_bind (n := Q) (m := 0) (blindU_bound lr cl n pk κ b Q bs0 (hB pk b hb))
+  refine (isQueryBoundP_bind (n := Q) (m := 0) (blindU_bound lr cl n pk κ b Q (bs0 ()) (hB pk b hb))
     fun z _ => ?_).mono (by omega)
   exact mapM_bound _ (fun e => (isQueryBoundP_map_iff _ _ _).2 (liftU_bound _)) _
 

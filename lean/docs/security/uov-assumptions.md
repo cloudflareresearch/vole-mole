@@ -642,10 +642,11 @@ With `pomfrit.md` U1 and U2:
 **Lean** (`lean/VoleMole/Assumptions/Blind.lean`, `ompr_le_blind`). The forger and its proof
 are mechanized for an abstract client, in the one-more game of U1 (`OneMore.omuf`, programmed
 targets `H_T(x) + r`). The client has coins, a first phase `start` (label `x`, blinding `r`, state,
-over its own oracle), and a finishing phase `post` (over its oracle and `H_T`, no Issuer) that
+over its own oracle), a state carried across sessions (`init`; PomFRIT's instance carries the
+game's query log), and a finishing phase `post` (over its oracle and `H_T`, no Issuer) that
 returns one acceptance flag. The forger `blindAdv cl n B` answers `B`'s `k`-th request with
 session `k`'s blinded request and forwards `B`'s preimage queries to the Issuer. If the sessions'
-labels are pairwise distinct (`Distinct`, on the supports), then
+labels are pairwise distinct (`Distinct`, on the supports, for all carried states), then
 
     Adv^{ompr}(B; n, ℓ) ≤ Pr[Forges] + Pr[CompFail].
 
@@ -676,7 +677,8 @@ PomFRIT's relation `P(s) = h ⊕ r` holds with `r = 0`. For every `B` and every 
 within `ℓ` Issuer queries but the client's signatures do not all verify. With at most `Q` target
 requests by `B`, the game has `Q + ℓ + 1` targets and the forger makes at most `Q` `H_T` queries
 (`pomfrit_T6_bound`, `advOMPR_pad`, `blindForger_bound`). The proof is `ompr_le_blind` for the
-client as a `Blind.Client` (`toClient`), and the observation that the blind game and `gameB` agree
+client as a `Blind.Client` (`toClient`, carrying the game wrapper's log so that it also makes
+the reduction's logged queries `auxSpec` at each label), and the observation that the blind game and `gameB` agree
 on the key, the forger's flag and the final state (`projF_eqd`, `star`).
 
 *Not mechanized: the completeness term for the Lean client.* Two pieces remain:

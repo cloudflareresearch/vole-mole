@@ -487,10 +487,12 @@ targets within `ℓ` Issuer queries but the client's signatures do not all pass 
 (with `H_T` the oracle). For `B` with at most `Q` target requests the game has `Q + ℓ + 1`
 targets, U1's convention (`pomfrit_T6_bound`, with `advOMPR_pad`: unused targets do not matter).
 The proof: `ompr_le_blind` for the client as a `Blind.Client` (`toClient`: coins are the cipher
-table and the client's coins; `post` finishes the claimed sessions and runs PomFRIT's
-verification), and the blind game and `gameB` have the same key, flag and final state
-(`projF_eqd`), since the two composed adversaries have the same flag as oracle computations
-(`star`).
+table and the client's coins; its state carried across sessions is the game wrapper's log, so
+that `start` also makes the reduction's own logged queries at each label, `auxSpec`, exactly as the
+wrapper does; `post` finishes the claimed sessions and runs PomFRIT's verification at the final
+log), and the blind game and `gameB` have the same key, flag and final state (`projF_eqd`), since
+the two composed adversaries have the same flag as oracle computations (`star`). `Blind.Client`
+has a carried state for this reason: `auxSpec` reads the log of all sessions so far.
 
 **What remains of T6 on paper**: the bound `compFail ≤ (ℓ+1)·2^{−113}` for the Lean client. Lean
 has completeness of the Lean prover per session in the finite-table model
