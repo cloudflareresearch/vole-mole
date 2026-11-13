@@ -1,40 +1,24 @@
-import VoleMole.Theft.HitChain
-import VoleMole.Theft.Tables
-import VoleMole.Theft.ComOW
-import VoleMole.EndToEnd.SpecRelations
+import VoleMole.Theft.HitLevel
 
 /-!
-# `ε_hit` for the Lean verifiers, with the chain hashes random tables
+# `ε_hit` for Ratatouille's Lean verifiers, with the chain hashes random tables
 
 The programming step of the theft theorems (`weakSE2_of_plain`) leaves `ε_hit`: the probability
 that a fresh forgery's verifier `H₂³` point is a point a simulator programmed (`ProgEv … HitOpX`).
-Here it is bounded for Ratatouille in the model of `noTheft_leanX_plain` with the concrete extra
-table `XTab L M` (`hbX`: `H₂⁰`, `H₂¹`, `H₂²` and the other base hashes uniform tables on the inputs
-of at most `L` bytes).
+`Theft/HitLevel.lean` bounds it for any two proof systems (`progEv_chain`). Here are the facts it
+needs for Ratatouille, in the model of `noTheft_leanX_plain` with the extra table `XTab L M`.
 
-* **Decision trees** (`ComOW.QTree`). `pr_hit_le`: a tree with `q` queries outputs a cell other
-  than `a` whose value equals a target read off the table at `a` only, with probability
-  `≤ (q + 1)/|Y|` (lazy sampling at `a`, then `pr_tree_bad_fix`). `QTree.of_two`: reading two cells
-  first costs two queries. `pr_set`, `pr_level_le`: the same on a tape with the table as one
-  component (a lens), for the forgery's and a simulation's points as byte strings (`keyL`, `encL`).
-* **The chain tables** of `XTab` (`getMu`/`setMu`, `get21`/`set21`, `get22`/`set22`): `hbX` with
-  one of them changed agrees off its domain (`hbX_agreeOff_*`), and answers a short input by the
-  table (`hbX_*_eq`).
-* **The cases of a hit** (`hit_cases`, from `Chain.chain_hit`): the programmed key is one of the
-  two simulations' prefixes (`progT_moved`), and the forgery's chain meets that simulation's at a
-  first level where the inputs differ and the outputs agree (`HitAt`): `H₂²` (the target is the
-  first 56 bytes of the programmed block), `H₂¹` or `H₂⁰`. Equal `H₂⁰` inputs mean equal
-  statements (`muIn_stI_inj`, `muIn_stS_inj`; issuance and spend inputs have 64 and 88 bytes), which
-  freshness excludes. All forgery chain inputs have at most `Lmin = 14357` bytes (`fSt_facts`), so
-  they are table points when `L ≥ Lmin`.
+* **The forgery** of an operation (`fd`): its statement (the spend's with the adversary's key)
+  and proof bytes. All its chain inputs have at most `Lmin = 14357` bytes (`fd_fOk`), so they are
+  table points when `L ≥ Lmin`.
+* Equal `H₂⁰` inputs mean equal statements (`muIn_stI_inj`, `muIn_stS_inj`; issuance and spend
+  inputs have 64 and 88 bytes), which freshness excludes (`fresh_ne₁`, `fresh_ne₂`).
 * **Freshness with the adversary's key** (`FreshOk`). The Lean spend statement does not hash the
   key `pk` (`Privacy.Ratatouille.stS`), so a spend statement that differs from a simulated one only
   in the key has the same chain; the bound is for `FreshOk`, which compares a spend with the
   simulated spend's statement under the adversary's key. In the game this is `FreshOp`
   (`freshOk_stS`), and `FreshOk` implies `FreshOp` (`FreshOk.freshOp`).
-* **The forgery's point is computed by a tree** (`qtree_forger`): the two simulations' points (the
-  programmed `H₂³` table depends on the chain table only there, `progT_fst_congr`), then the
-  adversary's tree (`AdmHit`).
+* The Lean simulators' programmings are `SimProg` (`simProgI`, `simProgS`).
 * **`progEv_hit`**: for `L ≥ 14357` and an adversary whose last stage reads `H₂⁰`, `H₂¹`, `H₂²` with
   `q_μ`, `q₂₁`, `q₂₂` queries,
 
@@ -46,246 +30,9 @@ of at most `L` bytes).
 -- (The coin types are large products: their `Fintype` instances exceed the default size.)
 set_option synthInstance.maxSize 1024
 
-open Finset
+namespace VoleMole.Theft.Hit.Rata
 
-namespace VoleMole.Theft.Hit
-
-open VoleMole.Privacy VoleMole.Theft.ComOW
-
-/-! ## A tree that hits a target read at one cell -/
-
-section Generic
-
-variable {K Y : Type*} [Fintype K] [DecidableEq K] [Fintype Y] [Nonempty Y]
-
-omit [Fintype K] [Fintype Y] [Nonempty Y] in
-lemma fixAt_single (a : K) (v : Y) (T : K → Y) :
-    fixAt (Function.update (fun _ => none) a (some v)) T = Function.update T a v := by
-  funext k
-  by_cases hk : k = a
-  · subst hk
-    simp [fixAt]
-  · simp [fixAt, Function.update_of_ne hk]
-
-/-- **A tree with `q` queries outputs a cell other than `a` whose value is a target read off the
-table at `a` only** (or a constant, `a = none`) with probability `≤ (q + 1)/|Y|`: lazy sampling
-at `a`, then `pr_tree_bad_fix` with the cell `a` fixed. -/
-theorem pr_hit_le {f : (K → Y) → Option K} {q : ℕ} (hf : QTree f q) (a : Option K)
-    (τ : (K → Y) → Y) (hτ : ∀ T T', (∀ k, a = some k → T k = T' k) → τ T = τ T') :
-    pr (K → Y) (fun T => ∃ k, f T = some k ∧ a ≠ some k ∧ T k = τ T) ≤
-      (q + 1 : ℕ) * (1 / Fintype.card Y) := by
-  classical
-  rcases isEmpty_or_nonempty K with hK | ⟨⟨k₀⟩⟩
-  · refine (pr_mono (Q := fun _ => False) fun T ⟨k, _⟩ => hK.elim k).trans ?_
-    rw [pr_def]
-    simp only [filter_false, card_empty, Nat.cast_zero, zero_div]
-    positivity
-  have hf' : QTree (fun T => (f T).getD k₀) q := hf.map fun o => o.getD k₀
-  let T₀ : K → Y := fun _ => Classical.arbitrary Y
-  rcases a with _ | a
-  · have hc : ∀ T, τ T = τ T₀ := fun T => hτ T T₀ (by simp)
-    have h := pr_tree_bad (Bad := fun y => y = τ T₀) (pr_eq_le (τ T₀)) hf'
-    refine (pr_mono fun T hT => ?_).trans h
-    obtain ⟨k, hk, -, hv⟩ := hT
-    show T ((f T).getD k₀) = τ T₀
-    rw [hk, Option.getD_some, hv, hc]
-  · rw [pr_resample a]
-    refine pr_prod_le' _ fun v => ?_
-    have h := pr_tree_bad_fix (Bad := fun y => y = τ (Function.update T₀ a v)) (pr_eq_le _) hf'
-      (Function.update (fun _ => none) a (some v))
-    refine (pr_mono fun T hT => ?_).trans h
-    obtain ⟨k, hk, hka, hv⟩ := hT
-    have hka' : k ≠ a := fun h => hka (h ▸ rfl)
-    simp only [fixAt_single, hk, Option.getD_some]
-    refine ⟨by simp [Function.update_of_ne hka'], ?_⟩
-    simp only [Function.update_of_ne hka'] at hv
-    rw [hv]
-    exact hτ _ _ fun k hk => by cases hk; simp
-
-omit [Fintype K] [Fintype Y] in
-/-- **A computation that reads two cells and then runs a tree** is a tree with two more queries. -/
-lemma QTree.of_two {O Z : Type*} {F : (K → Y) → O} (H : (K → Y) → Z) (a b : K)
-    (hH : ∀ T T', T a = T' a → T b = T' b → H T = H T') (G : Z → (K → Y) → O) {q : ℕ}
-    (hG : ∀ z, QTree (G z) q) (hF : ∀ T, F T = G (H T) T) : QTree F (q + 2) := by
-  let T₀ : K → Y := fun _ => Classical.arbitrary Y
-  let U : Y → Y → K → Y := fun v w => Function.update (Function.update T₀ a v) b w
-  have hU : ∀ T, H T = H (U (T a) (T b)) := fun T => hH _ _
-    (by by_cases hab : a = b <;> simp [U, hab]) (by simp [U])
-  have e : F = fun T => (fun v T => (fun w T => G (H (U v w)) T) (T b) T) (T a) T := by
-    funext T
-    rw [hF, hU]
-  rw [e]
-  exact .ask a (fun v T => (fun w T => G (H (U v w)) T) (T b) T) (q + 1) fun v =>
-    .ask b (fun w T => G (H (U v w)) T) q fun w => hG _
-
-/-- **Averaging over one component.** For a component `get` with its setter `set` (the laws of a
-lens), the probability of `P` is the probability of `P` at a uniform value of the component, the
-rest uniform. -/
-lemma pr_set {X T : Type*} [Fintype X] [Fintype T] [Nonempty T] (set : T → X → X) (get : X → T)
-    (h1 : ∀ x, set (get x) x = x) (h2 : ∀ t x, get (set t x) = t)
-    (h3 : ∀ t t' x, set t (set t' x) = set t x) (P : X → Prop) :
-    pr X P = pr (X × T) (fun z => P (set z.2 z.1)) := by
-  let e : X × T ≃ X × T :=
-    ⟨fun z => (set z.2 z.1, get z.1), fun z => (set z.2 z.1, get z.1),
-      fun z => by simp [h1, h2, h3], fun z => by simp [h1, h2, h3]⟩
-  rw [show (fun z : X × T => P (set z.2 z.1)) = fun z => P (e z).1 from rfl,
-    pr_equiv e (fun z => P z.1), pr_prod_fst]
-
-end Generic
-
-/-! ## The chain tables of the extra table -/
-
-section XTab
-
-open VoleMole.Verifier VoleMole.Verifier.Bridge VoleMole.ZK.Sim
-
-variable {L M : ℕ}
-
-/-- **The key of a short input**: `a` with `encL a = b`, if `b` has at most `L` bytes. -/
-noncomputable def keyL (L : ℕ) (b : ByteArray) : Option (KL L) := by
-  classical
-  exact if h : ∃ a : KL L, encL a = b then some h.choose else none
-
-lemma keyL_encL (a : KL L) : keyL L (encL a) = some a := by
-  classical
-  have h : ∃ a' : KL L, encL a' = encL a := ⟨a, rfl⟩
-  simp only [keyL, h, ↓reduceDIte, Option.some.injEq]
-  exact encL_injective h.choose_spec
-
-lemma encL_of_keyL {b : ByteArray} {a : KL L} (h : keyL L b = some a) : encL a = b := by
-  classical
-  unfold keyL at h
-  split_ifs at h with h'
-  · cases h
-    exact h'.choose_spec
-
-/-- An input of at most `L` bytes is a key. -/
-lemma exists_encL {b : ByteArray} (h : b.size ≤ L) : ∃ a : KL L, encL a = b :=
-  ⟨⟨⟨b.size, Nat.lt_succ_of_le h⟩, blk b.size b⟩, ba_blk_of_size rfl⟩
-
-/-- The `H₂⁰` table. -/
-def getMu (x : XTab L M) : KL L → Bytes 32 := x.2.1
-def setMu (T : KL L → Bytes 32) (x : XTab L M) : XTab L M := (x.1, T, x.2.2)
-/-- The `H₂¹` table. -/
-def get21 (x : XTab L M) : KL L → Bytes 136 := x.2.2.2.2.1
-def set21 (T : KL L → Bytes 136) (x : XTab L M) : XTab L M :=
-  (x.1, x.2.1, x.2.2.1, x.2.2.2.1, T, x.2.2.2.2.2)
-/-- The `H₂²` table. -/
-def get22 (x : XTab L M) : KL L → Bytes 56 := x.2.2.2.2.2.1
-def set22 (T : KL L → Bytes 56) (x : XTab L M) : XTab L M :=
-  (x.1, x.2.1, x.2.2.1, x.2.2.2.1, x.2.2.2.2.1, T, x.2.2.2.2.2.2)
-
-/-- `AgreeOff` survives a table on another (or the same) domain. -/
-lemma agreeOff_withTable {k j : Kind} {Hs Hs' : Hashes} (h : Hs.AgreeOff k Hs') {K : Type}
-    (enc : K → ByteArray) (G : K → Bytes j.outLen) :
-    (Hs.withTable j enc G).AgreeOff k (Hs'.withTable j enc G) := by
-  intro k' hk'
-  funext b
-  simp only [Hashes.withTable]
-  split_ifs with h1 h2
-  · rfl
-  · subst h1
-    rw [h _ hk']
-  · rw [h k' hk']
-
-/-- Two tables on the domain `k` agree off `k`. -/
-lemma agreeOff_withTable_self (Hs : Hashes) (k : Kind) {K : Type} (enc : K → ByteArray)
-    (G G' : K → Bytes k.outLen) : (Hs.withTable k enc G).AgreeOff k (Hs.withTable k enc G') := by
-  intro k' hk'
-  funext b
-  simp only [Hashes.withTable, hk', ite_false]
-
-open Classical in
-lemma withTable_self (Hs : Hashes) (k : Kind) {K : Type} (enc : K → ByteArray)
-    (G : K → Bytes k.outLen) (b : ByteArray) :
-    (Hs.withTable k enc G).hash k b =
-      if h : ∃ a, enc a = b then ba (G h.choose) else Hs.hash k b := by
-  simp only [Hashes.withTable, ite_true]
-
-/-- The table `encL` answers a short input at its key. -/
-lemma withTable_encL (Hs : Hashes) (k : Kind) (G : KL L → Bytes k.outLen) (b : ByteArray) :
-    (Hs.withTable k encL G).hash k b =
-      match keyL L b with
-      | some a => ba (G a)
-      | none => Hs.hash k b := by
-  classical
-  rw [withTable_self]
-  by_cases h : ∃ a : KL L, encL a = b
-  · obtain ⟨a, rfl⟩ := h
-    have hex : ∃ a' : KL L, encL a' = encL a := ⟨a, rfl⟩
-    simp only [keyL_encL, hex, ↓reduceDIte]
-    congr 2
-    exact encL_injective (Exists.choose_spec (⟨a, rfl⟩ : ∃ a', encL a' = encL a))
-  · have : keyL L b = none := by simp only [keyL, h, ↓reduceDIte]
-    simp only [h, ↓reduceDIte, this]
-
-lemma hbX_agreeOff_mu (T T' : KL L → Bytes 32) (x : XTab L M) :
-    (hbX (setMu T x)).AgreeOff .mu (hbX (setMu T' x)) := by
-  unfold hbX setMu
-  simp only
-  refine agreeOff_withTable (agreeOff_withTable (agreeOff_withTable (agreeOff_withTable
-    (agreeOff_withTable (agreeOff_withTable_self _ _ _ _ _) _ _) _ _) _ _) _ _) _ _
-
-lemma hbX_agreeOff_21 (T T' : KL L → Bytes 136) (x : XTab L M) :
-    (hbX (set21 T x)).AgreeOff .h21 (hbX (set21 T' x)) := by
-  unfold hbX set21
-  simp only
-  exact agreeOff_withTable (agreeOff_withTable (agreeOff_withTable_self _ _ _ _ _) _ _) _ _
-
-lemma hbX_agreeOff_22 (T T' : KL L → Bytes 56) (x : XTab L M) :
-    (hbX (set22 T x)).AgreeOff .h22 (hbX (set22 T' x)) := by
-  unfold hbX set22
-  simp only
-  exact agreeOff_withTable (agreeOff_withTable_self _ _ _ _ _) _ _
-
-lemma hbX_mu_eq (x : XTab L M) (b : ByteArray) :
-    (hbX x).hash .mu b = match keyL L b with
-      | some a => ba (x.2.1 a)
-      | none => Hashes.shake.hash .mu b := by
-  refine (Hashes.withTable_ne _ (.comb M) .mu (by simp) _ _ _).trans ?_
-  refine (Hashes.withTable_ne _ .h22 .mu (by simp) _ _ _).trans ?_
-  refine (Hashes.withTable_ne _ .h21 .mu (by simp) _ _ _).trans ?_
-  refine (Hashes.withTable_ne _ .h4 .mu (by simp) _ _ _).trans ?_
-  refine (Hashes.withTable_ne _ .muDelayed .mu (by simp) _ _ _).trans ?_
-  refine (withTable_encL _ .mu x.2.1 b).trans ?_
-  rcases keyL L b with _ | a
-  · exact Hashes.withTable_ne _ .h1 .mu (by simp) _ _ _
-  · rfl
-
-lemma hbX_21_eq (x : XTab L M) (b : ByteArray) :
-    (hbX x).hash .h21 b = match keyL L b with
-      | some a => ba (x.2.2.2.2.1 a)
-      | none => Hashes.shake.hash .h21 b := by
-  refine (Hashes.withTable_ne _ (.comb M) .h21 (by simp) _ _ _).trans ?_
-  refine (Hashes.withTable_ne _ .h22 .h21 (by simp) _ _ _).trans ?_
-  refine (withTable_encL _ .h21 x.2.2.2.2.1 b).trans ?_
-  rcases keyL L b with _ | a
-  · exact (Hashes.withTable_ne _ .h4 .h21 (by simp) _ _ _).trans
-      ((Hashes.withTable_ne _ .muDelayed .h21 (by simp) _ _ _).trans
-      ((Hashes.withTable_ne _ .mu .h21 (by simp) _ _ _).trans
-      (Hashes.withTable_ne _ .h1 .h21 (by simp) _ _ _)))
-  · rfl
-
-lemma hbX_22_eq (x : XTab L M) (b : ByteArray) :
-    (hbX x).hash .h22 b = match keyL L b with
-      | some a => ba (x.2.2.2.2.2.1 a)
-      | none => Hashes.shake.hash .h22 b := by
-  refine (Hashes.withTable_ne _ (.comb M) .h22 (by simp) _ _ _).trans ?_
-  refine (withTable_encL _ .h22 x.2.2.2.2.2.1 b).trans ?_
-  rcases keyL L b with _ | a
-  · exact (Hashes.withTable_ne _ .h21 .h22 (by simp) _ _ _).trans
-      ((Hashes.withTable_ne _ .h4 .h22 (by simp) _ _ _).trans
-      ((Hashes.withTable_ne _ .muDelayed .h22 (by simp) _ _ _).trans
-      ((Hashes.withTable_ne _ .mu .h22 (by simp) _ _ _).trans
-      (Hashes.withTable_ne _ .h1 .h22 (by simp) _ _ _))))
-  · rfl
-
-end XTab
-
-/-! ## Ratatouille: the event of a hit -/
-
-namespace Rata
-
+open VoleMole.Privacy
 open VoleMole.Verifier VoleMole.Verifier.Bridge VoleMole.ZK.Sim VoleMole.ZK
 open VoleMole.Privacy.Ratatouille VoleMole.Spec.Ratatouille VoleMole.Theft.Ratatouille
 open VoleMole.Theft.Chain
@@ -293,74 +40,11 @@ open VoleMole.ROM.IC (muIn)
 
 variable {R : Type} [CipherRow R] {L M : ℕ}
 
-/-- The shared tables with the extra table `XTab L M`. -/
-abbrev ShT (R : Type) (L M : ℕ) := ShX R pI (XTab L M)
-
-/-- **The record the chain is computed with**: the base record `hbX x` with the `H₅` table. -/
-noncomputable def recT (t : ShT R L M) : Hashes := rec5 (hbX t.2.2) t.2.1.1
-
-/-- The PRG of the tables' cipher. -/
-noncomputable abbrev prgT (t : ShT R L M) : HasPrg := icPrg (rowFn t.2.1.2)
-
-variable (A : Thief Sizes.labelRows Tab3 (ShT R L M))
-
-/-- **The forgery's statement** (the spend's with the adversary's key). -/
-def fSt : Op Sizes.labelRows → Statement
-  | .issue q t c => Privacy.Ratatouille.stI (opXI q t c)
-  | .spend q c _ => Privacy.Ratatouille.stS (opXS A q c)
-
-/-- The forgery's proof bytes. -/
-def fPf : Op Sizes.labelRows → ByteArray
-  | .issue q _ _ => bOf (issueReqProof q)
-  | .spend q _ _ => bOf (SpendReq.parse q).proof
-
-/-- **A simulation**: its statement and its output (none if no statement). -/
-abbrev SimD := Option (Statement × Except String ByteArray)
-
-/-- The issuance simulation. -/
-noncomputable def sd₁ (x : Option IssueInstance) (c : SimCoins pI) : SimD :=
-  x.map fun i => (Privacy.Ratatouille.stI i, simulate pI c)
-
-/-- The spend simulation. -/
-noncomputable def sd₂ (x : Option SpendInstance) (c : SimCoins pS) : SimD :=
-  x.map fun i => (Privacy.Ratatouille.stS i, simulate pS c)
-
-/-- The forgery's chain points: `H₂²`, `H₂¹`, `H₂⁰`. -/
-noncomputable def fPt22 (op : Op Sizes.labelRows) (t : ShT R L M) : ByteArray :=
-  @cin2 (prgT t) (recT t) CrtGen.tables (fSt A op) (fPf op)
-noncomputable def fPt21 (op : Op Sizes.labelRows) (t : ShT R L M) : ByteArray :=
-  @cin1 (prgT t) (recT t) (fSt A op) (fPf op)
-def fPtMu (op : Op Sizes.labelRows) : ByteArray := muIn (fSt A op)
-
-/-- A simulation's chain points. -/
-noncomputable def sPt22 (d : SimD) (t : ShT R L M) : ByteArray :=
-  match d with
-  | some (st, o) => @sim2 (prgT t) (recT t) CrtGen.tables st o
-  | none => ByteArray.empty
-noncomputable def sPt21 (d : SimD) (t : ShT R L M) : ByteArray :=
-  match d with
-  | some (st, o) => @sim1 (prgT t) (recT t) st o
-  | none => ByteArray.empty
-def sPtMu (d : SimD) : ByteArray :=
-  match d with
-  | some (st, _) => muIn st
-  | none => ByteArray.empty
-
-/-- A simulation's targets: the first 56 bytes of its programmed block, and its `H₂¹`, `H₂⁰`
-answers. -/
-noncomputable def sTau22 (d : SimD) (t : ShT R L M) : ByteArray :=
-  match d with
-  | some (st, o) => (ba (blk (preLen pI) (@simPre (prgT t) (recT t) CrtGen.tables st o))).extract 0 56
-  | none => ByteArray.empty
-noncomputable def sTau21 (d : SimD) (t : ShT R L M) : ByteArray :=
-  (recT t).hash .h21 (sPt21 d t)
-noncomputable def sTauMu (d : SimD) (t : ShT R L M) : ByteArray :=
-  (recT t).hash .mu (sPtMu d)
-
-/-- **A hit at one level**: the forgery's point `Pf` is a short input other than the simulation's
-`Ps`, and the table answers it with the target `τ`. -/
-def Ev {n : ℕ} (Pf Ps τ : ByteArray) (G : KL L → ZK.Sim.Bytes n) : Prop :=
-  ∃ k, encL k = Pf ∧ Pf ≠ Ps ∧ ba (G k) = τ
+/-- **The forgery of an operation**: its statement (the spend's with the adversary's key) and
+proof bytes. -/
+def fd {G S : Type} (A : Thief Sizes.labelRows G S) : Op Sizes.labelRows → FD
+  | .issue q t c => (Privacy.Ratatouille.stI (opXI q t c), bOf (issueReqProof q))
+  | .spend q c _ => (Privacy.Ratatouille.stS (opXS A q c), bOf (SpendReq.parse q).proof)
 
 /-- **The weak freshness of the theft game with the adversary's key**: a spend is compared with
 the simulated spend's statement with its key replaced by the adversary's. In the game the
@@ -372,75 +56,6 @@ def FreshOk {Z : Sizes} {G S : Type} (A : Thief Z G S) (p₁ : Option (IssueInst
     (p₂ : Option (SpendInstance × SpendProof Z)) (op : Op Z) : Prop :=
   FreshOp A p₁ (p₂.map fun y => ({ y.1 with pk := A.pk }, y.2)) op
 
-/-! ### Helpers -/
-
-omit [CipherRow R] in
-lemma recT_hash_ne (t : ShT R L M) {k : Kind} (hk : k ≠ .h5) :
-    (recT t).hash k = (hbX t.2.2).hash k :=
-  funext (Hashes.withTable_ne _ .h5 k hk enc5 t.2.1.1)
-
-omit [CipherRow R] in
-lemma recT_wf (t : ShT R L M) : HashesWF (recT t) := (hbX_wf t.2.2).withTable .h5 enc5 t.2.1.1
-
-/-- The forger's verifier point is computed with the `H₅` record (`vPre` does not read `H₂³`). -/
-lemma vPoint_eq {p : Params} (Hb : Hashes) (st : Statement) (pf : ByteArray) (s : ShG R p) :
-    vPoint Hb st pf s =
-      (@vPre (icPrg (rowFn s.2.2)) (rec5 Hb s.2.1) CrtGen.tables st pf ++ (pfOf st pf).ctr).push 11 := by
-  unfold vPoint
-  have hA : (recV p Hb s.1 s.2.1).AgreeOff .h23 (rec5 Hb s.2.1) :=
-    agreeOff_withTable (fun k hk => funext (Hashes.withTable_ne Hb .h23 k hk _ _)) _ _
-  rw [@vPre_agreeOff (icPrg (rowFn s.2.2)) _ _ _ unread_h23 hA]
-  rfl
-
-/-- The simulator's `outPre` is `simPre` with `recT`. -/
-lemma outPre_eq (st : Statement) (o : Except String ByteArray) (t : ShT R L M) :
-    @outPre (prgT t) (hbX t.2.2) CrtGen.tables st t.2.1.1 o =
-      @simPre (prgT t) (recT t) CrtGen.tables st o := by
-  cases o <;> rfl
-
-lemma progRO_moved_at {p : Params} (st : Statement) (c : SimCoins p) (s : ShG R p) (u : ShT R L M)
-    (hs : s.2 = u.2.1) (k : K2 p) (h : (progRO p (hbX u.2.2) st c s).1 k ≠ s.1 k) :
-    k.1 = blk (preLen p) (@simPre (prgT u) (recT u) CrtGen.tables st (simulate p c)) := by
-  obtain ⟨s1, s2⟩ := s
-  simp only at hs
-  subst hs
-  rw [progRO_moved (hbX u.2.2) st c _ k h]
-  exact congrArg _ (outPre_eq st _ u)
-
-/-- **The keys both programmings change** are grinding keys of one of the two simulations'
-prefixes. -/
-lemma progT_moved (x₁ : Option IssueInstance) (c₁ : SimCoins pI) (x₂ : Option SpendInstance)
-    (c₂ : SimCoins pS) (t : ShT R L M) (k : K2 pI)
-    (h : (progT (leanProgIRX hbX) (leanProgSRX hbX) x₁ c₁ x₂ c₂ t).1 k ≠ t.1 k) :
-    (∃ st o, sd₁ x₁ c₁ = some (st, o) ∧
-        k.1 = blk (preLen pI) (@simPre (prgT t) (recT t) CrtGen.tables st o)) ∨
-      (∃ st o, sd₂ x₂ c₂ = some (st, o) ∧
-        k.1 = blk (preLen pI) (@simPre (prgT t) (recT t) CrtGen.tables st o)) := by
-  -- the spend programming acts first, on `t`; the issuance programming on its output
-  have h2 : (progO (leanProgSRX (R := R) hbX) x₂ c₂ t).2 = t.2 := by
-    rcases x₂ with _ | i <;> rfl
-  by_cases hk : (progO (leanProgSRX (R := R) hbX) x₂ c₂ t).1 k = t.1 k
-  · left
-    rcases x₁ with _ | i
-    · exact absurd (by rw [← hk]; rfl) h
-    · refine ⟨_, _, rfl, ?_⟩
-      have hx : (progO (leanProgSRX (R := R) hbX) x₂ c₂ t).2.2 = t.2.2 := by rw [h2]
-      have hm : (progRO pI (hbX t.2.2) (Privacy.Ratatouille.stI i) c₁
-          (shOf (progO (leanProgSRX (R := R) hbX) x₂ c₂ t))).1 k ≠
-          (shOf (progO (leanProgSRX (R := R) hbX) x₂ c₂ t)).1 k := by
-        intro he
-        apply h
-        show (progRO pI (hbX (progO (leanProgSRX (R := R) hbX) x₂ c₂ t).2.2)
-          (Privacy.Ratatouille.stI i) c₁ (shOf (progO (leanProgSRX (R := R) hbX) x₂ c₂ t))).1 k =
-          t.1 k
-        rw [hx, he, ← hk]
-        rfl
-      exact progRO_moved_at _ c₁ _ t (by simp only [shOf, h2]) k hm
-  · right
-    rcases x₂ with _ | i
-    · exact absurd rfl hk
-    · exact ⟨_, _, rfl, progRO_moved_at (p := pS) _ c₂ (shOf t) t rfl k hk⟩
-
 /-! ### The statements' `H₂⁰` inputs -/
 
 lemma size_bOf {n : ℕ} (v : Spec.Ratatouille.Bytes n) : (bOf v).size = n := by
@@ -448,14 +63,6 @@ lemma size_bOf {n : ℕ} (v : Spec.Ratatouille.Bytes n) : (bOf v).size = n := by
 
 lemma bOf_inj {n : ℕ} {v w : Spec.Ratatouille.Bytes n} (h : bOf v = bOf w) : v = w :=
   Vector.toList_inj.1 (EndToEnd.SpecRel.toBA_inj h)
-
-lemma append_split {a b a' b' : ByteArray} (h : a ++ b = a' ++ b') (hs : a.size = a'.size) :
-    a = a' ∧ b = b' := by
-  have ha : a = a' := by
-    have e : (a ++ b).extract 0 a.size = (a' ++ b').extract 0 a.size := by rw [h]
-    rwa [ByteArray.extract_append_eq_left rfl, ByteArray.extract_append_eq_left hs] at e
-  subst ha
-  exact ⟨rfl, (ByteArray.append_right_inj _).1 h⟩
 
 lemma le64_toNat_inj {a b : UInt64} (h : le64 a.toNat = le64 b.toNat) : a = b :=
   UInt64.toNat_inj.1 (EndToEnd.SpecRel.le64_inj (UInt64.toNat_lt a) (UInt64.toNat_lt b) h)
@@ -538,93 +145,32 @@ lemma freshOk_stS (p₁ : Option (IssueInstance × IssueProof Z)) (o₂ : Except
 
 end Fresh
 
-/-! ### The cases of a hit -/
 
-/-- **A hit on one simulation**, at one of the three levels. -/
-def HitAt (op : Op Sizes.labelRows) (t : ShT R L M) (d : SimD) : Prop :=
-  Ev (fPt22 A op t) (sPt22 d t) (sTau22 d t) (get22 t.2.2) ∨
-    Ev (fPt21 A op t) (sPt21 d t) (sTau21 d t) (get21 t.2.2) ∨
-    Ev (fPtMu A op) (sPtMu d) (sTauMu d t) (getMu t.2.2)
+/-! ### The forgery's chain inputs are table points -/
 
 /-- The shortest table length that holds every chain input of the forgeries:
 `H₂¹` inputs of the spend relation (`14357` bytes). -/
 def Lmin : ℕ := 14357
 
-omit [CipherRow R] in
-lemma fSt_facts (op : Op Sizes.labelRows) :
-    (fSt A op).delayed = false ∧ (fSt A op).binder1.size = 0 ∧ (fSt A op).binder2.size = 0 ∧
-      64 + 16 * (fSt A op).params.correctionBytes +
-        (fSt A op).params.nMask * (fSt A op).params.nMultBytes + 16 + 0 + 1 ≤ Lmin ∧
-      264 + 0 + (fSt A op).params.witnessBytes + 1 ≤ Lmin ∧ (muIn (fSt A op)).size ≤ Lmin := by
+lemma fd_fOk {G S : Type} (A : Thief Sizes.labelRows G S) (hL : Lmin ≤ L)
+    (op : Op Sizes.labelRows) : FOk L (fd A op).1 := by
   cases op with
   | issue q t c =>
-    refine ⟨rfl, rfl, rfl, ?_, ?_, ?_⟩
+    refine ⟨rfl, rfl, rfl, le_trans ?_ hL, le_trans ?_ hL, le_trans ?_ hL⟩
     · show 64 + 16 * pI.correctionBytes + pI.nMask * pI.nMultBytes + 16 + 0 + 1 ≤ Lmin
       decide
     · show 264 + 0 + pI.witnessBytes + 1 ≤ Lmin
       decide
-    · simp only [fSt, size_muIn_stI, Lmin]
+    · simp only [fd, size_muIn_stI, Lmin]
       omega
   | spend q c x =>
-    refine ⟨rfl, rfl, rfl, ?_, ?_, ?_⟩
+    refine ⟨rfl, rfl, rfl, le_trans ?_ hL, le_trans ?_ hL, le_trans ?_ hL⟩
     · show 64 + 16 * pS.correctionBytes + pS.nMask * pS.nMultBytes + 16 + 0 + 1 ≤ Lmin
       decide
     · show 264 + 0 + pS.witnessBytes + 1 ≤ Lmin
       decide
-    · simp only [fSt, size_muIn_stS, Lmin]
+    · simp only [fd, size_muIn_stS, Lmin]
       omega
-
-omit [CipherRow R] in
-lemma recT_22 (t : ShT R L M) (k : KL L) : (recT t).hash .h22 (encL k) = ba (get22 t.2.2 k) := by
-  rw [recT_hash_ne t (by decide), hbX_22_eq, keyL_encL]
-  rfl
-
-omit [CipherRow R] in
-lemma recT_21 (t : ShT R L M) (k : KL L) : (recT t).hash .h21 (encL k) = ba (get21 t.2.2 k) := by
-  rw [recT_hash_ne t (by decide), hbX_21_eq, keyL_encL]
-  rfl
-
-omit [CipherRow R] in
-lemma recT_mu (t : ShT R L M) (k : KL L) : (recT t).hash .mu (encL k) = ba (getMu t.2.2 k) := by
-  rw [recT_hash_ne t (by decide), hbX_mu_eq, keyL_encL]
-  rfl
-
-/-- **A hit on one simulation's prefix** (`chain_hit` with the tables' record): one of the three
-level events, unless the simulation produced a proof whose statement has the forgery's `H₂⁰`
-input. -/
-lemma hitAt_of (hL : Lmin ≤ L) {p : Params} (op : Op Sizes.labelRows) (t : ShT R L M)
-    (st : Statement) (o : Except String ByteArray) (hds : st.delayed = false) (k : K2 p)
-    (hk : enc2 p k = (@vPre (prgT t) (recT t) CrtGen.tables (fSt A op) (fPf op) ++
-      (pfOf (fSt A op) (fPf op)).ctr).push 11)
-    (hkp : ba (blk (preLen p) (@simPre (prgT t) (recT t) CrtGen.tables st o)) =
-      ba (blk (preLen pI) (@simPre (prgT t) (recT t) CrtGen.tables st o)))
-    (hkp' : k.1 = blk (preLen p) (@simPre (prgT t) (recT t) CrtGen.tables st o))
-    (hne : (∃ b, o = .ok b) → muIn (fSt A op) ≠ muIn st) :
-    HitAt A op t (some (st, o)) := by
-  obtain ⟨hdf, hb1, hb2, hl1, hl2, hlm⟩ := fSt_facts A op
-  obtain ⟨hv, hc⟩ := @chain_hit (prgT t) (recT t) CrtGen.tables (recT_wf t) p (fSt A op) st (fPf op)
-    o hdf hds k hk hkp'
-  rcases hc with ⟨h2, he⟩ | ⟨h1, he⟩ | ⟨hm, he⟩ | ⟨hok, hm⟩
-  · left
-    have hs := @size_cin2_le (prgT t) (recT t) CrtGen.tables (fSt A op) (fPf op) (recT_wf t) hdf
-    obtain ⟨a, ha⟩ := exists_encL (L := L)
-      (b := @cin2 (prgT t) (recT t) CrtGen.tables (fSt A op) (fPf op)) (by omega)
-    refine ⟨a, ha, h2, ?_⟩
-    rw [← recT_22, ha, he, hkp]
-    rfl
-  · right; left
-    have hs := @size_cin1_le (prgT t) (recT t) (fSt A op) (fPf op) (recT_wf t)
-    obtain ⟨a, ha⟩ := exists_encL (L := L)
-      (b := @cin1 (prgT t) (recT t) (fSt A op) (fPf op)) (by omega)
-    refine ⟨a, ha, h1, ?_⟩
-    rw [← recT_21, ha]
-    exact he
-  · right; right
-    obtain ⟨a, ha⟩ := exists_encL (L := L) (b := muIn (fSt A op)) (by omega)
-    refine ⟨a, ha, hm, ?_⟩
-    rw [← recT_mu, ha]
-    exact he
-  · exact absurd hm (hne hok)
 
 lemma simO_some_I {i : IssueInstance} {c : SimCoins pI} {b : ByteArray} (h : simulate pI c = .ok b) :
     ∃ π, simO leanSimIR (some i) c = some π := by
@@ -644,531 +190,87 @@ lemma simO_some_S {i : SpendInstance} {c : SimCoins pS} {b : ByteArray} (h : sim
     simp only [vecOf, simulate_ok_size h, hn, ↓reduceDIte, reduceCtorEq] at h''
   · exact ⟨π, by simp only [simO]; exact h'⟩
 
-/-- **The cases of a hit.** A fresh forgery (`FreshOk`) whose verifier's `H₂³` point is a point
-the simulators programmed hits one of the two simulations at one of the three levels. -/
-theorem hit_cases (hL : Lmin ≤ L) (x₁ : Option IssueInstance) (c₁ : SimCoins pI)
-    (x₂ : Option SpendInstance) (c₂ : SimCoins pS) (op : Op Sizes.labelRows) (t : ShT R L M)
-    (hfr : FreshOk A (pairO x₁ (simO leanSimIR x₁ c₁)) (pairO x₂ (simO leanSimSR x₂ c₂)) op)
-    (hhit : HitOpX (Hb := hbX) A op (progT (leanProgIRX hbX) (leanProgSRX hbX) x₁ c₁ x₂ c₂ t) t) :
-    HitAt A op t (sd₁ x₁ c₁) ∨ HitAt A op t (sd₂ x₂ c₂) := by
+
+/-! ### The programmings, the hit, freshness -/
+
+/-- The issuance simulator's programming. -/
+lemma simProgI : SimProg (R := R) (L := L) (M := M) (leanProgIRX hbX)
+    (fun i c => (Privacy.Ratatouille.stI i, simulate pI c)) :=
+  simProg_progRO Privacy.Ratatouille.stI fun _ => rfl
+
+/-- The spend simulator's programming. -/
+lemma simProgS : SimProg (R := R) (p := pI) (L := L) (M := M) (leanProgSRX hbX)
+    (fun i c => (Privacy.Ratatouille.stS i, simulate pS c)) :=
+  simProg_progRO (p := pS) Privacy.Ratatouille.stS fun _ => rfl
+
+variable (A : Thief Sizes.labelRows Tab3 (ShT R pI L M))
+
+/-- **A programmed point of the verifier is a hit of the forgery.** -/
+lemma hitG_of_hitOpX (op : Op Sizes.labelRows) (t' t : ShT R pI L M)
+    (h : HitOpX (Hb := hbX) A op t' t) : HitG (fd A op) t' t := by
+  cases op with
+  | issue q tc c => exact hitG_of_hitPt _ _ t' t h
+  | spend q c x => exact hitG_of_hitPt (p := pS) _ _ t' t h
+
+omit [CipherRow R] in
+/-- **A fresh forgery's `H₂⁰` input is not the simulated issuance's.** -/
+lemma fresh_ne₁ (x₁ : Option IssueInstance) (c₁ : SimCoins pI)
+    (p₂ : Option (SpendInstance × SpendProof Sizes.labelRows)) (op : Op Sizes.labelRows)
+    (i : IssueInstance) (hfr : FreshOk A (pairO x₁ (simO leanSimIR x₁ c₁)) p₂ op)
+    (hi : x₁ = some i) (hok : ∃ b, simulate pI c₁ = .ok b) :
+    muIn (fd A op).1 ≠ muIn (Privacy.Ratatouille.stI i) := by
+  subst hi
+  intro hm
   cases op with
   | issue q tc c =>
-    obtain ⟨k, hk, hmv⟩ := hhit
-    rw [vPoint_eq] at hk
-    rcases progT_moved x₁ c₁ x₂ c₂ t k hmv with ⟨st, o, hd, hkp⟩ | ⟨st, o, hd, hkp⟩
-    · left
-      rw [hd]
-      rcases x₁ with _ | i
-      · cases hd
-      simp only [sd₁, Option.map_some, Option.some.injEq, Prod.mk.injEq] at hd
-      obtain ⟨rfl, rfl⟩ := hd
-      refine hitAt_of A hL (.issue q tc c) t _ _ rfl k hk rfl hkp ?_
-      rintro ⟨b, hb⟩ hm
-      obtain ⟨π, hπ⟩ := simO_some_I (i := i) hb
-      refine hfr (i, π) (by rw [hπ]; rfl) ?_
-      exact muIn_stI_inj hm
-    · right
-      rw [hd]
-      rcases x₂ with _ | i
-      · cases hd
-      simp only [sd₂, Option.map_some, Option.some.injEq, Prod.mk.injEq] at hd
-      obtain ⟨rfl, rfl⟩ := hd
-      refine hitAt_of A hL (.issue q tc c) t _ _ rfl k hk rfl hkp ?_
-      intro _ hm
-      have := congrArg ByteArray.size hm
-      simp only [fSt, size_muIn_stI, size_muIn_stS] at this
-      omega
+    obtain ⟨b, hb⟩ := hok
+    obtain ⟨π, hπ⟩ := simO_some_I (i := i) hb
+    exact hfr (i, π) (by rw [hπ]; rfl) (muIn_stI_inj hm)
   | spend q c x =>
-    obtain ⟨k, hk, hmv⟩ := hhit
-    have hk := hk.trans (vPoint_eq (p := pS) _ _ _ (shOf t))
-    rcases progT_moved x₁ c₁ x₂ c₂ t k hmv with ⟨st, o, hd, hkp⟩ | ⟨st, o, hd, hkp⟩
-    · left
-      rw [hd]
-      rcases x₁ with _ | i
-      · cases hd
-      simp only [sd₁, Option.map_some, Option.some.injEq, Prod.mk.injEq] at hd
-      obtain ⟨rfl, rfl⟩ := hd
-      refine hitAt_of A hL (.spend q c x) t _ _ rfl k hk rfl hkp ?_
-      intro _ hm
-      have := congrArg ByteArray.size hm
-      simp only [fSt, size_muIn_stI, size_muIn_stS] at this
-      omega
-    · right
-      rw [hd]
-      rcases x₂ with _ | i
-      · cases hd
-      simp only [sd₂, Option.map_some, Option.some.injEq, Prod.mk.injEq] at hd
-      obtain ⟨rfl, rfl⟩ := hd
-      refine hitAt_of A hL (.spend q c x) t _ _ rfl k hk rfl hkp ?_
-      rintro ⟨b, hb⟩ hm
-      obtain ⟨π, hπ⟩ := simO_some_S (i := i) hb
-      refine hfr ({ i with pk := A.pk }, π) (by rw [hπ]; rfl) ?_
-      have := muIn_stS_inj hm.symm
-      rw [← this]
-      rfl
+    have := congrArg ByteArray.size hm
+    simp only [fd, size_muIn_stI, size_muIn_stS] at this
+    omega
 
-end Rata
-
-/-! ## One level: a lens on the tape -/
-
-section Level
-
-open VoleMole.ZK.Sim
-
-variable {L : ℕ}
-
-/-- **One level of a hit has probability `≤ (q + 1)/|Y|`.** The tape `Ω` has a component `T`
-(a table on the short inputs, lens `set`/`get`). The forgery's point `Pf` is computed from `T` by
-a tree with `q` queries; the simulation's point `Ps` does not depend on `T`, and its target `τ`
-reads `T` only at `Ps`. -/
-theorem pr_level_le {Ω : Type*} [Fintype Ω] [Nonempty Ω] {n : ℕ} (set : (KL L → Bytes n) → Ω → Ω)
-    (get : Ω → KL L → Bytes n) (h1 : ∀ x, set (get x) x = x) (h2 : ∀ t x, get (set t x) = t)
-    (h3 : ∀ t t' x, set t (set t' x) = set t x) (Pf Ps τ : Ω → ByteArray) {q : ℕ}
-    (hPs : ∀ T T' z, Ps (set T z) = Ps (set T' z))
-    (hτ : ∀ T T' z, (∀ k, keyL L (Ps (set T z)) = some k → T k = T' k) →
-      τ (set T z) = τ (set T' z))
-    (hPf : ∀ z, QTree (fun T => keyL L (Pf (set T z))) q) :
-    pr Ω (fun ω => ∃ k, encL k = Pf ω ∧ Pf ω ≠ Ps ω ∧ ba (get ω k) = τ ω) ≤
-      (q + 1 : ℕ) * (1 / Fintype.card (Bytes n)) := by
-  classical
-  rw [pr_set set get h1 h2 h3]
-  refine pr_prod_le' _ fun z => ?_
-  let T₀ : KL L → Bytes n := fun _ _ => 0
-  have h := pr_hit_le (hPf z) (keyL L (Ps (set T₀ z))) (fun T => blk n (τ (set T z)))
-    fun T T' hT => by
-      rw [hτ T T' z fun k hk => hT k (by rwa [hPs T₀ T z])]
-  refine (Privacy.pr_mono fun T hT => ?_).trans h
-  obtain ⟨k, hk, hne, hv⟩ := hT
-  refine ⟨k, by rw [← hk, keyL_encL], fun he => hne ?_, ?_⟩
-  · rw [← hk, encL_of_keyL he, hPs T₀ T z]
-  · rw [h2] at hv
-    rw [← hv, blk_ba]
-
-end Level
-
-/-! ## The forgery's points are computed by trees -/
-
-namespace Rata
-
-open VoleMole.Verifier VoleMole.Verifier.Bridge VoleMole.ZK.Sim VoleMole.ZK
-open VoleMole.Privacy.Ratatouille VoleMole.Spec.Ratatouille VoleMole.Theft.Ratatouille
-open VoleMole.Theft.Chain
-open VoleMole.ROM.IC (muIn)
-
-variable {R : Type} [CipherRow R] {L M : ℕ}
-
-/-- **The programmed `H₂³` table depends on the extra table only through the two simulations'
-prefixes.** -/
-lemma progT_fst_congr (x₁ : Option IssueInstance) (c₁ : SimCoins pI) (x₂ : Option SpendInstance)
-    (c₂ : SimCoins pS) (G2 : Tab2G pI) (G5E : Tab5F × (Blk → R)) (x x' : XTab L M)
-    (hp1 : ∀ st o, sd₁ x₁ c₁ = some (st, o) →
-      @simPre (prgT (G2, (G5E, x))) (recT (G2, (G5E, x))) CrtGen.tables st o =
-        @simPre (prgT (G2, (G5E, x'))) (recT (G2, (G5E, x'))) CrtGen.tables st o)
-    (hp2 : ∀ st o, sd₂ x₂ c₂ = some (st, o) →
-      @simPre (prgT (G2, (G5E, x))) (recT (G2, (G5E, x))) CrtGen.tables st o =
-        @simPre (prgT (G2, (G5E, x'))) (recT (G2, (G5E, x'))) CrtGen.tables st o) :
-    (progT (leanProgIRX hbX) (leanProgSRX hbX) x₁ c₁ x₂ c₂ (G2, (G5E, x))).1 =
-      (progT (leanProgIRX hbX) (leanProgSRX hbX) x₁ c₁ x₂ c₂ (G2, (G5E, x'))).1 := by
-  rcases x₁ with _ | i <;> rcases x₂ with _ | j
-  · rfl
-  · have e := hp2 _ _ rfl
-    show (progRO pS (hbX x) _ c₂ (G2, G5E)).1 = (progRO pS (hbX x') _ c₂ (G2, G5E)).1
-    simp only [progRO]
-    rw [outPre_eq (t := (G2, (G5E, x))), outPre_eq (t := (G2, (G5E, x'))), e]
-  · have e := hp1 _ _ rfl
-    show (progRO pI (hbX x) _ c₁ (G2, G5E)).1 = (progRO pI (hbX x') _ c₁ (G2, G5E)).1
-    simp only [progRO]
-    rw [outPre_eq (t := (G2, (G5E, x))), outPre_eq (t := (G2, (G5E, x'))), e]
-  · have e1 := hp1 _ _ rfl
-    have e2 := hp2 _ _ rfl
-    show (progRO pI (hbX x) _ c₁ ((progRO pS (hbX x) _ c₂ (G2, G5E)).1, G5E)).1 =
-      (progRO pI (hbX x') _ c₁ ((progRO pS (hbX x') _ c₂ (G2, G5E)).1, G5E)).1
-    simp only [progRO]
-    rw [outPre_eq (Privacy.Ratatouille.stS j) _ (G2, (G5E, x)),
-      outPre_eq (Privacy.Ratatouille.stS j) _ (G2, (G5E, x')), e2,
-      outPre_eq (Privacy.Ratatouille.stI i) _ (G2, (G5E, x)),
-      outPre_eq (Privacy.Ratatouille.stI i) _ (G2, (G5E, x')), e1]
-
-instance : Inhabited (KL L) := ⟨⟨0, Fin.elim0⟩⟩
-
-lemma sd₁_delayed {x : Option IssueInstance} {c : SimCoins pI} {st : Statement}
-    {o : Except String ByteArray} (h : sd₁ x c = some (st, o)) : st.delayed = false := by
-  rcases x with _ | i
-  · cases h
-  · simp only [sd₁, Option.map_some, Option.some.injEq, Prod.mk.injEq] at h
-    rw [← h.1]
+omit [CipherRow R] in
+/-- **A fresh forgery's `H₂⁰` input is not the simulated spend's.** -/
+lemma fresh_ne₂ (p₁ : Option (IssueInstance × IssueProof Sizes.labelRows))
+    (x₂ : Option SpendInstance) (c₂ : SimCoins pS) (op : Op Sizes.labelRows) (i : SpendInstance)
+    (hfr : FreshOk A p₁ (pairO x₂ (simO leanSimSR x₂ c₂)) op) (hi : x₂ = some i)
+    (hok : ∃ b, simulate pS c₂ = .ok b) :
+    muIn (fd A op).1 ≠ muIn (Privacy.Ratatouille.stS i) := by
+  subst hi
+  intro hm
+  cases op with
+  | issue q tc c =>
+    have := congrArg ByteArray.size hm
+    simp only [fd, size_muIn_stI, size_muIn_stS] at this
+    omega
+  | spend q c x =>
+    obtain ⟨b, hb⟩ := hok
+    obtain ⟨π, hπ⟩ := simO_some_S (i := i) hb
+    refine hfr ({ i with pk := A.pk }, π) (by rw [hπ]; rfl) ?_
+    have := muIn_stS_inj hm.symm
+    rw [← this]
     rfl
 
-lemma sd₂_delayed {x : Option SpendInstance} {c : SimCoins pS} {st : Statement}
-    {o : Except String ByteArray} (h : sd₂ x c = some (st, o)) : st.delayed = false := by
-  rcases x with _ | i
-  · cases h
-  · simp only [sd₂, Option.map_some, Option.some.injEq, Prod.mk.injEq] at h
-    rw [← h.1]
-    rfl
-
-/-- **The forgery's point at one level is computed by a tree** with two more queries than the
-adversary's: the two simulations' points (which fix the programmed `H₂³` table), then the
-adversary's tree. -/
-lemma qtree_forger {n : ℕ} (setX : (KL L → ZK.Sim.Bytes n) → XTab L M → XTab L M) {q : ℕ}
-    (Pf : Op Sizes.labelRows → ShT R L M → ByteArray) (Ps : SimD → ShT R L M → ByteArray)
-    (hPf : ∀ op G2 G5E x T T', Pf op (G2, (G5E, setX T x)) = Pf op (G2, (G5E, setX T' x)))
-    (hPs : ∀ d G2 G5E x T T', Ps d (G2, (G5E, setX T x)) = Ps d (G2, (G5E, setX T' x)))
-    (hpre : ∀ (d : SimD) st o G2 G5E x T T', d = some (st, o) → st.delayed = false →
-      (∀ k, keyL L (Ps d (G2, (G5E, setX T x))) = some k → T k = T' k) →
-      @simPre (prgT (G2, (G5E, setX T x))) (recT (G2, (G5E, setX T x))) CrtGen.tables st o =
-        @simPre (prgT (G2, (G5E, setX T' x))) (recT (G2, (G5E, setX T' x))) CrtGen.tables st o)
-    (F : Tab3 → Tab3 → ShT R L M → Op Sizes.labelRows)
-    (hF : ∀ g₁ g₂ G2 G5E x, QTree (fun T => F g₁ g₂ (G2, (G5E, setX T x))) q)
-    (x₁ : Option IssueInstance) (c₁ : SimCoins pI) (x₂ : Option SpendInstance) (c₂ : SimCoins pS)
-    (g₁ g₂ : Tab3) (G2 : Tab2G pI) (G5E : Tab5F × (Blk → R)) (x : XTab L M) :
-    QTree (fun T => keyL L (Pf (F g₁ g₂ (progT (leanProgIRX hbX) (leanProgSRX hbX) x₁ c₁ x₂ c₂
-      (G2, (G5E, setX T x)))) (G2, (G5E, setX T x)))) (q + 2) := by
-  let T₀ : KL L → ZK.Sim.Bytes n := fun _ _ => 0
-  let a₁ : KL L := (keyL L (Ps (sd₁ x₁ c₁) (G2, (G5E, setX T₀ x)))).getD default
-  let a₂ : KL L := (keyL L (Ps (sd₂ x₂ c₂) (G2, (G5E, setX T₀ x)))).getD default
-  have hag : ∀ (d : SimD) (a : KL L), ∀ T T' : KL L → ZK.Sim.Bytes n,
-      T ((keyL L (Ps d (G2, (G5E, setX T₀ x)))).getD a) =
-        T' ((keyL L (Ps d (G2, (G5E, setX T₀ x)))).getD a) →
-      ∀ k, keyL L (Ps d (G2, (G5E, setX T x))) = some k → T k = T' k := by
-    intro d a T T' hT k hk
-    rw [hPs d G2 G5E x T T₀] at hk
-    rw [hk] at hT
-    exact hT
-  refine QTree.of_two (fun T => (progT (leanProgIRX hbX) (leanProgSRX hbX) x₁ c₁ x₂ c₂
-      (G2, (G5E, setX T x))).1) a₁ a₂ ?_
-    (fun H2 T => keyL L (Pf (F g₁ g₂ (H2, (G5E, setX T x))) (G2, (G5E, setX T₀ x))))
-    (fun H2 => (hF g₁ g₂ H2 G5E x).map fun op => keyL L (Pf op (G2, (G5E, setX T₀ x)))) fun T => ?_
-  · intro T T' h1 h2
-    refine progT_fst_congr x₁ c₁ x₂ c₂ G2 G5E _ _ (fun st o hd => hpre _ st o G2 G5E x T T' hd
-      (sd₁_delayed hd) (hag _ default T T' h1))
-      (fun st o hd => hpre _ st o G2 G5E x T T' hd (sd₂_delayed hd) (hag _ default T T' h2))
-  · have e : progT (leanProgIRX hbX) (leanProgSRX hbX) x₁ c₁ x₂ c₂ (G2, (G5E, setX T x)) =
-        ((progT (leanProgIRX hbX) (leanProgSRX hbX) x₁ c₁ x₂ c₂ (G2, (G5E, setX T x))).1,
-          (G5E, setX T x)) :=
-      Prod.ext rfl (progT_snd (prog₁ := leanProgIRX (R := R) hbX) (prog₂ := leanProgSRX hbX)
-        (fun _ _ _ => rfl) (fun _ _ _ => rfl) _ _ _ _ _)
-    show keyL L (Pf _ _) = keyL L (Pf _ _)
-    rw [e, hPf _ G2 G5E x T T₀]
-
-/-! ## The three levels -/
-
-variable (A : Thief Sizes.labelRows Tab3 (ShT R L M))
-
-omit [CipherRow R] in
-lemma recT_agree22 (G2 : Tab2G pI) (G5E : Tab5F × (Blk → R)) (x : XTab L M) (T T' : KL L → ZK.Sim.Bytes 56) :
-    (recT (G2, (G5E, set22 T x))).AgreeOff .h22 (recT (G2, (G5E, set22 T' x))) :=
-  agreeOff_withTable (hbX_agreeOff_22 T T' x) _ _
-
-omit [CipherRow R] in
-lemma recT_agree21 (G2 : Tab2G pI) (G5E : Tab5F × (Blk → R)) (x : XTab L M) (T T' : KL L → ZK.Sim.Bytes 136) :
-    (recT (G2, (G5E, set21 T x))).AgreeOff .h21 (recT (G2, (G5E, set21 T' x))) :=
-  agreeOff_withTable (hbX_agreeOff_21 T T' x) _ _
-
-omit [CipherRow R] in
-lemma recT_agreeMu (G2 : Tab2G pI) (G5E : Tab5F × (Blk → R)) (x : XTab L M) (T T' : KL L → ZK.Sim.Bytes 32) :
-    (recT (G2, (G5E, setMu T x))).AgreeOff .mu (recT (G2, (G5E, setMu T' x))) :=
-  agreeOff_withTable (hbX_agreeOff_mu T T' x) _ _
-
-omit [CipherRow R] in
-/-- The record answers a point the same for two tables that agree at the point's key. -/
-lemma recT_hash22 (G2 : Tab2G pI) (G5E : Tab5F × (Blk → R)) (x : XTab L M) (T T' : KL L → ZK.Sim.Bytes 56)
-    (b : ByteArray) (h : ∀ k, keyL L b = some k → T k = T' k) :
-    (recT (G2, (G5E, set22 T x))).hash .h22 b = (recT (G2, (G5E, set22 T' x))).hash .h22 b := by
-  rw [recT_hash_ne _ (by decide), recT_hash_ne _ (by decide), hbX_22_eq, hbX_22_eq]
-  rcases hk : keyL L b with _ | k
-  · rfl
-  · simp only
-    rw [show (set22 T x).2.2.2.2.2.1 = T from rfl, show (set22 T' x).2.2.2.2.2.1 = T' from rfl,
-      h k hk]
-
-omit [CipherRow R] in
-lemma recT_hash21 (G2 : Tab2G pI) (G5E : Tab5F × (Blk → R)) (x : XTab L M) (T T' : KL L → ZK.Sim.Bytes 136)
-    (b : ByteArray) (h : ∀ k, keyL L b = some k → T k = T' k) :
-    (recT (G2, (G5E, set21 T x))).hash .h21 b = (recT (G2, (G5E, set21 T' x))).hash .h21 b := by
-  rw [recT_hash_ne _ (by decide), recT_hash_ne _ (by decide), hbX_21_eq, hbX_21_eq]
-  rcases hk : keyL L b with _ | k
-  · rfl
-  · simp only
-    rw [show (set21 T x).2.2.2.2.1 = T from rfl, show (set21 T' x).2.2.2.2.1 = T' from rfl,
-      h k hk]
-
-omit [CipherRow R] in
-lemma recT_hashMu (G2 : Tab2G pI) (G5E : Tab5F × (Blk → R)) (x : XTab L M) (T T' : KL L → ZK.Sim.Bytes 32)
-    (b : ByteArray) (h : ∀ k, keyL L b = some k → T k = T' k) :
-    (recT (G2, (G5E, setMu T x))).hash .mu b = (recT (G2, (G5E, setMu T' x))).hash .mu b := by
-  rw [recT_hash_ne _ (by decide), recT_hash_ne _ (by decide), hbX_mu_eq, hbX_mu_eq]
-  rcases hk : keyL L b with _ | k
-  · rfl
-  · simp only
-    rw [show (setMu T x).2.1 = T from rfl, show (setMu T' x).2.1 = T' from rfl, h k hk]
-
-/-! ### `H₂²` -/
-
-lemma hPf22 (op : Op Sizes.labelRows) (G2 : Tab2G pI) (G5E : Tab5F × (Blk → R)) (x : XTab L M)
-    (T T' : KL L → ZK.Sim.Bytes 56) :
-    fPt22 A op (G2, (G5E, set22 T x)) = fPt22 A op (G2, (G5E, set22 T' x)) :=
-  @cin2_congr22 (icPrg (rowFn G5E.2)) _ _ _ _ _ (recT_agree22 G2 G5E x T T')
-
-lemma hPs22 (d : SimD) (G2 : Tab2G pI) (G5E : Tab5F × (Blk → R)) (x : XTab L M)
-    (T T' : KL L → ZK.Sim.Bytes 56) :
-    sPt22 d (G2, (G5E, set22 T x)) = sPt22 d (G2, (G5E, set22 T' x)) := by
-  rcases d with _ | ⟨st, _ | b⟩
-  · rfl
-  · simp only [sPt22, sim2]
-  · simp only [sPt22, sim2]
-    exact @cin2_congr22 (icPrg (rowFn G5E.2)) _ _ _ _ _ (recT_agree22 G2 G5E x T T')
-
-lemma hpre22 (d : SimD) (st : Statement) (o : Except String ByteArray) (G2 : Tab2G pI)
-    (G5E : Tab5F × (Blk → R)) (x : XTab L M) (T T' : KL L → ZK.Sim.Bytes 56) (hd : d = some (st, o))
-    (h : ∀ k, keyL L (sPt22 d (G2, (G5E, set22 T x))) = some k → T k = T' k) :
-    @simPre (prgT (G2, (G5E, set22 T x))) (recT (G2, (G5E, set22 T x))) CrtGen.tables st o =
-      @simPre (prgT (G2, (G5E, set22 T' x))) (recT (G2, (G5E, set22 T' x))) CrtGen.tables st o := by
-  subst hd
-  rcases o with _ | b
-  · simp only [simPre]
-  · simp only [sPt22, sim2] at h
-    simp only [simPre]
-    exact @vPre_congr22 (icPrg (rowFn G5E.2)) _ _ _ _ _ (recT_agree22 G2 G5E x T T')
-      (recT_hash22 G2 G5E x T T' _ h)
-
-lemma hτ22 (d : SimD) (G2 : Tab2G pI) (G5E : Tab5F × (Blk → R)) (x : XTab L M)
-    (T T' : KL L → ZK.Sim.Bytes 56)
-    (h : ∀ k, keyL L (sPt22 d (G2, (G5E, set22 T x))) = some k → T k = T' k) :
-    sTau22 d (G2, (G5E, set22 T x)) = sTau22 d (G2, (G5E, set22 T' x)) := by
-  rcases d with _ | ⟨st, o⟩
-  · rfl
-  · simp only [sTau22]
-    rw [hpre22 _ st o G2 G5E x T T' rfl h]
-
-/-! ### `H₂¹` -/
-
-lemma hPf21 (op : Op Sizes.labelRows) (G2 : Tab2G pI) (G5E : Tab5F × (Blk → R)) (x : XTab L M)
-    (T T' : KL L → ZK.Sim.Bytes 136) :
-    fPt21 A op (G2, (G5E, set21 T x)) = fPt21 A op (G2, (G5E, set21 T' x)) :=
-  @cin1_congr21 (icPrg (rowFn G5E.2)) _ _ _ _ (recT_agree21 G2 G5E x T T')
-
-lemma hPs21 (d : SimD) (G2 : Tab2G pI) (G5E : Tab5F × (Blk → R)) (x : XTab L M)
-    (T T' : KL L → ZK.Sim.Bytes 136) :
-    sPt21 d (G2, (G5E, set21 T x)) = sPt21 d (G2, (G5E, set21 T' x)) := by
-  rcases d with _ | ⟨st, _ | b⟩
-  · rfl
-  · simp only [sPt21, sim1]
-  · simp only [sPt21, sim1]
-    exact @cin1_congr21 (icPrg (rowFn G5E.2)) _ _ _ _ (recT_agree21 G2 G5E x T T')
-
-lemma hpre21 (d : SimD) (st : Statement) (o : Except String ByteArray) (G2 : Tab2G pI)
-    (G5E : Tab5F × (Blk → R)) (x : XTab L M) (T T' : KL L → ZK.Sim.Bytes 136) (hd : d = some (st, o))
-    (h : ∀ k, keyL L (sPt21 d (G2, (G5E, set21 T x))) = some k → T k = T' k) :
-    @simPre (prgT (G2, (G5E, set21 T x))) (recT (G2, (G5E, set21 T x))) CrtGen.tables st o =
-      @simPre (prgT (G2, (G5E, set21 T' x))) (recT (G2, (G5E, set21 T' x))) CrtGen.tables st o := by
-  subst hd
-  rcases o with _ | b
-  · simp only [simPre]
-  · simp only [sPt21, sim1] at h
-    simp only [simPre]
-    exact @vPre_congr21 (icPrg (rowFn G5E.2)) _ _ _ _ _ (recT_agree21 G2 G5E x T T')
-      (recT_hash21 G2 G5E x T T' _ h)
-
-lemma hτ21 (d : SimD) (G2 : Tab2G pI) (G5E : Tab5F × (Blk → R)) (x : XTab L M)
-    (T T' : KL L → ZK.Sim.Bytes 136)
-    (h : ∀ k, keyL L (sPt21 d (G2, (G5E, set21 T x))) = some k → T k = T' k) :
-    sTau21 d (G2, (G5E, set21 T x)) = sTau21 d (G2, (G5E, set21 T' x)) := by
-  simp only [sTau21]
-  rw [recT_hash21 G2 G5E x T T' _ h, hPs21 d G2 G5E x T T']
-
-/-! ### `H₂⁰` -/
-
-lemma hpreMu (d : SimD) (st : Statement) (o : Except String ByteArray) (G2 : Tab2G pI)
-    (G5E : Tab5F × (Blk → R)) (x : XTab L M) (T T' : KL L → ZK.Sim.Bytes 32) (hd : d = some (st, o))
-    (hdl : st.delayed = false) (h : ∀ k, keyL L (sPtMu d) = some k → T k = T' k) :
-    @simPre (prgT (G2, (G5E, setMu T x))) (recT (G2, (G5E, setMu T x))) CrtGen.tables st o =
-      @simPre (prgT (G2, (G5E, setMu T' x))) (recT (G2, (G5E, setMu T' x))) CrtGen.tables st o := by
-  subst hd
-  rcases o with _ | b
-  · simp only [simPre]
-  · simp only [sPtMu] at h
-    simp only [simPre]
-    exact @vPre_congrMu (icPrg (rowFn G5E.2)) _ _ _ _ _ hdl (recT_agreeMu G2 G5E x T T')
-      (recT_hashMu G2 G5E x T T' _ h)
-
-omit [CipherRow R] in
-lemma hτMu (d : SimD) (G2 : Tab2G pI) (G5E : Tab5F × (Blk → R)) (x : XTab L M)
-    (T T' : KL L → ZK.Sim.Bytes 32) (h : ∀ k, keyL L (sPtMu d) = some k → T k = T' k) :
-    sTauMu d (G2, (G5E, setMu T x)) = sTauMu d (G2, (G5E, setMu T' x)) := by
-  simp only [sTauMu]
-  rw [recT_hashMu G2 G5E x T T' _ h]
-
-/-! ## `ε_hit` -/
-
-/-- **The adversaries of `ε_hit`**: the last stage reads each chain table (`H₂⁰`, `H₂¹`, `H₂²`
-on the short inputs) by a decision tree with `q_μ`, `q₂₁`, `q₂₂` queries, at every value of
-everything else (the slices, `H₂³`, `H₅`, the cipher and the other tables, which it reads
-freely). -/
-def AdmHit (qMu q21 q22 : ℕ) (F : Tab3 → Tab3 → ShT R L M → Op Sizes.labelRows) : Prop :=
-  (∀ g₁ g₂ G2 G5E x, QTree (fun T => F g₁ g₂ (G2, (G5E, setMu T x))) qMu) ∧
-    (∀ g₁ g₂ G2 G5E x, QTree (fun T => F g₁ g₂ (G2, (G5E, set21 T x))) q21) ∧
-    (∀ g₁ g₂ G2 G5E x, QTree (fun T => F g₁ g₂ (G2, (G5E, set22 T x))) q22)
-
-omit [CipherRow R] in
-/-- A last stage that does not read the tables is admissible with no queries. -/
-lemma admHit_const (o : Op Sizes.labelRows) : AdmHit (R := R) (L := L) (M := M) 0 0 0 fun _ _ _ => o :=
-  ⟨fun _ _ _ _ _ => .ret _ _, fun _ _ _ _ _ => .ret _ _, fun _ _ _ _ _ => .ret _ _⟩
-
-/-- **The bound**: `2·((q_μ+3)·2⁻²⁵⁶ + (q₂₁+3)·2⁻¹⁰⁸⁸ + (q₂₂+3)·2⁻⁴⁴⁸)`. -/
-noncomputable def epsHit (qMu q21 q22 : ℕ) : ℝ :=
-  2 * ((qMu + 3 : ℕ) * (1 / 2 ^ 256) + (q21 + 3 : ℕ) * (1 / 2 ^ 1088) +
-    (q22 + 3 : ℕ) * (1 / 2 ^ 448))
-
-lemma card_bytes (n : ℕ) : Fintype.card (ZK.Sim.Bytes n) = 2 ^ (8 * n) := by
-  rw [Fintype.card_fun, Fintype.card_fin, Prob.card_uint8, pow_mul]
-
-/-- The tape of `ProgEv`. -/
-abbrev Tape (α : Type) (R : Type) (L M : ℕ) :=
-  (α × (SimCoins pI × Tab3)) × ((SimCoins pS × Tab3) × ShT R L M)
-
-/-- The tape with a chain table replaced. -/
-def setZ {α Y : Type} (setX : Y → XTab L M → XTab L M) (T : Y) (z : Tape α R L M) : Tape α R L M :=
-  (z.1, (z.2.1, (z.2.2.1, (z.2.2.2.1, setX T z.2.2.2.2))))
-
-section Tape
-
-variable [Fintype R] [Nonempty R] {α : Type} [Fintype α] [Nonempty α]
-
-lemma pr_E22_le (d : Tape α R L M → SimD) (hd : ∀ T z, d (setZ set22 T z) = d z)
-    (op : Tape α R L M → Op Sizes.labelRows) {q : ℕ}
-    (hop : ∀ z, QTree (fun T => keyL L (fPt22 A (op (setZ set22 T z)) (setZ set22 T z).2.2)) q) :
-    pr (Tape α R L M) (fun z => Ev (fPt22 A (op z) z.2.2) (sPt22 (d z) z.2.2) (sTau22 (d z) z.2.2)
-      (get22 z.2.2.2.2)) ≤ (q + 1 : ℕ) * (1 / 2 ^ (8 * 56)) := by
-  have h := pr_level_le (setZ set22) (fun z => get22 z.2.2.2.2) (fun _ => rfl) (fun _ _ => rfl)
-    (fun _ _ _ => rfl) (fun z => fPt22 A (op z) z.2.2) (fun z => sPt22 (d z) z.2.2)
-    (fun z => sTau22 (d z) z.2.2)
-    (fun T T' z => by
-      show sPt22 (d (setZ set22 T z)) (z.2.2.1, (z.2.2.2.1, set22 T z.2.2.2.2)) =
-        sPt22 (d (setZ set22 T' z)) (z.2.2.1, (z.2.2.2.1, set22 T' z.2.2.2.2))
-      rw [hd, hd]
-      exact hPs22 _ _ _ _ _ _)
-    (fun T T' z hT => by
-      show sTau22 (d (setZ set22 T z)) (z.2.2.1, (z.2.2.2.1, set22 T z.2.2.2.2)) =
-        sTau22 (d (setZ set22 T' z)) (z.2.2.1, (z.2.2.2.1, set22 T' z.2.2.2.2))
-      rw [hd, hd]
-      exact hτ22 _ _ _ _ _ _ (by rwa [hd] at hT))
-    hop
-  rw [card_bytes] at h
-  exact_mod_cast h
-
-lemma pr_E21_le (d : Tape α R L M → SimD) (hd : ∀ T z, d (setZ set21 T z) = d z)
-    (op : Tape α R L M → Op Sizes.labelRows) {q : ℕ}
-    (hop : ∀ z, QTree (fun T => keyL L (fPt21 A (op (setZ set21 T z)) (setZ set21 T z).2.2)) q) :
-    pr (Tape α R L M) (fun z => Ev (fPt21 A (op z) z.2.2) (sPt21 (d z) z.2.2) (sTau21 (d z) z.2.2)
-      (get21 z.2.2.2.2)) ≤ (q + 1 : ℕ) * (1 / 2 ^ (8 * 136)) := by
-  have h := pr_level_le (setZ set21) (fun z => get21 z.2.2.2.2) (fun _ => rfl) (fun _ _ => rfl)
-    (fun _ _ _ => rfl) (fun z => fPt21 A (op z) z.2.2) (fun z => sPt21 (d z) z.2.2)
-    (fun z => sTau21 (d z) z.2.2)
-    (fun T T' z => by
-      show sPt21 (d (setZ set21 T z)) (z.2.2.1, (z.2.2.2.1, set21 T z.2.2.2.2)) =
-        sPt21 (d (setZ set21 T' z)) (z.2.2.1, (z.2.2.2.1, set21 T' z.2.2.2.2))
-      rw [hd, hd]
-      exact hPs21 _ _ _ _ _ _)
-    (fun T T' z hT => by
-      show sTau21 (d (setZ set21 T z)) (z.2.2.1, (z.2.2.2.1, set21 T z.2.2.2.2)) =
-        sTau21 (d (setZ set21 T' z)) (z.2.2.1, (z.2.2.2.1, set21 T' z.2.2.2.2))
-      rw [hd, hd]
-      exact hτ21 _ _ _ _ _ _ (by rwa [hd] at hT))
-    hop
-  rw [card_bytes] at h
-  exact_mod_cast h
-
-omit [CipherRow R] in
-lemma pr_EMu_le (d : Tape α R L M → SimD) (hd : ∀ T z, d (setZ setMu T z) = d z)
-    (op : Tape α R L M → Op Sizes.labelRows) {q : ℕ}
-    (hop : ∀ z, QTree (fun T => keyL L (fPtMu A (op (setZ setMu T z)))) q) :
-    pr (Tape α R L M) (fun z => Ev (fPtMu A (op z)) (sPtMu (d z)) (sTauMu (d z) z.2.2)
-      (getMu z.2.2.2.2)) ≤ (q + 1 : ℕ) * (1 / 2 ^ (8 * 32)) := by
-  have h := pr_level_le (setZ setMu) (fun z => getMu z.2.2.2.2) (fun _ => rfl) (fun _ _ => rfl)
-    (fun _ _ _ => rfl) (fun z => fPtMu A (op z)) (fun z => sPtMu (d z))
-    (fun z => sTauMu (d z) z.2.2)
-    (fun T T' z => by simp only [hd])
-    (fun T T' z hT => by
-      show sTauMu (d (setZ setMu T z)) (z.2.2.1, (z.2.2.2.1, setMu T z.2.2.2.2)) =
-        sTauMu (d (setZ setMu T' z)) (z.2.2.1, (z.2.2.2.1, setMu T' z.2.2.2.2))
-      rw [hd, hd]
-      exact hτMu _ _ _ _ _ _ (by rwa [hd] at hT))
-    hop
-  rw [card_bytes] at h
-  exact_mod_cast h
-
-end Tape
-
--- (the final `ring` step multiplies out `2⁴⁴⁸` and `2¹⁰⁸⁸`)
-set_option exponentiation.threshold 1100 in
 /-- **`ε_hit` for the Lean verifiers and simulators of Ratatouille, with the chain hashes random
 tables.** With `H₂⁰`, `H₂¹`, `H₂²` uniform tables on the inputs of at most `L ≥ 14357` bytes
 (`hbX`), against adversaries that read them with `q_μ`, `q₂₁`, `q₂₂` queries (`AdmHit`), a fresh
 forgery (`FreshOk`) hits a programmed `H₂³` point with probability
 
-    ≤ 2·((q_μ+3)·2⁻²⁵⁶ + (q₂₁+3)·2⁻¹⁰⁸⁸ + (q₂₂+3)·2⁻⁴⁴⁸).
+    ≤ 2·((q_μ+3)·2⁻²⁵⁶ + (q₂₁+3)·2⁻¹⁰⁸⁸ + (q₂₂+3)·2⁻⁴⁴⁸)
 
-Per simulation and level the forgery must answer a target the simulation fixed, at a point it
-did not query (`hit_cases`, `pr_level_le`); its point is computed by a tree with the adversary's
-queries plus the two simulations' points (`qtree_forger`). -/
+(`progEv_chain`). -/
 theorem progEv_hit [Fintype R] [Nonempty R] (hL : Lmin ≤ L) (qMu q21 q22 : ℕ) :
     ProgEv leanSimIR (leanProgIRX (R := R) hbX) leanSimSR (leanProgSRX hbX) (FreshOk A)
-      (HitOpX (Hb := hbX) A) (AdmHit qMu q21 q22) (epsHit qMu q21 q22) := by
-  intro α _ _ x₁ x₂ out hout
-  let i₂ : Tape α R L M → Option SpendInstance := fun z =>
-    x₂ z.1.1 (simO leanSimIR (x₁ z.1.1) z.1.2.1)
-  let op : Tape α R L M → Op Sizes.labelRows := fun z =>
-    out z.1.1 (simO leanSimIR (x₁ z.1.1) z.1.2.1) (simO leanSimSR (i₂ z) z.2.1.1) z.1.2.2 z.2.1.2
-      (progT (leanProgIRX hbX) (leanProgSRX hbX) (x₁ z.1.1) z.1.2.1 (i₂ z) z.2.1.1 z.2.2)
-  let d₁ : Tape α R L M → SimD := fun z => sd₁ (x₁ z.1.1) z.1.2.1
-  let d₂ : Tape α R L M → SimD := fun z => sd₂ (i₂ z) z.2.1.1
-  have h22 : ∀ (d : Tape α R L M → SimD), (∀ T z, d (setZ set22 T z) = d z) →
-      pr (Tape α R L M) (fun z => Ev (fPt22 A (op z) z.2.2) (sPt22 (d z) z.2.2)
-        (sTau22 (d z) z.2.2) (get22 z.2.2.2.2)) ≤ (q22 + 2 + 1 : ℕ) * (1 / 2 ^ (8 * 56)) :=
-    fun d hd => pr_E22_le A d hd op fun z =>
-      qtree_forger set22 (fPt22 A) sPt22 (hPf22 A) hPs22
-        (fun d st o G2 G5E x T T' hd _ h => hpre22 d st o G2 G5E x T T' hd h)
-        (out z.1.1 (simO leanSimIR (x₁ z.1.1) z.1.2.1) (simO leanSimSR (i₂ z) z.2.1.1))
-        (fun g₁ g₂ G2 G5E x => (hout _ _ _).2.2 g₁ g₂ G2 G5E x)
-        (x₁ z.1.1) z.1.2.1 (i₂ z) z.2.1.1 z.1.2.2 z.2.1.2 z.2.2.1 z.2.2.2.1 z.2.2.2.2
-  have h21 : ∀ (d : Tape α R L M → SimD), (∀ T z, d (setZ set21 T z) = d z) →
-      pr (Tape α R L M) (fun z => Ev (fPt21 A (op z) z.2.2) (sPt21 (d z) z.2.2)
-        (sTau21 (d z) z.2.2) (get21 z.2.2.2.2)) ≤ (q21 + 2 + 1 : ℕ) * (1 / 2 ^ (8 * 136)) :=
-    fun d hd => pr_E21_le A d hd op fun z =>
-      qtree_forger set21 (fPt21 A) sPt21 (hPf21 A) hPs21
-        (fun d st o G2 G5E x T T' hd _ h => hpre21 d st o G2 G5E x T T' hd h)
-        (out z.1.1 (simO leanSimIR (x₁ z.1.1) z.1.2.1) (simO leanSimSR (i₂ z) z.2.1.1))
-        (fun g₁ g₂ G2 G5E x => (hout _ _ _).2.1 g₁ g₂ G2 G5E x)
-        (x₁ z.1.1) z.1.2.1 (i₂ z) z.2.1.1 z.1.2.2 z.2.1.2 z.2.2.1 z.2.2.2.1 z.2.2.2.2
-  have hMu : ∀ (d : Tape α R L M → SimD), (∀ T z, d (setZ setMu T z) = d z) →
-      pr (Tape α R L M) (fun z => Ev (fPtMu A (op z)) (sPtMu (d z))
-        (sTauMu (d z) z.2.2) (getMu z.2.2.2.2)) ≤ (qMu + 2 + 1 : ℕ) * (1 / 2 ^ (8 * 32)) :=
-    fun d hd => pr_EMu_le A d hd op fun z =>
-      qtree_forger setMu (fun op _ => fPtMu A op) (fun d _ => sPtMu d) (fun _ _ _ _ _ _ => rfl)
-        (fun _ _ _ _ _ _ => rfl)
-        (fun d st o G2 G5E x T T' hd hdl h => hpreMu d st o G2 G5E x T T' hd hdl h)
-        (out z.1.1 (simO leanSimIR (x₁ z.1.1) z.1.2.1) (simO leanSimSR (i₂ z) z.2.1.1))
-        (fun g₁ g₂ G2 G5E x => (hout _ _ _).1 g₁ g₂ G2 G5E x)
-        (x₁ z.1.1) z.1.2.1 (i₂ z) z.2.1.1 z.1.2.2 z.2.1.2 z.2.2.1 z.2.2.2.1 z.2.2.2.2
-  have hH : ∀ (d : Tape α R L M → SimD), (∀ {Y : Type} (s : Y → XTab L M → XTab L M) T z,
-      d (setZ s T z) = d z) →
-      pr (Tape α R L M) (fun z => HitAt A (op z) z.2.2 (d z)) ≤
-        (q22 + 2 + 1 : ℕ) * (1 / 2 ^ (8 * 56)) + (q21 + 2 + 1 : ℕ) * (1 / 2 ^ (8 * 136)) +
-          (qMu + 2 + 1 : ℕ) * (1 / 2 ^ (8 * 32)) := by
-    intro d hd
-    refine (pr_or_le _ _).trans ?_
-    refine add_assoc _ _ (_ : ℝ) ▸ add_le_add (h22 d fun T z => hd _ T z) ?_
-    exact (pr_or_le _ _).trans (add_le_add (h21 d fun T z => hd _ T z) (hMu d fun T z => hd _ T z))
-  refine (Privacy.pr_mono (Q := fun z => HitAt A (op z) z.2.2 (d₁ z) ∨ HitAt A (op z) z.2.2 (d₂ z))
-    fun z hz => hit_cases A hL _ _ _ _ _ _ hz.1 hz.2).trans ?_
-  refine (pr_or_le _ _).trans ?_
-  refine (add_le_add (hH d₁ fun _ _ _ => rfl) (hH d₂ fun _ _ _ => rfl)).trans (le_of_eq ?_)
-  simp only [epsHit, show 8 * 56 = 448 from rfl, show 8 * 136 = 1088 from rfl,
-    show 8 * 32 = 256 from rfl]
-  push_cast
-  ring
+      (HitOpX (Hb := hbX) A) (AdmHit (R := R) (p := pI) (L := L) (M := M) (G := Tab3) qMu q21 q22) (epsHit qMu q21 q22) :=
+  progEv_chain (R := R) (G := Tab3) (sim₁ := leanSimIR) (sim₂ := leanSimSR) simProgI simProgS (fd A)
+    (Fresh := FreshOk A) (fun _ _ op _ => fd_fOk A hL op) (hitG_of_hitOpX A)
+    (fun x₁ c₁ p₂ op i hfr hi hok => by
+      dsimp only at hok ⊢
+      exact fresh_ne₁ A x₁ c₁ p₂ op i hfr hi hok)
+    (fun p₁ x₂ c₂ op i hfr hi hok => by
+      dsimp only at hok ⊢
+      exact fresh_ne₂ A p₁ x₂ c₂ op i hfr hi hok) qMu q21 q22
 
-end Rata
-
-end VoleMole.Theft.Hit
+end VoleMole.Theft.Hit.Rata

@@ -4,6 +4,7 @@ import VoleMole.Theft.SimExtractLean
 import VoleMole.Theft.Tables
 import VoleMole.Theft.ComOW
 import VoleMole.Theft.HitTheft
+import VoleMole.Theft.MoussakaHit
 
 /-!
 # Audit of the non-malleability theorems (`Theft/`)
@@ -39,7 +40,11 @@ import VoleMole.Theft.HitTheft
 * **`ε_hit` is bounded with a satisfiable adversary class.** `noTheft_leanX_hit`
   (`Theft/HitTheft.lean`) is instantiated at the trivial thief, whose last stage reads no chain
   table (`AdmHit 0 0 0`, `admHit_const`), with `L = 14357`: its `ε_hit` term is `epsHit 0 0 0 =
-  6·(2⁻²⁵⁶ + 2⁻¹⁰⁸⁸ + 2⁻⁴⁴⁸)`.
+  6·(2⁻²⁵⁶ + 2⁻¹⁰⁸⁸ + 2⁻⁴⁴⁸)`. `noRedirect_leanX_hit` (`Theft/MoussakaHit.lean`) is instantiated at
+  a well-formed trivial adversary (`thiefW`, `hitWf_thiefW`: a one-key Anchor Set with a 32-byte
+  digest, 16-byte contexts, a 32-byte challenge digest, a constant redemption under its own set),
+  with `L = 6293`. A redirect of the honest request to another 32-byte challenge digest is fresh
+  for the bound (`redirect_freshOk`).
 
 No `sorry`, no `axiom`.
 -/
@@ -141,10 +146,10 @@ example (L M : ℕ) :=
 constant extractor, with `L = Lmin`. -/
 example (M : ℕ) :=
   noTheft_leanX_hit (R := Blk → Blk) (L := Hit.Rata.Lmin) (M := M) (thief0 _ _ _) le_rfl
-    (e := fun _ _ _ _ _ _ => wit0) (Adm := Hit.Rata.AdmHit 0 0 0) (Adm₀ := fun _ => True)
+    (e := fun _ _ _ _ _ _ => wit0) (Adm := Hit.AdmHit 0 0 0) (Adm₀ := fun _ => True)
     (ε₀ := 1) (a3 := 0) (a5 := 0) (aE := 0) (x3 := 0) (x5 := 0) (xE := 0)
     (fun _ _ _ => StageBudget.const _) (fun _ _ _ => StageBudget.const _)
-    (plainSE_one _ _ _ _ _) (fun _ _ => Hit.Rata.admHit_const _) (fun _ h => h)
+    (plainSE_one _ _ _ _ _) (fun _ _ => Hit.admHit_const _) (fun _ h => h)
     fun _ _ _ _ _ _ => trivial
 
 /-- **`Adv^ow` is `1` for some inverter** in this model: `Com` is a fixed function, and the
@@ -266,6 +271,54 @@ theorem redirect_freshR (A : Moussaka.Thief G S) (o₁ b cd : Bytes) (hcd : cd �
   rintro y hy heq
   cases hy
   exact hcd (RedeemInstance.mk.inj heq).2.2.2.2
+
+/-- A one-key Anchor Set with a 32-byte digest. -/
+def setW : AnchorSet :=
+  ⟨[⟨List.replicate digestBytes 0, fun _ => 0⟩], by simp, by simp [maxAnchors], by simp⟩
+
+/-- **A well-formed trivial adversary**: constant choices with the lengths of the C++ types, and
+a constant redemption request under its own Anchor Set as its output. -/
+def thiefW (G S : Type) : Thief G S :=
+  ⟨fun _ => 0, fun _ => 0, ⟨List.replicate digestBytes 0, fun _ => 0⟩, fun _ _ => 0,
+    fun _ => (setW, List.replicate cdBytes 0),
+    fun _ _ _ _ _ => .redeem setW [] (List.replicate ctxBytes 0) (List.replicate ctxBytes 0)
+      (List.replicate cdBytes 0)⟩
+
+/-- **`HitWf` is satisfiable.** -/
+theorem hitWf_thiefW : Hit.Mous.HitWf (thiefW G S) := by
+  refine ⟨fun req => ⟨fun pk hpk => ?_, by simp [thiefW]⟩, ?_⟩
+  · simp only [thiefW, setW, List.mem_singleton] at hpk
+    subst hpk
+    simp
+  · intro o₁ o₂ g₁ g₂ s S' req ci cr cd h
+    simp only [thiefW, MOp.redeem.injEq] at h
+    obtain ⟨rfl, rfl, rfl, rfl, rfl⟩ := h
+    refine ⟨fun pk hpk => ?_, by simp, by simp, by simp, fun _ => rfl⟩
+    simp only [setW, List.mem_singleton] at hpk
+    subst hpk
+    simp
+
+/-- `noRedirect_leanX_hit`'s hypotheses hold for the well-formed trivial adversary (no
+chain-table queries) and a constant extractor, with `L = Lmin`. -/
+example (M : ℕ) :=
+  noRedirect_leanX_hit (R := Blk → Blk) (L := Hit.Mous.Lmin) (M := M) (thiefW _ _) hitWf_thiefW
+    le_rfl (e := fun _ _ _ _ _ _ => []) (Adm := Hit.AdmHit 0 0 0) (Adm₀ := fun _ => True)
+    (ε₀ := 1) (a3 := 0) (a5 := 0) (aE := 0) (x3 := 0) (x5 := 0) (xE := 0)
+    (fun _ _ _ => StageBudget.const _) (fun _ _ _ => StageBudget.const _)
+    (plainSE_one _ _ _ _ _) (fun _ _ => Hit.admHit_const _) (fun _ h => h)
+    fun _ _ _ _ _ _ => trivial
+
+/-- **A redirect is in scope of the bound**: a well-formed honest redemption statement, and the
+same request under another 32-byte challenge digest, is `FreshOk`. -/
+theorem redirect_freshOk (A : Moussaka.Thief G S) (o₁ b cd : Bytes)
+    (hw : Hit.Mous.WfR (stOfR (A.choose o₁).1 b A.ci A.cr (A.choose o₁).2))
+    (hl : cd.length = cdBytes) (hcd : cd ≠ (A.choose o₁).2) :
+    Hit.Mous.FreshOk (Moussaka.stI A o₁) (stR A o₁ (.ok b))
+      (.redeem (A.choose o₁).1 b A.ci A.cr cd) := by
+  refine ⟨⟨hw.1, hw.2.1, hw.2.2.1, hw.2.2.2.1, hw.2.2.2.2.1, hl⟩, ?_⟩
+  rintro y hy
+  cases hy
+  exact ⟨hw, fun he => hcd (by simpa [Hit.Mous.hashedR, stOfR] using he)⟩
 
 end Mous
 

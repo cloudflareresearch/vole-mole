@@ -1,6 +1,7 @@
 import VoleMole.Theft.RatatouilleManyLean
 import VoleMole.Theft.MoussakaManyReads
 import VoleMole.Theft.MoussakaUnboundManyReads
+import VoleMole.Theft.RatatouilleManyHit
 import VoleMole.Audit.TheftMany
 import VoleMole.Audit.UnboundMany
 
@@ -15,6 +16,10 @@ import VoleMole.Audit.UnboundMany
   (`Theft/MoussakaManyReads.lean`) and `nmUN_lean_reads`, `nmUN_lean_plain`
   (`Theft/MoussakaUnboundManyReads.lean`). This checks that the hypotheses are consistent, not
   that they are small.
+* **`ε_hit` is bounded with a satisfiable adversary class.** `noTheftN_leanX_hit`
+  (`Theft/RatatouilleManyHit.lean`: the other hashes uniform tables, the programmed-point terms
+  bounded) is instantiated at the trivial adversary, whose last stage reads no chain table
+  (`AdmHitN 0 0 0`, `admHitN_const`), with `L = 14357`, for every `U ≥ 1` and `M`.
 * **The game chains change tokens.** A spend whose request is sent and whose response the
   Client accepts leaves the Client with the change token made from the slot's coins
   (`change_chains`), and a later spend of that Client reveals the nullifier of the slot that made
@@ -118,6 +123,16 @@ example [NeZero U] :=
     (a3 := 0) (a5 := 0) (aE := 0) (x3 := 0) (x5 := 0) (xE := 0)
     (fun _ _ => StageBudgetN.const _) (fun _ _ => StageBudgetN.const _)
     (plainSEN_one _ _ _ _ _ _) (εh := fun _ => 1) (fun i => slotEvN_one _ i _ _ _ _ _)
+
+/-- `noTheftN_leanX_hit`'s hypotheses hold for the trivial adversary (no chain-table queries)
+and a constant extractor, with `L = Lmin`. -/
+example [NeZero U] (M' : ℕ) :=
+  noTheftN_leanX_hit (R := Blk → Blk) (L := Hit.Rata.Lmin) (M' := M') (thiefNR _ U M _ _) le_rfl
+    (e := fun _ _ _ _ => wit0) (Adm := Hit.AdmHitN 0 0 0) (Adm₀ := fun _ => True) (ε₀ := 1)
+    (a3 := 0) (a5 := 0) (aE := 0) (x3 := 0) (x5 := 0) (xE := 0)
+    (fun _ _ => StageBudgetNX.const _) (fun _ _ => StageBudgetNX.const _)
+    (plainSEN_one _ _ _ _ _ _) (fun _ _ => Hit.admHitN_const _) (fun _ h => h)
+    fun _ _ _ _ => trivial
 
 /-- **Change tokens chain.** In a spend slot whose request is sent (`xtE` gives the statement
 `x`, the entry carries a spend proof) and whose response the Client accepts, the spending
