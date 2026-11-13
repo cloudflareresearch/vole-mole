@@ -348,6 +348,11 @@ import VoleMole.Assumptions.BlindPomfritT6Lean
 import VoleMole.Assumptions.PomfritLemmaPSim
 import VoleMole.Assumptions.PomfritShift
 import VoleMole.Assumptions.PomfritShiftSim
+import VoleMole.Theft.Basic
+import VoleMole.Theft.Ratatouille
+import VoleMole.Theft.RatatouilleLean
+import VoleMole.Theft.Moussaka
+import VoleMole.Theft.MoussakaLean
 import VoleMole.Audit.Nonvacuous
 import VoleMole.Audit.Liveness
 import VoleMole.Audit.UnboundROM
@@ -358,3 +363,4 @@ import VoleMole.Audit.OMPRShift
 import VoleMole.Audit.T6Pomfrit
 import VoleMole.Audit.TheoremR
 import VoleMole.Audit.PomfritLemmaP
+import VoleMole.Audit.Theft
