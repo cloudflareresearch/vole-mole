@@ -1,6 +1,7 @@
 import VoleMole.Audit.IdealTag
 import VoleMole.Assumptions.SimLinks
 import VoleMole.ROM.MoussakaUnboundSim
+import VoleMole.ROM.MoussakaUnboundSimPerm
 import VoleMole.Audit.UnboundROM
 
 /-!
@@ -19,6 +20,12 @@ the joint bound (each query of the run charged once for both relations, `ROM/Sim
 their separation hypothesis is discharged inside (`decOf_sep`, the relations' DSTs). The unbound
 Moussaka joint bound (`moussakaUnbound_sim_joint_spec`) is instantiated at the executable
 statements with one-instance families and trivial provers.
+
+The permutation-model joint bounds (`moussaka_sim_joint_specP`, `ratatouille_sim_joint_specP`,
+`moussakaUnbound_sim_joint_specP`, `ROM/SimPermJointSpec.lean`) are instantiated at the
+executable statements with one-instance families and a prover `invP` that makes one **inverse**
+cipher query (one cipher query, no hash query): the joint normalization, the prefix runs and the
+one hash log are discharged for it.
 
 No `sorry`, no `axiom`.
 -/
@@ -92,6 +99,77 @@ example (lr : Bool) (ci cr cd pf : ByteArray) :=
     (fun _ _ => isQueryBoundP_pure _ _ _) (fun _ _ => isQueryBoundP_pure _ _ _) 0
     (fun _ _ => trivial) trivial (fun _ _ => trivial) 0 (fun _ _ => isQueryBoundP_pure _ _ _)
     (isQueryBoundP_pure _ _ _) (fun _ _ => isQueryBoundP_pure _ _ _)
+    (fun _ _ _ _ => ⟨⟨[], (List.append_nil _).symm⟩, [], (List.append_nil _).symm⟩)
+    (fun _ _ _ _ => ⟨⟨[], (List.append_nil _).symm⟩, [], (List.append_nil _).symm⟩)
+    (fun _ _ => rfl) (fun _ => pure ()) (fun _ _ => False) fun _ _ h => h.elim
+
+/-! ## The permutation model -/
+
+/-- A prover of the permutation model making one inverse cipher query. -/
+def invP (pf : ByteArray) : OracleComp specP (ByteArray × (Unit × Unit)) :=
+  liftM (specP.query (.inr (false, (default, default)))) >>= fun _ => pure (pf, ((), ()))
+
+lemma invP_e (pf : ByteArray) : IsQueryBoundP (invP pf) (fun t => t.isRight = true) 1 := by
+  rw [invP, isQueryBoundP_query_bind_iff]
+  exact ⟨Or.inr Nat.one_pos, fun _ => isQueryBoundP_pure _ _ _⟩
+
+lemma invP_k (pf : ByteArray) : IsKindQueryBoundP (invP pf) 0 := by
+  rw [invP, IsKindQueryBoundP, isQueryBound_query_bind_iff]
+  exact ⟨trivial, fun _ => trivial⟩
+
+lemma invP_h (pf : ByteArray) : IsQueryBoundP (invP pf) (fun t => t.isLeft = true) 0 := by
+  rw [invP, isQueryBoundP_query_bind_iff]
+  exact ⟨Or.inl (by simp), fun _ => isQueryBoundP_pure _ _ _⟩
+
+/-- Moussaka issuance and redemption together in the permutation model
+(`moussaka_sim_joint_specP`): its hypotheses hold at the executable statements for one-instance
+families and the prover `invP` (an inverse cipher query) of each relation. -/
+example (lr : Bool) (pf : ByteArray) :=
+  moussaka_sim_joint_specP (ιI' := Unit) (ιR' := Unit) (α := Unit)
+    (fun _ : Unit => (toBA (List.replicate 45 0), toBA (List.replicate 16 0)))
+    (fun _ => by rw [Privacy.size_toBA, List.length_replicate])
+    (fun _ => by rw [Privacy.size_toBA, List.length_replicate]) lr (fun _ _ _ => rfl)
+    (fun _ : Unit => []) (fun _ => by simp) (fun _ => UnboundROM.nf0)
+    (fun _ => toBA (List.replicate 16 0)) (fun _ => toBA (List.replicate 16 0))
+    (fun _ => ByteArray.empty) (fun _ => UnboundROM.nf0_size)
+    (fun _ => by rw [Privacy.size_toBA, List.length_replicate])
+    (fun _ => by rw [Privacy.size_toBA, List.length_replicate]) (fun _ _ _ => rfl)
+    (invP pf) (fun _ => invP pf) (invP pf) (fun _ => invP pf) {()} {()} 1
+    (fun _ _ => invP_e pf) (fun _ _ => invP_e pf) 0 (fun _ _ => invP_k pf) (invP_k pf)
+    (fun _ _ => invP_k pf) 0 (fun _ _ => invP_h pf) (invP_h pf) (fun _ _ => invP_h pf)
+    (fun _ _ _ _ => ⟨⟨[], (List.append_nil _).symm⟩, [], (List.append_nil _).symm⟩)
+    (fun _ _ _ _ => ⟨⟨[], (List.append_nil _).symm⟩, [], (List.append_nil _).symm⟩)
+    (fun _ _ => rfl) (fun _ => pure ()) (fun _ _ => False) fun _ _ h => h.elim
+
+/-- Ratatouille issuance and spend together in the permutation model
+(`ratatouille_sim_joint_specP`): its hypotheses hold likewise. -/
+example (lr : Bool) (pf : ByteArray) :=
+  ratatouille_sim_joint_specP (ιI' := Unit) (ιR' := Unit) (α := Unit)
+    (fun _ : Unit => (ByteArray.empty, 0, ByteArray.empty)) (fun _ => by norm_num) lr
+    (fun _ _ _ => rfl) (fun _ : Unit => IdealTag.pk0) (fun _ => ByteArray.empty) (fun _ => 0)
+    (fun _ => by norm_num) (fun _ => ByteArray.empty) (fun _ => ByteArray.empty)
+    (fun _ _ _ => rfl)
+    (invP pf) (fun _ => invP pf) (invP pf) (fun _ => invP pf) {()} {()} 1
+    (fun _ _ => invP_e pf) (fun _ _ => invP_e pf) 0 (fun _ _ => invP_k pf) (invP_k pf)
+    (fun _ _ => invP_k pf) 0 (fun _ _ => invP_h pf) (invP_h pf) (fun _ _ => invP_h pf)
+    (fun _ _ _ _ => ⟨⟨[], (List.append_nil _).symm⟩, [], (List.append_nil _).symm⟩)
+    (fun _ _ _ _ => ⟨⟨[], (List.append_nil _).symm⟩, [], (List.append_nil _).symm⟩)
+    (fun _ _ => rfl) (fun _ => pure ()) (fun _ _ => False) fun _ _ h => h.elim
+
+/-- Unbound Moussaka in the permutation model (`moussakaUnbound_sim_joint_specP`): its hypotheses
+hold likewise. -/
+example (lr : Bool) (ci cr cd pf : ByteArray) :=
+  moussakaUnbound_sim_joint_specP (ιI' := Unit) (ιR' := Unit) (βI := Unit) (βR := Unit)
+    (α := Unit) (fun _ : Unit => moussakaUnboundIssue (toBA (List.replicate 45 0)) ci lr) lr
+    (fun _ => (toBA (List.replicate 45 0), ci))
+    (fun _ => Unbound.moussakaUnboundIssue_stmt _ _ _)
+    (fun _ => by rw [Privacy.size_toBA, List.length_replicate]) (fun _ _ _ => rfl)
+    (fun _ : Unit => moussakaUnboundRedeem [] UnboundROM.nf0 ci cr cd lr) (fun _ => [])
+    (fun _ => by simp) (fun _ => UnboundROM.nf0) (fun _ => ci) (fun _ => cr) (fun _ => cd)
+    (fun _ => Unbound.moussakaUnboundRedeem_stmt _ _ _ _ _ _) (fun _ => UnboundROM.nf0_size)
+    (fun _ _ _ => rfl) (invP pf) (fun _ => invP pf) (invP pf) (fun _ => invP pf) {()} {()} 1
+    (fun _ _ => invP_e pf) (fun _ _ => invP_e pf) 0 (fun _ _ => invP_k pf) (invP_k pf)
+    (fun _ _ => invP_k pf) 0 (fun _ _ => invP_h pf) (invP_h pf) (fun _ _ => invP_h pf)
     (fun _ _ _ _ => ⟨⟨[], (List.append_nil _).symm⟩, [], (List.append_nil _).symm⟩)
     (fun _ _ _ _ => ⟨⟨[], (List.append_nil _).symm⟩, [], (List.append_nil _).symm⟩)
     (fun _ _ => rfl) (fun _ => pure ()) (fun _ _ => False) fun _ _ h => h.elim
