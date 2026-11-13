@@ -392,6 +392,7 @@ import VoleMole.Theft.HitChain
 import VoleMole.Theft.HitLevel
 import VoleMole.Theft.Hit
 import VoleMole.Theft.HitTheft
+import VoleMole.Theft.MoussakaHit
 import VoleMole.Theft.ManyPlain
 import VoleMole.Theft.ManyReads
 import VoleMole.Theft.RatatouilleMany

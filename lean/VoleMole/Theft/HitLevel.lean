@@ -326,6 +326,17 @@ theorem pr_level_le {Ω : Type*} [Fintype Ω] [Nonempty Ω] {n : ℕ} (set : (KL
 end Level
 
 
+/-! ## Byte strings -/
+
+/-- Concatenations with first parts of equal sizes determine both parts. -/
+lemma append_split {a b a' b' : ByteArray} (h : a ++ b = a' ++ b') (hs : a.size = a'.size) :
+    a = a' ∧ b = b' := by
+  have ha : a = a' := by
+    have e : (a ++ b).extract 0 a.size = (a' ++ b').extract 0 a.size := by rw [h]
+    rwa [ByteArray.extract_append_eq_left rfl, ByteArray.extract_append_eq_left hs] at e
+  subst ha
+  exact ⟨rfl, (ByteArray.append_right_inj _).1 h⟩
+
 /-! ## Reading a list of cells first -/
 
 section Cells

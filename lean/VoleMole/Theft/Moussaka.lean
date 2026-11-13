@@ -438,21 +438,21 @@ theorem sim_se_le {AdmE : (G → G → S → MOp) → Prop} {εSE : ℝ}
   simp only [simG, seEv, accE, freshE, relE, h1, h2]
   rfl
 
-/-- **Redemption non-malleability (Theorem 3).** For every adversary, with zero knowledge of both
-proof systems at the hops' distinguishers and weak simulation-extractability:
-
-    Pr[Bad] ≤ ε_I + ε_R + δ_R + ε_SE + Adv^ow(inverter). -/
-theorem noRedirect [Nonempty CI] [Nonempty CR] [Nonempty G] [Nonempty S]
+/-- **Redemption non-malleability, from a bound on the simulated game's `Acc ∧ Fresh ∧ ¬ Rel`
+event** (`hse`; `noRedirect` gets it from `WeakSE2`). -/
+theorem noRedirect_of_se [Nonempty CI] [Nonempty CR] [Nonempty G] [Nonempty S]
     {AdmI : (Bytes → G → S → Prop) → Prop} {AdmR : (Bytes → G → S → Prop) → Prop}
-    {AdmE : (G → G → S → MOp) → Prop} {εI εR εSE : ℝ}
+    {εI εR εSE : ℝ}
     (hzkI : ZeroKnowledgeRO IssueRelW (fun x w (ρ : Coins proveSeedBytes) g s => PI w x (List.ofFn ρ) g s)
       simI progI AdmI εI) (hεI : 0 ≤ εI)
     (hzkR : ZeroKnowledgeRO RedeemRelW (fun x w (ρ : Coins proveSeedBytes) g s => PR w x (List.ofFn ρ) g s)
       simR progR AdmR εR) (hεR : 0 ≤ εR)
     (hAI : ∀ ω r₂ g₂, AdmI (distI A PR verI verR ext ω r₂ g₂))
     (hAR : ∀ ω c₁ g₁, AdmR (distR A verI verR ext simI progI ω c₁ g₁))
-    (hse : WeakSE2 (simI' simI) progI (simR' simR) progR (AccOp verI verR) FreshOp RelOp ext AdmE εSE)
-    (hAE : ∀ o₁ o₂, AdmE (A.out o₁ o₂)) :
+    (hse : pr ((Sec × (CI × G)) × ((CR × G) × S))
+      (simG (fun ω => simIssP A simI (tOf A ω)) (fun ω => pgIP A progI (tOf A ω))
+        (fun ω => simRedP A simR (List.ofFn ω.1) (tOf A ω))
+        (fun ω => pgRP A progR (List.ofFn ω.1) (tOf A ω)) (seEv A verI verR ext)) ≤ εSE) :
     pr _ (nmReal A PI PR verI verR ext) ≤
       εI + εR + pr _ (deltaR A PR simI progI) + εSE +
         owAdv A.ci A.cr (inverter A ext simI progI simR progR) := by
@@ -487,8 +487,7 @@ theorem noRedirect [Nonempty CI] [Nonempty CR] [Nonempty G] [Nonempty S]
         (fun ω => simRedP A simR (List.ofFn ω.1) (tOf A ω))
         (fun ω => pgRP A progR (List.ofFn ω.1) (tOf A ω))
         (fun ω o₁ o₂ g₁ g₂ s => accE A verI verR ω o₁ o₂ g₁ g₂ s ∧ freshE A ω o₁ o₂ g₁ g₂ s ∧
-          ¬ relE A ext ω o₁ o₂ g₁ g₂ s)) ≤ εSE :=
-    sim_se_le A verI verR ext simI progI simR progR hse hAE
+          ¬ relE A ext ω o₁ o₂ g₁ g₂ s)) ≤ εSE := hse
   have hop := sim_opens_le A ext simI progI simR progR
   have hd : pr ((Sec × (CI × G)) × ((Coins proveSeedBytes × G) × S)) (deltaR A PR simI progI) =
       pr ((Sec × (CI × G)) × ((Coins proveSeedBytes × G) × S))
@@ -503,5 +502,26 @@ theorem noRedirect [Nonempty CI] [Nonempty CR] [Nonempty G] [Nonempty S]
     rfl
   rw [hr, hd]
   linarith
+
+/-- **Redemption non-malleability (Theorem 3).** For every adversary, with zero knowledge of both
+proof systems at the hops' distinguishers and weak simulation-extractability:
+
+    Pr[Bad] ≤ ε_I + ε_R + δ_R + ε_SE + Adv^ow(inverter). -/
+theorem noRedirect [Nonempty CI] [Nonempty CR] [Nonempty G] [Nonempty S]
+    {AdmI : (Bytes → G → S → Prop) → Prop} {AdmR : (Bytes → G → S → Prop) → Prop}
+    {AdmE : (G → G → S → MOp) → Prop} {εI εR εSE : ℝ}
+    (hzkI : ZeroKnowledgeRO IssueRelW (fun x w (ρ : Coins proveSeedBytes) g s => PI w x (List.ofFn ρ) g s)
+      simI progI AdmI εI) (hεI : 0 ≤ εI)
+    (hzkR : ZeroKnowledgeRO RedeemRelW (fun x w (ρ : Coins proveSeedBytes) g s => PR w x (List.ofFn ρ) g s)
+      simR progR AdmR εR) (hεR : 0 ≤ εR)
+    (hAI : ∀ ω r₂ g₂, AdmI (distI A PR verI verR ext ω r₂ g₂))
+    (hAR : ∀ ω c₁ g₁, AdmR (distR A verI verR ext simI progI ω c₁ g₁))
+    (hse : WeakSE2 (simI' simI) progI (simR' simR) progR (AccOp verI verR) FreshOp RelOp ext AdmE εSE)
+    (hAE : ∀ o₁ o₂, AdmE (A.out o₁ o₂)) :
+    pr _ (nmReal A PI PR verI verR ext) ≤
+      εI + εR + pr _ (deltaR A PR simI progI) + εSE +
+        owAdv A.ci A.cr (inverter A ext simI progI simR progR) :=
+  noRedirect_of_se A PI PR verI verR ext simI progI simR progR hzkI hεI hzkR hεR hAI hAR
+    (sim_se_le A verI verR ext simI progI simR progR hse hAE)
 
 end VoleMole.Theft.Moussaka

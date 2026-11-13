@@ -64,14 +64,6 @@ lemma size_bOf {n : ℕ} (v : Spec.Ratatouille.Bytes n) : (bOf v).size = n := by
 lemma bOf_inj {n : ℕ} {v w : Spec.Ratatouille.Bytes n} (h : bOf v = bOf w) : v = w :=
   Vector.toList_inj.1 (EndToEnd.SpecRel.toBA_inj h)
 
-lemma append_split {a b a' b' : ByteArray} (h : a ++ b = a' ++ b') (hs : a.size = a'.size) :
-    a = a' ∧ b = b' := by
-  have ha : a = a' := by
-    have e : (a ++ b).extract 0 a.size = (a' ++ b').extract 0 a.size := by rw [h]
-    rwa [ByteArray.extract_append_eq_left rfl, ByteArray.extract_append_eq_left hs] at e
-  subst ha
-  exact ⟨rfl, (ByteArray.append_right_inj _).1 h⟩
-
 lemma le64_toNat_inj {a b : UInt64} (h : le64 a.toNat = le64 b.toNat) : a = b :=
   UInt64.toNat_inj.1 (EndToEnd.SpecRel.le64_inj (UInt64.toNat_lt a) (UInt64.toNat_lt b) h)
 
