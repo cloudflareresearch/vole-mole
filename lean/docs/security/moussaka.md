@@ -1262,8 +1262,10 @@ the fix column describes `d5def9c`, where Moussaka used the rows (and what dropp
    (`omuf_le_num_sim`: `(qI + qR)·failEps`, see §4 "Status"); Theorem 1 averaged over key generation (the Lean theorem is
    per key; the `K`-key guessing step is mechanized for the ideal game); `ε_dig` as a probability over key
    generation (a condition on the keys in Lean); AES as random permutations beyond the
-   extraction step (Theorem 1 with simultaneous extraction is in the permutation model,
-   `omuf_le_num_simP`, but its CT-UF^open and OMPR corollaries are in the PRF view only).
+   extraction step for unbound Moussaka (Theorem 1 with simultaneous extraction is in the
+   permutation model, `omuf_le_num_simP`, and so are its CT-UF^open and OMPR corollaries,
+   `omuf_le_num_open_simP`, `omuf_le_num_ompr_simP` with `Com` a random permutation too,
+   `Assumptions/PermSimLinks.lean`; unbound Moussaka has no permutation-model protocol theorem).
    Corollary 2 is not stated separately. Theorem 3 (non-malleability) is in Lean for `U` tokens
    and `M` honest redemptions with weak SE for `U + M` simulated proofs as a hypothesis
    (`noRedirectN`), and for one token,

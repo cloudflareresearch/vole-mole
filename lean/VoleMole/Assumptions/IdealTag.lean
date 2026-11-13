@@ -34,7 +34,8 @@ queries on every path,
 With `Tag` modelled as a random function, UF-Tag (item 12, with the strict win "never signed") *is*
 det-FDH with `H = Tag`: this is Lemma 2.1 of `ratatouille.md` in the random-function model, with no
 loss. The permutation terms `q_K·2^{−479} + q_K²·2^{−799}` of the paper's Lemma 2.1 come from
-modelling KP800 as a permutation with inverse queries; they are not mechanized (see the note).
+modelling KP800 as a permutation with inverse queries; that model is `Assumptions/FDHPerm.lean`
+(`advFDHPerm_le_fdh`).
 
 **Theorem 1 (c): A-OMPI ≤ OMPR** (`advOMPI_le_ompr`). The reduction `ompiRed A` names A-OMPI's
 targets by their indices, forwards the index queries to the preimage oracle (caching them, so
