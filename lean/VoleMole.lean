@@ -309,6 +309,7 @@ import VoleMole.Assumptions.IdealTag
 import VoleMole.Assumptions.RatatouilleOMPR
 import VoleMole.Assumptions.SimLinks
 import VoleMole.Assumptions.Shift
+import VoleMole.Assumptions.TheoremR
 import VoleMole.Assumptions.Blind
 import VoleMole.Assumptions.BlindPomfrit
 import VoleMole.Audit.Nonvacuous
@@ -318,3 +319,4 @@ import VoleMole.Audit.IdealTag
 import VoleMole.Audit.SimExtract
 import VoleMole.Audit.OMPRShift
 import VoleMole.Audit.T6Pomfrit
+import VoleMole.Audit.TheoremR

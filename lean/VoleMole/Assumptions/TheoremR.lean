@@ -4,7 +4,72 @@ import VoleMole.Protocols.UOVAssumptions
 /-!
 # Theorem R: reductions that are black-box in the adversary only
 
-`lean/docs/security/ompr-shift-algebra.md` §2.
+`lean/docs/security/ompr-shift-algebra.md` §2, on the games of `Assumptions/UOV.lean`. A reduction
+from OMPR to OMPR⊕τ that is black-box in the adversary, but may use `pk` and the algebra of `P` in
+any way and may rewind, wins OMPR against one explicit adversary `A**_D` with probability at most
+`2·τ^{−(q+1)}`, up to the OMPR^free advantage of an explicit adversary `M` and a collision term.
+Generic in the trapdoor (`Trapdoor`) and in a class relation `cls` on targets (an equivalence; for
+UOV, equality up to a nonzero scalar, `Links.uovCls`).
+
+**OMPR^free** (`uov-open-reductions.md` §3.1; `fImpl`, `freeExp`, `FreeWin`, `advOMPRFree`). The
+oracles of `specB`: the world, labelled targets on demand (each request draws a fresh uniform
+target), the preimage oracle. The challenger logs the calls. The adversary wins with a preimage
+of a nonzero target `t_x` such that no call was made on an element of the class of `t_x`, with at
+most `nT` targets requested and `Q` calls. Sanity: `not_freeWin_of_called`.
+
+**The reduction** (`specRed`) is an oracle computation `R : PK → ProbComp (OracleComp …)` with the
+oracles of the OMPR experiment (`specB`: world, labelled targets, `D`) and `A**_D` as a
+next-message function (`AnsAdv`): the shift list after a prefix `h_1..h_{k−1}`; the junk targets
+of a run `H = (h_1..h_{q+1})`; the output of the run `H` given answers to its junk queries. The
+oracle is stateless, so `R` rewinds and interleaves runs by choosing its queries. `R` gets `pk`
+and is otherwise unrestricted.
+
+**The experiment** (`redExp`, handler `μR` on the atomic operations `Op` that `prog` maps `R`'s
+queries to): the OMPR challenger with `n` targets on demand, and `A**_D` (§2.1 of the note): shift
+lists and choices `a(H)` are values of a lazy random oracle that `R` cannot query, junk targets are
+lazily drawn, the answers are checked with `P` (`valid`), and the output is `a(H)` and
+`D(h_k ⊕ δ_{k,a_k})` for `k = 1..q+1` (`cands`), memoized per `H`. The win is `OneMore.Wins` with
+`goodPre`, as in `advOMPR`. `redExp_liftRed`: **an OMPR adversary run as a reduction** (`liftRed`)
+wins it with probability `advOMPR`, so the challenger is `omExp`'s (`liftB_eqd`: targets on demand
+are a uniform stream).
+
+**The adversary `M`** (`redM`, handler `μM`) plays OMPR^free and runs `R`: it forwards the world
+and `R`'s calls, requests challenge and junk targets from its game, reads shift lists and choices
+from the game's world, and when a run is completed (answers right) it stores the junk answers and
+calls `D` on the `q + 1` candidates. At the end (`pick`) it outputs, among `R`'s claims and the
+stored junk claims, the first whose target is nonzero and has no call in its class. `M` also
+keeps the bookkeeping of the proof (`MSt`), which its output does not depend on.
+
+**Theorem R** (`thmR`). For `τ ≥ 7`, `q ≥ 1`, `cls` an equivalence, every `R`, `c`, `J`, `K₀`:
+
+    Pr[R wins OMPR(n, c) in redExp, ≤ J junk targets drawn, ≤ K₀ runs completed]
+      ≤ 2/τ^{q+1} + advOMPRFree(M; n + J, c + (q + 1)·K₀) + badPr.
+
+`badPr` is the probability of a bad event on values in `M`'s run (`MSt.addT`: a new target is `0`,
+or in the class of an earlier target, or in the class of an earlier candidate that was not
+counted; `MSt.complete`: a forgery is useful but not counted). The note bounds it by
+`V⁴·2^{−343}` on paper; that bound is **not mechanized**, the term is explicit.
+
+**The proof.**
+* *Exact simulation.* `jImpl` is `M`'s handler run against the challenger (`collapseJ`); every
+  step, projected by `π`, is the experiment's step (`proj_step`), so `redExp` is the joint
+  experiment projected (`redExp_eqd`), and `M`'s OMPR^free experiment is the joint experiment with
+  `M`'s pick (`freeExp_redM`).
+* *Invariant* (`Inv`, `jImpl_inv`): `M`'s record agrees with the challenger; counters; without a
+  bad event the targets are nonzero and in distinct classes, and every call in the class of a
+  target is in `chg` (`R`'s calls and the counted candidates).
+* *The lottery* (`lottery_le`): a forgery is *counted* if its shift is the first useful shift of
+  its request (`firstU`, `counted`), so each request has at most one winning shift whatever
+  happened before; `W` counts them, `K` the completed runs, and `hit` records `W > q·K` after
+  some run. `Pr[hit] ≤ 2/τ^{q+1}`: the potential `pot = θ^{W − q·K − 1}`, `θ = τ^{q+1}/2`, is
+  contracted by every step (`lot_step`: only a completion changes it; the choices are fresh,
+  `Inv.fresh`, and `pot_complete` sums over them with `lottery_sum` and [OR]'s
+  `rewind_supermartingale`), and `potential_le` is Ville's inequality for a stateful handler.
+* *Accounting* (`free_of_win`; the count is [OR]'s `lottery_count`): without `bad` and `hit`,
+  `R`'s `c + 1` claims and the `q·K` junk claims are on distinct labels, at most
+  `|chg| = c + W ≤ c + q·K` of them have a call in their class, so `pick` finds a free one.
+
+No `sorry`, no `axiom`.
 -/
 
 open OracleComp OracleSpec VoleMole.ROM.OneMore
@@ -70,6 +135,20 @@ def FreeWin (cls : T → T → Prop) (nT Q : ℕ) (r : PK × Option (X × S) × 
 noncomputable def advOMPRFree (cls : T → T → Prop) (nT Q : ℕ)
     (A : PK → ProbComp (OracleComp (specB AR X Hn T S) (Option (X × S)))) : ℝ≥0∞ :=
   Pr{let r ← freeExp tr A}[FreeWin tr cls nT Q r]
+
+omit [DecidableEq DR] [∀ d, SampleableType (AR d)] [DecidableEq X] [SampleableType T] in
+/-- Sanity: a claim on a target with a call in its class does not win. In particular, calling `D`
+on the target, or on a nonzero multiple of it for UOV's class relation, loses. -/
+theorem not_freeWin_of_called (cls : T → T → Prop) (nT Q : ℕ)
+    (r : PK × Option (X × S) × FCh AR X Hn T) (x : X) (s : S) (t : T) (h : Hn) (z : T)
+    (ho : r.2.1 = some (x, s)) (ht : r.2.2.tg x = some (t, h)) (hz : z ∈ r.2.2.calls)
+    (hc : cls z t) : ¬ FreeWin tr cls nT Q r := by
+  rintro ⟨x', s', t', h', ho', ht', -, -, hfree, -, -⟩
+  rw [ho] at ho'
+  obtain ⟨rfl, rfl⟩ := Prod.mk.inj (Option.some.inj ho')
+  rw [ht] at ht'
+  obtain ⟨rfl, rfl⟩ := Prod.mk.inj (Option.some.inj ht')
+  exact hfree z hz hc
 
 end FreeImpl
 
@@ -477,7 +556,8 @@ lemma sim_fqA (H : List T) (g : FCh (WA AR τ q T) (XM X T) Unit T) :
 omit [AddCommGroup T] in
 lemma sim_fqT (x : XM X T) (g : FCh (WA AR τ q T) (XM X T) Unit T) :
     (simulateQ (fImpl pre) (fqT (AR := AR) (τ := τ) (q := q) (S := S) x)).run g =
-      (fun t => (some t, { g with tg := Function.update g.tg x (some (t, ())), nt := g.nt + 1 })) <$>
+      (fun t =>
+        (some t, { g with tg := Function.update g.tg x (some (t, ())), nt := g.nt + 1 })) <$>
         ($ᵗ T) := by
   unfold fqT
   erw [simulateQ_spec_query]
@@ -1309,6 +1389,8 @@ theorem free_of_win (hcls : Equivalence cls) {s : JSt AR τ q X T S} (hI : Inv c
     have h2 := hI.chg_len
     have h3 := hI.lot hh
     have h4 : s.1.iq ≤ c := hiq
+    have h5 := Nat.mul_comm q s.1.K
+    have h6 := VoleMole.UOVAssumptions.lottery_count c s.1.K q s.1.W (by omega)
     omega
   obtain ⟨p₀, hp₀, hfree⟩ := hD
   obtain ⟨t₀, ht₀, -⟩ := hB p₀ hp₀
