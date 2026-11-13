@@ -584,11 +584,15 @@ per `ctx`, because parents share the spender's `ctx` (fact 1). ∎
     cipher forward. The bound `ε_bal^simP` is `ε_bal^sim` with the permutation model's failure
     terms (`failEpsP`, Post `q_E·4608·q₂₁·p²` dominating, `p = 1/(2¹²⁸ − q_E)`) and the total
     hash count `n + 2q₂₁` in the `2⁻⁴⁴⁸` term: `≈ 2⁻⁶⁰·⁵⁴` at `2⁶⁴` queries and `N = 2³⁰`
-    (`2N·failEpsP ≈ 2⁻⁸⁴·⁸`). The forger's and collision finder's terms stay as probabilities
-    of the permutation-model run (`forgeAdvP`, `collAdvP`); the UF-Tag and OMPR corollaries are
-    not redone there: they need a UF-Tag forger whose common randomness is the permutation table,
-    with `bOut_reads` redone for the jointly normalized provers (Moussaka's analogue is done,
-    `Assumptions/PermSimLinks.lean`).
+    (`2N·failEpsP ≈ 2⁻⁸⁴·⁸`). The forger's term is the UF-Tag advantage of an explicit forger
+    `forgerP` whose common randomness is the permutation table (`Assumptions/RatatouillePermSim.lean`,
+    `forgeAdvP_le_ufTag`, `balance_le_ufTag_simP`); its `reads` property (`bOut_readsP`) holds
+    because the jointly normalized provers are PRF-view provers of the normalized adversary
+    and the lifted Issuer's queries do not depend on the signer. Down to OMPR, with `Tag` a
+    random function (`balance_le_ompr_simP`, hypothesis `TagIdeal` for `forgerP`) or a random
+    permutation with inverse queries (`balance_le_ompr_sim_permP`, hypothesis `TagIdealP`), with
+    `_rate` forms: the terms of the two items above, with `ε_bal^simP` and `collAdvP`. The
+    collision finder's term stays a probability of the permutation-model run (`collAdvP`).
 
 **Correction (minor) to the proof of Theorem 1.** "It forwards every Issuer signing call to
 `Sign`": `spend_response` signs before the caller's nullifier check (F5), so on the
@@ -1454,3 +1458,11 @@ permutation with inverse queries):
   `balance_le_ompr_sim_perm`, `balance_le_ompr_rate_sim_perm`: Theorem 1 under OMPR.
 - `Audit/PermFDH.lean`: their hypotheses instantiated, except `TagIdealP`
   (`tagIdealP_of_eq_zero`).
+
+`lean/VoleMole/Assumptions/RatatouillePermSim.lean` (AES as random permutations):
+- `forgerP : TagForger PTable`, `games_congrP`, `bOut_readsP`, `forgeAdvP_le_ufTag`,
+  `forgerP_logs_le`, **`balance_le_ufTag_simP`**.
+- **`balance_le_ompr_simP`**, `balance_le_ompr_rate_simP` (`Tag` a random function),
+  **`balance_le_ompr_sim_permP`**, `balance_le_ompr_rate_sim_permP` (`Tag` a random permutation).
+- `Audit/PermSim.lean`: their hypotheses instantiated for `balA0P`, except `TagIdeal`,
+  `TagIdealP`.

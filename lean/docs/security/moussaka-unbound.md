@@ -414,6 +414,17 @@ Status) with a second issuance oracle and the unbound Moderator.
   (`omufU_le_num_ompr_perm`, hypothesis `hmodelP`, `Assumptions/PermLinks.lean`) the term is
   `Σ_j (Adv^{ompr}_{key j}(B_j; n, q_S) + n·failPr_{key j}) + (q_f + q_i + q_S + 1)²/|B| +
   q_i·|D ∪ D_u|/|B|`, `n = q_f + 3q_S + 2`.
+- *AES as random permutations* (`ROM/MoussakaUnboundOMUFSimPerm.lean`,
+  `Assumptions/UnboundPermSimLinks.lean`). The same game with an adversary that makes forward and
+  inverse cipher queries (`OMUFU.AdversaryP`, `OMUFU.gameP`), the Anchors and the Moderator
+  reading the cipher forward: `Pr[Win] ≤ ε_I^simP + ε_U^simP + Pr[Coll] + Pr[Forge]`
+  (`omufU_le_num_simP`), the two simultaneous bounds with the permutation model's failure terms
+  (`failEpsP`) and, for the unbound pair, the total hash count `n' + 2q'₂₁` in the `2⁻⁴⁴⁸` term.
+  The bound issuance provers are normalized on their own (`normP`, `moussakaIssue_sim_specP`),
+  the unbound pair jointly (`moussakaUnbound_sim_joint_specP`). `Forge` is the CT-UF^open
+  advantage over `D ∪ D_u` of `ctufForgerUP`, whose common randomness is the permutation table
+  (`omufU_le_num_open_simP`), and with `hmodelP` (`Com ∪ UCom` a random permutation too) the
+  OMPR form `omufU_le_num_ompr_simP`. Non-vacuity: `Audit/PermSim.lean` (`aUUP`).
 - *Numbers.* At `q' = 2⁶⁴` queries per kind for the whole run (`q'_E = n' = 2⁶⁴`) and
   `qI = qR = 2³⁰`: per proof `ε_I ≈ ε_UI ≈ 2⁻⁶⁰·⁶⁸`, `ε_UR ≈ 2⁻⁶⁰·⁵⁴`, so the per-proof union
   `qI·ε_I + qI·ε_UI + qR·ε_UR ≈ 2⁻²⁹·⁰⁵`. Simultaneously, `ε_I^sim ≈ 2⁻⁶⁰·⁶⁸`,
@@ -877,7 +888,8 @@ the base protocol.
    standard-model assumption) and CT-UF^open over `D ∪ D_u`. CT-UF^open reduces to OMPR only
    through the modelling hypothesis `hmodel` (Lemma U with `Com` a random function, no inverse
    queries), or `hmodelP` (`Com ∪ UCom` a random permutation with inverse queries,
-   `omufU_le_num_ompr_perm`). The bound issuance extraction is charged separately
+   `omufU_le_num_ompr_perm`; with AES as random permutations too, `omufU_le_num_ompr_simP`). The
+   bound issuance extraction is charged separately
    from the unbound pair. Cor U2 is mechanized on the game of Thm U1 with its bounds
    (`ROM/MoussakaUnboundCor.lean`). Prop U3 and Thm U4 are mechanized together, corrected (UF8),
    for one honest token with one redemption (`Theft/MoussakaUnbound.lean`, `nmU`) and for `U`
@@ -979,6 +991,11 @@ All in `lean/VoleMole/`; no `sorry`, no axioms beyond the standard three.
 - `Assumptions/UnboundLinks.lean`: the CT-UF^open forger over `D ∪ D_u` (`ctufForgerU`,
   `win_imp_openU`), `omufU_le_open`, `omufU_le_num_open`, `omufU_le_num_ompr` and their `_sim`
   versions.
+- `ROM/MoussakaUnboundOMUFSimPerm.lean`: Theorem U1 with AES as random permutations
+  (`OMUFU.AdversaryP`, `OMUFU.gameP`, `gameP_eval`, `PBIP`, `PUIP`, `PURP`, `win_impP`,
+  `omufU_le_simP`, `moussakaIssue_sim_specP`, `epsIsimP`, `epsUsimP`, `omufU_le_num_simP`).
+- `Assumptions/UnboundPermSimLinks.lean`: its CT-UF^open forger (`ctufForgerUP`, `gameUP_congr`,
+  `tableQueryLog_normP`, `win_imp_openUP`), `omufU_le_num_open_simP`, `omufU_le_num_ompr_simP`.
 - `Protocols/MoussakaUnbound.lean`: `collision_or_forgery_unbound` (Thm U1, steps 3–4).
 - `ROM/MoussakaUnboundCor.lean`: Corollary U2 (§5.1 Status): the event `U2`, the per-table core
   `notU2_imp`, `corU2_le`, `corU2_le_sim`, `corU2_le_num_sim`, `notU2_imp_open`,

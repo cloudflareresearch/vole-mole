@@ -164,6 +164,7 @@ import VoleMole.ROM.PermJoint
 import VoleMole.ROM.SimPermJoint
 import VoleMole.ROM.SimPermJointSpec
 import VoleMole.ROM.MoussakaUnboundSimPerm
+import VoleMole.ROM.MoussakaUnboundOMUFSimPerm
 import VoleMole.ROM.MoussakaOMUFSimPerm
 import VoleMole.ROM.RatatouilleBalanceSimPerm
 import VoleMole.ROM.MoussakaOMUFSim
@@ -359,6 +360,8 @@ import VoleMole.Assumptions.PermLinks
 import VoleMole.Assumptions.FDHPerm
 import VoleMole.Assumptions.RatatouillePerm
 import VoleMole.Assumptions.PermSimLinks
+import VoleMole.Assumptions.RatatouillePermSim
+import VoleMole.Assumptions.UnboundPermSimLinks
 import VoleMole.Assumptions.Shift
 import VoleMole.Assumptions.TheoremR
 import VoleMole.Assumptions.TheoremRBad
