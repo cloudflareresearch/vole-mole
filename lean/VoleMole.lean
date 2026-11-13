@@ -355,6 +355,7 @@ import VoleMole.Assumptions.RatatouilleOMPR
 import VoleMole.Assumptions.SimLinks
 import VoleMole.Assumptions.UnboundLinks
 import VoleMole.Assumptions.LazyPerm
+import VoleMole.Assumptions.EagerPerm
 import VoleMole.Assumptions.CTUFPerm
 import VoleMole.Assumptions.PermLinks
 import VoleMole.Assumptions.FDHPerm
