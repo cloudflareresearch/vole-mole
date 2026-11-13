@@ -965,6 +965,176 @@ lemma hτMu (d : SimD) (G2 : Tab2G pI) (G5E : Tab5F × (Blk → R)) (x : XTab L 
   simp only [sTauMu]
   rw [recT_hashMu G2 G5E x T T' _ h]
 
+/-! ## `ε_hit` -/
+
+/-- **The adversaries of `ε_hit`**: the last stage reads each chain table (`H₂⁰`, `H₂¹`, `H₂²`
+on the short inputs) by a decision tree with `q_μ`, `q₂₁`, `q₂₂` queries, at every value of
+everything else (the slices, `H₂³`, `H₅`, the cipher and the other tables, which it reads
+freely). -/
+def AdmHit (qMu q21 q22 : ℕ) (F : Tab3 → Tab3 → ShT R L M → Op Sizes.labelRows) : Prop :=
+  (∀ g₁ g₂ G2 G5E x, QTree (fun T => F g₁ g₂ (G2, (G5E, setMu T x))) qMu) ∧
+    (∀ g₁ g₂ G2 G5E x, QTree (fun T => F g₁ g₂ (G2, (G5E, set21 T x))) q21) ∧
+    (∀ g₁ g₂ G2 G5E x, QTree (fun T => F g₁ g₂ (G2, (G5E, set22 T x))) q22)
+
+omit [CipherRow R] in
+/-- A last stage that does not read the tables is admissible with no queries. -/
+lemma admHit_const (o : Op Sizes.labelRows) : AdmHit (R := R) (L := L) (M := M) 0 0 0 fun _ _ _ => o :=
+  ⟨fun _ _ _ _ _ => .ret _ _, fun _ _ _ _ _ => .ret _ _, fun _ _ _ _ _ => .ret _ _⟩
+
+/-- **The bound**: `2·((q_μ+3)·2⁻²⁵⁶ + (q₂₁+3)·2⁻¹⁰⁸⁸ + (q₂₂+3)·2⁻⁴⁴⁸)`. -/
+noncomputable def epsHit (qMu q21 q22 : ℕ) : ℝ :=
+  2 * ((qMu + 3 : ℕ) * (1 / 2 ^ 256) + (q21 + 3 : ℕ) * (1 / 2 ^ 1088) +
+    (q22 + 3 : ℕ) * (1 / 2 ^ 448))
+
+lemma card_bytes (n : ℕ) : Fintype.card (ZK.Sim.Bytes n) = 2 ^ (8 * n) := by
+  rw [Fintype.card_fun, Fintype.card_fin, Prob.card_uint8, pow_mul]
+
+/-- The tape of `ProgEv`. -/
+abbrev Tape (α : Type) (R : Type) (L M : ℕ) :=
+  (α × (SimCoins pI × Tab3)) × ((SimCoins pS × Tab3) × ShT R L M)
+
+/-- The tape with a chain table replaced. -/
+def setZ {α Y : Type} (setX : Y → XTab L M → XTab L M) (T : Y) (z : Tape α R L M) : Tape α R L M :=
+  (z.1, (z.2.1, (z.2.2.1, (z.2.2.2.1, setX T z.2.2.2.2))))
+
+section Tape
+
+variable [Fintype R] [Nonempty R] {α : Type} [Fintype α] [Nonempty α]
+
+lemma pr_E22_le (d : Tape α R L M → SimD) (hd : ∀ T z, d (setZ set22 T z) = d z)
+    (op : Tape α R L M → Op Sizes.labelRows) {q : ℕ}
+    (hop : ∀ z, QTree (fun T => keyL L (fPt22 A (op (setZ set22 T z)) (setZ set22 T z).2.2)) q) :
+    pr (Tape α R L M) (fun z => Ev (fPt22 A (op z) z.2.2) (sPt22 (d z) z.2.2) (sTau22 (d z) z.2.2)
+      (get22 z.2.2.2.2)) ≤ (q + 1 : ℕ) * (1 / 2 ^ (8 * 56)) := by
+  have h := pr_level_le (setZ set22) (fun z => get22 z.2.2.2.2) (fun _ => rfl) (fun _ _ => rfl)
+    (fun _ _ _ => rfl) (fun z => fPt22 A (op z) z.2.2) (fun z => sPt22 (d z) z.2.2)
+    (fun z => sTau22 (d z) z.2.2)
+    (fun T T' z => by
+      show sPt22 (d (setZ set22 T z)) (z.2.2.1, (z.2.2.2.1, set22 T z.2.2.2.2)) =
+        sPt22 (d (setZ set22 T' z)) (z.2.2.1, (z.2.2.2.1, set22 T' z.2.2.2.2))
+      rw [hd, hd]
+      exact hPs22 _ _ _ _ _ _)
+    (fun T T' z hT => by
+      show sTau22 (d (setZ set22 T z)) (z.2.2.1, (z.2.2.2.1, set22 T z.2.2.2.2)) =
+        sTau22 (d (setZ set22 T' z)) (z.2.2.1, (z.2.2.2.1, set22 T' z.2.2.2.2))
+      rw [hd, hd]
+      exact hτ22 _ _ _ _ _ _ (by rwa [hd] at hT))
+    hop
+  rw [card_bytes] at h
+  exact_mod_cast h
+
+lemma pr_E21_le (d : Tape α R L M → SimD) (hd : ∀ T z, d (setZ set21 T z) = d z)
+    (op : Tape α R L M → Op Sizes.labelRows) {q : ℕ}
+    (hop : ∀ z, QTree (fun T => keyL L (fPt21 A (op (setZ set21 T z)) (setZ set21 T z).2.2)) q) :
+    pr (Tape α R L M) (fun z => Ev (fPt21 A (op z) z.2.2) (sPt21 (d z) z.2.2) (sTau21 (d z) z.2.2)
+      (get21 z.2.2.2.2)) ≤ (q + 1 : ℕ) * (1 / 2 ^ (8 * 136)) := by
+  have h := pr_level_le (setZ set21) (fun z => get21 z.2.2.2.2) (fun _ => rfl) (fun _ _ => rfl)
+    (fun _ _ _ => rfl) (fun z => fPt21 A (op z) z.2.2) (fun z => sPt21 (d z) z.2.2)
+    (fun z => sTau21 (d z) z.2.2)
+    (fun T T' z => by
+      show sPt21 (d (setZ set21 T z)) (z.2.2.1, (z.2.2.2.1, set21 T z.2.2.2.2)) =
+        sPt21 (d (setZ set21 T' z)) (z.2.2.1, (z.2.2.2.1, set21 T' z.2.2.2.2))
+      rw [hd, hd]
+      exact hPs21 _ _ _ _ _ _)
+    (fun T T' z hT => by
+      show sTau21 (d (setZ set21 T z)) (z.2.2.1, (z.2.2.2.1, set21 T z.2.2.2.2)) =
+        sTau21 (d (setZ set21 T' z)) (z.2.2.1, (z.2.2.2.1, set21 T' z.2.2.2.2))
+      rw [hd, hd]
+      exact hτ21 _ _ _ _ _ _ (by rwa [hd] at hT))
+    hop
+  rw [card_bytes] at h
+  exact_mod_cast h
+
+omit [CipherRow R] in
+lemma pr_EMu_le (d : Tape α R L M → SimD) (hd : ∀ T z, d (setZ setMu T z) = d z)
+    (op : Tape α R L M → Op Sizes.labelRows) {q : ℕ}
+    (hop : ∀ z, QTree (fun T => keyL L (fPtMu A (op (setZ setMu T z)))) q) :
+    pr (Tape α R L M) (fun z => Ev (fPtMu A (op z)) (sPtMu (d z)) (sTauMu (d z) z.2.2)
+      (getMu z.2.2.2.2)) ≤ (q + 1 : ℕ) * (1 / 2 ^ (8 * 32)) := by
+  have h := pr_level_le (setZ setMu) (fun z => getMu z.2.2.2.2) (fun _ => rfl) (fun _ _ => rfl)
+    (fun _ _ _ => rfl) (fun z => fPtMu A (op z)) (fun z => sPtMu (d z))
+    (fun z => sTauMu (d z) z.2.2)
+    (fun T T' z => by simp only [hd])
+    (fun T T' z hT => by
+      show sTauMu (d (setZ setMu T z)) (z.2.2.1, (z.2.2.2.1, setMu T z.2.2.2.2)) =
+        sTauMu (d (setZ setMu T' z)) (z.2.2.1, (z.2.2.2.1, setMu T' z.2.2.2.2))
+      rw [hd, hd]
+      exact hτMu _ _ _ _ _ _ (by rwa [hd] at hT))
+    hop
+  rw [card_bytes] at h
+  exact_mod_cast h
+
+end Tape
+
+-- (the final `ring` step multiplies out `2⁴⁴⁸` and `2¹⁰⁸⁸`)
+set_option exponentiation.threshold 1100 in
+/-- **`ε_hit` for the Lean verifiers and simulators of Ratatouille, with the chain hashes random
+tables.** With `H₂⁰`, `H₂¹`, `H₂²` uniform tables on the inputs of at most `L ≥ 14357` bytes
+(`hbX`), against adversaries that read them with `q_μ`, `q₂₁`, `q₂₂` queries (`AdmHit`), a fresh
+forgery (`FreshOk`) hits a programmed `H₂³` point with probability
+
+    ≤ 2·((q_μ+3)·2⁻²⁵⁶ + (q₂₁+3)·2⁻¹⁰⁸⁸ + (q₂₂+3)·2⁻⁴⁴⁸).
+
+Per simulation and level the forgery must answer a target the simulation fixed, at a point it
+did not query (`hit_cases`, `pr_level_le`); its point is computed by a tree with the adversary's
+queries plus the two simulations' points (`qtree_forger`). -/
+theorem progEv_hit [Fintype R] [Nonempty R] (hL : Lmin ≤ L) (qMu q21 q22 : ℕ) :
+    ProgEv leanSimIR (leanProgIRX (R := R) hbX) leanSimSR (leanProgSRX hbX) (FreshOk A)
+      (HitOpX (Hb := hbX) A) (AdmHit qMu q21 q22) (epsHit qMu q21 q22) := by
+  intro α _ _ x₁ x₂ out hout
+  let i₂ : Tape α R L M → Option SpendInstance := fun z =>
+    x₂ z.1.1 (simO leanSimIR (x₁ z.1.1) z.1.2.1)
+  let op : Tape α R L M → Op Sizes.labelRows := fun z =>
+    out z.1.1 (simO leanSimIR (x₁ z.1.1) z.1.2.1) (simO leanSimSR (i₂ z) z.2.1.1) z.1.2.2 z.2.1.2
+      (progT (leanProgIRX hbX) (leanProgSRX hbX) (x₁ z.1.1) z.1.2.1 (i₂ z) z.2.1.1 z.2.2)
+  let d₁ : Tape α R L M → SimD := fun z => sd₁ (x₁ z.1.1) z.1.2.1
+  let d₂ : Tape α R L M → SimD := fun z => sd₂ (i₂ z) z.2.1.1
+  have h22 : ∀ (d : Tape α R L M → SimD), (∀ T z, d (setZ set22 T z) = d z) →
+      pr (Tape α R L M) (fun z => Ev (fPt22 A (op z) z.2.2) (sPt22 (d z) z.2.2)
+        (sTau22 (d z) z.2.2) (get22 z.2.2.2.2)) ≤ (q22 + 2 + 1 : ℕ) * (1 / 2 ^ (8 * 56)) :=
+    fun d hd => pr_E22_le A d hd op fun z =>
+      qtree_forger set22 (fPt22 A) sPt22 (hPf22 A) hPs22
+        (fun d st o G2 G5E x T T' hd _ h => hpre22 d st o G2 G5E x T T' hd h)
+        (out z.1.1 (simO leanSimIR (x₁ z.1.1) z.1.2.1) (simO leanSimSR (i₂ z) z.2.1.1))
+        (fun g₁ g₂ G2 G5E x => (hout _ _ _).2.2 g₁ g₂ G2 G5E x)
+        (x₁ z.1.1) z.1.2.1 (i₂ z) z.2.1.1 z.1.2.2 z.2.1.2 z.2.2.1 z.2.2.2.1 z.2.2.2.2
+  have h21 : ∀ (d : Tape α R L M → SimD), (∀ T z, d (setZ set21 T z) = d z) →
+      pr (Tape α R L M) (fun z => Ev (fPt21 A (op z) z.2.2) (sPt21 (d z) z.2.2)
+        (sTau21 (d z) z.2.2) (get21 z.2.2.2.2)) ≤ (q21 + 2 + 1 : ℕ) * (1 / 2 ^ (8 * 136)) :=
+    fun d hd => pr_E21_le A d hd op fun z =>
+      qtree_forger set21 (fPt21 A) sPt21 (hPf21 A) hPs21
+        (fun d st o G2 G5E x T T' hd _ h => hpre21 d st o G2 G5E x T T' hd h)
+        (out z.1.1 (simO leanSimIR (x₁ z.1.1) z.1.2.1) (simO leanSimSR (i₂ z) z.2.1.1))
+        (fun g₁ g₂ G2 G5E x => (hout _ _ _).2.1 g₁ g₂ G2 G5E x)
+        (x₁ z.1.1) z.1.2.1 (i₂ z) z.2.1.1 z.1.2.2 z.2.1.2 z.2.2.1 z.2.2.2.1 z.2.2.2.2
+  have hMu : ∀ (d : Tape α R L M → SimD), (∀ T z, d (setZ setMu T z) = d z) →
+      pr (Tape α R L M) (fun z => Ev (fPtMu A (op z)) (sPtMu (d z))
+        (sTauMu (d z) z.2.2) (getMu z.2.2.2.2)) ≤ (qMu + 2 + 1 : ℕ) * (1 / 2 ^ (8 * 32)) :=
+    fun d hd => pr_EMu_le A d hd op fun z =>
+      qtree_forger setMu (fun op _ => fPtMu A op) (fun d _ => sPtMu d) (fun _ _ _ _ _ _ => rfl)
+        (fun _ _ _ _ _ _ => rfl)
+        (fun d st o G2 G5E x T T' hd hdl h => hpreMu d st o G2 G5E x T T' hd hdl h)
+        (out z.1.1 (simO leanSimIR (x₁ z.1.1) z.1.2.1) (simO leanSimSR (i₂ z) z.2.1.1))
+        (fun g₁ g₂ G2 G5E x => (hout _ _ _).1 g₁ g₂ G2 G5E x)
+        (x₁ z.1.1) z.1.2.1 (i₂ z) z.2.1.1 z.1.2.2 z.2.1.2 z.2.2.1 z.2.2.2.1 z.2.2.2.2
+  have hH : ∀ (d : Tape α R L M → SimD), (∀ {Y : Type} (s : Y → XTab L M → XTab L M) T z,
+      d (setZ s T z) = d z) →
+      pr (Tape α R L M) (fun z => HitAt A (op z) z.2.2 (d z)) ≤
+        (q22 + 2 + 1 : ℕ) * (1 / 2 ^ (8 * 56)) + (q21 + 2 + 1 : ℕ) * (1 / 2 ^ (8 * 136)) +
+          (qMu + 2 + 1 : ℕ) * (1 / 2 ^ (8 * 32)) := by
+    intro d hd
+    refine (pr_or_le _ _).trans ?_
+    refine add_assoc _ _ (_ : ℝ) ▸ add_le_add (h22 d fun T z => hd _ T z) ?_
+    exact (pr_or_le _ _).trans (add_le_add (h21 d fun T z => hd _ T z) (hMu d fun T z => hd _ T z))
+  refine (Privacy.pr_mono (Q := fun z => HitAt A (op z) z.2.2 (d₁ z) ∨ HitAt A (op z) z.2.2 (d₂ z))
+    fun z hz => hit_cases A hL _ _ _ _ _ _ hz.1 hz.2).trans ?_
+  refine (pr_or_le _ _).trans ?_
+  refine (add_le_add (hH d₁ fun _ _ _ => rfl) (hH d₂ fun _ _ _ => rfl)).trans (le_of_eq ?_)
+  simp only [epsHit, show 8 * 56 = 448 from rfl, show 8 * 136 = 1088 from rfl,
+    show 8 * 32 = 256 from rfl]
+  push_cast
+  ring
+
 end Rata
 
 end VoleMole.Theft.Hit
