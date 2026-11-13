@@ -239,4 +239,225 @@ theorem pr_paired {n : ℕ} (v v' : Fin n → ι₂ → F) (o o' : Fin n → ι�
 
 end Tri
 
+/-! ## Maps that are close to a scalar -/
+
+section Det
+
+variable {V : Type*} [AddCommGroup V] [Module F V]
+
+/-- A **free family** of size `m` for `g`: vectors `t_j` with `t_j`, `g t_j` (`2m` vectors)
+linearly independent. -/
+def FreeFam (g : V → V) (m : ℕ) : Prop :=
+  ∃ t : Fin m → V, finrank F (Submodule.span F (Set.range t ∪ Set.range (g ∘ t))) = 2 * m
+
+lemma freeFam_indep [FiniteDimensional F V] {g : V → V} {m : ℕ} {t : Fin m → V}
+    (h : finrank F (Submodule.span F (Set.range t ∪ Set.range (g ∘ t))) = 2 * m) :
+    LinearIndependent F (Sum.elim t (g ∘ t)) := by
+  rw [linearIndependent_iff_card_eq_finrank_span, Set.finrank, Set.Sum.elim_range, h]
+  simp [two_mul]
+
+lemma finrank_sup_singleton [FiniteDimensional F V] (W : Submodule F V) {x : V} (hx : x ∉ W) :
+    finrank F (W ⊔ F ∙ x : Submodule F V) = finrank F W + 1 := by
+  have hx0 : x ≠ 0 := fun h => hx (h ▸ W.zero_mem)
+  have h := Submodule.finrank_sup_add_finrank_inf_eq W (F ∙ x)
+  rw [((Submodule.disjoint_span_singleton' hx0).2 hx).eq_bot, finrank_bot,
+    finrank_span_singleton hx0] at h
+  omega
+
+lemma finrank_span_singleton_le' (x : V) : finrank F (F ∙ x : Submodule F V) ≤ 1 := by
+  by_cases hx : x = 0
+  · rw [hx, Submodule.span_zero_singleton, finrank_bot]
+    exact zero_le_one
+  · rw [finrank_span_singleton hx]
+
+lemma freeFam_succ [FiniteDimensional F V] {g : V → V} {m : ℕ} {t : Fin m → V}
+    (h : finrank F (Submodule.span F (Set.range t ∪ Set.range (g ∘ t))) = 2 * m) {u : V}
+    (hu : u ∉ Submodule.span F (Set.range t ∪ Set.range (g ∘ t)))
+    (hgu : g u ∉ Submodule.span F (Set.range t ∪ Set.range (g ∘ t)) ⊔ F ∙ u) :
+    FreeFam (F := F) g (m + 1) := by
+  refine ⟨Fin.cons u t, ?_⟩
+  have e : Submodule.span F (Set.range (Fin.cons u t : Fin (m + 1) → V) ∪
+      Set.range (g ∘ (Fin.cons u t : Fin (m + 1) → V))) =
+      (Submodule.span F (Set.range t ∪ Set.range (g ∘ t)) ⊔ F ∙ u) ⊔ F ∙ g u := by
+    rw [Fin.comp_cons, Fin.range_cons, Fin.range_cons, Submodule.span_union,
+      Submodule.span_insert, Submodule.span_insert, Submodule.span_union]
+    ac_rfl
+  rw [e, finrank_sup_singleton _ hgu, finrank_sup_singleton _ hu, h]
+  ring
+
+/-- **A map without `ρ` free vectors is a scalar up to a small subspace.** Let `g` be additive
+and `σ`-semilinear on a space of dimension `> 2ρ`, with no free family of size `ρ`. Then there
+are `c` and a subspace `Z` of dimension `≤ 2(ρ − 1)` with `g u − c u ∈ Z` for all `u`; and `c = 0`
+or `σ` is the identity. -/
+theorem near_scalar [FiniteDimensional F V] (σ : F →+* F) (g : V → V)
+    (hadd : ∀ u w, g (u + w) = g u + g w) (hsm : ∀ (c : F) u, g (c • u) = σ c • g u) {ρ : ℕ}
+    (hρ : 2 * ρ + 1 ≤ finrank F V) (hfree : ¬ FreeFam (F := F) g ρ) :
+    ∃ (c : F) (Z : Submodule F V), finrank F Z ≤ 2 * (ρ - 1) ∧ (∀ u, g u - c • u ∈ Z) ∧
+      (c = 0 ∨ ∀ x, σ x = x) := by
+  classical
+  have h0 : FreeFam (F := F) g 0 := ⟨Fin.elim0, by simp⟩
+  set m := Nat.findGreatest (FreeFam (F := F) g) ρ with hm
+  have hmP : FreeFam (F := F) g m := Nat.findGreatest_spec (Nat.zero_le ρ) h0
+  have hmle : m ≤ ρ := Nat.findGreatest_le ρ
+  have hmlt : m < ρ := lt_of_le_of_ne hmle fun e => hfree (e ▸ hmP)
+  have hmax : ¬ FreeFam (F := F) g (m + 1) :=
+    Nat.findGreatest_is_greatest (Nat.lt_succ_self m) hmlt
+  obtain ⟨t, ht⟩ := hmP
+  set Z := Submodule.span F (Set.range t ∪ Set.range (g ∘ t)) with hZ
+  have hZle : finrank F Z ≤ 2 * (ρ - 1) := by omega
+  -- every vector outside `Z` is an eigenvector modulo `Z`
+  have ex : ∀ u, u ∉ Z → ∃ c : F, g u - c • u ∈ Z := by
+    intro u hu
+    by_contra hc
+    refine hmax (freeFam_succ ht hu fun hmem => hc ?_)
+    obtain ⟨z, hz, y, hy, e⟩ := Submodule.mem_sup.1 hmem
+    obtain ⟨c, rfl⟩ := Submodule.mem_span_singleton.1 hy
+    exact ⟨c, by rw [← e, add_sub_cancel_right]; exact hz⟩
+  have g0 : g 0 = 0 := by simpa using hsm 0 0
+  have gneg : ∀ u, g (-u) = -g u := fun u => by
+    have := hadd u (-u)
+    rw [add_neg_cancel, g0] at this
+    exact (neg_eq_of_add_eq_zero_right this.symm).symm
+  have gsub : ∀ u w, g (u - w) = g u - g w := fun u w => by
+    rw [sub_eq_add_neg, hadd, gneg, ← sub_eq_add_neg]
+  have key : ∀ u w, u ∉ Z → w ∉ Z ⊔ F ∙ u → ∀ cu cw : F, g u - cu • u ∈ Z → g w - cw • w ∈ Z →
+      cu = cw := by
+    intro u w hu hw cu cw hcu hcw
+    have huw : u + w ∉ Z := fun h => hw (by
+      have : w = (u + w) + (-1 : F) • u := by simp
+      rw [this]
+      exact Submodule.add_mem_sup h (Submodule.mem_span_singleton.2 ⟨-1, rfl⟩))
+    obtain ⟨c', hc'⟩ := ex _ huw
+    have e1 : (c' - cw) • w = ((g u - cu • u) + (g w - cw • w) - (g (u + w) - c' • (u + w))) +
+        (cu - c') • u := by
+      rw [hadd]; simp only [smul_add, sub_smul]; abel
+    have h1 : (c' - cw) • w ∈ Z ⊔ F ∙ u := by
+      rw [e1]
+      exact Submodule.add_mem_sup (Z.sub_mem (Z.add_mem hcu hcw) hc')
+        (Submodule.mem_span_singleton.2 ⟨_, rfl⟩)
+    have h2 : c' = cw := by
+      by_contra hne
+      have hne' : c' - cw ≠ 0 := sub_ne_zero.2 hne
+      refine hw ?_
+      have := (Z ⊔ F ∙ u).smul_mem (c' - cw)⁻¹ h1
+      rwa [smul_smul, inv_mul_cancel₀ hne', one_smul] at this
+    have e2 : (c' - cu) • u = (g u - cu • u) + (g w - cw • w) - (g (u + w) - c' • (u + w)) := by
+      rw [hadd, h2]; simp only [smul_add, sub_smul]; abel
+    have h3 : (c' - cu) • u ∈ Z := by
+      rw [e2]; exact Z.sub_mem (Z.add_mem hcu hcw) hc'
+    have h4 : c' = cu := by
+      by_contra hne
+      have hne' : c' - cu ≠ 0 := sub_ne_zero.2 hne
+      refine hu ?_
+      have := Z.smul_mem (c' - cu)⁻¹ h3
+      rwa [smul_smul, inv_mul_cancel₀ hne', one_smul] at this
+    rw [← h4, h2]
+  have hZtop : Z ≠ ⊤ := fun h => by
+    have := congrArg (fun W : Submodule F V => finrank F W) h
+    simp only [finrank_top] at this
+    omega
+  obtain ⟨u0, hu0⟩ : ∃ u0, u0 ∉ Z := by
+    by_contra h
+    push Not at h
+    exact hZtop (eq_top_iff.2 fun x _ => h x)
+  obtain ⟨c0, hc0⟩ := ex u0 hu0
+  have hall' : ∀ u, u ∉ Z → g u - c0 • u ∈ Z := by
+    intro u hu
+    obtain ⟨cu, hcu⟩ := ex u hu
+    have hfin : finrank F ((Z ⊔ F ∙ u0) ⊔ F ∙ u : Submodule F V) < finrank F V := by
+      have h1 := Submodule.finrank_add_le_finrank_add_finrank (Z ⊔ F ∙ u0) (F ∙ u)
+      have h2 := Submodule.finrank_add_le_finrank_add_finrank Z (F ∙ u0)
+      have h3 := finrank_span_singleton_le' (F := F) u0
+      have h4 := finrank_span_singleton_le' (F := F) u
+      omega
+    obtain ⟨y, hy⟩ : ∃ y, y ∉ (Z ⊔ F ∙ u0) ⊔ F ∙ u := by
+      by_contra h
+      push Not at h
+      have : ((Z ⊔ F ∙ u0) ⊔ F ∙ u : Submodule F V) = ⊤ := eq_top_iff.2 fun x _ => h x
+      rw [this, finrank_top] at hfin
+      exact lt_irrefl _ hfin
+    have hy0 : y ∉ Z ⊔ F ∙ u0 := fun h => hy (Submodule.mem_sup_left h)
+    have hyu : y ∉ Z ⊔ F ∙ u := fun h => hy (by
+      have : Z ⊔ F ∙ u ≤ (Z ⊔ F ∙ u0) ⊔ F ∙ u :=
+        sup_le (le_sup_of_le_left le_sup_left) le_sup_right
+      exact this h)
+    have hyZ : y ∉ Z := fun h => hy0 (Submodule.mem_sup_left h)
+    obtain ⟨cy, hcy⟩ := ex y hyZ
+    rw [key u0 y hu0 hy0 c0 cy hc0 hcy, ← key u y hu hyu cu cy hcu hcy]
+    exact hcu
+  have hall : ∀ u, g u - c0 • u ∈ Z := by
+    intro u
+    by_cases hu : u ∈ Z
+    · have h1 : u + u0 ∉ Z := fun h => hu0 (by
+        have := Z.sub_mem h hu
+        rwa [add_sub_cancel_left] at this)
+      have h2 := Z.sub_mem (hall' _ h1) hc0
+      have e : g (u + u0) - c0 • (u + u0) - (g u0 - c0 • u0) = g u - c0 • u := by
+        rw [hadd, smul_add]; abel
+      rwa [e] at h2
+    · exact hall' u hu
+  refine ⟨c0, Z, hZle, hall, ?_⟩
+  by_cases hc : c0 = 0
+  · exact Or.inl hc
+  · refine Or.inr fun x => ?_
+    by_cases hx : x = 0
+    · rw [hx, map_zero]
+    · have h1 := hall (x • u0)
+      rw [hsm] at h1
+      have h2 := Z.smul_mem (σ x) hc0
+      have h3 := Z.sub_mem h1 h2
+      have e : σ x • g u0 - c0 • x • u0 - σ x • (g u0 - c0 • u0) = (σ x * c0 - c0 * x) • u0 := by
+        simp only [smul_sub, sub_smul, mul_smul]; abel
+      rw [e] at h3
+      by_contra hne
+      have hne' : σ x * c0 - c0 * x ≠ 0 := fun h => hne (by
+        have : σ x * c0 = x * c0 := by rw [sub_eq_zero.1 h, mul_comm]
+        exact mul_right_cancel₀ hc this)
+      refine hu0 ?_
+      have := Z.smul_mem (σ x * c0 - c0 * x)⁻¹ h3
+      rwa [smul_smul, inv_mul_cancel₀ hne', one_smul] at this
+
+end Det
+
+/-! ## A subspace of small codimension is the kernel of a few functionals -/
+
+/-- A linear map of rank `≤ d` on `F^κ` vanishes on the common kernel of `d` functionals. -/
+lemma exists_functionals {κ W : Type*} [Fintype κ] [DecidableEq κ] [AddCommGroup W] [Module F W]
+    (R : (κ → F) →ₗ[F] W) {d : ℕ} (h : finrank F (LinearMap.range R) ≤ d) :
+    ∃ Φ : Fin d → κ → F, ∀ u, (∀ a, Φ a ⬝ᵥ u = 0) → R u = 0 := by
+  classical
+  let b := Module.finBasis F (LinearMap.range R)
+  let E : (Fin (finrank F (LinearMap.range R)) → F) →ₗ[F] (Fin d → F) :=
+    Function.ExtendByZero.linearMap F (Fin.castLE h)
+  let j : (κ → F) →ₗ[F] (Fin d → F) := E.comp (b.equivFun.toLinearMap.comp R.rangeRestrict)
+  have hE : Function.Injective E := by
+    intro x y hxy
+    funext i
+    have := congrFun hxy (Fin.castLE h i)
+    change Function.extend (Fin.castLE h) x 0 _ = Function.extend (Fin.castLE h) y 0 _ at this
+    rwa [(Fin.castLE_injective h).extend_apply, (Fin.castLE_injective h).extend_apply] at this
+  refine ⟨fun a i => j (fun i' => if i = i' then 1 else 0) a, fun u hu => ?_⟩
+  have hj : j u = 0 := by
+    funext a
+    have := hu a
+    rw [LinearMap.pi_apply_eq_sum_univ j u]
+    simp only [dotProduct] at this
+    simp only [Finset.sum_apply, Pi.smul_apply, smul_eq_mul, Pi.zero_apply]
+    refine Eq.trans ?_ this
+    exact Finset.sum_congr rfl fun i _ => mul_comm _ _
+  have h1 : b.equivFun (R.rangeRestrict u) = 0 := hE (by simpa [j] using hj)
+  have h2 : R.rangeRestrict u = 0 := by simpa using h1
+  simpa using congrArg Subtype.val h2
+
+/-- A subspace of `F^κ` of codimension `≤ d` contains the common kernel of `d` functionals. -/
+lemma exists_functionals_of_finrank {κ : Type*} [Fintype κ] [DecidableEq κ]
+    (K : Submodule F (κ → F)) {d : ℕ} (h : Fintype.card κ ≤ finrank F K + d) :
+    ∃ Φ : Fin d → κ → F, ∀ u, (∀ a, Φ a ⬝ᵥ u = 0) → u ∈ K := by
+  have h1 := Submodule.finrank_quotient_add_finrank K
+  have h2 : finrank F (κ → F) = Fintype.card κ := by simp
+  have h3 : finrank F (LinearMap.range K.mkQ) ≤ d := by
+    rw [Submodule.range_mkQ, finrank_top]; omega
+  obtain ⟨Φ, hΦ⟩ := exists_functionals K.mkQ h3
+  exact ⟨Φ, fun u hu => by simpa using hΦ u hu⟩
+
 end VoleMole.Assumptions.SymmetryProbes
