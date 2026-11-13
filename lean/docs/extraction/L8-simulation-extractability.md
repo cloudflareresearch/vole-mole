@@ -598,3 +598,15 @@ need (`WeakSE2`: one simulated proof of each of two relations, statements chosen
 the tables, the extractor on the simulated transcripts, the adversary's last stage and the
 programmed tables, as in §2's log), and `Theft/Ratatouille.lean` and `Theft/Moussaka.lean` reduce
 the two theorems to it (`security/ratatouille.md` §5, `security/moussaka.md` §5.3).
+
+The programming step of the proof (§6: the simulator programs only `H₂³`, at its own grinding
+points, and an accepting fresh forgery avoids them) is mechanized in the table model
+(`Theft/SimExtract.lean`, `weakSE2_of_plain`): `WeakSE2 ≤ ε_plain + ε_hit` for an extractor that
+does not read `H₂³`, where `ε_plain` bounds extraction with no simulated proofs and no programming
+(`PlainSE`; the reduction runs the simulators from their coins) and `ε_hit` the probability that a
+fresh forgery is accepted on the programmed tables but not on the unprogrammed ones (`ProgMoves`).
+For the Lean verifier, which reads `H₂³` at `chal3`'s input only (`verRO_h23_eq`), that event means
+the forgery's `chal3` input is a programmed point (`accOp_moves`), that is, its prefix
+`chal2 ‖ qs_check ‖ ã` is a simulated proof's (`progRO_moved`). `ε_plain` and `ε_hit` stay
+hypotheses: the zero-knowledge table model fixes `H₂⁰…H₂²` as SHAKE, and both need them random
+(`security/ratatouille.md` §5, "Lean").

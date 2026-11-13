@@ -39,7 +39,7 @@ zero-knowledge theorems, for any simulators whose programming changes only one p
 than `H₂³`, `H₅`, `H₃` and the cipher (`H₂⁰`, `H₂¹`, `H₂²`, `H₄`, `H₁`) are SHAKE, fixed functions,
 and an adversary is any function of the tables: only its table reads are bounded, not its
 computation. Plain extraction rests on `chal1` and `chal2` being random (L3, L4) and `ProgMoves`
-on collision resistance of the chain (`chal2` determines the statement), neither of which holds
+on collision resistance of the chain (`chal2` determines the statement); neither can be proved
 for a fixed function against unbounded adversaries. They are proved in the random-oracle model of
 `ROM/` (`*_accept_le_adaptive`, `omuf_le_num_sim`, `balance_le_sim_num`), where every hash is a
 random oracle and adversaries make bounded queries; carrying those bounds into this model needs
