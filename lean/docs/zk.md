@@ -440,20 +440,80 @@ label-row sizes (`zk_pre_h4_main`). In particular H4 with the cipher a table the
 Because every 37-byte read counts as a candidate, no `iv`-collision term is needed for one proof
 (as in §10.2 for the label-row layout, where other proofs' reads are counted as reads).
 
+**Several proofs on one `H₅` table and one cipher** (`ZK/MainSharedKeys.lean`,
+`ZK/MainSharedSlots.lean`, `ZK/MainSharedGame.lean`, `ZK/MainSharedSim.lean`,
+`Privacy/MoussakaMainShared.lean`, `Privacy/MoussakaMainSharedPU.lean`, `Audit/MainShared.lean`).
+The joint hop is redone for four proofs that **share the `H₅` table** (on every 37-byte input)
+**and the cipher table**. Each proof keeps its own `H₃` slice and its own `H₂³` table, both
+visible to the adversary, the latter programmed by the simulator; the adversary reads the slices
+and the cipher at `q₃`, `q_E` keys, `H₅` at a consistent read set `R5`, and `H₂³` freely. The three
+pieces that the previous version of this section listed:
+
+- *(i) The real prover's `H₅` reads as a function of its output and witness prefix*
+  (`prove_reads`). The executable prover reads `H₅` at both labels of each gate on its own tags
+  (`vgIn5`). If it outputs the proof `b`, each of these inputs is a verifier's gate input of `b`
+  (`vInOff`: recomputed from `b` and the cipher) at label offset `0`, or at offset
+  `d[0..16) ⊕ w[0..16)` with `d` read off `b`. The proof goes through the tape of the real run
+  (`prove_eq_proveIdeal`, `step1_real`, `gateInputsOff_tagCols`, `uPre_main_dB`).
+- *(ii) The transfer with a shared table* (`main_shared_le`). The proofs are replaced in game
+  order, so the statement of the replaced proof does not depend on the tables. Replacing proof `j`
+  is `zk_rom_ic_h23_main_num` for the distinguisher "the rest of the game" (`ctx_hop`,
+  `hop₁` … `hop₄`), whose `H₅` read set is `R5` together with the reads of the later, still real
+  proofs and of the earlier simulators' programming. Its (PU) event is bounded by **one event of
+  the view alone, the same in every hybrid** (`bstar`): some proof failed, or for some proof `j`
+  with label offset `θ_j = d_j[0..16) ⊕ r_j`: `θ_j = 0`, or a key of `R5`, or an active or sibling
+  gate input of another proof, is a gate input of proof `j` at offset `θ_j`. By (i) this covers the
+  real proofs' reads (`realB_cov`), and the programming reads active inputs only (`simB_cov`).
+  `bstar` reads the tables as `R5` does (`rd_bstar`), so it can itself be moved across the later
+  hops; each hop at most doubles it, as in `MainChain.fill_ideal_le`:
+
+      |Pr[all real] − Pr[all simulated]| ≤ 15·εS(q₃, q_E + 8·4607) + 15·Pr_sim[bstar],
+
+  `εS q₃ q_E = q₃·2⁻¹²⁸ + 2⁻¹¹³ + 221·(4607 + q_E + 4607)·2⁻¹²⁸`, for any game of four
+  `main`-layout proofs in sequence (`MainChain.Game`) and any event with consistent reads (`Rd`).
+- *(iii) Collisions among simulated proofs* (`pr_sib_hit_le`, `bstar_sim`). With all proofs
+  simulated, `bstar` is a failed simulation (`noHitProb` each), a prediction, or the event that a
+  sibling gate input of one simulated proof is a sibling gate input of another. The sibling inputs
+  of a simulated proof are its gate inputs at offset `d[0..16) ⊕ r` (`sibL_coins`), and only the
+  offset depends on the simulator's uniform field `d`. So against any fixed list of `N` strings
+  the probability is `≤ (N + 1)·2⁻¹²⁸`, whatever `r` and whatever the `iv`s. **No property of `H₄`
+  is used**: the earlier version of this note expected an `iv`-collision bound, which would need
+  `H₄` a random oracle; the uniform `d` of the later proof is enough. For four proofs the term is
+  `(313 + 625 + 937)·2⁻¹²⁸ = 1875·2⁻¹²⁸`.
+
+**Moussaka 4(a) on `main` with shared tables** (`Privacy/MoussakaMainShared.lean`,
+`Privacy/MoussakaMainSharedPU.lean`). The game of `anonymity_main` with one `H₅` table and one
+cipher for the four proofs (`realS`); the redemption proofs are computed only if §6's rule lets
+the redemptions happen (they are never shown otherwise, and a simulated one would program its
+table). With all proofs simulated the guess's input and the tables are a function of the
+commitments, the nullifiers, the simulators' coins and the raw tables (`simS_eq`), so hiding and
+the exchange of the fresh nullifiers finish as before (`hiding_hopS`, `idealS_eq`), and the
+prediction part of `bstar` is the game `PU.puAdv`: the predictor of Client `c` (`predS`) outputs
+the candidates (`candC`) of its issuance and redemption proofs for the **public key set**, the
+guess's read set and the four proofs' active gate inputs; at most `2·(q₅ + 1249)` candidates
+(`card_predS_le`).
+
+    |Pr[world 0] − Pr[world 1]| ≤ 30·εS(q₃, q_E + 8·4607)
+        + 15·(Σ_{b,c} puAdv Com (predS_c b) + 8·noHitProb + 3750·2⁻¹²⁸) + 2·εhide
+                                                                  (anonymity_main_shared)
+
+Every term is a number except the four (PU) advantages and `εhide`. `30·εS(q₃, q_E + 8·4607)` is
+about `2⁻⁹⁹·⁸` plus `30·(q₃ + 221·q_E)·2⁻¹²⁸`; the constant is `30·221·10·4607·2⁻¹²⁸`, the cipher
+reads of the other proofs counted in each of the 15 applications of the one-proof theorem per
+world (`anonymity_main` has `8·εRF ≈ 2⁻¹⁰⁵·¹` at zero budgets, with per-proof ciphers). The
+theorem is instantiated in `Audit/MainShared.lean`, also for a guess that reads the shared `H₅`
+table.
+
 **Still on paper, for ZK on `main`:**
-- **several proofs on shared tables** (`ε_iv` proper). `anonymity_main` and `unlinkability_main`
-  give each proof its own uniform tables (the model of `zk_rom_ic`), and their adversary does not
-  read `H₂³`. The one-proof theorem above is in the shared-table model, but the joint hop is not:
-  with one `H₅` table, the candidates for one proof include the `H₅` reads of the other proofs
-  that are still real, and those reads are not a function of the proofs' outputs alone. On `main`
-  they are a function of the output and the witness prefix (the sibling label is the active label
-  shifted by `d[0..16) ⊕ r`), so the bad event of one proof can be moved across the hops of the
-  others as in `MainChain.fill_ideal_le`; what this needs is (i) the executable prover's `H₅` read
-  set as that explicit function, (ii) `MainChain`'s transfer with one shared table and the
-  simulators' `H₂³` programming (the collision terms `δ` of §10.2), and (iii) a bound, in the game
-  with all proofs simulated, on the event that the virtual sibling key of one simulated proof is a
-  candidate for another (an `iv`-type term; with `H₄` a fixed function, as in the Lean games, the
-  `iv` of a simulated proof is not uniform, the obstacle of §10.8's `β`). Not done;
+- **one `H₂³` table and one `H₃` for the proofs.** `anonymity_main_shared` shares `H₅` and the
+  cipher; each proof has its own `H₂³` table and `H₃` slice. With one `H₂³` table the hops also
+  cost the programming-collision terms `δ` of §10.2 (a real proof reads a grinding point that an
+  earlier simulation programmed); their bound there (`pr_collide_zk`) applies the one-proof
+  theorem a second time, which on `main` adds one more (PU) term, statistical here (the
+  distinguisher reads `H₅` at the proof's own active inputs, whose only candidate is `r = d`).
+  One shared `H₃` is §10.5's argument. Neither is done on `main`;
+- the factor `15` on `εS` and on the (PU) terms is a cost of the mechanized transfer (each hop's
+  bad event is moved across the later hops); the paper's lazy sampling gives `4` and `1`;
 - the adversary's earlier choices (responses, Anchor Sets, amounts) do not read the tables, as in
   §10.2's games; Moussaka's game is the index-taking Client's (`main`'s `find_issuer` Client, and
   the non-colluding mode 4(b) with its statistical `Pred = 2⁻¹²⁸`, are not done on `main`; for
@@ -953,7 +1013,9 @@ layout without label rows, `ZK/Main.lean`, `ZK/Relations.lean`, §4.1, and `ZK/H
 `Privacy/MainChain.lean`, `ZK/MainSlots.lean`, `ZK/MainGame.lean`, `Privacy/MoussakaMain.lean`,
 `Privacy/RatatouilleMain.lean`, `ZK/HopsMainIC.lean`, §4.2; `Privacy/PU.lean`,
 `Privacy/PUKeccak.lean`, `ZK/MainPU.lean`, `Privacy/MoussakaMainPU.lean`, `Audit/MainPU.lean`,
-§4.3). There is
+§4.3; `ZK/MainSharedKeys.lean`, `ZK/MainSharedSlots.lean`, `ZK/MainSharedGame.lean`,
+`ZK/MainSharedSim.lean`, `Privacy/MoussakaMainShared.lean`, `Privacy/MoussakaMainSharedPU.lean`,
+`Audit/MainShared.lean`, §4.2). There is
 no `sorry` and no `axiom`. `#print axioms` lists
 only `propext`, `Classical.choice` and `Quot.sound`.
 
