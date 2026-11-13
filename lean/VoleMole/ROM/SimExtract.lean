@@ -6,34 +6,36 @@ import VoleMole.ROM.AdaptComb
 
 `ROM/AdaptChain.lean` and `ROM/AdaptComb.lean` bound, for **one** prover `P`, the probability
 that the verifier accepts `P`'s proof at the statement `P` chose and the straight-line extractor
-fails. A protocol game produces many proofs from **one** run `G` of the adversary and the honest
-parties: the `j`-th proof is the output of the prover `proj j <$> G` (Moussaka's `PI`, `PR`).
-Adding the single-proof bounds charges every query of `G` once per proof. Here the per-query bad
-events of the single-proof bound are charged **once** for the queries of `G`, and per output only
-for the extractor's and the verifier's own queries (`ROM/SimUnion.lean`).
+fails. A protocol game produces many proofs from **one** run of the adversary and the honest
+parties: the `j`-th proof is the output of a prover `P j` that runs the game (all of it, as
+Moussaka's `PI`, `PR`, projections `proj j <$> G` of one run; or up to the `j`-th request, as
+Ratatouille's `proverAt`). Adding the single-proof bounds charges every query of the run once per
+proof. Here the per-query bad events of the single-proof bound are charged **once** for the
+queries of a reference run `P₀` whose logs extend every `P j`'s (`PrefixRuns`), and per output
+only for the extractor's and the verifier's own queries (`ROM/SimUnion.lean`).
 
-* `runE_map`, `gameA_map`: the adaptive game of `f <$> G` is `runE E G` followed by a
-  continuation `gameK f` (the extractor and the verifier at the statement `f` chose); its log is
-  `G`'s joint run's log followed by the continuation's (`tableQueryLog_gameA_map`).
-* `adaptBad_map_congr`, `combAdaptBad_map_congr`: at a query of `G`'s run, the bad events of two
-  provers `f <$> G`, `f' <$> G` coincide: they read the logs before the query only, and those
-  are `G`'s.
+* `runE_map`, `gameA_map`, `gameA_eq_bind`: the adaptive game of `P` is `runE E P` followed by a
+  continuation `gameK` (the extractor and the verifier at the statement `P` chose); its log is
+  `P`'s hash log followed by the continuation's (`tableQueryLog_gameA_eq`).
+* `logBefore_prefix`, `adaptBad_prefix_congr`, `combAdaptBad_prefix_congr`: at a hash query of
+  `P`, the bad events of `P` and of a prover whose logs extend `P`'s coincide: they read the logs
+  before the query only.
 * **`prEvent_sim_le_E`**, **`prEvent_sim_comb_le_E`** (per cipher table): if an event of any
   computation implies, at every table, that some output `j ∈ J` is accepted and not extracted,
   its probability is at most
 
       Σ_k q_k·ε_k + |J|·Σ_k r_k·ε_k + Σ_{j ∈ J} Pr[bindFail_j ∨ deadOpen_j ∨ cf_j],
 
-  `q` the queries of `G`, `r = extractorQueries + verifierQueries` those of one continuation,
+  `q` the budget of the runs, `r = extractorQueries + verifierQueries` that of one continuation,
   `ε` the single-proof bound's per-query charge (`adaptEps`, `combAdaptEps`).
 * **`prEvent_sim_le`**, **`prEvent_sim_comb_le`** (the joint experiment): averaged over the cipher
   table, with the failure events (binding, an opened dead leaf, Post) bounded per output by the
   single-proof bounds (`prEvent_joint_bindFail_le_A`, `prEvent_joint_deadOpen_le_A`,
-  `prEvent_joint_postOut_le_A`).
+  `prEvent_joint_postOut_le_A`); `sim_sum_eq`, `sim_comb_sum_eq` sum the charges.
 
 What stays per output: the verifier's three chain queries and the extractor's (`r`, the paper's
-"per-output verification queries"), and the failure events. These are not per-query events of
-`G` in the single-proof development (Post, binding and the opened dead leaf are bounded on
+"per-output verification queries"), and the failure events. The latter are not per-query events
+of the run in the single-proof development (Post, binding and the opened dead leaf are bounded on
 average over the cipher table, and the opened dead leaf includes the verifier's fresh `H₂³`
 answer), so they keep a factor `|J|`; each is `O(2⁻¹¹⁷)` at `2⁶⁴` queries.
 -/
@@ -119,19 +121,65 @@ end Proj
 section Congr
 
 variable {γ ι β : Type} (T : CrtTables) (stF : ι → Statement) (dec : ByteArray → Option ι)
-  (E : CTable) (G : OracleComp specIC γ)
+  (E : CTable)
 
-lemma logBefore_gameA_map (f : γ → ByteArray × (ι × β)) (g : Table) {t : Dom}
-    (ht : t ∈ (tableQueryLog (runE E G) g).map Sigma.fst) :
-    logBefore t (tableQueryLog (gameA T stF (f <$> G) E) g) =
-      logBefore t (tableQueryLog (runE E G) g) := by
-  rw [tableQueryLog_gameA_map, logBefore_append_of_mem _ ht]
+/-- The adaptive game's log begins with `P`'s hash queries (`runE`). -/
+theorem tableQueryLog_gameA_eq (P : OracleComp specIC (ByteArray × (ι × β))) (g : Table) :
+    tableQueryLog (gameA T stF P E) g = tableQueryLog (runE E P) g ++
+      tableQueryLog (gameK T stF E id (evalWithAnswerFn (QueryImpl.ofFn g) (runE E P))) g := by
+  have h := tableQueryLog_gameA_map T stF E id P g
+  rwa [id_map] at h
 
-lemma logBefore_gLog_map (f : γ → ByteArray × β) (st : Statement) (g : Table) {t : Dom}
-    (ht : t ∈ (tableQueryLog (runE E G) g).map Sigma.fst) :
-    logBefore t (gLog T st (f <$> G) E g) = logBefore t (tableQueryLog (runE E G) g) := by
-  obtain ⟨X, hX⟩ := gLog_map T E f G st g
-  rw [hX, logBefore_append_of_mem _ ht]
+lemma mem_hashLog_iff {t : Dom} {J : QueryLog specIC} :
+    t ∈ hashLog J ↔ (Sum.inl t : DomIC) ∈ J.map Sigma.fst := by
+  induction J with
+  | nil => simp [hashLog]
+  | cons e J ih =>
+    obtain ⟨d, u⟩ := e
+    cases d with
+    | inl d =>
+      show t ∈ d :: hashLog J ↔ _
+      simp [ih]
+    | inr x =>
+      show t ∈ hashLog J ↔ _
+      simp [ih]
+
+/-- **Logs before a query of the shorter run**: if `P'`'s logs extend `P`'s, then at a hash query
+of `P` the logs before it of `P`'s and `P'`'s games agree (the adaptive game's, each fixed game's,
+and the joint log's). -/
+theorem logBefore_prefix (P P' : OracleComp specIC (ByteArray × (ι × β))) (g : Table) {t : Dom}
+    (ht : t ∈ (tableQueryLog (runE E P) g).map Sigma.fst)
+    (hH : ∃ Y, tableQueryLog (runE E P') g = tableQueryLog (runE E P) g ++ Y)
+    (hJ : ∃ Y, jOf g P' E = jOf g P E ++ Y) :
+    logBefore t (tableQueryLog (gameA T stF P E) g) =
+        logBefore t (tableQueryLog (gameA T stF P' E) g) ∧
+      (∀ st, logBefore t (gLog T st P E g) = logBefore t (gLog T st P' E g)) ∧
+      logBefore (Sum.inl t) (jOf g P E) = logBefore (Sum.inl t) (jOf g P' E) := by
+  obtain ⟨Y, hY⟩ := hH
+  obtain ⟨Y', hY'⟩ := hJ
+  have ht' : t ∈ (tableQueryLog (runE E P') g).map Sigma.fst := by
+    rw [hY, List.map_append]; exact List.mem_append_left _ ht
+  have hP : ∀ (Q : OracleComp specIC (ByteArray × (ι × β))),
+      t ∈ (tableQueryLog (runE E Q) g).map Sigma.fst →
+      logBefore t (tableQueryLog (gameA T stF Q E) g) = logBefore t (tableQueryLog (runE E Q) g) ∧
+        ∀ st, logBefore t (gLog T st Q E g) = logBefore t (tableQueryLog (runE E Q) g) :=
+    fun Q hQ => by
+      refine ⟨by rw [tableQueryLog_gameA_eq, logBefore_append_of_mem _ hQ], fun st => ?_⟩
+      have h := gLog_map T E id Q st g
+      rw [id_map] at h
+      obtain ⟨X, hX⟩ := h
+      rw [hX, logBefore_append_of_mem _ hQ]
+  have hrun : logBefore t (tableQueryLog (runE E P) g) =
+      logBefore t (tableQueryLog (runE E P') g) := by
+    rw [hY, logBefore_append_of_mem _ ht]
+  have hjt : (Sum.inl t : DomIC) ∈ (jOf g P E).map Sigma.fst := by
+    rw [← mem_hashLog_iff]
+    unfold jOf
+    rw [← map_fst_tableQueryLog_runE]
+    exact ht
+  refine ⟨by rw [(hP P ht).1, (hP P' ht').1, hrun], fun st => ?_, ?_⟩
+  · rw [(hP P ht).2, (hP P' ht').2, hrun]
+  · rw [hY', logBefore_append_of_mem _ hjt]
 
 /-- **`chainBad` at a query reads the chain data at that query's input only.** -/
 theorem chainBad_congr_at {st : Statement} (C C' : ChainData st) (T : CrtTables)
@@ -147,19 +195,16 @@ theorem chainBad_congr_at {st : Statement} (C C' : ChainData st) (T : CrtTables)
   all_goals simp only [chainBad]
 
 set_option maxRecDepth 4000 in
-/-- **At a query of the shared run, the bad events of the issue relations do not depend on which
-output the prover projects to.** -/
-theorem adaptBad_map_congr (sys : ι → System GF128) (f f' : γ → ByteArray × (ι × β)) (N : ℕ)
-    (cb : Option (ℕ × ByteArray)) (g : Table) (t : Dom)
-    (ht : t ∈ (tableQueryLog (runE E G) g).map Sigma.fst) :
-    adaptBad T stF dec sys (f <$> G) E N cb t g ↔ adaptBad T stF dec sys (f' <$> G) E N cb t g := by
+/-- **At a query of the shorter run, the bad events of the issue relations agree** for two
+provers whose logs extend one another. -/
+theorem adaptBad_prefix_congr (sys : ι → System GF128) (P P' : OracleComp specIC (ByteArray × (ι × β)))
+    (N : ℕ) (cb : Option (ℕ × ByteArray)) (g : Table) (t : Dom)
+    (ht : t ∈ (tableQueryLog (runE E P) g).map Sigma.fst)
+    (hH : ∃ Y, tableQueryLog (runE E P') g = tableQueryLog (runE E P) g ++ Y)
+    (hJ : ∃ Y, jOf g P' E = jOf g P E ++ Y) :
+    adaptBad T stF dec sys P E N cb t g ↔ adaptBad T stF dec sys P' E N cb t g := by
   let _ : HasPrg := icPrg E.cipher
-  have hA : logBefore t (tableQueryLog (gameA T stF (f <$> G) E) g) =
-      logBefore t (tableQueryLog (gameA T stF (f' <$> G) E) g) := by
-    rw [logBefore_gameA_map T stF E G f g ht, logBefore_gameA_map T stF E G f' g ht]
-  have hG : ∀ st, logBefore t (gLog T st (f <$> G) E g) = logBefore t (gLog T st (f' <$> G) E g) :=
-    fun st => by rw [logBefore_gLog_map T E G f st g ht, logBefore_gLog_map T E G f' st g ht]
-  have hJ : jOf g (f <$> G) E = jOf g (f' <$> G) E := by rw [jOf_map, jOf_map]
+  obtain ⟨hA, hG, hJ⟩ := logBefore_prefix T stF E P P' g ht hH hJ
   unfold adaptBad chainBadA chainHitL stmtHit
   rw [stmtAt_congr dec hA, hA]
   refine or_congr (exists_congr fun s => and_congr_right fun _ => ?_) Iff.rfl
@@ -167,46 +212,45 @@ theorem adaptBad_map_congr (sys : ι → System GF128) (f f' : γ → ByteArray 
   refine chainBad_congr_at _ _ T chal3Blocks N g k x (fun hk => ?_) (fun hk => ⟨?_, rfl⟩)
     (fun hk => ?_)
   · subst hk
-    show preOf T (stF s) (f <$> G) E x g = preOf T (stF s) (f' <$> G) E x g
+    show preOf T (stF s) P E x g = preOf T (stF s) P' E x g
     unfold preOf
     rw [hG, hJ]
   · subst hk
-    show midOf T (stF s) (f <$> G) E x g = midOf T (stF s) (f' <$> G) E x g
+    show midOf T (stF s) P E x g = midOf T (stF s) P' E x g
     unfold midOf
     rw [hG, hJ]
   · subst hk
-    show accOf T (stF s) (f <$> G) E x g = accOf T (stF s) (f' <$> G) E x g
+    show accOf T (stF s) P E x g = accOf T (stF s) P' E x g
     unfold accOf
     rw [hG, hJ]
 
 set_option maxRecDepth 4000 in
 /-- **The same for the combined relations.** -/
-theorem combAdaptBad_map_congr {M : ℕ} (sysL : ι → (Fin M → GF128) → System GF128)
-    (witL : ι → (ℕ → GF128) → Prop) (dst : ByteArray) (f f' : γ → ByteArray × (ι × β)) (N : ℕ)
-    (g : Table) (t : Dom) (ht : t ∈ (tableQueryLog (runE E G) g).map Sigma.fst) :
-    combAdaptBad T stF dec (f <$> G) E sysL witL dst N t g ↔
-      combAdaptBad T stF dec (f' <$> G) E sysL witL dst N t g := by
+theorem combAdaptBad_prefix_congr {M : ℕ} (sysL : ι → (Fin M → GF128) → System GF128)
+    (witL : ι → (ℕ → GF128) → Prop) (dst : ByteArray)
+    (P P' : OracleComp specIC (ByteArray × (ι × β))) (N : ℕ) (g : Table) (t : Dom)
+    (ht : t ∈ (tableQueryLog (runE E P) g).map Sigma.fst)
+    (hH : ∃ Y, tableQueryLog (runE E P') g = tableQueryLog (runE E P) g ++ Y)
+    (hJ : ∃ Y, jOf g P' E = jOf g P E ++ Y) :
+    combAdaptBad T stF dec P E sysL witL dst N t g ↔
+      combAdaptBad T stF dec P' E sysL witL dst N t g := by
   let _ : HasPrg := icPrg E.cipher
-  have hA : logBefore t (tableQueryLog (gameA T stF (f <$> G) E) g) =
-      logBefore t (tableQueryLog (gameA T stF (f' <$> G) E) g) := by
-    rw [logBefore_gameA_map T stF E G f g ht, logBefore_gameA_map T stF E G f' g ht]
-  have hA' : logBefore t (gLogA T stF (f <$> G) E g) = logBefore t (gLogA T stF (f' <$> G) E g) :=
-    hA
-  have hJ : jOf g (f <$> G) E = jOf g (f' <$> G) E := by rw [jOf_map, jOf_map]
+  obtain ⟨hA, -, hJ⟩ := logBefore_prefix T stF E P P' g ht hH hJ
+  have hA' : logBefore t (gLogA T stF P E g) = logBefore t (gLogA T stF P' E g) := hA
   unfold combAdaptBad combBadA chainHitL stmtHit
   rw [stmtAt_congr dec hA', hA]
   refine or_congr (exists_congr fun s => and_congr_right fun _ => ?_) Iff.rfl
   obtain ⟨k, x⟩ := t
   by_cases hk : k = .h22
   · subst hk
-    have hmid : (combDataA T stF (f <$> G) E sysL witL dst s).midOf x g =
-        (combDataA T stF (f' <$> G) E sysL witL dst s).midOf x g := by
-      show midOfA T stF (f <$> G) E (stF s) x g = midOfA T stF (f' <$> G) E (stF s) x g
+    have hmid : (combDataA T stF P E sysL witL dst s).midOf x g =
+        (combDataA T stF P' E sysL witL dst s).midOf x g := by
+      show midOfA T stF P E (stF s) x g = midOfA T stF P' E (stF s) x g
       unfold midOfA
       rw [hA', hJ]
-    have hpre : (combDataA T stF (f <$> G) E sysL witL dst s).pre x g =
-        (combDataA T stF (f' <$> G) E sysL witL dst s).pre x g := by
-      show preCellsA T stF (f <$> G) E x g = preCellsA T stF (f' <$> G) E x g
+    have hpre : (combDataA T stF P E sysL witL dst s).pre x g =
+        (combDataA T stF P' E sysL witL dst s).pre x g := by
+      show preCellsA T stF P E x g = preCellsA T stF P' E x g
       unfold preCellsA
       rw [hA']
     simp only [combBad, ite_true, CombData.qsComb, CombData.wC]
@@ -216,11 +260,11 @@ theorem combAdaptBad_map_congr {M : ℕ} (sysL : ι → (Fin M → GF128) → Sy
     refine chainBad_congr_at _ _ T chal3Blocks N g k x (fun hk' => ?_) (fun hk' => absurd hk' hk)
       (fun hk' => ?_)
     · subst hk'
-      show preOfA T stF (f <$> G) E (stF s) x g = preOfA T stF (f' <$> G) E (stF s) x g
+      show preOfA T stF P E (stF s) x g = preOfA T stF P' E (stF s) x g
       unfold preOfA
       rw [hA', hJ]
     · subst hk'
-      show accOfA T stF (f <$> G) E (stF s) x g = accOfA T stF (f' <$> G) E (stF s) x g
+      show accOfA T stF P E (stF s) x g = accOfA T stF P' E (stF s) x g
       unfold accOfA
       rw [hA', hJ]
 
@@ -230,33 +274,46 @@ end Congr
 
 section SimE
 
-variable {ι' γ α ι β : Type} (T : CrtTables) (stF : ι → Statement) (dec : ByteArray → Option ι)
-  (E : CTable) (G : OracleComp specIC γ) (proj : ι' → γ → ByteArray × (ι × β))
+variable {ι' α ι β : Type} (T : CrtTables) (stF : ι → Statement) (dec : ByteArray → Option ι)
+  (E : CTable) (P₀ : OracleComp specIC (ByteArray × (ι × β)))
+  (P : ι' → OracleComp specIC (ByteArray × (ι × β)))
+
+/-- **The outputs' runs are prefixes of the reference run `P₀`**, at the table `g`: the hash log
+and the joint log of each `P j` begin `P₀`'s. -/
+def PrefixRuns (J : Finset ι') : Prop :=
+  ∀ j ∈ J, ∀ g, (∃ Y, tableQueryLog (runE E P₀) g = tableQueryLog (runE E (P j)) g ++ Y) ∧
+    ∃ Y, jOf g P₀ E = jOf g (P j) E ++ Y
 
 /-- The finite key set of the simultaneous bound: every query of the event's computation, of the
-shared run and of each output's game. -/
+reference run and of each output's game. -/
 noncomputable def simKeys (oa : OracleComp spec α) (J : Finset ι') : Finset Dom :=
-  possibleQueryKeys oa ∪ possibleQueryKeys (runE E G) ∪
-    J.biUnion fun j => possibleQueryKeys (gameA T stF (proj j <$> G) E)
+  possibleQueryKeys oa ∪ possibleQueryKeys (runE E P₀) ∪
+    J.biUnion fun j => possibleQueryKeys (gameA T stF (P j) E)
 
 lemma simKeys_oa (oa : OracleComp spec α) (J : Finset ι') :
-    AllQueriesSatisfy oa (· ∈ simKeys T stF E G proj oa J) :=
+    AllQueriesSatisfy oa (· ∈ simKeys T stF E P₀ P oa J) :=
   (allQueriesSatisfy_possibleQueryKeys oa).mono fun _ h =>
     Finset.mem_union_left _ (Finset.mem_union_left _ h)
 
 lemma simKeys_run (oa : OracleComp spec α) (J : Finset ι') :
-    AllQueriesSatisfy (runE E G) (· ∈ simKeys T stF E G proj oa J) :=
+    AllQueriesSatisfy (runE E P₀) (· ∈ simKeys T stF E P₀ P oa J) :=
   (allQueriesSatisfy_possibleQueryKeys _).mono fun _ h =>
     Finset.mem_union_left _ (Finset.mem_union_right _ h)
 
 lemma simKeys_game (oa : OracleComp spec α) (J : Finset ι') (j : ι') (hj : j ∈ J) :
-    AllQueriesSatisfy (gameA T stF (proj j <$> G) E) (· ∈ simKeys T stF E G proj oa J) :=
+    AllQueriesSatisfy (gameA T stF (P j) E) (· ∈ simKeys T stF E P₀ P oa J) :=
   (allQueriesSatisfy_possibleQueryKeys _).mono fun _ h =>
     Finset.mem_union_right _ (Finset.mem_biUnion.2 ⟨j, hj, h⟩)
 
-/-- **Simultaneous extraction for the issue relations, per cipher table.** A run `G` of the
-adversary and the honest parties (at most `q k` hash queries of kind `k`, `nG` in all), outputs
-`j ∈ J` read off it by `proj j` (the provers `proj j <$> G` of the single-proof games), and an
+lemma gameA_eq_bind (Q : OracleComp specIC (ByteArray × (ι × β))) :
+    gameA T stF Q E = runE E Q >>= gameK T stF E id := by
+  have h := gameA_map T stF E id Q
+  rwa [id_map] at h
+
+/-- **Simultaneous extraction for the issue relations, per cipher table.** Provers `P j`
+(`j ∈ J`, the proofs of one protocol run, e.g. projections of the run or the run up to the
+`j`-th request) whose hash and joint logs are prefixes of a reference run `P₀` (`PrefixRuns`),
+each of them and `P₀` within the budgets `q` (per kind) and `nG` (hash queries in all), and an
 event of any computation `oa` that implies, at every table, that some output is accepted at the
 statement it chose and not extracted (`htr`). Then
 
@@ -273,73 +330,74 @@ theorem prEvent_sim_le_E (sys : ι → System GF128) (hT : liftInvOk T = true) (
     (hvals : ∀ s c1 lb w, (stF s).values c1 lb w = (sys s).values w)
     (hdet : ∀ s, @ChainDet (icPrg E.cipher) T (stF s) (sys s) N (Wit s))
     (cf : Out ((ι × β) × QueryLog specIC) → Prop)
-    (hcf : ∀ j s g, ¬cf (evalWithAnswerFn (QueryImpl.ofFn g) (gameIC T (stF s) (proj j <$> G) E)) →
-      KeysPre (stF s) E (jOf g (proj j <$> G) E) (gLog T (stF s) (proj j <$> G) E g) g)
-    (q : Kind → ℕ) (hq : IsKindQueryBoundIC G q) (nG : ℕ)
-    (hnG : IsQueryBoundP G (fun t => t.isLeft = true) nG)
-    (J : Finset ι') (j₀ : ι') (oa : OracleComp spec α) (event : α → Prop)
+    (hcf : ∀ j s g, ¬cf (evalWithAnswerFn (QueryImpl.ofFn g) (gameIC T (stF s) (P j) E)) →
+      KeysPre (stF s) E (jOf g (P j) E) (gLog T (stF s) (P j) E g) g)
+    (q : Kind → ℕ) (hq₀ : IsKindQueryBoundIC P₀ q) (hq : ∀ j, IsKindQueryBoundIC (P j) q) (nG : ℕ)
+    (hnG₀ : IsQueryBoundP P₀ (fun t => t.isLeft = true) nG)
+    (hnG : ∀ j, IsQueryBoundP (P j) (fun t => t.isLeft = true) nG)
+    (J : Finset ι') (hpre : PrefixRuns E P₀ P J) (oa : OracleComp spec α) (event : α → Prop)
     (htr : ∀ g, event (evalWithAnswerFn (QueryImpl.ofFn g) oa) → ∃ j ∈ J,
-      let r := evalWithAnswerFn (QueryImpl.ofFn g) (gameA T stF (proj j <$> G) E)
+      let r := evalWithAnswerFn (QueryImpl.ofFn g) (gameA T stF (P j) E)
       r.2.2.accept = true ∧ ¬@Extracted (icPrg E.cipher) _ (stF (stOut r)) (Wit (stOut r)) r) :
     let n' := q + extractorQueries + verifierQueries
     Pr{let r ← (simulateQ randomOracle oa).run' ∅}[event r] ≤
       ∑ k ∈ adaptKinds, (q k : ℝ≥0∞) * adaptEps st₀ n N cb n' k +
       ∑ _j ∈ J, ∑ k ∈ adaptKinds,
         ((extractorQueries + verifierQueries) k : ℝ≥0∞) * adaptEps st₀ n N cb n' k +
-      ∑ j ∈ J, Pr{let r ← (simulateQ randomOracle (gameA T stF (proj j <$> G) E)).run' ∅}[
+      ∑ j ∈ J, Pr{let r ← (simulateQ randomOracle (gameA T stF (P j) E)).run' ∅}[
         bindFailA stF E r ∨ deadOpenA stF E r ∨ cf r] := by
   classical
   intro n'
   let ε := adaptEps st₀ n N cb n'
   have hK : ∀ k ∉ adaptKinds, ε k = 0 := adaptEps_eq_zero st₀ n N cb n'
-  have hqP : ∀ j, IsKindQueryBoundIC (proj j <$> G) q := fun j =>
-    (isQueryBound_map_iff _ _ _ _ _).2 hq
-  let S := simKeys T stF E G proj oa J
+  let S := simKeys T stF E P₀ P oa J
   let : SampleableType ((d : S) → Ans d.val) := SampleableType.piOfFintype _
-  have hbad : ∀ j, ∀ (c : (ofFn fun d : S => Ans d.val).QueryCache) (t : S), c t = none →
+  have hbad : ∀ Q : OracleComp specIC (ByteArray × (ι × β)), IsKindQueryBoundIC Q q →
+      ∀ (c : (ofFn fun d : S => Ans d.val).QueryCache) (t : S), c t = none →
       (cachedKeys c).card < nG + (2 + verifierTotal) →
       Pr{let g ← $ᵗ ((d : S) → Ans d.val)}[
-        adaptBad T stF dec sys (proj j <$> G) E N cb t.val (extendTable S (completeTable c g))] ≤
-        ε t.val.1 := fun j c t hc _ =>
-    cached_of_cell S (adaptBad T stF dec sys (proj j <$> G) E N cb) (fun t => ε t.1)
-      (fun t g => prEvent_adaptBad_le T stF dec sys (proj j <$> G) E hT st₀ hparams hn N cb q
-        (hqP j) t g) c t hc
-  refine prEvent_le_shared_suffix S oa event (simKeys_oa T stF E G proj oa J) (runE E G)
-    (simKeys_run T stF E G proj oa J) (fun t => ε t.1) _
-    (worstCaseCostBound_of_kindQueryBound _ adaptKinds ε hK q (isKindQueryBound_runE E hq)) nG
-    (isTotalQueryBound_runE E hnG) (adaptBad T stF dec sys (proj j₀ <$> G) E N cb) J
-    (fun _ => runE E G) (fun j => gameK T stF E (proj j)) (fun j hj => ?_) _
-    (fun j a => worstCaseCostBound_of_kindQueryBound _ adaptKinds ε hK _
-      (isKindQueryBound_gameK T stF E (proj j) a)) nG (2 + verifierTotal)
-    (fun _ => isTotalQueryBound_runE E hnG) (fun j a => isTotalQueryBound_gameK T stF E (proj j) a)
-    (fun j => adaptBad T stF dec sys (proj j <$> G) E N cb) J
-    (fun j => gameA T stF (proj j <$> G) E) (fun _ r => bindFailA stF E r ∨ deadOpenA stF E r ∨ cf r)
-    (fun j hj => simKeys_game T stF E G proj oa J j hj) (nG + (2 + verifierTotal)) (by omega)
-    le_rfl (hbad j₀) (fun j _ => hbad j) fun g hev => ?_
-  · rw [← gameA_map]
-    exact simKeys_game T stF E G proj oa J j hj
+        adaptBad T stF dec sys Q E N cb t.val (extendTable S (completeTable c g))] ≤
+        ε t.val.1 := fun Q hQ c t hc _ =>
+    cached_of_cell S (adaptBad T stF dec sys Q E N cb) (fun t => ε t.1)
+      (fun t g => prEvent_adaptBad_le T stF dec sys Q E hT st₀ hparams hn N cb q hQ t g) c t hc
+  refine prEvent_le_shared_suffix S oa event (simKeys_oa T stF E P₀ P oa J) (runE E P₀)
+    (simKeys_run T stF E P₀ P oa J) (fun t => ε t.1) _
+    (worstCaseCostBound_of_kindQueryBound _ adaptKinds ε hK q (isKindQueryBound_runE E hq₀)) nG
+    (isTotalQueryBound_runE E hnG₀) (adaptBad T stF dec sys P₀ E N cb) J
+    (fun j => runE E (P j)) (fun _ => gameK T stF E id) (fun j hj => ?_) _
+    (fun _ a => worstCaseCostBound_of_kindQueryBound _ adaptKinds ε hK _
+      (isKindQueryBound_gameK T stF E id a)) nG (2 + verifierTotal)
+    (fun j => isTotalQueryBound_runE E (hnG j)) (fun _ a => isTotalQueryBound_gameK T stF E id a)
+    (fun j => adaptBad T stF dec sys (P j) E N cb) J
+    (fun j => gameA T stF (P j) E) (fun _ r => bindFailA stF E r ∨ deadOpenA stF E r ∨ cf r)
+    (fun j hj => simKeys_game T stF E P₀ P oa J j hj) (nG + (2 + verifierTotal)) (by omega)
+    le_rfl (hbad P₀ hq₀) (fun j _ => hbad (P j) (hq j)) fun g hev => ?_
+  · rw [← gameA_eq_bind]
+    exact simKeys_game T stF E P₀ P oa J j hj
   obtain ⟨j, hj, hacc, hnex⟩ := htr g hev
   by_cases hf : bindFailA stF E (evalWithAnswerFn (QueryImpl.ofFn g)
-      (gameA T stF (proj j <$> G) E)) ∨ deadOpenA stF E (evalWithAnswerFn (QueryImpl.ofFn g)
-      (gameA T stF (proj j <$> G) E)) ∨ cf (evalWithAnswerFn (QueryImpl.ofFn g)
-      (gameA T stF (proj j <$> G) E))
+      (gameA T stF (P j) E)) ∨ deadOpenA stF E (evalWithAnswerFn (QueryImpl.ofFn g)
+      (gameA T stF (P j) E)) ∨ cf (evalWithAnswerFn (QueryImpl.ofFn g) (gameA T stF (P j) E))
   · exact Or.inr (Or.inr ⟨j, hj, hf⟩)
   simp only [not_or] at hf
-  obtain ⟨e, he, hb⟩ := adaptBad_trace T stF dec sys (proj j <$> G) E hT hdel cb hcomb hdec N Wit
+  obtain ⟨e, he, hb⟩ := adaptBad_trace T stF dec sys (P j) E hT hdel cb hcomb hdec N Wit
     hvals hdet cf (hcf j) g ⟨⟨hacc, hnex⟩, hf.1, hf.2.1, hf.2.2⟩
-  rw [tableQueryLog_gameA_map] at he
-  by_cases hm : e.1 ∈ (tableQueryLog (runE E G) g).map Sigma.fst
-  · obtain ⟨e', he', heq⟩ := List.mem_map.1 hm
+  rw [tableQueryLog_gameA_eq] at he
+  by_cases hm : e.1 ∈ (tableQueryLog (runE E (P j)) g).map Sigma.fst
+  · obtain ⟨⟨Y, hY⟩, hJ⟩ := hpre j hj g
+    have hm₀ : e.1 ∈ (tableQueryLog (runE E P₀) g).map Sigma.fst := by
+      rw [hY, List.map_append]; exact List.mem_append_left _ hm
+    obtain ⟨e', he', heq⟩ := List.mem_map.1 hm₀
     refine Or.inl ⟨e', he', ?_⟩
     rw [heq]
-    exact (adaptBad_map_congr T stF dec E G sys (proj j) (proj j₀) N cb g e.1 hm).1 hb
+    exact (adaptBad_prefix_congr T stF dec E sys (P j) P₀ N cb g e.1 hm ⟨Y, hY⟩ hJ).1 hb
   · refine Or.inr (Or.inl ⟨j, hj, e, ?_, hm, hb⟩)
     exact (List.mem_append.1 he).resolve_left fun h => hm (List.mem_map_of_mem h)
 
 set_option exponentiation.threshold 500 in
 set_option maxRecDepth 4000 in
 /-- **Simultaneous extraction for the combined relations, per cipher table** (as
-`prEvent_sim_le_E`, with `ROM/AdaptComb.lean`'s per-query charge `combAdaptEps`; `nG` the run's
+`prEvent_sim_le_E`, with `ROM/AdaptComb.lean`'s per-query charge `combAdaptEps`; `nG` the runs'
 total hash queries enters the `H₂²` charge as `(nG + 2 + verifierTotal)·2⁻⁴⁴⁸`). -/
 theorem prEvent_sim_comb_le_E {M : ℕ} (sysL : ι → (Fin M → GF128) → System GF128)
     (witL : ι → (ℕ → GF128) → Prop) (dst : ByteArray) (hT : liftInvOk T = true)
@@ -352,13 +410,14 @@ theorem prEvent_sim_comb_le_E {M : ℕ} (sysL : ι → (Fin M → GF128) → Sys
       (stF s).values c1 v.ba w = (sysL s (combDec v)).values w)
     (hdet : ∀ s, @CombDet (icPrg E.cipher) M T (stF s) (sysL s) (witL s) N (Wit s))
     (cf : Out ((ι × β) × QueryLog specIC) → Prop)
-    (hcf : ∀ j s g, ¬cf (evalWithAnswerFn (QueryImpl.ofFn g) (gameIC T (stF s) (proj j <$> G) E)) →
-      KeysPre (stF s) E (jOf g (proj j <$> G) E) (gLog T (stF s) (proj j <$> G) E g) g)
-    (q : Kind → ℕ) (hq : IsKindQueryBoundIC G q) (nG : ℕ)
-    (hnG : IsQueryBoundP G (fun t => t.isLeft = true) nG)
-    (J : Finset ι') (j₀ : ι') (oa : OracleComp spec α) (event : α → Prop)
+    (hcf : ∀ j s g, ¬cf (evalWithAnswerFn (QueryImpl.ofFn g) (gameIC T (stF s) (P j) E)) →
+      KeysPre (stF s) E (jOf g (P j) E) (gLog T (stF s) (P j) E g) g)
+    (q : Kind → ℕ) (hq₀ : IsKindQueryBoundIC P₀ q) (hq : ∀ j, IsKindQueryBoundIC (P j) q) (nG : ℕ)
+    (hnG₀ : IsQueryBoundP P₀ (fun t => t.isLeft = true) nG)
+    (hnG : ∀ j, IsQueryBoundP (P j) (fun t => t.isLeft = true) nG)
+    (J : Finset ι') (hpre : PrefixRuns E P₀ P J) (oa : OracleComp spec α) (event : α → Prop)
     (htr : ∀ g, event (evalWithAnswerFn (QueryImpl.ofFn g) oa) → ∃ j ∈ J,
-      let r := evalWithAnswerFn (QueryImpl.ofFn g) (gameA T stF (proj j <$> G) E)
+      let r := evalWithAnswerFn (QueryImpl.ofFn g) (gameA T stF (P j) E)
       r.2.2.accept = true ∧ ¬@Extracted (icPrg E.cipher) _ (stF (stOut r)) (Wit (stOut r)) r) :
     let nn := q + extractorQueries + verifierQueries
     let ntot := nG + 2 + verifierTotal
@@ -366,57 +425,66 @@ theorem prEvent_sim_comb_le_E {M : ℕ} (sysL : ι → (Fin M → GF128) → Sys
       ∑ k ∈ adaptKinds, (q k : ℝ≥0∞) * combAdaptEps (M := M) dst st₀ n' εc ntot N nn k +
       ∑ _j ∈ J, ∑ k ∈ adaptKinds, ((extractorQueries + verifierQueries) k : ℝ≥0∞) *
         combAdaptEps (M := M) dst st₀ n' εc ntot N nn k +
-      ∑ j ∈ J, Pr{let r ← (simulateQ randomOracle (gameA T stF (proj j <$> G) E)).run' ∅}[
+      ∑ j ∈ J, Pr{let r ← (simulateQ randomOracle (gameA T stF (P j) E)).run' ∅}[
         bindFailA stF E r ∨ deadOpenA stF E r ∨ cf r] := by
   classical
   intro nn ntot
   let ε := combAdaptEps (M := M) dst st₀ n' εc ntot N nn
   have hK : ∀ k ∉ adaptKinds, ε k = 0 := combAdaptEps_eq_zero dst st₀ n' εc ntot N nn
-  have hqP : ∀ j, IsKindQueryBoundIC (proj j <$> G) q := fun j =>
-    (isQueryBound_map_iff _ _ _ _ _).2 hq
-  let S := simKeys T stF E G proj oa J ∪ Finset.univ.image (combKey M dst)
+  let S := simKeys T stF E P₀ P oa J ∪ Finset.univ.image (combKey M dst)
   have hKS : ∀ u, combKey M dst u ∈ S := fun u =>
     Finset.mem_union_right _ (Finset.mem_image_of_mem _ (Finset.mem_univ u))
-  have hsub : ∀ d, d ∈ simKeys T stF E G proj oa J → d ∈ S := fun _ h =>
+  have hsub : ∀ d, d ∈ simKeys T stF E P₀ P oa J → d ∈ S := fun _ h =>
     Finset.mem_union_left _ h
   let : SampleableType ((d : S) → Ans d.val) := SampleableType.piOfFintype _
-  have hbad : ∀ j, ∀ (c : (ofFn fun d : S => Ans d.val).QueryCache) (t : S), c t = none →
+  have hbad : ∀ Q : OracleComp specIC (ByteArray × (ι × β)), IsKindQueryBoundIC Q q →
+      ∀ (c : (ofFn fun d : S => Ans d.val).QueryCache) (t : S), c t = none →
       (cachedKeys c).card < ntot →
-      Pr{let g ← $ᵗ ((d : S) → Ans d.val)}[combAdaptBad T stF dec (proj j <$> G) E sysL witL dst N
-        t.val (extendTable S (completeTable c g))] ≤ ε t.val.1 := fun j c t hc hcard =>
-    prEvent_combAdaptBad_le T stF dec (proj j <$> G) E sysL witL dst hT st₀ hparams hn' hεc N q
-      (hqP j) S hKS ntot c t hc hcard
-  refine prEvent_le_shared_suffix S oa event ((simKeys_oa T stF E G proj oa J).mono hsub)
-    (runE E G) ((simKeys_run T stF E G proj oa J).mono hsub) (fun t => ε t.1) _
-    (worstCaseCostBound_of_kindQueryBound _ adaptKinds ε hK q (isKindQueryBound_runE E hq)) nG
-    (isTotalQueryBound_runE E hnG) (combAdaptBad T stF dec (proj j₀ <$> G) E sysL witL dst N) J
-    (fun _ => runE E G) (fun j => gameK T stF E (proj j)) (fun j hj => ?_) _
-    (fun j a => worstCaseCostBound_of_kindQueryBound _ adaptKinds ε hK _
-      (isKindQueryBound_gameK T stF E (proj j) a)) nG (2 + verifierTotal)
-    (fun _ => isTotalQueryBound_runE E hnG) (fun j a => isTotalQueryBound_gameK T stF E (proj j) a)
-    (fun j => combAdaptBad T stF dec (proj j <$> G) E sysL witL dst N) J
-    (fun j => gameA T stF (proj j <$> G) E) (fun _ r => bindFailA stF E r ∨ deadOpenA stF E r ∨ cf r)
-    (fun j hj => (simKeys_game T stF E G proj oa J j hj).mono hsub) ntot (by omega)
-    (by omega) (hbad j₀) (fun j _ => hbad j) fun g hev => ?_
-  · rw [← gameA_map]
-    exact (simKeys_game T stF E G proj oa J j hj).mono hsub
+      Pr{let g ← $ᵗ ((d : S) → Ans d.val)}[combAdaptBad T stF dec Q E sysL witL dst N
+        t.val (extendTable S (completeTable c g))] ≤ ε t.val.1 := fun Q hQ c t hc hcard =>
+    prEvent_combAdaptBad_le T stF dec Q E sysL witL dst hT st₀ hparams hn' hεc N q hQ S hKS ntot
+      c t hc hcard
+  refine prEvent_le_shared_suffix S oa event ((simKeys_oa T stF E P₀ P oa J).mono hsub)
+    (runE E P₀) ((simKeys_run T stF E P₀ P oa J).mono hsub) (fun t => ε t.1) _
+    (worstCaseCostBound_of_kindQueryBound _ adaptKinds ε hK q (isKindQueryBound_runE E hq₀)) nG
+    (isTotalQueryBound_runE E hnG₀) (combAdaptBad T stF dec P₀ E sysL witL dst N) J
+    (fun j => runE E (P j)) (fun _ => gameK T stF E id) (fun j hj => ?_) _
+    (fun _ a => worstCaseCostBound_of_kindQueryBound _ adaptKinds ε hK _
+      (isKindQueryBound_gameK T stF E id a)) nG (2 + verifierTotal)
+    (fun j => isTotalQueryBound_runE E (hnG j)) (fun _ a => isTotalQueryBound_gameK T stF E id a)
+    (fun j => combAdaptBad T stF dec (P j) E sysL witL dst N) J
+    (fun j => gameA T stF (P j) E) (fun _ r => bindFailA stF E r ∨ deadOpenA stF E r ∨ cf r)
+    (fun j hj => (simKeys_game T stF E P₀ P oa J j hj).mono hsub) ntot (by omega)
+    (by omega) (hbad P₀ hq₀) (fun j _ => hbad (P j) (hq j)) fun g hev => ?_
+  · rw [← gameA_eq_bind]
+    exact (simKeys_game T stF E P₀ P oa J j hj).mono hsub
   obtain ⟨j, hj, hacc, hnex⟩ := htr g hev
   by_cases hf : bindFailA stF E (evalWithAnswerFn (QueryImpl.ofFn g)
-      (gameA T stF (proj j <$> G) E)) ∨ deadOpenA stF E (evalWithAnswerFn (QueryImpl.ofFn g)
-      (gameA T stF (proj j <$> G) E)) ∨ cf (evalWithAnswerFn (QueryImpl.ofFn g)
-      (gameA T stF (proj j <$> G) E))
+      (gameA T stF (P j) E)) ∨ deadOpenA stF E (evalWithAnswerFn (QueryImpl.ofFn g)
+      (gameA T stF (P j) E)) ∨ cf (evalWithAnswerFn (QueryImpl.ofFn g) (gameA T stF (P j) E))
   · exact Or.inr (Or.inr ⟨j, hj, hf⟩)
   simp only [not_or] at hf
-  obtain ⟨e, he, hb⟩ := combAdaptBad_trace T stF dec (proj j <$> G) E sysL witL dst hT hdel hcomb
+  obtain ⟨e, he, hb⟩ := combAdaptBad_trace T stF dec (P j) E sysL witL dst hT hdel hcomb
     hdec N Wit hvals hdet cf (hcf j) g ⟨⟨hacc, hnex⟩, hf.1, hf.2.1, hf.2.2⟩
-  rw [tableQueryLog_gameA_map] at he
-  by_cases hm : e.1 ∈ (tableQueryLog (runE E G) g).map Sigma.fst
-  · obtain ⟨e', he', heq⟩ := List.mem_map.1 hm
+  rw [tableQueryLog_gameA_eq] at he
+  by_cases hm : e.1 ∈ (tableQueryLog (runE E (P j)) g).map Sigma.fst
+  · obtain ⟨⟨Y, hY⟩, hJ⟩ := hpre j hj g
+    have hm₀ : e.1 ∈ (tableQueryLog (runE E P₀) g).map Sigma.fst := by
+      rw [hY, List.map_append]; exact List.mem_append_left _ hm
+    obtain ⟨e', he', heq⟩ := List.mem_map.1 hm₀
     refine Or.inl ⟨e', he', ?_⟩
     rw [heq]
-    exact (combAdaptBad_map_congr T stF dec E G sysL witL dst (proj j) (proj j₀) N g e.1 hm).1 hb
+    exact (combAdaptBad_prefix_congr T stF dec E sysL witL dst (P j) P₀ N g e.1 hm ⟨Y, hY⟩
+      hJ).1 hb
   · refine Or.inr (Or.inl ⟨j, hj, e, ?_, hm, hb⟩)
     exact (List.mem_append.1 he).resolve_left fun h => hm (List.mem_map_of_mem h)
+
+/-- **Projections of one run are prefix runs** (with equal logs). -/
+theorem prefixRuns_map {γ : Type} (G : OracleComp specIC γ) (proj : ι' → γ → ByteArray × (ι × β))
+    (j₀ : ι') (J : Finset ι') :
+    PrefixRuns E (proj j₀ <$> G) (fun j => proj j <$> G) J := fun j _ g =>
+  ⟨⟨[], by rw [tableQueryLog_runE_map, tableQueryLog_runE_map, List.append_nil]⟩,
+    [], by rw [jOf_map, jOf_map, List.append_nil]⟩
 
 end SimE
 
@@ -464,29 +532,25 @@ noncomputable def failEps (q : Kind → ℕ) (qE : ℕ) : ℝ≥0∞ :=
     (openHashEps q + q .h1 * (2 ^ 256 : ℝ≥0∞)⁻¹) +
     ((qE * 2 : ℕ) : ℝ≥0∞) * (((512 * q .h1 : ℕ) : ℝ≥0∞) * (2 ^ 256 : ℝ≥0∞)⁻¹)
 
-/-- The per-output failure terms of the outputs `proj j <$> G`, each at `G`'s budgets. -/
+/-- The per-output failure terms of the provers `Pv j`, each within the budgets `q`, `qE`. -/
 theorem sum_fail_le (T : CrtTables) (stF : ι → Statement) (p : Params)
-    (hparams : ∀ s, (stF s).params = p) (G : OracleComp specIC γ)
-    (proj : ι' → γ → ByteArray × (ι × β)) (J : Finset ι') (qE : ℕ)
-    (hqE : IsQueryBoundP G (fun t => t.isRight = true) qE) (q : Kind → ℕ)
-    (hq : IsKindQueryBoundIC G q) :
+    (hparams : ∀ s, (stF s).params = p) (Pv : ι' → OracleComp specIC (ByteArray × (ι × β)))
+    (J : Finset ι') (qE : ℕ) (hqE : ∀ j, IsQueryBoundP (Pv j) (fun t => t.isRight = true) qE)
+    (q : Kind → ℕ) (hq : ∀ j, IsKindQueryBoundIC (Pv j) q) :
     ∑ j ∈ J, (Pr{let E ← $ᵗ CTable; let r ← (simulateQ randomOracle
-        (gameA T stF (proj j <$> G) E)).run' ∅}[bindFailA stF E r] +
+        (gameA T stF (Pv j) E)).run' ∅}[bindFailA stF E r] +
       Pr{let E ← $ᵗ CTable; let r ← (simulateQ randomOracle
-        (gameA T stF (proj j <$> G) E)).run' ∅}[deadOpenA stF E r] +
+        (gameA T stF (Pv j) E)).run' ∅}[deadOpenA stF E r] +
       Pr{let E ← $ᵗ CTable; let r ← (simulateQ randomOracle
-        (gameA T stF (proj j <$> G) E)).run' ∅}[PostOut E r]) ≤
+        (gameA T stF (Pv j) E)).run' ∅}[PostOut E r]) ≤
       J.card * failEps q qE := by
   rw [← nsmul_eq_mul]
   refine Finset.sum_le_card_nsmul _ _ _ fun j _ => ?_
-  have hqP : IsKindQueryBoundIC (proj j <$> G) q := (isQueryBound_map_iff _ _ _ _ _).2 hq
-  have hqEP : IsQueryBoundP (proj j <$> G) (fun t => t.isRight = true) qE :=
-    (isQueryBoundP_map_iff _ _ _).2 hqE
-  have hdo := prEvent_joint_deadOpen_le_A T stF (proj j <$> G) p hparams q hqP
+  have hdo := prEvent_joint_deadOpen_le_A T stF (Pv j) p hparams q (hq j)
   unfold failEps
   gcongr
-  · exact (prEvent_joint_bindFail_le_A T stF (proj j <$> G) qE hqEP).trans (add_le_add le_rfl hdo)
-  · exact prEvent_joint_postOut_le_A T stF (proj j <$> G) qE hqEP q hqP
+  · exact (prEvent_joint_bindFail_le_A T stF (Pv j) qE (hqE j)).trans (add_le_add le_rfl hdo)
+  · exact prEvent_joint_postOut_le_A T stF (Pv j) qE (hqE j) q (hq j)
 
 /-- **Simultaneous extraction for the issue relations in the joint experiment** (the cipher table
 uniform, then the lazy hash oracle): `prEvent_sim_le_E` averaged over the cipher table, with
@@ -499,13 +563,15 @@ theorem prEvent_sim_le (T : CrtTables) (stF : ι → Statement) (dec : ByteArray
     (Wit : ι → ByteArray → (ℕ → GF128) → Prop)
     (hvals : ∀ s c1 lb w, (stF s).values c1 lb w = (sys s).values w)
     (hdet : ∀ (E : CTable) s, @ChainDet (icPrg E.cipher) T (stF s) (sys s) N (Wit s))
-    (G : OracleComp specIC γ) (proj : ι' → γ → ByteArray × (ι × β))
-    (qE : ℕ) (hqE : IsQueryBoundP G (fun t => t.isRight = true) qE)
-    (q : Kind → ℕ) (hq : IsKindQueryBoundIC G q) (nG : ℕ)
-    (hnG : IsQueryBoundP G (fun t => t.isLeft = true) nG)
-    (J : Finset ι') (j₀ : ι') (oa : CTable → OracleComp spec α) (event : CTable → α → Prop)
+    (P₀ : OracleComp specIC (ByteArray × (ι × β))) (P : ι' → OracleComp specIC (ByteArray × (ι × β)))
+    (qE : ℕ) (hqE : ∀ j, IsQueryBoundP (P j) (fun t => t.isRight = true) qE)
+    (q : Kind → ℕ) (hq₀ : IsKindQueryBoundIC P₀ q) (hq : ∀ j, IsKindQueryBoundIC (P j) q) (nG : ℕ)
+    (hnG₀ : IsQueryBoundP P₀ (fun t => t.isLeft = true) nG)
+    (hnG : ∀ j, IsQueryBoundP (P j) (fun t => t.isLeft = true) nG)
+    (J : Finset ι') (hpre : ∀ E, PrefixRuns E P₀ P J) (oa : CTable → OracleComp spec α)
+    (event : CTable → α → Prop)
     (htr : ∀ E g, event E (evalWithAnswerFn (QueryImpl.ofFn g) (oa E)) → ∃ j ∈ J,
-      let r := evalWithAnswerFn (QueryImpl.ofFn g) (gameA T stF (proj j <$> G) E)
+      let r := evalWithAnswerFn (QueryImpl.ofFn g) (gameA T stF (P j) E)
       r.2.2.accept = true ∧ ¬@Extracted (icPrg E.cipher) _ (stF (stOut r)) (Wit (stOut r)) r) :
     let n' := q + extractorQueries + verifierQueries
     Pr{let E ← $ᵗ CTable; let r ← (simulateQ randomOracle (oa E)).run' ∅}[event E r] ≤
@@ -515,13 +581,13 @@ theorem prEvent_sim_le (T : CrtTables) (stF : ι → Statement) (dec : ByteArray
       J.card * failEps q qE := by
   intro n'
   refine (prEvent_avg_le_sum3 _ _ _ J (fun j E => (simulateQ randomOracle
-    (gameA T stF (proj j <$> G) E)).run' ∅) (fun E r => bindFailA stF E r)
+    (gameA T stF (P j) E)).run' ∅) (fun E r => bindFailA stF E r)
     (fun E r => deadOpenA stF E r) (fun E r => PostOut E r) fun E =>
-      prEvent_sim_le_E T stF dec E G proj sys hT st₀ hparams hdel cb hcomb hdec hn N Wit hvals
+      prEvent_sim_le_E T stF dec E P₀ P sys hT st₀ hparams hdel cb hcomb hdec hn N Wit hvals
         (hdet E) (fun r => PostOut E r)
-        (fun j s g h => keysPre_of_not_postOut T (stF s) (proj j <$> G) E g h) q hq nG hnG J j₀
-        (oa E) (event E) (htr E)).trans ?_
-  exact add_le_add le_rfl (sum_fail_le T stF st₀.params hparams G proj J qE hqE q hq)
+        (fun j s g h => keysPre_of_not_postOut T (stF s) (P j) E g h) q hq₀ hq nG hnG₀ hnG J
+        (hpre E) (oa E) (event E) (htr E)).trans ?_
+  exact add_le_add le_rfl (sum_fail_le T stF st₀.params hparams P J qE hqE q hq)
 
 set_option exponentiation.threshold 500 in
 set_option maxRecDepth 4000 in
@@ -537,13 +603,15 @@ theorem prEvent_sim_comb_le (T : CrtTables) (stF : ι → Statement) (dec : Byte
     (hvals : ∀ s c1 (v : Prob.Bytes (16 * M)) w,
       (stF s).values c1 v.ba w = (sysL s (combDec v)).values w)
     (hdet : ∀ (E : CTable) s, @CombDet (icPrg E.cipher) M T (stF s) (sysL s) (witL s) N (Wit s))
-    (G : OracleComp specIC γ) (proj : ι' → γ → ByteArray × (ι × β))
-    (qE : ℕ) (hqE : IsQueryBoundP G (fun t => t.isRight = true) qE)
-    (q : Kind → ℕ) (hq : IsKindQueryBoundIC G q) (nG : ℕ)
-    (hnG : IsQueryBoundP G (fun t => t.isLeft = true) nG)
-    (J : Finset ι') (j₀ : ι') (oa : CTable → OracleComp spec α) (event : CTable → α → Prop)
+    (P₀ : OracleComp specIC (ByteArray × (ι × β))) (P : ι' → OracleComp specIC (ByteArray × (ι × β)))
+    (qE : ℕ) (hqE : ∀ j, IsQueryBoundP (P j) (fun t => t.isRight = true) qE)
+    (q : Kind → ℕ) (hq₀ : IsKindQueryBoundIC P₀ q) (hq : ∀ j, IsKindQueryBoundIC (P j) q) (nG : ℕ)
+    (hnG₀ : IsQueryBoundP P₀ (fun t => t.isLeft = true) nG)
+    (hnG : ∀ j, IsQueryBoundP (P j) (fun t => t.isLeft = true) nG)
+    (J : Finset ι') (hpre : ∀ E, PrefixRuns E P₀ P J) (oa : CTable → OracleComp spec α)
+    (event : CTable → α → Prop)
     (htr : ∀ E g, event E (evalWithAnswerFn (QueryImpl.ofFn g) (oa E)) → ∃ j ∈ J,
-      let r := evalWithAnswerFn (QueryImpl.ofFn g) (gameA T stF (proj j <$> G) E)
+      let r := evalWithAnswerFn (QueryImpl.ofFn g) (gameA T stF (P j) E)
       r.2.2.accept = true ∧ ¬@Extracted (icPrg E.cipher) _ (stF (stOut r)) (Wit (stOut r)) r) :
     let nn := q + extractorQueries + verifierQueries
     let ntot := nG + 2 + verifierTotal
@@ -554,13 +622,13 @@ theorem prEvent_sim_comb_le (T : CrtTables) (stF : ι → Statement) (dec : Byte
       J.card * failEps q qE := by
   intro nn ntot
   refine (prEvent_avg_le_sum3 _ _ _ J (fun j E => (simulateQ randomOracle
-    (gameA T stF (proj j <$> G) E)).run' ∅) (fun E r => bindFailA stF E r)
+    (gameA T stF (P j) E)).run' ∅) (fun E r => bindFailA stF E r)
     (fun E r => deadOpenA stF E r) (fun E r => PostOut E r) fun E =>
-      prEvent_sim_comb_le_E T stF dec E G proj sysL witL dst hT st₀ hparams hdel hcomb hdec hn'
+      prEvent_sim_comb_le_E T stF dec E P₀ P sysL witL dst hT st₀ hparams hdel hcomb hdec hn'
         hεc N Wit hvals (hdet E) (fun r => PostOut E r)
-        (fun j s g h => keysPre_of_not_postOut T (stF s) (proj j <$> G) E g h) q hq nG hnG J j₀
-        (oa E) (event E) (htr E)).trans ?_
-  exact add_le_add le_rfl (sum_fail_le T stF st₀.params hparams G proj J qE hqE q hq)
+        (fun j s g h => keysPre_of_not_postOut T (stF s) (P j) E g h) q hq₀ hq nG hnG₀ hnG J
+        (hpre E) (oa E) (event E) (htr E)).trans ?_
+  exact add_le_add le_rfl (sum_fail_le T stF st₀.params hparams P J qE hqE q hq)
 
 /-! ## The terms -/
 

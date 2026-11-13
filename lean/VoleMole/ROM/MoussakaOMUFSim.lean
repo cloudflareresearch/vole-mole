@@ -110,8 +110,14 @@ theorem prEvent_simI_le (hA : A.Budget q qE n) :
     Pr{let E ← $ᵗ CTable; let v ← (simulateQ randomOracle (extAll lr pk sk qI A E)).run' ∅}[
         SimI lr E v] ≤ epsIsim (gameK q qI qR) (gameE lr qE qI qR) qI := by
   have h := moussakaIssue_sim_spec (ι := ιI) (β := GOut K) (fun s => s.1) (fun s => s.2.1)
-    (fun s => s.2.2) lr (hinjI lr) (game lr pk sk qI A) projI _ (game_e lr pk sk hA qI) _
-    (game_k lr pk sk hA qI) _ (game_h lr pk sk hA qI) (Finset.range qI) 0
+    (fun s => s.2.2) lr (hinjI lr) (projI 0 <$> game lr pk sk qI A)
+    (fun j => projI j <$> game lr pk sk qI A) _
+    (fun _ => (isQueryBoundP_map_iff _ _ _).2 (game_e lr pk sk hA qI)) _
+    ((isQueryBound_map_iff _ _ _ _ _).2 (game_k lr pk sk hA qI))
+    (fun _ => (isQueryBound_map_iff _ _ _ _ _).2 (game_k lr pk sk hA qI)) _
+    ((isQueryBoundP_map_iff _ _ _).2 (game_h lr pk sk hA qI))
+    (fun _ => (isQueryBoundP_map_iff _ _ _).2 (game_h lr pk sk hA qI)) (Finset.range qI)
+    (fun E => prefixRuns_map E (game lr pk sk qI A) projI 0 _)
     (extAll lr pk sk qI A) (fun E v => SimI lr E v) fun E g hev => by
       obtain ⟨r, hr, hb⟩ := hev
       rw [extAll_eval] at hr
@@ -126,9 +132,15 @@ theorem prEvent_simR_le (hA : A.Budget q qE n) (hdig : ∀ k, (pk k).digest.size
   have h := moussakaRedeem_sim_spec (ι := ιR K) (β := GOut K) (fun s => ancR pk s)
     (fun s => by simpa using s.2.1) (fun s => s.1.2.1) (fun s => s.1.2.2.1)
     (fun s => s.1.2.2.2.1) (fun s => s.1.2.2.2.2) (fun s => s.2.2.1) (fun s => s.2.2.2.1)
-    (fun s => s.2.2.2.2) lr (hinjR lr pk hdig hdinj) (game lr pk sk qI A) projR _
-    (game_e lr pk sk hA qI) _ (game_k lr pk sk hA qI) _ (game_h lr pk sk hA qI)
-    (Finset.range qR) 0 (extAll lr pk sk qI A) (fun E v => SimR lr pk E v) fun E g hev => by
+    (fun s => s.2.2.2.2) lr (hinjR lr pk hdig hdinj) (projR 0 <$> game lr pk sk qI A)
+    (fun j => projR j <$> game lr pk sk qI A) _
+    (fun _ => (isQueryBoundP_map_iff _ _ _).2 (game_e lr pk sk hA qI)) _
+    ((isQueryBound_map_iff _ _ _ _ _).2 (game_k lr pk sk hA qI))
+    (fun _ => (isQueryBound_map_iff _ _ _ _ _).2 (game_k lr pk sk hA qI)) _
+    ((isQueryBoundP_map_iff _ _ _).2 (game_h lr pk sk hA qI))
+    (fun _ => (isQueryBoundP_map_iff _ _ _).2 (game_h lr pk sk hA qI)) (Finset.range qR)
+    (fun E => prefixRuns_map E (game lr pk sk qI A) projR 0 _)
+    (extAll lr pk sk qI A) (fun E v => SimR lr pk E v) fun E g hev => by
       obtain ⟨r, hr, hb⟩ := hev
       rw [extAll_eval] at hr
       obtain ⟨j, hj, rfl⟩ := List.mem_map.1 hr

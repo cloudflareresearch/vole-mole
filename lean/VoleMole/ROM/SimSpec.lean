@@ -6,9 +6,10 @@ import VoleMole.ROM.SpecSound
 
 `ROM/SimExtract.lean`'s simultaneous bounds (`prEvent_sim_le`, `prEvent_sim_comb_le`) for the
 relations the protocol theorems use, with the spec relation of the chosen instance as the
-extraction target (as `ROM/SpecSound.lean`'s `*_accept_le_adaptive_spec`). A run `G` (at most
-`q_E` cipher queries, `q k` hash queries of kind `k`, `n_G` in all) outputs proofs `j ∈ J`, the
-`j`-th read off it by `proj j`; for `m = |J|` outputs:
+extraction target (as `ROM/SpecSound.lean`'s `*_accept_le_adaptive_spec`). Provers `P j`
+(`j ∈ J`, the proofs of one protocol run) whose runs are prefixes of a reference run `P₀`
+(`PrefixRuns`), all within `q_E` cipher queries, `q k` hash queries of kind `k` and `n_G` in all;
+for `m = |J|` outputs:
 
     Pr[some output is accepted and its extraction fails]
       ≤ (q₂₁+m)·2⁻¹⁵⁰ + (q₂₂+m)·ε₂ + (q₂₃+m)·9·2⁻¹²⁸ + chainHitEpsSim q m + stmtBindEpsSim q m
@@ -31,24 +32,27 @@ namespace VoleMole.ROM.IC
 open VoleMole.Prob VoleMole.Arith VoleMole.Verifier VoleMole.Verifier.Bridge VoleMole.ZK.Sim
 open VoleMole.EndToEnd VoleMole.SeedExtraction VoleMole.ROM
 
-variable {ι' γ α ι β : Type}
+variable {ι' α ι β : Type}
 
 /-- **Moussaka issuance, simultaneous extraction, spec relation.** For a family of instances
-`(t, ctx_iss) = inst s` (`|t| = 45`, `|ctx_iss| = 16`, injective encodings), a run `G` and the
-outputs `proj j <$> G` (`j ∈ J`), an event that implies at every table that some output's proof is
+`(t, ctx_iss) = inst s` (`|t| = 45`, `|ctx_iss| = 16`, injective encodings) and provers `P j`
+(`j ∈ J`) whose runs are prefixes of `P₀`, an event that implies at every table that some output's proof is
 accepted at its instance and the decoded witness of no known tree is an issuance witness has
 probability at most the simultaneous bound (module doc). -/
 theorem moussakaIssue_sim_spec (inst : ι → ByteArray × ByteArray)
     (ht : ∀ s, (inst s).1.size = 45) (hci : ∀ s, (inst s).2.size = 16) (labelRows : Bool)
     (hinj : Function.Injective fun s =>
       (moussakaIssue (inst s).1 (inst s).2 labelRows).instEnc ByteArray.empty)
-    (G : OracleComp specIC γ) (proj : ι' → γ → ByteArray × (ι × β)) (qE : ℕ)
-    (hqE : IsQueryBoundP G (fun t => t.isRight = true) qE) (q : Kind → ℕ)
-    (hq : IsKindQueryBoundIC G q) (nG : ℕ) (hnG : IsQueryBoundP G (fun t => t.isLeft = true) nG)
-    (J : Finset ι') (j₀ : ι') (oa : CTable → OracleComp spec α) (event : CTable → α → Prop)
+    (P₀ : OracleComp specIC (ByteArray × (ι × β))) (P : ι' → OracleComp specIC (ByteArray × (ι × β)))
+    (qE : ℕ) (hqE : ∀ j, IsQueryBoundP (P j) (fun t => t.isRight = true) qE) (q : Kind → ℕ)
+    (hq₀ : IsKindQueryBoundIC P₀ q) (hq : ∀ j, IsKindQueryBoundIC (P j) q) (nG : ℕ)
+    (hnG₀ : IsQueryBoundP P₀ (fun t => t.isLeft = true) nG)
+    (hnG : ∀ j, IsQueryBoundP (P j) (fun t => t.isLeft = true) nG)
+    (J : Finset ι') (hpre : ∀ E, PrefixRuns E P₀ P J) (oa : CTable → OracleComp spec α)
+    (event : CTable → α → Prop)
     (htr : ∀ E g, event E (evalWithAnswerFn (QueryImpl.ofFn g) (oa E)) → ∃ j ∈ J,
       let r := evalWithAnswerFn (QueryImpl.ofFn g) (gameA CrtGen.tables
-        (fun s => moussakaIssue (inst s).1 (inst s).2 labelRows) (proj j <$> G) E)
+        (fun s => moussakaIssue (inst s).1 (inst s).2 labelRows) (P j) E)
       r.2.2.accept = true ∧ ¬@Extracted (icPrg E.cipher) _
         (moussakaIssue (inst (stOut r)).1 (inst (stOut r)).2 labelRows)
         (fun _ w => Privacy.Moussaka.IssueRelW
@@ -74,7 +78,7 @@ theorem moussakaIssue_sim_spec (inst : ι → ByteArray × ByteArray)
       exact fun ch known acc hv A hA hAS hkos hQS hP =>
         moussakaIssue_extract_chain (inst s).1 (inst s).2 labelRows ch hv hA hAS hkos hP.1 hQS
           admissible deltaBlocks deltaBlocks_injOn acc hP.2)
-    G proj qE hqE q hq nG hnG J j₀ oa event fun E g hev => by
+    P₀ P qE hqE q hq₀ hq nG hnG₀ hnG J hpre oa event fun E g hev => by
       obtain ⟨j, hj, hacc, hnex⟩ := htr E g hev
       exact ⟨j, hj, hacc, fun he => hnex (extracted_mono (fun c1 w hw =>
         SpecRel.issueRelW_of_wit _ _ (ht _) (hci _) w hw) he)⟩
@@ -96,14 +100,17 @@ theorem moussakaRedeem_sim_spec (anc : ι → List UovPk)
     (hinj : Function.Injective fun s =>
       (moussakaRedeem (anc s) (nf s) (ctxIss s) (ctxRed s) (cd s) labelRows).instEnc
         ByteArray.empty)
-    (G : OracleComp specIC γ) (proj : ι' → γ → ByteArray × (ι × β)) (qE : ℕ)
-    (hqE : IsQueryBoundP G (fun t => t.isRight = true) qE) (q : Kind → ℕ)
-    (hq : IsKindQueryBoundIC G q) (nG : ℕ) (hnG : IsQueryBoundP G (fun t => t.isLeft = true) nG)
-    (J : Finset ι') (j₀ : ι') (oa : CTable → OracleComp spec α) (event : CTable → α → Prop)
+    (P₀ : OracleComp specIC (ByteArray × (ι × β))) (P : ι' → OracleComp specIC (ByteArray × (ι × β)))
+    (qE : ℕ) (hqE : ∀ j, IsQueryBoundP (P j) (fun t => t.isRight = true) qE) (q : Kind → ℕ)
+    (hq₀ : IsKindQueryBoundIC P₀ q) (hq : ∀ j, IsKindQueryBoundIC (P j) q) (nG : ℕ)
+    (hnG₀ : IsQueryBoundP P₀ (fun t => t.isLeft = true) nG)
+    (hnG : ∀ j, IsQueryBoundP (P j) (fun t => t.isLeft = true) nG)
+    (J : Finset ι') (hpre : ∀ E, PrefixRuns E P₀ P J) (oa : CTable → OracleComp spec α)
+    (event : CTable → α → Prop)
     (htr : ∀ E g, event E (evalWithAnswerFn (QueryImpl.ofFn g) (oa E)) → ∃ j ∈ J,
       let r := evalWithAnswerFn (QueryImpl.ofFn g) (gameA CrtGen.tables
         (fun s => moussakaRedeem (anc s) (nf s) (ctxIss s) (ctxRed s) (cd s) labelRows)
-        (proj j <$> G) E)
+        (P j) E)
       r.2.2.accept = true ∧ ¬@Extracted (icPrg E.cipher) _
         (moussakaRedeem (anc (stOut r)) (nf (stOut r)) (ctxIss (stOut r)) (ctxRed (stOut r))
           (cd (stOut r)) labelRows)
@@ -142,7 +149,7 @@ theorem moussakaRedeem_sim_spec (anc : ι → List UovPk)
       exact fun ch known acc l hv A hA hAS hkos hQS hcb hP =>
         moussakaRedeem_extract_chain (anc s) (nf s) (ctxIss s) (ctxRed s) (cd s) labelRows ch l hv
           hA hAS hkos hP.1 hQS hcb admissible deltaBlocks deltaBlocks_injOn acc hP.2)
-    G proj qE hqE q hq nG hnG J j₀ oa event fun E g hev => by
+    P₀ P qE hqE q hq₀ hq nG hnG₀ hnG J hpre oa event fun E g hev => by
       obtain ⟨j, hj, hacc, hnex⟩ := htr E g hev
       exact ⟨j, hj, hacc, fun he => hnex (extracted_mono (fun c1 w hw =>
         SpecRel.redeemRelW_of_wit _ (hn64 _) _ _ _ _ (hnf _) (hci _) (hcr _) w hw) he)⟩
