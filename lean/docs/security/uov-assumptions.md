@@ -681,14 +681,13 @@ client as a `Blind.Client` (`toClient`, carrying the game wrapper's log so that 
 the reduction's logged queries `auxSpec` at each label), and the observation that the blind game and `gameB` agree
 on the key, the forger's flag and the final state (`projF_eqd`, `star`).
 
-*Not mechanized: the completeness term for the Lean client.* Two pieces remain:
-- the Lean prover's `voleGen` and `proveCommit` (`issue_request`, `finalize_issue`) as a
-  `PomClient`, i.e. with their hashes and cipher calls as queries, equal per table to the
-  executable prover;
-- their completeness in the lazy random-oracle model, `compFail ≤ (ℓ+1)·2^{−113}`
-  (`ZK/CompleteRO.lean`, `pomfritRedeem_complete_rom`, proves `≤ 2^{−113}` per session in the
-  finite-table model; per claimed session the grinding prefix is a function of the run without
-  the `H₂³` answers, so the same argument applies to each claim).
+*The Lean client* (`pomfrit.md` §6.4, G9). The Lean prover's `voleGen` and `proveCommit` as a
+`PomClient` (`leanClient`, with hashes and cipher calls as queries, `ROM/ProverIC.lean`), equal per
+table to the executable prover (`eval_start`, `eval_finish`), has `compFail ≤ (ℓ+1)·2^{−113}`
+(`compFail_le`): outside `GrindBad` of a claimed session's grinding answers its signature verifies,
+and each claimed session's prefix is computed without `H₂³` queries, so its answers are fresh.
+Hence `Adv^{ompr}(B; n, ℓ) ≤ Pr[PomWin] + (ℓ+1)·2^{−113}` (`pomfrit_T6_lean`,
+`Assumptions/BlindPomfritT6Lean.lean`).
 
 Step 1's uniformity is the programming step above; the distinct messages are `Distinct`.
 

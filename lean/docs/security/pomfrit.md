@@ -499,10 +499,28 @@ log), and the blind game and `gameB` have the same key, flag and final state (`p
 the two composed adversaries have the same flag as oracle computations (`star`). `Blind.Client`
 has a carried state for this reason: `auxSpec` reads the log of all sessions so far.
 
-**What remains of T6 on paper**: the bound `compFail ≤ (ℓ+1)·2^{−113}` for the Lean client. Lean
-has completeness of the Lean prover per session in the finite-table model
-(`pomfritRedeem_complete_rom`), not in this lazy model, and the Lean prover is not yet an oracle
-computation. See G9.
+**The Lean client** (G9, closed). The client is the Lean prover run as `issue_request` /
+`finalize_issue` with witness prefix `0` (`leanClient`, `lean/VoleMole/Assumptions/PomClientLean.lean`),
+with its hashes and cipher evaluations as queries (`ROM/ProverIC.lean`: `step1Q`, `proveCommitQ`).
+Per table it is the executable prover (`eval_start`, `eval_finish`: `Prover.voleGen`,
+`Prover.proveCommit` with the hashes of the table and the ideal-cipher PRG). Then
+`compFail ≤ (ℓ+1)·2^{−113}` (`compFail_le`), so (`pomfrit_T6_lean`,
+`Assumptions/BlindPomfritT6Lean.lean`)
+
+    Adv^{ompr}(B; n, ℓ) ≤ Pr[PomWin(blindForger (leanClient …) n B)] + (ℓ+1)·2^{−113},
+
+and `pomfrit_T6_lean_bound` with `B`'s target budget `Q` and `Q + ℓ + 1` targets. The proof
+(`Assumptions/BlindPomfritComplete.lean`): for fixed key, coins and target stream the game is the
+lazy random oracle's run of one computation; at every table, if `B` wins and the flag is `false`,
+then the `H₂³` answers at the grinding prefix of one of the `ℓ+1` claimed sessions are `GrindBad`
+(`fail_table`: `B`'s phase keeps each session's answer cached at its label with hint `0` and its
+state the client's step 1, `InvH`; the finishing phase does not change cached entries, so the
+claims' targets are the sessions' answers; outside `GrindBad` each signature verifies, `verOne_ok`,
+from `pom_complete`, `chal1Pre_honest`, `tgtIn_final`). Each claimed session's prefix is computed
+without `H₂³` queries (`allQ_pfxB`), so its `2³²` grinding answers are fresh and bad with
+probability `≤ 2^{−113}` (`prEvent_grindBad_le`, `Assumptions/BlindPomfritGrind.lean`). Assumed of
+`B` besides `pomfrit_T6`'s: its random oracle has finite nonempty answer types. The Issuer's
+`derive_preimage` abort does not enter: `compFail` is conditioned on `B`'s claims being preimages.
 
 U2's assumption relates to U1's in both directions:
 - A-OMPR⊕τ implies A-OMPR tightly (`advOMPR_le_shift`).
@@ -1036,7 +1054,7 @@ dedicated to PomFRIT.
 | | `main` | label-row fix |
 |---|---|---|
 | U1, U2 (classical one-more unforgeability) | ✓ (reductions in Lean; U1 with every term explicit, Lemma P's term bounded, §6.4; for U2 Lemma P's term is still a term, G8) | ✓ |
-| T6 (OMPR ≤ one-more unforgeability) | ✓ (in Lean up to the Lean client's completeness term, §6.4, G9) | ✓ |
+| T6 (OMPR ≤ one-more unforgeability) | ✓ (in Lean, for the Lean client: `pomfrit_T6_lean`, §6.4, G9) | ✓ |
 | QROM one-more unforgeability | paper, new quantum UOV assumptions (Q7 §4) | same |
 | Blindness, honest-but-curious Issuer | ✗ (practical linking) | ✓ (Thm B) |
 | Blindness, malicious Issuer, malicious key, selective failure | ✗ | ✓ (Thm B, §8.3) |
@@ -1104,23 +1122,14 @@ dedicated to PomFRIT.
   instead of `ℓ+1`) needs the derived provers' runs as prefixes of one run (`PrefixRuns`) and Lemma
   P's per-query bad event with its per-query bound and deterministic step as lemmas (as
   `adaptBad`, `adaptBad_trace`); the generic `prEvent_le_shared_suffix` then applies. Not done.
-- **G9.** Theorem 6 (OMPR ≤ PomFRIT, `uov-assumptions.md` §5.6) is in Lean in PomFRIT's real
-  one-more forgery game, for a forger with coins (`gameB`, which is `game` for a forger without
-  coins) and any client given as oracle computations over the hashes and the cipher
-  (`pomfrit_T6`, `pomfrit_T6_bound`; §6.4). The completeness term `compFail` is explicit. Two
-  pieces remain, both for the Lean client:
-  - the Lean prover's step 1 and step 2 (`Prover.voleGen`, `Prover.proveCommit`, run as
-    `issue_request` and `finalize_issue` with witness prefix `0`) as a `PomClient`: hash queries
-    as `verifyQ` makes them, and cipher queries for the full GGM tree, the leaf commitments, the
-    VOLE expansion and `u_mask` (as `ROM/VerifyIC.lean` does for the verifier, with a
-    congruence lemma for the prover's cells), equal per table to the executable prover;
-  - its completeness in the lazy model: `compFail ≤ (ℓ+1)·2^{−113}`. Per claimed session, outside
-    `GrindBad` of the `H₂³` answers at its grinding prefix, the verifier accepts
-    (`realRun2_complete`, with `P(s) = H_T(x)` from the claim). That prefix is a function of the
-    run without the `H₂³` answers (`B` never sees them, step 1 does not read them, a session's
-    prefix does not depend on the other sessions' grinding), so each claim fails with probability
-    `≤ 2^{−113}`, by the same argument as `complete2_rom`, after passing from the lazy oracle to a
-    table (`ROM/ExtractReduce.lean`, `prEvent_eq_extendTable`).
+- **G9 (closed).** Theorem 6 (OMPR ≤ PomFRIT, `uov-assumptions.md` §5.6) is in Lean for the Lean
+  client with the completeness term bounded: `compFail ≤ (ℓ+1)·2^{−113}` (`compFail_le`) and
+  `Adv^{ompr}(B; n, ℓ) ≤ Pr[PomWin] + (ℓ+1)·2^{−113}` (`pomfrit_T6_lean`, `pomfrit_T6_lean_bound`;
+  §6.4). The client's steps are the Lean prover's as oracle computations (`ROM/ProverIC.lean`,
+  `Assumptions/PomClientLean.lean`), equal per table to `Prover.voleGen` and `Prover.proveCommit`
+  (the PRG calls are recorded with cipher queries and replayed, `voleGenAt_congrA`, `memoF_map`).
+  The per-session bound is the grinding term only; the union is over the `ℓ+1` claims, not the
+  `n` sessions, because a claimed session's prefix is computed without `H₂³` queries.
   Composing T6 with U1 into an equivalence also needs that `Pr[PomWin]` does not depend on the
   hint rule (U1 uses Lemma P's `E₁`, T6 the hint `0`; the forger never sees hints), which is not
   stated in Lean.
@@ -1158,7 +1167,7 @@ VoleMole.ROM.OneMorePomfrit`).
 | Theorems U1 and U2 (§6.4): `Pr[PomWin] ≤ Adv^{ompr}(B; Q_T+ℓ+1, ℓ) + Pr[∃ i, PFail_i]`, and with A-OMPR⊕τ and `ShiftFail_i`; non-vacuity with the honest Issuer (`Audit/Nonvacuous.lean`) | `pomfrit_U1_bound`, `pomfrit_U2_bound`, `pomfrit_U1`, `pomfrit_U2`, `PFail`, `ShiftFail` |
 | A-OMPR⊕τ ⇒ A-OMPR, tight; A-OMPR ⇒ A-OMPR⊕τ with loss `τ^{ℓ+1}` (guessing) (`lean/VoleMole/Assumptions/Shift.lean`) | `advOMPR_le_shift`, `advOMPRShift_mono`, `advOMPRShift_le_guess`, `guessRed` |
 | Theorem 6, generic core: OMPR ≤ one-more forgery + completeness failure, for the blinding forger of any client with distinct labels (`lean/VoleMole/Assumptions/Blind.lean`); audited at PomFRIT's trapdoor (`Audit/OMPRShift.lean`) | `ompr_le_blind`, `blindAdv`, `Client`, `Distinct`, `bcomb_eqd`, `win_mid`, `post_pres` |
-| Theorem 6 at PomFRIT (§6.4): `Adv^{ompr}(B; n, ℓ) ≤ Pr[PomWin(blindForger)] + compFail` in PomFRIT's real one-more forgery game for a forger with coins, for any client as oracle computations; with `B`'s target budget `Q` and `Q + ℓ + 1` targets; the game for a forger with coins is `game` for one without; `compFail` not bounded for the Lean client (G9) (`lean/VoleMole/Assumptions/BlindPomfrit.lean`; audited in `Audit/T6Pomfrit.lean`) | `pomfrit_T6`, `pomfrit_T6_bound`, `compFail`, `gameB`, `ForgerB`, `PomWinB`, `gameB_liftF`, `PomClient`, `label_ne`, `toClient`, `distinct_toClient`, `blindForger`, `blindForger_bound`, `star`, `projF_eqd`, `advOMPR_pad` |
+| Theorem 6 at PomFRIT (§6.4): `Adv^{ompr}(B; n, ℓ) ≤ Pr[PomWin(blindForger)] + compFail` in PomFRIT's real one-more forgery game for a forger with coins, for any client as oracle computations; with `B`'s target budget `Q` and `Q + ℓ + 1` targets; the game for a forger with coins is `game` for one without; for the Lean client `compFail ≤ (ℓ+1)·2^{−113}` (G9) (`lean/VoleMole/Assumptions/BlindPomfrit.lean`, `PomClientLean.lean`, `BlindPomfritGrind.lean`, `BlindPomfritComplete.lean`, `BlindPomfritT6Lean.lean`, `ROM/ProverIC.lean`; audited in `Audit/T6Pomfrit.lean`) | `pomfrit_T6`, `pomfrit_T6_bound`, `compFail`, `gameB`, `ForgerB`, `PomWinB`, `gameB_liftF`, `PomClient`, `label_ne`, `toClient`, `distinct_toClient`, `blindForger`, `blindForger_bound`, `star`, `projF_eqd`, `advOMPR_pad`, `compFail_le`, `pomfrit_T6_lean`, `pomfrit_T6_lean_bound`, `leanClient`, `eval_start`, `eval_finish`, `pom_complete`, `fail_table`, `prEvent_grindBad_le`, `step1Q`, `proveCommitQ` |
 | Blindness (Thm B, from G1) under (ZK-fix) as a two-phase hypothesis: `≤ 4ε` between the worlds, for either proof layout (`lean/VoleMole/Privacy/PomFRIT.lean`) | `blindness` |
 | (ZK-fix) for the executable Lean prover with label rows, from the two-phase tape hypothesis; blindness with that prover; completeness of `verify` on the final signature (`lean/VoleMole/Privacy/PomFRITLean.lean`) | `lean_zeroKnowledge`, `blindness_lean`, `blindness_lean_shake`, `pomfritVerify_complete`, `pomfritVerify_complete_tables` |
 | G1 → G2 for one session; G3 exactly (one-time pad, then a swap of the sessions' simulator coins) | `sessionClose_real_sim`, `simGame_eq` |

@@ -148,6 +148,7 @@ import VoleMole.ROM.MoussakaUnbound
 import VoleMole.ROM.MoussakaUnboundAdapt
 import VoleMole.ROM.MoussakaUnboundSpec
 import VoleMole.ROM.VerifyIC
+import VoleMole.ROM.ProverIC
 import VoleMole.ROM.MoussakaOMUF
 import VoleMole.ROM.SimUnion
 import VoleMole.ROM.SimExtract
@@ -324,6 +325,10 @@ import VoleMole.Assumptions.TheoremR
 import VoleMole.Assumptions.Blind
 import VoleMole.Assumptions.BlindPomfrit
 import VoleMole.Assumptions.PomfritLemmaP
+import VoleMole.Assumptions.PomClientLean
+import VoleMole.Assumptions.BlindPomfritGrind
+import VoleMole.Assumptions.BlindPomfritComplete
+import VoleMole.Assumptions.BlindPomfritT6Lean
 import VoleMole.Audit.Nonvacuous
 import VoleMole.Audit.Liveness
 import VoleMole.Audit.UnboundROM

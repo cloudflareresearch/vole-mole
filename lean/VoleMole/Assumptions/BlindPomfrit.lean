@@ -55,15 +55,9 @@ verifier's decision does not depend on the claim rule (`verOne_snd`).
   and the game with `Q + ℓ + 1` targets (U1's convention `n = Q_T + ℓ + 1`; `advOMPR_pad`: unused
   targets do not matter).
 
-**Not here.** A bound on `compFail` for the Lean client. It needs the Lean prover's step 1 and
-step 2 (`Prover.voleGen`, `Prover.proveCommit`) as oracle computations over `specIC`, equal per
-table to the executable prover (hash queries as for `verifyQ`; cipher queries for the full GGM
-tree, the leaf commitments, the VOLE expansion and `u_mask`, as `ROM/VerifyIC.lean` does for the
-verifier), and completeness in this lazy model: per claimed session, outside `GrindBad` of the
-`H₂³` answers at its grinding prefix the verifier accepts (`ZK.Sim.realRun2_complete`), and that
-prefix is a function of the run without the `H₂³` answers (`B` never sees them, step 1 does not
-read them, and a session's prefix does not depend on the other sessions' grinding), so
-`compFail ≤ (ℓ + 1)·2⁻¹¹³`. On paper (`pomfrit.md` G9).
+**The Lean client** (G9): `compFail ≤ (ℓ + 1)·2⁻¹¹³` for `leanClient`
+(`Assumptions/PomClientLean.lean`, the Lean prover as oracle computations, `ROM/ProverIC.lean`),
+`compFail_le` and `pomfrit_T6_lean` in `Assumptions/BlindPomfritT6Lean.lean`.
 
 No `sorry`, no `axiom`.
 -/

@@ -1,4 +1,5 @@
 import VoleMole.Assumptions.BlindPomfrit
+import VoleMole.Assumptions.BlindPomfritT6Lean
 
 /-!
 # Non-vacuity of Theorem 6 at PomFRIT
@@ -9,8 +10,12 @@ distinctness is a theorem, `distinct_toClient`). `pomfrit_T6_bound`'s only hypot
 target budget, holds for an adversary that makes one target request (`oneReq_bound`). For a
 forger without coins `gameB` is `Pomfrit.game` (`gameB_liftF`), so the game is not a new one.
 
-What this does not show: that `compFail` is small for some client. For the Lean client that is
-the open part of G9 (`pomfrit.md` §12).
+**The Lean client** (G9, `Assumptions/PomClientLean.lean`, `Assumptions/BlindPomfritT6Lean.lean`):
+`compFail ≤ (ℓ + 1)·2⁻¹¹³` (`compFail_le`) and Theorem 6 without a completeness term
+(`pomfrit_T6_lean`, `pomfrit_T6_lean_bound`), instantiated below with the honest Issuer and the
+adversaries above; their extra assumption, a finite nonempty answer type for `B`'s oracle, holds for
+`AB` (`Bool`). The client's two steps agree per table with the executable prover
+(`eval_start`, `eval_finish`), so the client is the Lean prover, not a stand-in.
 -/
 
 open OracleComp OracleSpec VoleMole.ROM VoleMole.ROM.IC VoleMole.ROM.OneMore
@@ -53,5 +58,24 @@ example := pomfrit_T6_bound T lr ℓ 1 cl (pure (pk, sk)) honestPre tgts1 oneReq
 /-- **`gameB` is `Pomfrit.game`** for a forger without coins (here U1's game shape). -/
 example (A : Forger) (e1 : CTable → QueryLog specIC → ByteArray → TG) :=
   gameB_liftF (AR := AB) T lr tgts1 ℓ (pure (pk, sk)) honestPre n A addHint e1
+
+/-- **The completeness term for the Lean client**, honest Issuer, fixed key. -/
+example (B : VoleMole.Verifier.UovPk →
+    ProbComp (OracleComp (specB AB ByteArray Unit TG SIss) (List (ByteArray × SIss)))) :
+    compFail VoleMole.Verifier.CrtGen.tables lr ℓ (leanClient VoleMole.Verifier.CrtGen.tables lr) n
+      (pure (pk, sk)) honestPre B ≤ (ℓ + 1 : ℝ≥0∞) * (2 ^ 113 : ℝ≥0∞)⁻¹ :=
+  compFail_le lr ℓ n (pure (pk, sk)) honestPre B
+
+/-- **Theorem 6 at PomFRIT for the Lean client**: no hypothesis. -/
+example (B : VoleMole.Verifier.UovPk →
+    ProbComp (OracleComp (specB AB ByteArray Unit TG SIss) (List (ByteArray × SIss)))) :=
+  pomfrit_T6_lean lr ℓ n (pure (pk, sk)) honestPre B tgts1
+
+/-- **With `B`'s budget**: the hypothesis holds for `oneReq`. -/
+example := pomfrit_T6_lean_bound lr ℓ (pure (pk, sk)) honestPre oneReq 1 tgts1 oneReq_bound
+
+/-- **The Lean client's step 1 is the executable prover's** at every table. -/
+example (g : Table) (E : CTable) (κ : VoleMole.Prob.Bytes 32) (k : ℕ) :=
+  eval_start g E VoleMole.Verifier.CrtGen.tables lr pk κ k
 
 end VoleMole.Audit.T6Pomfrit
