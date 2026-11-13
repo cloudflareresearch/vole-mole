@@ -591,3 +591,10 @@ when `Q` counts all H₂¹, H₂² and H₂³ queries. Theorem L8 is stated with
 | A free tree is fresh, known, and holds `u*` | `free_tree_is_fresh` |
 
 Not formalized: the probabilistic lemmas 5.1–5.3 and 5.5, and the union bound.
+
+The protocol reductions that use weak SE (Ratatouille Theorem 3, Moussaka Theorem 3) are
+mechanized with weak SE as a hypothesis: `lean/VoleMole/Theft/Basic.lean` states the notion they
+need (`WeakSE2`: one simulated proof of each of two relations, statements chosen without reading
+the tables, the extractor on the simulated transcripts, the adversary's last stage and the
+programmed tables, as in §2's log), and `Theft/Ratatouille.lean` and `Theft/Moussaka.lean` reduce
+the two theorems to it (`security/ratatouille.md` §5, `security/moussaka.md` §5.3).
