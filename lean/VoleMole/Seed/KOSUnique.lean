@@ -487,4 +487,435 @@ theorem pomfrit_par_count :
 
 end Count
 
+/-! ## Hidden slices (`pomfrit-lemmap-tight.md` §6)
+
+A *class* `C` is a set of alive trees with the same rows `u_C`. Its *slice* at `g` is the set of
+challenges that agree with `g` outside `C`. On a slice the witness rows are affine with slope `u_C`
+(`claim4Hyp_slice`), so any two points of one slice with the same check value certify the witness
+of every accepted chain with that `ũ` (`slice_collision_sound`). A row whose slope is not a bit
+(a label row) confines the accepting set to `|A|² ≤ ∏_{free} |B_i|` (`card_sq_le_of_nonbit_slope`).
+-/
+
+section Slice
+
+open VoleMole.SeedExtraction VoleMole.PomFRIT
+
+variable {ι J F : Type*} [Fintype ι] [DecidableEq ι] [Field F]
+variable {B : ι → Type*} [∀ i, AddCommGroup (B i)]
+
+/-- The slice of the class `C` at `g`: the challenges that agree with `g` on every tree outside
+`C`. -/
+def slice (C : Finset ι) (g : ∀ i, B i) : Set (∀ i, B i) := {Δ | ∀ i ∉ C, Δ i = g i}
+
+lemma mem_slice_self (C : Finset ι) (g : ∀ i, B i) : g ∈ slice C g := fun _ _ => rfl
+
+/-- A set on which every tree outside `C` is fixed lies in one slice of `C`. -/
+lemma subset_slice_of_fixed {A : Set (∀ i, B i)} {C : Finset ι}
+    (hfix : ∀ i ∉ C, IsFixed A i) {g : ∀ i, B i} (hg : g ∈ A) : A ⊆ slice C g :=
+  fun Δ hΔ i hi => hfix i hi Δ hΔ g hg
+
+lemma isFixed_of_subset_slice {A : Set (∀ i, B i)} {C : Finset ι} {g : ∀ i, B i}
+    (hA : A ⊆ slice C g) {i : ι} (hi : i ∉ C) : IsFixed A i :=
+  fun _ hΔ _ hΔ' => (hA hΔ i hi).trans (hA hΔ' i hi).symm
+
+/-- A slice is closed under the translations of `AffineOn`. -/
+lemma slice_translate {C : Finset ι} {g Δ Δ₂ Δ₃ : ∀ i, B i} (h : Δ ∈ slice C g)
+    (h₂ : Δ₂ ∈ slice C g) (h₃ : Δ₃ ∈ slice C g) : Δ + (Δ₃ - Δ₂) ∈ slice C g := fun i hi => by
+  simp [h i hi, h₂ i hi, h₃ i hi]
+
+/-- **The witness rows on a slice.** If the trees of `C` are known and hold the same rows `u_C`,
+every subset of a slice of `C` satisfies Claim 4's hypotheses with the bit slope `u_C`: the rows
+are `v + u_C·e(Δ)` there. -/
+theorem claim4Hyp_slice {e : (∀ i, B i) →+ F} (he : Function.Injective e) {S A : Set (∀ i, B i)}
+    {known : Finset ι} {u : ι → J → Bool} {Q : J → (∀ i, B i) → F}
+    (htree : ∀ j, ∃ c, ∀ Δ ∈ S, Q j Δ = c + ∑ i ∈ known, bit (u i j) * blockLift e i (Δ i))
+    {C : Finset ι} (hC : C ⊆ known) {uC : J → Bool} (huC : ∀ i ∈ C, ∀ j, u i j = uC j)
+    {g : ∀ i, B i} (hAS : A ⊆ S) (hA : A ⊆ slice C g) :
+    Claim4Hyp e A known u Q (fun j => bit (uC j)) where
+  lift_inj := he
+  tree_form j := by
+    obtain ⟨c, hc⟩ := htree j
+    exact ⟨c, fun Δ hΔ => hc Δ (hAS hΔ)⟩
+  consistent j := by
+    obtain ⟨c, hc⟩ := htree j
+    refine ⟨c + ∑ i ∈ known \ C, bit (u i j) * blockLift e i (g i) -
+      bit (uC j) * ∑ i ∈ Finset.univ \ C, blockLift e i (g i), fun Δ hΔ => ?_⟩
+    have h1 : ∑ i ∈ known, bit (u i j) * blockLift e i (Δ i) =
+        ∑ i ∈ known \ C, bit (u i j) * blockLift e i (g i) +
+          bit (uC j) * ∑ i ∈ C, blockLift e i (Δ i) := by
+      rw [← Finset.sum_sdiff hC, Finset.mul_sum]
+      congr 1
+      · exact Finset.sum_congr rfl fun i hi => by rw [hA hΔ i (Finset.mem_sdiff.1 hi).2]
+      · exact Finset.sum_congr rfl fun i hi => by rw [huC i hi j]
+    have h2 : e Δ = ∑ i ∈ Finset.univ \ C, blockLift e i (g i) + ∑ i ∈ C, blockLift e i (Δ i) := by
+      rw [lift_eq_sum e Δ, ← Finset.sum_sdiff (Finset.subset_univ C)]
+      congr 1
+      exact Finset.sum_congr rfl fun i hi => by rw [hA hΔ i (Finset.mem_sdiff.1 hi).2]
+    rw [hc Δ (hAS hΔ), h1, h2]
+    ring
+  unknown_fixed i hi := isFixed_of_subset_slice hA fun hiC => hi (hC hiC)
+
+/-- **A row with a slope that is not a bit confines the accepting set.** Under Claim 4's
+hypotheses with any slopes, if the slope of row `j` on `A` is neither `0` nor `1` and every tree
+outside `G` is fixed on `A`, then `|A|² ≤ ∏_{i ∈ G} |B_i|`: the blocks of the trees of `G` with
+`u^{(i)}[j] = 1` determine the challenge, and so do the blocks of the others. (For PomFRIT's label
+rows and `G` a group of width at most 57: `|A| ≤ 2²⁸`.) -/
+theorem card_sq_le_of_nonbit_slope [∀ i, Fintype (B i)] {e : (∀ i, B i) →+ F}
+    {A : Finset (∀ i, B i)} {known : Finset ι} {u : ι → J → Bool} {Q : J → (∀ i, B i) → F}
+    {uStar : J → F} (h : Claim4Hyp e (A : Set (∀ i, B i)) known u Q uStar) {j : J}
+    (h0 : uStar j ≠ 0) (h1 : uStar j ≠ 1) (G : Finset ι)
+    (hfix : ∀ i ∉ G, IsFixed (A : Set (∀ i, B i)) i) :
+    A.card ^ 2 ≤ ∏ i ∈ G, Fintype.card (B i) := by
+  classical
+  obtain ⟨c, hc⟩ := h.tree_form j
+  obtain ⟨v, hv⟩ := h.consistent j
+  set P : Finset ι := G.filter fun i => i ∈ known ∧ u i j = true with hP
+  -- The two forms of `Q[j](Δ) - Q[j](Δ')`.
+  have key : ∀ Δ ∈ A, ∀ Δ' ∈ A,
+      (∑ i ∈ known, bit (u i j) * blockLift e i (Δ i - Δ' i) =
+        uStar j * ∑ i, blockLift e i (Δ i - Δ' i)) ∧
+      e Δ - e Δ' = ∑ i, blockLift e i (Δ i - Δ' i) := by
+    intro Δ hΔ Δ' hΔ'
+    have hall : e Δ - e Δ' = ∑ i, blockLift e i (Δ i - Δ' i) := by
+      rw [lift_eq_sum e Δ, lift_eq_sum e Δ', ← Finset.sum_sub_distrib]
+      exact Finset.sum_congr rfl fun i _ => (map_sub _ _ _).symm
+    refine ⟨?_, hall⟩
+    have e1 := (hc Δ hΔ).symm.trans (hv Δ hΔ)
+    have e2 := (hc Δ' hΔ').symm.trans (hv Δ' hΔ')
+    rw [← hall]
+    simp only [map_sub, mul_sub, Finset.sum_sub_distrib]
+    linear_combination e1 - e2
+  have hzero : ∀ Δ ∈ A, ∀ Δ' ∈ A, ∀ i, i ∉ G ∨ i ∉ known → blockLift e i (Δ i - Δ' i) = 0 := by
+    intro Δ hΔ Δ' hΔ' i hi
+    have : Δ i = Δ' i := by
+      rcases hi with hi | hi
+      · exact hfix i hi Δ hΔ Δ' hΔ'
+      · exact h.unknown_fixed i hi Δ hΔ Δ' hΔ'
+    rw [this, sub_self, map_zero]
+  have hfin : ∀ Δ ∈ A, ∀ Δ' ∈ A, ∑ i, blockLift e i (Δ i - Δ' i) = 0 → Δ = Δ' := by
+    intro Δ hΔ Δ' hΔ' hs
+    exact h.lift_inj (sub_eq_zero.1 (((key Δ hΔ Δ' hΔ').2).trans hs))
+  -- The blocks of `P` determine the challenge.
+  have inj1 : ∀ Δ ∈ A, ∀ Δ' ∈ A, (∀ i ∈ P, Δ i = Δ' i) → Δ = Δ' := by
+    intro Δ hΔ Δ' hΔ' hag
+    refine hfin Δ hΔ Δ' hΔ' ?_
+    have hl : ∑ i ∈ known, bit (u i j) * blockLift e i (Δ i - Δ' i) = 0 := by
+      refine Finset.sum_eq_zero fun i hi => ?_
+      by_cases hiG : i ∈ G
+      · cases hu : u i j
+        · simp [bit]
+        · have : i ∈ P := by simp [hP, hiG, hi, hu]
+          rw [hag i this, sub_self, map_zero, mul_zero]
+      · rw [hzero Δ hΔ Δ' hΔ' i (Or.inl hiG), mul_zero]
+    have := (key Δ hΔ Δ' hΔ').1
+    rw [hl] at this
+    exact (mul_eq_zero.1 this.symm).resolve_left h0
+  -- The blocks of `G \ P` determine the challenge.
+  have inj2 : ∀ Δ ∈ A, ∀ Δ' ∈ A, (∀ i ∈ G \ P, Δ i = Δ' i) → Δ = Δ' := by
+    intro Δ hΔ Δ' hΔ' hag
+    refine hfin Δ hΔ Δ' hΔ' ?_
+    have hl : ∑ i ∈ known, bit (u i j) * blockLift e i (Δ i - Δ' i) =
+        ∑ i, blockLift e i (Δ i - Δ' i) := by
+      rw [← Finset.sum_subset (Finset.subset_univ known) fun i _ hi =>
+        hzero Δ hΔ Δ' hΔ' i (Or.inr hi)]
+      refine Finset.sum_congr rfl fun i hi => ?_
+      by_cases hiP : i ∈ P
+      · have : u i j = true := (Finset.mem_filter.1 hiP).2.2
+        simp [bit, this]
+      · by_cases hiG : i ∈ G
+        · rw [hag i (Finset.mem_sdiff.2 ⟨hiG, hiP⟩), sub_self, map_zero, mul_zero]
+        · rw [hzero Δ hΔ Δ' hΔ' i (Or.inl hiG), mul_zero]
+    have := (key Δ hΔ Δ' hΔ').1
+    rw [hl] at this
+    have h1' : (1 - uStar j) * ∑ i, blockLift e i (Δ i - Δ' i) = 0 := by
+      linear_combination this
+    exact (mul_eq_zero.1 h1').resolve_left (sub_ne_zero.2 (Ne.symm h1))
+  have card_le : ∀ P' : Finset ι, (∀ Δ ∈ A, ∀ Δ' ∈ A, (∀ i ∈ P', Δ i = Δ' i) → Δ = Δ') →
+      A.card ≤ ∏ i ∈ P', Fintype.card (B i) := by
+    intro P' hinj
+    let f : (∀ i, B i) → (∀ i : P', B i) := fun Δ i => Δ i
+    have hf : Set.InjOn f (A : Set (∀ i, B i)) := fun Δ hΔ Δ' hΔ' heq =>
+      hinj Δ hΔ Δ' hΔ' fun i hi => congrFun heq ⟨i, hi⟩
+    calc A.card ≤ (Finset.univ : Finset (∀ i : P', B i)).card :=
+          Finset.card_le_card_of_injOn f (fun _ _ => Finset.mem_coe.2 (Finset.mem_univ _)) hf
+      _ = ∏ i : P', Fintype.card (B i) := by rw [Finset.card_univ, Fintype.card_pi]
+      _ = ∏ i ∈ P', Fintype.card (B i) := Finset.prod_coe_sort P' (fun i => Fintype.card (B i))
+  calc A.card ^ 2 = A.card * A.card := sq _
+    _ ≤ (∏ i ∈ G \ P, Fintype.card (B i)) * ∏ i ∈ P, Fintype.card (B i) :=
+        Nat.mul_le_mul (card_le _ inj2) (card_le _ inj1)
+    _ = ∏ i ∈ G, Fintype.card (B i) := Finset.prod_sdiff (Finset.filter_subset _ _)
+
+variable [Fintype F] [DecidableEq F]
+
+/-- **A collision in a slice is a certificate.** Let `chall₁` be good for parallelism on
+`DisjQuads`, and let `A` be the accepting set of a chain with a bit slope `u*` and a free tree.
+If two distinct challenges of one slice of a class `C` (known trees with the same witness rows
+`u_C`) have the same check value for the chain's `ũ`, then `u* = u_C`: the chain's witness is the
+one the trees of `C` hold. So an extractor that finds such a pair may output the prefix of `C`. -/
+theorem slice_collision_sound {T : Finset F} {L ℓ : ℕ} (hℓ : ℓ ≤ L) {c : Ch F T}
+    {e : (∀ i, B i) →+ F} {S A : Set (∀ i, B i)} {known : Finset ι} {u : ι → Fin ℓ → Bool}
+    {Q : (∀ i, B i) → Fin L → F} {D : (∀ i, B i) → Fin 4 → F}
+    (hc : KOSPar c (DisjQuads B) e Q D) (ũ h : Fin 4 → F)
+    (hacc : ∀ Δ ∈ A, kosValue c e Q D ũ Δ = h) {uStar : Fin ℓ → F}
+    (hK : Claim4Hyp e A known u (fun j Δ => Q Δ (Fin.castLE hℓ j)) uStar)
+    (hbits : ∀ j, uStar j = 0 ∨ uStar j = 1) {i₀ : ι} (hfree : ¬IsFixed A i₀)
+    (htree : ∀ j, ∃ c', ∀ Δ ∈ S,
+      Q Δ (Fin.castLE hℓ j) = c' + ∑ i ∈ known, bit (u i j) * blockLift e i (Δ i))
+    {C : Finset ι} (hC : C ⊆ known) {uC : Fin ℓ → Bool} (huC : ∀ i ∈ C, ∀ j, u i j = uC j)
+    {g Δ₀ Δ₁ : ∀ i, B i} (h0S : Δ₀ ∈ S) (h1S : Δ₁ ∈ S) (h0 : Δ₀ ∈ slice C g)
+    (h1 : Δ₁ ∈ slice C g) (hne : Δ₀ ≠ Δ₁)
+    (hcol : kosValue c e Q D ũ Δ₀ = kosValue c e Q D ũ Δ₁) :
+    uStar = fun j => bit (uC j) := by
+  have hsub : ({Δ₀, Δ₁} : Set (∀ i, B i)) ⊆ S := by
+    rintro Δ (rfl | rfl)
+    · exact h0S
+    · exact h1S
+  have hsl : ({Δ₀, Δ₁} : Set (∀ i, B i)) ⊆ slice C g := by
+    rintro Δ (rfl | rfl)
+    · exact h0
+    · exact h1
+  have hK' := claim4Hyp_slice (Q := fun j Δ => Q Δ (Fin.castLE hℓ j)) hK.lift_inj htree hC huC
+    hsub hsl
+  obtain ⟨i₁, hi₁⟩ := Function.ne_iff.1 hne
+  have hfree' : ¬IsFixed ({Δ₀, Δ₁} : Set (∀ i, B i)) i₁ := fun hf =>
+    hi₁ (hf Δ₀ (by simp) Δ₁ (by simp))
+  refine (witness_determined hℓ hc ũ h (kosValue c e Q D ũ Δ₀) hacc ?_ hK hK' hbits
+    (fun j => ?_) hfree hfree').1
+  · rintro Δ (rfl | rfl)
+    · rfl
+    · exact hcol.symm
+  · cases uC j <;> simp [bit]
+
+/-- `KOSGood` passes to subsets of `S`. -/
+lemma KOSGood.mono {X : Type*} {T : Finset F} {L : ℕ} {c : Ch F T} {S S' : Set X} {e : X → F}
+    {Q : X → Fin L → F} {D : X → Fin 4 → F} (hc : KOSGood c S e Q D) (h : S' ⊆ S) :
+    KOSGood c S' e Q D := fun u h' A hA => hc u h' A (hA.trans h)
+
+/-- **On the right slice, `E₁^lin` needs no new event.** Let `chall₁` be KOS-good and let the
+response function be affine on a slice of the class `C` (it is when the trees of `C` agree on the
+label rows, `translateOn_gate_slice`). If the accepting set `A` of a chain lies in that slice, any
+two distinct challenges of the slice with the same check value give `u* = u_C`. -/
+theorem slice_collision_sound_affine {T : Finset F} {L ℓ : ℕ} (hℓ : ℓ ≤ L) {c : Ch F T}
+    {e : (∀ i, B i) →+ F} {S A : Set (∀ i, B i)} {known : Finset ι} {u : ι → Fin ℓ → Bool}
+    {Q : (∀ i, B i) → Fin L → F} {D : (∀ i, B i) → Fin 4 → F} {C : Finset ι} {g : ∀ i, B i}
+    (hc : KOSGood c S e Q D) (haff : AffineOn (S ∩ slice C g) Q D) (hA : A ⊆ S ∩ slice C g)
+    (ũ h : Fin 4 → F) (hacc : ∀ Δ ∈ A, kosValue c e Q D ũ Δ = h) {uStar : Fin ℓ → F}
+    (hK : Claim4Hyp e A known u (fun j Δ => Q Δ (Fin.castLE hℓ j)) uStar)
+    (hbits : ∀ j, uStar j = 0 ∨ uStar j = 1) {i₀ : ι} (hfree : ¬IsFixed A i₀)
+    (htree : ∀ j, ∃ c', ∀ Δ ∈ S,
+      Q Δ (Fin.castLE hℓ j) = c' + ∑ i ∈ known, bit (u i j) * blockLift e i (Δ i))
+    (hC : C ⊆ known) {uC : Fin ℓ → Bool} (huC : ∀ i ∈ C, ∀ j, u i j = uC j)
+    {Δ₀ Δ₁ : ∀ i, B i} (h0 : Δ₀ ∈ S ∩ slice C g) (h1 : Δ₁ ∈ S ∩ slice C g) (hne : Δ₀ ≠ Δ₁)
+    (hcol : kosValue c e Q D ũ Δ₀ = kosValue c e Q D ũ Δ₁) :
+    uStar = fun j => bit (uC j) := by
+  have hsub : ({Δ₀, Δ₁} : Set (∀ i, B i)) ⊆ S ∩ slice C g := by
+    rintro Δ (rfl | rfl)
+    · exact h0
+    · exact h1
+  have hK' := claim4Hyp_slice (Q := fun j Δ => Q Δ (Fin.castLE hℓ j)) hK.lift_inj htree hC huC
+    (hsub.trans Set.inter_subset_left) (hsub.trans Set.inter_subset_right)
+  obtain ⟨i₁, hi₁⟩ := Function.ne_iff.1 hne
+  have hfree' : ¬IsFixed ({Δ₀, Δ₁} : Set (∀ i, B i)) i₁ := fun hf =>
+    hi₁ (hf Δ₀ (by simp) Δ₁ (by simp))
+  refine (witness_determined_affine hℓ (hc.mono Set.inter_subset_left) haff hA hsub ũ h
+    (kosValue c e Q D ũ Δ₀) hacc ?_ hK hK' hbits (fun j => ?_) hfree hfree').1
+  · rintro Δ (rfl | rfl)
+    · rfl
+    · exact hcol.symm
+  · cases uC j <;> simp [bit]
+
+end Slice
+
+/-! ## Gates with two labels are affine (`pomfrit-lemmap-tight.md` §6.2)
+
+The gate term of a CRT mask is `T(L(Δ)) + γ(Δ)·c` with `T` a hash, `L` the gate's label and `γ` its
+selection bit. On a slice of a class whose trees agree on the label rows, the label takes two
+values, selected by a bit `β(Δ)` that is additive in `Δ`, and `γ = b₀ + β`. Such a term commutes
+with the translations of `AffineOn`, whatever `T` is, in characteristic 2. -/
+
+section Gate
+
+variable {X R : Type*} [AddCommGroup X] [AddCommGroup R]
+
+/-- `f` commutes with the translations of `AffineOn` on `S`. -/
+def TranslateOn (S : Set X) (f : X → R) : Prop :=
+  ∀ Δ ∈ S, ∀ Δ₂ ∈ S, ∀ Δ₃ ∈ S, f (Δ + (Δ₃ - Δ₂)) = f Δ + (f Δ₃ - f Δ₂)
+
+lemma TranslateOn.add {S : Set X} {f f' : X → R} (hf : TranslateOn S f) (hf' : TranslateOn S f') :
+    TranslateOn S fun Δ => f Δ + f' Δ := fun Δ hΔ Δ₂ h₂ Δ₃ h₃ => by
+  show f _ + f' _ = f Δ + f' Δ + (f Δ₃ + f' Δ₃ - (f Δ₂ + f' Δ₂))
+  rw [hf Δ hΔ Δ₂ h₂ Δ₃ h₃, hf' Δ hΔ Δ₂ h₂ Δ₃ h₃]; abel
+
+lemma TranslateOn.sum {κ : Type*} {S : Set X} (s : Finset κ) {f : κ → X → R}
+    (hf : ∀ k ∈ s, TranslateOn S (f k)) : TranslateOn S fun Δ => ∑ k ∈ s, f k Δ :=
+  fun Δ hΔ Δ₂ h₂ Δ₃ h₃ => by
+    rw [← Finset.sum_sub_distrib, ← Finset.sum_add_distrib]
+    exact Finset.sum_congr rfl fun k hk => hf k hk Δ hΔ Δ₂ h₂ Δ₃ h₃
+
+lemma TranslateOn.comp {R' : Type*} [AddCommGroup R'] {S : Set X} {f : X → R}
+    (hf : TranslateOn S f) (φ : R →+ R') : TranslateOn S fun Δ => φ (f Δ) :=
+  fun Δ hΔ Δ₂ h₂ Δ₃ h₃ => by
+    show φ (f _) = φ (f Δ) + (φ (f Δ₃) - φ (f Δ₂))
+    rw [hf Δ hΔ Δ₂ h₂ Δ₃ h₃, map_add, map_sub]
+
+/-- **A function of one additive bit is affine in characteristic 2.** -/
+theorem translateOn_bit (S : Set X) (hR : ∀ r : R, r + r = 0) (β : X →+ ZMod 2)
+    (ψ : ZMod 2 → R) : TranslateOn S fun Δ => ψ (β Δ) := by
+  intro Δ _ Δ₂ _ Δ₃ _
+  have hneg : ∀ r : R, -r = r := fun r => neg_eq_of_add_eq_zero_left (hR r)
+  have h3 : ∀ a b : R, a + (b + a) = b := fun a b => by rw [add_left_comm, hR, add_zero]
+  have h3' : ∀ a b : R, a + (a + b) = b := fun a b => by rw [← add_assoc, hR, zero_add]
+  have h01 : ∀ b : ZMod 2, b = 0 ∨ b = 1 := by decide
+  have e1 : (1 : ZMod 2) + 1 = 0 := by decide
+  have e2 : (-1 : ZMod 2) = 1 := by decide
+  have key : ∀ b b₂ b₃ : ZMod 2, ψ (b + (b₃ - b₂)) = ψ b + (ψ b₃ - ψ b₂) := by
+    intro b b₂ b₃
+    rw [sub_eq_add_neg (ψ b₃), hneg]
+    rcases h01 b with rfl | rfl <;> rcases h01 b₂ with rfl | rfl <;>
+      rcases h01 b₃ with rfl | rfl <;> simp [hR, h3, h3', e1, e2]
+  simpa only [map_add, map_sub] using key (β Δ) (β Δ₂) (β Δ₃)
+
+/-- **Gates with two labels.** If on `S` the gate's label is `L₀` or `L₀ + ℓ` according to an
+additive bit `β`, and its selection bit is `b₀ + β`, the gate term `T(L) + γ·c` commutes with
+translations on `S`, for every hash `T`. -/
+theorem translateOn_gate {Lab : Type*} [AddCommGroup Lab] (S : Set X) (hR : ∀ r : R, r + r = 0)
+    (β : X →+ ZMod 2) (T : Lab → R) (cm : R) (L₀ ℓ : Lab) (b₀ : ZMod 2) {lab : X → Lab}
+    {γ : X → ZMod 2} (hlab : ∀ Δ ∈ S, lab Δ = if β Δ = 1 then L₀ + ℓ else L₀)
+    (hγ : ∀ Δ ∈ S, γ Δ = b₀ + β Δ) (hS : ∀ Δ ∈ S, ∀ Δ₂ ∈ S, ∀ Δ₃ ∈ S, Δ + (Δ₃ - Δ₂) ∈ S) :
+    TranslateOn S fun Δ => T (lab Δ) + if γ Δ = 1 then cm else 0 := by
+  have h := translateOn_bit S hR β fun b =>
+    T (if b = 1 then L₀ + ℓ else L₀) + if b₀ + b = 1 then cm else 0
+  intro Δ hΔ Δ₂ h₂ Δ₃ h₃
+  have ht := hS Δ hΔ Δ₂ h₂ Δ₃ h₃
+  have := h Δ hΔ Δ₂ h₂ Δ₃ h₃
+  simp only at this
+  dsimp only
+  rw [hlab _ ht, hγ _ ht, hlab Δ hΔ, hγ Δ hΔ, hlab Δ₂ h₂, hγ Δ₂ h₂, hlab Δ₃ h₃, hγ Δ₃ h₃]
+  exact this
+
+/-- With labels of exponent 2, a sum of copies of `ℓ` selected by bits is `ℓ` selected by the sum
+of the bits. -/
+lemma sum_ite_bit {κ Lab : Type*} [AddCommGroup Lab] (hLab : ∀ l : Lab, l + l = 0) (ℓ : Lab)
+    (s : Finset κ) (b : κ → ZMod 2) :
+    (∑ i ∈ s, if b i = 1 then ℓ else 0) = if ∑ i ∈ s, b i = 1 then ℓ else 0 := by
+  classical
+  have h01 : ∀ b : ZMod 2, b = 0 ∨ b = 1 := by decide
+  induction s using Finset.induction_on with
+  | empty => simp
+  | insert a s ha ih =>
+    rw [Finset.sum_insert ha, Finset.sum_insert ha, ih]
+    rcases h01 (b a) with h | h <;> rcases h01 (∑ i ∈ s, b i) with h' | h' <;>
+      simp [h, h', hLab, show (1 : ZMod 2) + 1 = 0 from by decide]
+
+/-- **The gate terms are affine on a slice.** Model of one gate of a CRT mask: tree `i`
+contributes the bit `γ_i(Δ_i)` to the gate's selection bit and, if that bit is set, its label
+offset `ℓ_i` to the gate's label `C₀ + Σ_i γ_i(Δ_i)·ℓ_i`; the gate term is
+`T(label) + (selection bit)·c`. If the trees of `C` have the same label offset, the gate term
+commutes with translations on every slice of `C`, for every hash `T` and every `c_mult` value. -/
+theorem translateOn_gate_slice {ι Lab : Type*} [Fintype ι] [DecidableEq ι] {B : ι → Type*}
+    [∀ i, AddCommGroup (B i)] [AddCommGroup Lab] (hR : ∀ r : R, r + r = 0)
+    (hLab : ∀ l : Lab, l + l = 0) (γ : ∀ i, B i →+ ZMod 2) (ℓs : ι → Lab) (C₀ : Lab) (T : Lab → R)
+    (cm : R) (C : Finset ι) {ℓ : Lab} (hℓ : ∀ i ∈ C, ℓs i = ℓ) (g : ∀ i, B i) :
+    TranslateOn (slice C g) fun Δ =>
+      T (C₀ + ∑ i, if γ i (Δ i) = 1 then ℓs i else 0) + if ∑ i, γ i (Δ i) = 1 then cm else 0 := by
+  let β : (∀ i, B i) →+ ZMod 2 := ∑ i ∈ C, (γ i).comp (Pi.evalAddMonoidHom B i)
+  have hβ : ∀ Δ, β Δ = ∑ i ∈ C, γ i (Δ i) := fun Δ => by
+    simp [β]
+  refine translateOn_gate (slice C g) hR β T cm
+    (C₀ + ∑ i ∈ Finset.univ \ C, if γ i (g i) = 1 then ℓs i else 0) ℓ
+    (∑ i ∈ Finset.univ \ C, γ i (g i)) (fun Δ hΔ => ?_) (fun Δ hΔ => ?_)
+    (fun Δ hΔ Δ₂ h₂ Δ₃ h₃ => slice_translate hΔ h₂ h₃)
+  · have h1 : (∑ i, if γ i (Δ i) = 1 then ℓs i else 0) =
+        (∑ i ∈ Finset.univ \ C, if γ i (g i) = 1 then ℓs i else 0) +
+          ∑ i ∈ C, if γ i (Δ i) = 1 then ℓ else 0 := by
+      rw [← Finset.sum_sdiff (Finset.subset_univ C)]
+      congr 1
+      · exact Finset.sum_congr rfl fun i hi => by rw [hΔ i (Finset.mem_sdiff.1 hi).2]
+      · exact Finset.sum_congr rfl fun i hi => by rw [hℓ i hi]
+    rw [h1, sum_ite_bit hLab, hβ]
+    split_ifs
+    · rw [add_assoc]
+    · rw [add_zero]
+  · rw [hβ, ← Finset.sum_sdiff (Finset.subset_univ C)]
+    congr 1
+    exact Finset.sum_congr rfl fun i hi => by rw [hΔ i (Finset.mem_sdiff.1 hi).2]
+
+end Gate
+
+/-- `AffineOn` from closure under translations and `TranslateOn` of the rows. -/
+lemma affineOn_of_translateOn {F X : Type*} [Field F] [AddCommGroup X] {L : ℕ} {S : Set X}
+    {Q : X → Fin L → F} {D : X → Fin 4 → F}
+    (hS : ∀ Δ ∈ S, ∀ Δ₂ ∈ S, ∀ Δ₃ ∈ S, Δ + (Δ₃ - Δ₂) ∈ S) (hQ : TranslateOn S Q)
+    (hD : TranslateOn S D) : AffineOn S Q D :=
+  fun Δ hΔ Δ₂ h₂ Δ₃ h₃ => ⟨hS Δ hΔ Δ₂ h₂ Δ₃ h₃, hQ Δ hΔ Δ₂ h₂ Δ₃ h₃, hD Δ hΔ Δ₂ h₂ Δ₃ h₃⟩
+
+/-! ## Extractors that only evaluate the check value (`pomfrit-lemmap-tight.md` §6.5)
+
+A deterministic extractor with oracle access to a function `f : X → Y` is a decision tree. If the
+functions `f_g` of a family differ from a base function `f₀` only on pairwise disjoint sets
+`σ_g` (hidden slices), the extractor's output on `f_g` is its output on `f₀` for all but at most
+`T` values of `g`, where `T` is the number of its queries on `f₀`. -/
+
+section BlackBox
+
+/-- A deterministic algorithm with oracle access to a function `X → Y` and output in `O`. -/
+inductive DTree (X Y O : Type*) where
+  | leaf : O → DTree X Y O
+  | node : X → (Y → DTree X Y O) → DTree X Y O
+
+variable {X Y O : Type*}
+
+/-- The output on the oracle `f`. -/
+def DTree.eval : DTree X Y O → (X → Y) → O
+  | .leaf o, _ => o
+  | .node x k, f => (k (f x)).eval f
+
+/-- The queries made on the oracle `f`. -/
+def DTree.queries : DTree X Y O → (X → Y) → List X
+  | .leaf _, _ => []
+  | .node x k, f => x :: (k (f x)).queries f
+
+/-- Two oracles that agree on the queries made on the first give the same output. -/
+lemma DTree.eval_congr (t : DTree X Y O) {f f' : X → Y} (h : ∀ x ∈ t.queries f, f x = f' x) :
+    t.eval f = t.eval f' := by
+  induction t with
+  | leaf o => rfl
+  | node x k ih =>
+    have hx : f x = f' x := h x (by simp [DTree.queries])
+    simp only [DTree.eval]
+    rw [← hx]
+    exact ih (f x) fun y hy => h y (by simp [DTree.queries, hy])
+
+open Classical in
+/-- **Black-box extractors do not find hidden slices.** If `f g` agrees with `f₀` outside `σ g`
+and the sets `σ g` are pairwise disjoint, an algorithm that makes `T` queries on `f₀` gives its
+output on `f₀` for all but at most `T` of the `g`. -/
+theorem DTree.card_detect_le {Γ : Type*} [Fintype Γ] (t : DTree X Y O) (f₀ : X → Y)
+    (f : Γ → X → Y) (σ : Γ → Set X) (hσ : ∀ g x, x ∉ σ g → f g x = f₀ x)
+    (hdisj : ∀ g g' x, x ∈ σ g → x ∈ σ g' → g = g') :
+    #{g : Γ | t.eval (f g) ≠ t.eval f₀} ≤ (t.queries f₀).length := by
+  have hsub : ({g : Γ | t.eval (f g) ≠ t.eval f₀} : Finset Γ) ⊆
+      (t.queries f₀).toFinset.biUnion fun x => {g : Γ | x ∈ σ g} := by
+    intro g hg
+    simp only [Finset.mem_filter, Finset.mem_univ, true_and] at hg
+    by_contra hnot
+    refine hg (t.eval_congr fun x hx => ?_).symm
+    by_contra hne
+    refine hnot (Finset.mem_biUnion.2 ⟨x, List.mem_toFinset.2 hx, ?_⟩)
+    simp only [Finset.mem_filter, Finset.mem_univ, true_and]
+    by_contra hxσ
+    exact hne (hσ g x hxσ).symm
+  calc #{g : Γ | t.eval (f g) ≠ t.eval f₀}
+      ≤ #((t.queries f₀).toFinset.biUnion fun x => ({g : Γ | x ∈ σ g} : Finset Γ)) :=
+        Finset.card_le_card hsub
+    _ ≤ ∑ x ∈ (t.queries f₀).toFinset, #({g : Γ | x ∈ σ g} : Finset Γ) := Finset.card_biUnion_le
+    _ ≤ ∑ _x ∈ (t.queries f₀).toFinset, 1 := Finset.sum_le_sum fun x _ =>
+        Finset.card_le_one.2 fun g hg g' hg' => by
+          simp only [Finset.mem_filter, Finset.mem_univ, true_and] at hg hg'
+          exact hdisj g g' x hg hg'
+    _ = #(t.queries f₀).toFinset := by simp
+    _ ≤ (t.queries f₀).length := List.toFinset_card_le _
+
+end BlackBox
+
 end VoleMole.Seed
