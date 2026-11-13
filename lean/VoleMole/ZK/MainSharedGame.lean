@@ -583,4 +583,120 @@ theorem rd_bstar {R5 : GView S p₁ p₂ p₃ p₄ → Finset (Bytes 37)} {q3 qE
 
 end Events
 
+
+/-! ## Replacing one proof, the rest of the game as the distinguisher -/
+
+section Ctx
+
+variable {S : Type} {p₁ p₂ p₃ p₄ : Params} (Hb : Hashes)
+
+/-- Averaging a per-fiber bound `ε + Pr[B]`. -/
+theorem abs_pr_fiber_le {α β : Type*} [Fintype α] [Nonempty α] [Fintype β]
+    (P Q B : α × β → Prop) {ε : ℝ}
+    (h : ∀ a, |pr β (fun b => P (a, b)) - pr β (fun b => Q (a, b))| ≤ ε + pr β (fun b => B (a, b))) :
+    |pr (α × β) P - pr (α × β) Q| ≤ ε + pr (α × β) B := by
+  have hα : (0 : ℝ) < Fintype.card α := by exact_mod_cast Fintype.card_pos
+  rw [pr_prod, pr_prod, pr_prod, ← sub_div, ← Finset.sum_sub_distrib, abs_div, abs_of_pos hα,
+    div_le_iff₀ hα, add_mul, div_mul_cancel₀ _ hα.ne']
+  calc |∑ a, (pr β (fun b => P (a, b)) - pr β (fun b => Q (a, b)))|
+      ≤ ∑ a, |pr β (fun b => P (a, b)) - pr β (fun b => Q (a, b))| := Finset.abs_sum_le_sum_abs _ _
+    _ ≤ ∑ a : α, (ε + pr β (fun b => B (a, b))) := Finset.sum_le_sum fun a _ => h a
+    _ = ε * Fintype.card α + ∑ a, pr β (fun b => B (a, b)) := by
+        rw [Finset.sum_add_distrib, Finset.sum_const, Finset.card_univ, nsmul_eq_mul, mul_comm]
+
+/-- **One proof replaced, in a context.** `C o V u` is the view of the game when this proof's
+output is `o`, its tables are `V` and the shared tables are `u`; the rest of the game reads the
+shared tables at `T5`, `TE`. For an event `Ψ` that reads `H₅` at `R5`, the real proof and the
+simulated one differ by `εS` and the probability that the witness prefix is a candidate of
+`R5 ∪ T5` on the simulated proof. -/
+theorem ctx_hop {p : Params} (hm : MainP p) (hp : SmallParams p) (hHb : HashesWF Hb) (y : SW)
+    (hy : ValidZK CrtGen.tables p y) (Ψ : GView S p₁ p₂ p₃ p₄ → Prop)
+    (R5 : GView S p₁ p₂ p₃ p₄ → Finset (Bytes 37))
+    (C : Out → VP p → USh → GView S p₁ p₂ p₃ p₄)
+    (T5 : Out → VP p → USh → Finset (Bytes 37)) (TE : Out → VP p → USh → Finset Blk)
+    (hCu : ∀ o V u, (C o V u).u = u)
+    (hC5 : ∀ o V u (G5 : Tab5F), (∀ k ∈ T5 o V u, u.1 k = G5 k) →
+      C o V (G5, u.2) = (C o V u).withU (G5, u.2))
+    (hCE : ∀ o V u (E : Cipher), (∀ k ∈ TE o V u, u.2 k = E k) →
+      C o V (u.1, E) = (C o V u).withU (u.1, E))
+    (hTE : ∀ o V u, (TE o V u).card ≤ 4 * 4607)
+    (set3 : GView S p₁ p₂ p₃ p₄ → Tab3 → GView S p₁ p₂ p₃ p₄)
+    (get3 : GView S p₁ p₂ p₃ p₄ → Tab3)
+    (hC3 : ∀ o (G3 G3' : Tab3) (G2 : Tab2G p) u,
+      C o (G3', G2) u = set3 (C o (G3, G2) u) G3' ∧ get3 (C o (G3, G2) u) = G3)
+    {q3 qE : ℕ}
+    (hΨ5 : ∀ v (G5 : Tab5F), (∀ k ∈ R5 v, v.u.1 k = G5 k) → Ψ (v.withU (G5, v.u.2)) = Ψ v)
+    (hΨE : ∃ Q : GView S p₁ p₂ p₃ p₄ → Finset Blk, (∀ v, (Q v).card ≤ qE) ∧
+      ∀ v (E : Cipher), (∀ k ∈ Q v, v.u.2 k = E k) → Ψ (v.withU (v.u.1, E)) = Ψ v)
+    (hΨ3 : ∃ Q : GView S p₁ p₂ p₃ p₄ → Finset (Bytes 16), (∀ v, (Q v).card ≤ q3) ∧
+      ∀ v (G3 : Tab3), (∀ k ∈ Q v, get3 v k = G3 k) → Ψ (set3 v G3) = Ψ v) :
+    |pr (USh × KS p) (fun z => Ψ (C (realRO p Hb (withP y.1 p) y.2 z.2.1.1 z.2.2.1
+          (shOf z.2.2.2 z.1)) z.2.2 z.1)) -
+      pr (USh × KS p) (fun z => Ψ (C (simulate p z.2.1.2)
+          (z.2.2.1, (progRO p Hb (withP y.1 p) z.2.1.2 (shOf z.2.2.2 z.1)).1) z.1))| ≤
+      εS q3 (qE + 4 * 4607) + pr (USh × KS p) (fun z => mainPredIC Hb (withP y.1 p) hm
+        (fun o G3 G2 G5 E => R5 (C o (G3, G2) (G5, E)) ∪ T5 o (G3, G2) (G5, E)) (wPre y.2)
+        ((z.2.1.2, (z.2.2.1, z.2.2.2, z.1.1)), z.1.2)) := by
+  classical
+  obtain ⟨cs, hzk⟩ := hy
+  obtain ⟨QE, hQEc, hQE⟩ := hΨE
+  obtain ⟨Q3, hQ3c, hQ3⟩ := hΨ3
+  refine slot_zk_main Hb (withP y.1 p) y.2 hm hzk hHb hp
+    (fun o G3 G2 G5 E => Ψ (C o (G3, G2) (G5, E)))
+    (fun o G3 G2 G5 E => Q3 (C o (G3, G2) (G5, E))) ?_ (fun _ _ _ _ _ => hQ3c _)
+    (fun o G3 G2 G5 E => R5 (C o (G3, G2) (G5, E)) ∪ T5 o (G3, G2) (G5, E)) ?_
+    (fun o G3 G2 G5 E => QE (C o (G3, G2) (G5, E)) ∪ TE o (G3, G2) (G5, E)) ?_ ?_
+  · intro o G3 G3' G2 G5 E h
+    obtain ⟨e1, e2⟩ := hC3 o G3 G3' G2 (G5, E)
+    rw [e1, hQ3 _ G3' (by rw [e2]; exact h)]
+  · intro o G3 G2 G5 G5' E h
+    have e := hC5 o (G3, G2) (G5, E) G5' fun k hk => h k (mem_union_right _ hk)
+    have hu := hCu o (G3, G2) (G5, E)
+    have := hΨ5 (C o (G3, G2) (G5, E)) G5' (by
+      rw [hu]; exact fun k hk => h k (mem_union_left _ hk))
+    rw [hu] at this
+    rw [e, this]
+  · intro o G3 G2 G5 E E' h
+    have e := hCE o (G3, G2) (G5, E) E' fun k hk => h k (mem_union_right _ hk)
+    have hu := hCu o (G3, G2) (G5, E)
+    have := hQE (C o (G3, G2) (G5, E)) E' (by
+      rw [hu]; exact fun k hk => h k (mem_union_left _ hk))
+    rw [hu] at this
+    rw [e, this]
+  · intro o G3 G2 G5 E
+    exact (card_union_le _ _).trans (add_le_add (hQEc _) (hTE _ _ _))
+
+set_option maxRecDepth 4000 in
+/-- **The bad event of `ctx_hop`, on the simulated proof**: the simulation failed, or its label
+offset is zero, or a key of the read set is a gate input of the simulated proof at its sibling
+offset. -/
+theorem pred_imp [HasPrg] {p : Params} (hm : MainP p) (y : SW) (c : SimCoins p)
+    (Sx : Finset (Bytes 37))
+    (h : wPre y.2 ∈ candidatesG Hb CrtGen.tables (withP y.1 p) enc5 hm Sx c.1 c.2) :
+    slotErr (some (simulate p c)) ∨ slotZero p (some y) (some (simulate p c)) ∨
+      ∃ k ∈ Sx, enc5 k ∈ match simulate p c with
+        | .ok b => vInOff Hb CrtGen.tables (withP y.1 p) b (thetaMain (dPre p b) (wPre y.2))
+        | .error _ => [] := by
+  rcases hf : firstHit c.1.2.1 with _ | ⟨ctr, δ⟩
+  · left
+    refine ⟨"grinding failed", ?_⟩
+    unfold simulate
+    rw [hf]
+  · have ho : simulate p c = .ok (simAssemble p c.1 ctr δ c.2) := by
+      unfold simulate
+      rw [hf]
+      rfl
+    right
+    have hc := cand_imp Hb CrtGen.tables (withP y.1 p) hm Sx c.1 c.2 hf h
+    rcases hc with hz | ⟨k, hk, hx⟩
+    · left
+      rw [ho]
+      exact hz
+    · right
+      refine ⟨k, hk, ?_⟩
+      rw [ho]
+      exact hx
+
+end Ctx
+
 end VoleMole.ZK.Sim
