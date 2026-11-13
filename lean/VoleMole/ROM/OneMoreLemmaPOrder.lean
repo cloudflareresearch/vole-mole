@@ -261,4 +261,198 @@ lemma corrBit_pcd (hA : A.size = p.o₂) (hπ : p.o₄ ≤ π.size) (hw : 45 ≤
 
 end Pcd
 
+/-- A candidate's value at a witness row, through the chain's fields. -/
+lemma candidate_chain_eq [HasPrg] (st : Statement) (ch : Bridge.Chain) (t : Fin BAVC.tau) {n : ℕ}
+    (hn : n < st.params.witnessBits) :
+    candidate (F := GF128) (ch.u st) (ch.dc st) t n =
+      SeedExtraction.bit (Bridge.uBit st.params ch.iv (ch.corr st) ch.keys t n) +
+        SeedExtraction.bit (Bridge.corrBit (ch.pf st) n) := by
+  simp only [candidate, extW, hn, dite_true, Bridge.Chain.u, Bridge.Chain.dc]
+
+/-! ## The ordering step -/
+
+section Order
+
+open VoleMole.Verifier.Bridge
+
+variable {β : Type} (T : CrtTables) (st : Statement) (lr : Bool)
+  (P : OracleComp specIC (ByteArray × β)) (E : CTable) (g : Table)
+
+lemma ivX_stE_of (hstp : st.params = pomfritParams lr)
+    (hmu : ∀ Hs : Hashes, st.mu1 Hs = Hs.hash .muDelayed muCell.2) (x1 : ByteArray) :
+    ivX (stE lr) x1 g = ivX st x1 g := by
+  simp only [ivX, mu1_stE, hmu, hstp]
+  rfl
+
+/-- **Lemma P's ordering step**: if the log `Pfx` before `x`'s first target query (a prefix of `P`'s
+log) contains the verifier's `H₂¹` input, then `E₁(x)`, computed from `Pfx` and the reduction's
+queries at `x`, is the prefix of the widest group of the output's alive trees, with the extractor's
+candidates: the hint is Lemma P's majority prefix (outside the hits and Post). For any statement
+with PomFRIT's parameters and `mu₁`. -/
+theorem e1P_eq_major (hstp : st.params = pomfritParams lr)
+    (hmu : ∀ Hs : Hashes, st.mu1 Hs = Hs.hash .muDelayed muCell.2)
+    (hh : NoHit (gameIC T st P E) (chainHit T st P E) g)
+    (hkp : KeysPre st E (jOf g P E) (gLog T st P E g) g)
+    (hacc : (evalWithAnswerFn (QueryImpl.ofFn g) (gameIC T st P E)).2.2.accept = true)
+    {leaves : BAVC.Leaves}
+    (hr : @BAVC.reconstruct (icPrg E.cipher) (ivE g st P E)
+      (Proof.opening ⟨st.params, πOf g P E⟩) (Proof.delta ⟨st.params, πOf g P E⟩) = some leaves)
+    {Pfx : QueryLog specIC} (hP : Pfx <+: jOf g P E)
+    (hx1 : ((.h21, runX (Hashes.ofTable g) st (πOf g P E) leaves) : Dom) ∈ hashLog Pfx)
+    {x : ByteArray}
+    (hxc : xChal1 x = (evalWithAnswerFn (QueryImpl.ofFn g) (gameIC T st P E)).2.2.chal1)
+    (hxd : xDpre x = (Proof.correction ⟨st.params, πOf g P E⟩).extract 0 45) :
+    e1P lr E (Pfx ++ axT g lr Pfx x) x =
+      toTG ((PomFRIT.majP (aliveR E (evalWithAnswerFn (QueryImpl.ofFn g) (gameIC T st P E)))
+        fun t => preB (@candOut (icPrg E.cipher) _ st
+          (evalWithAnswerFn (QueryImpl.ofFn g) (gameIC T st P E)) t)).getD []) := by
+  classical
+  let _ : HasPrg := icPrg E.cipher
+  set r := evalWithAnswerFn (QueryImpl.ofFn g) (gameIC T st P E) with hrdef
+  set Hs := Hashes.ofTable g
+  set π := πOf g P E
+  set J := jOf g P E
+  have hr2 : r.2.2 = verify Hs T st π := by
+    simp only [r, gameIC]
+    rw [evalWithAnswerFn_game, proverIC_fst]
+    rfl
+  have hJ : r.2.1.aux.2 = J := aux_gameIC T st P E g
+  have hacc' : (verify Hs T st π).accept = true := by rw [← hr2]; exact hacc
+  obtain ⟨hf, leaves', hrec, -⟩ := (accept_iff _ T st π).1 hacc'
+  have hrec' : BAVC.reconstruct (ivE g st P E) (Proof.opening ⟨st.params, π⟩)
+      (Proof.delta ⟨st.params, π⟩) = some leaves' := hrec
+  rw [hr] at hrec'
+  cases hrec'
+  obtain ⟨hiv, hc1⟩ := verify_iv_chal1 _ T st π hacc' hrec
+  have hHs : ∀ k w, (Hs.hash k w).size = k.outLen := fun k w => by simp [Hs]
+  set x1 := runX Hs st π leaves with hx1def
+  -- the logs
+  obtain ⟨rest, hG0⟩ := gLog_eq_hashEnt_append T st P E g
+  have hG : gLog T st P E g = hashEnt J ++ rest := hG0
+  obtain ⟨V, hV⟩ := hP
+  have hJV : J = Pfx ++ V := hV.symm
+  have hsubG : ∀ e ∈ hashEnt Pfx, e ∈ gLog T st P E g := fun e he => by
+    rw [hG, hJV, hashEnt_append]
+    exact List.mem_append_left _ (List.mem_append_left _ he)
+  have hx1H : ((.h21, x1) : Dom) ∈ (hashEnt Pfx).map Sigma.fst := mem_hashEnt_iff.2 hx1
+  have hx1J : ((.h21, x1) : Dom) ∈ (hashEnt J).map Sigma.fst := by
+    rw [hJV, hashEnt_append, List.map_append]; exact List.mem_append_left _ hx1H
+  have hc1x : xChal1 x = (g (.h21, x1)).ba := by rw [hxc, hr2, hc1]; rfl
+  have hfirstP : firstIn .h21 (fun _ => true) (xChal1 x) (hashEnt Pfx) = some x1 := by
+    rw [hc1x]
+    exact firstIn_gLog T st P E g hh (Or.inr (Or.inl rfl)) (d := (.h21, x1)) rfl hsubG hx1H rfl
+  have hx1Of : x1Of Pfx x = some x1 := hfirstP
+  have hx1Of' : x1Of (Pfx ++ axT g lr Pfx x) x = some x1 := by
+    unfold x1Of; rw [hashEnt_append]; exact firstIn_append_of_some hfirstP
+  have hGx : logBefore (.h21, x1) (hashEnt (Pfx ++ axT g lr Pfx x)) =
+      logBefore (.h21, x1) (gLog T st P E g) := by
+    rw [hashEnt_append, logBefore_append_of_mem _ hx1H, hG, hJV, hashEnt_append,
+      List.append_assoc, logBefore_append_of_mem _ hx1H]
+  have hx1L : (.inl (.h21, x1) : DomIC) ∈ Pfx.map Sigma.fst := mem_hashLog.1 hx1
+  have hJx : logBefore (.inl (.h21, x1)) (Pfx ++ axT g lr Pfx x) =
+      logBefore (.inl (.h21, x1)) J := by
+    rw [logBefore_append_of_mem _ hx1L, hJV, logBefore_append_of_mem _ hx1L]
+  -- `iv`
+  have hcons : ∀ e ∈ hashEnt Pfx, e = ⟨e.1, g e.1⟩ := fun e he =>
+    gLog_answer T st P E g e (hsubG e he)
+  have hivX : ivX st x1 g = ivE g st P E := by
+    simp only [x1, ivX, ivE, ivOf, runX]
+    rw [xIvPre_chal1Input hf (size_mu1 _ hHs st) (hHs _ _)]
+  have hivq : ivX (stE lr) x1 (tableOfLog (hashEnt (Pfx ++ axT g lr Pfx x))) = r.2.2.iv := by
+    rw [ivX_tableOfLog g lr hx1Of hcons, ivX_stE_of st lr g hstp hmu, hivX, hr2, hiv]; rfl
+  -- the alive trees
+  have hfirst : firstIn .h21 (fun _ => true) r.2.2.chal1 (hashEnt r.2.1.aux.2) = some x1 := by
+    rw [hJ, ← hxc, hc1x]
+    have hsubJ : ∀ e ∈ hashEnt J, e ∈ gLog T st P E g := fun e he => by
+      rw [hG]; exact List.mem_append_left _ he
+    exact firstIn_gLog T st P E g hh (Or.inr (Or.inl rfl)) (d := (.h21, x1)) rfl hsubJ hx1J rfl
+  have hGJ : logBefore (.h21, x1) (hashEnt J) = logBefore (.h21, x1) (gLog T st P E g) := by
+    rw [hG, logBefore_append_of_mem _ hx1J]
+  have halive : aliveR E r = univ.filter fun i =>
+      deadPre E (logBefore (.h21, x1) (gLog T st P E g)) (logBefore (.inl (.h21, x1)) J)
+        r.2.2.iv x1 i = ∅ := by
+    unfold aliveR
+    rw [hfirst]
+    dsimp only
+    rw [hJ, hGJ]
+  -- unfold `E₁`
+  unfold e1P
+  rw [hx1Of']
+  dsimp only
+  rw [hGx, hJx, halive]
+  -- the committed keys are the extractor's
+  obtain ⟨hcom, hwH, -⟩ := chain_ident T st P E g hh (fun _ _ => ByteArray.empty) hacc' hrec
+  have hxmu : x1.extract 0 32 = st.mu1 (Hashes.ofTable g) := by
+    simp only [x1, runX]
+    exact extract_mu_chal1Input (size_mu1 _ hHs st)
+  have hivE : ivX (stE lr) x1 (tableOfLog (hashEnt (Pfx ++ axT g lr Pfx x))) = ivE g st P E := by
+    rw [ivX_tableOfLog g lr hx1Of hcons, ivX_stE_of st lr g hstp hmu, hivX]
+  have hkeys : keyPre E (logBefore (.h21, x1) (gLog T st P E g)) (logBefore (.inl (.h21, x1)) J)
+      (ivX (stE lr) x1 (tableOfLog (hashEnt (Pfx ++ axT g lr Pfx x)))) x1 = r.2.1.keys := by
+    rw [hrdef, gameIC_keys, hivE]
+    funext i j
+    unfold keyPre
+    split_ifs with hv
+    · rw [hcom i hv.1 j hv.2]
+      simp only
+      rw [keysOf_of_reconstruct hr hv.1 hv.2, ← hivX, hkp x1 hxmu i hv.1 j hv.2 _
+        (hcom i hv.1 j hv.2) (fun hxJ => hwH hxJ i hv.1 j hv.2)]
+    · rw [keysOf_of_not_valid _ _ _ _ _ hv]
+  -- the proof fields
+  have hπs : π.size = st.params.o₇ + 20 := size_bytes hf
+  have hxPre : xPre st.params x1 = π.extract 0 st.params.o₂ := by
+    simp only [x1, runX]
+    exact xPre_chal1Input hf (size_mu1 _ hHs st) (hHs _ _)
+  have hiv' : (preCore (stE lr) E (logBefore (.h21, x1) (gLog T st P E g))
+      (logBefore (.inl (.h21, x1)) J) x1 (tableOfLog (hashEnt (Pfx ++ axT g lr Pfx x)))).iv =
+      r.2.2.iv := hivq
+  rw [hiv']
+  refine congrArg (fun m => toTG (Option.getD m [])) ?_
+  refine PomFRIT.majP_congr fun t _ => preB_congr fun n hn => ?_
+  have hn' : n < st.params.witnessBits := by rw [hstp]; simp [pomfritParams, Params.witnessBits]; omega
+  have hnE : n < (stE lr).params.witnessBits := by
+    simp [stE, pomfritParams, Params.witnessBits]; omega
+  refine (candidate_chain_eq (stE lr) _ t hnE).trans (Eq.trans ?_
+    (candidate_chain_eq st (outChain r) t hn').symm)
+  have hr1 : r.1 = π := by
+    simp only [r, gameIC]
+    rw [evalWithAnswerFn_game, proverIC_fst]
+    rfl
+  have hpo : xPre (pomfritParams lr) x1 = π.extract 0 (pomfritParams lr).o₂ := by
+    rw [← hstp]; exact hxPre
+  have hπo : (pomfritParams lr).o₄ ≤ π.size := by
+    rw [hπs, ← hstp]; unfold Params.o₇ Params.o₅; omega
+  have keyU : ∀ ch : Bridge.Chain,
+      ch.proof = xPre (pomfritParams lr) x1 ++ zerosBA 64 ++ xDpre x ++ zerosBA 119 →
+      ch.keys = r.2.1.keys → ch.iv = r.2.2.iv →
+      Bridge.uBit (stE lr).params ch.iv (ch.corr (stE lr)) ch.keys t n =
+        Bridge.uBit st.params (outChain r).iv ((outChain r).corr st) (outChain r).keys t n := by
+    intro ch hp hk hi
+    have hc : ch.corr (stE lr) = (outChain r).corr st := by
+      funext i
+      unfold Bridge.Chain.corr Bridge.Chain.pf
+      have h1 : (⟨(stE lr).params, ch.proof⟩ : Proof).corrections =
+          (⟨st.params, (outChain r).proof⟩ : Proof).corrections := by
+        show (⟨pomfritParams lr, ch.proof⟩ : Proof).corrections =
+          (⟨st.params, r.1⟩ : Proof).corrections
+        rw [hp, hstp, hr1, ByteArray.append_assoc, ByteArray.append_assoc]
+        exact corrections_pcd hpo (by unfold Params.o₄ at hπo; omega) _
+      rw [h1, hstp]
+      rfl
+    rw [hc, hk, hi, hstp]
+    rfl
+  have keyC : ∀ ch : Bridge.Chain,
+      ch.proof = xPre (pomfritParams lr) x1 ++ zerosBA 64 ++ xDpre x ++ zerosBA 119 →
+      Bridge.corrBit (ch.pf (stE lr)) n = Bridge.corrBit ((outChain r).pf st) n := by
+    intro ch hp
+    show Bridge.corrBit ⟨pomfritParams lr, ch.proof⟩ n = Bridge.corrBit ⟨st.params, r.1⟩ n
+    rw [hp, hstp, hr1]
+    refine corrBit_pcd ?_ hπo (by simp [pomfritParams]) ?_ hn
+    · rw [hpo, ByteArray.size_extract]; unfold Params.o₄ at hπo; omega
+    · rw [hxd, hstp]
+  exact congrArg₂ (fun a b => SeedExtraction.bit a + SeedExtraction.bit b)
+    (keyU _ rfl hkeys rfl) (keyC _ rfl)
+
+end Order
+
 end VoleMole.ROM.OneMore.Pomfrit
