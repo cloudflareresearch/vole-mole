@@ -9,8 +9,10 @@ ideal-cipher model of `Privacy/MoussakaRO.lean` (`leanPI`, `leanPR`, simulator `
 programming `leanProgI`, `leanProgR`; tables `Tab3` and `ShM R`). Both zero-knowledge hypotheses
 are theorems (`leanPI_zkRO`, `leanPR_zkRO`), with error `ZKRow.εz R p q₃ q₅ q_E`. What remains as
 hypotheses is as for Ratatouille (`Theft/RatatouilleLean.lean`): the read budgets of the hops'
-distinguishers (`hAI`, `hAR`), weak simulation-extractability (`hse`, L8 on paper), and the explicit
-terms `δ_R` and `Adv^ow`.
+distinguishers (`hAI`, `hAR`; proved from the parts' budgets in `noRedirect_lean_reads`,
+`Theft/Reads.lean`), weak simulation-extractability (`hse`, L8 on paper; reduced to plain
+extraction in `noRedirect_lean_plain`, `Theft/SimExtractLean.lean`), and the explicit terms `δ_R`
+and `Adv^ow`.
 -/
 
 -- (The coin types are large products: their `Fintype` instances exceed the default size.)

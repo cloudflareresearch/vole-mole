@@ -35,8 +35,8 @@ This file is the protocol-independent part, in the table model of `Privacy/ZeroK
   (`lean/docs/extraction/L8-simulation-extractability.md`, game `SE_A` with `q_S = 2`, weak form).
   The extractor sees the simulated statements and proofs (L8's log, item 2), the adversary's last
   stage as a function of the tables (its queries, item 1) and the programmed tables. **This is a
-  hypothesis**: L8 proves it on paper for the VOLEitH simulator; no Lean proof exists beyond its
-  deterministic core (`Seed/SimExt.lean`).
+  hypothesis** here. `Theft/SimExtract.lean` proves it from plain extraction and a
+  programmed-point term (`weakSE2_of_plain`), both still hypotheses; L8 proves it on paper.
 * `zk_step`: one zero-knowledge hop for a proof that runs only when its statement exists, the
   form `ZeroKnowledgeRO` gives for the protocols' Clients.
 -/

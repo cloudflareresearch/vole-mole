@@ -40,7 +40,7 @@ Contents:
 |---|---|---|---|
 | One-more unforgeability, per issuance context (Thm 1) | **Yes**; [Lean] in the ROM and ideal-cipher model on the spec, with the Lean verifier as the honest Anchors' and Moderator's check, the extraction terms from the soundness theorems (`ROM/MoussakaOMUF.lean`, `omuf_le_num`; §4 "Status") | `ε_ext^iss + ε_ext^red + ε_dig + Adv^bind_Com + K·Adv^ct-uf-open_UOV,Com`; mechanized: `qI·ε_I + qR·ε_R + Adv^bind_Com(B₁) + Adv^ct-uf-open_K(B₂)` (`omuf_le_num_open`), `ε_dig` a condition on the honest keys; and, with `Com` a random function in the CT-UF^open game (a modelling hypothesis), the last term down to `Σ_j Adv^{ompr}_j + K·(q_f + 2q_S + 1)·failPr` (`omuf_le_num_ompr`) | PoK (extraction README), binding of `Com`, chosen-target unforgeability of UOV on `Com`-images with openings (CT-UF^open, implied tightly by one-more-UOV with `Com` ideal in the standalone game, §3.3; [Lean] with `Com` a random function) |
 | One nullifier per signed commitment; double-spend detection (Cor 2) | **Yes**, if the Moderator keeps one record per `(ctx_iss, ctx_red)` across all Anchor Sets (`moussaka.hpp:141-146`) | as Thm 1 | as Thm 1 |
-| Redemption non-malleability: no redirect to another `challenge_digest`, Anchor Set or `ctx_red` (Thm 3) | **Yes**; [Lean] the reduction as a game on the spec in the ROM and ideal-cipher table model, one token (`Theft/Moussaka.lean`, `noRedirect`; with the Lean prover's zero knowledge, `noRedirect_lean`), weak SE a hypothesis (§5.3) | `ε_hop + ε_SE^red + Adv^ow_Com` (corrected, §5.3); mechanized: `ε_I + ε_R + δ_R + ε_SE + Adv^ow(B)` | weak SE (L8), one-wayness of `Com` (any opening of `t`) |
+| Redemption non-malleability: no redirect to another `challenge_digest`, Anchor Set or `ctx_red` (Thm 3) | **Yes**; [Lean] the reduction as a game on the spec in the ROM and ideal-cipher table model, one token (`Theft/Moussaka.lean`, `noRedirect`; with the Lean prover's zero knowledge, `noRedirect_lean`; with the hops' read budgets proved, `noRedirect_lean_reads`); weak SE reduced to plain extraction plus a programmed-point term, both hypotheses (`noRedirect_lean_plain`, §5.3) | `ε_hop + ε_SE^red + Adv^ow_Com` (corrected, §5.3); mechanized: `ε_I + ε_R + δ_R + ε_SE + Adv^ow(B)` | weak SE (L8), one-wayness of `Com` (any opening of `t`) |
 | Issuer hiding and unlinkability vs a Moderator **colluding with all Anchors**, with adversarial keys (Thm 4a) | **Yes, computationally**; [Lean] from uniform seed outputs (`Privacy/Moussaka.lean`, `anonymity`; for `main`'s Client, which finds its index itself, `Privacy/MoussakaFind.lean`); with the executable Lean prover (label rows) down to its tape hypothesis (`Privacy/MoussakaLean.lean`, `anonymity_label_rows`); for the Lean prover in the ROM and ideal-cipher model with every zero-knowledge term explicit, `≈ 2⁻¹⁰²·³` plus budget terms and `2·Adv^hide_Com` (`anonymityRO_lean_num`), and `≈ 2⁻¹⁰¹·⁹` with a table-reading interaction (`anonymityRA_lean_num`; Appendix B); also with AES as random permutations (`_perm`) and with one shared `H₃` (`anonymitySh_num`, `anonymityRASh_num`); from the real Clients' OS seeds and seed XOF, each `+ 2·(2q_X + 2)·2⁻²⁵⁶` (`anonymity*_seed`, `lean/docs/zk.md` §10.6); with a key stage (contexts, keys) that reads the tables too (`anonymityRAK_lean_num`, `≈ 2⁻¹⁰¹·⁹`); with any number `n` of further honest Clients, `≤ n·2⁻¹⁰²` plus budget terms and `2·Adv^hide_Com` (`anonymityN_lean_num`), also adaptively scheduled, each further session's contexts, key, response and Anchor Set chosen from earlier outcomes and the challenge contexts and keys from the sessions before it (`anonymityAd_lean_num`, the same numbers), and interleaved in any order (`anonymityIL_lean_num`, `≤ (n + 2)·2⁻¹⁰¹`; with a table-reading scheduler that also places the challenge, `anonymityILO_lean_num`, `+ 28·L·(a₃ + a₂ + a₅ + 221·a_E)·2⁻¹²⁸`), and with `N` challenge pairs (`anonymityP_lean_num`; linear in `N` up to a bad event bounded on paper, `anonymityP_lin`; `lean/docs/zk.md` §10.8; §11 item 5) | `2·ε_ZK^joint + 2·Adv^hide_Com` (the `2^{−192}` is not needed, §6) | ZK (lean/docs/zk.md), hiding of `Com` |
 | The same vs a Moderator that sees no issuance (Thm 4b) | **Yes**, with no Keccak assumption, up to an abort term the note missed (§6); [Lean] from uniform seed outputs (`Privacy/MoussakaNC.lean`, `anonymityNC`, `unlinkabilityNC`; for `main`'s Client `Privacy/MoussakaNCFind.lean`), with the vinegar hash a random oracle (`anonymityNC_vinegarRO`), and with the executable Lean prover down to its tape or hop hypotheses (`anonymityNC_label_rows`, `_shake`); in the ROM and ideal-cipher model with every proof and the honest Anchors' Lean verifier on the shared tables, `≈ 2⁻¹⁰³·²` plus budget terms and `2·(φ₀ + φ₁)` (`anonymityNCRO_lean_num`, `unlinkabilityNCRO_lean_num`, also `_perm`), also with one shared `H₃` (`anonymityNCSh_num`), with the Moderator's choices read off the tables (`anonymityNCRA_lean_num`, as oracle computations `anonymityNCOC_lean_num`) and from the real Clients' seeds (`*NC*_seed`; Appendix B); with a model of pqov's `derive_preimage` as the Anchors' signer (`anonymityNC_pqov`, `anonymityNCRO_pqov`), averaged over keys of pqov's key generation with any oil matrix (`anonymityNCRO_pqov_pqovKeys`; `O = 0`: `anonymityNCRO_pqov_keys`; abort term `≈ 2⁻²⁹³·⁸`; the model reproduces the C++ `derive_preimage` on the KAT targets), and the games shown to reach redemption (`pr_refused_NCRO_le`; Appendix B) | `2·Σ ε_ZK^red + 2·(φ₀ + φ₁)`, `φ_c ≤ δ_c^{255}` on average over the vinegar random oracle (pqov uses 255 vinegars, §6), `E[δ_c^{255}] ≤ 255^{−37} + 1/(255·256^{37}) ≈ 2^{−295.8}` on average over the key (`δ ≤ 1/255` holds on average over the key, not per key) (`0` for one Anchor; no `2^{−192}`) | ZK of the redemption proofs only; both issuers in the Anchor Sets (`main`'s Client; for the index-taking Client of the random-oracle games, an index taken from `S`) |
 | Issuer hiding under a Moderator-chosen Anchor Set | **Only relative to the Anchors in the set that are honest and in common use** (§7) | n/a | Anchor-Set consistency outside the library |
@@ -614,17 +614,26 @@ is **[Lean]** for one honest token (`lean/VoleMole/Theft/`):
   - `ε_SE`: weak SE (`Theft.WeakSE2`), **a hypothesis**.
   - `Adv^ow`: an explicit inverter that gets `nf` and `t` (`owAdv`, `sim_opens_le`).
 - **`noRedirect_lean`** (`Theft/MoussakaLean.lean`): with the Lean prover and simulator, the
-  zero-knowledge hypotheses are discharged (`leanPI_zkRO`, `leanPR_zkRO`). The read budgets of
-  the hops' distinguishers stay hypotheses.
+  zero-knowledge hypotheses are discharged (`leanPI_zkRO`, `leanPR_zkRO`).
+- **`noRedirect_lean_reads`** (`Theft/Reads.lean`): with the Lean verifiers (`verIL`, `verRL`), the
+  hops' read budgets are proved from the adversary's last stage's `(a₃, a₅, a_E)` and the
+  extractor's `(x₃, x₅, x_E)`: `(a₃ + x₃, a₅ + x₅ + 936, a_E + x_E + 9214)` (`distI_budgetL`,
+  `distR_budgetL`).
+- **`noRedirect_lean_plain`** (`Theft/SimExtractLean.lean`): `WeakSE2` is proved
+  (`weakSE2_moussaka`) from plain extraction (`PlainSE`, an extractor that does not read `H₂³`)
+  and the probability that a fresh forgery's `H₂³` query is a programmed point (`ProgEv … HitOp`;
+  `accOp_moves`, `progRO_moved`): `Pr[Bad] ≤ εz(pI; q) + εz(pR; q) + δ_R + ε_plain + ε_hit +
+  Adv^ow`. Both terms stay hypotheses (`security/ratatouille.md` §5, "Lean").
 - Not covered:
-  - L8 in the random-oracle and ideal-cipher model. The extraction games use lazy random oracles
-    for every hash, while the zero-knowledge model fixes `H₁`, `H₂⁰…H₂²` and `H₄`
+  - `PlainSE` and `ProgEv … HitOp` in the random-oracle model: the zero-knowledge table model fixes
+    `H₁`, `H₂⁰…H₂²` and `H₄` as SHAKE, while `ROM/`'s extraction bounds need them random
     (`security/ratatouille.md` §5, "Lean").
   - `U > 1` tokens.
   - Anchor Sets and digests that `A` chooses after reading the tables.
   - More than one output.
   - A bound on `δ_R` for the Lean prover.
-  - `Adv^ow` in the ideal-permutation model.
+  - `Adv^ow` in the ideal-permutation model. In the table model `Com` is a fixed function and the
+    inverter any function, so some inverter wins with probability `1` (`owAdv_one_moussaka`).
 
 The architecture and protocols drafts note one limit that remains: a Moderator that relays
 *another* Moderator's challenge is not stopped by `challenge_digest`.
@@ -1187,8 +1196,10 @@ the fix column describes `d5def9c`, where Moussaka used the rows (and what dropp
    generation (a condition on the keys in Lean); AES as random permutations beyond the
    extraction step (Theorem 1 with simultaneous extraction is in the permutation model,
    `omuf_le_num_simP`, but its CT-UF^open and OMPR corollaries are in the PRF view only).
-   Corollary 2 is not stated separately. Theorem 3 (non-malleability) is in Lean for one token
-   with weak SE as a hypothesis (`noRedirect`, `noRedirect_lean`; §5.3 "Status").
+   Corollary 2 is not stated separately. Theorem 3 (non-malleability) is in Lean for one token,
+   with the hops' read budgets proved and weak SE reduced to plain extraction and a
+   programmed-point term, both hypotheses (`noRedirect_lean_reads`, `noRedirect_lean_plain`; §5.3
+   "Status").
 8. Timing side channels beyond the index check (OS RNG, allocation) are out of scope.
 
 ---

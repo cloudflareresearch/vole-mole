@@ -14,9 +14,10 @@ read budgets `(q₃, q₅, q_E)`. What remains as hypotheses:
 * `hAI`, `hAS`: the two hops' distinguishers have those budgets. They consist of the adversary's
   last stage, the verifiers on its output, the extractor and (in the first hop) the real spend
   prover, so they hold when those read the tables at bounded numbers of keys; the read
-  composition lemmas of `ZK/ReadsRO.lean` (`Rd5.bind`, `realRO_rd5`, …) are what a proof would
-  use, as in `Privacy/RatatouilleRO.lean`'s `rd5_view`. Not done here.
-* `hse`: weak simulation-extractability of the Lean simulators (`WeakSE2`), L8 on paper.
+  composition lemmas of `ZK/ReadsRO.lean` (`Rd5.bind`, `realRO_rd5`, …) prove them from the
+  budgets of those parts: `noTheft_lean_reads` (`Theft/Reads.lean`).
+* `hse`: weak simulation-extractability of the Lean simulators (`WeakSE2`), L8 on paper;
+  `noTheft_lean_plain` (`Theft/SimExtractLean.lean`) reduces it to plain extraction.
 * `δ_S` stays an explicit probability (as `δS₁` of `unlinkabilityRO`), and `Adv^ow` is the
   explicit inverter's advantage.
 -/
