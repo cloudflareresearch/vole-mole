@@ -32,7 +32,7 @@ bijection of `GF(256)`. So `s ↦ √μ·s` maps the preimages of `t` onto the p
 | A3 | Turning a preimage of `y` into a preimage of `y ⊕ Δ`, for uniform `Δ`, **is** the UOV problem (tight) | proved | §4.3 |
 | A4 | **Rewinding does not help in general.** In the generic model, every reduction OMPR⊕τ ⇒ OMPR that is black-box in the adversary and in `(P, D)`, with unlimited rewinding, any embedding and any number of targets and calls, succeeds with probability `≤ 2·τ^{−(q+1)} + V⁴·2^{−360}` against one explicit adversary (`τ ≥ 7`, `q ≥ 1`). Guessing achieves `τ^{−(q+1)}` | proved; inequality and counting Lean (`rewind_supermartingale`, `lottery_count`) | §4.4 |
 | A5 | **Rewinding does help for some adversaries**: if all `D`-queries are on shifted targets of the first `N − 1` requests, a rewinding reduction has polynomial loss (`ε/3`, time `×8τ(τ(N−1)+1)/ε`) | proved | §4.5 |
-| A6 | OMPR ⇒ OMPR⊕17 for UOV with polynomial loss: **open**. Any proof must use the algebra of `P` (by A4) in a way that A3 makes unlikely, or be non-black-box in the adversary. Follow-up (`ompr-shift-algebra.md`): using the algebra does not help a reduction that is black-box in the adversary, unless OMPR^free fails; no attack at τ = 17 | conjecture, obstacles | §4.6 |
+| A6 | OMPR ⇒ OMPR⊕17 for UOV with polynomial loss: **open**. Any proof must use the algebra of `P` (by A4) in a way that A3 makes unlikely, or be non-black-box in the adversary. Follow-up (`ompr-shift-algebra.md`): using the algebra does not help a reduction that is black-box in the adversary, unless OMPR^free fails; no attack at τ = 17. Attack side (`ompr-cryptanalysis.md`): the two games have the same oracle, the oracle gives the key only at `2^{292}` calls, and no call pays for two targets; A6 reduces to the forgery-side statement of `ompr-shift-algebra.md` §4.4 | conjecture, obstacles; cryptanalysis | §4.6 |
 
 **Answers to the two questions.**
 - **A.** OMPR⊕τ ⇒ OMPR is tight. OMPR ⇒ OMPR⊕τ has no tight or polynomial-loss proof in the
@@ -539,6 +539,16 @@ of [BMV08] is not available: it needs to simulate `A**`'s forgeries, and preimag
   for `τ ≥ 256` and none for τ = 17 (`256/17 = 2^{3.9}`). The conjecture is to be read for
   `τ ≤ 17`.
 
+**Follow-up: `ompr-cryptanalysis.md`** (attacks that use the oracle).
+- OMPR⊕τ has the oracle of OMPR. Every oracle-aided route to the key is common to both games,
+  and none beats key recovery from `pk`: vinegar collisions need `2^{292.5}` calls, linear
+  statistics of the answers `2^{600}`, and a good answer adds no equation to the structural
+  attacks.
+- Shifts chosen after earlier answers give the counting factor τ only (Lemma S3 there).
+- So a separation, if any, is on the forgery side, where the collinear lists of
+  `ompr-shift-algebra.md` C1 are the one structural gain known (at most `2^{4.1}`). The best
+  attack we know on either game is the direct forgery attack on UOV, with no calls.
+
 **Advice, unchanged from [UA] §6.** Keep U1 as the main statement and U2 under the explicitly
 stronger OMPR⊕17. The protocol change [UA] §8 C2 removes the question.
 
@@ -578,6 +588,8 @@ and the ideal-permutation bookkeeping of B2. The variant of A4 for UOV itself (T
   `ompr-shift-algebra.md` Theorem R it must also be non-black-box in the adversary, or break
   OMPR^free.
 - OMPR^free for UOV: is there a combiner across classes? Cryptanalysis of §3.5, item 3.
+  `ompr-cryptanalysis.md` §3 finds none for OMPR (spans of answers cover targets like spans of
+  random points); it does not treat free calls separately.
 - The translation problem for a fixed `Δ` versus the UOV problem (§4.3).
 - A4 for `τ < 5` (other constants), and for a PSF that has the scaling symmetry built in.
 - Other public pairs `(φ, T)` with `P ∘ φ = T ∘ P` (§4.2). Settled for additive and affine `φ`

@@ -22,7 +22,7 @@ the oil system is invertible, and the oil part is solved.  Pure Python, no depen
   table        Probabilities and costs at (N, M, q) = (119, 45, 256) quoted in the note.
 
 Usage: ompr_toy.py [law|fibre|fourier|attack|collide|annih|span|table|all] [seed]
-Run under a memory cap; `all` takes about ten minutes on one core and less than 1 GB.
+Run under a memory cap; `all` takes about four minutes on one core and less than 1 GB.
 """
 import hashlib
 import random

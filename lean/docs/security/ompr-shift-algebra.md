@@ -638,6 +638,7 @@ of chosen `y_i`, and through them the lines and planes of T1 and the span of §3
 - Larger spans are MQ instances, as in §3.3, with τ right-hand sides instead of one.
 
 So the calls do not combine with the shifts beyond the factor τ. Two points can be made exact.
+(A third, shifts chosen after earlier answers, is Lemma S3 of `ompr-cryptanalysis.md` §4.2.)
 
 **One call, two requests [proved].** Scaling turns a preimage of `y` into preimages of the class
 `F^×·y`. A call serves requests `k < k′` in this way only if two candidates are proportional:
@@ -705,6 +706,7 @@ So `D` improves neither side of the comparison of §4.1 beyond what Thomae–Wol
 | Reduction using a combiner from the algebra of `P` | none found (§3); would break OMPR^free |
 | Reduction that is not black-box in the adversary | open; `E₁` of PomFRIT is the known instance, with additive loss `Q₃·2^{−71}` |
 | Attack separating OMPR⊕17 from OMPR | none found; C1 is below break-even in the reference model, and within `2^{4.1}` in any (§4) |
+| Attack that uses the `D` oracle, on either game | none below the oracle-free attacks (`ompr-cryptanalysis.md`): the games share the oracle; key recovery through it needs `2^{292.5}` calls (vinegar collision) or `2^{600}` (linear statistics); shifts chosen after answers give the factor τ only |
 
 The loss `τ^{q+1}` is thus an artefact only in the sense that no attack matches it. No proof
 technique that treats the adversary as a black box removes it, unless UOV has a combiner that
@@ -752,7 +754,8 @@ budget, so the counts quoted in §4.1 vary a little between runs and machines.
   `φ(s) = γ(P(s))·s`; pairs with `A` not bijective and `T ≠ 0`; a sharper exceptional fraction
   (the bound `256^{−976}` comes from the matrices at distance 1 from the scalars).
 - Hypothesis X for the real sampler; the hardness of `P|_{K_s}` (45 quadrics in 74 variables,
-  no oil space).
+  no oil space). `ompr-cryptanalysis.md` §3.3–3.4: spans of answers cover target classes like
+  spans of random points on toy keys; `P|_{K_s}` costs `2^{144.1}` in the reference model.
 - Theorem R with the lottery form of the assumption stated as a game, and its relation to
   OMPR^free.
 - A multi-target algebraic attack on MQ would change §4.1 for independent targets as well; we
