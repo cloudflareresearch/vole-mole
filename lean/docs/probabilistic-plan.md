@@ -1043,7 +1043,10 @@ programming) is a different construction and shares nothing with these.
 Files: `ROM/SimUnion.lean` (generic), `ROM/SimExtract.lean`, `ROM/SimSpec.lean`,
 `ROM/SimJoint.lean` (both relations of a protocol together), `ROM/SimJointSpec.lean`,
 `ROM/MoussakaOMUFSim.lean`, `ROM/RatatouilleBalanceSim.lean`, `ROM/MoussakaUnboundSim.lean`,
-`ROM/SimPerm.lean` (permutation model), `Assumptions/SimLinks.lean`, `Audit/SimExtract.lean`;
+`ROM/SimPerm.lean` (permutation model), `ROM/PermJoint.lean`, `ROM/SimPermJoint.lean`,
+`ROM/SimPermJointSpec.lean`, `ROM/MoussakaUnboundSimPerm.lean`, `ROM/MoussakaOMUFSimPerm.lean`,
+`ROM/RatatouilleBalanceSimPerm.lean` (permutation model, both relations together),
+`Assumptions/SimLinks.lean`, `Audit/SimExtract.lean`;
 PomFRIT: `ROM/OneMoreLemmaPPrefix.lean`, `ROM/OneMoreLemmaPSim.lean`,
 `Assumptions/PomfritLemmaPSim.lean`, `Audit/PomfritLemmaP.lean`;
 changed: `ROM/AdaptChain.lean`, `ROM/AdaptComb.lean` (the bad
@@ -1157,15 +1160,60 @@ now carry the joint bound. The budgets are those of the per-proof theorems (kept
 audit adversaries of `Audit/Nonvacuous.lean` and `Audit/IdealTag.lean`, and the unbound joint
 bound at the executable statements.
 
-**The permutation model** (`ROM/SimPerm.lean`). Per permutation table `π`, the normalized
-provers `normP p π (P j)` are provers of the PRF view at `π.fwd`, so `prEvent_sim_le_E`,
+**The permutation model, per relation** (`ROM/SimPerm.lean`). Per permutation table `π`, the
+normalized provers `normP p π (P j)` are provers of the PRF view at `π.fwd`, so `prEvent_sim_le_E`,
 `prEvent_sim_comb_le_E` apply; averaged over `π` with the permutation model's failure terms
 (`failEpsP`, `sum_fail_leP`): `prEvent_sim_leP`, `prEvent_sim_comb_leP`, at the normalized budget
 `addH4 q`. Normalization commutes with projections (`normP_map`, `prefixRuns_normP_map`).
-Per relation only: the normalization depends on the relation's parameters (`ivIn p`), which
-differ between issuance and redemption (spend), so the two relations' normalized runs do not have
-one hash log; a normalization serving both parameter sets would be needed. No spec-level
-instances (they would follow `ROM/SimSpec.lean` with the `_perm` failure terms).
+
+**The permutation model, both relations together** (`ROM/PermJoint.lean`,
+`ROM/SimPermJoint.lean`). *The obstacle*: `normP p π` adds the `H₄` query of the chain's `iv` at
+the relation's parameters (`ivIn p`) before every `H₂¹` query (N1), and issuance and redemption
+(spend) have different parameters, so `normP p_I π P` and `normP p_R π P` have different hash
+logs, while the joint bound charges the queries of one shared run (`hsame`). *The resolution*: one
+normalization for both relations, `normJ p_I p_R π P = normP p_I π (addIV p_R P)`; `addIV p_R`
+adds the `H₄` query at `p_R` before every `H₂¹` query and leaves the cipher queries alone, so it
+is a prover of the permutation model that does not depend on `π`. `normJ` is `normP p_I π` of that
+fixed prover, so all record arguments (`normP_congr`, `normP_prefix`, the counting of
+`ROM/PermCount.lean`, binding, the dead leaf) apply unchanged. N1 was the only place where the
+statement's parameters entered, through Post (`PostP p`, the `iv` read at `ivIn p`) and
+`KeysPre`. Those lemmas now take the normalization parameters `p_N` and the statement parameters
+`p` separately, with N1 at `p` as a hypothesis on the normalized log (`IvBefore p`):
+`prEvent_perm_postP_le_iv`, `keysPre_of_not_postP_iv`, `prEvent_jointP_postP_le_iv`,
+`prEvent_jointP_deadOpen_le_iv`, `keysPre_iv`, `sum_fail_leP_iv`. The proofs are those of
+`ROM/PermPost.lean` and `ROM/PermAdapt.lean` with `p` and `p_N` separated, and the bounds are the
+same. `normJ` satisfies N1 at both parameter sets (`ivBefore_normP`, `ivBefore_normP_addIV`) and
+commutes with projections and binds (`normJ_map`, `normJ_bind`). So two projections of one run
+have one hash log after it (`tableQueryLog_runE_normJ_map`), and prefix runs stay prefix runs
+(`prefixRuns_normJ_map`, `proverAtP_prefix`). The cost is a second `H₄` query per `H₂¹` query:
+`ε_{H₄} = 0`, so it only enters the total hash count `n_G + 2q₂₁` in the `2⁻⁴⁴⁸` term.
+`prEvent_sim_joint_leP` is `prEvent_sim_joint_le_E` per table at `π.fwd` with `cf = PostPOut p`,
+averaged over `π`:
+
+    Σ_k q'_k·jointEps_k + |J_I|·Σ_k r_k·ε_I,k + |J_R|·Σ_k r_k·ε_R,k + (|J_I| + |J_R|)·failEpsP q q_E,
+
+`q' = addH4 q`. Spec relations (`ROM/SimPermJointSpec.lean`, `ROM/MoussakaUnboundSimPerm.lean`):
+`moussaka_sim_joint_specP`, `ratatouille_sim_joint_specP`, `moussakaUnbound_sim_joint_specP`. Each
+is the PRF-view bound with `failEpsP` for `failEps` and `n_G + 2q₂₁` for `n_G`.
+
+**The protocols in the permutation model** (`ROM/MoussakaOMUFSimPerm.lean`,
+`ROM/RatatouilleBalanceSimPerm.lean`). The adversary makes forward and inverse cipher queries
+(`AdversaryP`, `RoundAdvP`); the honest verifiers read the cipher forward (`liftP`); the game runs
+against `π` (`runP`; `gameP`, `balQP`). At a fixed table the adversary normalized stage by stage
+(`toIC lr π`) is an adversary of the PRF view with the same output (`gameP_eval`,
+`evalWithAnswerFn_balQP`). So the deterministic cores (`game_eval`, `no_win`) apply. The provers
+are projections (Moussaka) or prefixes (Ratatouille) of the permutation-model game, jointly
+normalized; their acceptance and statements depend only on their outputs (`accepted_IP`,
+`ext_issueP`). This gives `win_impP` and the reductions `omuf_le_simP`, `balance_le_simP`. With
+the bounds: `omuf_le_num_simP` (`epsIRsimP`), `balance_le_sim_numP`, `balance_le_lean_simP`
+(`epsBalSimP`), at the budgets of the PRF-view theorems (`q'_E` counts forward and inverse
+queries). `Coll`, `Forge` (`forgeAdvP`, `collAdvP`) stay terms. The CT-UF^open, UF-Tag and OMPR
+corollaries of the PRF view (`omuf_le_num_open_sim`, `balance_le_ufTag_sim`, `*_ompr_sim`) are
+not redone: their reductions run the game in the PRF view. `Audit/SimExtract.lean` instantiates the
+protocol theorems with adversaries that make inverse cipher queries (`aUP`, `balA0P`), and the
+spec-level instances with a prover making one (`invP`). `#print axioms` of
+`prEvent_sim_joint_leP`, the three `*_specP`, `omuf_le_num_simP`, `balance_le_sim_numP`,
+`balance_le_lean_simP`: `propext`, `Classical.choice`, `Quot.sound`.
 
 **Numbers** (`ε_QS(n) = 2⁻¹²⁸ + (n−1)²·2⁻¹⁹² ≈ 2⁻¹²⁸` for all four systems; `q` queries per kind,
 `q_E = q`, `n_G = q`, `m` proofs per relation; union = the per-proof union bound, per relation =
@@ -1179,6 +1227,22 @@ Moussaka and Ratatouille agree to two decimals):
 | `2⁶⁴` | `2⁴⁰` | `2⁻⁶⁰·⁶⁸`, `2⁻⁶⁰·⁵⁴` | `2⁻¹⁹·⁶` | `2⁻⁵⁹·⁶` | `2⁻⁶⁰·⁵⁴` | `2⁻⁷⁷·⁹` |
 | `2⁴⁸` | `2³⁰` | `2⁻⁷⁶·⁶⁸`, `2⁻⁷⁶·⁵⁴` | `2⁻⁴⁵·⁶` | `2⁻⁷⁵·⁶` | `2⁻⁷⁶·⁵⁴` | `2⁻⁹⁷·⁰` |
 | `2⁸⁰` | `2³⁰` | `2⁻⁴⁴·⁶⁸`, `2⁻⁴⁴·⁵⁴` | `2⁻¹³·⁶` | `2⁻⁴³·⁶` | `2⁻⁴⁴·⁵⁴` | `2⁻⁵⁵·⁹` |
+
+In the permutation model (both relations together, `moussaka_sim_joint_specP`; `failEpsP` with
+`p = 1/(2¹²⁸ − q_E)`, `p' = 1/(2¹²⁸ − q_E − 4607)`; the extra `q₂₁` hash queries only in the
+`2⁻⁴⁴⁸` term):
+
+| `q` | `m` | joint, PRF view | joint, permutation model | `m·failEps` | `m·failEpsP` |
+|---|---|---|---|---|---|
+| `2⁶⁴` | `2²⁰` | `2⁻⁶⁰·⁵⁴` | `2⁻⁶⁰·⁵⁴` | `2⁻⁹⁷·⁹` | `2⁻⁹⁵·⁸` |
+| `2⁶⁴` | `2³⁰` | `2⁻⁶⁰·⁵⁴` | `2⁻⁶⁰·⁵⁴` | `2⁻⁸⁷·⁹` | `2⁻⁸⁵·⁸` |
+| `2⁶⁴` | `2⁴⁰` | `2⁻⁶⁰·⁵⁴` | `2⁻⁶⁰·⁵⁴` | `2⁻⁷⁷·⁹` | `2⁻⁷⁵·⁸` |
+| `2⁴⁸` | `2³⁰` | `2⁻⁷⁶·⁵⁴` | `2⁻⁷⁶·⁵⁴` | `2⁻⁹⁷·⁰` | `2⁻⁹⁷·⁰` |
+| `2⁸⁰` | `2³⁰` | `2⁻⁴⁴·⁵⁴` | `2⁻⁴⁴·⁵⁴` | `2⁻⁵⁵·⁹` | `2⁻⁵³·⁸` |
+
+`failEpsP ≈ 4648·2⁻¹²⁸ = 2⁻¹¹⁵·⁸` at `q = 2⁶⁴` (Post, `q_E·4608·q₂₁·p²`, dominates), against
+`failEps ≈ 1064·2⁻¹²⁸ = 2⁻¹¹⁷·⁹`; the main term is the same, so at `2⁶⁴` queries and `2³⁰` proofs
+per relation the permutation model's joint bound is `2⁻⁶⁰·⁵⁴`, as the PRF view's.
 
 The dominant terms are `(q₂₃ + 2m)·9·2⁻¹²⁸` and `(q₂₂ + 2m)·(ε_QS + 2⁻¹²⁸)`. The joint bound is
 `1.91×` smaller than the per-relation sum (not `2×`: at `H₂²` the joint charge is the combined
@@ -1253,8 +1317,8 @@ The `2⁻⁷¹` per `H₂³` query (Lemma P's `Shift`) dominates; it is the pape
 `2⁻⁵⁶·⁰`). The dominant terms are the `H₂²` and `H₂³` charges, `≈ 2⁻⁶³` each at `2⁶⁴`: the
 paper's `ε_ext`.
 
-**Not covered.** Both relations together in the
-permutation model (above), the quantum setting.
+**Not covered.** In the permutation model, the CT-UF^open, UF-Tag and OMPR corollaries of the
+protocol theorems and PomFRIT's U1 and U2 (above); the quantum setting.
 
 ### 2n. Lemma P in the random-oracle model (PomFRIT G8), as implemented
 
