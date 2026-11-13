@@ -205,8 +205,11 @@ permutations with inverse queries):
   `preimage_line`, `preimage_plane`, `qmap_add_of_polar_eq_zero`, `affine_symmetry`); Theorem R of `ompr-shift-algebra.md` with its games
   (`Assumptions/TheoremR.lean`, `thmR`): a reduction OMPR ⇒ OMPR⊕τ that is black-box in the
   adversary only wins against the explicit adversary `A**_D` with probability
-  `≤ 2·τ^{−(q+1)} + Adv^{free}(M) + badPr`, `M` explicit, `badPr` an explicit collision probability
-  (paper: `≤ V⁴·2⁻³⁴³`); OMPR^free as a game (`advOMPRFree`); every OMPR adversary is in the
+  `≤ 2·τ^{−(q+1)} + Adv^{free}(M) + V⁴·2⁻³⁴³`, `M` explicit, for reductions with at most `T`
+  messages to `A**_D` (`thmR_V4`; the bad events `badPr_le`, `Assumptions/TheoremRBad.lean`), and
+  Corollary R′ (`corR'`); no affine symmetry of pqov's keys translates targets except with
+  probability `256⁻¹⁹⁵¹ + 256⁻³²⁸⁵`, and the target map of a symmetry is fixed by `A` (Lemma N;
+  `Assumptions/SymmetryCount.lean`, `pr_translation_le`, `pr_not_spanTriv`); OMPR^free as a game (`advOMPRFree`); every OMPR adversary is in the
   reduction class with its advantage (`redExp_liftRed`); the deterministic cores of the protocol notes (§5);
   arithmetizations of all seven relations (§6); executable specs, verifier and prover that match
   the C++ KATs, unbound Moussaka's included (§7, §8).
@@ -220,7 +223,7 @@ weak simulation-extractability (L8) for the Lean simulators, which Moussaka non-
 (Thm 3) and Ratatouille no theft take as the hypothesis `WeakSE2`, the read budgets of their ZK
 hops, their collision terms `δ` and `Adv^ow ≤ q_K·2⁻¹²⁷`; Ratatouille's `Com`-binding term `ε_bind^K`, and Lemma 2.1's permutation terms (§5); the UOV
 reductions with `Com` or `Tag` a random permutation with inverse access (Lean: random functions),
-T1(b, d, e), T2, T3, T5, P8(b–d), the bad-event bound and Corollary R′ of Theorem R (`ompr-shift-algebra.md` §2.4) and the converse of
+T1(b, d, e), T3 beyond its translation part and Lemma N (`ompr-shift-algebra.md` §8.7), T5, P8(b–d), the success of `A**_D` in Corollary R′ (§2.4) and the converse of
 `advOMPR_le_ompr31` (`docs/security/uov-assumptions.md` §10); the meta-reduction theorems and the
 GPI analysis (`docs/security/uov-open-structure.md`) and the OMPR⊕τ and CT-UF^× separations
 (`docs/security/uov-open-reductions.md`), apart from their counting cores;
@@ -284,14 +287,14 @@ averaged abort term, the `P2` part of pqov's keys uniform; one-more-UOV (OMPR, D
     reduction from the UOV problem, OW or EUF/SUF-CMA to OMPR or CT-UF (A1), none fully black-box
     to any of OMPR, A-OMPI, CT-UF, CT-UF^open (A2, using the determinism of `derive_preimage`), and
     T2's loss `q_T` is optimal for single-run reductions that use only validity (A3).
-  - **OMPR ⇒ OMPR⊕τ with UOV's algebra** (`docs/security/ompr-shift-algebra.md`; Theorem R in Lean, `thmR`, with the term
-    `V⁴·2⁻³⁴³` an explicit probability `badPr` bounded on paper): a
+  - **OMPR ⇒ OMPR⊕τ with UOV's algebra** (`docs/security/ompr-shift-algebra.md`; Theorem R in Lean with every term
+    explicit, `thmR_V4`; Corollary R′ `corR'`): a
     reduction black-box in the adversary only, with any use of the public map and rewinding, wins
     against one explicit adversary with probability `≤ 2·τ^{−(q+1)} + Adv^{free}_{UOV} +
     V⁴·2⁻³⁴³` (Theorem R). So beating the guessing loss by more than a factor 4 needs a break of
     OMPR^free or a reduction that is not black-box in the adversary (such as one using PomFRIT's
     `E₁`). Affine symmetries of `P` never translate targets (`affine_symmetry`). **No symmetries but the
-    scalings** (Theorem T3, `ompr-shift-algebra.md` §8, paper; model: `P1`, `P2` uniform): for
+    scalings** (Theorem T3, `ompr-shift-algebra.md` §8, paper; model: `P1`, `P2` uniform; [Lean] the translation part and Lemma N over pqov's keys with `P2` uniform: `pr_translation_le` (`≤ 256⁻¹⁹⁵¹ + 256⁻³²⁸⁵`), `pr_not_spanTriv`, `scaling_target`): for
     every oil space and all keys but a fraction `≤ 256^{−976}`, the only pairs `(A, T)` with
     `P∘A = T∘P`, `A` an additive bijection (linear or Frobenius-semilinear, with an affine part), are
     `(λI, λ²I)`, and the only infinitesimal pairs `B(s, Xs) = Y·P(s)` are `F·(I, 0)`; so a public
@@ -1238,7 +1241,7 @@ limitation, not an attack) takes over. Strong simulation-extractability: 2⁻⁶
 | `ratatouille.md` | Balance (no inflation), no theft, unlinkability, correctness: proved. [Lean] Thm 1 (balance) in the ROM and ideal-cipher model (`balance_le_ufTag`, `ROM/RatatouilleBalance.lean`), without the probe (`balance_le_noProbe`), and down to one-more-UOV with `Tag` idealized in the standalone game (`balance_le_ompr`), and with simultaneous extraction (`balance_le_sim_num`, `balance_le_ompr_sim`). Thm 3 (no theft) as a game with weak SE a hypothesis (`noTheft`, `noTheft_lean`, `Theft/`). | Spends are not bound to a session, so a copied spend request can be redeemed first (medium); for the same reason a relay can burn an honest nullifier by squatting, so N2a holds only in its extraction form (corrected). Thm 3's §5 bound had unnecessary terms (corrected). Thm 1's UF-Tag reduction must not forward the Issuer's signing calls on the duplicate-nullifier path (corrected); Thm 1 omitted the Issuer's abort term (corrected). |
 | `domain-separation.md` | Every hash/XOF/permutation call lies in a disjoint domain, except below. [Lean] `Protocols/DomainSeparation.lean` | PomFRIT's `hash_to_target` overlaps four proof-system domains (no exploit found; fix: a final domain byte). |
 | `uov-assumptions.md` | Relates the protocol-specific UOV assumptions to each other and to standard UOV: all three protocols rest on one-more-UOV (OMPR). [Lean] the counting cores (`Protocols/UOVAssumptions.lean`), the assumptions as games (`Assumptions/UOV.lean`) and T1(a), T1(c), T4 (random-function `Com`), A1, P8(a), T6's generic core, P9(a) (`Assumptions/`). | Several reductions are unavailable; the note states why. Lemma U (CT-UF from OMPR) was wrong; T1(c) and T4 need padding and a sampler-failure term. |
-| `ompr-shift-algebra.md` | OMPR versus OMPR⊕17 using UOV's algebra: a reduction black-box in the adversary only (any use of the public map, rewinding) wins with probability `≤ 2·τ^{−(q+1)} + Adv^{free}_{UOV} + V⁴·2⁻³⁴³` (Theorem R; [Lean] `Assumptions/TheoremR.lean`, `thmR`, bad-event bound on paper); collinear shifts trade one equation for a landing on τ of 256 points (at τ = 17 no gain in the reference model, at most `2^4.1` in any; estimates and toy experiments). Theorem T3: no additive or affine symmetry but the scalings, for all keys but `256^{−976}` (paper; identities in `Spec/PqovSymmetry.lean`). [Lean] `Spec/PqovShift.lean` (`affine_symmetry`, `preimage_line`, `preimage_plane`), `Assumptions/TheoremR.lean`, `Audit/TheoremR.lean`; toy checks `scripts/ompr-shift-algebra/`. | A6 stays open (attack side: `ompr-cryptanalysis.md`); collinear shifts may gain up to `τ`; at τ = 17 the sign is model-dependent, at most 4 bits. |
+| `ompr-shift-algebra.md` | OMPR versus OMPR⊕17 using UOV's algebra: a reduction black-box in the adversary only (any use of the public map, rewinding) wins with probability `≤ 2·τ^{−(q+1)} + Adv^{free}_{UOV} + V⁴·2⁻³⁴³` (Theorem R; [Lean] `thmR_V4`, `corR'`, `Assumptions/TheoremR*.lean`); collinear shifts trade one equation for a landing on τ of 256 points (at τ = 17 no gain in the reference model, at most `2^4.1` in any; estimates and toy experiments). Theorem T3: no additive or affine symmetry but the scalings, for all keys but `256^{−976}` (paper; identities in `Spec/PqovSymmetry.lean`; translation part and Lemma N with the count in `Assumptions/SymmetryCount.lean`). [Lean] `Spec/PqovShift.lean` (`affine_symmetry`, `preimage_line`, `preimage_plane`), `Assumptions/TheoremR.lean`, `Audit/TheoremR.lean`; toy checks `scripts/ompr-shift-algebra/`. | A6 stays open (attack side: `ompr-cryptanalysis.md`); collinear shifts may gain up to `τ`; at τ = 17 the sign is model-dependent, at most 4 bits. |
 | `ompr-cryptanalysis.md` | Attacks on OMPR and OMPR⊕τ that use the `derive_preimage` oracle: the answers are uniform good fibre points, so they carry the trapdoor only through goodness. Key recovery through the oracle needs `2^292.5` calls (vinegar collision) or `2^600` answers (linear statistics; variance proved for uniform `P2`); no call pays for two targets; the two games share the oracle. [Lean] `Spec/PqovVinegar.lean` (`vinegar_reuse`, `sysMat_smul`, `good_smul_iff`); toy experiments `scripts/ompr-cryptanalysis/ompr_toy.py`. | No attack below the oracle-free ones (direct forgery `≈ 2^140`, key recovery `≈ 2^194` multiplications). On toy keys the oracle does give the oil space, with `≈ q^(V/2)` or `≈ q^V/δ` calls. Not a proof; statistics of degree above one, and quantum attacks, are open. |
 | `uov-open-reductions.md` | OMPR versus OMPR⊕τ: the tight direction, and no relativizing reduction for the other with loss below `τ^{q+1}/2`; CT-UF up to scalars ≡ OMPR with free non-challenge calls, separated from OMPR. Paper; [Lean] counting cores and the scaling attack (`Spec/PqovScale.lean`). | Plain CT-UF is false for UOV. |
 | `uov-open-structure.md` | Meta-reduction theorems A1–A3 (one-more UOV assumptions do not follow from the UOV problem by key-preserving black-box reductions); first cryptanalysis of GPI. Paper only; scripts in `scripts/uov-open-structure/`. | GPI ≈ key recovery is a conjecture; estimates under semi-regularity, citations from memory; weak two-sided distinguishers and key-changing reductions are open. |
@@ -1538,8 +1541,8 @@ What is **not** established, roughly in order of importance:
      in the standalone games; the permutation versions with inverse access are paper.
    - PomFRIT's tight bound needs OMPR⊕17; OMPR ⇒ OMPR⊕17 without the `τ^{q+1}` loss has no
      black-box proof (`uov-open-reductions.md`); by Theorem R (`ompr-shift-algebra.md`; Lean `thmR`) a
-     proof must be non-black-box in the adversary or break OMPR^free. In Lean the collision term of
-     Theorem R is the explicit probability `badPr`; its bound `V⁴·2⁻³⁴³` and Corollary R′ are on paper.
+     proof must be non-black-box in the adversary or break OMPR^free. In Lean every term of
+     Theorem R is explicit (`thmR_V4`), and so is Corollary R′ (`corR'`).
    - T6 at PomFRIT is in Lean for the Lean client, completeness term included
      (`pomfrit_T6_lean`, `(ℓ+1)·2⁻¹¹³`; `pomfrit.md` G9); the converse of `advOMPR_le_ompr31` is not in Lean.
    - The quantum protocol theorems need quantum-oracle versions of these assumptions, which are
