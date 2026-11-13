@@ -585,4 +585,129 @@ theorem pomfrit_T6 :
 
 end T6
 
+/-! ## `gameB` extends `Pomfrit.game`: a forger without coins -/
+
+section Lift
+
+variable {DR : Type} [DecidableEq DR] {AR : DR → Type} [∀ d, SampleableType (AR d)] {Hn : Type}
+
+/-- A query of a `Pomfrit.Forger` as one of a `ForgerB`. -/
+def liftUB : QueryImpl specU (OracleComp (specUB AR)) := fun q =>
+  liftM ((specUB AR).query (.inr q))
+
+/-- **A forger without coins** (`Pomfrit.Forger`) as a `ForgerB` that ignores its random oracle. -/
+def liftF (A : Forger) : ForgerB AR := fun pk => pure (simulateQ liftUB (A pk))
+
+variable (T : CrtTables) (lr : Bool) (E : CTable) (hint : QueryLog specIC → ByteArray → Hn)
+  (tgts : TG × Hn → List TG) (pk : UovPk) (ℓ : ℕ)
+
+omit [DecidableEq DR] [∀ d, SampleableType (AR d)] in
+theorem acompB_liftF (A : Forger) :
+    AcompB (AR := AR) T lr E hint tgts pk ℓ (simulateQ liftUB (A pk)) =
+      simulateQ liftWB (Acomp T lr E hint tgts pk ℓ A) := by
+  have h : ∀ L, (simulateQ (wrapImplB (AR := AR) E hint) (simulateQ liftUB (A pk))).run L =
+      simulateQ liftWB ((simulateQ (wrapImpl E hint) (A pk)).run L) := fun L => by
+    rw [← QueryImpl.simulateQ_compose]
+    refine (simulateQ_run_comm liftWB (wrapImpl E hint) _ (fun q s => ?_) (A pk) L).symm
+    rw [QueryImpl.apply_compose]
+    simp only [liftUB]
+    erw [simulateQ_spec_query]
+    rfl
+  rw [AcompB, Acomp, h, simulateQ_bind]
+  refine bind_congr fun r => ?_
+  split_ifs <;> simp
+
+/-- The hashes' part of the composed world's cache. -/
+def resR (c : (specR (WB AR)).QueryCache) : (specR Ans).QueryCache :=
+  QueryCache.ofFn fun d => c (.inr d)
+
+omit [∀ d, SampleableType (AR d)] in
+lemma resR_cacheQuery_inr (c : (specR (WB AR)).QueryCache) (d : Dom) (u : Ans d) :
+    resR (c.cacheQuery (.inr d) u) = (resR c).cacheQuery d u := by
+  refine QueryCache.ext fun d' => ?_
+  show (c.cacheQuery (.inr d) u) (.inr d') = ((resR c).cacheQuery d u) d'
+  by_cases h : d' = d
+  · subst h
+    erw [QueryCache.cacheQuery_self, QueryCache.cacheQuery_self]
+    rfl
+  · show Function.update c.toFn (.inr d) (some u) (.inr d') =
+      Function.update (resR c).toFn d (some u) d'
+    rw [Function.update_of_ne (by simpa using h), Function.update_of_ne h]
+    rfl
+
+/-- **The hashes in the composed world are the hashes**: a query at `inr d`, restricted to the
+hashes' part of the cache. -/
+lemma roR (c : (specR (WB AR)).QueryCache) (d : Dom) :
+    (fun r => (r.1, resR r.2)) <$> ((specR (WB AR)).randomOracle (.inr d)).run c =
+      (((specR Ans).randomOracle d).run (resR c) : ProbComp (Ans d × (specR Ans).QueryCache)) := by
+  rw [randomOracle.run_eq, randomOracle.run_eq]
+  have h' : (resR c) d = c (.inr d) := rfl
+  rw [h']
+  cases h : c (.inr d) with
+  | some u => simp
+  | none =>
+    simp only [map_bind, map_pure]
+    show ($ᵗ (Ans d)) >>= (fun a => pure (a, resR (c.cacheQuery (Sum.inr d) a))) = _
+    congr 1
+    funext a
+    rw [resR_cacheQuery_inr]
+
+/-- The projection of the composed world's game state onto `Pomfrit.game`'s. -/
+def piR (s : (ByteArray → Option (TG × Hn)) × Ch (WB AR) ByteArray Hn TG) :
+    (ByteArray → Option (TG × Hn)) × Ch Ans ByteArray Hn TG :=
+  (s.1, ⟨resR s.2.ro, s.2.rest, s.2.tg, s.2.iq⟩)
+
+theorem liftWB_step (φ : Hn → TG ≃ TG) (pre : TG → SIss) (q : Dom ⊕ ((ByteArray × Hn) ⊕ TG))
+    (s : (ByteArray → Option (TG × Hn)) × Ch (WB AR) ByteArray Hn TG) :
+    (fun z => (z.1, piR z.2)) <$> ((realImpl φ pre ∘ₛ liftWB (AR := AR) (Hn := Hn)) q).run s =ᵈ
+      (realImpl φ pre q).run (piR s) := by
+  rw [QueryImpl.apply_compose]
+  rcases q with d | ⟨x, h⟩ | t
+  · simp only [liftWB]
+    erw [simulateQ_spec_query]
+    show (fun z => (z.1, piR z.2)) <$> ((fun r => (r.1, (s.1, r.2))) <$>
+        roStep (AR := WB AR) (X := ByteArray) (Hn := Hn) (G := TG) (Sum.inr d) s.2) =ᵈ
+      (fun r => (r.1, ((piR s).1, r.2))) <$> roStep d (piR s).2
+    simp only [roStep, Functor.map_map]
+    erw [← roR (AR := AR) s.2.ro d, Functor.map_map]
+    exact EvalDistEq.rfl
+  · simp only [liftWB]
+    erw [simulateQ_spec_query]
+    simp only [realImpl, StateT.run_mk, piR]
+    cases hx : s.1 x with
+    | some a => simp [hx]
+    | none => cases hr : s.2.rest <;> simp [hx, hr]
+  · simp only [liftWB]
+    erw [simulateQ_spec_query]
+    simp [realImpl, piR]
+
+variable {K : Type} (KG : ProbComp (UovPk × K)) (pre : K → TG → SIss) (n : ℕ)
+
+/-- **For a forger without coins, `gameB` is `Pomfrit.game`**: the same win probability. -/
+theorem gameB_liftF (A : Forger) (φ : Hn → TG ≃ TG)
+    (hint : CTable → QueryLog specIC → ByteArray → Hn) :
+    Pr{let r ← gameB (AR := AR) T lr tgts ℓ KG pre n (liftF A) φ hint}[PomWinB ℓ r] =
+      Pr{let r ← Pomfrit.game KG pre n ℓ T lr A φ hint tgts}[PomWin ℓ r] := by
+  have hE : (fun r => (r.1, r.2.1, piR r.2.2)) <$>
+      gameB (AR := AR) T lr tgts ℓ KG pre n (liftF A) φ hint =ᵈ
+        Pomfrit.game KG pre n ℓ T lr A φ hint tgts := by
+    simp only [gameB, Pomfrit.game, omuf, advCB, advC, liftF, map_bind, map_pure, bind_assoc, pure_bind,
+      acompB_liftF]
+    refine EvalDistEq.bind_right _ fun kp => EvalDistEq.bind_right _ fun E =>
+      EvalDistEq.bind_right _ fun L => ?_
+    have h0 : piR (AR := AR) ((fun _ => none : ByteArray → Option (TG × Hn)), ch0 L) =
+        ((fun _ => none), ch0 L) := by
+      simp only [piR, ch0]
+      congr 2
+    have := (LazyIdeal.simulateQ_proj_eqd_inv (realImpl φ (pre kp.2) ∘ₛ liftWB (AR := AR))
+      (realImpl φ (pre kp.2)) piR (fun _ => True) (fun _ _ _ _ _ => trivial)
+      (fun q s _ => liftWB_step φ (pre kp.2) q s) (Acomp T lr E (hint E) tgts kp.1 ℓ A)
+      ((fun _ => none), ch0 L) trivial).bind_left (fun z => pure (kp.1, z.1, z.2))
+    rw [h0, QueryImpl.simulateQ_compose] at this
+    simpa only [bind_map_left] using this
+  rw [← hE.prEvent_eq, prEvent_map]
+  rfl
+
+end Lift
+
 end VoleMole.Assumptions.BlindPomfrit
