@@ -2,6 +2,7 @@ import VoleMole.Audit.IdealTag
 import VoleMole.Assumptions.SimLinks
 import VoleMole.ROM.MoussakaUnboundSim
 import VoleMole.ROM.MoussakaUnboundSimPerm
+import VoleMole.ROM.MoussakaOMUFSimPerm
 import VoleMole.Audit.UnboundROM
 
 /-!
@@ -25,7 +26,8 @@ The permutation-model joint bounds (`moussaka_sim_joint_specP`, `ratatouille_sim
 `moussakaUnbound_sim_joint_specP`, `ROM/SimPermJointSpec.lean`) are instantiated at the
 executable statements with one-instance families and a prover `invP` that makes one **inverse**
 cipher query (one cipher query, no hash query): the joint normalization, the prefix runs and the
-one hash log are discharged for it.
+one hash log are discharged for it. Moussaka Theorem 1 in the permutation model
+(`omuf_le_num_simP`) is instantiated with `aUP`, `aU` with an inverse cipher query first.
 
 No `sorry`, no `axiom`.
 -/
@@ -173,5 +175,38 @@ example (lr : Bool) (ci cr cd pf : ByteArray) :=
     (fun _ _ _ _ => ⟨⟨[], (List.append_nil _).symm⟩, [], (List.append_nil _).symm⟩)
     (fun _ _ _ _ => ⟨⟨[], (List.append_nil _).symm⟩, [], (List.append_nil _).symm⟩)
     (fun _ _ => rfl) (fun _ => pure ()) (fun _ _ => False) fun _ _ h => h.elim
+
+/-- One inverse cipher query. -/
+def invU : OracleComp specP Unit :=
+  liftM (specP.query (.inr (false, (default, default)))) >>= fun _ => pure ()
+
+lemma invU_k : IsKindQueryBoundP invU 0 := by
+  rw [invU, IsKindQueryBoundP, isQueryBound_query_bind_iff]
+  exact ⟨trivial, fun _ => trivial⟩
+
+lemma invU_e : IsQueryBoundP invU (fun t => t.isRight = true) 1 := by
+  rw [invU, isQueryBoundP_query_bind_iff]
+  exact ⟨Or.inr Nat.one_pos, fun _ => isQueryBoundP_pure _ _ _⟩
+
+lemma invU_h : IsQueryBoundP invU (fun t => t.isLeft = true) 0 := by
+  rw [invU, isQueryBoundP_query_bind_iff]
+  exact ⟨Or.inl (by simp), fun _ => isQueryBoundP_pure _ _ _⟩
+
+/-- An OMUF adversary of the permutation model: one inverse cipher query, then `aU`'s moves. -/
+def aUP : AdversaryP 2 1 where
+  σ := Unit
+  init := invU
+  query _ := pure ((), ⟨0, ByteArray.empty, ByteArray.empty⟩)
+  absorb _ _ := ()
+  final _ := pure fun _ => ⟨[], ByteArray.empty, ByteArray.empty, ByteArray.empty, ByteArray.empty⟩
+
+theorem aUP_budget : aUP.Budget 0 1 0 :=
+  ⟨invU_k, invU_e, invU_h, fun _ => trivial, fun _ => trivial, fun _ => trivial,
+    fun _ => trivial, fun _ => trivial, fun _ => trivial⟩
+
+/-- Moussaka Theorem 1 with simultaneous extraction in the permutation model
+(`omuf_le_num_simP`): its hypotheses hold for `aUP` (an inverse cipher query). -/
+example (lr : Bool) (sk : Fin 2 → Spec.Signer) :=
+  omuf_le_num_simP (lr := lr) (pk := pkU) (sk := sk) (qI := 1) aUP_budget pkU_digest pkU_inj
 
 end VoleMole.Audit.SimExtract
