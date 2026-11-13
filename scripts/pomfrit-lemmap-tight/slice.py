@@ -17,9 +17,17 @@ R2  j fixed trees with j different label vectors: gate-bit recovery, candidate s
 R3  table facts used by the decoder: uniqueness of the effective gate bits for several classes.
 R4  wrong gates: the level set shrinks to a subspace; kernel guessing still decodes.
 R5  black-box extractors: evaluations of the check value off the slice show no collision.
+R6  the class extractor (section 6A): the default is the widest class, not the widest prefix
+    group. Against 9 label vectors on the 9 fixed trees the default is already right. Against two
+    classes of width 56 and a 17th tree with its own label, Dec^cls (the 17th tree by exhaustion,
+    the other class by linear algebra, a + 1 guessed directions) finds a pair; for the other class
+    it finds none.
+R7  table facts (section 6.4, wrong gates): single-tree rigidity; slopes that disagree with the
+    trees' VOLE values on level sets of codimension 4 (at infinity) and 6 (at x^6).
 
-Usage: slice.py [seed] [--quick] [--masks=N] [--j=J ... [--wrong=A]]
-(--j: only R0, R1, R3 and R2 for J fixed trees, with A wrong gates)
+Usage: slice.py [seed] [--quick] [--masks=N] [--j=J ... [--wrong=A]] [--cls=A]
+(--j: only R0, R1, R3 and R2 for J fixed trees, with A wrong gates;
+ --cls=A: only R0 and R6, with Dec^cls(A) and A wrong gates; A = 6 is section 6A's decoder)
 """
 import hashlib, os, random, re, sys, time
 from math import log2
@@ -189,6 +197,43 @@ def solve(rows, n):
                 v |= 1 << p
         ker.append(v)
     return x0, ker
+
+
+def linb(columns, x):
+    """lin() over the set bits only."""
+    r = 0
+    while x:
+        b = x & -x
+        r ^= columns[b.bit_length() - 1]
+        x ^= b
+    return r
+
+
+def solve_cols(colv, target):
+    """Solve sum_k x_k colv[k] = target over F_2. Returns (x, kernel basis) or None."""
+    piv, ker = {}, []
+    for k, v in enumerate(colv):
+        m = 1 << k
+        while v:
+            p = v.bit_length() - 1
+            if p in piv:
+                pv, pm = piv[p]
+                v ^= pv
+                m ^= pm
+            else:
+                piv[p] = (v, m)
+                break
+        else:
+            ker.append(m)
+    x, v = 0, target
+    while v:
+        p = v.bit_length() - 1
+        if p not in piv:
+            return None
+        pv, pm = piv[p]
+        v ^= pv
+        x ^= pm
+    return x, ker
 
 
 class Model:
@@ -559,6 +604,129 @@ class Decoder:
         return len(solve(rows, n)[1])
 
 
+def classes_of(M):
+    """The classes (trees with the same witness and label rows), widest first, ties by index."""
+    cl = {}
+    for i in range(17):
+        cl.setdefault((M.uw[i], M.lab[i]), []).append(i)
+    return sorted(cl.values(), key=lambda t: (-sum(K[i] for i in t), t[0]))
+
+
+def prefix_groups(M):
+    gr = {}
+    for i in range(17):
+        gr.setdefault(M.uw[i], []).append(i)
+    return sorted(gr.values(), key=lambda t: (-sum(K[i] for i in t), t[0]))
+
+
+class ClassDecoder(Decoder):
+    """Dec^cls for a class C (section 6A): the trees outside C whose label is `l1` are the linear
+    unknowns, the trees with a third label are exhausted, and a + 1 directions of one tree of C
+    are guessed. Returns a pair of challenges of one slice of C with the same check value."""
+
+    def __init__(self, M, C, ut, l1):
+        super().__init__(M, C, ut)
+        self.T1 = [i for i in range(17) if i not in C and M.lab[i] == l1 and l1 != self.lc]
+        self.R = [i for i in range(17) if i not in C and M.lab[i] not in (l1, self.lc)]
+        self.l1 = l1
+        self.gbits = [c for c in range(ND) if _TREE[c] in self.T1]
+        self.systems = 0
+
+    def _tables(self, gR):
+        M = self.M
+        base = M.labels(gR)
+        d0 = [gate_diff(M, e, base[e], self.lc) for e in range(NG)]
+        d1 = [gate_diff(M, e, base[e] ^ self.l1, self.lc) for e in range(NG)]
+        a0 = [sum(((d0[e] >> m) & 1) << e for e in range(NG)) ^ M.cmult[m] for m in range(NM)]
+        dd = [sum((((d0[e] ^ d1[e]) >> m) & 1) << e for e in range(NG)) for m in range(NM)]
+        return a0, dd
+
+    def _system(self, dl, sel, a0, dd, outs):
+        base = self.lam(dl, a0)
+        tgt = sum(base[i] << (128 * k) for k, i in enumerate(outs))
+        colv = []
+        for s_ in sel:
+            s0 = s_ & dd[0]
+            colv.append(sum((linb(self.cw[i], s0) ^ linb(WGATE, s_ & dd[1 + i])) << (128 * k)
+                            for k, i in enumerate(outs)))
+        return solve_cols(colv, tgt)
+
+    def run(self, a):
+        M = self.M
+        t = self.C[0]
+        dirs = [v << OFF[t] for v in range(1, 1 << (a + 1))]
+        sels = [[gamma(dl) & GCOL[c] for c in self.gbits] for dl in dirs]
+        rvals = [0]
+        for i in self.R:
+            rvals = [g | (v << OFF[i]) for g in rvals for v in range(1 << K[i])]
+        for gR in rvals:
+            a0, dd = self._tables(gR)
+            for dl, sel in zip(dirs, sels):
+                self.systems += 1
+                if self._system(dl, sel, a0, dd, [0]) is None:
+                    continue
+                sol = self._system(dl, sel, a0, dd, list(range(NO)))
+                if sol is None:
+                    continue
+                g = gR | sum(1 << self.gbits[k] for k in range(len(self.gbits))
+                             if (sol[0] >> k) & 1)
+                if M.Kv(g, self.ut) == M.Kv(g ^ dl, self.ut):
+                    return g, dl
+        return None
+
+
+def class_extract(M, ut, a):
+    """E_1^cls: the class whose prefix is output, and the pair if one was found."""
+    cl = classes_of(M)
+    w = [sum(K[i] for i in C) for C in cl]
+    if w[0] < 51:
+        return prefix_groups(M)[0], None, None
+    for C in cl[1:]:
+        if sum(K[i] for i in C) >= 51 and M.uw[C[0]] != M.uw[cl[0][0]]:
+            D = ClassDecoder(M, C, ut, M.lab[cl[0][0]])
+            pair = D.run(a)
+            return (C if pair else cl[0]), pair, D
+    return cl[0], None, None
+
+
+def rigid_kernel(C, dirs):
+    """The (d, b) with W_tree(d * delta) + W_gate(gamma(delta) & b) = 0 for all delta in dirs:
+    d on the blocks of C, b on the 312 gates. Returns (number of d bits, kernel basis)."""
+    cb = [c for c in range(ND) if _TREE[c] in C]
+    vecs = []
+    for c in cb:
+        i, v = _TREE[c], 0
+        for t, dl in enumerate(dirs):
+            r = pmulmod(1 << (c - OFF[i]), block(dl, i), MODULI[i])
+            v |= lin(WTREE, r << OFF[i]) << (128 * t)
+        vecs.append(v)
+    gms = [gamma(dl) for dl in dirs]
+    for e in range(NG):
+        vecs.append(sum(WGATE[e] << (128 * t) for t in range(len(dirs)) if (gms[t] >> e) & 1))
+    return len(cb), solve_cols(vecs, 0)[1]
+
+
+def subspace(C, forms):
+    """A basis of the directions of C on which all the F_2-linear forms vanish."""
+    piv, out = {}, []
+    for c in range(ND):
+        if _TREE[c] not in C:
+            continue
+        b = 1 << c
+        v = sum(f(b) << k for k, f in enumerate(forms))
+        while v:
+            p = v.bit_length() - 1
+            if p in piv:
+                v ^= piv[p][0]
+                b ^= piv[p][1]
+            else:
+                piv[p] = (v, b)
+                break
+        else:
+            out.append(b)
+    return out
+
+
 def setup(rng, classes):
     """classes: list of (trees, witness bits, label bits)."""
     uw, lab = [0] * 17, [0] * 17
@@ -682,6 +850,47 @@ def main():
               f" {sols == [gstar]}; level set 2^{cert}")
         return sols == [gstar] and cert == wC - wrong
 
+    # R6
+    def r6(a_dec, wrong, both=True):
+        good = True
+        print("R6 class extractor E_1^cls (default: the widest class):")
+        fx = GA
+        M = setup(rng, [(GB, wB, lB)] + [([i], wA, rng.getrandbits(128)) for i in fx])
+        cl, pg = classes_of(M), prefix_groups(M)
+        print(f"   9 label vectors on the 9 fixed trees: widest prefix group {pg[0]} (width"
+              f" {sum(K[i] for i in pg[0])}), E_1 outputs it; widest class {cl[0]} (width"
+              f" {sum(K[i] for i in cl[0])}), E_1^cls outputs it: the forger's class ="
+              f" {cl[0] == GB}; no decoding")
+        good &= cl[0] == GB and pg[0] == GA
+        Ca, Cb = list(range(1, 9)), list(range(9, 17))
+        la, lb, l0 = (rng.getrandbits(128) for _ in range(3))
+        for tgt, other in ((Cb, Ca), (Ca, Cb)) if both else ((Cb, Ca),):
+            M = setup(rng, [(Ca, 0x11, la), (Cb, 0x22, lb), ([0], 0x33, l0)])
+            M.chal = [rng.getrandbits(128) for _ in range(2 * NO + 1)]
+            gstar = rng.getrandbits(ND) & ~tree_mask(tgt)
+            ub = forge(M, tgt, gstar, rng.sample(range(NG), wrong))
+            ut = M.ut_of(M.uw[tgt[0]], M.lab[tgt[0]], ub)
+            t0 = time.time()
+            C, pair, D = class_extract(M, ut, a_dec)
+            t1 = time.time() - t0
+            if pair:
+                same = (pair[0] ^ gstar) & tree_mask([0]) == 0
+                desc = (f"pair found after {D.systems} linear systems, in the forger's slice up to"
+                        f" the linear unknowns = {same}; level set of that slice 2^{D.certify(pair[0])}")
+            else:
+                desc = f"no pair after {D.systems} linear systems"
+            print(f"   classes {Ca} (56), {Cb} (56), tree 0 alone; forger completes {tgt} with"
+                  f" {wrong} wrong gates; Dec^cls({a_dec}) on {Cb}: {desc}, {t1:.1f} s; E_1^cls"
+                  f" outputs the forger's class = {C == tgt}")
+            good &= C == tgt and (pair is not None) == (tgt == Cb)
+        return good
+
+    cls = [int(a.split("=")[1]) for a in sys.argv[1:] if a.startswith("--cls=")]
+    if cls:
+        ok &= r6(cls[0], cls[0])
+        print("OK" if ok else "FAILED")
+        sys.exit(0 if ok else 1)
+
     print("R2 many label classes among the fixed trees (slice among 2^(7j)):")
     js = [int(a.split("=")[1]) for a in sys.argv[1:] if a.startswith("--j=")]
     wr = [int(a.split("=")[1]) for a in sys.argv[1:] if a.startswith("--wrong=")]
@@ -740,6 +949,31 @@ def main():
         seen[v] = d
     print(f"R5 {n} evaluations of the check value off the slice: collisions {coll}")
     ok &= coll == 0
+
+    ok &= r6(1, 1, both=not quick)
+
+    # R7
+    single = all(not rigid_kernel([i], [1 << c for c in range(ND) if _TREE[c] == i])[1]
+                 for i in range(17))
+    print(f"R7 single-tree rigidity (a level set that contains all directions of one tree has"
+          f" the trees' slopes and no wrong gate): {single} for all 17 trees")
+    ok &= single
+    for name, k0, forms in (("deg D < 120 - k", 4, lambda k: [(lambda d, j=j: (elift(d) >> (119 - j)) & 1) for j in range(k)]),
+                            ("x^k | D", 6, lambda k: [(lambda d, j=j: (elift(d) >> j) & 1) for j in range(k)])):
+        res = []
+        for k in ((k0,) if quick else (k0 - 1, k0)):
+            dirs = subspace(GB, forms(k))
+            n, ker = rigid_kernel(GB, dirs)
+            dn = sum(1 for v in ker if v & ((1 << n) - 1))
+            sup = 0
+            for v in ker:
+                if v & ((1 << n) - 1):
+                    sup |= v >> n
+            res.append((k, 57 - len(dirs), dn, bin(sup).count("1")))
+        print(f"   level sets {{{name}}} of the class {GB}: " + "; ".join(
+            f"k = {k}: codimension {cd}, solutions with other tree slopes: {'yes' if dn else 'none'}"
+            + (f" (they change {g} gates)" if dn else "") for k, cd, dn, g in res))
+        ok &= res[-1][2] > 0 and (quick or res[0][2] == 0)
     print("OK" if ok else "FAILED")
     sys.exit(0 if ok else 1)
 
