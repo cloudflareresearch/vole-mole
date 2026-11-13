@@ -275,4 +275,44 @@ theorem prEvent_pfailZ_le (hd : pk.digest.size = 32) {qA : Kind → ℕ} {nA qE 
 
 end Fixed
 
+/-! ## Lemma P's term in the one-more game -/
+
+section Game
+
+variable {K : Type} (KG : ProbComp (UovPk × K)) (pre : K → TG → SIss) (lr : Bool) (A : Forger)
+
+/-- **Lemma P's term, bounded** (`pomfrit.md` §6.4, G8): in PomFRIT's one-more game with Lemma P's
+`E₁` (`e1P`), for a key generation whose public keys have 32-byte digests and a forger with budget
+`qA`, `nA`, `qE`, `Q_T`, some forgery `i ≤ ℓ` is accepted with a claim that is not a preimage of its
+programmed target with probability at most `(ℓ + 1)·pfailEps`, for any number `n` of targets. -/
+theorem prEvent_pfail_le (n ℓ : ℕ) (hdig : ∀ kp ∈ support KG, kp.1.digest.size = 32)
+    {qA : Kind → ℕ} {nA qE QT : ℕ} (hA : ForgerBound A qA nA qE QT) :
+    Pr{let r ← game KG pre n ℓ CrtGen.tables lr A addHint (e1P lr) tgts1}[
+        ∃ i : Fin (ℓ + 1), PFail i.val r] ≤
+      (ℓ + 1) * pfailEps (qP qA QT ℓ) (eP lr qE ℓ) (nP nA QT ℓ) := by
+  unfold game omuf advC
+  simp only [bind_assoc, pure_bind]
+  apply prEvent_bind_le_of_forall_le_of_support KG _ (fun r => ∃ i : Fin (ℓ + 1), PFail i.val r)
+  intro kp hkp
+  rw [eqd_swap ($ᵗ CTable) (unifList TG n) (fun E L => (do
+    let r ← (simulateQ (realImpl addHint (pre kp.2))
+      (Acomp CrtGen.tables lr E (e1P lr E) tgts1 kp.1 ℓ A)).run (fun _ => none, ch0 L)
+    pure (kp.1, r.1, r.2))) (fun r => ∃ i : Fin (ℓ + 1), PFail i.val r)]
+  apply prEvent_bind_le_of_forall_le _ _ (fun r => ∃ i : Fin (ℓ + 1), PFail i.val r)
+  intro L
+  refine le_trans (le_of_eq ?_) (prEvent_pfailZ_le lr kp.1 (pre kp.2) A L ℓ (hdig kp hkp) hA)
+  have key : ∀ E : CTable, (simulateQ (realImpl addHint (pre kp.2))
+      (Acomp CrtGen.tables lr E (e1P lr E) tgts1 kp.1 ℓ A)).run (fun _ => none, ch0 L) =
+      (fun z => (z.1.1, (z.1.2.1, chOf z.1.2.2 z.2))) <$>
+        (simulateQ randomOracle ((simulateQ (htW (AR := Ans) addHint (pre kp.2))
+          (Acomp CrtGen.tables lr E (e1P lr E) tgts1 kp.1 ℓ A)).run (hs0 L))).run ∅ := fun E =>
+    realImpl_run_eq addHint (pre kp.2) _ (fun _ => none) (ch0 L)
+  simp only [key, StateT.run'_eq, map_bind, Functor.map_map, bind_pure_comp]
+  have hev : ∀ a : ((List (ByteArray × SIss) × Bool) × HTS) × (specR Ans).QueryCache,
+      (∃ i : Fin (ℓ + 1), PFail i.val (kp.1, a.1.1, a.1.2.1, chOf a.1.2.2 a.2)) =
+        (∃ i : Fin (ℓ + 1), PFailZ kp.1 i.val a.1) := fun a => rfl
+  simp only [hev]
+
+end Game
+
 end VoleMole.ROM.OneMore.Pomfrit
