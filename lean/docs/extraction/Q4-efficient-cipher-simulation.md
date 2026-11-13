@@ -356,6 +356,11 @@ Two caveats:
 
 ### 5.3 Why point-level recording does not help yet
 
+**Update.** Q6 §11–§13 solve the problem by a different route, without a compressed permutation
+oracle: `multi` is a real-world event (so §5.2's search algorithm needs no extractor), and a
+block representation of the ideal cipher bounds it by `≈ 2^{−184.2}·q³` for all `q`. The analysis
+below is kept as the record of why the compressed-permutation route stalls.
+
 Option (a) in the brief: a compressed ideal cipher.
 - Carolan–Majenz give each key an independent compressed permutation database with soundness
   `120q/√(N−q+1) + q(q+1)/(N−2q+1)`, independent of `|K|` [CM26, Cor. 4.3, 4.17].
@@ -542,7 +547,8 @@ Q2 may use `S*` in place of `S^IC`:
    point-level and seed-level techniques stall at `O(q³/N)`, with the precise missing lemma.
 
 **Gaps.**
-- `ε_multi` for `q ≳ 2^{40}` (§5.3). Neither the simulator nor the efficiency question causes this.
+- ~~`ε_multi` for `q ≳ 2^{40}` (§5.3).~~ Closed by Q6 (Theorem 1, then Theorems 4–5). Neither the
+  simulator nor the efficiency question caused it.
 - MR14's round counts are used through their stated TV bound. Only the arithmetic is in Lean, not
   the probability argument.
 - The `Õ(q²)` cost of compressed-oracle simulation is polynomial but not concretely tight, as for

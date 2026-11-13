@@ -19,6 +19,10 @@ the real-number and counting cores that the paper's operator arguments reduce to
   `Σ 2√(g_i h_i) ≤ 2 √(Σ g) √(Σ h)`.
 * Numbers (paper §5): Theorem 1 at `q = 2^{30}`, `2^{40}`, `2^{50}` for one proof, and Theorem 2
   (mixed bound, Lemma K counts) for strong and weak SE at `Q_S = q = 2^{30}`.
+* Block representation (paper §11–§13, Theorems 4 and 5): `typical_telescope` (the potential
+  argument with an atypical-database correction), `chernoff_tail_num` and `typical_union_num`
+  (the tail of the exposure count at `δ = 3`, mean `≥ 128`), `nbar_ok`, and the numbers
+  `block_multi_at_2_50` … `block_multi_at_2_60`, `q2_total_at_2_58`, `q2_total_at_2_60_lt_one`.
 -/
 
 open Finset
@@ -194,6 +198,109 @@ theorem thm1_SE_strong_without_mixed_exceeds :
     let q₄ : ℚ := 2 ^ 30 + 2 * (2 ^ 31 + 1) + 3 * 2 ^ 30 + 2
     let EZ : ℚ := 32 / 9 * Q ^ 3 / (N - 1)
     1 / 2 ^ 50 ≤ 8 * 2320 * q₄ ^ 2 * EZ / N := by
+  norm_num
+
+/-! ## Block representation (paper §11–§13)
+
+`B = 2^{98}` (block size), `n̄ = 1037` (typical bound on the exposure count), `μ_B = n̄/(B(B−1))`.
+Theorem 5: the expected number of agreement triples is `≤ a²` with `a² = (32/9)·Q_E³·μ_B`, up to
+an atypical-database correction. Theorem 4 transfers it to the key-level `multi` event with an
+additive amplitude `c_R`. -/
+
+/-- The potential argument with a typical/atypical split (paper §12, step 4): if the potential
+grows by at most `c t` on the typical part and by at most `C · b t` on the atypical part, then
+`A T ≤ Σ c + C · Σ b`. -/
+theorem typical_telescope (A c b : ℕ → ℝ) (C : ℝ) (h0 : A 0 = 0)
+    (hstep : ∀ t, A (t + 1) ≤ A t + c t + C * b t) (T : ℕ) :
+    A T ≤ ∑ t ∈ range T, c t + C * ∑ t ∈ range T, b t := by
+  induction T with
+  | zero => simp [h0]
+  | succ n ih =>
+    rw [sum_range_succ, sum_range_succ, mul_add]
+    linarith [hstep n]
+
+/-- Chernoff tail at `δ = 3` for a sum of negatively associated indicators with mean bound
+`μ̄ ≥ 128`: `(e^δ/(1+δ)^{1+δ})^{128} ≤ 2^{−460}` (written `(2^{115})^4`). -/
+theorem chernoff_tail_num : (Real.exp 3 / 4 ^ 4) ^ 128 ≤ (1 : ℝ) / (2 ^ 115) ^ 4 := by
+  have h3 : Real.exp 3 = Real.exp 1 ^ 3 := by
+    rw [← Real.exp_nat_mul]; norm_num
+  have he : Real.exp 3 ≤ 201 / 10 := by
+    rw [h3]
+    have h1 : Real.exp 1 ≤ 2.7182818286 := Real.exp_one_lt_d9.le
+    calc Real.exp 1 ^ 3 ≤ (2.7182818286 : ℝ) ^ 3 :=
+          pow_le_pow_left₀ (Real.exp_pos 1).le h1 3
+      _ ≤ 201 / 10 := by norm_num
+  have h32 : ((201 / 10 : ℝ) / 4 ^ 4) ^ 32 ≤ 1 / 2 ^ 115 := by norm_num
+  calc (Real.exp 3 / 4 ^ 4) ^ 128 ≤ ((201 / 10 : ℝ) / 4 ^ 4) ^ 128 := by
+        gcongr
+    _ = (((201 / 10 : ℝ) / 4 ^ 4) ^ 32) ^ 4 := by rw [← pow_mul]
+    _ ≤ (1 / 2 ^ 115) ^ 4 := pow_le_pow_left₀ (by positivity) h32 4
+    _ = 1 / (2 ^ 115) ^ 4 := by rw [one_div_pow]
+
+/-- Union over the two parity classes and the `N · N/B = 2^{158}` fresh entries: the density of
+atypical values is `ε_T ≤ 2^{158}·2·2^{−460} ≤ 2^{−301}` (`2^{460} = (2^{115})^4`,
+`2^{301} = 2^{200}·2^{101}`; the exponents are split to stay below Lean's evaluation threshold). -/
+theorem typical_union_num :
+    (2 : ℚ) ^ 158 * 2 * (1 / (2 ^ 115) ^ 4) ≤ 1 / (2 ^ 200 * 2 ^ 101) := by
+  norm_num
+
+/-- `n̄ = 1037 ≥ 2·(1+δ)·μ̄` with `δ = 3` and `μ̄ = (1+2^{−8})³·B⁴/(2N³) = 128·(1+2^{−8})³`. -/
+theorem nbar_ok : (2 : ℚ) * (1 + 3) * (128 * (1 + 1 / 2 ^ 8) ^ 3) ≤ 1037 := by
+  norm_num
+
+/-- Theorem 5 at `Q_E = 2^{50}`: `a² ≤ 2^{−34}` (Theorem 1 gives `2^{−5.8}` here). -/
+theorem block_multi_at_2_50 :
+    let B : ℚ := 2 ^ 98
+    (32 : ℚ) / 9 * (2 ^ 50) ^ 3 * (1037 / (B * (B - 1))) ≤ 1 / 2 ^ 34 := by
+  norm_num
+
+/-- Theorem 5 at `Q_E = 2^{55}`: `a² ≤ 2^{−19}` (Theorem 1 is vacuous here). -/
+theorem block_multi_at_2_55 :
+    let B : ℚ := 2 ^ 98
+    (32 : ℚ) / 9 * (2 ^ 55) ^ 3 * (1037 / (B * (B - 1))) ≤ 1 / 2 ^ 19 := by
+  norm_num
+
+/-- Theorem 5 at `Q_E = 2^{58}`: `a² ≤ 2^{−10}`. -/
+theorem block_multi_at_2_58 :
+    let B : ℚ := 2 ^ 98
+    (32 : ℚ) / 9 * (2 ^ 58) ^ 3 * (1037 / (B * (B - 1))) ≤ 1 / 2 ^ 10 := by
+  norm_num
+
+/-- Theorem 5 at `Q_E = 2^{60}`: `a² ≤ 2^{−4}`. -/
+theorem block_multi_at_2_60 :
+    let B : ℚ := 2 ^ 98
+    (32 : ℚ) / 9 * (2 ^ 60) ^ 3 * (1037 / (B * (B - 1))) ≤ 1 / 2 ^ 4 := by
+  norm_num
+
+/-- The transfer amplitude `c_R` of Theorems 4 and 5 (four terms, `τ = 17`, `c̄/(B(B−1)) ≤
+2(1+2^{−8})/N`) satisfies `c_R² ≤ 2^{−58}` for `q ≤ 2^{60}` (shown at `q = 2^{60}`; every term is
+monotone in `q`). Uses `(x₁+x₂+x₃+x₄)² ≤ 4·Σ xᵢ²`. -/
+theorem transfer_sq_at_2_60 :
+    let N : ℚ := 2 ^ 128
+    let q : ℚ := 2 ^ 60
+    let cb : ℚ := 2 * (1 + 1 / 2 ^ 8) / N
+    4 * ((2 * 17 * q + 2) / (N - 1) + 17 * q / (N - 1) + cb * (2 * 17 * q + 2) + cb * (17 * q))
+      ≤ 1 / 2 ^ 58 := by
+  norm_num
+
+/-- Q2 with Theorems 4 and 5 at `q = 2^{58}`: main term `200q²/N` plus
+`ε_multi ≤ (a + c_R)² ≤ 2a² + 2c_R²` is `≤ 2^{−4}` (paper: `2^{−4.3}`). -/
+theorem q2_total_at_2_58 :
+    let N : ℚ := 2 ^ 128
+    let B : ℚ := 2 ^ 98
+    let q : ℚ := 2 ^ 58
+    200 * q ^ 2 / N + 2 * ((32 : ℚ) / 9 * q ^ 3 * (1037 / (B * (B - 1)))) + 2 * (1 / 2 ^ 58)
+      ≤ 1 / 2 ^ 4 := by
+  norm_num
+
+/-- Q2 with Theorems 4 and 5 at `q = 2^{60}`: still below 1. The main term alone is `≈ 0.78`:
+the bound is now limited by the Grover-inherent term, not by `ε_multi`. -/
+theorem q2_total_at_2_60_lt_one :
+    let N : ℚ := 2 ^ 128
+    let B : ℚ := 2 ^ 98
+    let q : ℚ := 2 ^ 60
+    200 * q ^ 2 / N + 2 * ((32 : ℚ) / 9 * q ^ 3 * (1037 / (B * (B - 1)))) + 2 * (1 / 2 ^ 58)
+      < 1 := by
   norm_num
 
 end VoleMole.Seed.CipherBinding

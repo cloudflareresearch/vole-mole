@@ -393,7 +393,7 @@ the permutation model with inverse queries, for both relations together (`ROM/Si
 parameters, so the two relations' runs share one hash log), with the failure terms
 `O(2⁻¹¹⁵·⁸)` per proof; again `2⁻⁶⁰·⁵` at `2⁶⁴` queries and `2³⁰` proofs per relation.
 
-## Quantum assembly (Q1, Q2, Q4–Q7 proved; extraction non-vacuous up to q ≈ 2^51.7)
+## Quantum assembly (Q1, Q2, Q4–Q7 proved; extraction limited only by the Grover term, q ≈ 2^60.2)
 
 **Theorem** (Q2, Theorem 7.1). For every quantum prover, with hashes as quantum random oracles
 and AES as a quantum ideal cipher:
@@ -438,8 +438,23 @@ and the numbers.
 - **Simulation-extractability is now meaningful (Q6 + Q7).** Q6's Theorem 2 counts the simulator's
   classical queries separately, building on Q7's Lemma K (at most 4607 key fetches per proof).
   Strong SE is `2^{−60.4}` at `Q_S = q = 2^{30}`.
-- **Key-level techniques are tight (Q6, Theorem 3).** Reaching `2^{57}` needs a point-level
-  multi-collision lemma; Q6 §7.3 states three candidates (M1–M3).
+- **Key-level techniques are tight (Q6, Theorem 3).** Going past `2^{51.7}` needs that AES
+  queries are point evaluations; Q6 §7.3 states three candidate lemmas (M1–M3).
+- **`ε_multi` closed (Q6 §11–§13, Theorems 4 and 5).**
+  - Theorem 4: the key-level `multi` event equals, up to `O(q/N)`, the real-world event "the
+    prover outputs a leaf commitment that two keys open". No database or extractor appears in
+    it, so it can be bounded in any representation of the ideal cipher.
+  - Theorem 5: write `E_k = Q_k ∘ G_k` with `Q` public and `G_k` acting independently on blocks
+    of `2^{98}` points of a key-dependent partition. An evaluation query touches one block
+    register, and blocks of different keys share only `≈ 2^{68}` points. Q6 Theorem 1's argument
+    on block registers gives `ε_multi ≲ 2^{−184.2}·Q_E³`, for free iv, with forward and inverse
+    queries. No compressed permutation oracle is used.
+  - Q2's total bound is now its main term: `2^{−20.4}` at `2^{50}`, `2^{−10.4}` at `2^{55}`,
+    `2^{−4.3}` at `2^{58}`, vacuous at `≈ 2^{60.2}` (Grover-inherent). (M1) and (M2) stay open
+    but are not needed.
+  - Lean (`Seed/CipherBinding.lean`): the Chernoff tail number, the telescoping with an
+    atypical-database correction, and the numbers. Toy checks:
+    `scripts/qrom-block-binding/`. The operator arguments are on paper.
 - **Multi-proof extraction and the quantum protocol theorems:** see `Q7-qrom-multi-extraction.md`.
 - (Historical) **Status of `ε_multi`.** Neither a point-level compressed ideal cipher (Carolan–Majenz) nor
   `E_k = P_{F(k)}` improves it. What's missing is a Liu–Zhandry-style multi-collision bound for the

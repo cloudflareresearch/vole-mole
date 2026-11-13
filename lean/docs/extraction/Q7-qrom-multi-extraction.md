@@ -777,6 +777,11 @@ accepted `Issue` queries.
 - `n` enters only through the counts and the readback term.
 - A point-level bound from Q6 plugs in unchanged, as long as it bounds this same event for an
   algorithm with `Q_E` (fetch-counted) cipher queries.
+- Q6 Theorems 4–5 (§11–§13 there) bound the same event by `≈ 2^{−184.2}·Q_E³`, with `Q_E`
+  counting every cipher *evaluation* (about `2^{18}` per verification, not Lemma K's 4607
+  fetches). Q6 Theorem 4 needs all `Ext` measurements at the end of the experiment, as in Q2; for
+  mid-run `Ext`s first move them to the end at the cost already in `ε_Sim` ((I1), `nδ`). Use the
+  smaller of this and Theorem 1.
 - The PomFRIT reductions' coherent `E₁` evaluations make no cipher queries. They read `D_o`.
 
 ---

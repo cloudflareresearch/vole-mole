@@ -452,6 +452,12 @@ included in `q₂`).
      oracle's soundness error. Alternatively, a simulator whose `Ext` has Definition-B semantics
      returns `multi` only on that recorded-collision event.
 
+     **Done differently (Q6 §11–§13).** No point-level database is needed. `multi` is, up to
+     `O(q/N)`, the real-world event "the adversary outputs a commitment that two keys open"
+     (Q6 Theorem 4), so the statement "the key database overcounts" above is about the *method*
+     of Thms 5.1/5.2, not the event. Q6 Theorem 5 bounds the real-world event by
+     `≈ 2^{−184.2}·q³` for all `q`, using that queries are point evaluations.
+
      `multi` is the only Q1 quantity that needs this. Theorem 4.2 is fine at all `q`
      (`≈ 2^{−113.8}` for `L = 2304`, `q₂ = 2^{64}`).
 3. **`ε_multi^H₄` has a constant `2^{−127}`.** It comes from DFMS eq. (8), for reading `iv` back from

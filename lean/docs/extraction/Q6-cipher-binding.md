@@ -4,7 +4,8 @@ Status: **[paper]**, with **[Lean]** for the counting and real-number cores and 
 (`lean/VoleMole/Seed/CipherBinding.lean`; check with
 `cd lean && lake env lean VoleMole/Seed/CipherBinding.lean`; no `sorry`, no `axiom`). Part of
 README §L9. Builds on Q1 (key-level compressed ideal cipher), Q2 (Lemma T, Theorem 7.1), Q4
-(`S*`), Q5 (SE) and Q7 (Lemma K). Notation as in Q1: `N = 2^128`, `p = 1/(N(N−1))`,
+(`S*`), Q5 (SE) and Q7 (Lemma K). §11–§13 (Theorems 4 and 5) were added later. They close target
+(b): `ε_multi` is no longer the limiting term at any `q`. Notation as in Q1: `N = 2^128`, `p = 1/(N(N−1))`,
 `ι = (iv, twk)`, `x_c(ι) = iv ⊞ (c,0,0,twk)`, `f_ι(σ) = σ(x₀(ι)) ‖ σ(x₁(ι))`.
 
 ## 0. Verdict
@@ -17,6 +18,7 @@ whose permutations agree on `{x₀(ι), x₁(ι)}`. Q2's `MULTI_end` and Q5's ca
 |---|---|---|
 | **(a) mixed classical/quantum** | **Theorem 2.** Classical cipher work (simulator, honest parties; one *fetch* per key by Q7's Lemma K) enters the agreement count probability-additively, `Q_C·S/N`. Only the quantum queries pay the coherent `(Q_A√(S/N))²` term. SE at `Q_S = q = 2^{30}` is now `2^{−60.4}` (weak and strong), instead of vacuous. | medium-high |
 | **(b) beyond 2^40** | **Theorem 1.** A level-free all-`q` replacement for Q1 Thms 5.1/5.2: `ε_multi ≤ 8|T|q₄²·E_Z/N + …` with `E_Z ≤ min(a², 1.0005a)`, `a = (4√2/3)Q_E^{3/2}/√N`. No `θ ≤ 1/2` condition, and the constant drops from `1.8·10⁷` to `≈ 484`. Q2's theorem is main-term-limited up to `q ≈ 2^{41.2}` and non-vacuous up to `q ≈ 2^{51.7}` (it was limited to about `2^{37}`). The list-binding route **does not help**: §6.1. Point-level/LZ route: not closed, and capped near `2^{53}`–`2^{56}` by current soundness bounds (§6.2). | high (Thm 1); high (list-binding negative); medium (point-level assessment) |
+| **(d) point evaluations (§11–§13)** | **Theorems 4 and 5.** (4) The key-level `multi` event equals, up to `O(q/N)`, a *real-world* event: the adversary outputs a commitment that two keys open. No extractor or database is involved, so any representation of the ideal cipher may be used to bound it. (5) Write `E_k = Q_k ∘ G_k` with `Q` public and `G_k` acting independently on the blocks of a key-dependent partition (block size `B = 2^{98}`). An evaluation query touches one block register, and two entries of different keys overlap in only `≈ B²/N` points. Theorem 1's argument, run on block registers, gives `ε_multi ≤ ((4√2/3)·Q_E^{3/2}·√μ_B + c)²` with `μ_B = 1037/(B(B−1)) ≈ 2^{−186}`: about `2^{−184.2}·Q_E³`, without H₄. This is below Q2's main term for every `q` at which the theorem is non-vacuous. | medium-high (new argument, not externally reviewed; toy checks and Lean numbers) |
 | **(c) obstruction** | **Theorem 3.** Theorem 1 is **tight**, up to constants, for every argument that uses only Q1's key-level abstraction ("a query is a unitary controlled on one key's register"). That abstraction admits full-value queries, and against those a real attack achieves `Ω(q₄²|T|·min(a,a²)/N)`. To go past `2^{52}` a proof must use that AES queries are *point evaluations*. The precise missing lemma is in §7.3. | high |
 
 **New end-to-end numbers** (λ = 128, `d = 9`; Q2's main term is `Σ² = 200q²/N`):
@@ -25,14 +27,21 @@ whose permutations agree on `{x₀(ι), x₁(ι)}`. Q2's `MULTI_end` and Q5's ca
 |---|---|---|
 | Q2, one proof, `q = 2^{30}` | `2^{−60.4}` (`ε_multi = 2^{−70.3}`) | `2^{−60.4}` (`ε_multi = 2^{−93.9}`) |
 | Q2, `q = 2^{40}` | `2^{−6.2}` | `2^{−40.2}` |
-| Q2, `q = 2^{45}` | vacuous | `2^{−23.3}` |
-| Q2, `q = 2^{50}` | vacuous | `2^{−5.8}` |
+| Q2, `q = 2^{45}` | vacuous | `2^{−23.3}`; with Theorems 4–5: **`2^{−30.4}`** |
+| Q2, `q = 2^{50}` | vacuous | `2^{−5.8}`; with Theorems 4–5: **`2^{−20.4}`** |
+| Q2, `q = 2^{55}` | vacuous | vacuous; with Theorems 4–5: **`2^{−10.4}`** |
+| Q2, `q = 2^{58}` | vacuous | vacuous; with Theorems 4–5: **`2^{−4.3}`** |
+| Q2, `q = 2^{60}` | vacuous | vacuous; with Theorems 4–5: **`2^{−0.26}`** (main term `2^{−0.36}`) |
 | Q2, `q_E = 2^{40}`, hashes `2^{50}` | vacuous | `2^{−20.4}` (Σ²); `ε_multi ≈ 2^{−23.9}` |
 | SE, `Q_S = 2^{20}`, `q = 2^{30}`, weak / strong | vacuous (Q5); Q7 Lemma K + Q1: `2^{−62.9}` / `2^{−55.8}` for `ε_bind` | `ε_bind = 2^{−90.3}` / `2^{−83.2}`; **total `2^{−60.4}` / `2^{−60.4}`** |
 | SE, `Q_S = 2^{30}`, `q = 2^{30}`, weak / strong | vacuous (also with Lemma K + Q1) | `ε_bind = 2^{−77.7}` / `2^{−70.6}`; **total `2^{−60.4}` / `2^{−60.4}`** (unpunctured `Sim`: `2^{−59.4}`) |
 
 The SE totals are Q5's `Σ_SE² = 2^{−60.4}` (with `Sim°`) plus the new `ε_bind^C`. `ε_rec'` and
 `ε_Sim` (now `2^{−172}`, §8) are negligible.
+
+With Theorems 4–5, Q2's bound is the main term `200q²/N` up to its own limit `q ≈ 2^{60.2}`.
+That limit is Grover-inherent (Q2 §8). §1–§10 below are unchanged except for pointers; the
+"`2^{51.7}`" statements there describe Theorem 1 alone.
 
 ---
 
@@ -308,6 +317,9 @@ keys", plus (L-b) worst-case sparsity `≤ 4|T|m` for completions. This would gi
   Net: `≈ 2^{21–25}·q²/N`, vacuous by `q ≈ 2^{52}–2^{53}`. That is no better than Theorem 1's
   `2^{51.7}`. **I did not write this up as a theorem.** It is an assessment (medium confidence).
 
+  **Update.** §11 removes item 2 (no extractor is needed in the search problem) and §12 avoids
+  compressed permutation oracles altogether, so items 1 and 3 do not arise.
+
 ## 7. Target (c): the obstruction is inherent to key-level recording
 
 ### 7.1 Theorem 3 (Theorem 1 is tight for the key-level abstraction)
@@ -375,6 +387,13 @@ Any one of the following would do it.
   `S*` (Q4 (S4)). It would need the `35q` accounting, or an `Ext` that does not evaluate the
   database.
 
+**Status (§11–§13).** (M3) is proved in a weaker form that suffices: Theorem 4 turns `multi` into
+the real-world *double-opening* problem with no `35q` overhead, and Theorem 5 bounds that problem
+by `≈ 2^{−184.2}·q³` (instead of `O(q³/N²) = 2^{−256}q³`), with free iv. (M1) and (M2) remain
+open. They are no longer needed: `ε_multi` is below the main term wherever the theorem is
+non-vacuous. Theorem 3 stands: Theorem 5 uses exactly that queries are point evaluations (a fetch
+of `σ_k` is not a single block query).
+
 ## 8. How this plugs into Q1/Q2/Q4/Q5/Q7
 
 | where | old term | new term |
@@ -386,6 +405,8 @@ Any one of the following would do it.
 | Q5 `ε_Sim` | `2^{−172} + τ n_out Q_E δ` (from Thm C for Thm 5.2) | `2^{−172}`. Theorem 2 needs no Thm C, and hybrid `S*` (lazy-sampled `F(k)` on frozen keys) is efficient. |
 | Q7 Thm M | `ε_multi^{H₄}(2Q_E+Q₄+1)` | Theorem 1 with `Q_E = q_E + n·4607`: `2^{−86.5}` at `n = 2^{20}`, `≈ 2^{−57}` at `n = 2^{30}` |
 | README §L9 | "`ε_multi` open above about `2^{40}`" | "`ε_multi` proved for all `q`; non-vacuous to `2^{51.7}`, tight for key-level techniques (Q6)" |
+| Q2 §6.3, Thm 7.1 (after §11–§13) | Theorem 1 | `ε_multi ≤ min(Theorem 1, Theorem 5)`; Theorem 5 is `((4√2/3)Q_E^{3/2}√μ_B + c_R + c_atyp)² + ε_Θ ≈ 2^{−184.2}Q_E³`. Theorem 7.1 is main-term-limited up to `q ≈ 2^{60.2}`. For an efficient `E` (`S*`), add Q4 Thm C's `2^{−172} + L·q·δ` as before. |
+| Q7 Thm M (after §11–§13) | Theorem 1 with fetch counts | either Theorem 1 with `Q_E = q_E + n·4607` (key fetches), or Theorem 5 with `Q_E` = all cipher *evaluations* (`≈ 2^{18}` per verification). Take the smaller. |
 
 The hybrid representation changes nothing in Q2's `P` analysis.
 - Insertions are steps that touch the `E` register. For `P` (alignment with chain targets) each
@@ -409,6 +430,13 @@ The hybrid representation changes nothing in Q2's `P` analysis.
 | Theorem 3 (technique lower bound) | sketch | high for `Q ≤ N^{1/3}`; medium for the count regime |
 | §6.1 list-binding negative | argument | high |
 | §6.2 point-level assessment | estimate | medium |
+
+| Theorem 4 (real-world transfer) | proof; exact toy simulation (`scripts/qrom-block-binding/r1_toy.py`) | high |
+| Theorem 5: block representation is exact | proof (one line) + exhaustive toy check | high |
+| Theorem 5: first moment on typical blocks | proof + exhaustive toy check (`block_moment_toy.py`) | high |
+| Theorem 5: typicality tails (negative association, Chernoff) | proof from cited facts; numbers in Lean | medium-high |
+| Theorem 5: potential argument with atypical correction | proof; Lean `typical_telescope` | high |
+| Theorems 4–5 as a whole | new, not externally reviewed | medium-high |
 
 **Margins.** Lemma 4.5 enters only through `X`. Even `X = 2^{30}G` would leave
 `ε_bind^C(T') ≤ 2^{−66}` at `Q_S = 2^{30}`.
@@ -439,5 +467,251 @@ The hybrid representation changes nothing in Q2's `P` analysis.
 - No 2024–2026 paper I found gives a multi-collision or two-block-collision bound for compressed
   permutation or ideal-cipher oracles.
 
+Added for §11–§13:
+- **What Theorems 4–5 rely on.** Only: (i) DFMS's compression operator `F` and Q1 Lemma 2.1 (the
+  junta bound, in Lean) for independent uniform registers; (ii) this note's Lemma 2.1; (iii)
+  negative association of the indicator vector of a uniform random subset, and closure under
+  monotone functions of disjoint coordinates (Joag-Dev–Proschan, *Negative association of random
+  variables*, Ann. Statist. 1983, Thm 2.11 and property P6); (iv) the Chernoff upper tail for
+  sums of negatively associated indicators (Dubhashi–Ranjan, *Balls and bins: a study in negative
+  dependence*, RSA 1998, Prop. 7); (v) Hoeffding's bound for the hypergeometric distribution
+  (Hoeffding 1963, §6). All cited from memory; all are textbook facts.
+- **Not relied on:** any compressed *permutation* oracle (Carolan; Carolan–Majenz; Kim;
+  Bhaumik–Huang; Majenz–Malavolta–Walter; Unruh), Liu–Zhandry's multi-collision bounds, CFHL's
+  recognizability theorems, or Alagic et al.
+- Found by search while writing §11–§13, not read: ePrint 2026/2663 (quantum multi-collision
+  lower bounds for one permutation via the compressed permutation oracle; no ideal cipher, no
+  two-key statement); Cojocaru et al., *Quantum lifting for invertible permutations and ideal
+  ciphers*, arXiv 2504.18188 (a lifting theorem with loss `(8q+1)^{2k}` for `k`-point relations,
+  far too lossy here).
+
 Papers: `scratchpad/papers/q4/` (CM26, BH26, Car25 texts saved by Q4). No new downloads were
 needed for `papers/q6/`.
+
+---
+
+## 11. Theorem 4: `multi` is a real-world event
+
+§7.3 asked for a point-level lemma inside some compressed oracle. The first step is to notice that
+no oracle database is needed to *state* the problem.
+
+**Setting.** Any experiment in the QICM (plus random oracles) with at most `q` cipher queries in
+total, forward or inverse, by all parties, and no measurement of the cipher registers before the
+end. At the end, classical outputs determine a finite set `𝒯` of targets `(ι, t)`, `t = (a, b)`,
+`a ≠ b`, with at most `τ` distinct `ι`. In Q2: the accepted chain's hidden-leaf commitments, so
+`τ = 17` (one `ι = (iv, twk_i)` per tree) and `|𝒯| ≤ L`. Let
+
+    MULTI   := "some target is opened by two distinct keys of the key-level database" (Q2 §6.2),
+    E_real  := E[ #{ ((ι,t), {k,k'}) : (ι,t) ∈ 𝒯, k ≠ k', f_ι(σ_k) = f_ι(σ_{k'}) = t } ],
+
+where `E_real` is taken in the real experiment: `σ` is the actual cipher and no database appears.
+
+**Theorem 4.**
+
+    √Pr[MULTI]  ≤  √E_real + √((2τq + 2)/(N−1)) + √(τq/(N−1)).
+
+*Proof.* Let `ψ` be the final purified state (Q1 §1), `P_k = |u⟩⟨u|_{D_k}`, `Q_k = 1 − P_k`. The
+compressed state is `F^{⊗K}ψ`, and `Π^k F_k ψ = Π^k Q_k ψ` because `Π^k` kills `⊥`. The event is
+diagonal, and "exists" is at most "number of", so
+
+    Pr[MULTI] ≤ Σ_{(ι,t)} Σ_{k<k'} ‖Π^k Π^{k'} Q_k Q_{k'} ψ‖²        (targets read from the outputs).
+
+Write `Q_kQ_{k'}ψ = ψ − P_kψ − Q_kP_{k'}ψ` and use the triangle inequality in `ℓ²` over the index
+set `((ι,t), k<k')`:
+1. `Σ ‖Π^kΠ^{k'}ψ‖² = E_real`. Measuring the purified registers gives the real cipher.
+2. `‖Π^kΠ^{k'}P_kψ‖² = p·‖Π^{k'}P_kψ‖² ≤ p·‖Π^{k'}ψ‖²`, because `‖Π^k u‖² = p` (F1) and `P_k`
+   commutes with `Π^{k'}`. Summing over `k` gives `≤ pN·O`, with
+   `O := Σ_{(ι,t)} Σ_k ‖Π^kψ‖²` the real expected number of (target, opening key) pairs.
+3. `‖Π^kΠ^{k'}Q_kP_{k'}ψ‖² = p·‖Π^kQ_kP_{k'}ψ‖² ≤ p·‖Π^kQ_kψ‖²`. For fixed `ι` the `Π^k_{ι,t}` are
+   orthogonal over `t`, so `Σ_{(ι,t)} ‖Π^kQ_kψ‖² ≤ τ‖Q_kψ‖²`, and `Σ_k ‖Q_kψ‖² ≤ q` (Q1 Lemma
+   2.1). Total `≤ pN·τq`.
+4. `O ≤ Σ 2‖Π^kQ_kψ‖² + 2‖Π^kP_kψ‖² ≤ 2τq + 2|𝒯|Np ≤ 2τq + 2`.
+
+With `pN = 1/(N−1)` this is the claim. ∎
+
+**Remarks.**
+- The same three-term split read backwards gives `√E_real ≤ √E_db + (same terms)`, where `E_db`
+  is the expected number of (target, database key pair) incidences. So the key-level event is not
+  an overcount. The loss in Theorem 1 is in the *method* (it charges agreements at all `N` points
+  of two touched keys), not in the event. This corrects the reading of Q1 §9.2.
+- Consequently (M3) needs no extractor in the search algorithm: Q4 §5.2's `35q` accounting
+  disappears. The problem to bound is the *double-opening problem*: output `(ι, t)` such that two
+  keys open `t` at `ι`.
+- The proof uses only that `Π^k` is diagonal with density `p` and that cipher registers are
+  independent and uniform. It is checked numerically on a toy cipher (`N = 3`, three keys, random
+  adversaries) by `scripts/qrom-block-binding/r1_toy.py`, including the exact compressed-database
+  probability.
+- With mid-run measurements on cipher registers that are not diagonal in the purified basis
+  (none occur in Q2) the theorem does not apply as stated.
+
+## 12. Theorem 5: the double-opening problem via a block representation
+
+### 12.1 The representation
+
+`x ↦ x ⊞ e₀` partitions `X` into `2^{96}` cycles of length `2^{32}`. Fix `B = 2^{98}`. For each key
+`k` let `𝒫_k` be a partition of the set of cycles into `N/B = 2^{30}` blocks of `2^{66}` cycles
+each (so each block `β ⊂ X` has `B` points and is closed under `⊞e₀`), and let `Q_k ∈ Sym(X)`.
+Call `Θ = (Q_k, 𝒫_k)_k` the *public data*. For each *entry* `e = (k, β)`, `β ∈ 𝒫_k`, let
+`G_e ∈ Sym(β)`. Put `G_k := ⊕_β G_{(k,β)}` and
+
+    E_k := Q_k ∘ G_k.
+
+**Fact 12.1.** If `Θ` is sampled with `Q_k` uniform and independent (any distribution of `𝒫_k`
+independent of `Q`), and all `G_e` are uniform and independent, then `E` is a uniform ideal cipher.
+*Proof.* `Q_k` is uniform and independent of `G_k`. ∎
+
+**Fact 12.2.** For fixed `Θ`, a forward query `(k, x)` is a unitary controlled on the value basis
+of the single register `D_e`, `e = (k, β_k(x))`; an inverse query `(k, y)` likewise with
+`e = (k, β_k(Q_k^{-1}(y)))`. So for fixed `Θ` the experiment is a "key-level" experiment in the
+sense of Q1 §2 over the entry set, with alphabets `Sym(β)`: Q1 Lemma 2.1 (at most `t` non-`⊥`
+entries after `t` queries; `Σ_e ‖Q_eψ‖² ≤ t`) and this note's Lemma 2.1 apply verbatim.
+
+A query thus "reveals" at most one block of `B` points of one key. Different keys use different
+partitions: this is the point of the construction (Remark 12.6).
+
+### 12.2 Agreements, exposure, typicality
+
+For entries `e = (k,β)`, `e' = (k',β')` with `k ≠ k'` and values `G_e, G_{e'}`, an *agreement
+triple* is `(e, e', z)` with `z ∈ β ∩ β'` and `E_k, E_{k'}` agreeing on `{z, z ⊞ e₀}`. Let
+`Ẑ'(D)` be the number of agreement triples among the stored (non-`⊥`) entries of `D`, `k < k'`.
+
+**Lemma 12.3 (first moment).** Fix `e = (k,β)` and a stored `e' = (k',β')` with value `G'`. Let
+`I := β' ∩ Q_{k'}^{-1}(Q_k(β))`. For uniform `G_e`, the expected number of agreement points of `e`
+with `e'` is exactly
+
+    n_e(e') / (B(B−1)),     n_e(e') := #{ z ∈ β ∩ β' : G'(z) ∈ I and G'(z ⊞ e₀) ∈ I }.
+
+*Proof.* Agreement at `z` means `G_e(z) = Q_k^{-1}(E_{k'}(z))` and the same at `z ⊞ e₀`. Both
+preimages lie in `β` iff `G'(z), G'(z⊞e₀) ∈ I`, and then the probability is `1/(B(B−1))`. ∎
+(Exhaustive toy check: `scripts/qrom-block-binding/block_moment_toy.py`.)
+
+Call `z` *exposed* (by `e'` towards `e`) if it is counted in `n_e(e')`.
+
+**Typical public data.** `Θ` is *typical* if for all `k ≠ k'`, `β ∈ 𝒫_k`, `β' ∈ 𝒫_{k'}` and all
+`x₀, a ≠ b`:
+- (T1) `|β ∩ β'| ≤ d̄ := (1+2^{−8})·B²/N`;
+- (T2) `|Q_k(β) ∩ Q_{k'}(β')| ≤ m̄ := (1+2^{−8})·B²/N`;
+- (T3) `#{k : Q_k^{-1}(a), Q_k^{-1}(b) ∈ β_k(x₀)} ≤ 2B²/N`.
+
+Sample `𝒫_k` as independent uniform partitions. Then (T1) is a hypergeometric tail on cycles (mean
+`2^{36}`), (T2) one on points (mean `2^{68}`), (T3) a binomial tail (mean `≈ 2^{68}`). By
+Hoeffding/Chernoff each fails with probability `≤ exp(−2^{20}/3)`, and a union over at most
+`2^{384}` choices gives `ε_Θ := Pr[Θ atypical] < 2^{−10^5}`.
+
+**Typical values.** For typical `Θ`, a value `G'` of an entry `e'` is *typical* if
+`n_e(e') ≤ n̄ := 1037` for every entry `e` of another key.
+
+**Lemma 12.4 (tail).** For typical `Θ` and uniform `G'`: `ε_T := Pr[G' atypical] ≤ 2^{−301}`.
+
+*Proof.* Fix `e`. `X_x := 1[G'(x) ∈ I]`, `x ∈ β'`, is the indicator vector of a uniform random
+subset of size `|I| ≤ m̄`, hence negatively associated. Split the `z ∈ β ∩ β'` by the parity of
+the lane-0 coordinate. In each class the pairs `{z, z⊞e₀}` are disjoint (cycles have even
+length), so the products `X_zX_{z⊞e₀}` are monotone functions of disjoint coordinates and again
+negatively associated. Each has mean `≤ (m̄/B)²`, and each class has at most `d̄/2` pairs, so each
+class sum has mean `≤ μ̄ := (d̄/2)(m̄/B)² = (1+2^{−8})³·B⁴/(2N³) ∈ [128, 129.6]`. The Chernoff
+bound at `δ = 3` gives `Pr[class sum ≥ 4μ̄] ≤ (e³/4⁴)^{μ̄} ≤ 2^{−460}` (**[Lean]**
+`chernoff_tail_num`), and `8μ̄ ≤ 1037` (**[Lean]** `nbar_ok`). Union over two classes and
+`N·N/B = 2^{158}` entries `e` (**[Lean]** `typical_union_num`). ∎
+
+`B = 2^{98}` is the smallest power of two for which the exposure count concentrates
+(`B⁴/N³ = 2^8`); `scripts/qrom-block-binding/nums.py` compares `2^{96}…2^{100}`.
+
+### 12.3 The theorem
+
+Let `μ_B := n̄/(B(B−1)) ≈ 2^{−185.98}`.
+
+**Theorem 5.** In the setting of Theorem 4, with `Q_E` cipher queries in total,
+
+    √E_real ≤ a + c_atyp + c_blk   (for typical Θ),      E_real ≤ (a + c_atyp + c_blk)² + L·N²·ε_Θ,
+    a := 2√2·Σ_{s<Q_E} √(s·μ_B) ≤ (4√2/3)·Q_E^{3/2}·√μ_B,      a² ≤ (32/9)·μ_B·Q_E³ ≈ 2^{−184.15}·Q_E³,
+    c_atyp := 8·Q_E²·√(2Q_E·ε_T/N),      c_blk := √(2(1+2^{−8})·(2τQ_E+2)/N) + √(2(1+2^{−8})·τQ_E/N).
+
+Together with Theorem 4, with `c_R := c_blk + √((2τQ_E+2)/(N−1)) + √(τQ_E/(N−1)) ≤
+6√(τ(Q_E+1)/N)`:
+
+    ε_multi = Pr[MULTI] ≤ ( (4√2/3)·Q_E^{3/2}·√μ_B + c_R + c_atyp )² + L·N²·ε_Θ.
+
+No property of H₄ is used: the bound holds for free iv.
+
+*Proof.* Fix typical `Θ` and purify the `G_e` (Fact 12.2). Compress every entry register with
+`F_e` (Q1 §2).
+1. **Potential.** `W := Ẑ'^{1/2}`. A query is block-diagonal in (query entry `e`, rest `D_{−e}`).
+   On a block, `W = √i₀ + g` with `i₀ = Ẑ'(D_{−e})`, `g(⊥) = 0`, `g(σ)² ≤ n(σ)`
+   (**[Lean]** `sqrt_add_sub_sq_le`), where `n(σ)` is the number of agreement triples that the
+   value `σ` of `e` creates with the stored entries.
+2. **Typical blocks.** If every stored entry of `D_{−e}` has a typical value, Lemma 12.3 gives
+   `E_σ n ≤ S·n̄/(B(B−1)) = S·μ_B`, with `S ≤ t` the number of stored entries. By Lemma 2.1,
+   `‖[W, cO]‖ ≤ 2√2·√(S·μ_B)` on such blocks.
+3. **All blocks.** Always `n_e(e') ≤ |β∩β'| ≤ d̄`, so `E_σ n ≤ S·d̄/(B(B−1)) ≤ 2S/N` and
+   `‖[W, cO]‖ ≤ 2√2·√(2S/N)`.
+4. **Atypical mass.** Let `P_atyp` project on databases with some atypical stored value. On a
+   block whose `D_{−e}` is typical it is the indicator of "`σ` atypical", of density `ε_T`, so
+   `‖P_atyp·cO·(1−P_atyp)‖ ≤ 2√2·√ε_T` (Lemma 2.1); on other blocks `1 − P_atyp = 0`. Hence
+   `‖P_atyp ψ_t‖ ≤ 2√2·t·√ε_T`.
+5. **Telescoping.** `‖Wψ_{t+1}‖ ≤ ‖Wψ_t‖ + ‖[W,cO]ψ_t‖`. Split `ψ_t` by "is `D_{−e}` typical".
+   This projector is constant on blocks, so it commutes with `[W, cO]`, and its complement is
+   `≤ P_atyp`. By 2–4,
+   `‖Wψ_{t+1}‖ ≤ ‖Wψ_t‖ + 2√2√(t·μ_B) + 2√2√(2t/N)·2√2·t·√ε_T`
+   (**[Lean]** `typical_telescope`). All other operations commute with `W`. So
+   `⟨Ẑ'⟩ = ‖Wψ_T‖² ≤ (a + c_atyp)²`.
+6. **From the database to `E_real`.** As in Theorem 4, now for entries. For a target `(ι, t)` and
+   key `k` let `e = (k, β_k(x₀(ι)))` and `Π^e` the event `G_e(x_c) = Q_k^{-1}(t_c)`, `c = 0, 1`.
+   It has density `1/(B(B−1))`, or `0` if a preimage is outside the block. Then
+   `E_real(Θ) = Σ ‖Π^eΠ^{e'}ψ‖²`, and with `ψ = Q_eQ_{e'}ψ + P_eψ + Q_eP_{e'}ψ`:
+   - `Σ ‖Π^eΠ^{e'}Q_eQ_{e'}ψ‖² ≤ ⟨Ẑ'⟩`: a stored pair that agrees with value `t` at `x₀(ι)` is an
+     agreement triple, and distinct targets give distinct `(z, t)`;
+   - the other two sums are `≤ (2B²/N)/(B(B−1))·O` and `≤ (2B²/N)/(B(B−1))·τQ_E` by (T3), with
+     `O ≤ 2τQ_E + 2` from Theorem 4's step 4, and `(2B²/N)/(B(B−1)) ≤ 2(1+2^{−8})/N`.
+7. **Average over `Θ`.** For atypical `Θ` use `#{pairs} ≤ L·N²`. ∎
+
+### 12.4 Remarks
+
+- **12.5 (what is used).** Evaluation queries (Fact 12.2), independence and uniformity of the
+  `G_e`, and Lemma 12.3. The argument is Theorem 1's amplitude regime on a different register
+  structure. It needs no compressed *permutation* oracle and no inverse-query-specific step.
+- **12.6 (why key-dependent partitions).** With one partition for all keys, the adversary puts
+  all entries into one block and the density per stored entry is `≈ B/N²`; that only reaches
+  `≈ 2^{55}`. With independent partitions, two entries of different keys share `≈ B²/N` points
+  whatever the adversary does (T1), and the density is `≈ B²/N³`.
+- **12.7 (the limit of this method).** Smaller blocks would be better (`μ_B ∝ B²`), but below
+  `B⁴/N³ ≈ 2^8` the exposure count no longer concentrates: a stored value exposes a point
+  towards a given entry only rarely, an adversary can search for such values, and a supremum
+  bound over databases fails. I see how to control that with a level recursion for a fixed target
+  entry; it gives `≈ 123·Q³/N^{3/2}`, the same as `B = 2^{98}` up to a factor 2, so I did not
+  write it up. Getting from `Q³/N^{3/2}` to the conjectured truth `Θ(Q³/N²)` needs a genuinely
+  point-level argument (M1/M2). It would not change any number in this project.
+- **12.8 (consistency with Theorem 3).** In the block model a "block fetch" BHT attack achieves
+  `Ω(Q³B²/N³)`, so Theorem 5 is tight for *its* abstraction, as Theorem 1 is for the key-level
+  one. A full-value fetch of `σ_k` costs `N/B = 2^{30}` block queries.
+- **12.9 (H₄).** Combining the block model with the H₄ step of Theorem 1 would need typicality of
+  exposures at the iv-points. It is not needed and not done.
+- **12.10 (simulation-extractability).** Theorem 2 (§4) is unaffected. Theorems 4–5 apply to any
+  end-of-experiment `multi`-type event when every cipher *evaluation* is counted in `Q_E`
+  (`≈ 2^{18}` per simulated proof or verification, not Lemma K's 4607 fetches). At
+  `Q_S = 2^{30}` that is `Q_E ≈ 2^{48}` and `a² ≈ 2^{−40}`, weaker than Theorem 2's `2^{−77.7}`.
+  I did not re-derive Q5's case analysis with it.
+
+## 13. Numbers with Theorems 4 and 5
+
+Script: `scripts/qrom-block-binding/nums.py`. **[Lean]**: `block_multi_at_2_50` (`a² ≤ 2^{−34}`),
+`block_multi_at_2_55` (`≤ 2^{−19}`), `block_multi_at_2_58` (`≤ 2^{−10}`), `block_multi_at_2_60`
+(`≤ 2^{−4}`), `transfer_sq_at_2_60` (`c_R² ≤ 2^{−58}`), `q2_total_at_2_58` (`≤ 2^{−4}`),
+`q2_total_at_2_60_lt_one`.
+
+**Q2 (one proof; `Q_E = q`; `τ = 17`).** `ε_multi := min(Theorem 1, Theorem 5)`.
+
+| `q` | `Σ² = 200q²/N` | Theorem 1 | **Theorem 5** | **total** |
+|---|---|---|---|---|
+| `2^{30}` | `2^{−60.4}` | `2^{−93.9}` | `2^{−88.4}` (`c_R`-dominated) | `2^{−60.4}` |
+| `2^{40}` | `2^{−40.4}` | `2^{−43.9}` | `2^{−64.1}` | `2^{−40.4}` |
+| `2^{45}` | `2^{−30.4}` | `2^{−23.3}` | `2^{−49.2}` | `2^{−30.4}` |
+| `2^{50}` | `2^{−20.4}` | `2^{−5.8}` | `2^{−34.2}` | `2^{−20.4}` |
+| `2^{55}` | `2^{−10.4}` | vacuous | `2^{−19.2}` | `2^{−10.4}` |
+| `2^{58}` | `2^{−4.4}` | vacuous | `2^{−10.2}` | `2^{−4.3}` |
+| `2^{59}` | `2^{−2.4}` | vacuous | `2^{−7.2}` | `2^{−2.3}` |
+| `2^{60}` | `2^{−0.36}` | vacuous | `2^{−4.2}` | `2^{−0.26}` |
+| `≥ 2^{60.2}` | vacuous | | `2^{−3.6}` at `2^{60.2}`; vacuous at `2^{61.4}` | vacuous |
+
+- `ε_multi` would cross the main term only at `q ≈ 2^{63.8}`, beyond the main term's own limit.
+- The theorem is therefore limited by `200q²/N` alone, which is Grover-inherent (Q2 §8).
+- `c_atyp < 2^{−58}` and `L·N²·ε_Θ < 2^{−10^5}` throughout.
