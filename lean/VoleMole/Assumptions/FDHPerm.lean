@@ -13,10 +13,28 @@ standalone UF-Tag game, KP800 is a random permutation `π` of the blocks `T × Z
 * **The game** `advFDHPerm tr emb A` (det-FDH with `H = Tag` read off the permutation): the forger
   (`specFP`: the world, the signer on messages, `π`) returns `(m*, s*)`; the challenger evaluates
   `π(emb m*)` (`fpFinal`); the win `FPWin`: `m*` never signed and `s*` a preimage of `Tag(m*)`.
-* **Two hybrids** (`advFDHPerm_le_avoid`): the permutation is replaced by the two-sided random
+* **Two hybrids** (`advFDHPerm_le_hyb`): the permutation is replaced by the two-sided random
   function (`LazyPerm.prEvent_rp_le_rf`, `q = q_f + q_i + q_S + 1` queries read it), and fresh
   inverse answers are drawn outside the structured inputs (`LazyPerm.prEvent_rf_le_avoid`,
-  `q_i·|M|/|B|`).
+  `q_i·|M|/|B|`). The signer reads the permutation, so an inverse record at a structured input
+  would change the forger's view; the hybrid excludes it.
+* **The reduction** (`simCF`, `fdhPermRed`): a function-model det-FDH forger that simulates the
+  hybrid's permutation: a fresh forward query at `emb m` gets `(H(m), z)`, every other fresh
+  forward answer is a coin, a fresh inverse answer a coin outside the structured inputs; coins are
+  values of the world's random oracle at fresh indices (`ARF`); `Sign(m)` evaluates `π(emb m)`
+  first. Against the det-FDH challenger its run, projected, is the hybrid (`combF_step`, under
+  the invariant `InvF`, `combF_inv`); `H` read off the table is the function's value
+  (`h_of_fwdFind`); the reduction makes at most `q_f + 1 + q_S` hash and `q_S` signing queries
+  (`simA_budget`, counted in the challenger's state by `fdhImpl_hq`, `fdhImpl_signed`).
+* **The bounds**: `advFDHPerm_le_fdh`,
+
+      Adv^{perm}(A) ≤ Adv^{euf}_{det}(fdhPermRed A; q_f + 1 + q_S, q_S) + permEps,
+
+  `permEps = (q_f + q_i + q_S + 1)²/|T × Z| + q_i·|M|/|T × Z|`, and with `IdealTag`'s chain
+  `advFDHPerm_le_ompr`, `advFDHPerm_le_ompr_rate` (OMPR with `k + 1 + q_S` targets,
+  `k = q_f + 1 + 2q_S`).
+
+The lazily sampled permutation is taken as the ideal permutation (as in `CTUFPerm`).
 
 No `sorry`, no `axiom`.
 -/
@@ -1058,6 +1076,43 @@ theorem advFDHPerm_le_fdh (hemb : Function.Injective emb) (tr : Trapdoor PK SK T
     · exact le_rfl
   · simp only [Function.comp_apply]
     rw [prEvent_pure_prop]; simp only [hW, ite_false]; exact bot_le
+
+/-- **det-FDH with `Tag` a random permutation, down to OMPR** (`ratatouille.md` Lemma 2.1 then
+T1(c), `uov-assumptions.md` §5.8): with `k = (q_f + 1 + q_S) + q_S` hash and signing queries of
+the reduction,
+
+    Adv^{perm}(A) ≤ Adv^{ompr}(B; k + 1 + q_S, q_S) + Pr[D errs on one of k + 1 + q_S targets]
+                    + (q_f + q_i + q_S + 1)²/|T × Z| + q_i·|M|/|T × Z|,
+
+`B = ompiRed (k + 1) q_S (fdhRed (fdhPermRed A))`. -/
+theorem advFDHPerm_le_ompr [Inhabited S] (hemb : Function.Injective emb) (tr : Trapdoor PK SK T S)
+    (A : PK → ProbComp (OracleComp (specFP AR M T Z S) (M × S))) {qf qi qS : ℕ}
+    (hA : ∀ pk, ∀ a ∈ support (A pk), FPBudget qf qi qS a) :
+    advFDHPerm tr emb A ≤
+      advOMPR tr (qf + 1 + qS + qS + 1 + qS) qS
+          (IdealTag.ompiRed (ARF AR emb) (qf + 1 + qS + qS + 1) qS
+            (IdealTag.fdhRed (ARF AR emb) (fdhPermRed emb A))) +
+        IdealTag.badTargets tr (qf + 1 + qS + qS + 1 + qS) +
+        CTUFPerm.permEps (qf + qi + qS + 1) qi (Fintype.card M) (Fintype.card (T × Z)) := by
+  refine (advFDHPerm_le_fdh hemb tr A hA).trans (add_le_add ?_ le_rfl)
+  refine IdealTag.advFDH_le_ompr tr _ qS _ (fdhPermRed emb A) fun pk a ha => ?_
+  unfold fdhPermRed at ha
+  erw [support_map] at ha
+  obtain ⟨a', ha', rfl⟩ := ha
+  exact simA_isHS emb a' (hA pk a' ha')
+
+/-- The same with the failure rate `ρ`: `+ (k + 1 + q_S)·ρ`. -/
+theorem advFDHPerm_le_ompr_rate [Inhabited S] (hemb : Function.Injective emb)
+    (tr : Trapdoor PK SK T S) (A : PK → ProbComp (OracleComp (specFP AR M T Z S) (M × S)))
+    {qf qi qS : ℕ} (hA : ∀ pk, ∀ a ∈ support (A pk), FPBudget qf qi qS a) :
+    advFDHPerm tr emb A ≤
+      advOMPR tr (qf + 1 + qS + qS + 1 + qS) qS
+          (IdealTag.ompiRed (ARF AR emb) (qf + 1 + qS + qS + 1) qS
+            (IdealTag.fdhRed (ARF AR emb) (fdhPermRed emb A))) +
+        ((qf + 1 + qS + qS + 1 + qS : ℕ) : ℝ≥0∞) * IdealTag.failRate tr +
+        CTUFPerm.permEps (qf + qi + qS + 1) qi (Fintype.card M) (Fintype.card (T × Z)) :=
+  (advFDHPerm_le_ompr hemb tr A hA).trans
+    (add_le_add (add_le_add le_rfl (IdealTag.badTargets_le tr _)) le_rfl)
 
 end Final
 
