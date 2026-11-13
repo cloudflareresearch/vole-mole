@@ -299,6 +299,34 @@ theorem prEvent_bad_le (H : QueryImpl spec (StateT τ ProbComp)) (bad : τ → P
         rw [add_comm]; exact_mod_cast Nat.sub_add_cancel this]
     · simp
 
+/-- **A bound after a common draw, with an additive constant**, on the draw's support. -/
+theorem prEvent_bind_le_add_const {α : Type} (mx : ProbComp α) (f g : α → ProbComp Prop)
+    (c : ℝ≥0∞) (h : ∀ a ∈ support mx, prEvent (f a) ≤ prEvent (g a) + c) :
+    prEvent (mx >>= f) ≤ prEvent (mx >>= g) + c := by
+  let : MeasurableSpace α := ⊤
+  rw [prEvent_bind_of_discrete, prEvent_bind_of_discrete]
+  calc ∫⁻ a, prEvent (f a) ∂𝒟[mx] ≤ ∫⁻ a, (prEvent (g a) + c) ∂𝒟[mx] :=
+        MeasureTheory.lintegral_mono_ae ((evalDist.ae_of_forall_mem_support mx (· ∈ support mx)
+          MeasurableSet.of_discrete fun _ ha => ha).mono fun a ha => h a ha)
+    _ = ∫⁻ a, prEvent (g a) ∂𝒟[mx] + c * 𝒟[mx] Set.univ := by
+        rw [MeasureTheory.lintegral_add_right _ measurable_const, MeasureTheory.lintegral_const]
+    _ ≤ _ := add_le_add le_rfl (mul_le_of_le_one_right' (evalDist_apply_univ_le_one mx))
+
+/-- A query bound for a kind bounds every narrower kind. -/
+theorem isQueryBoundP_of_imp {ι : Type} {spec : OracleSpec ι} {α : Type} (p p' : ι → Prop)
+    [DecidablePred p] [DecidablePred p'] (hpp : ∀ t, p' t → p t) (oa : OracleComp spec α) :
+    ∀ n, IsQueryBoundP oa p n → IsQueryBoundP oa p' n := by
+  induction oa using OracleComp.inductionOn with
+  | pure x => intro n _; trivial
+  | query_bind t k ih =>
+    intro n hn
+    rw [isQueryBoundP_query_bind_iff] at hn ⊢
+    refine ⟨hn.1.imp (fun h h' => h (hpp t h')) id, fun u => ?_⟩
+    have := ih u _ (hn.2 u)
+    refine this.mono ?_
+    by_cases h1 : p t <;> by_cases h2 : p' t <;> simp only [h1, h2, ite_true, ite_false] <;>
+      first | omega | exact absurd (hpp t h2) h1
+
 end Flag
 
 /-! ## The permutation oracle, lazily -/
