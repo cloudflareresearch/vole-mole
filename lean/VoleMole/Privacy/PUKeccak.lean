@@ -219,4 +219,50 @@ theorem puAdvPerm_ratatouille_le {Aux : Type} [Fintype Aux] [Nonempty Aux] (ctx 
   rw [e] at this
   simpa only [Nat.cast_pow, Nat.cast_ofNat] using this
 
+/-! ## Ratatouille: a commitment at a credit chosen with the public part -/
+
+/-- **Ratatouille's `Com` at a credit that is part of the public input**: the public part is the
+nullifier and a value `b` that determines the credit `T b` (in the unlinkability game: everything
+the credit of a change token depends on, which is independent of that token's opening). A game
+that uses the column `t ↦ Com(nf, ctx, t, r)` at one point `T b` is the game `puAdv` for this
+commitment. -/
+def comCredit {B : Type} (ctx : Spec.Ratatouille.Context) (T : B → Spec.Ratatouille.Credits)
+    (n : Coins 24 × B) (r : Coins 16) : Spec.Ratatouille.Commitment :=
+  Spec.Ratatouille.com (Vector.ofFn n.1) ctx (T n.2) (Vector.ofFn r)
+
+/-- `comCredit` is one truncated call of Keccak-p[800,12] on a state that is injective in the
+opening for every public part. -/
+theorem comCredit_eq_comP {B : Type} (ctx : Spec.Ratatouille.Context)
+    (T : B → Spec.Ratatouille.Credits) (n : Coins 24 × B) (r : Coins 16) :
+    comCredit ctx T n r = Vector.ofFn (comP kp800
+      (fun n : Coins 24 × B => XR ctx.fn (T n.2).toNat n.1) (trunc 32 68) n r) :=
+  ratatouille_com_eq_comP ctx (T n.2) n.1 r
+
+/-- **(PU) for Ratatouille's `Com` at a credit chosen with the public part, in the
+ideal-permutation model**: the bound of `puAdvPerm_ratatouille_le`, for a public part
+`(nf, b)` and the credit `T b`. So the one-point use of a commitment column at a credit that does
+not depend on the opening costs nothing more than a single commitment. -/
+theorem puAdvPerm_ratatouille_credit_le {Aux B : Type} [Fintype Aux] [Nonempty Aux] [Fintype B]
+    [Nonempty B] (ctx : ℕ → UInt8) (T : B → ℕ)
+    (A : Coins 24 × B → Coins 32 → Aux → PTree KState (Finset (Coins 16)))
+    {q c : ℕ} (hA : ∀ n t a, (A n t a).Bound q) (hc : ∀ n t a π, ((A n t a).run π).card ≤ c)
+    (hq : q < 2 ^ 128) :
+    puAdvPerm (fun n : Coins 24 × B => XR ctx (T n.2) n.1) (trunc 32 68) A ≤
+      (c + q) / (2 ^ 128 - q : ℝ) + q / (2 ^ 544 - q : ℝ) := by
+  have hR : Fintype.card (Coins 16) = 2 ^ 128 :=
+    (card_coins 16).trans (by norm_num)
+  have hm : ∀ t : Coins 32,
+      (2 ^ 8) ^ 68 ≤ (univ.filter fun y : KState => trunc 32 68 y = t).card := by
+    intro t
+    rw [card_fiber_trunc 32 68 t, Prob.card_uint8]
+  have := puAdvPerm_le (fun n : Coins 24 × B => XR ctx (T n.2) n.1)
+    (fun n => XR_injective ctx (T n.2) n.1) (trunc 32 68) A hA hc hm
+    (by rw [hR]; exact hq) (lt_of_lt_of_le hq (by
+      rw [← pow_mul]; exact Nat.pow_le_pow_right (by norm_num) (by norm_num)))
+  rw [hR] at this
+  have e : (((2 ^ 8) ^ 68 : ℕ) : ℝ) = 2 ^ 544 := by
+    rw [Nat.cast_pow, Nat.cast_pow, Nat.cast_ofNat, ← pow_mul]
+  rw [e] at this
+  simpa only [Nat.cast_pow, Nat.cast_ofNat] using this
+
 end VoleMole.Privacy.PU

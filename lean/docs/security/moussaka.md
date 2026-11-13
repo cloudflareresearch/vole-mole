@@ -905,8 +905,17 @@ Clients is mechanized for the random-oracle games of Appendix B (`lean/docs/zk.m
   simulators' coins and the tables (at most `2(q₅ + 1)` candidates). This is `Pred ≤ Adv^ow-r_Com`
   of this section, with `c` guesses. The `4·(q₅ + 1)·2⁻¹²⁸` is for the redemption proofs of a
   failed finalization (a dummy token, never shown), which the paper argument does not mention.
-  Not covered: several proofs on **shared** tables (the cross-proof `iv` collisions `ε_iv`; for
-  one proof the shared-table model with `H₂³` visible is `zk_rom_ic_h23_main`), `main`'s
+  **With one `H₅` table and one cipher for the four proofs** (`Privacy/MoussakaMainShared.lean`,
+  `Privacy/MoussakaMainSharedPU.lean`, `lean/docs/zk.md` §4.2): `anonymity_main_shared`,
+  `≤ 30·εS(q₃, q_E + 8·4607) + 15·(Σ_{b,c} puAdv Com (predS_c b) + 8·noHitProb + 3750·2⁻¹²⁸) +
+  2·Adv^hide_Com`, `εS q₃ q_E = q₃·2⁻¹²⁸ + 2⁻¹¹³ + 221·(4607 + q_E + 4607)·2⁻¹²⁸`. The
+  `3750·2⁻¹²⁸` is this section's `ε_iv`: a sibling gate input of one simulated proof is one of
+  another, bounded by the uniform `d` of the later proof (no property of `H₄` or of the `iv`s is
+  needed). The predictors see the commitments, the nullifiers, the simulators' coins and the
+  tables, and output at most `2(q₅ + 1249)` candidates (the guess's `H₅` reads and the proofs'
+  active gate inputs). Each proof still has its own `H₂³` table and `H₃` slice.
+  Not covered: one `H₂³` table and one `H₃` for the four proofs on `main` (the
+  programming-collision terms of `lean/docs/zk.md` §10.2 and §10.5's argument), `main`'s
   `find_issuer` Client and the non-colluding mode 4(b).
 
 Remarks from the mechanization:
