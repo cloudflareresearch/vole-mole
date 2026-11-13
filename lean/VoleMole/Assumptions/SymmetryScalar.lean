@@ -659,4 +659,81 @@ theorem bqHom_surjective {v v' : Fin 9 → Vin} (h : LinearIndependent GF256 (Su
   have h3' : ev (ev U (v' j)) (v i) k = 0 := h3
   rw [h2', h3', add_zero]
 
+/-! ## The probabilities of the events on the vinegar part -/
+
+/-- **`A(𝒪)` is not a second isotropic space**: for every tensor `S`, over a uniform `P1`. -/
+theorem pr_isoQ (S : Coef) : pr P1Part (fun p => IsoQ (bq p) S) ≤ 1 / 256 ^ 1503 := by
+  classical
+  refine (pr_mono (Q := fun p => ∃ w : (Fin 9 → Vin) × (Fin 9 → Vin) × (Fin 9 → Oil) ×
+      (Fin 9 → Oil), LinearIndependent GF256 (Sum.elim w.1 w.2.1) ∧
+      ∀ i j, bq p (w.1 i) (w.2.1 j) + bil S (w.1 i) (w.2.2.2 j) + bil S (w.2.1 j) (w.2.2.1 i) = 0)
+    fun p ⟨v, v', y, y', h1, h2⟩ => ⟨(v, v', y, y'), h1, h2⟩).trans ?_
+  rw [← card_gf]
+  refine pr_union Fintype.card_pos _ 2142 1503 (by card_le) fun w => ?_
+  obtain ⟨v, v', y, y'⟩ := w
+  by_cases hw : LinearIndependent GF256 (Sum.elim v v')
+  · refine (pr_mono (Q := fun p => bqHom v v' p =
+        fun i j => -(bil S (v i) (y' j) + bil S (v' j) (y i))) fun p hp => ?_).trans (le_of_eq ?_)
+    · funext i j
+      exact eq_neg_of_add_eq_zero_left (by rw [← add_assoc]; exact hp.2 i j)
+    · rw [pr_fiber _ (bqHom_surjective hw)]
+      simp only [Fintype.card_pi, Finset.prod_const, Finset.card_univ, Fintype.card_fin,
+        Nat.cast_pow, ← pow_mul]
+  · rw [pr_congr (Q := fun _ => False) fun p => ⟨fun h => hw h.1, False.elim⟩, pr_false]
+    positivity
+
+/-- The first nine and the next nine unit vinegars. -/
+def unitA (i : Fin 9) : Vin := Pi.single ⟨i, by omega⟩ 1
+
+/-- The next nine unit vinegars. -/
+def unitB (j : Fin 9) : Vin := Pi.single ⟨9 + j, by omega⟩ 1
+
+lemma unit_indep : LinearIndependent GF256 (Sum.elim unitA unitB) := by
+  let ι : Fin 9 ⊕ Fin 9 → Fin 74 :=
+    Sum.elim (fun i => ⟨i, by omega⟩) (fun j => ⟨9 + j, by omega⟩)
+  have hι : Function.Injective ι := by
+    rintro (a | a) (b | b) hab <;> simp only [ι, Sum.elim_inl, Sum.elim_inr, Fin.mk.injEq] at hab
+    · exact congrArg Sum.inl (Fin.ext hab)
+    · omega
+    · omega
+    · exact congrArg Sum.inr (Fin.ext (by omega))
+  have e : Sum.elim unitA unitB = (Pi.basisFun GF256 (Fin 74)) ∘ ι := by
+    funext s; cases s <;> simp [unitA, unitB, ι]
+  rw [e]
+  exact (Pi.basisFun GF256 (Fin 74)).linearIndependent.comp ι hι
+
+/-- **The vinegar part is not determined by the tensor**: for every `S`, over a uniform `P1`. -/
+theorem pr_detQ (S : Coef) : pr P1Part (fun p => DetQ (bq p) S) ≤ 1 / 256 ^ 314 := by
+  classical
+  refine (pr_mono (Q := fun p => ∃ w : GF256 × (Fin 45 → Fin 74 → GF256), w.1 ≠ 0 ∧
+      ∀ v v', w.1 • bq p v v' = bil S v (Matrix.of w.2 *ᵥ v') + bil S v' (Matrix.of w.2 *ᵥ v))
+    fun p ⟨δ, C, h1, h2⟩ => ⟨(δ, C), h1, h2⟩).trans ?_
+  rw [← card_gf]
+  refine pr_union Fintype.card_pos _ 3331 314 (by
+    simp only [Fintype.card_prod, Fintype.card_pi, Finset.prod_const, Finset.card_univ,
+      Fintype.card_fin, ← pow_mul]
+    rw [← pow_succ']) fun w => ?_
+  obtain ⟨δ, C⟩ := w
+  by_cases hw : δ = 0
+  · rw [pr_congr (Q := fun _ => False) fun p => ⟨fun h => h.1 hw, False.elim⟩, pr_false]
+    positivity
+  · refine (pr_mono (Q := fun p => bqHom unitA unitB p = fun i j =>
+        δ⁻¹ • (bil S (unitA i) (Matrix.of C *ᵥ unitB j) +
+          bil S (unitB j) (Matrix.of C *ᵥ unitA i))) fun p hp => ?_).trans (le_of_eq ?_)
+    · funext i j
+      show bq p (unitA i) (unitB j) = _
+      rw [← hp.2, smul_smul, inv_mul_cancel₀ hw, one_smul]
+    · rw [pr_fiber _ (bqHom_surjective unit_indep)]
+      simp only [Fintype.card_pi, Finset.prod_const, Finset.card_univ, Fintype.card_fin,
+        Nat.cast_pow, ← pow_mul]
+
+/-- A probability over a product is at most a bound that holds for every first coordinate. -/
+lemma pr_prod_le {α β : Type*} [Fintype α] [Fintype β] [Nonempty α] (P : α × β → Prop) {ε : ℝ}
+    (h : ∀ a, pr β (fun b => P (a, b)) ≤ ε) : pr (α × β) P ≤ ε := by
+  rw [pr_prod]
+  have hpos : (0 : ℝ) < Fintype.card α := by exact_mod_cast Fintype.card_pos
+  rw [div_le_iff₀ hpos]
+  calc ∑ a, pr β (fun b => P (a, b)) ≤ ∑ _a : α, ε := Finset.sum_le_sum fun a _ => h a
+    _ = ε * Fintype.card α := by rw [Finset.sum_const, Finset.card_univ, nsmul_eq_mul, mul_comm]
+
 end VoleMole.Assumptions.SymmetryScalar
