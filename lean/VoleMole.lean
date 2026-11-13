@@ -147,6 +147,11 @@ import VoleMole.ROM.MoussakaUnboundAdapt
 import VoleMole.ROM.MoussakaUnboundSpec
 import VoleMole.ROM.VerifyIC
 import VoleMole.ROM.MoussakaOMUF
+import VoleMole.ROM.SimUnion
+import VoleMole.ROM.SimExtract
+import VoleMole.ROM.SimSpec
+import VoleMole.ROM.MoussakaOMUFSim
+import VoleMole.ROM.RatatouilleBalanceSim
 import VoleMole.ROM.OneMore
 import VoleMole.ROM.OneMorePomfrit
 import VoleMole.ROM.TableReads
@@ -298,6 +303,7 @@ import VoleMole.Assumptions.CTUFOpenOMPR
 import VoleMole.Assumptions.UOVLinks
 import VoleMole.Assumptions.IdealTag
 import VoleMole.Assumptions.RatatouilleOMPR
+import VoleMole.Assumptions.SimLinks
 import VoleMole.Assumptions.Shift
 import VoleMole.Assumptions.Blind
 import VoleMole.Audit.Nonvacuous
