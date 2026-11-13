@@ -46,8 +46,10 @@ fresh context (`other`): `Adv^ow-k ≤ Adv^prf-t_1 + 2⁻¹⁹²`. So `Adv^ow-kr
 case of U3 cost `ε_prf + 2⁻¹⁹²`, not an extra one-wayness assumption on `UCom`.
 
 **Scope.** One honest token, one issuance and one redemption (the two hops of `Theft/Basic.lean`).
-The note's `U` tokens (the guessing factor `U`) and several honest redemptions per token are not
-modelled; they would need `WeakSE2` with more than two simulated proofs.
+The note's `U` tokens (the factor `U`) and several honest redemptions per token are
+`Theft/MoussakaUnboundMany.lean` (`nmUN`), with `WeakSEN` (`U + M` simulated proofs) in place of
+`WeakSE2`. With the Lean prover the two zero-knowledge hypotheses are theorems
+(`Theft/MoussakaUnboundLean.lean`).
 -/
 
 open Finset
