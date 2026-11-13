@@ -313,6 +313,25 @@ theorem prEvent_pfail_le (n ℓ : ℕ) (hdig : ∀ kp ∈ support KG, kp.1.diges
         (∃ i : Fin (ℓ + 1), PFailZ kp.1 i.val a.1) := fun a => rfl
   simp only [hev]
 
+/-- **Theorem U1 with Lemma P's term explicit** (`pomfrit.md` §6.1, §6.4; G8 closed for U1): for a
+key generation with 32-byte key digests, any Issuer and a forger with budget `qA` (hash queries per
+kind), `nA` (hash queries), `qE` (cipher queries), `Q_T` (`hash_to_target` queries), with Lemma P's
+`E₁` (`e1P`) as the reduction's first-phase rule,
+
+    Pr[PomWin] ≤ Adv^{ompr}(red …; Q_T + ℓ + 1, ℓ) + (ℓ + 1)·pfailEps(q', q_E', n'),
+
+with `q' = qA + Q_T·(H₃, H₂⁴, H₄) + (ℓ+1)·(the verification queries)`, `q_E' = qE + (ℓ+1)·cells`,
+`n' = nA + 3·Q_T + 26·(ℓ+1)` the derived provers' budgets (`qP`, `eP`, `nP`). -/
+theorem pomfrit_U1_explicit (ℓ : ℕ) (hdig : ∀ kp ∈ support KG, kp.1.digest.size = 32)
+    {qA : Kind → ℕ} {nA qE QT : ℕ} (hA : ForgerBound A qA nA qE QT) :
+    Pr{let r ← game KG pre (QT + (ℓ + 1)) ℓ CrtGen.tables lr A addHint (e1P lr) tgts1}[PomWin ℓ r] ≤
+      Pr{let r ← omExp KG pre (QT + (ℓ + 1))
+          (red addHint (advC ℓ CrtGen.tables lr A (e1P lr) tgts1))}[
+        Wins ℓ (goodPre relP) r.1 r.2.1 r.2.2] +
+      (ℓ + 1) * pfailEps (qP qA QT ℓ) (eP lr qE ℓ) (nP nA QT ℓ) :=
+  (pomfrit_U1_bound KG pre ℓ QT CrtGen.tables lr A (e1P lr) hA.ht).trans
+    (add_le_add le_rfl (prEvent_pfail_le KG pre lr A _ ℓ hdig hA))
+
 end Game
 
 end VoleMole.ROM.OneMore.Pomfrit

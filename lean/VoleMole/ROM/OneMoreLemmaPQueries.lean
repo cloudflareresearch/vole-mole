@@ -443,6 +443,37 @@ theorem right_wrapIC {α : Type} (oa : OracleComp specU α) :
     · simp only [wrapIC, StateT.run_mk, pure_bind]
       exact ih _ m _ (hm.2 _)
 
+/-! ### The derived prover -/
+
+/-- The derived provers' hash queries per kind, for a forger with budget `qA`, `Q_T`, and at most
+`ℓ + 1` verifications. -/
+def qP (qA : Kind → ℕ) (QT ℓ : ℕ) : Kind → ℕ :=
+  qA + (fun j => QT * auxQueries j) + fun j => (ℓ + 1) * vQueries j
+
+/-- The derived provers' hash queries in all. -/
+def nP (nA QT ℓ : ℕ) : ℕ := nA + 3 * QT + (ℓ + 1) * 26
+
+/-- The derived provers' cipher queries. -/
+def eP (lr : Bool) (qE ℓ : ℕ) : ℕ := qE + (ℓ + 1) * vCells lr
+
+variable (pk : UovPk)
+
+/-- **The derived prover's query bounds**, for `i ≤ ℓ`. -/
+theorem proverP_bounds {A : Forger} {qA : Kind → ℕ} {nA qE QT : ℕ} (hA : ForgerBound A qA nA qE QT)
+    (Lst : List TG) {i ℓ : ℕ} (hi : i ≤ ℓ) :
+    IsKindQueryBoundIC (proverP lr pk pre A Lst i) (qP qA QT ℓ) ∧
+      IsQueryBoundP (proverP lr pk pre A Lst i) (fun t => t.isLeft = true) (nP nA QT ℓ) ∧
+      IsQueryBoundP (proverP lr pk pre A Lst i) (fun t => t.isRight = true) (eP lr qE ℓ) := by
+  have hv : ∀ r, VBound (contP lr pk i r) (ℓ + 1) lr := fun r =>
+    (vBound_contP lr pk i r).mono lr (by omega)
+  rw [proverP_eq]
+  refine ⟨isKindQueryBoundIC_bind (kinds_wrapIC lr hint0 pre (A pk) qA QT _ (hA.kinds pk) (hA.ht pk))
+      fun r => (hv r).kinds, ?_, ?_⟩
+  · exact isQueryBoundP_bind (left_wrapIC lr hint0 pre (A pk) nA QT _ (hA.hashes pk) (hA.ht pk))
+      fun r _ => (hv r).left
+  · exact isQueryBoundP_bind (right_wrapIC lr hint0 pre (A pk) qE _ (hA.cipher pk))
+      fun r _ => (hv r).right
+
 end Forger
 
 end VoleMole.ROM.OneMore.Pomfrit
