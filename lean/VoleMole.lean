@@ -353,6 +353,7 @@ import VoleMole.Assumptions.PermLinks
 import VoleMole.Assumptions.FDHPerm
 import VoleMole.Assumptions.RatatouillePerm
 import VoleMole.Assumptions.PermSimLinks
+import VoleMole.Assumptions.RatatouillePermSim
 import VoleMole.Assumptions.Shift
 import VoleMole.Assumptions.TheoremR
 import VoleMole.Assumptions.TheoremRBad

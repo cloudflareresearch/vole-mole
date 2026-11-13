@@ -1070,18 +1070,21 @@ def UFWin (pk : PublicKey) (σ : Signer) (r : ForgerOut) : Prop :=
   ∃ c x s, r.1 = some (c, x, s) ∧ uovEval pk s = tag c x ∧
     ∀ q ∈ r.2.1, q = (c, x) → σ (tag c x) = none
 
-/-- **A UF-Tag forger with a signability probe.** -/
-structure TagForger where
-  run : Signer → CTable → OracleComp spec ForgerOut
-  reads : ∀ (σ σ' : Signer) (E : CTable) (g : Table),
+/-- **A UF-Tag forger with a signability probe.** Its common randomness is a table of type `Tb`:
+the ideal cipher (`CTable`, the default) or the permutation table of AES (`PTable`,
+`Assumptions/RatatouillePermSim.lean`), drawn uniformly by the game. -/
+structure TagForger (Tb : Type := CTable) where
+  run : Signer → Tb → OracleComp spec ForgerOut
+  reads : ∀ (σ σ' : Signer) (E : Tb) (g : Table),
     (∀ q ∈ (evalWithAnswerFn (QueryImpl.ofFn g) (run σ E)).2.1, σ' (tag q.1 q.2) = σ (tag q.1 q.2)) →
     (∀ q ∈ (evalWithAnswerFn (QueryImpl.ofFn g) (run σ E)).2.2,
       (σ' (tag q.1 q.2)).isSome = (σ (tag q.1 q.2)).isSome) →
     evalWithAnswerFn (QueryImpl.ofFn g) (run σ' E) = evalWithAnswerFn (QueryImpl.ofFn g) (run σ E)
 
 /-- **`Adv^{uf-tag}`** of a forger against the signer `σ`, the public map `pk`. -/
-noncomputable def ufTagAdv (pk : PublicKey) (σ : Signer) (B : TagForger) : ℝ≥0∞ :=
-  Pr{let E ← $ᵗ CTable; let r ← (simulateQ randomOracle (B.run σ E)).run' ∅}[UFWin pk σ r]
+noncomputable def ufTagAdv {Tb : Type} [SampleableType Tb] (pk : PublicKey) (σ : Signer)
+    (B : TagForger Tb) : ℝ≥0∞ :=
+  Pr{let E ← $ᵗ Tb; let r ← (simulateQ randomOracle (B.run σ E)).run' ∅}[UFWin pk σ r]
 
 /-! ### The Issuer's use of the signer, read off the transcript -/
 
@@ -1321,15 +1324,16 @@ section Forger
 
 variable (A : RoundAdv S (Op Z) Resp) (N : ℕ)
 
-/-- **`B` succeeds whenever the reduction's forgery event holds.** -/
-theorem forge_ufwin (σ : Signer) (g : Table) (E : CTable)
-    (hF : ForgeEv lr pkU E (evalWithAnswerFn (QueryImpl.ofFn g) (master lr pkU verQ A N σ E))) :
-    UFWin pkU.map σ (bOut lr pkU E (evalWithAnswerFn (QueryImpl.ofFn g)
-      (master lr pkU verQ A N σ E))) := by
+/-- **`B` succeeds whenever the reduction's forgery event holds**, for any lists of extraction
+outputs next to the game's transcript (the function-model run `master` or the permutation-model
+run `masterP`). -/
+theorem forge_ufwin_of (σ : Signer) (g : Table) (E : CTable) (Is : List OutI) (Ss : List OutS)
+    (hF : ForgeEv lr pkU E ((balT lr pkU A N σ g E).2.2, Is, Ss)) :
+    UFWin pkU.map σ (bOut lr pkU E ((balT lr pkU A N σ g E).2.2, Is, Ss)) := by
   classical
-  generalize hm : evalWithAnswerFn (QueryImpl.ofFn g) (master lr pkU verQ A N σ E) = m at hF ⊢
+  generalize hm : ((balT lr pkU A N σ g E).2.2, Is, Ss) = m at hF ⊢
   have hm1 : m.1 = (yG lr pkU A σ g E N).2.2 := by
-    rw [← hm, evalWithAnswerFn_master]; rfl
+    rw [← hm]; rfl
   obtain ⟨j, req, ctx, refund, out, hj, hval, hnot⟩ := hF
   have hjN : j < N := length_trace lr pkU A N σ g E ▸ (hm1 ▸ lt_of_getElem? hj)
   -- The Issuer accepted call `j`: its nullifier was fresh.
@@ -1415,6 +1419,14 @@ theorem forge_ufwin (σ : Signer) (g : Table) (E : CTable)
           rw [hqr] at hqe
           exact absurd (hqe ▸ hrelmem _ (by simp [relRec])) hnot'
 
+/-- **`B` succeeds whenever the reduction's forgery event holds.** -/
+theorem forge_ufwin (σ : Signer) (g : Table) (E : CTable)
+    (hF : ForgeEv lr pkU E (evalWithAnswerFn (QueryImpl.ofFn g) (master lr pkU verQ A N σ E))) :
+    UFWin pkU.map σ (bOut lr pkU E (evalWithAnswerFn (QueryImpl.ofFn g)
+      (master lr pkU verQ A N σ E))) := by
+  rw [evalWithAnswerFn_master] at hF ⊢
+  exact forge_ufwin_of lr pkU A N σ g E _ _ hF
+
 end Forger
 
 section Reads
@@ -1480,35 +1492,38 @@ theorem badB_congr (E : CTable) (m m' : List (Op Z × Resp) × List OutI × List
     obtain ⟨r', h1', h2'⟩ := (hj req ctx refund h3.1).2 ⟨r, h1, h2⟩
     exact ⟨req, ctx, refund, r', h1', h2', h3⟩
 
-/-- **`B` uses the signer only through its logs** (`TagForger.reads`). -/
-theorem bOut_reads (hver : VerifierIC CrtGen.tables verQ qV nV eV) (σ σ' : Signer) (g : Table)
-    (E : CTable)
-    (hs : ∀ q ∈ (bOut lr pkU E (evalWithAnswerFn (QueryImpl.ofFn g)
-      (master lr pkU verQ A N σ E))).2.1, σ' (tag q.1 q.2) = σ (tag q.1 q.2))
-    (hp : ∀ q ∈ (bOut lr pkU E (evalWithAnswerFn (QueryImpl.ofFn g)
-      (master lr pkU verQ A N σ E))).2.2, (σ' (tag q.1 q.2)).isSome = (σ (tag q.1 q.2)).isSome) :
-    bOut lr pkU E (evalWithAnswerFn (QueryImpl.ofFn g) (master lr pkU verQ A N σ' E)) =
-      bOut lr pkU E (evalWithAnswerFn (QueryImpl.ofFn g) (master lr pkU verQ A N σ E)) := by
+/-- **`B` uses the signer only through its logs**, for extraction outputs `GI τ k`, `GS τ k` that
+depend on the signer `τ` only through the run's first `k + 1` calls (`hG`). -/
+theorem bOut_reads_of (GI : Signer → ℕ → OutI) (GS : Signer → ℕ → OutS) (σ σ' : Signer)
+    (g : Table) (E : CTable)
+    (hG : ∀ k, (∀ k' ≤ k, yG lr pkU A σ' g E k' = yG lr pkU A σ g E k') →
+      GI σ' k = GI σ k ∧ GS σ' k = GS σ k)
+    (hs : ∀ q ∈ (bOut lr pkU E ((balT lr pkU A N σ g E).2.2, (List.range N).map (GI σ),
+      (List.range N).map (GS σ))).2.1, σ' (tag q.1 q.2) = σ (tag q.1 q.2))
+    (hp : ∀ q ∈ (bOut lr pkU E ((balT lr pkU A N σ g E).2.2, (List.range N).map (GI σ),
+      (List.range N).map (GS σ))).2.2, (σ' (tag q.1 q.2)).isSome = (σ (tag q.1 q.2)).isSome) :
+    bOut lr pkU E ((balT lr pkU A N σ' g E).2.2, (List.range N).map (GI σ'),
+        (List.range N).map (GS σ')) =
+      bOut lr pkU E ((balT lr pkU A N σ g E).2.2, (List.range N).map (GI σ),
+        (List.range N).map (GS σ)) := by
   classical
-  rw [evalWithAnswerFn_master] at hs hp ⊢
-  rw [evalWithAnswerFn_master]
   -- The two runs' data.
   have hwS : ∀ (τ : Signer) k, k < N → wSof lr pkU E ((balT lr pkU A N τ g E).2.2,
-      (List.range N).map (fun k => evalWithAnswerFn (QueryImpl.ofFn g) (gameI lr pkU verQ A τ k E)),
-      (List.range N).map (fun k => evalWithAnswerFn (QueryImpl.ofFn g) (gameS lr pkU verQ A τ k E)))
-        k = annS lr pkU E (evalWithAnswerFn (QueryImpl.ofFn g) (gameS lr pkU verQ A τ k E)) :=
+      (List.range N).map (GI τ),
+      (List.range N).map (GS τ))
+        k = annS lr pkU E (GS τ k) :=
     fun τ k hk => by simp [wSof, List.getElem?_map, List.getElem?_range hk]
   have hbal : ∀ τ : Signer, (balT lr pkU A N τ g E).2.2 = (yG lr pkU A τ g E N).2.2 := fun _ => rfl
   by_cases h : ∃ j, BadB lr pkU E ((balT lr pkU A N σ g E).2.2,
-      (List.range N).map (fun k => evalWithAnswerFn (QueryImpl.ofFn g) (gameI lr pkU verQ A σ k E)),
-      (List.range N).map (fun k => evalWithAnswerFn (QueryImpl.ofFn g) (gameS lr pkU verQ A σ k E))) j
+      (List.range N).map (GI σ),
+      (List.range N).map (GS σ)) j
   · unfold bOut at hs hp
     rw [dite_eq_left h] at hs hp
     obtain ⟨j, hjdef⟩ : ∃ j, Nat.find h = j := ⟨_, rfl⟩
     have hspec := Nat.find_spec h
     have hmin : ∀ n < j, ¬ BadB lr pkU E ((balT lr pkU A N σ g E).2.2,
-        (List.range N).map (fun k => evalWithAnswerFn (QueryImpl.ofFn g) (gameI lr pkU verQ A σ k E)),
-        (List.range N).map (fun k => evalWithAnswerFn (QueryImpl.ofFn g) (gameS lr pkU verQ A σ k E)))
+        (List.range N).map (GI σ),
+        (List.range N).map (GS σ))
           n := fun n hn => Nat.find_min h (by rw [hjdef]; exact hn)
     rw [hjdef] at hs hp hspec
     obtain ⟨req0, ctx0, refund0, r0, hj0, -, -, -, -⟩ := id hspec
@@ -1520,17 +1535,17 @@ theorem bOut_reads (hver : VerifierIC CrtGen.tables verQ qV nV eV) (σ σ' : Sig
     have hy := yT_signer lr pkU (verT g E) (nextT A g E) A.recv A.init σ σ' hjN.le
       (fun q hq => hs q hq) (fun q hq => hp q hq)
     have hgames : ∀ k ≤ j, _ := fun k hk =>
-      games_congr lr pkU verQ A hver σ σ' g E k fun k' hk' => hy k' (hk'.trans hk)
+      hG k fun k' hk' => hy k' (hk'.trans hk)
     have htake : ∀ k ≤ j, (balT lr pkU A N σ' g E).2.2.take k =
         (balT lr pkU A N σ g E).2.2.take k := fun k hk => by
       rw [hbal, hbal, take_trace _ _ _ _ _ _ _ (hk.trans hjN.le),
         take_trace _ _ _ _ _ _ _ (hk.trans hjN.le), hy k hk]
     have hw : ∀ k ≤ j, wSof lr pkU E ((balT lr pkU A N σ' g E).2.2,
-        (List.range N).map (fun k => evalWithAnswerFn (QueryImpl.ofFn g) (gameI lr pkU verQ A σ' k E)),
-        (List.range N).map (fun k => evalWithAnswerFn (QueryImpl.ofFn g) (gameS lr pkU verQ A σ' k E)))
+        (List.range N).map (GI σ'),
+        (List.range N).map (GS σ'))
           k = wSof lr pkU E ((balT lr pkU A N σ g E).2.2,
-        (List.range N).map (fun k => evalWithAnswerFn (QueryImpl.ofFn g) (gameI lr pkU verQ A σ k E)),
-        (List.range N).map (fun k => evalWithAnswerFn (QueryImpl.ofFn g) (gameS lr pkU verQ A σ k E)))
+        (List.range N).map (GI σ),
+        (List.range N).map (GS σ))
           k := fun k hk => by
       rw [hwS σ' k (hk.trans_lt hjN), hwS σ k (hk.trans_lt hjN), (hgames k hk).2]
     -- Calls before `j` are the same in both runs.
@@ -1567,11 +1582,11 @@ theorem bOut_reads (hver : VerifierIC CrtGen.tables verQ qV nV eV) (σ σ' : Sig
           rw [okRun_iff lr pkU _ σ' _ _ _ _ hnd]
           exact hok
     have hbad : ∀ k ≤ j, BadB lr pkU E ((balT lr pkU A N σ' g E).2.2,
-        (List.range N).map (fun k => evalWithAnswerFn (QueryImpl.ofFn g) (gameI lr pkU verQ A σ' k E)),
-        (List.range N).map (fun k => evalWithAnswerFn (QueryImpl.ofFn g) (gameS lr pkU verQ A σ' k E)))
+        (List.range N).map (GI σ'),
+        (List.range N).map (GS σ'))
           k ↔ BadB lr pkU E ((balT lr pkU A N σ g E).2.2,
-        (List.range N).map (fun k => evalWithAnswerFn (QueryImpl.ofFn g) (gameI lr pkU verQ A σ k E)),
-        (List.range N).map (fun k => evalWithAnswerFn (QueryImpl.ofFn g) (gameS lr pkU verQ A σ k E)))
+        (List.range N).map (GI σ),
+        (List.range N).map (GS σ))
           k := by
       intro k hk
       refine badB_congr lr pkU E _ _ k (htake k hk) (hw k hk) fun req ctx refund _ => ?_
@@ -1579,8 +1594,8 @@ theorem bOut_reads (hver : VerifierIC CrtGen.tables verQ qV nV eV) (σ σ' : Sig
       · rw [hbefore k hk]
       · exact hat req ctx refund ‹_›
     have h' : ∃ j, BadB lr pkU E ((balT lr pkU A N σ' g E).2.2,
-        (List.range N).map (fun k => evalWithAnswerFn (QueryImpl.ofFn g) (gameI lr pkU verQ A σ' k E)),
-        (List.range N).map (fun k => evalWithAnswerFn (QueryImpl.ofFn g) (gameS lr pkU verQ A σ' k E)))
+        (List.range N).map (GI σ'),
+        (List.range N).map (GS σ'))
           j := ⟨j, (hbad _ le_rfl).2 hspec⟩
     have hfind : Nat.find h' = j := by
       rw [Nat.find_eq_iff]
@@ -1604,19 +1619,35 @@ theorem bOut_reads (hver : VerifierIC CrtGen.tables verQ qV nV eV) (σ σ' : Sig
       (fun q hq => hs q (by rw [hlen] at hq; exact hq))
       (fun q hq => hp q (by rw [hlen] at hq; exact hq))
     have hdata : ((balT lr pkU A N σ' g E).2.2,
-        (List.range N).map (fun k => evalWithAnswerFn (QueryImpl.ofFn g) (gameI lr pkU verQ A σ' k E)),
-        (List.range N).map (fun k => evalWithAnswerFn (QueryImpl.ofFn g) (gameS lr pkU verQ A σ' k E))) =
+        (List.range N).map (GI σ'),
+        (List.range N).map (GS σ')) =
         ((balT lr pkU A N σ g E).2.2,
-        (List.range N).map (fun k => evalWithAnswerFn (QueryImpl.ofFn g) (gameI lr pkU verQ A σ k E)),
-        (List.range N).map (fun k => evalWithAnswerFn (QueryImpl.ofFn g) (gameS lr pkU verQ A σ k E))) := by
+        (List.range N).map (GI σ),
+        (List.range N).map (GS σ)) := by
       refine Prod.ext (congrArg (·.2.2) (hy N le_rfl)) (Prod.ext ?_ ?_)
       · refine List.map_congr_left fun k hk => ?_
-        exact (games_congr lr pkU verQ A hver σ σ' g E k fun k' hk' =>
+        exact (hG k fun k' hk' =>
           hy k' (hk'.trans (List.mem_range.1 hk).le)).1
       · refine List.map_congr_left fun k hk => ?_
-        exact (games_congr lr pkU verQ A hver σ σ' g E k fun k' hk' =>
+        exact (hG k fun k' hk' =>
           hy k' (hk'.trans (List.mem_range.1 hk).le)).2
     rw [hdata]
+
+/-- **`B` uses the signer only through its logs** (`TagForger.reads`). -/
+theorem bOut_reads (hver : VerifierIC CrtGen.tables verQ qV nV eV) (σ σ' : Signer) (g : Table)
+    (E : CTable)
+    (hs : ∀ q ∈ (bOut lr pkU E (evalWithAnswerFn (QueryImpl.ofFn g)
+      (master lr pkU verQ A N σ E))).2.1, σ' (tag q.1 q.2) = σ (tag q.1 q.2))
+    (hp : ∀ q ∈ (bOut lr pkU E (evalWithAnswerFn (QueryImpl.ofFn g)
+      (master lr pkU verQ A N σ E))).2.2, (σ' (tag q.1 q.2)).isSome = (σ (tag q.1 q.2)).isSome) :
+    bOut lr pkU E (evalWithAnswerFn (QueryImpl.ofFn g) (master lr pkU verQ A N σ' E)) =
+      bOut lr pkU E (evalWithAnswerFn (QueryImpl.ofFn g) (master lr pkU verQ A N σ E)) := by
+  rw [evalWithAnswerFn_master] at hs hp ⊢
+  rw [evalWithAnswerFn_master]
+  exact bOut_reads_of lr pkU A N
+    (fun τ k => evalWithAnswerFn (QueryImpl.ofFn g) (gameI lr pkU verQ A τ k E))
+    (fun τ k => evalWithAnswerFn (QueryImpl.ofFn g) (gameS lr pkU verQ A τ k E)) σ σ' g E
+    (fun k hy => games_congr lr pkU verQ A hver σ σ' g E k hy) hs hp
 
 end Reads
 

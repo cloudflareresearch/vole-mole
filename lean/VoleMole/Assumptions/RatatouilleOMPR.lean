@@ -56,18 +56,20 @@ def StrictWin (pk : PublicKey) (r : ForgerOut) : Prop :=
   ∃ c x s, r.1 = some (c, x, s) ∧ uovEval pk s = tag c x ∧ (c, x) ∉ r.2.1
 
 /-- **`Adv^{uf-tag}` with the strict win.** -/
-noncomputable def ufTagStrictAdv (pk : PublicKey) (σ : Signer) (B : TagForger) : ℝ≥0∞ :=
-  Pr{let E ← $ᵗ CTable; let r ← (simulateQ randomOracle (B.run σ E)).run' ∅}[StrictWin pk r]
+noncomputable def ufTagStrictAdv {Tb : Type} [SampleableType Tb] (pk : PublicKey) (σ : Signer)
+    (B : TagForger Tb) : ℝ≥0∞ :=
+  Pr{let E ← $ᵗ Tb; let r ← (simulateQ randomOracle (B.run σ E)).run' ∅}[StrictWin pk r]
 
 /-- A strict win is a win. -/
-theorem ufTagStrictAdv_le (pk : PublicKey) (σ : Signer) (B : TagForger) :
+theorem ufTagStrictAdv_le {Tb : Type} [SampleableType Tb] (pk : PublicKey) (σ : Signer)
+    (B : TagForger Tb) :
     ufTagStrictAdv pk σ B ≤ ufTagAdv pk σ B :=
   prEvent_bind_mono_of_support _ _ _ fun _ _ => prEvent_mono _ _ _ fun _ ⟨c, x, s, h1, h2, h3⟩ =>
     ⟨c, x, s, h1, h2, fun _ hq hqe => absurd (hqe ▸ hq) h3⟩
 
 /-- Per table: a win of `B` is a strict win of `B.noProbe τ` or a failure. -/
-theorem strictWin_noProbe (pk : PublicKey) (B : TagForger) (σ : Signer) (τ : Target → Preimage)
-    (E : CTable) (g : Table) (hW : RatBalance.UFWin pk σ (B.out σ E g)) :
+theorem strictWin_noProbe {Tb : Type} (pk : PublicKey) (B : TagForger Tb) (σ : Signer)
+    (τ : Target → Preimage) (E : Tb) (g : Table) (hW : RatBalance.UFWin pk σ (B.out σ E g)) :
     StrictWin pk ((B.noProbe τ).out σ E g) ∨ FailOut σ (B.out σ E g) := by
   by_cases hF : FailOut σ (B.out σ E g)
   · exact .inr hF
@@ -83,11 +85,11 @@ theorem strictWin_noProbe (pk : PublicKey) (B : TagForger) (σ : Signer) (τ : T
 
 /-- **The probe and the failed signings cost at most the failure event**:
 `Adv^{uf-tag+probe}(B) ≤ Adv^{uf-tag}_{strict}(B.noProbe τ) + failAdv(B)`. -/
-theorem ufTagAdv_le_strict (pk : PublicKey) (σ : Signer) (B : TagForger)
-    (τ : Target → Preimage) :
+theorem ufTagAdv_le_strict {Tb : Type} [SampleableType Tb] (pk : PublicKey) (σ : Signer)
+    (B : TagForger Tb) (τ : Target → Preimage) :
     ufTagAdv pk σ B ≤ ufTagStrictAdv pk σ (B.noProbe τ) + failAdv σ B := by
   unfold ufTagAdv ufTagStrictAdv failAdv
-  let : MeasurableSpace CTable := ⊤
+  let : MeasurableSpace Tb := ⊤
   rw [prEvent_bind_of_discrete, prEvent_bind_of_discrete, prEvent_bind_of_discrete,
     ← MeasureTheory.lintegral_add_left measurable_from_top]
   refine MeasureTheory.lintegral_mono fun E => ?_
@@ -115,7 +117,8 @@ abbrev FDHAdv {DR : Type} (AR : DR → Type) :=
 the concrete `Tag` is at most the det-FDH advantage (`Tag` a random function) of the ideal-model
 forger `A'`, with `q_H` hash and `q_S` signing queries. -/
 def TagIdeal {DR : Type} [DecidableEq DR] {AR : DR → Type} [∀ d, SampleableType (AR d)]
-    (pk : PublicKey) (σ : Signer) (B : TagForger) (qH qS : ℕ) (A' : FDHAdv AR) : Prop :=
+    {Tb : Type} [SampleableType Tb] (pk : PublicKey) (σ : Signer) (B : TagForger Tb) (qH qS : ℕ)
+    (A' : FDHAdv AR) : Prop :=
   ufTagStrictAdv pk σ B ≤ advFDH (ratTrap pk σ) qH qS A'
 
 /-! ## Theorem 1 under OMPR -/

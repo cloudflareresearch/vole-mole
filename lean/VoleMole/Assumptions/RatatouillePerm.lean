@@ -53,7 +53,8 @@ against the concrete `Tag` is at most the det-FDH advantage of the forger `A'` w
 first component of a random permutation with inverse queries (`advFDHPerm`). -/
 def TagIdealP {DR : Type} [DecidableEq DR] {AR : DR → Type} [∀ d, SampleableType (AR d)]
     {Z : Type} [DecidableEq Z] [SampleableType Z] [Fintype Z]
-    (pk : PublicKey) (σ : Signer) (B : TagForger) (emb : Commitment × Credits → Target × Z)
+    {Tb : Type} [SampleableType Tb] (pk : PublicKey) (σ : Signer) (B : TagForger Tb)
+    (emb : Commitment × Credits → Target × Z)
     (A' : FDHPermAdv AR Z) : Prop :=
   ufTagStrictAdv pk σ B ≤ advFDHPerm (ratTrap pk σ) emb A'
 
@@ -66,7 +67,8 @@ variable {Zs : Sizes} {S : Type} (lr : Bool) (pkU : UovPk) (A : RoundAdv S (Op Z
 
 /-- **The forgery term in the permutation model of `Tag`**: under `TagIdealP`,
 `Adv^{uf-tag}(B) ≤ Adv^{ompr}(B') + Pr[σ errs] + permEps + failAdv(B)`. -/
-theorem ufTag_le_ompr_perm (σ : Signer) (τ : Target → Preimage) (B : TagForger)
+theorem ufTag_le_ompr_perm {Tb : Type} [SampleableType Tb] (σ : Signer) (τ : Target → Preimage)
+    (B : TagForger Tb)
     (hemb : Function.Injective emb) (A' : FDHPermAdv AR Z) {qf qi qS : ℕ}
     (hA' : ∀ pk, ∀ a ∈ support (A' pk), FPBudget qf qi qS a)
     (hTag : TagIdealP pkU.map σ (B.noProbe τ) emb A') :

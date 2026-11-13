@@ -60,16 +60,20 @@ theorem patch_of_ne_none {σ : Signer} (τ : Target → Preimage) {y : Target} (
 def FailOut (σ : Signer) (r : ForgerOut) : Prop :=
   ∃ q ∈ r.2.1 ++ r.2.2, σ (tag q.1 q.2) = none
 
+section Forgers
+
+variable {Tb : Type}
+
 /-- The probability of the failure event in the forger's run. -/
-noncomputable def failAdv (σ : Signer) (B : TagForger) : ℝ≥0∞ :=
-  Pr{let E ← $ᵗ CTable; let r ← (simulateQ randomOracle (B.run σ E)).run' ∅}[FailOut σ r]
+noncomputable def failAdv [SampleableType Tb] (σ : Signer) (B : TagForger Tb) : ℝ≥0∞ :=
+  Pr{let E ← $ᵗ Tb; let r ← (simulateQ randomOracle (B.run σ E)).run' ∅}[FailOut σ r]
 
 /-- The forger's output against `σ` at the tables. -/
-abbrev TagForger.out (B : TagForger) (σ : Signer) (E : CTable) (g : Table) : ForgerOut :=
+abbrev TagForger.out (B : TagForger Tb) (σ : Signer) (E : Tb) (g : Table) : ForgerOut :=
   evalWithAnswerFn (QueryImpl.ofFn g) (B.run σ E)
 
 /-- **Outside the failure event, the run against `σ` is the run against `patch σ τ`.** -/
-theorem run_patch_of_not_fail (B : TagForger) (σ : Signer) (τ : Target → Preimage) (E : CTable)
+theorem run_patch_of_not_fail (B : TagForger Tb) (σ : Signer) (τ : Target → Preimage) (E : Tb)
     (g : Table) (h : ¬ FailOut σ (B.out σ E g)) : B.out (patch σ τ) E g = B.out σ E g := by
   have hne : ∀ q ∈ (B.out σ E g).2.1 ++ (B.out σ E g).2.2, σ (tag q.1 q.2) ≠ none :=
     fun q hq hn => h ⟨q, hq, hn⟩
@@ -79,7 +83,7 @@ theorem run_patch_of_not_fail (B : TagForger) (σ : Signer) (τ : Target → Pre
     exact hne q (List.mem_append_right _ hq)
 
 /-- **The failure event is read off the run against the total signer.** -/
-theorem failOut_iff_patch (B : TagForger) (σ : Signer) (τ : Target → Preimage) (E : CTable)
+theorem failOut_iff_patch (B : TagForger Tb) (σ : Signer) (τ : Target → Preimage) (E : Tb)
     (g : Table) : FailOut σ (B.out σ E g) ↔ FailOut σ (B.out (patch σ τ) E g) := by
   constructor
   · intro hF
@@ -100,7 +104,8 @@ theorem failOut_iff_patch (B : TagForger) (σ : Signer) (τ : Target → Preimag
 
 /-- **The forger without its probe**: `B` run against `patch σ τ` (every probe answers "yes"),
 with its probe log dropped. -/
-noncomputable def TagForger.noProbe (B : TagForger) (τ : Target → Preimage) : TagForger where
+noncomputable def TagForger.noProbe (B : TagForger Tb) (τ : Target → Preimage) :
+    TagForger Tb where
   run σ E := (fun r => (r.1, r.2.1, ([] : List (Commitment × Credits)))) <$> B.run (patch σ τ) E
   reads σ σ' E g hs _ := by
     simp only [evalWithAnswerFn_map] at hs ⊢
@@ -108,22 +113,22 @@ noncomputable def TagForger.noProbe (B : TagForger) (τ : Target → Preimage) :
       (fun q _ => rfl)]
 
 /-- A forger **never probes** if its probe log is always empty. -/
-def TagForger.ProbeFree (B : TagForger) : Prop :=
+def TagForger.ProbeFree (B : TagForger Tb) : Prop :=
   ∀ σ E (g : Table), (B.out σ E g).2.2 = []
 
-theorem noProbe_probeFree (B : TagForger) (τ : Target → Preimage) : (B.noProbe τ).ProbeFree := by
+theorem noProbe_probeFree (B : TagForger Tb) (τ : Target → Preimage) : (B.noProbe τ).ProbeFree := by
   intro σ E g
   simp [TagForger.out, TagForger.noProbe, evalWithAnswerFn_map]
 
 /-- A probe-free forger reads the signer only through its signing log. -/
-theorem ProbeFree.reads {B : TagForger} (hB : B.ProbeFree) (σ σ' : Signer) (E : CTable)
+theorem ProbeFree.reads {B : TagForger Tb} (hB : B.ProbeFree) (σ σ' : Signer) (E : Tb)
     (g : Table) (hs : ∀ q ∈ (B.out σ E g).2.1, σ' (tag q.1 q.2) = σ (tag q.1 q.2)) :
     B.out σ' E g = B.out σ E g :=
   B.reads σ σ' E g hs (fun q hq => by rw [hB σ E g] at hq; cases hq)
 
 /-- Per table: a win of `B` is a win of `B.noProbe τ` or a failure. -/
-theorem ufWin_noProbe (pk : PublicKey) (B : TagForger) (σ : Signer) (τ : Target → Preimage)
-    (E : CTable) (g : Table) (hW : UFWin pk σ (B.out σ E g)) :
+theorem ufWin_noProbe (pk : PublicKey) (B : TagForger Tb) (σ : Signer) (τ : Target → Preimage)
+    (E : Tb) (g : Table) (hW : UFWin pk σ (B.out σ E g)) :
     UFWin pk σ ((B.noProbe τ).out σ E g) ∨ FailOut σ (B.out σ E g) := by
   by_cases hF : FailOut σ (B.out σ E g)
   · exact .inr hF
@@ -135,11 +140,12 @@ theorem ufWin_noProbe (pk : PublicKey) (B : TagForger) (σ : Signer) (τ : Targe
 
 /-- **The probe costs at most the failure event**:
 `Adv^{uf-tag+probe}(B) ≤ Adv^{uf-tag}(B.noProbe τ) + failAdv(B)`, for every completion `τ`. -/
-theorem ufTagAdv_le_noProbe (pk : PublicKey) (σ : Signer) (B : TagForger)
+theorem ufTagAdv_le_noProbe [SampleableType Tb] (pk : PublicKey) (σ : Signer)
+    (B : TagForger Tb)
     (τ : Target → Preimage) :
     ufTagAdv pk σ B ≤ ufTagAdv pk σ (B.noProbe τ) + failAdv σ B := by
   unfold ufTagAdv failAdv
-  let : MeasurableSpace CTable := ⊤
+  let : MeasurableSpace Tb := ⊤
   rw [prEvent_bind_of_discrete, prEvent_bind_of_discrete, prEvent_bind_of_discrete,
     ← MeasureTheory.lintegral_add_left measurable_from_top]
   refine MeasureTheory.lintegral_mono fun E => ?_
@@ -150,6 +156,8 @@ theorem ufTagAdv_le_noProbe (pk : PublicKey) (σ : Signer) (B : TagForger)
       · exact ⟨true, Finset.mem_univ _, by simpa using h⟩
       · exact ⟨false, Finset.mem_univ _, by simpa using h⟩)
   simpa [add_comm] using h
+
+end Forgers
 
 /-! ## The failure event for a signer with independent failures -/
 
@@ -198,7 +206,8 @@ theorem pr_exists_list_le (L : List K) :
 /-- **The failure event of a forger against a signer with independent failures**: at every
 table, over the failure coordinates `f`, its probability is at most `ℓ·Pr[bad]`, with `ℓ` the
 number of pairs logged by the run against the total signer `τ` (which does not depend on `f`). -/
-theorem pr_failOut_le (B : TagForger) (τ : Target → Preimage) (E : CTable) (g : Table) :
+theorem pr_failOut_le {Tb : Type} (B : TagForger Tb) (τ : Target → Preimage) (E : Tb)
+    (g : Table) :
     pr (K → Ω) (fun f => FailOut (withFail bad κ f τ) (B.out (withFail bad κ f τ) E g)) ≤
       ((B.out (fun y => some (τ y)) E g).2.1 ++ (B.out (fun y => some (τ y)) E g).2.2).length *
         pr Ω bad := by
