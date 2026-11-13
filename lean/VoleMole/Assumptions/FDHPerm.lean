@@ -184,4 +184,238 @@ theorem advFDHPerm_le_hyb (tr : Trapdoor PK SK T S) (emb : M → T × Z)
 
 end Hybrids
 
+/-! ## The reduction to the random-function det-FDH game -/
+
+section Red
+
+variable {DR : Type} (AR : DR → Type) {M T Z : Type} [Fintype M] [DecidableEq T] [DecidableEq Z]
+  (emb : M → T × Z)
+
+/-- The coins for fresh inverse answers: blocks outside the structured inputs. -/
+abbrev Bc := {b : T × Z // b ∉ sList emb}
+
+/-- **The world with coins**: the forger's world, coins `ℕ → T × Z`, coins `ℕ → Bc`. -/
+abbrev ARF : DR ⊕ (ℕ ⊕ ℕ) → Type := Sum.elim AR (Sum.elim (fun _ => T × Z) fun _ => Bc emb)
+
+instance instARF [∀ d, SampleableType (AR d)] [SampleableType T] [SampleableType Z]
+    [SampleableType (Bc emb)] : ∀ d, SampleableType (ARF AR emb d)
+  | .inl d => inferInstanceAs (SampleableType (AR d))
+  | .inr (.inl _) => inferInstanceAs (SampleableType (T × Z))
+  | .inr (.inr _) => inferInstanceAs (SampleableType (Bc emb))
+
+variable {AR} {S : Type}
+
+/-- The reduction's oracles: det-FDH's, with the world with coins. -/
+abbrev specFR := specF (ARF AR emb) M T S
+
+/-- A world (or coin) query. -/
+def wQF (d : DR ⊕ (ℕ ⊕ ℕ)) : OracleComp (specFR emb (AR := AR) (S := S)) (ARF AR emb d) :=
+  liftM ((specFR emb (AR := AR) (S := S)).query (.inl d))
+
+/-- A hash query. -/
+def hQF (m : M) : OracleComp (specFR emb (AR := AR) (S := S)) T :=
+  liftM ((specFR emb (AR := AR) (S := S)).query (.inr (.inl m)))
+
+/-- A signing query. -/
+def sQF (m : M) : OracleComp (specFR emb (AR := AR) (S := S)) S :=
+  liftM ((specFR emb (AR := AR) (S := S)).query (.inr (.inr m)))
+
+/-- **The simulated forward step**: a recorded value, or `(H(m), z)` at a structured input
+`emb m` (`z` from a coin), or a coin. -/
+noncomputable def simFwd (b : T × Z) (s : PTab (T × Z) × ℕ) :
+    OracleComp (specFR emb (AR := AR) (S := S)) ((T × Z) × (PTab (T × Z) × ℕ)) :=
+  match fwdFind s.1 b with
+  | some y => pure (y, s)
+  | none => match CTUFPerm.embInv emb b with
+    | some m => hQF emb m >>= fun t => (fun c : T × Z => ((t, c.2), (s.1 ++ [(b, (t, c.2), true)],
+        s.2 + 1))) <$> wQF emb (.inr (.inl s.2))
+    | none => (fun c : T × Z => (c, (s.1 ++ [(b, c, true)], s.2 + 1))) <$> wQF emb (.inr (.inl s.2))
+
+/-- **The reduction's simulation**: the world forwarded; `Sign(m)` evaluates `π(emb m)` first;
+fresh inverse answers are coins outside the structured inputs. -/
+noncomputable def simCF :
+    QueryImpl (specFP AR M T Z S) (StateT (PTab (T × Z) × ℕ) (OracleComp (specFR emb (AR := AR) (S := S))))
+  | .inl (.inl d) => StateT.mk fun s => (fun a => (a, s)) <$> wQF emb (.inl d)
+  | .inl (.inr m) => StateT.mk fun s => simFwd emb (emb m) s >>= fun r =>
+      (fun a => (a, r.2)) <$> sQF emb m
+  | .inr (true, b) => StateT.mk fun s => simFwd emb b s
+  | .inr (false, c) => StateT.mk fun s => match invFind s.1 c with
+    | some x => pure (x, s)
+    | none => (fun x : Bc emb => (x.1, (s.1 ++ [(x.1, c, false)], s.2 + 1))) <$>
+        wQF emb (.inr (.inr s.2))
+
+/-- **The function-model forger**: the permutation-model forger and the final evaluation, under
+the simulation. -/
+noncomputable def simA (a : OracleComp (specFP AR M T Z S) (M × S)) :
+    OracleComp (specFR emb (AR := AR) (S := S)) (M × S) :=
+  Prod.fst <$> (simulateQ (simCF emb) (a >>= fpFinal emb)).run ([], 0)
+
+/-- **The reduction.** -/
+noncomputable def fdhPermRed {PK : Type} (A : PK → ProbComp (OracleComp (specFP AR M T Z S) (M × S)))
+    (pk : PK) : ProbComp (OracleComp (specFR emb (AR := AR) (S := S)) (M × S)) :=
+  simA emb <$> A pk
+
+end Red
+
+/-! ## The reduction against the det-FDH challenger -/
+
+section Core
+
+variable {DR : Type} [DecidableEq DR] {AR : DR → Type} [∀ d, SampleableType (AR d)]
+  {M T Z S : Type} [Fintype M] [DecidableEq M] [Inhabited T] [DecidableEq T] [DecidableEq Z]
+  [SampleableType T] [SampleableType Z] [Fintype T] [Fintype Z] (emb : M → T × Z)
+  [SampleableType (Bc emb)] (D : T → S)
+
+/-- **The reduction run against the det-FDH challenger, as one handler.** -/
+noncomputable def combF : QueryImpl (specFP AR M T Z S)
+    (StateT ((PTab (T × Z) × ℕ) × FDHSt (ARF AR emb) M T) ProbComp) :=
+  fun q => StateT.mk fun s => (fun r => (r.1.1, (r.1.2, r.2))) <$>
+    (simulateQ (fdhImpl D) ((simCF emb q).run s.1)).run s.2
+
+theorem collapseFP {α : Type} (oa : OracleComp (specFP AR M T Z S) α) (s : PTab (T × Z) × ℕ)
+    (c : FDHSt (ARF AR emb) M T) :
+    (simulateQ (fdhImpl D) ((simulateQ (simCF emb) oa).run s)).run c =
+      (fun r => ((r.1, r.2.1), r.2.2)) <$> (simulateQ (combF emb D) oa).run (s, c) := by
+  refine simulateQ_StateT_StateT_compose _ _ _ (fun q s c => ?_) oa s c
+  show _ = _ <$> ((fun r : (_ × _) × _ => (r.1.1, (r.1.2, r.2))) <$> _)
+  rw [Functor.map_map]
+  exact (id_map _).symm
+
+/-- The world's cache without the coins. -/
+def projROF (c : (specR (ARF AR emb)).QueryCache) : (specR AR).QueryCache :=
+  QueryCache.ofFn fun d => c (.inl d)
+
+/-- **The hybrid's state that the reduction's run represents.** -/
+def projF (s : (PTab (T × Z) × ℕ) × FDHSt (ARF AR emb) M T) : PTab (T × Z) × FPSt AR M :=
+  (s.1.1, ⟨projROF emb s.2.ro, s.2.signed⟩)
+
+/-- **The invariant**: unused coins from the counter on; `H` defined only at messages with a
+record; a forward record at a structured input carries `H`; no inverse record at a structured
+input. -/
+def InvF (s : (PTab (T × Z) × ℕ) × FDHSt (ARF AR emb) M T) : Prop :=
+  (∀ k, s.1.2 ≤ k → s.2.ro (.inr (.inl k)) = none ∧ s.2.ro (.inr (.inr k)) = none) ∧
+  (∀ m, fwdFind s.1.1 (emb m) = none → s.2.h m = none) ∧
+  (∀ e ∈ s.1.1, e.2.2 = true → ∀ m, e.1 = emb m → s.2.h m = some e.2.1.1) ∧
+  (∀ e ∈ s.1.1, e.2.2 = false → e.1 ∉ sList emb)
+
+theorem combF_world (d : DR) (L : PTab (T × Z)) (n : ℕ) (c : FDHSt (ARF AR emb) M T) :
+    ((combF emb D) (.inl (.inl d))).run ((L, n), c) =
+      (fun r : AR d × (specR (ARF AR emb)).QueryCache => (r.1, ((L, n), { c with ro := r.2 }))) <$>
+        ((specR (ARF AR emb)).randomOracle (Sum.inl d)).run c.ro := by
+  simp only [combF, simCF, StateT.run_mk, wQF]
+  erw [simulateQ_map, simulateQ_spec_query]
+  erw [StateT.run_map]
+  simp only [fdhImpl]
+  repeat (first | erw [StateT.run_mk] | erw [Functor.map_map])
+  rfl
+
+theorem combF_fwd_found (b y : T × Z) (s : (PTab (T × Z) × ℕ) × FDHSt (ARF AR emb) M T)
+    (h : fwdFind s.1.1 b = some y) :
+    ((combF emb D) (.inr (true, b))).run s = pure (y, s) := by
+  show (fun r => (r.1.1, (r.1.2, r.2))) <$> (simulateQ (fdhImpl D) (simFwd emb b s.1)).run s.2 = _
+  simp only [simFwd, h]
+  erw [simulateQ_pure]
+  rfl
+
+theorem combF_inv_found (c x : T × Z) (s : (PTab (T × Z) × ℕ) × FDHSt (ARF AR emb) M T)
+    (h : invFind s.1.1 c = some x) :
+    ((combF emb D) (.inr (false, c))).run s = pure (x, s) := by
+  simp only [combF, simCF, StateT.run_mk, h]
+  erw [simulateQ_pure]
+  rfl
+
+theorem combF_fwd_coin (b : T × Z) (L : PTab (T × Z)) (n : ℕ) (c : FDHSt (ARF AR emb) M T)
+    (h : fwdFind L b = none) (he : CTUFPerm.embInv emb b = none)
+    (hro : c.ro (.inr (.inl n)) = none) :
+    ((combF emb D) (.inr (true, b))).run ((L, n), c) =
+      (fun u : T × Z => (u, ((L ++ [(b, u, true)], n + 1),
+        { c with ro := c.ro.cacheQuery (.inr (.inl n)) u }))) <$> ($ᵗ (T × Z) : ProbComp (T × Z)) := by
+  show (fun r => (r.1.1, (r.1.2, r.2))) <$> (simulateQ (fdhImpl D) (simFwd emb b (L, n))).run c = _
+  simp only [simFwd, h, he, wQF]
+  erw [simulateQ_map, simulateQ_spec_query]
+  erw [StateT.run_map]
+  simp only [fdhImpl]
+  erw [StateT.run_mk]
+  try dsimp only
+  erw [randomOracle.run_eq]
+  rw [show c.ro.toFn (Sum.inr (Sum.inl n)) = none from hro]
+  try dsimp only
+  rw [map_bind]
+  simp only [map_pure]
+  rw [bind_pure_comp]
+  repeat erw [Functor.map_map]
+  rfl
+
+theorem combF_inv_fresh (c' : T × Z) (L : PTab (T × Z)) (n : ℕ) (c : FDHSt (ARF AR emb) M T)
+    (h : invFind L c' = none) (hro : c.ro (.inr (.inr n)) = none) :
+    ((combF emb D) (.inr (false, c'))).run ((L, n), c) =
+      (fun x : Bc emb => (x.1, ((L ++ [(x.1, c', false)], n + 1),
+        { c with ro := c.ro.cacheQuery (.inr (.inr n)) x }))) <$> ($ᵗ (Bc emb) : ProbComp (Bc emb)) := by
+  simp only [combF, simCF, StateT.run_mk, h, wQF]
+  erw [simulateQ_map, simulateQ_spec_query]
+  erw [StateT.run_map]
+  simp only [fdhImpl]
+  erw [StateT.run_mk]
+  try dsimp only
+  erw [randomOracle.run_eq]
+  rw [show c.ro.toFn (Sum.inr (Sum.inr n)) = none from hro]
+  try dsimp only
+  rw [map_bind]
+  simp only [map_pure]
+  rw [bind_pure_comp]
+  repeat erw [Functor.map_map]
+  rfl
+
+theorem combF_fwd_com (b : T × Z) (m : M) (L : PTab (T × Z)) (n : ℕ) (c : FDHSt (ARF AR emb) M T)
+    (h : fwdFind L b = none) (he : CTUFPerm.embInv emb b = some m) (htab : c.h m = none)
+    (hro : c.ro (.inr (.inl n)) = none) :
+    ((combF emb D) (.inr (true, b))).run ((L, n), c) =
+      (do let t ← ($ᵗ T : ProbComp T); let u ← ($ᵗ (T × Z) : ProbComp (T × Z))
+          pure ((t, u.2), ((L ++ [(b, (t, u.2), true)], n + 1),
+            { c with h := Function.update c.h m (some t), hq := c.hq + 1,
+                     ro := c.ro.cacheQuery (.inr (.inl n)) u }))) := by
+  show (fun r => (r.1.1, (r.1.2, r.2))) <$> (simulateQ (fdhImpl D) (simFwd emb b (L, n))).run c = _
+  simp only [simFwd, h, he, wQF, hQF]
+  erw [simulateQ_bind, simulateQ_spec_query]
+  erw [StateT.run_bind]
+  simp only [fdhImpl]
+  erw [StateT.run_mk]
+  try dsimp only
+  simp only [hStep, htab]
+  erw [Functor.map_map, bind_map_left, map_bind]
+  refine bind_congr fun (t : T) => ?_
+  erw [simulateQ_map, simulateQ_spec_query, StateT.run_map]
+  simp only [fdhImpl]
+  erw [StateT.run_mk]
+  try dsimp only
+  erw [randomOracle.run_eq]
+  rw [show c.ro.toFn (Sum.inr (Sum.inl n)) = none from hro]
+  try dsimp only
+  rw [map_bind]
+  simp only [map_pure]
+  rw [bind_pure_comp, bind_pure_comp]
+  repeat erw [Functor.map_map]
+  rfl
+
+theorem run_sQF (m : M) (c : FDHSt (ARF AR emb) M T) :
+    (simulateQ (fdhImpl D) (sQF emb (S := S) m)).run c =
+      (fun r => (D r.1, { r.2 with signed := m :: r.2.signed })) <$> hStep m c := by
+  unfold sQF
+  erw [simulateQ_spec_query]
+  rfl
+
+theorem combF_sign (m : M) (s : (PTab (T × Z) × ℕ) × FDHSt (ARF AR emb) M T) :
+    ((combF emb D) (.inl (.inr m))).run s =
+      ((combF emb D) (.inr (true, emb m))).run s >>= fun r =>
+        (fun w => (w.1, (r.2.1, w.2))) <$> (simulateQ (fdhImpl D) (sQF emb (S := S) m)).run r.2.2 := by
+  show (fun r => (r.1.1, (r.1.2, r.2))) <$> (simulateQ (fdhImpl D) (simFwd emb (emb m) s.1 >>= fun r =>
+      (fun a => (a, r.2)) <$> sQF emb m)).run s.2 = (fun r => (r.1.1, (r.1.2, r.2))) <$>
+      (simulateQ (fdhImpl D) (simFwd emb (emb m) s.1)).run s.2 >>= _
+  rw [simulateQ_bind, StateT.run_bind, map_bind]
+  erw [bind_map_left]
+  refine bind_congr fun r => ?_
+  erw [simulateQ_map, StateT.run_map, Functor.map_map]
+
+end Core
+
 end VoleMole.Assumptions.UOV.FDHPerm
