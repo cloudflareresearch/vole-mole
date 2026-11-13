@@ -985,7 +985,7 @@ Files: `ROM/OneMore.lean` (generic), `ROM/OneMorePomfrit.lean`. `lean/docs/secur
   (`Ch.tg`); `TgInv` and `NoFall` (support invariants, VCVio's `simulateQ_run_preservesInv` and an
   induction with `IsQueryBoundP`) turn the final events into statements about the oracle's answer
   and the first hint.
-- **The extraction term**: partly done, §2n (pomfrit.md G8).
+- **The extraction term**: done for U1 (every term explicit, `pomfrit_U1_explicit`), open for U2, §2n (pomfrit.md G8).
 
 ### 2l. Protocol games from single-proof extraction, as implemented
 
@@ -1148,8 +1148,10 @@ Moussaka, the quantum setting.
 
 ### 2n. Lemma P in the random-oracle model (PomFRIT G8), as implemented
 
-Files: `ROM/LemmaPDet.lean`, `ROM/LemmaP.lean`, `ROM/OneMoreLemmaP.lean`; changes to
-`ROM/OneMorePomfrit.lean`. `lean/docs/security/pomfrit.md` §5, §6.4 state the results.
+Files: `ROM/LemmaPDet.lean`, `ROM/LemmaP.lean`, `ROM/OneMoreLemmaP.lean`,
+`ROM/OneMoreLemmaPIC.lean`, `ROM/OneMoreLemmaPIdent.lean`, `ROM/OneMoreLemmaPOrder.lean`,
+`ROM/OneMoreLemmaPQueries.lean`, `ROM/OneMoreLemmaPFail.lean`, `ROM/OneMoreLemmaPBound.lean`,
+`Assumptions/PomfritLemmaP.lean`; changes to `ROM/OneMorePomfrit.lean`. `lean/docs/security/pomfrit.md` §5, §6.4 state the results.
 
 - **A general extraction goal.** The adaptive bound of §2g reads the extraction goal
   `∃ i ∈ known, Wit chal1 (cand i)` only through the per-chain hypothesis `hdet`.
@@ -1188,14 +1190,27 @@ Files: `ROM/LemmaPDet.lean`, `ROM/LemmaP.lean`, `ROM/OneMoreLemmaP.lean`; change
   marker `H₃(x)`, `mu₁`, `iv`), logged for the hint, so that `E₁` can compute `iv` at query time;
   `chal1Pre` now uses the ideal cipher's PRG (it used the global AES instance, so the target
   oracle's input was computed at a `chal1` that is not the verifier's).
-- **Not done.** (i) `proverI` reads the cipher table directly (its `chal1`, `E₁` and the earlier
-  forgeries' extraction use `icPrg E.cipher`), so `pomfritT_accept_le_major`, which needs a prover
-  that reaches the cipher only through queries, does not apply to it; the replacement (forger as
-  `wrapP`, `chal1` through `verifyIC`) extracts from a log with the verifier's cipher queries added,
-  and its relation to the game's extraction is not proved. (ii) Lemma P's ordering step (`E₁` at
-  query time is the widest group of the alive trees at the end, outside `H₂¹` answers hitting the
-  `chal1` field of an earlier target query, which the marker queries put in the log). (iii) The
-  probability assembly and the derived provers' query bounds.
+- **The `E`-independent derived prover** (`ROM/OneMoreLemmaPIC.lean`, `proverP`): the forger with
+  a void hint (`hintVoid`; the hint the game stores at `x` is the hint rule at `x`'s ghost log,
+  `InvH`, `eval_wrapIC_hint`), the verifications up to the target queries with `chal1` through
+  cipher queries (`chal1PreIC`: `verifyIC`'s cells, then `chal1Pre` with the queried cells' PRG,
+  `chal1Pre_congr_cells`). Per table: `eval_proverP` (output = `proverI`'s, hint = `E₁` at the ghost
+  log), `log_proverP` (forger's log `L`, then `V`), `aux_proverP` (ghost logs).
+- **Extraction from a prefix** (`ROM/OneMoreLemmaPIdent.lean`): `find?` on a log sandwiched between
+  two logs on which it agrees (`find?_sandwich`, `extractKey_sandwich`); with `chain_ident`'s
+  order (`mem_x_of_mem_z`) and `KeysPre` the extraction from `L` is the one from `L ++ V`
+  (`keysOf_knownOf_prefix`); `aliveR_eq_filter`, `aliveR_subset_known`.
+- **The ordering step** (`ROM/OneMoreLemmaPOrder.lean`, `e1P_eq_major`), and its failure as an order
+  hit (`orderHitL`, `ROM/OneMoreLemmaPFail.lean`).
+- **The per-table implication** (`pfail_events`) and **the assembly** (`ROM/OneMoreLemmaPBound.lean`):
+  `prEvent_bind_le_sum_of_table` over `Fin (ℓ+1) × Fin 4` (the four events of each derived game,
+  through `withLogQ` for the hits), the four bounds per derived prover, `eqd_swap` to draw the
+  target stream before the cipher table, `realImpl_run_eq` to pass from the game to the lazy oracle
+  (`prEvent_pfail_le`), then `pomfrit_U1_bound` (`pomfrit_U1_explicit`). Query bounds:
+  `ROM/OneMoreLemmaPQueries.lean` (`ForgerBound`, `proverP_bounds`).
+- **Not done (U2).** `pomfrit_U2_bound`'s term `Pr[∃ i, ShiftFail_i]`: the game machinery above is
+  for U1's hints (`addHint`, one target), and the extraction bound needed (some alive tree
+  extracts, `N = 2` per chain, no `Shift`) is not stated for the target family `pomfritRedeemT`.
 
 ### M4 — Mathlib bump and VCVio dependency (Phase B, ~1–3 days, mostly waiting on builds) — done
 

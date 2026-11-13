@@ -32,13 +32,11 @@ pieces that relate `PFail i` to the adaptive extraction game of `ROM/LemmaP.lean
   (`MajorExtracted`), every alive tree is known, and the hint is the widest group's prefix, then
   some extracted candidate is a preimage of the programmed target.
 
-**Not here** (`pomfrit.md` §6.4, G8): `proverI` reads the cipher table `E` directly (the
-reduction's `chal1`, its `E₁` and the earlier forgeries' extraction use `icPrg E.cipher`), so the
-adaptive bound `pomfritT_accept_le_major`, which is for provers that reach the cipher only through
-queries, does not apply to it as it stands. An `E`-independent derived prover (the forger as
-`wrapP`, `chal1` through `ROM/VerifyIC.lean`'s `verifyIC`) and the ordering step of Lemma P (`E₁`
-at query time equals the widest group of the alive trees at the end, outside an `H₂¹` answer
-hitting the `chal1` field of an earlier target query and the chain hits) remain.
+**Not here** (`pomfrit.md` §6.4, G8): `proverI` reads the cipher table `E` directly, so the
+adaptive bound `pomfritT_accept_le_major` does not apply to it. The `E`-independent derived prover
+(`proverP`, `ROM/OneMoreLemmaPIC.lean`), the ordering step (`ROM/OneMoreLemmaPOrder.lean`) and the
+bound on `Pr[∃ i, PFail i]` (`ROM/OneMoreLemmaPBound.lean`, `prEvent_pfail_le`) are in the files
+that build on this one.
 
 No `sorry`, no `axiom`.
 -/
