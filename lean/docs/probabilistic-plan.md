@@ -985,10 +985,7 @@ Files: `ROM/OneMore.lean` (generic), `ROM/OneMorePomfrit.lean`. `lean/docs/secur
   (`Ch.tg`); `TgInv` and `NoFall` (support invariants, VCVio's `simulateQ_run_preservesInv` and an
   induction with `IsQueryBoundP`) turn the final events into statements about the oracle's answer
   and the first hint.
-- **Not done**: the extraction term. The PomFRIT bounds of §2g are for `hash_to_target` = SHAKE
-  inside the statement; the one-more game needs it to be a random oracle (`pomfritRedeemT`, a
-  target-function family), and the per-forgery event to be the adaptive game of a derived prover
-  (pomfrit.md G8).
+- **The extraction term**: partly done, §2n (pomfrit.md G8).
 
 ### 2l. Protocol games from single-proof extraction, as implemented
 
@@ -1148,6 +1145,57 @@ verifications. Nothing in the paper's argument was found wrong.
 permutation model (`*_adaptive_perm`: the normalized prover adds one `H₄` query per `H₂¹` query
 and depends on the permutation table; the protocol games use the PRF view, §2l), unbound
 Moussaka, the quantum setting.
+
+### 2n. Lemma P in the random-oracle model (PomFRIT G8), as implemented
+
+Files: `ROM/LemmaPDet.lean`, `ROM/LemmaP.lean`, `ROM/OneMoreLemmaP.lean`; changes to
+`ROM/OneMorePomfrit.lean`. `lean/docs/security/pomfrit.md` §5, §6.4 state the results.
+
+- **A general extraction goal.** The adaptive bound of §2g reads the extraction goal
+  `∃ i ∈ known, Wit chal1 (cand i)` only through the per-chain hypothesis `hdet`.
+  `combBad_of_acceptG`, `CombDetG`, `combBad_trace_icDG` are `combBad_of_accept`, `CombDetD`,
+  `combBad_trace_icD` with the goal any predicate `Goal chal1 cand S` of a tree set `S` that
+  contains every tree with no committed dead leaf; the proofs are copies with the goal threaded
+  through (`ROM/Accept.lean` and `ROM/AdaptPomfrit.lean` are unchanged).
+- **The target family.** `pomfritRedeemT pk h b₁ b₂` (moved from `ROM/OneMorePomfrit.lean`) is
+  PomFRIT's statement with any target function `h` of `chal1`. The delayed `μ` binds `h(chal1)`
+  through its `H₂⁰` preimage for any `h` (`target_eq_of_muInD_T`), so §2g's union bound carries
+  over with the family `stT s = pomfritRedeemT pk (hF s) (b₁F s) (b₂F s)`
+  (`prEvent_accept_le_adaptive_pomfritT_E`, a copy of `prEvent_accept_le_adaptive_pomfrit_E`).
+- **Lemma P's goal on an output** (`MajorExtracted`): `aliveR` recomputes the committed dead
+  leaves (`deadPre`) at the first `H₂¹` preimage of the output's `chal1` in the prover's hash log
+  (`hashEnt`), with the verifier's `iv`; without chain hits it contains every tree with no dead
+  leaf of the accepted chain (`dead_of_not_mem_aliveR`: the preimage is the verifier's `H₂¹` input
+  by `cell_eq_of_noHit`, the logs before it agree since the game's log starts with the prover's
+  hash entries). The goal: a tree of `aliveR` in the relation whose prefix `preB` (witness bytes
+  `[0, 45)`) is the widest group's (`PomFRIT.majP`).
+- **The per-chain step** (`extract_or_major`, `pomfritT_extract_major_chain`): `extract_or_few`
+  with Lemma P's step 6: the free tree holds `u*`, trees outside `u*`'s prefix group are fixed,
+  and a group that is not the widest has width `≤ 57` (`minority_card_le`), so `|A| ≤ 2⁵⁷`. With
+  `N = 2⁵⁷` the union bound's `H₂³` term is `(Q₃ + 1)·2⁵⁷/2¹²⁸`
+  (`pomfritT_accept_le_major`).
+- **The game as a lazy random oracle** (`realImpl_run_eq`): `OneMore.realImpl` is the lazy random
+  oracle composed with a state handler `htW` for the target oracle and the Issuer, by induction on
+  the computation. Then `ROM/ExtractReduce.lean`'s per-table comparison applies to the one-more
+  game.
+- **Derived provers, table by table.** `wrapIC`/`wrapP` run the forger with the cipher as
+  queries; per table they give the game's forgeries, log and target answers (`eval_forger`,
+  `log_forger`, `eval_forgerP`). `pfail_table`: a failed forgery is, at the same tables, an
+  accepted proof of the derived prover `proverI … i` from which no extracted candidate decodes to a
+  preimage of the programmed target; `not_noPick`: Lemma P's goal, `aliveR ⊆ known` and the hint
+  equal to the widest group's prefix contradict that.
+- **Deviations.** The wrapper makes its own hidden queries at each target query (`auxSpec`: a
+  marker `H₃(x)`, `mu₁`, `iv`), logged for the hint, so that `E₁` can compute `iv` at query time;
+  `chal1Pre` now uses the ideal cipher's PRG (it used the global AES instance, so the target
+  oracle's input was computed at a `chal1` that is not the verifier's).
+- **Not done.** (i) `proverI` reads the cipher table directly (its `chal1`, `E₁` and the earlier
+  forgeries' extraction use `icPrg E.cipher`), so `pomfritT_accept_le_major`, which needs a prover
+  that reaches the cipher only through queries, does not apply to it; the replacement (forger as
+  `wrapP`, `chal1` through `verifyIC`) extracts from a log with the verifier's cipher queries added,
+  and its relation to the game's extraction is not proved. (ii) Lemma P's ordering step (`E₁` at
+  query time is the widest group of the alive trees at the end, outside `H₂¹` answers hitting the
+  `chal1` field of an earlier target query, which the marker queries put in the log). (iii) The
+  probability assembly and the derived provers' query bounds.
 
 ### M4 — Mathlib bump and VCVio dependency (Phase B, ~1–3 days, mostly waiting on builds) — done
 

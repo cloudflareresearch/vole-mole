@@ -1,5 +1,6 @@
 import VoleMole.ROM.OneMore
 import VoleMole.ROM.SpecSound
+import VoleMole.ROM.LemmaP
 import VoleMole.Arith.GF256Field
 
 /-!
@@ -39,12 +40,21 @@ fields before the message: `tgtIn_inj`, `acomp_support`), so this is the generic
 * `pomfrit_U2` / `pomfrit_U2_bound` (A-OMPR⊕τ, the hint the first `τ` shifts `sh E L x`):
   the same with `ShiftFail i` (no shift `δ` with the claim a preimage of `H_T(x_i) + δ`).
 
-**What is not here.** The bound on `Pr[∃ i, PFail i]`: Lemma P (§5) says that for its `E₁` an
-accepted forgery's extracted witness `(r, s)` has `r = E₁(x)` and `P(s) = H_T(x) ⊕ r`, except with
-`ε_ext` and `Shift`; then `pick` finds `s` and `PFail i` fails. The extraction part is bounded in
-`ROM/AdaptPomfrit.lean` for `hash_to_target` = SHAKE (`pomfritTarget`), not for a random oracle
-`H_T`; `pomfritRedeemT` is the statement those bounds would have to be generalized to. Lemma P's
-`E₁` itself is a parameter (`e1`, `sh`).
+**The reduction's own queries.** At every target query `x` (the forger's and the verifications')
+the wrapper first makes hidden hash queries (`auxSpec`: a marker `H₃(x)`, the delayed `mu₁` and the
+`iv` of the first `H₂¹` preimage of `x`'s `chal1`), logged with the forger's queries; the hint is
+computed from that log. The forger's view is unchanged (they are random-oracle queries it does not
+see). Lemma P's `E₁` (`ROM/OneMoreLemmaP.lean`, `e1P`) needs `iv` at query time; the paper's `E₁`
+evaluates the oracle itself.
+
+**`chal1` with the ideal cipher.** The verification's steps up to `chal1` (`chal1Pre`) use the
+ideal cipher's PRG `icPrg E.cipher`, as the verifier (`verifyQ`) does. (Before, `chal1Pre` used the
+global AES instance, so the `H_T` input `x` was computed at a `chal1` different from the verifier's.)
+
+**What is not here.** The bound on `Pr[∃ i, PFail i]`. Its extraction part, with Lemma P's goal and
+`Shift` term and `hash_to_target` any function of `chal1` (`pomfritRedeemT`), is
+`ROM/LemmaP.lean`'s `pomfritT_accept_le_major`; `ROM/OneMoreLemmaP.lean` relates `PFail i` to that
+game table by table. `pomfrit.md` §6.4 lists what remains.
 
 No `sorry`, no `axiom`.
 -/
@@ -66,24 +76,6 @@ noncomputable instance : SampleableType TG := SampleableType.ofFintype _
 
 /-- A target as 45 bytes. -/
 def encT (a : TG) : ByteArray := toBA (List.ofFn fun i => (a i).val)
-
-/-- **PomFRIT redemption with the target function `h`** (`pomfritRedeem` with `h` in place of
-`hash_to_target` at the verifier's `chal1`, and the binders given). -/
-def pomfritRedeemT (pk : UovPk) (h : ByteArray → ByteArray) (b1 b2 : ByteArray)
-    (labelRows : Bool) : Statement :=
-  { params := pomfritParams labelRows
-    dst := toBA (Spec.makeDst "pomf" 0 'p' '0')
-    delayed := true
-    binder1 := b1
-    binder2 := b2
-    instEnc := fun c1 => pk.digest ++ h c1
-    comb := some (45, toBA (Spec.makeDst "pomf" 0 'l' '0'))
-    values := fun c1 lb w =>
-      UovEval.pomfritRedeemValues 119 45 pk.map (fun k => ⟨fnOf (h c1) k.val⟩)
-        (combinationOf 45 lb) w }
-
-@[simp] lemma pomfritRedeemT_params (pk : UovPk) (h : ByteArray → ByteArray) (b1 b2 : ByteArray)
-    (lr : Bool) : (pomfritRedeemT pk h b1 b2 lr).params = pomfritParams lr := rfl
 
 /-- `pomfritRedeem` is `pomfritRedeemT` at `hash_to_target`. -/
 theorem pomfritRedeem_eq_T (pk : UovPk) (sig msg : ByteArray) (lr : Bool) :
@@ -124,16 +116,50 @@ def liftW : QueryImpl spec (OracleComp (specC Hn)) := fun d =>
 /-- A computation against the hashes, as one of the composed adversary. -/
 def toC {α : Type} (oa : OracleComp spec α) : OracleComp (specC Hn) α := simulateQ liftW oa
 
+/-- The delayed `mu₁` cell of PomFRIT's statements: `H₂⁴(DST ‖ 12)`. -/
+def muCell : Dom := (.muDelayed, (toBA (Spec.makeDst "pomf" 0 'p' '0')).push 12)
+
+/-- The `chal1` field of a `hash_to_target` input (bytes `39 … 175`, after the 7-byte DST and a
+32-byte key digest). -/
+def xChal1 (x : ByteArray) : ByteArray := x.extract 39 175
+
+/-- The first `H₂¹` preimage, in the log `L`, of the `chal1` field of `x`. -/
+def x1Of (L : QueryLog specIC) (x : ByteArray) : Option ByteArray :=
+  firstIn .h21 (fun _ => true) (xChal1 x) (hashEnt L)
+
+/-- `iv`'s cell for the `H₂¹` input `x₁` and `mu₁`. -/
+def ivCell (lr : Bool) (x1 mu1 : ByteArray) : Dom := (.h4, (xIvPre (pomfritParams lr) x1 ++ mu1).push 4)
+
+/-- **The reduction's own queries at a target query `x`** (hidden from the forger, logged for the
+hint): a marker `H₃(x)` (it records `x` in the hash log, for the ordering event of Lemma P), the
+delayed `mu₁` and, if `x`'s `chal1` has an `H₂¹` preimage `x₁` in the log `L`, the `iv` of `x₁`.
+They let the first-phase rule compute `iv` (the paper's `E₁` evaluates the random oracle itself). -/
+def auxSpec (lr : Bool) (L : QueryLog specIC) (x : ByteArray) : OracleComp spec (QueryLog specIC) := do
+  let u3 ← (liftM (spec.query (.h3, x)) : OracleComp spec (Ans (.h3, x)))
+  let um ← (liftM (spec.query muCell) : OracleComp spec (Ans muCell))
+  match x1Of L x with
+  | some x1 => do
+    let ui ← (liftM (spec.query (ivCell lr x1 um.ba)) : OracleComp spec (Ans (ivCell lr x1 um.ba)))
+    pure [⟨.inl (.h3, x), u3⟩, ⟨.inl muCell, um⟩, ⟨.inl (ivCell lr x1 um.ba), ui⟩]
+  | none => pure [⟨.inl (.h3, x), u3⟩, ⟨.inl muCell, um⟩]
+
+/-- `auxSpec` as a computation of the composed adversary. -/
+def auxC (lr : Bool) (L : QueryLog specIC) (x : ByteArray) : OracleComp (specC Hn) (QueryLog specIC) :=
+  toC (auxSpec lr L x)
+
 /-- **The wrapper**: the forger's hash queries go to the world oracle, its cipher queries are
-answered by the table `E`, both logged (in order); its `H_T` query `x` goes to the target oracle
-with the hint `hint L x` computed from the log `L` so far; its Issuer queries are forwarded. -/
-def wrapImpl (E : CTable) (hint : QueryLog specIC → ByteArray → Hn) :
+answered by the table `E`, both logged (in order); at its `H_T` query `x` the reduction makes its
+own queries (`auxC`, hidden from the forger, logged), then `x` goes to the target oracle with the
+hint `hint (L ++ aux) x` computed from the log `L` so far and those queries; its Issuer queries are
+forwarded. The log is then the joint log of the forger's and the reduction's queries in order (the
+extractor reads only its cipher entries). -/
+def wrapImpl (lr : Bool) (E : CTable) (hint : QueryLog specIC → ByteArray → Hn) :
     QueryImpl specU (StateT (QueryLog specIC) (OracleComp (specC Hn)))
   | .inl (.inl d) => StateT.mk fun L => (fun u => (u, L ++ [⟨.inl d, u⟩])) <$>
       (liftM ((specC Hn).query (.inl d)) : OracleComp (specC Hn) (Ans d))
   | .inl (.inr x) => StateT.mk fun L => pure (E x, L ++ [⟨.inr x, E x⟩])
-  | .inr (.inl x) => StateT.mk fun L => (fun a => (a.1, L)) <$>
-      (liftM ((specC Hn).query (.inr (.inl (x, hint L x)))) : OracleComp (specC Hn) (TG × Hn))
+  | .inr (.inl x) => StateT.mk fun L => auxC lr L x >>= fun ax => (fun a => (a.1, L ++ ax)) <$>
+      (liftM ((specC Hn).query (.inr (.inl (x, hint (L ++ ax) x)))) : OracleComp (specC Hn) (TG × Hn))
   | .inr (.inr t) => StateT.mk fun L => (fun s => (s, L)) <$>
       (liftM ((specC Hn).query (.inr (.inr t))) : OracleComp (specC Hn) SIss)
 
@@ -143,8 +169,9 @@ def wrapImpl (E : CTable) (hint : QueryLog specIC → ByteArray → Hn) :
 def tQ (x : ByteArray) (h : Hn) : OracleComp (specC Hn) (TG × Hn) :=
   liftM ((specC Hn).query (.inr (.inl (x, h))))
 
-/-- The verifier's steps up to `chal1` (as in `verifyQ`). -/
-def chal1Pre (st : Statement) (proof : ByteArray) : OracleComp spec (Option ByteArray) := do
+/-- The verifier's steps up to `chal1` (as in `verifyQ`), with the PRG `HasPrg` (the game uses the
+ideal cipher's, `icPrg E.cipher`, as `verifyQ` does). -/
+def chal1Pre [HasPrg] (st : Statement) (proof : ByteArray) : OracleComp spec (Option ByteArray) := do
   let pf : Proof := { params := st.params, bytes := proof }
   if !pf.checkFormat then return none
   let mu1 ← mu1Q st
@@ -203,12 +230,14 @@ noncomputable def verOne (L : QueryLog specIC) (msg sig : ByteArray) :
   let b1 := sig.extract n (n + 32)
   let b2 := sig.extract (n + 32) (n + 64)
   if toBA (Spec.PomFRIT.commitRefresher (toL b2)) != b1 then return ((ByteArray.empty, none), false)
-  let oc1 ← toC (chal1Pre (pomfritRedeemT pk (fun _ => ByteArray.empty) b1 b2 lr) proof)
+  let oc1 ← toC (@chal1Pre (VoleMole.ZK.Sim.icPrg E.cipher)
+    (pomfritRedeemT pk (fun _ => ByteArray.empty) b1 b2 lr) proof)
   match oc1 with
   | none => return ((ByteArray.empty, none), false)
   | some c1 =>
     let x := tgtIn pk lr sig msg c1
-    let ah ← tQ x (hint L x)
+    let ax ← auxC lr L x
+    let ah ← tQ x (hint (L ++ ax) x)
     verTail T E pk (pomfritRedeemT pk (fun _ => encT ah.1) b1 b2 lr) proof x (tgts ah) L
 
 /-- Every forgery, in order. -/
@@ -228,7 +257,7 @@ verification and extraction. The flag: there are `ℓ + 1` forgeries, every one 
 messages are pairwise distinct. -/
 noncomputable def Acomp (ℓ : ℕ) (A : Forger) :
     OracleComp (specC Hn) (List (ByteArray × SIss) × Bool) := do
-  let r ← (simulateQ (wrapImpl E hint) (A pk)).run []
+  let r ← (simulateQ (wrapImpl lr E hint) (A pk)).run []
   if r.1.length = ℓ + 1 then
     let vs ← verAll T lr E hint tgts pk r.2 r.1
     pure (vs.map Prod.fst, decide ((∀ v ∈ vs, v.2 = true) ∧ (r.1.map Prod.fst).Nodup))
@@ -254,9 +283,12 @@ lemma toC_bound {α : Type} (oa : OracleComp spec α) :
 
 variable (E : CTable) (hint : QueryLog specIC → ByteArray → Hn)
 
-lemma wrap_bound {α : Type} (oa : OracleComp specU α) :
+lemma auxC_bound (lr : Bool) (L : QueryLog specIC) (x : ByteArray) :
+    IsQueryBoundP (auxC (Hn := Hn) lr L x) (fun q => isTgt q = true) 0 := toC_bound _
+
+lemma wrap_bound (lr : Bool) {α : Type} (oa : OracleComp specU α) :
     ∀ (k : ℕ) (L : QueryLog specIC), IsQueryBoundP oa (fun q => isHT q = true) k →
-      IsQueryBoundP ((simulateQ (wrapImpl E hint) oa).run L) (fun q => isTgt q = true) k := by
+      IsQueryBoundP ((simulateQ (wrapImpl lr E hint) oa).run L) (fun q => isTgt q = true) k := by
   induction oa using OracleComp.inductionOn with
   | pure x => intro k L _; trivial
   | query_bind q cont ih =>
@@ -275,6 +307,8 @@ lemma wrap_bound {α : Type} (oa : OracleComp specU α) :
       have hk : 0 < k := hq.1.resolve_left (by simp [isHT])
       refine (isQueryBoundP_bind (n := 1) (m := k - 1) ?_ fun p _ =>
         ih p.1 (k - 1) p.2 (h2 p.1)).mono (by omega)
+      refine (isQueryBoundP_bind (n := 0) (m := 1) (auxC_bound lr L x) fun ax _ => ?_).mono
+        (by omega)
       exact (isQueryBoundP_map_iff _ _ _).2 ((isQueryBoundP_query_iff _ _ _).2 fun _ => Nat.one_pos)
     · have h2 : ∀ u, IsQueryBoundP (cont u) (fun q => isHT q = true) k := hq.2
       refine (isQueryBoundP_bind (n := 0) (m := k) ?_ fun p _ => ih p.1 k p.2 (h2 p.1)).mono
@@ -300,13 +334,15 @@ lemma verOne_bound (L : QueryLog specIC) (m sg : ByteArray) :
   dsimp only
   split
   · exact isQueryBoundP_pure _ _ _
-  · generalize hC : toC (Hn := Hn) (chal1Pre _ _) = C
+  · generalize hC : toC (Hn := Hn) (@chal1Pre (VoleMole.ZK.Sim.icPrg E.cipher) _ _) = C
     have h0 : IsQueryBoundP C (fun q => isTgt q = true) 0 := hC ▸ toC_bound _
     refine (isQueryBoundP_bind (n := 0) (m := 1) h0 fun oc1 _ => ?_).mono (by omega)
     cases oc1 with
     | none => exact isQueryBoundP_pure _ _ _
     | some c1 =>
       dsimp only
+      refine (isQueryBoundP_bind (n := 0) (m := 1) (auxC_bound lr L _) fun ax _ => ?_).mono
+        (by omega)
       exact tQ_bind_bound _ _ _ 0 fun ah => verTail_bound E T pk _ _ _ _ _
 
 lemma verAll_bound (L : QueryLog specIC) :
@@ -325,7 +361,7 @@ most `Q_T` `H_T` queries. -/
 lemma acomp_bound (ℓ QT : ℕ) (A : Forger) (hA : IsQueryBoundP (A pk) (fun q => isHT q = true) QT) :
     IsQueryBoundP (Acomp T lr E hint tgts pk ℓ A) (fun q => isTgt q = true) (QT + (ℓ + 1)) := by
   unfold Acomp
-  refine isQueryBoundP_bind (wrap_bound E hint _ QT [] hA) fun r _ => ?_
+  refine isQueryBoundP_bind (wrap_bound E hint lr _ QT [] hA) fun r _ => ?_
   split
   · rename_i hlen
     refine (isQueryBoundP_bind (n := ℓ + 1) (m := 0) ?_ fun _ _ => trivial)
@@ -396,7 +432,7 @@ lemma size_of_mem_hashQ {k : Kind} {x c : ByteArray} (h : c ∈ support (hashQ k
   show (Array.ofFn u).size = _
   rw [Array.size_ofFn]
 
-lemma chal1Pre_some {st : Statement} {proof c1 : ByteArray}
+lemma chal1Pre_some [HasPrg] {st : Statement} {proof c1 : ByteArray}
     (h : some c1 ∈ support (chal1Pre st proof)) :
     c1.size = 136 ∧ ({ params := st.params, bytes := proof } : Proof).checkFormat = true := by
   unfold chal1Pre at h
@@ -452,14 +488,16 @@ lemma verOne_accept {L : QueryLog specIC} {m sg : ByteArray} {v : (ByteArray × 
       subst hv
       simp at hacc
     | some c1 =>
-      generalize hC : chal1Pre _ _ = C at hoc1
+      generalize hC : @chal1Pre (VoleMole.ZK.Sim.icPrg E.cipher) _ _ = C at hoc1
       have h1 := support_toC (Hn := Hn) C hoc1
       subst hC
-      obtain ⟨hc1, hfmt⟩ := chal1Pre_some h1
+      obtain ⟨hc1, hfmt⟩ := @chal1Pre_some (VoleMole.ZK.Sim.icPrg E.cipher) _ _ _ h1
       rw [pomfritRedeemT_params] at hfmt
       refine ⟨c1, hc1, ?_, ?_⟩
       · have h3 := size_of_checkFormat hfmt
         exact h3
+      rw [mem_support_bind_iff] at hv
+      obtain ⟨_, -, hv⟩ := hv
       rw [mem_support_bind_iff] at hv
       obtain ⟨_, -, hv⟩ := hv
       exact verTail_fst T E pk hv

@@ -155,6 +155,9 @@ import VoleMole.ROM.MoussakaOMUFSim
 import VoleMole.ROM.RatatouilleBalanceSim
 import VoleMole.ROM.OneMore
 import VoleMole.ROM.OneMorePomfrit
+import VoleMole.ROM.LemmaPDet
+import VoleMole.ROM.LemmaP
+import VoleMole.ROM.OneMoreLemmaP
 import VoleMole.ROM.TableReads
 import VoleMole.ROM.PrivacyReads
 import VoleMole.Privacy.Basic
