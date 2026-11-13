@@ -1,5 +1,7 @@
 import VoleMole.Assumptions.PermSimLinks
 import VoleMole.Assumptions.RatatouillePermSim
+import VoleMole.Assumptions.UnboundPermSimLinks
+import VoleMole.Audit.UnboundOMUF
 import VoleMole.Audit.PermOMPR
 import VoleMole.Audit.PermFDH
 import VoleMole.Audit.SimExtract
@@ -21,6 +23,12 @@ a random permutation) for the permutation-model adversary `balA0P` of `Audit/Sim
 `a0`, `aP0`: every hypothesis is discharged except the modelling hypothesis (`TagIdeal`,
 `TagIdealP` for `(forgerP …).noProbe τ`), which stays an argument, as in `Audit/IdealTag.lean`
 and `Audit/PermFDH.lean`.
+
+Unbound Moussaka with AES and `Com ∪ UCom` random permutations
+(`Assumptions/UnboundPermSimLinks.lean`): `omufU_le_num_simP` and `omufU_le_num_ompr_simP` for the
+permutation-model adversary `aUUP` (an inverse cipher query, then `aUU`'s bound and unbound Issue
+queries and redemption, `Audit/UnboundOMUF.lean`): every hypothesis, the modelling hypothesis
+`hmodelP` for `ctufForgerUP` included, holds.
 
 No `sorry`, no `axiom`.
 -/
@@ -59,5 +67,33 @@ example (σ : IC.RatBalance.Signer) (τ : Target → Preimage) (N : ℕ) (lr : B
         (verifierIC_verifyIC CrtGen.tables)).noProbe τ) embR aP0) :=
   balance_le_ompr_rate_sim_permP lr IdealTag.pk0 balA0P N σ τ (by decide) balA0P_k balA0P_h
     balA0P_e embR_inj aP0 aP0_budget hTag
+
+/-- An OMUF-U adversary of the permutation model: one inverse cipher query, then `aUU`'s moves (a
+bound Issue query, an unbound one, one redemption). -/
+def aUUP : ROM.IC.OMUFU.AdversaryP 2 1 where
+  σ := Bool
+  init := (fun _ => false) <$> invU
+  query b := pure (true, if b then .inr ⟨0, ByteArray.empty, ByteArray.empty⟩
+    else .inl ⟨0, ByteArray.empty, ByteArray.empty⟩)
+  absorb b _ := b
+  final _ := pure fun _ => ⟨[], ByteArray.empty, ByteArray.empty, ByteArray.empty, ByteArray.empty⟩
+
+theorem aUUP_budget : aUUP.Budget 0 1 0 :=
+  ⟨isKindQueryBoundP_map _ invU_k, (isQueryBoundP_map_iff _ _ _).2 invU_e,
+    (isQueryBoundP_map_iff _ _ _).2 invU_h, fun _ => trivial, fun _ => trivial,
+    fun _ => trivial, fun _ => trivial, fun _ => trivial, fun _ => trivial⟩
+
+/-- **Unbound Moussaka Theorem U1, AES as random permutations** (`omufU_le_num_simP`): its
+hypotheses hold for `aUUP`. -/
+example (lr : Bool) (sk : Fin 2 → Spec.Signer) :=
+  ROM.IC.OMUFU.omufU_le_num_simP (lr := lr) (pk := pkU) (sk := sk) (qI := 2) aUUP_budget
+    pkU_digest pkU_inj
+
+/-- **Unbound Moussaka down to OMPR, AES and `Com ∪ UCom` random permutations**
+(`omufU_le_num_ompr_simP`): every hypothesis, the modelling one included, holds for `aUUP` and
+the toy forger. -/
+example (lr : Bool) (sk : Fin 2 → Spec.Signer) :=
+  omufU_le_num_ompr_simP lr pkU 2 aUUP sk toyTrap (fun _ => ((), ())) aUUP_budget pkU_digest
+    pkU_inj embU_inj (toyFP 2) (toyFP_budget 2) (toy_hmodelP _ (prEvent_le_one _))
 
 end VoleMole.Audit.PermSim
