@@ -33,9 +33,9 @@ Contents:
 | Property | Holds? | Bound (classical) | Assumptions |
 |---|---|---|---|
 | One-more unforgeability **per `(ctx_iss, ctx_red)`** (Thm U1): for each pair, accepted distinct nullifiers ≤ unbound issuances for `ctx_iss` | **Yes** ([Lean], ROM and ideal cipher, down to OMPR under `hmodel`; §4 Status) | `ε_ext^{u-iss} + ε_ext^{u-red} + ε_ext^{iss} + ε_dig + Adv^bind_{Com∪UCom} + K·Adv^ct-uf-open` | PoK of the two unbound relations (and of the bound issuance relation, if the Anchor also runs it), joint binding of `Com` and `UCom`, CT-UF^open of UOV |
-| Determinism of the nullifier: each signed commitment and `ctx_red` determine one `nf` (Cor U2) | **Yes** | as Thm U1 | as Thm U1 |
-| No nullifier squatting (Prop U3; base note's F2 does not apply) | **Yes** | `U·(Adv^prf-t + Adv^spr-k)` on top of Thm U1 | PRF of `Derive` with `t` leaked, second preimages of `Derive` in the key |
-| Redemption non-malleability, including no redirect to another `ctx_red` (Thm U4) | **Yes** | `ε_SE^{u-red} + ε_dig + Adv^bind + K·Adv^ct-uf-open + U·Adv^ow-kr + ε_hop` | weak SE, the above, one-wayness of `(nf_key, r)` |
+| Determinism of the nullifier: each signed commitment and `ctx_red` determine one `nf` (Cor U2) | **Yes** ([Lean], on the game of Thm U1; §5.1 Status) | items 1–2: the bound of Thm U1; item 3: `U²·2^{−193} + Adv^prf_U` | as Thm U1; item 3: PRF of `Derive` (`U` keys) |
+| No nullifier squatting (Prop U3, **corrected**; base note's F2 does not apply) | **Yes** ([Lean], one honest token; §5.2) | `ε_hop + ε_SE^{u-red} + U·(Adv^prf-t_1 + 2^{−192} + Adv^spr-k)` | ZK, weak SE, PRF of `Derive` with `t` leaked, second preimages of `Derive` in the key |
+| Redemption non-malleability, including no redirect to another `ctx_red` (Thm U4, **corrected**) | **Yes** ([Lean], one honest token; §5.3) | `ε_hop + ε_SE^{u-red} + Adv^bind_UCom + U·(Adv^prf-t_1 + 2^{−192})` | ZK, weak SE, binding of `UCom`, PRF of `Derive` with `t` leaked |
 | Issuer hiding and unlinkability vs Moderators **colluding with all Anchors**, issuance–redemption **and redemption–redemption across contexts** (Thm U5a) | **Yes, computationally** | `2·ε_ZK^joint + 2·Adv^prf-t_2` | ZK of both unbound relations, PRF of `Derive` with `t` leaked (2 keys) |
 | The same vs Moderators that see no issuance (Thm U5b) | **Yes, computationally** (unlike the base note's 4(b)) | `2·ε_ZK^joint|_red + 2·Adv^prf_2 + 2·(ψ₀ + ψ₁)`, `ψ_c ≤ κ + φ_c` (corrected, §6) | ZK of the redemption proofs, PRF of `Derive` (2 keys), Anchor Sets that contain both issuers; `κ = 0` for a complete issuance proof |
 | Unlinkability of two redemptions of one token **in the same `ctx_red`** | **No, by design** (same `nf`; rejected as a double spend) | — | — |
@@ -60,6 +60,14 @@ Main findings (§9):
 - **UF7 (proof correction).** The earlier proof of Thm U5(b) kept the Anchors' acceptance bits
   in the refusal bit through the PRF hop. The PRF reduction cannot compute them without the keys.
   The corrected abort term `ψ_c` also counts a rejected honest issuance proof (§6).
+- **UF8 (proof corrections, Prop U3 and Thm U4).** Prop U3 extracted the adversary's proof with
+  plain extraction (`ε_ext^{u-red}`) after simulating the honest proofs; that needs weak
+  simulation-extractability (`ε_SE^{u-red}`), as in Thm U4. Its key-recovery case argued "after
+  the PRF hop `k_h` enters only `t_h`, so `2^{−128}`", but `t_h` still determines `k_h`; the bound
+  holds by another argument (check the key at a fresh context: `Adv^ow-k ≤ Adv^prf-t_1 +
+  2^{−192}`). Thm U4 does not need `ε_dig` or `K·Adv^ct-uf-open`, and `Adv^ow-kr` is not a
+  separate assumption: it is at most `Adv^prf-t_1 + 2^{−192}`. All three are mechanized with the
+  corrected bounds (§5).
 
 No attack was found on the unbound relations or their implementation.
 
@@ -253,9 +261,15 @@ random-permutation estimates (forward and inverse queries, `q` of them) are evid
   `Derive`/`UCom` outputs on the 608 (resp. 440) bits the adversary does not see. So
   `Adv^prf-t_n ≲ n·(q + 1)·2^{−128} + n·q·2^{−440}`.
 - **Key recovery and one-wayness.** `Adv^ow-kr`: given `t = UCom(k, ctx_iss, r)` and the oracle
-  `Derive(k, ·)`, output `(k, r)`. `Adv^ow-kr ≤ Adv^prf-t_1 + Adv^ow_{UCom}` (after the PRF hop the
-  oracle is independent of `(k, r)`, and recovering `(k, r)` from `t` alone is one-wayness of
-  `UCom` in its 256 secret bits). Generic `≲ (q + 1)·2^{−128}`.
+  `Derive(k, ·)`, output `(k, r)`; `Adv^ow-k`: output `k` alone, so `Adv^ow-kr ≤ Adv^ow-k`. An
+  earlier version bounded `Adv^ow-kr ≤ Adv^prf-t_1 + Adv^ow_{UCom}`. No one-wayness of `UCom` is
+  needed: a key-recovery adversary `B` gives the PRF distinguisher that runs `B` and checks its key
+  at a context `c*` that `B` did not query. With the real oracle the check passes whenever `B`
+  succeeds. With a uniform table, `F(c*)` is independent of `B`'s view, so it passes with
+  probability `2^{−192}`. So `Adv^ow-k(B) ≤ Adv^prf-t_1(D_B) + 2^{−192}` ([Lean]
+  `Theft/MoussakaUnbound.lean`, `owkAdv_le`, for adversaries with one oracle query; the
+  distinguisher `owkD` makes two). The PRF assumption with `t` leaked already implies that `t`
+  hides `k`. Generic `≲ (q + 1)·2^{−128}`.
 - **Second preimages of `Derive` in the key (`Adv^spr-k`).** Given `(t, ctx_red,
   nf = Derive(k, ctx_red))` and the oracle `Derive(k, ·)`, output `k' ≠ k` with
   `Derive(k', ctx_red) = nf`. Generic `≲ q·2^{−192} + (q + 1)·2^{−128}` (a forward query on a fresh
@@ -433,11 +447,37 @@ Status) with a second issuance oracle and the unbound Moderator.
    Anchor Set it accepts, as in base Cor 2.
 3. **Honest uniqueness.** `U` honest tokens give pairwise distinct `nf` in one `ctx_red` except
    with probability `U²·2^{−193} + U²·2^{−257} + Adv^prf_U`: after the PRF hop the nullifiers are
-   independent uniform 192-bit strings; the middle term is a seed collision.
+   independent uniform 192-bit strings; the middle term is a seed collision. With uniform keys
+   (the spec's model of the seed expansion) the seed term drops: `U²·2^{−193} + Adv^prf_U`.
 4. **Derive does not include `ctx_iss`.** A Client may reuse one `k` in tokens for several issuance
    contexts; their nullifiers then coincide in every `ctx_red`. This only links that Client's own
    redemptions; since the Moderator keys its record by `(ctx_iss, ctx_red)`, the tokens remain
    separately spendable, and no other Client is affected. Honest Clients draw a fresh `k` per token.
+
+**Status: [Lean]** (`lean/VoleMole/ROM/MoussakaUnboundCor.lean`). Items 1 and 2 on the game
+OMUF-U of Thm U1 (§4 Status), as an event `U2` of the reductions' view (`extAll`: the game and the
+straight-line extraction of every proof). For every accepted unbound redemption `(S, nf, ctx_iss,
+ctx_red)`: its proof is extracted, and every extracted input `(nf_key, ctx_iss', r)` is the input
+extracted from an accepted **unbound** Issue query `(t, ctx_iss)` with `UCom(input) = t`,
+`ctx_iss' = ctx_iss` and `nf = Derive(nf_key, ctx_red)` (item 1); two accepted redemptions in one
+`ctx_red` whose extracted inputs commit to one `t` have the same record key `(ctx_iss, ctx_red,
+nf)` (item 2).
+- `notU2_imp` (per table): off `U2`, an accepted proof is not extracted, or two extracted inputs
+  of `Com ∪ UCom` collide, or a redemption's input commits to a target no Anchor signed. These
+  are the events Thm U1 charges.
+- `corU2_le`, `corU2_le_sim`: `Pr[¬U2]` is at most the terms of `omufU_le`, `omufU_le_sim`.
+  **`corU2_le_num_sim`**: `≤ ε_I^sim + ε_U^sim + AdvBind(B₁) + AdvCTUF(B₂)`, the bound of
+  `omufU_le_num_sim` (`≈ 2^{−59.61}` at `2⁶⁴` queries and `2³⁰` proofs, plus `AdvBind`).
+  **`corU2_le_num_ompr_sim`**: the last term down to OMPR under `hmodel` (with
+  `corU2_le_open_sim` in between, `Assumptions/UnboundLinks.lean`'s forger `ctufForgerU`).
+- Item 3: **`honest_nf_distinct`**: for `U` uniform keys and any context `c`,
+  `Pr[two keys collide at c] ≤ U²·2^{−193} + Adv^prf_U(collD c)` (`prfUAdv`, a hypothesis). At
+  `U = 2³⁰` the first term is `2^{−133}`.
+- Item 4 is a remark, not a claim.
+
+No step of the paper proof was found wrong. The Lean statement is the cross-variant form: a
+redemption's commitment signed through **bound** issuance is a collision, so the bound issuance
+proofs are extracted too (`ε_ext^{iss}`), as in Thm U1.
 
 ### 5.2 No nullifier squatting
 
@@ -447,15 +487,31 @@ Moderator accepts a redemption `(S', nf_h, ctx_iss, ctx_red)` that is not an hon
 `nf_h` is the nullifier of an honest token `h` in `ctx_red` (revealed or not), and whose extracted
 commitment `t'` differs from `t_h`. (`t' = t_h` is the non-malleability case, Thm U4.)
 
-**Proposition U3.** `Pr[A wins SQUAT] ≤ ε_ext^{u-red} + Adv^bind + U·(Adv^prf-t_1 + Adv^spr-k) +
-ε_hop`.
+**Proposition U3 (corrected, UF8).** `Pr[A wins SQUAT] ≤ ε_hop + ε_SE^{u-red} +
+U·(Adv^prf-t_1 + 2^{−192} + Adv^spr-k)`.
 
-*Proof.* Extraction gives `k'` with `Derive(k', ctx_red) = nf_h` and `UCom(k', ctx_iss, r') = t' ≠
-t_h`. If `k' = k_h` the adversary has computed `k_h`, which (after replacing the honest proofs by
-simulated ones, `ε_hop`) is key recovery from `t_h` and `Derive(k_h, ·)`: at most
-`Adv^prf-t_1 + 2^{−128}` (absorbed). Otherwise `k' ≠ k_h` is a second preimage of `nf_h` in the key
-([Lean] `squat_cases`: equal nullifiers in one context and distinct keys are exactly a second
-preimage). Guessing `h` costs the factor `U`. ∎
+*Proof.* Replace the honest proofs by simulated ones (`ε_hop`). Weak SE (`ε_SE^{u-red}`) gives
+`k'` with `Derive(k', ctx_red) = nf_h` for the adversary's fresh statement. If `k' = k_h` the
+adversary has computed `k_h` from `t_h` and nullifiers `Derive(k_h, ·)`: at most
+`Adv^prf-t_1 + 2^{−192}` (§3.2, `owkAdv_le`). Otherwise `k' ≠ k_h` is a second preimage of `nf_h`
+in the key ([Lean] `squat_cases`: equal nullifiers in one context and distinct keys are exactly a
+second preimage). Guessing `h` costs the factor `U`. ∎
+
+*Correction (UF8).* The earlier statement had `ε_ext^{u-red} + Adv^bind` in place of
+`ε_SE^{u-red}`. Plain straight-line extraction does not apply to an adversary that has seen
+simulated proofs on programmed tables; that is weak simulation-extractability, as in Thm U4.
+Binding is not used. The earlier proof also bounded the case `k' = k_h` by "after the PRF hop,
+`Adv^prf-t_1 + 2^{−128}`". That argument does not work as written: after the hop `t_h` still
+determines `k_h`. The bound itself holds, by the fresh-context distinguisher of §3.2.
+
+**Status: [Lean]** (`lean/VoleMole/Theft/MoussakaUnbound.lean`), together with Thm U4 in one game
+NM-U (§5.3 Status), for one honest token. **`noSquat`**: the event `Squat` is an accepted
+redemption with a statement that differs from the honest one and carries the honest token's
+nullifier **for its own context**, `nf* = Derive(nf_key, ctx_red*)`, revealed or not. The event
+does not mention extraction, and it does not require `t' ≠ t_h`. So it also covers redirecting
+the honest redemption with the honest nullifier, and it is stronger than SQUAT. The bound is
+`nmU`'s. It carries `Adv^bind(B₁)` because `nmU` bounds the U3 and U4 events together; the squat
+case alone uses only key recovery and `Adv^spr-k` (`hit_cases`).
 
 In the base protocol `nf` is a value the Client commits to, so anyone who learns an honest `nf` can
 buy a token with that `nf` and burn the honest one (base F2). Here the nullifier is a one-way
@@ -477,17 +533,64 @@ differs from every honest redemption statement and whose extracted commitment eq
 `t_h`. This covers redirecting an honest redemption to another digest, another Anchor Set, or
 **another Moderator** (`ctx_red' ≠ ctx_red`, with the honest Client's nullifier there).
 
-**Theorem U4.** For `U` honest tokens,
+**Theorem U4 (corrected, UF8).** For `U` honest tokens,
 
 ```
-Pr[A wins NM-U] ≤ ε_SE^{u-red} + ε_dig + Adv^bind_{Com∪UCom} + K·Adv^ct-uf-open + U·Adv^ow-kr + ε_hop.
+Pr[A wins NM-U] ≤ ε_hop + ε_SE^{u-red} + Adv^bind_UCom + U·(Adv^prf-t_1 + 2^{−192}).
 ```
 
 *Proof.* Replace the honest proofs by simulated ones (`ε_hop`; the statements contain
 `nf = Derive(k_h, ctx_red)`, which the challenger computes). Weak SE extracts `(r', k', s', u')` with
-`UCom(k', ctx_iss, r') = t_h` for the new statement; by binding `(k', r') = (k_h, r_h)`. In the
-simulated world `(k_h, r_h)` enter `A`'s view only through `t_h` and the nullifiers
-`Derive(k_h, ·)`, so outputting them is `Adv^ow-kr` (guess `h`: factor `U`). ∎
+`UCom(k', ctx_iss', r') = t_h` for the new statement. If `k' ≠ k_h`, this and the honest opening
+`(k_h, ctx_iss, r_h)` are a collision of `UCom` (`Adv^bind_UCom`; the reduction samples the honest
+tokens itself). If `k' = k_h`, `A` has computed `k_h`. In the simulated world `k_h` enters `A`'s
+view only through `t_h` and the nullifiers `Derive(k_h, ·)`, so this is key recovery: at most
+`Adv^prf-t_1 + 2^{−192}` (§3.2, `owkAdv_le`; guess `h`: factor `U`). ∎
+
+*Correction (UF8).* The earlier statement also had `ε_dig + K·Adv^ct-uf-open`. They are not
+needed: the event already fixes the extracted commitment to the honest `t_h`, so nothing has to
+be signed. Its `Adv^ow-kr` term is not a separate assumption (§3.2). Binding is needed for `UCom`
+only, not for `Com ∪ UCom`: an extracted `Com` input never commits to `t_h` here, since the
+adversary's operations are unbound requests.
+
+**Status: [Lean]** (`lean/VoleMole/Theft/MoussakaUnbound.lean`), in the table model of
+`Theft/Basic.lean`, built as the base note's Theorem 3 (`Theft/Moussaka.lean`).
+- *The game NM-U* (`nmReal`). One honest Client with coins `(nf_key, r)` runs the executable spec:
+  `issueRequestOf` for the adversary's `ctx_iss`, `finalizeIssue` against the adversary's key,
+  and one redemption (`redeemRequestOf`, with `find_issuer`) under an Anchor Set, **redemption
+  context** and digest that the adversary chooses from the issuance request. The adversary
+  (`Thief`) plays the Anchor and every Moderator. It then reads the tables and outputs an
+  operation (`UOp`): an unbound issuance request or an unbound redemption request with its own
+  set, contexts and digest. `Bad`: the operation is accepted (`AccOp`: the C++ lengths, 16-byte
+  contexts, the verifier), its statement differs from the honest one of its relation (`FreshOp`),
+  and the extracted witness is not a witness or **hits** the honest token (`HitOp`): it opens `t_h`
+  (`OpensOp`, Thm U4) or carries `Derive(nf_key, ctx_red*)` (`NfOp`, Prop U3). `bad_iff` states
+  the event without the length side conditions.
+- **`nmU`**:
+
+      Pr[Bad] ≤ ε_I + ε_R + δ_R + ε_SE + (ε_prf + 2^{−192}) + Adv^bind(B₁) + Adv^spr-k(B₂),
+
+  with `ε_I`, `ε_R` zero knowledge of the two unbound proof systems at the hops' distinguishers
+  (`ZeroKnowledgeRO` for `IssueRelW`, `RedeemRelW`), `δ_R` the collision term of the second hop,
+  `ε_SE` weak simulation-extractability (`WeakSE2`, **a hypothesis**, L8 on paper), `ε_prf` the
+  PRF advantage of the explicit distinguishers `owkD` (`prf1Adv`, `Adv^prf-t_1`, **a hypothesis**
+  on Keccak-p[800]), `Adv^bind` of the explicit collision finder `bindB` (`bindAdv`: two distinct
+  16-byte-field inputs of `UCom` with one output) and `Adv^spr-k` of the explicit `sprB`
+  (`sprAdv`). Steps: the two zero-knowledge hops and weak SE (`theft_le`, `sim_se_le`); in the
+  simulated world the view is a function of `t_h` and one nullifier (`view`, `qry`); a hit is a
+  key recovery, a binding break or a key second preimage (`hit_cases`, `sim_hit_le`); key
+  recovery reduces to the PRF (`owkAdv_le`).
+- **`noRedirectU`** (Thm U4): the event `Redirect` (not a witness, or opens `t_h`) has the bound
+  of `nmU`. **`noSquat`** (Prop U3): see §5.2.
+- *Numbers.* With the generic estimates of §3.2 at `q = 2⁶⁴` Keccak-p[800] queries,
+  `ε_prf ≈ 2^{−64}`, `Adv^spr-k ≈ 2^{−64}` and `Adv^bind ≈ 2^{−160}`, so the Keccak part of the
+  bound is `≈ 2^{−63}`. The hop terms `ε_I`, `ε_R` are `lean/docs/zk.md`'s with dedicated label
+  rows (on `main`, the joint (PU) hop of §3.1, on paper). `ε_SE` is L8's, on paper.
+- *Scope.* One honest token with one redemption: the generic two-hop machinery and `WeakSE2` have
+  two simulated proofs. The factor `U` (guessing the attacked token) and several honest
+  redemptions per token remain paper steps. For the unbound proof systems the zero-knowledge
+  hypotheses are not discharged by the Lean prover. The base protocol's `noRedirect_lean` does
+  that through `Privacy/MoussakaRO.lean`, which covers the bound relations only.
 
 A malicious Moderator therefore cannot spend an honest Client's token at another Moderator, even
 though the token is valid there.
@@ -701,8 +804,12 @@ the base protocol.
    standard-model assumption) and CT-UF^open over `D ∪ D_u`. CT-UF^open reduces to OMPR only
    through the modelling hypothesis `hmodel` (Lemma U with `Com` a random function, no inverse
    queries; the permutation version is paper). The bound issuance extraction is charged separately
-   from the unbound pair. Cor U2, Prop U3 and Thm U4 have Lean cores only (`nf_determined`,
-   `squat_cases`); their games are not mechanized.
+   from the unbound pair. Cor U2 is mechanized on the game of Thm U1 with its bounds
+   (`ROM/MoussakaUnboundCor.lean`). Prop U3 and Thm U4 are mechanized together, corrected (UF8),
+   for one honest token with one redemption (`Theft/MoussakaUnbound.lean`, `nmU`). They rest on
+   weak simulation-extractability (`WeakSE2`, L8 on paper), per-proof zero knowledge of the two
+   unbound proof systems, the PRF assumption with `t` leaked, `Adv^spr-k` and binding of `UCom`.
+   The factor `U` and several honest redemptions per token are paper steps.
 5. The mechanized Thm U5 takes **per-proof** zero knowledge (`ZeroKnowledge` for `IssueRelW` and
    `RedeemRelW`, against distinguishers that know the witness). That hypothesis holds with
    dedicated label rows (`lean/docs/zk.md`). On `main` the CRT masks come from the witness, the
@@ -794,5 +901,15 @@ All in `lean/VoleMole/`; no `sorry`, no axioms beyond the standard three.
   `win_imp_openU`), `omufU_le_open`, `omufU_le_num_open`, `omufU_le_num_ompr` and their `_sim`
   versions.
 - `Protocols/MoussakaUnbound.lean`: `collision_or_forgery_unbound` (Thm U1, steps 3–4).
+- `ROM/MoussakaUnboundCor.lean`: Corollary U2 (§5.1 Status): the event `U2`, the per-table core
+  `notU2_imp`, `corU2_le`, `corU2_le_sim`, `corU2_le_num_sim`, `notU2_imp_open`,
+  `corU2_le_open_sim`, `corU2_le_num_ompr_sim`; item 3: `prfUAdv`, `honest_nf_distinct`.
+- `Theft/MoussakaUnbound.lean`: Proposition U3 and Theorem U4 (§5.2, §5.3 Status): the game NM-U
+  (`Thief`, `UOp`, `Bad`, `bad_iff`, `nmReal`), the games of §3.2 (`prf1Adv`, `owkAdv`, `sprAdv`,
+  `bindAdv`), `owkAdv_le` (key recovery from the PRF), `hit_cases`, `sim_hit_le`, `sim_se_le`,
+  **`nmU`**, `noSquat`, `noRedirectU`.
+- `Audit/UnboundRest.lean`: `corU2_le_num_sim`, `corU2_le_num_ompr_sim` with Thm U1's audit
+  adversary; `nmU`, `noSquat`, `noRedirectU` with a trivial adversary (ZK, SE and PRF with error
+  `1`); the honest replay is not fresh, a redirect to another `ctx_red` is; `squat_of_nf`.
 - `Audit/UnboundOMUF.lean`: every Thm U1 corollary instantiated (two honest Anchors, an adversary
   with one bound and one unbound Issue query, the toy ideal forger for `hmodel`).
