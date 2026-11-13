@@ -1,0 +1,53 @@
+name = "vole_mole"
+version = "0.1.0"
+defaultTargets = ["VoleMole"]
+
+[leanOptions]
+pp.unicode.fun = true
+relaxedAutoImplicit = false
+autoImplicit = false
+
+[[require]]
+name = "mathlib"
+scope = "leanprover-community"
+rev = "v4.34.0"
+
+# Oracle computations and the lazy random oracle, for `VoleMole/ROM/` only (nothing else imports
+# it; see docs/probabilistic-plan.md, M4). Pinned: the API changes often.
+[[require]]
+name = "VCVio"
+git = "https://github.com/dtumad/VCV-io"
+rev = "afa6593f15e1e79ecb3cf22fc56191cecb452bb0"
+
+[[lean_lib]]
+name = "VoleMole"
+
+# Differential tests of the Lean constraint generators against the C++ (lean/vectors/).
+[[lean_exe]]
+name = "arith_vectors"
+root = "VoleMole.Arith.VectorsMain"
+
+# Known-answer cross-checks of the protocol specs (Spec/) against the C++: run from lean/ as
+# `lake exe spec_kats` (reads tests/*/..._kat.txt; lean/vectors/uov_keys.txt is an optional cross-check).
+[[lean_exe]]
+name = "spec_kats"
+root = "VoleMole.Spec.Kats"
+
+# Executable pieces of the Lean VOLEitH verifier (Verifier/) checked against the C++: run from
+# lean/ as `lake exe verifier_vectors` (reads lean/vectors/verifier_*.txt, written by
+# tests/voleith/dump_verifier_vectors.cpp, and tests/*/..._kat.txt).
+[[lean_exe]]
+name = "verifier_vectors"
+root = "VoleMole.Verifier.VectorsMain"
+
+# The executable Lean VOLEitH prover (Verifier/Prover.lean) against the C++: run from lean/ as
+# `lake exe prover_vectors` (reproduces every proof of tests/*/..._kat.txt byte for byte).
+[[lean_exe]]
+name = "prover_vectors"
+root = "VoleMole.Verifier.ProverMain"
+
+# The zero-knowledge simulator and the ideal-tape prover (ZK/Sim.lean) on the KAT runs: run from
+# lean/ as `lake exe zk_sim [TESTS_DIR [main|labelrows]]`.
+[[lean_exe]]
+name = "zk_sim"
+root = "VoleMole.ZK.SimMain"

@@ -1,0 +1,1767 @@
+# Moussaka: security analysis of the implementation
+
+**Name.** `main` calls this protocol **VOLE-IHAT** since `9d9bec8` (code under `src/ihat/`; domain-separation strings and KATs unchanged). This note keeps the old name and paths; see `lean/README.md`, "Names".
+
+This note states and proves the security properties of vole-mole's Moussaka implementation. It
+covers `src/moussaka/*.{cpp,hpp}` and `include/vole_mole/moussaka.hpp` at commit `6d7113e`
+(`main`). Moussaka is the Issuer-Hiding Anonymous Token (IHAT) of the VOLE-IHAT draft,
+`draft-authors-mole-vole-ihat.md`, which the README links as `[ihat]`. The draft was briefly named
+`draft-authors-mole-ihat-moussaka.md` (draft commit `a8291b0`) and got its old name back in
+`0af2a67`. This note was written against the draft as of 2026-10-13, together with the MOLE
+architecture draft (`draft-jms-mole-architecture.md`), which states the goals that an IHAT must
+meet. It has been rechecked against draft commit `6736ebe` (2026-11-02). The later changes pad the
+selector to `MAX_ANCHORS`, which matches the implementation (D2). They also add a rationale for the
+constant bits in `Com`'s initial state (at least 128; this note's binding bounds use the actual
+224, §3 and §8) and a changelog.
+
+Line citations refer to `main`. `moussaka.cpp` is `src/moussaka/moussaka.cpp`.
+
+Contents:
+- §0 Verdict
+- §1 The protocol as implemented
+- §2 Deviations from the draft
+- §3 Model and assumptions
+- §4 One-more unforgeability
+- §5 Nullifiers, double spending, selector, and context binding
+- §6 Anonymity: issuer hiding and unlinkability
+- §7 Malicious Anchor Sets and rogue keys
+- §8 Quantum adversaries
+- §9 Findings and attacks
+- §10 `main` versus the `voleith-label-rows` fix
+- §11 Open gaps
+- Appendix A: demonstrations
+- Appendix B: Lean
+
+---
+
+## 0. Verdict
+
+| Property | Holds? | Bound (classical) | Assumptions |
+|---|---|---|---|
+| One-more unforgeability, per issuance context (Thm 1) | **Yes**; [Lean] in the ROM and ideal-cipher model on the spec, with the Lean verifier as the honest Anchors' and Moderator's check, the extraction terms from the soundness theorems (`ROM/MoussakaOMUF.lean`, `omuf_le_num`; §4 "Status") | `ε_ext^iss + ε_ext^red + ε_dig + Adv^bind_Com + K·Adv^ct-uf-open_UOV,Com`; mechanized: `qI·ε_I + qR·ε_R + Adv^bind_Com(B₁) + Adv^ct-uf-open_K(B₂)` (`omuf_le_num_open`), `ε_dig` a condition on the honest keys; and, with `Com` a random function in the CT-UF^open game (a modelling hypothesis), the last term down to `Σ_j Adv^{ompr}_j + K·(q_f + 2q_S + 1)·failPr` (`omuf_le_num_ompr`) | PoK (extraction README), binding of `Com`, chosen-target unforgeability of UOV on `Com`-images with openings (CT-UF^open, implied tightly by one-more-UOV with `Com` ideal in the standalone game, §3.3; [Lean] with `Com` a random function) |
+| One nullifier per signed commitment; double-spend detection (Cor 2) | **Yes**, if the Moderator keeps one record per `(ctx_iss, ctx_red)` across all Anchor Sets (`moussaka.hpp:141-146`) | as Thm 1 | as Thm 1 |
+| Redemption non-malleability: no redirect to another `challenge_digest`, Anchor Set or `ctx_red` (Thm 3) | **Yes**; [Lean] the reduction as a game on the spec in the ROM and ideal-cipher table model, one token (`Theft/Moussaka.lean`, `noRedirect`; with the Lean prover's zero knowledge, `noRedirect_lean`; with the hops' read budgets proved, `noRedirect_lean_reads`); weak SE reduced to plain extraction plus a programmed-point term, both hypotheses (`noRedirect_lean_plain`, §5.3); the same with `H₁`, `H₂⁰…H₂²`, `H₄`, `H_comb` read off uniform tables (`noRedirect_leanX_plain`); `Adv^ow` in a random-table model for the standalone experiment (`owAdvRO_num`) | `ε_hop + ε_SE^red + Adv^ow_Com` (corrected, §5.3); mechanized: `ε_I + ε_R + δ_R + ε_SE + Adv^ow(B)`; for `U` tokens and `M` honest redemptions `U·ε_I + M·ε_R + Σ_i δ_i + ε_SE + Σ_h Adv^ow(B_h)` (`noRedirectN`, `Theft/MoussakaMany.lean`, with `WeakSEN`; hops' budgets proved and `WeakSEN` reduced to plain extraction, `noRedirectN_lean_plain`, `Theft/MoussakaManyReads.lean`) | weak SE (L8), one-wayness of `Com` (any opening of `t`) |
+| Issuer hiding and unlinkability vs a Moderator **colluding with all Anchors**, with adversarial keys (Thm 4a) | **Yes, computationally**; [Lean] from uniform seed outputs (`Privacy/Moussaka.lean`, `anonymity`; for `main`'s Client, which finds its index itself, `Privacy/MoussakaFind.lean`); with the executable Lean prover (label rows) down to its tape hypothesis (`Privacy/MoussakaLean.lean`, `anonymity_label_rows`); for the Lean prover in the ROM and ideal-cipher model with every zero-knowledge term explicit, `≈ 2⁻¹⁰²·³` plus budget terms and `2·Adv^hide_Com` (`anonymityRO_lean_num`), and `≈ 2⁻¹⁰¹·⁹` with a table-reading interaction (`anonymityRA_lean_num`; Appendix B); also with AES as random permutations (`_perm`) and with one shared `H₃` (`anonymitySh_num`, `anonymityRASh_num`); from the real Clients' OS seeds and seed XOF, each `+ 2·(2q_X + 2)·2⁻²⁵⁶` (`anonymity*_seed`, `lean/docs/zk.md` §10.6); with a key stage (contexts, keys) that reads the tables too (`anonymityRAK_lean_num`, `≈ 2⁻¹⁰¹·⁹`); with any number `n` of further honest Clients, `≤ n·2⁻¹⁰²` plus budget terms and `2·Adv^hide_Com` (`anonymityN_lean_num`), also adaptively scheduled, each further session's contexts, key, response and Anchor Set chosen from earlier outcomes and the challenge contexts and keys from the sessions before it (`anonymityAd_lean_num`, the same numbers), and interleaved in any order (`anonymityIL_lean_num`, `≤ (n + 2)·2⁻¹⁰¹`; with a table-reading scheduler that also places the challenge, `anonymityILO_lean_num`, `+ 28·L·(a₃ + a₂ + a₅ + 221·a_E)·2⁻¹²⁸`), and with `N` challenge pairs (`anonymityP_lean_num`; linear in `N` up to a bad event bounded on paper, `anonymityP_lin`; `lean/docs/zk.md` §10.8; §11 item 5) | `2·ε_ZK^joint + 2·Adv^hide_Com` (the `2^{−192}` is not needed, §6) | ZK (lean/docs/zk.md), hiding of `Com` |
+| The same vs a Moderator that sees no issuance (Thm 4b) | **Yes**, with no Keccak assumption, up to an abort term the note missed (§6); [Lean] from uniform seed outputs (`Privacy/MoussakaNC.lean`, `anonymityNC`, `unlinkabilityNC`; for `main`'s Client `Privacy/MoussakaNCFind.lean`), with the vinegar hash a random oracle (`anonymityNC_vinegarRO`), and with the executable Lean prover down to its tape or hop hypotheses (`anonymityNC_label_rows`, `_shake`); in the ROM and ideal-cipher model with every proof and the honest Anchors' Lean verifier on the shared tables, `≈ 2⁻¹⁰³·²` plus budget terms and `2·(φ₀ + φ₁)` (`anonymityNCRO_lean_num`, `unlinkabilityNCRO_lean_num`, also `_perm`), also with one shared `H₃` (`anonymityNCSh_num`), with the Moderator's choices read off the tables (`anonymityNCRA_lean_num`, as oracle computations `anonymityNCOC_lean_num`) and from the real Clients' seeds (`*NC*_seed`; Appendix B); with a model of pqov's `derive_preimage` as the Anchors' signer (`anonymityNC_pqov`, `anonymityNCRO_pqov`), averaged over keys of pqov's key generation with any oil matrix (`anonymityNCRO_pqov_pqovKeys`; `O = 0`: `anonymityNCRO_pqov_keys`; abort term `≈ 2⁻²⁹³·⁸`; the model reproduces the C++ `derive_preimage` on the KAT targets), and the games shown to reach redemption (`pr_refused_NCRO_le`; Appendix B) | `2·Σ ε_ZK^red + 2·(φ₀ + φ₁)`, `φ_c ≤ δ_c^{255}` on average over the vinegar random oracle (pqov uses 255 vinegars, §6), `E[δ_c^{255}] ≤ 255^{−37} + 1/(255·256^{37}) ≈ 2^{−295.8}` on average over the key (`δ ≤ 1/255` holds on average over the key, not per key) (`0` for one Anchor; no `2^{−192}`) | ZK of the redemption proofs only; both issuers in the Anchor Sets (`main`'s Client; for the index-taking Client of the random-oracle games, an index taken from `S`) |
+| Issuer hiding under a Moderator-chosen Anchor Set | **Only relative to the Anchors in the set that are honest and in common use** (§7) | n/a | Anchor-Set consistency outside the library |
+
+Main findings (§9):
+- **F1 (high, deployment).** If an Anchor's UOV key is also used as a PomFRIT Issuer key, anyone
+  can mint unlimited Moussaka tokens for any `ctx_iss`. PomFRIT's `issue_response`
+  (`pomfrit.cpp:188-190`) signs raw targets without a proof. This was demonstrated with the public
+  API only (Appendix A). Nothing in the API or documentation forbids the reuse.
+- **F2 (low).** Nullifier squatting. An adversary that sees an honest `nf` before the Moderator does
+  can buy its own token with that `nf`, redeem it first, and get the honest token rejected as a
+  double spend. Demonstrated.
+- **F3.** The draft's one-more-UOV proof sketch programs `Com` as a random oracle *inside* the
+  protocol. That is invalid as written, because the VOLEitH proofs evaluate the concrete
+  Keccak-p[800,12] circuit. §4 restructures the proof so that idealised reasoning is applied only
+  to a standalone assumption.
+- **F4.** Privacy against a colluding Anchor has a margin of exactly 128 bits classically (64-bit
+  Grover). Privacy against everyone has at most a 64-bit Grover margin, through AES-128 hidden-leaf
+  keys. On `main`, lean/docs/zk.md's formal ZK bound multiplies `Q₅` by `Adv^ow`, which is vacuous at
+  `q = 2^64`. The fix removes this.
+- **F7 (proof and model).** Theorem 4(b) misses an abort term, and needs Anchor Sets that contain
+  both issuers (with `main`'s Client, which finds its index itself since `21be618`; before, an index
+  rule that the Client takes from `S`) (§6). Mechanizing it found three more points (§9): the non-colluding random-oracle games were
+  vacuous before commit `919a204` (the spec's Anchor checked `main`'s request length); pqov's
+  `derive_preimage` uses 255 of its 256 vinegars; and `δ ≤ 1/255` holds only on average over the
+  key.
+- **F8 (medium, documentation).** The README rewrite (`ef3259e`) dropped the warning that the
+  nullifier record must span every accepted Anchor Set. A per-set record allows one redemption per
+  set that contains the token's Anchor (§5.1, §9).
+
+No attack was found on the implementation itself: soundness, the selector, constant-time index
+handling, or transcript binding.
+
+---
+
+## 1. The protocol as implemented
+
+**Parameters.**
+- UOV over `GF(256)` with `n = 119` and `m = 45` (`uov.hpp:17-18`; pqov "uov-Ip", UOV spec R3).
+- `NF_BYTES = 24`, `CTX_BYTES = 16`, `R_BYTES = 16`, `CHALLENGE_DIGEST_BYTES = 32`, and
+  `MAX_ANCHORS = 64` (`moussaka.hpp:24-29`, `commit.hpp:21`).
+- VOLEitH with the FAEST-EM-128f v3 parameters (`issue.hpp:132-136`, `redeem.hpp:147-151`).
+
+**Commitment.** `Com(nf, ctx_iss, ctx_red, r) = KP800(state)[0..45)`, where `state` is the 100-byte
+string below (`commit.hpp:33-48`, `moussaka.cpp:89-96`):
+
+```
+"mous" ‖ 0x00 ‖ "c0"  ‖ r ‖ 0^9 ‖ ctx_iss ‖ ctx_red ‖ nf ‖ 0^12
+ 7 bytes (DST)          16   9     16        16       24   12
+```
+
+- There are 576 free input bits and 224 fixed bits.
+- The output is the 360-bit UOV target.
+- `KP800` is Keccak-p[800,12], a permutation: one call, no sponge.
+
+**Client randomness.**
+- A 32-byte OS seed is expanded as `SHAKE128(MOUSSAKA_ISSUE_SEED_DST ‖ seed)` into `nf ‖ r ‖ ρ_iss`
+  (`moussaka.cpp:58-71`).
+- Redemption uses a fresh OS seed: `ρ_red = SHAKE128(MOUSSAKA_REDEEM_SEED_DST ‖ seed')`
+  (`:74-85`, `:230`).
+
+**Issuance.**
+1. The Client sends `(t, π_iss)`. `π_iss` proves `IssueRelation`: instance `(t, ctx_iss)`, witness
+   `(r, ctx_red, nf, s5, s9)`, with bit constraints on every witness bit (`issue.hpp:1-21`,
+   `:164-192`).
+2. The Anchor verifies `π_iss` and returns `s = DerivePreimage(sk, t)` (`moussaka.cpp:127-136`).
+   `DerivePreimage` is deterministic: the vinegar is
+   `SHAKE256(t ‖ sk_seed ‖ "pqov-derive-preimage" ‖ ctr)` with at most 256 retries
+   (`subprojects/pqov/src/ov.c:226-238`, `:24`), so one key yields one preimage per target.
+3. The Client checks `P(s) = t` (`moussaka.cpp:177`).
+
+**Redemption.**
+- The Client finds its issuer itself: in constant time over all `u`, it takes `i` as the last `u`
+  with `anchors[u].eval(s) = Com(nf, ctx_iss, ctx_red, r)`, and throws if there is none
+  (`find_issuer`, `src/ihat/ihat.cpp:120-138`, called at `:245`, on `main`; since `21be618`, before
+  which the caller passed `i` and the loop checked that index). It then consumes the token
+  (`ihat.cpp:247`) and sends `nf ‖ π_red`.
+- `RedeemRelation` (`redeem.hpp:1-36`, `:165-272`):
+  - instance: `(anchors, nf, ctx_iss, ctx_red, challenge_digest)`;
+  - witness: `(r, s, s5, s9, b)`, with `b ∈ {0,1}^64`;
+  - constraints:
+    - bit constraints on `r`, `s` and the states;
+    - `b[u]` is a bit for `u < n`, and `b[u] = 0` for `u ≥ n` (`:223-232`);
+    - parity `(⊕_{k≤u} b[k])·b[u+1] = 0` for `u < 63`, and weight `⊕ b = 1` (`:234-242`);
+    - `l(Σ_u b[u]·P_u(s)) = l(KP800(state))`, for a random linear combination `l` of the 45
+      components derived from chall₂ (`:251-270`).
+- The Moderator runs `voleith_verify` and returns `nf` (`moussaka.cpp:278-289`). Double-spend
+  detection is the caller's job.
+
+**Transcript binding.**
+- `mu = H₂⁰(instance ‖ DST ‖ 0x08)` (`voleith.hpp:100-122`).
+- The issue instance is `t ‖ ctx_iss`, fixed-length (`issue.hpp:165-166`).
+- The redeem instance is `⟨64⟩₄ ‖ ⟨n⟩₄ ‖ digest(P₀) ‖ … ‖ digest(P_{n−1}) ‖ nf ‖ ctx_iss ‖ ctx_red ‖
+  challenge_digest` (`redeem.hpp:182-200`). Here `digest = SHAKE256-256` of the compressed key bytes
+  (`uov.cpp:82-85`).
+- The constraint system uses the expanded map of the same `PublicKey` object, so maps and digests
+  cannot diverge through the API.
+
+---
+
+## 2. Deviations from the draft
+
+| # | Draft | Implementation | Security effect |
+|---|---|---|---|
+| D1 | `challenge_digest` is a separate "message" input to `VOLEitH.Prove`. The instance encoding omits it | `challenge_digest` is the last field of the hashed instance (`redeem.hpp:199`) | None: both bind it into `mu`. Interoperability: the draft doesn't say where "message" enters, so implementations can disagree on the transcript |
+| D2 | Selector `b ∈ F_2^MAX_ANCHORS` with `b[u] = 0` for `u ≥ N` (since draft `6fd8ff3`; before, `b ∈ F_q^N`) | `b ∈ {0,1}^64`, padded with zero-constrained entries (`redeem.hpp:223-232`) | None; the draft now matches. Lean `selector_one_hot`: the parity and weight constraints force one-hot over **any** field, so the older `F_q^N` version was sound too, even without bit constraints |
+| D3 | `P[i](s) = Com(…)` componentwise | One random linear combination `l` of the 45 components, `l = H(chall₂ ‖ "mous"‖0‖"l0")` (`redeem.hpp:253`) | Soundness loss `2^{−128} + q_c·2^{−448}` (L4) |
+| D4 | `Com` circuit unspecified (TODO) | Two committed intermediate states, after 5 and 9 rounds (`issue.hpp:5-20`) | Covered by L7 (Keccak segments) |
+| D5 | Anchor Set: `0 < N ≤ MAX_ANCHORS` | Also rejects duplicate keys by digest (`moussaka.cpp:138-151`) | Hygiene only (§7) |
+| D6 | `RedeemRequest` does not check the token | The Client finds the index `i` of a key that verifies its token, in constant time, and throws if none does (`src/ihat/ihat.cpp:120-138` on `main`) | Better: no proof is made for a false statement. No leak of `i`, and the caller need not supply it |
+| D7 | `nf`, `r` sampled directly | Derived with `ρ_iss` from one OS seed through SHAKE128 (`moussaka.cpp:58-71`) | None in the ROM up to the seed-XOF hop: `(2q_X + 2)·2^{−256}` per world in Theorem 4's game (an XOF query at a Client's seed gives its `nf`; two seeds of one domain collide), which Theorem 4 does not charge; [Lean] `anonymity*_seed`, `lean/docs/zk.md` §10.6. This needs the application-hash vs proof-hash disjointness (Lemma DS, §3.1) |
+| D8 | "samples a solution `s`" (older text) / "DerivePreimage" | Deterministic in `(sk, t)` | Needed: two preimages of one target from different vinegars are not known to be harmful, but determinism makes the UOV oracle a function (§3.3) |
+| D9 | Security claim: one-more-UOV (PoMFRIT Def. 8) | — | None. This note uses one-more-UOV too, through CT-UF^open (§3.3), which follows from it tightly. (An earlier version used plain CT-UF, which is false for UOV; §3.3) |
+| D10 | DST template "as in Ratatouille" | DST is *appended* to the instance in `mu` (`voleith.hpp:118`). Application hashes *prepend* DSTs | Covered by Lemma DS (§3.1) |
+
+There are no deviations in the commitment layout, the issuance relation, or the API flow.
+
+---
+
+## 3. Model and assumptions
+
+### 3.1 Proof-system results used
+
+Let `q` be the adversary's total number of oracle queries, with the per-oracle counts of
+`lean/docs/extraction/README.md`.
+
+- **PoK (classical, straight-line, simultaneous).** For relation `R ∈ {iss, red}`, the README's
+  extractor `E` succeeds on every accepting proof in a run, except with probability
+  `ε_ext^R = Q·9·2^{−128} + q₁ε_KOS + q₂(ε_QS + 2^{−128}) + q_c·2^{−448} + ε_bind + ε_dead +
+  (q²+q)·2^{−256}`, which is about `2^{−60.8}` at `q = 2^{64}` (README §Main theorem, L8 §9.1–9.2
+  for per-oracle counts and simultaneity). `E` needs only the query log, with no rewinding and no
+  programming. With L7, the extracted witness satisfies the **stated** relation: the Keccak
+  opening, the one-hot selector, and `P_u(s) = Com(…)` in all 45 components.
+  [Lean] for one proof, classical, in the random-oracle and ideal-cipher model, with a fixed or
+  adaptively chosen statement: the decoded witness is in the spec relation (`IssueRelW`,
+  `RedeemRelW`) except with the bounds of `lean/VoleMole/ROM/SpecSound.lean`
+  (`moussakaIssue_accept_le_full_spec`, `moussakaRedeem_accept_le_adaptive_spec`, …; for `t` of 45
+  bytes, `nf` of 24, contexts of 16; adaptive families with injective encodings, proved for
+  fixed-length fields and fixed Anchors' digests, `EndToEnd/SpecRelations.lean`). Simultaneously
+  for all proofs of a run, per relation (`moussakaIssue_sim_spec`, `moussakaRedeem_sim_spec`,
+  `ROM/SimSpec.lean`) and for both relations together (`moussaka_sim_joint_spec`,
+  `ROM/SimJointSpec.lean`): each query of the run charged once, the per-proof verifier queries
+  and failure terms once per proof (§4 "Status").
+- **Weak SE w.r.t. adaptively chosen statements** (L8, Theorem L8): `ε_SE^R = ε_ext^R + ε_prog +
+  ε_hk + ε_H + ε_eq`.
+- **ZK** (lean/docs/zk.md §3). On `main`:
+  - `ε_ZK = ε_rho + ε_prog + 2ε_hide + ε_lab + ε_iv` with
+    `ε_lab = (Q₅ + n_mult·Q_V)·Pred_R + Q_P·2^{−128}`;
+  - for Moussaka, `Pred_R` is the probability of predicting `r` (the first 16 witness bytes of both
+    relations: `issue.hpp:58`, `redeem.hpp:74`). [Lean] `ZK/Relations.lean`: `w[0..16) = r` from
+    the `Arith/` layouts, and the sibling-label bad event of both proofs jointly is
+    `≤ (#H₅ queries)·Pred_R` for explicit predictors (`moussaka_main_zk`); towards a Moderator
+    that never sees `t`, `Pred_R = 2^{−128}` unconditionally (`moussakaRedeem_main_zk_uniform`;
+    `lean/docs/zk.md` §4.1).
+
+  On the fix (`d5def9c` of branch `voleith-label-rows`, `CRT_DEDICATED_LABEL_ROWS`; on `main`
+  since `64fd1a4` the same rows are the default, but Moussaka opts out with `REUSE_CRT_WITNESS`, so
+  `main` stays at the (PU) bound above), standard adaptive NIZK holds with
+  `ε_lab = (Q₅ + n_mult·Q_V + Q_P)·2^{−128}`, with no `Pred` term.
+- **Lemma DS** (`lean/docs/security/domain-separation.md` §7: part (a), unconditional, for every
+  SHAKE call Moussaka makes; part (b) for `Com`). The DST-prefixed
+  application hashes (`SHAKE128(DST ‖ seed)` at `moussaka.cpp:58-85`) and the end-tagged
+  proof-system hashes have disjoint input domains, and so does the combination hash. So all are
+  independent random oracles. Two other hashes are separate from the start:
+  - SHAKE256, used for key digests and UOV vinegar, is a different function;
+  - `Com` uses Keccak-p[800], not Keccak-f[1600].
+- `ε_dig`: the probability that two distinct key byte strings handled in the run share a SHAKE256
+  digest. This is at most `q_{256}²·2^{−257}` in the ROM. It is listed separately because the
+  redeem statement binds maps only through digests (`redeem.hpp:193-195`). If two distinct Anchor
+  Sets had equal digest lists, a prover could pick the set after seeing chall₂, which L4's "statement
+  bound before chall₂" step excludes only if the digests are collision-free.
+
+### 3.2 The commitment `Com`
+
+The VOLEitH relations evaluate the **concrete** Keccak-p[800,12] circuit. So `Com` cannot be a
+programmable oracle inside the protocol proofs (F3). We therefore state its properties as concrete
+assumptions, in the standard model. The generic (random-permutation, forward and inverse) estimates
+below are evidence for these assumptions. They are not part of any reduction.
+
+- **Binding.** `Adv^bind_Com(A) = Pr[A → x ≠ x' ∈ D : Com(x) = Com(x')]`, where `D` is the
+  576-bit input space.
+  - Generic: `≲ q²/2^{361} + q·2^{576}/(2^{800}−q) ≈ q²/2^{361} + q/2^{224}`.
+  - The second term is an inverse query that happens to land in `D`.
+  - At `q = 2^{64}` this is `≈ 2^{−160}`.
+- **One-wayness in `r`.**
+  - `Adv^ow-r_Com(A) = Pr[A(nf, ctx_iss, ctx_red, t) → r' : Com(nf, ctx_iss, ctx_red, r') = t]`,
+    for uniform `r` and `t = Com(nf, ctx_iss, ctx_red, r)`, where `A` chooses
+    `nf, ctx_iss, ctx_red` first.
+  - Generic: `≲ (q+1)/2^{128}`.
+  - [Lean] `lean/VoleMole/Privacy/PU.lean`, `Privacy/PUKeccak.lean` (`lean/docs/zk.md` §4.3). The
+    form used for zero knowledge on `main` is (PU): `puAdv Com P = Pr[r ∈ P(nf, t, aux)]` for a
+    predictor that outputs `c` candidates (uniform `nf`; `c = 1` and a check of the candidate is
+    the notion above). With a uniformly random permutation in place of Keccak-p[800] and a
+    predictor that makes `q` forward and inverse queries, `puAdv ≤ (c + q)/(2^{128} − q) +
+    q/(2^{440} − q)` (`puAdvPerm_moussaka_le`): the generic estimate, with the inverse-query term.
+    For the concrete `Com` the exhaustive predictor has advantage `1` (`puAdv_bruteForce`), so the
+    assumption is computational, as it must be.
+- **Hiding (2-instance).**
+  - `Adv^hide_Com(A)`: `A` chooses `(ctx_iss, ctx_red)`. For uniform `r₀, r₁, nf₀, nf₁`, it gets
+    `t_c = Com(nf_c, ctx_iss, ctx_red, r_c)` for `c ∈ {0,1}`.
+  - It must distinguish being given `(nf₀, nf₁)` from being given independent uniform
+    `(nf₀*, nf₁*)`.
+  - Generic: `≲ 2(q+1)/2^{128}`.
+  - This is the hiding notion needed when the opening `r` is the only secret and `nf`, the
+    contexts and `t` are all known to a colluding party.
+  - [Lean] `lean/VoleMole/Privacy/ComHide.lean` (`lean/docs/zk.md` §10.9). With `Com`'s cells a
+    random-function table read at `q` cells, the advantage is `≤ (4q + 2)·2^{−128}`
+    (`hidingAdvRO_num`), the generic estimate above for forward queries. Against unbounded
+    distinguishers the advantage is `1 − p` (`ComHide.Moussaka.hidingAdv_bruteForce`: search all
+    `2^{128}` openings, `p` the chance that a fresh `nf` admits one, `≈ 2^{−192}` heuristically).
+    This assumption cannot be discharged in the ROM. `Com` is evaluated inside the issuance and
+    redemption relations, so it is not a table of the privacy games, and their reductions compute
+    it. `2·Adv^hide_Com` in Thm 4(a) stays a computational term.
+
+All three margins are generic. Keccak-p[800,12] has 12 of 22 rounds. Structural attacks on a
+12-round inverse with 224 fixed input bits, or on 360-bit output truncation, are outside this note.
+The draft defers to the Ratatouille draft for this choice.
+
+### 3.3 UOV
+
+Let `P_k` be the public maps of `K` honest Anchors and `Sign_k(y) = DerivePreimage(sk_k, y)` for any
+`y ∈ F_{256}^{45}`.
+
+The draft's assumption is **one-more-UOV** (PoMFRIT Def. 8; OMPR in `uov-assumptions.md` §3,
+item 7). This note uses it too, through one intermediate notion, CT-UF^open, that matches the
+structure of the proof: the reduction knows an opening of every target it has signed, because it
+extracts them from the issuance proofs.
+
+- **One-more-UOV (OMPR).**
+  - `A` gets `P` and `Q` uniform targets `y_1..y_Q`, and the oracle `Sign` on arbitrary targets.
+  - After `ℓ` distinct oracle targets, it outputs `ℓ+1` pairs `(j, s_j)` with distinct `y_j` and
+    `P(s_j) = y_j`.
+  - `Sign` is the real, deterministic `DerivePreimage`.
+- **CT-UF^open (chosen-target unforgeability on `Com`-images, with openings), `K` keys.**
+  - `A` gets `P_1..P_K` and oracles `Sign_1..Sign_K` on arbitrary targets.
+  - It wins if it outputs `(k, x*, s*)` with `x* ∈ D`, `P_k(s*) = Com(x*)` and `Com(x*)` never
+    queried to any `Sign_j`, **and** an opening `x_t ∈ D` with `Com(x_t) = t` for every target `t`
+    it queried.
+  - `Adv^{ct-uf-open}_K ≤ K·Adv^{ct-uf-open}_1`: the reduction generates the other `K−1` keys itself
+    ([Lean] for the ideal-`Com` game, `advCTUFIdeal_le_sum`, as a sum over the guessed key).
+- **Lemma U (CT-UF^open from one-more-UOV; `uov-assumptions.md` §5.4, T4).** Model `Com` as a
+  random permutation with inverse access **in the standalone CT-UF^open game only**. This is
+  legitimate there, because that game contains no proof that evaluates `Com`'s circuit. With `q_f`
+  forward, `q_i` inverse and `q_S` `Sign` queries,
+
+      Adv^{ct-uf-open}_1(A) ≤ Adv^{ompr}(B; q_f + q_S + 1, q_S)
+                             + q_i·2^{−223.9} + q_S·(q_f + q_S + 1)·2^{−359.9} + (q_f + q_S + 1)²·2^{−800}.
+
+  - *Proof idea.* Answer each fresh forward query on `x ∈ D` with `y_j ‖ z`, for the next challenge
+    target `y_j` and a uniform 440-bit `z`; forward `Sign` queries to the one-more oracle. Because
+    every signed target comes with an opening, it was a challenge target when it was signed, except
+    in the middle bad event. The forgery is a preimage of a fresh challenge, so the reduction has
+    `q_S + 1` preimages after `q_S` calls. The full proof is in `uov-assumptions.md` §5.4.
+  - The bound is tight: no loss beyond the bad events.
+  - *Corrections* (`uov-assumptions.md` §5.4). The middle term is not needed: OMPR does not ask
+    that a call follow its target's issuance. A term `n·failPr` is: a failed `derive_preimage`
+    answer is not a preimage (`failPr = E[δ^{255}] ≈ 2^{−295.8}` for pqov). And `B` must cache
+    repeated `Sign` queries and pad to exactly `q_S + 1` claims, which may use up to
+    `q_f + 2q_S + 1` targets.
+  - **Status: [Lean], with `Com` a random function, and with `Com` a random permutation with
+    inverse queries** (`Assumptions/CTUFPerm.lean`, `advCTUFPermAt_le_ompr`; see below and
+    `uov-assumptions.md` §5.4). `Assumptions/CTUFOpenOMPR.lean`: `advCTUFIdeal1_le_ompr`,
+    `Adv^{ct-uf-open}_1 ≤ Adv^{ompr}(B; q_f + 2q_S + 1, q_S) + (q_f + 2q_S + 1)·failPr`, in the
+    ideal-`Com` game `advCTUFIdeal1` (`Assumptions/UOV.lean`); the `K`-key step by guessing,
+    `advCTUFIdeal_le_sum`; together `advCTUFIdeal_le_ompr` (over key generation) and
+    `advCTUFIdealAt_le_ompr` (at fixed keys). Replacing the concrete `Com` by the ideal one stays
+    the modelling step, a hypothesis of `omuf_le_num_ompr` (§4 "Status").
+- **Why not plain CT-UF (no openings).** An earlier version of this note used CT-UF, with a signing
+  oracle on arbitrary targets and freshness "`Com(x*)` was never queried", as a weaker intermediate
+  assumption. That was a mistake:
+  - **CT-UF is false for UOV** (`uov-open-reductions.md` Theorem B1; Lean `ctuf_scaling_attack`,
+    `ctuf_pqov_broken`). The public map is homogeneous quadratic, `P(λs) = λ²·P(s)`, and every
+    element of `GF(256)` is a square (`√μ = μ^{128}`). So the answer to `Sign_k(μ·Com(x*))`,
+    `μ ∉ {0, 1}`, multiplied by `(μ^{−1})^{128}`, is a preimage of the unqueried `Com(x*)`.
+  - The old Lemma U (CT-UF from one-more-UOV) was therefore wrong. Its last step counted a `Sign`
+    query on a non-challenge target as a challenge preimage (`uov-assumptions.md` §5.4).
+  - The protocol is not affected: an Anchor signs `t` only after verifying a proof of knowledge of an
+    opening, and the reduction extracts it. The draft's own assumption, one-more-UOV, was never
+    affected. The scaling symmetry matters only for a key that signs raw targets, e.g. a key shared
+    with PomFRIT (F1).
+- **Plain UOV problem.** One-more-UOV is not expected to follow from the plain UOV problem
+  (`uov-open-structure.md` Part A: no key-preserving black-box reduction). From GPI and OW instead,
+  `Adv^{ct-uf-open}_1 ≤ Adv^{gpi}(q_f + q_S + 1) + (q_f + q_S + 1)·Adv^{ow} + …` (`uov-assumptions.md`
+  §5.4), with loss `q`. The main theorems are stated under CT-UF^open, hence under one-more-UOV.
+
+---
+
+## 4. One-more unforgeability
+
+MoLE's security goal (architecture draft, "Security Goals"):
+- an accepted Endorsement "corresponds to exactly one Endorsement granted by a trusted Anchor";
+- attackers control Clients and possibly *other* Anchors, but have no CRQC.
+
+**Game OMUF.**
+- The challenger generates `K` honest Anchor keys. `A` gets the public keys and these oracles:
+  - `Issue(k, req, ctx_iss)`: run `issue_response(sk_k, req, ctx_iss)` (`moussaka.cpp:127`). If it
+    accepts, put `t = req[0..45)` into the set `L_{ctx_iss}`.
+  - `Redeem(S, req, ctx_iss, ctx_red, cd)`, for an Anchor Set `S` made only of honest keys: run
+    `finalize_redeem`. If it accepts with `nf`, record `(ctx_iss, ctx_red, nf)` in a **single**
+    store `R`, shared across all `S`.
+- `A` controls everything else: other Anchors, and all Clients.
+- `A` wins if, for some `ctx_iss*`, the number of distinct `(ctx_red, nf)` recorded in `R` with
+  `ctx_iss*` exceeds `|L_{ctx_iss*}|`.
+
+**Theorem 1.** For every classical `A`,
+
+```
+Adv^omuf(A) ≤ ε_ext^iss + ε_ext^red + ε_dig + Adv^bind_Com(B₁) + K·Adv^{ct-uf-open}_{UOV,Com,1}(B₂).
+```
+
+- `B₁` and `B₂` run `A` once, plus `E` on every accepted proof at the end (straight-line).
+- `B₂` makes exactly as many `Sign` queries as `A` makes accepted `Issue` queries.
+
+With Lemma U, `K·Adv^{ct-uf-open} ≤ K·(Adv^{ompr} + q_i·2^{−223.9} + q²·2^{−800} + q·failPr)` (§3.3, corrected: no
+`q²·2^{−359.9}` term, a sampler-failure term).
+
+*Proof.*
+1. **Simulation.** `B₂` gets CT-UF^open keys and oracles. It answers `Issue(k, (t, π), ctx)` by verifying
+   `π` (public) and returning `Sign_k(t)`. This equals `DerivePreimage(sk_k, t)`, so the
+   simulation is perfect. No extraction is needed during the run; `B₂` extracts the openings of the
+   issuance proofs after it. `Redeem` is public verification.
+2. **Extraction.** At the end, run `E` on every accepted issuance proof and every accepted
+   redemption proof (§3.1 simultaneity). Outside an event of probability
+   `ε_ext^iss + ε_ext^red + ε_dig`:
+   - each accepted issuance `(t_q, ctx_q)` yields `x_q = (nf_q, ctx_q, ctx_red_q, r_q)` with
+     `Com(x_q) = t_q`;
+   - each accepted redemption `j` with `(S_j, nf_j, ctx_iss_j, ctx_red_j)` yields `(r_j, s_j, b_j)`.
+     By L7 and Lean `selector_one_hot`, `b_j = e_{u_j}` for some `u_j < |S_j|`, and
+     `P_{S_j[u_j]}(s_j) = t_j := Com(x_j)` with `x_j = (nf_j, ctx_iss_j, ctx_red_j, r_j)`.
+3. **Binding case.** Suppose two distinct inputs among `{x_q} ∪ {x_j}` have equal commitments.
+   Then `B₁` outputs that collision.
+4. **Otherwise.** Fix the winning `ctx_iss*` and let `J` be its distinct accepted `(ctx_red, nf)`.
+   - Distinct `j ∈ J` have distinct `x_j`, hence distinct `t_j`. So `j ↦ t_j` is injective on `J`.
+   - `|J| > |L_{ctx_iss*}|`, so Lean `exists_unsigned_of_card_lt` gives `j` with
+     `t_j ∉ L_{ctx_iss*}`.
+   - If `t_j ∈ L_{ctx'}` for some `ctx' ≠ ctx_iss*`, then `x_j` (context `ctx_iss*`) and the
+     extracted `x_q` (context `ctx'`) collide, which is case 3. So `t_j` was never submitted to any
+     `Sign_k`.
+   - `B₂` outputs `(S_j[u_j], x_j, s_j)`, together with the extracted opening `x_q` of every target
+     `t_q` it had signed (they exist on the good event of steps 2–3), a CT-UF^open forgery. ∎
+
+**Status: [Lean]** (`lean/VoleMole/ROM/MoussakaOMUF.lean`, `ROM/VerifyIC.lean`,
+`Protocols/Moussaka.lean`). Game OMUF on the executable spec, in the random-oracle and
+ideal-cipher model of `lean/VoleMole/ROM/` (SHAKE a random oracle, AES's rows uniform functions):
+- *The game.* `K` honest Anchors with any public keys `pk k` and any signers `sk k` (nothing is
+  assumed of them). The adversary (`Adversary`) is an oracle computation over the hashes and the
+  cipher that makes `qI` Issue queries one after the other, each seeing the earlier answers, then
+  outputs `qR` redemptions with Anchor Sets of honest Anchors. The Anchor (`anchorIC`) is the
+  spec's `issue_response` with the request length of `main` (`7272`) or of label rows (`7528`)
+  and the executable Lean verifier on the oracles (`anchorIC_eq_spec`: per table it is
+  `Spec.Moussaka.issueResponseN` with that verifier); an accepted proof puts `t` into the signed
+  set, whether or not `derive_preimage` then succeeds. The Moderator (`moderatorIC`) is
+  `finalize_redeem` with the Lean verifier, for a valid Anchor Set and 16-byte contexts. The
+  Redeem oracle of the game above is replaced by a final list of redemptions: its answer is
+  public, so the adversary can compute it. `Win`: for some `ctx_iss`, more distinct accepted
+  `(ctx_red, nf)` than distinct accepted `t`, the record global across Anchor Sets. The
+  adversary is deterministic given the oracles; every term averages over its coins.
+- *The verifier as an oracle computation* (`ROM/VerifyIC.lean`). The soundness theorems need
+  provers that reach the cipher only through oracle queries; the honest checks run inside the
+  game, so they must too. `verifyIC` derives the BAVC tree with cipher queries, queries the cells
+  the verifier's PRG calls read (`needCells`), then runs the hash-query verifier with the PRG of
+  the queried cells; per table it is the executable verifier with the ideal-cipher PRG
+  (`evalWithAnswerFn_verifyIC`, from a cell-level read lemma `verify_congr_cells`). One
+  verification costs `2 + 337` hash queries and `9212 + 2304·(2 + voleColBlocks)` cipher
+  queries (`55292` for an issuance proof, `69116` for a redemption proof).
+- *The reduction* (`omuf_le`). The provers `P^iss_j`, `P^red_j` are the whole game with its
+  `j`-th proof as output. Per table, a win in which every accepted proof is extracted gives a
+  `Com` collision among the extracted openings or a CT-UF^open forgery (`win_imp`; the deterministic
+  steps 3–4 are `Moussaka.collision_or_forgery`, through `exists_unsigned_of_card_lt`). A union
+  bound across the games on one table (`prEvent_bind_le_sum4_of_table`, `ROM/ExtractReduce.lean`)
+  gives
+
+      Pr[Win] ≤ Σ_{j<qI} Pr[accept ∧ ¬Extracted](P^iss_j) + Σ_{j<qR} Pr[accept ∧ ¬Extracted](P^red_j)
+                + AdvBind(B₁) + AdvCTUF(B₂).
+
+  `B₁`, `B₂` (`extAll`) run the game and the straight-line extractor on every proof. `AdvBind` is
+  the probability that two distinct extracted openings in `Com`'s domain (`nf` of 24 bytes, the
+  rest 16) collide; `AdvCTUF` that an accepted redemption's extracted opening, with an honest key
+  of its Anchor Set and a preimage under it, commits to a target that no Anchor's signer was
+  called on (the signer is called exactly on the accepted Issue queries' `t`, so `B₂`'s `Sign`
+  queries are those).
+- *With the soundness theorems* (`omuf_le_num`). Each extraction term is bounded by
+  `moussakaIssue_accept_le_adaptive_spec` or `moussakaRedeem_accept_le_adaptive_spec`
+  (`ROM/SpecSound.lean`) at the provers' budgets: the adversary's `qI + 2` stages plus the
+  `qI + qR` honest verifications (`gameK`, `gameE`, `gameH`). Their `hinj` hypotheses are
+  discharged; for redemption this needs the honest keys' digests to be 32 bytes and distinct
+  (`hdig`, `hdinj`), the note's `ε_dig` as a condition on the keys (Anchor Sets hold honest keys
+  only; over key generation it fails with probability `≤ K²·2^{−257}` in the ROM). So
+
+      Pr[Win] ≤ qI·ε_I(q', q'_E) + qR·ε_R(q', q'_E, n') + AdvBind(B₁) + AdvCTUF(B₂).
+
+- *With simultaneous extraction* (`ROM/MoussakaOMUFSim.lean`, `omuf_le_num_sim`; down to OMPR
+  `omuf_le_num_ompr_sim`, `Assumptions/SimLinks.lean`). All proofs come from one run of the game
+  (`PI j`, `PR j` are projections of `game`), and every extraction-failure term of the
+  single-proof bound is a sum of per-query bad events. So the extraction failures of all `qI`
+  issuance and `qR` redemption proofs are bounded together, charging each query of the run once
+  (`ROM/SimExtract.lean`, `ROM/SimJoint.lean`, plan §2m):
+
+      Pr[Win] ≤ ε_IR^sim(q', q'_E, n', qI, qR) + AdvBind(B₁) + AdvCTUF(B₂),
+      ε_IR^sim = (q'₂₁+m)·2⁻¹⁵⁰ + (q'₂₂+m)·(ε_QS(4409) + 2⁻¹²⁸ + (n'+339)·2⁻⁴⁴⁸)
+                 + (q'₂₃+m)·9·2⁻¹²⁸ + chainHitEpsCombSim q' M m + stmtBindEpsSim q' m
+                 + m·failEps q' q'_E,     m = qI + qR,
+
+  at the same budgets as `omuf_le_num`. A query of the run is charged by the relation whose
+  statement is committed there; the DSTs `mous0i0`, `mous0r0` make that at most one, so the
+  charge is the larger of the two relations' (the redemption one at `H₂²`). Per proof only the
+  extraction game's own verifier queries (`+m`) and the failure terms (binding, an opened dead
+  leaf, Post: `failEps ≈ 2⁻¹¹⁷·⁹` at `2⁶⁴` queries) remain. At `q' = 2⁶⁴` queries per kind and
+  `qI = qR = 2³⁰`: `qI·ε_I + qR·ε_R ≈ 2⁻²⁹·⁶`; each relation's simultaneous bound added
+  (`prEvent_simI_le`, `prEvent_simR_le`, the run charged once per relation) `≈ 2⁻⁵⁹·⁶`;
+  `ε_IR^sim ≈ 2⁻⁶⁰·⁵⁴`.
+- *With simultaneous extraction, AES as random permutations* (`ROM/MoussakaOMUFSimPerm.lean`,
+  `omuf_le_num_simP`; plan §2m). The same game with an adversary that makes forward and inverse
+  cipher queries (`AdversaryP`, `gameP`), the honest verifiers reading the cipher forward:
+  `Pr[Win] ≤ ε_IR^simP + Pr[Coll] + Pr[Forge]`, `ε_IR^simP` the bound above with the permutation
+  model's failure terms (`failEpsP`, Post `q_E·4608·q₂₁·p²` dominating, `p = 1/(2¹²⁸ − q_E)`)
+  and the total hash count `n' + 2q'₂₁` in the `2⁻⁴⁴⁸` term. `ε_IR^simP ≈ 2⁻⁶⁰·⁵⁴` at the same
+  numbers (`(qI + qR)·failEpsP ≈ 2⁻⁸⁴·⁸`). `Coll` stays a probability of the permutation-model
+  run; `Forge` is the CT-UF^open advantage of `ctufForgerP`, and down to OMPR
+  `omuf_le_num_ompr_simP` (`Assumptions/PermSimLinks.lean`).
+- *With CT-UF^open* (`Assumptions/UOVLinks.lean`, `omuf_le_num_open`). The same bound with
+  `Adv^{ct-uf-open}_K(B₂)`, the advantage of an explicit forger (`ctufForger`) in the standalone
+  CT-UF^open game (`Assumptions/UOV.lean`, `advCTUFOpenAt`) in place of `AdvCTUF(B₂)`. `B₂` runs
+  the game and the extractions with the signers as its oracle, and outputs, besides the forgery,
+  an extracted opening of every signed target. If an accepted issuance proof is not extracted an
+  opening may be missing, but that case is already the `ε_I` term (`win_imp_open`), so nothing is
+  added. This is Lemma U's repair (`uov-assumptions.md` §5.4) in Lean, up to the reduction from
+  OMPR itself. (CT-UF as stated is false for UOV, `ctuf_pqov_broken`.)
+- *Down to OMPR* (`Assumptions/UOVLinks.lean`, `omuf_le_num_ompr`). Under the modelling hypothesis
+  `hmodel` (the concrete-`Com` advantage of `B₂` is at most the ideal-`Com` advantage of some
+  forger `F` with budget `(q_f, q_S)`; not provable, since `Com` is a fixed function), the last
+  term is at most
+
+      Σ_j (Adv^{ompr}_{key j}(B_j; q_f + 2q_S + 1, q_S) + (q_f + 2q_S + 1)·failPr_{key j}),
+
+  per key, `B_j` the T4 reduction of the forger guessing key `j` (Lemma U and the `K`-key step,
+  §3.3). Over key generation the same chain is `advCTUFIdeal_le_ompr`
+  (`Σ_j Adv^{ompr}(B_j) + K·(q_f + 2q_S + 1)·failPr`); Theorem 1 itself is per key, since its
+  digest condition `hdig`, `hdinj` is a condition on the keys (an average needs the
+  digest-collision probability as a term, not done).
+
+  `Audit/Nonvacuous.lean` instantiates the hypotheses; the honest checks' request lengths are the
+  verifier's proof sizes (`pfLenI_eq`, `pfLenR_eq`). `#print axioms`: `propext`,
+  `Classical.choice`, `Quot.sound`.
+- *Differences from the paper bound.* (1) Simultaneous extraction (§3.1; L8 §9.1–9.2) is
+  mechanized (`omuf_le_num_sim`): `ε_IR^sim` in place of `ε_ext^iss + ε_ext^red`, each query of
+  the run charged once for both relations, as in the paper. One difference remains, small: the
+  failure terms (binding, an opened dead leaf, Post) stay per proof, `(qI + qR)·failEps`, since
+  in the single-proof development they are bounded on average over the cipher table rather than
+  per query (`2⁻⁸⁶·⁹` at `2⁶⁴` queries and `2³⁰ + 2³⁰` proofs). The per-proof union bound
+  `omuf_le_num` (`qI·ε_I + qR·ε_R`) is kept. (2) `Adv^ct-uf-open` for `K` keys; the
+  guessing step to `K·Adv^ct-uf-open_1` is mechanized for the ideal-`Com` game only
+  (`advCTUFIdeal_le_sum`). (3) `Com` binding stays an assumption (§3.2); CT-UF^open stays one for
+  the concrete `Com`, and reduces to OMPR (Lemma U, with `Com` a random function) through the
+  modelling hypothesis of `omuf_le_num_ompr`; `omuf_le_num` names the term `AdvCTUF(B₂)`, and
+  `omuf_le_num_open` shows it is a CT-UF^open advantage. No step of Theorem 1's paper proof was
+  found wrong; Lemma U's needed the corrections of §3.3.
+- *Unbound tokens:* Thm U1 is mechanized the same way (`moussaka-unbound.md` §4 Status).
+
+**Remarks.**
+- *Counting refinement.* The same argument bounds, for each `(ctx_iss, ctx_red)`, the accepted
+  nullifiers by the signed commitments whose extracted opening carries that `ctx_red`. The Anchor
+  never sees `ctx_red`, so this is a statement about the extractor's view only.
+- *Same `t` at several Anchors.* A Client may submit one `t` to several Anchors (the draft's NOTE
+  "nothing ties issuance to the Anchor"). It then holds several preimages of one `t`, but by binding
+  only one `nf`. The count by distinct `t` is the right one. Rate limits per Anchor are unaffected,
+  because each submission is a separate `Issue` query.
+- *Trust in Anchors.* A malicious Anchor *in* `S` can mint tokens for `S` at will, by design. A
+  malicious Anchor *outside* `S` gives no advantage, beyond F1 when keys are shared across
+  protocols.
+- *Redemption-proof extraction is essential, issuance-proof extraction is not.* The issuance proof
+  is used only to bind `ctx_iss` (case 3). Without it, a Client could have a commitment to one epoch
+  signed in another. The Anchor's rate limit per `ctx_iss` relies on it.
+
+---
+
+## 5. Nullifiers, double spending, selector, and context binding
+
+### 5.1 Nullifiers
+
+**Corollary 2.** On the good event of Theorem 1:
+1. **Determinism.** Every accepted redemption's `nf` equals the `nf` committed in a commitment that
+   some honest Anchor signed (with `ctx_iss` checked by that Anchor). Each signed `t` determines a
+   unique `(nf, ctx_red)` by binding.
+2. **Single use.** A Moderator that records `(ctx_iss, ctx_red, nf)` and rejects repeats accepts at
+   most one redemption per signed `t`.
+   - The record must be global across Anchor Sets. A token is valid under every `S` that contains
+     an Anchor `u` with `P_u(s) = t`, and the proof hides which set member was used
+     (`moussaka.hpp:141-146`). The README's "Security considerations" said so until `ef3259e`; the
+     current README only says to reject a nullifier already recorded "in a previous presentation"
+     (`README.md:115-120`), which a per-set record appears to satisfy (F8).
+   - A per-`S` record allows one redemption per set.
+3. **Honest uniqueness.** `U` honest tokens have pairwise distinct `nf` except with probability
+   `U²·2^{−193} + U²·2^{−257}`. The second term is an OS-seed collision. `nf` is the first 24 bytes
+   of `SHAKE128(DST ‖ seed)`, which is uniform in the ROM.
+4. **No in-circuit derivation.** `nf` is chosen by the Client at issuance and is not a PRF of a
+   committed key. So any party can request a token with **any** `nf` it knows. See F2. The draft's
+   NOTE (issue 45, `nf = PRF(K, ctx_red)` in-circuit) would also prevent squatting.
+5. **Linkage through reuse.** The same token redeemed twice exposes the same `nf`. `ctx_red` binds
+   the token to one redemption context. The `Token` object is consumed by `redeem_request`
+   (`moussaka.cpp:214` at `6d7113e`, `src/ihat/ihat.cpp:247` on `main`). The MoLE protocols draft uses a fixed `ctx_red` for all Moderators in its
+   Rollatini profile. A Moussaka profile copying this would make one token valid at every
+   Moderator, so the Client must burn it after one use (architecture draft, "Clients … MUST burn
+   them").
+
+### 5.2 The selector
+
+`redeem.hpp:223-242` constrains:
+- `b[u] ∈ {0,1}` for `u < n`, and `b[u] = 0` for `u ≥ n`;
+- `(⊕_{k≤u} b[k])·b[u+1] = 0` for `u < 63`;
+- `⊕_u b[u] = 1`.
+
+Lean `selector_one_hot` proves that, over any field, the parity and weight constraints alone imply
+`b = e_i` for a unique `i < n` with `b_i = 1`. *Proof idea.* Let `i` be the first nonzero entry.
+Then the prefix sum is `b_i ≠ 0` from `i` on, so every later entry is 0, and the weight constraint
+gives `b_i = 1`. So `Σ_u b[u]·P_u = P_i`, and padding entries contribute nothing, because they are
+pinned to 0 and also skipped in `lq` (`redeem.hpp:259-262`). The Lean `example` shows why parity
+is needed: three set bits also have weight `1` in `GF(2)`. This agrees with L7.
+
+### 5.3 Context binding and redemption non-malleability
+
+| Value | Bound at issuance | Checked at redemption | Guarantee |
+|---|---|---|---|
+| `ctx_iss` | public in `π_iss`'s instance and inside `t` | in the instance and in the Keccak input | A token for epoch `e` is not accepted under `e' ≠ e` (binding, Thm 1, case 3) |
+| `ctx_red` | inside `t` only (witness of `π_iss`, hidden from the Anchor by ZK and hiding) | in the instance and in the Keccak input | A token for redemption context `M` is not accepted under `M' ≠ M` (binding). The Anchor learns nothing about `M` (§6) |
+| `challenge_digest` | not committed | in the instance (D1) | Non-malleability (Thm 3) |
+| Anchor Set | — | digests and size in the instance; maps in the constraints | Non-malleability (Thm 3), using `ε_dig` |
+
+**Game NM (redirect).**
+- `A` is the Moderator and may act as any Anchor.
+- Honest Clients obtain tokens and redeem them on request, under the Anchor Set and
+  `challenge_digest` that `A` chooses (each token once).
+- `A` wins if `finalize_redeem` accepts some `(S', nf_h, ctx_iss, ctx_red', cd')` that differs
+  from every honest redemption statement, and whose extracted commitment equals the commitment `t_h`
+  of an honest token.
+
+The last condition excludes F2, where `A` uses its own, separately signed commitment.
+
+**Theorem 3.** For `U` honest tokens,
+
+```
+Pr[A wins NM] ≤ ε_hop + ε_SE^red + Adv^ow_Com,
+```
+
+where `ε_hop` is the cost of replacing the honest proofs by simulated ones (§6, `ε_ZK^joint`), and
+`Adv^ow_Com` is the probability of finding an opening of one of the `U` honest commitments `t_h`
+from the view of the simulated world (any opening: one that differs from the Client's is a binding
+break). With Keccak-p[800] ideal, `Adv^ow_Com ≤ U·Adv^ow-r + Adv^bind`.
+
+*Proof.*
+1. Hop to simulated honest proofs (`ε_hop`).
+2. Weak SE (L8): the new statement differs from every simulated one, so `E` extracts `(r', s', u')`
+   with `Com(nf', ctx_iss', ctx_red', r') = t_h`.
+3. In the simulated world, the openings of the honest tokens enter `A`'s view only through
+   `t_h` (and `nf_h`), so the extracted opening is an opening of `t_h` found from the commitments
+   alone (`Adv^ow_Com`). ∎
+
+**Correction.** An earlier version stated the bound as
+`ε_SE^red + ε_dig + Adv^bind_Com + K·Adv^{ct-uf-open} + U·Adv^ow-r_Com + ε_hop`, with two
+"moreover" cases for an extracted commitment `t' ≠ t_h`. Those cases are outside the event (it
+asks for `t' = t_h`); they belong to Theorem 1 and F2. So `ε_dig` and `K·Adv^{ct-uf-open}` are not
+needed, and binding and one-wayness in `r` merge into one opening-finding term.
+
+**Status.** Corollary 2 (1) and (2) are what the core of Theorem 1 uses (one extracted opening
+per accepted redemption, binding); they are not stated separately in Lean. Theorem 3's reduction
+is **[Lean]** for one honest token (`lean/VoleMole/Theft/`; for `U` tokens see below):
+- The game (`Theft/Moussaka.lean`, `nmReal`). The Client runs the spec (`issueRequestOf`,
+  `finalizeIssue`, and `main`'s `redeem_request` with `findIssuer`), with the real provers on the
+  tables of the zero-knowledge model. `A` (`Thief`) chooses the contexts, the Anchor key, the
+  response, `S` and `cd` from the issuance request. Its last stage reads the tables and outputs a
+  redemption (its own set, contexts and digest) or an issuance request.
+- The event (`Bad`) is: accepted (`finalize_redeem`'s length check and the verifier), fresh
+  statement, and the extracted witness is not a witness or opens `t_h`. The honest redemption
+  replayed under the same set, contexts and digest is not fresh; the same bytes under another
+  digest are (`Audit/Theft.lean`, `replay_not_freshR`, `redirect_freshR`). Off the event,
+  `not_redirect` gives a witness whose commitment is not `t_h`.
+- **`noRedirect`**: `Pr[Bad] ≤ ε_I + ε_R + δ_R + ε_SE + Adv^ow(inverter)`.
+  - `ε_I`, `ε_R`: zero knowledge for `IssueRelW` and `RedeemRelW` at the hops' distinguishers.
+  - `δ_R`: the real redemption proof reads the tables differently after the simulated
+    issuance's programming (as `δL` of `anonymityRO`).
+  - `ε_SE`: weak SE (`Theft.WeakSE2`), **a hypothesis**.
+  - `Adv^ow`: an explicit inverter that gets `nf` and `t` (`owAdv`, `sim_opens_le`).
+- **`noRedirect_lean`** (`Theft/MoussakaLean.lean`): with the Lean prover and simulator, the
+  zero-knowledge hypotheses are discharged (`leanPI_zkRO`, `leanPR_zkRO`).
+- **`noRedirect_lean_reads`** (`Theft/Reads.lean`): with the Lean verifiers (`verIL`, `verRL`), the
+  hops' read budgets are proved from the adversary's last stage's `(a₃, a₅, a_E)` and the
+  extractor's `(x₃, x₅, x_E)`: `(a₃ + x₃, a₅ + x₅ + 936, a_E + x_E + 9214)` (`distI_budgetL`,
+  `distR_budgetL`).
+- **`noRedirect_lean_plain`** (`Theft/SimExtractLean.lean`): `WeakSE2` is proved
+  (`weakSE2_moussaka`) from plain extraction (`PlainSE`, an extractor that does not read `H₂³`)
+  and the probability that a fresh forgery's `H₂³` query is a programmed point (`ProgEv … HitOp`;
+  `accOp_moves`, `progRO_moved`): `Pr[Bad] ≤ εz(pI; q) + εz(pR; q) + δ_R + ε_plain + ε_hit +
+  Adv^ow`. Both terms stay hypotheses (`security/ratatouille.md` §5, "Lean").
+- **`noRedirect_leanH_plain`**, **`noRedirect_leanX_plain`** (`Theft/LeanHb.lean`,
+  `Theft/Tables.lean`): the same theorem for any base hash record `Hb` with outputs of the right
+  lengths, and with `Hb x` read off one more uniform shared table `x : X` (`ShX`; for `X = XTab L M`
+  and `hbX`: `H₁`, `H₂⁰`, `H₂⁴`, `H₄`, `H₂¹`, `H₂²`, `H_comb` uniform tables on all inputs of at
+  most `L` bytes). The zero-knowledge hops lift by averaging over `x` with the same error
+  (`zkRO_tables`, `leanPIX_zkRO`, `leanPRX_zkRO`), the budgets hold at every `x`
+  (`distI_budgetX`, `distR_budgetX`), and `PlainSE`, `ProgEv … HitOpX` are probabilities over
+  uniform `x` as well (`security/ratatouille.md` §5, "Lean").
+- **`noRedirect_leanX_hit`** (`Theft/MoussakaHit.lean`): `noRedirect_leanX_plain` at
+  `X = XTab L M` with `ε_hit` bounded (`Hit.Mous.progEv_hit`, from the generic `Hit.progEv_chain`,
+  `Theft/HitLevel.lean`; the argument is the one of `security/ratatouille.md` §5),
+
+      Pr[Bad] ≤ εz(pI; q) + εz(pR; q) + δ_R + ε_plain
+        + 2·((q_μ+3)·2^{−256} + (q₂₁+3)·2^{−1088} + (q₂₂+3)·2^{−448}) + Adv^ow(inverter),
+
+  for `L ≥ 6293` (`Hit.Mous.Lmin`: the redemption relation's `H₂¹` input) and a last stage that
+  reads the tables `H₂⁰`, `H₂¹`, `H₂²` with `q_μ`, `q₂₁`, `q₂₂` queries (`AdmHit`). Two points
+  differ from Ratatouille.
+  - *Lengths.* The spec's instances are byte lists. The issuance encoding `t ‖ ctx_iss` and the
+    redemption encoding are injective only for fields of fixed lengths (`issueEncode_inj`,
+    `redeemEncode_inj`), and a chain input is a table point only if it is short. The C++ API
+    fixes the lengths by its types (`Context`, `ChallengeDigest`, the requests: `std::array`,
+    `include/vole_mole/ihat.hpp:26-38`; the key digest is 32 bytes). `WfI`, `WfR`: an instance
+    with these lengths and at most 64 Anchors. A well-formed statement is determined by its
+    `H₂⁰` input (`muIn_stI_inj`; for a redemption its hashed fields, `muIn_stR_inj`); issuance
+    and redemption inputs differ in the domain separator (`muIn_stI_ne_stR`).
+  - *The Anchor keys are not hashed, their digests are.* The redemption statement's `H₂⁰` input
+    has the digests of the Anchor Set, not the public maps. In the spec a key is a digest and a
+    map, unrelated (`Spec.UOVKey`); in C++ the digest is SHAKE256 of the key. Two redemption
+    statements with the same digests and other maps have the same chain. This is the analogue of
+    Ratatouille's spend statement not hashing `pk`.
+  - So `ε_hit` is bounded for **`FreshOk`**: the operation's statement is well-formed, and each
+    simulated statement of its relation is well-formed and differs from it in a hashed field
+    (`hashedR`: digests, `nf`, both contexts, challenge digest). `FreshOk` implies `FreshOp`, and
+    plain extraction keeps `FreshOp`.
+  - In the game the theorem is for adversaries with **`HitWf`**: the Anchor Sets `A` chooses have
+    32-byte digests, its challenge digests 32 bytes, its output redemptions 16-byte contexts and
+    a 32-byte digest, and an output redemption whose Anchor Set has the digests of the Client's
+    set is under the Client's set. Then an accepted operation that is fresh in the game is
+    `FreshOk` (`freshOk_of_game`: the issuance lengths are those `AccOp` checks, the Client's
+    statements are well-formed), and weak SE for `FreshOk` suffices (`sim_se_le_ok`,
+    `noRedirect_ok`, from `noRedirect_of_se`). The last condition of `HitWf` is a hypothesis on
+    the adversary, not a theorem: in C++ it is collision resistance of the key digest.
+  - `Audit/Theft.lean`: `HitWf` holds for a trivial well-formed adversary (`hitWf_thiefW`), the
+    theorem is instantiated for it, and a redirect to another 32-byte digest is `FreshOk`
+    (`redirect_freshOk`).
+- **`owAdvRO_num`** (`Theft/ComOW.lean`): one-wayness of `Com` in a random-table model, for the
+  standalone experiment: one commitment, cells keyed by `(nf, r)`, a decision-tree inverter with
+  `q` queries: `≤ (q + 2)·2^{−128} + (q + 1)·2^{−360}`. It does not bound `owAdv` of `noRedirect`.
+- Not covered:
+  - `PlainSE` in the model of `noRedirect_leanX_plain`, from `ROM/`'s extraction bounds. What
+    separates the two models is listed in
+    `security/ratatouille.md` §5 ("What is not covered"): the extractor must see the last stage's
+    query log, the last stage must be an oracle computation with cell queries to the cipher, and
+    the lazy oracle must be matched with the finite tables.
+  - `U > 1` tokens with the other hashes read off uniform tables, and so a bound on the
+    programmed-point terms `SlotEvN` (the many-token game below has the hops' budgets and the
+    reduction of `WeakSEN` to plain extraction with SHAKE only). The generic steps exist
+    (`Theft/ManyTables.lean`, `Hit.progMovesN_chain`, used for Ratatouille's `noTheftN_leanX_hit`);
+    the Moussaka game at a value of the extra table and `FreshOk` for a log are not done.
+  - Statements that are not well-formed, and redemptions under an Anchor Set with the digests of
+    the Client's set and other maps (`HitWf`, above).
+  - Anchor Sets and digests that `A` chooses after reading the tables.
+  - More than one output.
+  - A bound on `δ_R` for the Lean prover.
+  - `Adv^ow` for the inverter of `noRedirect`. `Com` is evaluated inside the issuance and
+    redemption relations, so it is concrete code in the game and the inverter any function: some
+    inverter wins with probability `1` (`owAdv_one_moussaka`). The term is a computational
+    assumption on Keccak-p[800,12], as `ε_hide` is (`Privacy/ComHide.lean`).
+
+**`U` honest tokens and `M` honest redemptions: [Lean]** (`Theft/Many.lean`,
+`Theft/MoussakaMany.lean`). The game NM^{U,M} (`nmRealN`): `U` honest Clients with independent
+coins `(nf_h, r_h)` each request a token for `A`'s contexts `ctx_iss h`, `ctx_red h`. `A`
+(`ThiefN`) signs token `h` with a response it chooses from all `U` requests. It then makes `M`
+redemption queries, one after the other. For each it chooses, from the issuance requests and the
+redemption requests seen so far, a token, an Anchor Set and a digest; the Client of that token
+answers as the spec does (`specI_eqN`, `specR_eqN`). A token may be redeemed several times, under
+different sets and digests. `BadN`: the operation is accepted, its statement differs from every
+honest statement of its relation (`FreshOpN`), and the extracted witness is not a witness or
+opens `t_h` for **some** honest `h`. Off the event an accepted fresh redemption has a witness
+whose commitment is no honest `t_h` (`not_redirectN`).
+- **`noRedirectN`**: `Pr[BadN] ≤ U·ε_I + M·ε_R + Σ_i δ_i + ε_SE + Σ_h Adv^ow(inverter h)`.
+  - The `U + M` zero-knowledge hops are generic (`Theft/Many.lean`: `hyb_hop`, `real_sim_leN`,
+    `theftN_le`): each slot's tape holds the prover's randomness and the simulator's coins, hop
+    `i` is `Privacy.hop_ro` with the rest of the tape fixed, and costs the zero-knowledge error
+    plus the collision term `δ_i` (`deltaN`; `δ_0 = 0`).
+  - `ε_SE`: weak SE with `U + M` simulated proofs for adaptively chosen statements
+    (`Theft.WeakSEN`, L8's game with `q_S = U + M`), **a hypothesis** here; `noRedirectN_lean_plain`
+    below reduces it to plain extraction.
+  - `Σ_h Adv^ow(inverter h)` is the note's `U·Adv^ow-r`: a union bound over the token that is
+    opened. The inverter of token `h` gets `nf_h` and `t_h` and holds the other Clients' coins
+    (`inverterN`, `sim_opens_leN`).
+- **`noRedirectN_lean`** (`Theft/MoussakaManyLean.lean`): with the Lean prover, `ε_I = εz(pI)`
+  and `ε_R = εz(pR)` (`leanPI_zkRO`, `leanPR_zkRO`). The hops' read budgets stay hypotheses here.
+- **`noRedirectN_lean_reads`** (`Theft/MoussakaManyReads.lean`): the hops' read budgets are
+  proved, with the Lean verifiers `verIL`, `verRL` (`distPN_budgetLI`, `distPN_budgetLR`, from
+  the generic `distN_budget`, `Theft/ManyReads.lean`). If the adversary's last stage reads
+  `(a₃, a₅, a_E)` (`StageBudgetN`) and the extractor `(x₃, x₅, x_E)`, every hop has the budget
+  `(a₃ + x₃, a₅ + x₅ + 312 + (U + M − 1)·624, a_E + x_E + (U + M)·4607)`: the later real proofs,
+  the verifier, and the programming of the earlier simulations. At `U + M = 2` this is the
+  budget of `noRedirect_lean_reads`.
+- **`noRedirectN_lean_plain`**: `WeakSEN` is proved from plain extraction (`PlainSEN`: no
+  simulated proofs, no programming; the last stage composed with `U + M` programmings) and one
+  programmed-point term per simulated proof (`SlotEvN i … HitKeyM`: the fresh forgery's verifier
+  reads `H₂³` at a grinding key whose prefix is the recomputed prefix of simulated proof `i`), by
+  `weakSEN_moussaka` (generic: `weakSEN_of_plain`, `progMovesN_of_slots`,
+  `Theft/ManyPlain.lean`). The bound is `U·εz(pI; q) + M·εz(pR; q) + Σ_i δ_i + ε_plain +
+  Σ_i ε_hit,i + Σ_h Adv^ow(inverter h)`. `PlainSEN` and the `SlotEvN` terms are hypotheses, as
+  `PlainSE` and `ε_hit` are for one token. `WeakSEN` at two proofs implies `WeakSE2`
+  (`weakSE2_of_weakSEN`).
+- `Audit/TheftMany.lean`: both theorems instantiated for a trivial adversary, for every `U ≥ 1`
+  and `M`; `replay_not_freshN`, `redirect_freshN`. `Audit/TheftManyR.lean`: the same for
+  `noRedirectN_lean_reads` and `noRedirectN_lean_plain`.
+- Scope: the `U` issuances come first; the contexts and the Anchor key of token `h` are fixed in
+  advance; `M` is fixed in advance.
+
+The architecture and protocols drafts note one limit that remains: a Moderator that relays
+*another* Moderator's challenge is not stopped by `challenge_digest`.
+
+---
+
+## 6. Anonymity: issuer hiding and unlinkability
+
+MoLE's privacy goals (architecture draft, "Privacy Goals"):
+- Endorsement grant and redemption are unlinkable, even if the Anchor and the Moderator collude;
+- redemption is Anchor-hiding "to both the Anchor and the Moderator";
+- both should hold against a future CRQC (harvest now, analyse later).
+
+**Game ANON^mode.**
+- `A` chooses `ctx_iss`, `ctx_red` and two Anchor public keys `pk⁰, pk¹`. These are arbitrary byte
+  strings. They may be equal (pure unlinkability), adversarially generated, or rogue.
+- Honest Clients `C₀`, `C₁` each run `issue_request(ctx_iss, ctx_red)`.
+  - *colluding*: `A` receives both issuance requests, plays the Anchor, and returns `s⁰`, `s¹`.
+  - *non-colluding*: honest Anchors with keys `pk⁰`, `pk¹` respond, and `A` sees nothing.
+- If either `finalize_issue` fails, the game outputs a random bit. A selective failure is visible
+  and inherent.
+- The challenger flips `b`. "Left" is `C_b`'s token and "right" is `C_{1−b}`'s.
+- `A` may ask, once per side, for that token to be redeemed under an Anchor Set `S` and digest `cd`
+  of its choice. `S` must contain the issuing key of *both* tokens, at indices that the Client
+  takes from `S` itself; otherwise the request is refused for both. Without this rule, a refusal
+  reveals the issuer: this is the partitioning leak of §7.
+- `A` outputs `b'`. Let `Adv = |2·Pr[b' = b] − 1|`.
+
+The four ZK proofs in play are two issuance and two redemption proofs. On `main`, these hops are
+**not** independent: both relations put the same `r` first in the witness, which is what (PU) is
+about. lean/docs/zk.md bounds each proof separately, with `Pred_R` measured in a world with simulated proofs.
+For the joint hop, take the bad event "`A` queries H₅ at a sibling label of any of the four proofs"
+and evaluate it in the hybrid where **all** proofs are simulated. That is the standard
+identical-until-bad argument, and it avoids circularity. In that hybrid, `r₀` and `r₁` enter `A`'s
+view only through `t₀` and `t₁`. So:
+
+```
+ε_ZK^joint(main) = Σ_{4 proofs} (ε_rho + ε_prog + 2ε_hide + ε_iv) + 4·(Q₅ + n_mult·Q_V)·Pred + 4·Q_P·2^{−128}
+ε_ZK^joint(fix)  = Σ_{4 proofs} (ε_rho + ε_prog + 2ε_hide + ε_iv) + 4·(Q₅ + n_mult·Q_V + Q_P)·2^{−128}
+```
+
+On `main`, `Pred ≤ Adv^ow-r_Com` in the colluding mode, where `A` knows `t`. In the non-colluding
+mode `Pred = 2^{−128}`, because `r` is independent of `A`'s view.
+
+**Theorem 4.** For every classical `A`:
+
+```
+(a) colluding:      Adv^anon ≤ 2·ε_ZK^joint + 2·Adv^hide_Com + 2^{−192}
+(b) non-colluding:  Adv^anon ≤ 2·ε_ZK^joint|_{2 redemption proofs, Pred = 2^{−128}} + 2^{−192}
+```
+
+(b) is wrong as stated: it misses an abort term (below). The corrected statement, mechanized
+(`Privacy/MoussakaNC.lean`), is
+
+```
+(b') non-colluding:  Adv^anon ≤ 2·ε_ZK^joint|_{2 redemption proofs} + 2·(φ₀ + φ₁),
+     φ_c = Pr_{nf, r}[DerivePreimage_{sk_c}(Com(nf, ctx_iss, ctx_red, r)) fails]
+     E_vin[φ_c] ≤ δ(sk_c)^{255}   (on average over the vinegar hash SHAKE256, a random oracle;
+                                   pqov's DerivePreimage fails only when its first 255
+                                   vinegars are bad; no assumption on Com),
+     E_key[δ^{255}] ≤ 255^{−37} + 1/(255·256^{37}) ≈ 2^{−295.8}
+                                  (on average over the key's P2 part, for every O and P1;
+                                   Lean for pqov's key generation with any O),
+```
+
+(In Lean, `anonymityNC` takes the signer abstract; `Spec/PqovSigner.lean` models pqov's
+`DerivePreimage` and proves it correct and failing only on singular systems,
+`Spec/PqovKey.lean` proves its system and the oil space from pqov's key layout, and
+`Privacy/MoussakaPqov.lean`, `Privacy/PqovDelta.lean`, `Privacy/PqovKeys.lean` give the bounds
+above: Appendix B. The
+always-failing signer is also `Correct`, with `φ_c = 1`, so the abstract theorem needs the
+concrete signer to be meaningful.)
+
+and with one Anchor (`pk⁰ = pk¹`, pure unlinkability) `Adv^anon ≤ 2·ε_ZK^joint|_{2 redemption
+proofs}`, with no abort term and for any Anchor Sets. The game is as above, with `main`'s Client
+(it finds its index with `find_issuer`), and in the general case Anchor Sets that contain both
+issuers' keys. (For the index-taking Client before `21be618`: an index the Client takes from `S`,
+holding its issuer's map or out of range.)
+
+*Proof (a).*
+1. In each world, replace all four proofs by simulated ones (`ε_ZK^joint` per world).
+   - This uses ZK for **adversarially chosen statements**: `S` (rogue keys included), `cd` and the
+     Anchor responses are chosen by `A`.
+   - lean/docs/zk.md's two-phase definition allows this (its sampler includes `A`'s first stage). The
+     simulator needs only the statement, and the honest witness satisfies the relation.
+   - The constant-time search for `i` (`find_issuer`, `src/ihat/ihat.cpp:120-138`) and the witness encoding
+     (`redeem.hpp:119-123`) do not branch on `i`. `i` may be a foreign key's, if that key also
+     verifies the token: the witness is then valid for it, and the simulator does not need `i`. The proof size is fixed.
+2. Now `A`'s view consists of:
+   - `t₀, t₁`, and its own `s⁰, s¹`;
+   - the simulated proofs, which are functions of the statements only;
+   - the revealed nullifiers, in left/right order;
+   - `S`, `ctx`, `cd`.
+3. `b` enters only through which `nf` is paired with which `t`.
+4. Replacing `(nf₀, nf₁)` by independent uniform values costs `Adv^hide_Com`. This is legitimate in
+   the standard model, because no proof evaluates `Com` on the honest inputs any more. After the
+   replacement the two worlds are identical.
+5. The `2^{−192}` term covers `nf₀ = nf₁`. ∎
+
+*Proof (b).* As in (a), but `A` never sees `t₀` and `t₁`. After the hop, the nullifiers are
+independent uniform strings in both worlds. No Keccak assumption is used. ∎
+
+The last step is where (b) fails: the redemptions happen only if both issuances succeeded, and
+success is not independent of the nullifiers. *Proof (b').*
+1. Replace the two redemption proofs by simulated ones (`2·ε_ZK^red` per world). The issuance
+   proofs are never shown to `A` and are not simulated: nothing is assumed of the issuance proof
+   system, not even completeness.
+2. Now the view is a function of the refusal bit `g = good₀(x₀) ∧ good₁(x₁)`, the two nullifiers
+   (in left/right order) and the simulator coins. `x_c = (nf_c, r_c, ρ_c)` is Client `c`'s tape and
+   `good_c(x)` says that Anchor `c` accepted the request, `DerivePreimage_{sk_c}(t)` succeeded,
+   and the token is redeemable (`find_issuer` succeeds) in both sets. `t` and `r` appear nowhere
+   else, so no hiding is needed.
+3. If both sets contain both issuers' keys, then, unless `DerivePreimage_{sk_c}` fails on `t_c`,
+   `good_c(x)` equals `acc(x)`: a finalized token verifies under its issuer's key, which `find_issuer`
+   then finds. Here `acc(x)` (length and proof check) is the same function for both Anchors.
+   Replacing `g` by the symmetric `acc(x₀) ∧ acc(x₁)` is identical until a `DerivePreimage` fails:
+   `φ₀ + φ₁` per world. (For the index-taking Client: if the key at the index has the issuer's map
+   or the index is out of range, `good_c(x) = acc(x) ∧ K_c` with the constant `K_c`, "the key is
+   found in both sets", and the symmetric bit is `acc(x₀) ∧ acc(x₁) ∧ K₀ ∧ K₁`.)
+4. The resulting hybrid is symmetric in the two Clients' tapes. Swapping them exchanges the worlds,
+   so the worlds are equal (no `2^{−192}`: the swap needs no distinctness).
+5. `φ_c`. `DerivePreimage` is deterministic: its vinegars are `SHAKE256(t ‖ sk_seed ‖ … ‖ ctr)`.
+   It tries `ctr = 0, …, 255` but uses only the first 255: `ov_preimage_core` increments
+   `n_attempt` before each attempt and returns `-1` when `MAX_ATTEMPT_VINEGAR <= n_attempt`
+   after the loop (`subprojects/pqov/src/ov.c:166`), which also discards a success at
+   `ctr = 255` (upstream pqov; harmless). So it fails iff the first 255 vinegars are all bad
+   (`lean/docs/security/uov-assumptions.md` §2 said 256; corrected there). With SHAKE256 a random oracle (Lemma D),
+   the vinegars at any fixed `t` are uniform, so for every fixed `(nf, r)` the failure
+   probability is `δ(sk_c)^{255}`, whatever `Com(nf, …, r)` is, and `E[φ_c] ≤ δ(sk_c)^{255}` with
+   no statement about `Com`. The figure `δ ≤ 1/255` is the fraction `σ` of singular `45 × 45`
+   matrices over GF(256); it is not a bound for a fixed key, since `L_v = vᵀ S` ranges over a
+   space of dimension `≤ 74` of matrices (a key with `S = 0` has `δ = 1`). It holds on average over
+   the key: `S = (P1 + P1ᵀ)O + P2` is uniform for uniform `P2`, and for `v ≠ 0` so is `L_v`, hence
+   `E[δ] ≤ σ + 256^{−74}`; for `m ≤ 74` linearly independent vinegars the systems are independent
+   and uniform, hence `E[δ^m] ≤ σ^m + 256^m/(255·256^{74})`, and with `m = 37`,
+   `E[δ^{255}] ≤ E[δ^{37}] ≤ 255^{−37} + 1/(255·256^{37}) ≈ 2^{−295.8}`. (The adversary makes no SHAKE256 query at `sk_seed` in this game, so Lemma
+   D's `q_v·2^{−256}` term does not arise.)
+6. One Anchor: `good₀ = good₁` as functions, so the refusal bit is already symmetric and step 3 is
+   not needed, for any Anchor Sets (and any index rule). ∎
+
+Why the abort term is needed in general: with `pk⁰ ≠ pk¹`, the targets on which `DerivePreimage`
+fails differ between the Anchors. Conditioned on both issuances succeeding, the laws of `nf₀` and
+`nf₁` can then differ, and the pairing of nullifiers to sides is no longer exchangeable. The term is
+negligible, but it is not zero. Why both issuers must be in the sets: if Client `c`'s issuer is
+missing from `S`, `main`'s Client still redeems whenever some other key `P'` of `S` verifies its
+token, so the refusal reveals whether `P'(s_c) = t_c` for the Client's hidden `s_c`, and nothing here
+bounds that event. (The Moderator chooses `S` before any issuance and knows whether it contains both
+issuers, so this is a restriction on the adversary that it can check itself. For the index-taking
+Client the same event arises from an index rule that points at a foreign key.)
+
+**[Lean] `lean/VoleMole/Privacy/MoussakaFind.lean` and `Privacy/Moussaka.lean`, Theorem 4(a).**
+The game above on `Spec/Moussaka.lean`'s `issueRequest`, `finalizeIssue` and redemption, with the
+seed XOF's outputs `(nf, r, ρ_iss)` and `ρ_red` drawn uniformly (`issueRequest_eq`), and the refusal
+rule above (`allOk`). `Privacy/MoussakaFind.lean` runs `main`'s `redeemRequest` (the Client finds
+its index with `findIssuer`, as `src/ihat/ihat.cpp:120-138`; `MoussakaFind.anonymity`).
+`Privacy/Moussaka.lean` runs the index-taking `redeemRequestAt` of the API before `21be618` with any
+Client-side index rule `idx` of `S` and the issuer's key; `main`'s index depends on the token, so it
+is not such a rule. The two proofs are the same; the random-oracle, Lean-prover and many-session
+refinements of Appendix B are stated for the index-taking Client. The seed-XOF hop to the real
+Clients is mechanized for the random-oracle games of Appendix B (`lean/docs/zk.md` §10.6).
+- Step 1, one proof at a time: `issue_close`, `redeem_close`, from zero knowledge as the hypothesis
+  `Privacy.ZeroKnowledge` (simulator from the statement; `ε`-close for every statement and valid
+  witness, against distinguishers that may know the witness). **On `main` no efficient simulator
+  satisfies this per-proof hypothesis** (a distinguisher that knows `r = w[0..16)` computes Θ and
+  runs the test of `lean/docs/zk.md` Prop. 4.1); there the joint (PU) hop over the four proofs
+  replaces it: [Lean] `Privacy/MoussakaMain.lean`, `anonymity_main` (below). With the label-row
+  fix it is `lean/docs/zk.md`'s theorem. The hypothesis is needed only for well-formed instances
+  (`IssueRelW`, `RedeemRelW`: contexts of 16 bytes, `nf` of 24, an Anchor Set of at most 64 keys,
+  as the C++ types and the Anchor Set's validation enforce).
+- Steps 2–3: `simGame_iff`: with all proofs simulated, the view is a function `hview` of
+  `t₀, t₁`, the nullifiers and the simulator coins; `r` enters nothing else.
+- Step 4: `hiding_hop`, with `Adv^hide_Com` as the hypothesis `hidingAdv ≤ εhide` for the explicit
+  reduction `reduction` (the adversary with the simulator coins fixed). After it the worlds
+  coincide exactly (`idealGame_eq`).
+- `anonymity` (both files): `|Pr[A accepts | b = 0] − Pr[A accepts | b = 1]| ≤ 4εI + 4εR + 2εhide`, the
+  `2·ε_ZK^joint + 2·Adv^hide_Com` of Theorem 4(a) with `ε_ZK^joint` taken as the sum of the four
+  per-proof errors.
+- **On `main` (no label rows), with the joint (PU) hop** (`Privacy/MoussakaMain.lean`,
+  `lean/docs/zk.md` §4.2): the same game with `main`'s statements and the executable prover in
+  the model of `zk_rom_ic` (each proof with its own uniform `H₃`, `H₂³`, `H₅` and cipher tables; the
+  adversary's guess sees each proof's `H₃`, `H₅` and cipher, reads `H₃` and the cipher at `q₃`,
+  `q_E` keys and `H₅` with consistent read sets; its other choices do not read the tables):
+  `anonymity_main`, `|Pr[b = 0] − Pr[b = 1]| ≤ 8·(q₃·2⁻¹²⁸ + 221·(4607 + q_E)·2⁻¹²⁸) +
+  15·(PU₀ + PU₁) + 2·Adv^hide_Com`, where `PU_b` (`puTerm`) is the probability, in world `b` with
+  all four proofs simulated, that the guess's `H₅` read set on some proof's table contains a
+  candidate for that proof's witness prefix `r`. That is this section's `Pred` event, measured
+  where `r` enters the view only through `t₀, t₁`; bounding it is (PU), one-wayness of
+  Keccak-p[800] in `r`, which stays an assumption. The `15` (against the `4` of `ε_ZK^joint(main)`
+  above) is a cost of the mechanized coupling (`lean/docs/zk.md` §4.2).
+  **With (PU) as a game** (`Privacy/MoussakaMainPU.lean`, `lean/docs/zk.md` §4.3):
+  `anonymity_main_pu`, for a guess whose `H₅` read sets have at most `q₅` keys,
+  `≤ 8·εRF(q₃, q_E) + 15·(Σ_{b,c} puAdv Com (predM_c b) + 4·(q₅ + 1)·2⁻¹²⁸) + 2·Adv^hide_Com`,
+  `predM_c b` the explicit predictor of Client `c`'s opening from `t₀, t₁`, the nullifiers, the
+  simulators' coins and the tables (at most `2(q₅ + 1)` candidates). This is `Pred ≤ Adv^ow-r_Com`
+  of this section, with `c` guesses. The `4·(q₅ + 1)·2⁻¹²⁸` is for the redemption proofs of a
+  failed finalization (a dummy token, never shown), which the paper argument does not mention.
+  **With one `H₅` table and one cipher for the four proofs** (`Privacy/MoussakaMainShared.lean`,
+  `Privacy/MoussakaMainSharedPU.lean`, `lean/docs/zk.md` §4.2): `anonymity_main_shared`,
+  `≤ 30·εS(q₃, q_E + 8·4607) + 15·(Σ_{b,c} puAdv Com (predS_c b) + 8·noHitProb + 3750·2⁻¹²⁸) +
+  2·Adv^hide_Com`, `εS q₃ q_E = q₃·2⁻¹²⁸ + 2⁻¹¹³ + 221·(4607 + q_E + 4607)·2⁻¹²⁸`. The
+  `3750·2⁻¹²⁸` is this section's `ε_iv`: a sibling gate input of one simulated proof is one of
+  another, bounded by the uniform `d` of the later proof (no property of `H₄` or of the `iv`s is
+  needed). The predictors see the commitments, the nullifiers, the simulators' coins and the
+  tables, and output at most `2(q₅ + 1249)` candidates (the guess's `H₅` reads and the proofs'
+  active gate inputs). Each proof still has its own `H₂³` table and `H₃` slice.
+  Not covered: one `H₂³` table and one `H₃` for the four proofs on `main` (the
+  programming-collision terms of `lean/docs/zk.md` §10.2 and §10.5's argument), `main`'s
+  `find_issuer` Client and the non-colluding mode 4(b).
+
+Remarks from the mechanization:
+- **The `2^{−192}` term of Theorem 4(a) is not needed.** After the hiding hop the two revealed
+  nullifiers are a fresh independent pair in either order, which is exchangeable whether or not
+  they collide.
+- **Theorem 4(b) misses an abort term**: corrected to (b') above and mechanized below. An
+  earlier version of this remark said that bounding the abort probability needs a statement about
+  `Com`'s outputs. It does not: `DerivePreimage`'s vinegars are a random-oracle hash of the target,
+  so its failure probability at every fixed target is `δ^{256}` for 256 usable vinegars
+  (`pr_fail_vinegar`) and `δ^{255}` for pqov's 255 (`pr_fail_vinegar_lt`). So "no Keccak
+  assumption" is exact.
+
+**[Lean] `lean/VoleMole/Privacy/MoussakaNCFind.lean` (`main`'s Client) and
+`Privacy/MoussakaNC.lean` (the index-taking Client), Theorem 4(b').** The non-colluding game on
+`Spec/Moussaka.lean`'s `issueRequest`, `issueResponseLR` (`Spec/MoussakaLabelRows.lean`, the
+label-row length variant of `issueResponse`; the honest Anchor verifies the issuance
+proof, then runs `derive_preimage`: any `Signer` correct for its key, which may be
+adversarially chosen), `finalizeIssue` and redemption (`redeemRequest`, or `redeemRequestAt`). The seed-XOF outputs are uniform. The
+adversary (`AdversaryNC`) chooses the contexts, both keys and, per side, `S` and `cd`, and sees
+only the two redemption requests or the refusal. The refusal rule is that of 4(a).
+- Step 1: `hopL_NC`, `hopR_NC`, `real_sim_NC`, from `Privacy.ZeroKnowledge` for `RedeemRelW` via
+  `redeem_close`. No hypothesis on the issuance proof system `PI`.
+- Step 2: `simNC_iff`. Step 3: `good_eq_of_derive`, `sim_hyb_NC`: for `main`'s Client from
+  `Contains` (both sets hold a key with each issuer's map); for the index-taking Client from
+  `IdxSound idx` (the Client's index holds its issuer's map, or nothing). Step 4: `hybNC_eq`.
+- **`anonymityNC`**: `|Pr[W₀] − Pr[W₁]| ≤ 4εR + 2·(φ false + φ true)`, `φ c` = `phi`: the
+  probability over uniform `(nf, r)` that `sk c` fails on `Com(nf, ctx_iss, ctx_red, r)`.
+- **`unlinkabilityNC`**: one Anchor, any Anchor Sets (any index rule): `≤ 4εR`.
+- `MoussakaFind.anonymityNC`, `unlinkabilityNC`, `anonymityNC_vinegarRO` and the `_label_rows`
+  theorems are these for `main`'s Client; the random-oracle games of Appendix B (`MoussakaNCRO`,
+  `MoussakaPqov`, …) remain stated for the index-taking Client.
+- **`anonymityNC_vinegarRO`** (step 5): with each Anchor's signer failing only when all 256
+  vinegars of a uniform table at the target are bad (`hfail`), averaged over the tables
+  `≤ 4εR + 2·(δ₀^{256} + δ₁^{256})`, `δ_c` the fraction of bad vinegars (`pr_fail_vinegar`,
+  from `pr_eval` and `pr_forall_fin`). With pqov's signer (255 usable vinegars):
+  `anonymityNC_pqov`, `≤ 4εR + 2·(δ₀^{255} + δ₁^{255})` (Appendix B).
+- The honest Anchor checks the request length of the label-row layout (`45 + 7528` bytes,
+  `Spec.Moussaka.issueResponseLR`), the layout of the Lean prover of the random-oracle games
+  below; `main`'s `45 + 7272` would make every honest label-row request malformed.
+- With the executable Lean prover for redemption (label rows): `anonymityNC_label_rows` (tape
+  hypothesis), `anonymityNC_label_rows_shake` (hop hypotheses: `εR = ε_rho + ε_grind + ε_bavc +
+  ε_lab`), `unlinkabilityNC_label_rows`.
+- As in 4(a), the per-proof zero-knowledge hypothesis holds with the label-row fix only. On `main`
+  no efficient simulator satisfies it against witness-knowing distinguishers, and the note's joint
+  hop with `Pred = 2^{−128}` (which is valid here, since `r` is independent of `A`'s view) is not
+  mechanized for 4(b); the joint hop itself is (`ZK/MainGame.lean`, used for 4(a) on `main`,
+  `anonymity_main`), and for a prefix independent of the predictor's inputs it gives
+  `(q₅ + 1)·2⁻¹²⁸` per proof (`pr_mem_uniform_le`), but the non-colluding game on `main` is not
+  written. What it needs: this file's game with the honest Anchor checking `main`'s request
+  length (`issueResponseN issueRequestBytes`; `respNC` is fixed to the label-row length), the two
+  redemption proofs as slots of `main_chain_le`, and the (PU) term bounded statistically: with
+  both proofs simulated the view depends on the openings only through the refusal bit
+  (`simNC_iff`), so the candidates are independent of `r` when the redemptions run
+  (`pr_mem_uniform_le`) and of the simulator's `d` when they do not (`pr_thetaMain_le`,
+  `ZK/MainPU.lean`, as for 4(a) in `puTerm_le`).
+- **In the random-oracle and ideal-cipher model** (`lean/VoleMole/Privacy/MoussakaNCRO.lean`,
+  Appendix B; the analogue of `anonymityRO_lean_num`): `A`'s guess also sees the tables, and the
+  honest Anchors run the Lean **verifier** on the issuance proofs over the same tables. In each
+  redemption hop the reduction recomputes the refusal bit, so it runs the two issuance proofs and
+  their verifications; this needs the verifier's read budgets (`312` `H₅`, `4607` cipher keys,
+  `ZK/VerifyReadsRO.lean`). A real issuance proof or verification reading `H₂³` at a point a
+  simulated redemption programmed needs **no collision term**: the hybrids run the issuances on the
+  tables after the redemptions' programming (the first hybrid, with nothing programmed, is the real
+  game), so it is part of the reduction. `anonymityNCRO_lean_num`: `≤ 4·εRO(q₃, q₅ + 2496,
+  q_E + 23035) + 2·(noHitProb + 2⁻¹⁰²⁴) + 2·(φ₀ + φ₁) + 4·q₃·2⁻¹²⁸`, about `2⁻¹⁰³·²` plus the budget
+  terms and the abort term; the `4·q₃·2⁻¹²⁸` lets the guess see the issuance slices (the swap
+  exchanges the Clients' tapes). With one shared `H₃`, as in the scheme
+  (`lean/VoleMole/Privacy/MoussakaNCSh.lean`): `anonymityNCSh_num`, `≤ 4·εRO(q_E + 23038,
+  q₅ + 2496, q_E + 23038) + 2·(noHitProb + 2⁻¹⁰²⁴) + 2·(φ₀ + φ₁)`, also about `2⁻¹⁰³·²`; the slice
+  term disappears (the issuance proofs read the shared tables, which the swap does not exchange),
+  and the guess's `H₃` reads are row reads inside the zero-knowledge error. With the real Clients'
+  seeds (`Privacy/SeedXOFNC.lean`): `anonymityNCRO_lean_num_seed`, `anonymityNCSh_num_seed`
+  (and the unlinkability and `_perm` versions), `+ 2·(2q_X + 2)·2⁻²⁵⁶`. With the Moderator's
+  contexts, keys, Anchor Sets and digests chosen by a setup that reads the slices and the tables
+  (`lean/VoleMole/Privacy/MoussakaNCRA.lean`): `anonymityNCRA_lean_num`, `≤ 4·εAd(9; q₃,
+  q₅ + 2496, q_E + 23035; k₃, k₂, k₅, k_E) + 2·(noHitProb + 2⁻¹⁰²⁴) + 2·(φ₀ + φ₁) +
+  4·(k₃ + q₃)·2⁻¹²⁸` for a setup within `(k₃, k₂, k₅, k_E)` reads; the right hop's collision term
+  is unchanged (the left simulation's coins do not enter the right statement).
+- `Spec.Moussaka.finalizeIssue` accepts a response of any length (in C++, `s` is a 119-byte
+  `std::array`), so the spec admits tokens with `|s| ≠ 119`, for which `redeemRequest` would prove
+  a witness outside `RedeemRel`. The game types the adversary's responses as 119 bytes, as the C++
+  does. Harmless for the C++; noted for the spec.
+
+**What the bounds mean.**
+- *Issuer hiding* is (a) or (b) with `pk⁰ ≠ pk¹` and one redemption. The Moderator, even colluding
+  with all Anchors and choosing the other keys, cannot tell whose token it sees.
+- *Unlinkability* is the case `pk⁰ = pk¹`.
+- `ctx_red` hiding from the Anchor follows from the same hops: `ctx_red` is in the issuance witness
+  and in `t`, behind 128 bits of `r`.
+
+**Magnitudes at `q = 2^{64}`** (generic estimates of §3.2):
+- `Adv^hide ≈ 2^{−63}`. This is the generic 128-bit level, with no margin. The cause is `r_len = 16`
+  together with a colluding Anchor that knows `t`.
+- On `main`, lean/docs/zk.md's `4(Q₅ + n_mult·Q_V)·Adv^ow-r` is a *product* of two query counts. At
+  `Q₅ ≈ q ≈ 2^{64}` it is vacuous (F4). Generically, the two searches (H₅ queries and Keccak
+  evaluations) test one guess of `r` each, so the probability is additive, `≈ (Q₅ + q)·2^{−128}`.
+  But that sharper form is a heuristic, not what lean/docs/zk.md proves.
+- On the fix, the bound is `≈ 2^{−60}`, with no Keccak term.
+
+---
+
+## 7. Malicious Anchor Sets and rogue keys
+
+1. **Rogue or malformed keys do not break hiding *within* a set.**
+   - Any 46591-byte string expands to a public map (`uov.cpp:73-80`; `expand_pk` always succeeds).
+   - ZK holds for every true statement, whatever the other keys are (Thm 4).
+   - An adversary that knows the honest Client's `s`, because it issued the token, can craft a key
+     `P'` with `P'(s) = t`. The token is then valid at two indices. This changes nothing, since `b`
+     is hidden.
+   - Duplicate keys are rejected by digest (`moussaka.cpp:144-150`). Distinct compressed keys give
+     distinct maps (16-byte `pk_seed` expanded by AES-CTR, and a canonical upper-triangular `P3`). So
+     the check is hygiene, not a security requirement: duplicates would neither leak `i` nor help
+     forge.
+2. **What a malicious Moderator *can* do is partition**, and this is outside the cryptography.
+   - `1 ≤ n` is allowed (`moussaka.cpp:139`), and `n = 1` gives no issuer hiding, as the
+     architecture draft says.
+   - A minimum `n` would not help. The Moderator can pad `S` with dummy keys of its own, or with keys
+     of Anchors that no Client uses, and the Client cannot tell.
+   - The Client must also refuse a set that omits its Anchor (the protocols draft says so;
+     `find_issuer`, `src/ihat/ihat.cpp:134-136`, throws when no key of `S` verifies the token). Each refusal tells a Moderator that serves
+     different sets to different Clients (or one at a time) "issuer ∉ S".
+   - So issuer hiding is meaningful only relative to the honest, actually used Anchors in a set that
+     all Clients see consistently (architecture draft, "Configuration Consistency and Partitioning
+     Attacks").
+   - The library offers no consistency check, and no API for one. The Client should accept only a
+     consistent, published set.
+3. **Per-Client keys and contexts.**
+   - An Anchor that issues to Client X under a key `pk_X` used only for X lets a colluding Moderator
+     test, with sets that include or omit `pk_X`, whether a refusing Client is X.
+   - Likewise, a per-Client `ctx_iss` links directly, because `ctx_iss` is public at both ends. The
+     anonymity set is "tokens with equal `(ctx_iss, ctx_red)` whose issuer is in `S`".
+   - Clients must check that `ctx_iss` is a common epoch value, and that Anchor keys come from the
+     consistent registry.
+4. **Unforgeability under a malicious set** is not a goal. A Moderator that includes a weak or
+   foreign key accepts whatever that key's owner signs.
+
+---
+
+## 8. Quantum adversaries
+
+MoLE needs **security** (unforgeability) only against pre-CRQC attackers. It needs **privacy**
+against a future CRQC that analyses recorded transcripts.
+
+**Unforgeability in the QROM** (not required by MoLE):
+- The structure of Theorem 1 survives. `B₂` needs no mid-run extraction, because the CT-UF^open oracle
+  takes targets and the openings are output at the end. All extraction happens after the run.
+- What changes:
+  - `ε_ext^R` becomes Q2's Theorem 7.1: `Σ² + ε_multi + ε_rec`, with leading term
+    `≈ 200·q²·2^{−128}`. This is `2^{−60}` at `q = 2^{30}` and vacuous at `2^{64}`.
+  - `ε_multi` is open above about `2^{40}` cipher queries.
+  - Q2 is stated for one proof. Simultaneous extraction from the `Q_iss + Q_red` outputs is
+    `lean/docs/extraction/Q7-qrom-multi-extraction.md`'s Theorem M, and Q7 §6 states Theorem 1 in
+    the QROM with it (paper).
+  - QROM SE is Q5 (paper), but Theorem 3 is not restated with it (Q7 §6), so Theorem 3 has no
+    quantum version.
+  - `Com` generic quantum bounds:
+    - binding `≲ q³/2^{360}` (BHT) `+ q²/2^{224}` (Grover on the inverse, `2^{112}` work);
+    - one-wayness and hiding in `r`: `≲ q²/2^{128}`, a `2^{64}` Grover search.
+  - Lemma U needs programming a quantum random *permutation* with inverse access. There is no
+    general tool for this, so the link from CT-UF^open to one-more-UOV is classical only. Quantum
+    CT-UF^open is a standalone assumption.
+
+**Privacy against a CRQC:**
+- ZK against quantum distinguishers (QROM programming of H₂³ and H₅) is proved on paper in
+  `lean/docs/zk-qrom.md`, with the label-row fix: about `2⁻¹⁹` at `2³⁰` queries and `2³⁰` proofs
+  (the dominant term is the adaptive-reprogramming loss, README §3). It is not mechanized, and
+  Theorem 4 is not restated with it.
+- Generic quantum attacks bound privacy at NIST level 1, with no margin:
+  - **Hidden-leaf keys.** Each proof contains the commitments `com_{i,Δ_i} = E_k(x₀) ‖ E_k(x₁)` of
+    its unopened leaves (AES-128). A Grover search of about `2^{64}` iterations recovers one hidden
+    key `k`. One known tree gives the full witness (the README extractor's candidate
+    `w^{(i)} = u_i ⊕ c_i ⊕ d`), so this reveals `b` (the issuer), `s` and `r`. It works against a
+    **non-colluding** Moderator too, on both `main` and the fix. Classically this is the `2^{128}`
+    `ε_hide` term.
+  - **Opening search.** For a colluding Anchor, which knows `t`, a Grover search over `r` of about
+    `2^{64}` Keccak-p[800,12] iterations links `nf` to `t`.
+- This matches level 1 by definition (AES-128 key search). It should be stated in the
+  documentation, since MoLE names CRQC-era privacy as a goal.
+
+---
+
+## 9. Findings and attacks
+
+**F1 — Cross-protocol key reuse allows unlimited forgery (high, deployment/API).**
+- *Mechanism.*
+  - Moussaka Anchors and PomFRIT Issuers use the same key type, `uov::SecretKey`.
+  - `pomfrit::issue_response(sk, t)` returns `DerivePreimage(sk, t)` for **any** 45-byte `t`, with
+    no proof (`src/pomfrit/pomfrit.cpp:188-190`).
+  - A Client computes `t = Com(nf, ctx_iss, ctx_red, r)` locally, for any `ctx_iss` (any epoch),
+    and sends `t` to the PomFRIT endpoint. It then finalizes a valid Moussaka token
+    (`moussaka.cpp:177` checks only `P(s) = t`).
+  - This bypasses the Moussaka Anchor's `ctx_iss` check and rate limit.
+- *Demonstrated* with the public API only (Appendix A, demo 1): `ACCEPTED`.
+- *Scope.*
+  - Ratatouille key reuse is not exploitable this way. It signs `Tag(c, ·)` behind a proof, and a
+    forgery would need a 360-bit cross-function collision.
+  - Different Moussaka `VERSION`s are separated by the DST.
+- *Documentation gap.* The only warning is in `uov.hpp:64-68`, and it is about full UOV
+  signatures.
+- *Fix.* Document "an Anchor key MUST be used only for Moussaka". Better, domain-separate at the
+  signing layer: hash a protocol tag into the target, or check a tag in `issue_response`. Or bind
+  the Anchor key into the issuance instance (the draft's NOTE).
+
+**F2 — Nullifier squatting (low, griefing).**
+- *Mechanism.*
+  - An adversary that learns an honest `nf_h` before the honest redemption is processed creates
+    its own commitment to `nf_h` and gets it signed by any honest Anchor, spending its own quota.
+    Examples of such an adversary: a relaying origin, or a network attacker on an unencrypted path.
+  - It redeems first. The honest token is then rejected as a double spend.
+  - The adversary gains no extra token, so Theorem 1's count is respected.
+- *Demonstrated* in Appendix A, demo 2: `adversary … ACCEPTED; honest token then REJECTED`.
+- *Fix.* Derive `nf` inside the circuit from a committed secret (the draft's issue 45), or have the
+  Moderator bind the redemption to the channel.
+
+**F3 — The draft's proof sketch for one-more-UOV programs `Com` inside the protocol.**
+- The sketch answers "`B` asks `Com(nf, r)`" with challenge targets. But the redemption and
+  issuance proofs evaluate the concrete Keccak-p circuit, and the extractor returns `x` with
+  `KP800(x)|₃₆₀ = t` for the *real* permutation. So the programmed values do not match what is
+  proved.
+- §4 repairs this:
+  - first reduce to the standalone assumptions CT-UF^open and binding, using only the extractor;
+  - then idealise `Com` only inside the CT-UF^open game (Lemma U).
+- The draft's earlier "tagged `c ‖ x`" discussion has the same issue.
+
+**F4 — Privacy margins (informational).**
+- Against colluding Anchors, privacy is exactly 128-bit (`r_len = 16`) classically and 64-bit with
+  Grover. The AES-128 hidden-leaf bound caps privacy against everyone at 64-bit Grover.
+- On `main`, lean/docs/zk.md's formal `Pred` term multiplies two query counts (§6).
+- *Cheap improvement.* The 9 zero bytes after `r` (`commit.hpp:34`) could carry a longer `r`, at
+  72 more witness bits.
+  - The trade-off is fewer fixed input bits (224 → 152). That lowers the generic inverse-forgery
+    cost to `2^{152}`, or a `2^{76}` Grover search.
+  - A middle ground, such as `r_len = 20`, keeps both above level 1.
+- The fix (§10) is the more important change for the formal ZK bound.
+
+**F5 — Partitioning through the Anchor Set and contexts (inherent, deployment).** See §7. The
+library accepts any set with `1 ≤ n ≤ 64` and any `ctx_iss`. This is consistent with the drafts,
+which delegate consistency to deployment.
+
+**F6 — Interoperability (D1, D10).** `challenge_digest`'s place in the transcript, and the DST
+position, are not pinned down by the draft.
+
+**F7 — Theorem 4(b) and its Lean model (proof and model).**
+- *Abort term and Anchor Sets.* (b) as stated misses `2·(φ₀ + φ₁)`, and needs both issuers in the
+  Anchor Sets: `main`'s Client redeems with any key that verifies its token (§6, (b′)). For the
+  index-taking Client before `21be618`, it needed the Client to take its index from `S`.
+- *Vacuous games, fixed.* Until commit `919a204` the random-oracle games of (b′) ran
+  `Spec.Moussaka.issueResponse`, which checks `main`'s request length `45 + 7272`, with the
+  label-row Lean prover (`7528`-byte proofs): every honest request was rejected and the bounds held
+  vacuously (`issueResponse_leanPI_malformed`). The games now use `issueResponseLR`, and the
+  redemptions are refused with probability `≤ φ₀ + φ₁ + 2·2⁻¹¹³` when both keys are found in
+  both sets (Appendix B). The liveness audit
+  (`lean/VoleMole/Audit/Liveness.lean`) found no other vacuous game, and one latent hazard of the
+  same kind: `Spec.Moussaka.finalizeRedeem` checks `main`'s redemption length (use
+  `finalizeRedeemLR`).
+- *255 vinegars.* `ov_preimage_core` discards a success at `ctr = 255` (`ov.c:166`), so the abort
+  probability is `δ^{255}`, not `δ^{256}` (harmless).
+- *`δ` only on average.* `δ ≤ 1/255` is the fraction of singular uniform matrices; for a fixed
+  key `δ` is not bounded (`δ = 1` for `S = 0`). On average over the `P2` part of the key (uniform
+  `P2` the modelling step) `E[δ^{255}] ≤ 255^{−37} + 1/(255·256^{37}) ≈ 2^{−295.8}`.
+
+**F8 — The README no longer says the nullifier record must span Anchor Sets (medium, documentation).**
+Until `ef3259e` the README said "one record must cover every Anchor Set you accept, since a token is
+valid under any set that contains its Anchor." The rewrite dropped this. It now only asks the caller
+to reject a nullifier recorded "in a previous presentation". A Moderator that keeps a record per
+Anchor Set satisfies that wording, but then a token can be redeemed once per set containing its
+Anchor (Corollary 2, item 2). The header still states the requirement
+(`include/vole_mole/ihat.hpp:149-153` on `main`, also for `unbound_finalize_redeem` at `:246-249`). **Fix:** restore
+the sentence in the README.
+
+**Checked and found sound:**
+- the constant-time index check and witness encoding;
+- the selector (Lean);
+- transcript binding: fixed-length or length-prefixed fields, and SHAKE256 digests, so `ε_dig` is
+  needed;
+- deterministic `DerivePreimage`, domain-separated from `ov_sign` (`ov.c:217-224`);
+- token consumption: `Token` moved, not copyable outside `TokenAccess`;
+- `finalize_issue` rejects invalid `s`.
+
+The issuance proof binds `(t, ctx_iss)` but not the Anchor. Replaying an honest request to another
+Anchor gives only a signature on someone else's `t`, which is useless without `r`, so this is
+harmless.
+
+---
+
+## 10. `main` versus the `voleith-label-rows` fix
+
+Since `64fd1a4`, `main` has the dedicated label rows as the default, but Moussaka (bound and
+unbound) sets `REUSE_CRT_WITNESS` and keeps the witness-derived masks, on the grounds that `r` is
+known only to the Client. The column `main` below therefore still describes Moussaka on `main`;
+the fix column describes `d5def9c`, where Moussaka used the rows (and what dropping
+`REUSE_CRT_WITNESS` from the two Moussaka relations would give).
+
+| | `main` | fix (`CRT_DEDICATED_LABEL_ROWS`, branch `voleith-label-rows`; proofs grow to 7528 / 9007 bytes) |
+|---|---|---|
+| ZK notion | (PU)-ZK: `Pred_R` = predicting `r` | Standard adaptive NIZK |
+| `ε_lab` per proof | `(Q₅ + n_mult·Q_V)·Pred + Q_P·2^{−128}` | `(Q₅ + n_mult·Q_V + Q_P)·2^{−128}` |
+| Thm 4(a), colluding | needs `Adv^ow-r` inside ZK *and* `Adv^hide`. The formal bound is vacuous at `q ≈ 2^{64}` | needs only `Adv^hide` (`≈ 2^{−63}` generic) |
+| Thm 4(b'), non-colluding | `Pred = 2^{−128}`, no Keccak assumption, `+ 2·(φ₀ + φ₁)` | same, with a cleaner bound ([Lean] `anonymityNC`; in the ROM and ideal-cipher model `anonymityNCRO_lean_num`) |
+| Joint hop over proofs sharing `r` | needed (§6); [Lean] for 4(a), `anonymity_main` (`lean/docs/zk.md` §4.2) | not needed: the hops are independent |
+| Thms 1 and 3 | unchanged (ZK enters Thm 3 only through `ε_hop`) | unchanged |
+| Quantum privacy | AES-128 Grover cap (§8) | same cap |
+
+---
+
+## 11. Open gaps
+
+1. Lemma DS (application vs proof-system hash disjointness) is proved on paper, with the
+   separation table checked in Lean (`lean/docs/security/domain-separation.md`,
+   `Protocols/DomainSeparation.lean`); SHAKE as a random oracle remains the modelling step.
+2. One-more-UOV → plain UOV problem: not expected (`uov-open-structure.md` Part A: no
+   key-preserving black-box reduction). The theorems rest on one-more-UOV through CT-UF^open and
+   Lemma U (§3.3), as the draft does, or on GPI and OW with loss `q`.
+3. `Com`'s binding, one-wayness and hiding are assumptions about 12-round Keccak-p[800]. Only
+   generic estimates are given.
+4. QROM: Theorem 3 has no quantum version (QROM SE is Q5, not applied here); ZK is on paper only
+   (`lean/docs/zk-qrom.md`), and Theorem 4 is not restated with it; multi-output extraction and
+   Theorem 1 are in `lean/docs/extraction/Q7-qrom-multi-extraction.md` (paper). `ε_multi` caps Q2
+   at about `2^{40}` cipher queries.
+5. Privacy in Lean (Appendix B; `lean/docs/zk.md` §10).
+   - *Theorem 4(a)* is mechanized for a fixed-size game (two Clients, one redemption per side),
+     in the ROM and ideal-cipher model with every zero-knowledge term explicit
+     (`anonymityRO_lean_num`), with a table-reading interaction (`anonymityRA_lean_num`; as oracle
+     computations, `anonymityOC_lean_num`), with AES's rows uniform permutations read forward and
+     inverse (`_perm`), with one shared `H₃` (`anonymitySh_num`, `anonymityRASh_num`) and from the
+     real Clients' seeds (`anonymity*_seed`, `+ 2·(2q_X + 2)·2⁻²⁵⁶`); and with many Clients
+     (`lean/docs/zk.md` §10.8): any number of further honest Clients on the same tables, issued
+     with the challenge Clients and redeeming at Anchor Sets chosen after every issuance request
+     (`anonymityN_lean_num`, `≤ n·2⁻¹⁰²` plus budget terms and `2·εhide` for `n` Clients in all),
+     also adaptively scheduled, Clients started before, during and after the challenge from
+     earlier outcomes, the challenge contexts and keys chosen by a key stage that reads the
+     tables (`anonymityRAK_lean_num`; `anonymityAd_lean_num`, the same `≤ n·2⁻¹⁰²`), also
+     interleaved, Clients started and answered in any order (`anonymityIL_lean_num`, `≤ (n + 2)·2⁻¹⁰¹`;
+     with a scheduler that reads the tables and places the challenge, `anonymityILO_lean_num`),
+     and `N` challenge pairs (`anonymityP_lean_num`, `≤ N·(2N·2⁻¹⁰² + 2·εhide)` plus budget terms:
+     `2⁻⁶³` at `2²⁰` Clients, `2⁻³⁹` at `2³²`; quadratic by an artifact of the proof; with the other
+     pairs on private tables `anonymityP_lin`, `≤ N·(2·2⁻¹⁰² + 2(N − 1)·2⁻¹²⁸ + 2β)` plus budget
+     and hiding terms, `β` the split world's bad event).
+   - *Theorem 4(b)*, corrected to (b′) with the abort term `2·(φ₀ + φ₁)`, is mechanized for the
+     same game from per-proof zero knowledge of the redemption proofs (with the Lean prover down to
+     its tape and hop hypotheses; the abort term `≤ 2·(δ₀^{256} + δ₁^{256})` in the vinegar
+     random-oracle model, `Privacy/MoussakaNC.lean`), and in the ROM and ideal-cipher model with
+     the honest Anchors' Lean verifier on the shared tables (`anonymityNCRO_lean_num`), with one
+     shared `H₃` (`anonymityNCSh_num`) and from the real Clients' seeds (`*NC*_seed`), each with
+     `_perm`; with the Moderator's choices (contexts, keys, Anchor Sets, digests, and the Anchors'
+     signers) read off the tables by a setup within `(k₃, k₂, k₅, k_E)` reads
+     (`anonymityNCRA_lean_num`, `≤ 4·εAd(9; q₃, q₅ + 2496, q_E + 23035; k₃, k₂, k₅, k_E) +
+     2·(noHitProb + 2⁻¹⁰²⁴) + 2·(φ₀ + φ₁) + 4·(k₃ + q₃)·2⁻¹²⁸`; the setup as an oracle computation,
+     `anonymityNCOC_lean_num`; with the seeds, `anonymityNCRA_lean_num_seed`), each with `_perm`; with a model of pqov's signer (`2·(δ₀^{255} + δ₁^{255})`; averaged over the `P2`
+     parts of pqov's keys, any oil matrices, `≤ 4·(255^{−37} + 1/(255·256^{37}))`), and with the
+     games shown to reach redemption (`Privacy/MoussakaPqov.lean`, `Privacy/PqovDelta.lean`,
+     `Privacy/PqovKeys.lean`).
+   - *What remains*: SHAKE as a random oracle and AES as an ideal cipher; the hiding of `Com` for
+     4(a) (computational, §3.2); the consistency of a table-reading interaction given as a bare
+     function of the tables (a theorem for oracle computations); for 4(b), the abort term for a
+     fixed key (bounded only on average over uniform `P2` parts of pqov's keys, F7) and a
+     table-reading setup in the shared-`H₃` game (`MoussakaNCSh`); in the interleaved game, a second challenge Client
+     whose contexts or key are chosen after the first one's request, and the factor about 2
+     against the sequential schedule (`lean/docs/zk.md` §10.8 "Open": the second Client can
+     differ only in its key, which no request reads, so the late key is a mechanical but
+     stack-wide generalization, not done; the factor 2 would disappear with the further sessions
+     on private tables, not done for the interleaved games); for `N` pairs, the bad event `β` of
+     the linear reduction (`anonymityP_lin` is linear in `N` up to `β`; `β ≲ 64(N − 1)·2⁻¹²⁸`
+     needs `H₄` a random oracle and is on paper); further Clients in the shared-`H₃`, seed-XOF and
+     non-colluding games.
+6. Whether lean/docs/zk.md's `Pred` product can be made additive on `main`. It is moot with the fix.
+7. Unforgeability in Lean (§4 "Status"). Theorem 1 is mechanized in the ROM and ideal-cipher
+   model on the spec (`omuf_le_num`), and down to OMPR (`omuf_le_num_ompr`) under the modelling
+   hypothesis that the concrete `Com` may be replaced by a random function in the CT-UF^open game.
+   What remains: `Com` binding as an assumption (item 3); that modelling step itself (Lemma U
+   with `Com` a random permutation with inverse access is now in Lean, `omuf_le_num_ompr_perm`,
+   with the permutation terms `(q_f + q_i + q_S + 1)²/2^{800} + q_i·2^{576}/2^{800}` explicit;
+   the hypothesis `hmodelP` replaces `Com` by that permutation); the per-proof failure terms of the simultaneous bound
+   (`omuf_le_num_sim`: `(qI + qR)·failEps`, see §4 "Status"); Theorem 1 averaged over key generation (the Lean theorem is
+   per key; the `K`-key guessing step is mechanized for the ideal game); `ε_dig` as a probability over key
+   generation (a condition on the keys in Lean). (Theorem 1 with simultaneous extraction is in the
+   permutation model of AES, `omuf_le_num_simP`, and so are its CT-UF^open and OMPR corollaries,
+   `omuf_le_num_open_simP`, `omuf_le_num_ompr_simP` with `Com` a random permutation too,
+   `Assumptions/PermSimLinks.lean`; for unbound Moussaka, `omufU_le_num_simP`,
+   `omufU_le_num_ompr_simP`, `moussaka-unbound.md` §4.)
+   Corollary 2 is not stated separately. Theorem 3 (non-malleability) is in Lean for `U` tokens
+   and `M` honest redemptions with weak SE for `U + M` simulated proofs as a hypothesis
+   (`noRedirectN`), with the hops' read budgets proved and that hypothesis reduced to plain
+   extraction and one programmed-point term per simulated proof, both hypotheses
+   (`noRedirectN_lean_reads`, `noRedirectN_lean_plain`), and for one token,
+   with the hops' read budgets proved and weak SE reduced to plain extraction and a
+   programmed-point term, both hypotheses (`noRedirect_lean_reads`, `noRedirect_lean_plain`; §5.3
+   "Status"), also with the other hashes read off uniform tables (`noRedirect_leanX_plain`).
+8. Timing side channels beyond the index check (OS RNG, allocation) are out of scope.
+
+---
+
+## Appendix A: demonstrations
+
+These are in `$SCRATCH/demo/moussaka_attacks.cpp`, outside the repo, where `$SCRATCH` is
+`/tmp/claude-1016/-home-claude-scm-vole-mole/93cbb905-f2d6-4f97-8011-866bcdeb7a31/scratchpad`.
+They were built against `build/libvole-mole.a` (`main`):
+
+```
+demo1 (PomFRIT-signed target accepted as Moussaka token): ACCEPTED
+demo2: adversary token with squatted nf ACCEPTED; honest token then REJECTED (double spend)
+```
+
+- Demo 1 uses only the public API:
+  1. `moussaka::issue_request`;
+  2. truncate the request to `t`;
+  3. `pomfrit::issue_response(sk, t)`;
+  4. `finalize_issue`, `redeem_request`, `finalize_redeem`.
+- Demo 2 uses `detail::commit` and `detail::prove_issue_request` to choose `nf`, which any custom
+  Client can do.
+
+## Appendix B: Lean
+
+`lean/VoleMole/Protocols/Moussaka.lean`, checked with `lake env lean`, with no `sorry` and no
+`axiom`:
+- `selector_one_hot` (any field) and `selector_one_hot_gf2`: the parity and weight constraints imply
+  one-hot with entry 1 (§5.2).
+- An `example` showing that the weight constraint alone fails over `GF(2)`.
+- `exists_unsigned_of_card_lt`: the pigeonhole step of Theorem 1.
+
+- `collision_or_forgery`: steps 3–4 of Theorem 1 (§4): if more distinct redemption identities
+  than signed commitments were accepted in one context, two distinct extracted openings collide
+  or a redemption opening's commitment was never signed.
+
+`lean/VoleMole/ROM/VerifyIC.lean`: the executable verifier as an oracle computation over the
+hashes and the cipher (`verifyIC`, `evalWithAnswerFn_verifyIC`, the cell-level read lemma
+`verify_congr_cells`, query bounds; `verifierIC_verifyIC`: it meets the generic interface
+`VerifierIC` of `ROM/ExtractReduce.lean`, and Ratatouille's balance game uses it too). The
+generic glue (the union bound across games per table, `prEvent_bind_le_sum4_of_table`;
+`gameA_transcript`; `evalWithAnswerFn_mapM`; `isKindQueryBoundIC_bind`) is in
+`lean/VoleMole/ROM/ExtractReduce.lean`. `lean/VoleMole/ROM/MoussakaOMUF.lean` (Theorem 1, §4 "Status"):
+the game (`game`, `anchorIC`, `moderatorIC`, `Win`; `anchorIC_eq_spec`), the reduction `omuf_le`
+(per table `win_imp`), and `omuf_le_num` with the extraction terms of
+`moussakaIssue_accept_le_adaptive_spec` and `moussakaRedeem_accept_le_adaptive_spec`. `#print
+axioms`: `propext`, `Classical.choice`, `Quot.sound`.
+`lean/VoleMole/ROM/MoussakaOMUFSim.lean` (§4 "Status"): `omuf_le_sim` (the reduction with one
+extraction event for both relations, `SimIR`), `omuf_le_num_sim` with the joint bound
+`prEvent_simIR_le` of `ROM/SimJointSpec.lean` (`moussaka_sim_joint_spec`; generic:
+`ROM/SimJoint.lean`, `ROM/SimExtract.lean`, `ROM/SimUnion.lean`), and per relation
+`prEvent_simI_le`, `prEvent_simR_le` (`ROM/SimSpec.lean`); `Assumptions/SimLinks.lean`:
+`omuf_le_num_open_sim`, `omuf_le_num_ompr_sim`. `#print axioms`: `propext`, `Classical.choice`, `Quot.sound`.
+
+`lean/VoleMole/Assumptions/UOVLinks.lean` (Theorem 1 against the standalone UOV games, §3.3,
+§4 "Status"): `omuf_le_num_open` (CT-UF^open), `omuf_le_num_ompr` (down to OMPR under the
+ideal-`Com` hypothesis). `lean/VoleMole/Assumptions/CTUFOpenOMPR.lean` (Lemma U with `Com` a random
+function, and the `K`-key step): `advCTUFIdeal1_le_ompr`, `advCTUFIdeal_le_sum`,
+`advCTUFIdealAt_le_sum`, `advCTUFIdeal_le_ompr`, `advCTUFIdealAt_le_ompr`; the ideal game is in
+`Assumptions/UOV.lean` (`advCTUFIdeal`, `CIWin`), the generic simulation lemmas in
+`Assumptions/LazyIdeal.lean`. `#print axioms`: `propext`, `Classical.choice`, `Quot.sound`.
+
+`lean/VoleMole/Privacy/Moussaka.lean` (Theorem 4(a), §6): `anonymity` (`≤ 4εI + 4εR + 2εhide`
+from per-proof zero knowledge and the hiding of `Com` for the explicit reduction), with the hops
+`issue_close`, `redeem_close`, `simGame_iff`, `hiding_hop`, `idealGame_eq`, for the index-taking
+Client of the API before `21be618` (`Spec.Moussaka.redeemRequestAt`, any index rule).
+`lean/VoleMole/Privacy/MoussakaFind.lean`: the same theorem and hops for `main`'s Client
+(`Spec.Moussaka.redeemRequest`, which finds its index with `findIssuer`; `redeemRequest_eq_at`
+relates the two steps). `#print axioms`: `propext`, `Classical.choice`, `Quot.sound`.
+
+`lean/VoleMole/Privacy/MoussakaNC.lean` (Theorem 4(b'), §6): `anonymityNC` (`≤ 4εR + 2·(φ₀ + φ₁)`
+from zero knowledge of the redemption proofs, signers correct for their keys and a sound index
+rule; nothing assumed of the issuance proofs or of `Com`), `unlinkabilityNC` (one Anchor, any index
+rule, `≤ 4εR`), `anonymityNC_vinegarRO` (`≤ 4εR + 2·(δ₀^{256} + δ₁^{256})` averaged over the
+Anchors' vinegar tables), `anonymityNC_label_rows`, `anonymityNC_label_rows_shake`,
+`unlinkabilityNC_label_rows` (the Lean prover for redemption), with the hops `real_sim_NC`,
+`simNC_iff`, `sim_hyb_NC`, `hybNC_eq`. `lean/VoleMole/Privacy/MoussakaNCFind.lean`: the same
+theorems for `main`'s Client, with `Contains` (both Anchor Sets hold both issuers' keys) in place of
+the sound index rule (`unlinkabilityNC` needs neither); `Audit/Nonvacuous.lean` instantiates
+`MoussakaFind.anonymityNC_vinegarRO` with pqov's signer (`contains_ncq`). The other games of this
+appendix take the index-taking Client. `#print axioms`: `propext`, `Classical.choice`,
+`Quot.sound`.
+
+`lean/VoleMole/Privacy/MoussakaLean.lean`: `anonymity_label_rows`, Theorem 4(a) with both proof
+systems the executable Lean prover with dedicated label rows (the statements of
+`Verifier/Relations.lean`), assuming only the tape hypotheses (`TapeHyp`, `lean/docs/zk.md`
+§10.1), the hiding of `Com` and the hash record's output lengths (proved for SHAKE,
+`anonymity_label_rows_shake`, which also derives the tape hypotheses from one hypothesis per hop,
+`ZK/Hops.lean`, so `εI`, `εR` are sums `ε_rho + ε_grind + ε_bavc + ε_lab`; BAVC and CRT
+completeness are proved, `Verifier/Bridge/`): the
+witness encodings satisfy the
+issuance and redemption systems for every combination (`issue_holds`, `redeem_holds`, from the
+`Arith/Moussaka.lean` completeness theorems), and the other deterministic hypotheses are proved
+(`zkHypI`, `zkHypR`).
+
+`lean/VoleMole/Privacy/MoussakaRO.lean`: Theorem 4(a) **in the random-oracle and ideal-cipher
+model**, where the adversary's final guess also sees the random tables (`H₃` per proof, `H₂³`,
+`H₅`, the cipher) and the four proofs share them (`lean/docs/zk.md` §10.2). `anonymityRO` (any
+proof systems that are `ZeroKnowledgeRO`, with bounded reads) and `anonymityRO_lean` (the
+executable Lean prover with SHAKE for the other hashes and AES as an ideal cipher):
+
+    |Pr[W₀] − Pr[W₁]| ≤ 8·εRO(q₃, q₅ + 3·624, q_E + 3·4607) + 2·δI₁ + Σ_b (δL b + δR b) + 2·εhide,
+
+`εRO q₃ q₅ q_E = q₃·2⁻¹²⁸ + 2⁻¹¹³ + 221·(4607 + q_E + 4607)·2⁻¹²⁸ + (q₅ + 1)·2⁻¹²⁸` the
+single-proof bound of `zk_rom_ic_h23_num`, at the budget of the reductions (each runs the later
+proofs for real, `624` `H₅` and `4607` cipher reads each, and applies the earlier simulations'
+`H₂³` programming, `312` and `4607` reads each). The `δ` are explicit programming-collision
+probabilities of the hybrids (a real proof reads `H₂³` at a point an earlier simulation
+programmed), bounded in Lean (`lean/VoleMole/Privacy/MoussakaDelta.lean`, `ZK/CollideRO.lean`,
+zk.md §10.2): `δI₁ ≤ noHitProb + 2⁻¹⁰²⁴` (`deltaI1_le`), `δL b ≤ 2⁻¹¹³ + εRO(0, 312, 4607) +
+noHitProb + 2·2⁻¹⁰²⁴` and `δR b ≤ … + 3·2⁻¹⁰²⁴` (`deltaL_le`, `deltaR_le`: the redemption
+statement may depend on the simulated requests' `ã`, so the bound applies zero knowledge a second
+time, to "the recomputed prefix's last `128` bytes are among the earlier simulations' `ã`"). So
+**`anonymityRO_lean_num`**:
+
+    |Pr[W₀] − Pr[W₁]| ≤ 8·εRO(q₃, q₅ + 1872, q_E + 13821) + 4·(2⁻¹¹³ + εRO(0, 312, 4607))
+                        + 6·noHitProb + 12·2⁻¹⁰²⁴ + 2·εhide,
+
+about `2⁻¹⁰²·³` plus `8·(q₃ + q₅ + 221·q_E)·2⁻¹²⁸` and `2·εhide` (`noHitProb ≤ 2^{−2¹⁵}`). The
+earlier paper bound for a redemption (`εRO + 2⁻¹⁰²³ + 2·noHitProb`) missed the `Δ' = 0` part of
+the grinding failure (`Pr[GrindBad] ≤ 2⁻¹¹³` instead of `noHitProb`, by the second-moment
+bound on the acceptance set, `grindBad_le_113`). Restrictions of the model: the
+adversary's interaction (contexts, keys, responses, Anchor Sets, digests) does not read the
+tables, only its guess does (the zero-knowledge theorem is for statements fixed before the
+tables; lifted below); the four `H₃` slices are independent (exact unless two proofs share `(μ₁, wPrefix)`,
+`≤ 2⁻¹⁹²`; lifted below: with one shared `H₃` no such term); the seed XOF's outputs are uniform
+(lifted at the end of this appendix); hiding is for the reduction with the
+simulator coins and the tables fixed.
+
+**With an interaction that reads the tables** (`lean/VoleMole/Privacy/MoussakaRA.lean`, zk.md
+§10.3). Here the responses, Anchor Sets and digests are functions of the two requests, the four
+`H₃` slices and the shared tables (programmed by the issuance simulations, in the hybrids). As a
+function of each slice and the shared tables, the transcript reads at most `i₃` slice keys, `i₂`
+`H₂³` keys, `i₅` `H₅` keys and `i_E` cipher keys, consistently (`AdversaryRA.IBudget`; any
+deterministic query algorithm). The redemption statements are then read off the tables. The
+redemption hops use zero knowledge for statements chosen from the tables (`zk_adaptive`,
+`lean_zeroKnowledgeROA`). It costs `s₃·2⁻¹²⁸` for the 16-byte `ρ`, `(s₅ + 1 + 221·s_E)·2⁻¹²⁸`
+for the reader's `H₅` and cipher reads in H6 and H4, and, if the reader reads `H₂³`, a second
+application of zero knowledge plus `2·s₂·2⁻¹⁰²⁴`. The transcript reads through the two issuance
+programmings, so the reader's budget is `(i₃, i₂, i₅ + 624, i_E + 9214)`. The collision terms are
+bounded the same way (`pr_collide_adaptive`). **`anonymityRA_lean_num`**:
+
+    |Pr[W₀] − Pr[W₁]| ≤ 4·εRO(i₃ + q₃, q₅ + i₅ + 1872, q_E + i_E + 13821)
+                        + 4·εAd(9; q₃, q₅ + 1248, q_E + 13821; i₃, i₂, i₅ + 624, i_E + 9214)
+                        + 4·(i₃·2⁻¹²⁸ + 2⁻¹¹³ + εROP(0, 312, 4607; i₅ + 624, i_E + 9214))
+                        + 6·noHitProb + 12·2⁻¹⁰²⁴ + 2·εhide,
+
+about `2⁻¹⁰¹·⁹` without budgets (`2⁻¹⁰¹·⁶` if the interaction reads `H₂³` at all). So the
+restriction to a table-oblivious interaction is not needed: there is no attack, and the cost is
+of the same order. For an interaction written as a VCVio oracle computation over the tables
+(`AdversaryOC`, `lean/VoleMole/ROM/PrivacyReads.lean`), consistency is a theorem and the budget
+the syntactic query bound (`QBudget`): `anonymityOC_lean_num`, `anonymityOC_lean_num_perm`, the
+same bounds with no consistency hypothesis on the interaction (the guess keeps its semantic
+read budget).
+
+**With one shared `H₃`** (`lean/VoleMole/Privacy/SharedH3RO.lean`, `SharedH3RA.lean`,
+`lean/VoleMole/ROM/SharedH3Reads.lean`, zk.md §10.5). In the scheme the four proofs hash with one
+`H₃(wPrefix ‖ μ₁ ‖ ρ ‖ 3)`; the four slices are its restrictions to the four prefixes. The games are
+proved again with `H₃` in the shared tables (each row carries `H₃`'s column at that `ρ`) and each
+proof reading the column at its prefix, computed from the witness and instance it proves (the
+redemption prefixes through the adversary's Anchor Sets and digests). No prefix-collision term is
+needed: in each hop the replaced proof's column is re-sampled, and another proof with the same
+prefix reads it at its own `ρ` (one row, inside `εRO`'s slice-read term).
+**`anonymitySh_num`**: `8·εRO(q_E + 13824, q₅ + 1872, q_E + 13824) + 4·(2⁻¹¹³ + εRO(0, 312, 4607))
++ 6·noHitProb + 12·2⁻¹⁰²⁴ + 2·εhide` (the adversary's `H₃` reads count in `q_E`); with a
+table-reading interaction (which may read `H₃` at a redemption's prefix before choosing it),
+**`anonymityRASh_num`**: `4·εRO(q_E + i_E + 13824, q₅ + i₅ + 1872, q_E + i_E + 13824) +
+4·εAd(9; q_E + 13822, q₅ + 1248, q_E + 13822; 0, i₂, i₅ + 624, i_E + 9214) + 4·(2⁻¹¹³ +
+εROP(0, 312, 4607; i₅ + 624, i_E + 9214)) + 8·(i_E + 9214)·2⁻¹²⁸ + 6·noHitProb + 12·2⁻¹⁰²⁴ +
+2·εhide` (the `RA` bound above with no slice reads, the row budgets in the slice-read slots, and
+`8·(i_E + 9214)·2⁻¹²⁸` for a redemption's fresh `ρ` meeting a row the interaction read);
+`anonymityOCSh_num` and `_perm` likewise. So the `≤ 2⁻¹⁹²` step is not needed; it is not wrong as
+a bound on the prefix collision, but "independent slices up to `2⁻¹⁹²`" is not a black-box reduction
+from one `H₃` (the slices' locations involve the Clients' secret `r`, `nf`).
+
+**AES as random permutations** (`lean/docs/zk.md` §10.4, `Privacy/PermRO.lean`,
+`Privacy/PermRA.lean`). The `RO` and `RA` theorems also hold with the cipher's rows uniform permutations that
+the adversary reads forward and inverse: `anonymityRO_lean_num_perm`, `anonymityRA_lean_num_perm`,
+the same bounds with every `εRO` (`εROP`, `εAd`) replaced by its permutation counterpart `εROPm`
+(`εROPmP`, `εAdPm`), whose hop denominators are `2¹²⁸ − (nHi + 1)` and which carry the PRP/PRF
+switching term `switchEps ≤ 2⁻¹¹³·²`; numerically the same to two decimals.
+
+**The seed-XOF hop** (`lean/VoleMole/Privacy/SeedXOF.lean`, `Privacy/SeedXOFGames.lean`,
+`ROM/SeedXOFReads.lean`, zk.md §10.6). With the real Clients (uniform 32-byte OS seeds, the seed
+XOF a uniform table keyed by `(DST, seed)`, the adversary reading at most `q_X` cells), each of the
+random-oracle theorems above holds with `+ 2·(2q_X + 2)·2⁻²⁵⁶`: `anonymityRO_lean_num_seed`,
+`anonymityRA_lean_num_seed`, `anonymitySh_num_seed`, `anonymityRASh_num_seed`,
+`anonymityOC_lean_num_seed`, `anonymityOCSh_num_seed`, each with `_perm_seed`. Theorem 4 has no
+term for this hop (D7); the cost covers an XOF query at a Client's seed and two seeds of one domain
+colliding. The abstract non-colluding game (`Privacy/MoussakaNC.lean`) keeps uniform seed
+outputs; the random-oracle ones get the hop below (`Privacy/SeedXOFNC.lean`).
+
+**Theorem 4(b′) in the random-oracle and ideal-cipher model** (`lean/VoleMole/Privacy/MoussakaNCRO.lean`,
+`lean/VoleMole/ZK/VerifyReadsRO.lean`, zk.md §10.7). The non-colluding game on the spec
+(`realGameNCRO`): each Client's `issue_request` with the Lean issuance prover on the shared tables
+(its own `H₃` slice), the honest Anchor's `issue_response` with the **Lean verifier on the same
+tables** (`leanVI`, the executable `Verifier.verify` with `H₂³`, `H₅` and the cipher the tables),
+then `derive_preimage` (any signer correct for its key); `finalize_issue`, §6's refusal rule, and
+the redemptions with the Lean redemption prover on the tables. The adversary's guess sees the
+redemptions or the refusal, the four `H₃` slices and the tables, with read budgets
+(`AdversaryNCRO.Budget`); its choices do not read the tables.
+- The verifier's reads (`ZK/VerifyReadsRO.lean`): `H₅` at `≤ 312` keys (`verRO_rd5`), the cipher at
+  `≤ 4607` (`verRO_rdE`), `H₂³` at one point (`verify_h23_congr`), no `H₃`.
+- Step 1 (`hopL_NCRO`, `hopR_NCRO`): the redemptions simulated, with the issuances and the
+  verifications run on the tables after the simulations' programming (`gameNCROS`,
+  `realGameNCRO_iff`), so the reductions run them at a cost of `2·(624 + 312) + 624 = 2496` `H₅`
+  and `2·(4607 + 4607) + 4607 = 23035` cipher reads; the right hop's collision term `deltaNC ≤
+  noHitProb + 2⁻¹⁰²⁴` (`deltaNC_le`; the redemption statements do not depend on the tables:
+  `tokW`, `okW`, `tokDNC_eq_tokW`).
+- The issuance slices the guess sees made independent (`sim_fresh_NC`, `2·q₃·2⁻¹²⁸`; an issuance
+  proof reads its slice only at its randomness, `realRO_h3_val`).
+- Steps 3–4 as in `Privacy/MoussakaNC.lean` (`fresh_hyb_NC`: `φ₀ + φ₁`; `hybFresh_eq`; one Anchor:
+  `simFresh_eq_one`).
+- **`anonymityNCRO_lean_num`**:
+
+      |Pr[W₀] − Pr[W₁]| ≤ 4·εRO(q₃, q₅ + 2496, q_E + 23035) + 2·(noHitProb + 2⁻¹⁰²⁴)
+                          + 2·(φ₀ + φ₁) + 4·q₃·2⁻¹²⁸,
+
+  about `2⁻¹⁰³·²` plus `4·(2q₃ + q₅ + 221·q_E)·2⁻¹²⁸` and the abort term;
+  `anonymityNCRO_lean_num_perm` (AES as uniformly random permutations, `εROPm`);
+  `anonymityNCRO_vinegarRO` (abort term `2·(δ₀^{256} + δ₁^{256})` averaged over the vinegar
+  tables); **`unlinkabilityNCRO_lean_num`**, `_perm`: one Anchor, any index rule, without the
+  abort term; the generic `anonymityNCRO`, `unlinkabilityNCRO` for any proof systems with read
+  budgets. `#print axioms`: `propext`, `Classical.choice`, `Quot.sound`.
+- **With one shared `H₃`** (`lean/VoleMole/Privacy/MoussakaNCSh.lean`, zk.md §10.7): the issuance
+  and redemption proofs read `H₃` at their prefixes off the shared tables (`realGameNCSh`), the
+  guess reads `H₃` through the rows. For an issuance prover that ignores its slot slice the slice
+  hop is an exact relabelling (`pr_slice_free`, `sim_fresh_NC_free`; `anonymityNCRO_free`), and
+  the redemption hops use `ZeroKnowledgeRO.shared` at the row budget (`q_E + 23038`: each shared
+  proof reads its row `ρ` too). **`anonymityNCSh_num`**:
+
+      |Pr[W₀] − Pr[W₁]| ≤ 4·εRO(q_E + 23038, q₅ + 2496, q_E + 23038) + 2·(noHitProb + 2⁻¹⁰²⁴)
+                          + 2·(φ₀ + φ₁),
+
+  about `2⁻¹⁰³·²` plus the budget terms and the abort term; `_perm`, `anonymityNCSh_vinegarRO`,
+  `unlinkabilityNCSh_num` (`_perm`).
+- **With the real Clients' seeds** (`lean/VoleMole/Privacy/SeedXOFNC.lean`, zk.md §10.6): each of
+  `anonymityNCRO_lean_num`, `unlinkabilityNCRO_lean_num`, `anonymityNCSh_num`,
+  `unlinkabilityNCSh_num` (and `_perm`) with `+ 2·(2q_X + 2)·2⁻²⁵⁶` (`*_seed`; given a bound
+  `φ₀ + φ₁ ≤ φ` on the abort term at every XOF table, the hypothesis `hφ`). Theorem 4(b′) has no seed-XOF term either (D7); as for
+  4(a), the hop is not free.
+- **With the Moderator's choices read off the tables** (`lean/VoleMole/Privacy/MoussakaNCRA.lean`,
+  `lean/VoleMole/ROM/PrivacyReadsNC.lean`, zk.md §10.7). A setup reads the four slices and the
+  shared tables (`AdversaryNCRA`, budget `KBudget k₃ k₂ k₅ k_E`, consistent) and outputs a state
+  `σ`; the contexts, keys, Anchor Sets, digests and the guess are `adv σ`'s, the Anchors' signers
+  `sk σ`. The redemption hops are adaptive (`hopL_NCRA`, `hopR_NCRA`: `hop_roA` with
+  `leanPR_zkROA` for the setup reader); `deltaNCA_le`: the right hop's collision term is still
+  `≤ noHitProb + 2⁻¹⁰²⁴`; the slice hop costs `2·(k₃ + q₃)·2⁻¹²⁸` per world (`sim_fresh_NCA`); the
+  abort term is bounded uniformly in `σ` (`fresh_hyb_NCA`, `φ c ≥ phi (adv σ) (sk σ) c`).
+  **`anonymityNCRA_lean_num`**:
+
+      |Pr[W₀] − Pr[W₁]| ≤ 4·εAd(9; q₃, q₅ + 2496, q_E + 23035; k₃, k₂, k₅, k_E)
+                          + 2·(noHitProb + 2⁻¹⁰²⁴) + 2·(φ₀ + φ₁) + 4·(k₃ + q₃)·2⁻¹²⁸,
+
+  `anonymityNCRA_lean_num_perm`, `unlinkabilityNCRA_lean_num` (`_perm`; one Anchor at every state,
+  no abort term), the setup as a VCVio oracle computation with a query bound
+  (`anonymityNCOC_lean_num`, `unlinkabilityNCOC_lean_num`, `_perm`), and with the seeds
+  (`anonymityNCRA_lean_num_seed`, `_perm_seed`, `unlinkabilityNCRA_lean_num_seed`,
+  `anonymityNCOC_lean_num_seed`). At `k = 0` this is `anonymityNCRO_lean_num` up to `4·2⁻¹²⁸`.
+  `#print axioms`: `propext`, `Classical.choice`, `Quot.sound`.
+- **pqov's signer and completeness** (`lean/VoleMole/Spec/PqovSigner.lean`,
+  `lean/VoleMole/Spec/PqovKey.lean`, `lean/VoleMole/Spec/PqovSignerExec.lean`,
+  `lean/VoleMole/Privacy/MoussakaPqov.lean`, `lean/VoleMole/Privacy/PqovDelta.lean`,
+  `lean/VoleMole/Privacy/PqovKeys.lean`, `lean/VoleMole/Arith/GF256Field.lean`). The theorems above take the signers abstract
+  (`Signer.Correct` only, which the always-failing signer meets with `φ = 1`) and hold for any
+  issuance verifier; these files make them concrete.
+  - *The signer.* `Spec.Pqov.signer pk O vin tries` models `ov_preimage_core` over `GF256` (a
+    `Field` instance from the embedding into GF(2¹²⁸)): attempt `ctr` solves
+    `L_v x = t − P(x₀)`, `x₀ = (v, 0)`, `L_v[k][j] = B(x₀, ō_j)_k` with `B` the polar form of the
+    public map and `ō_j = (O_j, e_j)` (pqov's `vᵀS_k`, `t + P₁(v)` by the UOV identities; the
+    byte-level routines are not modelled), and returns `x₀ + Σ_j x_j ō_j`. `signer_correct`: correct
+    for every key whose map vanishes on the oil space (`OilSpace`). `signer_fail`: it fails only
+    if every attempt `ctr < tries` has `det L_v = 0`. pqov uses `tries = 255`
+    (`ov.c:166`, §6 step 5); `deriveRef` uses pqov's vinegar derivation `vinShake`.
+  - *The model against pqov's key layout* (`Spec/PqovKey.lean`). `sum_forEachMonomial`,
+    `qmap_eq_blocks` split the expanded key into its `P1`, `P2`, `P3` blocks (`c1`, `c2`, `c3`,
+    pqov's `idx_of_trimat` offsets). For **every** key, `sysCoef_eq_pqovS`: the coefficients the
+    model computes from the polar form, `S k i j = B(e_i, ō_j)_k`, are pqov's stored
+    `S = (P1 + P1ᵀ)·O + P2` (`calculate_F2_P3`; so the model's `L_v = vᵀS` is `ov_calc_l1_mat`),
+    and `qmap_vinVec_eq`: `P(v, 0) = P₁(v)` (`batch_quad_trimat_eval`). `qmap_oil_eq`:
+    `P(Oy, y) = Σ_{a ≤ b} (P3 − UT(M + Mᵀ))_{ab} y_a y_b`, `M = Oᵀ(P1·O + P2)`, so
+    **`oilSpace_iff_P3Pqov`**: `P` vanishes on the oil space of `O` iff `P3` is pqov's
+    (`calculate_F2_P3`, `Verifier.Keygen.computeP3`), for every `O`, `P1`, `P2`. `pqovKey O P1 P2`
+    is the expanded key with that `P3` (`oilSpace_pqovKey`; `sysCoef_pqovKey`:
+    `S = (P1 + P1ᵀ)·O + P2`; `pqovKey_zero`: `O = 0` gives `keyO0`).
+  - *Against the C++.* `Spec/PqovSignerExec.lean` runs the model with the inverse replaced by an
+    elimination whose solution is checked on the model's `sysMat` (`attemptExec_sound`: then the
+    output is the model's `attempt` when `det L_v ≠ 0`). `lake exe spec_kats` runs it with pqov's
+    vinegars and 255 attempts on the test key (generated in Lean from `filled(0x60)`, oil matrix
+    from its seed) at the three Moussaka issuance and three PomFRIT request targets: the output
+    equals the C++ `derive_preimage` response byte for byte each time (first vinegar good). Not
+    proved: that the elimination rejects exactly the singular systems.
+  - *In the games.* `pqovRO` reads the vinegars from the vinegar tables. With 256 attempts it
+    satisfies `hfail` as stated (`pqovRO256_hfail`), so `anonymityNC_vinegarRO` applies to it; with
+    pqov's 255, `pr_fail_vinegar_lt` gives `E[φ_c] ≤ δ_c^{255}` and `anonymityNC_pqov`,
+    `anonymityNCRO_pqov`, `anonymityNCSh_pqov` the abort term `2·(δ₀^{255} + δ₁^{255})`.
+  - *`δ`* (`delta pk O`, the fraction of vinegars with `det L_v = 0`). `L_v = Σ_i v_i S_i`
+    (`sysMat_eq_sum`) is linear in `v`, so a fixed key bounds nothing (`delta_zero_key`: `δ = 1`).
+    Over uniform coefficients `S`: `pr_singular_avg`, `E[δ] ≤ 1/255 + 256^{−74}` (`pr_det_zero`:
+    `σ = 1 − |GL₄₅(𝔽₂₅₆)|/256^{2025} ≤ 1/255`; `pr_comp_addHom`: `S ↦ L_v` is a surjective
+    additive map for `v ≠ 0`); `pr_singular_all`, `pr_dependent_le`: `E[δ^m] ≤ σ^m +
+    256^m/(255·256^{74})` for `m ≤ 74`. For the keys `keyO0 P1 P2` (pqov's key generation with
+    `O = 0`: `P3 = 0`; `oilSpace_keyO0`; `sysCoef_keyO0`: `S` is the `P2` part) with `P2` uniform:
+    `avg_delta_keyO0`, `avg_delta255_keyO0` (`E[δ^{255}] ≤ 255^{−37} + 1/(255·256^{37})`), and
+    averaged over the Anchors' keys `anonymityNC_pqov_keys`, `anonymityNCRO_pqov_keys`: abort term
+    `≤ 4·(255^{−37} + 1/(255·256^{37})) ≈ 2^{−293.8}`. **For pqov's real keys**
+    (`Privacy/PqovKeys.lean`; any oil matrix `O` and `P1` part, `P3` computed): `S` is a translate
+    of the `P2` part (`sysMat_pqovKey`), so with `P2` uniform `avg_delta_pqovKey`,
+    `avg_delta_pow_pqovKey`, `avg_delta255_pqovKey` give the same bounds, and
+    `anonymityNC_pqov_pqovKeys`, `anonymityNCRO_pqov_pqovKeys` the same abort term with each
+    Anchor signing with its own `O c`. The modelling step: `P2` uniform given `(O, P1)` (AES-128-CTR
+    of `pk_seed` as a random function, `O` independent of `pk_seed` with SHAKE256 a random oracle);
+    since the bounds hold for every `(O, P1)` they hold for any law of `(O, P1)`.
+  - *The request length (finding).* `Spec.Moussaka.issueResponse` checks `main`'s length
+    `45 + 7272`; the Lean prover of the random-oracle games emits label-row proofs of `7528` bytes
+    (`leanPI_length`), so with it every honest request was malformed (`issueResponse_leanPI_malformed`)
+    and the random-oracle games of Theorem 4(b′) always refused: their bounds held vacuously. The
+    games now use `Spec.Moussaka.issueResponseLR` (`lean/VoleMole/Spec/MoussakaLabelRows.lean`,
+    `45 + 7528`).
+  - *Completeness.* `leanI_complete`: the Lean issuance proof has the label-row length and passes
+    `leanVI` on the shared tables except with probability `≤ 2⁻¹¹³` (`complete_rom`; the verifier
+    reads no `H₃`); `accNC_lean_complete`, `accNC_leanSh_complete` (one shared `H₃`): each honest
+    Anchor rejects its Client's request with probability `≤ 2⁻¹¹³`. `pr_refused_le`,
+    `pr_refused_NCRO_le`, `pr_refused_NCSh_le`: with both issuers' keys found at the Clients'
+    indices in both sets, the redemptions are refused with probability `≤ φ₀ + φ₁ + 2·2⁻¹¹³`;
+    `pr_refused_NCRO_pqov`: `≤ δ₀^{255} + δ₁^{255} + 2·2⁻¹¹³` with pqov's signers. `#print axioms`:
+    `propext`, `Classical.choice`, `Quot.sound`.
+  - *Liveness audit* (`lean/VoleMole/Audit/Liveness.lean`). Every privacy game was checked for the
+    failure above (an honest step that rejects the Lean prover's output, a refusal rule that always
+    fires): only the non-colluding games had one. With a trapdoor key `keyI` (pqov's key
+    generation with `O = 0`, `P2` chosen so that the system of one vinegar is the identity) and
+    its never-failing signer `skI`: `phi_skI` (abort term `0`), `refused_ncL` (refusal
+    `≤ 2·2⁻¹¹³`); in 4(a), two such issuers make §6's rule allow the redemptions on every tape
+    (`allOk_live`) and the guess sees `nf_b ‖ π_L`, `nf_{¬b} ‖ π_R` (`view_live`,
+    `realGameRO_live`), and the label-row Moderator accepts each honest redemption with the Lean
+    verifier except with probability `≤ 2⁻¹¹³` (`redeem_accepted_RO`, `leanR_complete`). A latent
+    hazard of the same kind: `Spec.Moussaka.finalizeRedeem` checks `main`'s `24 + 8751`, while the
+    Lean redemption proofs have `9007` bytes (`leanPR_length`), so `main`'s Moderator would reject
+    every one (`finalizeRedeem_leanPR_none`); no game runs an honest Moderator, and
+    `Spec.Moussaka.finalizeRedeemLR` (`24 + 9007`) is the one to use.
+- **With many Clients** (`lean/VoleMole/Privacy/MoussakaMany.lean`, `ZK/ReadsMany.lean`, zk.md
+  §10.8): the adversary also serves `m` further honest Clients on the same tables (their issuance
+  requests seen with the challenge requests, their redemptions at Anchor Sets chosen after them);
+  for each tape of the further Clients the game is `realGameRA` of the adversary that runs them
+  (`AdversaryN.withClients`), whose interaction reads their issuance proofs consistently
+  (`realRO_sreads`: `H₅`, the cipher and `H₂³` at the `2³²` grinding points of each prefix).
+  **`anonymityN_lean_num`**: `anonymityRA_lean_num` at `i₂ = 2³²m`, `i₅ = 624m`, `i_E = 4607m`
+  and the guess's budget `(q₃, q₅ + 2·624m, q_E + 2·4607m)`; in numbers `≤ n·2⁻¹⁰² +
+  8·(q₃ + q₅ + 221·q_E)·2⁻¹²⁸ + 2·εhide` (`anonymityN_lean_le`; `2⁻⁸²` at `n = 2²⁰`, `2⁻⁷⁰` at
+  `2³²`: `anonymityN_lean_2pow20`, `_2pow32`); `anonymityN_lean_num_perm`.
+- **With a key stage that reads the tables** (`lean/VoleMole/Privacy/MoussakaRAK.lean`, zk.md
+  §10.3): `AdversaryRAK`, the contexts and the challenge Clients' keys fixed by a setup that reads
+  the slices and the shared tables (consistently, `KBudget k₃ k₂ k₅ k_E`), the rest the
+  table-reading adversary at that state. The issuance statements are adaptive, so the issuance hops
+  are `hop_roA` with `ZeroKnowledgeROA` (`hop0RAK`, `hop1RAK`, `leanPI_zkROA`; `deltaI1K_le`:
+  still `noHitProb + 2⁻¹⁰²⁴`), the redemption hops read through the setup (`sReads_SxLK`,
+  `sReads_SxRK`; `deltaLAK_le`, `deltaRAK_le`). **`anonymityRAK_lean_num`**: `4·εAd(9; i₃ + q₃,
+  q₅ + i₅ + 1872, q_E + i_E + 13821; k₃, k₂, k₅, k_E) + 4·εAd(9; q₃, q₅ + 1248, q_E + 13821;
+  k₃ + i₃, k₂ + i₂, k₅ + i₅ + 624, k_E + i_E + 9214) + 4·((k₃ + i₃)·2⁻¹²⁸ + 2⁻¹¹³ +
+  εROP(0, 312, 4607; k₅ + i₅ + 624, k_E + i_E + 9214)) + 6·noHitProb + 12·2⁻¹⁰²⁴ + 2·εhide`;
+  `_numG`, `_perm`.
+- **With an adaptive schedule** (`lean/VoleMole/Privacy/MoussakaAdaptive.lean`, zk.md §10.8;
+  `AdversaryAdM`, `realGameAdM`): `m₁` further sessions before the challenge, `m₂` between the
+  challenge issuance requests and the answers to the challenge Clients, `m₃` after the outcome, one
+  after the other, each one's contexts, key, response, Anchor Set and digest chosen from all earlier
+  requests and outcomes, the challenge contexts and keys from the first `m₁`. A whole session is a
+  consistent table reader (`redX_sreads`, `fullXM_sreads`, `runSeqM_sreads`), and for each tape the
+  game is `realGameRAK` of the adversary that runs the sessions (`realGameAdM_iff`).
+  **`anonymityAd_lean_num`**; in numbers `≤ n·2⁻¹⁰² + 8·(q₃ + q₅ + 221·q_E)·2⁻¹²⁸ + 2·εhide`
+  (`anonymityAd_lean_le`; `2⁻⁸²` at `n = 2²⁰`, `2⁻⁷⁰` at `2³²`: `anonymityAd_lean_2pow20`,
+  `_2pow32`); `anonymityAd_lean_num_perm`.
+- **With an interleaved schedule** (`lean/VoleMole/Privacy/MoussakaInterleave.lean`,
+  `ZK/ReadsInterleave.lean`, zk.md §10.8; `AdversaryILM`, `realGameILM`): the adversary is an
+  interactive machine that, step by step, starts a new honest Client with contexts and a key of its
+  choice or delivers its answer (response, Anchor Set, digest) to any pending Client, seeing every
+  issuance and redemption request; it may keep many Clients pending across the challenge. A Client
+  is a chain of two consistent readers (`ChainCons`: `issX_req_sreads`, then `redX_sreads`), and by
+  the interleaving lemma (`Good.run`, `Good.sreads`) each stretch of the schedule reads at most `n`
+  Clients' keys. For each tape the game is `realGameRAK` of the adversary that runs the schedule
+  (`realGameILM_iff`), with key-stage and interaction budgets `(0, 2·2³²n, 1248n, 9214n)`.
+  **`anonymityIL_lean_num`**; in numbers `≤ (n + 2)·2⁻¹⁰¹ + 8·(q₃ + q₅ + 221·q_E)·2⁻¹²⁸ + 2·εhide`
+  for `n` further Clients (`anonymityIL_lean_le`; `2⁻⁸¹` at `n + 2 = 2²⁰`, `2⁻⁶⁹` at `2³²`;
+  `_2pow20`, `_2pow32`), `anonymityIL_lean_num_perm`: twice the sequential bound, a pending Client
+  being charged in the key stage and again in the interaction.
+- **With a scheduler that reads the tables and places the challenge**
+  (`lean/VoleMole/Privacy/MoussakaInterleaveOC.lean`, `ZK/ReadsInterleaveOC.lean`, zk.md §10.8;
+  `AdversaryILMO`, `realGameILMO`): each step of the schedule is a VCVio oracle computation over
+  the four challenge slices and the shared tables within a per-step query bound (`SBudget`), the
+  challenge starts when `go` holds and its answers are taken when `done` holds. By the interleaving
+  lemma with the scheduler's query logs in the union (`GoodO.run`, `GoodO.sreads`), key stage
+  `(L₁a₃, 2·2³²n + L₁a₂, 1248n + L₁a₅, 9214n + L₁a_E)`, interaction the same with `L₂`.
+  **`anonymityILO_lean_num`**; in numbers `≤ (n + 2)·2⁻¹⁰¹ + 8·(q₃ + q₅ + 221·q_E)·2⁻¹²⁸ +
+  28·L·(a₃ + a₂ + a₅ + 221·a_E)·2⁻¹²⁸ + 2·εhide` (`anonymityILO_lean_le`, `_2pow20`, `_2pow32`),
+  `anonymityILO_lean_num_perm`; the earlier game is the special case (`realGameILMO_toO`).
+- **With `N` challenge pairs** (`Privacy/MoussakaMany.lean`, zk.md §10.8; `AdversaryP`,
+  `realGameP`, worlds `Fin N → Bool`): the adversary answers every Client and chooses every pair's
+  two sides after every issuance request; side `s` of pair `j` redeems Client `w j ^^ s`'s token
+  under §6's rule per pair (`outAt`). A hybrid over the pairs (`abs_sub_le_mul_of_worlds`), each
+  step `anonymityN_lean_numG` with the other pairs' Clients as further Clients (`AdversaryP.hop`, the tape
+  split `splitM`, `realGameP_iff`; the hop's guess rebuilds the other pairs' outcomes from their
+  Clients' redemptions with §6's rule on the commitments, `outAt_eq`). **`anonymityP_lean_num`**
+  `≤ N·εPairM`; in numbers `≤ N·(2N·2⁻¹⁰² + 8·(q₃ + q₅ + 221·q_E)·2⁻¹²⁸ + 2·εhide)`
+  (`anonymityP_lean_le`; `2⁻⁶³` for `2N ≤ 2²⁰` Clients, `2⁻³⁹` for `2N ≤ 2³²`:
+  `anonymityP_lean_2pow20`, `_2pow32`); `anonymityP_lean_num_perm`. Quadratic in the number of
+  Clients by an artifact of the tree-hiding hop (zk.md §10.8, "Is the quadratic term inherent?").
+- **With `N` challenge pairs, the other pairs on private tables** (`Privacy/MoussakaLin.lean`,
+  `Privacy/Split.lean`, `ZK/ReadsPointRO.lean`; zk.md §10.8, "Linear in `N`"). Each step of the
+  hybrid moves the further Clients (issuance and redemption) to a private `(H₅, cipher)` pair with
+  the interleaved lazy-sampling lemma `pr_split_le`, which allows their redemption statements to
+  be chosen after the challenge requests; the bad event is that a challenge proof and a further
+  proof read a common `H₅` key or cipher point in the split world (the proofs' point read sets,
+  `rdRO_cons`). The step is then the two-Client game of the reduction `A.redS idx c u`, whose
+  interaction reads only `H₂³` and whose guess has the adversary's own budget.
+  **`anonymityP_lin`**: if each step's bad event has probability `≤ β`, `≤ N·(εPair0M + 2β)`; in
+  numbers (`anonymityP_lin_le`) `≤ N·(2·2⁻¹⁰² + 2(N − 1)·2⁻¹²⁸ + 8·(q₃ + q₅ + 221·q_E)·2⁻¹²⁸ +
+  2·εhide + 2β)`; many Clients: `anonymityN_lin`. **`β` is bounded on paper only**: with `H₄` a
+  random oracle, `β ≲ 64(N − 1)·2⁻¹²⁸` (every proof draws a fresh root seed and `iv_pre`, whatever
+  statement the adversary chose), giving `≲ n·2⁻¹⁰² + 33·n²·2⁻¹²⁸` for `n = 2N` Clients (`2⁻⁸¹·⁴`
+  at `2²⁰`, `2⁻⁵⁹` at `2³²`); in the Lean games `H₄` is SHAKE and the two-Client bound is stated
+  for SHAKE only.

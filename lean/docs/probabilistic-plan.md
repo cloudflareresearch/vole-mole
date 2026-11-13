@@ -1,0 +1,1590 @@
+# Plan: mechanizing the classical probabilistic steps
+
+Status: **phase A (M1–M3) implemented** in `VoleMole/Prob/` (Mathlib only, no new dependency), with
+the deviations listed in §2a. **Phase B: M4 done, M5 done** in `VoleMole/ROM/` (VCVio), including
+the run of the executable verifier against the oracle (§2c); what remains is listed at the end of
+§2c. **M6: done for the soundness game with a fixed statement**: binding (`ε_bind`) in the
+ideal-cipher model, PRF view (§2d), its residual `ε_open` (§2e), and now the "same chain" step
+(`ε_chain`) and L2 (`ε_dead`) after correcting the L2 interface (§2f, finding F2): for all five
+relations, `Pr[accept ∧ ¬Extracted]` is bounded by an explicit function of the prover's query counts
+alone (`ROM/CipherFull.lean`, `*_accept_le_full`). **Adaptively chosen statements (§2g)**: for the
+five relations the prover may output the statement with its proof; the bound is the `_full` one
+plus the statement-binding term `(q₀+3)(q₂₁+q₀+4)·2⁻²⁵⁶` (`(q₀+3)(q₂₂+q₀+4)·2⁻²⁵⁶` for PomFRIT's
+delayed binding; `*_accept_le_adaptive`). **The permutation model with inverse queries (§2h)**: the
+same results with AES an ideal cipher as random permutations, the prover making forward and
+inverse queries and the extractor reading the forward-and-inverse records (`*_accept_le_perm`,
+`*_accept_le_adaptive_perm`, all five relations), with `p = 1/(2¹²⁸ − q_E)` per fresh cipher value
+in place of `2⁻¹²⁸` and a point-tied Post (finding F3); no PRP/PRF switching term. **The spec
+relations (§2i)**: every one of these bounds also holds for the decoded witness and the byte-level
+spec relation, for well-formed instances (`ROM/SpecSound.lean`, `*_spec`). **The unbound Moussaka
+relations (§2j)**: all of the above for any statement with the unbound relations' parameters and
+systems (`ROM/MoussakaUnbound*.lean`). Scope: the classical
+(ROM + ideal cipher) proof of knowledge of `docs/extraction/README.md`. Zero knowledge (mechanized
+separately, `ZK/` and `Privacy/`, `docs/zk.md` §10) and the QROM documents (Q1–Q7) are out of
+scope here.
+
+## 0. Where we stand
+
+The deterministic cores are in Lean. Each per-relation theorem `*_extract_chain`
+(`Verifier/Bridge/ChainRelations.lean`) still takes these hypotheses:
+
+| Hypothesis | Lemma | Existing Lean count | Missing probability statement |
+|---|---|---|---|
+| `hkos : KOSGood ch.kosCh S (lift T) (ch.kosQ …) (ch.kosD …)` | L3 | `Seed.card_not_kosGood_le` (`#bad ≤ \|S\|³(\|F\|⁴\|T\| + (L−1)⁵\|F\|⁴)` over `Ch F T`) | uniform `chal1` (136 bytes) ⇒ `Pr[¬KOSGood] ≤ ε_KOS`; then a union over `q₁` H₂¹ queries (RO) |
+| `hQS` | L4 | `EndToEnd.card_qs_bad_le`, `Seed.zkHash_prob_le` (over `chalSpace S`) | uniform `chal2` (56 bytes) ⇒ `Pr[bad] ≤ ε_QS(n)` for the **canonical** slope (§M2); union over `q₂` (RO) |
+| `hcomb` (3 combined relations) | L4 | `*_comb_bad`, `*_comb_bad_gf128`, `SeedExtraction.combination_prob` | `l` uniform and independent of `chal2` ⇒ `Pr ≤ 1/\|F\|`; RO freshness of `chal2 ‖ dst` (`q_c·2⁻⁴⁴⁸`) |
+| `hδ : Set.InjOn δ Z` | L1 (bookkeeping) | none | **deterministic**: `chal3` with zero grinding bits ↦ `blocksOf (deltaBit ·)` is injective |
+| `hclaim1` | L1 | `onChain_of_accept` (given `hrun`) | binding of leaf commitments (ideal cipher, C1–C3) and the RO "same chain" step |
+| `hL2 : ∀ i ∉ known, IsFixed A i` | L2 | `isFixed_hideSet` with `A = hideSet` | done (§2f): `A` the challenges on the chain hiding the committed dead leaves; L2(c) and L2(a) in `ROM/CipherSame.lean` |
+| final step: "at most `max(d,1)` accepted ⇒ accepted with prob. ≤ `max(d,1)·2⁻¹²⁸`" | assembly step 4 | the `#{x ∈ Z \| acc x} ≤ max d 1` conclusion | uniform `chal3` ⇒ per query; union over `Q` H₂³ queries (RO) |
+
+So three kinds of work remain:
+- **(a) Single-sample statements.** A uniform challenge drawn independently of fixed data, turned
+  from a count into a probability. These need no oracle model. They are almost free given the
+  `*_card` lemmas, apart from byte decoding.
+- **(b) Random-oracle bookkeeping.** "A fresh RO answer is uniform and independent of the view."
+  A union bound over the `q₁`, `q₂`, `Q` queries. Freshness of `chal2 ‖ dst`. The "same chain" step:
+  an accepted proof's H₂ inputs occur in the log, otherwise guessing costs `2⁻ᵏ`.
+- **(c) Ideal-cipher arguments** (L1/L2: C1–C3, `ε_bind`, `ε_dead`). These are the biggest and the
+  least reusable.
+
+## 1. Framework
+
+**Options.**
+- **VCVio** (github.com/dtumad/VCV-io, Apache-2.0, very active). `OracleComp`, `ProbComp`,
+  `SampleableType` / `$ᵗ`, `simulateQ`, a lazy random oracle `OracleSpec.randomOracle`
+  (`QueryTracking/RandomOracle/{Basic,Eager,DeferredSampling,FreshQuery,Programming}.lean`), the
+  query bounds `IsQueryBound` / `IsPerIndexQueryBound` / `IsTotalQueryBound`
+  (`QueryTracking/QueryBound/Basic.lean`), birthday/collision bounds (`QueryTracking/Birthday.lean`,
+  `Collision.lean`, `Unpredictability.lean`), a forking lemma, Fiat–Shamir for Σ-protocols, and a
+  pRHL-style program logic. The core has no `sorry`; about 11 remain in the lattice/signature
+  examples. Paper: ePrint 2024/1819, which describes the older PMF API.
+  - **Caveat:** PR #710 (Sep 2026) made `evalDist` `Measure`-valued (`𝒟[mx]`, `Pr{let x ← mx}[p x]`
+    = `prEvent`). `probOutput` and `Pr[= x | oa]` are gone. Expect API churn on each bump.
+- **Mathlib only** (`PMF.uniformOfFintype`, `PMF.bind/map`, `PMF.toOuterMeasure`,
+  `ProbabilityTheory.uniformOn`). No new dependency. Enough for (a). For (b) we would hand-roll
+  oracle computations, lazy sampling and query logs, which means re-doing what VCVio already has.
+- **EasyCrypt** is the most mature tool for pRHL/ROM game hopping, but it is a separate tool: the
+  proofs could not reuse our Lean cores or the verifier model. **SSProve** (Rocq) and **CryptHOL**
+  (Isabelle; VCVio's conceptual ancestor) are mentioned only for comparison. No competing Lean
+  framework exists. ArkLib (Verified-zkEVM) builds on VCVio and is worth watching for IOP / FS
+  round-by-round soundness.
+
+**Version compatibility, concretely.**
+- **Ours:** toolchain `v4.34.0-rc1`, Mathlib tag `v4.34.0-rc1` = `de5ce8a9` (2026-08-11). (Since
+  M4: `v4.34.0`, Mathlib `5ed29652`, VCVio `afa6593f`; §2b.)
+- **VCVio `main`** (`afa6593f`, 2026-10-11) and tag `v4.34.0` (2026-09-17): toolchain `v4.34.0`,
+  Mathlib `v4.34.0` = `5ed29652` (2026-09-15). VCVio tracks only stable tags and has never built
+  against `-rc1`.
+- **So yes, adding it forces a bump:** `v4.34.0-rc1 → v4.34.0`. That is one step within the same
+  series, about 5 weeks of Mathlib, with `rc2` in between. Keeping rc1 as the root pin would make
+  VCVio fail to compile. Using VCVio `v4.33.1` would mean downgrading and an older (pre-#710) API.
+- **New transitive dependencies:** PolyFun, cslib (only for the optional `VCVioCslib` lib), Cli. The
+  VCVio core is about 400 files / 100k lines to build. Check `lake exe cache get` coverage for
+  VCVio itself; it has no Mathlib-style cache, so its first build is local.
+- **Expected breakage from the bump** is small to moderate. rc1 → stable changes are usually
+  renames and simp-set changes. The risky spots are `decide +kernel` proofs and the
+  heavy-computation files (`Arith/GFField.lean`, `CrtSearch`, `Keygen`). Do it as a separate
+  commit, under the OOM rules (one worker, `MemoryMax`).
+- These version facts were read from GitHub on 2026-10-14. No build was attempted.
+
+**Recommendation: VCVio, introduced in two phases.**
+- **Phase A (M1–M3), Mathlib only, no bump.** Phrase every single-sample statement over Mathlib
+  `PMF.uniformOfFintype`, which is what VCVio's `SampleableType` is specified against
+  (`𝒟[$ᵗ β] = uniformOn univ`). The phase-A lemmas then transfer unchanged.
+- **Phase B (M4+).** Bump to Mathlib `v4.34.0` and `require VCVio` at tag `v4.34.0` (or a pinned
+  `main` rev), in a new lib `VoleMole/ROM/` so that the rest of the library doesn't import it. Use
+  VCVio's lazy RO, query bounds and logging oracles for the union bounds and freshness.
+- **Why not hand-roll:** the query-bound and lazy-sampling infrastructure is exactly the error-prone
+  part, and VCVio has it, proved.
+- **Why not EasyCrypt:** the end goal is one Lean theorem over the executable verifier.
+
+## 2. Milestones
+
+Effort is in agent-days of focused work, assuming the current proof style.
+
+### M1 — Probability layer and byte decoding (Phase A, ~2–3 days) — done
+
+New file `VoleMole/Prob/Uniform.lean`:
+```lean
+/-- Probability of `P` under the uniform distribution on a finite type. -/
+noncomputable def prU (α) [Fintype α] [Nonempty α] (P : α → Prop) : ℝ≥0∞ :=
+  (PMF.uniformOfFintype α).toOuterMeasure {x | P x}
+theorem prU_eq_card [DecidablePred P] : prU α P = #{x | P x} / Fintype.card α
+theorem prU_le_of_card_le (h : #{x | P x} ≤ N) : prU α P ≤ N / Fintype.card α
+theorem prU_or_le : prU α (fun x => P x ∨ R x) ≤ prU α P + prU α R
+theorem prU_map_equiv (e : α ≃ β) : prU β P = prU α (P ∘ e)
+theorem prU_prod_le (h : ∀ b, prU α (fun a => P (a, b)) ≤ ε) : prU (α × β) P ≤ ε
+```
+Byte models (`ByteArray` is not a `Fintype`): `Bytes n := Fin n → UInt8` with `toBA : Bytes n →
+ByteArray`. Decoding equivalences:
+- `gf128OfBytesEquiv : Bytes 16 ≃ GF128` (`gfOfBytes`, i.e. `W128.ofBytes … |>.toGF`);
+- `chal1Equiv : Bytes 136 ≃ Seed.Ch GF128 shortKeys`, with `(chOf gfId mem_shortKeys (toBA b))`
+  as its forward map (8 field elements plus the low 64 bits of word 128);
+- `chal2Equiv : Bytes 56 ≃ GF128 × GF128 × GF128 × shortKeys`, matching the arguments that
+  `*_extract_chain` passes to `zkCoeff` (`gfOfBytes (chal2) 0/16/32`, `⟨W128.word chal2 48, 0⟩`), as
+  an element of `chalSpace shortKeys`;
+- `card_shortKeys : #shortKeys = 2^64` (proved by injectivity, not by `decide`).
+
+### M2 — First target: single-challenge bounds for L3 and L4 (Phase A, ~4–6 days) — done
+
+These have the best value per effort. They turn the existing `*_card` lemmas into the exact
+probability statements the hypotheses need, at the executable verifier's challenge encoding.
+
+**L3 (`hkos`).** One prerequisite step: `kosQ`/`kosD` must not depend on `chal1`. `Chain.resp` is
+built from `proof`, `keys` and `iv` only, but the statement must say so. Add
+`Chain.withChal1 (ch) (c : ByteArray)` (replaces the field) and the `rfl` lemmas
+`kosQ_withChal1 : (ch.withChal1 c).kosQ st T = ch.kosQ st T` (and the same for `kosD`).
+```lean
+theorem prU_not_kosGood (T' : Finset F) (S : Finset X) (he : Set.InjOn e S) (Q D) :
+    prU (Seed.Ch F T') (fun c => ¬ KOSGood c S e Q D) ≤
+      (#S^3 * (card F^4 * #T' + (L-1)^5 * card F^4) : ℝ≥0∞) / (card F^8 * #T')
+-- at the executable encoding, all five relations:
+theorem chain_kos_bad_le (st) (ch : Chain) (S : Finset Blocks) :
+    prU (Bytes 136) (fun b => ¬ KOSGood (ch.withChal1 (toBA b)).kosCh S (lift CrtGen.tables)
+        (ch.kosQ st CrtGen.tables) (ch.kosD st CrtGen.tables)) ≤ epsKOS #S (kosL st)
+theorem epsKOS_num : #S ≤ 2^120 → kosL st ≤ 2^13 → epsKOS … ≤ 2^(-150)   -- the Lean |S|³ is 6× looser than C(|S|,3)
+```
+
+**L4 (`hQS`, `hcomb`): the canonical slope first.** The hypotheses quantify over every `A` with
+`|A| ≥ 2` and every slope `uStar` on `A`, and `A` depends on `chal2` (`OnChain` includes the `z`
+check). L4 §5 resolves this, and we mechanize it deterministically:
+```lean
+/-- A_V: the challenges in S on which the VOLE check passes with the chain's h_V (no chal2). -/
+def Chain.AV (st ch T S) : Finset Blocks
+noncomputable def Chain.uCanon : Fin st.params.witnessBits → GF128  -- slope on A_V if |A_V| ≥ 2, else 0
+theorem slope_eq_uCanon (hkos : KOSGood …) (hA : ∀ Δ ∈ A, ch.OnChain st T Δ) (hAS : A ⊆ S)
+    (h2 : 2 ≤ #A) (hs : ∀ j, ∃ v, ∀ Δ ∈ A, ch.Qw st T j Δ = v + uStar j * lift T Δ) :
+    uStar = ch.uCanon st T S
+```
+(Uses `lift_injective`; on `A_V ⊇ A` the line is unique.) Then `hQS`/`hcomb` in `*_extract_chain`
+follow from a single event about `w* = uCanon + d`, which is fixed before `chal2`.
+
+**L4: the probability.** Make `chal2` an argument (`Chain.withChal2` / a `chal2` field with the
+SHAKE equation as a hypothesis in `onChain_of_accept`; see Risks). Then:
+```lean
+-- issue relations (no l):
+theorem chain_qs_bad_le (cs : System GF128) (w : ℕ → GF128) :
+    prU (Bytes 56) (fun b => ¬cs.Holds w ∧ zkHash cs.length (chal2Equiv b).… (valVec cs w) = 0)
+      ≤ ENNReal.ofReal (epsQS (2^128) (2^64) cs.length)
+-- combined relations: over (chal2, l) independent, systems parametrised by l
+theorem pomfrit_qs_comb_bad_le (w) :
+    prU (Bytes 56 × (Fin 45 → GF128)) (fun (b, l) =>
+      (¬(pomfritRedeemSystem … l).Holds w ∧ zkHash … = 0) ∨
+      ((pomfritRedeemSystem … l).Holds w ∧ ¬pomfritWit … w))
+      ≤ ENNReal.ofReal (epsQS (2^128) (2^64) n) + 2^(-128)
+```
+(Built from `card_qs_bad_le` per fixed `l` + `prU_prod_le`, and `*_comb_bad_gf128` + `prU_or_le`.)
+The step "the `l` the verifier computes as `SHAKE(chal2 ‖ dst)` is uniform and independent of
+`chal2`" is RO (M5). In M2 it is a hypothesis-free statement over the product space, which is what
+the L4 paper proof also does.
+
+**L1 bookkeeping (`hδ`), deterministic, ~1 day.** Take `Z := {x : Bytes 16 | grinding bits zero}`,
+`δ x := blocksOf (BAVC.deltaBit (toBA x))`. Prove `Set.InjOn δ Z`, `#Z = 2^120`, so that the final
+step is `prU (Bytes 16) acc ≤ max(d,1)/2^128` from `#{x ∈ Z | acc x} ≤ max d 1`.
+
+### M3 — Per-chain conditional theorem (Phase A, ~3–4 days) — done
+
+For a fixed chain *prefix* (everything before `chal1`, then everything between `chal1` and `chal2`
+as a function of `chal1`), sample `chal1`, `chal2`, `l` uniformly and conclude, with `hL2` and
+`hclaim1` still hypotheses (functions of the samples):
+```lean
+theorem pomfritRedeem_chain_prob (pre : ChainPrefix) (next : Bytes 136 → ChainMid) … :
+    prU (Bytes 136 × Bytes 56 × (Fin 45 → GF128)) (fun ω =>
+      hL2 ω ∧ hclaim1 ω ∧ ¬(extracts ω ∨ #{x ∈ Z | acc ω x} ≤ 2))
+    ≤ epsKOS … + epsQS … + 2^(-128)
+```
+This is the classical "one chain, independent challenges" form of L3 + L4 + L6, which is exactly
+the FAEST spec's per-round knowledge-soundness bound. It is a self-contained deliverable before
+any RO model exists.
+
+### 2a. Phase A as implemented, and deviations from the sketches above
+
+Files: `Prob/Uniform.lean` (M1), `Prob/Bytes.lean` (M1, and `hδ` of M2), `Prob/Challenges.lean`
+(M2), `Prob/ChainRelations.lean` (M3). `#print axioms` of the main results: `propext`,
+`Classical.choice`, `Quot.sound`.
+
+- **The chain refactor** (risk §3). `Chain` got two fields instead of `chal2` and `l`: `chal2`, and
+  `vals : (ℕ → GF128) → List GF128`, the constraint evaluator of the QuickSilver check (used by
+  `Chain.check`). For the executable verifier `vals = st.values chal1 chal2`, which reads
+  `l = H(chal2 ‖ dst)` internally; `onChain_of_accept` takes `hc2 : chal2 = Verifier.chal2 …` and
+  `hvals : vals = st.values chal1 chal2`. `chain_claim4` takes one system `cs` with
+  `vals = cs.values`. `Bridge/Relations.lean` gained `moussakaRedeemSysL`, `ratatouilleSpendSysL`,
+  `pomfritRedeemSysL` (the system at a free `l`; the old `*Sys … chal2` are these at
+  `ofArr (combinationArr …)`, by definition), and the combined relations' `*_extract_chain` take
+  `l` and `hvals : ∀ x, ch.vals x = (*SysL … l).values x`; PomFRIT's also takes the `c1` its
+  target is computed from. The executable verifier and the KAT runners are untouched.
+- **No `ChainPrefix`/`ChainMid` structures.** `proof` is one byte string holding data from all three
+  rounds, so the per-chain theorem takes a chain family `ch : Bytes 136 × Bytes 56 × Λ → Chain`
+  with hypotheses saying what it may depend on: `Chain.SamePrefix st pre (mid b₁)` (keys, `c_i`,
+  `c_mult`, `iv_pre` fixed), `Chain.SameMid st (mid ω.1) (ch ω)` (`chal1`, `ũ`, `d`, `h_V` functions
+  of `b₁`), `(mid b₁).chal1 = b₁`, `(ch ω).chal2 = b₂`, and `hvals` at `(b₁, l)`. `Chain.withChal1`
+  and its `rfl` lemmas exist (`chain_kos_bad_le`) but M3 does not need them.
+- **`chal2Equiv`** has codomain `Chal2 = GF128 × GF128 × GF128 × shortKeys` (a subtype); the count
+  is transported to `chalSpace shortKeys` inside `prU_qs_bad_le`. All decodings are proved
+  bijective by injectivity (`word_byte`: the words at offsets `0, 8, …` determine the bytes) and a
+  cardinality count; nothing of size `≥ 2⁶⁴` is enumerated.
+- **`epsKOS`** is an `ℝ≥0∞` ratio of naturals; `epsKOS_le` needs
+  `set_option exponentiation.threshold 1100` (Lean refuses to evaluate `2^n` for `n > 256` by
+  default). `ε_QS` stays real (`ENNReal.ofReal`), with `epsQS_le : ε_QS(n) ≤ 2⁻¹²⁷` for `n ≤ 2³²`.
+- **The canonical slope.** `uCanon` is "a slope on `A_V` if one exists, else `0`" (no case on
+  `|A_V| ≥ 2`: uniqueness is only needed on `A`). `slope_eq_uCanon` takes `A ⊆ A_V` (with
+  `mem_AV_of_onChain`) instead of `OnChain`; `forall_slope_of_uCanon` turns a property of `uCanon`
+  into `hQS`/`hcomb`'s quantified form.
+- **L4 names.** `prU_qs_bad_le` (one system, uniform `chal2`), `prU_comb_bad_le` (uniform `l`,
+  from a `*_comb_bad_gf128` count), `prU_qs_comb_bad_le` (both, independent, generic in the type of
+  `l`) instead of one lemma per relation.
+- **`hδ`.** `Z = admissible` (byte 15, the grinding bits, zero: what `check_format` accepts),
+  `δ = deltaBlocks = blocksOf ∘ deltaBit`, and the KOS set is `S = deltaBlocks '' admissible`
+  (`|S| ≤ 2¹²⁰`).
+- **M3's statement.** `chain_prob` is generic: a deterministic theorem `hdet` of the shape of
+  `*_extract_chain` is an argument, and each `*_chain_prob` instantiates it. The event is
+  `ChainHyps A known acc ∧ ¬(extraction ∨ #{x ∈ admissible | acc x} ≤ max(d, 1))` with
+  `A = onSet = {Δ ∈ S | OnChain}` and `ChainHyps` = L2 ∧ `hclaim1`. Bound:
+  `2⁻¹⁵⁰ + ε_QS(n) + 2⁻¹²⁸`. The issue relations have no `l`: they are stated over
+  `Bytes 136 × Bytes 56`, bound `2⁻¹⁵⁰ + ε_QS(n)`. The "same chain" binding is in `hclaim1`;
+  hypotheses on statement data that the `*_comb_bad` counts need (`anchors.length ≤ 64`,
+  `d < 2⁶⁴`) are hypotheses of the corresponding theorems.
+
+What phase A does not give, and phase B has to: that the executable verifier's `chal1`, `chal2`
+are fresh uniform RO answers on the chain and `l = H(chal2 ‖ dst)` is uniform and independent of
+`chal2` (the M3 statement is over independent samples); the union over queries; L2; `hclaim1`.
+
+### 2b. Phase B as implemented (M4, M5), and deviations
+
+Files: `ROM/Basic.lean` (M4), `ROM/UnionBound.lean`, `ROM/Fresh.lean`, `ROM/Chains.lean`,
+`ROM/Comb.lean` (M5); `Prob/Bytes.lean` gained `combEquiv`. Only `ROM/` imports VCVio.
+`#print axioms` of the main results: `propext`, `Classical.choice`, `Quot.sound`.
+
+- **The bump** (separate commit): `lean-toolchain`, `lakefile.toml`, `lake-manifest.json` to
+  `v4.34.0` (Mathlib `5ed29652`, the rev VCVio pins), and three fixes: `Arith/GFField.lean`
+  (`irreducible_modulus`: `simpa [hcard]` evaluated `2 ^ 64`, after which the kernel unfolded
+  `X ^ 2 ^ 64` until deep recursion; now `rw`), `Protocols/UOVAssumptions.lean`
+  (`Finset.prod_le_one` is now the ordered-monoid lemma; `prod_le_one₀`), `Seed/CipherSim.lean`
+  (`gcongr` now closes a side goal). No `decide +kernel` proof or heavy computation broke.
+- **VCVio** is pinned to `main` at `afa6593f` (2026-10-11, unchanged since the plan was written),
+  not to the tag `v4.34.0`. New packages: VCVio, PolyFun, cslib. Building what `ROM/` imports takes
+  about 120 modules and 2 minutes (2 threads, under 7 GB). The executables now link VCVio's empty
+  native-backend stubs; all runners pass unchanged.
+- **The oracle specification** is `OracleSpec.ofFn Ans` over `Dom = Kind × ByteArray`, with
+  `Ans (k, x) = Bytes k.outLen`: every domain answers bytes, and `l` is decoded by
+  `combEquiv M : Bytes (16·M) ≃ (Fin M → GF128)` (as `combinationOf` decodes it), so the range is
+  not `Fin 45 → GF128`. `comb M` is indexed by the number of combined equations; `H₁`'s three
+  shapes are one kind. The "domain separation ⇒ independent oracles" lemma was not done in M5; it
+  is now (§2c).
+- **The bridge** is `SampleableType.prEvent_uniformSample` (an event of `$ᵗ α` is a count) against
+  `prU_eq_card`, not `evalDist_selectElem_eq_uniform` and `PMF.toMeasure`.
+- **The union bound exists in VCVio**: `prEvent_randomOracle_le_of_bad_queries[_weighted]`
+  (`QueryTracking/RandomOracle/FreshQuery.lean`). It is stronger than the sketch: the bad predicate
+  `bad t g` may read the whole answer table (eager sampling), provided resampling the cell `t` alone
+  bounds it for every background table, and the event is tied to bad queries by a deterministic
+  implication over complete tables (`htrace`, with `evalWithAnswerFn`, `tableQueryLog`) instead of a
+  logged run. We add per-domain counts (`IsKindQueryBound`, turned into VCVio's weighted budget)
+  and state it as `prEvent_exists_bad_query_le`.
+- **"Parse a prefix from `x`"** became chain data that are functions of the query input and the
+  table, with the hypothesis that they do not read the query's own cell (`ChainData.Committed`; for
+  `H₂²` of the combined relations, no combination cell either, `CombData.Committed`). This is the
+  sketch's "committed keys are a function of the prior log", in the all-table form.
+- **Freshness of `chal2 ‖ dst`** is not from the `Unpredictability`/birthday lemmas. For the combined
+  relations the `H₂²` bad event reads the cell `chal2 ‖ dst`, chosen by the answer, so no single-cell
+  bound holds. `ROM/Fresh.lean` re-proves VCVio's theorem with the bound averaged over the uncached
+  cells of a cache of fewer than `n` keys (`prEvent_randomOracle_le_of_fresh_bad_queries`), and
+  `prEvent_completeTable_le_two_cells` exposes `chal2` and then `l`. The freshness term is
+  `n·2⁻⁴⁴⁸` per `H₂²` query, with `n` the total query count, instead of `q_c·2⁻⁴⁴⁸` (`n ≥ q_c`).
+- **`ε_bind`, `ε_dead`** are named hypotheses on events of the game's output (`bindFail`,
+  `deadFail`, `Pr ≤ ε`), split off by the union bound.
+- **The theorems** (`prEvent_le_chain_terms`, `prEvent_le_comb_terms`, and numerically
+  `moussakaIssue_prEvent_le`, `ratatouilleIssue_prEvent_le`, `moussakaRedeem_prEvent_le`,
+  `ratatouilleSpend_prEvent_le`, `pomfritRedeem_prEvent_le`):
+  `Pr[event] ≤ q₁·2⁻¹⁵⁰ + q₂·(ε_QS(n') [+ 2⁻¹²⁸ + n·2⁻⁴⁴⁸]) + Q·N·2⁻¹²⁸ + ε_bind + ε_dead`, with
+  `N = max(d, 1)` as in M3 (9, or 2 for PomFRIT). The deterministic per-chain part of `htrace` is
+  proved (`chain_good_of_not_bad`, `comb_good_of_not_bad`, instantiated for Moussaka and
+  Ratatouille issuance and PomFRIT): a chain whose `H₂¹` and `H₂²` queries are not bad extracts or
+  has at most `N` accepted `chal3`, and then an accepted `H₂³` answer is a bad query
+  (`chainBad_h23_of_accept`).
+
+Not done in M5 as first implemented, and done since (§2c): the hash-record refactor, the run of the
+executable verifier against the oracle (the event concrete, `htrace` proved), `*_good_of_not_bad`
+for Moussaka redemption and Ratatouille spend, and "domain separation ⇒ independent oracles".
+
+### 2c. The executable verifier against the oracle (M5, continued), and deviations
+
+Files: `Verifier/Hashes.lean` (the hash record), `ROM/Verifier.lean`, `ROM/Accept.lean`,
+`ROM/DomainSep.lean`, `ROM/SingleOracle.lean`; the verifier, the KAT runners and the bridge files
+changed as below. `#print axioms` of the main results: `propext`, `Classical.choice`,
+`Quot.sound`.
+
+- **The hash record** (`Verifier/Hashes.lean`). `Kind` and `Kind.outLen` moved here from
+  `ROM/Basic.lean` (re-exported there). `Hashes` is one structure with one field
+  `hash : Kind → ByteArray → ByteArray` (a function per L0 domain, indexed by `Kind` rather than
+  one named field per domain, so that `Hashes.ofTable g := ⟨fun k x => (g (k, x)).ba⟩` is one
+  line); the argument is the whole SHAKE input, domain byte included. `Hashes.shake` is SHAKE128
+  in every domain. The steps take `Hs`: `mu Hs`, `ivOf Hs`, `chal1 Hs`, `chal2 Hs`, `chal3 Hs`,
+  `crtReconstruct Hs`; the lower-level `BAVC.check h1`, `gateHashes h5`, `crtReconstructAt h5`
+  take the one function they use (so a chain's response depends only on `H₅`). The inputs are
+  separate definitions (`chal1Input`, `chal2Input`, `chal3Input`, `BAVC.leafHashInputs`,
+  `BAVC.comInput`, `gateInputs`), and `crtReconstructWith` takes the gate hashes, so that the
+  oracle version can query them. `verify Hs T st proof`; the runners use `Hashes.shake` and are
+  unchanged (18 accepted / 51 rejected on both layouts, `spec_kats`, `arith_vectors`; the
+  `@[csimp]` fast paths untouched).
+- **The combination is hashed by the verifier.** `Statement` has a field `comb : Option (ℕ ×
+  ByteArray)` (`M` and the combine DST) and `values chal1 lb` now takes the combination *bytes*
+  `lb = H_comb(chal2 ‖ dst)` (`Statement.combBytes`) instead of `chal2`; `combinationArr` became
+  `combinationOf n lb` (decoding only). Otherwise the verifier's queries would be hidden inside
+  `values`. `Bridge/Relations.lean`'s `*Sys` take `lb` (`ofArr_combinationOf`).
+- **Hashes outside L0 stay SHAKE**: the UOV key digests and expansion (computed by `UovPk` before
+  verification), PomFRIT's `hash_to_target` (part of the statement, `instEnc`/`values`) and the
+  refresher commitment (`pomfritVerify`). They are application-level hashes (L0 §2.5).
+- **Chain**: `iv` and the gate hash `h5` are fields (were `Chain.iv`, computed with SHAKE), with
+  `iv = ivOf Hs …`, `h5 = Hs.hash .h5` hypotheses of `onChain_of_accept` (generic in `Hs`);
+  `Chain.SamePrefix` compares `iv`, `h5` instead of `iv_pre`. `Transcript` has an `iv` field.
+- **The verifier as an oracle computation** (`ROM/Verifier.lean`): `verifyQ` makes the verifier's
+  queries in order (`mu₁`, `iv`, 17 leaf hashes, `com`, `chal1`, 312 gate hashes, PomFRIT's `mu`,
+  `chal2`, the combination, `chal3`); against a complete table it is `verify (Hashes.ofTable g)`
+  (`evalWithAnswerFn_verifyQ`), its accepted `H₂¹`, `H₂²`, `H₂³` queries are in its log at the
+  run's inputs (`inLog_verifyQ`, `runX`, `runY`, `runZ`, `runChain`), and it makes at most one
+  query to each of them, 337 in total (`isKindQueryBound_verifyQ`, `isTotalQueryBound_verifyQ`).
+  `game T st oa`: the prover, then `verifyQ` on its proof.
+- **The extractor's data are part of the prover's output** (`ExtData β`: the committed leaf keys it
+  recovered, the known trees, and an arbitrary `aux`, e.g. a log for the failure events to read).
+  The ideal cipher is not modelled, so the keys cannot be computed from the oracle log: the
+  statement holds for any key recovery, whose quality enters only through the assumptions below
+  (read `oa` as the prover together with the straight-line extractor).
+- **The event** is `accept ∧ ¬Extracted`, with `Extracted` the candidate of `*_extract_chain`
+  computed from the extractor's keys, the proof and the verifier's `iv` (and `chal1` for PomFRIT's
+  target). `htrace` is proved (`chainBad_of_accept`, `combBad_of_accept`): the accepted proof is on
+  its run's chain at its `Δ` (`onChain_of_accept`, from binding), `*_good_of_not_bad` gives
+  extraction or few accepted `chal3`, and then the verifier's own `H₂³` query is bad.
+- **What remains assumed**, explicitly:
+  - binding (L1, `ε_bind`): a bound on the concrete output event `bindFail` (accepted, and the
+    opening's leaves at the verifier's `iv` differ from the extractor's keys at a non-hidden leaf);
+  - the "same chain" step (`hsame`, outside an output event `chainFail` with `Pr ≤ ε_chain`, a new
+    term): `SameChain`, i.e. the data `C` commits at the verifier's own `H₂¹`/`H₂²`/`H₂³` inputs are
+    the accepted proof's chain (`pre`, `mid`), and the `chal3` accepted at the `H₂³` input are those
+    on the chain (`acc`; this is where `hclaim1` went). With complete tables over an infinite domain
+    the identification of the earlier queries by their answers can only be made through the log,
+    so it is not derivable inside VCVio's all-table formulation;
+  - L2 (`hL2`, outside `chainFail` and an output event `deadFail` with `Pr ≤ ε_dead`).
+- **The bounds** (`prEvent_accept_le_chain_terms`, `prEvent_accept_le_comb_terms`;
+  `moussakaIssue_accept_le`, `ratatouilleIssue_accept_le`, `moussakaRedeem_accept_le`,
+  `ratatouilleSpend_accept_le`, `pomfritRedeem_accept_le`): as in §2b with the verifier's queries
+  added, `(q₁+1)·2⁻¹⁵⁰ + (q₂+1)·(ε_QS(n') [+ 2⁻¹²⁸ + (n+337)·2⁻⁴⁴⁸]) + (Q+1)·N·2⁻¹²⁸ + ε_bind +
+  ε_dead + ε_chain`, `q` and `n` the prover's counts.
+- **Domain separation ⇒ independent oracles** (`ROM/DomainSep.lean`, not via the plan's
+  "restriction of one lazy RO"): one random oracle on byte strings `spec₁ κ`, answering `x` with
+  `(κ x).outLen` bytes for a domain rule `κ`; `route κ` asks `(k, x)` at `x`. If every query of
+  `oa` satisfies `κ x = k`, both lazy oracles give every event the same probability
+  (`prEvent_route_eq`: finite restriction, eager tables, and the bijection `(k, x) ↦ x` between
+  the uniform tables). Every single-oracle adversary is such a computation (`unroute`,
+  `prEvent_unroute_eq`, with its per-domain counts, `isKindQueryBound_unroute`). VCVio's
+  `Routing.lean` has the non-dependent finite version only. `ROM/SingleOracle.lean`: L0's rule
+  `l0Kind` (the final byte), the verifier's queries respect it (`allQueriesSatisfy_verifyQ`, for
+  statements whose combination is 45 equations with a DST ending in `'0'`: all five), and the game
+  against one SHAKE oracle `game₁` has the per-domain game's probabilities (`prEvent_game₁_eq`), so
+  the bounds above hold for single-oracle provers. Remaining modelling: SHAKE128 as a random oracle
+  with a fixed output length per input.
+- **`*_good_of_not_bad`** for Moussaka redemption and Ratatouille spend (`ROM/Comb.lean`), as
+  PomFRIT's.
+- **The statement-binding term `(q²+q)·2⁻²⁵⁶`** (L4 (H-stmt)): not done here, done in §2g for all
+  five relations. VCVio's birthday lemmas (`prEvent_cacheCollision_le_birthday*`,
+  `QueryTracking/Birthday.lean`) bound a collision anywhere in a `cachingOracle` cache with one
+  range size (the smallest; here `H₅`'s 4 bytes), not a collision among `H₂⁰` answers, and the
+  event ("μ's preimage was queried before `y`") is again an ordering fact about the log; §2g
+  charges both to the `H₂⁰` queries, as the chain hits of §2f.
+
+Still open after §2c: the "same chain" step (`hsame`, `ε_chain`), L2 (`ε_dead`) and binding
+(`ε_bind`) as named assumptions (M6: ideal cipher, query ordering), and the statement-binding
+term. §2d replaces `ε_bind` by an explicit term and a smaller residual.
+
+### 2d. M6, first part: binding in the ideal-cipher model, as implemented
+
+Files: `ROM/FreshCache.lean`, `ROM/CipherBind.lean`, `ROM/CipherGame.lean`; and the ROM layer made
+cipher-generic: `variable [HasPrg]` in `Verifier/Bridge/ChainRelations.lean`,
+`Prob/Challenges.lean`, `Prob/ChainRelations.lean`, `ROM/Chains.lean`, `ROM/Comb.lean`,
+`ROM/Verifier.lean`, `ROM/Accept.lean`, `ROM/SingleOracle.lean` (proofs unchanged; `omit` where a
+lemma does not use the PRG). So every bound of §2b/§2c holds for every CTR PRG, in particular for
+`icPrg E` (the CTR PRG of a cipher table `E`, `ZK/HopsH4.lean`), and at `aesPrg` it is the
+statement as before. No executable definition changed. `#print axioms` of the main results:
+`propext`, `Classical.choice`, `Quot.sound`.
+
+- **The model: PRF view, forward queries.** The cipher is a random oracle on cells
+  `(k, z) ↦ E_k(z)` (`cspec`, `CTable = Blk × Blk → Blk`), every row a uniform function, as on
+  the ZK side (`ZK/IdealCipher.lean`, `icPrg E`). The prover queries cells; the verifier and the
+  extractor *read* the table (the verifier through `icPrg E.cipher`), so their evaluations are not
+  counted. A lazy random permutation per key with inverse queries (the plan's sketch) was not
+  built: VCVio has none, and the cache-based argument below would have to be redone for a lazy
+  permutation. **PRP/PRF:** the switching lemma costs `q_E²/2¹²⁹`, much more than the bound below,
+  so it is not the route; in the permutation model the same argument runs with `2⁻¹²⁸` per fresh
+  answer replaced by `p = 1/(2¹²⁸ − q_E)` (a fresh forward or inverse answer is uniform over at
+  least `2¹²⁸ − q_E` values; L0-L2 §3.1), giving `2·q_E²·p²`. That version, with inverse
+  queries, is §2h (eager uniform permutations, no lazy permutation oracle needed).
+- **The union bound with a cache-reading bad event** (`ROM/FreshCache.lean`). VCVio's
+  `freshBadQuery` tests a fresh query with a predicate of the table only; a collision bound needs
+  to know which cells were queried before. `freshBadC oa c g bad`: some log entry, at a cell not in
+  the cache `c` nor earlier in the log, is bad for the cache of the earlier log
+  (`cacheOfLog c pre`). `prEvent_freshBadC_le_of_cached` (VCVio's proof with the cache passed
+  along): if a fresh query is bad with probability `≤ ε` over the uncached cells for every cache of
+  fewer than `N` cells, an `n`-query computation meets one with probability `≤ n·ε`
+  (`prEvent_le_of_freshBadC`, eager form, finite key type).
+- **The collision event** (`ROM/CipherBind.lean`, C2 of L0-L2 §4 in a log-local form):
+  `collBad (k, w) c E` — for a neighbour `w'` of `w` (`adj w = {w ⊞ e₀, w ⊟ e₀}`, `nxt`, `prv`;
+  the two points of a leaf commitment are `x₀` and `x₁ = x₀ ⊞ e₀`, `nxt_lp`, `prv_lp`) with
+  `(k, w')` not yet queried, a key `κ ≠ k` with a cached cell at `w` or `w'` has
+  `E_κ(w) = E_k(w)` and `E_κ(w') = E_k(w')`. Charged at the first query of the *second* key, so
+  both of `k`'s cells are fresh: `pr_two_cells_le` (two fresh cells hitting two values,
+  `≤ 2⁻²⁵⁶`, by an injection of the tables) and at most `2·|cache|` pairs (`card_collPairs_le`)
+  give `pr_collBad_le ≤ 2N·2⁻²⁵⁶`, and **`prEvent_coll_le`: `≤ 2·q_E²·2⁻²⁵⁶ = q_E²·2⁻²⁵⁵`** for a
+  `q_E`-query prover. `freshBadC_of_two_keys`: two different keys, each queried at one of a leaf's
+  two points, with equal blocks at both, make a fresh query bad. This is the doc's C2 with the
+  pair's four cells all charged to the log; the doc's 10 `q_E²p²` also covers inverse queries and
+  determinations the verifier makes. C1 (`E[N_coll] ≤ q_E²p`) is not needed here, and C3 (for L2)
+  is not done.
+- **Straight-line key extraction from the query log.** `extractKey log E iv i a`: the key of the
+  first entry of the prover's cipher log at one of tree `i`'s two leaf points whose key has
+  commitment `a = E_κ(x₀) ‖ E_κ(x₁)` (the second block read from the table: L0-L2 §6, the
+  extractor evaluates the partner block, Definition B). `keysOf`: these keys for the commitments
+  that the reconstruction from the opening computes (the opened ones at the hidden leaves);
+  `knownOf`: the trees whose hidden leaf has such a key. These replace `ExtData`'s keys and known
+  set (`proverIC`, below). `extractKey_eq_of_wit`: outside the collision event every logged
+  witness of a commitment is the extracted key (L1.2; at a hidden leaf, L2(c) without "before
+  `chal1`").
+- **Binding** (`binds_or_coll_or_dead`, deterministic, any `iv`, opening and `Δ`): if the
+  reconstruction's key at a non-hidden leaf differs from the extracted key, the log has a fresh
+  `collBad` query or a **dead leaf is opened** (`DeadOpen`: the reconstruction's key at a
+  non-hidden leaf was queried by the prover at neither of that leaf's points). Uses
+  `comAt_reconstruct` (a non-hidden leaf's commitment is its key's `leafCom`) and `leafCom_ic`
+  (under `icPrg E` that is the key's row at the two points). **`prEvent_not_binds_le`**:
+  `Pr_E[¬BindsIC] ≤ q_E²·2⁻²⁵⁵ + Pr_E[DeadOpen]`, for any cipher-only prover.
+- **The joint game and the bridge** (`ROM/CipherGame.lean`). The prover is
+  `P : OracleComp specIC _`, one random oracle on `Dom ⊕ Cell` (hashes and cipher), with
+  `IsQueryBoundP P Sum.isRight q_E` and per-domain hash counts `IsKindQueryBoundIC P q`.
+  `proverIC st E P`: `P` with the cipher answered by `E` (`runE`, which also returns its cipher
+  log), then the extractor (queries `mu₁` and `iv`, two more hash queries, and sets `keys`, `known`
+  from the log, `E` and the proof; the log goes into `aux`). `gameIC T st P E`: `game` at the
+  instance `icPrg E.cipher`. The experiment draws `E` uniformly, then runs `gameIC … E` against the
+  lazy hash oracle. `runH h P` is `P` with the hashes answered by a fixed table (a cipher-only
+  prover); `evalWithAnswerFn_runE` ties the two. **`prEvent_joint_le_add`**: if for every complete
+  hash table an event has cipher probability `≤ c +` that of another, the same holds in the joint
+  experiment (the lazy oracle becomes a uniform table on the finite set of all games' possible
+  queries, `prEvent_randomOracle_eq_eager`, and the two draws are swapped). Hence
+  **`prEvent_joint_bindFail_le`**: `Pr[bindFail] ≤ 2·q_E²·2⁻²⁵⁶ + Pr[DeadOpenOut]`
+  (`DeadOpenOut`: an accepted proof with a dead opened leaf), and
+  **`prEvent_joint_le_of_bindFail`**: any bound of §2c taken at each cipher table with
+  `ε_bind := Pr[bindFail]` holds in the joint experiment with that term replaced.
+- **Plugged in: `moussakaIssue_accept_le_ic`**: in the joint experiment,
+  `Pr[accept ∧ ¬Extracted] ≤ (q₁+1)·2⁻¹⁵⁰ + (q₂+1)·ε_QS(4008) + (Q+1)·9·2⁻¹²⁸ +
+  (2·q_E²·2⁻²⁵⁶ + ε_open) + ε_dead + ε_chain`, with `q_E` the prover's cipher queries, `ε_open` a
+  bound on `DeadOpenOut`, and `hsame`, `hL2`, `hdead`, `hchain` as in `moussakaIssue_accept_le`
+  for every cipher table (the committed chain data may depend on it). The other four relations go
+  through `prEvent_joint_le_of_bindFail` the same way; not stated (the combined relations also
+  need `P`'s total hash count transferred to `proverIC`, `+2`).
+
+**What `ε_bind` became, and what is left.** L0-L2's `ε_bind` has four parts: `Coll₁`, `Hit₁` (the
+`H₁` linking of L1.4), `Coll_E` (C2) and `Cross` (Definition B). `Coll_E` and `Cross` are covered
+by `2·q_E²·2⁻²⁵⁶` (in the PRF view, forward queries; a second committed key whose blocks match as
+cipher values is a second logged witness). What remains is `ε_open = Pr[DeadOpenOut]`: an
+accepted proof opens a leaf whose key the prover never evaluated at either of the leaf's points.
+Bounding it is L1.4 (the leaf commitments the verifier recomputes are the `H₁` preimages
+committed before the chain's `H₂¹` query: `Coll₁`, `Hit₁`) together with L2(a) (C3, `Post`): an
+ordering argument over the hash and cipher logs, the same kind as the "same chain" step. (Done in
+§2e, without the ordering: `Pr[DeadOpenOut] ≤ openHashEps q + q₁·2⁻²⁵⁶`, because a key never
+queried at all needs no "before".) Note also
+that the extracted keys are logged keys, but "logged before `chal1`" (committed by the chain) is
+not part of binding here: it is in `hsame` (`SameChain.pre` compares the keys committed at the
+chain's `H₂¹` input with the extractor's).
+
+**For `ε_chain` and `ε_dead`.** The joint game is the place for both: the committed data of a chain
+can now be computed from the cipher table and the query log (`extractKey` on the commitments
+committed at the `H₂¹` input), and L2's `Post` event is a `collBad`-style fresh-query event of the
+cipher log charged against the half-targets of earlier chains (C3), for which
+`prEvent_freshBadC_le_of_cached` is the union bound (with a bad event that reads the log of the
+hash queries too; the combined oracle `specIC` puts both in one log).
+
+### 2e. M6, second part: `ε_open`, the other relations, and what is left
+
+Files: `ROM/Queried.lean`, `ROM/FreshGuess.lean`, `ROM/CipherOpen.lean`, `ROM/CipherRelations.lean`;
+`ROM/CipherGame.lean` changed (below). No executable definition changed. `#print axioms` of the
+main results: `propext`, `Classical.choice`, `Quot.sound`.
+
+- **The joint log.** `runE E P` now returns `P`'s **joint log** (hash and cipher queries, in order,
+  with answers), which is `tableQueryLog P (join h E)` (`evalWithAnswerFn_runE`); `proverIC` keeps it
+  in `aux`. `cipherLog` (its cipher entries, `= tableQueryLog (runH h P) E`,
+  `cipherLog_tableQueryLog`) feeds `keysOf`, `knownOf`, `DeadOpenOut` as before; `hashLog` (its hash
+  cells) is `P`'s own hash queries. Generic log facts (`ROM/Queried.lean`): two tables agreeing on
+  the queried cells give the same run (`tableQueryLog_congr`), and a queried cell stays queried when
+  the table is changed there (`mem_tableQueryLog_congr`).
+- **The hash ladder** (`ROM/Queried.lean`, generic in `HasPrg` and the prover): the verifier's chain
+  `w_i → cw → x → y → z` (17 leaf hashes, `com`, `H₂¹`, `H₂²`, `H₂³`), each input containing the
+  previous answer at a fixed position. If the prover (its reported queries `qs aux`, behaving as a
+  log: `hfix`, `hmem`, `hcnt`) did not query some `w_i` but the verifier accepts, then walking up
+  the chain, either the prover did not query `z` either, or the first queried input contains the
+  answer of an unqueried cell: a bad answer (`ladderBad`, targets `ladderTargets`), i.e. `Hit₁` and
+  its analogues for `H₂¹`, `H₂²` (`ladder_walk`). Union bound: **`prEvent_accept_leafUnqueried_z_le`**
+  `≤ (q₁+18)·(17q'₁+q'₂₁)·2⁻²⁵⁶ + (q₂₁+1)·q'₂₂·2⁻¹⁰⁸⁸ + (q₂₂+1)·q'₂₃·2⁻⁴⁴⁸` when `z` was queried
+  (`zOut`: `z` read off the transcript). The all-in-one union bound with the `H₂³` step charged to
+  every `H₂³` query is `prEvent_accept_leafUnqueried_le` (`+ (q₂₃+1)·2⁻¹²⁸`).
+- **A fresh answer guessed** (`ROM/FreshGuess.lean`). `card_finOf_mul_le`: abstract class counting
+  (cells `t g`, classes `{update g (t g) w}` of `|W|` tables, at most `K` per class in the event,
+  classes disjoint), stated over abstract finite types so that no cardinality of a concrete
+  `2¹²⁸`-element type enters arithmetic (the kernel would evaluate it: `0 * Fintype.card …`
+  through `zero_mul` already recurses). `prEvent_fresh_guess_le`: lazy oracle → uniform table on the
+  possible queries → counting, `Pr ≤ K·2^{-8·outLen}`. Hence **`prEvent_accept_zUnqueried_le`**:
+  accepted with the verifier's `H₂³` input not queried by the prover, `≤ 2⁻¹²⁸` (not `(q₂₃+1)·2⁻¹²⁸`:
+  the verifier's chain reads no `H₂³` cell, `runChain_ofTable_update_h23`).
+- **Two fresh cipher cells** (`ROM/CipherOpen.lean`). If the dead leaf's leaf-hash input `w_i` *was*
+  queried by `P`, block `j` of it is the commitment `E_{s'}(x₀) ‖ E_{s'}(x₁)` of the dead leaf
+  (`extract_leafHashInput`, `comAt_reconstruct`, `leafCom_ic`), at two cells `P` never queried. At a
+  fixed hash table, updating the cipher table at those two cells changes neither `P`'s run (not in
+  its log), nor the verifier's tree (the GGM derivation reads only points of tweak `< L − 1`,
+  `recTree_ic_congr_cells`, `lp_ne_gp`), nor the dead leaf, nor `P`'s `H₁` inputs: the class
+  counting with two cells, **`prEvent_two_cells_le`**, gives `≤ q₁·2⁻²⁵⁶`
+  (`prEvent_deadQueried_le`).
+- **`ε_open` discharged**: **`prEvent_joint_deadOpen_le`**,
+  `Pr[DeadOpenOut] ≤ openHashEps q + q₁·2⁻²⁵⁶` with
+  `openHashEps q = (q₁+18)·(17q₁+q₂₁)·2⁻²⁵⁶ + (q₂₁+1)·q₂₂·2⁻¹⁰⁸⁸ + (q₂₂+1)·q₂₃·2⁻⁴⁴⁸ + 2⁻¹²⁸`
+  (`q` = `P`'s per-domain hash counts). For `q ≤ 2⁶⁴` this is `2⁻¹²⁸ + O(2⁻¹²⁰)`; the `2⁻¹²⁸`
+  is the one fresh guess of `Δ`, as the paper's "the verifier's own query is fresh".
+- **The five relations, `ε_bind` explicit**: `moussakaIssue_accept_le_ic'` (`ROM/CipherOpen.lean`),
+  `ratatouilleIssue_accept_le_ic`, `moussakaRedeem_accept_le_ic`, `ratatouilleSpend_accept_le_ic`,
+  `pomfritRedeem_accept_le_ic` (`ROM/CipherRelations.lean`): the `ROM/Accept.lean` bounds in the
+  joint experiment with `ε_bind` replaced by `2·q_E²·2⁻²⁵⁶ + openHashEps q + q₁·2⁻²⁵⁶`; for the
+  combined relations the total hash count `n` of `P` (`IsQueryBoundP P Sum.isLeft n`) becomes `n + 2`
+  (the extractor's two queries, `isTotalQueryBound_proverIC`). Remaining hypotheses: `hsame`
+  (`ε_chain`) and `hL2` (`ε_dead`), per cipher table.
+
+**Finding F2: `hL2` cannot be discharged with a small `ε_dead`.** `hL2` asks, outside `deadFail` on
+accepted runs, that every tree outside `known` has a fixed block on `onSet st T ch chal3Blocks`,
+the `chal3` values on the chain *computed with the extractor's keys*. Take an honest prover that,
+in one tree `i₀`, replaces the commitment of one leaf `j₀` by a random 32-byte string and uses the
+key `0` there in its VOLE (ConvertToVOLE does not need the hidden leaf's key, so its proofs are
+accepted whenever `Δ_{i₀} = j₀`; it grinds `chal3` for that). Then `i₀ ∉ known` (no logged key for
+the hidden commitment), the extractor's key at `(i₀, j₀)` is `zeroBlock` (`keysOf`), i.e. exactly
+the key the prover used, so the committed chain is consistent for *every* `Δ'` and `onSet` is all
+of `chal3Blocks`: tree `i₀` is not fixed on it. So `deadFail` must contain essentially every
+accepted run of this prover, and adding the trick to any cheating prover makes `ε_dead ≈ Pr[accept]`.
+The bound is still true, but `ε_dead` is not uniformly small, so the theorem says nothing in
+general. The paper's L2 is fine: L3 uses "a tree with a dead leaf has, *on the accepting set*,
+`Δ_i` fixed", and the accepting set excludes every `Δ'` that would open a dead leaf. The formal
+translation used `onSet` (consistency of the committed data, with garbage keys at dead leaves) in
+place of the accepting set. **Correction** (implemented, §2f; it changed the hypotheses of
+`ROM/Accept.lean`'s theorems): let the chain data at `z` carry the committed dead leaves
+`dead i : Finset ℕ` (leaves with no key evaluated before the chain's `H₂¹` query, a function of the
+log prefix, so `Committed`), take `A := {Δ' ∈ onSet | ∀ i, ∀ j ∈ dead i, Δ'_i = j}` in
+`chainBad_of_accept` (`chain_good_of_not_bad` needs only `A ⊆ onSet`; its `hP` should take any
+such `A`), `SameChain.acc : accOf z g b ↔ deltaBlocks b ∈ A`, and replace `hL2` by (i) L2(c):
+`i ∉ known → (dead i).Nonempty` (then `IsFixed A i` holds by construction) and (ii) L2(a): the
+accepted `Δ` hides every committed dead leaf (`Δ ∈ A`, from `onChain_of_accept`). Both are
+small-probability statements (`Post`/C3 and the `DeadOpen` argument of this section).
+
+**What was left for `ε_chain` and `ε_dead`** (all done in §2f). Both need the **committed data of a chain
+from the log prefix**: for the verifier's `H₂¹` input `x`, the `com` field of `x` (bytes
+`32 … 64`), its first `H₁` preimage of length 545 in the joint log before the first query of `x`,
+the 17 leaf-hash preimages of its blocks, and for each leaf the first key in the cipher log
+*before `x`* with that commitment (Definition B); `preOf x g` is this, with `c_i`, `c_mult`,
+`iv_pre`, `mu₁` parsed from `x` (and `iv = H₄(iv_pre ‖ mu₁ ‖ 4)`, `h5` from the table). Such data are
+`Committed` automatically (the log before the first query of a cell does not read it). The missing
+lemmas:
+1. *Ordering* (L1.4, `Hit₁` up the chain): on accepted runs, outside hits whose targets are fields
+   of *earlier* queries, the first queries of `w_i`, `cw`, `x`, `y`, `z` are `P`'s and in this order.
+   The union bound is the ladder's with targets taken from the log before the first occurrence
+   (invariant when that cell is resampled); the event is about the log, so it needs the game's log
+   in the output (a logged game, or `P`'s joint log as here, with answers).
+2. *`Coll₁`* (`H₁` answers distinct among the logged inputs, `≤ (q₁+18)²·2⁻²⁵⁶`) and an `H₂¹`
+   collision bound (`chal1` identifies `x` inside `y`), both cache-reading union bounds
+   (`prEvent_freshBadC_le_of_cached`).
+3. *`Post`* (C3(b), L2(c)): a key whose two matching cells are both first queried after `x` (so the
+   extractor's key from the full log differs from the pre-`x` one), `≤ 8·L·q₂·q_E·p²`; a joint
+   ordering event (hash log before the cipher query), at a fixed hash table a `freshBadC`-type
+   bound over the cipher log with the half-targets of the earlier `H₂¹` queries.
+4. *Parsing*: `chal1Input`, `chal2Input` (with `h_V` serialized), `chal3Input` inverted on their
+   fields, and `keysOf` made zero outside `i < τ, j < 2^{k_i}` so that `SamePrefix.keys` (equality
+   of functions `ℕ → ℕ → ByteArray`) does not ask for agreement on meaningless indices.
+5. For `ε_dead`: the corrected interface of F2, then (i) and (ii) above from 1–3.
+
+### 2f. M6, third part: the L2 interface, `ε_chain` and `ε_dead`, as implemented
+
+Files: `ROM/LogPrefix.lean`, `ROM/ChainParse.lean`, `ROM/CipherChain.lean`, `ROM/CipherSame.lean`,
+`ROM/CipherFull.lean`; changed: `ROM/Chains.lean`, `ROM/Comb.lean`, `ROM/Accept.lean`,
+`ROM/CipherBind.lean`, `ROM/CipherGame.lean`, `ROM/CipherOpen.lean`, `ROM/CipherRelations.lean`. No
+executable definition changed. `#print axioms` of the five `*_accept_le_full`: `propext`,
+`Classical.choice`, `Quot.sound`.
+
+**The result.** In the joint hash and ideal-cipher experiment (cipher table uniform, PRF view,
+forward queries; hashes lazy random oracles; a fixed statement), for a prover with `q_E` cipher
+queries and `q k` hash queries of kind `k` (total `n` for the combined relations):
+
+    Pr[accept ∧ ¬Extracted] ≤ (q₂₁+1)·2⁻¹⁵⁰ + (q₂₂+1)·ε₂ + (q₂₃+1)·N·2⁻¹²⁸
+      + 2·q_E²·2⁻²⁵⁶ + 2·(openHashEps q + q₁·2⁻²⁵⁶) + 1024·q_E·q₁·2⁻²⁵⁶ + chainHitEps q [+ comb]
+
+with `ε₂ = ε_QS(n')` (issue) or `ε_QS(n') + 2⁻¹²⁸ + (n+339)·2⁻⁴⁴⁸` (combined), `N = 9` (`2` for
+PomFRIT), `openHashEps q = (q₁+18)(17q₁+q₂₁)·2⁻²⁵⁶ + (q₂₁+1)q₂₂·2⁻¹⁰⁸⁸ + (q₂₂+1)q₂₃·2⁻⁴⁴⁸ + 2⁻¹²⁸`,
+`chainHitEps q = (q₁+18)(18q₁+q₂₁+325)·2⁻²⁵⁶ + (q₂₁+1)(q₂₁+q₂₂+2)·2⁻¹⁰⁸⁸ + (q₂₂+1)(q₂₂+q₂₃+2)·2⁻⁴⁴⁸`,
+and for the combined relations `+ (q₂₂+1)(q_comb+1)·2⁻⁴⁴⁸` (`chainHitEpsComb`):
+`moussakaIssue_accept_le_full`, `ratatouilleIssue_accept_le_full`, `moussakaRedeem_accept_le_full`,
+`ratatouilleSpend_accept_le_full`, `pomfritRedeem_accept_le_full`. No hypothesis remains besides
+the query bounds. The `2·openHashEps` counts `ε_open` twice (once in `ε_bind`, once in `ε_dead`);
+that is slack, not a gap. For `q ≤ 2⁶⁴` the new terms are `O(2⁻¹²⁰)` (`1024·q_E·q₁·2⁻²⁵⁶ ≤ 2⁻¹¹⁸`).
+
+**The L2 interface (F2 fixed).** `SameChain` takes the committed dead leaves `dead : Fin τ → Finset ℕ`,
+and `acc : accOf z g b ↔ deltaBlocks b ∈ hideSet st T ch dead`, the challenges on the chain that
+hide every committed dead leaf (`ROM/Accept.lean`). A tree with a dead leaf has a fixed block on
+`hideSet` (`isFixed_hideSet`; `chain_good_of_not_bad` and `comb_good_of_not_bad` now take any
+`A ⊆ onSet`). `hL2` is replaced by L2(c) (inside `hsame`, now `SameChainHyp`: every tree outside
+`known` has a committed dead leaf) and L2(a) (`hL2 : DeadHiddenHyp`: the accepted `Δ` hides every
+committed dead leaf), both under `¬chainFail`, `¬deadFail` and "no hit".
+
+**Hits** (new in the interface). `prEvent_accept_le_chain_terms`/`_comb_terms` and all per-relation
+theorems take a family `hit : Dom → Table → Prop` with per-query bound `εh` (resampling the cell
+alone, as `chainBad`), merged into the union bound (`prEvent_le_chain_terms_hit`,
+`prEvent_le_comb_terms_hit`), and assume `hsame`, `hL2` only when no query of the game's log is a
+hit (`NoHit`); the bound gains `hitSum (q + verifierQueries) εh`. The IC theorems take `ε_dead`,
+`ε_chain` as bounds on joint probabilities (`prEvent_joint_le_of_fails`), since Post is small only
+on average over the cipher table.
+
+**The committed data** (`ROM/CipherChain.lean`) are read off the game's hash log and `P`'s joint log
+*before the first query of the cell* (`logBefore`; `logBefore_tableQueryLog_update`: invariant under
+a change of the table at that cell, so committed): at `x`, `com` from `x`, its first 545-byte `H₁`
+preimage `cw`, the first preimages `w_i` of `cw`'s blocks, the leaf commitments, and per leaf the
+first key in the cipher log before `x` with that commitment (`keyPre`; dead if none, `deadPre`);
+`c_i`, `c_mult`, `iv_pre` parsed from `x`; at `y` the prefix at the first `H₂¹` preimage of `y`'s
+`chal1` plus `ũ`, `h_V`, `d`; at `z` the chain at the first `H₂²` preimage of `z`'s `chal2` plus `ã`
+and the check value. The parsers and their inverse lemmas are `ROM/ChainParse.lean` (item 4 of
+§2e); `keysOf` is now zero outside `i < τ, j < 2^{k_i}`.
+
+**The hits** (`chainHit`): an `H₁` answer equal to a block of an earlier 545-byte `H₁` input, to
+the `com` field of an earlier `H₂¹` input, or to an earlier `H₁` answer; an `H₂¹` answer equal to
+the `chal1` field of an earlier `H₂²` input or to an earlier `H₂¹` answer; an `H₂²` answer equal to
+the `chal2` field of an earlier `H₂³` or combination input or to an earlier `H₂²` answer
+(`prEvent_chainHit_le`). Without hits the verifier's cells `w_i → cw → x → y → z` were first
+queried in this order (`before_of_noHit`, the ordering half of L1.4) and are the first preimages
+found (`cell_eq_of_noHit`: `Coll₁` and the `H₂¹`, `H₂²` collisions); `chain_ident`.
+
+**Post** (C3, `PostJ`): a cipher query of `P` that is the first at both points `w`, `w'` of a key
+and whose two blocks (in either order) form a 32-byte block `jj < 256` of an earlier `H₁` input.
+`prEvent_postAt_le` (fixed query index and neighbour: two fresh cells, `prEvent_two_cells_le`,
+`≤ 512 q₁·2⁻²⁵⁶`, with `tableQueryLog_prefix_congr` for the invariance) and the union over `q_E`
+indices and 2 neighbours: `Pr ≤ 1024·q_E·q₁·2⁻²⁵⁶` (`prEvent_joint_postOut_le`). (The paper's
+`8·L·q₂·q_E·p²` charges `H₂¹` queries; here the targets are the `H₁` inputs.) Without Post, a key
+found in the whole cipher log for a committed commitment was found before `x`
+(`extractKey_pre_eq`).
+
+**Assembly** (`ROM/CipherSame.lean`): `sameChain_core`/`sameChainHyp_ic` (SameChain and L2(c)),
+`deadHiddenHyp_ic` (L2(a): a non-hidden committed dead leaf's reconstructed key was queried at a
+leaf point, after `x`, a Post, or never, `DeadOpenOut`), with `chainFail := PostOut`,
+`deadFail := DeadOpenOut`.
+
+**Combined relations.** `CombData.Committed.midComb` required the chain data at `y` to read *no*
+combination cell, which log-based data cannot satisfy (the prover may query combination cells before
+`y`). `CombData` now has `pre : ByteArray → Table → List Dom` (default `[]`), `midComb`/`sysComb`/
+`witComb` only for cells outside `pre y g`, with `preMid`, `preComb`; `combBad` at `H₂²` requires
+the combination cell of the answer outside `pre y g`, and `prEvent_accept_le_comb_terms` assumes it
+for the verifier's own query (`hcombFresh : CombFreshHyp`), discharged by the hit on earlier
+combination inputs (`combFreshHyp_ic`, `preCells`, `midOf_comb`).
+
+**Not covered.** The statement is fixed in these games; adaptively chosen statements are §2g. The
+cipher is a random function (PRF view) with forward queries only; the permutation model with
+inverse queries (`p = 1/(2¹²⁸−q_E)`) is §2h.
+
+### 2g. M6, fourth part: adaptively chosen statements (statement binding), as implemented
+
+Files: `ROM/AdaptGame.lean`, `ROM/StmtBind.lean`, `ROM/AdaptChain.lean`, `ROM/AdaptFull.lean`,
+`ROM/AdaptComb.lean`, `ROM/AdaptPomfrit.lean` (new; nothing existing changed). No executable
+definition changed. `#print axioms` of the five `*_accept_le_adaptive`: `propext`,
+`Classical.choice`, `Quot.sound`.
+
+**The game** (`gameA T stF P E`). A family of statements `stF : ι → Statement`; the prover
+`P : OracleComp specIC (ByteArray × (ι × β))` outputs its proof and the index `s` of the statement
+it proves. The straight-line extractor runs on `P`'s log at `stF s` (`proverA`, with
+`extractIC st E` the part of `proverIC` after `P`: `proverIC_eq_bind`), then the verifier at
+`stF s`. The event is `accept(stF s) ∧ ¬Extracted(stF s, Wit s)` at the output's `s` (`stOut r`).
+
+**Per table, the adaptive game is the fixed game at the chosen statement**
+(`evalWithAnswerFn_gameA`, `tableQueryLog_gameA`): output and log are those of
+`gameIC T (stF (sA g P E)) P E`, `sA g P E` being `P`'s choice against the tables `g`, `E`. So every
+deterministic lemma of §2c–§2f (`sameChainHyp_ic`, `deadHiddenHyp_ic`, `combFreshHyp_ic`,
+`chain_ident`, `ladder_walk`, `binds_or_coll_or_dead`, `deadQueried_of_deadOpen`, …) applies at
+`stF (sA g P E)`; what has to be redone are the union bounds, whose per-query predicates must not
+depend on the statement chosen at the end.
+
+**Statement binding** (`ROM/StmtBind.lean`). For a non-delayed statement the verifier's `H₂¹` input
+begins with `mu₁ = H₂⁰(inst ‖ DST ‖ 8)` (32 bytes, `xMu`; `muIn st` is the `H₂⁰` input). *The
+statement committed at a chain query* (`stmtAt dec L t`) is read off the log before the query only:
+at an `H₂¹` input `x`, the decoding (`dec`) of the first `H₂⁰` input in the log before `x` whose
+answer is `xMu x`; at an `H₂²` input, that at the first `H₂¹` preimage of its `chal1`; at an `H₂³`
+input, that at the first `H₂²` preimage of its `chal2` (`sX`, `sY`, `sZ`; committed:
+`stmtAt_update`). *Statement hits* (`stmtHit`): an `H₂⁰` answer equal to the `mu₁` field of an
+earlier `H₂¹` input ("μ's preimage queried after the chain's first query") or to an earlier `H₂⁰`
+answer (a collision): per `H₂⁰` query `≤ (n₂₁ + n₀)·2⁻²⁵⁶` (`prEvent_stmtHit_le`; 32-byte
+answers, so `2⁻²⁵⁶` per pair, as the paper says). *Identification* (`stmtAt_ident`): in the fixed
+game at a non-delayed `st` with `dec (muIn st) = some s`, on an accepted proof without chain hits
+and statement hits, the statement committed at each of the verifier's `H₂¹`, `H₂²`, `H₂³` inputs is
+`s`. The extractor queries `muIn st` (`mu_mem_gLog`), whose answer is `xMu x`; it precedes `x` (else
+a statement hit), it is the only `H₂⁰` input before `x` with that answer (`mu_cell_eq`, else a
+collision), and `y`, `z` lead back to `x` by `chain_ident`.
+
+**The union bound** (`prEvent_accept_le_adaptive_E`, `prEvent_accept_le_adaptive_comb_E`, per
+cipher table). The charge of a chain query is the bad event of the chain data of *the statement
+committed there* (`chainBadA`, `combBadA`: `∃ s, stmtAt … t = some s ∧ chainBad (C s) t g`); it is
+committed, so `prEvent_chainBad_update_le` (`prEvent_chainBadA_le`) and the two-cell bound of
+`ROM/Comb.lean` (`prEvent_combBadA_h22_le`) apply unchanged, with the per-statement constants equal
+across the family (common `params`, `chainEps_congr`, common system length). The chain hits are
+`ROM/CipherChain.lean`'s against the adaptive log (`chainHitL`), plus the statement hits, over
+`adaptKinds = {H₁, H₂¹, H₂², H₂³, H₂⁰}`. The deterministic step: at a table, in the fixed game at
+`stF (sA g P E)`, either a chain hit, or a statement hit, or (`chainBad_trace_ic`,
+`combBad_trace_ic`: the `htrace` of `prEvent_accept_le_chain_terms`/`_comb_terms` for the joint
+game) the verifier's `H₂¹`, `H₂²` or `H₂³` query is bad for that statement's data, and by
+`stmtAt_ident` that statement is the one committed there. For the combined relations the chain data
+of every statement are read off the *adaptive* game's log (`preOfA`, `midOfA`, `accOfA`,
+`preCellsA`, `combDataA`; at the chosen statement they are the fixed game's, `preOfA_eq`, …,
+`combBad_congr`), so that "the combination cell is outside the log before `y`" is one condition for
+the data and for the committed statement (`stmtAt_two_updates`).
+
+**The failure events** (`ROM/AdaptGame.lean`): Post (`prEvent_joint_postOut_le_A`, reads `P`'s log
+only), binding (`pr_bindFail_le_table_A` with `bindFail_imp`, the pointwise step of
+`pr_bindFail_le_table`), an opened dead leaf (`prEvent_joint_deadOpen_le_A`: the hash ladder
+`prEvent_leafUnqueried_z_le_A`, whose bad answers read `P`'s log and `Δ` only; the fresh `H₂³`
+answer `prEvent_zUnqueried_le_A`; two fresh cipher cells `prEvent_deadQueried_le_A`, where setting
+the dead leaf's cells changes neither `P`'s run nor its statement): the fixed-statement bounds.
+
+**The result** (`prEvent_accept_le_adaptive`, `prEvent_accept_le_adaptive_comb`, and per relation
+`moussakaIssue_accept_le_adaptive`, `ratatouilleIssue_accept_le_adaptive`,
+`moussakaRedeem_accept_le_adaptive`, `ratatouilleSpend_accept_le_adaptive`; PomFRIT below): for a
+family of instances `inst : ι → …` (one `labelRows`) with injective instance encodings (`hinj`;
+discharged for fixed-length families in `EndToEnd/SpecRelations.lean`: Moussaka issuance with `t`
+of fixed length, `hinj_moussakaIssue_of` (= `Audit.hinj_moussakaIssue`), from
+`Spec.Moussaka.issueEncode_inj`; Moussaka redemption with 32-byte key digests, fewer than 256
+Anchors, fixed-length `nf` and contexts and the family injective on `(digests, nf, ctx_iss,
+ctx_red, challenge_digest)`, `hinj_moussakaRedeem`, from `redeemEncode_inj`; Ratatouille issuance
+with fixed-length `c` and `t_init < 2⁶⁴`, `hinj_ratatouilleIssue` (with `le64_inj`); Ratatouille
+spend with fixed-length digest, `nf`, `c_next` and `d < 2⁶⁴`, injective on `(dig(pk), nf, d,
+c_next, ctx_iss)`, `hinj_ratatouilleSpend`; for spec-typed families `hinj_ratatouilleIssue_spec`,
+`hinj_ratatouilleSpend_spec`; examples with many instances in `Audit/Nonvacuous.lean`):
+
+    Pr[accept(stF s) ∧ ¬Extracted(stF s)] ≤ (the `_full` bound) + stmtBindEps q,
+    stmtBindEps q = (q₀+3)·(q₂₁+1 + q₀+3)·2⁻²⁵⁶,
+
+`q₀` the prover's `H₂⁰` queries (`+3`: the extractor's and the verifier's two, as the union bound
+counts them), so `≤ (q+3)(q+4)·2⁻²⁵⁶` for `q` hash queries in all: the paper's `(q²+q)·2⁻²⁵⁶` up to
+the verifier's and extractor's queries. Injectivity is what the model cannot supply: the instance
+encodings of the redemption and spend relations contain UOV key *digests* (`dig(pk)`, SHAKE256,
+application-level hashes outside L0), so `hinj` there means the family determines its keys from
+their digests (e.g. fixed anchors or a fixed key; adversarial `nf`, contexts, challenge digest,
+`d`, `c_next`). The issuance encodings concatenate variable-length fields without lengths
+(`t ‖ ctx_iss`, `c ‖ le64(t_init) ‖ ctx_iss`), so `hinj` needs fixed lengths there (as in the
+protocol); without it two instances with one encoding but different relations would both be
+"bound", which is a real limit of statement binding, not of the proof. (A finding: the decoded
+statement only has to have the same *data* at the chain as the chosen one, not to be it; this is
+what PomFRIT uses below, and with it injectivity could be weakened to "equal encodings give equal
+values and relations".)
+
+**PomFRIT** (delayed binding, `ROM/AdaptPomfrit.lean`, `pomfritRedeem_accept_le_adaptive`). Its
+`μ = H₂⁰(dig(pk) ‖ h(chal1) ‖ DST ‖ 8)` sits in the `H₂²` input (bytes `264 … 296`, after
+`chal1 ‖ ũ ‖ h_V`; `yMu`, `yMu_chal2Input`) and is queried by the verifier only
+(`inLog_verifyQ_muD`). So the statement is committed at `H₂²` (`stmtAtD`: the decoding at `y`'s
+`chal1` of the first `H₂⁰` preimage of `yMu y` before `y`; at `H₂³` through the `H₂²` preimage of
+`chal2`; at `H₂¹`, where nothing depends on the instance, a fixed reference statement), the
+statement hits are an `H₂⁰` answer equal to the `μ` field of an earlier `H₂²` input or to an
+earlier `H₂⁰` answer (`stmtHitD`, `≤ (n₂₂+n₀)·2⁻²⁵⁶`), and the identification is
+`stmtAtD_ident`. Two points needed more than the non-delayed case:
+1. *The μ preimage determines the target `h(chal1)`, not `(sig, msg)`* (the relation reads only the
+   target; distinct `(sig, msg)` or binders with one target are distinct statements). The
+   decoding (`decP`) returns *some* statement whose `H₂⁰` input at that `chal1` is the preimage, so
+   with the same target (`pomfritTarget_eq_of_muInD`), hence the same system, relation and values
+   at the chain's `chal1`. No injectivity hypothesis is needed (with the issuer's `pk` fixed).
+2. *Statements as indices.* The chain-level functions (`Chain.kosQ st T : Blocks → Fin (kosL st) →
+   GF128`, `kosD`, `uCanon`, `dc`, `OnChain`, …) take the statement as an index although they read
+   only `params`; `Iff.rfl` between two `pomfritRedeem` statements hits the recursion limit (it
+   unfolds the binders' `extract`s). Destructuring the two statements and substituting the equal
+   `params` makes it `Iff.rfl` (`chainBad_transport`, `combBad_transport`, `hideSet_transport`);
+   with the chain data's congruences for delayed statements (`preCore_congrD`, `midCore_congrD`,
+   `tailCore_congrD`, the latter at equal values at the chain's `chal1`) the fixed game's bad events
+   at the chosen statement become those of the committed one (`pomfrit_convX`, `_convY`,
+   `_convZ`). The data with a chain-dependent system are `combDataD` (adaptive log) and
+   `combDataFixD` (fixed log, `combBad_trace_icD`); the per-query bounds `prEvent_combBadF_h22_le`,
+   `prEvent_combBadF_cell_le` hold for any committed choice of statement.
+
+The bound: the bound of `pomfritRedeem_accept_le_full` plus
+`stmtBindEpsD q = (q₀+3)·(q₂₂+1 + q₀+3)·2⁻²⁵⁶`, for any family `(sigF s, msgF s)`.
+
+### 2h. M6, fifth part: the ideal cipher as random permutations, with inverse queries
+
+Files: `ROM/PermModel.lean`, `ROM/PermCount.lean`, `ROM/PermBind.lean`, `ROM/PermOpen.lean`,
+`ROM/PermPost.lean`, `ROM/PermFull.lean`, `ROM/PermAdapt.lean` (new); changed:
+`ROM/CipherSame.lean` (`KeysPre`; `sameChain_core` takes it in place of `¬PostJ`;
+`sameChainHyp_ic_of`, `deadHiddenHyp_ic_of` for any failure event implying it, the old theorems
+derived), `ROM/CipherFull.lean` (`combFreshHyp_ic_of`), `ROM/AdaptChain.lean`, `ROM/AdaptComb.lean`,
+`ROM/AdaptPomfrit.lean`, `ROM/AdaptFull.lean` (the per-table adaptive bounds take any such failure
+event; the PRF-view theorems pass `PostOut` and are unchanged). No executable definition changed.
+`#print axioms` of the ten new main results: `propext`, `Classical.choice`, `Quot.sound`.
+
+**The model** (`L0-L2` §3.1). `PTable = Blk → Perm Blk`, drawn uniformly (eagerly; its cardinality
+is never computed). The prover `P : OracleComp specP _` queries the hashes and the cipher forward,
+`(true, (k, z)) ↦ π_k(z)`, or inverse, `(false, (k, y)) ↦ π_k⁻¹(y)`. The game (`gameP`, adaptive:
+`gameA … (normP p π P) π.fwd`) runs the **normalized prover** `normP p π P`: a forward-only prover
+of the PRF-view spec that answers each inverse query by the forward query at its record
+`(k, π_k⁻¹(y))` and, before every `H₂¹` query `x`, queries `H₄(iv_pre ‖ μ ‖ 4)` parsed from `x`
+(`L0-L2` N1). Against `π.fwd` it outputs what `P` outputs against `π` (`evalWithAnswerFn_normP`),
+its cipher log is the list of records `(k, z, π_k(z))` (forward or inverse) that the straight-line
+extractor reads (`L0-L2` §6), and it makes `P`'s cipher queries and one more `H₄` query per
+`H₂¹` query (`isQueryBoundP_right_normP`, `isKindQueryBound_normP`, `isQueryBoundP_left_normP`).
+
+**The route** (A, direct, eager). Per permutation table the game is `gameIC` for a forward prover
+(`normP p π P`) at the table `π.fwd`, so every per-table lemma of §2c–§2g applies unchanged (all
+hash bounds, `binds_or_coll_or_dead`, `chain_ident`, the ladder, …). Only the three bounds averaged
+over the cipher are redone: binding (`collBad`), the opened dead leaf whose leaf hash the prover
+queried (`DeadQueried`), and Post. A generic transfer from the PRF-view theorems is not possible
+(they average over a uniform function table for a fixed prover; here the forward prover depends on
+`π`), and PRP/PRF switching (`q_E²/2¹²⁹`) is avoided. No lazy permutation oracle is built: the
+eager table with the record congruences of `normP` suffices.
+
+* **Records** (`ROM/PermModel.lean`). `normP_prefix`: a table agreeing with `σ` on the records of a
+  log prefix gives the same prefix, followed by a cipher query *under the same key* (an inverse
+  query's input may change); `normP_congr`: agreeing on all records gives the same run;
+  `normP_h4_mem`: N1.
+* **The counting core** (`ROM/PermCount.lean`, `prEvent_perm_two_le`): targets `j` naming two
+  inputs `z₁ ≠ z₂` of the key `k σ` outside a protected set `X σ` (`≤ r` inputs) and two values;
+  if changing `σ_{kσ}` off `X σ` keeps the key and the targets, then
+  `Pr[∃ j, σ_{kσ}(z₁) = y₁ ∧ σ_{kσ}(z₂) = y₂] ≤ K/((2¹²⁸−r)(2¹²⁸−r−1)) ≤ K·p_{r+1}²`. Proof by double
+  counting (`card_sum_mul_le`): each event table has the `(2¹²⁸−r)(2¹²⁸−r−1)` neighbours
+  `τ ∘ σ_{kσ}` (`tau`: two transpositions moving `y₁, y₂` to any distinct `a₁, a₂ ∉ σ_{kσ}(X σ)`),
+  each neighbour recovers `σ` from the target, and each table has at most `K` targets.
+* **Events charged at one record** (`ROM/PermBind.lean`, `prEvent_perm_prefix_le`): the `n`-th
+  record's key `κ` (prefix-determined, whether the query was forward or inverse) and a target of
+  the prefix with both inputs unrecorded under `κ`: protected set the prefix's inputs under `κ`
+  (`≤ n < q_E`), so `p = 1/(2¹²⁸ − q_E)` exactly as `L0-L2` §3.1.
+* **Binding** (`prEvent_perm_coll_le`): the PRF view's `collBad`, unchanged, on the records; its
+  targets at record `n` are four per earlier record of another key (`collT`; the neighbour
+  relation is symmetric, `prv_nxt`, `nxt_prv`, from the CTR byte layout), so
+  `Σ_{n<q_E} 4n·p² ≤ 2·q_E²·p²` (the PRF view's `2·q_E²·2⁻²⁵⁶`).
+* **`ε_open`** (`ROM/PermOpen.lean`): the dead leaf's two cells are a two-value guess for the dead
+  key with protected set its records and the `2·2303` GGM points (changing the dead key's
+  permutation there could change the verifier's tree): `prEvent_perm_deadQueried_le_g`
+  `≤ q₁·p'²`, `p' = 1/(2¹²⁸ − q_E − 4607)`; `prEvent_jointP_deadOpen_le`
+  `≤ openHashEps q + q₁·p'²` (the hash ladder per table, as before). The statement may depend on
+  the normalized prover's output (adaptive case).
+* **Finding F3 (the PRF view's Post fails with inverse queries).** `PostJ` (§2f) charges a record
+  that is the first one of its key at `w` and a neighbour `w'` and whose values form a block of an
+  earlier `H₁` input, at *any* points. A prover that picks a target block `(t₀, t₁)` and queries
+  `π_κ⁻¹(t₀)` for fresh keys `κ` wins whenever `π_κ(π_κ⁻¹(t₀) ⊞ e₀) = t₁`: probability about
+  `2⁻¹²⁸` per query, so `Pr[PostJ] ≈ q_E·2⁻¹²⁸` (not small). The extraction argument does not need
+  that event: only half-targets **tied to their points** (`L0-L2` C3). **`PostP`**
+  (`ROM/PermPost.lean`): for every `H₂¹` input `x` of the prefix, its `iv` (the `H₄` answer that
+  N1 put in the log before `x`), every leaf `(i, j)` of the commitments committed at `x`
+  (`comPre` on the prefix's hash entries), the points `lp iv i 0`, `lp iv i 1` and the two halves
+  in both orders (`halfT`, `≤ 4608` per `H₂¹` input); a record whose key maps both points of a
+  half-target, unrecorded before, to its values. `prEvent_perm_postP_le`:
+  `≤ q_E·4608·q₂₁·p²` (the paper's `8·L·q₂·q_E·p²`; quadratic, as the PRF view's
+  `1024·q_E·q₁·2⁻²⁵⁶`). `keysPre_of_not_postP_gen`: outside `PostP` the keys of the commitments
+  committed at an `H₂¹` input (whose `μ` field is the statement's) are found before it
+  (`KeysPre`), which is all `sameChain_core` and `deadHiddenHyp_ic` used of `¬PostJ`.
+* **Assembly** (`ROM/PermFull.lean`, `ROM/PermAdapt.lean`): per table the `ROM/Accept.lean` bound
+  (resp. `prEvent_accept_le_adaptive_E`, `_comb_E`, `_pomfrit_E`) for `normP p π P` with
+  `chainFail := PostPOut`, then the average over `π` with the three bounds above
+  (`prEvent_jointP_le_explicit`, `prEvent_avgP_le_add3`, the bridge `prEvent_jointP_le_add`).
+
+**The result.** For a prover with at most `q_E` cipher queries (forward or inverse), `q k` hash
+queries of kind `k` (total `n` for the combined relations), `p = 1/(2¹²⁸ − q_E)`,
+`p' = 1/(2¹²⁸ − q_E − 4607)`:
+
+    Pr[accept ∧ ¬Extracted] ≤ (q₂₁+1)·2⁻¹⁵⁰ + (q₂₂+1)·ε₂ + (q₂₃+1)·N·2⁻¹²⁸
+      + 2·q_E²·p² + 2·(openHashEps q + q₁·p'²) + q_E·4608·q₂₁·p² + chainHitEps q [+ comb]
+
+(`moussakaIssue_accept_le_perm`, `ratatouilleIssue_accept_le_perm`, `moussakaRedeem_accept_le_perm`,
+`ratatouilleSpend_accept_le_perm`, `pomfritRedeem_accept_le_perm`), with `ε₂`, `N`, `openHashEps`,
+`chainHitEps`, `chainHitEpsComb` as in §2f, except that the combined relations' total hash count is
+`n + q₂₁` (N1's `H₄` queries): `ε₂ = ε_QS(n') + 2⁻¹²⁸ + (n + q₂₁ + 339)·2⁻⁴⁴⁸`. With adaptively
+chosen statements, plus `stmtBindEps q` (`stmtBindEpsD q` for PomFRIT), under the hypotheses of §2g
+(`moussakaIssue_accept_le_adaptive_perm`, `ratatouilleIssue_accept_le_adaptive_perm`,
+`moussakaRedeem_accept_le_adaptive_perm`, `ratatouilleSpend_accept_le_adaptive_perm`,
+`pomfritRedeem_accept_le_adaptive_perm`; the normalized prover uses the family's common
+parameters). For `q ≤ 2⁶⁴`: `2·q_E²·p² ≈ 2⁻¹²⁷`, `q_E·4608·q₂₁·p² ≈ 2⁻¹¹⁵·⁸`, `q₁·p'² ≈ 2⁻¹⁹²`.
+
+**Compared with `L0-L2` §4–§5.** `Coll_E` (C2, `10·q_E²·p²`) and Cross (Definition B) are covered
+by `2·q_E²·p²` charged to the prover's records (the verifier's and extractor's evaluations are
+table reads, as in §2d, not counted in `q_E`; the GGM points enter `p'` instead); C3(b)/Post by
+`q_E·4608·q₂₁·p²`; C1 (`E[N_coll]`) is not needed. **Not covered:** the ZK side is still the PRF
+view (`docs/zk.md` §10.1): there the distinguisher reads whole rows, so the hidden paths' rows
+would have to become permutations in `ZK/IdealCipher.lean`'s hybrid, with the switching term for
+the honest evaluations of the hidden keys.
+
+### 2i. Soundness for the spec relations, as implemented
+
+Files: `EndToEnd/SpecRelations.lean`, `ROM/SpecSound.lean`.
+
+Every bound above is for `¬Extracted st Wit`, `Wit` the *arithmetized* relation of
+`EndToEnd/Relations.lean` (`moussakaIssueWit`, …): bits on the witness rows whose decoded fields
+satisfy the `Arith/*` relation, stated on byte functions (`fnOf`, zero beyond the end; e.g.
+`t = Com(…)` on the first 45 bytes of `t`). `EndToEnd/SpecRelations.lean` proves the converse of
+the spec → arithmetized direction (`Privacy/*Lean.lean`): for well-formed instances an
+arithmetized witness *decodes* to a witness of the spec relation (`issueRelW_of_wit`,
+`redeemRelW_of_wit`, `issueRel_of_witB`, `spendRel_of_witB`, `pomRel_of_wit`; the decoded witness
+reads the candidate's bits `w i = 1` at the `Arith` layout, `bitsOf_eq` showing they are the
+relation's bits). For the relations whose spec witness contains the committed Keccak states
+(Moussaka's two), the spec witness is the encoding of the decoded fields with the states
+recomputed (`issueWitOf`, `redeemWitOf`): the arithmetized predicates do not record the states,
+although the systems force them (`Arith.Keccak.qsKeccak_holds_iff_bytes`). Keccak-p[800]
+soundness itself was already complete (`Arith.Keccak.qsKeccak_sound`: the outputs are
+Keccak-p[800,12] of the input); nothing about it is assumed.
+
+`ROM/SpecSound.lean` then has, for each of the 20 headline theorems `X` (`_full`, `_perm`,
+`_adaptive`, `_adaptive_perm` of the five relations), `X_spec` with the same bound for "the decoded
+witness of no known tree is in the spec relation" (monotonicity, `prEvent_bind_mono`,
+`extracted_mono`). Extra hypotheses: Moussaka issuance `|t| = 45`, `|ctx_iss| = 16`; Moussaka
+redemption `|nf| = 24`, contexts of 16 bytes; Ratatouille issuance `t_init < 2⁶⁴` (the spec
+instance `issueInstOf` reads `c`, `ctx_iss` as 32- and 16-byte vectors, `spendInstOf` likewise);
+none for spend and PomFRIT (the spec relation `PomRel`: `P(s) = h ⊕ r` with `h` the verifier's
+target `pomfritTarget` at its `chal1`, which is `Spec.PomFRIT.hashToTarget` in `main`'s layout).
+The adaptive versions keep `hinj` (above).
+
+### 2j. The unbound Moussaka relations
+
+Files: `Prob/MoussakaUnbound.lean`, `ROM/MoussakaUnbound.lean`, `ROM/MoussakaUnboundAdapt.lean`,
+`EndToEnd/MoussakaUnboundSpec.lean`, `ROM/MoussakaUnboundSpec.lean`, `Audit/UnboundROM.lean` (new; the base relations' files unchanged). `#print axioms` of the headline results: `propext`,
+`Classical.choice`, `Quot.sound`.
+
+Every generic theorem of §2c–§2i is stated for an arbitrary `Statement`; the per-relation
+theorems only add the relation's system, its length, the per-chain extraction and, for the
+combined relations, the `l` failure count. The theorems for the unbound relations
+(`security/moussaka-unbound.md`) are stated once, **for any statement with the properties they use** (`Unbound.IssueStmt`,
+`Unbound.RedeemStmt`): the parameters (232 resp. 559 witness bytes, `QS_DEGREE = 9`, label rows
+`lr`), the DST, non-delayed binding, the combination `(45, "mous\x01l0")` for redemption, and
+`values = System.values` of `Arith.MoussakaUnbound.uIssueSystem` / `uRedeemSystem` at the instance
+(with `l` decoded by `combinationOf`). The per-chain step (`Unbound.issue_extract_chain`,
+`redeem_extract_chain`) destructures the statement and substitutes the parameters, after which
+`chain_claim4` and `moussaka_unbound_*_extract` apply as for the base relations. The results, with
+the base relations' terms and `n' = 3816` (issuance), `7929` (redemption):
+`Prob.moussakaUnbound*_chain_prob`, `ROM.moussakaUnbound*_accept_le`, `_accept_le_ic`,
+`_accept_le_full`, `_accept_le_perm`, `_accept_le_adaptive`, `_accept_le_adaptive_perm`, and the
+`_spec` versions of the last four (spec relations `Spec.MoussakaUnbound.IssueRel`, `RedeemRel`,
+for `|t| = 45` resp. `|nf| = 24`; no context lengths are needed since the spec reads the contexts
+through `fn`). `hinj` is discharged for the C++ encodings (`SpecRel.hinj_unboundIssue`,
+`hinj_unboundRedeem`). The executable verifier's statements `moussakaUnboundIssue`, `moussakaUnboundRedeem`
+(`Verifier/Relations.lean`) satisfy the properties (`Unbound.moussakaUnboundIssue_stmt`,
+`moussakaUnboundRedeem_stmt`: `rfl` and `moussakaUnbound*_values`), so all of these bounds are
+about the executable verifier.
+
+### 2k. Beyond one proof: the one-more reductions (PomFRIT U1, U2), as implemented
+
+Files: `ROM/OneMore.lean` (generic), `ROM/OneMorePomfrit.lean`. `lean/docs/security/pomfrit.md`
+§6.4 states the results; this note records the modelling.
+
+- **Stateful handlers.** The games are VCVio `simulateQ` runs of one composed adversary (the
+  forger, its verifications and the straight-line extractor) against a `StateT … ProbComp`
+  handler: the world (a lazy random oracle on any spec; for PomFRIT the hash oracles of §2b), a
+  target oracle with hints, and an Issuer function. The reduction is a second handler into the
+  experiment adversary's oracles; VCVio's `simulateQ_StateT_StateT_compose` collapses it with the
+  challenger into one handler (`collapse`).
+- **Programming.** The target oracle's fresh answers come from a list of `n` uniform values; the
+  real game and the collapsed reduction have the same joint distribution of output and state
+  (`real_eqd_comb`), by induction on the computation with the list uniform: at a fresh query the
+  real answer `u` and the reduction's `t − e` correspond under `t = u + e`. VCVio's
+  `evalDistEq_simulateQ_run` (per-query equality from every state) does not apply, since the two
+  handlers differ on the list; and its module is not in the shared build, so the induction is
+  done directly.
+- **Ghost state.** The real game records the programmed target `answer + hint` of each label
+  (`Ch.tg`); `TgInv` and `NoFall` (support invariants, VCVio's `simulateQ_run_preservesInv` and an
+  induction with `IsQueryBoundP`) turn the final events into statements about the oracle's answer
+  and the first hint.
+- **The extraction term**: done for U1 and U2 (every term explicit, `pomfrit_U1_explicit`,
+  `pomfrit_U2_explicit`, and with simultaneous extraction `pomfrit_U1_sim`, `pomfrit_U2_sim`), §2n
+  (pomfrit.md G8).
+
+### 2l. Protocol games from single-proof extraction, as implemented
+
+Files: `ROM/ExtractReduce.lean` (protocol independent), `ROM/RatatouilleBalance.lean`
+(Ratatouille Theorem 1, `docs/security/ratatouille.md` §4); the verifier with cipher queries is
+`ROM/VerifyIC.lean`, shared with Moussaka's Theorem 1 (`ROM/MoussakaOMUF.lean`,
+`docs/security/moussaka.md` §4).
+
+**Shared, after merging.** The two protocol reductions were written in parallel; one copy of each
+generic piece is kept. `ROM/VerifyIC.lean` (Moussaka's; its query bounds are smaller than those
+of the Ratatouille branch's own version, which is removed) now also proves the generic interface
+`VerifierIC` (`verifierIC_verifyIC`). `ROM/ExtractReduce.lean` holds the union bounds across
+games per table (`prEvent_bind_le_sum_of_table` with any output types per game, and
+`prEvent_bind_le_sum4_of_table`, which replaces `MoussakaOMUF`'s `prEvent_le_sum_of_tables` and
+`prEvent_le_sum4_of_tables`), `gameA_transcript`, `evalWithAnswerFn_mapM`,
+`isKindQueryBoundIC_bind` and `IsKindQueryBoundIC.mono`. Not unified: `MoussakaOMUF`'s provers
+`PI`, `PR` are its own (an issue phase, then the redemptions output at the end) rather than
+`proverAt`; and `CipherGame`'s `prEvent_randomOracle_eq_eager` is the `Dom`-indexed case of
+`prEvent_eq_extendTable`. `ROM/OneMore.lean` (PomFRIT's one-more reduction by target
+programming) is a different construction and shares nothing with these.
+
+* **Comparing computations per table** (`prEvent_le_sum_of_table`,
+  `prEvent_bind_le_sum_of_table`). A protocol game and the single-proof games of its requests are
+  different computations against one lazy random oracle. If at every complete hash table the
+  game's event implies the event of one of the others, the game's probability is at most
+  the sum of theirs: restrict all of them to one finite key set (`restrictQueries`), pass to an
+  eager uniform table (`evalDist_simulateQ_randomOracle_run'_eq_completeTable`,
+  `prEvent_eq_extendTable`), take the union bound there. An outer draw (the cipher table) is
+  integrated.
+* **The `j`-th prover** (`RoundAdv`, `roundsM`, `proverAt`). An adversary calling an honest party
+  `n` times, written once for any monad; the `j`-th prover re-runs the first `j` calls and outputs
+  the `j`-th request. Per table it outputs the run's `j`-th request
+  (`evalWithAnswerFn_proverAt`), and its budget is `j + 1` calls (`isKindQueryBoundIC_proverAt`,
+  `isQueryBoundP_proverAt`). The single-proof theorems (`*_accept_le_adaptive_spec`) apply to it
+  as they stand, one request at a time: the composed bound has a factor `N` (simultaneous
+  extraction, without it: §2m).
+* **The honest verifier as cipher queries** (`VerifierIC`, `verifyIC`). Inside the `j`-th prover
+  the honest party's verifications must query the cipher (the extractor reads the cipher log).
+  `VerifierIC` states what a game needs of such a verifier; `ROM/VerifyIC.lean`'s `verifyIC`
+  meets it (`verifierIC_verifyIC`): `extractorQueries + verifierQueries` per kind,
+  `2 + verifierTotal` hash queries, `verifyCellBound p` cipher queries.
+* **Extracted witnesses** (`gameA_out`, `extWit`): per table, the single-proof game's output is the
+  prover's proof and statement with the executable verifier's transcript, and a successful
+  extraction yields a witness of the spec relation.
+* **Reductions that read an oracle of the honest party** (`gameA_congr`, `proverAt_congr`): the
+  single-proof game depends on its prover only through the prover's output and log, and the `j`-th
+  prover only through the adversary's states in the first `j` calls when the honest party's calls
+  log the same queries. Ratatouille uses this to show that its forger reads the signer only on its
+  logs (`bOut_reads`, a UF-Tag forger as `TagForger`).
+
+### 2m. Simultaneous extraction: one charge per query of a protocol run, as implemented
+
+Files: `ROM/SimUnion.lean` (generic), `ROM/SimExtract.lean`, `ROM/SimSpec.lean`,
+`ROM/SimJoint.lean` (both relations of a protocol together), `ROM/SimJointSpec.lean`,
+`ROM/MoussakaOMUFSim.lean`, `ROM/RatatouilleBalanceSim.lean`, `ROM/MoussakaUnboundSim.lean`,
+`ROM/SimPerm.lean` (permutation model), `ROM/PermJoint.lean`, `ROM/SimPermJoint.lean`,
+`ROM/SimPermJointSpec.lean`, `ROM/MoussakaUnboundSimPerm.lean`, `ROM/MoussakaOMUFSimPerm.lean`,
+`ROM/RatatouilleBalanceSimPerm.lean` (permutation model, both relations together),
+`Assumptions/SimLinks.lean`, `Audit/SimExtract.lean`;
+PomFRIT: `ROM/OneMoreLemmaPPrefix.lean`, `ROM/OneMoreLemmaPSim.lean`,
+`Assumptions/PomfritLemmaPSim.lean`, `Audit/PomfritLemmaP.lean`;
+changed: `ROM/AdaptChain.lean`, `ROM/AdaptComb.lean` (the bad
+predicate, its per-query bound and the deterministic step of the adaptive union bounds are now
+lemmas, `adaptBad`, `prEvent_adaptBad_le`, `adaptBad_trace`, `combAdaptBad`,
+`prEvent_combAdaptBad_le`, `combAdaptBad_trace`; `prEvent_accept_le_adaptive_E` and
+`prEvent_accept_le_adaptive_comb_E` use them, statements unchanged), `ROM/LemmaP.lean` (likewise
+for Lemma P: `pomBad`, `pomEps`, `prEvent_pomBad_le`, `pomBad_trace`;
+`prEvent_accept_le_adaptive_pomfritT_E` uses them, statement unchanged). No executable definition
+changed. `#print axioms` of the headline results: `propext`, `Classical.choice`, `Quot.sound`.
+
+**The problem.** §2l bounds a protocol game's extraction failures by a union bound over its
+proofs: `qI·ε_I + qR·ε_R` (Moussaka), `N·ε_iss + N·ε_spend` (Ratatouille), each `ε` the
+single-proof bound at the whole run's budget `q`, so each query of the run is charged once per
+proof. The paper (`extraction/README.md` main theorem, `L8` §9.1–9.2, `moussaka.md` §3.1) charges
+each query once: the bad events (a bad `chal1` at an `H₂¹` query, a bad `chal2` at an `H₂²` query,
+an accepted `chal3` at an `H₂³` query, the hits) are properties of the query and the log before
+it, whichever proof later uses the query.
+
+**The generic lemma** (`ROM/SimUnion.lean`, `prEvent_le_shared_suffix`). An event of any
+computation that implies, at every table, (i) a bad query of a shared run `A` (predicate `badA`,
+charged once at `A`'s weighted budget `B_A`), or (ii) for some output `j ∈ J` a query of its
+continuation `K j` after a prefix `A' j` that the prefix did not make, bad for `badK j` (charged at
+the continuation's budget `B_K`, the prefix free), or (iii) some further event of another
+computation, has probability `≤ B_A + |J|·B_K + Σ Pr[(iii)]`. The core is
+`prEvent_suffixBad_le`: on a finite key set, from any cache, the fresh bad queries of a
+continuation after a prefix cost only the continuation's budget. Proof by induction on the prefix,
+exposing and caching each of its fresh answers without charge (VCVio's
+`prEvent_freshBadQuery_le_weighted` charges it), then `ROM/Fresh.lean`'s
+`prEvent_freshBadQuery_le_of_cached` for the continuation from the prefix's cache (the cache-size
+form, so the combined relations' two-cell `H₂²` bound applies). The lazy random oracle on `Dom`
+is reached through one finite key set (`restrictQueries`, `extendTable`).
+
+**The relations** (`ROM/SimExtract.lean`). The `j`-th output is the adaptive game of a prover
+`P j`; the reference run `P₀` is a prover whose hash log and joint log extend every `P j`'s
+(`PrefixRuns`: Moussaka's provers are projections `proj j <$> G` of one run, `prefixRuns_map`;
+Ratatouille's `proverAt` is the run up to the `j`-th request, a prefix of the run of `N` calls,
+`proverAt_prefix`, `prefixRuns_I`, `prefixRuns_S`). The game of `P` is `runE E P` followed by the
+extractor and the verifier (`gameA_eq_bind`, `gameK`). At a hash query of `P j`, the logs before it
+of `P j`'s and `P₀`'s games agree (`logBefore_prefix`: the adaptive game's, each fixed game's,
+the joint log's), and the bad events read only those (`adaptBad_prefix_congr`,
+`combAdaptBad_prefix_congr`; `chainBad_congr_at`: `chainBad` at a query reads the chain data at
+that query's input only). So the single-proof trace (`adaptBad_trace`: an accepted, unextracted
+output with no failure event has a bad query in its game's log) gives either a bad query of `P₀`'s
+run (charged once) or a fresh query of the continuation (the extractor's two and the verifier's,
+`r = extractorQueries + verifierQueries`). Per cipher table (`prEvent_sim_le_E`,
+`prEvent_sim_comb_le_E`):
+
+    Pr[event] ≤ Σ_k q_k·ε_k + |J|·Σ_k r_k·ε_k + Σ_{j ∈ J} Pr[bindFail_j ∨ deadOpen_j ∨ cf_j],
+
+`ε = adaptEps` (`combAdaptEps`), the single-proof bound's per-query charge at the games' budget
+`q + r`. In the joint experiment (`prEvent_sim_le`, `prEvent_sim_comb_le`), with `cf` = Post and
+each output's failure terms bounded by `§2g`'s adaptive bounds (`failEps q q_E =
+2q_E²·2⁻²⁵⁶ + 2·(openHashEps q + q₁·2⁻²⁵⁶) + 1024·q_E·q₁·2⁻²⁵⁶`); summed (`sim_sum_eq`,
+`sim_comb_sum_eq`) for `m = |J|`:
+
+    (q₂₁+m)·ε_KOS + (q₂₂+m)·ε₂ + (q₂₃+m)·N·2⁻¹²⁸ + chainHitEpsSim q m + stmtBindEpsSim q m
+      + m·failEps q q_E,
+
+against `m·((q₂₁+1)·ε_KOS + (q₂₂+1)·ε₂ + (q₂₃+1)·N·2⁻¹²⁸ + chainHitEps q + stmtBindEps q +
+failEps q q_E)` from the union bound (`chainHitEpsSim q 1 = chainHitEps q`,
+`stmtBindEpsSim q 1 = stmtBindEps q`). Spec relations (`ROM/SimSpec.lean`):
+`moussakaIssue_sim_spec`, `moussakaRedeem_sim_spec`, `ratatouilleIssue_sim_spec`,
+`ratatouilleSpend_sim_spec`.
+
+**Both relations of a protocol together** (`ROM/SimJoint.lean`). The above charges each query of
+the run once per relation. A query of the run is bad for a relation only at a statement of that
+relation's family committed at the query (`stmtAt`, the decoded first `H₂⁰` preimage). The two
+relations of a protocol have distinct DSTs of one length, so no `H₂⁰` input decodes in both
+families (`muIn_ne_of_dst`, `decOf_sep`; `stmtAt_eq_bind`, `stmtAt_sep`: the preimage does not
+depend on the decoder). The joint bad event of a query (`jointBad`) is an issue-type relation's
+bad chain query at a committed statement of its family (read off the combined relation's log,
+which agrees with the issue-type game's before a query of the shared run,
+`logBefore_gLogA_joint`), or a bad query of the combined relation (its hits contain the issue-type
+relation's, `mem_hitTargets_of_none`). Its per-query bound (`prEvent_jointBad_le`) weights each
+relation's chain charge by the probability `p_I`, `p_R` that a statement of its family is committed
+at the query, over the background; `p_I + p_R ≤ 1`, so the charge is
+`p_I·ε_I + p_R·ε_R ≤ ε_I ⊔ ε_R` (`mul_add_mul_le_max`). For `H₂¹`, `H₂³` and the issue-type
+relation this is the single-cell bound with a weight (`prEvent_cell_le_mul`); for the combined
+relation at `H₂²` it is `ROM/AdaptComb.lean`'s two-cell bound redone with the weight
+(`prEvent_combBadA_h22_le_mul`, `prEvent_three_le_of_first_mul`,
+`prEvent_three_le_of_second_mul`): `≤ n·2⁻⁴⁴⁸ + p_R·(ε_QS(n') + ε_c)`. So
+
+    jointEps k = (ε_I,k ⊔ ε_R,k) + [k = H₂²]·ntot·2⁻⁴⁴⁸ + hits (with combination) + statement hits.
+
+The union bound has two families of outputs (`prEvent_le_shared_suffix₂`), each continuation at its
+own relation's charge, and the shared run charged once with `jointEps`
+(`prEvent_sim_joint_le_E`, `prEvent_sim_joint_le`, the reference runs having one hash log,
+`hsame`). Summed (`sim_joint_sum_le`), with `κ ≥ ε_KOS` and `ε₂ ≥` both relations' `H₂²`
+charges, `m = m_I + m_R`:
+
+    (q₂₁+m)·κ + (q₂₂+m)·(ε₂ + ntot·2⁻⁴⁴⁸) + (q₂₃+m)·N·2⁻¹²⁸ + chainHitEpsCombSim q M m
+      + stmtBindEpsSim q m + m·failEps.
+
+Spec relations: `moussaka_sim_joint_spec`, `ratatouille_sim_joint_spec` (`ROM/SimJointSpec.lean`),
+`moussakaUnbound_sim_joint_spec` (`ROM/MoussakaUnboundSim.lean`, with the per-relation
+`moussakaUnboundIssue_sim_spec`, `moussakaUnboundRedeem_sim_spec`); `ε₂` is the combined
+relation's `ε_QS(n') + 2⁻¹²⁸`, which dominates the issue relation's `ε_QS(n)`
+(`ofReal_epsQS_mono`).
+
+**The protocols.** Moussaka Theorem 1: `omuf_le_sim` (the reduction with one extraction event for
+both relations, `SimIR = SimI ∨ SimR`, an event of the reductions' run `extAll`),
+`prEvent_simIR_le`, `omuf_le_num_sim` (`ε_IR^sim + AdvBind + AdvCTUF`), `omuf_le_num_open_sim`,
+`omuf_le_num_ompr_sim`; per relation `prEvent_simI_le`, `prEvent_simR_le` are kept.
+Ratatouille Theorem 1: `balance_le_sim` (one event `SimIS = SimIss ∨ SimSp` of `master`),
+`prEvent_simIS_le`, `balance_le_sim_num`, `balance_le_lean_sim`, `balance_le_ufTag_sim`,
+`balance_le_ompr_sim`, `balance_le_ompr_rate_sim` (`ε_bal^sim`); per relation
+`prEvent_simIss_le`, `prEvent_simSp_le` are kept. The `*_sim` theorems' statements changed: they
+now carry the joint bound. The budgets are those of the per-proof theorems (kept unchanged:
+`omuf_le_num`, `balance_le`, …). `Audit/SimExtract.lean` instantiates their hypotheses with the
+audit adversaries of `Audit/Nonvacuous.lean` and `Audit/IdealTag.lean`, and the unbound joint
+bound at the executable statements.
+
+**The permutation model, per relation** (`ROM/SimPerm.lean`). Per permutation table `π`, the
+normalized provers `normP p π (P j)` are provers of the PRF view at `π.fwd`, so `prEvent_sim_le_E`,
+`prEvent_sim_comb_le_E` apply; averaged over `π` with the permutation model's failure terms
+(`failEpsP`, `sum_fail_leP`): `prEvent_sim_leP`, `prEvent_sim_comb_leP`, at the normalized budget
+`addH4 q`. Normalization commutes with projections (`normP_map`, `prefixRuns_normP_map`).
+
+**The permutation model, both relations together** (`ROM/PermJoint.lean`,
+`ROM/SimPermJoint.lean`). *The obstacle*: `normP p π` adds the `H₄` query of the chain's `iv` at
+the relation's parameters (`ivIn p`) before every `H₂¹` query (N1), and issuance and redemption
+(spend) have different parameters, so `normP p_I π P` and `normP p_R π P` have different hash
+logs, while the joint bound charges the queries of one shared run (`hsame`). *The resolution*: one
+normalization for both relations, `normJ p_I p_R π P = normP p_I π (addIV p_R P)`; `addIV p_R`
+adds the `H₄` query at `p_R` before every `H₂¹` query and leaves the cipher queries alone, so it
+is a prover of the permutation model that does not depend on `π`. `normJ` is `normP p_I π` of that
+fixed prover, so all record arguments (`normP_congr`, `normP_prefix`, the counting of
+`ROM/PermCount.lean`, binding, the dead leaf) apply unchanged. N1 was the only place where the
+statement's parameters entered, through Post (`PostP p`, the `iv` read at `ivIn p`) and
+`KeysPre`. Those lemmas now take the normalization parameters `p_N` and the statement parameters
+`p` separately, with N1 at `p` as a hypothesis on the normalized log (`IvBefore p`):
+`prEvent_perm_postP_le_iv`, `keysPre_of_not_postP_iv`, `prEvent_jointP_postP_le_iv`,
+`prEvent_jointP_deadOpen_le_iv`, `keysPre_iv`, `sum_fail_leP_iv`. The proofs are those of
+`ROM/PermPost.lean` and `ROM/PermAdapt.lean` with `p` and `p_N` separated, and the bounds are the
+same. `normJ` satisfies N1 at both parameter sets (`ivBefore_normP`, `ivBefore_normP_addIV`) and
+commutes with projections and binds (`normJ_map`, `normJ_bind`). So two projections of one run
+have one hash log after it (`tableQueryLog_runE_normJ_map`), and prefix runs stay prefix runs
+(`prefixRuns_normJ_map`, `proverAtP_prefix`). The cost is a second `H₄` query per `H₂¹` query:
+`ε_{H₄} = 0`, so it only enters the total hash count `n_G + 2q₂₁` in the `2⁻⁴⁴⁸` term.
+`prEvent_sim_joint_leP` is `prEvent_sim_joint_le_E` per table at `π.fwd` with `cf = PostPOut p`,
+averaged over `π`:
+
+    Σ_k q'_k·jointEps_k + |J_I|·Σ_k r_k·ε_I,k + |J_R|·Σ_k r_k·ε_R,k + (|J_I| + |J_R|)·failEpsP q q_E,
+
+`q' = addH4 q`. Spec relations (`ROM/SimPermJointSpec.lean`, `ROM/MoussakaUnboundSimPerm.lean`):
+`moussaka_sim_joint_specP`, `ratatouille_sim_joint_specP`, `moussakaUnbound_sim_joint_specP`. Each
+is the PRF-view bound with `failEpsP` for `failEps` and `n_G + 2q₂₁` for `n_G`.
+
+**The protocols in the permutation model** (`ROM/MoussakaOMUFSimPerm.lean`,
+`ROM/RatatouilleBalanceSimPerm.lean`). The adversary makes forward and inverse cipher queries
+(`AdversaryP`, `RoundAdvP`); the honest verifiers read the cipher forward (`liftP`); the game runs
+against `π` (`runP`; `gameP`, `balQP`). At a fixed table the adversary normalized stage by stage
+(`toIC lr π`) is an adversary of the PRF view with the same output (`gameP_eval`,
+`evalWithAnswerFn_balQP`). So the deterministic cores (`game_eval`, `no_win`) apply. The provers
+are projections (Moussaka) or prefixes (Ratatouille) of the permutation-model game, jointly
+normalized; their acceptance and statements depend only on their outputs (`accepted_IP`,
+`ext_issueP`). This gives `win_impP` and the reductions `omuf_le_simP`, `balance_le_simP`. With
+the bounds: `omuf_le_num_simP` (`epsIRsimP`), `balance_le_sim_numP`, `balance_le_lean_simP`
+(`epsBalSimP`), at the budgets of the PRF-view theorems (`q'_E` counts forward and inverse
+queries). `Coll`, `Forge` (`forgeAdvP`, `collAdvP`) stay terms. The CT-UF^open, UF-Tag and OMPR
+corollaries are redone in the permutation model in §2o (`PermSimLinks`, `RatatouillePermSim`,
+`UnboundPermSimLinks`), and unbound Moussaka's protocol game is there too
+(`ROM/MoussakaUnboundOMUFSimPerm.lean`). `Audit/SimExtract.lean` instantiates the
+protocol theorems with adversaries that make inverse cipher queries (`aUP`, `balA0P`), and the
+spec-level instances with a prover making one (`invP`). `#print axioms` of
+`prEvent_sim_joint_leP`, the three `*_specP`, `omuf_le_num_simP`, `balance_le_sim_numP`,
+`balance_le_lean_simP`: `propext`, `Classical.choice`, `Quot.sound`.
+
+**Numbers** (`ε_QS(n) = 2⁻¹²⁸ + (n−1)²·2⁻¹⁹² ≈ 2⁻¹²⁸` for all four systems; `q` queries per kind,
+`q_E = q`, `n_G = q`, `m` proofs per relation; union = the per-proof union bound, per relation =
+each relation's simultaneous bound added (the previous `*_sim`), joint = the current `*_sim`;
+Moussaka and Ratatouille agree to two decimals):
+
+| `q` | `m` | per proof `ε_I`, `ε_R` | union, both relations | per relation, added | joint | `m·failEps` per relation |
+|---|---|---|---|---|---|---|
+| `2⁶⁴` | `2²⁰` | `2⁻⁶⁰·⁶⁸`, `2⁻⁶⁰·⁵⁴` | `2⁻³⁹·⁶` | `2⁻⁵⁹·⁶` | `2⁻⁶⁰·⁵⁴` | `2⁻⁹⁷·⁹` |
+| `2⁶⁴` | `2³⁰` | `2⁻⁶⁰·⁶⁸`, `2⁻⁶⁰·⁵⁴` | `2⁻²⁹·⁶` | `2⁻⁵⁹·⁶` | `2⁻⁶⁰·⁵⁴` | `2⁻⁸⁷·⁹` |
+| `2⁶⁴` | `2⁴⁰` | `2⁻⁶⁰·⁶⁸`, `2⁻⁶⁰·⁵⁴` | `2⁻¹⁹·⁶` | `2⁻⁵⁹·⁶` | `2⁻⁶⁰·⁵⁴` | `2⁻⁷⁷·⁹` |
+| `2⁴⁸` | `2³⁰` | `2⁻⁷⁶·⁶⁸`, `2⁻⁷⁶·⁵⁴` | `2⁻⁴⁵·⁶` | `2⁻⁷⁵·⁶` | `2⁻⁷⁶·⁵⁴` | `2⁻⁹⁷·⁰` |
+| `2⁸⁰` | `2³⁰` | `2⁻⁴⁴·⁶⁸`, `2⁻⁴⁴·⁵⁴` | `2⁻¹³·⁶` | `2⁻⁴³·⁶` | `2⁻⁴⁴·⁵⁴` | `2⁻⁵⁵·⁹` |
+
+In the permutation model (both relations together, `moussaka_sim_joint_specP`; `failEpsP` with
+`p = 1/(2¹²⁸ − q_E)`, `p' = 1/(2¹²⁸ − q_E − 4607)`; the extra `q₂₁` hash queries only in the
+`2⁻⁴⁴⁸` term):
+
+| `q` | `m` | joint, PRF view | joint, permutation model | `m·failEps` | `m·failEpsP` |
+|---|---|---|---|---|---|
+| `2⁶⁴` | `2²⁰` | `2⁻⁶⁰·⁵⁴` | `2⁻⁶⁰·⁵⁴` | `2⁻⁹⁷·⁹` | `2⁻⁹⁵·⁸` |
+| `2⁶⁴` | `2³⁰` | `2⁻⁶⁰·⁵⁴` | `2⁻⁶⁰·⁵⁴` | `2⁻⁸⁷·⁹` | `2⁻⁸⁵·⁸` |
+| `2⁶⁴` | `2⁴⁰` | `2⁻⁶⁰·⁵⁴` | `2⁻⁶⁰·⁵⁴` | `2⁻⁷⁷·⁹` | `2⁻⁷⁵·⁸` |
+| `2⁴⁸` | `2³⁰` | `2⁻⁷⁶·⁵⁴` | `2⁻⁷⁶·⁵⁴` | `2⁻⁹⁷·⁰` | `2⁻⁹⁷·⁰` |
+| `2⁸⁰` | `2³⁰` | `2⁻⁴⁴·⁵⁴` | `2⁻⁴⁴·⁵⁴` | `2⁻⁵⁵·⁹` | `2⁻⁵³·⁸` |
+
+`failEpsP ≈ 4648·2⁻¹²⁸ = 2⁻¹¹⁵·⁸` at `q = 2⁶⁴` (Post, `q_E·4608·q₂₁·p²`, dominates), against
+`failEps ≈ 1064·2⁻¹²⁸ = 2⁻¹¹⁷·⁹`; the main term is the same, so at `2⁶⁴` queries and `2³⁰` proofs
+per relation the permutation model's joint bound is `2⁻⁶⁰·⁵⁴`, as the PRF view's.
+
+The dominant terms are `(q₂₃ + 2m)·9·2⁻¹²⁸` and `(q₂₂ + 2m)·(ε_QS + 2⁻¹²⁸)`. The joint bound is
+`1.91×` smaller than the per-relation sum (not `2×`: at `H₂²` the joint charge is the combined
+relation's `2·2⁻¹²⁸`, larger than the issue relation's `2⁻¹²⁸`), and about the paper's
+`ε_ext ≈ 2⁻⁶⁰·⁸` once for both relations.
+
+**Compared with the paper.** (1) Each query of the run is charged once for both relations, as in
+the paper (its chains are separated by the relations' DSTs; Lean uses the same separation). (2)
+The failure terms (binding, an opened dead leaf, Post) stay per proof, `m·failEps`: in §2d–§2h
+they are bounded on average over the cipher table (Post and binding are events of the prover's
+cipher records; the opened dead leaf includes the verifier's fresh `H₂³` answer, genuinely per
+proof, `2⁻¹²⁸` each). Lifting the cipher-side events to "some output" would need the per-record
+union bounds of `ROM/CipherBind.lean`, `ROM/CipherChain.lean` and `ROM/CipherOpen.lean` redone
+against the reference run; at `2⁶⁴` queries they cost `m·2⁻¹¹⁷·⁹`, negligible against the main
+term for `m < 2⁵⁷`. (3) The hits and statement hits of the verifier's own queries are charged per
+proof (`chainHitEpsSim`, `stmtBindEpsSim` count `18m`, `m`, `m` and `3m` extra queries), as the
+paper's `(q²+q)` would with `q` including the verifications. Nothing in the paper's argument was
+found wrong.
+
+**PomFRIT, Theorem U1** (`ROM/OneMoreLemmaPPrefix.lean`, `ROM/OneMoreLemmaPSim.lean`; §2n). The
+one-more reduction (§2k) leaves one event `∃ i ≤ ℓ, PFail i` of the game; §2n bounds it by a union
+over the forgeries, `(ℓ + 1)·pfailEps`, each forgery's derived game (`proverP … i`) charged with the
+whole forger's run. Here it is charged once:
+- *Prefix runs.* The derived prover of forgery `i` is the forger, the earlier forgeries'
+  verifications up to their target queries (`verPreIC`) and forgery `i`'s (`verLastIC`). The two
+  make the same queries from any state, except that `verPreIC` skips a forgery whose refresher check
+  fails (`log_verPreIC_state`, `log_verPreIC_eq_last`). A failed forgery passed the game's
+  verification (`pfail_refresh`), so where `PFail i` holds, the joint and hash logs of `proverP … i`
+  are prefixes of those of `proverP … ℓ` (`prefix_of_pfail`), the reference run. `PrefixRuns` (for
+  every table) does not hold; the shared-run bound needs the prefix only at the tables of the trace,
+  so `prEvent_le_shared_suffix` is applied directly.
+- *The per-query bad event* (`simBadP`): `pomBad` or an order hit (`orderHitL`), per query
+  `≤ simEps` (`prEvent_simBadP_le`: `2⁻¹⁵⁰` at `H₂¹`, `ε_QS + 2⁻¹²⁸ + ntot·2⁻⁴⁴⁸` at `H₂²`,
+  `2⁵⁷·2⁻¹²⁸` at `H₂³`, the hits, the statement hits, `n₃·2⁻¹⁰⁸⁸` order hits at `H₂¹`); it reads
+  the logs before the query only (`simBadP_prefix_congr`, through `logBefore_prefix`).
+- *The trace*: `pfail_events` and `pomBad_trace` give a failure of the `i`-th derived game
+  (`failP`: binding, an opened dead leaf, Post, the verifier's `H₂³` input unqueried) or a bad query
+  of its log, in its run (charged once, at `proverP … ℓ`'s) or in its extraction and verification
+  (charged per forgery).
+
+Per cipher table `prEvent_pfailZ_sim_le_E`; averaged (`prEvent_avg_le_sum4`, the failure terms by
+`sum_fail_le` and `prEvent_zUnqueried_le_A`) `prEvent_pfailZ_sim_le`; in the game
+`prEvent_pfail_sim_le`; Theorem U1 `pomfrit_U1_sim`, `pomfrit_U1_ompr_sim`:
+
+    Pr[PomWin] ≤ Adv^{ompr} + pfailSimEps(q', q_E', n', ℓ),
+    pfailSimEps = Σ_k (q'_k + (ℓ+1)·r_k)·simEps_k + (ℓ+1)·(failEps(q', q_E') + 2⁻¹²⁸)
+               = (q'₂₁ + ℓ+1)·2⁻¹⁵⁰ + (q'₂₂ + ℓ+1)·(ε_QS + 2⁻¹²⁸ + (n'+339)·2⁻⁴⁴⁸)
+                 + (q'₂₃ + ℓ+1)·2⁻⁷¹ + hits + (ℓ+1)·(failEps + 2⁻¹²⁸)   (`pfailSimEps_eq`),
+
+`r = extractorQueries + verifierQueries`, `q'`, `q_E'`, `n'` the derived provers' budgets (§2n). It
+is never worse than the union: `pfailSimEps ≤ (ℓ + 1)·pfailEps` (`pfailSimEps_le`, via
+`sum_simEps_eq`: one derived game's charges are `majEps` plus its order hits). Numbers (`q` queries
+of each hash kind, `n_A = q_E = Q_T = q`):
+
+| `q` | `ℓ` | union `(ℓ+1)·pfailEps` | simultaneous `pfailSimEps` |
+|---|---|---|---|
+| `2⁶⁴` | `2³⁰` | `2²³` | `2⁻⁷·⁰` |
+| `2⁶⁴` | `2²⁰` | `2¹³` | `2⁻⁷·⁰` |
+| `2⁴⁸` | `2³⁰` | `2⁷` | `2⁻²³·⁰` |
+| `2⁴⁰` | `2³⁰` | `2⁻¹·⁰` | `2⁻³¹·⁰` |
+
+The `2⁻⁷¹` per `H₂³` query (Lemma P's `Shift`) dominates; it is the paper's
+`(Q₃ + ℓ + 1)·2^{−71}`, inherent in U1 (U2 has no such term). The per-forgery terms are about
+`2⁻⁴¹` at `ℓ = 2³⁰`. As for Moussaka and Ratatouille, the failure terms stay per forgery.
+
+**PomFRIT, Theorem U2** (`ROM/OneMoreShiftSim.lean`; §2n). The same with `N = 2` for `2⁵⁷`
+(`simBadS`, `simEpsS`: `2·2⁻¹²⁸` at `H₂³`), the trace through `shiftFail_events` and
+`pomBad_traceG` with U2's goal, and the prefix runs through `ver_tableG` (`prefix_of_shiftFail`):
+`pomfrit_U2_sim`, `pomfrit_U2_omprShift_sim`, `Pr[PomWin] ≤ Adv^{ompr⊕17} + sfailSimEps`,
+`sfailSimEps ≤ (ℓ + 1)·sfailEps` (`sfailSimEps_le`). Numbers (as above): `2⁻⁶²·⁰` at `q = 2⁶⁴`,
+`ℓ = 2³⁰` or `2²⁰`; `2⁻⁷⁸·⁰` at `2⁴⁸`; `2⁻⁸⁶·⁰` at `2⁴⁰` (union `2⁻³²·⁰`, `2⁻⁴²·⁰`, `2⁻⁴⁸·⁰`,
+`2⁻⁵⁶·⁰`). The dominant terms are the `H₂²` and `H₂³` charges, `≈ 2⁻⁶³` each at `2⁶⁴`: the
+paper's `ε_ext`.
+
+**Not covered.** In the AES permutation model, the UF-Tag and OMPR corollaries of Ratatouille's
+balance theorem and PomFRIT's U1 and U2 (above; Moussaka's are in §2o); the quantum setting.
+`Com` and `Tag` as random permutations in the standalone games: §2o.
+
+### 2o. `Com` and `Tag` as random permutations with inverse queries (standalone games)
+
+Files: `Assumptions/LazyPerm.lean` (generic), `Assumptions/CTUFPerm.lean`,
+`Assumptions/PermLinks.lean`, `Assumptions/FDHPerm.lean`, `Assumptions/RatatouillePerm.lean`,
+`Assumptions/PermSimLinks.lean`, `Assumptions/RatatouillePermSim.lean`,
+`ROM/MoussakaUnboundOMUFSimPerm.lean`, `Assumptions/UnboundPermSimLinks.lean`,
+`Audit/PermOMPR.lean`, `Audit/PermFDH.lean`, `Audit/PermSim.lean`; `lean/docs/security/uov-assumptions.md` §5.4 and §5.8 state the results.
+
+- **The shared step** (`LazyPerm`). A lazily sampled permutation of a finite block type with
+  forward and inverse queries (`rpImpl`), next to other oracles that may read it at one point
+  (`pt`, `implC`: the challenger's evaluation of `Com` or `Tag`). `prEvent_rp_le_rf`: against a
+  two-sided lazy random function (`rfImpl`) every event moves by at most `q·(n₀ + q)/|B|`.
+  `prEvent_invHit_le`: an inverse answer lands in a set `S` with probability `≤ q_i·|S|/|B|`.
+  `prEvent_rf_le_avoid`: fresh inverse answers can be drawn outside `S` at the same cost. The
+  identical-until-a-flag lemmas (`prEvent_and_not_flag_eq`, `prEvent_le_add_flag`) and the union
+  bound over a run (`prEvent_bad_le`) are proved here: VCVio's `SimulateQ/UntilBad` and
+  total-variation modules are not in the built package set.
+- **Moussaka** (`CTUFPerm`, `PermLinks`): T4 in the permutation model, `advCTUFPermAt_le_ompr`,
+  and the Moussaka corollaries `omuf_le_num_ompr_perm`, `omufU_le_num_ompr_perm` (hypothesis
+  `hmodelP`). The reduction simulates the permutation from `Com` and coins drawn from the world's
+  random oracle at fresh indices; its run against the function-model challenger projects onto the
+  random-function hybrid (stepwise, `combP_step`, under `InvP`). Corrections to the paper's
+  statement: the switching term includes the inverse queries; `n` budgets `q_S + 1` more targets.
+- **Ratatouille** (`FDHPerm`, `RatatouillePerm`): the det-FDH game with `Tag` read off the
+  permutation (`advFDHPerm`); the hybrid in which fresh inverse answers avoid the structured
+  inputs (`advFDHPerm_le_hyb`); its simulation by a function-model det-FDH forger (`simCF`,
+  `combF`): the step (`combF_step`), the invariant (`InvF`, `combF_inv`: coins unused from the
+  counter on; `H` defined only at recorded structured inputs; a forward record at `emb m` carries
+  `H(m)`; no inverse record at a structured input), the win transfer (`hyb_le_fdh`, through
+  `h_of_fwdFind`) and the counts (`simA_budget`; `fdhImpl_hq`, `fdhImpl_signed` from the generic
+  `count_le`). Then `advFDHPerm_le_fdh`:
+  `Adv^{perm}(A) ≤ Adv^{euf}_{det}(fdhPermRed A; q_f + 1 + q_S, q_S) + permEps`, and with T1(a, c)
+  `advFDHPerm_le_ompr`. The signer reads the permutation, so unlike CT-UF^open an inverse record at
+  a structured input changes the forger's view; this is why the hybrid avoids structured inputs on
+  inverse queries. Ratatouille under OMPR with the modelling hypothesis `TagIdealP`:
+  `balance_le_ompr_perm`, `balance_le_ompr_sim_perm` (and `_rate`); the permutation terms are
+  the paper's `q_K²·2^{−799} + q_K·2^{−479}` (here `(q_f + q_i + q_S + 1)²·2^{−800} + q_i·2^{−480}`).
+- **AES as random permutations, Moussaka** (`PermSimLinks`): `omuf_le_num_simP`'s forgery term is
+  the CT-UF^open advantage of `ctufForgerP` (common randomness the permutation table;
+  `omuf_le_open_simP`, `omuf_le_num_open_simP`), and with `hmodelP` the headline
+  `omuf_le_num_ompr_simP` (AES and `Com` both random permutations with inverse queries). The
+  forger's `reads` property comes from `gameP_congr` (the permutation-model game reads the
+  signers only at accepted Issue queries) and the log lemmas `tableQueryLog_liftP`,
+  `tableQueryLog_normJ` (a jointly normalized computation's log is a function of the original's).
+- **AES as random permutations, Ratatouille** (`RatatouillePermSim`). `TagForger` is generic in
+  the table type that is its common randomness (`TagForger Tb`, default `CTable`), and so are
+  `ufTagAdv`, `failAdv`, `noProbe`, `run_patch_of_not_fail`, `ufTagStrictAdv`,
+  `ufTagAdv_le_strict`, `TagIdeal`, `TagIdealP`. `bOut_reads` and `forge_ufwin` are factored
+  through `bOut_reads_of`, `forge_ufwin_of` (any extraction outputs next to the transcript; the
+  outputs must depend on the signer only through the run's first calls). The forger of the
+  permutation model is `forgerP : TagForger PTable` (it runs `masterP`). Its `reads` property
+  (`bOut_readsP`) comes from `games_congrP`: a jointly normalized `j`-th prover is the PRF-view
+  prover of the normalized adversary (`nJ_proverAtP`, `normJ_roundsM`), and the lifted,
+  normalized Issuer makes the same queries whatever the signer (`tableQueryLog_normJ`,
+  `tableQueryLog_liftP`). Then `forgeAdvP_le_ufTag`, `balance_le_ufTag_simP`, and the OMPR forms
+  `balance_le_ompr_simP` (`Tag` a random function, `TagIdeal`) and `balance_le_ompr_sim_permP`
+  (`Tag` a random permutation, `TagIdealP`), with `_rate` forms; `forgerP_logs_le` (at most `N`
+  logged pairs).
+- **AES as random permutations, unbound Moussaka** (`ROM/MoussakaUnboundOMUFSimPerm.lean`,
+  `UnboundPermSimLinks`). The OMUF-U game of the permutation model (`OMUFU.AdversaryP`,
+  `OMUFU.gameP`; the adversary at a table normalized by the unbound relations' joint
+  normalization, `gameP_eval`), the provers `PBIP`, `PUIP`, `PURP` (bound issuance normalized by
+  `normP (mousPI lr) π`, the unbound pair by `normJ (mousUPI lr) (mousUPR lr) π`), `win_impP`,
+  `omufU_le_simP`, the bound issuance family's simultaneous bound in the permutation model
+  (`moussakaIssue_sim_specP`, from `prEvent_sim_leP`), and `omufU_le_num_simP`
+  (`εI^simP + εU^simP + Pr[Coll] + Pr[Forge]`). The CT-UF^open forger `ctufForgerUP` (common
+  randomness the permutation table; `reads` from `gameUP_congr` and the log lemmas, with
+  `tableQueryLog_normP` for the bound issuance provers), `omufU_le_num_open_simP`, and with
+  `hmodelP` `omufU_le_num_ompr_simP`. Non-vacuity of both: `Audit/PermSim.lean` (`balA0P`;
+  `aUUP`, an inverse cipher query then a bound and an unbound Issue query and a redemption).
+- **Not done.**
+  - PomFRIT U1 and U2 with AES as random permutations with inverse queries: there is no
+    permutation-model one-more game. It needs the game with a forger making inverse cipher
+    queries, the derived provers (`wrapIC`, `wrapP`) per permutation table normalized as in
+    `ROM/PermJoint.lean`, and the per-table Lemma P bounds (`prEvent_pfailZ_sim_le_E`,
+    `prEvent_shiftFailZ_sim_le_E`) averaged with `failEpsP` instead of `failEps`, as
+    `ROM/MoussakaOMUFSimPerm.lean` does for Moussaka.
+  - The lazily sampled permutation is the uniformly drawn one (`EagerPerm.rp_eqd_eager`, joint
+    distribution of output, table and state, any oracle computation; proof: condition on the table,
+    the fibres of `π(b)` have equal size by composing with a transposition, induct on the
+    computation). The AES model `ROM/PermModel.lean` (`PTable`) is eager already; the two agree.
+
+### 2n. Lemma P in the random-oracle model (PomFRIT G8), as implemented
+
+Files: `ROM/LemmaPDet.lean`, `ROM/LemmaP.lean`, `ROM/OneMoreLemmaP.lean`,
+`ROM/OneMoreLemmaPIC.lean`, `ROM/OneMoreLemmaPIdent.lean`, `ROM/OneMoreLemmaPOrder.lean`,
+`ROM/OneMoreLemmaPQueries.lean`, `ROM/OneMoreLemmaPFail.lean`, `ROM/OneMoreLemmaPBound.lean`,
+`Assumptions/PomfritLemmaP.lean`, and for simultaneous extraction `ROM/OneMoreLemmaPPrefix.lean`,
+`ROM/OneMoreLemmaPSim.lean`, `Assumptions/PomfritLemmaPSim.lean`; changes to
+`ROM/OneMorePomfrit.lean`. `lean/docs/security/pomfrit.md` §5, §6.4 state the results.
+
+Whether the `2⁵⁷` of Lemma P can be removed: `lean/docs/security/pomfrit-lemmap-tight.md`
+(`Seed/KOSUnique.lean`: `ũ` determines the witness slope, `witness_determined`; affine first
+messages need no `Shift` term, `exists_slope_of_kosGood_affine`; hidden slices: a collision in a
+slice certifies the witness, `slice_collision_sound`, and `T` evaluations detect at most `T`
+slices, `DTree.card_detect_le`). No `pomEps'` yet: the slice decoder of §6.4 there is proved for
+two label classes only; its completeness in general is a conjecture.
+
+- **A general extraction goal.** The adaptive bound of §2g reads the extraction goal
+  `∃ i ∈ known, Wit chal1 (cand i)` only through the per-chain hypothesis `hdet`.
+  `combBad_of_acceptG`, `CombDetG`, `combBad_trace_icDG` are `combBad_of_accept`, `CombDetD`,
+  `combBad_trace_icD` with the goal any predicate `Goal chal1 cand S` of a tree set `S` that
+  contains every tree with no committed dead leaf; the proofs are copies with the goal threaded
+  through (`ROM/Accept.lean` and `ROM/AdaptPomfrit.lean` are unchanged).
+- **The target family.** `pomfritRedeemT pk h b₁ b₂` (moved from `ROM/OneMorePomfrit.lean`) is
+  PomFRIT's statement with any target function `h` of `chal1`. The delayed `μ` binds `h(chal1)`
+  through its `H₂⁰` preimage for any `h` (`target_eq_of_muInD_T`), so §2g's union bound carries
+  over with the family `stT s = pomfritRedeemT pk (hF s) (b₁F s) (b₂F s)`
+  (`prEvent_accept_le_adaptive_pomfritT_E`, a copy of `prEvent_accept_le_adaptive_pomfrit_E`).
+- **Lemma P's goal on an output** (`MajorExtracted`): `aliveR` recomputes the committed dead
+  leaves (`deadPre`) at the first `H₂¹` preimage of the output's `chal1` in the prover's hash log
+  (`hashEnt`), with the verifier's `iv`; without chain hits it contains every tree with no dead
+  leaf of the accepted chain (`dead_of_not_mem_aliveR`: the preimage is the verifier's `H₂¹` input
+  by `cell_eq_of_noHit`, the logs before it agree since the game's log starts with the prover's
+  hash entries). The goal: a tree of `aliveR` in the relation whose prefix `preB` (witness bytes
+  `[0, 45)`) is the widest group's (`PomFRIT.majP`).
+- **The per-chain step** (`extract_or_major`, `pomfritT_extract_major_chain`): `extract_or_few`
+  with Lemma P's step 6: the free tree holds `u*`, trees outside `u*`'s prefix group are fixed,
+  and a group that is not the widest has width `≤ 57` (`minority_card_le`), so `|A| ≤ 2⁵⁷`. With
+  `N = 2⁵⁷` the union bound's `H₂³` term is `(Q₃ + 1)·2⁵⁷/2¹²⁸`
+  (`pomfritT_accept_le_major`).
+- **The game as a lazy random oracle** (`realImpl_run_eq`): `OneMore.realImpl` is the lazy random
+  oracle composed with a state handler `htW` for the target oracle and the Issuer, by induction on
+  the computation. Then `ROM/ExtractReduce.lean`'s per-table comparison applies to the one-more
+  game.
+- **Derived provers, table by table.** `wrapIC`/`wrapP` run the forger with the cipher as
+  queries; per table they give the game's forgeries, log and target answers (`eval_forger`,
+  `log_forger`, `eval_forgerP`). `pfail_table`: a failed forgery is, at the same tables, an
+  accepted proof of the derived prover `proverI … i` from which no extracted candidate decodes to a
+  preimage of the programmed target; `not_noPick`: Lemma P's goal, `aliveR ⊆ known` and the hint
+  equal to the widest group's prefix contradict that.
+- **Deviations.** The wrapper makes its own hidden queries at each target query (`auxSpec`: a
+  marker `H₃(x)`, `mu₁`, `iv`), logged for the hint, so that `E₁` can compute `iv` at query time;
+  `chal1Pre` now uses the ideal cipher's PRG (it used the global AES instance, so the target
+  oracle's input was computed at a `chal1` that is not the verifier's).
+- **The `E`-independent derived prover** (`ROM/OneMoreLemmaPIC.lean`, `proverP`): the forger with
+  a void hint (`hintVoid`; the hint the game stores at `x` is the hint rule at `x`'s ghost log,
+  `InvH`, `eval_wrapIC_hint`), the verifications up to the target queries with `chal1` through
+  cipher queries (`chal1PreIC`: `verifyIC`'s cells, then `chal1Pre` with the queried cells' PRG,
+  `chal1Pre_congr_cells`). Per table: `eval_proverP` (output = `proverI`'s, hint = `E₁` at the ghost
+  log), `log_proverP` (forger's log `L`, then `V`), `aux_proverP` (ghost logs).
+- **Extraction from a prefix** (`ROM/OneMoreLemmaPIdent.lean`): `find?` on a log sandwiched between
+  two logs on which it agrees (`find?_sandwich`, `extractKey_sandwich`); with `chain_ident`'s
+  order (`mem_x_of_mem_z`) and `KeysPre` the extraction from `L` is the one from `L ++ V`
+  (`keysOf_knownOf_prefix`); `aliveR_eq_filter`, `aliveR_subset_known`.
+- **The ordering step** (`ROM/OneMoreLemmaPOrder.lean`, `e1P_eq_major`), and its failure as an order
+  hit (`orderHitL`, `ROM/OneMoreLemmaPFail.lean`).
+- **The per-table implication** (`pfail_events`) and **the assembly** (`ROM/OneMoreLemmaPBound.lean`):
+  `prEvent_bind_le_sum_of_table` over `Fin (ℓ+1) × Fin 4` (the four events of each derived game,
+  through `withLogQ` for the hits), the four bounds per derived prover, `eqd_swap` to draw the
+  target stream before the cipher table, `realImpl_run_eq` to pass from the game to the lazy oracle
+  (`prEvent_pfail_le`), then `pomfrit_U1_bound` (`pomfrit_U1_explicit`). Query bounds:
+  `ROM/OneMoreLemmaPQueries.lean` (`ForgerBound`, `proverP_bounds`).
+- **Simultaneous extraction** (`ROM/OneMoreLemmaPPrefix.lean`, `ROM/OneMoreLemmaPSim.lean`;
+  §2m): the per-query bad event, its bound and its deterministic step exposed as lemmas
+  (`pomBad`, `prEvent_pomBad_le`, `pomBad_trace`), the derived provers' runs prefixes of the last one's
+  where a forgery fails (`prefix_of_pfail`), then `prEvent_le_shared_suffix`: `pomfrit_U1_sim`,
+  `Pr[PomWin] ≤ Adv^{ompr} + pfailSimEps`, each query of the forger's run charged once,
+  `pfailSimEps ≤ (ℓ + 1)·pfailEps`.
+- **Theorem U2** (`ROM/LemmaPSome.lean`, `ROM/OneMoreShiftTable.lean`, `ROM/OneMoreShiftFail.lean`,
+  `ROM/OneMoreShiftBound.lean`, `ROM/OneMoreShiftSim.lean`, `Assumptions/PomfritShift.lean`,
+  `Assumptions/PomfritShiftSim.lean`). Generalized rather than copied where the U1 pieces allowed:
+  - *Any goal.* `pomBad_trace` and the union bound of `ROM/LemmaP.lean` read Lemma P's goal only
+    through `hdet`; `pomBad_traceG`, `prEvent_accept_le_adaptive_pomfritT_EG`,
+    `prEvent_accept_le_adaptive_pomfritTG` take the goal as a parameter (`GoalT`; `MajorExtracted`
+    is `GoalOut GoalP`). U2's goal `GoalS` (some alive tree extracts) with
+    `pomfritT_extract_some_chain` (`extract_or_few` for the target family, `N = 2`) gives
+    `pomfritT_accept_le_some`. `prEvent_pomBad_le` does not read the goal and is reused.
+  - *Any hint type.* The derived prover `proverP` reads neither hints nor targets, so it serves U2
+    unchanged; the game's side is restated for any `Hn`, `φ`, hint and target rules
+    (`InvG`, `eval_forgerG`, `eval_verOneG`, `eval_verPreAllG`), and `ver_tableG` relates an
+    accepted forgery of the game directly to `proverP` (U1 went through `proverI`, which is
+    U1-specific).
+  - *U2's shift rule* `shP` (all alive trees' prefixes), its ordering step `shP_eq_alive` (the proof
+    of `e1P_eq_major`, the list in place of the widest group), `shiftFail_events` (the proof of
+    `pfail_events` with `ver_tableG`), and the assembly as for U1 (`prEvent_shiftFail_le`,
+    `prEvent_shiftFail_sim_le`).
+  - Copies rather than generalizations: `shP_eq_alive` (of `e1P_eq_major`), the U2 bounds (of
+    `ROM/OneMoreLemmaPBound.lean`, `ROM/OneMoreLemmaPSim.lean`) and `simBadS` (of `simBadP`, with
+    `N = 2`), to leave the U1 files untouched while `ROM/LemmaP*.lean` is being worked on. Making
+    the U1 statements corollaries of the general ones is a refactor, not new mathematics.
+
+### M4 — Mathlib bump and VCVio dependency (Phase B, ~1–3 days, mostly waiting on builds) — done
+
+- Bump to `v4.34.0` (separate commit). Fix the breakage. Then `require VCVio` and add
+  `VoleMole/ROM/Basic.lean`.
+- Bridge phase-A `prU` to VCVio: `Pr{let x ← $ᵗ α}[P x] = prU α P` (via
+  `evalDist_selectElem_eq_uniform` and `PMF.toMeasure`).
+- Model the hashes as one `OracleSpec` indexed by domain (L0's disjointness justifies independent
+  oracles): `H₂¹ : Bytes* → Bytes 136`, `H₂² → Bytes 56`, `H₂³ → Bytes 16`,
+  `H_comb → Fin 45 → GF128`, `H₁`, `H₄`, `H₅`.
+
+### M5 — ROM: union over queries and freshness (Phase B, ~1–2 weeks) — done, see §2b
+
+Lazy RO = `OracleSpec.randomOracle` (`uniformSampleImpl.withCaching`), adversary
+`P* : OracleComp spec α` with `IsPerIndexQueryBound P* qb`. Key generic lemma (check
+`FreshQuery.lean` / `Unpredictability.lean` first; it may exist in some form):
+```lean
+/-- "Bad answer" union bound: if every possible answer to a query at index i is bad with
+probability ≤ ε given its input, then some logged query is bad with probability ≤ qb i · ε. -/
+theorem prEvent_exists_bad_query_le (bad : spec.Domain i → spec.Range i → Prop)
+    (hε : ∀ x, Pr{let y ← $ᵗ _}[bad x y] ≤ ε) (hq : IsPerIndexQueryBound oa qb) :
+    Pr{let z ← (simulateQ randomOracle (withLogging oa)).run ∅}[∃ (x, y) ∈ log z i, bad x y]
+      ≤ qb i * ε
+```
+Instances:
+- `bad₁ x c := ¬KOSGood …` for the prefix parsed from `x` (M2), giving `q₁·ε_KOS`;
+- `bad₂ y c :=` M2's event for the canonical slope parsed from `y` (and `l` read through the RO
+  cache), giving `q₂·(ε_QS + 2⁻¹²⁸)`;
+- freshness of `chal2 ‖ dst` in `H_comb` (`q_c·2⁻⁴⁴⁸`, `Unpredictability` / birthday lemmas);
+- `bad₃ := acc` on doomed chains, giving `Q·max(d,1)·2⁻¹²⁸`;
+- statement binding before `chall₂`, `(q²+q)·2⁻²⁵⁶`: `prEvent_cacheCollision_le_birthday` (as
+  implemented: per-`H₂⁰`-query statement hits, §2g).
+
+Subtlety: the "parse a prefix from `x`" functions must be total functions of the query input (and
+the RO cache *before* the query). This is where L1's "committed data" enters. In M5 take it as
+given via a hypothesis that the committed keys are a function of the prior log.
+
+### M6 — Ideal cipher, L1/L2, the "same chain" step (Phase B, ~3–6 weeks, optional) — done (PRF view; adaptive statements; permutation model with inverse queries; spec relations; the unbound Moussaka relations), see §2d, §2e, §2f, §2g, §2h, §2i, §2j
+
+- Model AES as an ideal cipher: a lazy random *permutation* per key, with forward and inverse
+  queries. VCVio has no ready-made ideal cipher that I could find; build it as a stateful
+  `QueryImpl` with a partial bijection per key.
+- Prove C1 (`E[N_coll] ≤ q_E²p`), C2 and C3 (`L0-L2-commitments.md` §4), then `ε_bind` and
+  `ε_dead`.
+- Derive `hrun` of `onChain_of_accept` (binding) and `hL2`.
+- The "same chain" step: an accepted proof whose H₂¹/H₂²/H₂³ inputs were never queried is accepted
+  with probability `≤ 2⁻¹²⁸`-ish, because the verifier's own query is fresh.
+- Final theorem: `Pr[accept ∧ ¬R(x, E(π, log))] ≤ ε_ext` for `E` the straight-line extractor run
+  on the log.
+
+This is where most of the risk and effort sits. A useful intermediate is M5's theorem with `ε_bind`
+and `ε_dead` as named hypotheses about the cipher.
+
+## 3. Risks
+
+- **The executable verifier hard-codes SHAKE** (resolved: §2a for `chal2`/`l` as chain fields,
+  §2c for the hash record). `Verifier.chal1`, `chal2`, `chal3`, `ivOf` and
+  `Combination` called the concrete `H`, and `Chain.chal2` was a def, not a field.
+  - For M2/M3: add `chal2` (and `l`) as chain fields, with `chal2 = Verifier.chal2 …` as an explicit
+    hypothesis where `onChain_of_accept` needs it.
+  - For M5+: parametrise the verifier by a hash record `Hs` (`verify (Hs := shakeHashes)` stays
+    executable for the KATs).
+  - That is a refactor touching `Verifier/*` and the Bridge files. Plan it early, as a
+    behaviour-preserving change checked by `verifier_vectors`.
+- **ByteArray vs `Fintype`.** All sampled values must be `Bytes n`/`Vector UInt8 n`, coerced.
+  Lemmas about `ByteArray.extract`/`get!` on coerced values are tedious but routine.
+- **Big finite sets.** `shortKeys` (2⁶⁴) and `Bytes 136` must never be decided or enumerated. Every
+  cardinality goes through equivalences.
+- **ℝ≥0∞ arithmetic.** Numeric bounds like `2^(−150)` are painful in `ℝ≥0∞`. Keep the `ℝ` forms
+  (`epsQS` is already real) and convert once.
+- **VCVio churn.** Measure-valued semantics just landed (#710). Pin a rev, isolate it in
+  `VoleMole/ROM/`, and keep phase-A lemmas framework-free.
+- **Bump fallout and memory.** The rc1 → v4.34.0 bump re-checks the heavy kernel computations.
+  VCVio adds about 100k lines to build locally. Respect the one-worker / `MemoryMax` rule.
+- **Modelling gap.** The ROM statement is about the *model* (independent oracles per L0 domain,
+  ideal cipher). L0's disjointness (`Seed/Commitments.lean`, `Protocols/DomainSeparation.lean`)
+  justifies splitting one SHAKE into independent oracles; this is now a lemma (§2c,
+  `ROM/DomainSep.lean`, `ROM/SingleOracle.lean`). AES as an ideal cipher (or random permutations,
+  M6) remains a modelling assumption.
+
+## 4. ZK
+
+Done outside this plan: the classical random-oracle and ideal-cipher zero-knowledge proofs and the
+protocols' privacy games are mechanized in `ZK/` and `Privacy/` (`docs/zk.md` §10, `README.md`
+§3), with the oracles as uniform tables of the games rather than VCVio's programming oracle.
