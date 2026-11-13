@@ -710,4 +710,202 @@ theorem gameB_liftF (A : Forger) (φ : Hn → TG ≃ TG)
 
 end Lift
 
+/-! ## Padding the target stream of the experiment -/
+
+section Pad
+
+variable {DR : Type} [DecidableEq DR] {AR : DR → Type} [∀ d, SampleableType (AR d)]
+  {X : Type} [DecidableEq X] {Hn G S : Type} [AddCommGroup G] [SampleableType G]
+
+omit [AddCommGroup G] in
+lemma unifList_add (m : ℕ) : ∀ Q : ℕ,
+    unifList G (Q + m) = (do
+      let L ← unifList G Q
+      let L' ← unifList G m
+      pure (L ++ L'))
+  | 0 => by simp [unifList]
+  | Q + 1 => by
+    rw [show Q + 1 + m = (Q + m) + 1 by omega]
+    simp only [unifList, unifList_add m Q, bind_assoc, pure_bind, List.cons_append]
+
+omit [AddCommGroup G] [SampleableType G] in
+/-- **Unused targets do not matter**: an adversary with at most `k ≤ |stream|` target requests
+runs the same on a longer stream, the extra targets left over. -/
+theorem chImpl_pad (pre : G → S) (L' : List G) {α : Type}
+    (b : OracleComp (specB AR X Hn G S) α) :
+    ∀ (k : ℕ) (c : Ch AR X Hn G), IsQueryBoundP b (fun q => isTgt q = true) k →
+      k ≤ c.rest.length →
+      (simulateQ (chImpl pre) b).run { c with rest := c.rest ++ L' } =
+        (fun z => (z.1, { z.2 with rest := z.2.rest ++ L' })) <$> (simulateQ (chImpl pre) b).run c := by
+  induction b using OracleComp.inductionOn with
+  | pure x => intro k c _ _; simp
+  | query_bind q cont ih =>
+    intro k c hq hk
+    rw [isQueryBoundP_query_bind_iff] at hq
+    simp only [simulateQ_bind, simulateQ_spec_query, StateT.run_bind, map_bind]
+    rcases q with d | ⟨x, h⟩ | t
+    · have e : ∀ c' : Ch AR X Hn G, (chImpl (S := S) pre (.inl d)).run c' = roStep d c' :=
+        fun _ => rfl
+      rw [e, e]
+      simp only [roStep]
+      erw [bind_map_left, bind_map_left]
+      refine bind_congr fun r => ?_
+      exact ih r.1 k { c with ro := r.2 } (hq.2 r.1) hk
+    · have hk0 : 0 < k := hq.1.resolve_left (by simp [isTgt])
+      cases hr : c.rest with
+      | nil => rw [hr] at hk; simp at hk; omega
+      | cons u r =>
+        simp only [chImpl, StateT.run_mk, hr, List.cons_append, pure_bind]
+        have := ih (some u) (k - 1) { c with rest := r, tg := Function.update c.tg x (some (u, h)) }
+          (hq.2 (some u)) (by rw [hr] at hk; simp at hk ⊢; omega)
+        exact this
+    · simp only [chImpl, StateT.run_mk, pure_bind]
+      exact ih _ k { c with iq := c.iq + 1 } (hq.2 _) hk
+
+variable {PK K : Type} (KG : ProbComp (PK × K)) (pre : K → G → S)
+
+omit [AddCommGroup G] in
+/-- **Padding the stream**: for an adversary making at most `Q` target requests, the experiment
+with `Q + m` targets has the same distribution of key, claims, labelled targets and preimage
+count as with `Q`. -/
+theorem omExp_pad (Q m : ℕ) (B : PK → ProbComp (OracleComp (specB AR X Hn G S) (List (X × S))))
+    (hB : ∀ pk, ∀ b ∈ support (B pk), IsQueryBoundP b (fun q => isTgt q = true) Q) :
+    (fun r => (r.1, r.2.1, r.2.2.tg, r.2.2.iq)) <$> omExp KG pre (Q + m) B =ᵈ
+      (fun r => (r.1, r.2.1, r.2.2.tg, r.2.2.iq)) <$> omExp KG pre Q B := by
+  simp only [omExp, map_bind, map_pure, unifList_add m Q, bind_assoc, pure_bind]
+  refine EvalDistEq.bind_right _ fun kp => EvalDistEq.bind_congr_of_support _ fun b hb => ?_
+  refine EvalDistEq.bind_congr_of_support _ fun L hL => ?_
+  have hlen := length_of_mem_unifList Q L hL
+  have hpad : ∀ L', (simulateQ (chImpl (pre kp.2)) b).run (ch0 (L ++ L')) =
+      (fun z => (z.1, { z.2 with rest := z.2.rest ++ L' })) <$>
+        (simulateQ (chImpl (pre kp.2)) b).run (ch0 L) := fun L' =>
+    chImpl_pad (pre kp.2) L' b Q (ch0 L) (hB kp.1 b hb) (by simp [ch0, hlen])
+  simp only [hpad, bind_map_left]
+  exact UOV.bind_unused _ _
+
+omit [DecidableEq DR] [∀ d, SampleableType (AR d)] [DecidableEq X] [AddCommGroup G]
+  [SampleableType G] in
+lemma wins_congr (ℓ : ℕ) (good : PK → S → Option (G × Hn) → Prop) (pk : PK) (cl : List (X × S))
+    (c c' : Ch AR X Hn G) (h1 : c.tg = c'.tg) (h2 : c.iq = c'.iq) :
+    Wins ℓ good pk cl c ↔ Wins ℓ good pk cl c' := by
+  simp only [Wins, h1, h2]
+
+omit [AddCommGroup G] in
+/-- **`Adv^{ompr}` does not depend on unused targets.** -/
+theorem advOMPR_pad {SK : Type} (tr : Trapdoor PK SK G S) (Q m ℓ : ℕ)
+    (B : PK → ProbComp (OracleComp (specB AR X Hn G S) (List (X × S))))
+    (hB : ∀ pk, ∀ b ∈ support (B pk), IsQueryBoundP b (fun q => isTgt q = true) Q) :
+    advOMPR tr (Q + m) ℓ B = advOMPR tr Q ℓ B := by
+  have h := (omExp_pad tr.keyGen tr.D Q m B hB).prEvent_eq
+    (fun t => t.2.1.length = ℓ + 1 ∧ (t.2.1.map Prod.fst).Nodup ∧ t.2.2.2 ≤ ℓ ∧
+      ∀ p ∈ t.2.1, goodPre tr.IsPre t.1 p.2 (t.2.2.1 p.1))
+  rw [prEvent_map, prEvent_map] at h
+  exact h
+
+end Pad
+
+/-! ## The blinding forger's `H_T` queries -/
+
+section Bound
+
+variable {DR : Type} {AR : DR → Type}
+
+/-- An `H_T` query of a `ForgerB`. -/
+def isHTB : DR ⊕ (DomIC ⊕ (ByteArray ⊕ TG)) → Bool
+  | .inr (.inr (.inl _)) => true
+  | _ => false
+
+lemma liftU_bound {α : Type} (oc : OracleComp specIC α) :
+    IsQueryBoundP (simulateQ (liftU (AR := AR)) oc) (fun q => isHTB q = true) 0 := by
+  induction oc using OracleComp.inductionOn with
+  | pure x => trivial
+  | query_bind t k ih =>
+    simp only [simulateQ_bind, simulateQ_spec_query, liftU]
+    erw [isQueryBoundP_query_bind_iff]
+    exact ⟨Or.inl (by simp [isHTB]), fun u => ih u⟩
+
+lemma mapM_bound {β γ : Type} (f : β → OracleComp (specUB AR) γ)
+    (hf : ∀ b, IsQueryBoundP (f b) (fun q => isHTB q = true) 0) :
+    ∀ l : List β, IsQueryBoundP (l.mapM f) (fun q => isHTB q = true) 0
+  | [] => trivial
+  | b :: l => by
+    rw [List.mapM_cons]
+    exact isQueryBoundP_bind (n := 0) (m := 0) (hf b) fun _ _ =>
+      isQueryBoundP_bind (n := 0) (m := 0) (mapM_bound f hf l) fun _ _ => isQueryBoundP_pure _ _ _
+
+variable (lr : Bool) {Cn St : Type} (cl : PomClient Cn St) {X' Hn' : Type} [DecidableEq X'] (n : ℕ)
+  (pk : UovPk) (κ : Cn)
+
+lemma blindU_bound {α : Type} (b : OracleComp (specB AR X' Hn' TG SIss) α) :
+    ∀ (k : ℕ) (s : BSt ByteArray TG Hn' (ℕ × St) X'),
+      IsQueryBoundP b (fun q => isTgt q = true) k →
+        IsQueryBoundP ((simulateQ (blindImplU lr cl n pk κ) b).run s) (fun q => isHTB q = true) k := by
+  induction b using OracleComp.inductionOn with
+  | pure x => intro k s _; trivial
+  | query_bind q cont ih =>
+    intro k s hq
+    rw [isQueryBoundP_query_bind_iff] at hq
+    simp only [simulateQ_bind, simulateQ_spec_query, StateT.run_bind]
+    rcases q with d | ⟨x', hB⟩ | t
+    · have h2 : ∀ u, IsQueryBoundP (cont u) (fun q => isTgt q = true) k := hq.2
+      refine (isQueryBoundP_bind (n := 0) (m := k) ?_ fun p _ => ih p.1 k p.2 (h2 p.1)).mono
+        (by omega)
+      exact (isQueryBoundP_map_iff _ _ _).2 ((isQueryBoundP_query_iff _ _ _).2 (by simp [isHTB]))
+    · have h2 : ∀ u, IsQueryBoundP (cont u) (fun q => isTgt q = true) (k - 1) := hq.2
+      have hk : 0 < k := hq.1.resolve_left (by simp [isTgt])
+      refine (isQueryBoundP_bind (n := 1) (m := k - 1) ?_ fun p _ =>
+        ih p.1 (k - 1) p.2 (h2 p.1)).mono (by omega)
+      simp only [blindImplU, StateT.run_mk]
+      split_ifs
+      · refine (isQueryBoundP_bind (n := 0) (m := 1)
+          ((isQueryBoundP_map_iff _ _ _).2 (liftU_bound _)) fun o _ => ?_).mono (by omega)
+        refine (isQueryBoundP_bind (n := 1) (m := 0) ?_ fun _ _ => isQueryBoundP_pure _ _ _)
+        exact (isQueryBoundP_query_iff _ _ _).2 fun _ => Nat.one_pos
+      · exact isQueryBoundP_pure _ _ _
+    · have h2 : ∀ u, IsQueryBoundP (cont u) (fun q => isTgt q = true) k := hq.2
+      refine (isQueryBoundP_bind (n := 0) (m := k) ?_ fun p _ => ih p.1 k p.2 (h2 p.1)).mono
+        (by omega)
+      exact (isQueryBoundP_map_iff _ _ _).2 ((isQueryBoundP_query_iff _ _ _).2 (by simp [isHTB]))
+
+/-- **The blinding forger makes at most `Q` `H_T` queries** if `B` makes at most `Q` target
+requests: one per served request; the client's steps make none. -/
+theorem blindForger_bound (Q : ℕ)
+    (B : UovPk → ProbComp (OracleComp (specB AR X' Hn' TG SIss) (List (X' × SIss))))
+    (hB : ∀ pk, ∀ b ∈ support (B pk), IsQueryBoundP b (fun q => isTgt q = true) Q) :
+    ∀ f ∈ support (blindForger lr cl n B pk), IsQueryBoundP f (fun q => isHTB q = true) Q := by
+  intro f hf
+  simp only [blindForger, mem_support_bind_iff, support_pure, Set.mem_singleton_iff] at hf
+  obtain ⟨b, hb, κ, -, rfl⟩ := hf
+  refine (isQueryBoundP_bind (n := Q) (m := 0) (blindU_bound lr cl n pk κ b Q bs0 (hB pk b hb))
+    fun z _ => ?_).mono (by omega)
+  exact mapM_bound _ (fun e => (isQueryBoundP_map_iff _ _ _).2 (liftU_bound _)) _
+
+end Bound
+
+/-! ## Theorem 6 at PomFRIT with `B`'s target budget -/
+
+section T6Bound
+
+variable {DR : Type} [DecidableEq DR] {AR : DR → Type} [∀ d, SampleableType (AR d)]
+  (T : CrtTables) (lr : Bool) (ℓ Q : ℕ) {Cn St : Type} (cl : PomClient Cn St) {X' Hn' : Type}
+  [DecidableEq X'] {K : Type} (KG : ProbComp (UovPk × K)) (pre : K → TG → SIss)
+  (tgts : TG × TG → List TG)
+  (B : UovPk → ProbComp (OracleComp (specB AR X' Hn' TG SIss) (List (X' × SIss))))
+
+/-- **Theorem 6 at PomFRIT, with `B`'s target budget**: for an OMPR adversary `B` with at most
+`Q` target requests, `Adv^{ompr}(B; Q, ℓ)` is at most the win probability of the blinding forger
+(which makes at most `Q` `H_T` queries, `blindForger_bound`) in PomFRIT's one-more forgery game
+with `Q + ℓ + 1` targets (U1's `n = Q_T + ℓ + 1`: the game's target oracle is a random oracle,
+`OneMore.noFall_of_bound`) plus the client's completeness failure. -/
+theorem pomfrit_T6_bound
+    (hB : ∀ pk, ∀ b ∈ support (B pk), IsQueryBoundP b (fun q => isTgt q = true) Q) :
+    advOMPR (Links.pomTrap KG pre) Q ℓ B ≤
+      Pr{let r ← gameB T lr tgts ℓ KG pre (Q + (ℓ + 1)) (blindForger lr cl (Q + (ℓ + 1)) B)
+          addHint (fun _ => hint0)}[PomWinB ℓ r] +
+        compFail T lr ℓ cl (Q + (ℓ + 1)) KG pre B := by
+  rw [← advOMPR_pad (Links.pomTrap KG pre) Q (ℓ + 1) ℓ B hB]
+  exact pomfrit_T6 T lr ℓ cl (Q + (ℓ + 1)) KG pre tgts B
+
+end T6Bound
+
 end VoleMole.Assumptions.BlindPomfrit
