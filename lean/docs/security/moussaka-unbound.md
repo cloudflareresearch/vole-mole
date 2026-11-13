@@ -32,7 +32,7 @@ Contents:
 
 | Property | Holds? | Bound (classical) | Assumptions |
 |---|---|---|---|
-| One-more unforgeability **per `(ctx_iss, ctx_red)`** (Thm U1): for each pair, accepted distinct nullifiers ≤ unbound issuances for `ctx_iss` | **Yes** | `ε_ext^{u-iss} + ε_ext^{u-red} + ε_ext^{iss} + ε_dig + Adv^bind_{Com∪UCom} + K·Adv^ct-uf-open` | PoK of the two unbound relations (and of the bound issuance relation, if the Anchor also runs it), joint binding of `Com` and `UCom`, CT-UF^open of UOV |
+| One-more unforgeability **per `(ctx_iss, ctx_red)`** (Thm U1): for each pair, accepted distinct nullifiers ≤ unbound issuances for `ctx_iss` | **Yes** ([Lean], ROM and ideal cipher, down to OMPR under `hmodel`; §4 Status) | `ε_ext^{u-iss} + ε_ext^{u-red} + ε_ext^{iss} + ε_dig + Adv^bind_{Com∪UCom} + K·Adv^ct-uf-open` | PoK of the two unbound relations (and of the bound issuance relation, if the Anchor also runs it), joint binding of `Com` and `UCom`, CT-UF^open of UOV |
 | Determinism of the nullifier: each signed commitment and `ctx_red` determine one `nf` (Cor U2) | **Yes** | as Thm U1 | as Thm U1 |
 | No nullifier squatting (Prop U3; base note's F2 does not apply) | **Yes** | `U·(Adv^prf-t + Adv^spr-k)` on top of Thm U1 | PRF of `Derive` with `t` leaked, second preimages of `Derive` in the key |
 | Redemption non-malleability, including no redirect to another `ctx_red` (Thm U4) | **Yes** | `ε_SE^{u-red} + ε_dig + Adv^bind + K·Adv^ct-uf-open + U·Adv^ow-kr + ε_hop` | weak SE, the above, one-wayness of `(nf_key, r)` |
@@ -223,8 +223,8 @@ For `m_I + m_R = m` proofs whose provers share one run, each query of the run is
 
 about `2⁻⁶⁰·⁵` at `2⁶⁴` queries per kind and `2³⁰` proofs per relation (`m·failEps ≈ 2⁻⁸⁶·⁹`).
 The bound issuance relation (`ε_ext^{iss}` in Thm U1) is a third family, charged by the base
-note's bounds, not jointly with the unbound pair. There is no Lean game for Thm U1, so these are
-the extraction terms for it, not a mechanized Thm U1. With
+note's bounds, not jointly with the unbound pair. The game of Thm U1 uses exactly these terms
+(§4 Status, `omufU_le_num_sim`). With
 the CRT masks taken from the witness (`main`), the label term of the ZK hop is
 `(Q₅ + n_mult·Q_V)·Pred_R`, with `Pred_R` the probability of predicting the opening `r`, the first 16
 witness bytes of both unbound relations. One `r` now enters `1 + N` proofs; each `H₅` query tests
@@ -343,6 +343,79 @@ many signing queries as `A` makes accepted `Issue` and `UIssue` queries.
   bound issuance proofs, a `t` signed through the bound path could not be excluded from unbound
   redemption by binding alone. Since both issuance paths verify their proofs before signing, this
   costs nothing in the implementation.
+
+**Status: [Lean]** (`lean/VoleMole/ROM/MoussakaUnboundOMUF.lean`, `ROM/MoussakaUnboundOMUFSim.lean`,
+`Assumptions/UnboundLinks.lean`). Game OMUF-U on the executable spec, in the random-oracle and
+ideal-cipher model of `lean/VoleMole/ROM/`, built as the base note's Theorem 1 (`moussaka.md` §4
+Status) with a second issuance oracle and the unbound Moderator.
+- *The game.* `K` honest Anchors with any public keys and any signers; each runs both variants
+  with one key. The adversary (`Adversary`) makes `qI` Issue queries one after the other, each
+  bound (`OMUF.anchorIC`, `issue_response`) or unbound (`uanchorIC`, `ROM/MoussakaUnboundOMUF.lean:109`;
+  per table it is `unbound_issue_response` with the executable verifier, `uanchorIC_eq_spec`), as
+  it chooses, then outputs `qR` unbound redemptions for Anchor Sets of honest Anchors. The
+  Moderator (`umoderatorIC`, `:137`) is `unbound_finalize_redeem` with the Lean verifier. An
+  accepted proof of either variant signs `t`. `Win` (`:193`): for some `(ctx_iss, ctx_red)`, more
+  distinct accepted `nf` than distinct `t` accepted through unbound issuance for `ctx_iss`. The
+  request lengths are the verifier's proof sizes (`upfLenI_eq`, `upfLenR_eq`; `6864`, `12423` on
+  `main`).
+- *The reduction* (`omufU_le`). Per table, a win in which every accepted proof is extracted gives
+  a collision among the extracted inputs of `Com ∪ UCom` or a forgery (`win_imp`; the
+  deterministic steps 3–4 are `Protocols/MoussakaUnbound.lean`, `collision_or_forgery_unbound`).
+  The inputs are `XOp = Opening ⊕ UOpening`, with `Com` or `UCom` as commitment (`comX`) and the
+  union domain `WFX`. So
+
+      Pr[Win] ≤ Σ_{j<qI} Pr[BadBI_j] + Σ_{j<qI} Pr[BadUI_j] + Σ_{j<qR} Pr[BadUR_j]
+                + AdvBind(B₁) + AdvCTUF(B₂),
+
+  three extraction families: bound issuance (`ε_ext^{iss}`), unbound issuance, unbound
+  redemption. `AdvBind` is the probability that two distinct well-formed extracted inputs, in one
+  variant or across the variants, have one commitment. `AdvCTUF` is the probability that an
+  accepted redemption's extracted `UCom` input, with an honest key of its Anchor Set and a
+  preimage, commits to a target no Anchor's signer was called on, through either variant.
+- *With the soundness theorems* (`omufU_le_num`): `qI·ε_I + qI·ε_UI + qR·ε_UR + AdvBind +
+  AdvCTUF`, at the game's budgets (the adversary's `qI + 2` stages plus the `qI + qR` honest
+  verifications), under the base note's digest condition `hdig`, `hdinj` (`ε_dig` as a condition
+  on the keys).
+- *With simultaneous extraction* (`omufU_le_num_sim`). The unbound issuance and redemption proofs
+  are charged jointly (`moussakaUnbound_sim_joint_spec`, `m = qI + qR`, `epsUsim`). The bound
+  issuance proofs are a third family, charged by their own simultaneous bound
+  (`moussakaIssue_sim_spec`, `OMUF.epsIsim`, `m = qI`), as §3.1 says:
+
+      Pr[Win] ≤ ε_I^sim(q', q'_E, qI) + ε_U^sim(q', q'_E, n', qI, qR) + AdvBind(B₁) + AdvCTUF(B₂).
+
+- *With CT-UF^open over `D ∪ D_u`* (`omufU_le_num_open`, `omufU_le_num_open_sim`). The last
+  term is the advantage of an explicit forger (`ctufForgerU`) in the standalone CT-UF^open game of
+  `Assumptions/UOV.lean` with commitment `comX` and domain `WFX`. Its openings are the extracted
+  issuance inputs, a `Com` input for a bound target and a `UCom` input for an unbound one.
+- *Down to OMPR* (`omufU_le_num_ompr`, `omufU_le_num_ompr_sim`). Under the project's modelling
+  hypothesis `hmodel` (`Com ∪ UCom` ideal in the standalone CT-UF^open game only; as for
+  `omuf_le_num_ompr`, not provable), the last term is at most
+  `Σ_j (Adv^{ompr}_{key j}(B_j; q_f + 2q_S + 1, q_S) + (q_f + 2q_S + 1)·failPr_{key j})`.
+- *Numbers.* At `q' = 2⁶⁴` queries per kind for the whole run (`q'_E = n' = 2⁶⁴`) and
+  `qI = qR = 2³⁰`: per proof `ε_I ≈ ε_UI ≈ 2⁻⁶⁰·⁶⁸`, `ε_UR ≈ 2⁻⁶⁰·⁵⁴`, so the per-proof union
+  `qI·ε_I + qI·ε_UI + qR·ε_UR ≈ 2⁻²⁹·⁰⁵`. Simultaneously, `ε_I^sim ≈ 2⁻⁶⁰·⁶⁸`,
+  `ε_U^sim ≈ 2⁻⁶⁰·⁵⁴`, together `≈ 2⁻⁵⁹·⁶¹`, of which the per-proof failure terms are
+  `≈ 2⁻⁸⁶·⁴`. The dominant terms are `(q₂₃ + m)·9·2⁻¹²⁸` and `(q₂₂ + m)·(ε_QS + 2⁻¹²⁸)`.
+  Charging the bound issuance proofs separately costs a factor `≈ 1.9` against the base
+  Theorem 1's `2⁻⁶⁰·⁵⁴`. To this add `AdvBind` (generic `≈ q²/2³⁶¹ + q/2²²⁴`, §3.2) and the
+  OMPR terms.
+- *Differences from the paper bound; corrections.* No step of the paper proof of Thm U1 was found
+  wrong. The mechanized statement differs in four places:
+  - Each Issue position is charged in **both** issuance families (`qI·ε_I + qI·ε_UI`, not
+    `q_b·ε_I + q_u·ε_UI`): the adversary picks the variant adaptively, and the prover of the
+    other variant at that position outputs a dummy statement. In the simultaneous bound this
+    costs `m = qI` in place of `q_b` and `q_u` in the `+m` terms, which is negligible.
+  - `ε_ext^{iss}` is not joint with the unbound pair: the run is charged twice (once per bound).
+    A joint bound over three families would need a three-family `ROM/SimJoint.lean`.
+  - `ε_dig` is a condition on the keys (`hdig`, `hdinj`), not a term. `AdvBind` is a collision of
+    the input tuples. That these are distinct Keccak-p[800] states (the input spaces are disjoint
+    and injective in their fields) is `Arith/MoussakaUnbound.lean`
+    (`encodeUnboundComState_ne_encodeComState`, `encodeUnboundComState_inj`). The game does not
+    restate it on states.
+  - The factor `K` (`K·Adv^ct-uf-open_1`) is mechanized for the ideal-`Com` game only, as in the
+    base note.
+
+  The failure terms stay per proof, as in the base note.
 
 ---
 
@@ -618,12 +691,19 @@ the base protocol.
 3. Thm U5(a) and (b) are mechanized on the executable spec with adaptive redemption queries
    (`Privacy/MoussakaUnboundAd.lean`, `anonymityAd`; `Privacy/MoussakaUnboundNC.lean`,
    `anonymityNC`, `anonymityNC_complete`, `anonymityNC_vinegarRO`). They rest on two hypotheses
-   that stay hypotheses: per-proof zero knowledge (item 4) and the PRF advantage of the explicit
+   that stay hypotheses: per-proof zero knowledge (item 5) and the PRF advantage of the explicit
    reductions (item 1). The proof of (b) needed a correction (UF7). Two modelling restrictions
    remain: the number `n` of redemption queries is fixed in advance, and in (b) every queried
    Anchor Set must contain both issuers' keys (as for base 4(b) with `find_issuer`). Further honest
    sessions around the challenge, as in base `Privacy/MoussakaAdaptive.lean`, are not modelled.
-4. The mechanized Thm U5 takes **per-proof** zero knowledge (`ZeroKnowledge` for `IssueRelW` and
+4. Thm U1 is mechanized (§4 Status). It rests on the base note's assumptions, stated as
+   advantages of explicit adversaries: joint binding of `Com ∪ UCom` (`AdvBind`, a
+   standard-model assumption) and CT-UF^open over `D ∪ D_u`. CT-UF^open reduces to OMPR only
+   through the modelling hypothesis `hmodel` (Lemma U with `Com` a random function, no inverse
+   queries; the permutation version is paper). The bound issuance extraction is charged separately
+   from the unbound pair. Cor U2, Prop U3 and Thm U4 have Lean cores only (`nf_determined`,
+   `squat_cases`); their games are not mechanized.
+5. The mechanized Thm U5 takes **per-proof** zero knowledge (`ZeroKnowledge` for `IssueRelW` and
    `RedeemRelW`, against distinguishers that know the witness). That hypothesis holds with
    dedicated label rows (`lean/docs/zk.md`). On `main` the CRT masks come from the witness, the
    label term is joint over the `H₅` queries (§3.1), and no per-proof simulator exists; the joint
@@ -703,3 +783,16 @@ All in `lean/VoleMole/`; no `sorry`, no axioms beyond the standard three.
   the joint one at the executable statements.
 - `Audit/UnboundROM.lean`: non-vacuity of the headline bounds at the executable statements
   (trivial prover; families with more than one instance).
+- `ROM/MoussakaUnboundOMUF.lean`: Theorem U1 (§4 Status): the game OMUF-U (`anchorU`, `uanchorIC`,
+  `uanchorIC_eq_spec`, `umoderatorIC`, `game`, `Win`), the three provers (`PBI`, `PUI`, `PUR`),
+  the extracted inputs of `Com ∪ UCom` (`XOp`, `comX`, `WFX`, `Coll`, `Forge`), the per-table core
+  `win_imp`, the union bound over three families (`prEvent_bind_le_sum5_of_table`), `omufU_le`,
+  `omufU_le_num` (`epsUI`, `epsUR`), liveness (`upfLenI_eq`, `upfLenR_eq`).
+- `ROM/MoussakaUnboundOMUFSim.lean`: Theorem U1 with simultaneous extraction (`omufU_le_sim`,
+  `prEvent_simBI_le`, `prEvent_simU_le`, `epsUsim`, `omufU_le_num_sim`).
+- `Assumptions/UnboundLinks.lean`: the CT-UF^open forger over `D ∪ D_u` (`ctufForgerU`,
+  `win_imp_openU`), `omufU_le_open`, `omufU_le_num_open`, `omufU_le_num_ompr` and their `_sim`
+  versions.
+- `Protocols/MoussakaUnbound.lean`: `collision_or_forgery_unbound` (Thm U1, steps 3–4).
+- `Audit/UnboundOMUF.lean`: every Thm U1 corollary instantiated (two honest Anchors, an adversary
+  with one bound and one unbound Issue query, the toy ideal forger for `hmodel`).
