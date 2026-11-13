@@ -73,7 +73,8 @@ theorem noTheftN_lean (A : ThiefN Sizes.labelRows U M Tab3 (ShR R))
         ∑ i, pr (TapeN U M (SimCoins pI) (SimCoins pS) Tab3 (ShR R))
           (deltaNR A leanPIR leanPSR leanSimIR leanProgIR leanSimSR leanProgSR i) +
         εSE +
-        ∑ j : Fin (U + M), owAdvK (inverterN A leanSimIR leanProgIR leanSimSR leanProgSR ext j) := by
+        ∑ j : Fin (U + M),
+          owAdvK (inverterN A leanSimIR leanProgIR leanSimSR leanProgSR ext j) := by
   have hI := leanPIR_zkRO (R := R) q3 q5 qE
   have hS := leanPSR_zkRO (R := R) q3 q5 qE
   exact noTheftN (CI := SimCoins pI) (CS := SimCoins pS) A leanPIR leanPSR leanSimIR leanProgIR
