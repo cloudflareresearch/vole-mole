@@ -405,7 +405,7 @@ of `σ_k` is not a single block query).
 | Q5 `ε_Sim` | `2^{−172} + τ n_out Q_E δ` (from Thm C for Thm 5.2) | `2^{−172}`. Theorem 2 needs no Thm C, and hybrid `S*` (lazy-sampled `F(k)` on frozen keys) is efficient. |
 | Q7 Thm M | `ε_multi^{H₄}(2Q_E+Q₄+1)` | Theorem 1 with `Q_E = q_E + n·4607`: `2^{−86.5}` at `n = 2^{20}`, `≈ 2^{−57}` at `n = 2^{30}` |
 | README §L9 | "`ε_multi` open above about `2^{40}`" | "`ε_multi` proved for all `q`; non-vacuous to `2^{51.7}`, tight for key-level techniques (Q6)" |
-| Q2 §6.3, Thm 7.1 (after §11–§13) | Theorem 1 | `ε_multi ≤ min(Theorem 1, Theorem 5)`; Theorem 5 is `((4√2/3)Q_E^{3/2}√μ_B + c_R + c_atyp)² + ε_Θ ≈ 2^{−184.2}Q_E³`. Theorem 7.1 is main-term-limited up to `q ≈ 2^{60.2}`. For an efficient `E` (`S*`), add Q4 Thm C's `2^{−172} + L·q·δ` as before. |
+| Q2 §6.3, Thm 7.1 (after §11–§13) | Theorem 1 | `ε_multi ≤ min(Theorem 1, Theorem 5)`; Theorem 5 is `((4√2/3)Q_E^{3/2}√μ_B + c_R + c_atyp + √(LN²ε_Θ))² ≈ 2^{−184.2}Q_E³`. Theorem 7.1 is main-term-limited up to `q ≈ 2^{60.2}`. For an efficient `E` (`S*`), add Q4 Thm C's `2^{−172} + L·q·δ` as before. |
 | Q7 Thm M (after §11–§13) | Theorem 1 with fetch counts | either Theorem 1 with `Q_E = q_E + n·4607` (key fetches), or Theorem 5 with `Q_E` = all cipher *evaluations* (`≈ 2^{18}` per verification). Take the smaller. |
 
 The hybrid representation changes nothing in Q2's `P` analysis.
@@ -622,14 +622,14 @@ Let `μ_B := n̄/(B(B−1)) ≈ 2^{−185.98}`.
 
 **Theorem 5.** In the setting of Theorem 4, with `Q_E` cipher queries in total,
 
-    √E_real ≤ a + c_atyp + c_blk   (for typical Θ),      E_real ≤ (a + c_atyp + c_blk)² + L·N²·ε_Θ,
+    √E_real(Θ) ≤ a + c_atyp + c_blk   (for typical Θ),      E_real ≤ (a + c_atyp + c_blk)² + L·N²·ε_Θ,
     a := 2√2·Σ_{s<Q_E} √(s·μ_B) ≤ (4√2/3)·Q_E^{3/2}·√μ_B,      a² ≤ (32/9)·μ_B·Q_E³ ≈ 2^{−184.15}·Q_E³,
     c_atyp := 8·Q_E²·√(2Q_E·ε_T/N),      c_blk := √(2(1+2^{−8})·(2τQ_E+2)/N) + √(2(1+2^{−8})·τQ_E/N).
 
 Together with Theorem 4, with `c_R := c_blk + √((2τQ_E+2)/(N−1)) + √(τQ_E/(N−1)) ≤
 6√(τ(Q_E+1)/N)`:
 
-    ε_multi = Pr[MULTI] ≤ ( (4√2/3)·Q_E^{3/2}·√μ_B + c_R + c_atyp )² + L·N²·ε_Θ.
+    ε_multi = Pr[MULTI] ≤ ( (4√2/3)·Q_E^{3/2}·√μ_B + c_R + c_atyp + √(L·N²·ε_Θ) )².
 
 No property of H₄ is used: the bound holds for free iv.
 
@@ -714,4 +714,4 @@ Script: `scripts/qrom-block-binding/nums.py`. **[Lean]**: `block_multi_at_2_50` 
 
 - `ε_multi` would cross the main term only at `q ≈ 2^{63.8}`, beyond the main term's own limit.
 - The theorem is therefore limited by `200q²/N` alone, which is Grover-inherent (Q2 §8).
-- `c_atyp < 2^{−58}` and `L·N²·ε_Θ < 2^{−10^5}` throughout.
+- `c_atyp < 2^{−58}` and `√(L·N²·ε_Θ) < 2^{−10^4}` throughout.
