@@ -66,9 +66,10 @@ oracle-free attacks: direct forgery `≈ 2^{140}` multiplications, key recovery 
   standalone game only. For Moussaka (both variants) the hypothesis can instead be taken with
   `Com` a random permutation with inverse queries (`hmodelP`; `omuf_le_num_ompr_perm`,
   `omufU_le_num_ompr_perm`), the permutation terms explicit (§5.4), and also with AES as random
-  permutations (`omuf_le_num_ompr_simP`). For Ratatouille the hypothesis can be taken with `Tag`
-  a random permutation with inverse queries (`TagIdealP`; `balance_le_ompr_perm`,
-  `balance_le_ompr_sim_perm`, §5.8). PomFRIT's U1 and U2 are stated with OMPR and OMPR⊕τ
+  permutations (`omuf_le_num_ompr_simP`, `omufU_le_num_ompr_simP`). For Ratatouille the
+  hypothesis can be taken with `Tag` a random permutation with inverse queries (`TagIdealP`;
+  `balance_le_ompr_perm`, `balance_le_ompr_sim_perm`, §5.8), also with AES as random
+  permutations (`balance_le_ompr_simP`, `balance_le_ompr_sim_permP`). PomFRIT's U1 and U2 are stated with OMPR and OMPR⊕τ
   (`pomfrit_U1_ompr`, `pomfrit_U2_omprShift`).
 - Secondary statements: Moussaka and Ratatouille also follow, with loss `q`, from GPI plus the UOV
   problem (or OW). Ratatouille also follows from SUF-CMA of the specified scheme.
@@ -610,9 +611,16 @@ with `n = (q_f + q_S + 1) + 2q_S + 1`. The proof:
                 + Σ_j (Adv^{ompr}_{key j}(B_j; n, q_S) + n·failPr_{key j})
                 + (q_f + q_i + q_S + 1)²/|T × Z| + q_i·|Xc|/|T × Z|       (omuf_le_num_ompr_simP)
 
-  Non-vacuity: `Audit/PermSim.lean`. Unbound Moussaka has the permutation-model joint extraction
-  bound (`moussakaUnbound_sim_joint_specP`) but no permutation-model protocol theorem yet, so it
-  has no such corollary.
+  Non-vacuity: `Audit/PermSim.lean`. Unbound Moussaka the same way
+  (`Assumptions/UnboundPermSimLinks.lean`): its permutation-model game
+  (`ROM/MoussakaUnboundOMUFSimPerm.lean`, `omufU_le_num_simP`), the forger `ctufForgerUP` over
+  `Com ∪ UCom` (`gameUP_congr`; the bound issuance provers are normalized by `normP`, whose log
+  is `tableQueryLog_normP`), `omufU_le_num_open_simP`, and with `hmodelP`
+  `omufU_le_num_ompr_simP`:
+
+      Pr[Win] ≤ εI^simP + εU^simP + Pr[Coll]
+                + Σ_j (Adv^{ompr}_{key j}(B_j; n, q_S) + n·failPr_{key j})
+                + (q_f + q_i + q_S + 1)²/|T × Z| + q_i·|Xc|/|T × Z|.
 
 **How the concrete game relates.** The CT-UF^open game of `advCTUFOpenAt` (Moussaka's
 `Com = KP800(·)|_{360}`, read by the forger as a function) is not reduced to the ideal one: that
@@ -963,11 +971,13 @@ preimage of an unqueried index. Then apply (a) and T1(c). ∎
       corollaries instantiated for `balA0`, with `TagIdealP` an argument,
       `tagIdealP_of_eq_zero`).
     - The lazily sampled permutation is taken as the ideal permutation, as in §5.4.
-    - With AES as random permutations (`ROM/RatatouilleBalanceSimPerm.lean`) the balance theorem's
-      forgery term is the probability `forgeAdvP` of the permutation-model run. It is not yet
-      bounded by a UF-Tag forger: that needs a UF-Tag forger whose common randomness is the
-      permutation table, with the `reads` property of `forger` (`bOut_reads`) redone for the
-      jointly normalized provers.
+    - With AES as random permutations (`ROM/RatatouilleBalanceSimPerm.lean`,
+      `Assumptions/RatatouillePermSim.lean`) the balance theorem's forgery term `forgeAdvP` is at
+      most the UF-Tag advantage of `forgerP : TagForger PTable` (`TagForger` is generic in the
+      table that is its common randomness; `forgeAdvP_le_ufTag`). Its `reads` property
+      (`bOut_readsP`) is `bOut_reads_of` with `games_congrP`. The modelling hypothesis is then
+      taken for `(forgerP …).noProbe τ`: `balance_le_ompr_simP` (`TagIdeal`),
+      `balance_le_ompr_sim_permP` (`TagIdealP`). Non-vacuity: `Audit/PermSim.lean`.
 
 **Does R1 remove the issue?** No. R1 is orthogonal to it.
 - The probe comes from the API order (F5), not from Tag's input. With R1, `spend_response` still
@@ -1252,6 +1262,8 @@ hash-and-sign with retry [KX24]).
 | T4 with `Com` a random permutation with inverse queries; the switch permutation/function; Moussaka and unbound Moussaka down to OMPR with it | `advCTUFPermAt_le_ompr`, `advCTUFPermAt_le_ideal` (`Assumptions/CTUFPerm.lean`), `prEvent_rp_le_rf`, `prEvent_invHit_le`, `prEvent_rf_le_avoid` (`Assumptions/LazyPerm.lean`), `omuf_le_num_ompr_perm`, `omufU_le_num_ompr_perm` (`Assumptions/PermLinks.lean`) |
 | det-FDH with `Tag` a random permutation: the game, the hybrids, the reduction to det-FDH and to OMPR; Ratatouille balance under OMPR with it | `advFDHPerm`, `advFDHPerm_le_hyb`, `combF_step`, `combF_inv`, `hyb_le_fdh`, `advFDHPerm_le_fdh`, `advFDHPerm_le_ompr` (`Assumptions/FDHPerm.lean`), `balance_le_ompr_perm`, `balance_le_ompr_sim_perm` (`Assumptions/RatatouillePerm.lean`) |
 | Moussaka with AES and `Com` both random permutations with inverse queries, down to OMPR | `ctufForgerP`, `gameP_congr`, `tableQueryLog_normJ`, `omuf_le_open_simP`, `omuf_le_num_ompr_simP` (`Assumptions/PermSimLinks.lean`) |
+| Unbound Moussaka with AES and `Com ∪ UCom` both random permutations, down to OMPR | `omufU_le_num_simP` (`ROM/MoussakaUnboundOMUFSimPerm.lean`), `ctufForgerUP`, `gameUP_congr`, `tableQueryLog_normP`, `omufU_le_num_open_simP`, `omufU_le_num_ompr_simP` (`Assumptions/UnboundPermSimLinks.lean`) |
+| Ratatouille with AES as random permutations, down to OMPR (`Tag` a random function or permutation) | `forgerP`, `bOut_readsP`, `forgeAdvP_le_ufTag`, `balance_le_ufTag_simP`, `balance_le_ompr_simP`, `balance_le_ompr_sim_permP` (`Assumptions/RatatouillePermSim.lean`) |
 | Cores of `uov-open-reductions.md`: combiner forest, lottery accounting, the rewinding supermartingale inequality | `combiner_count`, `lottery_count`, `four_mul_le_pow`, `rewind_supermartingale` |
 | Scaling symmetry of `P` and the one-query CT-UF attack (`Spec/PqovScale.lean`) | `qmap_smul`, `sq_pow_128`, `scaled_preimage`, `ctuf_scaling_attack` |
 

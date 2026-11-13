@@ -458,8 +458,9 @@ ideal-cipher model of `lean/VoleMole/ROM/` (SHAKE a random oracle, AES's rows un
   `Pr[Win] ≤ ε_IR^simP + Pr[Coll] + Pr[Forge]`, `ε_IR^simP` the bound above with the permutation
   model's failure terms (`failEpsP`, Post `q_E·4608·q₂₁·p²` dominating, `p = 1/(2¹²⁸ − q_E)`)
   and the total hash count `n' + 2q'₂₁` in the `2⁻⁴⁴⁸` term. `ε_IR^simP ≈ 2⁻⁶⁰·⁵⁴` at the same
-  numbers (`(qI + qR)·failEpsP ≈ 2⁻⁸⁴·⁸`). `Coll`, `Forge` stay probabilities of the
-  permutation-model run; the CT-UF^open and OMPR corollaries are not redone there.
+  numbers (`(qI + qR)·failEpsP ≈ 2⁻⁸⁴·⁸`). `Coll` stays a probability of the permutation-model
+  run; `Forge` is the CT-UF^open advantage of `ctufForgerP`, and down to OMPR
+  `omuf_le_num_ompr_simP` (`Assumptions/PermSimLinks.lean`).
 - *With CT-UF^open* (`Assumptions/UOVLinks.lean`, `omuf_le_num_open`). The same bound with
   `Adv^{ct-uf-open}_K(B₂)`, the advantage of an explicit forger (`ctufForger`) in the standalone
   CT-UF^open game (`Assumptions/UOV.lean`, `advCTUFOpenAt`) in place of `AdvCTUF(B₂)`. `B₂` runs
@@ -1283,11 +1284,11 @@ the fix column describes `d5def9c`, where Moussaka used the rows (and what dropp
    the hypothesis `hmodelP` replaces `Com` by that permutation); the per-proof failure terms of the simultaneous bound
    (`omuf_le_num_sim`: `(qI + qR)·failEps`, see §4 "Status"); Theorem 1 averaged over key generation (the Lean theorem is
    per key; the `K`-key guessing step is mechanized for the ideal game); `ε_dig` as a probability over key
-   generation (a condition on the keys in Lean); AES as random permutations beyond the
-   extraction step for unbound Moussaka (Theorem 1 with simultaneous extraction is in the
-   permutation model, `omuf_le_num_simP`, and so are its CT-UF^open and OMPR corollaries,
+   generation (a condition on the keys in Lean). (Theorem 1 with simultaneous extraction is in the
+   permutation model of AES, `omuf_le_num_simP`, and so are its CT-UF^open and OMPR corollaries,
    `omuf_le_num_open_simP`, `omuf_le_num_ompr_simP` with `Com` a random permutation too,
-   `Assumptions/PermSimLinks.lean`; unbound Moussaka has no permutation-model protocol theorem).
+   `Assumptions/PermSimLinks.lean`; for unbound Moussaka, `omufU_le_num_simP`,
+   `omufU_le_num_ompr_simP`, `moussaka-unbound.md` §4.)
    Corollary 2 is not stated separately. Theorem 3 (non-malleability) is in Lean for `U` tokens
    and `M` honest redemptions with weak SE for `U + M` simulated proofs as a hypothesis
    (`noRedirectN`), with the hops' read budgets proved and that hypothesis reduced to plain

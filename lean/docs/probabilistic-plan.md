@@ -1208,8 +1208,9 @@ normalized; their acceptance and statements depend only on their outputs (`accep
 the bounds: `omuf_le_num_simP` (`epsIRsimP`), `balance_le_sim_numP`, `balance_le_lean_simP`
 (`epsBalSimP`), at the budgets of the PRF-view theorems (`q'_E` counts forward and inverse
 queries). `Coll`, `Forge` (`forgeAdvP`, `collAdvP`) stay terms. The CT-UF^open, UF-Tag and OMPR
-corollaries of the PRF view (`omuf_le_num_open_sim`, `balance_le_ufTag_sim`, `*_ompr_sim`) are
-not redone: their reductions run the game in the PRF view. `Audit/SimExtract.lean` instantiates the
+corollaries are redone in the permutation model in §2o (`PermSimLinks`, `RatatouillePermSim`,
+`UnboundPermSimLinks`), and unbound Moussaka's protocol game is there too
+(`ROM/MoussakaUnboundOMUFSimPerm.lean`). `Audit/SimExtract.lean` instantiates the
 protocol theorems with adversaries that make inverse cipher queries (`aUP`, `balA0P`), and the
 spec-level instances with a prover making one (`invP`). `#print axioms` of
 `prEvent_sim_joint_leP`, the three `*_specP`, `omuf_le_num_simP`, `balance_le_sim_numP`,
@@ -1325,8 +1326,9 @@ balance theorem and PomFRIT's U1 and U2 (above; Moussaka's are in §2o); the qua
 
 Files: `Assumptions/LazyPerm.lean` (generic), `Assumptions/CTUFPerm.lean`,
 `Assumptions/PermLinks.lean`, `Assumptions/FDHPerm.lean`, `Assumptions/RatatouillePerm.lean`,
-`Assumptions/PermSimLinks.lean`, `Audit/PermOMPR.lean`, `Audit/PermFDH.lean`,
-`Audit/PermSim.lean`; `lean/docs/security/uov-assumptions.md` §5.4 and §5.8 state the results.
+`Assumptions/PermSimLinks.lean`, `Assumptions/RatatouillePermSim.lean`,
+`ROM/MoussakaUnboundOMUFSimPerm.lean`, `Assumptions/UnboundPermSimLinks.lean`,
+`Audit/PermOMPR.lean`, `Audit/PermFDH.lean`, `Audit/PermSim.lean`; `lean/docs/security/uov-assumptions.md` §5.4 and §5.8 state the results.
 
 - **The shared step** (`LazyPerm`). A lazily sampled permutation of a finite block type with
   forward and inverse queries (`rpImpl`), next to other oracles that may read it at one point
@@ -1364,14 +1366,33 @@ Files: `Assumptions/LazyPerm.lean` (generic), `Assumptions/CTUFPerm.lean`,
   forger's `reads` property comes from `gameP_congr` (the permutation-model game reads the
   signers only at accepted Issue queries) and the log lemmas `tableQueryLog_liftP`,
   `tableQueryLog_normJ` (a jointly normalized computation's log is a function of the original's).
+- **AES as random permutations, Ratatouille** (`RatatouillePermSim`). `TagForger` is generic in
+  the table type that is its common randomness (`TagForger Tb`, default `CTable`), and so are
+  `ufTagAdv`, `failAdv`, `noProbe`, `run_patch_of_not_fail`, `ufTagStrictAdv`,
+  `ufTagAdv_le_strict`, `TagIdeal`, `TagIdealP`. `bOut_reads` and `forge_ufwin` are factored
+  through `bOut_reads_of`, `forge_ufwin_of` (any extraction outputs next to the transcript; the
+  outputs must depend on the signer only through the run's first calls). The forger of the
+  permutation model is `forgerP : TagForger PTable` (it runs `masterP`). Its `reads` property
+  (`bOut_readsP`) comes from `games_congrP`: a jointly normalized `j`-th prover is the PRF-view
+  prover of the normalized adversary (`nJ_proverAtP`, `normJ_roundsM`), and the lifted,
+  normalized Issuer makes the same queries whatever the signer (`tableQueryLog_normJ`,
+  `tableQueryLog_liftP`). Then `forgeAdvP_le_ufTag`, `balance_le_ufTag_simP`, and the OMPR forms
+  `balance_le_ompr_simP` (`Tag` a random function, `TagIdeal`) and `balance_le_ompr_sim_permP`
+  (`Tag` a random permutation, `TagIdealP`), with `_rate` forms; `forgerP_logs_le` (at most `N`
+  logged pairs).
+- **AES as random permutations, unbound Moussaka** (`ROM/MoussakaUnboundOMUFSimPerm.lean`,
+  `UnboundPermSimLinks`). The OMUF-U game of the permutation model (`OMUFU.AdversaryP`,
+  `OMUFU.gameP`; the adversary at a table normalized by the unbound relations' joint
+  normalization, `gameP_eval`), the provers `PBIP`, `PUIP`, `PURP` (bound issuance normalized by
+  `normP (mousPI lr) π`, the unbound pair by `normJ (mousUPI lr) (mousUPR lr) π`), `win_impP`,
+  `omufU_le_simP`, the bound issuance family's simultaneous bound in the permutation model
+  (`moussakaIssue_sim_specP`, from `prEvent_sim_leP`), and `omufU_le_num_simP`
+  (`εI^simP + εU^simP + Pr[Coll] + Pr[Forge]`). The CT-UF^open forger `ctufForgerUP` (common
+  randomness the permutation table; `reads` from `gameUP_congr` and the log lemmas, with
+  `tableQueryLog_normP` for the bound issuance provers), `omufU_le_num_open_simP`, and with
+  `hmodelP` `omufU_le_num_ompr_simP`. Non-vacuity of both: `Audit/PermSim.lean` (`balA0P`;
+  `aUUP`, an inverse cipher query then a bound and an unbound Issue query and a redemption).
 - **Not done.**
-  - Ratatouille with AES as random permutations: `forgeAdvP` (`balance_le_sim_numP`) is not
-    linked to a UF-Tag forger. It needs a UF-Tag forger whose common randomness is the
-    permutation table (`TagForger` fixes `CTable`), the strict-win and failure steps
-    (`ufTagAdv_le_strict`) for it, and `bOut_reads` (about 140 lines on `master`'s structure) redone
-    for `masterP` with the jointly normalized provers, via `tableQueryLog_normJ` as for Moussaka.
-  - Unbound Moussaka with AES as random permutations: only the joint extraction bound
-    (`moussakaUnbound_sim_joint_specP`) is in the permutation model, not the protocol game.
   - PomFRIT U1 and U2 with AES as random permutations with inverse queries: there is no
     permutation-model one-more game. It needs the game with a forger making inverse cipher
     queries, the derived provers (`wrapIC`, `wrapP`) per permutation table normalized as in

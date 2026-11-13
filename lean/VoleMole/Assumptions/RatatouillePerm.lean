@@ -26,9 +26,8 @@ game, and `Tag(c, x)` is the first component of `π(emb (c, x))` for an injectiv
   `(q_f + q_i + q_S + 1)²·2^{−800}` (the paper's `q_K²·2^{−799}`).
 
 The cipher of the proofs (AES) is the ideal cipher of the PRF view here (`CTable`); with AES as
-random permutations the balance theorem's forgery term is `forgeAdvP`
-(`ROM/RatatouilleBalanceSimPerm.lean`), which is not linked to a UF-Tag forger (see
-`docs/probabilistic-plan.md` §2o).
+random permutations: `Assumptions/RatatouillePermSim.lean` (`balance_le_ompr_simP`,
+`balance_le_ompr_sim_permP`).
 
 No `sorry`, no `axiom`.
 -/

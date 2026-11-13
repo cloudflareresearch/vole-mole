@@ -28,7 +28,8 @@ permutations and an adversary that makes **forward and inverse** cipher queries
   total hash count `n' + 2q'₂₁`, at the budgets of `balance_le` (`q' = N•(qA + qV)`,
   `q'_E = N(eA + eVR)`, `n' = N(nA + nV)`; `eA` counts forward and inverse cipher queries).
   `forgeAdvP`, `collAdvP` are the forger's and the collision finder's success probabilities in
-  the reduction's run (as `forgeAdv`, `collAdv`); they stay terms.
+  the reduction's run (as `forgeAdv`, `collAdv`). `forgeAdvP` is bounded by a UF-Tag forger in
+  `Assumptions/RatatouillePermSim.lean`; `collAdvP` stays a term.
 -/
 
 open OracleComp OracleSpec
