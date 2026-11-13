@@ -122,8 +122,14 @@ permutations with inverse queries):
     in Lean in PomFRIT's real one-more game for a forger with coins and any client given as oracle
     computations (`pomfrit_T6`, `pomfrit_T6_bound`, `Assumptions/BlindPomfrit.lean`; the game for a
     forger with coins is `game` for one without, `gameB_liftF`; the client carries the game's query
-    log across sessions, so that the reduction's logged queries are replayed exactly). Its
-    completeness term `compFail` is not yet bounded for the Lean client (`pomfrit.md` G9).
+    log across sessions, so that the reduction's logged queries are replayed exactly). For
+    the Lean client (`leanClient`, the Lean prover as oracle computations, equal per table to
+    `Prover.voleGen` / `Prover.proveCommit`, `eval_start`, `eval_finish`) the completeness term is
+    `≤ (ℓ+1)·2⁻¹¹³` (`compFail_le`), so `Adv^{ompr}(B; n, ℓ) ≤ Pr[PomWin] + (ℓ+1)·2⁻¹¹³`
+    (`pomfrit_T6_lean`, `pomfrit_T6_lean_bound`; `ROM/ProverIC.lean`,
+    `Assumptions/PomClientLean.lean`, `BlindPomfritGrind.lean`, `BlindPomfritComplete.lean`,
+    `BlindPomfritT6Lean.lean`; `pomfrit.md` G9, closed). It assumes `B`'s own random oracle has
+    finite answer types.
 - *The UOV assumptions* (`docs/security/uov-assumptions.md`, `Assumptions/`): the assumptions of §3
   of that note as standalone games, generic in key generation, public map and `derive_preimage`
   (`Assumptions/UOV.lean`), with the protocol theorems' UOV terms as their advantages
@@ -133,7 +139,7 @@ permutations with inverse queries):
   (`advOMPR_le_shift`), and OMPR⊕τ ≤ `τ^{ℓ+1}`·OMPR by guessing the shifts (P8(a),
   `advOMPRShift_le_guess`, `Assumptions/Shift.lean`); OMPR ≤ one-more forgery plus a completeness
   term for the blinding forger of any client with distinct session labels (T6, generic core,
-  `ompr_le_blind`, `Assumptions/Blind.lean`; at PomFRIT, `pomfrit_T6`); UF-Tag with a signability probe ≤ UF-Tag plus the
+  `ompr_le_blind`, `Assumptions/Blind.lean`; at PomFRIT, `pomfrit_T6`, and for the Lean client with the completeness term bounded, `pomfrit_T6_lean`); UF-Tag with a signability probe ≤ UF-Tag plus the
   signer's aborts (P9(a), `ufTagAdv_le_noProbe`). The real sampler can abort, so every "tight"
   reduction carries a sampler-failure term `n·E[δ^{255}] ≈ n·2⁻²⁹⁵·⁸`.
 - *Audits* (§3, "Audits"). Every headline theorem's hypotheses are instantiated
@@ -159,9 +165,7 @@ permutations with inverse queries):
   the C++ KATs, unbound Moussaka's included (§7, §8).
 
 **On paper only**: U2's Lemma P term `Pr[∃ i, ShiftFail_i]` (shift-list hints and an extraction
-bound without `Shift`; `pomfrit.md` G8); the
-completeness term of T6 at PomFRIT for the Lean client (`compFail ≤ (ℓ+1)·2⁻¹¹³`; needs the Lean
-prover as oracle computations and its completeness in the lazy random-oracle model, G9);
+bound without `Shift`; `pomfrit.md` G8); 
 simultaneous extraction for PomFRIT (needs G8), and for both relations together in the
 permutation model;
 Moussaka non-malleability (Thm 3); Ratatouille
@@ -314,7 +318,7 @@ lean/
                             protocol theorems (UOVLinks); reductions between them: T1(a)/(c)
                             (IdealTag), T4 and the K-key step (CTUFOpenOMPR), A1 and P8(a)
                             (Shift), T6's generic core (Blind) and its PomFRIT instance
-                            (BlindPomfrit); Ratatouille under OMPR (RatatouilleOMPR);
+                            (BlindPomfrit; Lean client: PomClientLean, BlindPomfritT6Lean); Ratatouille under OMPR (RatatouilleOMPR);
                             simultaneous extraction down to OMPR (SimLinks); shared lazy-sampling, union-bound and simulation
                             lemmas (LazyIdeal)
     Audit/                  non-vacuity checks: the headline theorems' hypotheses instantiated,
@@ -1167,7 +1171,7 @@ limitation, not an attack) takes over. Strong simulation-extractability: 2⁻⁶
 
 | Note | Main results | Main findings |
 |---|---|---|
-| `pomfrit.md` | One-more unforgeability (classical: proved; [Lean] the U1/U2 reductions, `pomfrit_U1_bound`, `pomfrit_U2_bound`, with Lemma P's failure probability an explicit term, stated with OMPR and OMPR⊕τ as standalone games (`pomfrit_U1_ompr`, `pomfrit_U2_omprShift`); U1 with Lemma P's term bounded, every term explicit (`pomfrit_U1_explicit`, `pomfrit_U1_ompr_explicit`); U2's Lemma P term still a term (G8); OMPR ≤ PomFRIT up to the Lean client's completeness term (`pomfrit_T6`, G9); quantum: Q7, under new quantum UOV assumptions). Blindness: **fails on `main`**, proved with the ZK fix. | The paper's reduction has a gap (its first-phase extractor is not well defined for multi-tree VOLEitH), repaired by Lemma P at a 2⁻⁷¹ per-query loss ([Lean] `Protocols/PomFRIT.lean`). A holder can make many valid signatures per message (non-minimal grinding counter): deduplicate on the message. |
+| `pomfrit.md` | One-more unforgeability (classical: proved; [Lean] the U1/U2 reductions, `pomfrit_U1_bound`, `pomfrit_U2_bound`, with Lemma P's failure probability an explicit term, stated with OMPR and OMPR⊕τ as standalone games (`pomfrit_U1_ompr`, `pomfrit_U2_omprShift`); U1 with Lemma P's term bounded, every term explicit (`pomfrit_U1_explicit`, `pomfrit_U1_ompr_explicit`); U2's Lemma P term still a term (G8); OMPR ≤ PomFRIT for the Lean client with `(ℓ+1)·2⁻¹¹³` (`pomfrit_T6_lean`, G9 closed); quantum: Q7, under new quantum UOV assumptions). Blindness: **fails on `main`**, proved with the ZK fix. | The paper's reduction has a gap (its first-phase extractor is not well defined for multi-tree VOLEitH), repaired by Lemma P at a 2⁻⁷¹ per-query loss ([Lean] `Protocols/PomFRIT.lean`). A holder can make many valid signatures per message (non-minimal grinding counter): deduplicate on the message. |
 | `moussaka.md` | One-more unforgeability, double-spend detection, redemption non-malleability, issuer hiding: proved. [Lean] Thm 1 in the ROM and ideal-cipher model (`omuf_le_num`, `ROM/MoussakaOMUF.lean`), down to one-more-UOV with `Com` idealized in the standalone game (`omuf_le_num_ompr`), and with simultaneous extraction (`omuf_le_num_sim`, `omuf_le_num_ompr_sim`). | Nullifier squatting (low). The draft's one-more-UOV argument is invalid as written (it programs `Com` inside the protocol); restructured through CT-UF^open. This note's earlier intermediate assumption, plain CT-UF, is false for UOV (scaling); the draft's assumption is unaffected. `main`'s README no longer says the nullifier record must span every accepted Anchor Set (F8, documentation). |
 | `moussaka-unbound.md` | Unbound tokens (late `ctx_red` binding, PR #63, `62be5bc`): one-more unforgeability per `(ctx_iss, ctx_red)`, nullifier determinism, redemption non-malleability (including redirection to another `ctx_red`), issuer hiding and unlinkability, also across redemption contexts. Proved on paper; [Lean] arithmetization soundness and completeness (`Arith/MoussakaUnbound.lean`), end-to-end extraction (`EndToEnd/MoussakaUnbound.lean`), issuer hiding and unlinkability across contexts on the executable spec with `n` adaptively chosen redemption queries: colluding (Thm U5(a)) `≤ 4εI + 2n·εR + 2εprf` (`Privacy/MoussakaUnboundAd.anonymityAd`; non-adaptive: `Privacy/MoussakaUnbound.anonymity`), non-colluding (Thm U5(b), corrected) `≤ 2n·εR + 2·(ψ₀ + ψ₁) + 2εprf` with `ψ_c ≤ κ + φ_c`, and `≤ 2n·εR + 2·(δ₀²⁵⁶ + δ₁²⁵⁶) + 2εprf` over vinegar random oracles (`Privacy/MoussakaUnboundNC.anonymityNC`, `anonymityNC_vinegarRO`), both from per-proof zero knowledge and the PRF advantage of Keccak-p[800,12] as hypotheses; the executable verifier and prover on its KATs and the random-oracle extraction bounds (fixed and adaptive statements, permutation model, spec relations; `ROM/MoussakaUnbound*.lean`), the deterministic cores of unforgeability (`Protocols/MoussakaUnbound.lean`), domain separation. | Squatting is no longer possible (fixes the base note's F2). Privacy against non-colluding Moderators now needs a PRF assumption on Keccak-p[800,12]. A token keeps no record of the contexts it was redeemed in. The paper proof of U5(b) kept the issuance-acceptance bits through the PRF hop; the corrected abort term also counts the issuance proof's completeness error (UF7). |
 | `ratatouille.md` | Balance (no inflation), no theft, unlinkability, correctness: proved. [Lean] Thm 1 (balance) in the ROM and ideal-cipher model (`balance_le_ufTag`, `ROM/RatatouilleBalance.lean`), without the probe (`balance_le_noProbe`), and down to one-more-UOV with `Tag` idealized in the standalone game (`balance_le_ompr`), and with simultaneous extraction (`balance_le_sim_num`, `balance_le_ompr_sim`). | Spends are not bound to a session, so a copied spend request can be redeemed first (medium). Thm 1's UF-Tag reduction must not forward the Issuer's signing calls on the duplicate-nullifier path (corrected); Thm 1 omitted the Issuer's abort term (corrected). |
@@ -1343,6 +1347,7 @@ used here add nothing).
 | `ROM/SpecSound.lean` | done: **the 20 headline theorems for the spec relations** (`X_spec` for each `*_accept_le_full`, `*_accept_le_perm`, `*_accept_le_adaptive`, `*_accept_le_adaptive_perm`): the same bound for "the decoded witness of no known tree is in the spec relation", with only well-formedness of the instance added (`EndToEnd/SpecRelations.lean`; plan §2i) |
 | `Prob/MoussakaUnbound.lean`, `ROM/MoussakaUnbound.lean`, `ROM/MoussakaUnboundAdapt.lean`, `ROM/MoussakaUnboundSpec.lean`, `EndToEnd/MoussakaUnboundSpec.lean` | done (plan §2j): **the unbound Moussaka relations**, `ε_QS(3816)` and `ε_QS(7929)`: the one-chain bounds (`moussakaUnbound*_chain_prob`), `moussakaUnbound{Issue,Redeem}_accept_le_{full,perm,adaptive,adaptive_perm}` and their `_spec` versions, stated for any statement with the unbound relations' parameters and systems (`Unbound.IssueStmt`, `RedeemStmt`) and instantiated at the executable verifier (`Unbound.moussakaUnboundIssue_stmt`, `moussakaUnboundRedeem_stmt`); `hinj` for the C++ encodings (`hinj_moussakaUnboundRedeem`, …) |
 | `ROM/VerifyIC.lean`, `ROM/ExtractReduce.lean` | done (plan §2l): the executable verifier as an oracle computation over the hashes and the cipher (`verifyIC`, equal to `verify` per table, `evalWithAnswerFn_verifyIC`; reads the cipher only at its cells, `verify_congr_cells`; budget `verifierIC_verifyIC`), and the protocol-independent glue that bounds a game's event per table by single-proof events (`prEvent_bind_le_sum4_of_table`, the `j`-th prover `proverAt`) |
+| `ROM/ProverIC.lean`, `Assumptions/PomClientLean.lean`, `Assumptions/BlindPomfritGrind.lean`, `Assumptions/BlindPomfritComplete.lean`, `Assumptions/BlindPomfritT6Lean.lean` | done (`pomfrit.md` G9): the Lean prover's steps 1 and 2 as oracle computations, equal per table to `Prover.voleGen` / `Prover.proveCommit` (`eval_step1Q`, `eval_proveCommitQ`; PRG calls as recorded cipher queries, `voleGenAt_congrA`, `memoF_map`); the Lean client `leanClient` (`eval_start`, `eval_finish`, `pom_complete`); the grinding bound `prEvent_grindBad_le`; the game at a table (`fail_table`); `compFail_le`, `pomfrit_T6_lean`, `pomfrit_T6_lean_bound` |
 | `ROM/MoussakaOMUF.lean`, `ROM/RatatouilleBalance.lean`, `ROM/OneMore.lean`, `ROM/OneMorePomfrit.lean` | done (§5; plan §2k, §2l): Moussaka one-more unforgeability (`omuf_le_num`; the Anchor is the spec's, `anchorIC_eq_spec`), Ratatouille balance (`balance_le_ufTag`; deterministic core `no_win`), and the one-more reduction with a programmed target oracle (`real_eqd_comb`) for PomFRIT's U1 and U2 (`pomfrit_U1_bound`, `pomfrit_U2_bound`) |
 | `ROM/SimUnion.lean`, `ROM/SimExtract.lean`, `ROM/SimSpec.lean`, `ROM/MoussakaOMUFSim.lean`, `ROM/RatatouilleBalanceSim.lean`, `ROM/SimJoint.lean`, `ROM/SimJointSpec.lean`, `ROM/MoussakaUnboundSim.lean`, `ROM/SimPerm.lean`, `Assumptions/SimLinks.lean` | done (plan §2m): **simultaneous extraction**. The union bound over a shared run and per-output continuations (`prEvent_le_shared_suffix`); outputs as prefix runs of a reference run (`PrefixRuns`, `proverAt_prefix`); `prEvent_sim_le`, `prEvent_sim_comb_le`; the four spec relations (`*_sim_spec`); Moussaka Thm 1 (`omuf_le_num_sim`, `_open_sim`, `_ompr_sim`) and Ratatouille balance (`balance_le_sim_num`, `_lean_sim`, `_ufTag_sim`, `_ompr_sim`), each query of the run charged once for both relations (`prEvent_sim_joint_le`, `*_sim_joint_spec`); unbound Moussaka (`moussakaUnbound*_sim_spec`, `moussakaUnbound_sim_joint_spec`; extraction terms only, Thm U1 has no Lean game); permutation model per relation (`prEvent_sim_leP`, `prEvent_sim_comb_leP`) |
 | `ROM/LemmaPDet.lean`, `ROM/LemmaP.lean`, `ROM/OneMoreLemmaP.lean`, `ROM/OneMoreLemmaP{IC,Ident,Order,Queries,Fail,Bound}.lean`, `Assumptions/PomfritLemmaP.lean` | done for U1 (plan §2n, `pomfrit.md` G8): Lemma P per chain (`majP`, `pomfritT_extract_major_chain`); its extraction and `Shift` bound for one adaptively chosen statement with any target function of `chal1` (`pomfritT_accept_le_major`); the one-more game as a lazy random oracle (`realImpl_run_eq`), `E₁` (`e1P`), and each failed forgery as an accepted proof of a derived prover (`pfail_table`, `not_noPick`); the `E`-independent derived prover (`proverP`, `proverP_bounds`), Lemma P's ordering step (`e1P_eq_major`), `pfail_events`, `prEvent_pfail_le`, `pomfrit_U1_explicit`. Missing: U2's `ShiftFail` term |
@@ -1455,8 +1460,8 @@ What is **not** established, roughly in order of importance:
      black-box proof (`uov-open-reductions.md`); by Theorem R (`ompr-shift-algebra.md`; Lean `thmR`) a
      proof must be non-black-box in the adversary or break OMPR^free. In Lean the collision term of
      Theorem R is the explicit probability `badPr`; its bound `V⁴·2⁻³⁴³` and Corollary R′ are on paper.
-   - T6 at PomFRIT is in Lean up to the Lean client's completeness term (`pomfrit_T6`, `compFail`;
-     `pomfrit.md` G9); the converse of `advOMPR_le_ompr31` is not in Lean.
+   - T6 at PomFRIT is in Lean for the Lean client, completeness term included
+     (`pomfrit_T6_lean`, `(ℓ+1)·2⁻¹¹³`; `pomfrit.md` G9); the converse of `advOMPR_le_ompr31` is not in Lean.
    - The quantum protocol theorems need quantum-oracle versions of these assumptions, which are
      new.
 6. **Quantum bounds stop at about 2⁵¹·⁷ queries.** Going further needs a point-level
