@@ -610,9 +610,8 @@ exactly a prediction of `r`: the extra `2(q₅+1)·2⁻¹²⁸` per world (`docs
 `d[0..16) ⊕ w[0..16)`), `ZK/MainSharedGame.lean` (`main_shared_le`), `ZK/MainSharedSim.lean`
 (`pr_sib_hit_le`, `bstar_sim`), `Privacy/MoussakaMainSharedPU.lean` (`anonymity_main_shared`),
 `Audit/MainShared.lean`; computing redemption proofs only when §6's rule lets redemptions happen
-also removes the dummy-token term of `anonymity_main_pu`. Still [paper]: one `H₂³` table and one
-`H₃` for the proofs on `main`, the reduction of Ratatouille's
-`puTermR` to `puAdv`, Moussaka's `find_issuer` Client and 4(b) on `main`, and (PU) for the real
+also removes the dummy-token term of `anonymity_main_pu`. Ratatouille likewise: `unlinkability_main_pu`, `unlinkability_main_shared` (`Privacy/RatatouilleMain*.lean`). Still [paper]: one `H₂³` table and one
+`H₃` for the proofs on `main`, Moussaka's `find_issuer` Client and 4(b) on `main`, and (PU) for the real
 Keccak-p[800,12], which is an assumption.
 
 **Statement (with the fix).** Adaptive, multi-proof, statistical-in-the-witness zero knowledge in
@@ -1721,10 +1720,15 @@ What is **not** established, roughly in order of importance:
    collision term (`ε_iv`) is `1875·2⁻¹²⁸` per world, from the uniform `d` of the later simulated
    proof, with no assumption on `H₄` (`pr_sib_hit_le`); (PU) is bounded in the ideal-permutation
    model (`puAdvPerm_moussaka_le`, `puAdvPerm_ratatouille_le`, and for a credit chosen with the
-   public part `puAdvPerm_ratatouille_credit_le`). Not done: one `H₂³` table and one `H₃` for the
-   proofs on `main` (the programming-collision terms of §10.2), Ratatouille's `puTermR` as `puAdv`
-   and its shared-table version (the commitment with the credit in its public part is
-   `PU.comCredit`), Moussaka 4(b) on `main`, and (PU) for the real 12-round permutation (an
+   public part `puAdvPerm_ratatouille_credit_le`). For Ratatouille, `puTermR` is the (PU)
+   advantage of three explicit predictors (`Privacy/RatatouilleMainPub.lean`,
+   `RatatouilleMainPU.lean`): the two issued tokens' openings against `comI` and round 1's change
+   token's against `comCh` (`PU.comCredit` at a public credit); `unlinkability_main_pu`: `≤ 8·εRF +
+   15·(Σ six puAdv + 4·(q₅+1)·2⁻¹²⁸) + 2·εhide`; with one `H₅` table and one cipher for the four
+   proofs (`Privacy/RatatouilleMainShared*.lean`), `unlinkability_main_shared`: `≤ 30·εS(q₃,
+   q_E+8·4607) + 15·(Σ six puAdv + 8·noHitProb + 3750·2⁻¹²⁸) + 2·εhide` (audit
+   `Audit/MainRata.lean`). Not done: one `H₂³` table and one `H₃` for the proofs on `main` (both
+   protocols; the programming-collision terms of §10.2), Moussaka 4(b) on `main`, and (PU) for the real 12-round permutation (an
    assumption; the exhaustive predictor has advantage 1). The QROM ZK bound
    is loose (2⁻¹⁹ at 2³⁰) until the 256-bit `rho` and salt are added.
    With the fix, zero knowledge of the executable Lean prover and the three protocols' privacy
