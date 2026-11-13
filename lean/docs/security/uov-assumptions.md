@@ -41,7 +41,7 @@ checkout `subprojects/pqov` (revision `fac2ec1`, UOV round-3 code, with
 | T3 | EUF-CMA of the **specified** salted UOV ⇐ GPI + UOV problem. (The spec's own proof is for salt-UOV, a different signer.) | `q_H + 1` on UOV, none on GPI | §5.3 |
 | T4 | **Lemma U is incorrect as stated**: CT-UF with an arbitrary-target signing oracle does not follow from OMPR; it is in fact false (row O). CT-UF^open ⇐ OMPR, tight up to the sampler-failure term `n·E[δ^{255}]`, `n = q_f + 2q_S + 1` ([Lean] with `Com` a random function: `advCTUFIdeal1_le_ompr`; the paper's timing term is unnecessary; `K` keys by guessing, `advCTUFIdeal_le_ompr`); CT-UF^open ⇐ GPI + OW | tight up to `n·E[δ^{255}]`, ×K / `q_π` | §5.4 |
 | T5 | With R1, Ratatouille balance ⇐ EUF-CMA of salted UOV with `H = Tag`, which ⇐ GPI + UOV (or ⇐ UOV alone with salt-UOV signing) | `q_K + 1` | §5.5 |
-| T6 | **PomFRIT ⇔ OMPR**: an OMPR breaker *is* a PomFRIT one-more forger. So OMPR ≤ PomFRIT ≤ OMPR⊕17. [Lean] generic core for any client with distinct session labels, plus a completeness term (`ompr_le_blind`); the PomFRIT instance is paper (`pomfrit.md` G9) | tight, plus completeness failures | §5.6 |
+| T6 | **PomFRIT ⇔ OMPR**: an OMPR breaker *is* a PomFRIT one-more forger. So OMPR ≤ PomFRIT ≤ OMPR⊕17. [Lean] generic core for any client with distinct session labels, plus a completeness term (`ompr_le_blind`); in PomFRIT's real game for any client as oracle computations (`pomfrit_T6`); the completeness term for the Lean client is paper (`pomfrit.md` G9) | tight, plus completeness failures | §5.6 |
 | P7 | OMPR does not reduce to the UOV problem, OW or any EUF/SUF-CMA notion by a key-preserving black-box reduction (theorems A1–A3 of `uov-open-structure.md`; §5.7 has the original sketch). Determinism makes a separation easier, not harder (A2) | `k + 1` (runs of the adversary) | §5.7, `uov-open-structure.md` Part A |
 | O | **Follow-up (`uov-open-reductions.md`).** CT-UF as defined is **false**: `P(λs) = λ²P(s)`, so one query on `μ·Com(x*)` forges. Its repair up to scalars equals "OMPR with free non-challenge calls", which no relativizing reduction derives from OMPR. For OMPR ⇒ OMPR⊕τ, every relativizing reduction, with rewinding, loses `≥ τ^{q+1}/2` | — | `uov-open-reductions.md` |
 | P8 | OMPR⊕τ ⇐ OMPR loses `τ^{q+1}`. Every *simple-embedding* reduction loses that much against some adversary. In a generic model the two assumptions have the same bound. For PomFRIT's tree shapes, U1's additive `Q₃·2^{−71}` (≈ `2^{−7}` at `2^{64}` queries) is unavoidable for simple-embedding reductions, and (row O) for every relativizing reduction up to a factor 2. [Lean] (a) `advOMPRShift_le_guess`; the converse OMPR⊕τ ⇒ OMPR, tight, `advOMPR_le_shift` | — | §6 |
@@ -658,12 +658,35 @@ read only the client's oracle, which is separate from `B`'s. Then `B`'s win is t
 The audit instantiates this at PomFRIT's trapdoor with a client whose `CompFail` term is 0
 (`Audit/OMPRShift.lean`).
 
-*Not mechanized: the PomFRIT instance.* It needs three missing pieces:
-- the Lean `issue_request`/`finalize` as oracle computations over the game's oracles;
-- their completeness in this lazy random-oracle model, which bounds `Pr[CompFail]` by
-  `(ℓ+1)·2^{−113}` (`ZK/CompleteRO.lean`, `pomfritRedeem_complete_rom`, proves it in the
-  finite-table model only);
-- a PomFRIT `Forger` with coins (`ROM/OneMorePomfrit.lean`'s `Forger` has none).
+**Lean, the PomFRIT instance** (`lean/VoleMole/Assumptions/BlindPomfrit.lean`, `pomfrit_T6`,
+`pomfrit_T6_bound`; `pomfrit.md` §6.4). The game is PomFRIT's real one-more forgery game
+(`ROM/OneMorePomfrit.lean`: the forger wrapped, then `verAll`, i.e. `pomfritVerify` with `H_T` the
+oracle) for a forger with coins and its own random oracle (`gameB`); for a forger without coins it
+is `game` (`gameB_liftF`). The client is any PomFRIT client given as oracle computations over the
+hashes and the cipher (`PomClient`: step 1 of session `k` for the message `msgOf k`, and the final
+signature from the state, the `H_T` answer and the Issuer's response). Session labels are
+`hash_to_target`'s inputs; distinct messages give distinct labels (`label_ne`, from `tgtIn_inj`),
+so `Distinct` is a theorem. The forger `blindForger cl n B` blinds with `r = 0`: it is an
+adversary, so it need not blind, and step 1 of the proof then reads `t_i = h_i`, a fresh RO value;
+PomFRIT's relation `P(s) = h ⊕ r` holds with `r = 0`. For every `B` and every client,
+
+    Adv^{ompr}(B; n, ℓ) ≤ Pr[PomWin(blindForger cl n B)] + compFail,
+
+`compFail` the probability that `B`'s claims are `ℓ+1` preimages of distinct sessions' targets
+within `ℓ` Issuer queries but the client's signatures do not all verify. With at most `Q` target
+requests by `B`, the game has `Q + ℓ + 1` targets and the forger makes at most `Q` `H_T` queries
+(`pomfrit_T6_bound`, `advOMPR_pad`, `blindForger_bound`). The proof is `ompr_le_blind` for the
+client as a `Blind.Client` (`toClient`), and the observation that the blind game and `gameB` agree
+on the key, the forger's flag and the final state (`projF_eqd`, `star`).
+
+*Not mechanized: the completeness term for the Lean client.* Two pieces remain:
+- the Lean prover's `voleGen` and `proveCommit` (`issue_request`, `finalize_issue`) as a
+  `PomClient`, i.e. with their hashes and cipher calls as queries, equal per table to the
+  executable prover;
+- their completeness in the lazy random-oracle model, `compFail ≤ (ℓ+1)·2^{−113}`
+  (`ZK/CompleteRO.lean`, `pomfritRedeem_complete_rom`, proves `≤ 2^{−113}` per session in the
+  finite-table model; per claimed session the grinding prefix is a function of the run without
+  the `H₂³` answers, so the same argument applies to each claim).
 
 Step 1's uniformity is the programming step above; the distinct messages are `Distinct`.
 
@@ -960,7 +983,7 @@ Yes: **A-OMPR, i.e. OMPR(n, q) of Def. 3.1 for uov-Ip with `SPre = derive_preima
 
 | Protocol | From A-OMPR | Loss | Best alternative without OMPR |
 |---|---|---|---|
-| PomFRIT | U1 (`pomfrit.md`); **and necessary** (T6). [Lean] U1/U2 with OMPR / OMPR⊕τ (`pomfrit_U1_ompr`, `pomfrit_U2_omprShift`), Lemma P's term explicit; T6 generic core (`ompr_le_blind`) | `(Q₃+ℓ+1)·2^{−71}`; optimal for relativizing reductions (P8, row O) | none: equivalent to OMPR; U2 needs OMPR⊕17 |
+| PomFRIT | U1 (`pomfrit.md`); **and necessary** (T6). [Lean] U1/U2 with OMPR / OMPR⊕τ (`pomfrit_U1_ompr`, `pomfrit_U2_omprShift`), Lemma P's term explicit; T6 generic core (`ompr_le_blind`) and in PomFRIT's game up to the Lean client's completeness term (`pomfrit_T6`) | `(Q₃+ℓ+1)·2^{−71}`; optimal for relativizing reductions (P8, row O) | none: equivalent to OMPR; U2 needs OMPR⊕17 |
 | Moussaka | CT-UF^open ⇐ OMPR (T4), in Thm 1. [Lean] `omuf_le_num_ompr`, with `Com` idealized in the standalone game (`hmodel`) | tight up to `n·E[δ^{255}]`, ×K | GPI + OW, loss `q_π`, ×K (T4) |
 | Ratatouille | A-OMPI ≤ OMPR (T1c), in Lemma 2.1 and Thm 1; the Lean theorem's UF-Tag+probe ≤ A-OMPI + abort term (P9). [Lean] `balance_le_ompr`, with `Tag` idealized in the standalone game (`TagIdeal`) | tight up to `(q_T + Q)·E[δ^{255}]`, plus `(N_I + N_S)·E[δ^{255}] + q_v·2^{−256}` for Issuer aborts (`E4`, or the probe) | spec-SUF-CMA (T1e); GPI + OW (T2), loss `q_T`; both plus the same abort term |
 
@@ -1160,14 +1183,16 @@ T4 with `Com` a random function, `advCTUFIdeal1_le_ompr`; the `K`-key step,
 (`rfStream_presample`, `rfStream_rest_le`), union bound over a uniform stream
 (`prEvent_unifList_exists_le`), embedding a key among iid keys (`iidVec_update`).
 
-The reductions between the games (`lean/VoleMole/Assumptions/Shift.lean`, `Blind.lean`; audits in
-`Audit/OMPRShift.lean` at PomFRIT's trapdoor, `τ = 17`):
+The reductions between the games (`lean/VoleMole/Assumptions/Shift.lean`, `Blind.lean`,
+`BlindPomfrit.lean`; audits in `Audit/OMPRShift.lean` at PomFRIT's trapdoor, `τ = 17`, and
+`Audit/T6Pomfrit.lean`):
 
 | Statement | Lean |
 |---|---|
 | A1 (`uov-open-reductions.md` §4.1): `Adv^{ompr}(B) ≤ Adv^{ompr⊕τ}(shiftZero B)`, `τ ≥ 1`, tight; `Adv^{ompr⊕τ}` grows with `τ` | `advOMPR_le_shift`, `advOMPRShift_mono` |
 | P8(a): `Adv^{ompr⊕τ}(B) ≤ τ^{ℓ+1}·Adv^{ompr}(guessRed n τ B)` | `advOMPRShift_le_guess`, `guess_count`, `pr_guess_ge`, `adReal_eqd`, `recCh_eqd` |
 | T6, generic core (§5.6): `Adv^{ompr}(B) ≤ Pr[Forges] + Pr[CompFail]` for the blinding forger of any client with distinct session labels | `ompr_le_blind`, `blindAdv`, `Client`, `bcomb_eqd`, `win_mid`, `post_pres` |
+| T6 at PomFRIT (§5.6): `Adv^{ompr}(B; n, ℓ) ≤ Pr[PomWin(blindForger)] + compFail` in PomFRIT's one-more forgery game for a forger with coins (`= game` without coins), any client as oracle computations; with `B`'s budget `Q`, `Q + ℓ + 1` targets; unused targets do not change `Adv^{ompr}` (`Assumptions/BlindPomfrit.lean`, `Audit/T6Pomfrit.lean`) | `pomfrit_T6`, `pomfrit_T6_bound`, `compFail`, `gameB`, `gameB_liftF`, `PomClient`, `toClient`, `distinct_toClient`, `blindForger`, `blindForger_bound`, `star`, `projF_eqd`, `advOMPR_pad` |
 | A simulation along a projection (shared, `Assumptions/LazyIdeal.lean`) | `simulateQ_proj_eqd_inv` |
 
 Not mechanized:
@@ -1175,8 +1200,8 @@ Not mechanized:
   T4 with `Com` a random function in `Assumptions/CTUFOpenOMPR.lean`, §5.4);
 - T4 with `Com` a random permutation with inverse access, and the permutation model of `Tag` (the
   terms `q_K·2^{−479} + q_K²·2^{−799}`);
-- the PomFRIT instance of T6, which needs the client as oracle computations and its completeness
-  in the lazy random-oracle model (§5.6);
+- the completeness term of T6 at PomFRIT for the Lean client, which needs the Lean prover as
+  oracle computations and its completeness in the lazy random-oracle model (§5.6);
 - the converse of `advOMPR_le_ompr31`. In Def. 3.1 the adversary's coins may depend on the
   targets, and an on-demand adversary (`omExp`) draws its coins before it sees them. The converse
   holds for coins-first adversaries, but is not stated;
