@@ -664,6 +664,11 @@ adversary's operations are unbound requests.
   `noRedirectUN_lean_plain`, with `ε_SE = ε_plain + Σ_i ε_hit,i`. `PlainSEN` and the `SlotEvN`
   terms are hypotheses (`security/ratatouille.md` §5 says why). The one-token unbound theorems
   (`nmU_lean`) still take the hops' budgets and `WeakSE2` as hypotheses.
+  The `SlotEvN` terms are not bounded here. For Ratatouille they are, with the chain hashes
+  uniform tables (`noTheftN_leanX_hit`, `security/ratatouille.md` §5), and for bound Moussaka
+  with one token (`noRedirect_leanX_hit`). The generic steps apply (`Hit.progMovesN_chain`,
+  `Theft/ManyTables.lean`); the unbound game at a value of the extra table, and a freshness for
+  well-formed unbound statements (as `Hit.Mous.FreshOk`, `HitWf`), are not done.
 
 A malicious Moderator therefore cannot spend an honest Client's token at another Moderator, even
 though the token is valid there.

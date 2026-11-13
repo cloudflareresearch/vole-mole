@@ -637,7 +637,8 @@ For `ε_plain`, `ROM/`'s extraction bounds do not apply as they stand: the extra
 does not see the adversary's queries (the extractor of §2 does), read budgets are certificate
 sizes and not query counts, a cipher read is a whole row and not a cell, and `ROM/`'s oracle is
 lazy. `ε_hit` is bounded for Ratatouille's Lean verifiers and simulators
-(`Theft/HitChain.lean`, `Theft/Hit.lean`, `progEv_hit`; `noTheft_leanX_hit`): a forgery that
+(`Theft/HitChain.lean`, `Theft/HitLevel.lean`, `progEv_chain`; `noTheft_leanX_hit`,
+`noRedirect_leanX_hit`, and `noTheftN_leanX_hit` for `N` simulated proofs): a forgery that
 hits a programmed point meets the simulated proof's chain `H₂⁰ → H₂¹ → H₂²` at a first level
 where the inputs differ and the outputs agree (`chain_hit`), equal `H₂⁰` inputs mean equal
 statements, and a tree with `q` queries to that level's table finds such a point with

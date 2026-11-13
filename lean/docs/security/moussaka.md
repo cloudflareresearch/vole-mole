@@ -641,21 +641,60 @@ is **[Lean]** for one honest token (`lean/VoleMole/Theft/`; for `U` tokens see b
   (`zkRO_tables`, `leanPIX_zkRO`, `leanPRX_zkRO`), the budgets hold at every `x`
   (`distI_budgetX`, `distR_budgetX`), and `PlainSE`, `ProgEv … HitOpX` are probabilities over
   uniform `x` as well (`security/ratatouille.md` §5, "Lean").
+- **`noRedirect_leanX_hit`** (`Theft/MoussakaHit.lean`): `noRedirect_leanX_plain` at
+  `X = XTab L M` with `ε_hit` bounded (`Hit.Mous.progEv_hit`, from the generic `Hit.progEv_chain`,
+  `Theft/HitLevel.lean`; the argument is the one of `security/ratatouille.md` §5),
+
+      Pr[Bad] ≤ εz(pI; q) + εz(pR; q) + δ_R + ε_plain
+        + 2·((q_μ+3)·2^{−256} + (q₂₁+3)·2^{−1088} + (q₂₂+3)·2^{−448}) + Adv^ow(inverter),
+
+  for `L ≥ 6293` (`Hit.Mous.Lmin`: the redemption relation's `H₂¹` input) and a last stage that
+  reads the tables `H₂⁰`, `H₂¹`, `H₂²` with `q_μ`, `q₂₁`, `q₂₂` queries (`AdmHit`). Two points
+  differ from Ratatouille.
+  - *Lengths.* The spec's instances are byte lists. The issuance encoding `t ‖ ctx_iss` and the
+    redemption encoding are injective only for fields of fixed lengths (`issueEncode_inj`,
+    `redeemEncode_inj`), and a chain input is a table point only if it is short. The C++ API
+    fixes the lengths by its types (`Context`, `ChallengeDigest`, the requests: `std::array`,
+    `include/vole_mole/ihat.hpp:26-38`; the key digest is 32 bytes). `WfI`, `WfR`: an instance
+    with these lengths and at most 64 Anchors. A well-formed statement is determined by its
+    `H₂⁰` input (`muIn_stI_inj`; for a redemption its hashed fields, `muIn_stR_inj`); issuance
+    and redemption inputs differ in the domain separator (`muIn_stI_ne_stR`).
+  - *The Anchor keys are not hashed, their digests are.* The redemption statement's `H₂⁰` input
+    has the digests of the Anchor Set, not the public maps. In the spec a key is a digest and a
+    map, unrelated (`Spec.UOVKey`); in C++ the digest is SHAKE256 of the key. Two redemption
+    statements with the same digests and other maps have the same chain. This is the analogue of
+    Ratatouille's spend statement not hashing `pk`.
+  - So `ε_hit` is bounded for **`FreshOk`**: the operation's statement is well-formed, and each
+    simulated statement of its relation is well-formed and differs from it in a hashed field
+    (`hashedR`: digests, `nf`, both contexts, challenge digest). `FreshOk` implies `FreshOp`, and
+    plain extraction keeps `FreshOp`.
+  - In the game the theorem is for adversaries with **`HitWf`**: the Anchor Sets `A` chooses have
+    32-byte digests, its challenge digests 32 bytes, its output redemptions 16-byte contexts and
+    a 32-byte digest, and an output redemption whose Anchor Set has the digests of the Client's
+    set is under the Client's set. Then an accepted operation that is fresh in the game is
+    `FreshOk` (`freshOk_of_game`: the issuance lengths are those `AccOp` checks, the Client's
+    statements are well-formed), and weak SE for `FreshOk` suffices (`sim_se_le_ok`,
+    `noRedirect_ok`, from `noRedirect_of_se`). The last condition of `HitWf` is a hypothesis on
+    the adversary, not a theorem: in C++ it is collision resistance of the key digest.
+  - `Audit/Theft.lean`: `HitWf` holds for a trivial well-formed adversary (`hitWf_thiefW`), the
+    theorem is instantiated for it, and a redirect to another 32-byte digest is `FreshOk`
+    (`redirect_freshOk`).
 - **`owAdvRO_num`** (`Theft/ComOW.lean`): one-wayness of `Com` in a random-table model, for the
   standalone experiment: one commitment, cells keyed by `(nf, r)`, a decision-tree inverter with
   `q` queries: `≤ (q + 2)·2^{−128} + (q + 1)·2^{−360}`. It does not bound `owAdv` of `noRedirect`.
 - Not covered:
-  - `PlainSE` in the model of `noRedirect_leanX_plain`, from `ROM/`'s extraction bounds, and a
-    bound on `ε_hit` (`ProgEv … HitOpX`). For Ratatouille `ε_hit` is bounded
-    (`noTheft_leanX_hit`, `security/ratatouille.md` §5); the chain lemmas are generic, but
-    Moussaka's issuance encoding `t ‖ ctx_iss` is not injective for variable-length `t`, and the
-    instances have no length bound, so the `H₂⁰` level needs bounded, injectively encoded
-    statements. What separates the two models is listed in
+  - `PlainSE` in the model of `noRedirect_leanX_plain`, from `ROM/`'s extraction bounds. What
+    separates the two models is listed in
     `security/ratatouille.md` §5 ("What is not covered"): the extractor must see the last stage's
     query log, the last stage must be an oracle computation with cell queries to the cipher, and
     the lazy oracle must be matched with the finite tables.
-  - `U > 1` tokens with the other hashes read off uniform tables (the many-token game below has
-    the hops' budgets and the reduction of `WeakSEN` to plain extraction with SHAKE only).
+  - `U > 1` tokens with the other hashes read off uniform tables, and so a bound on the
+    programmed-point terms `SlotEvN` (the many-token game below has the hops' budgets and the
+    reduction of `WeakSEN` to plain extraction with SHAKE only). The generic steps exist
+    (`Theft/ManyTables.lean`, `Hit.progMovesN_chain`, used for Ratatouille's `noTheftN_leanX_hit`);
+    the Moussaka game at a value of the extra table and `FreshOk` for a log are not done.
+  - Statements that are not well-formed, and redemptions under an Anchor Set with the digests of
+    the Client's set and other maps (`HitWf`, above).
   - Anchor Sets and digests that `A` chooses after reading the tables.
   - More than one output.
   - A bound on `δ_R` for the Lean prover.
