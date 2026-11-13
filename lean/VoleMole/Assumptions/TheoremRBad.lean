@@ -1,4 +1,5 @@
 import VoleMole.Assumptions.TheoremR
+import VoleMole.Arith.GF256Field
 
 /-!
 # Theorem R: the bad events on values
@@ -1210,5 +1211,151 @@ theorem thmR_num (hτ : 7 ≤ τ) (hq : 1 ≤ q) (c Tq : ℕ)
         (add_le_add le_rfl (badPr_le tr n Tq hR))
 
 end Main
+
+
+/-! ## At UOV's parameters: `V⁴·2^{−343}`, and Corollary R′ -/
+
+section Real
+
+open VoleMole.Arith
+
+/-- **The numerator is at most `2^{17}·V⁴`** over `GF(256)`, with `V = n + c + (τ + 1)(q + 1)·T`
+the paper's count of values (`ompr-shift-algebra.md` §2.1). The dominant term is the list-pair
+collisions, `2·τ²·256²·(q + 1)T·(n + qT)²`; it fits because `V ≥ 2(τ + 1)` once `T ≥ 1`. -/
+theorem badNum_le {τ q : ℕ} (hq : 1 ≤ q) (n c T : ℕ) :
+    badNum τ q 256 n T ≤ 2 ^ 17 * (n + c + (τ + 1) * (q + 1) * T) ^ 4 := by
+  set V := n + c + (τ + 1) * (q + 1) * T with hVdef
+  set a := n + q * T with ha
+  set l := (q + 1) * T with hl
+  have hlV : (τ + 1) * l ≤ V := by rw [hVdef, hl, ← mul_assoc]; omega
+  have haV : a ≤ V := by
+    have : q * T ≤ (τ + 1) * (q + 1) * T := by
+      calc q * T ≤ (q + 1) * T := Nat.mul_le_mul_right _ (by omega)
+        _ ≤ (τ + 1) * ((q + 1) * T) := Nat.le_mul_of_pos_left _ (by omega)
+        _ = _ := by ring
+    omega
+  have hlV' : l ≤ V := le_trans (Nat.le_mul_of_pos_left _ (by omega)) hlV
+  -- the expanded numerator
+  have e : badNum τ q 256 n T = a + 256 * (a * a) + 256 * (a * l) +
+      (τ * τ * l) * (2 * 65536 * (a * a) + 256 * a + 1) := by
+    simp only [badNum, cT, cL, ← ha, ← hl]; ring
+  rw [e]
+  rcases Nat.eq_zero_or_pos T with hT | hT
+  · have hl0 : l = 0 := by rw [hl, hT, mul_zero]
+    rw [hl0]
+    simp only [mul_zero, add_zero, zero_mul]
+    rcases Nat.eq_zero_or_pos V with hV | hV
+    · have : a = 0 := by omega
+      simp [this]
+    · have h1 : a * a ≤ V * V := Nat.mul_le_mul haV haV
+      have h2 : V ≤ V ^ 4 := by
+        calc V = V ^ 1 := (pow_one V).symm
+          _ ≤ V ^ 4 := Nat.pow_le_pow_right hV (by norm_num)
+      have h3 : V * V ≤ V ^ 4 := by
+        calc V * V = V ^ 2 := (sq V).symm
+          _ ≤ V ^ 4 := Nat.pow_le_pow_right hV (by norm_num)
+      omega
+  · have hl2 : 2 ≤ l := by rw [hl]; nlinarith
+    have hV2 : 2 * τ ≤ V := by nlinarith
+    have hV : 1 ≤ V := by omega
+    have hu : 2 * (τ * τ * l) ≤ V * V := by
+      calc 2 * (τ * τ * l) ≤ (2 * τ) * ((τ + 1) * l) := by nlinarith
+        _ ≤ V * V := Nat.mul_le_mul hV2 hlV
+    have h1 : a * a ≤ V * V := Nat.mul_le_mul haV haV
+    have h1' : a * l ≤ V * V := Nat.mul_le_mul haV hlV'
+    have hX : 2 * 65536 * (a * a) + 256 * a + 1 ≤ 2 * 65536 * (V * V) + 256 * V + 1 := by omega
+    have h4 : 2 * ((τ * τ * l) * (2 * 65536 * (a * a) + 256 * a + 1)) ≤
+        (V * V) * (2 * 65536 * (V * V) + 256 * V + 1) := by
+      rw [← mul_assoc]
+      exact Nat.mul_le_mul hu hX
+    have p2 : V ≤ V ^ 4 := by
+      calc V = V ^ 1 := (pow_one V).symm
+        _ ≤ V ^ 4 := Nat.pow_le_pow_right hV (by norm_num)
+    have p3 : V * V ≤ V ^ 4 := by
+      calc V * V = V ^ 2 := (sq V).symm
+        _ ≤ V ^ 4 := Nat.pow_le_pow_right hV (by norm_num)
+    have p4 : V * V * V ≤ V ^ 4 := by
+      calc V * V * V = V ^ 3 := by ring
+        _ ≤ V ^ 4 := Nat.pow_le_pow_right hV (by norm_num)
+    have e2 : (V * V) * (2 * 65536 * (V * V) + 256 * V + 1) =
+        2 * 65536 * V ^ 4 + 256 * (V * V * V) + V * V := by ring
+    rw [e2] at h4
+    omega
+
+
+theorem badNum_div_le {τ q : ℕ} (hq : 1 ≤ q) (n c T : ℕ) :
+    (badNum τ q (Fintype.card GF256) n T : ℝ≥0∞) / (Fintype.card GF256 ^ 45 : ℕ) ≤
+      ((n + c + (τ + 1) * (q + 1) * T : ℕ) : ℝ≥0∞) ^ 4 / 2 ^ 343 := by
+  rw [GF256.card_eq]
+  have h := badNum_le (τ := τ) hq n c T
+  have e : ((256 ^ 45 : ℕ) : ℝ≥0∞) = 2 ^ 17 * 2 ^ 343 := by
+    rw [show (256 ^ 45 : ℕ) = 2 ^ 17 * 2 ^ 343 by
+      rw [← pow_add, show (256 : ℕ) = 2 ^ 8 by norm_num, ← pow_mul]]
+    simp only [Nat.cast_mul, Nat.cast_pow, Nat.cast_ofNat]
+  rw [e]
+  calc (badNum τ q 256 n T : ℝ≥0∞) / (2 ^ 17 * 2 ^ 343)
+      ≤ (2 ^ 17 * ((n + c + (τ + 1) * (q + 1) * T : ℕ) : ℝ≥0∞) ^ 4) / (2 ^ 17 * 2 ^ 343) := by
+        refine ENNReal.div_le_div_right ?_ _
+        exact_mod_cast h
+    _ = _ := ENNReal.mul_div_mul_left _ _ (by positivity) (by simp)
+
+variable {DR : Type} [DecidableEq DR] {AR : DR → Type} [∀ d, SampleableType (AR d)]
+  {τ q : ℕ} [NeZero τ] {X : Type} [DecidableEq X] {S : Type}
+  [SampleableType (Fin 45 → GF256)] [DecidableRel (scls GF256 45)]
+  {PK SK : Type} (tr : Trapdoor PK SK (Fin 45 → GF256) S) [∀ pk s t, Decidable (tr.IsPre pk s t)]
+  (n : ℕ)
+
+/-- **`badPr ≤ V⁴·2^{−343}`** at UOV's targets `GF(256)^45`, `V = n + c + (τ + 1)(q + 1)·T`, for a
+reduction with at most `T` messages to `A**_D` (`ompr-shift-algebra.md` §2.2, step 1; `c` only
+enlarges `V`). -/
+theorem badPr_le_V4 (hq : 1 ≤ q) (c Tq : ℕ)
+    {R : PK → ProbComp (OracleComp (specRed AR τ q X (Fin 45 → GF256) S) (List (X × S)))}
+    (hR : ∀ pk, ∀ r ∈ support (R pk), IsQueryBoundP r (fun o => o.isRight = true) Tq) :
+    badPr (scls GF256 45) tr n R ≤ ((n + c + (τ + 1) * (q + 1) * Tq : ℕ) : ℝ≥0∞) ^ 4 / 2 ^ 343 :=
+  (badPr_le tr n Tq hR).trans (badNum_div_le hq n c Tq)
+
+/-- **Theorem R** (`ompr-shift-algebra.md` §2.1) at UOV's targets, as stated in the note: for
+`τ ≥ 7`, `q ≥ 1` and a reduction `R` with `c` calls and at most `T` messages to `A**_D`,
+
+    Pr[R^{A**_D} wins OMPR(n, c)] ≤ 2·τ^{−(q+1)} + Adv^{free}(M) + V⁴·2^{−343},
+
+`V = n + c + (τ + 1)(q + 1)·T`, where `M = redM` requests at most `n + q·T` targets and makes at
+most `c + (q + 1)·T` calls. -/
+theorem thmR_V4 (hτ : 7 ≤ τ) (hq : 1 ≤ q) (c Tq : ℕ)
+    (R : PK → ProbComp (OracleComp (specRed AR τ q X (Fin 45 → GF256) S) (List (X × S))))
+    (hR : ∀ pk, ∀ r ∈ support (R pk), IsQueryBoundP r (fun o => o.isRight = true) Tq) :
+    Pr{let r ← redExp tr n R}[Wins c (goodPre tr.IsPre) r.1 r.2.1 r.2.2.toCh] ≤
+      2 / (τ : ℝ≥0∞) ^ (q + 1) +
+        advOMPRFree tr (scls GF256 45) (n + q * Tq) (c + (q + 1) * Tq)
+          (redM (scls GF256 45) tr.IsPre n R) +
+        ((n + c + (τ + 1) * (q + 1) * Tq : ℕ) : ℝ≥0∞) ^ 4 / 2 ^ 343 :=
+  (thmR_num tr n hτ hq c Tq R hR).trans (add_le_add le_rfl (badNum_div_le hq n c Tq))
+
+/-- **Corollary R′** (`ompr-shift-algebra.md` §2.1). If the reduction has loss `L` against
+`A**_D`, i.e. it wins OMPR with probability at least `w / L` where `w` is the OMPR⊕τ advantage
+of `A**_D`, and `4·L ≤ τ^{q+1}`, then
+
+    w / L ≤ 1/(2L) + Adv^{free}(M) + V⁴·2^{−343}.
+
+With `w ≥ 1 − (2q + 1)·δ^{255}` (the note's claim on `A**_D`, not mechanized) this is the note's
+`Adv^{free}(M) ≥ 1/(2L) − (2q + 1)·δ^{255}/L − V⁴·2^{−343}`. -/
+theorem corR' (hτ : 7 ≤ τ) (hq : 1 ≤ q) (c Tq : ℕ)
+    (R : PK → ProbComp (OracleComp (specRed AR τ q X (Fin 45 → GF256) S) (List (X × S))))
+    (hR : ∀ pk, ∀ r ∈ support (R pk), IsQueryBoundP r (fun o => o.isRight = true) Tq)
+    (L w : ℝ≥0∞) (hL : 4 * L ≤ (τ : ℝ≥0∞) ^ (q + 1))
+    (hloss : w / L ≤ Pr{let r ← redExp tr n R}[Wins c (goodPre tr.IsPre) r.1 r.2.1 r.2.2.toCh]) :
+    w / L ≤ (2 * L)⁻¹ +
+        advOMPRFree tr (scls GF256 45) (n + q * Tq) (c + (q + 1) * Tq)
+          (redM (scls GF256 45) tr.IsPre n R) +
+        ((n + c + (τ + 1) * (q + 1) * Tq : ℕ) : ℝ≥0∞) ^ 4 / 2 ^ 343 := by
+  refine hloss.trans ((thmR_V4 tr n hτ hq c Tq R hR).trans ?_)
+  refine add_le_add (add_le_add ?_ le_rfl) le_rfl
+  calc 2 / (τ : ℝ≥0∞) ^ (q + 1) ≤ 2 / (4 * L) := ENNReal.div_le_div_left hL 2
+    _ = (2 * L)⁻¹ := by
+      rw [show (4 : ℝ≥0∞) * L = 2 * (2 * L) by ring, ← one_div,
+        show (2 : ℝ≥0∞) = 2 * 1 by ring, mul_assoc,
+        ENNReal.mul_div_mul_left _ _ (by norm_num) (by norm_num), one_mul]
+
+end Real
 
 end VoleMole.Assumptions.TheoremR
