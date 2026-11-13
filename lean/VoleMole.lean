@@ -359,6 +359,8 @@ import VoleMole.Theft.MoussakaUnbound
 import VoleMole.Theft.Reads
 import VoleMole.Theft.SimExtract
 import VoleMole.Theft.SimExtractLean
+import VoleMole.Theft.LeanHb
+import VoleMole.Theft.Tables
 import VoleMole.Audit.Nonvacuous
 import VoleMole.Audit.Liveness
 import VoleMole.Audit.UnboundROM
