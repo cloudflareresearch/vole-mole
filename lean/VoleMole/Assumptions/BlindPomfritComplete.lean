@@ -29,12 +29,11 @@ oracle and the hashes; `OneMore.realImpl_run_eq`). Table by table (`ROM/ExtractR
   without `H₂³` queries (`pfxB`, `allQ_pfxB`). Each has probability `≤ 2⁻¹¹³`
   (`prEvent_grindBad_le`).
 
-**Theorems.**
-* **`compFail_le`**: `compFail ≤ (ℓ + 1)·2⁻¹¹³` for the Lean client, every OMPR adversary `B` (with
-  a finite random oracle) and every key generation and Issuer.
-* **`pomfrit_T6_lean`**: `Adv^{ompr}(B; n, ℓ) ≤ Pr[PomWin(blindForger (leanClient …) n B)] +
-  (ℓ + 1)·2⁻¹¹³`, the forger running the Lean client; **`pomfrit_T6_lean_bound`**: with `B`'s
-  target budget `Q` and `Q + ℓ + 1` targets.
+**Theorems** (the probability assembly is `Assumptions/BlindPomfritT6Lean.lean`).
+* **`fail_table`**: at every table, `B`'s win with the flag `false` implies `GrindBad` of the
+  grinding answers of one of the `ℓ + 1` claimed sessions (`pfxB p >>= blockW`).
+* `allQ_pfxB`: those prefixes are computed without `H₂³` queries.
+* `compFail_le`, `pomfrit_T6_lean`, `pomfrit_T6_lean_bound` (next file).
 
 The Issuer's `derive_preimage` abort does not enter: `compFail` is conditioned on `B`'s claims
 being preimages (`relP`), and the client never calls the Issuer itself.
