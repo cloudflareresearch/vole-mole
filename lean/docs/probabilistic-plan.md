@@ -1331,8 +1331,10 @@ Files: `ROM/LemmaPDet.lean`, `ROM/LemmaP.lean`, `ROM/OneMoreLemmaP.lean`,
 
 Whether the `2⁵⁷` of Lemma P can be removed: `lean/docs/security/pomfrit-lemmap-tight.md`
 (`Seed/KOSUnique.lean`: `ũ` determines the witness slope, `witness_determined`; affine first
-messages need no `Shift` term, `exists_slope_of_kosGood_affine`). No `pomEps'` yet: an efficient
-extractor for first messages whose trees disagree on the label rows is open.
+messages need no `Shift` term, `exists_slope_of_kosGood_affine`; hidden slices: a collision in a
+slice certifies the witness, `slice_collision_sound`, and `T` evaluations detect at most `T`
+slices, `DTree.card_detect_le`). No `pomEps'` yet: the slice decoder of §6.4 there is proved for
+two label classes only; its completeness in general is a conjecture.
 
 - **A general extraction goal.** The adaptive bound of §2g reads the extraction goal
   `∃ i ∈ known, Wit chal1 (cand i)` only through the per-chain hypothesis `hdet`.

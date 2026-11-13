@@ -21,7 +21,8 @@ The *prefix group* of a bit vector `u*` on the witness rows is the set of alive 
 unless another file is named). *Code*: read off the C++ (`vole_commit.inc`,
 `kos_vole_check.hpp`), not mechanized. *Heuristic*: argument with a stated unproved step.
 *Estimate*: a size or cost figure. *Experimental*: checked on a toy model by
-`scripts/pomfrit-lemmap-tight/toy.py`. *Open*: no proof and no attack.
+`scripts/pomfrit-lemmap-tight/toy.py`, or, for §6, on a model with faest-arch-opt's CRT tables by
+`scripts/pomfrit-lemmap-tight/slice.py`. *Open*: no proof and no attack.
 
 ## 0. Answer
 
@@ -33,18 +34,26 @@ unless another file is named). *Code*: read off the C++ (`vole_commit.inc`,
 | D | **The code binds `ũ` into `h` (D2), and `ũ` determines the witness.** Except with probability `2³⁷⁷·ε_v < 2⁻¹³⁴` per `H₂¹` query, all accepting sets of all chains with the same first message and the same `ũ`, whatever their `h_V`, `d`, `chall₂`, have the same witness slope `u*`. So after the `H_T` query the forger has no choice of prefix group left. `pomfrit.md` §4's "after seeing `h`, it may complete either one" does not apply to the implementation | proved; Lean (`witness_determined`, `card_not_kosPar_le`, `pomfrit_disjQuads_le`, `pomfrit_par_count`); experimental | §4 |
 | P∞ | Lemma P holds with `Pr[Shift] ≤ q₁·2⁻¹³⁴ + Q_T·q₁·2⁻⁷⁰⁴` for the extractor `E₁^∞` that outputs the determined prefix. `E₁^∞` is not known to be efficient, so this does **not** improve U1 | proved (from D and Lemma P's steps 1–4) | §4.3 |
 | L | **Affine first messages: efficient, no loss.** If the alive trees agree on the λ label rows, `r` is `F₂`-affine on `S`, and `E₁^lin` (linear algebra on 121 evaluations of the verifier's check value) outputs the prefix of every accepting chain. No event beyond `ε_ext` is used: for such first messages `Shift` cannot happen | proved; Lean for the core (`exists_slope_of_kosGood_affine`, `witness_determined_affine`, `consistent_slope_eq`); affinity of the masks: code; experimental | §5 |
-| H | **Hidden slices.** If the trees disagree on the label rows, the masks are affine only on the slice the forger prepared (`c_mult` is tuned to a guess of the other trees' challenge bits). `E₁^lin` with `E₁` as fallback then fails with probability `2⁻⁷¹` per `H₂³` query, as before. An efficient extractor must find the slice from `c_mult` and the `H₅` table | attack: proved; experimental. Efficient decoding in general: open | §6 |
+| H | **Hidden slices.** If the trees disagree on the label rows, the masks are affine only on slices (`c_mult` is tuned to a guess of the other trees' challenge bits). `E₁^lin` with `E₁` as fallback fails with probability `2⁻⁷¹` per `H₂³` query against the forger of §6.1 | attack: proved; experimental | §6.1 |
+| S | **Structure of an accepting set.** A *class* is a set of alive trees with the same witness and label rows. An accepting set of a minority group has at most `2²⁸` points, or it lies in one slice of a class. On a slice of a class the response is affine. Any two challenges of one slice with the same check value certify the witness of every accepted chain with that `ũ`. So extraction is: find the slice | proved; Lean (`card_le_of_nonbit_slope`, `claim4Hyp_slice`, `translateOn_gate_slice`, `slice_collision_sound`, `slice_collision_sound_affine`); the executable verifier's masks: code | §6.2 |
+| BB | An extractor that only evaluates a check value that hides one of `N` slices, and is the same function off the slice, detects at most `T` of the `N` slices with `T` evaluations. The query log does not name the slice either. So an extractor must read `c_mult` against the `H₅` table | proved; Lean (`DTree.card_detect_le`) | §6.3 |
+| Dec | **A decoder finds the slice.** Two label classes: linear algebra (`512` equations in at most `112` unknowns per direction; `2^{a+1}` solves find level sets of codimension `≤ a`). Any number of label classes: the effective gate bits by linear algebra, then a search over the fixed trees that never discards the slice. §6.1's forger is decoded in `0.03 s` with faest-arch-opt's tables; with 9 different label vectors on the 9 fixed trees, in `2¹⁵`–`2¹⁷` search nodes | two classes: proved; completeness for full slices: proved; running time, wrong gates with more than two classes: heuristic; experimental | §6.4 |
+| T | **Time against loss.** With a decoder for up to `J` label vectors among the fixed trees, Lemma P's `H₂³` term becomes `2^{−15−7J}` per query: `2⁻⁷⁸` at `J = 9` (`≈ 2¹⁷` search nodes per class and `H_T` query; `2²¹` with wrong gates), `2⁻⁸⁵` at `J = 10` (`2²²`), `2⁻⁹⁹` at `J = 12` (`≈ 2³⁵`, extrapolated). Floor `2⁻¹⁰⁰`. The decoder's completeness against every forger is not proved, and we have no reduction from a hard problem. **U1 is unchanged** | heuristic; experimental | §6.5 |
 | M | The loss cannot be moved into the OMPR experiment (more targets): a wrong prefix gives a preimage of `t_j ⊕ r ⊕ r'`, which is not a target, and combining preimages across shifts is Theorem R's obstacle (`ompr-shift-algebra.md` §2). By D, PomFRIT needs less than A-OMPR⊕17: the shift index is fixed, though hidden, when the target is requested | proved (first part); remark | §7 |
-| C | Protocol: (i) keep `ũ` in `hash_to_target`: it is what makes D true; (ii) binding `h_V` as well adds nothing; (iii) per-tree affine masks (no CRT masks) would make L unconditional, at about `+1.1 kB` per signature; (iv) more grinding or other tree shapes move `2⁵⁷` by a few bits only | (i), (ii): proved; (iii): proved given the layout, size: estimate; (iv): proved | §8 |
+| C | Protocol: (i) keep `ũ` in `hash_to_target`: it is what makes D true; (ii) binding `h_V` as well adds nothing; (iii) per-tree affine masks (no CRT masks) would make L unconditional, at about `+1.1 kB` per signature with the 512-bit check, about `+50 B` with a FAEST-style check and a different analysis; (iv) more grinding or other tree shapes move `2⁵⁷` by a few bits only; (vi) each extra direct mask (`+55 B`) lets the decoder handle one more label class at the same cost; (vii) bit constraints on the label rows (`0 B`) remove the `2⁻¹⁰⁰` floor; (viii) binding the group or the slice in a hash: no cheap variant works | (i), (ii): proved; (iii): proved given the layout, sizes: estimate; (iv): proved; (vi): heuristic, experimental; (vii): proved given L4 on those rows, ZK not redone; (viii): argued | §8 |
 
 **In one paragraph.** The `2⁵⁷` is tight for Lemma P's extractor and for every extractor that
 ignores `ũ`. It is not inherent in the protocol as implemented: `hash_to_target` hashes `ũ`, and
 `ũ` commits the forger to one prefix group, up to `2⁻¹³⁴` per `H₂¹` query. What remains is
 computational: the reduction must *find* that group when `H_T` is queried. For first messages
 whose trees agree on the label rows this is linear algebra and U1's extra term vanishes. For the
-others the group can hide in one of up to `2⁶³` slices, and we have neither an efficient decoder
-with a proof nor an attack that would rule one out. So U1 stays as stated, `(Q₃+ℓ+1)·2⁻⁷¹`
-included, and no new `pomEps'` is claimed.
+others the group hides in one of up to `2⁶³` slices. §6 reduces extraction to finding the slice
+(any collision of the check value inside a slice is a certificate), shows that this cannot be
+done by evaluating the check value alone, and gives a decoder that reads `c_mult` against the
+`H₅` table. The decoder is proved for two label classes and defeats every hiding strategy we
+found, at a cost that grows by about `2⁷` per label class beyond 8. We could not prove that it
+finds every slice, nor reduce slice finding from a hard problem. So U1 stays as stated,
+`(Q₃+ℓ+1)·2⁻⁷¹` included, and no new `pomEps'` is claimed; the conditional statement is §6.5.
 
 ---
 
@@ -275,7 +284,7 @@ The toy run (E3): the kernel slope is the committed group's `u` at every base po
 In Lean the core (Theorem L) is proved for any response function with `AffineOn`. (Aff) for the
 executable verifier's masks, and the corollary in the one-more game, are not mechanized.
 
-## 6. Hidden slices: why this does not yet improve U1
+## 6. Hidden slices
 
 ### 6.1 The attack on `E₁'` [proved; experimental]
 
@@ -293,31 +302,233 @@ the slice, every gate `e` with `γ^A_e(Δ_A) ≠ γ^A_e(g*)` contributes `H₅` 
 
 (Aff) fails, so `E₁'` falls back to `E₁`, which outputs `r_A`. The forger completes with `G_B`
 on the slice it guessed anyway: `Shift` with probability `2⁻⁷¹` per `H₂³` query. So **`E₁'` has
-Lemma P's worst-case bound, no better.** Dropping the fallback does not help [heuristic, with `H₅`
-a random oracle; experimental]: at a base point off the slice the kernel test finds `N = 0` (toy
-run E4: one level set, the slice; no kernel at any of the 496 base points off it).
+Lemma P's worst-case bound, no better.** Dropping the fallback does not help: at a base point off
+the slice the kernel test finds `N = 0` (toy run E4: one level set, the slice; no kernel at any of
+the 496 base points off it. `slice.py` R1, real tables: no kernel direction off the slice).
 
 By Theorem D the forger is still committed: with this `ũ` only `G_B` can be completed. The
-extractor's problem is to find `g*` among `2⁶³` slices.
+extractor's problem is to find `g*` among `2⁶³` slices. §6.4 finds it.
 
-### 6.2 What an efficient extractor would have to do [heuristic, open]
+### 6.2 Structure of an accepting set [proved; Lean for the core]
 
-- **Two label classes.** If the alive trees outside the free class share one label vector, the
-  two candidate hash differences per gate are computable, `c_mult ⊕ (those) = F(ū)` is linear in
-  `(g*, ū)`, and `g*` is found by linear algebra. This needs "a slice is a level set only if
-  `c_mult` has this form", i.e. injectivity facts about `W_gate`, `F` and `G` that we did not
-  establish.
-- **More label classes.** Per gate the label depends on up to 16 bits `γ^λ_e(g)`, through `H₅`.
-  Finding `g*` is then a system of table constraints, linear only after guessing which table entry
-  each gate uses. The log does not help: the forger can query all candidate labels.
-- **Level sets that are not slices.** The label rows have no bit constraints, so an accepting set
-  can also sit in a subspace `{δ : e_T(δ) = α·e(δ)}` on which label slopes are not bits (L3 §6.1).
-  Such a set has at most `2^{⌊w(G)/2⌋}` points. An extractor must either find these too or charge
-  them: `2^{28−128}` per query if `G` is a minority.
+A *class* is a set `C` of alive trees whose corrected rows agree on the witness rows (`u_C`) and on
+the label rows (`ℓ_C`). Its *slice* at `g` is `σ_C(g) := {Δ' ∈ S : Δ_i = g_i for all i ∉ C}` (Lean
+`slice`). `w(C)` is its width.
 
-We have no proof that an efficient extractor finds every level set with more than, say, `2^k`
-points, and no forger that provably defeats every efficient extractor. Either would settle the
-question. A proof would give U1 with `2^{k−128}` per `H₂³` query.
+**Lemma S1 (a slope that is not a bit; `card_le_of_nonbit_slope`).** Let `A` satisfy (K) and let
+`G` contain every tree that is not fixed on `A`. If the slope `u*[j]` of a row `j` is neither 0 nor
+1, then `|A| ≤ 2^{w(P)}` and `|A| ≤ 2^{w(G∖P)}` for `P := {i ∈ G alive : u^{(i)}[j] = 1}`. So
+`|A| ≤ 2^{⌊w(G)/2⌋}`.
+
+*Proof.* For `Δ, Δ' ∈ A` with difference `δ`: `e_P(δ) = u*[j]·e(δ)`, so
+`(1 − u*[j])·e_P(δ) = u*[j]·e_{G∖P}(δ)`. Both coefficients are nonzero. If `δ` vanishes on `P`,
+then `e_{G∖P}(δ) = 0`, and the lift is injective: `δ = 0`. Likewise for `G∖P`. ∎
+
+Witness rows have bit slopes by (B). The label rows have no bit constraints, so Lemma S1 applies
+to them: an accepting set with a label slope that is not a bit has at most `2²⁸` points if its
+free trees are in a minority group (`w ≤ 57`). This replaces the third bullet of the old §6.2.
+
+**Lemma S2 (slices are affine).** Let all slopes of `A` on the witness and label rows be bits.
+Then the free trees of `A` agree on these rows (Claim 4 on the label rows too,
+`free_tree_holds_witness`). Let `C` be their class and `g ∈ A`. Then `A ⊆ σ_C(g)`
+(`subset_slice_of_fixed`), and on `σ_C(g)`:
+- every witness and label row is `v + u_C·e(Δ')` (`claim4Hyp_slice`);
+- the label of gate `e` takes two values, `C^g_e` and `C^g_e ⊕ ℓ_C`, selected by the bit
+  `γ^C_e(Δ_C)`, where `C^g_e := C_e ⊕ Σ_{i∉C} γ^i_e(g_i)·u^{(i)}_lab`. So the gate term is
+
+      g_m[e](Δ') = const_e ⊕ γ^C_e(Δ_C)·a^g_m[e],
+      a^g_m[e] := c_mult[m][e] ⊕ bit_m( H₅(iv, e, C^g_e) ⊕ H₅(iv, e, C^g_e ⊕ ℓ_C) ),
+
+  `F₂`-affine in `Δ_C` for every hash function and every `c_mult` (`translateOn_gate_slice`, a
+  model of one gate; `sum_ite_bit`, `translateOn_bit`). With `r̃`, which is affine per tree,
+  `r = (Q, D)` is `F₂`-affine on `σ_C(g)` [code for the executable verifier's masks, as (Aff)].
+
+We call `a^g ∈ F₂^{5×312}` the *effective gate bits* of the slice. For an honest prover
+`a_m = F·ū_m`.
+
+**Theorem S (certificates).**
+1. (`slice_collision_sound`) Let `chall₁` be good for parallelism on `𝒫_⊥` (§4.2). If two
+   distinct challenges of one slice of a class `C` have the same check value `K_c^ũ`, then every
+   accepting set with the same first message and `ũ` that has a bit slope and a free tree has
+   `u* = u_C`.
+2. (`slice_collision_sound_affine`) If the two challenges lie in the slice that contains the
+   accepting set, and the response is affine on it, `KOSGood` suffices (no `ε_par`).
+
+*Proof.* The two challenges form a set that passes the KOS check with `h_V` their common value.
+By `claim4Hyp_slice` it has (K) with slope `u_C` on the witness rows, and the tree in which the
+two differ is free and in `C`. Theorem D, respectively Theorem L on the slice. ∎
+
+So a certificate is small and easy to check, and Lemma S2 says where to look: at a base point
+`Δ^b ∈ σ_C(g)`, `E₁^lin` restricted to the directions of `C` computes the level set through `Δ^b`
+(a coset of `N_g`, below). If the chain can be accepted at two challenges, `N_g ≠ 0`.
+
+**Lemma P^dec.** Let `𝒟` be an algorithm that, at the `H_T` query, outputs `⊥` or a class `C` and
+two challenges as in Theorem S.1. Put `E₁^𝒟(x) := u_C[0..360) ⊕ d_pre` in the second case and
+`E₁(x)` in the first. Then Lemma P holds for `E₁^𝒟` with
+
+    Pr[Shift^𝒟] ≤ q₁·ε_par + (Q₃ + n_out)·m_𝒟·2⁻¹²⁸ + Q_T·q₁·2⁻⁷⁰⁴,
+
+where `m_𝒟 ≤ 2⁵⁷` is the largest accepting set of a group other than the widest one on a first
+message, `chall₁` and `ũ` for which `𝒟` outputs `⊥`.
+
+*Proof.* Steps 1–4 of Lemma P. If `𝒟` outputs a pair, Theorem S.1 gives the chain's prefix. If
+not, the chain's prefix is `E₁(x)` or its accepting set has at most `m_𝒟` points. ∎
+
+Lemma P^dec is not mechanized in the one-more game; its core is `slice_collision_sound`.
+
+### 6.3 Extractors that do not use the tables [proved; Lean]
+
+**Evaluations.** Let `f_g`, `g ∈ Γ`, be functions that agree with one function `f₀` outside
+pairwise disjoint sets `σ_g`. A deterministic algorithm with oracle access that makes `T` queries
+on `f₀` gives the same output on `f_g` as on `f₀` for all but at most `T` of the `g`
+(`DTree.card_detect_le`; a randomized one on average over its coins). With `f` the check value,
+`σ_g` the slices of `G_B` (`|Γ| = 2⁶³`) and of `G_A` (`|Γ| = 2⁵⁷`), and the two families' answers
+`r_B ≠ r_A`: an extractor that sees the response function only through `T` evaluations is wrong
+with probability at least `1 − T·2⁻⁵⁷` against one of the two forgers. This is the model of the toy
+run E4 (noise off the slice that does not depend on the slice). For the real masks the hypothesis
+is false: off the slice the check value depends on `c_mult`, gate by gate, and §6.4 uses that. What
+the lemma shows is that sampling or collision search on the check value is hopeless (`slice.py` R5:
+no collision off the slice).
+
+**The query log.** The forger can query `H₅` at every label that any slice could use, in a fixed
+order: `2·2^j` labels per gate for `j` label vectors among the fixed trees, at most `2²⁶` queries.
+Then the log is a function of the committed trees and not of `g*`.
+
+So an extractor has to evaluate `H₅` itself and compare with `c_mult`.
+
+### 6.4 Decoding the slice
+
+Fix a class `C`, a candidate for the free class, with `w = w(C)`. For `δ` supported on the blocks
+of `C` and `Δ^b ∈ σ_C(g)`, Lemma S2 gives `K_c^ũ(Δ^b + δ) − K_c^ũ(Δ^b) = Λ(δ; a^g)` with
+
+    Λ(δ; a)  := e(δ)·(H_c(u_C, ℓ_C, 0) + ũ) + H_c(0, 0, μ₀(δ; a)) + (μ₁, …, μ₄)(δ; a) ∈ F⁴,
+    μ_m(δ; a) := W_tree(u_{m,i}·δ_i mod M_i, i ∈ C) + W_gate(γ(δ) ∧ a_m).
+
+`Λ` is `F₂`-linear in `δ` and `F₂`-affine in `a`. The level sets of `K_c^ũ` in `σ_C(g)` are the
+cosets of `N_g := ker Λ(·; a^g)`. The task: find `g` with `N_g ≠ 0`. The slice enters only through
+`a^g`, i.e. through the labels `C^g_e = C_e ⊕ Σ_κ b_κ(e, g)·ℓ_κ`, where `ℓ_1, …, ℓ_j` are the
+distinct label vectors of the trees outside `C` other than `ℓ_C` (a tree outside `C` with label
+`ℓ_C` does not change `a^g`), and `b_κ(e, g) := Σ_{i : ℓ_i = ℓ_κ} γ^i_e(g_i)`.
+
+**Two label classes [proved; experimental].** If `j = 1`, then
+`a^g[e] = a⁰[e] ⊕ b_1(e, g)·d[e]` with `a⁰`, `d` computed from four `H₅` values per gate. So `a^g`
+is affine in `g`, and for each `δ` the set `{g : Λ(δ; a^g) = 0}` is the solution set of 512
+linear equations in at most 112 unknowns.
+
+> `Dec₂(a)`: fix a subspace `U` of dimension `a + 1` of the directions of `C`. For each
+> `δ ∈ U∖{0}` solve `Λ(δ; a^g) = 0` for `g`. Output the first solution found, with `δ`.
+
+Every output is a pair as in Theorem S.1. If some slice has `|N_g| ≥ 2^{w−a}`, then `N_g` meets
+`U`, and `Dec₂(a)` outputs a pair. Cost: `2^{a+1} − 1` linear systems. So for first messages with
+two label classes, `m_{Dec₂(a)} ≤ max(2²⁸, 2^{56−a})`. No property of `H₅` is used.
+
+`slice.py` R1 (§6.1's forger, `a = 0`, faest-arch-opt's `F`, `G`, `W_tree`, `W_gate`, `W_crt`):
+one system, unique solution `g*`, `0.03 s`; `E₁^lin` on that slice returns a level set of `2⁵⁷`
+points; the same decoder for the class `G_A` finds no slice. R4 (three wrong `c_mult` bits, level
+set `2⁵⁴`): found after a few guessed directions.
+
+**Any number of label classes, full slices [completeness: proved; running time: heuristic,
+experimental].** A slice is *full* if `N_g` is all of `C`'s directions.
+
+1. *Gate bits.* Solve `Λ(δ_t; a) = 0` for `a ∈ F₂^{1560}`, for a basis `δ_t` of `C`'s directions
+   (12 to 16 random directions suffice in the experiments). The solutions form an affine space
+   `𝒜` that contains `a^{g*}` for every full slice `g*`. With the real tables `𝒜` is one point
+   for `w ≥ 28`, and it is `F·ū` (R3). The reason: `𝒜` corresponds to the mask slopes `ū_m` that
+   agree with the trees of `C` (`ū_m ≡ u_{m,i} mod M_i`) and with `ũ`; that is `5·(128 − w)`
+   unknown bits against `4·128` equations, so `dim 𝒜 = max(0, 128 − 5w)` generically (R3: 23 for
+   `w = 21`, 53 for `w = 15`).
+2. *Candidates.* For each gate let `P_e ⊆ F₂^j` be the patterns `b` with
+   `bit_m(H₅(C_e ⊕ Σ b_κ ℓ_κ) ⊕ H₅(C_e ⊕ Σ b_κ ℓ_κ ⊕ ℓ_C)) = a_m[e] ⊕ c_mult[m][e]` for the `m`
+   that `𝒜` determines. The pattern of `g*` is in `P_e`. With `H₅` a random oracle each other
+   pattern is in `P_e` with probability `2⁻⁵`: `|P_e| ≈ 1 + 2^{j−5}` (measured: 17.1 of 512 for
+   `j = 9`).
+3. *The fixed blocks.* If most `P_e` are singletons (`j ≤ 5`, or label classes with several trees
+   each), each such gate gives `j` linear equations in `g` (R2: 3 classes on 9 trees: 251 gates,
+   unique solution; 5 classes: 110 gates). Otherwise search depth-first over the fixed trees, one
+   block at a time, and cut a branch when some gate has no pattern in `P_e` that extends the
+   blocks chosen so far.
+
+Steps 1–3 never discard a full slice: `a^{g*} ∈ 𝒜`, the pattern of `g*` is in every `P_e`, and the
+search cuts only branches without it. Every `g` found is checked with `E₁^lin` on its slice.
+
+The running time of the search is heuristic. A wrong partial assignment of `t` blocks survives
+gate `e` with probability about `1 − exp(−2^{j−5−t})`, so with 312 gates the search dies at
+depth `t ≈ j − 7`, after about `2^{7(j−8)+10}` nodes. Measured (real tables, `slice.py` R2;
+`--j=10`):
+
+| `j` (fixed trees, one label vector each) | `w(C)` | search nodes | Python time |
+|---|---|---|---|
+| 5, 7, 8 | 85, 71, 64 | `2⁹·³`, `2⁹·⁸`, `2¹⁰·⁵` | `< 0.1 s` |
+| 9 | 57 | `2¹⁵·⁴`–`2¹⁷·²` | `0.5 s` |
+| 10 | 50 | `2²¹·⁶` | `11 s` |
+| 9, 2 wrong gates / 6 wrong gates | 57 | `2¹⁸·⁷` / `2²⁰·⁹` | `1.5 s` / `11 s` |
+
+Step 2 costs `2·2^j·312` hash calls.
+
+**Wrong gates [heuristic; experimental].** A forger can make `a` gates wrong. Then
+`N_g = {δ : γ^C_e(δ) = 0 on these gates}` has codimension at most `a`, the forger is accepted
+`2^a` times less often, and step 1 fails for directions outside `N_g`. With two label classes
+`Dec₂(a)` covers this, with proof. In general we replace step 1: the slopes `ū_m` with
+`ū_m ≡ u_{m,i} mod M_i` for `i ∈ C` and `ũ = H_c(u_C, ℓ_C, ū₀) + (ū₁..ū₄)` are the solution of a
+linear system (unique for `5w ≥ 128`, generically), `a := F·ū`, and the search of step 3
+tolerates `a` gates without a pattern. This assumes that the slopes on a level set agree with the
+trees' VOLE values. For a level set of `2^d` points that is `128·d` equations on 440 unknowns per
+mask, so we expect it for `d ≥ 4`, without proof.
+
+### 6.5 What this gives, and what it does not
+
+Let `Dec(J)` run §6.4 for every class `C` of a group other than the widest one that has at most
+`J` label vectors among the trees outside it, tolerating enough wrong gates to find level sets
+of more than `m_J := 2^{120−7(J+1)}` points. A class with more than `J` label vectors outside has
+`w(C) ≤ 120 − 7(J+1)`, so its accepting sets have at most `m_J` points anyway.
+
+> **(H-dec)** If a slice of such a class has a level set of more than `max(m_J, 2²⁸)` points,
+> `Dec(J)` outputs a pair of it.
+
+With (H-dec), Lemma P^dec and Lemma S1 give Lemma P, hence U1, with
+`(Q₃+ℓ+1)·max(2^{−15−7J}, 2⁻¹⁰⁰) + q₁·2⁻¹³⁴` in place of `(Q₃+ℓ+1)·2⁻⁷¹`, for a reduction that
+runs `Dec(J)` at each `H_T` query:
+
+| `J` | search nodes per class | largest set missed | `H₂³` term | at `2⁶⁴` queries |
+|---|---|---|---|---|
+| ≤ 8 | `≤ 2¹¹` | `2⁵⁷` (9 label vectors, §6.1 with 9 labels) | `2⁻⁷¹` | `2⁻⁷` |
+| 9 | `2¹⁷` (`2²¹` with 6 wrong gates) | `2⁵⁰` | `2⁻⁷⁸` | `2⁻¹⁴` |
+| 10 | `2²²` | `2⁴³` | `2⁻⁸⁵` | `2⁻²¹` |
+| 11 | `≈ 2²⁸` (extrapolated) | `2³⁶` | `2⁻⁹²` | `2⁻²⁸` |
+| 12 | `≈ 2³⁵` (extrapolated) | `2²⁹` | `2⁻⁹⁹` | `2⁻³⁵` |
+
+Each step costs a factor of about `2⁷` in the reduction's work per `H_T` query and gains 7 bits.
+Beyond `J = 12` Lemma S1's `2²⁸` takes over.
+
+**Status of (H-dec).** Proved for first messages with two label classes (`Dec₂`). In general it is
+a conjecture supported by the experiments above. What a proof lacks:
+- The tables are `H₅` values at labels that the forger chooses. The candidate counts and the
+  search bound treat them as independent random tables. A forger can try many first messages;
+  that it cannot bias 312 gates enough is plausible and not proved.
+- Level sets of positive codimension with more than two label classes use the slope assumption
+  of §6.4.
+- For `J ≥ 11` the cost is extrapolated.
+
+**No hardness result.** We found no reduction from a hard problem, and do not expect one in the
+range that matters. The two natural candidates are easy here. MinRank: "`Λ(·; a^g)` has a kernel"
+with `a^g` affine in `g` is a MinRank instance, but with 512 rows against at most 57 columns, and
+the kernel attack (guess `δ`, solve for `g`) is `Dec₂`. Planted constraint satisfaction: each gate
+is a constraint of density `2⁻⁵` on a pattern of `j` bits, and there are 312 of them on at most
+112 unknown bits; pruning works until `j` is so large that `w(C)` is small. A forger that forces
+a search of `2^{7(j−8)+10}` nodes is accepted with probability at most `2^{−8−7j}` per `H₂³`
+query: its work per expected `Shift` grows as fast as the decoder's.
+
+**Rewinding.** An accepted forgery names its slice (the accepted `Δ'` lies in it). A reduction
+could rewind to the `H_T` query and program the right prefix. But the forger then sees a new `h`
+and need not complete that chain again, and the two runs together make up to `2ℓ` Issuer queries
+for `ℓ + 1` forgeries. This is the forking loss on a one-more game; we see no bound better than
+U1's from it.
+
+### 6.6 Not mechanized
+
+(Aff) on slices for the executable verifier's masks (Lean has the gate model,
+`translateOn_gate_slice`). Lemma P^dec in the one-more game. The decoders and their analysis
+(`Dec₂`'s proof is linear algebra on Lemma S2's formula; the search bound is heuristic).
 
 ## 7. Can the loss move into the OMPR experiment? [proved: no, for the obvious ways]
 
@@ -358,7 +569,42 @@ to learn the index.
 - **(iv) Parameters.** The term is `2^{w_min − 128}` with `w_min` the largest non-widest group
   width, about `n_Δ/2 = (128 − w_grind)/2`. So it is about `2^{−64 − w_grind/2}` for any tree
   shapes: one more grinding bit doubles the prover's work and gains half a bit. Not a fix.
+- **(iii′) A FAEST-style check** [estimate]. The `+1.1 kB` of (iii) comes from keeping four
+  direct masks of λ bits for the 512-bit check. With affine masks the response is affine for
+  every first message, and FAEST's own check (a `λ + 16`-bit VOLEHash masked by `λ + 16` rows,
+  one λ-bit QuickSilver mask) would do: 272 mask rows, `16·34 = 544` bytes of corrections, no
+  `c_mult` (`−195`), no label rows (`−256`), an 18-byte `ũ` (`−46`): about `+50 B`. But L3's
+  argument on triples needs `ε_v = 2⁻⁵¹²` and does not apply; the per-tree argument for affine
+  responses would replace it, and `zk.md` would be redone. Not analyzed here.
 - **(v) Assumption.** U2 under A-OMPR⊕17 (or the committed variant of §7) is tight today.
+- **(vi) More direct masks** [heuristic; experimental]. Each mask adds one bit per gate to the
+  decoder's test, so candidate sets halve and one more label class costs what the previous one
+  did. A direct mask costs a 39-byte row of `c_mult` and 16 bytes of `ũ`: `+55 B`. With 8 masks
+  (`+165 B`), `slice.py --masks=8 --j=12` decodes 12 label vectors in `2¹⁷·⁵` nodes: §6.5's
+  `2⁻⁹⁹` row at the cost of today's `2⁻⁷⁸` row. The masks must be direct: a hashed mask adds
+  unknown slopes without equations. This is still (H-dec), not a proof. VOLEHash would have
+  `4 + x` outputs (L3 and `zk.md` to be re-instantiated).
+- **(vii) Bit constraints on the label rows** [proved given L4 on these rows; ZK not redone].
+  Add the QuickSilver constraints `Θ_j² = Θ_j` for the λ label rows (no bytes: the QuickSilver
+  proof does not grow). Then (B) covers the label rows, Lemma S1's case cannot occur, and the
+  `2⁻¹⁰⁰` floor of §6.5 goes away. On its own this does not help against hidden slices.
+- **(viii) Binding the group or the slice in a hash** [argued; nothing cheap found].
+  - A declared tree index, group or slice in `H_T`'s or `H₂¹`'s input: the verifier cannot check
+    it (an honest prover has no slice), so a forger declares the widest group. No effect.
+  - Anything the verifier recomputes from its own view depends on `Δ'`, and an honest prover can
+    commit only to `Δ'`-independent values. For the labels there are none to bind: the linear
+    functions of the verifier's labels that do not depend on `Δ'` are `a·L` with `a·G = 0`, and
+    they vanish identically because `L = G·Q_lab`.
+  - Digests of both labels of some gates in the first message, the verifier checking that its
+    label's digest is one of the two. Then the labels used on the accepting set are in the log,
+    and each such gate gives its pattern exactly. This needs two 16-byte digests per gate and
+    about `n/j` gates for `n` fixed bits in `j` label classes (8 to 10 gates, `≈ 300 B`, when
+    every fixed tree has its own label; many more when there are few classes, which `Dec₂`
+    handles anyway). More bytes than (vi), a new leakage to argue in `zk.md` (a digest of the
+    sibling label), and still no proof of completeness. Not pursued.
+
+**Summary.** For a proved tight U1: (iii), (iii′) or (v). Without a protocol change, §6.5 is
+the best statement we have, and it is conditional. (i) is mandatory in all cases.
 
 ## 9. Lean and script
 
@@ -379,20 +625,45 @@ Axioms: `propext`, `Classical.choice`, `Quot.sound`.
 | Theorem L per quadruple; one slope for all level sets; for two accepting sets | `pcross_eq_zero_of_kosGood_affine`, `exists_slope_of_kosGood_affine`, `witness_determined_affine` |
 | `u*` is the witness part of the slope | `consistent_slope_eq` |
 | `57` | `minority_weight_le` (`Protocols/PomFRIT.lean`, existing) |
+| slice of a class; an accepting set with fixed trees outside `C` lies in one | `slice`, `subset_slice_of_fixed`, `isFixed_of_subset_slice`, `slice_translate` |
+| Lemma S1: a slope that is not a bit | `card_le_of_nonbit_slope`, `card_sq_le_of_nonbit_slope` |
+| Lemma S2: witness rows on a slice; a gate with two labels is affine; one gate of a CRT mask on a slice | `claim4Hyp_slice`; `TranslateOn`, `translateOn_bit`, `translateOn_gate`; `sum_ite_bit`, `translateOn_gate_slice`, `affineOn_of_translateOn` |
+| Theorem S.1, S.2 | `slice_collision_sound`, `slice_collision_sound_affine` (`KOSGood.mono`) |
+| §6.3: `T` evaluations detect at most `T` slices | `DTree`, `DTree.eval`, `DTree.queries`, `DTree.eval_congr`, `DTree.card_detect_le` |
 
-Not mechanized: §3 (the forgers); (Aff) for the executable verifier's masks; Lemma P^∞ and
-Lemma P^lin as statements about the one-more game (they would need `KOSPar` as a bad event at
-`H₂¹` in `ROM/Chains.lean`'s style, and `E₁^lin` as a function of the log); §6.
+Not mechanized: §3 (the forgers); (Aff) for the executable verifier's masks, on `S` and on
+slices (the gate model `translateOn_gate_slice` is: any hash, any `c_mult`, labels and selection
+bits as sums over the trees); Lemma P^∞, Lemma P^lin and Lemma P^dec as statements about the
+one-more game (they would need `KOSPar` as a bad event at `H₂¹` in `ROM/Chains.lean`'s style, and
+the extractor as a function of the log); §6.4–§6.5 (the decoders).
+
+Non-vacuity. `slice_collision_sound` takes the hypotheses of `witness_determined` (`KOSPar`:
+`exists_kosPar`) and the tree form of the witness rows on `S`, which is `Claim4Hyp.tree_form`'s
+shape; `claim4Hyp_slice` derives `Claim4Hyp` on a slice from it, so the certificate's hypotheses
+hold for every pair of points of a slice. `translateOn_gate_slice` has no hypothesis beyond
+characteristic 2 and equal label offsets on `C`.
 
 `scripts/pomfrit-lemmap-tight/toy.py [seed]`: four trees of widths `(3, 2, 2, 2)`, `GF(2³²)`,
 a KOS check of the same shape. E1: §3.1's level sets. E2: Theorem D over all pairs. E3: `E₁^lin`.
 E4: §6.1's hidden slice. Runs in seconds.
 
+`scripts/pomfrit-lemmap-tight/slice.py [seed] [--quick] [--masks=N] [--j=J [--wrong=A]]`: the
+verifier's response for FAEST-EM-128f shapes (17 trees, `GF(2¹²⁸)`, 312 gates, 5 masks) with
+faest-arch-opt's matrices `F`, `G`, `W_tree`, `W_gate`, `W_crt` read from
+`VoleMole/Verifier/CrtData.lean`. Not modelled: the GGM trees (per-tree VOLE values are sampled),
+all but 8 witness rows, QuickSilver; VOLEHash is a polynomial hash of the same shape; `H₅` is
+BLAKE2b. R0: the tables' identity, an honest first message. R1: §6.1's forger and `Dec₂`. R2: the
+search, wrong gates, label classes of several trees. R3: uniqueness of the gate bits. R4: `Dec₂`
+with wrong gates. R5: no collisions off the slice. About 20 s; `--j=10` adds 30 s.
+
 ## 10. Open
 
-1. An efficient extractor for first messages without (Aff), with a proof (§6.2), or a forger
-   that defeats every efficient one.
-2. Mechanize Lemma P^lin in the one-more game: (Aff) for `Verifier`'s masks, `E₁^lin` on the log,
-   and a `pomEps'` without the `2⁵⁷` for forgers restricted to (Aff). A restriction on forgers
-   is not a security statement, so this was not attempted.
+1. (H-dec) of §6.5: a proof that the decoder finds every large level set, for forgers that choose
+   the labels (and so the `H₅` tables) adversarially; or a forger that defeats it at a cost below
+   the decoder's. The two-class case is proved.
+2. Mechanize Lemma P^lin and Lemma P^dec in the one-more game: (Aff) for `Verifier`'s masks on
+   `S` and on slices, the extractor on the log, `KOSPar` as a bad event at `H₂¹`, and a `pomEps'`
+   without the `2⁵⁷` for forgers with at most two label classes. A restriction on forgers is not a
+   security statement, so this was not attempted.
 3. The committed-shift variant of A-OMPR⊕17 (§7): is it implied by OMPR?
+4. (iii′) of §8: the size and the consistency analysis of a FAEST-style check with affine masks.
