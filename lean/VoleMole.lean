@@ -340,6 +340,7 @@ import VoleMole.Assumptions.UnboundLinks
 import VoleMole.Assumptions.LazyPerm
 import VoleMole.Assumptions.CTUFPerm
 import VoleMole.Assumptions.PermLinks
+import VoleMole.Assumptions.FDHPerm
 import VoleMole.Assumptions.Shift
 import VoleMole.Assumptions.TheoremR
 import VoleMole.Assumptions.Blind
