@@ -579,5 +579,6 @@ and the ideal-permutation bookkeeping of B2. The variant of A4 for UOV itself (T
 - OMPR^free for UOV: is there a combiner across classes? Cryptanalysis of §3.5, item 3.
 - The translation problem for a fixed `Δ` versus the UOV problem (§4.3).
 - A4 for `τ < 5` (other constants), and for a PSF that has the scaling symmetry built in.
-- Other public pairs `(φ, T)` with `P ∘ φ = T ∘ P` (§4.2): we know only the scalings and did not
-  prove that there are no others.
+- Other public pairs `(φ, T)` with `P ∘ φ = T ∘ P` (§4.2). Settled for additive and affine `φ`
+  with `T` injective: for all keys but a fraction `256^{−976}` there are only the scalings
+  (`ompr-shift-algebra.md` Theorem T3, §8). Open for `φ` that is not additive.
