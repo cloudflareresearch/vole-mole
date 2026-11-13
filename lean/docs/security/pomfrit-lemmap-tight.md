@@ -18,7 +18,7 @@ The *prefix group* of a bit vector `u*` on the witness rows is the set of alive 
 `u^{(i)} = u*` on the first `8M = 360` rows.
 
 **Status labels.** *Proved*: full proof here. *Lean*: machine-checked (`Seed/KOSUnique.lean`
-unless another file is named). *Code*: read off the C++ (`vole_commit.inc`,
+unless another file is named; §6A: `Seed/SliceDecode.lean`, `ROM/LemmaPClass.lean`). *Code*: read off the C++ (`vole_commit.inc`,
 `kos_vole_check.hpp`), not mechanized. *Heuristic*: argument with a stated unproved step.
 *Estimate*: a size or cost figure. *Experimental*: checked on a toy model by
 `scripts/pomfrit-lemmap-tight/toy.py`, or, for §6, on a model with faest-arch-opt's CRT tables by
@@ -38,9 +38,11 @@ unless another file is named). *Code*: read off the C++ (`vole_commit.inc`,
 | S | **Structure of an accepting set.** A *class* is a set of alive trees with the same witness and label rows. An accepting set of a minority group has at most `2²⁸` points, or it lies in one slice of a class. On a slice of a class the response is affine. Any two challenges of one slice with the same check value certify the witness of every accepted chain with that `ũ`. So extraction is: find the slice | proved; Lean (`card_le_of_nonbit_slope`, `claim4Hyp_slice`, `translateOn_gate_slice`, `slice_collision_sound`, `slice_collision_sound_affine`); the executable verifier's masks: code | §6.2 |
 | BB | An extractor that only evaluates a check value that hides one of `N` slices, and is the same function off the slice, detects at most `T` of the `N` slices with `T` evaluations. The query log does not name the slice either. So an extractor must read `c_mult` against the `H₅` table | proved; Lean (`DTree.card_detect_le`) | §6.3 |
 | Dec | **A decoder finds the slice.** Two label classes: linear algebra (`512` equations in at most `112` unknowns per direction; `2^{a+1}` solves find level sets of codimension `≤ a`). Any number of label classes: the effective gate bits by linear algebra, then a search over the fixed trees that never discards the slice. §6.1's forger is decoded in `0.03 s` with faest-arch-opt's tables; with 9 different label vectors on the 9 fixed trees, in `2¹⁵`–`2¹⁷` search nodes | two classes: proved; completeness for full slices: proved; running time, wrong gates with more than two classes: heuristic; experimental | §6.4 |
-| T | **Time against loss.** With a decoder for up to `J` label vectors among the fixed trees, Lemma P's `H₂³` term becomes `2^{−15−7J}` per query: `2⁻⁷⁸` at `J = 9` (`≈ 2¹⁷` search nodes per class and `H_T` query; `2²¹` with wrong gates), `2⁻⁸⁵` at `J = 10` (`2²²`), `2⁻⁹⁹` at `J = 12` (`≈ 2³⁵`, extrapolated). Floor `2⁻¹⁰⁰`. The decoder's completeness against every forger is not proved, and we have no reduction from a hard problem. **U1 is unchanged** | heuristic; experimental | §6.5 |
+| T | **Time against loss, with `E₁`'s default** (the widest prefix group). With a decoder for up to `J` label vectors among the fixed trees, Lemma P's `H₂³` term becomes `2^{−15−7J}` per query: `2⁻⁷⁸` at `J = 9` (`≈ 2¹⁷` search nodes per class and `H_T` query; `2²¹` with wrong gates), `2⁻⁸⁵` at `J = 10` (`2²²`), `2⁻⁹⁹` at `J = 12` (`≈ 2³⁵`, extrapolated). The decoder's completeness against every forger is not proved (conjecture (H-dec)). Its treatment of wrong gates rests on an assumption that fails for some level sets of codimension `≥ 4` (row Rig). Superseded down to `2⁻⁸⁵` by row Cls | heuristic; experimental | §6.5 |
+| Cls | **The class extractor: `2⁻⁷⁸` per `H₂³` query, no conjecture.** An accepting set lies in a slice of *one class*, or it has at most `2^{⌊w/2⌋}` points for the width `w` of its prefix group. So a prefix group that is split into many classes cannot be completed, and the default must be the widest class, not the widest prefix group. §6.1's forger with 9 label vectors is then extracted without any decoding. The default can be wrong only if two classes have width `≥ 51`; they leave at most one tree. `Dec^cls` exhausts that tree (`2⁸`), solves for the blocks of the other class by linear algebra and guesses 7 directions: fewer than `2¹⁵` linear systems per `H_T` query, with proof, and no property of `H₅`. **Lemma P holds for `E₁^cls` with `(Q₃ + n_out)·2⁻⁷⁸ + q₁·2⁻¹³⁴` in place of `(Q₃ + n_out)·2⁻⁷¹`**; U1's term at `2⁶⁴` queries becomes `2⁻¹⁴`. With `2²²` systems per `H_T` query: `2⁻⁷⁹`; with `2³⁶`: `2⁻⁸⁵` | proved; the masks' structure: code; Lean for the core (`class_or_small_dec`, `extract_or_class`, `dec_cert_sound`, `dec_cert_complete`, `card_decQ_le`); the one-more game: not mechanized, `pomfrit_U1_sim` is unchanged; experimental | §6A |
+| Rig | **Table facts for wrong gates.** A level set that contains all directions of one tree has the trees' mask slopes and no wrong gate (17 rank computations). On level sets of codimension 4 (`deg D ≤ 115`) and 6 (`x⁶ | D`) there are first messages whose mask slopes differ from the trees' VOLE values on every tree, with more than 150 changed gates: §6.4's slope assumption and its "at most `a` gates without a pattern" are false there. `Dec^cls` does not use them | proved (the examples); experimental | §6A.6 |
 | M | The loss cannot be moved into the OMPR experiment (more targets): a wrong prefix gives a preimage of `t_j ⊕ r ⊕ r'`, which is not a target, and combining preimages across shifts is Theorem R's obstacle (`ompr-shift-algebra.md` §2). By D, PomFRIT needs less than A-OMPR⊕17: the shift index is fixed, though hidden, when the target is requested | proved (first part); remark | §7 |
-| C | Protocol: (i) keep `ũ` in `hash_to_target`: it is what makes D true; (ii) binding `h_V` as well adds nothing; (iii) per-tree affine masks (no CRT masks) would make L unconditional, at about `+1.1 kB` per signature with the 512-bit check, about `+50 B` with a FAEST-style check and a different analysis; (iv) more grinding or other tree shapes move `2⁵⁷` by a few bits only; (vi) each extra direct mask (`+55 B`) lets the decoder handle one more label class at the same cost; (vii) bit constraints on the label rows (`0 B`) remove the `2⁻¹⁰⁰` floor; (viii) binding the group or the slice in a hash: no cheap variant works | (i), (ii): proved; (iii): proved given the layout, sizes: estimate; (iv): proved; (vi): heuristic, experimental; (vii): proved given L4 on those rows, ZK not redone; (viii): argued | §8 |
+| C | Protocol: (i) keep `ũ` in `hash_to_target`: it is what makes D true; (ii) binding `h_V` as well adds nothing; (iii) per-tree affine masks (no CRT masks) would make L unconditional, at about `+1.1 kB` per signature with the 512-bit check, about `+50 B` with a FAEST-style check and a different analysis; (iv) more grinding or other tree shapes move `2⁵⁷` by a few bits only; (vi) each extra direct mask (`+55 B`) lets the decoder handle one more label class at the same cost; (vii) bit constraints on the label rows (`0 B`, ZK unchanged) remove Lemma S1's case; with `E₁^cls` they are not needed above `2⁻⁹²`; (viii) binding the group or the slice in a hash: no cheap variant works | (i), (ii): proved; (iii): proved given the layout, sizes: estimate; (iv): proved; (vi): heuristic, experimental; (vii): proved given L4 on those rows; ZK: the hybrids of `zk.md` go through, not re-mechanized; (viii): argued | §8 |
 
 **In one paragraph.** The `2⁵⁷` is tight for Lemma P's extractor and for every extractor that
 ignores `ũ`. It is not inherent in the protocol as implemented: `hash_to_target` hashes `ũ`, and
@@ -49,11 +51,20 @@ computational: the reduction must *find* that group when `H_T` is queried. For f
 whose trees agree on the label rows this is linear algebra and U1's extra term vanishes. For the
 others the group hides in one of up to `2⁶³` slices. §6 reduces extraction to finding the slice
 (any collision of the check value inside a slice is a certificate), shows that this cannot be
-done by evaluating the check value alone, and gives a decoder that reads `c_mult` against the
-`H₅` table. The decoder is proved for two label classes and defeats every hiding strategy we
-found, at a cost that grows by about `2⁷` per label class beyond 8. We could not prove that it
-finds every slice, nor reduce slice finding from a hard problem. So U1 stays as stated,
-`(Q₃+ℓ+1)·2⁻⁷¹` included, and no new `pomEps'` is claimed; the conditional statement is §6.5.
+done by an extractor for which the check value off the slice is noise, and gives a decoder that
+reads `c_mult` against the `H₅` table. For `E₁`'s default that decoder is proved for two label
+classes only, and its general case is the conjecture of §6.5.
+
+§6A changes the default instead. An accepting set lies in a slice of one *class* (trees with the
+same witness **and label** rows), so the forgers that hide a slice among many label vectors hide
+it in the widest class, and `E₁^cls`, which outputs the widest class, needs no decoder against
+them. Decoding is needed only between two classes of width at least 51, where at most one tree is
+left over, and there the two-class decoder with one tree exhausted is complete, with proof. This
+gives Lemma P, hence U1 on paper, with **`2⁻⁷⁸` per `H₂³` query in place of `2⁻⁷¹`** (`2⁻⁷⁹`,
+`2⁻⁸⁵` for more work), for a reduction that solves fewer than `2¹⁵` small linear systems per `H_T`
+query. The per-chain step is in Lean (`class_or_small_dec`), with the structure of the CRT masks
+as a hypothesis. The one-more game with `E₁^cls` is not mechanized: `pomfrit_U1_sim` still has
+`2⁻⁷¹`. Below `2⁻⁸⁵` the statement is conditional, as before (§6A.6).
 
 ---
 
@@ -475,6 +486,10 @@ tolerates `a` gates without a pattern. This assumes that the slopes on a level s
 trees' VOLE values. For a level set of `2^d` points that is `128·d` equations on 440 unknowns per
 mask, so we expect it for `d ≥ 4`, without proof.
 
+*Correction (§6A.6).* The expectation is wrong for some level sets of codimension `≥ 4`: there
+are first messages whose mask slopes differ from the trees' VOLE values on a level set of `2⁵³`
+points, with more than 150 changed gates. This step of the heuristic decoder is not complete.
+
 ### 6.5 What this gives, and what it does not
 
 Let `Dec(J)` run §6.4 for every class `C` of a group other than the widest one that has at most
@@ -501,7 +516,11 @@ Each step costs a factor of about `2⁷` in the reduction's work per `H_T` query
 Beyond `J = 12` Lemma S1's `2²⁸` takes over.
 
 **Status of (H-dec).** Proved for first messages with two label classes (`Dec₂`). In general it is
-a conjecture supported by the experiments above. What a proof lacks:
+a conjecture supported by the experiments above, and the decoder's step for wrong gates rests on
+an assumption that fails on the level sets of §6A.6 (codimension `≥ 4`, slopes that are not the
+trees'). §6A obtains the rows `2⁻⁷⁸` and `2⁻⁸⁵`
+of the table without it, by changing the default: the rows above are for `E₁`'s default and are
+kept for the record. What a proof lacks:
 - The tables are `H₅` values at labels that the forger chooses. The candidate counts and the
   search bound treat them as independent random tables. A forger can try many first messages;
   that it cannot bias 312 gates enough is plausible and not proved.
@@ -527,8 +546,207 @@ U1's from it.
 ### 6.6 Not mechanized
 
 (Aff) on slices for the executable verifier's masks (Lean has the gate model,
-`translateOn_gate_slice`). Lemma P^dec in the one-more game. The decoders and their analysis
-(`Dec₂`'s proof is linear algebra on Lemma S2's formula; the search bound is heuristic).
+`translateOn_gate_slice`). Lemma P^dec in the one-more game. The search of §6.4 and its analysis
+(the search bound is heuristic). `Dec₂` with one tree exhausted is `Dec^cls`, in Lean (§6A.5).
+
+## 6A. The class extractor [proved; Lean for the core; experimental]
+
+§6 keeps `E₁`'s default, the widest *prefix group*, and asks a decoder to find the slices of
+every class of every other group. That default is the mistake. Corrected, the hard case of §6.4
+(many label vectors among the fixed trees) needs no decoder at all.
+
+### 6A.1 An accepting set lives in one class
+
+**Lemma C.** Let `A` be an accepting set with (K), a bit witness slope `u*` and a free tree, and
+let `G` be the prefix group of `u*`. Then one of:
+
+- (a) every label slope is a bit. The free trees are in one class `C ⊆ G`, every other tree is
+  fixed, `A ⊆ σ_C(g)` and `|A| ≤ 2^{w(C)}`;
+- (b) some label slope is not a bit, and `|A| ≤ 2^{⌊w(G)/2⌋}`.
+
+*Proof.* (a) is Claim 4 on the label rows, which are hashed rows of tree form
+(`free_tree_holds_witness`): a free tree holds the slope of every such row. (b) is Lemma S1 with
+`G`: every tree outside `G` is fixed (T). ∎
+
+So a prefix group counts through its widest class and through half its width, not through its
+width. Take §6.1's forger with 9 label vectors on the 9 trees of `G_A`. `G_A` has width 63, but
+its classes have width 7: completing with `G_A` is accepted with probability at most `2⁻⁹⁷` per
+`H₂³` query (case (b), `2³¹` points). `E₁` outputs `G_A`'s prefix all the same. The widest class
+is `G_B`, the forger's (`slice.py` R6, first line).
+
+### 6A.2 `E₁^cls` and `Dec^cls`
+
+**`E₁^cls(x)`** (Lean `clsExt`). Steps 1–4 of `E₁`, keeping the label rows of each alive tree.
+Group the alive trees into classes. Let `C₁` be the widest class (ties: least index).
+
+1. If `w(C₁) ≤ 50`, output `E₁(x)`.
+2. Otherwise, if a class `C₂` with `w(C₂) ≥ 51` has a prefix other than `C₁`'s, run
+   `Dec^cls(C₂)`. If it outputs a pair, output `C₂`'s prefix.
+3. Otherwise output `C₁`'s prefix.
+
+A set of trees of width `≥ 51` has at least 8 trees (`eight_le_card_of_wide`: 7 trees have width 49, or 50 with tree 0). So there are at most two
+such classes (`not_three_wide`), `C₂` in step 2 is unique, `w(C₂) ≤ 57` (`minority_weight_le`),
+and `C₁` and `C₂` leave at most one of the 17 trees.
+
+**`Dec^cls(C₂)`** (Lean `dec`; `slice.py` `ClassDecoder`). Let `T₁` be the alive trees outside
+`C₂` with `C₁`'s label vector, `R` the alive trees outside `C₂` with a third label vector (at most
+one tree), and `U` the 127 nonzero directions in the first 7 bits of one tree of `C₂`. The other
+blocks are fixed: a dead tree at the challenge that hides its dead leaf, an alive tree with `C₂`'s
+label vector and another witness at 0.
+
+> For each value `g_R` of the blocks of `R` and each `δ ∈ U`: solve `Λ(δ; a^{(g₁, g_R)}) = 0` for
+> the blocks `g₁` of `T₁`. With `g_R` fixed, `a^g` is affine in `g₁` (§6.4, two label classes), so
+> this is a linear system of 512 equations in at most 64 unknowns. For a solution, check
+> `K_c^ũ(Δ^b + δ) = K_c^ũ(Δ^b)` at the base point `Δ^b` of the slice, and output the pair.
+
+Cost: at most `127·2⁸ < 2¹⁵` linear systems and `4·312·2⁸ < 2¹⁹` values of `H₅` per `H_T` query.
+Written as an algorithm that only evaluates the check value (the coefficients of each system are
+`65` increments of `K_c^ũ`): at most `127·2⁸·2·65 + 2 < 2²²·¹` evaluations (`card_decQ_le`,
+`card_basePts_le`), and its output depends on the check value at these points only (`dec_congr`).
+This does not contradict §6.3: there the check value off the slice is the same function for every
+hidden slice. For the real masks its increments along `C₂` are affine in `g₁`, and the decoder
+reads the slice off them.
+
+**Lemma Dec.**
+1. (Soundness; `dec_sound`, `dec_cert_sound`.) Every output is a pair of distinct challenges of
+   one slice of `C₂` with the same check value: a pair as in Theorem S.1. No hypothesis.
+2. (Completeness; `dec_cert_complete`.) If some slice of `C₂` contains a set of more than `2⁵⁰`
+   challenges with one check value, `Dec^cls(C₂)` outputs a pair.
+
+*Proof of 2.* Let the set lie in the slice at `g = (g₁, g_R)`. By Lemma S2 the response is affine
+on the slice. So `N := {δ in the blocks of C₂ : K(Δ + δ) = K(Δ)}` is the same for every `Δ` of the
+slice, it is a subgroup, and the set lies in a coset of it: `|N| > 2⁵⁰`. The blocks of `C₂` have
+`2^{w(C₂)} ≤ 2⁵⁷` elements and `|U ∪ {0}| = 2⁷`, so two sums `a + ν`, `a ∈ U ∪ {0}`, `ν ∈ N`,
+coincide, and `N` contains some `δ ∈ U`. For this `δ` and this `g_R`, `g₁` solves the system. Every
+solution `g₁'` of the system is a slice in which `δ` is a direction of a level set, because the
+system *is* `Λ(δ; a^{(g₁', g_R)}) = 0`. So the check passes. ∎
+
+`slice.py` R6 (real tables, classes of widths 56 and 56, tree 0 with a third label vector and a
+third witness, 6 wrong gates so that the level set has `2⁵⁰` points): the pair is found after
+`26811` systems, `17 s` in Python; for the other class all `32512` systems have no solution
+(`--cls=6`).
+
+### 6A.3 Lemma P^cls and Theorem U1^cls
+
+**Lemma P^cls.** Lemma P (`pomfrit.md` §5) holds with `E₁^cls` in place of `E₁` and
+
+    Pr[Shift^cls] ≤ q₁·ε_par + (Q₃ + n_out)·2⁻⁷⁸ + Q_T·q₁·2⁻⁷⁰⁴,      ε_par < 2⁻¹³⁴.
+
+*Proof.* Steps 1–3 of Lemma P's proof. Discard also the event that `chall₁` is not good for
+parallelism on `𝒫_⊥` (§4.2): `q₁·ε_par`. Take an accepted chain with `|𝒜| ≥ 3`, a bit witness
+slope `u*` and a free tree `i₀`. We show that `E₁^cls(x)` is the prefix of `i₀`, or `|𝒜| ≤ 2⁵⁰`
+(Lean `class_or_small`, `class_or_small_dec`). Then steps 7–8 with `2⁵⁰` for `2⁵⁷`.
+
+- *`Dec^cls(C₂)` output a pair.* By Theorem S.1 `u*` is `C₂`'s witness, so the prefix of `i₀` is
+  `C₂`'s.
+- *Otherwise, and `w(C₁) ≥ 51`.* The output is `C₁`'s prefix. Suppose the prefix of `i₀` is
+  another one. In case (a) of Lemma C, `𝒜` lies in a slice of the class `C` of `i₀`. If
+  `w(C) ≤ 50`, done. If not, `C` is the class `C₂` of step 2, the decoder ran and output nothing,
+  and by Lemma Dec.2 `|𝒜| ≤ 2⁵⁰`. In case (b), the prefix group of `i₀` is disjoint from `C₁`, so
+  it has at most 9 trees and width at most 64 (`width_le_of_disjoint_wide`): `|𝒜| ≤ 2³²`.
+- *`w(C₁) ≤ 50`.* The output is `E₁(x)`. Suppose the prefix group `G` of `i₀` is not the widest.
+  In case (a), `|𝒜| ≤ 2^{w(C)} ≤ 2⁵⁰`. In case (b), `w(G) ≤ 57` and `|𝒜| ≤ 2²⁸`. ∎
+
+**Theorem U1^cls.** For every classical adversary `A` against Def. 2.5 there is a `B` such that
+
+    Adv^{omuf}_{PomFRIT}(A) ≤ Adv^{ompr}_{UOV}(B; Q_T + ℓ + 1, ℓ) + ε_ext(N; q₁, q₂, Q₃ + ℓ + 1)
+                             + (Q₃ + ℓ + 1)·2⁻⁷⁸ + q₁·2⁻¹³⁴ + Q_T·q₁·2⁻⁷⁰⁴ + ε_DS.
+
+`B` is U1's reduction with `E₁^cls` for `E₁`: per `H_T` query, `E₁`'s work on the label rows too
+and, if two classes have width `≥ 51`, fewer than `2¹⁵` linear systems and `2¹⁹` values of `H₅`.
+`B` samples `H₅` lazily; its own evaluations are entries that `A` may ask for later and gets
+consistently, as for the cipher in U1. At `2⁶⁴` queries the term is `2⁻¹⁴` in place of `2⁻⁷`
+(`loss_cls_at_2_64`).
+
+*What the proof uses.* Lemma P's events (`ε_ext`); `ε_par` (§4.2, Lean); Claim 4 and Lemma S1 on
+the label rows (Lean, generic; that the label rows of the executable verifier have the tree form:
+code, `zk.md` H3); Lemma S2 and the two-label form of the gate terms (the masks of
+`vole_commit.inc`: code; gate model in Lean, `translateOn_gate_slice`, `twoLabel_gate`). It uses
+no property of `H₅`, no bound on the forger's label vectors, and no conjecture.
+
+*Tightness for `E₁^cls`.* Classes of widths 56 and 50 (trees `1..8`, and tree 0 with six trees)
+and two trees with two more label vectors: the slice of the second class hides among `2⁷⁰`, in
+three label vectors on two classes and two trees, and `E₁^cls` does not look for it. `2⁻⁷⁸` per
+`H₂³` query. Like §3.1 this is not a forgery.
+
+### 6A.4 More work, a smaller term [proved; not mechanized]
+
+The proof has two parameters: the least width `θ` of a class that is decoded, and the trees it
+exhausts. Let `m` be the largest width below `θ`. The same argument, with a subgroup of `2^{57−m}`
+directions, gives:
+
+| `θ` | trees left over by two classes of width `≥ θ` | linear systems per `H_T` query | largest set missed | `H₂³` term | at `2⁶⁴` queries |
+|---|---|---|---|---|---|
+| 51 | 1 (8 bits) | `2⁷·2⁸ = 2¹⁵` | `2⁵⁰` | `2⁻⁷⁸` | `2⁻¹⁴` |
+| 50 | 2 (14 bits) | `2⁸·2¹⁴ = 2²²` | `2⁴⁹` | `2⁻⁷⁹` | `2⁻¹⁵` |
+| 49 | 3 (22 bits) | `2¹⁴·2²² = 2³⁶` | `2⁴³` | `2⁻⁸⁵` | `2⁻²¹` |
+| 43 | 4 (28 bits) | `2¹⁵·2²⁸ = 2⁴³` | `2⁴²` | `2⁻⁸⁶` | `2⁻²²` |
+
+Widths are `7k` or `7k + 1`, so the widths below 51, 50, 49, 43 are 50, 49, 43, 42. In each row
+three classes of width `≥ θ` do not exist, and case (b) of Lemma C gives at most `2³⁸` points. The
+Lean statements are for `θ = 51`. The last two rows are not a reasonable amount of work per `H_T`
+query; they are what exhaustion costs. Below them the leftover trees must be decoded, not
+exhausted, and that is §6.4's search with its conjecture (§6A.6).
+
+### 6A.5 Lean
+
+`Seed/SliceDecode.lean`, `ROM/LemmaPClass.lean` (§9). The decoder is a function `dec` of the check
+value. `class_or_small_dec` is the per-chain statement: for trees of `2^{width i}` challenges,
+`KOSPar`, Claim 4's hypotheses on the witness rows (bit slopes) and the label rows (any slopes),
+the response affine on the slices of each class (`AffineOn`) and two-label in the blocks of `T₁`
+(`TwoLabelOn`), and decoder data that cover the slices (`basePts_cover`), the output of `clsExt`
+is the prefix of every free tree, or `|𝒜| ≤ 2⁵⁰`. `extract_or_class` is `extract_or_major` with
+this conclusion. `per_query_bound_cls`: `2⁵⁰/2¹²⁸ = 2⁻⁷⁸`.
+
+Not mechanized, and why:
+- *The executable verifier's chains.* `ROM/LemmaPDet.lean` gets Claim 4 for `Verifier`'s witness
+  rows from `chain_claim4`. The label rows' tree form and `AffineOn`, `TwoLabelOn` for
+  `Verifier`'s CRT masks (`W_tree`, `W_gate`, the `H₅` gate terms) are not proved for the
+  executable code; the gate model is.
+- *The one-more game.* `ROM/LemmaP.lean`'s goal (`GoalT`) is a predicate of the candidates and
+  the alive trees. `E₁^cls` also reads the label rows, `ũ` and the check value, its evaluations of
+  `H₅` are queries of the reduction at each `H_T` query, and `KOSPar` is a new bad event at `H₂¹`
+  (the count is `card_not_kosPar_le`). So `pomEps`, `e1P` and the chain
+  `OneMoreLemmaP*.lean` would have to be restated. **`pomfrit_U1_explicit` and `pomfrit_U1_sim`
+  are unchanged, with `2⁻⁷¹`.** U1^cls is a paper theorem with a mechanized per-chain core.
+
+### 6A.6 What remains of (H-dec), and a correction to §6.4
+
+With `E₁^cls` the decoder never meets many label vectors on many trees: the trees outside a class
+that is not the widest are the widest class (one label vector) and what the two leave over. (H-dec)
+is needed only to go below §6A.4: to decode a second class when 3 or more trees are left over, and
+third classes. For a second class the leftover trees carry at most 5 label vectors next to
+`C₁`'s (`j ≤ 6`), the candidate sets of §6.4 step 2 have about `1 + 2^{j−5} ≤ 3` patterns, and the
+search is short in the experiments (R2: at most `2¹¹` nodes for `j ≤ 8`). We have no proof. What a
+proof needs:
+
+- *A property of `H₅`.* For the label vectors and the slice a forger commits to, most gates must
+  have few candidate patterns: `|P_e|` close to `1 + 2^{j−5}`, the count for a random table. The
+  forger chooses its labels after it has seen the table, so this is not a statement about one
+  random table. A union bound over all label vectors only gives candidate sets several times
+  larger [estimate], and we know no better argument. `Dec^cls` needs no such property because for
+  one label vector `a^g` is affine in the blocks, for every table.
+- *Level sets of positive codimension.* §6.4 ("Wrong gates") assumes that the mask slopes on a
+  level set are the trees' VOLE values, and that at most `a` gates lose their pattern on a level
+  set of codimension `a`. Both fail (`slice.py` R7, faest-arch-opt's tables):
+  - On `N = {δ : deg D(δ) ≤ 115}`, `D = W_crt·δ`, of codimension 4, the forger can commit trees
+    with `u_{m,i} = (ū_m + P) mod M_i`, `P` the field polynomial, and gate bits for the
+    product by `P`: for `δ ∈ N` the product `P·D(δ)` has degree below 247 and vanishes in the
+    field, so the mask slope is still `ū_m`, while every tree's value differs and 173 gates
+    change. The same with `P/x` on `{x⁶ | D}` (codimension 6, 156 gates). This uses the places
+    of the tables' CRT (`vole_mult_tables.py`, `Verifier/CrtSearch.lean`): `∞³`, `x⁵`, `(x+1)⁵`,
+    `(x²+x+1)²` and every irreducible of degree 3 to 6 and one of degree 8, of total degree
+    `127 = 247 − 120`. The level set must kill a place beyond its multiplicity; `∞³` is the
+    cheapest, at codimension 4. On `{deg D ≤ 116}` and `{x⁵ | D}` there is no such solution.
+  - What does hold: if the level set contains all directions of one tree, the slopes are the
+    trees' and no gate is wrong (the linear system `W_tree(d·δ) + W_gate(γ(δ) ∧ b) = 0` on one
+    tree's directions has only the zero solution, for each of the 17 trees). On the level sets
+    of codimension 1 to 3 that we tried (random ones, the kernels of gate forms, the two families
+    above) the slopes are the trees'.
+
+  So the heuristic decoder of §6.4 is incomplete against these first messages when the level set
+  has codimension `≥ 4`, and §6.5's figures for wrong gates do not cover them. `Dec₂(a)` and
+  `Dec^cls` guess a direction of the level set and are not affected.
 
 ## 7. Can the loss move into the OMPR experiment? [proved: no, for the obvious ways]
 
@@ -584,10 +802,37 @@ to learn the index.
   `2⁻⁹⁹` row at the cost of today's `2⁻⁷⁸` row. The masks must be direct: a hashed mask adds
   unknown slopes without equations. This is still (H-dec), not a proof. VOLEHash would have
   `4 + x` outputs (L3 and `zk.md` to be re-instantiated).
-- **(vii) Bit constraints on the label rows** [proved given L4 on these rows; ZK not redone].
-  Add the QuickSilver constraints `Θ_j² = Θ_j` for the λ label rows (no bytes: the QuickSilver
-  proof does not grow). Then (B) covers the label rows, Lemma S1's case cannot occur, and the
-  `2⁻¹⁰⁰` floor of §6.5 goes away. On its own this does not help against hidden slices.
+- **(vii) Bit constraints on the label rows** [soundness: proved given L4 on these rows; ZK: the
+  hybrids go through, not re-mechanized].
+  - *The change.* QuickSilver gets the λ constraints `Θ_j² = Θ_j` on the label rows
+    `[ℓ, ℓ+λ)`, with no `d` on these rows. The rows are corrected VOLE rows (`Q = V + Δ·u`,
+    `zk.md` H3), so the prover has their `(u, v)` and the verifier their `q`. The proof does not
+    grow: a degree-2 QuickSilver proof is one field element for any number of constraints. The
+    constraint count goes from 1313 to 1441 (`ε_QS` changes in its last digits; about 10% more
+    QuickSilver work).
+  - *Soundness.* (B) then covers the label rows: on an accepting set of at least 3 points every
+    label slope is a bit. Case (b) of Lemma C cannot occur and every such set lies in a slice of
+    one class. In Lean this is `class_or_small` with the label rows among the witness rows.
+  - *What it buys.* With `E₁`'s default (§6.5) it removes the bound `2²⁸` of Lemma S1, the
+    `2⁻¹⁰⁰` floor. With `E₁^cls` case (b) is never the largest missed set in §6A.4 (`2³²` to `2³⁸`
+    against `2⁵⁰` to `2⁴²`), so **no row of §6A.4 changes**. It would matter only with a decoder
+    for third classes: without (vii), two label parts of width 36 in a group next to a class of
+    width 42 leave `2³⁶` points to case (b), i.e. `2⁻⁹²`. We know no forger that attains Lemma
+    S1's bound (on such a set every gate sees four labels, and its term is affine only if a 5-bit
+    relation between four `H₅` values holds).
+  - *Zero knowledge* (`zk.md` §5–§6). An honest `Θ` is a bit vector, so the constraints hold and
+    H3 (the verifier's recomputation of `qs_check`) stays perfect. After H5, `Θ` enters the view
+    through `c_mult`, `ũ` and now `ã`. H6's bad event is bounded in H7, where `ũ` and `ã` are
+    uniform: the map from the masks to `(ã, ũ)` is a bijection for every value of the unmasked
+    QuickSilver coefficients, which may depend on `Θ` and on the label rows' `V`
+    (`qsResponse_bijective` for any `H`; `labelView_responses_theta_card`, whose `φ` "may depend on
+    `Θ` and `w`"). So H7 holds as stated and `ε_lab` does not change. `Sim` step 8 evaluates the
+    verifier's QuickSilver on the label rows of `Q` as well; it has them. The same holds for
+    blindness (`pomfrit.md` §8.2), which uses the proof only through (ZK-fix). What is not done:
+    the executable prover and verifier, the constraint system `pomfritRedeemSystem` and the
+    known-answer tests are those of the current protocol.
+  - *Verdict.* Free and harmless, and it simplifies the analysis (one case in Lemma C). It is not
+    needed for §6A's bounds and does not help to find a slice.
 - **(viii) Binding the group or the slice in a hash** [argued; nothing cheap found].
   - A declared tree index, group or slice in `H_T`'s or `H₂¹`'s input: the verifier cannot check
     it (an honest prover has no slice), so a forger declares the widest group. No effect.
@@ -603,8 +848,9 @@ to learn the index.
     handles anyway). More bytes than (vi), a new leakage to argue in `zk.md` (a digest of the
     sibling label), and still no proof of completeness. Not pursued.
 
-**Summary.** For a proved tight U1: (iii), (iii′) or (v). Without a protocol change, §6.5 is
-the best statement we have, and it is conditional. (i) is mandatory in all cases.
+**Summary.** For a proved tight U1: (iii), (iii′) or (v). Without a protocol change, §6A gives
+`2⁻⁷⁸` per `H₂³` query (`2⁻⁷⁹`, `2⁻⁸⁵` for more work) on paper, unconditionally; below that the
+statement is conditional (§6A.6). (i) is mandatory in all cases.
 
 ## 9. Lean and script
 
@@ -631,39 +877,68 @@ Axioms: `propext`, `Classical.choice`, `Quot.sound`.
 | Theorem S.1, S.2 | `slice_collision_sound`, `slice_collision_sound_affine` (`KOSGood.mono`) |
 | §6.3: `T` evaluations detect at most `T` slices | `DTree`, `DTree.eval`, `DTree.queries`, `DTree.eval_congr`, `DTree.card_detect_le` |
 
+`lean/VoleMole/Seed/SliceDecode.lean`, `lean/VoleMole/ROM/LemmaPClass.lean` (§6A; new, no
+existing file changed except the import list). Same axioms.
+
+| Paper | Lean |
+|---|---|
+| `Dec^cls` as a function of the check value; its candidates and evaluation points | `dec`, `decCand`, `decPred`, `decPts`, `decQ` |
+| Lemma Dec.1 (no hypothesis); for a chain: the output is a certificate | `dec_sound`; `dec_cert_sound` |
+| Lemma Dec.2: affine increments give the prediction; a zero increment is found; for a chain | `incr_decPt`, `dec_complete`; `dec_cert_complete` |
+| the evaluation count; the output reads the check value at these points only | `card_decPts_le`, `card_decQ_le`, `dec_congr` |
+| the base points cover the slices; their number | `basePts`, `basePts_cover`, `card_basePts_le` |
+| the check value under translations; its increments | `kosValue_translate`, `incr_kosValue`, `incr_kosValue_twoLabel` |
+| two-label increments; the gate model has them; additive rows have them | `TwoLabelOn`; `twoLabel_bits`, `twoLabel_gate`; `twoLabelOn_additive` |
+| width `≥ 51` means 8 trees; at most two such classes; a disjoint group has width `≤ 64` | `eight_le_card_of_wide`, `not_three_wide`, `width_le_of_disjoint_wide` |
+| `E₁^cls` | `clsExt`, `clsCand` (`majTree_spec`) |
+| Lemma C and Lemma P^cls per chain, for any sound and complete certificate; with `Dec^cls` | `class_or_small`; `class_or_small_dec` |
+| the per-chain step with QuickSilver, as `extract_or_major` | `extract_or_class` |
+| `2⁵⁰/2¹²⁸ = 2⁻⁷⁸`; `2⁶⁴·2⁻⁷⁸ = 2⁻¹⁴` | `per_query_bound_cls`, `loss_cls_at_2_64` |
+
 Not mechanized: §3 (the forgers); (Aff) for the executable verifier's masks, on `S` and on
 slices (the gate model `translateOn_gate_slice` is: any hash, any `c_mult`, labels and selection
 bits as sums over the trees); Lemma P^∞, Lemma P^lin and Lemma P^dec as statements about the
 one-more game (they would need `KOSPar` as a bad event at `H₂¹` in `ROM/Chains.lean`'s style, and
-the extractor as a function of the log); §6.4–§6.5 (the decoders).
+the extractor as a function of the log); §6.4–§6.5 (the search); for §6A: the label rows' tree
+form and `AffineOn`, `TwoLabelOn` for the executable verifier's masks, Lemma P^cls and U1^cls in
+the one-more game (§6A.5), and the rows of §6A.4 other than `θ = 51`.
 
 Non-vacuity. `slice_collision_sound` takes the hypotheses of `witness_determined` (`KOSPar`:
 `exists_kosPar`) and the tree form of the witness rows on `S`, which is `Claim4Hyp.tree_form`'s
 shape; `claim4Hyp_slice` derives `Claim4Hyp` on a slice from it, so the certificate's hypotheses
 hold for every pair of points of a slice. `translateOn_gate_slice` has no hypothesis beyond
-characteristic 2 and equal label offsets on `C`.
+characteristic 2 and equal label offsets on `C`. `class_or_small_dec` adds: `AffineOn` on the
+slices and `TwoLabelOn` (both hold for additive rows, `affineOn_univ`, `twoLabelOn_additive`, and
+for the gate model, `translateOn_gate_slice`, `twoLabel_gate`); the decoder's data (`basePts_cover`
+gives the base points and their properties from generators of the blocks of `T₁`; the directions
+are any subgroup of `2⁷` directions of the class); Claim 4's hypotheses on the label rows, of the
+same shape as on the witness rows. The theorems are not instantiated with the executable verifier.
 
 `scripts/pomfrit-lemmap-tight/toy.py [seed]`: four trees of widths `(3, 2, 2, 2)`, `GF(2³²)`,
 a KOS check of the same shape. E1: §3.1's level sets. E2: Theorem D over all pairs. E3: `E₁^lin`.
 E4: §6.1's hidden slice. Runs in seconds.
 
-`scripts/pomfrit-lemmap-tight/slice.py [seed] [--quick] [--masks=N] [--j=J [--wrong=A]]`: the
+`scripts/pomfrit-lemmap-tight/slice.py [seed] [--quick] [--masks=N] [--j=J [--wrong=A]] [--cls=A]`: the
 verifier's response for FAEST-EM-128f shapes (17 trees, `GF(2¹²⁸)`, 312 gates, 5 masks) with
 faest-arch-opt's matrices `F`, `G`, `W_tree`, `W_gate`, `W_crt` read from
 `VoleMole/Verifier/CrtData.lean`. Not modelled: the GGM trees (per-tree VOLE values are sampled),
 all but 8 witness rows, QuickSilver; VOLEHash is a polynomial hash of the same shape; `H₅` is
 BLAKE2b. R0: the tables' identity, an honest first message. R1: §6.1's forger and `Dec₂`. R2: the
 search, wrong gates, label classes of several trees. R3: uniqueness of the gate bits. R4: `Dec₂`
-with wrong gates. R5: no collisions off the slice. About 20 s; `--j=10` adds 30 s.
+with wrong gates. R5: no collisions off the slice. R6: `E₁^cls` against 9 label vectors, and
+`Dec^cls` between two classes of width 56 with a 17th tree (one wrong gate; `--cls=6`: §6A's
+decoder with 6 wrong gates, 45 s). R7: single-tree rigidity; other slopes on level sets of
+codimension 4 and 6. About 25 s; `--j=10` adds 30 s.
 
 ## 10. Open
 
-1. (H-dec) of §6.5: a proof that the decoder finds every large level set, for forgers that choose
-   the labels (and so the `H₅` tables) adversarially; or a forger that defeats it at a cost below
-   the decoder's. The two-class case is proved.
-2. Mechanize Lemma P^lin and Lemma P^dec in the one-more game: (Aff) for `Verifier`'s masks on
-   `S` and on slices, the extractor on the log, `KOSPar` as a bad event at `H₂¹`, and a `pomEps'`
-   without the `2⁵⁷` for forgers with at most two label classes. A restriction on forgers is not a
-   security statement, so this was not attempted.
+1. Below `2⁻⁸⁵` (§6A.6): a decoder with proof for a second class when three or more trees are
+   left over, and for third classes. It needs a bound on the candidate sets for labels chosen
+   after the `H₅` table is seen, and a treatment of level sets whose slopes are not the trees'.
+   Or a forger that defeats the search at a cost below the search's.
+2. Mechanize Lemma P^cls and U1^cls in the one-more game (§6A.5): the label rows' tree form and
+   `AffineOn`, `TwoLabelOn` for `Verifier`'s masks; `E₁^cls` on the log with its `H₅` evaluations
+   as queries; `KOSPar` as a bad event at `H₂¹`; a `pomEps` with `2⁵⁰`. The per-chain core is
+   `class_or_small_dec`.
 3. The committed-shift variant of A-OMPR⊕17 (§7): is it implied by OMPR?
 4. (iii′) of §8: the size and the consistency analysis of a FAEST-style check with affine masks.
