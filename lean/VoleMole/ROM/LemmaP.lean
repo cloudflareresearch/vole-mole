@@ -646,6 +646,190 @@ section PomUnionT
 variable {ι β : Type} (pk : UovPk) (hF : ι → ByteArray → ByteArray) (b1F b2F : ι → ByteArray) (lr : Bool) (T : CrtTables)
   (P : OracleComp specIC (ByteArray × (ι × β))) (E : CTable)
 
+/-- **Lemma P's per-query bad event** for the prover `P` (the bad event of
+`prEvent_accept_le_adaptive_pomfritT_E`): at the query `t`, a bad query of the statement committed
+there (`combBadF` at `stmtAtD`), a chain hit, or a statement hit of the adaptive game's log. It reads
+the log before `t` only. -/
+def pomBad (N : ℕ) (t : Dom) (g : Table) : Prop :=
+  combBadF T (stT pk hF b1F b2F lr) P E (stKT pk hF b1F b2F lr) (sysKT pk hF) (witKT pk hF) dstP
+      (stmtAtD (decT pk hF b1F b2F lr) none) N t g ∨
+    chainHitL (some (45, dstP)) (tableQueryLog (gameA T (stT pk hF b1F b2F lr) P E)) t g ∨
+    stmtHitD (tableQueryLog (gameA T (stT pk hF b1F b2F lr) P E)) t g
+
+/-- **The per-query charge of `pomBad`** at a query of kind `k`, for a game with `n'' k` queries of
+kind `k` (`ntot` bounds the cached cells at an `H₂²` query). -/
+noncomputable def pomEps (n' : ℕ) (εc : ℝ≥0∞) (ntot N : ℕ) (n'' : Kind → ℕ) (k : Kind) : ℝ≥0∞ :=
+  (if k = .h22 then ENNReal.ofReal (Seed.epsQS (2 ^ 128) (2 ^ 64) n') + εc + (ntot : ℝ≥0∞) / 2 ^ 448
+    else chainEps (stKT pk hF b1F b2F lr none) chal3Blocks 0 N k) +
+    (hitEps n'' (combCount (some (45, dstP)) n'') k + stmtEpsD n'' k)
+
+lemma pomEps_eq_zero (n' : ℕ) (εc : ℝ≥0∞) (ntot N : ℕ) (n'' : Kind → ℕ) (k : Kind)
+    (hk : k ∉ adaptKinds) : pomEps pk hF b1F b2F lr n' εc ntot N n'' k = 0 := by
+  cases k <;> simp_all [adaptKinds, pomEps, chainEps, hitEps, stmtEpsD]
+
+set_option maxRecDepth 4000 in
+/-- **Lemma P's deterministic step, per table** (the trace of
+`prEvent_accept_le_adaptive_pomfritT_E`): if the verifier accepts the prover's proof and Lemma P's
+extraction fails, without binding failure, opened dead leaf or `cf`, a query of the game's log is
+bad (`pomBad`). -/
+theorem pomBad_trace (hT : liftInvOk T = true) (N : ℕ)
+    (hdet : ∀ s, @CombDetG (icPrg E.cipher) 45 T (stT pk hF b1F b2F lr s)
+      (sysKT pk hF (some s)) (witKT pk hF (some s)) N
+      (GoalP (witKT pk hF (some s))))
+    (cf : Out ((ι × β) × QueryLog specIC) → Prop)
+    (hcf : ∀ s g, ¬cf (evalWithAnswerFn (QueryImpl.ofFn g) (gameIC T (stT pk hF b1F b2F lr s) P E)) →
+      KeysPre (stT pk hF b1F b2F lr s) E (jOf g P E) (gLog T (stT pk hF b1F b2F lr s) P E g) g)
+    (g : Table)
+    (h₀ : let r := evalWithAnswerFn (QueryImpl.ofFn g) (gameA T (stT pk hF b1F b2F lr) P E)
+      (r.2.2.accept = true ∧ ¬MajorExtracted E (stT pk hF b1F b2F lr (stOut r))
+        (witKT pk hF (some (stOut r))) r) ∧
+      ¬bindFailA (stT pk hF b1F b2F lr) E r ∧ ¬deadOpenA (stT pk hF b1F b2F lr) E r ∧ ¬cf r) :
+    ∃ e ∈ tableQueryLog (gameA T (stT pk hF b1F b2F lr) P E) g,
+      pomBad pk hF b1F b2F lr T P E N e.1 g := by
+  classical
+  let _ : HasPrg := icPrg E.cipher
+  set stF := stT pk hF b1F b2F lr
+  set oa := gameA T stF P E
+  let cb : Option (ℕ × ByteArray) := some (45, dstP)
+  let sel : QueryLog spec → Dom → Option (Option ι) := stmtAtD (decT pk hF b1F b2F lr) none
+  let ev : Out ((ι × β) × QueryLog specIC) → Prop := fun r =>
+    r.2.2.accept = true ∧ ¬MajorExtracted E (stF (stOut r)) (witKT pk hF (some (stOut r))) r
+  let bad : Dom → Table → Prop := fun t g =>
+    combBadF T stF P E (stKT pk hF b1F b2F lr) (sysKT pk hF) (witKT pk hF) dstP
+      sel N t g ∨ chainHitL cb (tableQueryLog oa) t g ∨ stmtHitD (tableQueryLog oa) t g
+  show ∃ e ∈ tableQueryLog oa g, bad e.1 g
+  have h : (fun r => ev r ∧ ¬bindFailA stF E r ∧ ¬deadOpenA stF E r ∧
+      ¬cf r) (evalWithAnswerFn (QueryImpl.ofFn g) oa) := h₀
+  simp only [ev, bindFailA, deadOpenA, oa, evalWithAnswerFn_gameA, stOut_gameIC] at h
+  obtain ⟨⟨hacc, hnex⟩, hnb, hnd, hnp⟩ := h
+  have hlog : tableQueryLog oa g = gLog T (stF (sA g P E)) P E g :=
+    tableQueryLog_gameA T stF P E g
+  by_cases hh : NoHit (gameIC T (stF (sA g P E)) P E) (chainHit T (stF (sA g P E)) P E) g
+  swap
+  · simp only [NoHit, not_forall, not_not] at hh
+    obtain ⟨e, he, hhit⟩ := hh
+    refine ⟨e, hlog ▸ he, Or.inr (Or.inl ?_)⟩
+    unfold chainHitL
+    rw [hlog]
+    exact hhit
+  by_cases hs : NoStmtHitD T (stF (sA g P E)) P E g
+  swap
+  · simp only [NoStmtHitD, not_forall, not_not] at hs
+    obtain ⟨e, he, hhit⟩ := hs
+    refine ⟨e, hlog ▸ he, Or.inr (Or.inr ?_)⟩
+    unfold stmtHitD
+    rw [hlog]
+    exact hhit
+  obtain ⟨leaves, hr, hacc', hbad⟩ := combBad_trace_icDG hT (stF (sA g P E))
+    (sysKT pk hF (some (sA g P E))) (witKT pk hF (some (sA g P E))) dstP rfl N
+    (GoalP (witKT pk hF (some (sA g P E))))
+    (fun c1 v w => by
+      show (OneMore.Pomfrit.pomfritRedeemT pk (hF (sA g P E)) (b1F (sA g P E)) (b2F (sA g P E))
+        lr).values c1 v.ba w = _
+      rw [OneMore.Pomfrit.pomfritRedeemT_values, ofArr_combinationOf_ba]; rfl)
+    P E (hdet (sA g P E)) cf (hcf (sA g P E)) g hacc _
+    (dead_of_not_mem_aliveR T (stF (sA g P E)) P E g hh hacc) hnex hnp hnb hnd hh
+  set keys := (evalWithAnswerFn (QueryImpl.ofFn g) (proverIC (stF (sA g P E)) E P)).2.keys
+  set ch := runChain (Hashes.ofTable g) T (stF (sA g P E)) (πOf g P E) leaves keys
+  obtain ⟨s', hdec, hmuEq⟩ := decT_spec pk hF b1F b2F lr ch.chal1 (sA g P E)
+  obtain ⟨h2, h3⟩ := stmtAtD_ident (decT pk hF b1F b2F lr) none T (stF (sA g P E)) P E g rfl hh hs
+    keys hacc' hr hdec
+  obtain ⟨-, -, hF3, hF4, hO3, hO4⟩ := chain_ident T (stF (sA g P E)) P E g hh keys hacc' hr
+  have hr0 : BAVC.reconstruct (ivOf (Hashes.ofTable g) ⟨(stF (sA g P E)).params, πOf g P E⟩
+      ((stF (sA g P E)).mu1 (Hashes.ofTable g))) (Proof.opening ⟨(stF (sA g P E)).params, πOf g P E⟩)
+      (Proof.delta ⟨(stF (sA g P E)).params, πOf g P E⟩) = some leaves := hr
+  obtain ⟨hxL, hyL, hzL⟩ := inLog_verifyQ g T (stF (sA g P E)) (πOf g P E) hacc' hr0 keys
+  have hc1s : ch.chal1.size = 136 := Prob.Bytes.size_ba _
+  have hyc1 : yChal1 (runY (Hashes.ofTable g) (stF (sA g P E)) ch) = ch.chal1 := by
+    rw [runY, yChal1_chal2Input _ hc1s]
+  have htgt : hF (sA g P E) (yChal1 (runY (Hashes.ofTable g) (stF (sA g P E)) ch)) =
+      hF s' (yChal1 (runY (Hashes.ofTable g) (stF (sA g P E)) ch)) := by
+    rw [hyc1]; exact (target_eq_of_muInD_T pk lr hmuEq).symm
+  have hgl : gLogA T stF P E g = gLog T (stF (sA g P E)) P E g := gLogA_eq T stF P E g
+  have hF3' : firstIn .h21 (fun _ => true)
+      (yChal1 (runY (Hashes.ofTable g) (stF (sA g P E)) ch))
+      (logBefore (.h22, runY (Hashes.ofTable g) (stF (sA g P E)) ch) (gLogA T stF P E g)) =
+      some (runX (Hashes.ofTable g) (stF (sA g P E)) (πOf g P E) leaves) := by
+    rw [hgl]; exact hF3
+  have hF4' : firstIn .h22 (fun _ => true) (zChal2 (runZ (stF (sA g P E)) ch))
+      (logBefore (.h23, runZ (stF (sA g P E)) ch) (gLogA T stF P E g)) =
+      some (runY (Hashes.ofTable g) (stF (sA g P E)) ch) := by
+    rw [hgl]; exact hF4
+  have hF3'' : firstIn .h21 (fun _ => true)
+      (yChal1 (runY (Hashes.ofTable g) (stF (sA g P E)) ch))
+      (logBefore (.h22, runY (Hashes.ofTable g) (stF (sA g P E)) ch)
+        (logBefore (.h23, runZ (stF (sA g P E)) ch) (gLogA T stF P E g))) =
+      some (runX (Hashes.ofTable g) (stF (sA g P E)) (πOf g P E) leaves) := by
+    rw [hgl, logBefore_logBefore hO4]; exact hF3
+  have hmk : ∀ (t : Dom) (o : Option ι), InLog (verifyQ T (stF (sA g P E)) (πOf g P E)) g t →
+      sel (gLog T (stF (sA g P E)) P E g) t = some o →
+      @combBad (icPrg E.cipher) _ _ (cDT pk hF b1F b2F lr T P E o) T chal3Blocks N t g →
+      ∃ e ∈ tableQueryLog oa g, bad e.1 g := by
+    intro t o ht hst hb
+    obtain ⟨e, he, rfl⟩ := List.mem_map.1 (inLog_gLog T (stF (sA g P E)) P E g ht)
+    refine ⟨e, hlog ▸ he, Or.inl ⟨o, ?_, hb⟩⟩
+    show sel (tableQueryLog oa g) e.1 = some o
+    rw [hlog]
+    exact hst
+  rcases hbad with hb | hb | hb
+  · exact hmk _ none hxL (by simp only [sel, stmtAtD]) (pomfritT_convX pk hF b1F b2F lr T P E N g _ hb)
+  · exact hmk _ (some s') hyL h2 (pomfritT_convY pk hF b1F b2F lr T P E N g _ _ s' hF3' htgt hb)
+  · exact hmk _ (some s') hzL h3
+      (pomfritT_convZ pk hF b1F b2F lr T P E N g _ _ _ s' hF4' hF3'' htgt hb)
+
+set_option exponentiation.threshold 500 in
+-- `Finset.univ : Finset (Bytes 56)` (the combination cells) needs a deeper recursion to elaborate.
+set_option maxRecDepth 4000 in
+/-- **Lemma P's per-query bound** (cache form): over the uncached cells of a cache with fewer than
+`ntot` keys, a fresh query `t` is bad (`pomBad`) with probability at most `pomEps` at its kind, for
+a prover with `q k` hash queries of kind `k` and any finite key set `K` containing the combination
+cells. -/
+theorem prEvent_pomBad_le (hT : liftInvOk T = true) (N : ℕ) {n' : ℕ}
+    (hn' : ∀ o c1 l, (sysKT pk hF o c1 l).length = n') {εc : ℝ≥0∞}
+    (hεc : ∀ o c1 w, prU (Fin 45 → GF128)
+      (fun l => (sysKT pk hF o c1 l).Holds w ∧ ¬witKT pk hF o c1 w) ≤ εc)
+    (q : Kind → ℕ) (hq : IsKindQueryBoundIC P q) (K : Finset Dom)
+    [SampleableType ((d : K) → Ans d.val)] (hK : ∀ u, combKey 45 dstP u ∈ K) (ntot : ℕ)
+    (c : (ofFn fun d : K => Ans d.val).QueryCache) (t : K) (hc : c t = none)
+    (hcard : (cachedKeys c).card < ntot) :
+    Pr{let g ← $ᵗ ((d : K) → Ans d.val)}[
+      pomBad pk hF b1F b2F lr T P E N t.val (extendTable K (completeTable c g))] ≤
+      pomEps pk hF b1F b2F lr n' εc ntot N (q + extractorQueries + verifierQueries) t.val.1 := by
+  classical
+  let _ : HasPrg := icPrg E.cipher
+  set stF := stT pk hF b1F b2F lr
+  set oa := gameA T stF P E
+  set n'' := q + extractorQueries + verifierQueries
+  let cb : Option (ℕ × ByteArray) := some (45, dstP)
+  let sel : QueryLog spec → Dom → Option (Option ι) := stmtAtD (decT pk hF b1F b2F lr) none
+  have hsel : ∀ L L' t, logBefore t L = logBefore t L' → sel L t = sel L' t :=
+    fun L L' t h => stmtAtD_congr _ _ h
+  have hq'' := isKindQueryBound_gameA T stF P E hq
+  rcases t with ⟨⟨k, x⟩, hx⟩
+  unfold pomBad pomEps
+  refine (prEvent_or_le _ _ _).trans (add_le_add ?_ ((prEvent_or_le _ _ _).trans
+    (add_le_add ?_ ?_)))
+  · by_cases hk : k = .h22
+    · subst hk
+      simp only [ite_true]
+      exact prEvent_combBadF_h22_le T stF P E (stKT pk hF b1F b2F lr) (sysKT pk hF)
+        (witKT pk hF) dstP sel hsel N hn' hεc K hK hx c hc hcard
+    · refine prEvent_completeTable_cell_le c _ hc
+        (fun t G => combBadF T stF P E (stKT pk hF b1F b2F lr) (sysKT pk hF)
+          (witKT pk hF) dstP sel N t.val (extendTable K G)) _ fun G => ?_
+      simp only [extendTable_update]
+      simp only [hk, ite_false]
+      exact prEvent_combBadF_cell_le T stF P E (stKT pk hF b1F b2F lr) (sysKT pk hF)
+        (witKT pk hF) dstP sel hsel hT _ (fun _ => rfl) N (k, x) hk _
+  · refine prEvent_completeTable_cell_le c _ hc
+      (fun t G => chainHitL cb (tableQueryLog oa) t.val (extendTable K G)) _ fun G => ?_
+    simp only [extendTable_update]
+    exact prEvent_chainHitL_le cb oa n'' hq'' _ _
+  · refine prEvent_completeTable_cell_le c _ hc
+      (fun t G => stmtHitD (tableQueryLog oa) t.val (extendTable K G)) _ fun G => ?_
+    simp only [extendTable_update]
+    exact prEvent_stmtHitD_le oa n'' hq'' _ _
+
 set_option exponentiation.threshold 500 in
 -- `Finset.univ : Finset (Bytes 56)` (the combination cells) needs a deeper recursion to elaborate.
 set_option maxRecDepth 4000 in
@@ -683,27 +867,14 @@ theorem prEvent_accept_le_adaptive_pomfritT_E (hT : liftInvOk T = true) (N : ℕ
           cf r] := by
   classical
   intro n''
-  let _ : HasPrg := icPrg E.cipher
   set stF := stT pk hF b1F b2F lr
   set oa := gameA T stF P E
   set mx := (simulateQ randomOracle oa).run' ∅
   set ntot := n + 2 + verifierTotal
-  let cb : Option (ℕ × ByteArray) := some (45, dstP)
-  let sel : QueryLog spec → Dom → Option (Option ι) := stmtAtD (decT pk hF b1F b2F lr) none
-  have hsel : ∀ L L' t, logBefore t L = logBefore t L' → sel L t = sel L' t :=
-    fun L L' t h => stmtAtD_congr _ _ h
   let ev : Out ((ι × β) × QueryLog specIC) → Prop := fun r =>
     r.2.2.accept = true ∧ ¬MajorExtracted E (stF (stOut r)) (witKT pk hF (some (stOut r))) r
-  let bad : Dom → Table → Prop := fun t g =>
-    combBadF T stF P E (stKT pk hF b1F b2F lr) (sysKT pk hF) (witKT pk hF) dstP
-      sel N t g ∨ chainHitL cb (tableQueryLog oa) t g ∨ stmtHitD (tableQueryLog oa) t g
-  let combE : Kind → ℝ≥0∞ := fun k => if k = .h22 then
-    ENNReal.ofReal (Seed.epsQS (2 ^ 128) (2 ^ 64) n') + εc + (ntot : ℝ≥0∞) / 2 ^ 448
-    else chainEps (stKT pk hF b1F b2F lr none) chal3Blocks 0 N k
-  let ε : Kind → ℝ≥0∞ := fun k => combE k + (hitEps n'' (combCount cb n'') k + stmtEpsD n'' k)
-  have hKε : ∀ k ∉ adaptKinds, ε k = 0 := by
-    intro k hk
-    cases k <;> simp_all [adaptKinds, ε, combE, chainEps, hitEps, stmtEpsD]
+  let ε : Kind → ℝ≥0∞ := pomEps pk hF b1F b2F lr n' εc ntot N n''
+  have hKε : ∀ k ∉ adaptKinds, ε k = 0 := pomEps_eq_zero pk hF b1F b2F lr n' εc ntot N n''
   let K : Finset Dom := possibleQueryKeys oa ∪ Finset.univ.image (combKey 45 dstP)
   have hK : ∀ u, combKey 45 dstP u ∈ K := fun u =>
     Finset.mem_union_right _ (Finset.mem_image_of_mem _ (Finset.mem_univ u))
@@ -711,143 +882,40 @@ theorem prEvent_accept_le_adaptive_pomfritT_E (hT : liftInvOk T = true) (N : ℕ
     (allQueriesSatisfy_possibleQueryKeys oa).mono fun d h => Finset.mem_union_left _ h
   let : SampleableType ((d : K) → Ans d.val) := SampleableType.piOfFintype _
   have hq'' := isKindQueryBound_gameA T stF P E hq
-  have htrace : ∀ g : Table, (fun r => ev r ∧ ¬bindFailA stF E r ∧ ¬deadOpenA stF E r ∧
-      ¬cf r) (evalWithAnswerFn (QueryImpl.ofFn g) oa) →
-      ∃ e ∈ tableQueryLog oa g, bad e.1 g := by
-    intro g h
-    simp only [ev, bindFailA, deadOpenA, oa, evalWithAnswerFn_gameA, stOut_gameIC] at h
-    obtain ⟨⟨hacc, hnex⟩, hnb, hnd, hnp⟩ := h
-    have hlog : tableQueryLog oa g = gLog T (stF (sA g P E)) P E g :=
-      tableQueryLog_gameA T stF P E g
-    by_cases hh : NoHit (gameIC T (stF (sA g P E)) P E) (chainHit T (stF (sA g P E)) P E) g
-    swap
-    · simp only [NoHit, not_forall, not_not] at hh
-      obtain ⟨e, he, hhit⟩ := hh
-      refine ⟨e, hlog ▸ he, Or.inr (Or.inl ?_)⟩
-      unfold chainHitL
-      rw [hlog]
-      exact hhit
-    by_cases hs : NoStmtHitD T (stF (sA g P E)) P E g
-    swap
-    · simp only [NoStmtHitD, not_forall, not_not] at hs
-      obtain ⟨e, he, hhit⟩ := hs
-      refine ⟨e, hlog ▸ he, Or.inr (Or.inr ?_)⟩
-      unfold stmtHitD
-      rw [hlog]
-      exact hhit
-    obtain ⟨leaves, hr, hacc', hbad⟩ := combBad_trace_icDG hT (stF (sA g P E))
-      (sysKT pk hF (some (sA g P E))) (witKT pk hF (some (sA g P E))) dstP rfl N
-      (GoalP (witKT pk hF (some (sA g P E))))
-      (fun c1 v w => by
-        show (OneMore.Pomfrit.pomfritRedeemT pk (hF (sA g P E)) (b1F (sA g P E)) (b2F (sA g P E))
-          lr).values c1 v.ba w = _
-        rw [OneMore.Pomfrit.pomfritRedeemT_values, ofArr_combinationOf_ba]; rfl)
-      P E (hdet (sA g P E)) cf (hcf (sA g P E)) g hacc _
-      (dead_of_not_mem_aliveR T (stF (sA g P E)) P E g hh hacc) hnex hnp hnb hnd hh
-    set keys := (evalWithAnswerFn (QueryImpl.ofFn g) (proverIC (stF (sA g P E)) E P)).2.keys
-    set ch := runChain (Hashes.ofTable g) T (stF (sA g P E)) (πOf g P E) leaves keys
-    obtain ⟨s', hdec, hmuEq⟩ := decT_spec pk hF b1F b2F lr ch.chal1 (sA g P E)
-    obtain ⟨h2, h3⟩ := stmtAtD_ident (decT pk hF b1F b2F lr) none T (stF (sA g P E)) P E g rfl hh hs
-      keys hacc' hr hdec
-    obtain ⟨-, -, hF3, hF4, hO3, hO4⟩ := chain_ident T (stF (sA g P E)) P E g hh keys hacc' hr
-    have hr0 : BAVC.reconstruct (ivOf (Hashes.ofTable g) ⟨(stF (sA g P E)).params, πOf g P E⟩
-        ((stF (sA g P E)).mu1 (Hashes.ofTable g))) (Proof.opening ⟨(stF (sA g P E)).params, πOf g P E⟩)
-        (Proof.delta ⟨(stF (sA g P E)).params, πOf g P E⟩) = some leaves := hr
-    obtain ⟨hxL, hyL, hzL⟩ := inLog_verifyQ g T (stF (sA g P E)) (πOf g P E) hacc' hr0 keys
-    have hc1s : ch.chal1.size = 136 := Prob.Bytes.size_ba _
-    have hyc1 : yChal1 (runY (Hashes.ofTable g) (stF (sA g P E)) ch) = ch.chal1 := by
-      rw [runY, yChal1_chal2Input _ hc1s]
-    have htgt : hF (sA g P E) (yChal1 (runY (Hashes.ofTable g) (stF (sA g P E)) ch)) =
-        hF s' (yChal1 (runY (Hashes.ofTable g) (stF (sA g P E)) ch)) := by
-      rw [hyc1]; exact (target_eq_of_muInD_T pk lr hmuEq).symm
-    have hgl : gLogA T stF P E g = gLog T (stF (sA g P E)) P E g := gLogA_eq T stF P E g
-    have hF3' : firstIn .h21 (fun _ => true)
-        (yChal1 (runY (Hashes.ofTable g) (stF (sA g P E)) ch))
-        (logBefore (.h22, runY (Hashes.ofTable g) (stF (sA g P E)) ch) (gLogA T stF P E g)) =
-        some (runX (Hashes.ofTable g) (stF (sA g P E)) (πOf g P E) leaves) := by
-      rw [hgl]; exact hF3
-    have hF4' : firstIn .h22 (fun _ => true) (zChal2 (runZ (stF (sA g P E)) ch))
-        (logBefore (.h23, runZ (stF (sA g P E)) ch) (gLogA T stF P E g)) =
-        some (runY (Hashes.ofTable g) (stF (sA g P E)) ch) := by
-      rw [hgl]; exact hF4
-    have hF3'' : firstIn .h21 (fun _ => true)
-        (yChal1 (runY (Hashes.ofTable g) (stF (sA g P E)) ch))
-        (logBefore (.h22, runY (Hashes.ofTable g) (stF (sA g P E)) ch)
-          (logBefore (.h23, runZ (stF (sA g P E)) ch) (gLogA T stF P E g))) =
-        some (runX (Hashes.ofTable g) (stF (sA g P E)) (πOf g P E) leaves) := by
-      rw [hgl, logBefore_logBefore hO4]; exact hF3
-    have hmk : ∀ (t : Dom) (o : Option ι), InLog (verifyQ T (stF (sA g P E)) (πOf g P E)) g t →
-        sel (gLog T (stF (sA g P E)) P E g) t = some o →
-        @combBad (icPrg E.cipher) _ _ (cDT pk hF b1F b2F lr T P E o) T chal3Blocks N t g →
-        ∃ e ∈ tableQueryLog oa g, bad e.1 g := by
-      intro t o ht hst hb
-      obtain ⟨e, he, rfl⟩ := List.mem_map.1 (inLog_gLog T (stF (sA g P E)) P E g ht)
-      refine ⟨e, hlog ▸ he, Or.inl ⟨o, ?_, hb⟩⟩
-      show sel (tableQueryLog oa g) e.1 = some o
-      rw [hlog]
-      exact hst
-    rcases hbad with hb | hb | hb
-    · exact hmk _ none hxL (by simp only [sel, stmtAtD]) (pomfritT_convX pk hF b1F b2F lr T P E N g _ hb)
-    · exact hmk _ (some s') hyL h2 (pomfritT_convY pk hF b1F b2F lr T P E N g _ _ s' hF3' htgt hb)
-    · exact hmk _ (some s') hzL h3
-        (pomfritT_convZ pk hF b1F b2F lr T P E N g _ _ _ s' hF4' hF3'' htgt hb)
   have hgood := prEvent_randomOracle_le_of_fresh_bad_queries oa K hS (fun t => ε t.1) _
     (worstCaseCostBound_of_kindQueryBound oa adaptKinds ε hKε n'' hq'') ntot
     (isTotalQueryBound_gameA T stF E hn)
-    (fun r => ev r ∧ ¬bindFailA stF E r ∧ ¬deadOpenA stF E r ∧ ¬cf r) bad ?_ htrace
-  · have hsum : ∑ k ∈ adaptKinds, (n'' k : ℝ≥0∞) * ε k =
-        n'' .h21 * epsKOS #chal3Blocks (Chain.kosL (stKT pk hF b1F b2F lr none)) +
-          n'' .h22 * (ENNReal.ofReal (Seed.epsQS (2 ^ 128) (2 ^ 64) n') + εc +
-            ((n + 2 + verifierTotal : ℕ) : ℝ≥0∞) / 2 ^ 448) +
-          n'' .h23 * ((N : ℝ≥0∞) / 2 ^ 128) +
-          hitSum n'' (hitEps n'' (combCount (some (45, dstP)) n'')) +
-          n'' .mu * stmtEpsD n'' .mu := by
-      simp only [adaptKinds, ε, combE]
-      rw [Finset.sum_insert (by decide), Finset.sum_insert (by decide),
-        Finset.sum_insert (by decide), Finset.sum_insert (by decide), Finset.sum_singleton]
-      simp only [chainEps, hitEps, stmtEpsD, hitSum, reduceCtorEq, ite_true, ite_false, zero_add,
-        add_zero, mul_add, ntot]
-      ring
-    calc Pr{let r ← mx}[ev r]
-        ≤ Pr{let r ← mx}[(ev r ∧ ¬bindFailA stF E r ∧ ¬deadOpenA stF E r ∧ ¬cf r) ∨
-            (bindFailA stF E r ∨ (deadOpenA stF E r ∨ cf r))] :=
-          prEvent_mono mx _ _ fun r h => by tauto
-      _ ≤ Pr{let r ← mx}[ev r ∧ ¬bindFailA stF E r ∧ ¬deadOpenA stF E r ∧ ¬cf r] +
-            (Pr{let r ← mx}[bindFailA stF E r] +
-              (Pr{let r ← mx}[deadOpenA stF E r] + Pr{let r ← mx}[cf r])) :=
-          (prEvent_or_le mx _ _).trans (add_le_add le_rfl ((prEvent_or_le mx _ _).trans
-            (add_le_add le_rfl (prEvent_or_le mx _ _))))
-      _ ≤ _ := by
-          rw [← hsum]
-          refine (add_le_add hgood le_rfl).trans_eq ?_
-          ring
-  · rintro c ⟨⟨k, x⟩, hx⟩ hc hcard
-    refine (prEvent_or_le _ _ _).trans (add_le_add ?_ ((prEvent_or_le _ _ _).trans
-      (add_le_add ?_ ?_)))
-    · by_cases hk : k = .h22
-      · subst hk
-        show _ ≤ combE .h22
-        simp only [combE, ite_true]
-        exact prEvent_combBadF_h22_le T stF P E (stKT pk hF b1F b2F lr) (sysKT pk hF)
-          (witKT pk hF) dstP sel hsel N hn' hεc K hK hx c hc hcard
-      · refine prEvent_completeTable_cell_le c _ hc
-          (fun t G => combBadF T stF P E (stKT pk hF b1F b2F lr) (sysKT pk hF)
-            (witKT pk hF) dstP sel N t.val (extendTable K G)) _ fun G => ?_
-        simp only [extendTable_update]
-        show _ ≤ combE k
-        rw [show combE k = chainEps (stKT pk hF b1F b2F lr none) chal3Blocks 0 N k from by
-          simp only [combE, hk, ite_false]]
-        exact prEvent_combBadF_cell_le T stF P E (stKT pk hF b1F b2F lr) (sysKT pk hF)
-          (witKT pk hF) dstP sel hsel hT _ (fun _ => rfl) N (k, x) hk _
-    · refine prEvent_completeTable_cell_le c _ hc
-        (fun t G => chainHitL cb (tableQueryLog oa) t.val (extendTable K G)) _ fun G => ?_
-      simp only [extendTable_update]
-      exact prEvent_chainHitL_le cb oa n'' hq'' _ _
-    · refine prEvent_completeTable_cell_le c _ hc
-        (fun t G => stmtHitD (tableQueryLog oa) t.val (extendTable K G)) _ fun G => ?_
-      simp only [extendTable_update]
-      exact prEvent_stmtHitD_le oa n'' hq'' _ _
-
+    (fun r => ev r ∧ ¬bindFailA stF E r ∧ ¬deadOpenA stF E r ∧ ¬cf r)
+    (pomBad pk hF b1F b2F lr T P E N)
+    (fun c t hc hcard => prEvent_pomBad_le pk hF b1F b2F lr T P E hT N hn' hεc q hq K hK ntot c t
+      hc hcard)
+    (fun g h => pomBad_trace pk hF b1F b2F lr T P E hT N hdet cf hcf g h)
+  have hsum : ∑ k ∈ adaptKinds, (n'' k : ℝ≥0∞) * ε k =
+      n'' .h21 * epsKOS #chal3Blocks (Chain.kosL (stKT pk hF b1F b2F lr none)) +
+        n'' .h22 * (ENNReal.ofReal (Seed.epsQS (2 ^ 128) (2 ^ 64) n') + εc +
+          ((n + 2 + verifierTotal : ℕ) : ℝ≥0∞) / 2 ^ 448) +
+        n'' .h23 * ((N : ℝ≥0∞) / 2 ^ 128) +
+        hitSum n'' (hitEps n'' (combCount (some (45, dstP)) n'')) +
+        n'' .mu * stmtEpsD n'' .mu := by
+    simp only [adaptKinds, ε, pomEps]
+    rw [Finset.sum_insert (by decide), Finset.sum_insert (by decide),
+      Finset.sum_insert (by decide), Finset.sum_insert (by decide), Finset.sum_singleton]
+    simp only [chainEps, hitEps, stmtEpsD, hitSum, reduceCtorEq, ite_true, ite_false, zero_add,
+      add_zero, mul_add, ntot]
+    ring
+  calc Pr{let r ← mx}[ev r]
+      ≤ Pr{let r ← mx}[(ev r ∧ ¬bindFailA stF E r ∧ ¬deadOpenA stF E r ∧ ¬cf r) ∨
+          (bindFailA stF E r ∨ (deadOpenA stF E r ∨ cf r))] :=
+        prEvent_mono mx _ _ fun r h => by tauto
+    _ ≤ Pr{let r ← mx}[ev r ∧ ¬bindFailA stF E r ∧ ¬deadOpenA stF E r ∧ ¬cf r] +
+          (Pr{let r ← mx}[bindFailA stF E r] +
+            (Pr{let r ← mx}[deadOpenA stF E r] + Pr{let r ← mx}[cf r])) :=
+        (prEvent_or_le mx _ _).trans (add_le_add le_rfl ((prEvent_or_le mx _ _).trans
+          (add_le_add le_rfl (prEvent_or_le mx _ _))))
+    _ ≤ _ := by
+        rw [← hsum]
+        refine (add_le_add hgood le_rfl).trans_eq ?_
+        ring
 end PomUnionT
 
 /-! ## The joint experiment and the theorem -/
