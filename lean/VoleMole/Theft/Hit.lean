@@ -6,7 +6,41 @@ import VoleMole.EndToEnd.SpecRelations
 /-!
 # `ε_hit` for the Lean verifiers, with the chain hashes random tables
 
-WIP: see the module notes at the end of the file.
+The programming step of the theft theorems (`weakSE2_of_plain`) leaves `ε_hit`: the probability
+that a fresh forgery's verifier `H₂³` point is a point a simulator programmed (`ProgEv … HitOpX`).
+Here it is bounded for Ratatouille in the model of `noTheft_leanX_plain` with the concrete extra
+table `XTab L M` (`hbX`: `H₂⁰`, `H₂¹`, `H₂²` and the other base hashes uniform tables on the inputs
+of at most `L` bytes).
+
+* **Decision trees** (`ComOW.QTree`). `pr_hit_le`: a tree with `q` queries outputs a cell other
+  than `a` whose value equals a target read off the table at `a` only, with probability
+  `≤ (q + 1)/|Y|` (lazy sampling at `a`, then `pr_tree_bad_fix`). `QTree.of_two`: reading two cells
+  first costs two queries. `pr_set`, `pr_level_le`: the same on a tape with the table as one
+  component (a lens), for the forgery's and a simulation's points as byte strings (`keyL`, `encL`).
+* **The chain tables** of `XTab` (`getMu`/`setMu`, `get21`/`set21`, `get22`/`set22`): `hbX` with
+  one of them changed agrees off its domain (`hbX_agreeOff_*`), and answers a short input by the
+  table (`hbX_*_eq`).
+* **The cases of a hit** (`hit_cases`, from `Chain.chain_hit`): the programmed key is one of the
+  two simulations' prefixes (`progT_moved`), and the forgery's chain meets that simulation's at a
+  first level where the inputs differ and the outputs agree (`HitAt`): `H₂²` (the target is the
+  first 56 bytes of the programmed block), `H₂¹` or `H₂⁰`. Equal `H₂⁰` inputs mean equal
+  statements (`muIn_stI_inj`, `muIn_stS_inj`; issuance and spend inputs have 64 and 88 bytes), which
+  freshness excludes. All forgery chain inputs have at most `Lmin = 14357` bytes (`fSt_facts`), so
+  they are table points when `L ≥ Lmin`.
+* **Freshness with the adversary's key** (`FreshOk`). The Lean spend statement does not hash the
+  key `pk` (`Privacy.Ratatouille.stS`), so a spend statement that differs from a simulated one only
+  in the key has the same chain; the bound is for `FreshOk`, which compares a spend with the
+  simulated spend's statement under the adversary's key. In the game this is `FreshOp`
+  (`freshOk_stS`), and `FreshOk` implies `FreshOp` (`FreshOk.freshOp`).
+* **The forgery's point is computed by a tree** (`qtree_forger`): the two simulations' points (the
+  programmed `H₂³` table depends on the chain table only there, `progT_fst_congr`), then the
+  adversary's tree (`AdmHit`).
+* **`progEv_hit`**: for `L ≥ 14357` and an adversary whose last stage reads `H₂⁰`, `H₂¹`, `H₂²` with
+  `q_μ`, `q₂₁`, `q₂₂` queries,
+
+      ε_hit ≤ 2·((q_μ+3)·2⁻²⁵⁶ + (q₂₁+3)·2⁻¹⁰⁸⁸ + (q₂₂+3)·2⁻⁴⁴⁸)   (`epsHit`).
+
+`Theft/HitTheft.lean` puts it into the theft theorem (`noTheft_leanX_hit`).
 -/
 
 -- (The coin types are large products: their `Fintype` instances exceed the default size.)
