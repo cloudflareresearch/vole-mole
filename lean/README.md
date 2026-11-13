@@ -402,7 +402,9 @@ lean/
                             protocol theorems (UOVLinks); reductions between them: T1(a)/(c)
                             (IdealTag), T4 and the K-key step (CTUFOpenOMPR), A1 and P8(a)
                             (Shift), T6's generic core (Blind) and its PomFRIT instance
-                            (BlindPomfrit; Lean client: PomClientLean, BlindPomfritT6Lean); Ratatouille under OMPR (RatatouilleOMPR);
+                            (BlindPomfrit; Lean client: PomClientLean, BlindPomfritT6Lean); Ratatouille under OMPR (RatatouilleOMPR); `Com`/`Tag` as random
+                            permutations with inverse queries (LazyPerm, CTUFPerm, PermLinks,
+                            FDHPerm);
                             simultaneous extraction down to OMPR (SimLinks); shared lazy-sampling, union-bound and simulation
                             lemmas (LazyIdeal)
     Audit/                  non-vacuity checks: the headline theorems' hypotheses instantiated,
@@ -1589,8 +1591,17 @@ What is **not** established, roughly in order of importance:
      A first cryptanalysis of OMPR and OMPR⊕17 with the oracle is in
      `docs/security/ompr-cryptanalysis.md`: no oracle-aided attack beats the direct forgery attack on
      UOV; Conjecture A6 reduces to its forgery-side form (collinear shifts, at most `2^4.1`).
-   - The Lean chains to OMPR idealize `Com` (`hmodel`) and `Tag` (`TagIdeal`) as random functions
-     in the standalone games; the permutation versions with inverse access are paper.
+   - The Lean chains to OMPR idealize `Com` and `Tag` in the standalone games. For Moussaka and
+     unbound Moussaka the idealization can be a random permutation of the 800-bit KP800 blocks
+     with inverse queries (hypothesis `hmodelP`; `omuf_le_num_ompr_perm`,
+     `omufU_le_num_ompr_perm`, `Assumptions/PermLinks.lean`), with the permutation terms
+     `(q_f+q_i+q_S+1)²·2⁻⁸⁰⁰ + q_i·2⁻²²⁴` explicit (`Assumptions/CTUFPerm.lean`,
+     `advCTUFPermAt_le_ompr`; the PRP/PRF switch with inverse queries in
+     `Assumptions/LazyPerm.lean`; the lazy permutation is taken as the ideal one). T4's paper
+     birthday term left out inverse queries (corrected, `uov-assumptions.md` §5.4). For
+     Ratatouille's `Tag` only the switch to the hybrid is in Lean (`advFDHPerm_le_hyb`,
+     `Assumptions/FDHPerm.lean`); the chain still uses `TagIdeal` (a random function). PomFRIT's
+     U1 and U2 with AES as random permutations with inverse queries are not done.
    - PomFRIT's tight bound needs OMPR⊕17; OMPR ⇒ OMPR⊕17 without the `τ^{q+1}` loss has no
      black-box proof (`uov-open-reductions.md`); by Theorem R (`ompr-shift-algebra.md`; Lean `thmR`) a
      proof must be non-black-box in the adversary or break OMPR^free. In Lean every term of
