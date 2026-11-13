@@ -1042,11 +1042,15 @@ Files: `ROM/SimUnion.lean` (generic), `ROM/SimExtract.lean`, `ROM/SimSpec.lean`,
 `ROM/SimJoint.lean` (both relations of a protocol together), `ROM/SimJointSpec.lean`,
 `ROM/MoussakaOMUFSim.lean`, `ROM/RatatouilleBalanceSim.lean`, `ROM/MoussakaUnboundSim.lean`,
 `ROM/SimPerm.lean` (permutation model), `Assumptions/SimLinks.lean`, `Audit/SimExtract.lean`;
+PomFRIT: `ROM/OneMoreLemmaPPrefix.lean`, `ROM/OneMoreLemmaPSim.lean`,
+`Assumptions/PomfritLemmaPSim.lean`, `Audit/PomfritLemmaP.lean`;
 changed: `ROM/AdaptChain.lean`, `ROM/AdaptComb.lean` (the bad
 predicate, its per-query bound and the deterministic step of the adaptive union bounds are now
 lemmas, `adaptBad`, `prEvent_adaptBad_le`, `adaptBad_trace`, `combAdaptBad`,
 `prEvent_combAdaptBad_le`, `combAdaptBad_trace`; `prEvent_accept_le_adaptive_E` and
-`prEvent_accept_le_adaptive_comb_E` use them, statements unchanged). No executable definition
+`prEvent_accept_le_adaptive_comb_E` use them, statements unchanged), `ROM/LemmaP.lean` (likewise
+for Lemma P: `pomBad`, `pomEps`, `prEvent_pomBad_le`, `pomBad_trace`;
+`prEvent_accept_le_adaptive_pomfritT_E` uses them, statement unchanged). No executable definition
 changed. `#print axioms` of the headline results: `propext`, `Classical.choice`, `Quot.sound`.
 
 **The problem.** §2l bounds a protocol game's extraction failures by a union bound over its
@@ -1192,19 +1196,63 @@ proof (`chainHitEpsSim`, `stmtBindEpsSim` count `18m`, `m`, `m` and `3m` extra q
 paper's `(q²+q)` would with `q` including the verifications. Nothing in the paper's argument was
 found wrong.
 
-**Not covered.** PomFRIT (its one-more reduction §2k bounds the extraction failures by one event
-`∃ i, PFail i` of the game, `pomfrit_U1_bound`, `pomfrit_U2_bound`; bounding it needs Lemma P's
-term, G8, which is not finished: an `E`-independent derived prover per forgery whose runs are
-prefixes of one run, Lemma P's ordering step, and Lemma P's per-query bad event, per-query bound
-and deterministic step as lemmas; then `prEvent_le_shared_suffix` applies as for the other
-protocols), both relations together in the permutation model (above), the quantum setting.
+**PomFRIT, Theorem U1** (`ROM/OneMoreLemmaPPrefix.lean`, `ROM/OneMoreLemmaPSim.lean`; §2n). The
+one-more reduction (§2k) leaves one event `∃ i ≤ ℓ, PFail i` of the game; §2n bounds it by a union
+over the forgeries, `(ℓ + 1)·pfailEps`, each forgery's derived game (`proverP … i`) charged with the
+whole forger's run. Here it is charged once:
+- *Prefix runs.* The derived prover of forgery `i` is the forger, the earlier forgeries'
+  verifications up to their target queries (`verPreIC`) and forgery `i`'s (`verLastIC`). The two
+  make the same queries from any state, except that `verPreIC` skips a forgery whose refresher check
+  fails (`log_verPreIC_state`, `log_verPreIC_eq_last`). A failed forgery passed the game's
+  verification (`pfail_refresh`), so where `PFail i` holds, the joint and hash logs of `proverP … i`
+  are prefixes of those of `proverP … ℓ` (`prefix_of_pfail`), the reference run. `PrefixRuns` (for
+  every table) does not hold; the shared-run bound needs the prefix only at the tables of the trace,
+  so `prEvent_le_shared_suffix` is applied directly.
+- *The per-query bad event* (`simBadP`): `pomBad` or an order hit (`orderHitL`), per query
+  `≤ simEps` (`prEvent_simBadP_le`: `2⁻¹⁵⁰` at `H₂¹`, `ε_QS + 2⁻¹²⁸ + ntot·2⁻⁴⁴⁸` at `H₂²`,
+  `2⁵⁷·2⁻¹²⁸` at `H₂³`, the hits, the statement hits, `n₃·2⁻¹⁰⁸⁸` order hits at `H₂¹`); it reads
+  the logs before the query only (`simBadP_prefix_congr`, through `logBefore_prefix`).
+- *The trace*: `pfail_events` and `pomBad_trace` give a failure of the `i`-th derived game
+  (`failP`: binding, an opened dead leaf, Post, the verifier's `H₂³` input unqueried) or a bad query
+  of its log, in its run (charged once, at `proverP … ℓ`'s) or in its extraction and verification
+  (charged per forgery).
+
+Per cipher table `prEvent_pfailZ_sim_le_E`; averaged (`prEvent_avg_le_sum4`, the failure terms by
+`sum_fail_le` and `prEvent_zUnqueried_le_A`) `prEvent_pfailZ_sim_le`; in the game
+`prEvent_pfail_sim_le`; Theorem U1 `pomfrit_U1_sim`, `pomfrit_U1_ompr_sim`:
+
+    Pr[PomWin] ≤ Adv^{ompr} + pfailSimEps(q', q_E', n', ℓ),
+    pfailSimEps = Σ_k (q'_k + (ℓ+1)·r_k)·simEps_k + (ℓ+1)·(failEps(q', q_E') + 2⁻¹²⁸)
+               = (q'₂₁ + ℓ+1)·2⁻¹⁵⁰ + (q'₂₂ + ℓ+1)·(ε_QS + 2⁻¹²⁸ + (n'+339)·2⁻⁴⁴⁸)
+                 + (q'₂₃ + ℓ+1)·2⁻⁷¹ + hits + (ℓ+1)·(failEps + 2⁻¹²⁸)   (`pfailSimEps_eq`),
+
+`r = extractorQueries + verifierQueries`, `q'`, `q_E'`, `n'` the derived provers' budgets (§2n). It
+is never worse than the union: `pfailSimEps ≤ (ℓ + 1)·pfailEps` (`pfailSimEps_le`, via
+`sum_simEps_eq`: one derived game's charges are `majEps` plus its order hits). Numbers (`q` queries
+of each hash kind, `n_A = q_E = Q_T = q`):
+
+| `q` | `ℓ` | union `(ℓ+1)·pfailEps` | simultaneous `pfailSimEps` |
+|---|---|---|---|
+| `2⁶⁴` | `2³⁰` | `2²³` | `2⁻⁷·⁰` |
+| `2⁶⁴` | `2²⁰` | `2¹³` | `2⁻⁷·⁰` |
+| `2⁴⁸` | `2³⁰` | `2⁷` | `2⁻²³·⁰` |
+| `2⁴⁰` | `2³⁰` | `2⁻¹·⁰` | `2⁻³¹·⁰` |
+
+The `2⁻⁷¹` per `H₂³` query (Lemma P's `Shift`) dominates; it is the paper's
+`(Q₃ + ℓ + 1)·2^{−71}`, inherent in U1 (U2 has no such term). The per-forgery terms are about
+`2⁻⁴¹` at `ℓ = 2³⁰`. As for Moussaka and Ratatouille, the failure terms stay per forgery.
+
+**Not covered.** PomFRIT's Theorem U2 (`ShiftFail`, §2n), both relations together in the
+permutation model (above), the quantum setting.
 
 ### 2n. Lemma P in the random-oracle model (PomFRIT G8), as implemented
 
 Files: `ROM/LemmaPDet.lean`, `ROM/LemmaP.lean`, `ROM/OneMoreLemmaP.lean`,
 `ROM/OneMoreLemmaPIC.lean`, `ROM/OneMoreLemmaPIdent.lean`, `ROM/OneMoreLemmaPOrder.lean`,
 `ROM/OneMoreLemmaPQueries.lean`, `ROM/OneMoreLemmaPFail.lean`, `ROM/OneMoreLemmaPBound.lean`,
-`Assumptions/PomfritLemmaP.lean`; changes to `ROM/OneMorePomfrit.lean`. `lean/docs/security/pomfrit.md` §5, §6.4 state the results.
+`Assumptions/PomfritLemmaP.lean`, and for simultaneous extraction `ROM/OneMoreLemmaPPrefix.lean`,
+`ROM/OneMoreLemmaPSim.lean`, `Assumptions/PomfritLemmaPSim.lean`; changes to
+`ROM/OneMorePomfrit.lean`. `lean/docs/security/pomfrit.md` §5, §6.4 state the results.
 
 - **A general extraction goal.** The adaptive bound of §2g reads the extraction goal
   `∃ i ∈ known, Wit chal1 (cand i)` only through the per-chain hypothesis `hdet`.
@@ -1261,6 +1309,12 @@ Files: `ROM/LemmaPDet.lean`, `ROM/LemmaP.lean`, `ROM/OneMoreLemmaP.lean`,
   target stream before the cipher table, `realImpl_run_eq` to pass from the game to the lazy oracle
   (`prEvent_pfail_le`), then `pomfrit_U1_bound` (`pomfrit_U1_explicit`). Query bounds:
   `ROM/OneMoreLemmaPQueries.lean` (`ForgerBound`, `proverP_bounds`).
+- **Simultaneous extraction** (`ROM/OneMoreLemmaPPrefix.lean`, `ROM/OneMoreLemmaPSim.lean`;
+  §2m): the per-query bad event, its bound and its deterministic step exposed as lemmas
+  (`pomBad`, `prEvent_pomBad_le`, `pomBad_trace`), the derived provers' runs prefixes of the last one's
+  where a forgery fails (`prefix_of_pfail`), then `prEvent_le_shared_suffix`: `pomfrit_U1_sim`,
+  `Pr[PomWin] ≤ Adv^{ompr} + pfailSimEps`, each query of the forger's run charged once,
+  `pfailSimEps ≤ (ℓ + 1)·pfailEps`.
 - **Not done (U2).** `pomfrit_U2_bound`'s term `Pr[∃ i, ShiftFail_i]`: the game machinery above is
   for U1's hints (`addHint`, one target), and the extraction bound needed (some alive tree
   extracts, `N = 2` per chain, no `Shift`) is not stated for the target family `pomfritRedeemT`.
