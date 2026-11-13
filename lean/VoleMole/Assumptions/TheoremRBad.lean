@@ -11,6 +11,8 @@ open scoped ENNReal
 
 namespace VoleMole.Assumptions.TheoremR
 
+open VoleMole.Assumptions.UOV
+
 /-- **Equality up to a nonzero scalar** on `F^m`: the class relation of UOV targets
 (`Links.uovCls` is `scls GF256 45`). -/
 def scls (F : Type) [Field F] (m : ℕ) (z t : Fin m → F) : Prop := ∃ μ : F, μ ≠ 0 ∧ z = μ • t
@@ -1091,5 +1093,122 @@ theorem bad_run {NT NL NC Tq : ℕ} {α : Type} (r : OracleComp (specRed AR τ q
       ring
 
 end Steps
+
+
+/-! ## The bound on `badPr`, and Theorem R with every term explicit -/
+
+section Main
+
+variable {DR : Type} [DecidableEq DR] {AR : DR → Type} [∀ d, SampleableType (AR d)]
+  {τ q : ℕ} [NeZero τ] {X : Type} [DecidableEq X] {F : Type} [Field F] [Fintype F]
+  [DecidableEq F] {m : ℕ} [SampleableType (Fin m → F)] {S : Type} [DecidableRel (scls F m)]
+  {PK SK : Type} (tr : Trapdoor PK SK (Fin m → F) S) [∀ pk s t, Decidable (tr.IsPre pk s t)]
+  (n : ℕ)
+
+local notation "𝕋" => Fin m → F
+
+/-- **The numerator of the bound on the bad events**, for `n` challenge targets and `T` messages
+to `A**_D`: `NT = n + q·T` target draws and `(q + 1)·T` list draws, each with its risk. `Q` is
+the field size. -/
+def badNum (τ q Q n T : ℕ) : ℕ :=
+  (n + q * T) * cT τ Q (n + q * T) ((q + 1) * T) ((q + 1) * T) + (q + 1) * T * cL τ Q (n + q * T)
+
+omit [DecidableEq DR] [∀ d, SampleableType (AR d)] [NeZero τ] [DecidableEq X] [Field F]
+  [Fintype F] [SampleableType (Fin m → F)] [DecidableRel (scls F m)] in
+theorem Ival_init (Tq : ℕ) :
+    Ival (q := q) (n + q * Tq) ((q + 1) * Tq) ((q + 1) * Tq) Tq
+      ((m0 n, f0) : JSt AR τ q X 𝕋 S) Tq := by
+  have hl : lists ((m0 n, f0) : JSt AR τ q X 𝕋 S) = ∅ := by
+    ext hs; simp [lists, lstAt, f0]
+  refine ⟨by simp [m0], ⟨0, by simp [hl], by simp⟩, by simp [nonchg, m0], by simp [m0],
+    by simp [m0]⟩
+
+omit [DecidableEq DR] [∀ d, SampleableType (AR d)] [NeZero τ] [DecidableEq X]
+  [DecidableEq F] [Fintype F] [SampleableType (Fin m → F)] [DecidableRel (scls F m)] in
+theorem not_Ebad_init : ¬ Ebad ((m0 n, f0) : JSt AR τ q X 𝕋 S) := by
+  rintro (h | ⟨hs, δ, h, -⟩)
+  · simp [m0] at h
+  · simp [lstAt, f0] at h
+
+/-- **The bad events of Theorem R are rare** (`ompr-shift-algebra.md` §2.2, step 1). For targets in
+`F^m` with the class relation "equal up to a nonzero scalar", and a reduction that sends at most
+`T` messages to `A**_D`,
+
+    badPr ≤ badNum(τ, q, |F|, n, T) / |F|^m.
+
+The proof charges every fresh uniform value when it is drawn: a target must avoid `0`, the
+classes of the earlier targets and of the uncounted candidates, and the points that would give
+two useful shifts in a cached list (`tgtBad`); a shift list must avoid two shifts with a
+difference in `0 ∪ {μw − μ'w'}` (`lstBad`). A completion is bad only if such a pair exists. -/
+theorem badPr_le {R : PK → ProbComp (OracleComp (specRed AR τ q X 𝕋 S) (List (X × S)))} (Tq : ℕ)
+    (hR : ∀ pk, ∀ r ∈ support (R pk), IsQueryBoundP r (fun o => o.isRight = true) Tq) :
+    badPr (scls F m) tr n R ≤ badNum τ q (Fintype.card F) n Tq / (Fintype.card F ^ m : ℕ) := by
+  unfold badPr jointExp
+  refine prEvent_bind_le_of_forall_le _ _ _ fun kp => prEvent_bind_le_of_forall_le_of_support _ _
+    _ fun r hr => ?_
+  simp only [bind_pure_comp, prEvent_map]
+  refine (prEvent_mono _ _ (fun z : List (X × S) × JSt AR τ q X 𝕋 S => Ebad z.2)
+    fun z h => Or.inl h).trans ?_
+  refine ((bad_run tr.IsPre kp.1 (tr.D kp.2) (NT := n + q * Tq) (NL := (q + 1) * Tq)
+    (NC := (q + 1) * Tq) (Tq := Tq) r Tq _ (hR _ r hr) (Ival_init n Tq)).2
+      (not_Ebad_init n)).trans (le_of_eq ?_)
+  unfold Bnd badNum
+  simp only [m0, Fintype.card_fun, Fintype.card_fin, div_eq_mul_inv]
+  push_cast
+  ring
+
+omit [DecidableEq F] [Fintype F] [SampleableType (Fin m → F)] [DecidableRel (scls F m)] in
+/-- Equality up to a nonzero scalar is an equivalence. -/
+theorem scls_equiv : Equivalence (scls F m) where
+  refl t := ⟨1, one_ne_zero, (one_smul _ _).symm⟩
+  symm := by
+    rintro t t' ⟨μ, h0, rfl⟩
+    exact ⟨μ⁻¹, inv_ne_zero h0, by rw [smul_smul, inv_mul_cancel₀ h0, one_smul]⟩
+  trans := by
+    rintro t t' t'' ⟨μ, h0, rfl⟩ ⟨μ', h0', rfl⟩
+    exact ⟨μ * μ', mul_ne_zero h0 h0', by rw [smul_smul]⟩
+
+/-- In the joint experiment of a reduction with at most `T` messages to `A**_D`, at most `q·T`
+junk targets are drawn and at most `T` runs are completed. -/
+theorem jointExp_counts {R : PK → ProbComp (OracleComp (specRed AR τ q X 𝕋 S) (List (X × S)))}
+    (Tq : ℕ) (hR : ∀ pk, ∀ r ∈ support (R pk), IsQueryBoundP r (fun o => o.isRight = true) Tq)
+    (r : PK × List (X × S) × JSt AR τ q X 𝕋 S) (hr : r ∈ support (jointExp (scls F m) tr n R)) :
+    r.2.2.1.nj ≤ q * Tq ∧ r.2.2.1.K ≤ Tq := by
+  simp only [jointExp, mem_support_bind_iff, support_pure, Set.mem_singleton_iff] at hr
+  obtain ⟨kp, -, b, hb, z, hz, rfl⟩ := hr
+  obtain ⟨b', -, -, -, h4, h5⟩ := (bad_run tr.IsPre kp.1 (tr.D kp.2) (NT := n + q * Tq)
+    (NL := (q + 1) * Tq) (NC := (q + 1) * Tq) (Tq := Tq) b Tq _ (hR _ b hb)
+    (Ival_init n Tq)).1 z hz
+  refine ⟨?_, ?_⟩ <;> dsimp only <;> omega
+
+/-- **Theorem R with the bad events bounded** (`ompr-shift-algebra.md` §2.1), for targets in
+`F^m` up to nonzero scalars and a reduction `R` that sends at most `T` messages to `A**_D`
+(rewinding included: every message counts):
+
+    Pr[R wins OMPR(n, c)] ≤ 2·τ^{−(q+1)} + Adv^{free}(M; n + q·T, c + (q + 1)·T)
+                             + badNum(τ, q, |F|, n, T) / |F|^m.
+
+No term of `thmR` is left implicit: the junk and run counts follow from the query bound. -/
+theorem thmR_num (hτ : 7 ≤ τ) (hq : 1 ≤ q) (c Tq : ℕ)
+    (R : PK → ProbComp (OracleComp (specRed AR τ q X 𝕋 S) (List (X × S))))
+    (hR : ∀ pk, ∀ r ∈ support (R pk), IsQueryBoundP r (fun o => o.isRight = true) Tq) :
+    Pr{let r ← redExp tr n R}[Wins c (goodPre tr.IsPre) r.1 r.2.1 r.2.2.toCh] ≤
+      2 / (τ : ℝ≥0∞) ^ (q + 1) +
+        advOMPRFree tr (scls F m) (n + q * Tq) (c + (q + 1) * Tq)
+          (redM (scls F m) tr.IsPre n R) +
+        badNum τ q (Fintype.card F) n Tq / (Fintype.card F ^ m : ℕ) := by
+  have h0 : Pr{let r ← redExp tr n R}[¬ (r.2.2.nj ≤ q * Tq ∧ r.2.2.nc ≤ Tq)] = 0 := by
+    rw [(redExp_eqd (scls F m) tr n R).prEvent_eq, prEvent_map]
+    refine prEvent_eq_zero_of_forall_mem_support _ _ fun r hr h => h ?_
+    exact jointExp_counts tr n Tq hR r hr
+  calc Pr{let r ← redExp tr n R}[Wins c (goodPre tr.IsPre) r.1 r.2.1 r.2.2.toCh]
+      ≤ Pr{let r ← redExp tr n R}[(Wins c (goodPre tr.IsPre) r.1 r.2.1 r.2.2.toCh ∧
+          r.2.2.nj ≤ q * Tq ∧ r.2.2.nc ≤ Tq) ∨ ¬ (r.2.2.nj ≤ q * Tq ∧ r.2.2.nc ≤ Tq)] :=
+        prEvent_mono _ _ _ fun r h => by tauto
+    _ ≤ _ := (prEvent_or_le _ _ _).trans (by rw [h0, add_zero])
+    _ ≤ _ := (thmR (scls F m) tr n scls_equiv hτ hq c (q * Tq) Tq R).trans
+        (add_le_add le_rfl (badPr_le tr n Tq hR))
+
+end Main
 
 end VoleMole.Assumptions.TheoremR
