@@ -675,4 +675,41 @@ theorem hit_cases (hL : Lmin ≤ L) (x₁ : Option IssueInstance) (c₁ : SimCoi
 
 end Rata
 
+/-! ## One level: a lens on the tape -/
+
+section Level
+
+open VoleMole.ZK.Sim
+
+variable {L : ℕ}
+
+/-- **One level of a hit has probability `≤ (q + 1)/|Y|`.** The tape `Ω` has a component `T`
+(a table on the short inputs, lens `set`/`get`). The forgery's point `Pf` is computed from `T` by
+a tree with `q` queries; the simulation's point `Ps` does not depend on `T`, and its target `τ`
+reads `T` only at `Ps`. -/
+theorem pr_level_le {Ω : Type*} [Fintype Ω] [Nonempty Ω] {n : ℕ} (set : (KL L → Bytes n) → Ω → Ω)
+    (get : Ω → KL L → Bytes n) (h1 : ∀ x, set (get x) x = x) (h2 : ∀ t x, get (set t x) = t)
+    (h3 : ∀ t t' x, set t (set t' x) = set t x) (Pf Ps τ : Ω → ByteArray) {q : ℕ}
+    (hPs : ∀ T T' z, Ps (set T z) = Ps (set T' z))
+    (hτ : ∀ T T' z, (∀ k, keyL L (Ps (set T z)) = some k → T k = T' k) →
+      τ (set T z) = τ (set T' z))
+    (hPf : ∀ z, QTree (fun T => keyL L (Pf (set T z))) q) :
+    pr Ω (fun ω => ∃ k, encL k = Pf ω ∧ Pf ω ≠ Ps ω ∧ ba (get ω k) = τ ω) ≤
+      (q + 1 : ℕ) * (1 / Fintype.card (Bytes n)) := by
+  classical
+  rw [pr_set set get h1 h2 h3]
+  refine pr_prod_le' _ fun z => ?_
+  let T₀ : KL L → Bytes n := fun _ _ => 0
+  have h := pr_hit_le (hPf z) (keyL L (Ps (set T₀ z))) (fun T => blk n (τ (set T z)))
+    fun T T' hT => by
+      rw [hτ T T' z fun k hk => hT k (by rwa [hPs T₀ T z])]
+  refine (Privacy.pr_mono fun T hT => ?_).trans h
+  obtain ⟨k, hk, hne, hv⟩ := hT
+  refine ⟨k, by rw [← hk, keyL_encL], fun he => hne ?_, ?_⟩
+  · rw [← hk, encL_of_keyL he, hPs T₀ T z]
+  · rw [h2] at hv
+    rw [← hv, blk_ba]
+
+end Level
+
 end VoleMole.Theft.Hit
