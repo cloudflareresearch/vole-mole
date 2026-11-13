@@ -587,8 +587,8 @@ of that state is then no forgery (`uov-assumptions.md` §5.8). The Lean forgery 
 ## 5. No theft (N2) and honest clients
 
 Status: the reduction is mechanized, also with `H₁`, `H₂⁰…H₂²`, `H₄` read off uniform tables.
-Plain extraction, the programmed-point term `ε_hit` and `Adv^ow` stay hypotheses or explicit
-terms (below, "Lean").
+There the programmed-point term `ε_hit` is bounded (`noTheft_leanX_hit`). Plain extraction and
+`Adv^ow` stay a hypothesis and an explicit term (below, "Lean").
 
 **Theorem 3 (N2a).** Consider an honest client with secret coins `(nf, r)` for its issued state
 `c = Com(nf, ctx, T_init, r)` and `(nf', r')` for its change `c' = Com(nf', ctx, t', r')`.
@@ -696,6 +696,41 @@ honest openings, not about signatures. The table's bound in §0 is the right one
     uniform tables on all inputs of at most `L` bytes, and SHAKE on longer inputs (`hbX_wf`,
     `hbX_h1`, `hbX_mu`, `hbX_h21`, `hbX_h22`). `Audit/Theft.lean` instantiates
     `noTheft_leanX_plain` at `hbX`.
+- **`noTheft_leanX_hit`** (`Theft/HitChain.lean`, `Theft/Hit.lean`, `Theft/HitTheft.lean`):
+  `noTheft_leanX_plain` at `X = XTab L M` with `ε_hit` bounded,
+
+      Pr[Bad] ≤ εz(pI; q) + εz(pS; q) + δ_S + ε_plain
+        + 2·((q_μ+3)·2^{−256} + (q₂₁+3)·2^{−1088} + (q₂₂+3)·2^{−448}) + Adv^ow(inverter),
+
+  for `L ≥ 14357` (`Lmin`) and a last stage that reads the tables `H₂⁰`, `H₂¹`, `H₂²` of `x` by
+  decision trees with `q_μ`, `q₂₁`, `q₂₂` queries, at every value of everything else (`AdmHit`;
+  the other tables are read freely). The proof:
+  - *Chain structure* (`Theft/HitChain.lean`). The verifier's prefix is `H₂²(cin2) ‖ …`, its
+    `H₂²` input is `H₂¹(cin1) ‖ … ‖ 10`, its `H₂¹` input is `mu₁ ‖ … ‖ 9` with `mu₁ =
+    H₂⁰(muIn st)` (`vPre_some`, `cin2_some`, `cin1_some`, `mu1_eq`). Each level reads its hash
+    at one point (`vPre_congr22`, `vPre_congr21`, `vPre_congrMu` and the `cin*_congr*` lemmas).
+    `chain_hit`: if the forgery's grinding point is a block of a simulator's prefix, then at the
+    first level where the forgery's input and the simulation's differ the two outputs agree
+    (for `H₂²`: the first 56 bytes of the programmed block, which covers a simulation that
+    failed), or both statements have the same `H₂⁰` input.
+  - *Sizes.* The forgery's chain inputs have at most `14357` bytes (`size_cin1_le`,
+    `size_cin2_le`; the spend relation's `H₂¹` input), so with `L ≥ 14357` they are table points.
+    The issuance and spend `H₂⁰` inputs have `64` and `88` bytes and fixed-length fields
+    (`muIn_stI_inj`, `muIn_stS_inj`).
+  - *Lazy sampling* (`Theft/Hit.lean`). Per simulation and level the forgery's point is computed
+    by a tree with the adversary's queries plus two (the simulations' points, which fix the
+    programmed `H₂³` table: `progT_fst_congr`, `qtree_forger`), and it must hit a target the
+    table fixes at a point it does not output: `≤ (q + 3)/|Y|` (`pr_hit_le`, `pr_level_le`). Two
+    simulations and three levels give `epsHit`.
+  - *Freshness under the adversary's key.* The Lean spend statement does not hash the key `pk`
+    (`Privacy.Ratatouille.stS`; the instance encoding is `nf ‖ d ‖ c' ‖ ctx`). Two spend
+    statements that differ only in `pk` have the same chain, and the bound would need the QS
+    check to separate them. So the bound is for `FreshOk`, which compares a spend with the
+    simulated spend's statement under the adversary's key. In the theft game the Client's spend
+    is under the adversary's key, so `FreshOk` is `FreshOp` there (`freshOk_stS`), and
+    `noTheft_ok` is `noTheft` with weak SE for `FreshOk` (`sim_se_le_ok`). The plain-extraction
+    hypothesis keeps `FreshOp` (`PlainSE.fresh_mono`).
+  `Audit/Theft.lean` instantiates `noTheft_leanX_hit` for the trivial thief (`AdmHit 0 0 0`).
 - **`owAdvColRO_num`** (`Theft/ComOW.lean`): one-wayness of `Com` in a random-table model, for
   the standalone experiment. `Com`'s cells are a uniform table keyed by `(nf, r)`, each a column
   over the credit value. The inverter sees the two commitments (columns) and the nullifiers, reads
@@ -731,13 +766,14 @@ honest openings, not about signatures. The table's bound in §0 is the right one
        `x` on short inputs) with SHAKE elsewhere. The bridge needs that the verifier, the prover
        and the simulators' recomputation query only table points (sizes of every hash input), and
        `prEvent_randomOracle_eq_eager` on that support.
-  - `ε_hit` (`ProgEv … HitOpX`). With `hbX` it is a target collision in the chain `H₂⁰ → H₂¹ →
-    H₂²`: the forgery's `chal2` equals a simulated proof's, with a different statement. The
-    lazy-sampling bound for a decision tree is proved (`ComOW.pr_tree_bad`). What is missing:
-    that the verifier's `chal2`, `chal1` and `mu` inputs of a fresh forgery and of a simulated
-    proof differ at some level (parsing the three inputs, injectivity of the statement encoding
-    across the two relations), that these inputs have at most `L` bytes, and that the simulators'
-    programming reads each of the three tables at one point.
+  - `ε_hit` is bounded for Ratatouille (`noTheft_leanX_hit` above), not yet for Moussaka: the
+    chain lemmas (`Theft/HitChain.lean`) and the lazy-sampling step are generic, but Moussaka's
+    issuance encoding `t ‖ ctx_iss` is injective only for fixed-length `t`, and its instances
+    have no length bound, so the `H₂⁰` level needs a restriction to bounded, injectively encoded
+    statements (as `hinj` in `ROM/`).
+  - The many-client theorems (`noTheftN_lean_plain`) keep the per-slot terms `ε_hit,i`
+    (`SlotEvN`) as hypotheses: they use SHAKE for the chain hashes, so `progEv_hit` does not
+    apply to them as stated.
   - `Adv^ow ≤ q_K·2^{−127}` for the inverter of `noTheft`. In the games `Com` is concrete code:
     the issuance and spend relations evaluate Keccak-p[800,12], and the zero-knowledge theorems
     need the honest witness to satisfy that concrete relation. So `Com` cannot be a random table
@@ -1230,7 +1266,7 @@ and determinism of `Tag`. The witness satisfies V3 by `change_correct`. ∎
     request, `2N·failEps`;
   - adversaries are deterministic given the oracles (randomized ones by averaging over their
     coins) and make a fixed number `N` of calls with a per-call query budget.
-- Theorem 3 (no theft, N2a): the reduction is in Lean (`noTheft`, `noTheft_lean`, §5). The read budgets of the zero-knowledge hops are proved from the adversary's and the extractor's budgets (`noTheft_lean_reads`). Weak SE is reduced to plain extraction and a programmed-point (chain-collision) term (`noTheft_lean_plain`). The theorem also holds with `H₁`, `H₂⁰…H₂²`, `H₄` and `H_comb` read off uniform tables (`noTheft_leanX_plain`: the zero-knowledge hops are uniform in the base hash record and lift by averaging). Plain extraction and the chain-collision term stay hypotheses there: carrying `ROM/`'s extraction bound over needs the extractor to see the last stage's query log, the last stage as an oracle computation with cell queries to the cipher, and the lazy-to-eager step (§5, "What is not covered"). `Adv^ow` stays the advantage of the explicit inverter: `Com` is evaluated inside the relations, so it cannot be a random table of the game, and some inverter wins with probability `1` (`owAdv_one_ratatouille`). In a random-table model of the standalone experiment a `q`-query inverter has advantage `≤ (q+2)·2^{−126}` (`owAdvColRO_num`). The game has one honest client with one issuance and one spend, adversarial choices that do not read the tables, and one output request. For `U` honest clients and `M` honest spends, with change tokens spent again, the reduction is `noTheftN` (`Theft/RatatouilleMany.lean`, §5): `U·ε_I + M·ε_S + Σ_i δ_i + ε_SE + Σ_j Adv^ow(B_j)`, with weak SE for `U + M` simulated proofs (`WeakSEN`). With the Lean prover the hops' budgets are proved and `WeakSEN` is reduced to plain extraction and one programmed-point term per simulated proof, all hypotheses (`noTheftN_lean_reads`, `noTheftN_lean_plain`).
+- Theorem 3 (no theft, N2a): the reduction is in Lean (`noTheft`, `noTheft_lean`, §5). The read budgets of the zero-knowledge hops are proved from the adversary's and the extractor's budgets (`noTheft_lean_reads`). Weak SE is reduced to plain extraction and a programmed-point (chain-collision) term (`noTheft_lean_plain`). The theorem also holds with `H₁`, `H₂⁰…H₂²`, `H₄` and `H_comb` read off uniform tables (`noTheft_leanX_plain`: the zero-knowledge hops are uniform in the base hash record and lift by averaging). The chain-collision term is bounded there for adversaries that read the chain tables with bounded queries (`noTheft_leanX_hit`: `2·((q_μ+3)·2^{−256} + (q₂₁+3)·2^{−1088} + (q₂₂+3)·2^{−448})`, freshness under the adversary's key since the Lean spend statement does not hash `pk`). Plain extraction stays a hypothesis: carrying `ROM/`'s extraction bound over needs the extractor to see the last stage's query log, the last stage as an oracle computation with cell queries to the cipher, and the lazy-to-eager step (§5, "What is not covered"). `Adv^ow` stays the advantage of the explicit inverter: `Com` is evaluated inside the relations, so it cannot be a random table of the game, and some inverter wins with probability `1` (`owAdv_one_ratatouille`). In a random-table model of the standalone experiment a `q`-query inverter has advantage `≤ (q+2)·2^{−126}` (`owAdvColRO_num`). The game has one honest client with one issuance and one spend, adversarial choices that do not read the tables, and one output request. For `U` honest clients and `M` honest spends, with change tokens spent again, the reduction is `noTheftN` (`Theft/RatatouilleMany.lean`, §5): `U·ε_I + M·ε_S + Σ_i δ_i + ε_SE + Σ_j Adv^ow(B_j)`, with weak SE for `U + M` simulated proofs (`WeakSEN`). With the Lean prover the hops' budgets are proved and `WeakSEN` is reduced to plain extraction and one programmed-point term per simulated proof, all hypotheses (`noTheftN_lean_reads`, `noTheftN_lean_plain`).
 - KP800 as an ideal permutation is a model. Commitment binding and hiding inherit it. In the Lean
   privacy theorems hiding stays a computational hypothesis (`ε_hide`, §2.2).
 - Lemma DS is proved on paper, with the separation table checked in Lean

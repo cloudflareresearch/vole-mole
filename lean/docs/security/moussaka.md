@@ -646,7 +646,11 @@ is **[Lean]** for one honest token (`lean/VoleMole/Theft/`; for `U` tokens see b
   `q` queries: `≤ (q + 2)·2^{−128} + (q + 1)·2^{−360}`. It does not bound `owAdv` of `noRedirect`.
 - Not covered:
   - `PlainSE` in the model of `noRedirect_leanX_plain`, from `ROM/`'s extraction bounds, and a
-    bound on `ε_hit` (`ProgEv … HitOpX`). What separates the two models is listed in
+    bound on `ε_hit` (`ProgEv … HitOpX`). For Ratatouille `ε_hit` is bounded
+    (`noTheft_leanX_hit`, `security/ratatouille.md` §5); the chain lemmas are generic, but
+    Moussaka's issuance encoding `t ‖ ctx_iss` is not injective for variable-length `t`, and the
+    instances have no length bound, so the `H₂⁰` level needs bounded, injectively encoded
+    statements. What separates the two models is listed in
     `security/ratatouille.md` §5 ("What is not covered"): the extractor must see the last stage's
     query log, the last stage must be an oracle computation with cell queries to the cipher, and
     the lazy oracle must be matched with the finite tables.
