@@ -67,8 +67,9 @@ theorem moussakaUnbound_sim_joint_specP (stI : ιI → Statement) (lr : Bool)
       (fun j => normJ (mousUPI lr) (mousUPR lr) π (PI j)) JI)
     (hpreR : ∀ π : PTable, PrefixRuns π.fwd (normJ (mousUPI lr) (mousUPR lr) π PR₀)
       (fun j => normJ (mousUPI lr) (mousUPR lr) π (PR j)) JR)
-    (hsame : ∀ (π : PTable) g, tableQueryLog (runE π.fwd (normJ (mousUPI lr) (mousUPR lr) π PI₀)) g =
-      tableQueryLog (runE π.fwd (normJ (mousUPI lr) (mousUPR lr) π PR₀)) g)
+    (hsame : ∀ (π : PTable) g,
+      tableQueryLog (runE π.fwd (normJ (mousUPI lr) (mousUPR lr) π PI₀)) g =
+        tableQueryLog (runE π.fwd (normJ (mousUPI lr) (mousUPR lr) π PR₀)) g)
     (oa : PTable → OracleComp spec α) (event : PTable → α → Prop)
     (htr : ∀ π g, event π (evalWithAnswerFn (QueryImpl.ofFn g) (oa π)) →
       (∃ j ∈ JI,
