@@ -448,14 +448,17 @@ UOV specification (`≈ 2^{166}`); we could not check the round-3 tables.
 
 The first row applies no variable reduction. With Thomae–Wolf preprocessing (and the guesses of
 Furue–Nakamura–Takagi), which the best forgery attack uses, the same model gives `2^{140.3}`
-multiplications (`ompr-shift-algebra.md` §4.1, `scripts/ompr-shift-algebra/c1_experiments.py`);
+multiplications (`ompr-shift-algebra.md` §4.1, `scripts/ompr-shift-algebra/c1_experiments.py`),
+and with the class attack of `ompr-cryptanalysis-2.md` §3.1 (44 homogeneous quadrics, then
+scaling) `2^{138.5}`;
 for `(112, 44)` it gives `2^{145.6}` bit operations, close to the direct-attack figure we
-remember from the UOV specification. Use the second row as the forgery cost.
+remember from the UOV specification. Use the third row as the forgery cost.
 
 | Attack | Goal | multiplications | bit operations |
 |---|---|---|---|
 | direct, 45 equations in 45 unknowns (no variable-reduction trick) | forgery | `2^{144}` | `2^{151}` |
 | direct, after Thomae–Wolf variable reduction (one equation removed; `ompr-shift-algebra.md` §4.1) | forgery | `2^{140.3}` | `2^{147.4}` |
+| class attack P1 with Thomae–Wolf (`ompr-cryptanalysis-2.md` §3.1) | forgery | `2^{138.5}` | `2^{145.6}` |
 | intersection | key | `2^{194}` | `2^{201}` |
 | Kipnis–Shamir | key | `2^{253}` | `2^{260}` |
 | best dedicated badness system (b) | GPI | `2^{255}` | `2^{262}` |
@@ -510,14 +513,20 @@ by key recovery, which is harder than forgery at these parameters. The multiplie
   one. *Update* (`ompr-cryptanalysis.md` §2.3, Lemma F): for a linear form `w·s` the difference
   is 0 unless `w ∈ 𝒪^⊥`, and then about `2^{−292}` (root mean square over the key, uniform
   `P2`); seeing it takes `2^{600}` samples. On toy keys this statistic recovers the oil space
-  from 2 to 5 times `q^V/δ` samples. Statistics of higher degree are open. A worst-case to average-case reduction for badness would close the gap; the lack of
+  from 2 to 5 times `q^V/δ` samples. Statistics of higher degree: `ompr-cryptanalysis-2.md` §2. A
+  statistic of the vinegar fixed before the key block has a difference of at most `2^{−288}`
+  (root mean square, any degree; proved); every linear one at most `2^{−140}` for almost all
+  keys (proved, fourth moment); the best of degree `d`, heuristically,
+  `2^{−292}·√(11·binom(74+d, d))`. Statistics of the whole point at chosen targets stay open. A worst-case to average-case reduction for badness would close the gap; the lack of
   public symmetries of `Bad` is the obstacle.
 - **(H1)** of §B.3 at the real parameters: prove that `f|_A` is determined by its `F_256`-points
   on a random 3-space, or replace the interpolation.
 - **Dedicated algebraic attacks.** The systems of §B.4 are the obvious ones. A modelling that
   uses `K_s` inside the intersection attack without new variables would be a real improvement;
   we see none.
-- **Quantum.** Not analysed.
+- **Quantum.** `ompr-cryptanalysis-2.md` §4: Kipnis–Shamir with Grover, `≈ 2^{144}` gates at
+  depth `2^{130}`, is the cheapest quantum key recovery we know. GPI against quantum
+  distinguishers was not analysed beyond that.
 - **Fixed keys.** All of this is for keys with `δ(sk)` near `δ_unif`; see [UA] §9.
 
 ## References

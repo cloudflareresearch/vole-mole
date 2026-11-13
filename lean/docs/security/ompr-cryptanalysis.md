@@ -28,6 +28,20 @@ the literature was not retrieved again.
 of, each with a proof that it fails, a cost, or a measurement. OMPR for UOV has had no outside
 cryptanalysis.
 
+**Second pass.** `ompr-cryptanalysis-2.md` (**[OC2]**) reviews this note and treats four of its
+open items. Read the two together. Its findings, in short:
+- **The forgery baseline is `2^{138.5}`, not `2^{140.3}`** ([OC2] P1): `P(s) ∈ F·t` is 44
+  homogeneous quadrics, and a solution scales to a preimage of `t`. Read B0 below as `2^{138.5}`
+  multiplications (`2^{145.6}` bit operations). No attack of this note goes below it.
+- F2 needs two forgeries (the call `D(0)` pays for no target): `2^{139.5}`, above the baseline.
+- K2: zeros of `P` can be tested for being oil vectors; the right statement is that spans of
+  answers meet `𝒪` as often as random subspaces do.
+- K3: the largest linear bias is `≤ 2^{−148}·ε^{−1/4}` for all but a fraction `ε` of keys
+  (proved); a statistic of any degree fixed before the key has bias `≤ 2^{−296}` in root mean
+  square (proved); `X(w)` has an exact formula in the matrices `T` with `L*(T) = w`.
+- S2: with P1 on both sides, 17 collinear shifts cost `2^{138.7}` against `2^{138.5}`.
+- Quantum: Grover-hybrid forgery `≈ 2^{120}` gates; the oracle adds nothing.
+
 ## 0. Summary
 
 **The oracle, exactly (§1).** In the random-oracle model for the vinegar hash, the answers to
@@ -46,7 +60,7 @@ number of challenge targets. "No gain" means: not below the baseline of the same
 
 | # | Attack | Uses | Cost or success probability | Status | Where |
 |---|---|---|---|---|---|
-| B0 | Direct forgery, Thomae–Wolf | `pk` | `2^{140.3}` (`2^{147.4}` bit operations). **Baseline for forgery** | estimate | [SA] §4.1 |
+| B0 | Direct forgery, Thomae–Wolf | `pk` | `2^{140.3}` (`2^{147.4}` bit operations) with 45 equations; **`2^{138.5}` (`2^{145.6}`) with the class attack P1 of [OC2] §3.1. Baseline for forgery** | estimate | [SA] §4.1, [OC2] §3.1 |
 | B1 | Intersection attack | `pk` | `2^{194}`. **Baseline for key recovery** | estimate | [UOS] B.5 |
 | K1 | Vinegar collision: two answers with proportional vinegars differ by an oil vector | (a) | probability `≤ Q²·2^{−585}`: `2^{−457}` at `Q = 2^64`; needs `2^{292.5}` calls | proved (ideal sampler); Lean `vinegar_reuse`; experimental | §2.1 |
 | K2 | Small sets of answers with dependent vinegars (they exist for `r ≥ 9` at `Q = 2^64`) | (a) | not detectable: a zero of `P` in the span of `r` answers is `2^{232}` times more often not an oil vector | proved count; heuristic | §2.2 |
@@ -57,7 +71,7 @@ number of challenge targets. "No gain" means: not below the baseline of the same
 | K7 | Differences of preimages of one target | (a) | a zero of `Q_s`, not an oil vector unless K1 | proved | §2.7 |
 | K8 | Timing, aborts | side channel | retry count is independent of the answer; abort probability `δ^{255}` | [UA] §2 | §2.8 |
 | F1 | Scaling: one call serves a class | (a) | accounted for in the game; one call serves two targets with probability `≤ 255·n²·2^{−360}` | proved | [OR] §3.1, [SA] §4.3 |
-| F2 | Singular line through `D(0)` | (a), 1 call | `2^{140.3}`: equals B0, does not stack with Thomae–Wolf | proved; estimate | [SA] C3 |
+| F2 | Singular line through `D(0)` | (a), 1 call | `2^{138.5}` per forgery with scaling, and two forgeries are needed ([OC2] Lemma B): `2^{139.5}`. Does not stack with Thomae–Wolf | proved; estimate | [SA] C3, [OC2] §3.2 |
 | F3 | Planes of two answers, isotropic pairs | (a) | a given class is met with probability `Q²·2^{−345}` (`2^{−217}` at `Q = 2^64`); isotropic pair `2^{−233}` | heuristic (Hypothesis X) | §3.2 |
 | F4 | Spans of answers, ROS-type combinations | (a) | enumeration: `W` points hit one of `n` targets with probability `W·n·2^{−360}`. Linear combinations fail on the cross terms | heuristic; experimental | §3.3 |
 | F5 | Translating a known preimage; `P` on `K_s` | (a) | the UOV problem ([OR] A3); on `K_s`: 45 quadrics in 74 variables without oil space, `2^{144.1}` | proved; estimate | §3.4 |
@@ -79,8 +93,9 @@ number of challenge targets. "No gain" means: not below the baseline of the same
 - **Conjecture A6** ([OR] §4.6, [SA] §4.4) stands, with this evidence added: for `τ ≤ τ*`, the
   best attack on OMPR⊕τ is the best attack on OMPR, **and the best attack on OMPR that we know is
   the direct forgery attack on UOV, which makes no calls**.
-- **Not covered:** quantum attacks; algorithms we did not think of; an algebraic multi-target
-  attack on MQ (none known); the modelling step "vinegar hash = random oracle".
+- **Not covered here:** algorithms we did not think of; the modelling step "vinegar hash =
+  random oracle". Quantum attacks, statistics of higher degree, the tail of Lemma F and
+  multi-target attacks are in [OC2]; an amortization of XL over many targets remains open.
 
 ---
 
@@ -266,7 +281,8 @@ is correlated with `1_Bad`, a function of `vin(s)`: `|E_Good[g] − E[g]| ≤ δ
 E[g]|`. Quadratic characters `ψ(Q(s))` with `Q` in the span of the public forms are exactly
 unbiased on `Good` (`P` maps `U(Good)` to the uniform law, [UA] Lemma C), and have bias
 `≈ q^{−59}` on `F^N` (a form of rank 118). We know no statistic of degree above one that does
-better than Lemma F. This is the open item of [UOS] B.7; cGPI inherits it.
+better than Lemma F. [OC2] §2 proves this for statistics fixed before the key (any degree) and
+gives a heuristic for the largest one of degree `d`.
 
 ### 2.4 K4: goodness as algebra [proved count]
 
@@ -356,8 +372,7 @@ of the adversary's choice) differ by `e` with `Q_s(e) = P(e) + B(s, e) = 0`.
 - `D` fails with probability `δ^{255}` per target. A failure reveals that 255 hidden vinegars are
   bad, nothing else.
 - A quantum adversary still gets classical answers. Fourier sampling on a superposition over
-  `Good` would give `𝒪^⊥`, but the oracle does not provide one. Quantum attacks on OMPR were not
-  analysed.
+  `Good` would give `𝒪^⊥`, but the oracle does not provide one. Quantum attacks are in [OC2] §4.
 
 ## 3. One more preimage with the oracle
 
@@ -508,6 +523,7 @@ have a uniform block `S`, as pqov's keys have for a uniform `P2`.
   which makes no calls; an adversary of running time `T` gains at most `Q²·2^{−585}` (K1) plus
   what it gains against cGPI from its calls. *Basis:* §1 (the oracle is fibre points and
   goodness), §2 (neither leads to the key below `2^{194}`), §3 (no call pays for two targets).
+  *Update:* the direct forgery is P1 of [OC2], `≈ 2^{138.5}` multiplications.
   *Caveats:* no outside cryptanalysis; cGPI is new and its low-advantage distinguishers are
   bounded only for linear statistics; classical only.
 - **A6.** Unchanged in substance, sharper in scope. The oracles coincide (S1), shifts chosen
@@ -537,18 +553,23 @@ tables of `q^N ≤ 2^{20}` integers. Counts vary with the seed.
 
 ## 8. Open
 
-- cGPI and GPI against statistics of degree above one ([UOS] B.7).
-- Lemma F's tail: a bound on `max_w |X(w)|` for a fixed key, not only the mean square. Pairwise
-  independence gives Chebyshev only.
-- The exact relation between `X(w)` and the number of rank-one representations `N₁(w)` (§2.3).
-- An algebraic multi-target attack on MQ, and the hardness of `P` on `K_s` (§3.4).
-- Quantum attacks on OMPR.
+- cGPI and GPI against statistics of degree above one ([UOS] B.7). *[OC2] §2:* proved for
+  fixed statistics of the vinegar; heuristic for key-dependent ones; open for statistics of the
+  whole answer at chosen targets.
+- Lemma F's tail. *[OC2] Theorem T:* `max_w |c(w)| ≤ 2^{−148}·ε^{−1/4}`, from the fourth
+  moment. A sharp bound is open.
+- The exact relation between `X(w)` and `N₁(w)`. *[OC2] Theorem H:* `X(w) = Σ κ(rank T)` over
+  the matrices `T` with `L*(T) = w`; the rank-one term is `κ(1)·N₁(w)`.
+- An algebraic multi-target attack on MQ, and the hardness of `P` on `K_s` (§3.4). *[OC2] §3:*
+  the class attack P1 (one equation), nothing beyond it; amortizing XL is open.
+- Quantum attacks on OMPR. *[OC2] §4:* estimates; no use of the oracle found.
 - OMPR ⇒ OMPR⊕17 by a reduction ([OR] §7, [SA] §7).
 
 ## References
 
 Citations are from memory.
 
+- [OC2] `ompr-cryptanalysis-2.md`.
 - [UA] `uov-assumptions.md`. [UOS] `uov-open-structure.md`. [OR] `uov-open-reductions.md`.
   [SA] `ompr-shift-algebra.md`. The references [Beu21], [KS98], [TW12], [FNT21], [Péb24a] are
   listed there.
