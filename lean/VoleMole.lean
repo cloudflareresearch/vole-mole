@@ -310,4 +310,5 @@ import VoleMole.Audit.Nonvacuous
 import VoleMole.Audit.Liveness
 import VoleMole.Audit.UnboundROM
 import VoleMole.Audit.IdealTag
+import VoleMole.Audit.SimExtract
 import VoleMole.Audit.OMPRShift
