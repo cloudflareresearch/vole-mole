@@ -430,4 +430,157 @@ theorem viewOf_E (s : S) (u : USh) {b₁ : Beh p₁} {b₂ : Beh p₂} {b₃ : B
 
 end Game
 
+
+/-! ## Events of the view and their read sets -/
+
+section Events
+
+variable {S : Type} {p₁ p₂ p₃ p₄ : Params}
+
+/-- **`f` reads the tables of a view within explicit sets**: the `H₅` table only at `R5`, the
+cipher at `qE` keys, each `H₃` slice at `q3` keys (the `H₂³` tables freely). -/
+structure Rd {X : Sort*} (f : GView S p₁ p₂ p₃ p₄ → X)
+    (R5 : GView S p₁ p₂ p₃ p₄ → Finset (Bytes 37)) (q3 qE : ℕ) : Prop where
+  h5 : ∀ v (G5 : Tab5F), (∀ k ∈ R5 v, v.u.1 k = G5 k) → f (v.withU (G5, v.u.2)) = f v
+  hE : ∃ Q : GView S p₁ p₂ p₃ p₄ → Finset Blk, (∀ v, (Q v).card ≤ qE) ∧
+    ∀ v (E : Cipher), (∀ k ∈ Q v, v.u.2 k = E k) → f (v.withU (v.u.1, E)) = f v
+  h3₁ : ∃ Q : GView S p₁ p₂ p₃ p₄ → Finset (Bytes 16), (∀ v, (Q v).card ≤ q3) ∧
+    ∀ v (G3 : Tab3), (∀ k ∈ Q v, v.v₁.1 k = G3 k) → f (v.with3₁ G3) = f v
+  h3₂ : ∃ Q : GView S p₁ p₂ p₃ p₄ → Finset (Bytes 16), (∀ v, (Q v).card ≤ q3) ∧
+    ∀ v (G3 : Tab3), (∀ k ∈ Q v, v.v₂.1 k = G3 k) → f (v.with3₂ G3) = f v
+  h3₃ : ∃ Q : GView S p₁ p₂ p₃ p₄ → Finset (Bytes 16), (∀ v, (Q v).card ≤ q3) ∧
+    ∀ v (G3 : Tab3), (∀ k ∈ Q v, v.v₃.1 k = G3 k) → f (v.with3₃ G3) = f v
+  h3₄ : ∃ Q : GView S p₁ p₂ p₃ p₄ → Finset (Bytes 16), (∀ v, (Q v).card ≤ q3) ∧
+    ∀ v (G3 : Tab3), (∀ k ∈ Q v, v.v₄.1 k = G3 k) → f (v.with3₄ G3) = f v
+
+variable (Hb : Hashes)
+
+/-- The cipher keys that the keys of a slot's proof read (the reconstruction's nodes). -/
+noncomputable def slotRd (p : Params) (y : Option SW) (o : Option Out) (E : Cipher) : Finset Blk :=
+  match y, o with
+  | some y, some (.ok b) => rdKeys E (ivOf Hb ⟨p, b⟩ ((withP y.1 p).mu1 Hb))
+      (⟨p, b⟩ : Proof).opening (⟨p, b⟩ : Proof).delta
+  | _, _ => ∅
+
+lemma card_slotRd (p : Params) (y : Option SW) (o : Option Out) (E : Cipher) :
+    (slotRd Hb p y o E).card ≤ 4607 := by
+  unfold slotRd
+  split
+  · exact rdKeys_card _ _ _ _
+  · simp
+
+lemma slotKeys_congrE (p : Params) (y : Option SW) (o : Option Out) {E E' : Cipher}
+    (h : ∀ k ∈ slotRd Hb p y o E, E k = E' k) : slotKeys Hb p y o E' = slotKeys Hb p y o E := by
+  unfold slotKeys
+  unfold slotRd at h
+  split
+  · rename_i y b
+    simp only [proofKeys]
+    rw [vInOff_ic_congr Hb CrtGen.tables (withP y.1 p) b _ h,
+      vInOff_ic_congr Hb CrtGen.tables (withP y.1 p) b _ h]
+  · rfl
+
+lemma slotHit_congrE (p : Params) (y : Option SW) (o : Option Out) {E E' : Cipher}
+    (h : ∀ k ∈ slotRd Hb p y o E, E k = E' k) : slotHit Hb p y o E' = slotHit Hb p y o E := by
+  funext k
+  unfold slotHit
+  unfold slotRd at h
+  split
+  · rename_i y b
+    rw [vInOff_ic_congr Hb CrtGen.tables (withP y.1 p) b _ h]
+  · rfl
+
+variable (G : Game S Out SW SW SW SW)
+
+/-- **The bad event, on the outputs** (`bstar`): some proof failed, or for some proof its label
+offset is zero, or a key of `R` or a key of another proof is a gate input of the proof at its
+sibling offset. -/
+def bstarCore (s : S) (o₁ o₂ o₃ o₄ : Option Out) (E : Cipher) (R : Finset (Bytes 37)) : Prop :=
+  (slotErr o₁ ∨ slotErr o₂ ∨ slotErr o₃ ∨ slotErr o₄) ∨
+  (slotZero p₁ (G.σ₁ s) o₁ ∨ ∃ k ∈ R ∪ (slotKeys Hb p₂ (G.σ₂ s o₁) o₂ E ∪
+      slotKeys Hb p₃ (G.σ₃ s o₁ o₂) o₃ E ∪ slotKeys Hb p₄ (G.σ₄ s o₁ o₂ o₃) o₄ E),
+    slotHit Hb p₁ (G.σ₁ s) o₁ E k) ∨
+  (slotZero p₂ (G.σ₂ s o₁) o₂ ∨ ∃ k ∈ R ∪ (slotKeys Hb p₁ (G.σ₁ s) o₁ E ∪
+      slotKeys Hb p₃ (G.σ₃ s o₁ o₂) o₃ E ∪ slotKeys Hb p₄ (G.σ₄ s o₁ o₂ o₃) o₄ E),
+    slotHit Hb p₂ (G.σ₂ s o₁) o₂ E k) ∨
+  (slotZero p₃ (G.σ₃ s o₁ o₂) o₃ ∨ ∃ k ∈ R ∪ (slotKeys Hb p₁ (G.σ₁ s) o₁ E ∪
+      slotKeys Hb p₂ (G.σ₂ s o₁) o₂ E ∪ slotKeys Hb p₄ (G.σ₄ s o₁ o₂ o₃) o₄ E),
+    slotHit Hb p₃ (G.σ₃ s o₁ o₂) o₃ E k) ∨
+  (slotZero p₄ (G.σ₄ s o₁ o₂ o₃) o₄ ∨ ∃ k ∈ R ∪ (slotKeys Hb p₁ (G.σ₁ s) o₁ E ∪
+      slotKeys Hb p₂ (G.σ₂ s o₁) o₂ E ∪ slotKeys Hb p₃ (G.σ₃ s o₁ o₂) o₃ E),
+    slotHit Hb p₄ (G.σ₄ s o₁ o₂ o₃) o₄ E k)
+
+/-- **The bad event of the joint hop**, an event of the view (the same in every hybrid). -/
+def bstar (R5 : GView S p₁ p₂ p₃ p₄ → Finset (Bytes 37)) (v : GView S p₁ p₂ p₃ p₄) : Prop :=
+  bstarCore (p₁ := p₁) (p₂ := p₂) (p₃ := p₃) (p₄ := p₄) Hb G v.s v.o₁ v.o₂ v.o₃ v.o₄ v.u.2 (R5 v)
+
+/-- **The bad event reads what `R5` reads**, and the cipher at `4·4607` more keys (the
+reconstructions of the four proofs). -/
+theorem rd_bstar {R5 : GView S p₁ p₂ p₃ p₄ → Finset (Bytes 37)} {q3 qE : ℕ}
+    (hR : Rd R5 R5 q3 qE) : Rd (bstar Hb G R5) R5 q3 (qE + 4 * 4607) := by
+  classical
+  refine ⟨fun v G5 h => ?_, ?_, ?_, ?_, ?_, ?_⟩
+  · show bstarCore Hb G _ _ _ _ _ _ (R5 (v.withU (G5, v.u.2))) = _
+    rw [hR.h5 v G5 h]; rfl
+  · obtain ⟨Q, hQc, hQ⟩ := hR.hE
+    refine ⟨fun v => Q v ∪ (slotRd Hb p₁ (yv₁ G v) v.o₁ v.u.2 ∪ slotRd Hb p₂ (yv₂ G v) v.o₂ v.u.2 ∪
+      slotRd Hb p₃ (yv₃ G v) v.o₃ v.u.2 ∪ slotRd Hb p₄ (yv₄ G v) v.o₄ v.u.2), fun v => ?_,
+      fun v E h => ?_⟩
+    · have a₁ := card_slotRd Hb p₁ (yv₁ G v) v.o₁ v.u.2
+      have a₂ := card_slotRd Hb p₂ (yv₂ G v) v.o₂ v.u.2
+      have a₃ := card_slotRd Hb p₃ (yv₃ G v) v.o₃ v.u.2
+      have a₄ := card_slotRd Hb p₄ (yv₄ G v) v.o₄ v.u.2
+      have b₀ := card_union_le (Q v) (slotRd Hb p₁ (yv₁ G v) v.o₁ v.u.2 ∪
+        slotRd Hb p₂ (yv₂ G v) v.o₂ v.u.2 ∪ slotRd Hb p₃ (yv₃ G v) v.o₃ v.u.2 ∪
+        slotRd Hb p₄ (yv₄ G v) v.o₄ v.u.2)
+      have b₁ := card_union_le (slotRd Hb p₁ (yv₁ G v) v.o₁ v.u.2 ∪
+        slotRd Hb p₂ (yv₂ G v) v.o₂ v.u.2 ∪ slotRd Hb p₃ (yv₃ G v) v.o₃ v.u.2)
+        (slotRd Hb p₄ (yv₄ G v) v.o₄ v.u.2)
+      have b₂ := card_union_le (slotRd Hb p₁ (yv₁ G v) v.o₁ v.u.2 ∪
+        slotRd Hb p₂ (yv₂ G v) v.o₂ v.u.2) (slotRd Hb p₃ (yv₃ G v) v.o₃ v.u.2)
+      have b₃ := card_union_le (slotRd Hb p₁ (yv₁ G v) v.o₁ v.u.2)
+        (slotRd Hb p₂ (yv₂ G v) v.o₂ v.u.2)
+      have := hQc v
+      beta_reduce
+      omega
+    · simp only [mem_union] at h
+      have e₁ := slotKeys_congrE Hb p₁ (yv₁ G v) v.o₁ (E := v.u.2) (E' := E)
+        fun k hk => h k (Or.inr (Or.inl (Or.inl (Or.inl hk))))
+      have e₂ := slotKeys_congrE Hb p₂ (yv₂ G v) v.o₂ (E := v.u.2) (E' := E)
+        fun k hk => h k (Or.inr (Or.inl (Or.inl (Or.inr hk))))
+      have e₃ := slotKeys_congrE Hb p₃ (yv₃ G v) v.o₃ (E := v.u.2) (E' := E)
+        fun k hk => h k (Or.inr (Or.inl (Or.inr hk)))
+      have e₄ := slotKeys_congrE Hb p₄ (yv₄ G v) v.o₄ (E := v.u.2) (E' := E)
+        fun k hk => h k (Or.inr (Or.inr hk))
+      have f₁ := slotHit_congrE Hb p₁ (yv₁ G v) v.o₁ (E := v.u.2) (E' := E)
+        fun k hk => h k (Or.inr (Or.inl (Or.inl (Or.inl hk))))
+      have f₂ := slotHit_congrE Hb p₂ (yv₂ G v) v.o₂ (E := v.u.2) (E' := E)
+        fun k hk => h k (Or.inr (Or.inl (Or.inl (Or.inr hk))))
+      have f₃ := slotHit_congrE Hb p₃ (yv₃ G v) v.o₃ (E := v.u.2) (E' := E)
+        fun k hk => h k (Or.inr (Or.inl (Or.inr hk)))
+      have f₄ := slotHit_congrE Hb p₄ (yv₄ G v) v.o₄ (E := v.u.2) (E' := E)
+        fun k hk => h k (Or.inr (Or.inr hk))
+      simp only [yv₁, yv₂, yv₃, yv₄] at e₁ e₂ e₃ e₄ f₁ f₂ f₃ f₄
+      show bstarCore Hb G v.s v.o₁ v.o₂ v.o₃ v.o₄ E (R5 (v.withU (v.u.1, E))) = _
+      rw [hQ v E fun k hk => h k (Or.inl hk)]
+      simp only [bstar, bstarCore, e₁, e₂, e₃, e₄, f₁, f₂, f₃, f₄]
+  · obtain ⟨Q, hQc, hQ⟩ := hR.h3₁
+    refine ⟨Q, hQc, fun v G3 h => ?_⟩
+    show bstarCore Hb G _ _ _ _ _ _ (R5 (v.with3₁ G3)) = _
+    rw [hQ v G3 h]; rfl
+  · obtain ⟨Q, hQc, hQ⟩ := hR.h3₂
+    refine ⟨Q, hQc, fun v G3 h => ?_⟩
+    show bstarCore Hb G _ _ _ _ _ _ (R5 (v.with3₂ G3)) = _
+    rw [hQ v G3 h]; rfl
+  · obtain ⟨Q, hQc, hQ⟩ := hR.h3₃
+    refine ⟨Q, hQc, fun v G3 h => ?_⟩
+    show bstarCore Hb G _ _ _ _ _ _ (R5 (v.with3₃ G3)) = _
+    rw [hQ v G3 h]; rfl
+  · obtain ⟨Q, hQc, hQ⟩ := hR.h3₄
+    refine ⟨Q, hQc, fun v G3 h => ?_⟩
+    show bstarCore Hb G _ _ _ _ _ _ (R5 (v.with3₄ G3)) = _
+    rw [hQ v G3 h]; rfl
+
+end Events
+
 end VoleMole.ZK.Sim
