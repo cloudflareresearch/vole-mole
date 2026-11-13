@@ -4,7 +4,64 @@ import VoleMole.Assumptions.UOVLinks
 /-!
 # Theorem 6 at PomFRIT: OMPR is at most PomFRIT one-more unforgeability plus completeness
 
-WIP.
+`lean/docs/security/uov-assumptions.md` §5.6 (T6), `lean/docs/security/pomfrit.md` §6.4, G9. The
+generic core `Blind.ompr_le_blind` instantiated at PomFRIT's real one-more forgery game.
+
+**The game for a forger with coins** (`gameB`). `Pomfrit.Forger` has no randomness. A `ForgerB`
+has coins (a `ProbComp` layer) and its own random oracle `AR` (coins on demand), besides
+`Pomfrit.Forger`'s oracles (the hashes and the cipher, `H_T`, the Issuer). `gameB` is
+`Pomfrit.game` for it: the composed adversary `AcompB` runs the forger wrapped by `wrapImplB` (its
+own oracle forwarded, everything else as `Pomfrit.wrapImpl`), then `Pomfrit.verAll`. The world of
+the `OneMore.omuf` instance is the forger's oracle and the hashes (`WB`). For a forger without
+coins it is `Pomfrit.game` (`gameB_liftF`: the same win probability).
+
+**The client** (`PomClient`). A PomFRIT client against the hashes and the cipher (`specIC`): coins,
+step 1 of session `k` for the message `msgOf k` (the step-1 signature bytes, `chal1`, a state), and
+the final signature from the state, the `H_T` answer and the Issuer's response. Session `k`'s
+label is `hash_to_target`'s input `tgtIn` for its message (`label`); labels of distinct sessions
+are distinct (`label_ne`, from `tgtIn_inj`). The blinding is `0`: the forger is not an honest
+client and need not blind, and PomFRIT's relation holds for every witness prefix `r`
+(`P(s) = H_T(x) ⊕ r` with `r = 0`).
+
+**The forger** (`blindForger`). From an OMPR adversary `B`: `B`'s coins and the client's; `B`'s
+world goes to the forger's random oracle; `B`'s `k`-th target request (`k < n`) is answered by
+step 1 of session `k` and the `H_T` answer at its label; `B`'s preimage queries go to the Issuer;
+then the claimed sessions are finished with `B`'s preimages. It makes at most as many `H_T`
+queries as `B` makes target requests (`blindForger_bound`).
+
+**The reduction to `ompr_le_blind`.** The client as a `Blind.Client` (`toClient`): coins are the
+cipher table and the client's coins; `start` is step 1 with the cipher answered by the table
+(`cellsBy`); `post` finishes the claimed sessions and runs PomFRIT's verification of the
+signatures (`flagV`: `Pomfrit.verOne`'s decision, `verOneV`). Its labels are distinct for all keys
+and coins (`distinct_toClient`). The blind game of `ompr_le_blind` and `gameB` with the blinding
+forger have the same key, flag and final state (`projF_eqd`), because the two composed adversaries
+have the same flag as oracle computations (`star`): with hint `0` the wrapper's log is write-only
+(`wrapB_fst`), the verifier's decision does not read the log (`verOne_snd`), and the forger's
+handler under the wrapper is `Blind.blindImpl` of `toClient` (`blindU_step`).
+
+**Theorems.**
+* `pomfrit_T6`: for every OMPR adversary `B`, every client `cl`, every `n`, `ℓ`,
+
+      Adv^{ompr}(B; n, ℓ) ≤ Pr[PomWin(blindForger cl n B)] + compFail,
+
+  `PomWin` in `gameB` (programmed target the `H_T` answer: `addHint` with hint `0`), `compFail`
+  the probability that `B`'s claims are `ℓ + 1` preimages of distinct sessions' targets within
+  `ℓ` Issuer queries but the client's signatures are not all accepted.
+* `pomfrit_T6_bound`: for `B` with at most `Q` target requests, the same with `Adv^{ompr}(B; Q, ℓ)`
+  and the game with `Q + ℓ + 1` targets (U1's convention `n = Q_T + ℓ + 1`; `advOMPR_pad`: unused
+  targets do not matter).
+
+**Not here.** A bound on `compFail` for the Lean client. It needs the Lean prover's step 1 and
+step 2 (`Prover.voleGen`, `Prover.proveCommit`) as oracle computations over `specIC`, equal per
+table to the executable prover (hash queries as for `verifyQ`; cipher queries for the full GGM
+tree, the leaf commitments, the VOLE expansion and `u_mask`, as `ROM/VerifyIC.lean` does for the
+verifier), and completeness in this lazy model: per claimed session, outside `GrindBad` of the
+`H₂³` answers at its grinding prefix the verifier accepts (`ZK.Sim.realRun2_complete`), and that
+prefix is a function of the run without the `H₂³` answers (`B` never sees them, step 1 does not
+read them, and a session's prefix does not depend on the other sessions' grinding), so
+`compFail ≤ (ℓ + 1)·2⁻¹¹³`. On paper (`pomfrit.md` G9).
+
+No `sorry`, no `axiom`.
 -/
 
 open OracleComp OracleSpec VoleMole.ROM VoleMole.ROM.IC VoleMole.ROM.OneMore
