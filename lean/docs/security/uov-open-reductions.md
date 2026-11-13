@@ -355,7 +355,7 @@ Consequences.
 - A key carries one `c`. OMPR⊕τ has up to τ shifts per request, chosen by the adversary, different
   for each request. A reduction to OMPR cannot change its key per request, and its oracle is for
   `P`.
-- The only public maps `(φ, T)` with `P ∘ φ = T ∘ P` that we know are the scalings of Lemma S.
+- The only public maps `(φ, T)` with `P ∘ φ = T ∘ P` are the scalings of Lemma S, for additive or affine `φ` with `φ` bijective or `T` injective and all keys but a fraction `256^{−976}` (`ompr-shift-algebra.md` T3, §8, paper).
   They act on targets linearly, not by translation.
 
 ### 4.3 Translating a preimage is the UOV problem
@@ -515,7 +515,8 @@ coincide ([UA] Prop. 8(c)), Lemma A3, and the absence of a translation symmetry 
    problem, and a reduction that solves it does not need the adversary.
 3. *Re-randomizing targets.* To make all τ candidates useful, the reduction needs challenge targets
    with prescribed differences `δ_a ⊕ δ_b`. OMPR targets are independent. The public symmetries
-   of the target space are scalings (Lemma S), which do not produce prescribed differences.
+   of the target space are scalings (Lemma S; the only additive or affine ones for all keys but
+   `256^{−976}`, `ompr-shift-algebra.md` T3), which do not produce prescribed differences.
 4. *Knowing the shift in advance.* If the reduction can learn `a_k` before it fixes `h_k`, it
    embeds the right shift and loses nothing. This is what PomFRIT's first-phase extractor `E₁`
    does (`pomfrit.md` Lemma P), up to the event that the prover completes with another prefix.
