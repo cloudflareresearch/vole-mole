@@ -1,5 +1,6 @@
 import VoleMole.Theft.RatatouilleLean
 import VoleMole.Theft.MoussakaLean
+import VoleMole.Theft.SimExtractLean
 
 /-!
 # Audit of the non-malleability theorems (`Theft/`)
@@ -16,6 +17,16 @@ import VoleMole.Theft.MoussakaLean
   the honest redemption request replayed under the same Anchor Set, contexts and digest is not
   fresh (`replay_not_freshR`), and the same bytes under another challenge digest are
   (`redirect_freshR`): redirecting is what the theorem bounds.
+
+* **The budget and plain-extraction versions can hold.** `noTheft_lean_reads`,
+  `noRedirect_lean_reads` (`Theft/Reads.lean`: the hops' budgets proved) and
+  `noTheft_lean_plain`, `noRedirect_lean_plain` (`Theft/SimExtractLean.lean`: `WeakSE2` replaced
+  by plain extraction and programmed-point hits) are instantiated for the same adversaries, with
+  a constant extractor (`StageBudget.const`, `plainSE_one`, `progEv_one`).
+* **`Adv^ow` is not small in this model** (`owAdv_one_ratatouille`, `owAdv_one_moussaka`): `Com` is
+  a fixed function here and the inverter any function, so an inverter that picks a preimage of the
+  commitment it is given wins with probability `1`. The note's `q_K·2⁻¹²⁷` needs `KP800` as an
+  ideal permutation (a random table) and an inverter with a bounded number of queries to it.
 
 No `sorry`, no `axiom`.
 -/
@@ -78,6 +89,41 @@ example (q3 q5 qE : ℕ) :=
     (fun ω c₁ g₁ => budget_of_eq (distS_thief0 _ _ ω c₁ g₁))
     (weakSE2_one _ _ _ _ _ _ _ _ _) fun _ _ => trivial
 
+/-- `noTheft_lean_reads`'s hypotheses hold for the trivial thief: the budgets of a constant last
+stage and a constant extractor. -/
+example :=
+  noTheft_lean_reads (R := Blk → Blk) (thief0 _ _ _) ext0 (AdmE := fun _ => True)
+    (a3 := 0) (a5 := 0) (aE := 0) (x3 := 0) (x5 := 0) (xE := 0)
+    (fun _ _ => StageBudget.const _) (fun _ _ => StageBudget.const _)
+    (weakSE2_one _ _ _ _ _ _ _ _ _) fun _ _ => trivial
+
+/-- A constant witness. -/
+def wit0 : Wit :=
+  (⟨Vector.replicate 24 0, Vector.replicate 16 0⟩,
+    ⟨0, Vector.replicate 16 0, 0, Vector.replicate 119 0, Vector.replicate 24 0, 0,
+      Vector.replicate 16 0⟩)
+
+/-- `noTheft_lean_plain`'s hypotheses hold for the trivial thief and a constant extractor. -/
+example :=
+  noTheft_lean_plain (R := Blk → Blk) (thief0 _ _ _) (e := fun _ _ _ _ _ _ => wit0)
+    (a3 := 0) (a5 := 0) (aE := 0) (x3 := 0) (x5 := 0) (xE := 0)
+    (fun _ _ => StageBudget.const _) (fun _ _ => StageBudget.const _)
+    (plainSE_one _ _ _ _ _) (progEv_one _ _ _ _ _ _ _)
+
+/-- **`Adv^ow` is `1` for some inverter** in this model: `Com` is a fixed function, and the
+inverter that picks an opening of the first commitment at `t = 0` always succeeds. -/
+theorem owAdv_one_ratatouille (ctx : Context) :
+    ∃ B : Nullifier → (Credits → Commitment) → (Credits → Commitment) → Unit →
+      Bool × Credits × Open4, owAdv ctx B = 1 := by
+  refine ⟨fun nf L₁ _ _ => (false, 0, (nf, ctx, 0,
+    Classical.epsilon fun r => com nf ctx 0 r = L₁ 0)), ?_⟩
+  unfold owAdv
+  rw [pr_congr (Q := fun _ => True) fun z => ⟨fun _ => trivial, fun _ => ?_⟩, pr_const]
+  · simp
+  · simp only [comOf, Bool.false_eq_true, ite_false]
+    exact Classical.epsilon_spec (p := fun r => com (vec z.1.1.1) ctx 0 r = com (vec z.1.1.1) ctx 0
+      (vec z.1.1.2)) ⟨_, rfl⟩
+
 /-- **F2 is excluded**: the honest spend request, copied verbatim under the Client's context, is
 not fresh. -/
 theorem copy_not_freshS (A : Thief Z G S) (o₁ : Except Error (IssueRequest Z)) (q : SpendRequest Z)
@@ -132,6 +178,33 @@ example (q3 q5 qE : ℕ) :=
     (fun ω r₂ g₂ => budget_of_eq (distI_thiefM _ ω r₂ g₂))
     (fun ω c₁ g₁ => budget_of_eq (distR_thiefM _ _ ω c₁ g₁))
     (weakSE2_one _ _ _ _ _ _ _ _ _) fun _ _ => trivial
+
+/-- `noRedirect_lean_reads`'s hypotheses hold for the trivial adversary. -/
+example :=
+  noRedirect_lean_reads (R := Blk → Blk) (thiefM _ _) extM (AdmE := fun _ => True)
+    (a3 := 0) (a5 := 0) (aE := 0) (x3 := 0) (x5 := 0) (xE := 0)
+    (fun _ _ => StageBudget.const _) (fun _ _ => StageBudget.const _)
+    (weakSE2_one _ _ _ _ _ _ _ _ _) fun _ _ => trivial
+
+/-- `noRedirect_lean_plain`'s hypotheses hold for the trivial adversary and a constant
+extractor. -/
+example :=
+  noRedirect_lean_plain (R := Blk → Blk) (thiefM _ _) (e := fun _ _ _ _ _ _ => [])
+    (a3 := 0) (a5 := 0) (aE := 0) (x3 := 0) (x5 := 0) (xE := 0)
+    (fun _ _ => StageBudget.const _) (fun _ _ => StageBudget.const _)
+    (plainSE_one _ _ _ _ _) (progEv_one _ _ _ _ _ _ _)
+
+/-- **`Adv^ow` is `1` for some inverter** in this model (Moussaka): the inverter that picks an
+opening of the commitment it is given always succeeds. -/
+theorem owAdv_one_moussaka (ci cr : Bytes) :
+    ∃ B : Bytes → Bytes → Unit → Moussaka.Open4, Moussaka.owAdv ci cr B = 1 := by
+  refine ⟨fun nf t _ => (nf, ci, cr, Classical.epsilon fun r => com nf ci cr r = t), ?_⟩
+  unfold Moussaka.owAdv
+  rw [pr_congr (Q := fun _ => True) fun z => ⟨fun _ => trivial, fun _ => ?_⟩, pr_const]
+  · simp
+  · simp only [Moussaka.comOf]
+    exact Classical.epsilon_spec (p := fun r => com (List.ofFn z.1.1) ci cr r =
+      com (List.ofFn z.1.1) ci cr (List.ofFn z.1.2)) ⟨_, rfl⟩
 
 /-- **A replay is excluded**: the honest redemption request under the honest Anchor Set, contexts
 and digest is not fresh. -/
