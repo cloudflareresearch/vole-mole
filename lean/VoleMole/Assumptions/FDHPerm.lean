@@ -755,4 +755,310 @@ theorem combF_inv (hemb : Function.Injective emb) :
 
 end Core
 
+/-! ## The reduction's budget -/
+
+section RedBudget
+
+variable {DR : Type} [DecidableEq DR] {AR : DR → Type} [∀ d, SampleableType (AR d)] {M T Z S : Type}
+  [Fintype M] [Inhabited T] [DecidableEq T] [DecidableEq Z] [SampleableType T] [SampleableType Z]
+  [Fintype T] [Fintype Z] (emb : M → T × Z) [SampleableType (Bc emb)]
+
+/-- A hash query. -/
+def isHR {X : Type} : X ⊕ (M ⊕ M) → Bool
+  | .inr (.inl _) => true
+  | _ => false
+
+/-- A signing query. -/
+def isSR {X : Type} : X ⊕ (M ⊕ M) → Bool
+  | .inr (.inr _) => true
+  | _ => false
+
+theorem isQueryBoundP_wQF (p : _ → Prop) [DecidablePred p] (d : DR ⊕ (ℕ ⊕ ℕ)) (n : ℕ) :
+    IsQueryBoundP (wQF emb (AR := AR) (S := S) d) p n ↔ (p (.inl d) → 0 < n) :=
+  isQueryBoundP_query_iff _ _ _
+
+theorem isQueryBoundP_hQF (p : _ → Prop) [DecidablePred p] (m : M) (n : ℕ) :
+    IsQueryBoundP (hQF emb (AR := AR) (S := S) m) p n ↔ (p (.inr (.inl m)) → 0 < n) :=
+  isQueryBoundP_query_iff _ _ _
+
+theorem isQueryBoundP_sQF (p : _ → Prop) [DecidablePred p] (m : M) (n : ℕ) :
+    IsQueryBoundP (sQF emb (AR := AR) (S := S) m) p n ↔ (p (.inr (.inr m)) → 0 < n) :=
+  isQueryBoundP_query_iff _ _ _
+
+/-- The simulated forward step makes at most one hash query and no signing query. -/
+theorem simFwd_bound (p : _ → Prop) [DecidablePred p] (hw : ∀ d, ¬p (.inl d))
+    (b : T × Z) (s : PTab (T × Z) × ℕ) (n : ℕ) (hn : ∀ m, p (.inr (.inl m)) → 0 < n) :
+    IsQueryBoundP (simFwd emb (AR := AR) (S := S) b s) p n := by
+  unfold simFwd
+  cases fwdFind s.1 b with
+  | some y => trivial
+  | none =>
+    cases CTUFPerm.embInv emb b with
+    | none =>
+      exact (isQueryBoundP_map_iff (p := p) _ _ _).2
+        ((isQueryBoundP_wQF emb _ _ _).2 fun h => absurd h (hw _))
+    | some m =>
+      rw [← Nat.add_zero n]
+      exact isQueryBoundP_bind ((isQueryBoundP_hQF emb _ _ _).2 (hn m)) fun _ _ =>
+        (isQueryBoundP_map_iff (p := p) _ _ _).2
+          ((isQueryBoundP_wQF emb _ _ _).2 fun h => absurd h (hw _))
+
+/-- One step of the simulation makes at most one hash query, and only for a forward or signing
+query. -/
+theorem simCF_hash_bound (t : (DR ⊕ M) ⊕ (Bool × (T × Z))) (s : PTab (T × Z) × ℕ) :
+    IsQueryBoundP (((simCF emb (AR := AR) (S := S)) t).run s) (fun q => isHR q = true)
+      (if isFwdF t = true ∨ isSignF t = true then 1 else 0) := by
+  have hw : ∀ d, ¬(isHR (M := M) (.inl d : (DR ⊕ (ℕ ⊕ ℕ)) ⊕ (M ⊕ M)) = true) := by simp [isHR]
+  rcases t with (d | m) | ⟨_ | _, b⟩
+  · simp only [simCF, StateT.run_mk]
+    exact (isQueryBoundP_map_iff _ _ _).2 ((isQueryBoundP_wQF emb _ _ _).2 fun h => absurd h (hw _))
+  · simp only [simCF, StateT.run_mk]
+    rw [show (if isFwdF (.inl (.inr m) : (DR ⊕ M) ⊕ (Bool × (T × Z))) = true ∨
+      isSignF (.inl (.inr m) : (DR ⊕ M) ⊕ (Bool × (T × Z))) = true then 1 else 0) = 1 + 0 by
+        simp [isSignF]]
+    exact isQueryBoundP_bind (simFwd_bound emb _ hw _ _ _ fun _ _ => Nat.one_pos) fun _ _ =>
+      (isQueryBoundP_map_iff _ _ _).2 ((isQueryBoundP_sQF emb _ _ _).2 fun h => by simp [isHR] at h)
+  · simp only [simCF, StateT.run_mk]
+    cases invFind s.1 b with
+    | some y => trivial
+    | none =>
+      exact (isQueryBoundP_map_iff _ _ _).2 ((isQueryBoundP_wQF emb _ _ _).2 fun h => absurd h (hw _))
+  · simp only [simCF]
+    exact simFwd_bound emb _ hw _ _ _ fun _ _ => by simp [isFwdF]
+
+/-- One step of the simulation makes at most one signing query, and only for a signing query. -/
+theorem simCF_sign_bound (t : (DR ⊕ M) ⊕ (Bool × (T × Z))) (s : PTab (T × Z) × ℕ) :
+    IsQueryBoundP (((simCF emb (AR := AR) (S := S)) t).run s) (fun q => isSR q = true)
+      (if isSignF t = true then 1 else 0) := by
+  have hw : ∀ d, ¬(isSR (M := M) (.inl d : (DR ⊕ (ℕ ⊕ ℕ)) ⊕ (M ⊕ M)) = true) := by simp [isSR]
+  have hh : ∀ m, (isSR (.inr (.inl m) : (DR ⊕ (ℕ ⊕ ℕ)) ⊕ (M ⊕ M)) = true) → 0 < 0 := by
+    simp [isSR]
+  rcases t with (d | m) | ⟨_ | _, b⟩
+  · simp only [simCF, StateT.run_mk]
+    exact (isQueryBoundP_map_iff _ _ _).2 ((isQueryBoundP_wQF emb _ _ _).2 fun h => absurd h (hw _))
+  · simp only [simCF, StateT.run_mk]
+    rw [show (if isSignF (.inl (.inr m) : (DR ⊕ M) ⊕ (Bool × (T × Z))) = true then 1 else 0) =
+      0 + 1 by simp [isSignF]]
+    exact isQueryBoundP_bind (simFwd_bound emb _ hw _ _ _ hh) fun _ _ =>
+      (isQueryBoundP_map_iff _ _ _).2 ((isQueryBoundP_sQF emb _ _ _).2 fun _ => Nat.one_pos)
+  · simp only [simCF, StateT.run_mk]
+    cases invFind s.1 b with
+    | some y => trivial
+    | none =>
+      exact (isQueryBoundP_map_iff _ _ _).2 ((isQueryBoundP_wQF emb _ _ _).2 fun h => absurd h (hw _))
+  · simp only [simCF]
+    exact simFwd_bound emb _ hw _ _ _ hh
+
+/-- **The reduction's budget**: at most `q_f + 1 + q_S` hash and `q_S` signing queries. -/
+theorem simA_budget (a : OracleComp (specFP AR M T Z S) (M × S)) {qf qi qS : ℕ}
+    (ha : FPBudget qf qi qS a) :
+    IsQueryBoundP (simA emb a) (fun q => isHR q = true) (qf + 1 + qS) ∧
+      IsQueryBoundP (simA emb a) (fun q => isSR q = true) qS := by
+  obtain ⟨hfw, -, hsg⟩ := ha
+  have hfw' : IsQueryBoundP (a >>= fpFinal emb) (fun t => isFwdF t = true) (qf + 1) :=
+    isQueryBoundP_bind hfw fun o _ => fpFinal_bound _ emb o 1 fun _ _ => Nat.one_pos
+  have hsg' : IsQueryBoundP (a >>= fpFinal emb) (fun t => isSignF t = true) (qS + 0) :=
+    isQueryBoundP_bind hsg fun o _ => fpFinal_bound _ emb o 0 fun _ h => by simp [isSignF] at h
+  refine ⟨?_, ?_⟩
+  · unfold simA
+    rw [isQueryBoundP_map_iff]
+    exact isQueryBoundP_run_simulateQ (simCF emb) _ _ (simCF_hash_bound emb) _ _ _
+      (CTUFPerm.isQueryBoundP_or _ _ _ _ _ hfw' (by simpa using hsg'))
+  · unfold simA
+    rw [isQueryBoundP_map_iff]
+    exact isQueryBoundP_run_simulateQ (simCF emb) _ _ (simCF_sign_bound emb) _ _ _
+      (by simpa using hsg')
+
+/-- The reduction's hash and signing queries together. -/
+theorem simA_isHS (a : OracleComp (specFP AR M T Z S) (M × S)) {qf qi qS : ℕ}
+    (ha : FPBudget qf qi qS a) : IsQueryBoundP (simA emb a) IdealTag.isHS (qf + 1 + qS + qS) := by
+  obtain ⟨h1, h2⟩ := simA_budget emb a ha
+  refine isQueryBoundP_of_imp _ _ ?_ _ _ (CTUFPerm.isQueryBoundP_or _ _ _ _ _ h1 h2)
+  rintro ((d | _) | (m | m)) h <;> simp_all [IdealTag.isHS, isHR, isSR]
+
+end RedBudget
+
+/-! ## Counting the det-FDH challenger's queries -/
+
+section Count
+
+variable {ι : Type} {spec : OracleSpec ι} {σ : Type}
+
+/-- **A counter that a step increases by at most one, and only on queries of kind `p`, grows by
+at most the number of such queries.** -/
+theorem count_le (impl : QueryImpl spec (StateT σ ProbComp)) (cnt : σ → ℕ) (p : ι → Prop)
+    [DecidablePred p]
+    (hstep : ∀ q s, ∀ z ∈ support ((impl q).run s), cnt z.2 ≤ cnt s + if p q then 1 else 0)
+    {α : Type} (oa : OracleComp spec α) :
+    ∀ k s, IsQueryBoundP oa p k → ∀ z ∈ support ((simulateQ impl oa).run s), cnt z.2 ≤ cnt s + k := by
+  induction oa using OracleComp.inductionOn with
+  | pure x =>
+    intro k s _ z hz
+    simp only [simulateQ_pure, StateT.run_pure, support_pure, Set.mem_singleton_iff] at hz
+    subst hz; exact Nat.le_add_right _ _
+  | query_bind q f ih =>
+    intro k s hb z hz
+    rw [isQueryBoundP_query_bind_iff] at hb
+    have hk : p q → 0 < k := fun hp => hb.1.resolve_left (not_not.2 hp)
+    simp only [simulateQ_bind, simulateQ_spec_query, StateT.run_bind, mem_support_bind_iff] at hz
+    obtain ⟨w, hw, hz⟩ := hz
+    have h1 := hstep q s w hw
+    have h2 := ih w.1 _ w.2 (hb.2 w.1) z hz
+    split_ifs at h1 h2 with hp
+    · have := hk hp; omega
+    · omega
+
+variable {DR : Type} [DecidableEq DR] {AR : DR → Type} [∀ d, SampleableType (AR d)]
+  {M : Type} [DecidableEq M] {T S : Type} [SampleableType T]
+
+omit [DecidableEq DR] [∀ d, SampleableType (AR d)] in
+theorem hStep_hq (m : M) (c : FDHSt AR M T) : ∀ w ∈ support (hStep m c), w.2.hq = c.hq := by
+  intro w hw
+  unfold hStep at hw
+  cases h : c.h m with
+  | some t =>
+    rw [h] at hw; simp only [support_pure, Set.mem_singleton_iff] at hw; subst hw; rfl
+  | none =>
+    rw [h] at hw
+    erw [support_map] at hw
+    obtain ⟨t, -, rfl⟩ := hw; rfl
+
+/-- **The det-FDH challenger counts at most the hash queries.** -/
+theorem fdhImpl_hq (D : T → S) {α : Type} (oa : OracleComp (specF AR M T S) α) (k : ℕ)
+    (hk : IsQueryBoundP oa (fun q => isHR q = true) k) :
+    ∀ z ∈ support ((simulateQ (fdhImpl D) oa).run fdh0), z.2.hq ≤ k := by
+  intro z hz
+  have := count_le (fdhImpl D) FDHSt.hq _ (fun q c z hz => ?_) oa k fdh0 hk z hz
+  · simpa [fdh0] using this
+  rcases q with d | (m | m)
+  · simp only [fdhImpl, StateT.run_mk] at hz
+    erw [support_map] at hz
+    obtain ⟨r, -, rfl⟩ := hz; simp
+  · simp only [fdhImpl, StateT.run_mk] at hz
+    erw [support_map] at hz
+    obtain ⟨r, hr, rfl⟩ := hz
+    simp [hStep_hq m c r hr, isHR]
+  · simp only [fdhImpl, StateT.run_mk] at hz
+    erw [support_map] at hz
+    obtain ⟨r, hr, rfl⟩ := hz
+    simp [hStep_hq m c r hr, isHR]
+
+/-- **The det-FDH challenger logs at most the signing queries.** -/
+theorem fdhImpl_signed (D : T → S) {α : Type} (oa : OracleComp (specF AR M T S) α) (k : ℕ)
+    (hk : IsQueryBoundP oa (fun q => isSR q = true) k) :
+    ∀ z ∈ support ((simulateQ (fdhImpl D) oa).run fdh0), z.2.signed.length ≤ k := by
+  intro z hz
+  have := count_le (fdhImpl D) (fun c => c.signed.length) _ (fun q c z hz => ?_) oa k fdh0 hk z hz
+  · simpa [fdh0] using this
+  rcases q with d | (m | m)
+  · simp only [fdhImpl, StateT.run_mk] at hz
+    erw [support_map] at hz
+    obtain ⟨r, -, rfl⟩ := hz; simp
+  · simp only [fdhImpl, StateT.run_mk] at hz
+    erw [support_map] at hz
+    obtain ⟨r, hr, rfl⟩ := hz
+    simp [(IdealTag.hStep_support m c r hr).1, isSR]
+  · simp only [fdhImpl, StateT.run_mk] at hz
+    erw [support_map] at hz
+    obtain ⟨r, hr, rfl⟩ := hz
+    simp [(IdealTag.hStep_support m c r hr).1, isSR]
+
+end Count
+
+/-! ## The bound -/
+
+section Final
+
+variable {DR : Type} [DecidableEq DR] {AR : DR → Type} [∀ d, SampleableType (AR d)]
+  {M T Z S : Type} [Fintype M] [DecidableEq M] [Inhabited T] [DecidableEq T] [DecidableEq Z]
+  [SampleableType T] [SampleableType Z] [Fintype T] [Fintype Z] {emb : M → T × Z}
+  [SampleableType (Bc emb)] {PK SK : Type}
+
+theorem projROF_empty : projROF emb (∅ : (specR (ARF AR emb)).QueryCache) = ∅ :=
+  QueryCache.ext fun _ => rfl
+
+/-- **Per key and forger: a win in the hybrid is a det-FDH win of the reduction** (before the
+challenger's final evaluation of `H(m*)`), within `q_f + 1 + q_S` hash and `q_S` signing
+queries. -/
+theorem hyb_le_fdh (hemb : Function.Injective emb) (IsPre : PK → S → T → Prop) (pk : PK)
+    (D : T → S) (a : OracleComp (specFP AR M T Z S) (M × S)) {qf qi qS : ℕ}
+    (ha : FPBudget qf qi qS a) :
+    Pr{let r ← (simulateQ (fhImpl D emb) (a >>= fpFinal emb)).run ([], ⟨∅, []⟩)}[
+        FPWin IsPre pk emb r] ≤
+      Pr{let r ← (simulateQ (fdhImpl D) (simA emb a)).run fdh0}[
+        r.1.1 ∉ r.2.signed ∧ (∃ c, r.2.h r.1.1 = some c ∧ IsPre pk r.1.2 c) ∧
+          r.2.hq ≤ qf + 1 + qS ∧ r.2.signed.length ≤ qS] := by
+  set G := a >>= fpFinal emb
+  set s₀ : (PTab (T × Z) × ℕ) × FDHSt (ARF AR emb) M T := (([], 0), fdh0)
+  have hs₀ : InvF emb s₀ := ⟨fun _ _ => ⟨rfl, rfl⟩, fun _ _ => rfl, fun e he => by
+    simp [s₀] at he, fun e he => by simp [s₀] at he⟩
+  have hproj := LazyIdeal.simulateQ_proj_eqd_inv (combF emb D) (fhImpl D emb) (projF emb)
+    (InvF emb) (combF_inv emb D hemb) (fun q s hs => combF_step emb D hemb q s hs) G s₀ hs₀
+  have hp0 : projF emb s₀ = (([] : PTab (T × Z)), (⟨∅, []⟩ : FPSt AR M)) := by
+    simp only [projF, s₀, fdh0, projROF_empty]
+  rw [hp0] at hproj
+  have e1 := hproj.prEvent_eq fun r => FPWin IsPre pk emb r
+  rw [prEvent_map] at e1
+  rw [← e1]
+  have hInv := simulateQ_run_preservesInv (combF emb D) (InvF emb) (combF_inv emb D hemb) G s₀ hs₀
+  have hcol : (simulateQ (fdhImpl D) (simA emb a)).run fdh0 =
+      (fun z => (z.1, z.2.2)) <$> (simulateQ (combF emb D) G).run s₀ := by
+    unfold simA
+    rw [simulateQ_map, StateT.run_map, collapseFP, Functor.map_map]
+  obtain ⟨hbH, hbS⟩ := simA_budget emb a ha
+  have hH := fdhImpl_hq D (simA emb a) _ hbH
+  have hS := fdhImpl_signed D (simA emb a) _ hbS
+  calc _ ≤ Pr{let z ← (simulateQ (combF emb D) G).run s₀}[
+          z.1.1 ∉ z.2.2.signed ∧ ∃ c, z.2.2.h z.1.1 = some c ∧ IsPre pk z.1.2 c] := by
+        refine prEvent_mono_of_support _ _ _ fun z hz hW => ?_
+        obtain ⟨hn, c, hc, hp⟩ := hW
+        refine ⟨hn, c, ?_, hp⟩
+        unfold CTUFPerm.comP at hc
+        obtain ⟨y, hy, rfl⟩ := Option.map_eq_some_iff.1 hc
+        exact h_of_fwdFind emb (hInv z hz) hy
+    _ = Pr{let r ← (simulateQ (fdhImpl D) (simA emb a)).run fdh0}[
+          r.1.1 ∉ r.2.signed ∧ ∃ c, r.2.h r.1.1 = some c ∧ IsPre pk r.1.2 c] := by
+        rw [hcol, prEvent_map]
+    _ ≤ _ := prEvent_mono_of_support _ _ _ fun r hr h => ⟨h.1, h.2, hH r hr, hS r hr⟩
+
+/-- **det-FDH with `Tag` a random permutation with inverse queries, down to the random-function
+det-FDH game** (`uov-assumptions.md` §5.8): for a forger with at most `q_f` forward, `q_i`
+inverse and `q_S` signing queries, and an injective encoding `emb` of the messages into the
+blocks,
+
+    Adv^{perm}(A) ≤ Adv^{euf}_{det}(fdhPermRed A; q_f + 1 + q_S, q_S)
+                    + (q_f + q_i + q_S + 1)²/|T × Z| + q_i·|M|/|T × Z|.
+
+The reduction simulates the permutation from `H` and coins (`simCF`): a fresh forward query at
+`emb m` gets `(H(m), z)`, every other fresh forward answer is a coin, a fresh inverse answer a
+coin outside the structured inputs. -/
+theorem advFDHPerm_le_fdh (hemb : Function.Injective emb) (tr : Trapdoor PK SK T S)
+    (A : PK → ProbComp (OracleComp (specFP AR M T Z S) (M × S))) {qf qi qS : ℕ}
+    (hA : ∀ pk, ∀ a ∈ support (A pk), FPBudget qf qi qS a) :
+    advFDHPerm tr emb A ≤ advFDH tr (qf + 1 + qS) qS (fdhPermRed emb A) +
+      CTUFPerm.permEps (qf + qi + qS + 1) qi (Fintype.card M) (Fintype.card (T × Z)) := by
+  classical
+  refine (advFDHPerm_le_hyb tr emb A hA).trans (add_le_add ?_ le_rfl)
+  unfold advFDH fdhExp fdhPermRed
+  simp only [map_bind, map_pure, bind_map_left]
+  refine prEvent_bind_mono_of_support _ _ _ fun kp _ => ?_
+  refine prEvent_bind_mono_of_support _ _ _ fun a ha => ?_
+  refine (hyb_le_fdh hemb tr.IsPre kp.1 (tr.D kp.2) a (hA kp.1 a ha)).trans ?_
+  rw [map_eq_bind_pure_comp]
+  refine prEvent_bind_mono_of_support _ _ _ fun r _ => ?_
+  by_cases hW : r.1.1 ∉ r.2.signed ∧ (∃ c, r.2.h r.1.1 = some c ∧ tr.IsPre kp.1 r.1.2 c) ∧
+      r.2.hq ≤ qf + 1 + qS ∧ r.2.signed.length ≤ qS
+  · obtain ⟨hn, ⟨c, hc, hp⟩, hq, hl⟩ := hW
+    simp only [Function.comp_apply, hStep, hc, pure_bind]
+    rw [prEvent_pure_prop, prEvent_pure_prop]
+    split_ifs with h1 h2
+    · exact le_rfl
+    · exact absurd ⟨hn, hp, hq, hl⟩ h2
+    · exact absurd ⟨hn, ⟨c, rfl, hp⟩, hq, hl⟩ h1
+    · exact le_rfl
+  · simp only [Function.comp_apply]
+    rw [prEvent_pure_prop]; split_ifs with h; exacts [absurd h hW, bot_le]
+
+end Final
+
 end VoleMole.Assumptions.UOV.FDHPerm
