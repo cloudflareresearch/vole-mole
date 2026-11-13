@@ -757,6 +757,22 @@ lemma progT_fst_congr (x₁ : Option IssueInstance) (c₁ : SimCoins pI) (x₂ :
 
 instance : Inhabited (KL L) := ⟨⟨0, Fin.elim0⟩⟩
 
+lemma sd₁_delayed {x : Option IssueInstance} {c : SimCoins pI} {st : Statement}
+    {o : Except String ByteArray} (h : sd₁ x c = some (st, o)) : st.delayed = false := by
+  rcases x with _ | i
+  · cases h
+  · simp only [sd₁, Option.map_some, Option.some.injEq, Prod.mk.injEq] at h
+    rw [← h.1]
+    rfl
+
+lemma sd₂_delayed {x : Option SpendInstance} {c : SimCoins pS} {st : Statement}
+    {o : Except String ByteArray} (h : sd₂ x c = some (st, o)) : st.delayed = false := by
+  rcases x with _ | i
+  · cases h
+  · simp only [sd₂, Option.map_some, Option.some.injEq, Prod.mk.injEq] at h
+    rw [← h.1]
+    rfl
+
 /-- **The forgery's point at one level is computed by a tree** with two more queries than the
 adversary's: the two simulations' points (which fix the programmed `H₂³` table), then the
 adversary's tree. -/
@@ -764,7 +780,7 @@ lemma qtree_forger {n : ℕ} (setX : (KL L → ZK.Sim.Bytes n) → XTab L M → 
     (Pf : Op Sizes.labelRows → ShT R L M → ByteArray) (Ps : SimD → ShT R L M → ByteArray)
     (hPf : ∀ op G2 G5E x T T', Pf op (G2, (G5E, setX T x)) = Pf op (G2, (G5E, setX T' x)))
     (hPs : ∀ d G2 G5E x T T', Ps d (G2, (G5E, setX T x)) = Ps d (G2, (G5E, setX T' x)))
-    (hpre : ∀ (d : SimD) st o G2 G5E x T T', d = some (st, o) →
+    (hpre : ∀ (d : SimD) st o G2 G5E x T T', d = some (st, o) → st.delayed = false →
       (∀ k, keyL L (Ps d (G2, (G5E, setX T x))) = some k → T k = T' k) →
       @simPre (prgT (G2, (G5E, setX T x))) (recT (G2, (G5E, setX T x))) CrtGen.tables st o =
         @simPre (prgT (G2, (G5E, setX T' x))) (recT (G2, (G5E, setX T' x))) CrtGen.tables st o)
@@ -791,9 +807,8 @@ lemma qtree_forger {n : ℕ} (setX : (KL L → ZK.Sim.Bytes n) → XTab L M → 
     (fun H2 => (hF g₁ g₂ H2 G5E x).map fun op => keyL L (Pf op (G2, (G5E, setX T₀ x)))) fun T => ?_
   · intro T T' h1 h2
     refine progT_fst_congr x₁ c₁ x₂ c₂ G2 G5E _ _ (fun st o hd => hpre _ st o G2 G5E x T T' hd
-      (hag _ default T T' h1))
-      (fun st o hd => hpre _ st o G2 G5E x T T' hd
-      (hag _ default T T' h2))
+      (sd₁_delayed hd) (hag _ default T T' h1))
+      (fun st o hd => hpre _ st o G2 G5E x T T' hd (sd₂_delayed hd) (hag _ default T T' h2))
   · have e : progT (leanProgIRX hbX) (leanProgSRX hbX) x₁ c₁ x₂ c₂ (G2, (G5E, setX T x)) =
         ((progT (leanProgIRX hbX) (leanProgSRX hbX) x₁ c₁ x₂ c₂ (G2, (G5E, setX T x))).1,
           (G5E, setX T x)) :=
@@ -801,6 +816,154 @@ lemma qtree_forger {n : ℕ} (setX : (KL L → ZK.Sim.Bytes n) → XTab L M → 
         (fun _ _ _ => rfl) (fun _ _ _ => rfl) _ _ _ _ _)
     show keyL L (Pf _ _) = keyL L (Pf _ _)
     rw [e, hPf _ G2 G5E x T T₀]
+
+/-! ## The three levels -/
+
+variable (A : Thief Sizes.labelRows Tab3 (ShT R L M))
+
+omit [CipherRow R] in
+lemma recT_agree22 (G2 : Tab2G pI) (G5E : Tab5F × (Blk → R)) (x : XTab L M) (T T' : KL L → ZK.Sim.Bytes 56) :
+    (recT (G2, (G5E, set22 T x))).AgreeOff .h22 (recT (G2, (G5E, set22 T' x))) :=
+  agreeOff_withTable (hbX_agreeOff_22 T T' x) _ _
+
+omit [CipherRow R] in
+lemma recT_agree21 (G2 : Tab2G pI) (G5E : Tab5F × (Blk → R)) (x : XTab L M) (T T' : KL L → ZK.Sim.Bytes 136) :
+    (recT (G2, (G5E, set21 T x))).AgreeOff .h21 (recT (G2, (G5E, set21 T' x))) :=
+  agreeOff_withTable (hbX_agreeOff_21 T T' x) _ _
+
+omit [CipherRow R] in
+lemma recT_agreeMu (G2 : Tab2G pI) (G5E : Tab5F × (Blk → R)) (x : XTab L M) (T T' : KL L → ZK.Sim.Bytes 32) :
+    (recT (G2, (G5E, setMu T x))).AgreeOff .mu (recT (G2, (G5E, setMu T' x))) :=
+  agreeOff_withTable (hbX_agreeOff_mu T T' x) _ _
+
+omit [CipherRow R] in
+/-- The record answers a point the same for two tables that agree at the point's key. -/
+lemma recT_hash22 (G2 : Tab2G pI) (G5E : Tab5F × (Blk → R)) (x : XTab L M) (T T' : KL L → ZK.Sim.Bytes 56)
+    (b : ByteArray) (h : ∀ k, keyL L b = some k → T k = T' k) :
+    (recT (G2, (G5E, set22 T x))).hash .h22 b = (recT (G2, (G5E, set22 T' x))).hash .h22 b := by
+  rw [recT_hash_ne _ (by decide), recT_hash_ne _ (by decide), hbX_22_eq, hbX_22_eq]
+  rcases hk : keyL L b with _ | k
+  · rfl
+  · simp only
+    rw [show (set22 T x).2.2.2.2.2.1 = T from rfl, show (set22 T' x).2.2.2.2.2.1 = T' from rfl,
+      h k hk]
+
+omit [CipherRow R] in
+lemma recT_hash21 (G2 : Tab2G pI) (G5E : Tab5F × (Blk → R)) (x : XTab L M) (T T' : KL L → ZK.Sim.Bytes 136)
+    (b : ByteArray) (h : ∀ k, keyL L b = some k → T k = T' k) :
+    (recT (G2, (G5E, set21 T x))).hash .h21 b = (recT (G2, (G5E, set21 T' x))).hash .h21 b := by
+  rw [recT_hash_ne _ (by decide), recT_hash_ne _ (by decide), hbX_21_eq, hbX_21_eq]
+  rcases hk : keyL L b with _ | k
+  · rfl
+  · simp only
+    rw [show (set21 T x).2.2.2.2.1 = T from rfl, show (set21 T' x).2.2.2.2.1 = T' from rfl,
+      h k hk]
+
+omit [CipherRow R] in
+lemma recT_hashMu (G2 : Tab2G pI) (G5E : Tab5F × (Blk → R)) (x : XTab L M) (T T' : KL L → ZK.Sim.Bytes 32)
+    (b : ByteArray) (h : ∀ k, keyL L b = some k → T k = T' k) :
+    (recT (G2, (G5E, setMu T x))).hash .mu b = (recT (G2, (G5E, setMu T' x))).hash .mu b := by
+  rw [recT_hash_ne _ (by decide), recT_hash_ne _ (by decide), hbX_mu_eq, hbX_mu_eq]
+  rcases hk : keyL L b with _ | k
+  · rfl
+  · simp only
+    rw [show (setMu T x).2.1 = T from rfl, show (setMu T' x).2.1 = T' from rfl, h k hk]
+
+/-! ### `H₂²` -/
+
+lemma hPf22 (op : Op Sizes.labelRows) (G2 : Tab2G pI) (G5E : Tab5F × (Blk → R)) (x : XTab L M)
+    (T T' : KL L → ZK.Sim.Bytes 56) :
+    fPt22 A op (G2, (G5E, set22 T x)) = fPt22 A op (G2, (G5E, set22 T' x)) :=
+  @cin2_congr22 (icPrg (rowFn G5E.2)) _ _ _ _ _ (recT_agree22 G2 G5E x T T')
+
+lemma hPs22 (d : SimD) (G2 : Tab2G pI) (G5E : Tab5F × (Blk → R)) (x : XTab L M)
+    (T T' : KL L → ZK.Sim.Bytes 56) :
+    sPt22 d (G2, (G5E, set22 T x)) = sPt22 d (G2, (G5E, set22 T' x)) := by
+  rcases d with _ | ⟨st, _ | b⟩
+  · rfl
+  · simp only [sPt22, sim2]
+  · simp only [sPt22, sim2]
+    exact @cin2_congr22 (icPrg (rowFn G5E.2)) _ _ _ _ _ (recT_agree22 G2 G5E x T T')
+
+lemma hpre22 (d : SimD) (st : Statement) (o : Except String ByteArray) (G2 : Tab2G pI)
+    (G5E : Tab5F × (Blk → R)) (x : XTab L M) (T T' : KL L → ZK.Sim.Bytes 56) (hd : d = some (st, o))
+    (h : ∀ k, keyL L (sPt22 d (G2, (G5E, set22 T x))) = some k → T k = T' k) :
+    @simPre (prgT (G2, (G5E, set22 T x))) (recT (G2, (G5E, set22 T x))) CrtGen.tables st o =
+      @simPre (prgT (G2, (G5E, set22 T' x))) (recT (G2, (G5E, set22 T' x))) CrtGen.tables st o := by
+  subst hd
+  rcases o with _ | b
+  · simp only [simPre]
+  · simp only [sPt22, sim2] at h
+    simp only [simPre]
+    exact @vPre_congr22 (icPrg (rowFn G5E.2)) _ _ _ _ _ (recT_agree22 G2 G5E x T T')
+      (recT_hash22 G2 G5E x T T' _ h)
+
+lemma hτ22 (d : SimD) (G2 : Tab2G pI) (G5E : Tab5F × (Blk → R)) (x : XTab L M)
+    (T T' : KL L → ZK.Sim.Bytes 56)
+    (h : ∀ k, keyL L (sPt22 d (G2, (G5E, set22 T x))) = some k → T k = T' k) :
+    sTau22 d (G2, (G5E, set22 T x)) = sTau22 d (G2, (G5E, set22 T' x)) := by
+  rcases d with _ | ⟨st, o⟩
+  · rfl
+  · simp only [sTau22]
+    rw [hpre22 _ st o G2 G5E x T T' rfl h]
+
+/-! ### `H₂¹` -/
+
+lemma hPf21 (op : Op Sizes.labelRows) (G2 : Tab2G pI) (G5E : Tab5F × (Blk → R)) (x : XTab L M)
+    (T T' : KL L → ZK.Sim.Bytes 136) :
+    fPt21 A op (G2, (G5E, set21 T x)) = fPt21 A op (G2, (G5E, set21 T' x)) :=
+  @cin1_congr21 (icPrg (rowFn G5E.2)) _ _ _ _ (recT_agree21 G2 G5E x T T')
+
+lemma hPs21 (d : SimD) (G2 : Tab2G pI) (G5E : Tab5F × (Blk → R)) (x : XTab L M)
+    (T T' : KL L → ZK.Sim.Bytes 136) :
+    sPt21 d (G2, (G5E, set21 T x)) = sPt21 d (G2, (G5E, set21 T' x)) := by
+  rcases d with _ | ⟨st, _ | b⟩
+  · rfl
+  · simp only [sPt21, sim1]
+  · simp only [sPt21, sim1]
+    exact @cin1_congr21 (icPrg (rowFn G5E.2)) _ _ _ _ (recT_agree21 G2 G5E x T T')
+
+lemma hpre21 (d : SimD) (st : Statement) (o : Except String ByteArray) (G2 : Tab2G pI)
+    (G5E : Tab5F × (Blk → R)) (x : XTab L M) (T T' : KL L → ZK.Sim.Bytes 136) (hd : d = some (st, o))
+    (h : ∀ k, keyL L (sPt21 d (G2, (G5E, set21 T x))) = some k → T k = T' k) :
+    @simPre (prgT (G2, (G5E, set21 T x))) (recT (G2, (G5E, set21 T x))) CrtGen.tables st o =
+      @simPre (prgT (G2, (G5E, set21 T' x))) (recT (G2, (G5E, set21 T' x))) CrtGen.tables st o := by
+  subst hd
+  rcases o with _ | b
+  · simp only [simPre]
+  · simp only [sPt21, sim1] at h
+    simp only [simPre]
+    exact @vPre_congr21 (icPrg (rowFn G5E.2)) _ _ _ _ _ (recT_agree21 G2 G5E x T T')
+      (recT_hash21 G2 G5E x T T' _ h)
+
+lemma hτ21 (d : SimD) (G2 : Tab2G pI) (G5E : Tab5F × (Blk → R)) (x : XTab L M)
+    (T T' : KL L → ZK.Sim.Bytes 136)
+    (h : ∀ k, keyL L (sPt21 d (G2, (G5E, set21 T x))) = some k → T k = T' k) :
+    sTau21 d (G2, (G5E, set21 T x)) = sTau21 d (G2, (G5E, set21 T' x)) := by
+  simp only [sTau21]
+  rw [recT_hash21 G2 G5E x T T' _ h, hPs21 d G2 G5E x T T']
+
+/-! ### `H₂⁰` -/
+
+lemma hpreMu (d : SimD) (st : Statement) (o : Except String ByteArray) (G2 : Tab2G pI)
+    (G5E : Tab5F × (Blk → R)) (x : XTab L M) (T T' : KL L → ZK.Sim.Bytes 32) (hd : d = some (st, o))
+    (hdl : st.delayed = false) (h : ∀ k, keyL L (sPtMu d) = some k → T k = T' k) :
+    @simPre (prgT (G2, (G5E, setMu T x))) (recT (G2, (G5E, setMu T x))) CrtGen.tables st o =
+      @simPre (prgT (G2, (G5E, setMu T' x))) (recT (G2, (G5E, setMu T' x))) CrtGen.tables st o := by
+  subst hd
+  rcases o with _ | b
+  · simp only [simPre]
+  · simp only [sPtMu] at h
+    simp only [simPre]
+    exact @vPre_congrMu (icPrg (rowFn G5E.2)) _ _ _ _ _ hdl (recT_agreeMu G2 G5E x T T')
+      (recT_hashMu G2 G5E x T T' _ h)
+
+omit [CipherRow R] in
+lemma hτMu (d : SimD) (G2 : Tab2G pI) (G5E : Tab5F × (Blk → R)) (x : XTab L M)
+    (T T' : KL L → ZK.Sim.Bytes 32) (h : ∀ k, keyL L (sPtMu d) = some k → T k = T' k) :
+    sTauMu d (G2, (G5E, setMu T x)) = sTauMu d (G2, (G5E, setMu T' x)) := by
+  simp only [sTauMu]
+  rw [recT_hashMu G2 G5E x T T' _ h]
 
 end Rata
 
