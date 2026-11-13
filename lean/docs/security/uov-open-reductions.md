@@ -562,11 +562,14 @@ stronger OMPR⊕17. The protocol change [UA] §8 C2 removes the question.
 | `c + 1 + Kq ≤ c + w ⟹ Kq + 1 ≤ w` (A4, step 2) | `lottery_count` | `Protocols/UOVAssumptions.lean` |
 | `4n(τ − 1) ≤ τ^n` for `τ ≥ 7`, `n ≥ 2` | `four_mul_le_pow` | `Protocols/UOVAssumptions.lean` |
 | `((τ − 1 + θ)/τ)^{q+1} ≤ θ^q`, `θ = τ^{q+1}/2` (A4, step 4) | `rewind_supermartingale` | `Protocols/UOVAssumptions.lean` |
+| OMPR^free (§3.1), targets on demand, single-forgery form | `advOMPRFree`, `FreeWin` | `Assumptions/TheoremR.lean` |
+| A4, step 3 for one run: `Σ_a θ^{X(a)} ≤ (τ − 1 + θ)^{q+1}`; Ville's inequality for a stateful handler | `lottery_sum`, `potential_le` | `Assumptions/TheoremR.lean` |
 | A1, on the games `advOMPR`, `advOMPRShift`; and [UA] P8(a), `Adv^{ompr⊕τ} ≤ τ^{q+1}·Adv^{ompr}` | `advOMPR_le_shift`, `advOMPRShift_mono`, `advOMPRShift_le_guess` | `Assumptions/Shift.lean` |
 
 On paper only (except A1 and the guessing bound): the games, the lazy-sampling arguments, the
-bad-event bounds, Ville's inequality, the Chernoff steps of B4 and A5, and the ideal-permutation
-bookkeeping of B2. The goodness part of Lemma S (item 3) is on paper; it is not used by B1.
+bad-event bounds, Ville's inequality in the generic model of A4, the Chernoff steps of B4 and A5,
+and the ideal-permutation bookkeeping of B2. The variant of A4 for UOV itself (Theorem R of
+`ompr-shift-algebra.md` §2) is mechanized with its games (`thmR`), up to its bad-event term. The goodness part of Lemma S (item 3) is on paper; it is not used by B1.
 
 ## 7. Open
 

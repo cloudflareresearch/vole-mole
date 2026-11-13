@@ -69,8 +69,8 @@ keyed ones average them over `keyGen`.
 `advCTUFXAt_le` (CT-UF^× ≤ CT-UF); `advUFTagAt_eq_probe` (a forger without probe is a probe
 forger); `ofOracle`. **Sanity** (the trivial attacks lose): `not_wins_of_iq`,
 `not_ompiWin_of_opened`, `not_fdhWin_of_signed`, `not_ctWin_of_signed`, `not_ufWin_of_answered`.
-Not defined: OMPR^free (`uov-open-reductions.md`), EUF-CMA of the specified and of salt-UOV
-(items 4, 5).
+OMPR^free (`uov-open-reductions.md` §3.1) is in `Assumptions/TheoremR.lean` (`advOMPRFree`).
+Not defined: EUF-CMA of the specified and of salt-UOV (items 4, 5).
 
 No `sorry`, no `axiom`.
 -/
