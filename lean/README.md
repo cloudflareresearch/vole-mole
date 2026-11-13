@@ -433,7 +433,7 @@ lean/
                             (BlindPomfrit; Lean client: PomClientLean, BlindPomfritT6Lean); Ratatouille under OMPR (RatatouilleOMPR); Theorem T3 (SymmetryProbes,
                             SymmetryTensor, SymmetryScalar, SymmetryT3); `Com`/`Tag` as random
                             permutations with inverse queries (LazyPerm, CTUFPerm, PermLinks,
-                            FDHPerm);
+                            FDHPerm, RatatouillePerm, PermSimLinks);
                             simultaneous extraction down to OMPR (SimLinks); shared lazy-sampling, union-bound and simulation
                             lemmas (LazyIdeal)
     Audit/                  non-vacuity checks: the headline theorems' hypotheses instantiated,
@@ -1637,9 +1637,15 @@ What is **not** established, roughly in order of importance:
      `advCTUFPermAt_le_ompr`; the PRP/PRF switch with inverse queries in
      `Assumptions/LazyPerm.lean`; the lazy permutation is taken as the ideal one). T4's paper
      birthday term left out inverse queries (corrected, `uov-assumptions.md` §5.4). For
-     Ratatouille's `Tag` only the switch to the hybrid is in Lean (`advFDHPerm_le_hyb`,
-     `Assumptions/FDHPerm.lean`); the chain still uses `TagIdeal` (a random function). PomFRIT's
-     U1 and U2 with AES as random permutations with inverse queries are not done.
+     Ratatouille, `Tag` can be a random permutation with inverse queries too: det-FDH reduces to
+     the random-function game of a simulating forger (`advFDHPerm_le_fdh`, `+ (q_f+q_i+q_S+1)²/|B| +
+     q_i·|M|/|B|`) and to OMPR (`advFDHPerm_le_ompr`), giving `balance_le_ompr_perm`,
+     `balance_le_ompr_sim_perm` (hypothesis `TagIdealP`; `Assumptions/FDHPerm.lean`,
+     `Assumptions/RatatouillePerm.lean`, `Audit/PermFDH.lean`). With AES and `Com` both random
+     permutations, Moussaka's Theorem 1 goes down to OMPR (`omuf_le_num_ompr_simP`,
+     `Assumptions/PermSimLinks.lean`, `Audit/PermSim.lean`). Not done with AES as permutations:
+     Ratatouille's UF-Tag/OMPR corollaries (`forgeAdvP` is not linked to a UF-Tag forger), unbound
+     Moussaka's protocol theorem, and PomFRIT U1/U2 (no permutation-model one-more game).
    - PomFRIT's tight bound needs OMPR⊕17; OMPR ⇒ OMPR⊕17 without the `τ^{q+1}` loss has no
      black-box proof (`uov-open-reductions.md`); by Theorem R (`ompr-shift-algebra.md`; Lean `thmR`) a
      proof must be non-black-box in the adversary or break OMPR^free. In Lean every term of
