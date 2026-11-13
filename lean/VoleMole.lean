@@ -355,6 +355,8 @@ import VoleMole.Theft.RatatouilleLean
 import VoleMole.Theft.Moussaka
 import VoleMole.Theft.MoussakaLean
 import VoleMole.Theft.Reads
+import VoleMole.Theft.SimExtract
+import VoleMole.Theft.SimExtractLean
 import VoleMole.Audit.Nonvacuous
 import VoleMole.Audit.Liveness
 import VoleMole.Audit.UnboundROM
