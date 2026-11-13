@@ -600,7 +600,13 @@ uniform permutation for Keccak-p[800] and a predictor with `q` forward and inver
 candidates, `puAdv ≤ (c+q)/(2¹²⁸−q) + q/(2⁴⁴⁰−q)` (Ratatouille: `2⁵⁴⁴`). A finalization the
 adversary makes fail still computes an unshown redemption proof for a dummy token, so `PU_b` is not
 exactly a prediction of `r`: the extra `2(q₅+1)·2⁻¹²⁸` per world (`docs/zk.md` §4.2, corrected).
-Still [paper]: several proofs on shared tables on `main` (`ε_iv`), the reduction of Ratatouille's
+[Lean] with one `H₅` table and one cipher shared by the four proofs: `ZK/MainSharedKeys.lean`
+(`prove_reads`: the executable prover's `H₅` reads are gate inputs of its proof at offset 0 or
+`d[0..16) ⊕ w[0..16)`), `ZK/MainSharedGame.lean` (`main_shared_le`), `ZK/MainSharedSim.lean`
+(`pr_sib_hit_le`, `bstar_sim`), `Privacy/MoussakaMainSharedPU.lean` (`anonymity_main_shared`),
+`Audit/MainShared.lean`; computing redemption proofs only when §6's rule lets redemptions happen
+also removes the dummy-token term of `anonymity_main_pu`. Still [paper]: one `H₂³` table and one
+`H₃` for the proofs on `main`, the reduction of Ratatouille's
 `puTermR` to `puAdv`, Moussaka's `find_issuer` Client and 4(b) on `main`, and (PU) for the real
 Keccak-p[800,12], which is an assumption.
 
@@ -1682,12 +1688,20 @@ What is **not** established, roughly in order of importance:
    H5/H6 coupling for one proof and jointly for a token's proofs, the oracle adversary as read
    sets; `ZK/HopsMain.lean`, `ZK/MainGame.lean`; `docs/zk.md` §4.2), with per-proof tables;
    for one proof the shared-table model with `H₂³` visible and a global cipher is mechanized on
-   `main` (`zk_rom_ic_h23_main`); (PU) is a game (`PU.puAdv`), Moussaka's (PU) term is the
-   advantage of explicit predictors in it (`anonymity_main_pu`), and it is bounded in the
-   ideal-permutation model (`puAdvPerm_moussaka_le`, `puAdvPerm_ratatouille_le`). Not done: the
-   joint hop over several proofs on shared tables (`ε_iv`), Ratatouille's `puTermR` as `puAdv`,
-   and (PU) for the real 12-round permutation (an assumption; the exhaustive predictor has
-   advantage 1). The QROM ZK bound
+   `main` (`zk_rom_ic_h23_main`), and for a token's four proofs the joint hop with one `H₅` table and
+   one cipher (`ZK.Sim.main_shared_le`: `15·εS + 15·Pr_sim[bstar]` for any four-proof game; each
+   proof keeps its own `H₂³` table and `H₃` slice); (PU) is a game (`PU.puAdv`), and Moussaka's
+   Theorem 4(a) on `main` with the shared `H₅` table and cipher is `anonymity_main_shared`: `≤
+   30·εS(q₃, q_E + 8·4607) + 15·(Σ_{b,c} puAdv Com (predS_c b) + 8·noHitProb + 3750·2⁻¹²⁸) +
+   2·εhide`, every term a number except the four (PU) advantages and `εhide`; the cross-proof
+   collision term (`ε_iv`) is `1875·2⁻¹²⁸` per world, from the uniform `d` of the later simulated
+   proof, with no assumption on `H₄` (`pr_sib_hit_le`); (PU) is bounded in the ideal-permutation
+   model (`puAdvPerm_moussaka_le`, `puAdvPerm_ratatouille_le`, and for a credit chosen with the
+   public part `puAdvPerm_ratatouille_credit_le`). Not done: one `H₂³` table and one `H₃` for the
+   proofs on `main` (the programming-collision terms of §10.2), Ratatouille's `puTermR` as `puAdv`
+   and its shared-table version (the commitment with the credit in its public part is
+   `PU.comCredit`), Moussaka 4(b) on `main`, and (PU) for the real 12-round permutation (an
+   assumption; the exhaustive predictor has advantage 1). The QROM ZK bound
    is loose (2⁻¹⁹ at 2³⁰) until the 256-bit `rho` and salt are added.
    With the fix, zero knowledge of the executable Lean prover and the three protocols' privacy
    games are mechanized in the classical random-oracle and ideal-cipher model, with every
