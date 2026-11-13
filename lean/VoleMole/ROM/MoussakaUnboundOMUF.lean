@@ -668,4 +668,389 @@ theorem win_imp (g : Table) (E : CTable)
 
 end Red
 
+/-! ## Theorem U1 -/
+
+section Union
+
+variable {D : Type} [DecidableEq D] {R : D → Type} [∀ d, Fintype (R d)] [∀ d, Nonempty (R d)]
+  [∀ d, SampleableType (R d)]
+
+/-- **Three indexed families and two events of a further computation**
+(`prEvent_bind_le_sum4_of_table` with a third family). -/
+theorem prEvent_bind_le_sum5_of_table {T X Y₁ Y₂ Y₃ Z : Type} (mT : ProbComp T)
+    (m₀ : T → OracleComp (OracleSpec.ofFn R) X) (e₀ : T → X → Prop) (s₁ s₂ s₃ : Finset ℕ)
+    (m₁ : ℕ → T → OracleComp (OracleSpec.ofFn R) Y₁) (e₁ : T → Y₁ → Prop)
+    (m₂ : ℕ → T → OracleComp (OracleSpec.ofFn R) Y₂) (e₂ : T → Y₂ → Prop)
+    (m₃ : ℕ → T → OracleComp (OracleSpec.ofFn R) Y₃) (e₃ : T → Y₃ → Prop)
+    (n : T → OracleComp (OracleSpec.ofFn R) Z) (c d : T → Z → Prop)
+    (h : ∀ E (g : (d : D) → R d), e₀ E (evalWithAnswerFn (QueryImpl.ofFn g) (m₀ E)) →
+      (∃ i ∈ s₁, e₁ E (evalWithAnswerFn (QueryImpl.ofFn g) (m₁ i E))) ∨
+      (∃ i ∈ s₂, e₂ E (evalWithAnswerFn (QueryImpl.ofFn g) (m₂ i E))) ∨
+      (∃ i ∈ s₃, e₃ E (evalWithAnswerFn (QueryImpl.ofFn g) (m₃ i E))) ∨
+      c E (evalWithAnswerFn (QueryImpl.ofFn g) (n E)) ∨
+      d E (evalWithAnswerFn (QueryImpl.ofFn g) (n E))) :
+    Pr{let E ← mT; let r ← (simulateQ randomOracle (m₀ E)).run' ∅}[e₀ E r] ≤
+      ∑ i ∈ s₁, Pr{let E ← mT; let r ← (simulateQ randomOracle (m₁ i E)).run' ∅}[e₁ E r] +
+      ∑ i ∈ s₂, Pr{let E ← mT; let r ← (simulateQ randomOracle (m₂ i E)).run' ∅}[e₂ E r] +
+      ∑ i ∈ s₃, Pr{let E ← mT; let r ← (simulateQ randomOracle (m₃ i E)).run' ∅}[e₃ E r] +
+      Pr{let E ← mT; let r ← (simulateQ randomOracle (n E)).run' ∅}[c E r] +
+      Pr{let E ← mT; let r ← (simulateQ randomOracle (n E)).run' ∅}[d E r] := by
+  classical
+  let Y : ((ℕ ⊕ ℕ) ⊕ ℕ) ⊕ Bool → Type := fun
+    | .inl (.inl (.inl _)) => Y₁
+    | .inl (.inl (.inr _)) => Y₂
+    | .inl (.inr _) => Y₃
+    | .inr _ => Z
+  let ob : (i : ((ℕ ⊕ ℕ) ⊕ ℕ) ⊕ Bool) → T → OracleComp (OracleSpec.ofFn R) (Y i) := fun
+    | .inl (.inl (.inl i)) => m₁ i
+    | .inl (.inl (.inr i)) => m₂ i
+    | .inl (.inr i) => m₃ i
+    | .inr _ => n
+  let Q : (i : ((ℕ ⊕ ℕ) ⊕ ℕ) ⊕ Bool) → T → Y i → Prop := fun
+    | .inl (.inl (.inl _)) => e₁
+    | .inl (.inl (.inr _)) => e₂
+    | .inl (.inr _) => e₃
+    | .inr true => c
+    | .inr false => d
+  have key := prEvent_bind_le_sum_of_table mT m₀
+    (((s₁.disjSum s₂).disjSum s₃).disjSum Finset.univ) ob e₀ Q fun E g hw => by
+      rcases h E g hw with ⟨i, hi, he⟩ | ⟨i, hi, he⟩ | ⟨i, hi, he⟩ | hc | hd
+      · exact ⟨.inl (.inl (.inl i)), by simp [hi], he⟩
+      · exact ⟨.inl (.inl (.inr i)), by simp [hi], he⟩
+      · exact ⟨.inl (.inr i), by simp [hi], he⟩
+      · exact ⟨.inr true, by simp, hc⟩
+      · exact ⟨.inr false, by simp, hd⟩
+  rw [Finset.sum_disjSum, Finset.sum_disjSum, Finset.sum_disjSum, Fintype.sum_bool] at key
+  refine key.trans (le_of_eq ?_)
+  simp only [ob, Q]
+  ring
+
+end Union
+
+/-- **Theorem U1 (unforgeability per redemption context), the reduction.** For every OMUF-U
+adversary, honest Anchors with any public keys and signers (each running both variants with one
+key), and either proof layout (`lr`): the probability that the adversary wins is at most the
+extraction failures of the `qI` bound issuance, `qI` unbound issuance and `qR` unbound redemption
+provers (each a prover of the soundness theorems), plus `B₁`'s joint binding advantage and `B₂`'s
+CT-UF^open advantage. -/
+theorem omufU_le (lr : Bool) (pk : Fin K → UovPk) (sk : Fin K → Spec.Signer) (qI : ℕ)
+    (A : Adversary K qR) :
+    Pr{let E ← $ᵗ CTable; let r ← (simulateQ randomOracle (runE E (game lr pk sk qI A))).run' ∅}[
+        Win r.1] ≤
+      ∑ j ∈ Finset.range qI, Pr{let E ← $ᵗ CTable; let r ← (simulateQ randomOracle
+        (gameA CrtGen.tables (stI lr) (PBI lr pk sk qI A j) E)).run' ∅}[BadBI E lr r] +
+      ∑ j ∈ Finset.range qI, Pr{let E ← $ᵗ CTable; let r ← (simulateQ randomOracle
+        (gameA CrtGen.tables (stUI lr) (PUI lr pk sk qI A j) E)).run' ∅}[BadUI E lr r] +
+      ∑ j ∈ Finset.range qR, Pr{let E ← $ᵗ CTable; let r ← (simulateQ randomOracle
+        (gameA CrtGen.tables (stUR lr pk) (PUR lr pk sk qI A j) E)).run' ∅}[BadUR E lr pk r] +
+      Pr{let E ← $ᵗ CTable; let v ← (simulateQ randomOracle (extAll lr pk sk qI A E)).run' ∅}[
+        Coll lr pk E v] +
+      Pr{let E ← $ᵗ CTable; let v ← (simulateQ randomOracle (extAll lr pk sk qI A E)).run' ∅}[
+        Forge lr pk E v] := by
+  refine prEvent_bind_le_sum5_of_table ($ᵗ CTable) (fun E => runE E (game lr pk sk qI A))
+    (fun _ r => Win r.1) (Finset.range qI) (Finset.range qI) (Finset.range qR) _ _ _ _ _ _ _ _ _
+    fun E g hw => ?_
+  rw [evalWithAnswerFn_runE] at hw
+  exact win_imp lr pk sk qI A g E hw
+
+/-! ## Query bounds of the provers -/
+
+/-- **The adversary's budget**: each of its stages makes at most `q k` hash queries of each kind,
+`qE` cipher queries and `n` hash queries in all. -/
+structure Adversary.Budget (A : Adversary K qR) (q : Kind → ℕ) (qE n : ℕ) : Prop where
+  init_k : IsKindQueryBoundIC A.init q
+  init_e : IsQueryBoundP A.init (fun t => t.isRight = true) qE
+  init_h : IsQueryBoundP A.init (fun t => t.isLeft = true) n
+  query_k : ∀ s, IsKindQueryBoundIC (A.query s) q
+  query_e : ∀ s, IsQueryBoundP (A.query s) (fun t => t.isRight = true) qE
+  query_h : ∀ s, IsQueryBoundP (A.query s) (fun t => t.isLeft = true) n
+  final_k : ∀ s, IsKindQueryBoundIC (A.final s) q
+  final_e : ∀ s, IsQueryBoundP (A.final s) (fun t => t.isRight = true) qE
+  final_h : ∀ s, IsQueryBoundP (A.final s) (fun t => t.isLeft = true) n
+
+/-- One honest issuance verification's cipher queries, either variant. -/
+def cellI (lr : Bool) : ℕ :=
+  max (verifyCellBound (parI lr)) (verifyCellBound (Unbound.issueParams lr))
+
+/-- **The game's hash queries per kind**: the adversary's `qI + 2` stages and the `qI + qR`
+honest verifications (as `OMUF.gameK`). -/
+abbrev gameK (q : Kind → ℕ) (qI qR : ℕ) : Kind → ℕ := OMUF.gameK q qI qR
+
+/-- **The game's cipher queries.** -/
+def gameE (lr : Bool) (qE qI qR : ℕ) : ℕ :=
+  (qI + 2) * qE + qI * cellI lr + qR * verifyCellBound (Unbound.redeemParams lr)
+
+/-- **The game's hash queries in all** (as `OMUF.gameH`). -/
+abbrev gameH (n qI qR : ℕ) : ℕ := OMUF.gameH n qI qR
+
+section Bounds
+
+variable (lr : Bool) (pk : Fin K → UovPk) (sk : Fin K → Spec.Signer)
+
+theorem anchorU_k (q : IQ K) : IsKindQueryBoundIC (anchorU lr sk q) vK := by
+  rcases q with q | q
+  · exact anchorIC_k lr sk q
+  · show IsKindQueryBoundIC (uanchorIC lr sk q) vK
+    unfold uanchorIC
+    split_ifs
+    · exact isKindQueryBoundIC_map _ (isKindQueryBoundIC_verifyIC _ _ _)
+    · trivial
+
+theorem anchorU_e (q : IQ K) :
+    IsQueryBoundP (anchorU lr sk q) (fun t => t.isRight = true) (cellI lr) := by
+  rcases q with q | q
+  · exact (anchorIC_e lr sk q).mono (le_max_left _ _)
+  · show IsQueryBoundP (uanchorIC lr sk q) _ _
+    unfold uanchorIC
+    split_ifs
+    · exact ((isQueryBoundP_map_iff _ _ _).2 (isQueryBoundP_right_verifyIC _ _ _)).mono
+        (le_max_right _ _)
+    · trivial
+
+theorem anchorU_h (q : IQ K) :
+    IsQueryBoundP (anchorU lr sk q) (fun t => t.isLeft = true) (2 + verifierTotal) := by
+  rcases q with q | q
+  · exact anchorIC_h lr sk q
+  · show IsQueryBoundP (uanchorIC lr sk q) _ _
+    unfold uanchorIC
+    split_ifs
+    · exact (isQueryBoundP_map_iff _ _ _).2 (isQueryBoundP_left_verifyIC _ _ _)
+    · trivial
+
+theorem umoderatorIC_k (r : RedQ K) : IsKindQueryBoundIC (umoderatorIC lr pk r) vK := by
+  unfold umoderatorIC
+  split_ifs
+  · exact isKindQueryBoundIC_map _ (isKindQueryBoundIC_verifyIC _ _ _)
+  · trivial
+
+theorem umoderatorIC_e (r : RedQ K) :
+    IsQueryBoundP (umoderatorIC lr pk r) (fun t => t.isRight = true)
+      (verifyCellBound (Unbound.redeemParams lr)) := by
+  unfold umoderatorIC
+  split_ifs
+  · exact (isQueryBoundP_map_iff _ _ _).2 (isQueryBoundP_right_verifyIC _ _ _)
+  · trivial
+
+theorem umoderatorIC_h (r : RedQ K) :
+    IsQueryBoundP (umoderatorIC lr pk r) (fun t => t.isLeft = true) (2 + verifierTotal) := by
+  unfold umoderatorIC
+  split_ifs
+  · exact (isQueryBoundP_map_iff _ _ _).2 (isQueryBoundP_left_verifyIC _ _ _)
+  · trivial
+
+variable {A : Adversary K qR} {q : Kind → ℕ} {qE n : ℕ} (hA : A.Budget q qE n)
+include hA
+
+theorem runIss_k (m : ℕ) (s : A.σ) : IsKindQueryBoundIC (runIss lr sk A m s) (m • (q + vK)) := by
+  induction m generalizing s with
+  | zero => trivial
+  | succ m ih =>
+    refine (isKindQueryBoundIC_bind (hA.query_k s) fun sq =>
+      isKindQueryBoundIC_bind (anchorU_k lr sk sq.2) fun ra =>
+        isKindQueryBoundIC_bind (q₂ := 0) (ob := fun rest => (pure (rest.1, (sq.2, ra.2) :: rest.2) :
+          OracleComp specIC (A.σ × List (IQ K × Bool)))) (ih _) fun _ => trivial).mono (le_of_eq ?_)
+    rw [succ_nsmul]; abel
+
+theorem runIss_e (m : ℕ) (s : A.σ) : IsQueryBoundP (runIss lr sk A m s)
+    (fun t => t.isRight = true) (m * (qE + cellI lr)) := by
+  induction m generalizing s with
+  | zero => trivial
+  | succ m ih =>
+    refine (isQueryBoundP_bind (hA.query_e s) fun sq _ =>
+      isQueryBoundP_bind (anchorU_e lr sk sq.2) fun ra _ =>
+        isQueryBoundP_bind (m := 0) (ob := fun rest => (pure (rest.1, (sq.2, ra.2) :: rest.2) :
+          OracleComp specIC (A.σ × List (IQ K × Bool)))) (ih _) fun _ _ => trivial).mono
+            (le_of_eq ?_)
+    ring
+
+theorem runIss_h (m : ℕ) (s : A.σ) : IsQueryBoundP (runIss lr sk A m s)
+    (fun t => t.isLeft = true) (m * (n + (2 + verifierTotal))) := by
+  induction m generalizing s with
+  | zero => trivial
+  | succ m ih =>
+    refine (isQueryBoundP_bind (hA.query_h s) fun sq _ =>
+      isQueryBoundP_bind (anchorU_h lr sk sq.2) fun ra _ =>
+        isQueryBoundP_bind (m := 0) (ob := fun rest => (pure (rest.1, (sq.2, ra.2) :: rest.2) :
+          OracleComp specIC (A.σ × List (IQ K × Bool)))) (ih _) fun _ _ => trivial).mono
+            (le_of_eq ?_)
+    ring
+
+omit hA in
+theorem runRed_k (R : Fin qR → RedQ K) : IsKindQueryBoundIC (runRed lr pk R) (qR • vK) := by
+  unfold runRed
+  simpa using isKindQueryBoundIC_mapM (List.finRange qR) _ fun j =>
+    isKindQueryBoundIC_map _ (umoderatorIC_k lr pk (R j))
+
+omit hA in
+theorem runRed_e (R : Fin qR → RedQ K) :
+    IsQueryBoundP (runRed lr pk R) (fun t => t.isRight = true)
+      (qR * verifyCellBound (Unbound.redeemParams lr)) := by
+  unfold runRed
+  simpa using isQueryBoundP_mapM _ (List.finRange qR) _ fun j =>
+    (isQueryBoundP_map_iff _ _ _).2 (umoderatorIC_e lr pk (R j))
+
+omit hA in
+theorem runRed_h (R : Fin qR → RedQ K) :
+    IsQueryBoundP (runRed lr pk R) (fun t => t.isLeft = true) (qR * (2 + verifierTotal)) := by
+  unfold runRed
+  simpa using isQueryBoundP_mapM _ (List.finRange qR) _ fun j =>
+    (isQueryBoundP_map_iff _ _ _).2 (umoderatorIC_h lr pk (R j))
+
+theorem game_k (qI : ℕ) : IsKindQueryBoundIC (game lr pk sk qI A) (gameK q qI qR) := by
+  unfold game
+  refine (isKindQueryBoundIC_bind hA.init_k fun s =>
+    isKindQueryBoundIC_bind (runIss_k lr sk hA qI s) fun r =>
+      isKindQueryBoundIC_bind (hA.final_k r.1) fun R =>
+        isKindQueryBoundIC_map _ (runRed_k lr pk R)).mono (le_of_eq ?_)
+  simp only [gameK, OMUF.gameK, smul_add, add_smul]
+  abel
+
+theorem game_e (qI : ℕ) :
+    IsQueryBoundP (game lr pk sk qI A) (fun t => t.isRight = true) (gameE lr qE qI qR) := by
+  unfold game
+  refine (isQueryBoundP_bind hA.init_e fun s _ =>
+    isQueryBoundP_bind (runIss_e lr sk hA qI s) fun r _ =>
+      isQueryBoundP_bind (hA.final_e r.1) fun R _ =>
+        (isQueryBoundP_map_iff _ _ _).2 (runRed_e lr pk R)).mono (le_of_eq ?_)
+  simp only [gameE]; ring
+
+theorem game_h (qI : ℕ) :
+    IsQueryBoundP (game lr pk sk qI A) (fun t => t.isLeft = true) (gameH n qI qR) := by
+  unfold game
+  refine (isQueryBoundP_bind hA.init_h fun s _ =>
+    isQueryBoundP_bind (runIss_h lr sk hA qI s) fun r _ =>
+      isQueryBoundP_bind (hA.final_h r.1) fun R _ =>
+        (isQueryBoundP_map_iff _ _ _).2 (runRed_h lr pk R)).mono (le_of_eq ?_)
+  simp only [gameH, OMUF.gameH]; ring
+
+end Bounds
+
+/-! ## Theorem U1 with the extraction terms of the soundness theorems -/
+
+/-- **The extraction failure of one unbound issuance proof**
+(`moussakaUnboundIssue_accept_le_adaptive_spec`). -/
+noncomputable def epsUI (q : Kind → ℕ) (qE : ℕ) : ℝ≥0∞ :=
+  (q .h21 + 1) * (2 ^ 150 : ℝ≥0∞)⁻¹ +
+    (q .h22 + 1) * ENNReal.ofReal (Seed.epsQS (2 ^ 128) (2 ^ 64) 3816) +
+    (q .h23 + 1) * ((9 : ℝ≥0∞) / 2 ^ 128) +
+    (2 * qE ^ 2 * (2 ^ 256)⁻¹ + (openHashEps q + q .h1 * (2 ^ 256 : ℝ≥0∞)⁻¹)) +
+    (openHashEps q + q .h1 * (2 ^ 256 : ℝ≥0∞)⁻¹) +
+    ((qE * 2 : ℕ) : ℝ≥0∞) * (((512 * q .h1 : ℕ) : ℝ≥0∞) * (2 ^ 256 : ℝ≥0∞)⁻¹) +
+    chainHitEps q + stmtBindEps q
+
+/-- **The extraction failure of one unbound redemption proof**
+(`moussakaUnboundRedeem_accept_le_adaptive_spec`), `n` the prover's hash queries in all. -/
+noncomputable def epsUR (q : Kind → ℕ) (qE n : ℕ) : ℝ≥0∞ :=
+  (q .h21 + 1) * (2 ^ 150 : ℝ≥0∞)⁻¹ +
+    (q .h22 + 1) * (ENNReal.ofReal (Seed.epsQS (2 ^ 128) (2 ^ 64) 7929) +
+      (2 ^ 128 : ℝ≥0∞)⁻¹ + ((n + 2 + verifierTotal : ℕ) : ℝ≥0∞) / 2 ^ 448) +
+    (q .h23 + 1) * ((9 : ℝ≥0∞) / 2 ^ 128) +
+    (2 * qE ^ 2 * (2 ^ 256)⁻¹ + (openHashEps q + q .h1 * (2 ^ 256 : ℝ≥0∞)⁻¹)) +
+    (openHashEps q + q .h1 * (2 ^ 256 : ℝ≥0∞)⁻¹) +
+    ((qE * 2 : ℕ) : ℝ≥0∞) * (((512 * q .h1 : ℕ) : ℝ≥0∞) * (2 ^ 256 : ℝ≥0∞)⁻¹) +
+    chainHitEpsComb q Arith.Moussaka.M + stmtBindEps q
+
+section Num
+
+variable (lr : Bool) (pk : Fin K → UovPk) (sk : Fin K → Spec.Signer) (qI : ℕ) {A : Adversary K qR}
+  {q : Kind → ℕ} {qE n : ℕ}
+
+theorem hinjUI : Function.Injective fun s : ιI =>
+    (moussakaUnboundIssue s.1.1 s.1.2 lr).instEnc ByteArray.empty :=
+  EndToEnd.SpecRel.hinj_moussakaUnboundIssue lr (fun s : ιI => s.1) 45 (fun s => s.2.1)
+    Subtype.val_injective
+
+theorem hinjUR (hdig : ∀ k, (pk k).digest.size = 32)
+    (hdinj : Function.Injective fun k => (pk k).digest) :
+    Function.Injective fun s : ιR K =>
+      (moussakaUnboundRedeem (ancR pk s) s.1.2.1 s.1.2.2.1 s.1.2.2.2.1 s.1.2.2.2.2 lr).instEnc
+        ByteArray.empty := by
+  refine EndToEnd.SpecRel.hinj_moussakaUnboundRedeem lr (fun s : ιR K => ancR pk s)
+    (fun s => s.1.2.1) (fun s => s.1.2.2.1) (fun s => s.1.2.2.2.1) (fun s => s.1.2.2.2.2) ?_ ?_
+    24 16 16 (fun s => s.2.2.1) (fun s => s.2.2.2.1) (fun s => s.2.2.2.2) ?_
+  · intro s p hp
+    obtain ⟨k, -, rfl⟩ := List.mem_map.1 hp
+    exact hdig k
+  · intro s; simp only [ancR, List.length_map]; have := s.2.1; omega
+  · intro s s' h
+    simp only [ancR, List.map_map, Prod.mk.injEq] at h
+    obtain ⟨h1, h2, h3, h4, h5⟩ := h
+    have hl : s.1.1 = s'.1.1 := (List.map_injective_iff.2 hdinj) h1
+    exact Subtype.ext (Prod.ext hl (Prod.ext h2 (Prod.ext h3 (Prod.ext h4 h5))))
+
+/-- **Theorem U1 (unforgeability per redemption context), with the extraction terms of the
+soundness theorems.** For an adversary within its budget (`A.Budget q qE n`, per stage) and honest
+Anchors whose 32-byte key digests are distinct (`hdig`, `hdinj`: the note's `ε_dig` event, a
+condition on the keys):
+
+    Pr[Win] ≤ qI·εI(q', q'_E) + qI·εUI(q', q'_E) + qR·εUR(q', q'_E, n')
+              + AdvBind(B₁) + AdvCTUF(B₂),
+
+with the provers' budgets `q' = gameK q qI qR`, `q'_E = gameE lr qE qI qR`, `n' = gameH n qI qR`.
+`εI` (`OMUF.epsI`, `ε_ext^{iss}`), `εUI` (`ε_ext^{u-iss}`) and `εUR` (`ε_ext^{u-red}`) are the
+single-proof bounds of the three relations. -/
+theorem omufU_le_num (hA : A.Budget q qE n) (hdig : ∀ k, (pk k).digest.size = 32)
+    (hdinj : Function.Injective fun k => (pk k).digest) :
+    Pr{let E ← $ᵗ CTable; let r ← (simulateQ randomOracle (runE E (game lr pk sk qI A))).run' ∅}[
+        Win r.1] ≤
+      qI * epsI (gameK q qI qR) (gameE lr qE qI qR) +
+      qI * epsUI (gameK q qI qR) (gameE lr qE qI qR) +
+      qR * epsUR (gameK q qI qR) (gameE lr qE qI qR) (gameH n qI qR) +
+      Pr{let E ← $ᵗ CTable; let v ← (simulateQ randomOracle (extAll lr pk sk qI A E)).run' ∅}[
+        Coll lr pk E v] +
+      Pr{let E ← $ᵗ CTable; let v ← (simulateQ randomOracle (extAll lr pk sk qI A E)).run' ∅}[
+        Forge lr pk E v] := by
+  refine (omufU_le lr pk sk qI A).trans
+    (add_le_add (add_le_add (add_le_add (add_le_add ?_ ?_) ?_) le_rfl) le_rfl)
+  · refine (Finset.sum_le_card_nsmul _ _ (epsI (gameK q qI qR) (gameE lr qE qI qR))
+      fun j _ => ?_).trans (by simp)
+    exact moussakaIssue_accept_le_adaptive_spec (ι := ιI) (β := GOut K) (fun s => s.1)
+      (fun s => s.2.1) (fun s => s.2.2) lr (hinjI lr) (PBI lr pk sk qI A j) _
+      ((isQueryBoundP_map_iff _ _ _).2 (game_e lr pk sk hA qI)) _
+      (isKindQueryBoundIC_map _ (game_k lr pk sk hA qI))
+  · refine (Finset.sum_le_card_nsmul _ _ (epsUI (gameK q qI qR) (gameE lr qE qI qR))
+      fun j _ => ?_).trans (by simp)
+    exact moussakaUnboundIssue_accept_le_adaptive_spec (ι := ιI) (β := GOut K) (stUI lr) lr
+      (fun s => s.1) (fun s => Unbound.moussakaUnboundIssue_stmt _ _ lr) (fun s => s.2.1)
+      (hinjUI lr) (PUI lr pk sk qI A j) _
+      ((isQueryBoundP_map_iff _ _ _).2 (game_e lr pk sk hA qI)) _
+      (isKindQueryBoundIC_map _ (game_k lr pk sk hA qI))
+  · refine (Finset.sum_le_card_nsmul _ _
+      (epsUR (gameK q qI qR) (gameE lr qE qI qR) (gameH n qI qR)) fun j _ => ?_).trans (by simp)
+    exact moussakaUnboundRedeem_accept_le_adaptive_spec (ι := ιR K) (β := GOut K) (stUR lr pk) lr
+      (fun s => ancR pk s) (fun s => by simpa using s.2.1) (fun s => s.1.2.1) (fun s => s.1.2.2.1)
+      (fun s => s.1.2.2.2.1) (fun s => s.1.2.2.2.2)
+      (fun s => Unbound.moussakaUnboundRedeem_stmt _ _ _ _ _ lr) (fun s => s.2.2.1)
+      (hinjUR lr pk hdig hdinj) (PUR lr pk sk qI A j) _
+      ((isQueryBoundP_map_iff _ _ _).2 (game_e lr pk sk hA qI)) _
+      ((isQueryBoundP_map_iff _ _ _).2 (game_h lr pk sk hA qI)) _
+      (isKindQueryBoundIC_map _ (game_k lr pk sk hA qI))
+
+end Num
+
+/-! ## Liveness: the honest checks' lengths are the verifier's proof sizes -/
+
+/-- The unbound issuance request length the Anchor expects is `45` plus the executable verifier's
+unbound issuance proof size, on `main` and with label rows. -/
+theorem upfLenI_eq (lr : Bool) : upfLenI lr = (Unbound.issueParams lr).proofBytes := by
+  cases lr <;> decide
+
+/-- The same for the Moderator's unbound redemption request length. -/
+theorem upfLenR_eq (lr : Bool) : upfLenR lr = (Unbound.redeemParams lr).proofBytes := by
+  cases lr <;> decide
+
+/-- On `main`, the request lengths are the C++ constants (`UNBOUND_ISSUE_PROOF_BYTES`,
+`UNBOUND_REDEEM_PROOF_BYTES`). -/
+theorem upfLen_main :
+    upfLenI false = Spec.MoussakaUnbound.issueProofBytes ∧
+      upfLenR false = Spec.MoussakaUnbound.redeemProofBytes := ⟨rfl, rfl⟩
+
+/-- The Anchor's unbound statement has the unbound issuance parameters. -/
+theorem ustmtI_params (lr : Bool) (q : IssQ K) : (ustmtI lr q).params = Unbound.issueParams lr :=
+  rfl
+
+/-- The Moderator's statement has the unbound redemption parameters. -/
+theorem ustmtR_params (lr : Bool) (pk : Fin K → UovPk) (r : RedQ K) :
+    (ustmtR lr pk r).params = Unbound.redeemParams lr := rfl
+
 end VoleMole.ROM.IC.OMUFU
