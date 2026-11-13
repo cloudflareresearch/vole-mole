@@ -247,6 +247,8 @@ import VoleMole.ZK.ReadsROPerm
 import VoleMole.Privacy.MoussakaRO
 import VoleMole.Privacy.MoussakaMain
 import VoleMole.Privacy.RatatouilleMain
+import VoleMole.Privacy.PU
+import VoleMole.Privacy.PUKeccak
 import VoleMole.Privacy.RatatouilleRO
 import VoleMole.ZK.TwoPhaseRO
 import VoleMole.ZK.TwoPhaseIC
