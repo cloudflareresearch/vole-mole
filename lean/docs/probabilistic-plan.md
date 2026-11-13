@@ -1399,8 +1399,10 @@ Files: `Assumptions/LazyPerm.lean` (generic), `Assumptions/CTUFPerm.lean`,
     `ROM/PermJoint.lean`, and the per-table Lemma P bounds (`prEvent_pfailZ_sim_le_E`,
     `prEvent_shiftFailZ_sim_le_E`) averaged with `failEpsP` instead of `failEps`, as
     `ROM/MoussakaOMUFSimPerm.lean` does for Moussaka.
-  - The lazily sampled permutation is taken as the ideal one; its equality with a uniformly drawn
-    permutation (standard) is not proved.
+  - The lazily sampled permutation is the uniformly drawn one (`EagerPerm.rp_eqd_eager`, joint
+    distribution of output, table and state, any oracle computation; proof: condition on the table,
+    the fibres of `π(b)` have equal size by composing with a transposition, induct on the
+    computation). The AES model `ROM/PermModel.lean` (`PTable`) is eager already; the two agree.
 
 ### 2n. Lemma P in the random-oracle model (PomFRIT G8), as implemented
 

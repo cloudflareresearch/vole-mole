@@ -597,8 +597,13 @@ with `n = (q_f + q_S + 1) + 2q_S + 1`. The proof:
   rather than `(q_f + q_S + 1)²·2^{−800}`; and the reduction reuses the function-model one, which
   budgets the final evaluations twice, so `n` has `q_S + 1` more targets than the corrected
   `q_f + 2q_S + 1` (the term `n·failPr` changes accordingly). The lazily sampled permutation is
-  taken as the ideal permutation; its equality with an eagerly drawn uniform permutation is the
-  standard fact, not proved.
+  the eagerly drawn uniform one (`Assumptions/EagerPerm.lean`, `rp_eqd_eager`,
+  `prEvent_rp_eq_eager`): for every oracle computation, without a query bound, a run against
+  `rpImpl` from the empty table has the joint distribution of output, table and other state of
+  `π ← $ᵗ Equiv.Perm B` and a run answered from `π` (`epImpl π`, the table a log of the points
+  determined; `rp_eqd_eager0`: the same without the table, `epImpl0 π`). So every bound on
+  `advCTUFPermAt` holds for the game with `π` drawn up front. Corollaries restating the headline
+  theorems with the eager game are not written.
 - The Moussaka corollaries take the modelling hypothesis in this form (`hmodelP`: concrete
   CT-UF^open of `B₂` ≤ `advCTUFPermAt` of some forger within budget):
   `omuf_le_num_ompr_perm`, `omufU_le_num_ompr_perm`. Non-vacuity: `Audit/PermOMPR.lean` (a toy
@@ -975,7 +980,7 @@ preimage of an unqueried index. Then apply (a) and T1(c). ∎
       `Audit/PermFDH.lean` (a toy forger wins `advFDHPerm` with probability one; the balance
       corollaries instantiated for `balA0`, with `TagIdealP` an argument,
       `tagIdealP_of_eq_zero`).
-    - The lazily sampled permutation is taken as the ideal permutation, as in §5.4.
+    - The lazily sampled permutation is the eager uniform one, as in §5.4 (`rp_eqd_eager`).
     - With AES as random permutations (`ROM/RatatouilleBalanceSimPerm.lean`,
       `Assumptions/RatatouillePermSim.lean`) the balance theorem's forgery term `forgeAdvP` is at
       most the UF-Tag advantage of `forgerP : TagForger PTable` (`TagForger` is generic in the
@@ -1347,8 +1352,6 @@ The reductions between the games (`lean/VoleMole/Assumptions/Shift.lean`, `Blind
 Not mechanized:
 - T1(b, d, e), T2, T3, T5 and P8(b)–(d) (T1(a) and T1(c) are in `Assumptions/IdealTag.lean`, §5.1;
   T4 with `Com` a random function in `Assumptions/CTUFOpenOMPR.lean`, §5.4);
-- the equality of the lazily sampled permutation with an eagerly drawn uniform permutation (the
-  permutation models of `Com`, §5.4, and of `Tag`, §5.8, use the lazy one);
 - the completeness term of T6 at PomFRIT for the Lean client, which needs the Lean prover as
   oracle computations and its completeness in the lazy random-oracle model (§5.6);
 - the converse of `advOMPR_le_ompr31`. In Def. 3.1 the adversary's coins may depend on the

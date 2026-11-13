@@ -600,6 +600,74 @@ theorem rp_eqd_eager0 [SampleableType (Equiv.Perm B)] {α : Type} (oa : OracleCo
   rw [map_bind]
   exact EvalDistEq.bind_right _ fun π => (epImpl_proj pt implC π oa [] s).symm
 
+/-! ### The eager log: consistent with `π`, growing, and holding the evaluated points -/
+
+omit [Fintype B] [SampleableType B] in
+/-- **A recorded input** has its value under a permutation that extends the table. -/
+theorem fwdFind_of_rec {π : Equiv.Perm B} {L : PTab B} (hL : Cons π L) {b : B}
+    (hb : ∃ e ∈ L, e.1 = b) : fwdFind L b = some (π b) := by
+  obtain ⟨e₀, he₀, rfl⟩ := hb
+  unfold fwdFind
+  cases h : L.find? (fun e => decide (e.1 = e₀.1)) with
+  | none => rw [List.find?_eq_none] at h; exact absurd (by simp) (h e₀ he₀)
+  | some e =>
+    have h1 : e.1 = e₀.1 := by simpa using List.find?_some h
+    simp only [Option.map_some, ← h1, hL e (List.mem_of_find?_eq_some h)]
+
+omit [Fintype B] [SampleableType B] in
+theorem fwdE_log (π : Equiv.Perm B) (b : B) {L : PTab B} (hL : Cons π L) :
+    Cons π (fwdE π b L).2 ∧ L <+: (fwdE π b L).2 ∧ ∃ e ∈ (fwdE π b L).2, e.1 = b := by
+  unfold fwdE
+  split
+  · next y h =>
+    obtain ⟨e, he, h1, -⟩ := fwdFind_some' h
+    exact ⟨hL, List.prefix_refl L, e, he, h1⟩
+  · exact ⟨(cons_append _ _ _).2 ⟨hL, rfl⟩, List.prefix_append _ _, (b, π b, true), by simp, rfl⟩
+
+omit [Fintype B] [SampleableType B] in
+theorem invE_log (π : Equiv.Perm B) (c : B) {L : PTab B} (hL : Cons π L) :
+    Cons π (invE π c L).2 ∧ L <+: (invE π c L).2 := by
+  unfold invE
+  split
+  · exact ⟨hL, List.prefix_refl L⟩
+  · exact ⟨(cons_append _ _ _).2 ⟨hL, by simp⟩, List.prefix_append _ _⟩
+
+omit [Fintype B] [SampleableType B] in
+/-- **The eager log stays consistent with `π` and only grows.** -/
+theorem epImpl_log (π : Equiv.Perm B) {α : Type} (oa : OracleComp (specPm A B) α) (L : PTab B)
+    (s : σ) (hL : Cons π L) :
+    ∀ z ∈ support ((simulateQ (epImpl pt implC π) oa).run (L, s)),
+      Cons π z.2.1 ∧ L <+: z.2.1 := by
+  refine OracleComp.simulateQ_run_preservesInv _ (fun st => Cons π st.1 ∧ L <+: st.1)
+    (fun t st hst z hz => ?_) oa (L, s) ⟨hL, List.prefix_refl L⟩
+  rcases t with i | ⟨_ | _, b⟩
+  · simp only [epImpl, StateT.run_mk] at hz
+    cases hp : pt i with
+    | none =>
+      rw [hp] at hz; erw [support_map] at hz
+      obtain ⟨u, -, rfl⟩ := hz; exact hst
+    | some b =>
+      rw [hp] at hz; erw [support_map] at hz
+      obtain ⟨u, -, rfl⟩ := hz
+      have := fwdE_log π b hst.1
+      exact ⟨this.1, hst.2.trans this.2.1⟩
+  · simp only [epImpl, StateT.run_mk, support_pure, Set.mem_singleton_iff] at hz
+    subst hz
+    have := invE_log π b hst.1
+    exact ⟨this.1, hst.2.trans this.2⟩
+  · simp only [epImpl, StateT.run_mk, support_pure, Set.mem_singleton_iff] at hz
+    subst hz
+    have := fwdE_log π b hst.1
+    exact ⟨this.1, hst.2.trans this.2.1⟩
+
+/-- A forward permutation query. -/
+def fwdQP (b : B) : OracleComp (specPm A B) B := liftM ((specPm A B).query (.inr (true, b)))
+
+omit [Fintype B] [DecidableEq B] [SampleableType B] in
+theorem simulateQ_fwdQP {τ : Type} (impl : QueryImpl (specPm A B) (StateT τ ProbComp)) (b : B) :
+    simulateQ impl (fwdQP b) = impl (.inr (true, b)) := by
+  unfold fwdQP; erw [simulateQ_spec_query]
+
 end Eager
 
 end VoleMole.Assumptions.LazyPerm

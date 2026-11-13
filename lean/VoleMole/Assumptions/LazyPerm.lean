@@ -32,8 +32,8 @@ structured part of `B`.
   inverse query has its input in `S` with probability `≤ q_i·|S|/|B|` after `q_i` inverse
   queries. For `Com` and `Tag` (`S` the structured inputs) this is the inverse-query term.
 
-The permutation is sampled lazily (`rpImpl`); that a lazily sampled permutation is distributed as
-an eagerly drawn uniform one is the standard fact, not proved here.
+The permutation is sampled lazily (`rpImpl`); `Assumptions/EagerPerm.lean` (`rp_eqd_eager`) proves
+that this is an eagerly drawn uniform `Equiv.Perm B`.
 
 No `sorry`, no `axiom`.
 -/
