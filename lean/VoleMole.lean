@@ -154,6 +154,7 @@ import VoleMole.ROM.SimSpec
 import VoleMole.ROM.SimJoint
 import VoleMole.ROM.SimJointSpec
 import VoleMole.ROM.MoussakaUnboundSim
+import VoleMole.ROM.SimPerm
 import VoleMole.ROM.MoussakaOMUFSim
 import VoleMole.ROM.RatatouilleBalanceSim
 import VoleMole.ROM.OneMore
