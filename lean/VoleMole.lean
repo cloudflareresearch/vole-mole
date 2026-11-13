@@ -15,6 +15,7 @@ import VoleMole.ZK.Relations
 import VoleMole.ZK.Grinding
 import VoleMole.Seed.Commitments
 import VoleMole.Seed.KOS
+import VoleMole.Seed.KOSUnique
 import VoleMole.Seed.QuickSilver
 import VoleMole.Seed.SimExt
 import VoleMole.Seed.QuantumCipher
