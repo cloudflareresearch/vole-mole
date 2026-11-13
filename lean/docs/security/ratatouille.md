@@ -756,8 +756,25 @@ and affords the amount, else it is refused for both (feasibility is leakage).
   some proof's table contains a candidate for that proof's witness prefix (the opening of the
   token it spends or issues, a change token's included). Bounding it is (PU), one-wayness of
   Keccak-p[800] in the openings, an assumption. The joint hop is needed: round 2 may spend round
-  1's change token, whose opening round 1's proof commits to. Not covered there: cross-proof `iv`
-  and `H₃`-slice collisions and an Issuer reading `H₂³`.
+  1's change token, whose opening round 1's proof commits to. Not covered there: several proofs
+  on shared tables (cross-proof `iv` collisions) and an Issuer reading `H₂³`; for **one** proof
+  both are covered on `main` by `zk_rom_ic_h23_main` (`ZK/HopsMainIC.lean`, `lean/docs/zk.md`
+  §4.2).
+  **(PU) as a game** (`Privacy/PU.lean`, `Privacy/PUKeccak.lean`, `lean/docs/zk.md` §4.3):
+  `puAdv com P = Pr[r ∈ P(n, com n r, aux)]` for a predictor with `c` candidates.
+  `Com(nf, ctx, t, r)` is one call of Keccak-p[800,12] on the encoded state, truncated to 32
+  bytes (`ratatouille_com_eq_comP`), and with a uniformly random permutation in its place a
+  predictor with `q` forward and inverse queries has advantage at most
+  `(c + q)/(2¹²⁸ − q) + q/(2⁵⁴⁴ − q)` (`puAdvPerm_ratatouille_le`): the generic `(q + 1)·2⁻¹²⁸`
+  of the (PU) paragraph below, for one commitment. For Keccak-p[800,12] itself (PU) is an
+  assumption. Unlike for Moussaka (`anonymity_main_pu`), `puTermR` is **not** yet reduced to
+  `puAdv`: with all proofs simulated the game is a function of the commitment columns
+  `t ↦ Com(nf, ctx, t, r)` (`simGame_iff`) and the change token's credit value is the Issuer's
+  choice, so the reduction needs the game's single use of each column made explicit. As for
+  Moussaka, the spend proofs that are computed but not shown (a failed finalization, a refused
+  round) are not predictions of a secret; their part of `puTermR` would be bounded by
+  `(q₅ + 1)·2⁻¹²⁸` each through the simulator's uniform `d` (`pr_thetaMain_le`; mechanized for
+  Moussaka only).
 - The spec's proof sizes are a parameter (`Spec.Ratatouille.Sizes`: `main`'s, or the label-row
   layout's 256 bytes longer proofs). **[Lean] `lean/VoleMole/Privacy/RatatouilleLean.lean`**:
   `unlinkability_label_rows`, the same bound with the executable Lean prover and verifier as the

@@ -69,9 +69,15 @@ the flag and are unchanged.
 | Ratatouille spend | ZK under (PU), computational [Lean, §4.1] | ZK, statistical in `w` |
 
 On `main`, one proof of the executable prover is close to the simulator up to the success of an
-explicit predictor of `w[0..16)` (`zk_rom_ic_main`), and Moussaka's Theorem 4(a) and Ratatouille's
+explicit predictor of `w[0..16)` (`zk_rom_ic_main`; with the tables shared, `H₂³` visible and the
+cipher global, `zk_rom_ic_h23_main`), and Moussaka's Theorem 4(a) and Ratatouille's
 Theorem 2 hold with the joint (PU) hop over the proofs that share `r`, with the (PU) event as an
-explicit term (`anonymity_main`, `unlinkability_main`) [Lean, §4.2].
+explicit term (`anonymity_main`, `unlinkability_main`) [Lean, §4.2]. (PU) is stated as a game
+(`PU.puAdv`); for Moussaka the (PU) event is reduced to the advantage of explicit predictors in it
+(`anonymity_main_pu`), and in the ideal-permutation model for Keccak-p[800] the advantage is at
+most `(c + q)/(2¹²⁸ − q) + q/(2⁴⁴⁰ − q)` for `q` queries and `c` candidates
+(`puAdvPerm_moussaka_le`) [Lean, §4.3]. For the real 12-round permutation (PU) stays an
+assumption.
 
 The rest of the construction checks out on both code versions (§§5–7):
 - The 4 + (d − 1) CRT masks hide the VOLE-check and QuickSilver responses.
@@ -403,25 +409,147 @@ proves about (`ZK/Relations.lean`: `encodeIssueWitness_take`, `encodeRedeemWitne
 predictor of `r` from the commitments, the nullifiers, independent simulator coins and tables:
 **(PU) is the assumption that it is small**. It stays an explicit term, not a hypothesis; in the
 colluding modes it is one-wayness of Keccak-p[800] in `r` (`security/moussaka.md` §3.2), not
-proved. After the joint hop the proofs are the simulator's, and the hiding hop and the final swap
+proved. (One correction, made precise in §4.3: a redemption or spend proof is also computed when
+the adversary made a finalization fail, for a dummy token whose opening is zero. That proof is
+never shown, and its part of `PU_b` is not a prediction of a secret; it is bounded by
+`(q₅ + 1)·2⁻¹²⁸` through the simulator's uniform `d`. For Moussaka, `puTerm_le` reduces `PU_b` to
+the game `PU.puAdv` plus this term.) After the joint hop the proofs are the simulator's, and the hiding hop and the final swap
 of `Moussaka.anonymity` and `Ratatouille.unlinkability` apply at every value of the tables
 (`hiding_hop`, `idealGame_eq`). Both theorems are instantiated in `Audit/Nonvacuous.lean`.
 
+**One proof with the tables shared and `H₂³` visible** (`ZK/HopsMainIC.lean`). The bound of
+`zk_rom_ic_main` also holds in the model of `zk_rom_ic_h23` (§10.1), the one the games of §10.2
+use: `H₅` a uniform table on every 37-byte input, `H₂³` a uniform table on every grinding point
+that the simulator programs (`simTab`), `H₃` a table on the proof's seed inputs, and the cipher of
+the whole BAVC and VOLE expansion one uniform table `E`; the distinguisher reads `H₃`, `H₅`, `E`
+adaptively and `H₂³` freely. Only H6 uses the label rows; every other hop is `zk_rom_ic_h23`'s,
+with `MainP.hlab` (`labelRowOffset + 128 ≤ correctionRows`, true on `main`) in place of the
+label-row sizes (`zk_pre_h4_main`). In particular H4 with the cipher a table the adversary reads
+(`joint3_h4`) is used unchanged; read from the simulator's side it is §6's H8.
+- H6 (`pr_bad_mainG`, `lab_rom_hyp_sG_main`, `joint2_h6_main`): a read of the `H₅` table at a
+  sibling input names one candidate for `u_pre` (`guessOfG`), whatever `iv` its 37 bytes carry;
+  `u_pre = d[0..16) ⊕ w[0..16)`; so the bad event is at most the probability that `w[0..16)` is in
+  the candidate set `candidatesG` (at most `q₅ + 1` values, `card_candidatesG_le`).
+- **`zk_rom_ic_h23_main`**, **`zk_rom_ic_h23_main_num`**: the advantage is at most
+  `q₃·2⁻¹²⁸ + 2⁻¹¹³ + 221·(4607 + q_E + 4607)·2⁻¹²⁸ + Pr[mainPredIC]`, `mainPredIC` the event, in
+  the simulator's experiment (simulator coins, tables with `H₂³` programmed, cipher), that the
+  witness prefix is one of the candidates named by the distinguisher's `H₅` reads on the simulated
+  proof. `pr_mainPredIC_uniform_le`: for a uniform prefix independent of the predictor's inputs it
+  is `≤ (q₅ + 1)·2⁻¹²⁸`. Instantiated at Moussaka's issuance statement in `Audit/MainPU.lean`.
+
+Because every 37-byte read counts as a candidate, no `iv`-collision term is needed for one proof
+(as in §10.2 for the label-row layout, where other proofs' reads are counted as reads).
+
 **Still on paper, for ZK on `main`:**
-- H8 and the global random oracle: each proof has its own uniform tables (the model of §10.1),
-  so the `iv` and `H₃`-slice collisions between proofs (`ε_iv`, the slice term of §10.2) and an
-  adversary that reads `H₂³` (§10.1's `zk_rom_h23`) are not covered on `main`;
+- **several proofs on shared tables** (`ε_iv` proper). `anonymity_main` and `unlinkability_main`
+  give each proof its own uniform tables (the model of `zk_rom_ic`), and their adversary does not
+  read `H₂³`. The one-proof theorem above is in the shared-table model, but the joint hop is not:
+  with one `H₅` table, the candidates for one proof include the `H₅` reads of the other proofs
+  that are still real, and those reads are not a function of the proofs' outputs alone. On `main`
+  they are a function of the output and the witness prefix (the sibling label is the active label
+  shifted by `d[0..16) ⊕ r`), so the bad event of one proof can be moved across the hops of the
+  others as in `MainChain.fill_ideal_le`; what this needs is (i) the executable prover's `H₅` read
+  set as that explicit function, (ii) `MainChain`'s transfer with one shared table and the
+  simulators' `H₂³` programming (the collision terms `δ` of §10.2), and (iii) a bound, in the game
+  with all proofs simulated, on the event that the virtual sibling key of one simulated proof is a
+  candidate for another (an `iv`-type term; with `H₄` a fixed function, as in the Lean games, the
+  `iv` of a simulated proof is not uniform, the obstacle of §10.8's `β`). Not done;
 - the adversary's earlier choices (responses, Anchor Sets, amounts) do not read the tables, as in
   §10.2's games; Moussaka's game is the index-taking Client's (`main`'s `find_issuer` Client, and
-  the non-colluding mode 4(b) with its statistical `Pred = 2⁻¹²⁸`, are not done on `main`);
-- a bound on `PU_b` itself: (PU), one-wayness of Keccak-p[800] in `r`, an assumption
-  (`security/moussaka.md` §3.2, `security/ratatouille.md`); statistically, for a prefix independent
-  of the predictor's inputs, `pr_mem_uniform_le` gives `(q₅ + 1)·2⁻¹²⁸` per proof;
+  the non-colluding mode 4(b) with its statistical `Pred = 2⁻¹²⁸`, are not done on `main`; for
+  4(b) the pieces are there: `pr_thetaMain_le` and `pr_mem_uniform_le` give the statistical bound
+  once the view is shown to depend on `r` only through the refusal bit);
+- a bound on (PU) for the real permutation: §4.3 states (PU) as a game, reduces Moussaka's
+  `PU_b` to it and bounds it in the ideal-permutation model; for Keccak-p[800,12] itself it is an
+  assumption. For Ratatouille `puTermR` is not yet reduced to the game (§4.3);
 - the identification of the `main` code with the model (by inspection, `main:` citations above);
   the Lean prover's KAT match covers `main`'s layout (`lake exe prover_vectors`);
 - for PomFRIT, that `rank F ≤ λ < n_mult` (so `#S/|B|` is small); the bit-level link from
   `Spec/PomFRIT.lean`'s byte `r` to the witness bit vector is a hypothesis (`hw`, the layout of
   `Arith/PomFRIT.lean`). PomFRIT's ZK on `main` is false (§4, `pomfrit_attack_test`).
+
+### 4.3 (PU) as a game, and its bound in the ideal-permutation model
+
+**The game** (`Privacy/PU.lean`). Let `com : N → R → T` be a commitment with public part `n` and
+opening `r`. A predictor `P n t aux` sees the public part, the commitment `t = com n r` and coins
+`aux` independent of `r`, and outputs a finite set of candidates:
+
+    puAdv com P = Pr_{n, r, aux}[ r ∈ P n (com n r) aux ].
+
+(PU) for a class of predictors is the assumption that `puAdv` is small. It is one-wayness of
+`com` in `r` with `c` guesses, `c` the size of the candidate sets. It is computational: the
+exhaustive predictor has `puAdv = 1` (`puAdv_bruteForce`), with one candidate when `com n` is
+injective. If the candidates do not depend on `t`, `puAdv ≤ c/|R|` (`puAdv_const_le`).
+
+**Moussaka's `PU_b` is this game** (`Privacy/MoussakaMainPU.lean`, `ZK/MainPU.lean`). With all
+four proofs simulated, the guess's input is a function of the commitments `t₀, t₁`, the
+nullifiers, the simulators' coins and the tables (`yM_sim`, from `post_redSim`); so are the
+redemption statements when the tokens finalized (`redStmt_fin`), the read sets and the candidate
+sets (`candJ`: what `predJ` tests on a simulated proof, `predJ_simP`). Both of a Client's proofs
+have its opening as witness prefix (`wPre_issueWitness`, `wPre_redeemWitness`). The predictor for
+Client `c` (`predM`) outputs the candidates of its issuance proof and, if §6's rule lets the
+redemptions run, of its redemption proof: at most `2·(q₅ + 1)` values (`card_predM_le`). The other
+Client's `(nf, r)`, the simulators' coins and the tables are its auxiliary coins (`predM₀`,
+`predM₁`). When the rule fails, the redemption proofs are computed but not shown, and the token
+may be the dummy of a failed finalization, so the witness prefix is no secret. Then the read set
+does not depend on the proof's uniform `d`, and `d[0..16) ⊕ target` is a candidate with probability
+`≤ (q₅ + 1)·2⁻¹²⁸` for any target (`pr_thetaMain_le`, `pr_d3_le`, `pr_d4_le`). So
+
+    puTerm b ≤ puAdv Com (predM₀ b) + puAdv Com (predM₁ b) + 2·(q₅ + 1)·2⁻¹²⁸      (puTerm_le)
+
+and **`anonymity_main_pu`**: Theorem 4(a) on `main`,
+
+    |Pr[world 0] − Pr[world 1]| ≤ 8·εRF(q₃, q_E)
+        + 15·(Σ_{b,c} puAdv Com (predM_c b) + 4·(q₅ + 1)·2⁻¹²⁸) + 2·εhide,
+
+for a guess whose `H₅` read sets have at most `q₅` keys. The only terms that are not numbers are
+the four (PU) advantages and `εhide` (hiding of `Com`). `Com` is the concrete
+`Spec.Moussaka.com`: `puAdv_comM_eq` writes it as `comP kp800 (XM ci cr) (trunc 45 55)`, one call
+of Keccak-p[800,12] on the encoded state, truncated to 45 bytes (`com_eq_comP`).
+
+**The ideal-permutation model** (`Privacy/PU.lean`, `Privacy/PUKeccak.lean`). Replace Keccak-p[800]
+by a uniformly random permutation `π` of the 800-bit state: `com n r = tr (π (X n r))`, `X n`
+injective in `r` (`XM_injective`: the opening is bytes 7…22 of the state), `tr` the truncation.
+The predictor is an oracle algorithm with **forward and inverse** queries to `π` (`PTree`, a
+decision tree; `PTree.run`), at most `q` queries on every path (`PTree.Bound`), at most `c`
+candidates. Then (`pr_predict_perm_le`, `puAdvPerm_le`)
+
+    Pr_{π, n, r, aux}[ r ∈ P^π(n, tr (π (X n r)), aux) ] ≤ (c + q)/(|R| − q) + q/(m − q),
+
+`m` the number of states with a given truncation. For Moussaka (128-bit `r`, 360-bit `Com`):
+`(c + q)/(2¹²⁸ − q) + q/(2⁴⁴⁰ − q)` (`puAdvPerm_moussaka_le`); for Ratatouille (256-bit `Com`):
+`(c + q)/(2¹²⁸ − q) + q/(2⁵⁴⁴ − q)` (`puAdvPerm_ratatouille_le`, `ratatouille_com_eq_comP`). This
+is `security/moussaka.md` §3.2's generic estimate `(q + 1)/2¹²⁸`, with the inverse-query term.
+
+The proof is by symmetry, with no lazy sampling:
+- `pr_input_sym_le`: if the inputs of `π` that the run determines (`PTree.ins`: its forward
+  queries and the answers of its inverse queries) do not contain `X r`, then for every `r'` with
+  `X r' ∉ ins` the permutation `π ∘ swap (X r) (X r')` gives `r'` the same commitment and the same
+  run. So `r` is one of at least `|R| − q` equally likely openings: `≤ c/(|R| − q)`;
+- `pr_output_sym_le`: likewise a set of `c` candidates for the value `π (X r)` contains it with
+  probability `≤ c/(m − q)`, through `swap (π (X r)) y' ∘ π` for the `y'` with the same truncation;
+- `PTree.touch`: if the run does determine `π` at `X r`, cut it before the first query that does
+  (`PTree.cut`): that query is a forward query at `X r` (it names `r`) or an inverse query at
+  `π (X r)` (it names that value). One candidate each, summed over the `q` positions.
+
+**What this means for the real permutation.** Nothing is proved about Keccak-p[800,12]. The
+theorem says that an attack which uses the permutation only through forward and inverse
+evaluations, with no knowledge of its structure, needs about `2¹²⁸/(c + q)` evaluations. The real
+permutation is one fixed public function and the predictors of `anonymity_main_pu` are arbitrary
+functions of their inputs (they compute `Com` themselves), so no query-counting bound applies to
+`puAdv Com`; the exhaustive predictor has advantage `1` (`Audit/MainPU.lean`). For it (PU) is the
+assumption that 12-round Keccak-p[800] (12 of 22 rounds) has no structural shortcut for recovering
+128 unknown input bits from a 360-bit (256-bit) truncated output when the other 672 input bits are
+known. This is the status of `εhide` (§10.9), for the same reason: `Com` is evaluated inside the
+relations, so it is concrete code in the games.
+
+**Not done.** For Ratatouille, `puTermR` (`unlinkability_main`) is not reduced to `puAdv`. The
+simulated game there is a function of the commitment *columns* `t ↦ Com(nf, ctx, t, r)`
+(`Ratatouille.simGame_iff`), so the same reduction gives predictors that see a column, and the
+change token's credit value is chosen by the Issuer; a single-commitment form needs the game's
+uses of each column (one point each) made explicit. The ideal-permutation bound is for one
+commitment and a decision-tree predictor; a predictor with several commitments under related
+states (a column) is not covered.
 
 ## 5. The simulator
 
@@ -823,7 +951,9 @@ All files are under `lean/VoleMole/ZK/` (and `Privacy/LeanProver.lean`, `Privacy
 `Privacy/MoussakaInterleaveOC.lean`, `Privacy/RatatouilleInterleaveOC.lean`, §10.8; for `main`'s
 layout without label rows, `ZK/Main.lean`, `ZK/Relations.lean`, §4.1, and `ZK/HopsMain.lean`,
 `Privacy/MainChain.lean`, `ZK/MainSlots.lean`, `ZK/MainGame.lean`, `Privacy/MoussakaMain.lean`,
-`Privacy/RatatouilleMain.lean`, §4.2). There is
+`Privacy/RatatouilleMain.lean`, `ZK/HopsMainIC.lean`, §4.2; `Privacy/PU.lean`,
+`Privacy/PUKeccak.lean`, `ZK/MainPU.lean`, `Privacy/MoussakaMainPU.lean`, `Audit/MainPU.lean`,
+§4.3). There is
 no `sorry` and no `axiom`. `#print axioms` lists
 only `propext`, `Classical.choice` and `Quot.sound`.
 
