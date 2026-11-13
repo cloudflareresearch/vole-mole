@@ -757,9 +757,10 @@ and affords the amount, else it is refused for both (feasibility is leakage).
   token it spends or issues, a change token's included). Bounding it is (PU), one-wayness of
   Keccak-p[800] in the openings, an assumption. The joint hop is needed: round 2 may spend round
   1's change token, whose opening round 1's proof commits to. Not covered there: several proofs
-  on shared tables (cross-proof `iv` collisions) and an Issuer reading `H₂³`; for **one** proof
-  both are covered on `main` by `zk_rom_ic_h23_main` (`ZK/HopsMainIC.lean`, `lean/docs/zk.md`
-  §4.2).
+  on shared tables and an Issuer reading `H₂³`; for **one** proof both are covered on `main` by
+  `zk_rom_ic_h23_main` (`ZK/HopsMainIC.lean`), and for four proofs on one `H₅` table and one
+  cipher by `main_shared_le` (`ZK/MainSharedGame.lean`, `lean/docs/zk.md` §4.2; instantiated for
+  Moussaka only).
   **(PU) as a game** (`Privacy/PU.lean`, `Privacy/PUKeccak.lean`, `lean/docs/zk.md` §4.3):
   `puAdv com P = Pr[r ∈ P(n, com n r, aux)]` for a predictor with `c` candidates.
   `Com(nf, ctx, t, r)` is one call of Keccak-p[800,12] on the encoded state, truncated to 32
@@ -769,8 +770,16 @@ and affords the amount, else it is refused for both (feasibility is leakage).
   of the (PU) paragraph below, for one commitment. For Keccak-p[800,12] itself (PU) is an
   assumption. Unlike for Moussaka (`anonymity_main_pu`), `puTermR` is **not** yet reduced to
   `puAdv`: with all proofs simulated the game is a function of the commitment columns
-  `t ↦ Com(nf, ctx, t, r)` (`simGame_iff`) and the change token's credit value is the Issuer's
-  choice, so the reduction needs the game's single use of each column made explicit. As for
+  `t ↦ Com(nf, ctx, t, r)` (`simGame_iff`). Each column is used at one credit (`T_init` for an
+  issued token, `clientCheck(τ.t, τ.x, d)` for a change token, which does not depend on the
+  change token's `(nf', r')`), so no column version of (PU) is needed: `comCredit ctx T (nf, b) r
+  = Com(nf, ctx, T b, r)` puts what determines the credit into the public part, and the
+  ideal-permutation bound is unchanged (`puAdvPerm_ratatouille_credit_le`,
+  `Privacy/PUKeccak.lean`). The reduction of `puTermR` to three such predictors is not
+  mechanized. Nor is the shared-table version: Moussaka's is `anonymity_main_shared`
+  (`lean/docs/zk.md` §4.2), and its joint hop `main_shared_le` is stated for any four-proof game,
+  so what Ratatouille lacks is the reduction above and the simulators' programming as a function
+  of the requests. As for
   Moussaka, the spend proofs that are computed but not shown (a failed finalization, a refused
   round) are not predictions of a secret; their part of `puTermR` would be bounded by
   `(q₅ + 1)·2⁻¹²⁸` each through the simulator's uniform `d` (`pr_thetaMain_le`; mechanized for

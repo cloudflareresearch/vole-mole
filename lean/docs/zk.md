@@ -521,7 +521,8 @@ table.
   once the view is shown to depend on `r` only through the refusal bit);
 - a bound on (PU) for the real permutation: §4.3 states (PU) as a game, reduces Moussaka's
   `PU_b` to it and bounds it in the ideal-permutation model; for Keccak-p[800,12] itself it is an
-  assumption. For Ratatouille `puTermR` is not yet reduced to the game (§4.3);
+  assumption. For Ratatouille `puTermR` is not yet reduced to the game; the commitment with the
+  credit in its public part and its ideal-permutation bound are there (§4.3);
 - the identification of the `main` code with the model (by inspection, `main:` citations above);
   the Lean prover's KAT match covers `main`'s layout (`lake exe prover_vectors`);
 - for PomFRIT, that `rank F ≤ λ < n_mult` (so `#S/|B|` is small); the bit-level link from
@@ -603,13 +604,25 @@ assumption that 12-round Keccak-p[800] (12 of 22 rounds) has no structural short
 known. This is the status of `εhide` (§10.9), for the same reason: `Com` is evaluated inside the
 relations, so it is concrete code in the games.
 
-**Not done.** For Ratatouille, `puTermR` (`unlinkability_main`) is not reduced to `puAdv`. The
-simulated game there is a function of the commitment *columns* `t ↦ Com(nf, ctx, t, r)`
-(`Ratatouille.simGame_iff`), so the same reduction gives predictors that see a column, and the
-change token's credit value is chosen by the Issuer; a single-commitment form needs the game's
-uses of each column (one point each) made explicit. The ideal-permutation bound is for one
-commitment and a decision-tree predictor; a predictor with several commitments under related
-states (a column) is not covered.
+**Ratatouille: the column question is settled, the reduction is not done.** `puTermR`
+(`unlinkability_main`) is not reduced to `puAdv`. The simulated game there is a function of the
+commitment *columns* `t ↦ Com(nf, ctx, t, r)` (`Ratatouille.simGame_iff`). But each column is used
+at one credit: an issued token's at `T_init`, a change token's at
+`t' = clientCheck(τ.t, τ.x, d)`, which depends on the spent token and on the Issuer's amount, not
+on the change token's own `(nf', r')`. So (PU) needs no column version: what determines the credit
+goes into the public part. `comCredit ctx T (nf, b) r = Com(nf, ctx, T b, r)`
+(`Privacy/PUKeccak.lean`) is a commitment in the sense of `puAdv`, with public part `(nf, b)`. It
+is one truncated call of Keccak-p[800,12] on a state that is injective in `r` for every public
+part (`comCredit_eq_comP`), and the ideal-permutation bound is the single-commitment one,
+`(c + q)/(2¹²⁸ − q) + q/(2⁵⁴⁴ − q)` (`puAdvPerm_ratatouille_credit_le`).
+
+What is not mechanized is the reduction itself: the simulated game's `H₅` read sets, spend
+statements and witness prefixes as functions of the four commitment values, the nullifiers, the
+simulators' coins and the tables (the analogue of `yM_sim` and `simS_eq`, through
+`Ratatouille.view_map` and `pubView`), with three predictors (the two issued tokens' openings and
+round 1's change token's). The shared-table version for Ratatouille is not done either: it is an
+instance of `main_shared_le` (§4.2), which is stated for any four-proof game, plus that reduction
+and the simulators' programming as a function of the requests (§10.2's `Vtab`).
 
 ## 5. The simulator
 
