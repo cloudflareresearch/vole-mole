@@ -4,7 +4,48 @@ import VoleMole.Arith.GF256Field
 /-!
 # Theorem R: the bad events on values
 
-`lean/docs/security/ompr-shift-algebra.md` §2.2, step 1.
+`lean/docs/security/ompr-shift-algebra.md` §2.2, step 1, and Corollary R′. `thmR`
+(`Assumptions/TheoremR.lean`) leaves the term `badPr`: the probability, in `M`'s run, that `M`'s
+flag `bad` is set (`MSt.addT`: a new target is `0`, or in the class of an earlier target or of an
+uncounted candidate; `MSt.complete`: a candidate is useful but not counted). Here it is bounded,
+for targets in `F^m` with the class relation "equal up to a nonzero scalar" (`scls`; UOV's
+`Links.uovCls` is `scls GF256 45`) and a reduction with at most `T` messages to `A**_D`
+(`IsQueryBoundP` on the `.inr` queries; rewinding included, every message counts).
+
+**The bound** (`badPr_le`). With `NT = n + q·T` target draws and `NL = (q + 1)·T` list draws,
+
+    badPr ≤ (NT·cT + NL·cL) / |F|^m,
+    cT = 1 + NT·Q + NL·Q + NL·τ²·(Q²·NT + Q),    cL = τ²·(1 + Q²·NT²),    Q = |F|.
+
+At `GF(256)^45` this is at most `V⁴·2^{−343}`, `V = n + c + (τ + 1)(q + 1)·T`, the note's value
+(`badNum_le`, `badPr_le_V4`; it needs `q ≥ 1`, so that `V ≥ 2(τ + 1)` once `T ≥ 1`).
+
+**The proof.** A union bound over the fresh uniform values, each charged when it is drawn.
+* The bad states (`Ebad`): `M`'s flag, or (E3) as a property of the state (`E3`): a cached shift
+  list has two shifts whose difference is `0` or `μ·w − μ'·w'` for targets `w`, `w'` drawn so far.
+* A target draw makes the state bad only if the target lies in `tgtBad` (`draw_mem`): `0`, the
+  classes of the targets and of the uncharged calls, and for each cached list and pair of shifts
+  the `≤ Q²·|tl| + Q` points that would complete (E3). Its probability is `|tgtBad| / Q^m`
+  (`pr_draw_le`).
+* A list draw makes the state bad only if two of its shifts differ by an element of `lstBad`
+  (`lst_mem`); the difference of two coordinates of a uniform function is uniform (`pr_diff_mem`),
+  so the probability is `≤ τ²·|lstBad| / Q^m` (`pr_lst_le`).
+* A completion sets `bad` only if (E3) already held for the cached lists of the run
+  (`complete_E3`), which `prog` queries just before (`lsts_step`).
+* The run: `bad_run`, by induction on the reduction with the message budget, with the invariant
+  `Ival` (room for the draws still to come, via `Dlt`) and the potential `Bnd`.
+
+**Theorem R with every term explicit** (`thmR_num`; at UOV's parameters `thmR_V4`): the query
+bound also gives `≤ q·T` junk targets and `≤ T` completed runs (`jointExp_counts`), so
+
+    Pr[R wins OMPR(n, c)] ≤ 2·τ^{−(q+1)} + Adv^{free}(M; n + q·T, c + (q + 1)·T) + V⁴·2^{−343}.
+
+**Corollary R′** (`corR'`): if `R` has loss `L` against `A**_D` (it wins with probability
+`≥ w/L`, `w` the OMPR⊕τ advantage of `A**_D`) and `4L ≤ τ^{q+1}`, then
+`w/L ≤ 1/(2L) + Adv^{free}(M) + V⁴·2^{−343}`. The note's claim `w ≥ 1 − (2q + 1)·δ^{255}` is
+not mechanized: `A**_D` is not an adversary of a Lean OMPR⊕τ game.
+
+No `sorry`, no `axiom`.
 -/
 
 open OracleComp OracleSpec VoleMole.ROM.OneMore
