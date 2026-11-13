@@ -950,6 +950,10 @@ file.
   `uov-open-reductions.md` §4 extends (b) to all reductions that are black-box in `(P, D)`, with
   rewinding (loss `≥ τ^{q+1}/2`), and notes that (b) must allow embeddings `μ·t_j ⊕ c_k`.
 - There is no separation either, and the generic bound (c) is the same.
+- `ompr-shift-algebra.md` treats reductions that use the algebra of `P`. A reduction that is
+  black-box in the adversary still loses `τ^{q+1}/4`, unless it breaks OMPR^free
+  (`uov-open-reductions.md` §3.1). The only structural use of the shifts found is a list on one
+  line `F·c`, which removes one of the 45 equations: no gain at τ = 17, `≈ 2^{3.7}` at `τ ≥ 256`.
 - Keep U1, which is proved and loses at most `2^{−7}` at `2^{64}` queries, as the main statement.
   Cite U2 under the explicitly stronger OMPR⊕17.
 - The cleanest way out is a protocol change, §8 C2. It makes the 17-shift question moot.
@@ -1060,8 +1064,10 @@ hash-and-sign with retry [KX24]).
 - **OMPR ⇒ OMPR⊕17** (§6). Partly answered in `uov-open-reductions.md` §4: OMPR⊕τ ⇒ OMPR is
   tight (Lean `advOMPR_le_shift`), and the `τ^{q+1}` guessing bound is Lean
   `advOMPRShift_le_guess`; the converse has no relativizing proof with loss below `τ^{q+1}/2`,
-  even with rewinding; the shift cannot be absorbed into the key. A proof that uses the algebra of `P`, and a
-  separation, both remain open.
+  even with rewinding; the shift cannot be absorbed into the key. `ompr-shift-algebra.md`: a proof
+  that uses the algebra of `P` but the adversary as a black box would break OMPR^free (Theorem R
+  there); no attack at τ = 17. A proof that is not black-box in the adversary, and a separation,
+  remain open.
 - **CT-UF with arbitrary targets** versus OMPR. Answered in `uov-open-reductions.md` §2–§3: CT-UF
   as defined is false (scaling); up to scalars it *is* the "free non-challenge calls" variant,
   which is not implied by OMPR for relativizing reductions, and is implied when the free calls do

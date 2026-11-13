@@ -32,7 +32,7 @@ bijection of `GF(256)`. So `s ↦ √μ·s` maps the preimages of `t` onto the p
 | A3 | Turning a preimage of `y` into a preimage of `y ⊕ Δ`, for uniform `Δ`, **is** the UOV problem (tight) | proved | §4.3 |
 | A4 | **Rewinding does not help in general.** In the generic model, every reduction OMPR⊕τ ⇒ OMPR that is black-box in the adversary and in `(P, D)`, with unlimited rewinding, any embedding and any number of targets and calls, succeeds with probability `≤ 2·τ^{−(q+1)} + V⁴·2^{−360}` against one explicit adversary (`τ ≥ 7`, `q ≥ 1`). Guessing achieves `τ^{−(q+1)}` | proved; inequality and counting Lean (`rewind_supermartingale`, `lottery_count`) | §4.4 |
 | A5 | **Rewinding does help for some adversaries**: if all `D`-queries are on shifted targets of the first `N − 1` requests, a rewinding reduction has polynomial loss (`ε/3`, time `×8τ(τ(N−1)+1)/ε`) | proved | §4.5 |
-| A6 | OMPR ⇒ OMPR⊕17 for UOV with polynomial loss: **open**. Any proof must use the algebra of `P` (by A4) in a way that A3 makes unlikely, or be non-black-box in the adversary | conjecture, obstacles | §4.6 |
+| A6 | OMPR ⇒ OMPR⊕17 for UOV with polynomial loss: **open**. Any proof must use the algebra of `P` (by A4) in a way that A3 makes unlikely, or be non-black-box in the adversary. Follow-up (`ompr-shift-algebra.md`): using the algebra does not help a reduction that is black-box in the adversary, unless OMPR^free fails; no attack at τ = 17 | conjecture, obstacles | §4.6 |
 
 **Answers to the two questions.**
 - **A.** OMPR⊕τ ⇒ OMPR is tight. OMPR ⇒ OMPR⊕τ has no tight or polynomial-loss proof in the
@@ -527,6 +527,17 @@ coincide ([UA] Prop. 8(c)), Lemma A3, and the absence of a translation symmetry 
 the choice among τ targets with fixed differences. We found none. A meta-reduction in the style
 of [BMV08] is not available: it needs to simulate `A**`'s forgeries, and preimages are not unique.
 
+**Follow-up: `ompr-shift-algebra.md`.**
+- Theorem R there extends A4 to UOV itself: a reduction that is black-box in the adversary only,
+  with any use of `pk`, wins against `A**` (with forgeries `D(z)`) with probability
+  `≤ 2·τ^{−(q+1)} + Adv^{free}_{UOV}(M) + V⁴·2^{−343}`. So item 2 above is closed for this class
+  unless OMPR^free (§3.1) fails.
+- Its §3 goes through the algebra (symmetries, polar form, kernel and oil translations, spans of
+  preimages): no combiner. An affine symmetry never translates targets (Lean `affine_symmetry`).
+- Its §4: collinear shifts `λ_a·c` remove one of the 45 equations. That is a gain of `≈ 2^{3.7}`
+  for `τ ≥ 256` and none for τ = 17 (`256/17 = 2^{3.9}`). The conjecture is to be read for
+  `τ ≤ 17`.
+
 **Advice, unchanged from [UA] §6.** Keep U1 as the main statement and U2 under the explicitly
 stronger OMPR⊕17. The protocol change [UA] §8 C2 removes the question.
 
@@ -559,7 +570,9 @@ bookkeeping of B2. The goodness part of Lemma S (item 3) is on paper; it is not 
 
 ## 7. Open
 
-- OMPR ⇒ OMPR⊕17 for UOV (Conjecture A6), by a proof that is not relativizing.
+- OMPR ⇒ OMPR⊕17 for UOV (Conjecture A6), by a proof that is not relativizing. By
+  `ompr-shift-algebra.md` Theorem R it must also be non-black-box in the adversary, or break
+  OMPR^free.
 - OMPR^free for UOV: is there a combiner across classes? Cryptanalysis of §3.5, item 3.
 - The translation problem for a fixed `Δ` versus the UOV problem (§4.3).
 - A4 for `τ < 5` (other constants), and for a PSF that has the scaling symmetry built in.
