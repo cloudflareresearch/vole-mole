@@ -167,4 +167,263 @@ theorem real_sim_shared {q3 qE : ℕ} (hC : A.Cons q3 qE) (b : Bool) :
     small_pIm small_pRm small_pRm hashesWF_shake (gvalidS A idx b) (evS A idx b) (r5S A idx b)
     (rd_evS A idx hC b) (rd_r5S A idx hC b)
 
+
+/-! ## With all proofs simulated: a function of the commitments and the nullifiers -/
+
+/-- The simulators' coins and the raw tables (the tape of the simulated game without the
+secret). -/
+abbrev AuxS := USh × KS pIm × KS pIm × KS pRm × KS pRm
+
+/-- A statement with an empty witness (the simulator's programming reads the statement only). -/
+def swOf (st : Statement) : SW := (st, ByteArray.empty)
+
+/-- The simulator's tables depend on the statement only. -/
+lemma simVis_congr (Hb : Hashes) (p : Params) (c : SimCoins p) (V : VP p) {y y' : Option SW}
+    (h : y.map Prod.fst = y'.map Prod.fst) (u : USh) :
+    simVis Hb p c V y u = simVis Hb p c V y' u := by
+  rcases y with _ | y <;> rcases y' with _ | y'
+  · rfl
+  · simp at h
+  · simp at h
+  · simp only [Option.map_some, Option.some.injEq] at h
+    simp only [simVis, h]
+
+/-- **The simulated view** as a function of the commitments `t₀, t₁`, the nullifiers `n₀, n₁`
+revealed at redemption, the simulators' coins and the raw tables: the openings enter nothing. The
+`H₂³` tables are programmed for the public statements. -/
+noncomputable def hviewS (b : Bool) (t₀ t₁ n₀ n₁ : Bytes) (a : AuxS) : Prop :=
+  let q₀ := reqS t₀ a.2.1.1.2
+  let q₁ := reqS t₁ a.2.2.1.1.2
+  let ok := allOkT A.toM.int idx q₀ q₁ t₀ t₁
+  A.guess q₀ q₁ (bif ok then
+      some (ySim A.toM.int simRM b q₀ q₁ n₀ n₁ a.2.2.2.1.1.2 false,
+        ySim A.toM.int simRM b q₀ q₁ n₀ n₁ a.2.2.2.2.1.2 true) else none)
+    (a.1, (simVis Hashes.shake pIm a.2.1.1.2 a.2.1.2 (some (swOf (stI ⟨t₀, A.toM.int.ci⟩))) a.1,
+      simVis Hashes.shake pIm a.2.2.1.1.2 a.2.2.1.2 (some (swOf (stI ⟨t₁, A.toM.int.ci⟩))) a.1,
+      simVis Hashes.shake pRm a.2.2.2.1.1.2 a.2.2.2.1.2
+        (bif ok then some (swOf (stR (xSideM A.toM b q₀ q₁ n₀ n₁ false))) else none) a.1,
+      simVis Hashes.shake pRm a.2.2.2.2.1.2 a.2.2.2.2.2
+        (bif ok then some (swOf (stR (xSideM A.toM b q₀ q₁ n₀ n₁ true))) else none) a.1))
+
+/-- `allOk` on simulated issuance outputs is `allOkT` on the requests and the commitments. -/
+lemma allOk_sim (s : SecM) (c₁ c₂ : SimCoins pIm) :
+    allOk A.toM.int idx (issM A.toM s false (some (simulate pIm c₁)))
+        (issM A.toM s true (some (simulate pIm c₂))) =
+      allOkT A.toM.int idx (reqS (tM A.toM s false) c₁) (reqS (tM A.toM s true) c₂)
+        (tM A.toM s false) (tM A.toM s true) :=
+  allOk_eq_allOkT idx A.toM.int _ _ rfl rfl
+
+/-- **A redemption statement of the simulated game**: none unless §6's rule holds, and then the
+public statement `stR (xSideM …)` with the opening of Client `b ^^ side` as witness prefix. -/
+theorem redStmt_sim (b : Bool) (s : SecM) (c₁ c₂ : SimCoins pIm) (side : Bool) :
+    (bif allOkT A.toM.int idx (reqS (tM A.toM s false) c₁) (reqS (tM A.toM s true) c₂)
+        (tM A.toM s false) (tM A.toM s true) then
+      ∃ y, redStmt A.toM (ptM A.toM idx b s (some (simulate pIm c₁)) (some (simulate pIm c₂))
+        side) = some y ∧
+        y.1 = stR (xSideM A.toM b (reqS (tM A.toM s false) c₁) (reqS (tM A.toM s true) c₂)
+          (nOf s false) (nOf s true) side) ∧ wPre y.2 = rOf s (b ^^ side)
+    else True) := by
+  cases hok : allOkT A.toM.int idx (reqS (tM A.toM s false) c₁) (reqS (tM A.toM s true) c₂)
+    (tM A.toM s false) (tM A.toM s true)
+  · trivial
+  · have hA : allOk A.toM.int idx (issM A.toM s false (some (simulate pIm c₁)))
+        (issM A.toM s true (some (simulate pIm c₂))) = true := by rw [allOk_sim, hok]
+    have hr := redeemOk_pt_of_allOk idx A.toM.int hA b side
+    have hfin : finT A.toM.int (reqS (tM A.toM s false) c₁) (reqS (tM A.toM s true) c₂)
+        (tM A.toM s false) (tM A.toM s true) (b ^^ side) = true := by
+      have := hok
+      unfold allOkT at this
+      simp only [Bool.and_eq_true] at this
+      cases b ^^ side
+      · exact this.1.1.1.1.1
+      · exact this.1.1.1.1.2
+    have hsome : ∃ y, redStmt A.toM (ptM A.toM idx b s (some (simulate pIm c₁))
+        (some (simulate pIm c₂)) side) = some y := by
+      unfold redeemOk at hr
+      unfold redStmt
+      have e : ptM A.toM idx b s (some (simulate pIm c₁)) (some (simulate pIm c₂)) side =
+          pt A.toM.int idx b (issM A.toM s false (some (simulate pIm c₁)))
+            (issM A.toM s true (some (simulate pIm c₂))) side := rfl
+      rw [e]
+      split at hr
+      · cases hr
+      · rename_i pk hk
+        simp only [decide_eq_true_eq] at hr
+        rw [hk]
+        simp only
+        simp only [hr, ↓reduceIte]
+        exact ⟨_, rfl⟩
+    obtain ⟨y, hy⟩ := hsome
+    let k : AuxM := ((c₁, Classical.arbitrary _), (c₂, Classical.arbitrary _),
+      (Classical.arbitrary _, Classical.arbitrary _), (Classical.arbitrary _, Classical.arbitrary _))
+    exact ⟨y, hy, redStmt_fin A.toM idx b s k side hfin y hy⟩
+
+
+/-- The redemption statements of the simulated game, gated by §6's rule. -/
+lemma σ₃_sim (b : Bool) (s : SecM) (c₁ c₂ : SimCoins pIm) :
+    (gameS A idx b).σ₃ s (some (simulate pIm c₁)) (some (simulate pIm c₂)) =
+      bif allOkT A.toM.int idx (reqS (tM A.toM s false) c₁) (reqS (tM A.toM s true) c₂)
+        (tM A.toM s false) (tM A.toM s true) then
+        redStmt A.toM (ptM A.toM idx b s (some (simulate pIm c₁)) (some (simulate pIm c₂)) false)
+      else none := by
+  show (bif allOk _ _ _ _ then _ else _) = _
+  rw [allOk_sim]
+
+lemma σ₄_sim (b : Bool) (s : SecM) (c₁ c₂ : SimCoins pIm) (o : Option Out) :
+    (gameS A idx b).σ₄ s (some (simulate pIm c₁)) (some (simulate pIm c₂)) o =
+      bif allOkT A.toM.int idx (reqS (tM A.toM s false) c₁) (reqS (tM A.toM s true) c₂)
+        (tM A.toM s false) (tM A.toM s true) then
+        redStmt A.toM (ptM A.toM idx b s (some (simulate pIm c₁)) (some (simulate pIm c₂)) true)
+      else none := by
+  show (bif allOk _ _ _ _ then _ else _) = _
+  rw [allOk_sim]
+
+/-- **The guess's third input with all proofs simulated** is a function of the requests, the
+commitments, the nullifiers and the simulators' coins. -/
+theorem yS_sim (b : Bool) (s : SecM) (c₁ c₂ : SimCoins pIm) (c₃ c₄ : SimCoins pRm) :
+    yM A.toM idx b s (some (simulate pIm c₁)) (some (simulate pIm c₂))
+      (((gameS A idx b).σ₃ s (some (simulate pIm c₁)) (some (simulate pIm c₂))).map fun _ =>
+        simulate pRm c₃)
+      (((gameS A idx b).σ₄ s (some (simulate pIm c₁)) (some (simulate pIm c₂))
+        (((gameS A idx b).σ₃ s (some (simulate pIm c₁)) (some (simulate pIm c₂))).map fun _ =>
+          simulate pRm c₃)).map fun _ => simulate pRm c₄) =
+      bif allOkT A.toM.int idx (reqS (tM A.toM s false) c₁) (reqS (tM A.toM s true) c₂)
+        (tM A.toM s false) (tM A.toM s true) then
+        some (ySim A.toM.int simRM b (reqS (tM A.toM s false) c₁) (reqS (tM A.toM s true) c₂)
+            (nOf s false) (nOf s true) c₃ false,
+          ySim A.toM.int simRM b (reqS (tM A.toM s false) c₁) (reqS (tM A.toM s true) c₂)
+            (nOf s false) (nOf s true) c₄ true)
+      else none := by
+  rw [σ₄_sim, σ₃_sim]
+  cases hok : allOkT A.toM.int idx (reqS (tM A.toM s false) c₁) (reqS (tM A.toM s true) c₂)
+    (tM A.toM s false) (tM A.toM s true)
+  · unfold yM
+    rw [allOk_sim, hok]
+    rfl
+  · let k : AuxM := ((c₁, Classical.arbitrary _), (c₂, Classical.arbitrary _),
+      (c₃, Classical.arbitrary _), (c₄, Classical.arbitrary _))
+    have h := yM_sim A.toM idx b s k
+    unfold ySimM at h
+    rw [show allOkT A.toM.int idx (reqS (tM A.toM s false) k.1.1) (reqS (tM A.toM s true) k.2.1.1)
+      (tM A.toM s false) (tM A.toM s true) = true from hok] at h
+    exact h
+
+/-- **With all four proofs simulated, the final event is `hviewS`** at the commitments and the
+nullifiers. -/
+theorem simS_iff (b : Bool) (x : GTape SecM pIm pIm pRm pRm) :
+    evS A idx b (hybV Hashes.shake (gameS A idx b) true true true true x) ↔
+      hviewS A idx b (tM A.toM x.1 false) (tM A.toM x.1 true) (nOf x.1 false) (nOf x.1 true)
+        x.2 := by
+  obtain ⟨s, u, k₁, k₂, k₃, k₄⟩ := x
+  have h3 := redStmt_sim A idx b s k₁.1.2 k₂.1.2 false
+  have h4 := redStmt_sim A idx b s k₁.1.2 k₂.1.2 true
+  have hY := yS_sim A idx b s k₁.1.2 k₂.1.2 k₃.1.2 k₄.1.2
+  have hv₃ : simVis Hashes.shake pRm k₃.1.2 k₃.2
+      ((gameS A idx b).σ₃ s (some (simulate pIm k₁.1.2)) (some (simulate pIm k₂.1.2))) u =
+      simVis Hashes.shake pRm k₃.1.2 k₃.2
+        (bif allOkT A.toM.int idx (reqS (tM A.toM s false) k₁.1.2) (reqS (tM A.toM s true) k₂.1.2)
+          (tM A.toM s false) (tM A.toM s true) then
+          some (swOf (stR (xSideM A.toM b (reqS (tM A.toM s false) k₁.1.2)
+            (reqS (tM A.toM s true) k₂.1.2) (nOf s false) (nOf s true) false))) else none) u := by
+    refine simVis_congr _ _ _ _ ?_ u
+    rw [σ₃_sim]
+    cases hok : allOkT A.toM.int idx (reqS (tM A.toM s false) k₁.1.2)
+      (reqS (tM A.toM s true) k₂.1.2) (tM A.toM s false) (tM A.toM s true)
+    · rfl
+    · rw [hok] at h3
+      obtain ⟨y, hy, hy1, -⟩ := h3
+      simp only [Bool.cond_true, hy, Option.map_some, hy1]
+      rfl
+  have hv₄ : simVis Hashes.shake pRm k₄.1.2 k₄.2
+      ((gameS A idx b).σ₄ s (some (simulate pIm k₁.1.2)) (some (simulate pIm k₂.1.2))
+        (((gameS A idx b).σ₃ s (some (simulate pIm k₁.1.2)) (some (simulate pIm k₂.1.2))).map
+          fun _ => simulate pRm k₃.1.2)) u =
+      simVis Hashes.shake pRm k₄.1.2 k₄.2
+        (bif allOkT A.toM.int idx (reqS (tM A.toM s false) k₁.1.2) (reqS (tM A.toM s true) k₂.1.2)
+          (tM A.toM s false) (tM A.toM s true) then
+          some (swOf (stR (xSideM A.toM b (reqS (tM A.toM s false) k₁.1.2)
+            (reqS (tM A.toM s true) k₂.1.2) (nOf s false) (nOf s true) true))) else none) u := by
+    refine simVis_congr _ _ _ _ ?_ u
+    rw [σ₄_sim]
+    cases hok : allOkT A.toM.int idx (reqS (tM A.toM s false) k₁.1.2)
+      (reqS (tM A.toM s true) k₂.1.2) (tM A.toM s false) (tM A.toM s true)
+    · rfl
+    · rw [hok] at h4
+      obtain ⟨y, hy, hy1, -⟩ := h4
+      simp only [Bool.cond_true, hy, Option.map_some, hy1]
+      rfl
+  show A.guess (reqS (tM A.toM s false) k₁.1.2) (reqS (tM A.toM s true) k₂.1.2)
+      (yM A.toM idx b s (some (simulate pIm k₁.1.2)) (some (simulate pIm k₂.1.2))
+        (((gameS A idx b).σ₃ s (some (simulate pIm k₁.1.2)) (some (simulate pIm k₂.1.2))).map
+          fun _ => simulate pRm k₃.1.2)
+        (((gameS A idx b).σ₄ s (some (simulate pIm k₁.1.2)) (some (simulate pIm k₂.1.2))
+          (((gameS A idx b).σ₃ s (some (simulate pIm k₁.1.2)) (some (simulate pIm k₂.1.2))).map
+            fun _ => simulate pRm k₃.1.2)).map fun _ => simulate pRm k₄.1.2))
+      (u, (simVis Hashes.shake pIm k₁.1.2 k₁.2 (some (issStmt A.toM s false)) u,
+        simVis Hashes.shake pIm k₂.1.2 k₂.2 (some (issStmt A.toM s true)) u,
+        simVis Hashes.shake pRm k₃.1.2 k₃.2
+          ((gameS A idx b).σ₃ s (some (simulate pIm k₁.1.2)) (some (simulate pIm k₂.1.2))) u,
+        simVis Hashes.shake pRm k₄.1.2 k₄.2
+          ((gameS A idx b).σ₄ s (some (simulate pIm k₁.1.2)) (some (simulate pIm k₂.1.2))
+            (((gameS A idx b).σ₃ s (some (simulate pIm k₁.1.2)) (some (simulate pIm k₂.1.2))).map
+              fun _ => simulate pRm k₃.1.2)) u)) ↔ _
+  rw [hY, hv₃, hv₄]
+  exact Iff.rfl
+
+/-! ## The hiding hop and the ideal world -/
+
+/-- **The reduction to hiding**: the adversary, with the simulators' coins and the tables fixed,
+run on the commitments and nullifiers it is given. -/
+noncomputable def redS (b : Bool) (a : AuxS) (z : Bytes × Bytes × Bytes × Bytes) : Prop :=
+  hviewS A idx b z.1 z.2.1 z.2.2.1 z.2.2.2 a
+
+/-- The game after the hiding hop: fresh nullifiers are revealed at redemption. -/
+noncomputable def idealS (b : Bool) (x : (HTape × (Coins nfBytes × Coins nfBytes)) × AuxS) : Prop :=
+  redS A idx b x.2 (hideIdeal A.toM.int.ci A.toM.int.cr x.1)
+
+theorem hiding_hopS (b : Bool) {εhide : ℝ}
+    (hhide : ∀ a, hidingAdv A.toM.int.ci A.toM.int.cr (redS A idx b a) ≤ εhide) :
+    |hyb Hashes.shake (gameS A idx b) true true true true (evS A idx b) -
+      pr _ (idealS A idx b)| ≤ εhide := by
+  unfold hyb
+  rw [pr_congr (simS_iff A idx b)]
+  exact abs_pr_prod_sub_le' (fun x : HTape × AuxS => redS A idx b x.2
+    (hideReal A.toM.int.ci A.toM.int.cr x.1)) _ fun a => hhide a
+
+/-- Exchange the fresh nullifiers. -/
+def swapNS : (HTape × (Coins nfBytes × Coins nfBytes)) × AuxS ≃
+    (HTape × (Coins nfBytes × Coins nfBytes)) × AuxS where
+  toFun x := ((x.1.1, (x.1.2.2, x.1.2.1)), x.2)
+  invFun x := ((x.1.1, (x.1.2.2, x.1.2.1)), x.2)
+  left_inv _ := rfl
+  right_inv _ := rfl
+
+/-- **After the hiding hop the worlds coincide**, tables included. -/
+theorem idealS_eq : pr _ (idealS A idx false) = pr _ (idealS A idx true) := by
+  rw [← pr_equiv swapNS]
+  exact pr_congr fun x => Iff.rfl
+
+/-! ## Issuer hiding and unlinkability on `main`, shared tables -/
+
+/-- **Theorem 4(a) on `main` (no label rows) with a shared `H₅` table and cipher, under (PU).**
+For the colluding adversary whose guess reads the tables consistently (`AdversaryS.Cons q3 qE`),
+if every hiding reduction of the adversary at fixed coins and tables has advantage at most
+`εhide`, the two worlds of the real game differ by at most
+
+    30·εS(q3, qE + 8·4607) + 15·(puTermS 0 + puTermS 1) + 2·εhide. -/
+theorem anonymity_main_shared0 {q3 qE : ℕ} (hC : A.Cons q3 qE) {εhide : ℝ}
+    (hhide : ∀ b a, hidingAdv A.toM.int.ci A.toM.int.cr (redS A idx b a) ≤ εhide) :
+    |realS A idx false - realS A idx true| ≤
+      30 * εS q3 (qE + 8 * 4607) + 15 * (puTermS A idx false + puTermS A idx true) +
+        2 * εhide := by
+  have r0 := real_sim_shared A idx hC false
+  have r1 := real_sim_shared A idx hC true
+  have h0 := hiding_hopS A idx false (hhide false)
+  have h1 := hiding_hopS A idx true (hhide true)
+  have e := idealS_eq A idx
+  have := abs_sub_le_iff.1 r0; have := abs_sub_le_iff.1 r1; have := abs_sub_le_iff.1 h0
+  have := abs_sub_le_iff.1 h1
+  rw [abs_sub_le_iff]
+  constructor <;> linarith
+
 end VoleMole.Privacy.Moussaka
