@@ -1254,6 +1254,11 @@ Files: `ROM/LemmaPDet.lean`, `ROM/LemmaP.lean`, `ROM/OneMoreLemmaP.lean`,
 `ROM/OneMoreLemmaPSim.lean`, `Assumptions/PomfritLemmaPSim.lean`; changes to
 `ROM/OneMorePomfrit.lean`. `lean/docs/security/pomfrit.md` §5, §6.4 state the results.
 
+Whether the `2⁵⁷` of Lemma P can be removed: `lean/docs/security/pomfrit-lemmap-tight.md`
+(`Seed/KOSUnique.lean`: `ũ` determines the witness slope, `witness_determined`; affine first
+messages need no `Shift` term, `exists_slope_of_kosGood_affine`). No `pomEps'` yet: an efficient
+extractor for first messages whose trees disagree on the label rows is open.
+
 - **A general extraction goal.** The adaptive bound of §2g reads the extraction goal
   `∃ i ∈ known, Wit chal1 (cand i)` only through the per-chain hypothesis `hdet`.
   `combBad_of_acceptG`, `CombDetG`, `combBad_trace_icDG` are `combBad_of_accept`, `CombDetD`,

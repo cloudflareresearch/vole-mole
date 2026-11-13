@@ -154,7 +154,8 @@ Line references are to the working tree at commit `6d7113e`.
     3. Write `d[0..M) := u[0..M) ⊕ r` and finish the proof.
 
     No Issuer is needed.
-  - D1 does not remove the paper's multi-tree ambiguity (F1). In both designs, `r` is
+  - D1 does not remove the paper's multi-tree ambiguity (F1); D2's binding of `ũ` does, up to an
+    efficient extractor (`pomfrit-lemmap-tight.md`). In both designs, `r` is
     `u^{(i)}[prefix] (⊕ d)` for whichever tree turns out to be free. Lemma P handles both.
   - For ZK, `r` is an ordinary witness prefix (`lean/docs/zk.md` §1). On `main` it is also the free-XOR label
     offset (`lean/docs/zk.md` §4); that is the blindness failure. The fix moves the labels to dedicated rows.
@@ -326,6 +327,13 @@ is reused below.
 7-bit trees (width 63). Completing with the minority prefix costs about `2^{71}/Pr[open]` H₂³
 calls. So the term is tight up to the opening-success factor.
 
+**Can it be tightened?** `pomfrit-lemmap-tight.md`. In short: the term is tight for `E₁` and for
+every extractor that does not read `ũ` (there: A1, A2). But `hash_to_target` binds `ũ` (D2), and
+`ũ` determines the prefix group up to `2⁻¹³⁴` per `H₂¹` query (Theorem D, Lean
+`Seed/KOSUnique.lean`, `witness_determined`). For first messages whose trees agree on the label
+rows an efficient extractor has no `Shift` at all (Theorem L). For the others, finding the group
+efficiently is open, so the bound above stands.
+
 ## 6. One-more unforgeability (classical)
 
 *Status.* The reductions below are mechanized (§6.4): the game, the programming of `H_T`, the
@@ -391,6 +399,8 @@ differences are fixed before `h`) after seeing `h` does not yield an extra preim
 still needs a preimage of a fresh, uniformly translated target, and `derive_preimage` answers each
 target once, deterministically. But no proof of A-OMPR ⇒ A-OMPR⊕17 without the `τ^{ℓ+1}` loss is
 known to us. The paper implicitly assumes the `E₁` that Lemma P supplies with this loss.
+`pomfrit-lemmap-tight.md` §4 makes "artifact" precise for the code: after its `H_T` query the
+forger has no choice of prefix left; the loss is the reduction's cost of not finding it.
 
 What Theorems U1/U2 do **not** need:
 - ZK or simulated proofs. The Issuer returns only preimages. So unforgeability holds **on `main`**,
@@ -1123,6 +1133,9 @@ dedicated to PomFRIT.
 - **G1.** Is A-OMPR ⇒ A-OMPR⊕τ without the `τ^{ℓ+1}` loss? (With the loss it is Lean
   `advOMPRShift_le_guess`; the converse, A-OMPR⊕τ ⇒ A-OMPR, is tight, `advOMPR_le_shift`.) If so, U1 loses its `Q₃·2^{−71}`
   term. A protocol change that pins `r` to π₁ would also remove it, but none was explored here.
+  `pomfrit-lemmap-tight.md`: `ũ` in `hash_to_target` already pins `r` information-theoretically
+  (§4 there); what is open is an efficient first-phase extractor for first messages whose trees
+  disagree on the label rows (§6 there); protocol options are in §8 there.
 - **G2.** QROM unforgeability (§7) needs mid-run extraction, or a different reduction. Q7 §4
   supplies one (database-controlled programming, simultaneous extraction from ℓ+1 proofs by
   Theorem M), on paper and under the new assumptions A-OMPR-RO and A-OMPR⊕τ-RO; from the
