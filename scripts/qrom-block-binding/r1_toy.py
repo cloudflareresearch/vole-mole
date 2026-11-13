@@ -8,6 +8,10 @@ unitaries between forward/inverse queries. Checks, for the final state psi (puri
       <=  sum_{k<k'} || Pi^k Pi^k' Q_k Q_k' psi ||^2                      (union over pairs)
       <=  ( sqrt(E_real) + sqrt(T2) + sqrt(T3) )^2                        (Theorem 4, exact terms)
   T2 <= p N O,   T3 <= p N tau q,   O <= 2 tau q + 2 N p                  (closed forms)
+  T3 <= p N O_db,  O <= |T| + E_real,  O_db <= |T| + union                (review, Q6 §14.3)
+  sqrt(union) <= ((1 + sqrt(pN)) sqrt(E_real) + 2 sqrt(pN |T|)) / (1 - sqrt(pN))
+
+O_db is the expected number of (target, opening database key) incidences; |T| = 1 here.
 
 where E_real is the real-world expected number of key pairs that both open the adversary's
 target (iota, t), read from the adversary's registers at the end. Pure Python, no numpy.
@@ -144,14 +148,20 @@ def run(seed, nq):
             t2 += pair_norm2(P[k], k, k2)
             t3 += pair_norm2(avg_axis(Qp[k], k2), k, k2)
             union += pair_norm2(sub(Qp[k], avg_axis(Qp[k], k2)), k, k2)
+    o_db = sum(abs(v[i]) ** 2 for k in range(K) for o, v in Qp[k].items()
+               for i, a in enumerate(ADV) if opens(o[k], *target(a)))
+    eps = P_DENS * K
+    refined = ((1 + math.sqrt(eps)) * math.sqrt(e_real) + 2 * math.sqrt(eps)) / (1 - math.sqrt(eps))
     openers = sum(abs(v[i]) ** 2 for o, v in psi.items() for i, a in enumerate(ADV)
                   for k in range(K) if opens(o[k], *target(a)))
     rhs = (math.sqrt(e_real) + math.sqrt(t2) + math.sqrt(t3)) ** 2
     ok = (lhs <= union + 1e-9 and union <= rhs + 1e-9
           and t2 <= P_DENS * K * openers + 1e-9 and t3 <= P_DENS * K * nq + 1e-9
-          and openers <= 2 * nq + 2 * K * P_DENS + 1e-9)
+          and openers <= 2 * nq + 2 * K * P_DENS + 1e-9
+          and t3 <= P_DENS * K * o_db + 1e-9 and openers <= 1 + e_real + 1e-9
+          and o_db <= 1 + union + 1e-9 and math.sqrt(union) <= refined + 1e-9)
     print(f"seed={seed} q={nq}: Pr[MULTI]={lhs:.5f} union={union:.5f} E_real={e_real:.5f} "
-          f"T2={t2:.5f} T3={t3:.5f} rhs={rhs:.5f} openers={openers:.4f} {'OK' if ok else 'FAIL'}")
+          f"T2={t2:.5f} T3={t3:.5f} rhs={rhs:.5f} openers={openers:.4f} O_db={o_db:.4f} {'OK' if ok else 'FAIL'}")
     return ok
 
 
