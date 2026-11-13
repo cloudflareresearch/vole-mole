@@ -13,8 +13,8 @@ set_option synthInstance.maxSize 1024
 
 namespace VoleMole.Assumptions.SymmetryScalar
 
-open VoleMole.Spec VoleMole.Spec.Pqov VoleMole.Arith VoleMole.Privacy VoleMole.Privacy.Moussaka
-  VoleMole.Assumptions.SymmetryProbes VoleMole.Assumptions.SymmetryTensor Module Matrix
+open VoleMole.Spec VoleMole.Spec.Pqov VoleMole.Arith VoleMole.Arith.UOV VoleMole.Privacy
+  VoleMole.Privacy.Moussaka VoleMole.Assumptions.SymmetryProbes VoleMole.Assumptions.SymmetryTensor Module Matrix
 
 /-! ## Linear algebra -/
 
@@ -431,6 +431,232 @@ theorem adapted_lie (hQ : QuadV Q BQ) (hS : GoodS S) (hD : ¬ DetQ BQ S)
   rw [e, map_add, e2, e3]
   simp
 
+/-- **Affine pairs, and pairs with `T` injective** (adapted coordinates): if
+`P(A s + a) = T(P s) + c` with `A`, `T` additive and `σ`-semilinear, and `A` is bijective or `T`
+injective, then `σ` is the identity, `a = 0`, `c = 0`, `A = λ` and `T = λ²`. -/
+theorem adapted_affine (hQ : QuadV Q BQ) (hS : GoodS S) (hI : ¬ IsoQ BQ S) (hD : ¬ DetQ BQ S)
+    (σ : GF256 →+* GF256) (A : Vin × Oil → Vin × Oil) (a : Vin × Oil) (T : Tgt → Tgt) (c : Tgt)
+    (hAa : ∀ s u, A (s + u) = A s + A u) (hAs : ∀ (c : GF256) s, A (c • s) = σ c • A s)
+    (hTa : ∀ y z, T (y + z) = T y + T z) (hTs : ∀ (c : GF256) y, T (c • y) = σ c • T y)
+    (hb : Function.Bijective A ∨ Function.Injective T)
+    (h : ∀ s, PA Q S (A s + a) = T (PA Q S s) + c) :
+    (∀ x, σ x = x) ∧ a = 0 ∧ c = 0 ∧
+      ∃ l : GF256, l ≠ 0 ∧ (∀ s, A s = l • s) ∧ ∀ y, T y = l ^ 2 • y := by
+  have hA0 : A 0 = 0 := by simpa using hAs 0 0
+  have hT0 : T 0 = 0 := by simpa using hTs 0 0
+  have hc : c = PA Q S a := by
+    have := h 0
+    rw [hA0, zero_add, PA_zero hQ, hT0, zero_add] at this
+    exact this.symm
+  have hE : ∀ s, PA Q S (A s) + BA BQ S (A s) a = T (PA Q S s) := by
+    intro s
+    have := h s
+    rw [PA_add hQ, hc] at this
+    have e : PA Q S (A s) + PA Q S a + BA BQ S (A s) a =
+        PA Q S (A s) + BA BQ S (A s) a + PA Q S a := by abel
+    rw [e] at this
+    exact add_right_cancel this
+  have hpol : ∀ s u, BA BQ S (A s) (A u) = T (BA BQ S s u) := by
+    intro s u
+    have e := hE (s + u)
+    rw [hAa, PA_add hQ, BA_add_left hQ, PA_add hQ, hTa, hTa, ← hE s, ← hE u] at e
+    have e' : PA Q S (A s) + BA BQ S (A s) a + (PA Q S (A u) + BA BQ S (A u) a) +
+        BA BQ S (A s) (A u) = PA Q S (A s) + BA BQ S (A s) a +
+        (PA Q S (A u) + BA BQ S (A u) a) + T (BA BQ S s u) := by rw [← e]; abel
+    exact add_left_cancel e'
+  have hbij : Function.Bijective A := by
+    rcases hb with hb | hb
+    · exact hb
+    · refine Finite.injective_iff_bijective.1 ?_
+      refine (injective_iff_map_eq_zero (AddMonoidHom.mk' A hAa)).2 fun z hz => ?_
+      refine rad_trivial hQ hS fun u => hb ?_
+      rw [← hpol, show A z = 0 from hz, BA_zero_left hQ, hT0]
+  have ha : a = 0 := by
+    refine rad_trivial hQ hS fun u => ?_
+    obtain ⟨s, rfl⟩ := hbij.2 u
+    rw [BA_comm hQ]
+    obtain ⟨l, h0, h1⟩ := SymmetryCount.exists_ne_zero_one
+    have hl0 : σ l ≠ 0 := fun e => h0 (σ.injective (e.trans (map_zero σ).symm))
+    have hl1 : σ l ≠ 1 := fun e => h1 (σ.injective (e.trans (map_one σ).symm))
+    have e1 := hE (l • s)
+    rw [hAs, PA_smul hQ, PA_smul hQ, BA_smul_left hQ, hTs, map_pow, ← hE s, smul_add] at e1
+    have e2 : (σ l - σ l ^ 2) • BA BQ S (A s) a = 0 := by
+      rw [sub_smul, sub_eq_zero]
+      exact add_left_cancel e1
+    rcases smul_eq_zero.mp e2 with e3 | e3
+    · exfalso
+      have : σ l * (1 - σ l) = 0 := by rw [← e3]; ring
+      rcases mul_eq_zero.mp this with e4 | e4
+      · exact hl0 e4
+      · exact hl1 (sub_eq_zero.mp e4).symm
+    · exact e3
+  have hc0 : c = 0 := by rw [hc, ha, PA_zero hQ]
+  obtain ⟨hσ, l, hl, hA, hT⟩ := adapted_group hQ hS hI hD σ A T hAa hAs hTa hTs hbij fun s => by
+    have := h s
+    rwa [ha, hc0, add_zero, add_zero] at this
+  exact ⟨hσ, ha, hc0, l, hl, hA, hT⟩
+
 end Main
+
+/-! ## The vinegar part of pqov's keys -/
+
+/-- The bytes of the `P1` part: the first `45·2775 = 124875` bytes of the expanded key. -/
+abbrev P1Part := Fin 124875 → GF256
+
+/-- The `P1` part as a function of the offset. -/
+def p1 (p : P1Part) : ℕ → GF256 := fun n => if h : n < 124875 then p ⟨n, h⟩ else 0
+
+/-- The polar form of the vinegar part `P₁`, from the bytes of `P1`. -/
+noncomputable def bq (p : P1Part) (v w : Vin) : Tgt := fun k =>
+  ∑ i : Fin 74, ∑ l : Fin 74, if (i : ℕ) < l then
+    p ⟨off1 i l + k, off1_lt i l k⟩ * (v i * w l + w i * v l) else 0
+
+private lemma gf_add_self (a : GF256) : a + a = 0 := by
+  have h : -a = a := rfl
+  calc a + a = a + -a := by rw [h]
+    _ = 0 := add_neg_cancel a
+
+/-- The polar form of pqov's key on two vinegar vectors is `bq`. -/
+lemma polar_vinVec (O : OilMat) (p : P1Part) (P2 : P2Part) (v w : Vin) :
+    polar (pqovKey O (p1 p) P2) (vinVec v) (vinVec w) = bq p v w := by
+  funext k
+  rw [polar_eq_blocks]
+  simp only [vinVec_fin, vinVec_oil, mul_zero, add_zero, Finset.sum_const_zero,
+    ite_self, c1_pqovKey, c1_keyP12, bq]
+  refine Finset.sum_congr rfl fun i _ => Finset.sum_congr rfl fun l _ => ?_
+  by_cases hil : (i : ℕ) < l
+  · simp only [hil, hil.le, ↓reduceIte, p1, off1_lt i l k, ↓reduceDIte]
+  · by_cases hil' : (i : ℕ) ≤ l
+    · have : i = l := Fin.ext (by omega)
+      subst this
+      simp only [le_refl, ↓reduceIte, lt_irrefl, mul_comm (w i) (v i), gf_add_self, mul_zero]
+    · simp only [hil, hil', ↓reduceIte]
+
+lemma off1_row_lt {a a' b : ℕ} (h : a < a') (hb : b < 74) (ha' : a' ≤ 74) :
+    (triangle 74 - triangle (74 - a)) + (b - a) < triangle 74 - triangle (74 - a') := by
+  have e := triangle_succ (73 - a)
+  rw [show 73 - a + 1 = 74 - a by omega] at e
+  have m1 := triangle_mono (show 74 - a' ≤ 73 - a by omega)
+  have m2 := triangle_mono (show 74 - a ≤ 74 by omega)
+  omega
+
+lemma off1_inj {i l i' l' : Fin 74} {k k' : Fin 45} (hil : (i : ℕ) ≤ l) (hil' : (i' : ℕ) ≤ l')
+    (h : off1 i l + k = off1 i' l' + k') : i = i' ∧ l = l' ∧ k = k' := by
+  have hk := k.isLt
+  have hk' := k'.isLt
+  have hl := l.isLt
+  have hl' := l'.isLt
+  unfold off1 at h
+  have e : (triangle 74 - triangle (74 - i)) + (l - i) =
+      (triangle 74 - triangle (74 - i')) + (l' - i') ∧ (k : ℕ) = k' := by omega
+  rcases lt_trichotomy (i : ℕ) i' with hlt | heq | hgt
+  · have := off1_row_lt hlt hl (by omega)
+    omega
+  · have hb2 : (l : ℕ) = l' := by rw [heq] at e; omega
+    exact ⟨Fin.ext heq, Fin.ext hb2, Fin.ext e.2⟩
+  · have := off1_row_lt hgt hl' (by omega)
+    omega
+
+/-- The `P1` bytes holding `F i l k` at `off1 i l + k` (`i < l`), `0` elsewhere. -/
+noncomputable def p1Region (F : Fin 74 → Fin 74 → Fin 45 → GF256) : P1Part := fun n =>
+  ∑ x : Fin 74 × Fin 74 × Fin 45,
+    if (x.1 : ℕ) < x.2.1 ∧ (n : ℕ) = off1 x.1 x.2.1 + x.2.2 then F x.1 x.2.1 x.2.2 else 0
+
+lemma p1Region_off (F : Fin 74 → Fin 74 → Fin 45 → GF256) (i l : Fin 74) (k : Fin 45)
+    (hil : (i : ℕ) < l) : p1Region F ⟨off1 i l + k, off1_lt i l k⟩ = F i l k := by
+  unfold p1Region
+  rw [Fintype.sum_eq_single (i, l, k) fun x hx => ?_]
+  · simp [hil]
+  · rw [ite_eq_right_iff]
+    rintro ⟨h1, h2⟩
+    obtain ⟨e1, e2, e3⟩ := off1_inj hil.le h1.le h2
+    exact absurd (by rw [e1, e2, e3]) hx
+
+/-- `Σ_{i<l} (M_{il} + M_{li}) s_{il} = Σ_{i,l} M_{il} s_{il}` for `s` symmetric with zero
+diagonal. -/
+lemma sum_tri_sym {n : ℕ} (M s : Fin n → Fin n → GF256) (hs : ∀ i l, s i l = s l i)
+    (h0 : ∀ i, s i i = 0) :
+    (∑ i : Fin n, ∑ l : Fin n, if (i : ℕ) < l then (M i l + M l i) * s i l else 0) =
+      ∑ i : Fin n, ∑ l : Fin n, M i l * s i l := by
+  have e : ∀ i l : Fin n, (if (i : ℕ) < l then (M i l + M l i) * s i l else 0) =
+      (if (i : ℕ) < l then M i l * s i l else 0) + (if (i : ℕ) < l then M l i * s l i else 0) := by
+    intro i l
+    by_cases h : (i : ℕ) < l
+    · simp only [h, ↓reduceIte, hs l i]; ring
+    · simp [h]
+  have e' : ∀ i l : Fin n, M i l * s i l =
+      (if (i : ℕ) < l then M i l * s i l else 0) + (if (l : ℕ) < i then M i l * s i l else 0) := by
+    intro i l
+    rcases lt_trichotomy (i : ℕ) l with h | h | h
+    · simp [h, show ¬ (l : ℕ) < i by omega]
+    · have : i = l := Fin.ext h
+      subst this
+      simp [h0]
+    · simp [h, show ¬ (i : ℕ) < l by omega]
+  calc _ = (∑ i : Fin n, ∑ l : Fin n, if (i : ℕ) < l then M i l * s i l else 0) +
+        ∑ i : Fin n, ∑ l : Fin n, (if (i : ℕ) < l then M l i * s l i else 0) := by
+          simp only [e, Finset.sum_add_distrib]
+    _ = (∑ i : Fin n, ∑ l : Fin n, if (i : ℕ) < l then M i l * s i l else 0) +
+        ∑ i : Fin n, ∑ l : Fin n, (if (l : ℕ) < i then M i l * s i l else 0) := by
+          congr 1
+          rw [Finset.sum_comm]
+    _ = _ := by
+          rw [← Finset.sum_add_distrib]
+          refine Finset.sum_congr rfl fun i _ => ?_
+          rw [← Finset.sum_add_distrib]
+          exact Finset.sum_congr rfl fun l _ => (e' i l).symm
+
+/-- The values of the polar form of `P₁` on two families, as an additive map of the bytes. -/
+noncomputable def bqHom (v v' : Fin 9 → Vin) : P1Part →+ (Fin 9 → Fin 9 → Tgt) where
+  toFun p i j := bq p (v i) (v' j)
+  map_zero' := by funext i j k; simp [bq]
+  map_add' p p' := by
+    funext i j k
+    simp only [bq, Pi.add_apply, add_mul, ← Finset.sum_add_distrib]
+    refine Finset.sum_congr rfl fun a _ => Finset.sum_congr rfl fun b _ => ?_
+    split_ifs <;> simp
+
+/-- **Interpolation for the vinegar part**: the values `B₁(v_i, v'_j)` of the polar form of a
+uniform `P1` on `18` independent vectors are uniform and independent. -/
+theorem bqHom_surjective {v v' : Fin 9 → Vin} (h : LinearIndependent GF256 (Sum.elim v v')) :
+    Function.Surjective (bqHom v v') := by
+  classical
+  intro τ
+  let H : (Fin 74 → Fin 74 → Tgt) →+ (Fin 9 ⊕ Fin 9 → Fin 9 ⊕ Fin 9 → Tgt) :=
+    (AddMonoidHom.compLeft (evHom (S := Tgt) (Sum.elim v v')) _).comp (evHom (Sum.elim v v'))
+  have hH : Function.Surjective H := by
+    have h3 : Function.Surjective
+        (AddMonoidHom.compLeft (evHom (S := Tgt) (Sum.elim v v')) (Fin 9 ⊕ Fin 9)) :=
+      Function.Surjective.comp_left (evHom_surjective h)
+    simp only [H, AddMonoidHom.coe_comp]
+    exact h3.comp (evHom_surjective h)
+  obtain ⟨U, hU⟩ := hH fun s s' => Sum.elim (fun i => Sum.elim (fun _ => 0) (fun j => τ i j) s')
+    (fun _ => 0) s
+  have hUb : ∀ (x y : Vin) (k : Fin 45), ev (ev U x) y k =
+      ∑ i : Fin 74, ∑ l : Fin 74, U i l k * (x i * y l) := by
+    intro x y k
+    simp only [ev, Finset.sum_apply, Pi.smul_apply, smul_eq_mul, Finset.mul_sum]
+    rw [Finset.sum_comm]
+    exact Finset.sum_congr rfl fun i _ => Finset.sum_congr rfl fun l _ => by ring
+  refine ⟨p1Region fun i l k => U i l k + U l i k, ?_⟩
+  funext i j k
+  have h1 : bq (p1Region fun i l k => U i l k + U l i k) (v i) (v' j) k =
+      ev (ev U (v i)) (v' j) k + ev (ev U (v' j)) (v i) k := by
+    rw [hUb, hUb, ← Finset.sum_add_distrib]
+    simp only [← Finset.sum_add_distrib, ← mul_add]
+    rw [← sum_tri_sym (fun a b => U a b k) (fun a b => v i a * v' j b + v' j a * v i b)
+      (fun a b => by ring) (fun a => by rw [mul_comm (v' j a)]; exact gf_add_self _)]
+    simp only [bq]
+    refine Finset.sum_congr rfl fun a _ => Finset.sum_congr rfl fun b _ => ?_
+    by_cases hab : (a : ℕ) < b
+    · simp only [hab, ↓reduceIte, p1Region_off _ a b k hab]
+    · simp only [hab, ↓reduceIte]
+  have h2 := congrFun (congrFun (congrFun hU (Sum.inl i)) (Sum.inr j)) k
+  have h3 := congrFun (congrFun (congrFun hU (Sum.inr j)) (Sum.inl i)) k
+  show bq _ (v i) (v' j) k = τ i j k
+  rw [h1]
+  have h2' : ev (ev U (v i)) (v' j) k = τ i j k := h2
+  have h3' : ev (ev U (v' j)) (v i) k = 0 := h3
+  rw [h2', h3', add_zero]
 
 end VoleMole.Assumptions.SymmetryScalar
