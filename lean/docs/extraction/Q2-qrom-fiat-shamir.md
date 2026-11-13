@@ -36,7 +36,9 @@ Theorems 4 and 5 (§11–§13 there) then give `ε_multi ≲ 2^{−184.2}·Q_E³
 iv: `2^{−34}` at `2^{50}`, `2^{−10}` at `2^{58}`, `2^{−4}` at `2^{60}`. This is below `200q²/N`
 wherever the theorem is non-vacuous. So Theorem 7.1 is now limited by its Grover-inherent main
 term alone: `2^{−20.4}` at `q = 2^{50}`, `2^{−10.4}` at `2^{55}`, `2^{−4.3}` at `2^{58}`, vacuous
-at `q ≈ 2^{60.2}`. The table below and §6.3 keep the original numbers for the record.
+at `q ≈ 2^{60.2}`. The table below and §6.3 keep the original numbers for the record. Q6 §14 is
+an independent review of Theorems 4 and 5: they are sound, and this extractor satisfies their
+"no mid-run measurement" condition.
 
 **Main new ingredient: Lemma T (§4).** It is a two-sided transition-capacity bound. It combines
 CFHL's telescoping (Chung–Fehr–Huang–Liao, EUROCRYPT 2021, Lemma 5.6) with DFMS's *local*
@@ -472,6 +474,13 @@ the accepted chain's iv. That iv is an `H₄` output recorded by `V`. This is Q1
   chain" (Q6 Theorem 4). Representing the cipher as `E_k = Q_k ∘ G_k` with block-wise independent
   `G_k` and key-dependent block partitions, and running Lemma T's argument on block registers,
   gives `ε_multi ≤ ((4√2/3)Q_E^{3/2}√μ_B + c)²` with `μ_B ≈ 2^{−186}` (Q6 Theorem 5).
+  - The targets are all leaf commitments `com_{i,j}` that `V` recomputes (opened and hidden;
+    steps 2 and 7 of Lemma F), at most `L`, at 17 points `x₀(iv, twk_i)`. Under `Rec` and
+    `¬COL` they are the accepted chain's targets, so this is `MULTI_end`.
+  - `Q_E = q_E + q_{E,V}` counts every cipher *evaluation*, `V`'s included (about `2^{18}`).
+  - `c = 5√(L/N) < 2^{−56}` for every `q` (Q6 §14.3, Theorem 5′), plus terms below `2^{−58}`.
+  - The condition of Q6 Theorem 4 holds: no measurement or control on the cipher database
+    precedes the final measurement of `D` (§6.1). Reviewed in Q6 §14.2.
 
 **Why `multi` is not in P.** Putting "two keys aligned with a target" into `P` would make the
 `H₂¹'` transition non-neutral for *every* `r` whenever the label's iv hits an agreement point.

@@ -449,12 +449,26 @@ and the numbers.
     register, and blocks of different keys share only `≈ 2^{68}` points. Q6 Theorem 1's argument
     on block registers gives `ε_multi ≲ 2^{−184.2}·Q_E³`, for free iv, with forward and inverse
     queries. No compressed permutation oracle is used.
+  - **Reviewed (Q6 §14).** An independent referee pass found both theorems sound: the
+    representation is exact (inverse queries and key-dependent partitions included), each query
+    acts on one block register, the overlap and exposure tails and all constants check, and Q2,
+    Q5 and Q7's extractors satisfy the "no measurement of the cipher database before the end"
+    condition. Four write-up gaps were closed. The main one: the additive transfer term is now
+    `5√(|𝒯|/N)` for `|𝒯|` target commitments, independent of the query count (Theorems 4′, 5′).
+    The original term grew like `√(17n·Q_E/N)` for `n` outputs and was not negligible there.
   - Q2's total bound is now its main term: `2^{−20.4}` at `2^{50}`, `2^{−10.4}` at `2^{55}`,
     `2^{−4.3}` at `2^{58}`, vacuous at `≈ 2^{60.2}` (Grover-inherent). (M1) and (M2) stay open
     but are not needed.
   - Lean (`Seed/CipherBinding.lean`): the Chernoff tail number, the telescoping with an
     atypical-database correction, and the numbers. Toy checks:
     `scripts/qrom-block-binding/`. The operator arguments are on paper.
+- **Simulation-extractability and multi-proof extraction at large `q` (Q6 §14.5).**
+  `ε_bind^C ≤ min(Theorem 2, Theorem 5′)` and `ε_multi^{(n)} ≤ min(Theorem 1, Theorem 5′)`, with
+  Theorem 5′ counting every cipher evaluation (`2^{18}` per simulated proof or verification).
+  Strong and weak SE at `Q_S = 2^{30}`: `2^{−60.4}` at `q = 2^{30}` (Theorem 2), `2^{−39.3}` at
+  `2^{40}`, `2^{−30.4}` at `2^{45}`, `2^{−20.4}` at `2^{50}`, `2^{−4.3}` at `2^{58}` (Theorem 5′;
+  Theorem 2 alone is vacuous from `≈ 2^{50}`). Theorem M at `n = 2^{20}` equals its main term
+  for all `q`.
 - **Multi-proof extraction and the quantum protocol theorems:** see `Q7-qrom-multi-extraction.md`.
 - (Historical) **Status of `ε_multi`.** Neither a point-level compressed ideal cipher (Carolan–Majenz) nor
   `E_k = P_{F(k)}` improves it. What's missing is a Liu–Zhandry-style multi-collision bound for the
