@@ -32,6 +32,9 @@ tokens, several redemptions per token, in an order the adversary chooses).
   without reading the tables (`lean/docs/extraction/L8-simulation-extractability.md`, game `SE_A`
   with `q_S = N`, weak form). `WeakSE2` is the case of two proofs, one per relation. **A
   hypothesis**, as `WeakSE2`. `simGN_le_of_weakSEN` applies it to the simulated game.
+* **Two proof systems as one** (`sumProve`, `sumSim`, `sumProg`, `zk_sum_inl`, `zk_sum_inr`): the
+  slots of a protocol with two relations (issuance and redemption) are proofs of one system on
+  the sum of the instance types, the simulator holding coins for both.
 -/
 
 open Finset
@@ -412,6 +415,95 @@ theorem deltaN_zero (hN : 0 < N) :
   simp
 
 end Many
+
+/-! ## Two proof systems as one -/
+
+section Sum
+
+variable {I₁ I₂ W Pf ρ C₁ C₂ G S : Type*}
+
+/-- Two provers as one, on the sum of the instance types, with an optional output. -/
+def sumProve (p₁ : I₁ → W → ρ → G → S → Pf) (p₂ : I₂ → W → ρ → G → S → Pf) (x : I₁ ⊕ I₂) (w : W)
+    (r : ρ) (g : G) (s : S) : Option Pf :=
+  match x with
+  | .inl x => some (p₁ x w r g s)
+  | .inr x => some (p₂ x w r g s)
+
+/-- Two simulators as one, with coins for both. -/
+def sumSim (s₁ : I₁ → C₁ → Pf) (s₂ : I₂ → C₂ → Pf) (x : I₁ ⊕ I₂) (c : C₁ × C₂) : Option Pf :=
+  match x with
+  | .inl x => some (s₁ x c.1)
+  | .inr x => some (s₂ x c.2)
+
+/-- Two programmings as one. -/
+def sumProg (g₁ : I₁ → C₁ → S → S) (g₂ : I₂ → C₂ → S → S) (x : I₁ ⊕ I₂) (c : C₁ × C₂) (s : S) :
+    S :=
+  match x with
+  | .inl x => g₁ x c.1 s
+  | .inr x => g₂ x c.2 s
+
+/-- The first relation, on the sum of the instance types. -/
+def RelInl (R₁ : I₁ → W → Prop) (x : I₁ ⊕ I₂) (w : W) : Prop :=
+  match x with
+  | .inl x => R₁ x w
+  | .inr _ => False
+
+/-- The second relation, on the sum of the instance types. -/
+def RelInr (R₂ : I₂ → W → Prop) (x : I₁ ⊕ I₂) (w : W) : Prop :=
+  match x with
+  | .inl _ => False
+  | .inr x => R₂ x w
+
+variable [Fintype ρ] [Fintype C₁] [Fintype C₂] [Fintype G] [Fintype S]
+  {p₁ : I₁ → W → ρ → G → S → Pf} {p₂ : I₂ → W → ρ → G → S → Pf} {s₁ : I₁ → C₁ → Pf}
+  {s₂ : I₂ → C₂ → Pf} {g₁ : I₁ → C₁ → S → S} {g₂ : I₂ → C₂ → S → S}
+
+/-- **Zero knowledge of the first proof system, on the sum**: the second simulator's coins are
+not used. -/
+theorem zk_sum_inl [Nonempty C₂] {R₁ : I₁ → W → Prop} {Adm : (Pf → G → S → Prop) → Prop} {ε : ℝ}
+    (hzk : ZeroKnowledgeRO R₁ p₁ s₁ g₁ Adm ε) :
+    ZeroKnowledgeRO (RelInl (I₂ := I₂) R₁) (sumProve p₁ p₂) (sumSim s₁ s₂) (sumProg g₁ g₂)
+      (fun D => Adm (fun o g s => D (some o) g s)) ε := by
+  intro x w hxw D hD
+  rcases x with x | x
+  · have h := hzk x w hxw _ hD
+    let e : ((C₁ × C₂) × G) × S ≃ C₂ × ((C₁ × G) × S) :=
+      { toFun := fun a => (a.1.1.2, ((a.1.1.1, a.1.2), a.2))
+        invFun := fun y => (((y.2.1.1, y.1), y.2.1.2), y.2.2)
+        left_inv := fun _ => rfl
+        right_inv := fun _ => rfl }
+    have e1 := pr_equiv e (fun y : C₂ × ((C₁ × G) × S) =>
+      D (some (s₁ x y.2.1.1)) y.2.1.2 (g₁ x y.2.1.1 y.2.2))
+    rw [pr_prod_snd (α := C₂) (fun y : (C₁ × G) × S =>
+      D (some (s₁ x y.1.1)) y.1.2 (g₁ x y.1.1 y.2))] at e1
+    simp only [sumProve, sumSim, sumProg]
+    rw [← e1] at h
+    exact h
+  · exact hxw.elim
+
+/-- **Zero knowledge of the second proof system, on the sum.** -/
+theorem zk_sum_inr [Nonempty C₁] {R₂ : I₂ → W → Prop} {Adm : (Pf → G → S → Prop) → Prop} {ε : ℝ}
+    (hzk : ZeroKnowledgeRO R₂ p₂ s₂ g₂ Adm ε) :
+    ZeroKnowledgeRO (RelInr (I₁ := I₁) R₂) (sumProve p₁ p₂) (sumSim s₁ s₂) (sumProg g₁ g₂)
+      (fun D => Adm (fun o g s => D (some o) g s)) ε := by
+  intro x w hxw D hD
+  rcases x with x | x
+  · exact hxw.elim
+  · have h := hzk x w hxw _ hD
+    let e : ((C₁ × C₂) × G) × S ≃ C₁ × ((C₂ × G) × S) :=
+      { toFun := fun a => (a.1.1.1, ((a.1.1.2, a.1.2), a.2))
+        invFun := fun y => (((y.1, y.2.1.1), y.2.1.2), y.2.2)
+        left_inv := fun _ => rfl
+        right_inv := fun _ => rfl }
+    have e1 := pr_equiv e (fun y : C₁ × ((C₂ × G) × S) =>
+      D (some (s₂ x y.2.1.1)) y.2.1.2 (g₂ x y.2.1.1 y.2.2))
+    rw [pr_prod_snd (α := C₁) (fun y : (C₂ × G) × S =>
+      D (some (s₂ x y.1.1)) y.1.2 (g₂ x y.1.1 y.2))] at e1
+    simp only [sumProve, sumSim, sumProg]
+    rw [← e1] at h
+    exact h
+
+end Sum
 
 /-! ## Weak simulation-extractability with many simulated proofs -/
 

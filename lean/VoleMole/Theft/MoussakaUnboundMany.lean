@@ -156,17 +156,9 @@ theorem xwN_fst (ω : SecN U) (l : Log) : (xwN A ω l).map Prod.fst = xN A (pubO
   · cases findIssuer (A.set l) (tOfN A ω (A.tok l)) (A.sig l) <;> rfl
   · rfl
 
-/-- The issuance relation, on the sum of the instance types. -/
-def RelUI (x : UI) (w : Bytes) : Prop :=
-  match x with
-  | .inl x => IssueRelW x w
-  | .inr _ => False
-
-/-- The redemption relation, on the sum of the instance types. -/
-def RelUR (x : UI) (w : Bytes) : Prop :=
-  match x with
-  | .inl _ => False
-  | .inr x => RedeemRelW x w
+/-- The two unbound relations, on the sum of the instance types. -/
+abbrev RelUI : UI → Bytes → Prop := RelInl IssueRelW
+abbrev RelUR : UI → Bytes → Prop := RelInr RedeemRelW
 
 theorem xwN_relI (ω : SecN U) (l : Log) (hl : l.length < U) :
     ∀ x w, xwN A ω l = some (x, w) → RelUI x w := by
@@ -199,25 +191,17 @@ variable (PI : Bytes → IssueInstance → Bytes → G → S → Bytes)
   (PR : Bytes → RedeemInstance → Bytes → G → S → Bytes)
 
 /-- The two provers as one, with uniform randomness and an optional output. -/
-def PU (x : UI) (w : Bytes) (ρ : Coins proveSeedBytes) (g : G) (s : S) : Option Bytes :=
-  match x with
-  | .inl x => some (PI w x (List.ofFn ρ) g s)
-  | .inr x => some (PR w x (List.ofFn ρ) g s)
+abbrev PU : UI → Bytes → Coins proveSeedBytes → G → S → Option Bytes :=
+  sumProve (fun x w ρ g s => PI w x (List.ofFn ρ) g s) (fun x w ρ g s => PR w x (List.ofFn ρ) g s)
 
 variable {CI CR : Type} (simI : IssueInstance → CI → Bytes) (progI : IssueInstance → CI → S → S)
   (simR : RedeemInstance → CR → Bytes) (progR : RedeemInstance → CR → S → S)
 
 /-- The two simulators as one, with coins for both. -/
-def simU (x : UI) (c : CI × CR) : Option Bytes :=
-  match x with
-  | .inl x => some (simI x c.1)
-  | .inr x => some (simR x c.2)
+abbrev simU : UI → CI × CR → Option Bytes := sumSim simI simR
 
 /-- The two programmings as one. -/
-def progU (x : UI) (c : CI × CR) (s : S) : S :=
-  match x with
-  | .inl x => progI x c.1 s
-  | .inr x => progR x c.2 s
+abbrev progU : UI → CI × CR → S → S := sumProg progI progR
 
 /-- **The real slot**: the log entry of the next honest proof. -/
 def PN (ω : SecN U) (l : Log) (ρ : Coins proveSeedBytes) (g : G) (s : S) : Option (UI × Bytes) :=
@@ -350,60 +334,6 @@ def distPN [Nonempty CI] [Nonempty CR] [Nonempty G] (i : Fin (U + M)) (ω : SecN
     (pairO (xN A (pubOf A ω)
       (simPre (fun ω => SmP A simI simR (pubOf A ω)) (fun ω => pgP A progI progR (pubOf A ω)) ω
         (tapeC τ) i).1) (some p)) g u
-
-/-! ## Zero knowledge on the sum of the instance types -/
-
-section ZK
-
-variable [Fintype CI] [Nonempty CI] [Fintype CR] [Nonempty CR] [Fintype G] [Fintype S]
-
-omit [Nonempty CI] in
-theorem zkU_I {AdmI : (Bytes → G → S → Prop) → Prop} {εI : ℝ}
-    (hzk : ZeroKnowledgeRO IssueRelW
-      (fun x w (ρ : Coins proveSeedBytes) g s => PI w x (List.ofFn ρ) g s) simI progI AdmI εI) :
-    ZeroKnowledgeRO RelUI (PU PI PR) (simU simI simR) (progU progI progR)
-      (fun D => AdmI (fun o g s => D (some o) g s)) εI := by
-  intro x w hxw D hD
-  rcases x with x | x
-  · have h := hzk x w hxw _ hD
-    let e : ((CI × CR) × G) × S ≃ CR × ((CI × G) × S) :=
-      { toFun := fun a => (a.1.1.2, ((a.1.1.1, a.1.2), a.2))
-        invFun := fun y => (((y.2.1.1, y.1), y.2.1.2), y.2.2)
-        left_inv := fun _ => rfl
-        right_inv := fun _ => rfl }
-    have e1 := pr_equiv e (fun y : CR × ((CI × G) × S) =>
-      D (some (simI x y.2.1.1)) y.2.1.2 (progI x y.2.1.1 y.2.2))
-    rw [pr_prod_snd (α := CR) (fun y : (CI × G) × S =>
-      D (some (simI x y.1.1)) y.1.2 (progI x y.1.1 y.2))] at e1
-    simp only [PU, simU, progU]
-    rw [← e1] at h
-    exact h
-  · exact hxw.elim
-
-omit [Nonempty CR] in
-theorem zkU_R {AdmR : (Bytes → G → S → Prop) → Prop} {εR : ℝ}
-    (hzk : ZeroKnowledgeRO RedeemRelW
-      (fun x w (ρ : Coins proveSeedBytes) g s => PR w x (List.ofFn ρ) g s) simR progR AdmR εR) :
-    ZeroKnowledgeRO RelUR (PU PI PR) (simU simI simR) (progU progI progR)
-      (fun D => AdmR (fun o g s => D (some o) g s)) εR := by
-  intro x w hxw D hD
-  rcases x with x | x
-  · exact hxw.elim
-  · have h := hzk x w hxw _ hD
-    let e : ((CI × CR) × G) × S ≃ CI × ((CR × G) × S) :=
-      { toFun := fun a => (a.1.1.1, ((a.1.1.2, a.1.2), a.2))
-        invFun := fun y => (((y.1, y.2.1.1), y.2.1.2), y.2.2)
-        left_inv := fun _ => rfl
-        right_inv := fun _ => rfl }
-    have e1 := pr_equiv e (fun y : CI × ((CR × G) × S) =>
-      D (some (simR x y.2.1.1)) y.2.1.2 (progR x y.2.1.1 y.2.2))
-    rw [pr_prod_snd (α := CI) (fun y : (CR × G) × S =>
-      D (some (simR x y.1.1)) y.1.2 (progR x y.1.1 y.2))] at e1
-    simp only [PU, simU, progU]
-    rw [← e1] at h
-    exact h
-
-end ZK
 
 /-! ## Key recovery with many nullifiers reduces to the PRF -/
 
@@ -776,8 +706,10 @@ theorem nmUN [Nonempty S]
         ∑ h : Fin U, (εprf + (M + 1) / 2 ^ 192 +
           bindAdv (bindBN A simI progI simR progR ext h) +
           sprAdvN (A.ci h) (sprBN A simI progI simR progR ext h)) := by
-  have hzkI' := zkU_I PI PR simI progI simR progR hzkI
-  have hzkR' := zkU_R PI PR simI progI simR progR hzkR
+  have hzkI' : ZeroKnowledgeRO RelUI (PU PI PR) (simU simI simR) (progU progI progR)
+      (fun D => AdmI (fun o g s => D (some o) g s)) εI := zk_sum_inl hzkI
+  have hzkR' : ZeroKnowledgeRO RelUR (PU PI PR) (simU simI simR) (progU progI progR)
+      (fun D => AdmR (fun o g s => D (some o) g s)) εR := zk_sum_inr hzkR
   have h := theftN_le (Ω := SecN U) (ρ := Coins proveSeedBytes) (C := CI × CR) (G := G) (S := S)
     (PN A PI PR) (fun ω => SmP A simI simR (pubOf A ω)) (fun ω => pgP A progI progR (pubOf A ω))
     (accN A verI verR) (freshN A) (relN A ext) (hitN A ext)
