@@ -443,6 +443,14 @@ ideal-cipher model of `lean/VoleMole/ROM/` (SHAKE a random oracle, AES's rows un
   `qI = qR = 2³⁰`: `qI·ε_I + qR·ε_R ≈ 2⁻²⁹·⁶`; each relation's simultaneous bound added
   (`prEvent_simI_le`, `prEvent_simR_le`, the run charged once per relation) `≈ 2⁻⁵⁹·⁶`;
   `ε_IR^sim ≈ 2⁻⁶⁰·⁵⁴`.
+- *With simultaneous extraction, AES as random permutations* (`ROM/MoussakaOMUFSimPerm.lean`,
+  `omuf_le_num_simP`; plan §2m). The same game with an adversary that makes forward and inverse
+  cipher queries (`AdversaryP`, `gameP`), the honest verifiers reading the cipher forward:
+  `Pr[Win] ≤ ε_IR^simP + Pr[Coll] + Pr[Forge]`, `ε_IR^simP` the bound above with the permutation
+  model's failure terms (`failEpsP`, Post `q_E·4608·q₂₁·p²` dominating, `p = 1/(2¹²⁸ − q_E)`)
+  and the total hash count `n' + 2q'₂₁` in the `2⁻⁴⁴⁸` term. `ε_IR^simP ≈ 2⁻⁶⁰·⁵⁴` at the same
+  numbers (`(qI + qR)·failEpsP ≈ 2⁻⁸⁴·⁸`). `Coll`, `Forge` stay probabilities of the
+  permutation-model run; the CT-UF^open and OMPR corollaries are not redone there.
 - *With CT-UF^open* (`Assumptions/UOVLinks.lean`, `omuf_le_num_open`). The same bound with
   `Adv^{ct-uf-open}_K(B₂)`, the advantage of an explicit forger (`ctufForger`) in the standalone
   CT-UF^open game (`Assumptions/UOV.lean`, `advCTUFOpenAt`) in place of `AdvCTUF(B₂)`. `B₂` runs
@@ -1146,8 +1154,9 @@ the fix column describes `d5def9c`, where Moussaka used the rows (and what dropp
    inverse-query term); the per-proof failure terms of the simultaneous bound
    (`omuf_le_num_sim`: `(qI + qR)·failEps`, see §4 "Status"); Theorem 1 averaged over key generation (the Lean theorem is
    per key; the `K`-key guessing step is mechanized for the ideal game); `ε_dig` as a probability over key
-   generation (a condition on the keys in Lean); AES as random permutations (the `_perm`
-   soundness theorems exist, but `verifyIC` is written for the cipher as uniform functions).
+   generation (a condition on the keys in Lean); AES as random permutations beyond the
+   extraction step (Theorem 1 with simultaneous extraction is in the permutation model,
+   `omuf_le_num_simP`, but its CT-UF^open and OMPR corollaries are in the PRF view only).
    Corollary 2 is not stated separately, and Theorem 3 (non-malleability) is paper only (§5.3
    "Status").
 8. Timing side channels beyond the index check (OS RNG, allocation) are out of scope.

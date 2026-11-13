@@ -539,6 +539,15 @@ per `ctx`, because parents share the spender's `ctx` (fact 1). ∎
     here), because the single-proof development bounds them on average over the cipher table
     rather than per query. The per-request union bound (`balance_le`, `N·ε_iss + N·ε_spend`) is
     kept.
+  - *Simultaneous extraction with AES as random permutations* (`ROM/RatatouilleBalanceSimPerm.lean`,
+    `balance_le_sim_numP`, `balance_le_lean_simP`; plan §2m). The same game with an adversary
+    that makes forward and inverse cipher queries (`RoundAdvP`, `balQP`), the Issuer reading the
+    cipher forward. The bound `ε_bal^simP` is `ε_bal^sim` with the permutation model's failure
+    terms (`failEpsP`, Post `q_E·4608·q₂₁·p²` dominating, `p = 1/(2¹²⁸ − q_E)`) and the total
+    hash count `n + 2q₂₁` in the `2⁻⁴⁴⁸` term: `≈ 2⁻⁶⁰·⁵⁴` at `2⁶⁴` queries and `N = 2³⁰`
+    (`2N·failEpsP ≈ 2⁻⁸⁴·⁸`). The forger's and collision finder's terms stay as probabilities
+    of the permutation-model run (`forgeAdvP`, `collAdvP`); the UF-Tag and OMPR corollaries are
+    not redone there.
 
 **Correction (minor) to the proof of Theorem 1.** "It forwards every Issuer signing call to
 `Sign`": `spend_response` signs before the caller's nullifier check (F5), so on the

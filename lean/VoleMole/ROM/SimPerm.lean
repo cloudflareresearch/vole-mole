@@ -21,10 +21,9 @@ events bounded per output in the permutation model (`ROM/PermAdapt.lean`'s
 * `failEpsP`, `sum_fail_leP`: the per-output failure terms in the permutation model.
 * **`prEvent_sim_leP`**, **`prEvent_sim_comb_leP`**.
 
-Not done: the two relations of a protocol together (`ROM/SimJoint.lean`). The normalization
-depends on the relation's parameters (`ivIn p`), which differ between issuance and redemption
-(spend), so the two relations' normalized runs have different hash logs; one normalization
-serving both parameter sets would be needed.
+The two relations of a protocol together: `ROM/SimPermJoint.lean`. The normalization depends on
+the relation's parameters (`ivIn p`), which differ between issuance and redemption (spend); there
+one normalization adds the `iv` queries of both parameter sets (`normJ`, `ROM/PermJoint.lean`).
 -/
 
 open Finset OracleComp OracleSpec
