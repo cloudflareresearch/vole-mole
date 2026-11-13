@@ -1551,14 +1551,20 @@ What is **not** established, roughly in order of importance:
    off uniform tables: the zero-knowledge hops, the read budgets and the programming step hold for
    every base hash record (`Theft/LeanHb.lean`, `noTheft_leanH_plain`, `noRedirect_leanH_plain`) and
    lift, by averaging over one more shared table (`zkRO_tables`), to `noTheft_leanX_plain` and
-   `noRedirect_leanX_plain` (`Theft/Tables.lean`), with the same bound. Plain extraction and `ε_hit`
-   stay hypotheses there. `ROM/`'s extraction bounds do not carry over as they stand: `PlainSE`'s
+   `noRedirect_leanX_plain` (`Theft/Tables.lean`), with the same bound. For Ratatouille `ε_hit` is
+   bounded there: with `XTab L M` (`L ≥ 14357`) and a last stage reading the chain tables `H₂⁰`,
+   `H₂¹`, `H₂²` by decision trees with `q_μ`, `q₂₁`, `q₂₂` queries (`AdmHit`), `noTheft_leanX_hit`
+   (`Theft/HitChain.lean`, `Theft/Hit.lean`, `Theft/HitTheft.lean`) has `Pr[Bad] ≤ εz(pI;q) +
+   εz(pS;q) + δ_S + ε_plain + 2·((q_μ+3)·2⁻²⁵⁶ + (q₂₁+3)·2⁻¹⁰⁸⁸ + (q₂₂+3)·2⁻⁴⁴⁸) + Adv^ow`: a hit
+   meets the simulated chain at a first level where the inputs differ and the outputs agree
+   (`chain_hit`, `qtree_forger`, `pr_hit_le`). Freshness is under the adversary's key (`FreshOk`),
+   because the Lean spend statement does not hash `pk`; in the game this is the game's freshness
+   (`freshOk_stS`). `ε_hit` for Moussaka (non-injective `t ‖ ctx_iss`, unbounded instances) and
+   for the many-client theorems is not done, and plain extraction stays a hypothesis. `ROM/`'s extraction bounds do not carry over as they stand: `PlainSE`'s
    extractor does not see the adversary's queries (an adversary that derives its GGM key from an
    `H₂³` answer is not extractable by it, so the `_plain` theorems say nothing for such
    adversaries), read budgets are certificate sizes and not query bounds, a cipher read is a row and
-   not a cell, and `ROM/`'s oracle is lazy (`docs/security/ratatouille.md` §5). For `ε_hit` the
-   lazy-sampling bound for decision trees is proved (`Theft/ComOW.lean`, `pr_tree_bad`), the chain
-   structure is not. `Adv^ow` stays the advantage of the explicit inverter, a computational
+   not a cell, and `ROM/`'s oracle is lazy (`docs/security/ratatouille.md` §5). `Adv^ow` stays the advantage of the explicit inverter, a computational
    assumption on Keccak-p[800,12]: `Com` is evaluated inside the relations, so it cannot be a table
    of the game, and some inverter wins with probability 1 (`owAdv_one_ratatouille`,
    `owAdv_one_moussaka`). In a random-table model of the standalone experiment a `q`-query
