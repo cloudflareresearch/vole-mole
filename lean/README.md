@@ -82,10 +82,11 @@ permutations with inverse queries):
     keys (T4 with `Com` a random function, `advCTUFIdeal1_le_ompr`; the `K`-key step by guessing,
     `advCTUFIdeal_le_sum`; `Assumptions/CTUFOpenOMPR.lean`). Plain CT-UF, without openings, is
     false for UOV (`ctuf_pqov_broken`). **With simultaneous extraction** (`omuf_le_num_sim`,
-    `omuf_le_num_ompr_sim`, `ROM/MoussakaOMUFSim.lean`, `Assumptions/SimLinks.lean`):
-    `ε_I^sim + ε_R^sim` in place of `qI·ε_I + qR·ε_R`, each query of the run charged once per
-    relation, plus per proof its verifier's queries and the failure terms `failEps ≈ 2⁻¹¹⁷·⁹`: at
-    `2⁶⁴` queries and `2³⁰` proofs per relation `≈ 2⁻⁵⁹·⁶` instead of `2⁻²⁹·⁶`;
+    `omuf_le_num_ompr_sim`, `ROM/MoussakaOMUFSim.lean`, `ROM/SimJoint.lean`,
+    `Assumptions/SimLinks.lean`): `ε_IR^sim` in place of `qI·ε_I + qR·ε_R`, each query of the run
+    charged once for both relations (their statements are DST-separated), plus per proof its
+    verifier's queries and the failure terms `failEps ≈ 2⁻¹¹⁷·⁹`: at `2⁶⁴` queries and `2³⁰`
+    proofs per relation `≈ 2⁻⁶⁰·⁵` instead of `2⁻²⁹·⁶`;
   - Ratatouille balance (Thm 1, `balance_le_ufTag`): `N` adaptive issuance and spend calls with
     chosen refunds, `Pr[win] ≤ N·ε_iss + N·ε_spend + Adv^uf-tag(B) + Adv^coll_Com(C)`, `B` an
     explicit UF-Tag forger (with a signability probe) and `C` an explicit `Com` collision finder.
@@ -97,7 +98,7 @@ permutations with inverse queries):
     `Adv^ompr(B'; k + 1 + N, N) + (k + 1 + N)·ρ + failAdv(B)`, through det-FDH ≤ A-OMPI
     (`advFDH_le_ompi`) and A-OMPI ≤ OMPR (`advOMPI_le_ompr`; `Assumptions/IdealTag.lean`). **With
     simultaneous extraction** (`balance_le_sim_num`, `balance_le_ufTag_sim`, `balance_le_ompr_sim`,
-    `ROM/RatatouilleBalanceSim.lean`): `ε_iss^sim + ε_spend^sim` in place of
+    `ROM/RatatouilleBalanceSim.lean`): `ε_bal^sim` in place of
     `N·ε_iss + N·ε_spend`, with the same numbers;
   - PomFRIT one-more unforgeability (Thms U1, U2, `pomfrit_U1_bound`, `pomfrit_U2_bound`):
     `hash_to_target` a random oracle that the reduction programs perfectly; the forger's win is at
@@ -149,7 +150,8 @@ permutations with inverse queries):
 one-more game (an `E`-independent derived prover, the probability assembly; `pomfrit.md` G8); the
 completeness term of T6 at PomFRIT for the Lean client (`compFail ≤ (ℓ+1)·2⁻¹¹³`; needs the Lean
 prover as oracle computations and its completeness in the lazy random-oracle model, G9);
-simultaneous extraction for PomFRIT, unbound Moussaka and the permutation-model variants;
+simultaneous extraction for PomFRIT (needs G8), and for both relations together in the
+permutation model;
 Moussaka non-malleability (Thm 3); Ratatouille
 no theft, its `Com`-binding term `ε_bind^K`, and Lemma 2.1's permutation terms (§5); the UOV
 reductions with `Com` or `Tag` a random permutation with inverse access (Lean: random functions),
@@ -1315,7 +1317,7 @@ used here add nothing).
 | `Prob/MoussakaUnbound.lean`, `ROM/MoussakaUnbound.lean`, `ROM/MoussakaUnboundAdapt.lean`, `ROM/MoussakaUnboundSpec.lean`, `EndToEnd/MoussakaUnboundSpec.lean` | done (plan §2j): **the unbound Moussaka relations**, `ε_QS(3816)` and `ε_QS(7929)`: the one-chain bounds (`moussakaUnbound*_chain_prob`), `moussakaUnbound{Issue,Redeem}_accept_le_{full,perm,adaptive,adaptive_perm}` and their `_spec` versions, stated for any statement with the unbound relations' parameters and systems (`Unbound.IssueStmt`, `RedeemStmt`) and instantiated at the executable verifier (`Unbound.moussakaUnboundIssue_stmt`, `moussakaUnboundRedeem_stmt`); `hinj` for the C++ encodings (`hinj_moussakaUnboundRedeem`, …) |
 | `ROM/VerifyIC.lean`, `ROM/ExtractReduce.lean` | done (plan §2l): the executable verifier as an oracle computation over the hashes and the cipher (`verifyIC`, equal to `verify` per table, `evalWithAnswerFn_verifyIC`; reads the cipher only at its cells, `verify_congr_cells`; budget `verifierIC_verifyIC`), and the protocol-independent glue that bounds a game's event per table by single-proof events (`prEvent_bind_le_sum4_of_table`, the `j`-th prover `proverAt`) |
 | `ROM/MoussakaOMUF.lean`, `ROM/RatatouilleBalance.lean`, `ROM/OneMore.lean`, `ROM/OneMorePomfrit.lean` | done (§5; plan §2k, §2l): Moussaka one-more unforgeability (`omuf_le_num`; the Anchor is the spec's, `anchorIC_eq_spec`), Ratatouille balance (`balance_le_ufTag`; deterministic core `no_win`), and the one-more reduction with a programmed target oracle (`real_eqd_comb`) for PomFRIT's U1 and U2 (`pomfrit_U1_bound`, `pomfrit_U2_bound`) |
-| `ROM/SimUnion.lean`, `ROM/SimExtract.lean`, `ROM/SimSpec.lean`, `ROM/MoussakaOMUFSim.lean`, `ROM/RatatouilleBalanceSim.lean`, `Assumptions/SimLinks.lean` | done (plan §2m): **simultaneous extraction**. The union bound over a shared run and per-output continuations (`prEvent_le_shared_suffix`); outputs as prefix runs of a reference run (`PrefixRuns`, `proverAt_prefix`); `prEvent_sim_le`, `prEvent_sim_comb_le`; the four spec relations (`*_sim_spec`); Moussaka Thm 1 (`omuf_le_num_sim`, `_open_sim`, `_ompr_sim`) and Ratatouille balance (`balance_le_sim_num`, `_lean_sim`, `_ufTag_sim`, `_ompr_sim`), each query of the run charged once per relation |
+| `ROM/SimUnion.lean`, `ROM/SimExtract.lean`, `ROM/SimSpec.lean`, `ROM/MoussakaOMUFSim.lean`, `ROM/RatatouilleBalanceSim.lean`, `ROM/SimJoint.lean`, `ROM/SimJointSpec.lean`, `ROM/MoussakaUnboundSim.lean`, `ROM/SimPerm.lean`, `Assumptions/SimLinks.lean` | done (plan §2m): **simultaneous extraction**. The union bound over a shared run and per-output continuations (`prEvent_le_shared_suffix`); outputs as prefix runs of a reference run (`PrefixRuns`, `proverAt_prefix`); `prEvent_sim_le`, `prEvent_sim_comb_le`; the four spec relations (`*_sim_spec`); Moussaka Thm 1 (`omuf_le_num_sim`, `_open_sim`, `_ompr_sim`) and Ratatouille balance (`balance_le_sim_num`, `_lean_sim`, `_ufTag_sim`, `_ompr_sim`), each query of the run charged once for both relations (`prEvent_sim_joint_le`, `*_sim_joint_spec`); unbound Moussaka (`moussakaUnbound*_sim_spec`, `moussakaUnbound_sim_joint_spec`; extraction terms only, Thm U1 has no Lean game); permutation model per relation (`prEvent_sim_leP`, `prEvent_sim_comb_leP`) |
 | `ROM/LemmaPDet.lean`, `ROM/LemmaP.lean`, `ROM/OneMoreLemmaP.lean` | partly done (plan §2n, `pomfrit.md` G8): Lemma P per chain (`majP`, `pomfritT_extract_major_chain`); its extraction and `Shift` bound for one adaptively chosen statement with any target function of `chal1` (`pomfritT_accept_le_major`); the one-more game as a lazy random oracle (`realImpl_run_eq`), `E₁` (`e1P`), and each failed forgery as an accepted proof of a derived prover (`pfail_table`, `not_noPick`). Missing: an `E`-independent derived prover, Lemma P's ordering step, the probability assembly |
 | `ROM/TableReads.lean`, `ROM/PrivacyReads.lean`, `ROM/SharedH3Reads.lean`, `ROM/SeedXOFReads.lean` | done (privacy side, §3; in `ROM/` because they import VCVio): **table-reading interactions as oracle computations**: an `OracleComp` over the tables (`TSpec`), run on them (`runT`), is a consistent table reader (`SReads`) with its syntactic query budget (`QBudget`, VCVio's `IsQueryBoundP`): `sReads_runT` (consistency by construction, `runT_congr`), `sReadsP_runT` for joint reads; a budget cannot be dropped (`not_sReads_slice`); `zk_adaptive_oc`, `lean_zeroKnowledgeROA_oc`; the games' adversaries `AdversaryOC` and the `*OC_lean_num`, `blindnessOCH_lean_num`, `*OCSh_num`, `blindnessOCHSh_num` theorems and their `_perm`, `_seed` versions (`docs/zk.md` §10.3, §10.5, §10.6) |
 
@@ -1365,9 +1367,8 @@ What is **not** established, roughly in order of importance:
    ideal-cipher and quantum-oracle steps of the extraction proofs, and the protocol reductions
    for non-malleability and no theft, are paper proofs, except for the parts §9 mechanizes
    (below). Moussaka's unforgeability and Ratatouille's balance are mechanized with simultaneous
-   extraction (`omuf_le_num_sim`, `balance_le_sim_num`; plan §2m). Two differences from the paper
-   remain: the run's queries are charged once per relation rather than once in total (a factor 2),
-   and the cipher-side failure terms (binding, opened dead leaf, Post) stay per proof (`m·failEps`,
+   extraction (`omuf_le_num_sim`, `balance_le_sim_num`; plan §2m). One difference from the paper
+   remains: the cipher-side failure terms (binding, opened dead leaf, Post) stay per proof (`m·failEps`,
    negligible at `2⁶⁴` queries). PomFRIT's U1 and U2 keep Lemma P's failure probability as an
    explicit term: its extraction and `Shift` bound is in Lean for one adaptive statement
    (`pomfritT_accept_le_major`) and its join to the one-more game partly (plan §2n,
