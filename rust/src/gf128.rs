@@ -248,6 +248,8 @@ impl Hasher {
 
 #[cfg(test)]
 mod tests {
+    #[cfg(target_arch = "wasm32")]
+    use wasm_bindgen_test::wasm_bindgen_test as test;
     use super::*;
 
     fn mul_ref(a: u128, b: u128) -> u128 {

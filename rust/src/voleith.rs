@@ -177,6 +177,8 @@ pub fn verify<R: Relation>(inst: &R, proof: &[u8]) -> bool {
 
 #[cfg(test)]
 mod tests {
+    #[cfg(target_arch = "wasm32")]
+    use wasm_bindgen_test::wasm_bindgen_test as test;
     use super::*;
     use crate::gf128::embed8;
 

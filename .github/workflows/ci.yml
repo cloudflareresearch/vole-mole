@@ -96,3 +96,27 @@ jobs:
         run: |
           git ls-files -z '*.cpp' '*.hpp' | xargs -0 -n1 -P"$(nproc)" sh -c \
             'out=$(clang-tidy-22 -p build -quiet "$1" 2>&1) || { printf "%s\n" "$out"; exit 1; }' sh
+
+  # The Rust tests on wasm32, with and without simd128, in headless Chrome. The runner image
+  # ships Chrome and chromedriver.
+  rust-wasm:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: rust
+    env:
+      WASM_BINDGEN_USE_BROWSER: 1
+    steps:
+      - uses: actions/checkout@v4
+
+      # The runner's version must match the wasm-bindgen in Cargo.lock.
+      - name: Install dependencies
+        run: |
+          rustup target add wasm32-unknown-unknown
+          cargo install wasm-bindgen-cli --locked --version "$(cargo pkgid wasm-bindgen | cut -d@ -f2)"
+          echo "CHROMEDRIVER=$CHROMEWEBDRIVER/chromedriver" >> "$GITHUB_ENV"
+
+      - name: Test
+        run: |
+          cargo test --release --locked --target wasm32-unknown-unknown
+          RUSTFLAGS='-C target-feature=+simd128' cargo test --release --locked --target wasm32-unknown-unknown

@@ -582,6 +582,8 @@ pub fn zeroed(n: usize) -> Vec<Block> {
 
 #[cfg(test)]
 mod tests {
+    #[cfg(target_arch = "wasm32")]
+    use wasm_bindgen_test::wasm_bindgen_test as test;
     use super::*;
 
     fn clmul_ref(a: u64, b: u64) -> u128 {

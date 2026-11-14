@@ -225,6 +225,8 @@ pub fn shake128<const N: usize>(parts: &[&[u8]]) -> [u8; N] {
 
 #[cfg(test)]
 mod tests {
+    #[cfg(target_arch = "wasm32")]
+    use wasm_bindgen_test::wasm_bindgen_test as test;
     use super::*;
 
     fn reference(rate: usize, data: &[u8], n: usize) -> Vec<u8> {
