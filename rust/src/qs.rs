@@ -43,6 +43,13 @@ pub trait Qs {
     /// Multiply by a public constant.
     fn val_scale<const D: usize>(&self, c: Block, a: &Self::Val<D>) -> Self::Val<D>;
 
+    /// A sum of public multiples of values, reduced once at the end: `acc_finish` of
+    /// `acc_add_scaled(c_i, a_i)` over all i equals the sum of `val_scale(c_i, a_i)`.
+    type Acc<const D: usize>: Copy;
+    fn acc_zero<const D: usize>(&self) -> Self::Acc<D>;
+    fn acc_add_scaled<const D: usize>(&self, acc: &mut Self::Acc<D>, c: Block, a: &Self::Val<D>);
+    fn acc_finish<const D: usize>(&self, acc: &Self::Acc<D>) -> Self::Val<D>;
+
     /// Combine 8 bits into an element of the GF(256) subfield, bit j being the coefficient of x^j.
     fn combine8<const D: usize>(&self, bits: &[Self::Bit<D>; 8]) -> Self::Val<D>;
 
@@ -162,6 +169,12 @@ pub struct PVal<const D: usize> {
     pub top: Block,
 }
 
+#[derive(Clone, Copy)]
+pub struct PAcc<const D: usize> {
+    c: [Wide; D],
+    top: Wide,
+}
+
 pub struct Prover<'a> {
     witness: &'a [u8],
     macs: &'a [Block],
@@ -203,12 +216,93 @@ impl<'a> Prover<'a> {
 /// out[k] = Σ_{i+j=k} a[i] b[j] for k < C.
 #[inline(always)]
 fn poly_mul_into<const C: usize>(a: &[Block], b: &[Block], acc: &mut [Wide; C]) {
+    if !Block::HW_CLMUL && a.len() > 1 && b.len() > 1 && a.len() + b.len() - 1 <= C {
+        poly_mul_karatsuba(a, b, acc);
+        return;
+    }
     for (i, &x) in a.iter().enumerate() {
         for (j, &y) in b.iter().enumerate() {
             if i + j < C {
                 acc[i + j].add_mul(x, y);
             }
         }
+    }
+}
+
+/// out[k] += Σ_{i+j=k} a[i] b[j], with Karatsuba: for multiplication without a hardware
+/// instruction, where trading multiplications for additions pays off. Needs
+/// out.len() >= a.len() + b.len() - 1 and a, b of at most 16 coefficients.
+fn poly_mul_karatsuba(a: &[Block], b: &[Block], out: &mut [Wide]) {
+    let (n, m) = (a.len(), b.len());
+    if n == 0 || m == 0 {
+        return;
+    }
+    if n == 1 || m == 1 {
+        for (i, &x) in a.iter().enumerate() {
+            for (j, &y) in b.iter().enumerate() {
+                out[i + j].add_mul(x, y);
+            }
+        }
+        return;
+    }
+    if n != m {
+        // Split the longer operand into pieces as long as the shorter one.
+        if n < m {
+            for (c, piece) in b.chunks(n).enumerate() {
+                poly_mul_karatsuba(a, piece, &mut out[c * n..]);
+            }
+        } else {
+            for (c, piece) in a.chunks(m).enumerate() {
+                poly_mul_karatsuba(piece, b, &mut out[c * m..]);
+            }
+        }
+        return;
+    }
+    if n == 3 {
+        // Six multiplications instead of nine.
+        let w = |x: Block, y: Block| Wide::mul(x, y);
+        let (p0, p1, p2) = (w(a[0], b[0]), w(a[1], b[1]), w(a[2], b[2]));
+        let p01 = w(a[0] ^ a[1], b[0] ^ b[1]);
+        let p02 = w(a[0] ^ a[2], b[0] ^ b[2]);
+        let p12 = w(a[1] ^ a[2], b[1] ^ b[2]);
+        out[0].add_wide(&p0);
+        for t in [&p01, &p0, &p1] {
+            out[1].add_wide(t);
+        }
+        for t in [&p02, &p0, &p2, &p1] {
+            out[2].add_wide(t);
+        }
+        for t in [&p12, &p1, &p2] {
+            out[3].add_wide(t);
+        }
+        out[4].add_wide(&p2);
+        return;
+    }
+    // a = a0 + x^h a1, with a0 of h and a1 of k >= h coefficients.
+    let h = n / 2;
+    let k = n - h;
+    let mut sa = [Block::ZERO; 8];
+    let mut sb = [Block::ZERO; 8];
+    sa[..k].copy_from_slice(&a[h..]);
+    sb[..k].copy_from_slice(&b[h..]);
+    for i in 0..h {
+        sa[i] ^= a[i];
+        sb[i] ^= b[i];
+    }
+    let mut p0 = [Wide::zero(); 15];
+    let mut p1 = [Wide::zero(); 15];
+    let mut p2 = [Wide::zero(); 15];
+    poly_mul_karatsuba(&a[..h], &b[..h], &mut p0);
+    poly_mul_karatsuba(&a[h..], &b[h..], &mut p2);
+    poly_mul_karatsuba(&sa[..k], &sb[..k], &mut p1);
+    for i in 0..2 * h - 1 {
+        out[i].add_wide(&p0[i]);
+        out[h + i].add_wide(&p0[i]);
+    }
+    for i in 0..2 * k - 1 {
+        out[2 * h + i].add_wide(&p2[i]);
+        out[h + i].add_wide(&p2[i]);
+        out[h + i].add_wide(&p1[i]);
     }
 }
 
@@ -325,6 +419,26 @@ impl Qs for Prover<'_> {
     #[inline(always)]
     fn val_scale<const D: usize>(&self, c: Block, a: &PVal<D>) -> PVal<D> {
         PVal { c: a.c.map(|x| mul(c, x)), top: mul(c, a.top) }
+    }
+
+    type Acc<const D: usize> = PAcc<D>;
+
+    #[inline(always)]
+    fn acc_zero<const D: usize>(&self) -> PAcc<D> {
+        PAcc { c: [Wide::zero(); D], top: Wide::zero() }
+    }
+
+    #[inline(always)]
+    fn acc_add_scaled<const D: usize>(&self, acc: &mut PAcc<D>, c: Block, a: &PVal<D>) {
+        for i in 0..D {
+            acc.c[i].add_mul(c, a.c[i]);
+        }
+        acc.top.add_mul(c, a.top);
+    }
+
+    #[inline(always)]
+    fn acc_finish<const D: usize>(&self, acc: &PAcc<D>) -> PVal<D> {
+        PVal { c: acc.c.map(Wide::reduce), top: acc.top.reduce() }
     }
 
     #[inline(always)]
@@ -465,6 +579,23 @@ impl Qs for Verifier<'_> {
         mul(c, *a)
     }
 
+    type Acc<const D: usize> = Wide;
+
+    #[inline(always)]
+    fn acc_zero<const D: usize>(&self) -> Wide {
+        Wide::zero()
+    }
+
+    #[inline(always)]
+    fn acc_add_scaled<const D: usize>(&self, acc: &mut Wide, c: Block, a: &Block) {
+        acc.add_mul(c, *a);
+    }
+
+    #[inline(always)]
+    fn acc_finish<const D: usize>(&self, acc: &Wide) -> Block {
+        acc.reduce()
+    }
+
     #[inline(always)]
     fn combine8<const D: usize>(&self, bits: &[Block; 8]) -> Block {
         let mut acc = Wide::from(bits[0]);
@@ -479,5 +610,39 @@ impl Qs for Verifier<'_> {
         let y = if D == QS_DEGREE { *x } else { mul(*x, self.delta_pow[QS_DEGREE - D]) };
         self.h.set(0, y);
         self.h.next();
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn karatsuba_matches_schoolbook() {
+        let mut x = 0x0123_4567_89ab_cdef_fedc_ba98_7654_3210u128;
+        let mut next = || {
+            x = x.rotate_left(29) ^ (x >> 7) ^ 0x9e37_79b9_7f4a_7c15;
+            Block::from_u128(x)
+        };
+        for n in 1..=16 {
+            for m in 1..=16 {
+                if n > 9 && m > 9 && n != m {
+                    continue;
+                }
+                let a: Vec<Block> = (0..n).map(|_| next()).collect();
+                let b: Vec<Block> = (0..m).map(|_| next()).collect();
+                let mut want = vec![Wide::zero(); n + m];
+                for i in 0..n {
+                    for j in 0..m {
+                        want[i + j].add_mul(a[i], b[j]);
+                    }
+                }
+                let mut got = vec![Wide::zero(); n + m];
+                poly_mul_karatsuba(&a, &b, &mut got);
+                for k in 0..n + m {
+                    assert_eq!(got[k].reduce(), want[k].reduce(), "{n}x{m} coefficient {k}");
+                }
+            }
+        }
     }
 }

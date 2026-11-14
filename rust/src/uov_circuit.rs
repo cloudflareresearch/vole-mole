@@ -59,17 +59,17 @@ pub fn qs_eval_combined_public_map<Q: Qs>(
     s: &[Q::Val<1>; N],
     l: &Combination,
 ) -> Q::Val<2> {
-    let zero = q.val_const::<1>(Block::ZERO);
+    let zero = q.acc_zero::<1>();
     let mut y = q.val_const::<2>(Block::ZERO);
     let mut row = zero;
     let mut cur = 0;
     for_each_monomial(pk.expanded(), |i, j, coeffs| {
         if i != cur {
-            y = q.val_add(&y, &q.val_mul::<1, 1, 2>(&s[cur], &row));
+            y = q.val_add(&y, &q.val_mul::<1, 1, 2>(&s[cur], &q.acc_finish(&row)));
             row = zero;
             cur = i;
         }
-        row = q.val_add(&row, &q.val_scale(l.combine(coeffs), &s[j]));
+        q.acc_add_scaled(&mut row, l.combine(coeffs), &s[j]);
     });
-    q.val_add(&y, &q.val_mul::<1, 1, 2>(&s[cur], &row))
+    q.val_add(&y, &q.val_mul::<1, 1, 2>(&s[cur], &q.acc_finish(&row)))
 }

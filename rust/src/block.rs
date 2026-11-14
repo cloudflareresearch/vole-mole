@@ -13,6 +13,7 @@ pub(crate) mod imp {
     use core::arch::aarch64::*;
 
     pub type Inner = uint8x16_t;
+    pub const HW_CLMUL: bool = true;
 
     #[inline(always)]
     pub fn zero() -> Inner {
@@ -106,6 +107,7 @@ pub(crate) mod imp {
     use core::arch::x86_64::*;
 
     pub type Inner = __m128i;
+    pub const HW_CLMUL: bool = true;
 
     #[inline(always)]
     pub fn zero() -> Inner {
@@ -173,22 +175,27 @@ pub(crate) mod imp {
     }
 }
 
-/// Portable carry-less multiplication, for targets without an instruction for it.
-#[cfg(not(any(
-    all(target_arch = "aarch64", target_feature = "neon", target_feature = "aes"),
-    all(target_arch = "x86_64", target_feature = "sse2", target_feature = "pclmulqdq")
-)))]
-mod soft_clmul {
-    /// The low 64 bits of the carry-less product of x and y, with integer multiplications of
-    /// x and y with holes (BearSSL's `bmul64`): each multiplication keeps every fourth bit, so
-    /// that the carries of the at most 16 terms of a bit of the low half land in the holes.
+/// Portable carry-less multiplication, for targets without an instruction for it. Compiled
+/// everywhere so that it is tested against the hardware instructions.
+#[cfg_attr(
+    any(
+        all(target_arch = "aarch64", target_feature = "neon", target_feature = "aes"),
+        all(target_arch = "x86_64", target_feature = "sse2", target_feature = "pclmulqdq")
+    ),
+    allow(dead_code)
+)]
+pub(crate) mod soft_clmul {
+    /// The carry-less product of 32-bit x and y, with integer multiplications of x and y with
+    /// holes (as BearSSL's `bmul`): each multiplication keeps every fourth bit, and a bit of the
+    /// product is the sum of at most 8 terms, so the carries stay in the 3 bits above it.
     /// Constant time where integer multiplication is.
     #[inline(always)]
-    fn bmul64(x: u64, y: u64) -> u64 {
+    fn bmul32(x: u32, y: u32) -> u64 {
         const M0: u64 = 0x1111_1111_1111_1111;
         const M1: u64 = M0 << 1;
         const M2: u64 = M0 << 2;
         const M3: u64 = M0 << 3;
+        let (x, y) = (x as u64, y as u64);
         let (x0, x1, x2, x3) = (x & M0, x & M1, x & M2, x & M3);
         let (y0, y1, y2, y3) = (y & M0, y & M1, y & M2, y & M3);
         let m = u64::wrapping_mul;
@@ -198,13 +205,14 @@ mod soft_clmul {
         let z3 = m(x0, y3) ^ m(x1, y2) ^ m(x2, y1) ^ m(x3, y0);
         (z0 & M0) | (z1 & M1) | (z2 & M2) | (z3 & M3)
     }
-    /// Constant-time 64x64 -> 128 carry-less multiplication. The high half is the low half of
-    /// the product of the bit-reversed operands, reversed.
+    /// Constant-time 64x64 -> 128 carry-less multiplication: Karatsuba over 32-bit halves.
     #[inline(always)]
     pub fn clmul64(a: u64, b: u64) -> [u64; 2] {
-        let lo = bmul64(a, b);
-        let hi = bmul64(a.reverse_bits(), b.reverse_bits()).reverse_bits() >> 1;
-        [lo, hi]
+        let (a0, a1, b0, b1) = (a as u32, (a >> 32) as u32, b as u32, (b >> 32) as u32);
+        let lo = bmul32(a0, b0);
+        let hi = bmul32(a1, b1);
+        let mid = bmul32(a0 ^ a1, b0 ^ b1) ^ lo ^ hi;
+        [lo ^ (mid << 32), hi ^ (mid >> 32)]
     }
 }
 
@@ -214,6 +222,7 @@ pub(crate) mod imp {
     use core::arch::wasm32::*;
 
     pub type Inner = v128;
+    pub const HW_CLMUL: bool = false;
 
     #[inline(always)]
     pub fn zero() -> Inner {
@@ -295,6 +304,7 @@ pub(crate) mod imp {
 )))]
 pub(crate) mod imp {
     pub type Inner = [u64; 2];
+    pub const HW_CLMUL: bool = false;
 
     #[inline(always)]
     pub fn zero() -> Inner {
@@ -397,6 +407,9 @@ impl Block {
     }
 
     pub const ZERO: Block = Block::from_u128_const(0);
+    /// Whether carry-less multiplication is a hardware instruction. Without one, it is worth
+    /// trading multiplications for additions.
+    pub const HW_CLMUL: bool = imp::HW_CLMUL;
     pub const ONES: Block = Block::from_u128_const(u128::MAX);
 
     /// Construct a block from a `u128` in a const context.
@@ -594,5 +607,22 @@ mod tests {
         assert_eq!(Block::from_u128_const(5), Block::from_u64(5, 0));
         let bytes: [u8; 16] = core::array::from_fn(|i| i as u8);
         assert_eq!(Block::from_bytes(&bytes).to_u128(), u128::from_le_bytes(bytes));
+    }
+
+    #[test]
+    fn soft_clmul() {
+        let mut x = 0x9e37_79b9_7f4a_7c15u64;
+        let mut next = || {
+            x ^= x << 13;
+            x ^= x >> 7;
+            x ^= x << 17;
+            x
+        };
+        let mut cases = vec![(0, 0), (u64::MAX, u64::MAX), (1, u64::MAX), (1 << 63, 1 << 63)];
+        cases.extend((0..10000).map(|_| (next(), next())));
+        for (a, b) in cases {
+            let [lo, hi] = super::soft_clmul::clmul64(a, b);
+            assert_eq!((lo as u128) | ((hi as u128) << 64), clmul_ref(a, b));
+        }
     }
 }
