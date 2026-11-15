@@ -3271,6 +3271,12 @@ with a modelling choice. Precisely:
    game rather than once per pair. The resulting bound is linear in `n`: the per-proof terms (the
    grinding `2⁻¹¹³`, the proof's own `221·4607·2⁻¹²⁸`, the H6 and slice terms) once per proof, of
    order `n·2⁻¹⁰⁵`, plus the adversary's budget terms once.
+   Correction for permutation rows (`ZK/InvPoint.lean`): an **inverse** query is not "at an
+   input". The proof reveals cipher outputs of hidden rows (the hidden leaves' commitments), and an
+   inverse query at such a value under the hidden key answers the proof's CTR block. So the
+   adversary's inverse queries target a proof through the values it reveals, not through its
+   `iv`; the correction is not `2⁻¹²⁸` but a second kind of point charge (see "The
+   permutation-row variants" below).
 3. *What is inherent.* The linear per-proof terms, and the adversary's budget terms. With a **shared
    or predictable iv** the quadratic loss would be real: expand each revealed GGM seed of every
    proof once (two cipher queries) and look the children up among all proofs' revealed seeds; a hit
@@ -3994,7 +4000,45 @@ Anchor keys of `kt`), reusing the generic pieces of the redirect game:
   the other numbers are those of the theft game with `cells(pR) = 101372` (`B ≤ 2⁻⁵⁵`,
   `J ≤ 300·2⁻⁶³`, the per-slot terms `≤ 2⁻⁷⁰`).
 
-Not done: the permutation-row variants.
+*The permutation-row variants* (`ZK/InvPoint.lean`; audit `Audit/ZKPointPerm.lean`). **Not
+done**: `noTheftN_lean_numJP`, `noRedirectN_lean_numJP` and `nmUN_lean_numJP` are not proved, and
+the permutation-row bounds stay linear in `U + M` (`_numLP`, `Theft/NumLin.lean`). Two routes were
+weighed:
+- *A switching step to function rows, so that the `_numJ` chain applies.* There is none at the
+  game level. A function-row game has no inverse queries, so an adversary that asks them has no
+  counterpart there. Switching the adversary's own reads costs the per-key birthday term
+  `Σ_k C(q_k, 2)·2⁻¹²⁸`, about `2⁻¹` for `2⁶⁴` queries under one key. Switching works only inside
+  a hop, on the hidden part's few reads, as `switchEps` does in `hide_rom_query_perm`.
+- *Porting the point-level hop to permutation rows.* This is the route. But the port cannot
+  charge an inverse query only at its answer. An inverse query `(k, y)` is a consistent read if it
+  is written as the forward point `(k, π_k⁻¹ y)` (`qInv_cons`). The direct port of
+  `IC.puncturePt_real` would charge it when that answer is one of the proof's points. That bound
+  is **false** (`inv_point_charge_fails`). Take one secret node, `P = {z₀}`, and a hidden part that
+  reveals the secret row's value `y` at `z₀`. Ask `2⁶⁴` inverse queries at `y` under other keys.
+  The advantage is `≥ 2⁻⁶⁴ − 2⁻¹²⁸` (`inv_adv_ge`, `(q/n)·(1 − q/n)` in general), while
+  `E_real[#keys read on P] ≤ 2q/n` (`inv_charge_le`), so the point-level form gives `< 2⁻¹²⁷`.
+  The BAVC is in this situation. Its hidden part (`Hidden`, `ZK/Hops.lean`) contains the hidden
+  leaves' commitments (`comsOf`): two blocks of each hidden leaf's row at CTR blocks of the
+  proof's `iv`. (Whether the pads, with the opened seeds, also determine some of the hidden
+  leaves' VOLE blocks was not checked; the commitments suffice.) So with permutation rows each
+  proof is worth `q_inv·2⁻¹²⁸` to an adversary who inverse-queries its revealed blocks under many
+  keys, and that is not a charge on the forward points.
+
+What the port needs:
+- *The read model.* An inverse read set in `TRd`, `PtReads` and `GRd`: the queries `(k, y)`,
+  `y` the input. An inverse read is charged to a proof when `y` is a block its output reveals
+  (the hidden leaves' commitment blocks, and any other block of the hidden part the output
+  determines). A forward read is charged at the CTR blocks of the proof's `iv`, as now. Inverse
+  reads are proof-specific through the revealed values, as forward reads are through the `iv`. So
+  the joint sum should still charge the budget about once, with one more overlap term: two proofs
+  with an equal revealed block (uniform in the simulated game).
+- *The hop.* The hop for permutation rows at points, with that charge. Re-programming the node's
+  row on `P` only moves the points `P` and the preimages of the hidden values, so the moved reads
+  are the forward reads on `P` and the inverse reads at hidden values. Then `hide_rom_query_pt` and
+  `zk_rom_ic_h23_exp` with permutation rows and `switchEps` on the hidden part's reads, and
+  `ZKExp` with the new charge.
+- *The rest.* The joint layer (`Theft/Joint*.lean`, typed on `ShX (Blk → Blk)`) over the row type
+  (`CipherRow`), and the three games' instances and numbers.
 
 ### 10.9 Hiding of `Com` (`Privacy/ComHide.lean`)
 

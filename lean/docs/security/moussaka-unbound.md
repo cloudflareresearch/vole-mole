@@ -810,7 +810,10 @@ adversary's operations are unbound requests.
     inputs (`ivs_view`, `nmU_J_le`); the simulated game's event is `ROM/`'s extraction error and
     the hit terms (`nmU_sim_le`), with `U·(M + 1)·2^{−192}` in the constant. A failed honest run is
     logged with the empty proof, which has no `iv` (`ivA`). The permutation-row variant stays
-    linear (`nmUN_lean_numLP`).
+    linear (`nmUN_lean_numLP`; `nmUN_lean_numJP` is not proved). With permutation rows, inverse
+    queries at a value the proof reveals (a hidden leaf's commitment) are not charged by the
+    forward points at the proof's `iv` (`inv_point_charge_fails`, `ZK/InvPoint.lean`;
+    `lean/docs/zk.md` §10.8, "The permutation-row variants").
 
 A malicious Moderator therefore cannot spend an honest Client's token at another Moderator, even
 though the token is valid there.
