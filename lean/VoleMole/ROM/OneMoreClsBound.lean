@@ -277,4 +277,135 @@ theorem pomfritT_accept_le_cls_dep (PE : CTable → OracleComp specIC (ByteArray
 
 end Dep
 
+/-! ## U1^cls's term per key and target stream -/
+
+section Fixed
+
+/-- The wrapper's hash queries per `H₂¹` query of the forger: `mu₁` (`H₂⁴`), `iv` (`H₄`) and at most
+`Nd` values of `H₅`. -/
+def wrapQueries (Nd : ℕ) : Kind → ℕ := fun k =>
+  if k = .muDelayed ∨ k = .h4 then 1 else if k = .h5 then Nd else 0
+
+/-- **The wrapped forger's budget per kind**: the forger's, and `wrapQueries` per `H₂¹` query. -/
+def qW (qA : Kind → ℕ) (Nd : ℕ) : Kind → ℕ := qA + fun k => qA .h21 * wrapQueries Nd k
+
+/-- The wrapped forger's hash queries in all. -/
+def nW (nA : ℕ) (qA : Kind → ℕ) (Nd : ℕ) : ℕ := nA + qA .h21 * (Nd + 2)
+
+/-- **Lemma P^cls's extraction term** (`pomfritT_accept_le_cls`'s bound). -/
+noncomputable def clsEps (q : Kind → ℕ) (qE n : ℕ) : ℝ≥0∞ :=
+  (q .h21 + 1) * ((2 ^ 150 : ℝ≥0∞)⁻¹ + (2 ^ 134 : ℝ≥0∞)⁻¹) +
+    (q .h22 + 1) * (ENNReal.ofReal (Seed.epsQS (2 ^ 128) (2 ^ 64) 1313) +
+      (2 ^ 128 : ℝ≥0∞)⁻¹ + ((n + 2 + verifierTotal : ℕ) : ℝ≥0∞) / 2 ^ 448) +
+    (q .h23 + 1) * ((2 ^ 50 : ℝ≥0∞) / 2 ^ 128) +
+    (2 * qE ^ 2 * (2 ^ 256)⁻¹ + (openHashEps q + q .h1 * (2 ^ 256 : ℝ≥0∞)⁻¹)) +
+    (openHashEps q + q .h1 * (2 ^ 256 : ℝ≥0∞)⁻¹) +
+    ((qE * 2 : ℕ) : ℝ≥0∞) * (((512 * q .h1 : ℕ) : ℝ≥0∞) * (2 ^ 256 : ℝ≥0∞)⁻¹) +
+    chainHitEpsComb q 45 + stmtBindEpsD q
+
+/-- **U1^cls's failure per forgery**: `pfailEps` with `clsEps` for `majEps`. -/
+noncomputable def clsFailEps (q : Kind → ℕ) (qE n : ℕ) : ℝ≥0∞ :=
+  clsEps q qE n + ((qE * 2 : ℕ) : ℝ≥0∞) * (((512 * q .h1 : ℕ) : ℝ≥0∞) * (2 ^ 256 : ℝ≥0∞)⁻¹) +
+    (2 ^ 128 : ℝ≥0∞)⁻¹ +
+    ∑ k ∈ hitKinds, (q + extractorQueries + verifierQueries) k *
+      (hitEps (q + extractorQueries + verifierQueries)
+        (combCount cbP (q + extractorQueries + verifierQueries)) k +
+        orderEps (q + extractorQueries + verifierQueries) k)
+
+/-- The four events of `clsFail_events`, on the logged output of the derived game. -/
+def evC (E : CTable) (lr : Bool) (pk : UovPk) :
+    ℕ → Out (((TG × ByteArray × ByteArray) × AuxP) × QueryLog specIC) × QueryLog spec → Prop
+  | 0, o => o.1.2.2.accept = true ∧ ClsCovered E (stG lr pk (stOut o.1)) CrtGen.tables o.1 ∧
+      ¬ClsExtracted E (stG lr pk (stOut o.1)) CrtGen.tables (witKT pk hG (some (stOut o.1))) o.1
+  | 1, o => PostOut E o.1
+  | 2, o => o.1.2.2.accept = true ∧
+      ((.h23, zOut (stG lr pk (stOut o.1)) o.1) : Dom) ∉ hashLog o.1.2.1.aux.2
+  | _, o => HitOut o
+
+variable (lr : Bool) (pk : UovPk) (pre : TG → SIss) (A : Forger) (Lst : List TG) (ℓ : ℕ)
+
+set_option maxHeartbeats 800000 in
+/-- **U1^cls's term for a fixed key and target stream**: over the cipher table and the hash table,
+some forgery of the game with the wrapped forger and `E₁^cls` fails with probability at most
+`(ℓ + 1)·clsFailEps`, for derived-prover budgets `q`, `e`, `n` of the wrapped forger. -/
+theorem prEvent_clsFailZ_le (hd : pk.digest.size = 32) {qA : Kind → ℕ} {nA qE QT : ℕ}
+    (hA : ForgerBound A qA nA qE QT) {Nd : ℕ}
+    (hW : ∀ E, ForgerBound (wrapE lr E A) (qW qA Nd) (nW nA qA Nd) qE QT) :
+    Pr{let E ← $ᵗ CTable; let z ← (simulateQ randomOracle ((simulateQ (htW (AR := Ans) addHint pre)
+        (Acomp CrtGen.tables lr E (e1C lr E) tgts1 pk ℓ (wrapE lr E A))).run (hs0 Lst))).run' ∅}[
+        ∃ i : Fin (ℓ + 1), PFailZ pk i.val z] ≤
+      (ℓ + 1) * clsFailEps (qP (qW qA Nd) QT ℓ) (eP lr qE ℓ) (nP (nW nA qA Nd) QT ℓ) := by
+  classical
+  set q := qP (qW qA Nd) QT ℓ
+  set e := eP lr qE ℓ
+  set n := nP (nW nA qA Nd) QT ℓ
+  refine (prEvent_bind_le_sum_of_table ($ᵗ CTable) _ (Finset.univ : Finset (Fin (ℓ + 1) × Fin 4))
+    (fun ij E => withLogQ (gameDP lr E pk pre (wrapE lr E A) Lst ij.1.val)) _
+    (fun ij E o => evC E lr pk ij.2.val o) fun E g h => ?_).trans ?_
+  · obtain ⟨i, hi⟩ := h
+    have hcov := (eval_wrapE g E lr pre A pk (hs0 Lst)).2.2.2
+    have hev := clsFail_events g lr E pk pre (wrapE lr E A) Lst ℓ i.val hd hcov hi
+    simp only [evalWithAnswerFn_withLogQ]
+    rcases hev with h0 | h1 | h2 | ⟨e', he', hb⟩
+    · exact ⟨(i, 0), mem_univ _, h0⟩
+    · exact ⟨(i, 1), mem_univ _, h1⟩
+    · exact ⟨(i, 2), mem_univ _, h2⟩
+    · refine ⟨(i, 3), mem_univ _, e', he', ?_⟩
+      have hea : e' = ⟨e'.1, g e'.1⟩ := tableQueryLog_answer _ g e' he'
+      have hans : (e'.2 : Ans e'.1).ba = (g e'.1).ba := by rw [hea]
+      rcases hb with hb | ⟨hk, hb⟩
+      · left; rw [hans]; exact hb
+      · right; exact ⟨hk, by rw [hans]; exact hb⟩
+  · rw [Fintype.sum_prod_type]
+    refine le_trans (Finset.sum_le_sum (g := fun _ => clsFailEps q e n) fun i _ => ?_) (by simp)
+    have hiℓ := Nat.lt_succ_iff.1 i.isLt
+    have hb := fun E => proverP_bounds lr pre pk (hW E) Lst hiℓ
+    have hb0 := proverP_bounds lr pre pk hA Lst hiℓ
+    have hq0 : qP qA QT ℓ ≤ q := by
+      intro k; simp only [q, qP, qW, Pi.add_apply]; omega
+    set PE := fun E => proverP lr pk pre (wrapE lr E A) Lst i.val with hPE
+    set P0 := proverP lr pk pre A Lst i.val
+    have t0 : Pr{let E ← $ᵗ CTable; let o ← (simulateQ randomOracle
+        (withLogQ (gameA CrtGen.tables (stG lr pk) (PE E) E))).run' ∅}[evC E lr pk 0 o] ≤
+        clsEps q e n := by
+      refine (prEvent_withLogQ_le ($ᵗ CTable) (fun E => gameA CrtGen.tables (stG lr pk) (PE E) E)
+        (fun E r => r.2.2.accept = true ∧ ClsCovered E (stG lr pk (stOut r)) CrtGen.tables r ∧
+          ¬ClsExtracted E (stG lr pk (stOut r)) CrtGen.tables
+            (witKT pk hG (some (stOut r))) r)).trans ?_
+      exact pomfritT_accept_le_cls_dep pk hG (fun s => s.2.1) (fun s => s.2.2) lr PE P0
+        (fun E g => events_wrapE g E lr pk pre A Lst i.val) e hb0.2.2 n (fun E => (hb E).2.1) q
+        (fun E => (hb E).1) (hb0.1.mono hq0)
+    have t1 : Pr{let E ← $ᵗ CTable; let o ← (simulateQ randomOracle
+        (withLogQ (gameA CrtGen.tables (stG lr pk) (PE E) E))).run' ∅}[evC E lr pk 1 o] ≤
+        ((e * 2 : ℕ) : ℝ≥0∞) * (((512 * q .h1 : ℕ) : ℝ≥0∞) * (2 ^ 256 : ℝ≥0∞)⁻¹) := by
+      refine (prEvent_withLogQ_le ($ᵗ CTable) (fun E => gameA CrtGen.tables (stG lr pk) (PE E) E)
+        (fun E r => PostOut E r)).trans ?_
+      refine (prEvent_transfer (fun E => gameA CrtGen.tables (stG lr pk) (PE E) E)
+        (fun E => gameA CrtGen.tables (stG lr pk) P0 E) (fun E r => PostOut E r)
+        (fun E r => PostOut E r) fun E g h => (events_wrapE g E lr pk pre A Lst i.val).2.2 h).trans ?_
+      exact prEvent_joint_postOut_le_A CrtGen.tables (stG lr pk) P0 e hb0.2.2 q (hb0.1.mono hq0)
+    have t2 : Pr{let E ← $ᵗ CTable; let o ← (simulateQ randomOracle
+        (withLogQ (gameA CrtGen.tables (stG lr pk) (PE E) E))).run' ∅}[evC E lr pk 2 o] ≤
+        (2 ^ 128 : ℝ≥0∞)⁻¹ := by
+      refine (prEvent_withLogQ_le ($ᵗ CTable) (fun E => gameA CrtGen.tables (stG lr pk) (PE E) E)
+        (fun E r => r.2.2.accept = true ∧
+          ((.h23, zOut (stG lr pk (stOut r)) r) : Dom) ∉ hashLog r.2.1.aux.2)).trans ?_
+      exact prEvent_joint_le_of_forall (fun E => (simulateQ randomOracle
+        (gameA CrtGen.tables (stG lr pk) (PE E) E)).run' ∅) _ fun E =>
+        prEvent_zUnqueried_le_A CrtGen.tables (stG lr pk) (PE E) E
+    have t3 : Pr{let E ← $ᵗ CTable; let o ← (simulateQ randomOracle
+        (withLogQ (gameA CrtGen.tables (stG lr pk) (PE E) E))).run' ∅}[evC E lr pk 3 o] ≤
+        ∑ k ∈ hitKinds, (q + extractorQueries + verifierQueries) k *
+          (hitEps (q + extractorQueries + verifierQueries)
+            (combCount cbP (q + extractorQueries + verifierQueries)) k +
+            orderEps (q + extractorQueries + verifierQueries) k) :=
+      prEvent_joint_le_of_forall (fun E => (simulateQ randomOracle
+        (withLogQ (gameA CrtGen.tables (stG lr pk) (PE E) E))).run' ∅) (fun E o => evC E lr pk 3 o)
+        fun E => prEvent_hitOrder_le _ _
+          (isKindQueryBound_gameA CrtGen.tables (stG lr pk) (PE E) E (hb E).1)
+    rw [Fin.sum_univ_four]
+    exact add_le_add (add_le_add (add_le_add t0 t1) t2) t3
+
+end Fixed
+
 end VoleMole.ROM.OneMore.Pomfrit
