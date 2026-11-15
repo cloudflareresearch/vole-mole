@@ -433,6 +433,10 @@ import VoleMole.Theft.PlainLog
 import VoleMole.Theft.PlainOracle
 import VoleMole.Theft.PlainRata
 import VoleMole.Theft.PlainMous
+import VoleMole.Theft.PlainEager
+import VoleMole.Theft.PlainVerQ
+import VoleMole.Theft.PlainRom
+import VoleMole.Theft.PlainRataRom
 import VoleMole.Theft.MoussakaHit
 import VoleMole.Theft.ManyPlain
 import VoleMole.Theft.ManyReads
@@ -471,6 +475,7 @@ import VoleMole.Audit.PomfritLemmaP
 import VoleMole.Audit.PomfritPerm
 import VoleMole.Audit.Theft
 import VoleMole.Audit.TheftPlainLog
+import VoleMole.Audit.TheftPlainRom
 import VoleMole.Audit.MainPU
 import VoleMole.Audit.MainShared
 import VoleMole.Audit.PomfritLemmaPCls

@@ -695,7 +695,15 @@ is **[Lean]** for one honest token (`lean/VoleMole/Theft/`; for `U` tokens see b
     q h5 + x₅ + 936, q_E + x_E + 9214)` and `ε_hit = epsHit (q mu) (q h21) (q h22)`. The
     Moussaka simulators always output bytes (empty if grinding fails), so the patch recomputes
     the prefix of the output and uses the empty prefix when the simulation failed (`progQIm`,
-    `preOf`). The lazy-to-eager step remains.
+    `preOf`). The lazy-to-eager step remains for Moussaka. For Ratatouille it is done
+    (`noTheft_lean_rom`, `security/ratatouille.md` §5, item 4); the generic parts apply here
+    unchanged (`pr_tables_eq_ro`, `normT`, `verifyQ_onT`, `gameA_onT`, `eval_gameA`). Still to do
+    for `noRedirect_lean_rom`: `VerOk` for the Lean Moussaka statements (`L ≥ 6293`,
+    `M = Moussaka.M`; the redemption's `mu₁` input holds the Anchors' digests), the joint bound
+    `moussaka_sim_joint_spec` for the Lean statements (as `ratatouille_sim_joint_lean`), the
+    extractor and provers (as `eRom`, `outI`, `outS`, with the redemption witness bytes), and the
+    analogue of `game_bad` and `plainSEL_rom`; and, as for Ratatouille, the extractor's read
+    budget.
   - Statements that are not well-formed, and (for one token) redemptions under an Anchor Set
     with the digests of the Client's set and other maps (`HitWf`, above; for `U` tokens this is
     the collision term of `noRedirectN_leanX_hitC`).

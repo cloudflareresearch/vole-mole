@@ -788,19 +788,70 @@ honest openings, not about signatures. The table's bound in §0 is the right one
        (`stageBudgetX_runT`) and the decision trees on the chain tables (`admHit_runT`) follow.
     3. *Cipher rows against cipher cells* (done). The oracle answers cells `(k, z) ↦ row(E k)(z)`;
        a cell query reads one row, so `q_E` cells read at most `q_E` rows (`stageBudgetX_runT`).
-    4. *Lazy oracle against finite tables* (not done). `ROM/` samples the hashes lazily on
+    4. *Lazy oracle against finite tables* (done for one Client, with function rows and
+       `M = uovM`; the extractor's read budget remains, (d)). `ROM/` samples the hashes lazily on
        `Kind × ByteArray`; here the tables are finite (`H₂³` on grinding points, `H₅` on 37-byte
-       inputs, the extra table on inputs of at most `L` bytes) with SHAKE elsewhere. Still to do:
-       (a) a measure-preserving bijection between the tables and a uniform table on the finite
-       set of table points, then `prEvent_randomOracle_eq_eager`, for an adversary whose queries
-       off the table points are answered by SHAKE locally (its cipher log, which `ROM/`'s
-       extractor reads, is unchanged); (b) that the verifier on an operation queries only table
-       points (`fd_fOk` gives the chain inputs; the `H₁`, `H₄`, combination inputs and the
-       `H₂³` input, a grinding point when the recomputed prefix has `preLen` bytes, remain); (c) applying
-       `ratatouille_sim_joint_spec` to the normalized adversary, with `e` the straight-line
-       extractor (`keysOf`, `knownOf`, `candidate`) mapped to the witnesses of `RelOp`, and the
-       budget `QBud (q + 2·(extractorQueries + vPreQueries)) (q_E + cells(pS) + cells(pI))`
-       of the reduction; (d) the read budget of that extractor (`hX`).
+       inputs, the extra table on inputs of at most `L` bytes) with SHAKE elsewhere.
+       (a) *Done* (`Theft/PlainEager.lean`). The table points are `tpt : TK p L → Dom`
+       (injective, `TPts` their finite set). `tabEquiv` is a bijection from the slices and the
+       tables to a table on the table points and a cipher table (function rows are `CTable`'s
+       rows); `pr_tables_eq_ro` turns an event of computations `m E` that query only table points
+       into `ROM/`'s experiment (`prEvent_randomOracle_eq_eager` on `TPts`, the two uniform draws
+       joined, `prEvent_uniform_bind_eq`). The normalization `normT` answers a hash query off the
+       table points with SHAKE locally; on the tables its run is the adversary's, its queries are
+       the adversary's at table points and cells (`normT_ansP`), it queries only those
+       (`allQueriesSatisfy_normT`) and keeps the query bounds (`qBud_normT`,
+       `isQueryBoundP_normT`). Its cipher entries are the adversary's (`cLog_filter`).
+       (b) *Done* (`Theft/PlainVerQ.lean`). `verifyQ_onT`: the verifier queries only table points
+       for a statement whose inputs fit (`VerOk`: not delayed, the prefix length of `p`, `mu₁`
+       and the chain inputs of at most `L` bytes, leaf inputs of at most `8193 ≤ L` bytes, the
+       combination of the table's `M`). The gate inputs have 37 bytes; the `H₂³` input of a
+       formatted proof is a grinding point (`mem_TPts_h23`; its 4-byte counter is a
+       little-endian `UInt32`, `pushLE32_getLE32`). With the extractor's `mu₁`, `iv` queries,
+       `ROM/`'s adaptive game queries only table points (`gameA_onT`). `verOk_stI`, `verOk_stS`
+       check `VerOk` for the Lean statements with `L ≥ Lmin`; for spends `M = uovM` (with another
+       `M` the combination query is off the tables, answered by SHAKE, and `ROM/`'s bound does
+       not apply).
+       (c) *Done* (`Theft/PlainRom.lean`, `Theft/PlainRataRom.lean`). `ratatouille_sim_joint_spec`
+       is for the byte-array statements `ratatouilleIssue`, `ratatouilleSpend` (a key with a
+       digest and an expanded map). The Lean spend statement `stS x` hashes no key and evaluates
+       the spec map `x.pk` (any map), so `ratatouille_sim_joint_lean` restates the joint bound for
+       `stI` and for `stS` with one key (`SpendK pk₀`; the statements decode from their `H₂⁰`
+       inputs, `muIn_stK_injective`), with `stS_extract_chain` (the chain extraction for `stS`).
+       `eRom A` is `ROM/`'s straight-line extractor on the tables: the cipher entries of the
+       query list (`cLog`), `mu₁` and `iv` from the extra table, `keysOf`, `knownOf`, and a known
+       tree's candidate (`candOf`, with the ideal-cipher PRG) mapped to the spec witnesses
+       (`witOfCand`) if one is a witness of the operation. The normalized adversary is the prover
+       of both relations (`outI`, `outS`; one output each, `m = 2`). On the tables a bad output of
+       `PlainSEL` is a bad output of the game (`game_bad`, `eval_gameA`), so
+       **`plainSEL_rom`**: `PlainSEL` holds for `eRom A` against `QBudT q q_E n_G` (per-kind
+       bounds, `q_E` cells and `n_G` hash queries in all: `ROM/`'s bound charges the total, and
+       `Kind.comb` has a parameter, so the per-kind bounds do not bound it) with error
+       `epsRom q q_E n_G`:
+
+           (q₂₁+2)·2^{−150} + (q₂₂+2)·(ε_QS(12282) + 2^{−128} + (n_G+339)·2^{−448})
+             + (q₂₃+2)·9·2^{−128} + chainHitEpsCombSim q uovM 2 + stmtBindEpsSim q 2
+             + 2·failEps q q_E.
+
+       (d) *Not done*: the read budget of the theorem's extractor (`hX` of `noTheft_lean_rom`).
+       `extRom` reads the reduction's query list (the prefix computations `vPreIC`, the last
+       stage's run) and `eRom`'s data: the cipher rows of `keysOf` (the reconstruction's GGM
+       expansion with the ideal cipher, and the rows of the logged keys) and of the candidates'
+       PRG expansions (`Chain.u`). A bound needs the cell set of `keysOf`/`knownOf` and `uBit`
+       under `icPrg`, which `ROM/` does not state. The audit takes it at the table sizes
+       (`Audit/TheftPlainRom.lean`), which checks consistency only.
+  - **`noTheft_lean_rom`** (`Theft/PlainRataRom.lean`): `noTheft_leanX_hitL` with plain extraction
+    discharged. Function rows (`R = Blk → Blk`), `M = uovM`, `L ≥ Lmin`, an adversary whose last
+    stage is the run of an oracle computation within `QBudT q q_E n_G` (`hA`), the extractor
+    `extRom A q q_E n_G` (`extL` of `eRom A`), and `hX` its read budget:
+
+        Pr[Bad] ≤ εz(pI; q') + εz(pS; q') + δ_S + ε_rom
+          + 2·((q_μ+3)·2^{−256} + (q₂₁+3)·2^{−1088} + (q₂₂+3)·2^{−448}) + Adv^ow(inverter),
+
+    `ε_rom = epsRom (q + 2·qPre) (q_E + cells(pS) + cells(pI)) (n_G + 2·338)` (the reduction's
+    budget: each prefix computation makes at most 338 hash queries, `isQueryBoundP_left_vPreIC`;
+    `qBudT_redQ`) and `q' = (q h3 + x₃, q h5 + x₅ + 936, q_E + x_E + 9214)`. Left: `εz`, `δ_S`, `Adv^ow` (as before), `hX` (item 4 (d)),
+    and the explicit numbers of `epsRom`. Audit: `Audit/TheftPlainRom.lean`.
   - **`noTheft_leanX_hitL`** (`Theft/PlainRata.lean`): `noTheft_leanX_hit` with mismatches 1–3
     resolved. For an adversary whose last stage is the run of an oracle computation within
     `QBud q q_E` (`hA`) and the extractor `extLR e` (`hX` its read budget):
@@ -812,8 +863,8 @@ honest openings, not about signatures. The table's bound in §0 is the right one
     and `ε_plain` the error of `PlainSEL` against the budget `QBud (q + 2·(extractorQueries +
     vPreQueries)) (q_E + cells(pS) + cells(pI))` (`cells(p) = verifyCellBound p`). The hops'
     budgets for an extractor that is not given per value of the extra table are
-    `distI_budgetX'`, `distS_budgetX'`. Audit: `Audit/TheftPlainLog.lean`. `PlainSEL` is the
-    remaining extraction hypothesis (item 4).
+    `distI_budgetX'`, `distS_budgetX'`. Audit: `Audit/TheftPlainLog.lean`. `PlainSEL` is
+    discharged by `plainSEL_rom` (item 4), giving `noTheft_lean_rom` above.
   - `ε_hit` is bounded for Ratatouille (`noTheft_leanX_hit` above), for Moussaka with one token
     (`noRedirect_leanX_hit`, `security/moussaka.md` §5.3: for well-formed statements and a
     freshness on the hashed fields) and for Ratatouille with `U` Clients and `M` spends
@@ -1365,7 +1416,7 @@ and determinism of `Tag`. The witness satisfies V3 by `change_correct`. ∎
     request, `2N·failEps`;
   - adversaries are deterministic given the oracles (randomized ones by averaging over their
     coins) and make a fixed number `N` of calls with a per-call query budget.
-- Theorem 3 (no theft, N2a): the reduction is in Lean (`noTheft`, `noTheft_lean`, §5). The read budgets of the zero-knowledge hops are proved from the adversary's and the extractor's budgets (`noTheft_lean_reads`). Weak SE is reduced to plain extraction and a programmed-point (chain-collision) term (`noTheft_lean_plain`). The theorem also holds with `H₁`, `H₂⁰…H₂²`, `H₄` and `H_comb` read off uniform tables (`noTheft_leanX_plain`: the zero-knowledge hops are uniform in the base hash record and lift by averaging). The chain-collision term is bounded there for adversaries that read the chain tables with bounded queries (`noTheft_leanX_hit`: `2·((q_μ+3)·2^{−256} + (q₂₁+3)·2^{−1088} + (q₂₂+3)·2^{−448})`, freshness under the adversary's key since the Lean spend statement does not hash `pk`). Plain extraction stays a hypothesis. The theorem is restated with the extractor reading the last stage's query list, the last stage an oracle computation with query bounds and cell queries to the cipher (`noTheft_leanX_hitL`, `PlainSEL`); carrying `ROM/`'s extraction bound over still needs the lazy-to-eager step (§5, "What is not covered", item 4). `Adv^ow` stays the advantage of the explicit inverter: `Com` is evaluated inside the relations, so it cannot be a random table of the game, and some inverter wins with probability `1` (`owAdv_one_ratatouille`). In a random-table model of the standalone experiment a `q`-query inverter has advantage `≤ (q+2)·2^{−126}` (`owAdvColRO_num`). The game has one honest client with one issuance and one spend, adversarial choices that do not read the tables, and one output request. For `U` honest clients and `M` honest spends, with change tokens spent again, the reduction is `noTheftN` (`Theft/RatatouilleMany.lean`, §5): `U·ε_I + M·ε_S + Σ_i δ_i + ε_SE + Σ_j Adv^ow(B_j)`, with weak SE for `U + M` simulated proofs (`WeakSEN`). With the Lean prover the hops' budgets are proved and `WeakSEN` is reduced to plain extraction and one programmed-point term per simulated proof, all hypotheses (`noTheftN_lean_reads`, `noTheftN_lean_plain`). With the other hashes uniform tables the programmed-point terms are bounded, `N·((q₂₂+N+1)·2^{−448} + (q₂₁+N+1)·2^{−1088} + (q_μ+N+1)·2^{−256})` for `N = U + M` (`noTheftN_leanX_hit`); plain extraction stays a hypothesis.
+- Theorem 3 (no theft, N2a): the reduction is in Lean (`noTheft`, `noTheft_lean`, §5). The read budgets of the zero-knowledge hops are proved from the adversary's and the extractor's budgets (`noTheft_lean_reads`). Weak SE is reduced to plain extraction and a programmed-point (chain-collision) term (`noTheft_lean_plain`). The theorem also holds with `H₁`, `H₂⁰…H₂²`, `H₄` and `H_comb` read off uniform tables (`noTheft_leanX_plain`: the zero-knowledge hops are uniform in the base hash record and lift by averaging). The chain-collision term is bounded there for adversaries that read the chain tables with bounded queries (`noTheft_leanX_hit`: `2·((q_μ+3)·2^{−256} + (q₂₁+3)·2^{−1088} + (q₂₂+3)·2^{−448})`, freshness under the adversary's key since the Lean spend statement does not hash `pk`). Plain extraction stays a hypothesis. The theorem is restated with the extractor reading the last stage's query list, the last stage an oracle computation with query bounds and cell queries to the cipher (`noTheft_leanX_hitL`, `PlainSEL`); with function rows and `M = uovM` plain extraction is then proved from `ROM/`'s simultaneous extraction (`plainSEL_rom`, `noTheft_lean_rom`, §5, "What is not covered", item 4); the extractor's read budget (`hX`) stays a hypothesis. `Adv^ow` stays the advantage of the explicit inverter: `Com` is evaluated inside the relations, so it cannot be a random table of the game, and some inverter wins with probability `1` (`owAdv_one_ratatouille`). In a random-table model of the standalone experiment a `q`-query inverter has advantage `≤ (q+2)·2^{−126}` (`owAdvColRO_num`). The game has one honest client with one issuance and one spend, adversarial choices that do not read the tables, and one output request. For `U` honest clients and `M` honest spends, with change tokens spent again, the reduction is `noTheftN` (`Theft/RatatouilleMany.lean`, §5): `U·ε_I + M·ε_S + Σ_i δ_i + ε_SE + Σ_j Adv^ow(B_j)`, with weak SE for `U + M` simulated proofs (`WeakSEN`). With the Lean prover the hops' budgets are proved and `WeakSEN` is reduced to plain extraction and one programmed-point term per simulated proof, all hypotheses (`noTheftN_lean_reads`, `noTheftN_lean_plain`). With the other hashes uniform tables the programmed-point terms are bounded, `N·((q₂₂+N+1)·2^{−448} + (q₂₁+N+1)·2^{−1088} + (q_μ+N+1)·2^{−256})` for `N = U + M` (`noTheftN_leanX_hit`); plain extraction stays a hypothesis.
 - KP800 as an ideal permutation is a model. Commitment binding and hiding inherit it. In the Lean
   privacy theorems hiding stays a computational hypothesis (`ε_hide`, §2.2).
 - Lemma DS is proved on paper, with the separation table checked in Lean
