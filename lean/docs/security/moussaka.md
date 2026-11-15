@@ -40,7 +40,7 @@ Contents:
 |---|---|---|---|
 | One-more unforgeability, per issuance context (Thm 1) | **Yes**; [Lean] in the ROM and ideal-cipher model on the spec, with the Lean verifier as the honest Anchors' and Moderator's check, the extraction terms from the soundness theorems (`ROM/MoussakaOMUF.lean`, `omuf_le_num`; §4 "Status") | `ε_ext^iss + ε_ext^red + ε_dig + Adv^bind_Com + K·Adv^ct-uf-open_UOV,Com`; mechanized: `qI·ε_I + qR·ε_R + Adv^bind_Com(B₁) + Adv^ct-uf-open_K(B₂)` (`omuf_le_num_open`), `ε_dig` a condition on the honest keys; and, with `Com` a random function in the CT-UF^open game (a modelling hypothesis), the last term down to `Σ_j Adv^{ompr}_j + K·(q_f + 2q_S + 1)·failPr` (`omuf_le_num_ompr`) | PoK (extraction README), binding of `Com`, chosen-target unforgeability of UOV on `Com`-images with openings (CT-UF^open, implied tightly by one-more-UOV with `Com` ideal in the standalone game, §3.3; [Lean] with `Com` a random function) |
 | One nullifier per signed commitment; double-spend detection (Cor 2) | **Yes**, if the Moderator keeps one record per `(ctx_iss, ctx_red)` across all Anchor Sets (`moussaka.hpp:141-146`) | as Thm 1 | as Thm 1 |
-| Redemption non-malleability: no redirect to another `challenge_digest`, Anchor Set or `ctx_red` (Thm 3) | **Yes**; [Lean] the reduction as a game on the spec in the ROM and ideal-cipher table model, one token (`Theft/Moussaka.lean`, `noRedirect`; with the Lean prover's zero knowledge, `noRedirect_lean`; with the hops' read budgets proved, `noRedirect_lean_reads`); weak SE reduced to plain extraction plus a programmed-point term, both hypotheses (`noRedirect_lean_plain`, §5.3); the same with `H₁`, `H₂⁰…H₂²`, `H₄`, `H_comb` read off uniform tables (`noRedirect_leanX_plain`), and there the programmed-point term bounded (`noRedirect_leanX_hit`; for `U` tokens `noRedirectN_leanX_hit`, `noRedirectN_leanX_hitC`); `Adv^ow` in a random-table model for the standalone experiment (`owAdvRO_num`) | `ε_hop + ε_SE^red + Adv^ow_Com` (corrected, §5.3); mechanized: `ε_I + ε_R + δ_R + ε_SE + Adv^ow(B)`; for `U` tokens and `M` honest redemptions `U·ε_I + M·ε_R + Σ_i δ_i + ε_SE + Σ_h Adv^ow(B_h)` (`noRedirectN`, `Theft/MoussakaMany.lean`, with `WeakSEN`; hops' budgets proved and `WeakSEN` reduced to plain extraction, `noRedirectN_lean_plain`, `Theft/MoussakaManyReads.lean`; with the chain hashes uniform tables `Σ_i ε_hit,i ≤ N·((q₂₂+N+1)·2⁻⁴⁴⁸ + (q₂₁+N+1)·2⁻¹⁰⁸⁸ + (q_μ+N+1)·2⁻²⁵⁶)`, `N = U + M`, `noRedirectN_leanX_hit`) | weak SE (L8), one-wayness of `Com` (any opening of `t`) |
+| Redemption non-malleability: no redirect to another `challenge_digest`, Anchor Set or `ctx_red` (Thm 3) | **Yes**; [Lean] the reduction as a game on the spec in the ROM and ideal-cipher table model, one token (`Theft/Moussaka.lean`, `noRedirect`; with the Lean prover's zero knowledge, `noRedirect_lean`; with the hops' read budgets proved, `noRedirect_lean_reads`); weak SE reduced to plain extraction plus a programmed-point term, both hypotheses (`noRedirect_lean_plain`, §5.3); the same with `H₁`, `H₂⁰…H₂²`, `H₄`, `H_comb` read off uniform tables (`noRedirect_leanX_plain`), and there the programmed-point term bounded (`noRedirect_leanX_hit`; for `U` tokens `noRedirectN_leanX_hit`, `noRedirectN_leanX_hitC`); for one token plain extraction proved from `ROM/` (`noRedirect_lean_rom'`, `L ≥ 8193`, Anchor keys determined by digests); `Adv^ow` in a random-table model for the standalone experiment (`owAdvRO_num`) | `ε_hop + ε_SE^red + Adv^ow_Com` (corrected, §5.3); mechanized: `ε_I + ε_R + δ_R + ε_SE + Adv^ow(B)`; for `U` tokens and `M` honest redemptions `U·ε_I + M·ε_R + Σ_i δ_i + ε_SE + Σ_h Adv^ow(B_h)` (`noRedirectN`, `Theft/MoussakaMany.lean`, with `WeakSEN`; hops' budgets proved and `WeakSEN` reduced to plain extraction, `noRedirectN_lean_plain`, `Theft/MoussakaManyReads.lean`; with the chain hashes uniform tables `Σ_i ε_hit,i ≤ N·((q₂₂+N+1)·2⁻⁴⁴⁸ + (q₂₁+N+1)·2⁻¹⁰⁸⁸ + (q_μ+N+1)·2⁻²⁵⁶)`, `N = U + M`, `noRedirectN_leanX_hit`) | weak SE (L8), one-wayness of `Com` (any opening of `t`) |
 | Issuer hiding and unlinkability vs a Moderator **colluding with all Anchors**, with adversarial keys (Thm 4a) | **Yes, computationally**; [Lean] from uniform seed outputs (`Privacy/Moussaka.lean`, `anonymity`; for `main`'s Client, which finds its index itself, `Privacy/MoussakaFind.lean`); with the executable Lean prover (label rows) down to its tape hypothesis (`Privacy/MoussakaLean.lean`, `anonymity_label_rows`); for the Lean prover in the ROM and ideal-cipher model with every zero-knowledge term explicit, `≈ 2⁻¹⁰²·³` plus budget terms and `2·Adv^hide_Com` (`anonymityRO_lean_num`), and `≈ 2⁻¹⁰¹·⁹` with a table-reading interaction (`anonymityRA_lean_num`; Appendix B); also with AES as random permutations (`_perm`) and with one shared `H₃` (`anonymitySh_num`, `anonymityRASh_num`); from the real Clients' OS seeds and seed XOF, each `+ 2·(2q_X + 2)·2⁻²⁵⁶` (`anonymity*_seed`, `lean/docs/zk.md` §10.6); with a key stage (contexts, keys) that reads the tables too (`anonymityRAK_lean_num`, `≈ 2⁻¹⁰¹·⁹`); with any number `n` of further honest Clients, `≤ n·2⁻¹⁰²` plus budget terms and `2·Adv^hide_Com` (`anonymityN_lean_num`), also adaptively scheduled, each further session's contexts, key, response and Anchor Set chosen from earlier outcomes and the challenge contexts and keys from the sessions before it (`anonymityAd_lean_num`, the same numbers), and interleaved in any order (`anonymityIL_lean_num`, `≤ (n + 2)·2⁻¹⁰¹`; with a table-reading scheduler that also places the challenge, `anonymityILO_lean_num`, `+ 28·L·(a₃ + a₂ + a₅ + 221·a_E)·2⁻¹²⁸`), and with `N` challenge pairs (`anonymityP_lean_num`; linear in `N` up to a bad event bounded on paper, `anonymityP_lin`; `lean/docs/zk.md` §10.8; §11 item 5) | `2·ε_ZK^joint + 2·Adv^hide_Com` (the `2^{−192}` is not needed, §6) | ZK (lean/docs/zk.md), hiding of `Com` |
 | The same vs a Moderator that sees no issuance (Thm 4b) | **Yes**, with no Keccak assumption, up to an abort term the note missed (§6); [Lean] from uniform seed outputs (`Privacy/MoussakaNC.lean`, `anonymityNC`, `unlinkabilityNC`; for `main`'s Client `Privacy/MoussakaNCFind.lean`), with the vinegar hash a random oracle (`anonymityNC_vinegarRO`), and with the executable Lean prover down to its tape or hop hypotheses (`anonymityNC_label_rows`, `_shake`); in the ROM and ideal-cipher model with every proof and the honest Anchors' Lean verifier on the shared tables, `≈ 2⁻¹⁰³·²` plus budget terms and `2·(φ₀ + φ₁)` (`anonymityNCRO_lean_num`, `unlinkabilityNCRO_lean_num`, also `_perm`), also with one shared `H₃` (`anonymityNCSh_num`), with the Moderator's choices read off the tables (`anonymityNCRA_lean_num`, as oracle computations `anonymityNCOC_lean_num`) and from the real Clients' seeds (`*NC*_seed`; Appendix B); with a model of pqov's `derive_preimage` as the Anchors' signer (`anonymityNC_pqov`, `anonymityNCRO_pqov`), averaged over keys of pqov's key generation with any oil matrix (`anonymityNCRO_pqov_pqovKeys`; `O = 0`: `anonymityNCRO_pqov_keys`; abort term `≈ 2⁻²⁹³·⁸`; the model reproduces the C++ `derive_preimage` on the KAT targets), and the games shown to reach redemption (`pr_refused_NCRO_le`; Appendix B) | `2·Σ ε_ZK^red + 2·(φ₀ + φ₁)`, `φ_c ≤ δ_c^{255}` on average over the vinegar random oracle (pqov uses 255 vinegars, §6), `E[δ_c^{255}] ≤ 255^{−37} + 1/(255·256^{37}) ≈ 2^{−295.8}` on average over the key (`δ ≤ 1/255` holds on average over the key, not per key) (`0` for one Anchor; no `2^{−192}`) | ZK of the redemption proofs only; both issuers in the Anchor Sets (`main`'s Client; for the index-taking Client of the random-oracle games, an index taken from `S`) |
 | Issuer hiding under a Moderator-chosen Anchor Set | **Only relative to the Anchors in the set that are honest and in common use** (§7) | n/a | Anchor-Set consistency outside the library |
@@ -684,6 +684,48 @@ is **[Lean]** for one honest token (`lean/VoleMole/Theft/`; for `U` tokens see b
 - **`owAdvRO_num`** (`Theft/ComOW.lean`): one-wayness of `Com` in a random-table model, for the
   standalone experiment: one commitment, cells keyed by `(nf, r)`, a decision-tree inverter with
   `q` queries: `≤ (q + 2)·2^{−128} + (q + 1)·2^{−360}`. It does not bound `owAdv` of `noRedirect`.
+- **`noRedirect_lean_rom`**, **`noRedirect_lean_rom'`** (`Theft/PlainMousJoint.lean`,
+  `Theft/PlainMousRom.lean`, `Theft/PlainMousRedirect.lean`, `Theft/PlainMousReads.lean`):
+  plain extraction proved from `ROM/`'s simultaneous extraction, for one token, function rows,
+  `M = Moussaka.M` and `L ≥ 8193` (`Lrom`), as for Ratatouille (`noTheft_lean_rom'`,
+  `security/ratatouille.md` §5, item 4). The generic parts apply unchanged (`pr_tables_eq_ro`,
+  `normT`, `verifyQ_onT`, `gameA_onT`, `eval_gameA`, the row sets of `ROM/ExtractCells.lean`).
+  What is new:
+  - *Decoding.* `ROM/`'s argument reads a statement back from its `H₂⁰` input. Well-formed
+    issuance statements decode (`IssW`, `muIn_issW_injective`). A redemption statement's `H₂⁰`
+    input has the Anchors' digests, not their maps, so the redemption family is the well-formed
+    instances whose Anchor keys are the keys `kt d` of their digests, for a fixed assignment `kt`
+    (`RedK kt`, `KeysBy`, `muIn_redK_injective`). In C++ a digest is SHAKE256 of the key, so an
+    adversary that uses two keys with one digest has found a collision; in Lean it is a
+    hypothesis on the adversary (`KeysOut A kt`), like `HitWf`'s last condition.
+  - **`moussaka_sim_joint_lean`**: `moussaka_sim_joint_spec` for `stI` on `IssW` and `stR` on
+    `RedK kt`, the witnesses in `IssueRelW`, `RedeemRelW` (`redeemRelW_of_wit_lean`: the spec
+    relation for Anchors with any maps; `stR_extract_chain`).
+  - `verOk_stIW`, `verOk_stRW`: `VerOk` for the well-formed Lean statements. *Correction to the
+    plan:* the bound needs `L ≥ 8193`, not `L ≥ 6293` (`Hit.Mous.Lmin`): the verifier's `H₁` leaf
+    inputs (`2⁸·32 + 1` bytes) must be table points for `ROM/`'s bound to apply.
+  - `eRomM` (as `eRom`; the candidate mapped to `issueWitOf`/`redeemWitOf` with the operation's
+    fields), `outIM`, `outRM kt` (the operation if it is in the family, a fixed well-formed dummy
+    otherwise), `game_badM`, and **`plainSEL_romM`**: `PlainSEL` for `eRomM` against
+    `QBudT q q_E n_G`, for the freshness `FreshK kt` (`FreshOk` and the Anchor keys of `kt`),
+    with error
+
+        epsRomM q q_E n_G = (q₂₁+2)·2^{−150} + (q₂₂+2)·(ε_QS(4409) + 2^{−128} + (n_G+339)·2^{−448})
+          + (q₂₃+2)·9·2^{−128} + chainHitEpsCombSim q M 2 + stmtBindEpsSim q 2 + 2·failEps q q_E.
+
+  - `noRedirect_okK`: `noRedirect_ok` for `FreshK kt`, for `HitWf` adversaries with `KeysOut`.
+    `noRedirect_lean_rom` keeps the extractor's read budget `hX` as a hypothesis;
+    `noRedirect_lean_rom'` proves it (`stageBudgetX_extRomM`: slices at `q h3`, `H₅` at
+    `q h5 + 624`, the cipher at `q_E + cells(pR) + cells(pI) + 4608` rows, `cells(pI) = 55292`,
+    `cells(pR) = 69116`):
+
+        Pr[Bad] ≤ εz(pI; q') + εz(pR; q') + δ_R + ε_rom
+          + 2·((q_μ+3)·2^{−256} + (q₂₁+3)·2^{−1088} + (q₂₂+3)·2^{−448}) + Adv^ow(inverter),
+
+    `q' = (2·q h3, 2·q h5 + 1560, 2·q_E + 138230)`, `ε_rom = epsRomM (q + 2·qPre)
+    (q_E + cells(pR) + cells(pI)) (n_G + 2·338)`. Left: `εz`, `δ_R`, `Adv^ow`, the explicit
+    numbers of `epsRomM`, and `HitWf`, `KeysOut` on the adversary. Audit:
+    `Audit/TheftPlainMous.lean` (the well-formed trivial adversary `thiefW`, `L = 8193`).
 - Not covered:
   - `PlainSE` in the model of `noRedirect_leanX_plain`, from `ROM/`'s extraction bounds. What
     separates the two models is listed in `security/ratatouille.md` §5 ("What is not covered").
@@ -695,15 +737,8 @@ is **[Lean]** for one honest token (`lean/VoleMole/Theft/`; for `U` tokens see b
     q h5 + x₅ + 936, q_E + x_E + 9214)` and `ε_hit = epsHit (q mu) (q h21) (q h22)`. The
     Moussaka simulators always output bytes (empty if grinding fails), so the patch recomputes
     the prefix of the output and uses the empty prefix when the simulation failed (`progQIm`,
-    `preOf`). The lazy-to-eager step remains for Moussaka. For Ratatouille it is done
-    (`noTheft_lean_rom`, `security/ratatouille.md` §5, item 4); the generic parts apply here
-    unchanged (`pr_tables_eq_ro`, `normT`, `verifyQ_onT`, `gameA_onT`, `eval_gameA`). Still to do
-    for `noRedirect_lean_rom`: `VerOk` for the Lean Moussaka statements (`L ≥ 6293`,
-    `M = Moussaka.M`; the redemption's `mu₁` input holds the Anchors' digests), the joint bound
-    `moussaka_sim_joint_spec` for the Lean statements (as `ratatouille_sim_joint_lean`), the
-    extractor and provers (as `eRom`, `outI`, `outS`, with the redemption witness bytes), and the
-    analogue of `game_bad` and `plainSEL_rom`; and, as for Ratatouille, the extractor's read
-    budget.
+    `preOf`). The lazy-to-eager step and the extractor's read budget are now done for one token
+    (`noRedirect_lean_rom'`, above); for `U` tokens plain extraction stays a hypothesis.
   - Statements that are not well-formed, and (for one token) redemptions under an Anchor Set
     with the digests of the Client's set and other maps (`HitWf`, above; for `U` tokens this is
     the collision term of `noRedirectN_leanX_hitC`).
@@ -1402,8 +1437,11 @@ the fix column describes `d5def9c`, where Moussaka used the rows (and what dropp
    "Status"), also with the other hashes read off uniform tables (`noRedirect_leanX_plain`,
    `noRedirectN_leanX_plain`). With the chain hashes uniform tables the programmed-point terms are
    bounded, for one token (`noRedirect_leanX_hit`) and for `U` tokens (`noRedirectN_leanX_hit`,
-   `noRedirectN_leanX_hitC` with the digest condition as a SHAKE256 collision term); plain
-   extraction stays a hypothesis.
+   `noRedirectN_leanX_hitC` with the digest condition as a SHAKE256 collision term). For one
+   token, function rows, `M = Moussaka.M` and `L ≥ 8193`, plain extraction and the extractor's
+   read budget are proved from `ROM/`'s simultaneous extraction (`noRedirect_lean_rom'`, §5.3),
+   for adversaries whose Anchor keys are determined by their digests (`KeysOut`); for `U` tokens
+   plain extraction stays a hypothesis.
 8. Timing side channels beyond the index check (OS RNG, allocation) are out of scope.
 
 ---
