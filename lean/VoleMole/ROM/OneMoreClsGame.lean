@@ -231,7 +231,7 @@ theorem pomWin_le_wrapE (A : Forger) :
       obtain ⟨f1, f2⟩ := flag_wrapE g CrtGen.tables lr E addHint (e1C lr E) tgts1 kp.1 (pre kp.2)
         A ℓ L
       exact ⟨f1 ▸ hz.1, f2 ▸ hz.2⟩
-  simp only [key, StateT.run'_eq, map_bind, Functor.map_map, bind_pure_comp] at h ⊢
+  simp only [key, StateT.run'_eq, Functor.map_map, bind_pure_comp] at h ⊢
   exact h
 
 /-- **Theorem U1^cls, union over the forgeries** (gap G8-cls): for a key generation with 32-byte
