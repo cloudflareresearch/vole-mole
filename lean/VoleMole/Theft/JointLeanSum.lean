@@ -416,4 +416,145 @@ theorem real_sim_leN_leanA (prove : X → I → W → Bytes 16 → Tab3 → Sh p
 
 end Active
 
+/-! ## `real_sim_leN_lean` with the programmings discharged -/
+
+section LeanPg
+
+variable {X : Type} [Fintype X] [Nonempty X] {I W O Ω : Type*} [Fintype Ω] [Nonempty Ω]
+  {p : Params} {N : ℕ}
+
+/-- **`real_sim_leN_lean` with its hypothesis on the programmings proved** (`lProgRd_conf`: the
+simulator's programming is a point reader confined to the simulated proof's `iv`, within
+`(312, 4607)`). What is left: the real proofs' readers (`hRP`) and the game reader. -/
+theorem real_sim_leN_lean_pg (Hb : X → Hashes) (hHb : ∀ x, HashesWF (Hb x)) (stOf : I → Statement)
+    (hp : ∀ xI, (stOf xI).params = p) (hlr : p.labelRows = true) (enc : I → W → ByteArray)
+    (Rl : I → W → Prop) (cs : I → ByteArray → ByteArray → System GF128)
+    (hz : ∀ xI w, Rl xI w → ZKHyp CrtGen.tables (stOf xI) (enc xI w) (cs xI))
+    (hsp : SmallParams p) (φ : Except String ByteArray → O) (ivO : X → I → O → Option ByteArray)
+    (hiv : ∀ x xI e v, ivO x xI (φ e) = some v → ivV (Hb x) (stOf xI) e = some v)
+    (xOf : Ω → List O → I) (wOf : Ω → List O → W) (hrel : ∀ ω h, Rl (xOf ω h) (wOf ω h))
+    (RP : ∀ x xI w r g', TRd (fun (_ : Tab3) (s : Sh p) => lProve p Hb stOf enc φ x xI w r g' s))
+    {s5 sE : ℕ}
+    (hRP : ∀ x xI w r g', Rl xI w → Conf (RP x xI w r g')
+      (fun s => ivO x xI (lProve p Hb stOf enc φ x xI w r g' s)) s5 sE)
+    (R : GRd Ω O p X N) (hc : R.Cons) {a3 a5 aE : ℕ} (hb : R.Bnd a3 a5 aE)
+    (h3 : (a3 : ℝ) < 2 ^ 128) (hE : 221 * ((aE + N * max 4607 sE + 4607 : ℕ) : ℝ) < 2 ^ 128)
+    (hβ : βZK (a5 + N * max 312 s5) (aE + N * max 4607 sE) < 1) {J : ℝ}
+    (hJ : ∑ i ∈ range N, ∑ k, wZK a3 (a5 + N * max 312 s5) (aE + N * max 4607 sE) k *
+      exU _ (fun z => (nZK p ivO xOf R (max 312 s5) (max 4607 sE) i k
+        (viewN (C := SimCoins p) (gP (lProve p Hb stOf enc φ) xOf wOf)
+          (gS (lSim p φ) xOf) (gPg (lProg p Hb stOf) xOf) N z) : ℝ)) ≤ J)
+    (hNB : N * ∑ k, wZK a3 (a5 + N * max 312 s5) (aE + N * max 4607 sE) k *
+      MZK N a3 a5 aE (max 312 s5) (max 4607 sE) k < 1)
+    (Ev : Ω → List O → (Fin N → Tab3) → ShX (Blk → Blk) p X → Prop)
+    (hEv : R.Reads (fun v => Ev v.1 v.2.1 v.2.2.1 v.2.2.2)) :
+    |pr _ (realGN (C := SimCoins p) (gP (lProve p Hb stOf enc φ) xOf wOf) Ev) -
+        pr _ (simGN (ρ := Bytes 16) (gS (lSim p φ) xOf) (gPg (lProg p Hb stOf) xOf) Ev)| ≤
+      (∑ i : Fin N, (εZK (aE + N * max 4607 sE) /
+          (1 - βZK (a5 + N * max 312 s5) (aE + N * max 4607 sE)) +
+        (1 + ∑ k, wZK a3 (a5 + N * max 312 s5) (aE + N * max 4607 sE) k *
+          MZK N a3 a5 aE (max 312 s5) (max 4607 sE) k) *
+          pr _ (deltaN (gP (lProve p Hb stOf enc φ) xOf wOf) (gS (lSim p φ) xOf)
+            (gPg (lProg p Hb stOf) xOf) i)) + J) /
+        (1 - N * ∑ k, wZK a3 (a5 + N * max 312 s5) (aE + N * max 4607 sE) k *
+          MZK N a3 a5 aE (max 312 s5) (max 4607 sE) k) :=
+  real_sim_leN_lean Hb hHb stOf hp hlr enc Rl cs hz hsp φ ivO hiv xOf wOf hrel
+    (lProgRd Hb stOf) (lProgRd_conf Hb hHb stOf hp φ ivO hiv) RP hRP R hc hb h3 hE hβ hJ hNB Ev hEv
+
+end LeanPg
+
+/-! ## The real provers' readers, at any parameter variable -/
+
+section Real
+
+/-- **A function of a confined reader's value is confined, with the reader's reads.** -/
+theorem Conf.map {p : Params} {Y Z : Type*} {F : Tab3 → Sh p → Y} {R : TRd F} (f : Y → Z)
+    {iv : Sh p → Option ByteArray} {a5 aE : ℕ} (hc : Conf R iv a5 aE) : Conf (R.map f) iv a5 aE :=
+  ⟨hc.h3, hc.h5, hc.hE, hc.in5, hc.inE⟩
+
+/-- `realPtRd` at a parameter variable `p` with `st.params = p`. -/
+noncomputable def realPtRdP {p : Params} (Hb : Hashes) (st : Statement) (w : ByteArray)
+    (hp : st.params = p) (hHb : HashesWF Hb) (ρ : Bytes 16) (G3 : Tab3) :
+    TRd (fun (_ : Tab3) (s : Sh p) => realRO p Hb st w ρ G3 s) := by
+  subst hp; exact realPtRd Hb st w hHb ρ G3
+
+/-- **The real prover's reader is confined**, at a parameter variable. -/
+theorem realPtRdP_conf {p : Params} {Hb : Hashes} {st : Statement} {w : ByteArray}
+    {cs : ByteArray → ByteArray → System GF128} (hzk : ZKHyp CrtGen.tables st w cs)
+    (hHb : HashesWF Hb) (hp : st.params = p) (hlr : p.labelRows = true) (ρ : Bytes 16)
+    (G3 : Tab3) :
+    Conf (realPtRdP Hb st w hp hHb ρ G3) (fun s => ivV Hb st (realRO p Hb st w ρ G3 s)) 624 4607 := by
+  subst hp
+  obtain ⟨hl1, -, -, hl2⟩ := labelRows_sizes hlr
+  exact realPtRd_conf hzk hHb (by omega) ρ G3
+
+variable {X : Type} {I W O : Type*} {p : Params}
+
+/-- **The Lean game's real provers as point readers.** -/
+noncomputable def lProveRd (Hb : X → Hashes) (hHb : ∀ x, HashesWF (Hb x)) (stOf : I → Statement)
+    (hp : ∀ xI, (stOf xI).params = p) (enc : I → W → ByteArray) (φ : Except String ByteArray → O)
+    (x : X) (xI : I) (w : W) (r : Bytes 16) (g' : Tab3) :
+    TRd (fun (_ : Tab3) (s : Sh p) => lProve p Hb stOf enc φ x xI w r g' s) :=
+  (realPtRdP (Hb x) (stOf xI) (enc xI w) (hp xI) (hHb x) r g').map φ
+
+/-- **`real_sim_leN_lean`'s `hRP`**, with `(s₅, s_E) = (624, 4607)`. -/
+theorem lProveRd_conf (Hb : X → Hashes) (hHb : ∀ x, HashesWF (Hb x)) (stOf : I → Statement)
+    (hp : ∀ xI, (stOf xI).params = p) (hlr : p.labelRows = true) (enc : I → W → ByteArray)
+    (Rl : I → W → Prop) (cs : I → ByteArray → ByteArray → System GF128)
+    (hz : ∀ xI w, Rl xI w → ZKHyp CrtGen.tables (stOf xI) (enc xI w) (cs xI))
+    (φ : Except String ByteArray → O) (ivO : X → I → O → Option ByteArray)
+    (hiv : ∀ x xI e v, ivO x xI (φ e) = some v → ivV (Hb x) (stOf xI) e = some v)
+    (x : X) (xI : I) (w : W) (r : Bytes 16) (g' : Tab3) (hw : Rl xI w) :
+    Conf (lProveRd Hb hHb stOf hp enc φ x xI w r g')
+      (fun s => ivO x xI (lProve p Hb stOf enc φ x xI w r g' s)) 624 4607 :=
+  ((realPtRdP_conf (hz xI w hw) (hHb x) (hp xI) hlr r g').map φ).of_iv fun _ v h => hiv x xI _ v h
+
+end Real
+
+/-! ## `real_sim_leN_lean` with the honest readers discharged -/
+
+section LeanFull
+
+variable {X : Type} [Fintype X] [Nonempty X] {I W O Ω : Type*} [Fintype Ω] [Nonempty Ω]
+  {p : Params} {N : ℕ}
+
+/-- **The joint bound for a game of Lean proofs, for every event a consistent game reader reads**,
+with the programmings and the later real proofs as proved point readers (`lProgRd_conf`,
+`lProveRd_conf`): `(m₅, m_E) = (312, 4607)`, `(s₅, s_E) = (624, 4607)`, so `max` is `(624, 4607)`.
+What is left is the game reader `R` (its budgets `(a₃, a₅, a_E)`) and `J`. -/
+theorem real_sim_leN_lean_full (Hb : X → Hashes) (hHb : ∀ x, HashesWF (Hb x))
+    (stOf : I → Statement) (hp : ∀ xI, (stOf xI).params = p) (hlr : p.labelRows = true)
+    (enc : I → W → ByteArray) (Rl : I → W → Prop) (cs : I → ByteArray → ByteArray → System GF128)
+    (hz : ∀ xI w, Rl xI w → ZKHyp CrtGen.tables (stOf xI) (enc xI w) (cs xI))
+    (hsp : SmallParams p) (φ : Except String ByteArray → O) (ivO : X → I → O → Option ByteArray)
+    (hiv : ∀ x xI e v, ivO x xI (φ e) = some v → ivV (Hb x) (stOf xI) e = some v)
+    (xOf : Ω → List O → I) (wOf : Ω → List O → W) (hrel : ∀ ω h, Rl (xOf ω h) (wOf ω h))
+    (R : GRd Ω O p X N) (hc : R.Cons) {a3 a5 aE : ℕ} (hb : R.Bnd a3 a5 aE)
+    (h3 : (a3 : ℝ) < 2 ^ 128) (hE : 221 * ((aE + N * max 4607 4607 + 4607 : ℕ) : ℝ) < 2 ^ 128)
+    (hβ : βZK (a5 + N * max 312 624) (aE + N * max 4607 4607) < 1) {J : ℝ}
+    (hJ : ∑ i ∈ range N, ∑ k, wZK a3 (a5 + N * max 312 624) (aE + N * max 4607 4607) k *
+      exU _ (fun z => (nZK p ivO xOf R (max 312 624) (max 4607 4607) i k
+        (viewN (C := SimCoins p) (gP (lProve p Hb stOf enc φ) xOf wOf)
+          (gS (lSim p φ) xOf) (gPg (lProg p Hb stOf) xOf) N z) : ℝ)) ≤ J)
+    (hNB : N * ∑ k, wZK a3 (a5 + N * max 312 624) (aE + N * max 4607 4607) k *
+      MZK N a3 a5 aE (max 312 624) (max 4607 4607) k < 1)
+    (Ev : Ω → List O → (Fin N → Tab3) → ShX (Blk → Blk) p X → Prop)
+    (hEv : R.Reads (fun v => Ev v.1 v.2.1 v.2.2.1 v.2.2.2)) :
+    |pr _ (realGN (C := SimCoins p) (gP (lProve p Hb stOf enc φ) xOf wOf) Ev) -
+        pr _ (simGN (ρ := Bytes 16) (gS (lSim p φ) xOf) (gPg (lProg p Hb stOf) xOf) Ev)| ≤
+      (∑ i : Fin N, (εZK (aE + N * max 4607 4607) /
+          (1 - βZK (a5 + N * max 312 624) (aE + N * max 4607 4607)) +
+        (1 + ∑ k, wZK a3 (a5 + N * max 312 624) (aE + N * max 4607 4607) k *
+          MZK N a3 a5 aE (max 312 624) (max 4607 4607) k) *
+          pr _ (deltaN (gP (lProve p Hb stOf enc φ) xOf wOf) (gS (lSim p φ) xOf)
+            (gPg (lProg p Hb stOf) xOf) i)) + J) /
+        (1 - N * ∑ k, wZK a3 (a5 + N * max 312 624) (aE + N * max 4607 4607) k *
+          MZK N a3 a5 aE (max 312 624) (max 4607 4607) k) :=
+  real_sim_leN_lean_pg Hb hHb stOf hp hlr enc Rl cs hz hsp φ ivO hiv xOf wOf hrel
+    (lProveRd Hb hHb stOf hp enc φ)
+    (fun x xI w r g' hw => lProveRd_conf Hb hHb stOf hp hlr enc Rl cs hz φ ivO hiv x xI w r g' hw)
+    R hc hb h3 hE hβ hJ hNB Ev hEv
+
+end LeanFull
+
 end VoleMole.Theft
