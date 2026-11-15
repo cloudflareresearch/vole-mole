@@ -1,4 +1,5 @@
 import VoleMole.Theft.MoussakaManyHit
+import VoleMole.Theft.MoussakaDigest
 import VoleMole.Theft.MoussakaUnboundHit
 import VoleMole.Audit.Theft
 import VoleMole.Audit.UnboundRest
@@ -16,6 +17,10 @@ import VoleMole.Audit.UnboundRest
 * **`HitWfN` is satisfiable** (`hitWfN_thiefNMW`, `hitWfN_thiefNUW`), and **`FreshOkN` is the
   game's freshness on well-formed statements**: `FreshOkN.freshOpN` (both files) and
   `freshOkN_of_sim` are the two directions used.
+* **The collision form's hypotheses hold** (`Theft/MoussakaDigest.lean`): `HitLenN` and
+  `KeysOkN` for the same adversary, whose one key is `⟨sha [], exp []⟩` for a digest function
+  and an expansion that map the empty compressed key to its digest and map
+  (`keysOkN_thiefNMW`), and `noRedirectN_leanX_hitC` is instantiated.
 
 This checks that the hypotheses are consistent, not that they are small.
 
@@ -76,6 +81,36 @@ chain-table queries) and a constant extractor, with `L = Lmin`. -/
 example [NeZero U] (M' : ℕ) :=
   noRedirectN_leanX_hit (R := Blk → Blk) (L := Hit.Mous.Lmin) (M' := M') (thiefNMW U M _ _)
     hitWfN_thiefNMW le_rfl (e := fun _ _ _ _ => []) (Adm := Hit.AdmHitN 0 0 0)
+    (Adm₀ := fun _ => True) (ε₀ := 1) (a3 := 0) (a5 := 0) (aE := 0) (x3 := 0) (x5 := 0) (xE := 0)
+    (fun _ _ => StageBudgetNX.const _) (fun _ => StageBudgetNX.const _)
+    (plainSEN_one _ _ _ _ _ _) (fun _ _ => Hit.admHitN_const _) (fun _ h => h)
+    fun _ _ _ _ => trivial
+
+/-- `HitLenN` holds for the well-formed trivial adversary. -/
+theorem hitLenN_thiefNMW [NeZero U] : HitLenN (thiefNMW U M G S) :=
+  ⟨hitWfN_thiefNMW.1, fun reqs reds g s S' req ci cr cd h =>
+    let ⟨h1, h2, h3, h4, _⟩ := hitWfN_thiefNMW.2 reqs reds g s S' req ci cr cd h
+    ⟨h1, h2, h3, h4⟩⟩
+
+/-- **`KeysOkN` is satisfiable**: the adversary's one key is the digest and expansion of the
+empty compressed key, for a digest function and an expansion that give it. -/
+theorem keysOkN_thiefNMW [NeZero U] :
+    KeysOkN (thiefNMW U M G S) (fun _ => List.replicate digestBytes 0) (fun _ _ => 0) := by
+  have hk : ∀ pk ∈ setW.keys, KeyOk (fun _ => List.replicate digestBytes 0) (fun _ _ => 0) pk := by
+    intro pk hpk
+    simp only [setW, List.mem_singleton] at hpk
+    exact ⟨[], hpk⟩
+  refine ⟨fun _ _ => hk, fun reqs reds g s S' req ci cr cd h => ?_⟩
+  simp only [thiefNMW, MOp.redeem.injEq] at h
+  obtain ⟨rfl, -⟩ := h
+  exact hk
+
+/-- `noRedirectN_leanX_hitC`'s hypotheses hold for the well-formed trivial adversary (no
+chain-table queries) and a constant extractor, with `L = Lmin`. -/
+example [NeZero U] (M' : ℕ) :=
+  noRedirectN_leanX_hitC (R := Blk → Blk) (L := Hit.Mous.Lmin) (M' := M')
+    (fun _ => List.replicate digestBytes 0) (fun _ _ => 0) (thiefNMW U M _ _) hitLenN_thiefNMW
+    keysOkN_thiefNMW le_rfl (e := fun _ _ _ _ => []) (Adm := Hit.AdmHitN 0 0 0)
     (Adm₀ := fun _ => True) (ε₀ := 1) (a3 := 0) (a5 := 0) (aE := 0) (x3 := 0) (x5 := 0) (xE := 0)
     (fun _ _ => StageBudgetNX.const _) (fun _ => StageBudgetNX.const _)
     (plainSEN_one _ _ _ _ _ _) (fun _ _ => Hit.admHitN_const _) (fun _ h => h)
