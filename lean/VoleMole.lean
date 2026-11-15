@@ -374,6 +374,7 @@ import VoleMole.ZK.IdealCipherPt
 import VoleMole.ZK.HopsH4Pt
 import VoleMole.ZK.IvOverlap
 import VoleMole.ZK.HopsROMExp
+import VoleMole.ZK.HopsH6Exp
 import VoleMole.Privacy.PomFRITLin
 import VoleMole.Privacy.MoussakaMany
 import VoleMole.Privacy.Split
