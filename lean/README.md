@@ -1734,7 +1734,15 @@ What is **not** established, roughly in order of importance:
    an honest token, `badGRd_reads`, `cells(pR) = 101372`; `nmU_joint_le`, `nmU_J_le`), so
    **`nmUN_lean_numJ`**: `Pr[BadN] ≤ 2⁻⁵⁴ + Σ_h (ε_prf + Adv^bind(B₁ h) + Adv^spr-k(B₂ h))` for
    `U, M ≤ 2³⁰` (same hypotheses as `nmUN_lean_numL`). Not done: the permutation-row variants
-   (`_numLP` stay linear in `U + M`). `Adv^ow` stays the advantage of the explicit inverter, a computational
+   (`_numJP`; `_numLP` stay linear in `U + M`). The per-proof point theorem does not port by
+   charging an inverse query at its answer: a proof reveals cipher outputs of hidden rows (the
+   hidden leaves' commitments), and inverse queries at such a value under many keys gain
+   `q·2⁻¹²⁸` per proof while reading the proof's CTR blocks only under the hidden key
+   (`inv_point_charge_fails`, `ZK/InvPoint.lean`, audit `Audit/ZKPointPerm.lean`: advantage
+   `≥ 2⁻⁶⁴ − 2⁻¹²⁸` against a point charge `< 2⁻¹²⁷`). Inverse queries must be charged at the values
+   a proof reveals; a game-level switching to function rows does not exist (no inverse queries
+   there, and switching the adversary's reads costs up to `2⁻¹`). See `docs/zk.md` §10.8, "The
+   permutation-row variants". `Adv^ow` stays the advantage of the explicit inverter, a computational
    assumption on Keccak-p[800,12]: `Com` is evaluated inside the relations, so it cannot be a table
    of the game, and some inverter wins with probability 1 (`owAdv_one_ratatouille`,
    `owAdv_one_moussaka`). In a random-table model of the standalone experiment a `q`-query
