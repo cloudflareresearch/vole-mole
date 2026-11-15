@@ -454,6 +454,9 @@ import VoleMole.Theft.PlainMousJoint
 import VoleMole.Theft.PlainMousRom
 import VoleMole.Theft.PlainMousRedirect
 import VoleMole.Theft.PlainMousReads
+import VoleMole.Theft.ManyPlainLog
+import VoleMole.Theft.PlainSlicesN
+import VoleMole.Theft.PlainRataManyRom
 import VoleMole.Theft.MoussakaHit
 import VoleMole.Theft.ManyPlain
 import VoleMole.Theft.ManyReads

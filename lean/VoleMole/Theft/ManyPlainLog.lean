@@ -20,7 +20,8 @@ list of its queries. Here the same is done for `N` simulated proofs (`WeakSEN`):
   with its answers patched; the adversary's last stage runs innermost, on the answers patched by
   all `N` patches. `seXs` lists the game's statements and coins, most recent first.
 * **`extLN`**: `e` on the reduction's query list: the patches' queries, which it computes from the
-  log (`logsL`, one list `logQ e` per entry), then the queries of a realization of the last stage.
+  first `N` entries of the log (`logsL`, one list `logQ e` per entry; the game's log has `N`), then
+  the queries of a realization of the last stage.
 * **`weakSEN_of_plainL`**: `WeakSEN ≤ ε_plain + ε_moves` for `extLN`, with `PlainSENL` for the
   class `Bud₀` of the reductions (`hadm`, for patch lists of length `N`). This is
   `weakSEN_of_plain` with the query list and `weakSE2_of_plainL` for `N` proofs. As there, the
@@ -124,7 +125,7 @@ lemma seXs_length {α : Type} (sim : I → C → Option P) (prog : I → C → A
   | n + 1 => by simp [seXs, seXs_length sim prog x a cs n]
 
 /-- **The extractor of `WeakSEN`'s game**: `e` on the queries the reduction makes, computed from
-the log (`logsL`: the patches' queries), the programmed tables and a realization of the last
+the first `N` entries of the log (`logsL`: the patches' queries), the programmed tables and a realization of the last
 stage (`AdmLN`; none if there is no realization). -/
 noncomputable def extLN (ans : (Fin N → G) → A × B → (i : ι) → spec i)
     (Bud : OracleComp spec Out → Prop) (logQ : Option (I × P) → (Fin N → G) → B → List ι)
@@ -133,7 +134,8 @@ noncomputable def extLN (ans : (Fin N → G) → A × B → (i : ι) → spec i)
   fun l F g s => by
     classical
     exact e l (F g s)
-      (logsL logQ l g s.2 ++ if h : AdmLN Bud ans F then qlog (ans g s) h.choose else []) g s.2
+      (logsL logQ (l.take N) g s.2 ++ if h : AdmLN Bud ans F then qlog (ans g s) h.choose else [])
+      g s.2
 
 /-- **On a realized last stage, `extLN` is `e` on the run and its queries.** -/
 lemma extLN_of_admLN {ans : (Fin N → G) → A × B → (i : ι) → spec i}
@@ -141,7 +143,7 @@ lemma extLN_of_admLN {ans : (Fin N → G) → A × B → (i : ι) → spec i}
     {e : List (Option (I × P)) → Out → List ι → (Fin N → G) → B → W}
     {F : (Fin N → G) → A × B → Out} (h : AdmLN Bud ans F) :
     ∃ oa, Bud oa ∧ F = (fun g s => runT (ans g s) oa) ∧ ∀ l, extLN ans Bud logQ e l F = fun g s =>
-      e l (runT (ans g s) oa) (logsL logQ l g s.2 ++ qlog (ans g s) oa) g s.2 := by
+      e l (runT (ans g s) oa) (logsL logQ (l.take N) g s.2 ++ qlog (ans g s) oa) g s.2 := by
   refine ⟨h.choose, h.choose_spec.1, h.choose_spec.2, fun l => funext fun g => funext fun s => ?_⟩
   unfold extLN
   rw [dite_eq_left h, congrFun (congrFun h.choose_spec.2 g) s]
@@ -260,7 +262,8 @@ theorem weakSEN_of_plainL {ans : (Fin N → G) → A × B → (i : ι) → spec 
     have hA : AdmLN Bud ans (out a l) := hout a l
     have hx : extLN ans Bud logQ e l (out a l) g (Lp s) =
         e l (out a l g (Lp s)) (logsL logQ l g s.2 ++ qlog (ans g (Lp s)) (oaF a l)) g s.2 := by
-      simp only [extLN, hA, ↓reduceDIte, e2]
+      have ht : l.take N = l := List.take_of_length_le (le_of_eq (simPre_length _ _ _ _ N))
+      simp only [extLN, hA, ↓reduceDIte, e2, ht]
       rfl
     rw [← hx]
     exact hrel
