@@ -642,20 +642,66 @@ are the redemptions, proved iff the refusal bit `gNC` holds.
       anonymityNC_main:  |Pr[W₀] − Pr[W₁]| ≤ 30·(εS(q₃, q_E + 8·4607) + Δ23)
           + 15·(8·noHitProb + (4·(q₅ + 625) + 626)·2⁻¹²⁸) + 2·2⁻¹²⁸ + 2·(φ false + φ true)
 
-for a sound index rule, signers correct for their keys and a guess with consistent reads and at
-most `q₅` `H₅` keys; `unlinkabilityNC_main` (one Anchor, any index rule): the same without the
+for a rule sound for the honest Clients (`RuleNC`), signers correct for their keys and a guess with
+consistent reads and at most `q₅` `H₅` keys; `unlinkabilityNC_main` (one Anchor, any index rule): the same without the
 abort term. Every term is a number except `φ` (bounded by `δ^255` for pqov in the vinegar
 random-oracle model, `Privacy/MoussakaPqov.lean`); no assumption on `Com`. At zero budgets the
 total is about `2⁻⁹⁹·³` plus the abort term (`30·εS(0, 8·4607) ≈ 2⁻⁹⁹·⁸`, `30·Δ23 ≤ 2⁻¹⁰¹·¹`). The audit instantiates it with the
 trapdoor signer of `Audit/Liveness.lean`, for which `φ = 0`.
+
+**`main`'s `find_issuer` Client** (`Privacy/MoussakaRule.lean`, `Privacy/MoussakaMainFind.lean`,
+`Audit/MainFind.lean`). The `main` games above are stated for an index rule that may read the
+token: `Rule = AnchorSet → UOVKey → t → s → ℕ`, the Client's index from the set, the issuer's key,
+the token's commitment and its preimage (`ptG`, `allOkG`, `allOkTG`; the lemmas of
+`Privacy/Moussaka.lean` with the suffix `G`). The rule reads the opening only through `t`, so with
+simulated proofs the view is still a function of the commitments (`post_redSimG`), and every proof
+above goes through unchanged. `Rule.ofIdx idx` is the index-taking Client (the definitions agree
+definitionally: `ptG_ofIdx`, `allOkG_ofIdx`); `findIdx S _ t s = (find_issuer S t s).getD 0` is
+`main`'s Client: `redeemRequest` is `redeemRequestAt` at `findIdx` for every token
+(`redeemRequest_eq_findIdx`; a validated set is nonempty, so at index `0` the index-taking step
+refuses with `find_issuer`'s error), and in the `main` games the requests and witnesses at
+`findIdx` are `find_issuer`'s (`redOut_findIdx`, `redStmt_findIdx`). So:
+
+    anonymity_main_sharedAll_find:  the bound of anonymity_main_sharedAll, at findIdx;
+    anonymityNC_main_find:          the bound of anonymityNC_main, for Anchor Sets with both issuers;
+    unlinkabilityNC_main_find:      one Anchor, any Anchor Sets, no abort term.
+
+In 4(b') the index-rule soundness `IdxSound` became `RuleNC A ix f`: at an honest token the rule's
+redeemability is a token-independent bit `f c side` (`ruleNC_ofIdx` for `IdxSound`,
+`ruleNC_findIdx` for sets that contain both issuers' maps, `MoussakaFind.Contains`, with
+`f = true`). The restriction is the one of the label-row `MoussakaFind.anonymityNC`: without it
+`main`'s Client also redeems under a foreign key that verifies its hidden preimage, and the
+refusal bit is not a function of the Anchor's verdict.
+
+**Unbound Moussaka U5(a) on `main`** (`Privacy/MoussakaUnboundMain.lean`,
+`Privacy/MoussakaUnboundMainPU.lean`, `Audit/MainUnbound.lean`). The colluding game of
+`MoussakaUnbound.anonymity` with **two redemption queries** (four proofs, as the joint hop of
+`ZK/MainGame.lean` takes), `main`'s unbound statements (`pIu`: 232 witness bytes, `pRu`: 559, no
+label rows; `zkHypIu`, `zkHypRu`), the executable prover with per-proof tables (`main_chain_le`;
+the shared-table hops of this section are not redone for unbound Moussaka) and `main`'s
+`find_issuer` Client:
+
+    anonymityU_main_pu:  |Pr[W₀] − Pr[W₁]| ≤ 8·εRF(q₃, q_E)
+        + 15·(Σ_{b,c} puAdv UCom (predU_c b) + 4·(q₅ + 1)·2⁻¹²⁸) + 2·εprf.
+
+Both unbound witnesses start with the opening `r` (`wPre_issueWitnessU`, `wPre_redeemWitnessU`).
+After the joint hop the game is `MoussakaUnbound.simGame` at fixed tables (`simU_eq`), and the PRF
+hop and the swap of the table rows of `Privacy/MoussakaUnbound.lean` finish (`prf_hop`,
+`idealGame_eq`). The (PU) term is the game `PU.puAdv` for `UCom` with public part `nf_key` (the
+predictor can then compute every nullifier the view shows): the predictor of Client `c` outputs
+the candidates of its issuance proof and of each query it answers, at most `3·(q₅ + 1)`
+(`card_predU_le`). `UCom` is one truncated Keccak-p[800,12] call with `r` at bytes `7 … 22`
+(`ucom_eq_comP`, `XU_injective`), so in the ideal-permutation model a predictor with `q` queries
+and `c` candidates has advantage at most `(c + q)/(2¹²⁸ − q) + q/(2⁴⁴⁰ − q)`
+(`puAdvPerm_unbound_le`). As for `Com`, (PU) for the real 12-round permutation is an assumption.
 
 **Still on paper, for ZK on `main`:**
 - the factor `15` on `εS` and on the (PU) terms is a cost of the mechanized transfer (each hop's
   bad event is moved across the later hops); the paper's lazy sampling gives `4` and `1`;
 - the adversary's earlier choices (responses, Anchor Sets, amounts) do not read the tables, as in
   §10.2's games (this is also what lets the one-`H₃` reduction compute the prefixes from the view);
-  Moussaka's games are the index-taking Client's (`main`'s `find_issuer` Client is not done on
-  `main`);
+  the `main` games take any token-reading index rule, `main`'s `find_issuer` Client included
+  (`findIdx`);
 - in 4(b') on `main` the issuance proofs are an abstract `PI` that does not read the game's tables:
   the refusal bit is a function of the secret (a `MainChain.Game`'s statements may not read the
   tables). Running the executable issuance prover and the Anchor's Lean verifier on the shared

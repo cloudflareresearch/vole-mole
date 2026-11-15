@@ -827,8 +827,25 @@ expansions' outputs `(nf_key, r, ρ_iss)` and every `ρ_red` uniform.
   proof, so the joint `ε_ZK^joint` of the theorem is the sum `2εI + n·εR` per world. This is the
   form `lean/docs/zk.md` establishes with **dedicated label rows**. On `main` (CRT masks from the
   witness, `REUSE_CRT_WITNESS = true`) no efficient simulator meets it: the label term is a joint
-  term over the `H₅` queries (§3.1, UF6), and the joint (PU) hop that replaces it is on paper, as
-  for the base protocol. So the mechanized U5 applies to `main` only through that paper step.
+  term over the `H₅` queries (§3.1, UF6), and the joint (PU) hop replaces it. For U5(a) with two
+  redemption queries the joint hop is mechanized on `main` (next item); for `n > 2` queries and
+  for U5(b) it is on paper.
+
+**[Lean] Theorem U5(a) on `main`, two queries** (`Privacy/MoussakaUnboundMain.lean`,
+`Privacy/MoussakaUnboundMainPU.lean`, `lean/docs/zk.md` §4.2). The colluding game with two
+redemption queries fixed after issuance, `main`'s unbound statements (no label rows), the
+executable prover in the random-oracle and ideal-cipher model with per-proof tables, the joint hop
+of `ZK/MainGame.lean` for the four proofs, and the guess seeing every proof's tables:
+
+    anonymityU_main_pu:  |Pr[W₀] − Pr[W₁]| ≤ 8·εRF(q₃, q_E)
+        + 15·(Σ_{b,c} puAdv UCom (predU_c b) + 4·(q₅ + 1)·2⁻¹²⁸) + 2·εprf.
+
+The four `puAdv` terms are (PU) for `UCom` (§3.1's `Pred_R`) as the game `PU.puAdv`, for explicit
+predictors that see the key `nf_key`, the commitment and independent coins, with at most
+`3·(q₅ + 1)` candidates; in the ideal-permutation model each is at most
+`(c + q)/(2¹²⁸ − q) + q/(2⁴⁴⁰ − q)` (`puAdvPerm_unbound_le`). `εprf` is the PRF hypothesis above,
+for the reductions at fixed tables. Not done on `main`: `n > 2` queries (the joint hop is for four
+proofs), adaptive queries, the tables shared between the proofs, and U5(b).
 - **The PRF.** `prfAdv A.ci (reductionAd …) ≤ εprf` (`Adv^prf-t_2`): given `t₀, t₁`, distinguish the
   table `c, ctx ↦ Derive(k_c, ctx)` from a uniform table. It is stated for the explicit reductions
   (the adversary with the simulator coins fixed, reading the table at the contexts it queries,
@@ -948,8 +965,9 @@ the base protocol.
    `RedeemRelW`, against distinguishers that know the witness). That hypothesis holds with
    dedicated label rows (`lean/docs/zk.md`). On `main` the CRT masks come from the witness, the
    label term is joint over the `H₅` queries (§3.1), and no per-proof simulator exists; the joint
-   (PU) hop that replaces it is on paper, as for the base protocol. The theorems do not take the
-   joint hypothesis.
+   (PU) hop replaces it. It is mechanized for U5(a) with two queries and per-proof tables
+   (`anonymityU_main_pu`, with (PU) for `UCom` as explicit predictor advantages); for `n > 2`
+   queries, shared tables and U5(b) it is on paper.
 
 ---
 
