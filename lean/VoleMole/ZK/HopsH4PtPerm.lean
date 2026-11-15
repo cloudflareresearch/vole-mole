@@ -314,4 +314,48 @@ theorem hide_rom_query_ptPm (hp : SmallParams p) (A : Hidden p → PCipher → P
   rw [hcK]
   exact div_le_div₀ hnum0 hnum hden hd
 
+/-! ## The numbers -/
+
+/-- **The collision term** for one hidden-row block and at most `56` VOLE column blocks
+(`Theft.PermOk`): `221·C(61, 2) = 404430`. -/
+lemma collPm_le (h1 : nHi p = 1) (h2 : p.voleColBlocks ≤ 56) : collPm p ≤ 404430 / 2 ^ 128 := by
+  unfold collPm
+  have hc : (4 + nHi p + p.voleColBlocks).choose 2 ≤ 1830 := by
+    rw [h1]
+    calc (4 + 1 + p.voleColBlocks).choose 2 ≤ (4 + 1 + 56).choose 2 :=
+          Nat.choose_le_choose 2 (by omega)
+      _ = 1830 := by decide
+  have hc' : (((4 + nHi p + p.voleColBlocks).choose 2 : ℕ) : ℝ) ≤ 1830 := by exact_mod_cast hc
+  rw [div_le_div_iff_of_pos_right (by positivity)]
+  linarith
+
+/-- **H4 at points and values, with the numbers** (`nHi = 1`, at most `56` VOLE column blocks,
+at most `2⁶⁴` charged keys):
+
+    |Pr_real[A] − Pr_ideal[A]| ≤ (1422577 + 221·E_real[#keys read at CTR blocks of iv or at
+                                  hidVals]) / (2¹²⁸ − 221·2⁶⁴),
+
+`1422577 = 221·4607 + 221·C(61, 2)`. -/
+theorem hide_rom_query_ptPm_num (hp : SmallParams p) (h1 : nHi p = 1) (h2 : p.voleColBlocks ≤ 56)
+    (A : Hidden p → PCipher → Prop) (Q : Hidden p → PCipher → Finset (Blk × Blk))
+    (hQ : ∀ o G G', (∀ kz ∈ Q o G, G kz.1 kz.2 = G' kz.1 kz.2) → (A o G ↔ A o G'))
+    (hQc : ∀ o G G', (∀ kz ∈ Q o G, G kz.1 kz.2 = G' kz.1 kz.2) → Q o G = Q o G')
+    {qm : ℕ} (hqm : ∀ o V G, (vkeys (InY iv) V (Q o G) G).card ≤ qm) (hq : qm ≤ 2 ^ 64) :
+    |realPrPm (fun seed π => hiddenOutE (cf π) p iv delta seed) A -
+        idealPrPm (hiddenIdeal (p := p) delta) A| ≤
+      (1422577 + 221 * expVKeys p iv delta Q) / (2 ^ 128 - 221 * 2 ^ 64) := by
+  have hq' : (qm : ℝ) ≤ 2 ^ 64 := by exact_mod_cast hq
+  have hsmall : 221 * (qm : ℝ) < 2 ^ 128 := by nlinarith
+  refine (hide_rom_query_ptPm p iv delta hp A Q hQ hQc hqm hsmall).trans ?_
+  have hc := collPm_le p h1 h2
+  have hE : 0 ≤ expVKeys p iv delta Q := exP_nonneg fun _ => Nat.cast_nonneg _
+  have hcoll : (0 : ℝ) ≤ collPm p :=
+    div_nonneg (mul_nonneg (by norm_num) (Nat.cast_nonneg _)) (by norm_num)
+  have hd : (2 : ℝ) ^ 128 - 221 * 2 ^ 64 ≤ 2 ^ 128 - 221 * qm := by linarith
+  refine div_le_div₀ (by linarith) ?_ (by norm_num) hd
+  have : (2 : ℝ) ^ 128 * collPm p ≤ 404430 := by
+    have := mul_le_mul_of_nonneg_left hc (by norm_num : (0 : ℝ) ≤ 2 ^ 128)
+    rwa [mul_div_cancel₀ _ (by positivity)] at this
+  linarith
+
 end VoleMole.ZK.Sim
