@@ -1,4 +1,5 @@
 import VoleMole.Theft.PlainRataPermReads
+import VoleMole.Theft.PlainMousPermReads
 import VoleMole.Theft.PlainTotalRom
 import VoleMole.Audit.TheftPlainReads
 import VoleMole.Audit.TheftPlainMany
@@ -12,6 +13,8 @@ import VoleMole.Audit.TheftPlainUnbound
   with permutation rows, and at a thief whose last stage makes one **inverse** cipher query
   (`admL_thiefInv`, within `QBudP 0 1`): the class of adversaries contains inverse queries.
   `epsRomP` is finite below `2¹²⁸ − 4607` cipher queries (`epsRomP_ne_top`).
+* `noRedirect_lean_romP'` (`Theft/PlainMousPermReads.lean`) is instantiated at the well-formed
+  trivial adversary of `Audit/TheftPlainMous.lean` (`thiefW`, `L = Lrom`) with permutation rows.
 * **No total budget.** `noTheft_lean_romK`, `noTheftN_lean_romK`, `noRedirect_lean_romK`,
   `noRedirectN_lean_romK`, `nmUN_lean_romK` (`Theft/PlainTotalRom.lean`) are instantiated at the
   trivial adversaries of the audits of the `*_lean_rom'` theorems, within `QBud 0 0` (no total
@@ -127,6 +130,18 @@ open VoleMole.Audit.TheftManyHit (thiefNMW hitWfN_thiefNMW)
 open VoleMole.Audit.TheftPlainMany (keysOutN_thiefNMW)
 
 variable {U M : ℕ}
+
+/-- `noRedirect_lean_romP'`'s hypotheses hold for the well-formed trivial adversary with
+permutation rows. -/
+example :=
+  noRedirect_lean_romP' (L := Lrom) (thiefW _ _) hitWf_thiefW keysOut_thiefW le_rfl
+    (q := 0) (qE := 0) (by norm_num)
+    (fun _ _ => ⟨pure (.redeem setW [] (List.replicate ctxBytes 0) (List.replicate ctxBytes 0)
+      (List.replicate cdBytes 0)), ⟨trivial, trivial⟩, rfl⟩)
+
+/-- The error of `plainSEL_romMP` is finite below `2¹²⁸ − 4607` cipher queries. -/
+example (q : Kind → ℕ) (qE nG : ℕ) (h : qE + 4607 < 2 ^ 128) : epsRomMP q qE nG ≠ ⊤ :=
+  epsRomMP_ne_top q nG h
 
 /-- `noRedirect_lean_romK`'s hypotheses hold for the well-formed trivial adversary. -/
 example :=
