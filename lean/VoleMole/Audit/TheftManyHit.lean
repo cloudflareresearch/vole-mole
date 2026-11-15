@@ -1,5 +1,6 @@
 import VoleMole.Theft.MoussakaManyHit
 import VoleMole.Theft.MoussakaDigest
+import VoleMole.Theft.MoussakaUnboundDigest
 import VoleMole.Theft.MoussakaUnboundHit
 import VoleMole.Audit.Theft
 import VoleMole.Audit.UnboundRest
@@ -20,7 +21,8 @@ import VoleMole.Audit.UnboundRest
 * **The collision form's hypotheses hold** (`Theft/MoussakaDigest.lean`): `HitLenN` and
   `KeysOkN` for the same adversary, whose one key is `⟨sha [], exp []⟩` for a digest function
   and an expansion that map the empty compressed key to its digest and map
-  (`keysOkN_thiefNMW`), and `noRedirectN_leanX_hitC` is instantiated.
+  (`keysOkN_thiefNMW`), and `noRedirectN_leanX_hitC` is instantiated; the same for unbound
+  Moussaka (`Theft/MoussakaUnboundDigest.lean`, `nmUN_leanX_hitC`).
 
 This checks that the hypotheses are consistent, not that they are small.
 
@@ -177,6 +179,37 @@ and one redemption. -/
 example (M' : ℕ) (pts : Fin (1 + 1) → Coins ctxBytes) (hpts : Function.Injective pts) :=
   nmUN_leanX_hit_one (R := Blk → Blk) (L := LminU) (M' := M') (thiefNUW 1 1 _ _)
     hitWfN_thiefNUW le_rfl (e := fun _ _ _ _ => []) (Adm := Hit.AdmHitN 0 0 0)
+    (Adm₀ := fun _ => True) (ε₀ := 1) (a3 := 0) (a5 := 0) (aE := 0) (x3 := 0) (x5 := 0) (xE := 0)
+    (fun _ _ => StageBudgetNX.const _) (fun _ => StageBudgetNX.const _)
+    (plainSEN_one _ _ _ _ _ _) (fun _ _ => Hit.admHitN_const _) (fun _ h => h)
+    (fun _ _ _ _ => trivial) pts hpts (fun _ _ => prf1Adv_le_one _ _)
+
+/-- `HitLenN` holds for the well-formed trivial unbound adversary. -/
+theorem hitLenN_thiefNUW [NeZero U] : MoussakaUnbound.HitLenN (thiefNUW U M G S) :=
+  ⟨hitWfN_thiefNUW.1, fun reqs reds g s S' req ci cr cd h =>
+    let ⟨h1, h2, _⟩ := hitWfN_thiefNUW.2 reqs reds g s S' req ci cr cd h
+    ⟨h1, h2⟩⟩
+
+/-- **`KeysOkN` is satisfiable** for the unbound game. -/
+theorem keysOkN_thiefNUW [NeZero U] :
+    MoussakaUnbound.KeysOkN (thiefNUW U M G S) (fun _ => List.replicate digestBytes 0)
+      (fun _ _ => 0) := by
+  have hk : ∀ pk ∈ setW.keys,
+      Moussaka.KeyOk (fun _ => List.replicate digestBytes 0) (fun _ _ => 0) pk := by
+    intro pk hpk
+    simp only [setW, List.mem_singleton] at hpk
+    exact ⟨[], hpk⟩
+  refine ⟨fun _ _ => hk, fun reqs reds g s S' req ci cr cd h => ?_⟩
+  simp only [thiefNUW, UOp.redeem.injEq] at h
+  obtain ⟨rfl, -⟩ := h
+  exact hk
+
+/-- `nmUN_leanX_hitC`'s hypotheses hold for the well-formed trivial adversary. -/
+example [NeZero U] (M' : ℕ) (pts : Fin (M + 1) → Coins ctxBytes)
+    (hpts : Function.Injective pts) :=
+  nmUN_leanX_hitC (R := Blk → Blk) (L := LminU) (M' := M')
+    (fun _ => List.replicate digestBytes 0) (fun _ _ => 0) (thiefNUW U M _ _) hitLenN_thiefNUW
+    keysOkN_thiefNUW le_rfl (e := fun _ _ _ _ => []) (Adm := Hit.AdmHitN 0 0 0)
     (Adm₀ := fun _ => True) (ε₀ := 1) (a3 := 0) (a5 := 0) (aE := 0) (x3 := 0) (x5 := 0) (xE := 0)
     (fun _ _ => StageBudgetNX.const _) (fun _ => StageBudgetNX.const _)
     (plainSEN_one _ _ _ _ _ _) (fun _ _ => Hit.admHitN_const _) (fun _ h => h)
