@@ -7,6 +7,10 @@
   toy [quick | i,j,..]
               Independent toy experiment (p1_review_toy.c): direct attack and P1, each with
               plain variable fixing and with the Thomae-Wolf step, hybrid XL, dense elimination.
+  toyh [i,j,..]
+              Hashimoto's reduction on toy keys (p1_review_toy.c, attack h): direct attack and
+              P1, against Thomae-Wolf; shape of the reduced systems, solutions per restart, XL
+              degree, cost.  About 6 seconds per cell; OMP_NUM_THREADS defaults to 4.
 
 Run under a memory cap.  `toy` takes about 15 minutes on 8 threads (`quick`: 2); `toy 0,1` runs the first two keys.
 """
@@ -88,9 +92,11 @@ def spec_direct(q, n, m):
 
 def class_attack(f, q, n, m, d=1):
     """d targets through one solve: m - d quadrics in n - 1 variables (one coordinate set to 1);
-    a solution lies on one of the d lines with probability d (q - 1) / (q^d - 1)."""
+    P(s) is uniform on the d-space of the targets, so a solution lies on one of the d lines, off
+    0, with probability d (q - 1) / q^d.  (Before the review of the Hashimoto step the
+    denominator was q^d - 1, which drops the landing factor q / (q - 1) at d = 1.)"""
     c, desc = f(q, n - 1, m - d)
-    return c - log2(d * (q - 1) / (q ** d - 1)), desc
+    return c - log2(d * (q - 1) / q ** d), desc
 
 
 SETS = [("uov-Ip, round 3", 119, 45, 256, 143), ("uov-Ip, rounds 1 and 2", 112, 44, 256, 143),
@@ -189,6 +195,95 @@ def toy(quick, only=None):
     shutil.rmtree(tmp, ignore_errors=True)
 
 
+# Hashimoto's reduction on toy keys: q, N, M, gmin, gmax, seconds per cell, a, c (direct), c' (P1).
+# c and c' are the smallest numbers of guesses that the condition of the specification allows
+# (for P1 with N variables in step 1 and N - 1 in steps 2 and 3, see hash_condition).
+TOYH = [
+    (16, 21, 8, 0, 4, 6, 2, 0, 0),
+    (16, 23, 10, 0, 4, 6, 2, 2, 1),
+    (16, 26, 10, 0, 4, 6, 2, 1, 0),
+    (16, 25, 11, 0, 4, 6, 2, 2, 1),
+    (16, 29, 11, 0, 5, 6, 2, 1, 0),
+    (256, 16, 7, 0, 2, 8, 2, 1, 0),
+    (256, 19, 8, 0, 2, 8, 2, 1, 0),
+]
+
+
+def hash_condition(n1, n2, m, a, c):
+    """Hashimoto's condition with n1 variables for step 1 and n2 for steps 2 and 3."""
+    return n1 >= (a + 1) * (m - c - a + 1) and n2 >= a * (m - c) - (a - 1) ** 2 + c
+
+
+def toy_h(only=None):
+    tmp = tempfile.mkdtemp(prefix="p1_review_h_")
+    exe = os.path.join(tmp, "p1_review_toy")
+    subprocess.run(["gcc", "-O3", "-march=native", "-fopenmp", "-o", exe,
+                    os.path.join(HERE, "p1_review_toy.c")], check=True)
+    env = dict(os.environ, OMP_NUM_THREADS=os.environ.get("OMP_NUM_THREADS", "4"))
+    print("Hashimoto's reduction (a, c) against Thomae-Wolf, direct attack and P1.\n"
+          "R = restarts (choices of the flat; for H one call per root of step 4), S = solutions\n"
+          "(expected R q^-(c+g)), W = log2 multiplications per forgery (measured when >= 30\n"
+          "forgeries, else per restart times q^(c+g), marked ~), Wd = the same in the Wiedemann\n"
+          "model at the measured degree D (series degree <= 0 / <= 1 in brackets).")
+    obs_tot, exp_tot = {}, {}
+    for idx, (q, N, M, gmin, gmax, secs, a, cd, cp) in enumerate(TOYH):
+        if only is not None and idx not in only:
+            continue
+        att = f"t,h{a}.{cd}.{cp},h{a}.{cd - 1}.{cp - 1}"
+        out = subprocess.run([exe, str(q), str(N), str(M), "1", str(gmin), str(gmax), str(secs),
+                              "1400", "2", att], check=True, capture_output=True, text=True,
+                             env=env).stdout
+        print(f"\nF_{q} ({N}, {M}), a = {a}: condition of the specification "
+              f"direct c >= {cd}: {hash_condition(N, N, M, a, cd)}/{hash_condition(N, N, M, a, cd - 1)}"
+              f", P1 c' >= {cp}: {hash_condition(N, N - 1, M - 1, a, cp)}/"
+              f"{hash_condition(N, N - 1, M - 1, a, cp - 1) if cp > 0 else '-'}")
+        best = {}
+        for line in out.splitlines():
+            if line.startswith("#"):
+                print("  " + line[2:])
+                continue
+            f = line.split()
+            prep, p1, g, me, n, D, T = (int(x) for x in f[4:11])
+            calls, dec, sols, forg = (int(x) for x in f[11:15])
+            mults, restarts = float(f[15]), int(f[16])
+            c = prep % 100 if prep >= 100 else 0
+            kind = ("H" if prep >= 100 else "TW") + (" P1" if p1 else " direct")
+            land = log2(q / (q - 1)) if p1 else 0.0
+            exp = restarts / q ** (c + g)
+            meas = forg >= 30
+            per = (c + g) * log2(q) + land
+            W = log2(mults / forg) if meas else log2(mults / restarts) + per
+            Wd = wiedemann(n, D) + log2(calls / restarts) + per
+            obs_tot[kind] = obs_tot.get(kind, 0) + sols
+            exp_tot[kind] = exp_tot.get(kind, 0) + exp
+            if W < best.get(kind, (INF,))[0]:
+                best[kind] = (W, g, c, meas, Wd)
+            print(f"    {kind:9s} c={c} g={g}: {me} eqs, {n} vars, D={D} ({xl_degree(n, me)}/"
+                  f"{xl_degree(n, me, 1)}), T={T}, R={restarts}, calls/R={calls / restarts:.3f}, "
+                  f"decided {dec / calls:.3f}, S={sols} (exp {exp:.1f}), forgeries {forg}, "
+                  f"W={'' if meas else '~'}{W:.2f}, Wd={Wd:.2f}")
+        mb = mul_bits(q)
+        model = {
+            "TW direct": mq(q, M - 1, M - 1)[0] - mb,
+            "TW P1": mq(q, M - 2, M - 2)[0] - mb + log2(q / (q - 1)),
+            "H direct": cd * log2(q) + mq(q, M - a - cd, M - a)[0] - mb,
+            "H P1": cp * log2(q) + mq(q, M - 1 - a - cp, M - 1 - a)[0] - mb + log2(q / (q - 1)),
+        }
+        for k in ("TW direct", "TW P1", "H direct", "H P1"):
+            if k in best:
+                W, g, c, meas, Wd = best[k]
+                print(f"  {k:9s}: best {'' if meas else '~'}{W:.2f} (c={c}, g={g}); Wiedemann at "
+                      f"measured D {Wd:.2f}; model of the specification {model[k]:.2f}")
+        for pre in ("TW", "H"):
+            d, p = best.get(pre + " direct"), best.get(pre + " P1")
+            if d and p:
+                print(f"  {pre:2s} gain of P1: measured {d[0] - p[0]:.2f}, Wiedemann at measured D "
+                      f"{d[4] - p[4]:.2f}, model {model[pre + ' direct'] - model[pre + ' P1']:.2f}")
+    print("\nSolutions, all cells: " + "; ".join(
+        f"{k} {obs_tot[k]} for {exp_tot[k]:.1f}" for k in sorted(obs_tot)))
+    shutil.rmtree(tmp, ignore_errors=True)
+
+
 def mq_toy(q, m):
     """min over g of q^g * Wiedemann cost of m quadrics in m - g variables (log2 mults)."""
     return mq(q, m, m)[0] - mul_bits(q)
@@ -198,6 +293,9 @@ def main():
     what = sys.argv[1] if len(sys.argv) > 1 else "estimates"
     if what == "estimates":
         estimates()
+    elif what == "toyh":
+        arg = sys.argv[2] if len(sys.argv) > 2 else ""
+        toy_h([int(x) for x in arg.split(",")] if arg[:1].isdigit() else None)
     elif what == "toy":
         arg = sys.argv[2] if len(sys.argv) > 2 else ""
         toy(arg == "quick", [int(x) for x in arg.split(",")] if arg[:1].isdigit() else None)
