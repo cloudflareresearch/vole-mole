@@ -482,6 +482,8 @@ import VoleMole.Theft.PlainUnboundPerm
 import VoleMole.Theft.PlainUnboundManyPerm
 import VoleMole.Theft.DeltaX
 import VoleMole.Theft.DeltaBound
+import VoleMole.Theft.NumTerms
+import VoleMole.Theft.Num
 import VoleMole.Theft.MoussakaHit
 import VoleMole.Theft.ManyPlain
 import VoleMole.Theft.ManyReads
