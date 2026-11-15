@@ -536,4 +536,100 @@ theorem admHit_runT {oa : OracleComp specIC α} {q : Kind → ℕ} {qE : ℕ} (h
 
 end Hit
 
+
+/-! ## The simulators' programming as a patch of the answers -/
+
+section Patch
+
+variable {R : Type} [CipherRow R] {p : Params} {L M : ℕ}
+
+/-- **The programmed values** of a programming at the grinding points of the prefix `pre`, as a
+partial table of `H₂³`. -/
+def mOf (p : Params) (pre : ByteArray) (g : Grind) : K2 p → Option (Bytes 16) :=
+  fun a => if a.1 = blk (preLen p) pre then some (g a.2) else none
+
+lemma programAt_key2 (pre : ByteArray) (g : Grind) (G2 : Tab2G p) (a : K2 p) :
+    programAt (key2 p pre) g G2 a = (mOf p pre g a).getD (G2 a) := by
+  unfold mOf
+  by_cases h : a.1 = blk (preLen p) pre
+  · simp only [h, ↓reduceIte]
+    have ha : a = key2 p pre a.2 := Prod.ext h rfl
+    rw [ha, programAt_apply_pt (key2_injective (p := p) pre)]
+    rfl
+  · simp only [h, ↓reduceIte]
+    exact programAt_apply_of_ne _ _ fun i hi => h (by rw [← hi]; rfl)
+
+open Classical in
+/-- **The patch of the answers by a partial `H₂³` table**: an `H₂³` query at a grinding point
+with a programmed value gets it; every other answer is kept. -/
+noncomputable def patch2 (p : Params) (m : K2 p → Option (Bytes 16)) :
+    (d : DomIC) → AnsIC d → AnsIC d
+  | .inl (.h23, b) => fun u => if h : ∃ a, enc2 p a = b then (m h.choose).getD u else u
+  | .inl _ => fun u => u
+  | .inr _ => fun u => u
+
+lemma patch2_ne (m : K2 p → Option (Bytes 16)) {k : Kind} (hk : k ≠ .h23) (b : ByteArray)
+    (u : AnsIC (.inl (k, b))) : patch2 p m (.inl (k, b)) u = u := by
+  cases k <;> first | rfl | exact absurd rfl hk
+
+omit [CipherRow R] in
+lemma recP_G2 (g₁ g₂ : Tab3) (t : ShX R p (XTab L M)) (G2 : Tab2G p) {k : Kind} (hk : k ≠ .h23)
+    (b : ByteArray) :
+    (recP g₁ g₂ ((G2, t.2) : ShX R p (XTab L M))).hash k b = (recP g₁ g₂ t).hash k b := by
+  by_cases h3 : k = .h3
+  · subst h3; rw [recP_h3, recP_h3]
+  by_cases h5 : k = .h5
+  · subst h5; rw [recP_h5, recP_h5]
+  rw [recP_other _ _ _ h3 h5 hk, recP_other _ _ _ h3 h5 hk]
+
+/-- **The answers on another `H₂³` table** agree at every query that is not an `H₂³` query. -/
+lemma ansP_G2 (g₁ g₂ : Tab3) (t : ShX R p (XTab L M)) (G2 : Tab2G p) (d : DomIC)
+    (hd : kindB .h23 d = false) :
+    ansP g₁ g₂ ((G2, t.2) : ShX R p (XTab L M)) d = ansP g₁ g₂ t d := by
+  rcases d with ⟨k, b⟩ | c
+  · have hk : k ≠ .h23 := by simpa [kindB] using hd
+    rw [ansP_inl, ansP_inl]
+    exact congrArg _ (recP_G2 g₁ g₂ t G2 hk b)
+  · rw [ansP_inr, ansP_inr]; rfl
+
+/-- **A programming at the grinding points of `pre` patches the answers** (`patch2`). -/
+lemma ansP_prog (g₁ g₂ : Tab3) (t : ShX R p (XTab L M)) (pre : ByteArray) (g : Grind)
+    (d : DomIC) :
+    ansP g₁ g₂ ((programAt (key2 p pre) g t.1, t.2) : ShX R p (XTab L M)) d =
+      patch2 p (mOf p pre g) d (ansP g₁ g₂ t d) := by
+  classical
+  rcases d with ⟨k, b⟩ | c
+  · by_cases hk : k = .h23
+    · subst hk
+      rw [ansP_inl, ansP_inl]
+      show blk 16 ((recP g₁ g₂ ((programAt (key2 p pre) g t.1, t.2) : ShX R p (XTab L M))).hash
+          .h23 b) = (if h : ∃ a, enc2 p a = b then (mOf p pre g h.choose).getD
+            (blk 16 ((recP g₁ g₂ t).hash .h23 b)) else blk 16 ((recP g₁ g₂ t).hash .h23 b))
+      rw [recP_h23, recP_h23]
+      by_cases h : ∃ a, enc2 p a = b
+      · rw [dite_eq_left h, dite_eq_left h, dite_eq_left h, blk_ba, blk_ba]
+        exact programAt_key2 pre g t.1 h.choose
+      · rw [dite_eq_right h, dite_eq_right h, dite_eq_right h]
+    · rw [patch2_ne _ hk, ansP_inl, ansP_inl]
+      exact congrArg _ (recP_G2 g₁ g₂ t _ hk b)
+  · rw [ansP_inr, ansP_inr]; rfl
+
+/-- The prefix computation makes no `H₂³` query. -/
+lemma kindB_h23_vPreIC (T : CrtTables) (st : Statement) (pf : ByteArray) (f : (d : DomIC) → AnsIC d)
+    {d : DomIC} (hd : d ∈ qlog f (vPreIC T st pf)) : kindB .h23 d = false := by
+  have h0 := countP_kind_le (isKindQueryBoundIC_vPreIC T st pf) .h23 f
+  have : (extractorQueries + vPreQueries) .h23 = 0 := by decide
+  rw [this, Nat.le_zero, List.countP_eq_zero] at h0
+  simpa using h0 d hd
+
+/-- **The prefix computation does not read `H₂³`**: its run and its queries are those on any
+other `H₂³` table. -/
+lemma qlog_vPreIC_G2 (g₁ g₂ : Tab3) (t : ShX R p (XTab L M)) (G2 : Tab2G p) (T : CrtTables)
+    (st : Statement) (pf : ByteArray) :
+    qlog (ansP g₁ g₂ ((G2, t.2) : ShX R p (XTab L M))) (vPreIC T st pf) =
+      qlog (ansP g₁ g₂ t) (vPreIC T st pf) :=
+  (runT_congr _ _ _ fun d hd => (ansP_G2 g₁ g₂ t G2 d (kindB_h23_vPreIC T st pf _ hd)).symm).1
+
+end Patch
+
 end VoleMole.Theft

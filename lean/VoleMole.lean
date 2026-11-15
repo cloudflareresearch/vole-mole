@@ -152,6 +152,7 @@ import VoleMole.ROM.MoussakaUnbound
 import VoleMole.ROM.MoussakaUnboundAdapt
 import VoleMole.ROM.MoussakaUnboundSpec
 import VoleMole.ROM.VerifyIC
+import VoleMole.ROM.PrefixIC
 import VoleMole.ROM.ProverIC
 import VoleMole.ROM.MoussakaOMUF
 import VoleMole.ROM.SimUnion
@@ -410,6 +411,9 @@ import VoleMole.Theft.HitChain
 import VoleMole.Theft.HitLevel
 import VoleMole.Theft.Hit
 import VoleMole.Theft.HitTheft
+import VoleMole.Theft.PlainLog
+import VoleMole.Theft.PlainOracle
+import VoleMole.Theft.PlainRata
 import VoleMole.Theft.MoussakaHit
 import VoleMole.Theft.ManyPlain
 import VoleMole.Theft.ManyReads
