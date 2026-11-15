@@ -462,6 +462,12 @@ import VoleMole.Theft.JointCharge
 import VoleMole.Theft.JointLean
 import VoleMole.Theft.JointSum
 import VoleMole.Theft.JointProver
+import VoleMole.Theft.JointProg
+import VoleMole.Theft.JointLeanSum
+import VoleMole.Theft.JointVer
+import VoleMole.Theft.JointRun
+import VoleMole.Theft.JointSumA
+import VoleMole.Theft.JointExt
 import VoleMole.Theft.MoussakaUnbound
 import VoleMole.Theft.MoussakaUnboundMany
 import VoleMole.Theft.MoussakaUnboundLean
@@ -565,6 +571,7 @@ import VoleMole.Audit.TheftJointZK
 import VoleMole.Audit.ZKPoint
 import VoleMole.Audit.ZKPoint2
 import VoleMole.Audit.ZKPoint3
+import VoleMole.Audit.ZKPoint4
 import VoleMole.Audit.MainPU
 import VoleMole.Audit.MainShared
 import VoleMole.Audit.PomfritLemmaPCls

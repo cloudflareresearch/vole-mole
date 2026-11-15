@@ -3824,16 +3824,70 @@ audit `Audit/ZKPoint3.lean`). Proved:
 - *Numbers* (`jointNumK_le`): the overlap factor `≤ 5/4` at `N ≤ 2³¹` still gives `≤ 2⁻⁵⁴`
   (about `2⁻⁵⁴·⁸`).
 
-Not done: the simulator's programming as a point reader confined to the simulated `iv` (needs
-`vPre` at points; only the key-level `vPre_ic_congr` exists); the theft games' game reader (the
-adversary's oracle run, the verifier and the extractor `eRom` at points, with a class bound
-`c_E` and a total slice bound `T₃`); the theft games as instances of the generic game (two proof
-systems on a sum type, the `vecOf` output map and its `iv` decoder, the transport along
-`(stOf x).params = p`); the `iv` structure of the simulated theft game (`H₄` the `XTab` table at
-inputs `iv_pre ‖ μ₁ ‖ 4`, `E[#dupPairs] ≤ N²·2⁻¹²⁸` from the uniform `iv_pre` coins) and the
-absent-`iv` term (`Pr[grinding fails]`); points restricted to the counters and tweaks in use. So
-`noTheftN_lean_numJ` is not stated, and the mechanized many-token bound stays
-`(U + M)·2⁻⁵⁵ + 2⁻⁵⁹`.
+*The theft games' pieces at points* (`Theft/JointProg.lean`, `Theft/JointLeanSum.lean`,
+`Theft/JointVer.lean`, `Theft/JointRun.lean`, `Theft/JointSumA.lean`, `Theft/JointExt.lean`; audit
+`Audit/ZKPoint4.lean`). Proved:
+- *The simulator's programming is confined to its `iv`* (`progPtRd`, `progPtRd_conf`). The BAVC
+  reconstruction from an opening reads the cipher only at the CTR blocks of the proof's `iv` of its
+  nodes, and then has the same nodes (`reconstruct_ic_congrP`, `rdKeys_ic_congrP`); so do the
+  recomputed prefix and the verifier's gate inputs (`vPre_ic_congrP`, `vIn5_ic_congrP`), and the
+  gate inputs are gate inputs of the `iv` (`vIn5_gate`). `progRO` is a consistent point reader of
+  `≤ 312` `H₅` gate inputs and `≤ 4607` keys at the simulated proof's `iv`, confined to `ivV` of the
+  simulated output (and to any decoder that only returns it, `Conf.of_iv`, `lProgRd_conf`). This
+  is `real_sim_leN_lean`'s `hRpg`: `real_sim_leN_lean_pg`. With the real provers' readers at a
+  parameter variable (`realPtRdP`, `lProveRd_conf`), **`real_sim_leN_lean_full`** has no hypothesis
+  on the honest readers left: the game reader and `J` remain (`max(m₅, s₅) = 624`,
+  `max(m_E, s_E) = 4607`).
+- *The verifier at points* (`verify_ic_congrP`, `verPtRd`, `verPtRd_bnd`): `verRO` is a consistent
+  point reader within `(0, 312, 4607)`, its cipher points at the CTR blocks of the verified proof's
+  `iv` (`verPtRd_inE`).
+- *The adversary's oracle run at points* (`ansPN_agree`, `runT_agree`, `runGRd`): the run of a
+  computation on the `N` slices and the tables (`ansPN`) reads each slice at its slice queries, `H₅`
+  at its `H₅` queries and the cipher at its **cells**; as a game reader it is consistent
+  (`runGRd_cons`), reads every event of its output (`runGRd_reads`), and is within the run's query
+  budget (`runGRd_bnd`). Game readers compose: `GRd.seq` (a reader, then a reader chosen by a value
+  it reads; `GRd.seq_cons`, `GRd.seq_reads`, `GRd.seq_bnd`), `GRd.ofTRd` (a table point reader such
+  as the verifier, at the view's extra table).
+- *`ROM/`'s extractor at points* (`eRom_congrP`, `romPts`, `romPts_congr`): `eRom` reads the cipher
+  only at the query list's cells and, for the zero key, the cells' keys and the reconstruction's
+  nodes, at the CTR blocks of the **forged** proof's `iv` (`romIv`): the extraction looks the logged
+  keys up at the leaf positions `lp iv i c` (`extractKey_congrP`), and the candidates' PRG
+  expansions use that `iv` (`uBit_congrP`). So the extraction's reads are charged to slot `i` only
+  if the forged `iv` shares slot `i`'s middle bytes. The cipher keys are at most the cells' keys plus
+  `4608` (`card_romPts_keys_le`).
+- *Several proof systems* (`Theft/JointLeanSum.lean`): whether a key is a gate input of an `iv` does
+  not depend on the parameters or the CRT tables (`gate5_params`: the label offset is free), so
+  neither does the charge (`chPt_params`); `lean_zkExpD` is `lean_zkExp` for an output map that
+  depends on the instance (the theft games' log entries carry the statement); `ZKExp.osum` joins two
+  systems on the same tables and a "no proof" case (constant output, no programming) into one on
+  `Option (I₁ ⊕ I₂)`; `real_sim_leN_leanG` is `real_sim_leN_lean` for any system with `ZKExp` at the
+  point charge.
+- *Correction: a slot with no proof must be charged nothing* (`real_sim_leN_leanA`, `nZKA`,
+  `exU_sum_nZKA_le`). In `real_sim_leN_lean`, `exU_sum_nZK_le`, a slot whose output has no `iv` is
+  charged every key the game reader reads (`cEof none`). In the theft games a Client may refuse a
+  spend (no proof); the adversary chooses the spends, so all `M` spend slots may have no proof, and
+  the sum would again be `M` times the adversary's budget term. `real_sim_leN_leanA` charges a slot
+  only if its instance is active (`ZKExp` with charge `0` for the others, which `ZKExp.osum` gives),
+  and `exU_sum_nZKA_le` bounds the sum with `E[#active slots with no iv]` (a failed simulation) in
+  place of `E[#slots with no iv]`; an inactive slot costs only `2N·h` through the others' overlaps.
+
+Not done:
+- *The theft games' event reader*: the composition of the run's reader, the verifier's reader on
+  the run's operation and the extractor's reader, with the extractor's query list (the patches'
+  prefix computations `vPreIC` of the first `N` log entries, `logQM`, each a run on `ansP` and so a
+  point reader confined to its proof's `iv`, then the run's queries, as `extLN` chooses them); and
+  the event `BadN` (`accN`, `freshN`, `relN`, `opensN`) as one it reads. The bounds `T₃` (the run's
+  slice queries in all) and `c_E` (classes of the run's cells, the patches' cells and the
+  extraction's points) follow from `runGRd_bnd`, `card_romPts_keys_le` and the patches' budgets.
+- *The theft games as instances*: `PN`, `SmP`, `pgP` as `gP`, `gS`, `gPg` of `osumProve`,
+  `osumSim`, `osumProg` with `xOf = xN` (`act` = some instance), the tape `Coins 16` as
+  `Bytes 16`, the `vecOf` output map's `iv` decoder, and the spend system at `pS` on the tables of
+  `pI` (`Sh pS` is `Sh pI` by definition; `Conf` at `pS` gives `Conf` at `pI` by `gate5_params`).
+- *The `iv` structure of the simulated theft game*: the simulated `iv`s are `H₄` of `XTab` at
+  `iv_pre ‖ μ₁ ‖ 4` with `iv_pre` from the simulation coins, so `exU_sum_nZKA_le` applies with
+  `E[#dupPairs] ≤ N²·2⁻¹²⁸` and the failed-simulation term `N·Pr[grinding fails]`.
+So `noTheftN_lean_numJ` is not stated, and the mechanized many-token bound stays
+`(U + M)·2⁻⁵⁵ + 2⁻⁵⁹` (`noTheftN_lean_numL`).
 
 ### 10.9 Hiding of `Com` (`Privacy/ComHide.lean`)
 
