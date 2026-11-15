@@ -1741,8 +1741,15 @@ What is **not** established, roughly in order of importance:
    (`inv_point_charge_fails`, `ZK/InvPoint.lean`, audit `Audit/ZKPointPerm.lean`: advantage
    `≥ 2⁻⁶⁴ − 2⁻¹²⁸` against a point charge `< 2⁻¹²⁷`). Inverse queries must be charged at the values
    a proof reveals; a game-level switching to function rows does not exist (no inverse queries
-   there, and switching the adversary's reads costs up to `2⁻¹`). See `docs/zk.md` §10.8, "The
-   permutation-row variants". `Adv^ow` stays the advantage of the explicit inverter, a computational
+   there, and switching the adversary's reads costs up to `2⁻¹`). For permutation rows H4 is proved at points with a value
+   charge: a read is charged if its input is a CTR block of the proof's `iv` or its value is one of
+   the hidden tree's values (`hide_rom_query_ptPm`, `IC.puncturePtPm_real`, audit
+   `Audit/ZKPermPt.lean`); the inverse-query attack is then charged `q` (`IC.inv_vcharge_eq`), and
+   the proofs' value overlap is `≤ q·(1 + N²m²·2⁻¹²⁸)` (`IC.exP_sum_inV_le`). Not done: the
+   one-proof `ZKExp` and `_numJP` with permutation rows, because that value set is not a function of
+   the proof (the hidden keys are revealed by nothing; the hidden VOLE blocks only through the
+   witness and the corrections), while the chain and the joint layer charge functions of the view.
+   See `docs/zk.md` §10.8, "The permutation-row variants". `Adv^ow` stays the advantage of the explicit inverter, a computational
    assumption on Keccak-p[800,12]: `Com` is evaluated inside the relations, so it cannot be a table
    of the game, and some inverter wins with probability 1 (`owAdv_one_ratatouille`,
    `owAdv_one_moussaka`). In a random-table model of the standalone experiment a `q`-query
