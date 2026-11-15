@@ -788,6 +788,19 @@ version `pomfrit_U1_cls'`, `pomfrit_U1_ompr_cls`). The pieces:
   `2⁻³⁰` at `2⁴⁸`, `2⁻³⁸` at `2⁴⁰` (dominant terms of `clsSimEps_eq`; the `H₂²` charge is `≈ 2⁻⁶³`
   at `2⁶⁴`, the per-forgery terms `≈ (ℓ + 1)·2⁻⁷⁸`).
 - `Audit/PomfritCls.lean`: the theorems at the honest Issuer, a 32-byte key digest and two forgers.
+- *AES as random permutations, with inverse queries* (`ROM/OneMoreClsPerm.lean`,
+  `Assumptions/PomfritClsPerm.lean`, `Audit/PomfritClsPerm.lean`): `pomfrit_U1_cls_simP`
+  (`pomfrit_U1_ompr_cls_simP`), the bound above with `failEpsP` for `failEps` (`clsSimEpsP`,
+  `clsSimEpsP_eq`), for a forger of `pomfrit.md` §6.4's permutation model (`ForgerP`, `gameP`). The
+  reduction's forger is normalized at `π` and wrapped with `π.fwd` (`wrapEP`, `pomWin_le_wrapP`).
+  The wrapped derived provers are not a `RecFamily` (the `H₅` inputs read `π.fwd` at unrecorded
+  cells), so as above Lemma P^cls is applied per table, now with the point-tied Post `PostPOut`
+  (`prEvent_clsFailZ_sim_le_Ec`, `clsFail_events_of`), and only the cipher terms are moved to the
+  normalized forger's derived provers (`events_wrapE`, `postPOut_wrapE`), a `RecFamily` averaged by
+  `sum_fail_le_fam`. `KeysPre` for the wrapped prover comes from the wrapper's own `iv` query, which
+  is N1 for every `H₂¹` input with the true `mu₁` (`ivMu_proverP_wrapE`, `keysPre_of_not_postP_mu`);
+  Post moves because the half-targets of the wrapped log's prefix are among the plain log's
+  (`postP_of_filter`, with the plain log's N1). Numbers unchanged: `≈ 2⁻¹⁴` at `2⁶⁴`.
 
 What the theorem is about. The reduction is U1's with the wrapped forger and `E₁^cls`; its OMPR
 advantage is that of `red addHint (advCE … wrapE … e1C …)`. The wrapper's work is not modelled
@@ -1021,7 +1034,8 @@ codimension 4 and 6. About 25 s; `--j=10` adds 30 s.
    left over, and for third classes. It needs a bound on the candidate sets for labels chosen
    after the `H₅` table is seen, and a treatment of level sets whose slopes are not the trees'.
    Or a forger that defeats the search at a cost below the search's.
-2. (Done, §6A.5: `pomfrit_U1_cls_sim'`.) Open there: a tight Lean count of the wrapper's `H₅`
+2. (Done, §6A.5: `pomfrit_U1_cls_sim'`, and with AES as random permutations
+   `pomfrit_U1_cls_simP`.) Open there: a tight Lean count of the wrapper's `H₅`
    queries (two wide classes leave at most one tree), and a forger-side wrapper, which would need a
    bound on commitments that match a key at an unqueried cipher cell.
 3. The committed-shift variant of A-OMPR⊕17 (§7): is it implied by OMPR?
