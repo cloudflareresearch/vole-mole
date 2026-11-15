@@ -463,6 +463,8 @@ import VoleMole.Theft.JointLean
 import VoleMole.Theft.JointSum
 import VoleMole.Theft.JointProver
 import VoleMole.Theft.JointProg
+import VoleMole.Theft.JointLeanSum
+import VoleMole.Theft.JointVer
 import VoleMole.Theft.MoussakaUnbound
 import VoleMole.Theft.MoussakaUnboundMany
 import VoleMole.Theft.MoussakaUnboundLean
