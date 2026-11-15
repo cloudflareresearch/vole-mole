@@ -38,7 +38,8 @@ Lean too, every term explicit (`ROM/OneMoreLemmaPBound.lean`, `prEvent_pfail_le`
 `pomfrit_U1_explicit`, §6.4), and with simultaneous extraction, each query of the forger's run
 charged once (`ROM/OneMoreLemmaPSim.lean`, `pomfrit_U1_sim`). For Theorem U2 it is bounded the
 same way, without Lemma P's `2⁻⁷¹` term (`ROM/OneMoreShiftBound.lean`, `pomfrit_U2_explicit`;
-`ROM/OneMoreShiftSim.lean`, `pomfrit_U2_sim`; §6.4 item 10).
+`ROM/OneMoreShiftSim.lean`, `pomfrit_U2_sim`; §6.4 item 10), and both also with AES as random
+permutations with inverse queries (`pomfrit_U1_simP`, `pomfrit_U2_simP`, §6.4).
 
 Line references are to the working tree at commit `6d7113e`.
 
@@ -46,7 +47,7 @@ Line references are to the working tree at commit `6d7113e`.
 
 | Property | On `main` | With the label-row fix | Section |
 |---|---|---|---|
-| One-more unforgeability (paper Def. 2.5), classical ROM + ideal cipher | **Holds.** Tight under a τ-shift variant of UOV one-more preimage resistance (Thm U2). Under the paper's standard assumption (Def. 3.1) the reduction loses an extra `(Q₃+ℓ+1)·2^{−71}` (Thm U1). [Lean] the game, the programming of `hash_to_target` and the reductions to Def. 3.1 and to A-OMPR⊕τ, with Lemma P's failure probability as an explicit term (`ROM/OneMorePomfrit.lean`, `pomfrit_U1_bound`, `pomfrit_U2_bound`; §6.4). For U1 that term is bounded too, with simultaneous extraction: `Pr[PomWin] ≤ Adv^{ompr} + pfailSimEps` with every term explicit, the forger's queries charged once (`pomfrit_U1_sim`, `pomfrit_U1_ompr_sim`; the union over forgeries, `(ℓ+1)·pfailEps`, is `pomfrit_U1_explicit`); for U2 likewise, with no `2^{−71}` term: `Pr[PomWin] ≤ Adv^{ompr⊕17} + sfailSimEps`, `2⁻⁶²` at `2⁶⁴` queries and `ℓ = 2³⁰` (`pomfrit_U2_sim`, `pomfrit_U2_omprShift_sim`; union: `pomfrit_U2_explicit`) | Same (ZK is not used) | §5–§6 |
+| One-more unforgeability (paper Def. 2.5), classical ROM + ideal cipher | **Holds.** Tight under a τ-shift variant of UOV one-more preimage resistance (Thm U2). Under the paper's standard assumption (Def. 3.1) the reduction loses an extra `(Q₃+ℓ+1)·2^{−71}` (Thm U1). [Lean] the game, the programming of `hash_to_target` and the reductions to Def. 3.1 and to A-OMPR⊕τ, with Lemma P's failure probability as an explicit term (`ROM/OneMorePomfrit.lean`, `pomfrit_U1_bound`, `pomfrit_U2_bound`; §6.4). For U1 that term is bounded too, with simultaneous extraction: `Pr[PomWin] ≤ Adv^{ompr} + pfailSimEps` with every term explicit, the forger's queries charged once (`pomfrit_U1_sim`, `pomfrit_U1_ompr_sim`; the union over forgeries, `(ℓ+1)·pfailEps`, is `pomfrit_U1_explicit`); for U2 likewise, with no `2^{−71}` term: `Pr[PomWin] ≤ Adv^{ompr⊕17} + sfailSimEps`, `2⁻⁶²` at `2⁶⁴` queries and `ℓ = 2³⁰` (`pomfrit_U2_sim`, `pomfrit_U2_omprShift_sim`; union: `pomfrit_U2_explicit`); both also with AES as random permutations with inverse queries, the same numbers (`pomfrit_U1_simP`, `pomfrit_U2_simP`, `pomfrit_U1_ompr_simP`, `pomfrit_U2_omprShift_simP`) | Same (ZK is not used) | §5–§6 |
 | One-more unforgeability, QROM | **On paper, under new quantum-oracle assumptions** (U1-Q, U2-Q of `lean/docs/extraction/Q7-qrom-multi-extraction.md` §4: database-controlled programming replaces the mid-run extractor). From the paper's A-OMPR with the classical reduction: open, since Q2 extracts only after the run | Same | §7 |
 | Blindness against a malicious Issuer (paper Def. 2.4: malicious key, selective-failure form) | **Fails.** An honest-but-curious Issuer links with advantage ≈ 1 using about 310 SHAKE calls per (signature, session) pair (`lean/docs/zk.md` §4) | **Holds** (Thm B), with advantage `≤ ε_ZK^fix(Q_P = 2) + 2Q_X·2^{−256}`. [Lean] from G1 with (ZK-fix) as a hypothesis (`Privacy/PomFRIT.lean`, `blindness`), and with (ZK-fix) derived for the executable Lean prover with label rows down to its tape hypothesis (`Privacy/PomFRITLean.lean`, `blindness_lean`). In the ROM and ideal-cipher model, for the Lean prover with the Issuer seeing the tables and every term explicit: `≈ 2⁻¹⁰³·⁴` plus budget terms (`blindnessRO_lean_num`), `≈ 2⁻¹⁰³·²` with the Issuer's key, messages and responses reading the tables except `H₂³` (`blindnessRA_lean_num`), `≈ 2⁻¹⁰²·³` with them reading `H₂³` too (joint budget, `blindnessRAH_lean_num`); each also with AES as random permutations (`_perm`), with one shared `H₃` and no `2⁻³⁶⁰` term (`blindnessSh_num`, `blindnessRASh_num`, `blindnessRAHSh_num`), and from the real Clients' OS seeds and `XOF_seed` (G0), `+ 2·(2Q_X + 1)·2⁻²⁵⁶` (`blindness*_seed`). With many sessions (`lean/docs/zk.md` §10.8), each plus budget terms: `n` sessions in one concurrent schedule `≤ n·2⁻¹⁰³` (`blindnessN_lean_le`; `2⁻⁸³` at `2²⁰`, `2⁻⁷¹` at `2³²`), adaptively scheduled `≤ n·2⁻¹⁰²` (`blindnessAd_lean_le_pfx`, the collision term counting `H₂³` prefixes; `2⁻⁸²` at `2²⁰`, `2⁻⁷⁰` at `2³²`; `n·2⁻⁹²` counting keys, `blindnessAd_lean_le`), interleaved, the Issuer starting further sessions and answering them in any order, `≤ (n + 2)·2⁻¹⁰²` for `n` further sessions (`blindnessIL_lean_le`; the same numbers), also with a scheduler that reads the tables and places the challenge itself, `+ 52·L·(a₃ + a₂ + a₅ + 221·a_E)·2⁻¹²⁸` for `L` steps of at most `a` queries each (`blindnessILO_lean_le`), `N` challenge pairs `≤ N·(2N·2⁻¹⁰³ + …)` (`blindnessP_lean_le`) and, with `H₄` a random-oracle table, `≤ N·2⁻¹⁰³ + 32·N²·2⁻¹²⁸` (`blindnessPH_lean_le`; `2⁻⁸³` at `2²⁰` sessions, `2⁻⁶⁰` at `2³²`). Formulas: §8.2; theorem names: §13 | §8 |
 | No selective failure via `finalize_issue`'s check (`pomfrit.cpp:207`) | Holds: the abort event is a function of the Issuer's own view | Holds | §8.3 |
@@ -776,6 +777,55 @@ Compared with the paper's term `ε_ext + (Q₃ + ℓ + 1)·2^{−71} + Q_T·q₁
   argument for U2 was found wrong; the mechanized term adds, as for U1, the order hits and the
   per-forgery failure terms (binding, an opened dead leaf, Post, the unqueried `H₂³` input).
 
+**AES as random permutations, with inverse queries** (`ROM/PermFamily.lean`,
+`ROM/OneMorePerm.lean`, `ROM/OneMoreLemmaPSimPerm.lean`, `ROM/OneMoreShiftSimPerm.lean`,
+`Assumptions/PomfritPermSim.lean`; `lean/docs/probabilistic-plan.md` §2o). Everything above takes
+the cipher in the PRF view (a uniform function per key, forward queries only). Here AES is a
+family of uniform random permutations and the forger also queries it backwards.
+
+- *The game* (`ForgerP`, `gameP`). The forger's cipher queries are `(true, (k, z)) ↦ π_k(z)` and
+  `(false, (k, y)) ↦ π_k⁻¹(y)`. The reduction's wrapper normalizes them (`normU`,
+  `ForgerP.toIC`): an inverse query becomes the forward query at `(k, π_k⁻¹(y))` (its record,
+  which the extractor reads), and before every `H₂¹` query `x` the reduction makes its own hidden
+  query `H₄(iv_pre ‖ μ ‖ 4)` parsed from `x` (N1 of `L0-L2` §3.2), as it already makes `auxSpec`.
+  The forger's view is the permutation oracle (`eval_normU`). The verifier and extractor read
+  `π.fwd`. `pomfrit_U1_boundP`, `pomfrit_U2_boundP`: the reductions of `pomfrit_U1_bound`,
+  `pomfrit_U2_bound` unchanged.
+- *Per table.* At a fixed `π` the normalized forger is a forger of the PRF view, so every
+  per-table lemma above applies at `E = π.fwd`. Only Post changes: the PRF view's `PostOut` is
+  not small when the forger can choose cipher outputs by inverse queries, so the trace uses the
+  point-tied Post `PostPOut` (`ROM/PermPost.lean`), which needs N1. The derived prover's log has
+  N1 (`n1c_proverP`): the forger's `H₂¹` queries by the normalization, the verifications' by the
+  verifier's own `iv` query in `chal1Pre` (`ivBefore_chal1Pre`). So outside `PostPOut` the
+  committed keys are found before the chain (`keysPre_proverP`). The PRF-view per-table bounds
+  and `pfail_events`, `shiftFail_events`, `aliveR_subset_known` now take the Post event as a
+  parameter (`prEvent_pfailZ_sim_le_Ec`, `prEvent_shiftFailZ_sim_le_Ec`, `pfail_events_of`,
+  `shiftFail_events_of`, `aliveR_subset_known_of`); the old statements are the case `PostOut`.
+- *Averaged over `π`.* The failure terms (binding, an opened dead leaf, `PostPOut`) of the derived
+  games are bounded over the permutation table by the eager counting of `ROM/PermBind.lean`,
+  `ROM/PermOpen.lean`, `ROM/PermJoint.lean`. Those lemmas were stated for `normP p π P` of a fixed
+  prover; PomFRIT's derived prover is not of that form (`normP` would query the verifications'
+  `iv` a second time). `ROM/PermFamily.lean` restates them for any family `π ↦ Q π` that depends on
+  the table only through its records (`RecFamily`: the prefix and congruence properties of
+  `normP_prefix`, `normP_congr`; `sum_fail_le_fam`), and `recFamily_proverP` shows the derived
+  provers are such a family (closure under binds, an inverse query recorded as a forward query).
+- *Theorems* (`pomfrit_U1_simP`, `pomfrit_U1_ompr_simP`; `pomfrit_U2_simP`,
+  `pomfrit_U2_omprShift_simP`): for a forger of the permutation model with budget `qA`, `nA`,
+  `q_E` (forward and inverse together), `Q_T` (`ForgerBoundP`),
+
+      Pr[PomWin] ≤ Adv^{ompr}(red …; Q_T + ℓ + 1, ℓ)   + pfailSimEpsP(q', q_E', n', ℓ),
+      Pr[PomWin] ≤ Adv^{ompr⊕17}(red …; Q_T + ℓ + 1, ℓ) + sfailSimEpsP(q', q_E', n', ℓ),
+
+  `pfailSimEpsP`, `sfailSimEpsP` the PRF-view expressions with `failEpsP` (`p = 1/(2¹²⁸ − q_E')`)
+  for `failEps`, at `q' = qP (addH4 qA) Q_T ℓ`, `q_E' = eP lr q_E ℓ`, `n' = nP (nA + qA₂₁) Q_T ℓ`
+  (the reduction's extra `H₄` queries are not charged by any per-query term; they only enter the
+  total hash count in the `2⁻⁴⁴⁸` term). Numbers: `failEpsP ≈ 2⁻¹¹⁵·⁸` against
+  `failEps ≈ 2⁻¹¹⁷·⁹` at `2⁶⁴` queries (`lean/docs/probabilistic-plan.md` §2o), so the per-forgery
+  failure terms are about `2⁻⁸⁶` at `ℓ = 2³⁰`, and the tables above are unchanged: U1 `2⁻⁷·⁰`, U2
+  `2⁻⁶²·⁰` at `q = 2⁶⁴`, `ℓ = 2³⁰`. Non-vacuity: `Audit/PomfritPerm.lean` (a forger with an `H₂¹`
+  query, a forward and an inverse cipher query and a `hash_to_target` query). Nothing in the
+  paper's argument changes; the paper does not treat inverse queries for U1 and U2 explicitly.
+
 ## 7. One-more unforgeability in the QROM
 
 *Status.* This section explains why the classical reduction does not lift with Q2 alone. The
@@ -1286,6 +1336,9 @@ dedicated to PomFRIT.
   (`shP_eq_alive`) and the per-table implication (`shiftFail_events`). Found on the way: the
   game's `chal1Pre` used the AES PRG instead of the ideal cipher's, so the target oracle's input
   was not at the verifier's `chal1` (fixed earlier).
+  **AES as random permutations, with inverse queries** (§6.4, end): `pomfrit_U1_simP`,
+  `pomfrit_U2_simP` (and the OMPR forms `pomfrit_U1_ompr_simP`, `pomfrit_U2_omprShift_simP`),
+  the same bounds with `failEpsP` for `failEps`.
 - **G8-cls (open; per-chain step and adaptive bound closed).** Theorem U1^cls in Lean
   (`pomfrit-lemmap-tight.md` §6A): U1 with the class extractor and `(Q₃ + ℓ + 1)·2⁻⁷⁸ + q₁·2⁻¹³⁴`
   for Lemma P's `(Q₃ + ℓ + 1)·2⁻⁷¹`. In Lean, for the executable verifier:
