@@ -3041,7 +3041,7 @@ only, above); the shared-`H₃` game (`MoussakaNCSh`) with a table-reading setup
 reductions read `H₃` through the rows, and the setup's row reads would enter the zero-knowledge
 error as in §10.5); further Clients in the non-colluding games (§10.8).
 
-### 10.8 Many sessions (`ZK/ReadsMany.lean`, `Privacy/PomFRITMany.lean`, `Privacy/MoussakaMany.lean`, `Privacy/RatatouilleMany.lean`, `Privacy/PomFRITAdaptive.lean`, `Privacy/PomFRITAdaptivePfx.lean`, `Privacy/MoussakaAdaptive.lean`, `Privacy/RatatouilleAdaptive.lean`, `ZK/ReadsPoint.lean`, `Privacy/PomFRITLin.lean`, `ZK/ReadsInterleave.lean`, `Privacy/PomFRITInterleave.lean`, `Privacy/MoussakaInterleave.lean`, `Privacy/RatatouilleInterleave.lean`, `ZK/ReadsInterleaveOC.lean`, `Privacy/PomFRITInterleaveOC.lean`, `Privacy/MoussakaInterleaveOC.lean`, `Privacy/RatatouilleInterleaveOC.lean`, `Privacy/Split.lean`, `ZK/ReadsPointRO.lean`, `Privacy/MoussakaLin.lean`, `Privacy/RatatouilleLin.lean`)
+### 10.8 Many sessions (`ZK/ReadsMany.lean`, `Privacy/PomFRITMany.lean`, `Privacy/MoussakaMany.lean`, `Privacy/RatatouilleMany.lean`, `Privacy/PomFRITAdaptive.lean`, `Privacy/PomFRITAdaptivePfx.lean`, `Privacy/MoussakaAdaptive.lean`, `Privacy/RatatouilleAdaptive.lean`, `ZK/ReadsPoint.lean`, `Privacy/PomFRITLin.lean`, `ZK/ReadsInterleave.lean`, `Privacy/PomFRITInterleave.lean`, `Privacy/MoussakaInterleave.lean`, `Privacy/RatatouilleInterleave.lean`, `ZK/ReadsInterleaveOC.lean`, `Privacy/PomFRITInterleaveOC.lean`, `Privacy/MoussakaInterleaveOC.lean`, `Privacy/RatatouilleInterleaveOC.lean`, `Privacy/Split.lean`, `ZK/ReadsPointRO.lean`, `Privacy/MoussakaLin.lean`, `Privacy/RatatouilleLin.lean`, `ZK/IdealCipherPt.lean`, `ZK/HopsH4Pt.lean`, `ZK/HopsROMExp.lean`, `ZK/HopsH6Exp.lean`, `ZK/IvOverlap.lean`)
 
 Every game above has the challenge sessions only: two (PomFRIT) or four (Moussaka, Ratatouille)
 requests. A deployment has many sessions on the same random oracle and cipher, and the adversary
@@ -3711,6 +3711,49 @@ tables (a worst-case, non-uniform reduction).
   ones); for the
   non-adaptive `realGameN`/`realGameP` the composed adversary's interaction is `SReads` by
   `SReads.bind` with the adversary's own reads; not stated.
+
+**Point-level hops with an expected charge** (`ZK/IdealCipherPt.lean`, `ZK/HopsH4Pt.lean`,
+`ZK/HopsROMExp.lean`, `ZK/HopsH6Exp.lean`, `ZK/IvOverlap.lean`). The hops above charge a
+distinguisher's reads by worst-case budgets, and H4 charges every read of a hidden node's row. In
+a game with `N` proofs, each proof's hop then pays the whole budget (`lean/docs/security/ratatouille.md`
+§5, "Why every hop pays the adversary's budget"). The joint step (`Theft/JointZK.lean`) would charge
+the budget once if each hop cost a constant plus the **expected** number of reads at the proof's
+**points**. Proved toward that:
+- *GGM puncturing at points* (`IC.puncturePt`, `IC.puncturePt_real`). The distinguisher reads
+  the table at points `(k, z)` (`Q o G : Finset (K × X)`), and a secret node's row is replaced only
+  on a set `P` of inputs (`IC.rowAtP`). If `P` contains every input (`hPx`) and the output reads
+  the secret rows only on `P` (`hΦP`), hop `n` costs `(N + E[#keys read on P])/|K|` (`IC.hopPt`),
+  the expectation in the experiment after the hop: the node's value is uniform and independent of
+  it (`IC.pr_mem_reset_exp`, the expectation form of `pr_mem_reset_le`). The ends of the hybrid
+  are `IC.puncture`'s (`experPt_empty`, `experPt_full`). For a **consistent** reader (`hQc`: its
+  read set is determined by the values it reads) of at most `qm` keys on `P`, the expectations are
+  moved to the real experiment: they differ by `≤ qm` times the experiments' distance, which the
+  bound itself bounds (`IC.exP_sub_le_of_levels`, layer cake), so
+  `|real − replaced| ≤ |sec|·(N + E_real[#keys read on P])/(|K| − |sec|·qm)`.
+- *H4 at points* (`hide_rom_query_pt`). The commitment reads every row only at the CTR blocks of
+  its `iv` (`hidOfRows_congrPt`; `InY iv`, `ZK/ReadsPoint.lean`), so with `P = InY iv`:
+  `|Pr_real − Pr_ideal| ≤ 221·(4607 + E_real[#keys read at CTR blocks of iv])/(2^{128} − 221·qm)`
+  (`expKeysY`; `≤` the expected number of read points there, `expKeysY_le`). Function rows.
+- *H1* (`IC.abs_pr_hidden_one_exp`, `IC.abs_pr_hidden_one_real`, `h3_rom_query_real`): the
+  programmed point is guessed with probability `E[#keys read]/|C|` (`IC.pr_mem_indep_exp`); for a
+  consistent reader of at most `qm` keys, `≤ E_real[#H₃ keys read]/(2^{128} − qm)`.
+- *H6's bad event* (`pr_bad_exp`): for a fixed table and shared tape,
+  `Pr[a sibling input is read] ≤ (1 + E_f[chg5])/2^{128}`, `chg5` the distinguisher's `H₅` keys
+  at gate inputs of this proof (its `iv`), `f` the proof's fields, uniform.
+- *The number of proofs a read concerns* (`ZK/IvOverlap.lean`). A CTR block keeps the middle 64
+  bits of its `iv` (`lane2_of_ctrBlock_eq`, `midB_of_inY`). For any read set `Z`, chosen after the
+  `iv`s, `Σ_i #{z ∈ Z | InY iv_i z} ≤ |Z|·(1 + #collPairs)` (`sum_inY_le`), and for independent
+  uniform `iv`s `E[#collPairs] ≤ N²·2^{−64}` (`exP_collPairs_le`), so the total point charge is
+  `≤ q·(1 + N²·2^{−64})` (`exP_sum_inY_le`): at most `5/4` of the budget for `N ≤ 2^{31}`
+  (`Audit/ZKPoint.lean`). The factor is real (two `iv`s sharing their middle bits share every
+  read at their common blocks); points restricted to the counters and tweaks in use would lower it.
+
+Not done: assembling these into one-proof zero knowledge of the form `hyb_hop_exp` needs (the
+whole chain `zk_rom_ic`: H1, grinding, H4, H6 and the tape steps, with the rest of the game as a
+consistent reader, and the expectations of H4 (real world) and H6 (the proof's fields) moved to
+one world); the theft games' read budgets per proof and per point; the theft games' `iv`s as
+independent uniform blocks; and the instantiation of `real_sim_leN_jointZK`
+(`lean/docs/security/ratatouille.md` §5).
 
 ### 10.9 Hiding of `Com` (`Privacy/ComHide.lean`)
 

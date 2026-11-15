@@ -373,6 +373,11 @@ import VoleMole.Privacy.PomFRITAdaptive
 import VoleMole.Privacy.PomFRITRAHPfx
 import VoleMole.Privacy.PomFRITAdaptivePfx
 import VoleMole.ZK.ReadsPoint
+import VoleMole.ZK.IdealCipherPt
+import VoleMole.ZK.HopsH4Pt
+import VoleMole.ZK.IvOverlap
+import VoleMole.ZK.HopsROMExp
+import VoleMole.ZK.HopsH6Exp
 import VoleMole.Privacy.PomFRITLin
 import VoleMole.Privacy.MoussakaMany
 import VoleMole.Privacy.Split
@@ -543,6 +548,7 @@ import VoleMole.Audit.TheftPlainUnbound
 import VoleMole.Audit.TheftPlainPerm
 import VoleMole.Audit.TheftNum
 import VoleMole.Audit.TheftJointZK
+import VoleMole.Audit.ZKPoint
 import VoleMole.Audit.MainPU
 import VoleMole.Audit.MainShared
 import VoleMole.Audit.PomfritLemmaPCls

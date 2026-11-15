@@ -989,11 +989,31 @@ honest openings, not about signatures. The table's bound in §0 is the right one
     **Not proved: the hypothesis.** `hyb_hop_exp` needs one-proof zero knowledge with an error
     linear in the **expected** number of the distinguisher's reads at the proof's **points**.
     `ZK/` proves zero knowledge with worst-case budgets (`Rd3`, `Rd5`, `RdE`) and charges whole
-    rows. What is missing: H4 at points (the hidden part reads only the points `pts`,
-    `HopsH4Ideal.lean`, so only their values need replacing); H1, H4 and H6 charged in
-    expectation; the theft hops' read budgets per proof and per point (`Theft/Reads.lean`,
-    `Theft/ManyReads.lean`, `Theft/PlainSlicesN.lean`); and the bound on the number of proofs a
-    read concerns. So the mechanized many-token bound stays `(U + M)·2^{−55} + 2^{−59}`.
+    rows. Steps toward it, each proved (`docs/zk.md` §10.8, "Point-level hops with an expected
+    charge"):
+    1. *H4 at points* (`ZK/IdealCipherPt.lean`, `ZK/HopsH4Pt.lean`): `hide_rom_query_pt`,
+       `|real − ideal| ≤ 221·(4607 + E_real[#keys read at CTR blocks of iv])/(2^{128} − 221·qm)`
+       for a consistent reader of at most `qm` such keys. Reads at other inputs are free; the
+       worst case enters only the denominator.
+    2. *H1 and H6 in expectation* (`ZK/HopsROMExp.lean`, `ZK/HopsH6Exp.lean`):
+       `h3_rom_query_real` (`≤ E_real[#H₃ keys read]/(2^{128} − qm)`) and `pr_bad_exp` (H6's bad
+       event `≤ (1 + E_f[#H₅ keys at the proof's gate inputs])/2^{128}`, the expectation over the
+       proof's uniform fields).
+    3. *How many proofs a read concerns* (`ZK/IvOverlap.lean`): for `N` independent uniform
+       `iv`s and any reads `Z` of at most `q` points (chosen after seeing the `iv`s),
+       `E[Σ_i #{z ∈ Z | z a CTR block of iv_i}] ≤ q·(1 + N²·2^{−64})` (`exP_sum_inY_le`; a
+       shared CTR block means shared middle 64 bits, `midB_of_inY`). At `N ≤ 2^{31}` the factor
+       is at most `5/4`, which `jointNum_le` (factor `1`) does not allow for; restricting the
+       points to the counters and tweaks in use would make it about `1 + N²·R·2^{−128}`.
+
+    Not done: these hops are not yet assembled into a one-proof theorem of the form
+    `hyb_hop_exp` needs (the chain `zk_rom_ic` with H1, grinding, H4, H6 and the tape steps,
+    with the reads of the rest of the game as the consistent reader; H4's and H6's expectations
+    are in different worlds, the real one and the proof's fields); the theft hops' read budgets
+    per proof and per point (`Theft/Reads.lean`, `Theft/ManyReads.lean`,
+    `Theft/PlainSlicesN.lean`); the `iv`s of the theft games as independent uniform blocks
+    (`H₄` a table, distinct inputs); and the instantiation of `real_sim_leN_jointZK`. So the
+    mechanized many-token bound stays `(U + M)·2^{−55} + 2^{−59}`.
   - **`noTheft_lean_rom`** (`Theft/PlainRataRom.lean`): `noTheft_leanX_hitL` with plain extraction
     discharged. Function rows (`R = Blk → Blk`), `M = uovM`, `L ≥ Lmin`, an adversary whose last
     stage is the run of an oracle computation within `QBudT q q_E n_G` (`hA`), the extractor

@@ -45,6 +45,11 @@ At key level the joint charge cannot help: an adversary's read at a random key h
 key of one of the `N` proofs with probability `221·N·2⁻¹²⁸`, so the key-level bad event has
 probability `≈ 221·N·q_E·2⁻¹²⁸`, the bound of `Theft/Many.lean`. See
 `lean/docs/security/ratatouille.md` §5.
+
+Steps toward the hypothesis are proved in `ZK/`: H4 at points with the charge in the real
+experiment (`hide_rom_query_pt`, `ZK/HopsH4Pt.lean`), H1 and H6's bad event in expectation
+(`h3_rom_query_real`, `pr_bad_exp`), and the number of proofs a read concerns
+(`exP_sum_inY_le`, `ZK/IvOverlap.lean`). They are not yet assembled into it.
 -/
 
 open Finset
