@@ -1,6 +1,8 @@
 import VoleMole.Audit.MainShared23
 import VoleMole.Privacy.MoussakaMainSharedAll
 import VoleMole.Privacy.RatatouilleMainSharedAll
+import VoleMole.Privacy.MoussakaNCMain
+import VoleMole.Audit.Liveness
 
 /-!
 # Audit of the results on `main` with one shared `H₃` (`lean/docs/zk.md` §4.2)
@@ -12,6 +14,10 @@ import VoleMole.Privacy.RatatouilleMainSharedAll
   the trivial hiding bound `εhide = 1` (Moussaka) or any bound on the hiding reductions
   (Ratatouille). So the consistency condition does not force a guess that
   ignores `H₃`.
+* **`anonymityNC_main` (Moussaka 4(b') on `main`) applies with a non-trivial signer and no abort
+  term**: the Moderator `ncm d` uses the key `keyI d` of `Audit/Liveness.lean` for both Anchors,
+  whose trapdoor signer `skI d` never fails (`skI_some`), so `φ = 0` (`phi_skI`); the index rule
+  is `idxEval` (`IdxSound`). Every hypothesis holds and every term of the bound is a number.
 * **The prefix-collision term is a number**: `pr_coll_le`, `pr_collR_le` bound it by `2⁻¹²⁸`
   (Moussaka) and `2·2⁻¹²⁸` (Ratatouille) per world, for every adversary.
 
@@ -115,5 +121,38 @@ example [HasPrg] (k : Pre) (ρ : ZK.Sim.Bytes 16) (εhide : ℝ)
 example [HasPrg] (A : AdversaryRH) (b₁ b₂ : Bool) := pr_collR_le A b₁ b₂
 
 end Ratatouille
+
+section NCMain
+
+open VoleMole.Spec VoleMole.Spec.Moussaka VoleMole.Privacy.Moussaka VoleMole.Audit.Live
+
+/-- A non-colluding Moderator on `main` with the key `keyI d` for both Anchors, a constant guess and
+no table reads. -/
+noncomputable def ncm (d : Spec.Bytes) : AdversaryNCM :=
+  ⟨fun _ => 0, fun _ => 0, fun _ => keyI d, fun _ => (Audit.S0, []), fun _ _ _ => True,
+    fun _ _ _ => ∅⟩
+
+theorem ncm_cons (d : Spec.Bytes) : (ncm d).ConsH 0 0 :=
+  ⟨fun _ => rdTH_const True, fun _ => rdTH_const ∅⟩
+
+/-- **The abort term of the trapdoor signer is `0`**: it never fails. -/
+theorem phi_skI (d : Spec.Bytes) (A : AdversaryNC) (c : Bool) : phi A (fun _ => skI d) c = 0 := by
+  unfold phi
+  rw [pr_congr (Q := fun _ => False) fun y => by simp [skI_some]]
+  exact pr_false
+
+/-- `anonymityNC_main` for `ncm d` with the trapdoor signers: every hypothesis holds, and the
+abort term vanishes. -/
+example (d : Spec.Bytes) (PI : NIZK IssueInstance) :
+    |realNCM (ncm d) Audit.idxEval PI (fun _ => skI d) false -
+        realNCM (ncm d) Audit.idxEval PI (fun _ => skI d) true| ≤
+      30 * (εS 0 (0 + 8 * 4607) + Δ23 9) +
+        15 * (8 * noHitProb + (4 * ((0 : ℕ) + 625) + 626) / 2 ^ 128) + 2 / 2 ^ 128 := by
+  have h := anonymityNC_main (ncm d) Audit.idxEval PI (fun _ => skI d) (fun _ => skI_correct d)
+    Audit.idxEval_sound (ncm_cons d) (q5 := 0) (fun _ _ _ => le_rfl)
+  rw [phi_skI, phi_skI] at h
+  simpa using h
+
+end NCMain
 
 end VoleMole.Audit.MainSharedAll
