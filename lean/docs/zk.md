@@ -75,8 +75,11 @@ Theorem 2 hold with the joint (PU) hop over the proofs that share `r`, with the 
 explicit term (`anonymity_main`, `unlinkability_main`); with all tables shared, one `H₃`
 included, as in the scheme (`anonymity_main_sharedAll`, `unlinkability_main_sharedAll`); and
 Moussaka's non-colluding Theorem 4(b') holds on `main` with a statistical (PU) term, since the
-Moderator's view depends on the openings only through the refusal bit (`anonymityNC_main`)
-[Lean, §4.2]. (PU) is stated as a game
+Moderator's view depends on the openings only through the refusal bit (`anonymityNC_main`; with
+`main`'s Lean issuance prover and the Anchors' Lean verifier on the shared tables,
+`anonymityNC_main_lean`, `+ 4·2⁻¹¹³`); unbound Moussaka's U5 holds on `main` with two redemption
+queries, also with all tables shared, up to an explicit prefix-collision term
+(`anonymityU_main_sharedAll`, `anonymityNC_main_U_sharedAll`) [Lean, §4.2]. (PU) is stated as a game
 (`PU.puAdv`); for Moussaka the (PU) event is reduced to the advantage of explicit predictors in it
 (`anonymity_main_pu`), and in the ideal-permutation model for Keccak-p[800] the advantage is at
 most `(c + q)/(2¹²⁸ − q) + q/(2⁴⁴⁰ − q)` for `q` queries and `c` candidates
@@ -678,7 +681,7 @@ refusal bit is not a function of the Anchor's verdict.
 `MoussakaUnbound.anonymity` with **two redemption queries** (four proofs, as the joint hop of
 `ZK/MainGame.lean` takes), `main`'s unbound statements (`pIu`: 232 witness bytes, `pRu`: 559, no
 label rows; `zkHypIu`, `zkHypRu`), the executable prover with per-proof tables (`main_chain_le`;
-the shared-table hops of this section are not redone for unbound Moussaka) and `main`'s
+with all tables shared: below) and `main`'s
 `find_issuer` Client:
 
     anonymityU_main_pu:  |Pr[W₀] − Pr[W₁]| ≤ 8·εRF(q₃, q_E)
@@ -714,6 +717,81 @@ abort hop, the PRF hop and the swap of `anonymityNC` finish:
 no assumption on `UCom`; `εprf` is `Adv^prf_2` (without the commitments) of the explicit reductions
 at fixed tables, `ψ c ≤ κ + φ c` (`κ = 0` for a complete issuance proof system).
 
+**4(b') on `main` with the Lean issuance prover** (`Privacy/MoussakaNCMainLean.lean`,
+`Audit/MainNCLean.lean`). The route of the next list, mechanized. The issuance proofs are `main`'s
+executable prover on the shared tables of `ZK/MainSharedAll.lean` (`proveL`: `H₃` the column of the
+one table at the proof's prefix, the raw `H₂³` table, the `H₅` table, the cipher), and each honest
+Anchor's verdict is `main`'s `issue_response` with the Lean verifier on the same tables (`AccL`).
+- *Length* (`issueProof_size`, `issueReq_length`): a Lean proof has its parameters' length
+  (`prove_size`, from `proveCommit_inv`), and `pIm.proofBytes = 7272 = issueRequestBytes − 45`,
+  so an honest request passes the Anchor's length check.
+- *Completeness on the shared tables* (`issue_complete_shared`): `complete_rom_ic` restated for the
+  shared-table model. The column of a uniform `H₃` at a fixed prefix is a uniform slice
+  (`pr_col`, through `Equiv.piSplitAt`), so for a statement of `main`'s issuance relation the
+  prover fails or the verifier rejects (`issFail`) with probability `≤ 2⁻¹¹³`; with the rest of
+  the tape fixed, for each Client (`pr_issFail_le`).
+- *The game* (`realNCML`): the issuance proofs are computed first, on the raw tables, and never
+  shown. If both Anchors accept, the rest is the integrand of `realNCM` for `PIacc`, the proof
+  system that accepts every request of the right length (`κ = 0`); otherwise a token is missing
+  and the redemptions are refused, which is `realNCM`'s integrand for `PIrej` (the view of a
+  refusal does not depend on the proof system). A `MainChain.Game` cannot express this directly,
+  because its statements may not read the tables; the case split is the game.
+- *The hop* (`realNCML_close`): the two games agree unless an issuance fails, so replacing the
+  verdicts by `true` costs `2·2⁻¹¹³` per world.
+
+      anonymityNC_main_lean:  |Pr[W₀] − Pr[W₁]| ≤ 30·(εS(q₃, q_E + 8·4607) + Δ23)
+          + 15·(8·noHitProb + (4·(q₅ + 625) + 626)·2⁻¹²⁸) + 2·2⁻¹²⁸ + 2·(φ false + φ true)
+          + 4·2⁻¹¹³,
+
+with the hypotheses of `anonymityNC_main` and no issuance proof system left abstract.
+
+**Unbound Moussaka U5 on `main` with all tables shared** (`Privacy/MoussakaUnboundNCMainAll.lean`,
+`Privacy/MoussakaUnboundMainAll.lean`, `Audit/MainUnboundAll.lean`). The two-query games above,
+with one `H₃`, one `H₂³` table, one `H₅` table and one cipher for the four proofs, as in the
+scheme. `main_sharedAll_le` is generic in the game, so the joint hop is one application (`pIu` with
+`n = 232, 232, 559, 559`); what is new is the simulated side and the prefix collisions.
+- *The table the guess sees, from what it sees.* With the proofs simulated, the shared `H₂³`
+  table is the raw table programmed for the four statements. The issuance statements are the
+  requests' commitments (`take uovM`). A redemption answer is `Derive ‖ π`, and its statement
+  is the query's set, context and digest with the answer's first 32 bytes as nullifier
+  (`stOfAns`, `stOfAnsA`; `stOfAnsA_redOutU`). So the table is a function of the guess's input
+  (`tabH`, `tabA`; `simV_tab`, `simVA_tab`), and the guess at the rest of the tape is an
+  adversary of the label-row games that programs the table itself (`atZ`). The PRF hop and the
+  swap of the nullifier table then apply at every rest of the tape (`prf_hop_UH`, `prf_hop_NH`;
+  `idealGame_eq_at`, the swap of `idealGame_eq` at fixed simulator coins; for (b) the swap of
+  `pr_run_swap`, whose guess may read the coins).
+- *The redemption proofs are gated* (`gameUH`): they are computed only if the rule lets the
+  redemptions happen; a hidden simulated proof would program the shared table.
+- *(PU)*: (a) the predictors `predUH_c b` output the candidates of the four simulated proofs for
+  the public key set (`candP`, at most `4·(q₅ + 1249)`), so `PU_b ≤ Σ_c puAdv UCom (predUH_c b) +
+  4·noHitProb + 1875·2⁻¹²⁸` (`pr_bstarUH_le`); (b) statistical, `PU_b ≤ 4·noHitProb +
+  4·(q₅ + 625)·2⁻¹²⁸ + 313·2⁻¹²⁸` (`pr_bstarNH_le`), from candidates computed from the keys, the
+  coins and the tables (`candNH`).
+- *The prefix-collision term* (`collUH b`, `collNH b`) stays explicit. Two proofs with one prefix
+  `wPrefix ‖ μ₁` read one column of `H₃`, and `main_sharedAll_le`'s reduction, which writes the
+  slices into the columns at the view's prefixes, charges that event whole. Issuance and
+  redemption witnesses differ in length, the two issuances in their openings, and two
+  redemptions by different Clients in their openings, so for queries answered by different
+  Clients (`TwoClientsU`, `TwoClients`) the term is `≤ 2⁻¹²⁸` (`collUH_le_of_who`,
+  `collNH_le_of_who`). **Two redemptions by one Client** in one context with one issuer index have
+  one witness and one statement, so one prefix, with probability `1`. The real prover reads its
+  column only at its `ρ` (`realROb_g3_congr'`), so the true cost is a `ρ` collision (`2⁻¹²⁸`), but
+  the view does not contain `ρ` and the reduction cannot write the slices pointwise. In two
+  contexts the witnesses differ in the committed Keccak states of `Derive` (injectivity of
+  Keccak-p[800] rounds, not in Lean).
+
+      anonymityU_main_sharedAll:  |Pr[W₀] − Pr[W₁]| ≤ 30·(εS(q₃, q_E + 8·4607) + Δ23)
+          + 15·(Σ_{b,c} puAdv UCom (predUH_c b) + 8·noHitProb + 3750·2⁻¹²⁸)
+          + collUH 0 + collUH 1 + 2·εprf
+      anonymityNC_main_U_sharedAll:  |Pr[W₀] − Pr[W₁]| ≤ 30·(εS(q₃, q_E + 8·4607) + Δ23)
+          + 15·(8·noHitProb + (8·(q₅ + 625) + 626)·2⁻¹²⁸) + collNH 0 + collNH 1
+          + 2·(ψ false + ψ true) + 2·εprf
+
+`*_two` (`anonymityU_main_sharedAll_two`, `anonymityNC_main_U_sharedAll_two`): the same with
+`2·2⁻¹²⁸` for the collision terms, for queries answered by different Clients. In (b) the issuance
+proof system stays abstract (`PI`), as in `anonymityNC`; the route of 4(b') above applies, not
+done.
+
 **Still on paper, for ZK on `main`:**
 - the factor `15` on `εS` and on the (PU) terms is a cost of the mechanized transfer (each hop's
   bad event is moved across the later hops); the paper's lazy sampling gives `4` and `1`;
@@ -721,18 +799,15 @@ at fixed tables, `ψ c ≤ κ + φ c` (`κ = 0` for a complete issuance proof sy
   §10.2's games (this is also what lets the one-`H₃` reduction compute the prefixes from the view);
   the `main` games take any token-reading index rule, `main`'s `find_issuer` Client included
   (`findIdx`);
-- in 4(b') on `main` (and in U5(b) on `main`) the issuance proofs are an abstract `PI` that does
-  not read the game's tables: the refusal bit is a function of the secret (a `MainChain.Game`'s
-  statements may not read the tables). The route to the executable issuance prover and the
-  Anchor's Lean verifier on the shared tables, on paper: the issuance proofs are never shown and
-  a real prover does not program the tables, so they enter the view only through the Anchor's
-  verdict, computed before any redemption on the raw uniform tables; by completeness in the
-  random-oracle and ideal-cipher model (`complete_rom_ic`, `≤ 2⁻¹¹³` per proof) replacing the
-  verdict by `true` costs `2·2⁻¹¹³` per world, and the game is then `realNCM` for a `PI` that
-  accepts the honest requests (`κ = 0`). Not mechanized: it needs `complete_rom_ic` restated for
-  `ZK/MainSharedAll.lean`'s model (one `H₃`, one `H₂³` table, one `H₅` table and one cipher shared
-  with the redemption proofs) and the length of `main`'s Lean issuance proof equal to
-  `issueRequestBytes − 45`;
+- in U5(b) on `main` the issuance proofs are an abstract `PI` that does not read the game's
+  tables. For 4(b') the route to the executable issuance prover and the Anchor's Lean verifier
+  is mechanized (`anonymityNC_main_lean`, above); for U5(b) the same route applies
+  (`unbound_issue_response` has no length check, so only completeness is needed), not done;
+- unbound Moussaka on `main` with more than two redemption queries: the joint hops
+  (`main_chain_le`, `main_sharedAll_le`) are for four proofs; `n` proofs need the transfer of
+  the bad event across `n` hops (a factor `2ⁿ − 1` in this proof), not done;
+- with all tables shared, two redemptions by one Client with one prefix (above): the term
+  `collUH`/`collNH` is explicit; a reduction that sees the proofs' `ρ` would make it `2⁻¹²⁸`;
 - a bound on (PU) for the real permutation: §4.3 states (PU) as a game, reduces Moussaka's
   `PU_b` to it and bounds it in the ideal-permutation model; for Keccak-p[800,12] itself it is an
   assumption (also for Ratatouille's `comI` and `comCh`, §4.3);
