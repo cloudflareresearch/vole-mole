@@ -1014,12 +1014,23 @@ honest openings, not about signatures. The table's bound in §0 is the right one
        its `H₅` gate inputs, and `221`-weighted cipher keys at its CTR blocks. That is
        `hyb_hop_exp`'s hypothesis for one hop, given the hop's distinguisher as such a reader.
 
-    Not done: the theft hops' distinguishers (`distN`: the later real proofs, the adversary, the
-    extractor) as consistent point readers, and their charges summed over the proofs in the
-    simulated world (`Theft/Reads.lean`, `Theft/ManyReads.lean`, `Theft/PlainSlicesN.lean` give
-    worst-case key budgets only); the points restricted to the counters and tweaks in use; the
-    `iv`s of the theft games as independent uniform blocks (`H₄` a table, distinct inputs); and
-    the instantiation of `real_sim_leN_jointZK`. So the mechanized many-token bound stays
+    5. *The joint step for a game of Lean proofs* (`docs/zk.md` §10.8, "The joint step for a game
+       of Lean proofs"): `real_sim_leN_lean` (`Theft/JointLean.lean`) gives the joint bound from
+       `lean_zkExp` for every event read by a consistent game reader, with the hop readers built by
+       composition (`hopRd`) and their charges bounded by the view (`hopRd_charges`), for honest
+       readers confined to their `iv`s; the real prover is (`realPtRd_conf`). Correction:
+       `real_sim_leN_jointZK` asks for hop bounds for every event of the view, which point charges
+       cannot give; the step is restated for a class of events (`real_sim_leN_jointAdm`). The sum
+       over the proofs with `iv`s from a uniform table is `exU_sum_nZK_le` (factor
+       `1 + N²·2⁻⁶⁴` plus the input-collision term), and the target is still reached with that
+       factor (`jointNumK_le`: `≤ 2⁻⁵⁴`, about `2⁻⁵⁴·⁸`, at `U + M ≤ 2³¹`).
+
+    Not done: the simulator's programming as a confined point reader (`vPre` at points), the
+    theft games' game reader at points (the adversary's oracle run, the verifier, the extractor
+    `eRom`), the theft games as instances of the generic game (sum of two proof systems, output
+    map, `iv` decoder), and the simulated game's `iv` structure (`H₄` of `XTab` at inputs
+    `iv_pre ‖ μ₁ ‖ 4`, the `iv_pre` collision term, the grinding-failure term). So
+    `noTheftN_lean_numJ` is not stated, and the mechanized many-token bound stays
     `(U + M)·2^{−55} + 2^{−59}`.
   - **`noTheft_lean_rom`** (`Theft/PlainRataRom.lean`): `noTheft_leanX_hitL` with plain extraction
     discharged. Function rows (`R = Blk → Blk`), `M = uovM`, `L ≥ Lmin`, an adversary whose last
