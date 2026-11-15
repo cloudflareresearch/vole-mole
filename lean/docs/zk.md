@@ -830,22 +830,70 @@ and with `main`'s Lean issuance prover `anonymityNC_main_U_leanN` (bounds in
 `security/moussaka-unbound.md`, §U5 on `main`). The (PU) term is statistical, so every term is a
 number except `ψ` (or `φ`) and `εprf`.
 
+**The joint hop linear in `n`** (`ZK/HopsMainICLin.lean`, `ZK/MainSharedLin.lean`). The factor
+`2ⁿ − 1` comes from carrying each hop's bad event `bstarN` across the later hops. The
+identical-until-bad form of the one-proof theorem removes it:
+
+- *H6 as an equality* (`pr_hidden_eq`, `lab_romG_eq`, `lab_rom_hyp_sG_main_eq`,
+  `joint2_h6_main_eq`). The two sides of H6 agree unless the prover or the distinguisher reads a
+  sibling key. If the run **holds whenever it reads a sibling key**, the two sides have the same
+  probability: on a tape with a sibling read the run holds in both coupled experiments (in the
+  second, either it reads a sibling key too, or it reads the same table values as in the first).
+  No consistency of the read set is needed. A sibling read on a tape is the prediction
+  `mainPred2` on the proof the ideal-tape prover outputs there, which is the simulated proof of
+  the fields (`bad_mem_guessesG`, `proveIdeal_eq_outOf`).
+- **`zk_rom_ic_h23_main_iub`**, **`slot_zk_main_iub`**: if the distinguisher holds on the
+  simulator's experiment wherever `mainPredIC` holds (`hB`), its advantage is at most
+  `εS(q₃, q_E)`, with no (PU) term; the other hops are `zk_rom_ic_h23_main`'s.
+- *The hop* (`ctx_hopN_iub`, `hop_fiber_iub`, **`hopN_iub`**): for an event `Φ` of the view with
+  consistent reads that contains `bstarN`, replacing slot `j` costs `εS(q₃ + n, q_E + n·4607) +
+  Δ23N(d, n)`; the prediction of the replaced proof implies `bstarN` (`ctx_bad`), so `hB` holds.
+- **`main_sharedAll_leLin`**: apply the hop to `F ∨ bstarN` and to `bstarN` (`rdN_or`: their read
+  sets together, `2q₃`, `2q_E + n·4607`). Each moves by at most `n·ε` from hybrid `0` to hybrid
+  `n` (`lin_chain_le`), and `Pr[F] = Pr[F ∨ b] − Pr[b ∧ ¬F]` with `0 ≤ Pr[b ∧ ¬F] ≤ Pr[b]`:
+
+      |Pr[all real; F] − Pr[all simulated; F]|
+          ≤ 2n·(εS(2q₃ + n, 2q_E + 2n·4607) + Δ23N(d, n)) + Pr[all simulated; bstarN].
+
+U5(b) with this hop: `anonymityNC_main_U_sharedAllLin`, `anonymityNC_main_U_leanLin`
+(`Privacy/MoussakaUnboundNCMainLin.lean`), the factor `2·(2ⁿ − 1)` on the hop and on the (PU) term
+replaced by `4n` and `2`.
+
+**U5(a) with `n` adaptive queries on this hop** (`Privacy/MoussakaUnboundMainN.lean`). A game of
+`n + 2` slots (the two issuance proofs, then the `n` queries of `MoussakaUnbound.AdversaryAd`),
+`main_sharedAll_leLin` with `ns = (232, 232, 559, …)`. With all proofs simulated the event is a
+function of the commitments, the nullifier table and the rest of the tape (`simAN_iff`: the history
+is `runT`, the `H₂³` table is programmed for the public statements `stPubA`), so the PRF hop and
+`pr_run_swap` finish. `Pr_sim[bstarN] ≤ (n + 2)·noHitProb + (n + 2)²·313·2⁻¹²⁸ +
+Pr[some slot's prefix is a public candidate]` (`pr_bstarN_sim_le'`), and the last term is at most
+`puAdv UCom (predAN₀ b) + puAdv UCom (predAN₁ b)`: each slot's witness prefix is the opening of
+the Client that owns it (`qOf_simA`), and the predictors rerun the interaction from `t_c`,
+`nf_key_c`, the other Client's coins and the rest of the tape, and output the candidates of all
+`n + 2` proofs (`candAN`, `card_candAN_le`). **`anonymityU_main_sharedAllN`**:
+
+    |Pr[W₀] − Pr[W₁]| ≤ 4(n + 2)·(εS(2q₃ + n + 2, 2q_E + 2(n + 2)·4607) + Δ23N(9, n + 2))
+        + Σ_{b,c} puAdv UCom (predAN_c b) + 2·((n + 2)·noHitProb + (n + 2)²·313·2⁻¹²⁸) + 2·εprf,
+
+no prefix-collision term (`collUH`), the issuance proofs `main`'s Lean prover on the shared tables.
+Audit: `Audit/MainUnboundLin.lean`.
+
 **Still on paper, for ZK on `main`:**
-- the factor `15` on `εS` and on the (PU) terms is a cost of the mechanized transfer (each hop's
-  bad event is moved across the later hops); the paper's lazy sampling gives `4` and `1`;
+- the factor `15` on `εS` and on the (PU) terms of the four-proof theorems (Moussaka 4(a), 4(b'),
+  Ratatouille, U5 with two queries) is a cost of the mechanized transfer (each hop's bad event is
+  moved across the later hops); the paper's lazy sampling gives `4` and `1`. The linear hop
+  (`main_sharedAll_leLin`, factor `2n` and `1`) applies to games stated as a `ZK.Sim.NGame`; those
+  theorems use `main_sharedAll_le` (the slice reduction to `main_shared23_le`, a
+  `MainChain.Game`) and were not restated;
 - the adversary's earlier choices (responses, Anchor Sets, amounts) do not read the tables, as in
   §10.2's games (this is also what lets the one-`H₃` reduction compute the prefixes from the view);
   the `main` games take any token-reading index rule, `main`'s `find_issuer` Client included
   (`findIdx`);
 - in U5(b) on `main` with two queries (`anonymityNC_main_U_sharedAll`) the issuance proofs are
   an abstract `PI`; with `n` queries the route of 4(b') is mechanized (`anonymityNC_main_U_leanN`);
-- unbound Moussaka U5(a) on `main` with more than two redemption queries, and U5(a) on the
-  `ρ`-aware hop: `main_sharedAll_leN` applies (two issuance slots and `n` redemption slots), but
-  the simulated side and the (PU) predictors for `n` queries are not done, so U5(a) with shared
-  tables still carries `collUH` (U5(b) has no such term, `anonymityNC_main_U_sharedAllN`);
-- the factor `2ⁿ − 1` of `main_sharedAll_leN` (`15` for four proofs) is the cost of moving each
-  hop's bad event across the later hops; a per-hybrid bound would need the identical-until-bad
-  form of the one-proof theorem (`Pr[F ∨ bad]` unchanged across H5–H6), not only its statement;
+- the linear hop is `2n·ε + Pr_sim[bstarN]`, not the paper's `n·ε + Pr_sim[bstarN]`: the event
+  `Pr[b ∧ ¬F]` is compared between the first and the last hybrid through `Pr[b]`, which moves by
+  `n·ε` too; and the guess's reads are counted twice (`2q₃`, `2q_E`), once for `F` and once for
+  `bstarN`;
 - a bound on (PU) for the real permutation: §4.3 states (PU) as a game, reduces Moussaka's
   `PU_b` to it and bounds it in the ideal-permutation model; for Keccak-p[800,12] itself it is an
   assumption (also for Ratatouille's `comI` and `comCh`, §4.3);
