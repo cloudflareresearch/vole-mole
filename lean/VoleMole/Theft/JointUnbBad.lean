@@ -1,4 +1,5 @@
 import VoleMole.Theft.JointBad
+import VoleMole.Theft.JointMousBad
 import VoleMole.Theft.PlainUnboundManyRom
 
 /-!
@@ -9,11 +10,8 @@ NM-U^{U,M} (`Theft/MoussakaUnboundMany.lean`) with `ROM/`'s extractor `extRomUN`
 read by one **consistent game reader** (`GRd`), for an adversary whose last stage is the run of an
 oracle computation (`AdmLN`):
 
-* **`fdPts`, `fd_congrP`** (any forged statement and proof `f : Hit.FD`, any `M`): `ROM/`'s
-  extraction (`rOut`, `candOf`) reads the cipher only at the query list's cells and at the CTR
-  blocks of `f`'s `iv` of the zero key, the cells' keys and the reconstruction's nodes; the
-  Ratatouille `eRom_congrP` (`Theft/JointExt.lean`) is this at `Hit.Rata.fd A op`;
-* **`eRomU_congrP`**, `romPtsU_congr`: the same for the unbound extractor `eRomU` at `fdU op`;
+* **`eRomU_congrP`**, `romPtsU_congr`: the unbound extractor `eRomU` reads the cipher only at
+  `romPtsF (fdU op)` (`rOut_congrP`, `Theft/JointMousBad.lean`, generic in the forgery);
 * `oaN`, **`qsJ`**, `extRomUN_eq`: the extractor's query list as runs on `ansPN` (the patches'
   prefix computations `vQUm`, then the last stage);
 * **`runsGRd`** (the runs), **`chkGRd`** (the verifier on the operation, issuance at `pI` and
@@ -34,108 +32,6 @@ namespace VoleMole.Theft
 open VoleMole.Privacy VoleMole.ZK.Sim VoleMole.ZK VoleMole.Verifier VoleMole.Verifier.Bridge
 open VoleMole.ROM VoleMole.ROM.IC VoleMole.ROM.Reads
 
-/-! ## `ROM/`'s extraction at points, for any forged statement and proof -/
-
-section Fd
-
-open VoleMole.Theft.Ratatouille (rOut ctOf cLog_congr logKeys_cLog_subset decE_of_decC)
-
-variable {L M : ℕ}
-
-/-- The `iv` of a forged statement and proof (with the extra table's `H₄`, `μ₁`). -/
-noncomputable def fdIv (f : Hit.FD) (x : XTab L M) : ByteArray :=
-  ivOf (hbX x) ⟨f.1.params, f.2⟩ (f.1.mu1 (hbX x))
-
-/-- **The keys the extraction reads at the forged `iv`**: the zero key, the query list's cells'
-keys, the reconstruction's nodes. -/
-noncomputable def fdKeysP (f : Hit.FD) (qs : List DomIC) (E : Blk → Blk → Blk) (x : XTab L M) :
-    Finset Blk :=
-  insert zeroRow ((qs.filterMap decE).toFinset ∪
-    rdKeys E (fdIv f x) (Proof.opening ⟨f.1.params, f.2⟩) (Proof.delta ⟨f.1.params, f.2⟩))
-
-/-- **The points the extraction reads**: the query list's cells, and `fdKeysP` at the CTR blocks
-of the forged `iv`. -/
-noncomputable def fdPts (f : Hit.FD) (qs : List DomIC) (E : Blk → Blk → Blk) (x : XTab L M) :
-    Finset (Blk × Blk) :=
-  (qs.filterMap decC).toFinset ∪ ptsOf (fdKeysP f qs E x) (fdIv f x)
-
-lemma card_fdKeysP_le (f : Hit.FD) (qs : List DomIC) (E : Blk → Blk → Blk) (x : XTab L M) :
-    (fdKeysP f qs E x).card ≤ (qs.filterMap decE).toFinset.card + 4608 :=
-  (card_insert_le _ _).trans (by
-    have := (card_union_le _ _).trans (Nat.add_le_add_left (rdKeys_card E (fdIv f x)
-      (Proof.opening ⟨f.1.params, f.2⟩) (Proof.delta ⟨f.1.params, f.2⟩))
-      (qs.filterMap decE).toFinset.card)
-    omega)
-
-set_option maxHeartbeats 1000000 in
-/-- **The extraction reads the cipher only at `fdPts`**: the extraction's output (`rOut`) and its
-candidates (`candOf`) agree on tables that agree there. -/
-theorem fd_congrP (f : Hit.FD) (qs : List DomIC) {E E' : Blk → Blk → Blk} (x : XTab L M)
-    (h : ∀ kz ∈ fdPts f qs E x, E kz.1 kz.2 = E' kz.1 kz.2) :
-    rOut f.1 f.2 (hbX x) (ctOf E') (cLog (ctOf E') qs) =
-        rOut f.1 f.2 (hbX x) (ctOf E) (cLog (ctOf E) qs) ∧
-      candOf (ctOf E') f.1 (rOut f.1 f.2 (hbX x) (ctOf E) (cLog (ctOf E) qs)) =
-        candOf (ctOf E) f.1 (rOut f.1 f.2 (hbX x) (ctOf E) (cLog (ctOf E) qs)) := by
-  have hc : cLog (ctOf E') qs = cLog (ctOf E) qs :=
-    (cLog_congr fun c hc => by
-      show E c.1 c.2 = E' c.1 c.2
-      exact h c (mem_union_left _ (mem_dec hc rfl))).symm
-  rw [hc]
-  have hP : ∀ k ∈ fdKeysP f qs E x, PtsAgree E E' k (fdIv f x) := fun k hk c t =>
-    h (k, _) (mem_union_right _ (mem_ptsOf.2 ⟨hk, c, t, rfl⟩))
-  unfold fdKeysP fdIv at hP
-  generalize cLog (ctOf E) qs = log at hc ⊢
-  have hsub : logKeys log ⊆ (qs.filterMap decE).toFinset := hc ▸ logKeys_cLog_subset _ _
-  set iv := ivOf (hbX x) ⟨f.1.params, f.2⟩ (f.1.mu1 (hbX x))
-  have hk : keysOf log (ctOf E) iv (Proof.opening ⟨f.1.params, f.2⟩) (Proof.delta ⟨f.1.params, f.2⟩) =
-      keysOf log (ctOf E') iv (Proof.opening ⟨f.1.params, f.2⟩) (Proof.delta ⟨f.1.params, f.2⟩) :=
-    keysOf_congrP (E := ctOf E) (E' := ctOf E') (iv := iv) fun k hk' => by
-      rcases mem_union.1 hk' with hk' | hk'
-      · exact hP k (mem_insert_of_mem (mem_union_left _ (hsub hk')))
-      · exact hP k (mem_insert_of_mem (mem_union_right _ hk'))
-  have hkn : knownOf log (ctOf E) iv (Proof.opening ⟨f.1.params, f.2⟩) =
-      knownOf log (ctOf E') iv (Proof.opening ⟨f.1.params, f.2⟩) :=
-    knownOf_congrP (E := ctOf E) (E' := ctOf E') (iv := iv)
-      (fun k hk' => hP k (mem_insert_of_mem (mem_union_left _ (hsub hk')))) _
-  have hr : rOut f.1 f.2 (hbX x) (ctOf E') log = rOut f.1 f.2 (hbX x) (ctOf E) log := by
-    unfold rOut
-    rw [← hk, ← hkn]
-  refine ⟨hr, ?_⟩
-  have hu0 : ∀ (i : Fin BAVC.tau) (j : ℕ) (corr : ℕ → ByteArray),
-      @uBit (icPrg (ctOf E').cipher) f.1.params iv corr (keysOf log (ctOf E) iv
-        (Proof.opening ⟨f.1.params, f.2⟩) (Proof.delta ⟨f.1.params, f.2⟩)) i j =
-      @uBit (icPrg (ctOf E).cipher) f.1.params iv corr (keysOf log (ctOf E) iv
-        (Proof.opening ⟨f.1.params, f.2⟩) (Proof.delta ⟨f.1.params, f.2⟩)) i j := by
-    intro i j corr
-    refine (uBit_congrP (E := (ctOf E).cipher) (E' := (ctOf E').cipher) j fun j' _ _ => ?_).symm
-    have hrow := keysOf_row log (ctOf E) iv (Proof.opening ⟨f.1.params, f.2⟩)
-      (Proof.delta ⟨f.1.params, f.2⟩) i j'
-    have hmem : blk 16 (keysOf log (ctOf E) iv (Proof.opening ⟨f.1.params, f.2⟩)
-        (Proof.delta ⟨f.1.params, f.2⟩) i j') ∈ insert zeroRow ((qs.filterMap decE).toFinset ∪
-          rdKeys E iv (Proof.opening ⟨f.1.params, f.2⟩) (Proof.delta ⟨f.1.params, f.2⟩)) := by
-      rcases mem_insert.1 hrow with hz | hl
-      · rw [hz]; exact mem_insert_self _ _
-      · exact mem_insert_of_mem (mem_union_left _ (hsub hl))
-    exact hP _ hmem
-  have ek : (outChain (rOut f.1 f.2 (hbX x) (ctOf E) log)).keys = keysOf log (ctOf E) iv
-      (Proof.opening ⟨f.1.params, f.2⟩) (Proof.delta ⟨f.1.params, f.2⟩) := rfl
-  have ei : (outChain (rOut f.1 f.2 (hbX x) (ctOf E) log)).iv = iv := rfl
-  funext i
-  unfold candOf Chain.u
-  simp only [ek, ei, hu0]
-
-/-- **Tables that agree at `fdPts` have the same points.** -/
-theorem fdPts_congr (f : Hit.FD) (qs : List DomIC) {E E' : Blk → Blk → Blk} (x : XTab L M)
-    (h : ∀ kz ∈ fdPts f qs E x, E kz.1 kz.2 = E' kz.1 kz.2) :
-    fdPts f qs E' x = fdPts f qs E x := by
-  have hA : RecAgreeP E E' (fdIv f x) (Proof.opening ⟨f.1.params, f.2⟩)
-      (Proof.delta ⟨f.1.params, f.2⟩) := fun k hk c t =>
-    h (k, _) (mem_union_right _ (mem_ptsOf.2 ⟨mem_insert_of_mem (mem_union_right _ hk), c, t, rfl⟩))
-  unfold fdPts fdKeysP
-  rw [rdKeys_ic_congrP hA]
-
-end Fd
-
 namespace MoussakaUnbound
 
 open VoleMole.Privacy.MoussakaUnbound VoleMole.Spec VoleMole.Spec.MoussakaUnbound
@@ -153,17 +49,17 @@ section ERomU
 
 variable {L : ℕ}
 
-/-- **The points `eRomU` reads**: `fdPts` of the operation's statement and proof. -/
+/-- **The points `eRomU` reads**: `romPtsF` of the operation's statement and proof. -/
 noncomputable def romPtsU (op : UOp) (qs : List DomIC) (E : Blk → Blk → Blk)
     (x : XTab L Arith.Moussaka.M) : Finset (Blk × Blk) :=
-  fdPts (fdU op) qs E x
+  romPtsF (fdU op) qs E x
 
 /-- **`eRomU` reads neither the slices nor `H₅`, and the cipher only at `romPtsU`.** -/
 theorem eRomU_congrP (p₁ : Option (IssueInstance × Bytes)) (p₂ : Option (RedeemInstance × Bytes))
     (op : UOp) (qs : List DomIC) (g₁ g₂ g₁' g₂' : Tab3) (G5 G5' : Tab5F) {E E' : Blk → Blk → Blk}
     (x : XTab L Arith.Moussaka.M) (h : ∀ kz ∈ romPtsU op qs E x, E kz.1 kz.2 = E' kz.1 kz.2) :
     eRomU p₁ p₂ op qs g₁' g₂' ((G5', E'), x) = eRomU p₁ p₂ op qs g₁ g₂ ((G5, E), x) := by
-  obtain ⟨h1, h2⟩ := fd_congrP (fdU op) qs x h
+  obtain ⟨h1, h2⟩ := rOut_congrP (fdU op) qs x h
   show pickU _ _ _ = pickU _ _ _
   dsimp only
   rw [h1, h2]
@@ -171,7 +67,7 @@ theorem eRomU_congrP (p₁ : Option (IssueInstance × Bytes)) (p₂ : Option (Re
 theorem romPtsU_congr (op : UOp) (qs : List DomIC) {E E' : Blk → Blk → Blk}
     (x : XTab L Arith.Moussaka.M) (h : ∀ kz ∈ romPtsU op qs E x, E kz.1 kz.2 = E' kz.1 kz.2) :
     romPtsU op qs E' x = romPtsU op qs E x :=
-  fdPts_congr (fdU op) qs x h
+  romPtsF_congr (fdU op) qs x h
 
 end ERomU
 
@@ -480,10 +376,10 @@ extractor's at the forged `iv`. -/
 lemma badGRd_QE_subset (ω : SecN U) (l : Log) (gs : Fin (U + M) → Tab3) (t : TabU L) :
     (badGRd A hA).QE ω l gs t ⊆ ((qsJ A hA l gs t).filterMap decC).toFinset ∪
       verQE (runsVal A hA (ω, l, gs, t)).1 t ∪
-      ptsOf (fdKeysP (fdU (runsVal A hA (ω, l, gs, t)).1) (qsJ A hA l gs t) t.2.1.2 t.2.2)
-        (fdIv (fdU (runsVal A hA (ω, l, gs, t)).1) t.2.2) := by
+      ptsOf (romKeysF (fdU (runsVal A hA (ω, l, gs, t)).1) (qsJ A hA l gs t) t.2.1.2 t.2.2)
+        (romIvF (fdU (runsVal A hA (ω, l, gs, t)).1) t.2.2) := by
   intro kz hkz
-  simp only [badGRd, GRd.seq, runsGRd, chkGRd, romPtsU, fdPts, mem_union] at hkz ⊢
+  simp only [badGRd, GRd.seq, runsGRd, chkGRd, romPtsU, romPtsF, mem_union] at hkz ⊢
   tauto
 
 /-- **The composed reader's budgets**: each slice at `q h3` keys, `H₅` at
@@ -516,13 +412,13 @@ theorem badGRd_bnd :
     have a1 := (card_le_card (image_decC_subset (qsJ A hA l gs t))).trans
       (card_qsJ_decE_le A hA l gs t)
     have a2 := (card_verQE_keys_le (runsVal A hA (ω, l, gs, t)).1 t).2
-    have a3 := (card_fst_ptsOf_le (K := fdKeysP (fdU (runsVal A hA (ω, l, gs, t)).1)
-      (qsJ A hA l gs t) t.2.1.2 t.2.2) (iv := fdIv (fdU (runsVal A hA (ω, l, gs, t)).1) t.2.2)).trans
-      ((card_fdKeysP_le _ _ _ _).trans (Nat.add_le_add_right (card_qsJ_decE_le A hA l gs t) _))
+    have a3 := (card_fst_ptsOf_le (K := romKeysF (fdU (runsVal A hA (ω, l, gs, t)).1)
+      (qsJ A hA l gs t) t.2.1.2 t.2.2) (iv := romIvF (fdU (runsVal A hA (ω, l, gs, t)).1) t.2.2)).trans
+      ((card_romKeysF_le _ _ _ _).trans (Nat.add_le_add_right (card_qsJ_decE_le A hA l gs t) _))
     have u1 := card_union_le (((qsJ A hA l gs t).filterMap decC).toFinset.image Prod.fst ∪
       (verQE (runsVal A hA (ω, l, gs, t)).1 t).image Prod.fst)
-      ((ptsOf (fdKeysP (fdU (runsVal A hA (ω, l, gs, t)).1) (qsJ A hA l gs t) t.2.1.2 t.2.2)
-        (fdIv (fdU (runsVal A hA (ω, l, gs, t)).1) t.2.2)).image Prod.fst)
+      ((ptsOf (romKeysF (fdU (runsVal A hA (ω, l, gs, t)).1) (qsJ A hA l gs t) t.2.1.2 t.2.2)
+        (romIvF (fdU (runsVal A hA (ω, l, gs, t)).1) t.2.2)).image Prod.fst)
     have u2 := card_union_le (((qsJ A hA l gs t).filterMap decC).toFinset.image Prod.fst)
       ((verQE (runsVal A hA (ω, l, gs, t)).1 t).image Prod.fst)
     omega
@@ -557,13 +453,13 @@ theorem badGRd_cls (ω : SecN U) (l : Log) (gs : Fin (U + M) → Tab3) (t : TabU
   have a1 := (card_ptCls_le (((qsJ A hA l gs t).filterMap decC).toFinset)).trans
     (card_qsJ_decC_le A hA l gs t)
   have a2 := (card_verQE_keys_le (runsVal A hA (ω, l, gs, t)).1 t).1
-  have a3 := (card_ptCls_ptsOf_le (fdKeysP (fdU (runsVal A hA (ω, l, gs, t)).1)
-    (qsJ A hA l gs t) t.2.1.2 t.2.2) (fdIv (fdU (runsVal A hA (ω, l, gs, t)).1) t.2.2)).trans
-    ((card_fdKeysP_le _ _ _ _).trans (Nat.add_le_add_right (card_qsJ_decE_le A hA l gs t) _))
+  have a3 := (card_ptCls_ptsOf_le (romKeysF (fdU (runsVal A hA (ω, l, gs, t)).1)
+    (qsJ A hA l gs t) t.2.1.2 t.2.2) (romIvF (fdU (runsVal A hA (ω, l, gs, t)).1) t.2.2)).trans
+    ((card_romKeysF_le _ _ _ _).trans (Nat.add_le_add_right (card_qsJ_decE_le A hA l gs t) _))
   have u1 := card_union_le (ptCls ((qsJ A hA l gs t).filterMap decC).toFinset ∪
     ptCls (verQE (runsVal A hA (ω, l, gs, t)).1 t))
-    (ptCls (ptsOf (fdKeysP (fdU (runsVal A hA (ω, l, gs, t)).1) (qsJ A hA l gs t) t.2.1.2 t.2.2)
-      (fdIv (fdU (runsVal A hA (ω, l, gs, t)).1) t.2.2)))
+    (ptCls (ptsOf (romKeysF (fdU (runsVal A hA (ω, l, gs, t)).1) (qsJ A hA l gs t) t.2.1.2 t.2.2)
+      (romIvF (fdU (runsVal A hA (ω, l, gs, t)).1) t.2.2)))
   have u2 := card_union_le (ptCls ((qsJ A hA l gs t).filterMap decC).toFinset)
     (ptCls (verQE (runsVal A hA (ω, l, gs, t)).1 t))
   omega

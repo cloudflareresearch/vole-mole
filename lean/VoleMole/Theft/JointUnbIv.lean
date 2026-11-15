@@ -1,5 +1,6 @@
 import VoleMole.Theft.JointUnbInst
 import VoleMole.Theft.JointIv
+import VoleMole.Theft.JointMousIv
 
 /-!
 # The `iv` structure of the simulated unbound game, and `J`
@@ -9,12 +10,11 @@ slots in the simulated game. As `Theft/JointIv.lean` does for Ratatouille's thef
 bounded by `exU_sum_nZKA_le` (`Theft/JointSumA.lean`) for views whose `iv`s are blocks of the `H₄`
 table at inputs that do not read it:
 
-* (any `M`) `setH4X`, `mu1_setH4X`, `hbX_h4X`: `μ₁` does not read `H₄`, and `H₄` is the extra
-  table's on inputs of at most `L` bytes; **`ivRX`**: a refused slot `j` gets the `iv`
-  `H₄(rsv j)` at a reserved 4-byte input (`rsvK`), as Ratatouille's `ivR`;
-* (any parameters) `coinA`, `coinB`, `exP_coinA_eq`, `exP_coinB_eq`: a slot's two `iv_pre` coins
-  are uniform; `failSG`, `exP_failSG`: a slot's two simulations fail with probability
-  `≤ 2·pFail`;
+* the generic pieces of `Theft/JointMousIv.lean`: `setH4X`, `mu1_setH4X`, `hbX_h4X` (`μ₁` does
+  not read `H₄`; `H₄` is the extra table's on short inputs), `coinA`, `coinB` (a slot's two
+  uniform `iv_pre` coins), `failSG` (its failed simulations, `≤ 2·pFail`), and the refused slots'
+  reserved `iv`s `Moussaka.ivR` (`H₄(rsv j)`, as Ratatouille's `ivR`; the extra table is the
+  same);
 * `ivA_simJ`: a simulated proof's `iv` is `H₄(iv_pre ‖ μ₁ ‖ 4)` (none if the simulation fails);
 * **`ivs_view`**: the simulated game's `iv`s are `T(d j)` or absent, `T` the `H₄` table and `d`
   (`dIv`) a function of the rest of the tape (`splitT`);
@@ -34,121 +34,6 @@ open VoleMole.ROM VoleMole.ROM.IC VoleMole.ROM.Reads VoleMole.Theft.Hit VoleMole
 
 open VoleMole.Theft.Ratatouille (rsvK rsvK_size rsvK_inj mu1_size' failG pFail failG_nonneg
   exP_prod_snd' exP_coord exP_coord2 exP_eq_bytes simPre_take simPre_getElem?)
-
-/-! ## `H₄` of an extra table, for any `M` -/
-
-section H4X
-
-variable {L M : ℕ}
-
-/-- The extra table with another `H₄` table. -/
-def setH4X (T : KL L → ZK.Sim.Bytes 16) (x : XTab L M) : XTab L M :=
-  (x.1, x.2.1, x.2.2.1, T, x.2.2.2.2)
-
-lemma hbX_agreeOff_h4X (T T' : KL L → ZK.Sim.Bytes 16) (x : XTab L M) :
-    (hbX (setH4X T x)).AgreeOff .h4 (hbX (setH4X T' x)) := by
-  unfold hbX setH4X
-  simp only
-  exact agreeOff_withTable (agreeOff_withTable (agreeOff_withTable
-    (agreeOff_withTable_self _ _ _ _ _) _ _) _ _) _ _
-
-/-- **`μ₁` does not read `H₄`.** -/
-lemma mu1_setH4X (st : Statement) (T T' : KL L → ZK.Sim.Bytes 16) (x : XTab L M) :
-    st.mu1 (hbX (setH4X T x)) = st.mu1 (hbX (setH4X T' x)) := by
-  unfold Statement.mu1 mu
-  rw [hbX_agreeOff_h4X T T' x .mu (by decide), hbX_agreeOff_h4X T T' x .muDelayed (by decide)]
-
-/-- **`H₄` is the table**, on inputs of at most `L` bytes. -/
-lemma hbX_h4X (x : XTab L M) {b : ByteArray} {k : KL L} (h : keyL L b = some k) :
-    (hbX x).hash .h4 b = ba (x.2.2.2.1 k) := by
-  have e := encL_of_keyL h
-  subst e
-  exact (Hashes.withTable_ne _ (.comb M) .h4 (by simp) _ _ _).trans
-    ((Hashes.withTable_ne _ .h22 .h4 (by simp) _ _ _).trans
-    ((Hashes.withTable_ne _ .h21 .h4 (by simp) _ _ _).trans
-    ((Hashes.withTable_enc _ .h4 encL _ k).trans (by rw [keyOf_eq encL_injective]; rfl))))
-
-/-- **The `iv` of a refused slot**: `H₄` at its reserved input. -/
-def ivRX (x : XTab L M) (j : ℕ) : Option ByteArray := some (ba (x.2.2.2.1 (rsvK j)))
-
-end H4X
-
-/-! ## A slot's coins, for any parameters -/
-
-section CoinsG
-
-variable {p₁ p₂ : Params}
-
-/-- The two `iv_pre` coins of a slot. -/
-def coinA (b : Slot (ZK.Sim.Bytes 16) (SimCoins p₁ × SimCoins p₂) Tab3) : ZK.Sim.Bytes 16 :=
-  b.1.2.1.1.1
-def coinB (b : Slot (ZK.Sim.Bytes 16) (SimCoins p₁ × SimCoins p₂) Tab3) : ZK.Sim.Bytes 16 :=
-  b.1.2.2.1.1
-
-/-- **A slot's first coin equals a given value with probability `2⁻¹²⁸`.** -/
-lemma exP_coinA_eq (v : ZK.Sim.Bytes 16) :
-    exP (Slot (ZK.Sim.Bytes 16) (SimCoins p₁ × SimCoins p₂) Tab3)
-      (fun b => if coinA b = v then 1 else 0) = 1 / 2 ^ 128 := by
-  classical
-  unfold coinA
-  rw [exP_prod_fst (fun a : ZK.Sim.Bytes 16 × (SimCoins p₁ × SimCoins p₂) =>
-      if a.2.1.1.1 = v then (1 : ℝ) else 0),
-    exP_prod_snd' (fun c : SimCoins p₁ × SimCoins p₂ => if c.1.1.1 = v then (1 : ℝ) else 0),
-    exP_prod_fst (fun c : SimCoins p₁ => if c.1.1 = v then (1 : ℝ) else 0),
-    exP_prod_fst (fun c : Shared => if c.1 = v then (1 : ℝ) else 0),
-    exP_prod_fst (fun u : ZK.Sim.Bytes 16 => if u = v then (1 : ℝ) else 0)]
-  exact exP_eq_bytes v
-
-/-- **A slot's second coin equals a given value with probability `2⁻¹²⁸`.** -/
-lemma exP_coinB_eq (v : ZK.Sim.Bytes 16) :
-    exP (Slot (ZK.Sim.Bytes 16) (SimCoins p₁ × SimCoins p₂) Tab3)
-      (fun b => if coinB b = v then 1 else 0) = 1 / 2 ^ 128 := by
-  classical
-  unfold coinB
-  rw [exP_prod_fst (fun a : ZK.Sim.Bytes 16 × (SimCoins p₁ × SimCoins p₂) =>
-      if a.2.2.1.1 = v then (1 : ℝ) else 0),
-    exP_prod_snd' (fun c : SimCoins p₁ × SimCoins p₂ => if c.2.1.1 = v then (1 : ℝ) else 0),
-    exP_prod_snd' (fun c : SimCoins p₂ => if c.1.1 = v then (1 : ℝ) else 0),
-    exP_prod_fst (fun c : Shared => if c.1 = v then (1 : ℝ) else 0),
-    exP_prod_fst (fun u : ZK.Sim.Bytes 16 => if u = v then (1 : ℝ) else 0)]
-  exact exP_eq_bytes v
-
-/-- A slot's two simulations' grinding failures. -/
-noncomputable def failSG (b : Slot (ZK.Sim.Bytes 16) (SimCoins p₁ × SimCoins p₂) Tab3) : ℝ :=
-  failG b.1.2.1.1.2.1 + failG b.1.2.2.1.2.1
-
-lemma failSG_nonneg (b : Slot (ZK.Sim.Bytes 16) (SimCoins p₁ × SimCoins p₂) Tab3) :
-    0 ≤ failSG b :=
-  add_nonneg (failG_nonneg _) (failG_nonneg _)
-
-/-- **A slot fails with probability at most `2·pFail`.** -/
-lemma exP_failSG :
-    exP (Slot (ZK.Sim.Bytes 16) (SimCoins p₁ × SimCoins p₂) Tab3) failSG = 2 * pFail := by
-  unfold failSG
-  rw [exP_add]
-  have h1 : exP (Slot (ZK.Sim.Bytes 16) (SimCoins p₁ × SimCoins p₂) Tab3)
-      (fun b => failG b.1.2.1.1.2.1) = pFail := by
-    rw [exP_prod_fst (fun a : ZK.Sim.Bytes 16 × (SimCoins p₁ × SimCoins p₂) => failG a.2.1.1.2.1),
-      exP_prod_snd' (fun c : SimCoins p₁ × SimCoins p₂ => failG c.1.1.2.1),
-      exP_prod_fst (fun c : SimCoins p₁ => failG c.1.2.1),
-      exP_prod_fst (fun c : Shared => failG c.2.1),
-      exP_prod_snd' (fun c : Grind × (Fin BAVC.tau → ZK.Sim.Bytes 32) × (Fin 105 → ZK.Sim.Bytes 16) =>
-        failG c.1),
-      exP_prod_fst failG]
-    rfl
-  have h2 : exP (Slot (ZK.Sim.Bytes 16) (SimCoins p₁ × SimCoins p₂) Tab3)
-      (fun b => failG b.1.2.2.1.2.1) = pFail := by
-    rw [exP_prod_fst (fun a : ZK.Sim.Bytes 16 × (SimCoins p₁ × SimCoins p₂) => failG a.2.2.1.2.1),
-      exP_prod_snd' (fun c : SimCoins p₁ × SimCoins p₂ => failG c.2.1.2.1),
-      exP_prod_snd' (fun c : SimCoins p₂ => failG c.1.2.1),
-      exP_prod_fst (fun c : Shared => failG c.2.1),
-      exP_prod_snd' (fun c : Grind × (Fin BAVC.tau → ZK.Sim.Bytes 32) × (Fin 105 → ZK.Sim.Bytes 16) =>
-        failG c.1),
-      exP_prod_fst failG]
-    rfl
-  rw [h1, h2]; ring
-
-end CoinsG
 
 namespace MoussakaUnbound
 
@@ -294,17 +179,17 @@ lemma viewJ_x (z : TapeJ U M L) : (viewJ A z).2.2.2.2.2 = z.2.2.2 := by
 
 /-- **The `iv` of slot `j` in the simulated game.** -/
 lemma ivAt_view (z : TapeJ U M L) (j : Fin (U + M)) :
-    ivAt (ivJ ivRX) (xJ A) (viewJ A z).2.2.2.2.2 (viewJ A z).1 (viewJ A z).2.1 j =
+    ivAt (ivJ Moussaka.ivR) (xJ A) (viewJ A z).2.2.2.2.2 (viewJ A z).1 (viewJ A z).2.1 j =
       match xN A (pubOf A z.1.1)
           (simPre (gS simJ (xJ A)) (gPg (progJ (L := L)) (xJ A)) z.1.1 (tapeC z.1.2) j).1 with
-      | none => ivRX z.2.2.2 j
+      | none => Moussaka.ivR z.2.2.2 j
       | some y => if simFail y (tapeC z.1.2 j) then none
           else some ((hbX z.2.2.2).hash .h4 (inp4 z.2.2.2 y (tapeC z.1.2 j))) := by
   rw [viewJ_x, viewJ_log]
   unfold ivAt
   rw [simPre_getElem? _ _ _ _ _ _ j.isLt]
   simp only [simPre_take _ _ _ _ _ _ j.isLt.le]
-  show ivJ ivRX z.2.2.2 (xJ A z.1.1 _) (simJ (xJ A z.1.1 _) _) = _
+  show ivJ Moussaka.ivR z.2.2.2 (xJ A z.1.1 _) (simJ (xJ A z.1.1 _) _) = _
   have e : xJ A z.1.1
       (simPre (gS simJ (xJ A)) (gPg (progJ (L := L)) (xJ A)) z.1.1 (tapeC z.1.2) j).1 =
       ((j : ℕ), xN A (pubOf A z.1.1)
@@ -320,7 +205,7 @@ lemma ivAt_view (z : TapeJ U M L) (j : Fin (U + M)) :
 /-- **The simulated game's `iv`s are the `H₄` table's blocks at `dIv`, or absent**
 (`L ≥ 49`: the simulations' inputs are short). -/
 theorem ivs_view (hL : 49 ≤ L) (z : TapeJ U M L) :
-    IvsOf (ivAt (ivJ ivRX) (xJ A) (viewJ A z).2.2.2.2.2 (viewJ A z).1 (viewJ A z).2.1)
+    IvsOf (ivAt (ivJ Moussaka.ivR) (xJ A) (viewJ A z).2.2.2.2.2 (viewJ A z).1 (viewJ A z).2.1)
       (fun j => (splitT z).2 (dIv A (splitT z).1 j)) := by
   intro j
   rw [ivAt_view]
@@ -487,10 +372,10 @@ variable {U M L : ℕ} (A : ThiefN U M Tab3 (TabU L))
 
 /-- **The absent `iv`s are failed simulations.** -/
 lemma nNone_view_le (z : TapeJ U M L) :
-    (nNone (ivAt (ivJ ivRX) (xJ A) (viewJ A z).2.2.2.2.2 (viewJ A z).1 (viewJ A z).2.1)
+    (nNone (ivAt (ivJ Moussaka.ivR) (xJ A) (viewJ A z).2.2.2.2.2 (viewJ A z).1 (viewJ A z).2.1)
         (U + M) : ℝ) ≤ ∑ j : Fin (U + M), failSG (z.1.2 j) := by
   rw [← ind_none_sum, Nat.cast_sum, ← Fin.sum_univ_eq_sum_range
-    (fun j => (((if ivAt (ivJ ivRX) (xJ A) (viewJ A z).2.2.2.2.2 (viewJ A z).1 (viewJ A z).2.1 j =
+    (fun j => (((if ivAt (ivJ Moussaka.ivR) (xJ A) (viewJ A z).2.2.2.2.2 (viewJ A z).1 (viewJ A z).2.1 j =
       none then 1 else 0 : ℕ)) : ℝ))]
   refine Finset.sum_le_sum fun j _ => ?_
   have hS : 0 ≤ failSG (z.1.2 j) := failSG_nonneg _
@@ -499,7 +384,7 @@ lemma nNone_view_le (z : TapeJ U M L) :
   generalize xN A (pubOf A z.1.1)
     (simPre (gS simJ (xJ A)) (gPg (progJ (L := L)) (xJ A)) z.1.1 (tapeC z.1.2) j).1 = o
   rcases o with _ | y
-  · simp [ivRX, hS]
+  · simp [Moussaka.ivR, hS]
   · simp only
     by_cases hf : simFail y (tapeC z.1.2 j)
     · simp only [hf, ↓reduceIte, Nat.cast_one]
@@ -512,7 +397,7 @@ lemma nNone_view_le (z : TapeJ U M L) :
 
 /-- **`E[#absent ivs] ≤ 2N·pFail`.** -/
 theorem exU_nNone_le :
-    exU (TapeJ U M L) (fun z => (nNone (ivAt (ivJ ivRX) (xJ A) (viewJ A z).2.2.2.2.2 (viewJ A z).1
+    exU (TapeJ U M L) (fun z => (nNone (ivAt (ivJ Moussaka.ivR) (xJ A) (viewJ A z).2.2.2.2.2 (viewJ A z).1
       (viewJ A z).2.1) (U + M) : ℝ)) ≤ 2 * (U + M : ℕ) * pFail := by
   refine (exP_mono (nNone_view_le A)).trans (le_of_eq ?_)
   have e : exP (TapeJ U M L) (fun z => ∑ j : Fin (U + M), failSG (z.1.2 j)) =
@@ -527,7 +412,7 @@ theorem exU_nNone_le :
 /-- **`E[#active slots with absent ivs] ≤ 2N·pFail`.** -/
 theorem exU_nNoneA_le :
     exU (TapeJ U M L) (fun z => (nNoneA (actAt actJ (xJ A) (viewJ A z))
-      (ivAt (ivJ ivRX) (xJ A) (viewJ A z).2.2.2.2.2 (viewJ A z).1 (viewJ A z).2.1) (U + M) : ℝ)) ≤
+      (ivAt (ivJ Moussaka.ivR) (xJ A) (viewJ A z).2.2.2.2.2 (viewJ A z).1 (viewJ A z).2.1) (U + M) : ℝ)) ≤
       2 * (U + M : ℕ) * pFail := by
   refine le_trans (exP_mono fun z => ?_) (exU_nNone_le A)
   unfold nNoneA nNone
@@ -549,7 +434,7 @@ game reader's budget once (`T₃ = q h3`, `c_E = a_E`, `a₅`), times the overla
 `N²·2⁻⁶⁴ + E[#dupPairs] ≤ N²·2⁻⁶⁴ + 4N²·2⁻¹²⁸`, plus the failed simulations
 (`E[#absent ivs] ≤ 2N·pFail`). -/
 theorem nmU_J_le (hL : 49 ≤ L) (hN : U + M ≤ 2 ^ 32) (w : Fin 3 → ℝ) (hw : ∀ k, 0 ≤ w k) :
-    ∑ i ∈ range (U + M), ∑ k, w k * exU _ (fun z => (nZKA actJ (ivJ ivRX) (xJ A) (badGRd A hA)
+    ∑ i ∈ range (U + M), ∑ k, w k * exU _ (fun z => (nZKA actJ (ivJ Moussaka.ivR) (xJ A) (badGRd A hA)
         (max 312 624) (max 4607 4607) i k (viewJ A z) : ℝ)) ≤
       w 0 * q .h3 + w 1 * aEU (U + M) qE + w 2 * a5U (U + M) q +
         (w 1 * (aEU (U + M) qE + 2 * (max 4607 4607 : ℕ)) +
@@ -561,7 +446,7 @@ theorem nmU_J_le (hL : 49 ≤ L) (hN : U + M ≤ 2 ^ 32) (w : Fin 3 → ℝ) (hw
   have hb := badGRd_bnd A hA
   rw [show (U + M) * 312 + q .h5 + 312 = a5U (U + M) q by unfold a5U; ring,
     show 2 * ((U + M) * verifyCellBound pR + qE) + 9215 = aEU (U + M) qE from rfl] at hb
-  have h := exU_sum_nZKA_le actJ (ivJ ivRX) (xJ A) (badGRd A hA) hb
+  have h := exU_sum_nZKA_le actJ (ivJ Moussaka.ivR) (xJ A) (badGRd A hA) hb
     (badGRd_T3 A hA) (badGRd_cls A hA) (max 312 624) (max 4607 4607) w hw (viewJ A) splitT
     (dIv A) (ivs_view A hL)
   refine h.trans ?_

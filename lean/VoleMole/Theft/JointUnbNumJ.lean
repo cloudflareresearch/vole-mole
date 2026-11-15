@@ -13,7 +13,7 @@ The many-token unbound bound of `Theft/NumLin.lean` (`nmUN_lean_numL`) is linear
   `ROM/`'s simultaneous extraction for the reduction's budget (as in `nmUN_lean_rom`);
 * **`nmUN_lean_numJ`**: numerically, with every per-kind hash budget and the cipher budget at
   most `2⁶⁴` and `U, M ≤ 2³⁰`, the hypotheses of `nmUN_lean_numL`, and the refused slots' `iv`s
-  `ivRX`,
+  `Moussaka.ivR`,
 
       Pr[BadN] ≤ 2⁻⁵⁴ + Σ_h (ε_prf + Adv^bind(B₁ h) + Adv^spr-k(B₂ h)).
 -/
@@ -375,7 +375,7 @@ theorem nmUN_lean_numJ (A : ThiefN U M Tab3 (TabU L))
   have hNB : (N : ℝ) * B < 1 :=
     (numJ_finalU hn (a := 0) (J := 0) (r := 0) (by norm_num) hB0 hB (by norm_num)
       (by norm_num)).1
-  have hj := nmU_joint_le A hA' ivRX h3 hE hβ hJ hNB
+  have hj := nmU_joint_le A hA' Moussaka.ivR h3 hE hβ hJ hNB
   have hfin := (numJ_finalU hn ha hB0 hB (hJm.trans hJn) hr').2
   refine final_combineU hj ?_ hfin
   linarith

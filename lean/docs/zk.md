@@ -3920,8 +3920,45 @@ audit `Audit/ZKPoint3.lean`). Proved:
   `ROM/`'s extraction error and the inverters (`theft_sim_le`); numerically `B ≤ 2⁻⁵⁵`,
   `J ≤ 300·2⁻⁶³`, the per-slot terms `≤ 2⁻⁷⁰` in all, `ε_SE ≤ 14·2⁻⁶³` (`numJ_final`).
 
-Not done: the same for Moussaka and unbound Moussaka (`noRedirectN_lean_numJ`, `nmUN_lean_numJ`:
-their event readers, instances and `iv` structure), and the permutation-row variants.
+*The joint step for Moussaka's redirect game* (`Theft/JointMousBad.lean`,
+`Theft/JointMousInst.lean`, `Theft/JointMousIv.lean`, `Theft/JointMousNumJ.lean`; audit
+`Audit/ZKPointMous.lean`). The same five steps, for Moussaka (function rows, `L ≥ 8193`, `HitWfN`
+adversaries with the Anchor keys of `kt`):
+- *The redirect event as one reader's event* (`Theft/JointMousBad.lean`). The extraction at points
+  is now stated for any forgery `f : Hit.FD` (`romIvF`, `romKeysF`, `romPtsF`, **`rOut_congrP`**,
+  `romPtsF_congr`: `eRom_congrP` with `fd op` a parameter), so Moussaka's `eRomM` reads the cipher
+  only at `romPtsF (fd op)` (**`eRomM_congrP`**). `qsJ` (the patches' prefixes `vQMm`, then the
+  last stage `oaN`; `extRomMN_eq`), `runsGRd`, `chkGRd` (the verifiers at `pI` and `pR`,
+  `ver_cons`), `badGRd`; **`badGRd_reads`**: it reads `BadN` with `extRomMN`. Budgets
+  (`badGRd_bnd`, `badGRd_T3`, `badGRd_cls`): `T₃ = q h3`, `a₅ = N·312 + q h5 + 312`,
+  `a_E = c_E = 2·(N·cells(pR) + q_E) + 9215` (`aEM`), `cells(pR) = 69116`.
+- *The redirect game as an instance* (`Theft/JointMousInst.lean`). `xJ = (j, xN …)`; the output
+  maps `φI`, `φR` are the spec's (`toL` of the proof, the empty proof on an error, `pfOf`), and an
+  entry's `iv` is `H₄(iv_pre ‖ μ₁ ‖ 4)` of a nonempty proof, none for the empty proof (`ivA`,
+  `ivA_φI`, `ivA_φR`); the witness of either relation is the slot's one byte string (`wJ`).
+  **`PN_eq`, `SmP_eq`, `pgP_eq`**, **`zkExpJ`** (`lean_zkExpD` with `zkHypI`, `zkHypR`;
+  `ZKExp.osum`; `pR` on the tables of `pI` by `TRd.toI`, `Conf.toI`, `ZKExp.toI`),
+  `progRdJ_conf`, `proveRdJ_conf`; **`redirect_joint_le`**: `real_sim_leN_leanA` for the redirect
+  game, with `J` left.
+- *The simulated game's `iv`s* (`Theft/JointMousIv.lean`). The `H₄` facts and the slot-coin
+  expectations are stated once for any extra table and any two parameter sets (`setH4X`,
+  `mu1_setH4X`, `hbX_h4X`, `coinA`, `coinB`, `exP_coinA_eq`, `exP_coinB_eq`, `failSG`,
+  `exP_failSG`); the reserved inputs are Ratatouille's (`rsvK`, `ivR`). `ivA_simJ`
+  (a successful simulation's proof is never empty, `toL_ok_ne`), **`ivs_view`**,
+  **`exP_dupPairs_le`** (`≤ 4N²·2⁻¹²⁸`), **`exU_nNone_le`** (`≤ 2N·pFail`), **`redirect_J_le`**.
+  A redemption slot is refused when the token did not finalize or no key of the set verifies it;
+  the refused-slot correction of the theft game applies unchanged (`ivR`).
+- **`noRedirectN_lean_numJ`** (`Theft/JointMousNumJ.lean`): with every per-kind hash budget and
+  the cipher budget at most `2⁶⁴` and `U, M ≤ 2³⁰`,
+
+      Pr[BadN] ≤ 2⁻⁵⁴ + Σ_h Adv^ow(inverter h),
+
+  the hypotheses of `noRedirectN_lean_numL` (`(U + M)·2⁻⁵⁵ + 2⁻⁵⁹`; `numJ_numL_same`). The
+  simulated game's event is `ROM/`'s extraction error and the inverters (`redirect_sim_le`); the
+  numbers are those of the theft game with `cells(pR) = 69116` in place of `cells(pS) = 142844`
+  (`B ≤ 2⁻⁵⁵`, `J ≤ 300·2⁻⁶³`, the per-slot terms `≤ 2⁻⁷⁰`, `ε_SE ≤ 14·2⁻⁶³`, `numJ_final`).
+
+Not done: the same for unbound Moussaka (`nmUN_lean_numJ`), and the permutation-row variants.
 
 ### 10.9 Hiding of `Com` (`Privacy/ComHide.lean`)
 
