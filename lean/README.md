@@ -1695,7 +1695,7 @@ What is **not** established, roughly in order of importance:
    The composition step of a joint argument is proved (`Theft/JointZK.lean`: `joint_le`,
    `real_sim_leN_jointZK`; audit `Audit/TheftJointZK.lean`); its all-events hypothesis is too strong,
    and the restated step below gives `≤ 2⁻⁵⁴` for all `U, M ≤ 2³⁰` for Ratatouille
-   (`noTheftN_lean_numJ`; `security/ratatouille.md` §5). Toward that hypothesis, one-proof hops charged by the
+   and Moussaka (`noTheftN_lean_numJ`, `noRedirectN_lean_numJ`; `security/ratatouille.md` §5). Toward that hypothesis, one-proof hops charged by the
    expected number of reads at the proof's points are proved (`ZK/IdealCipherPt.lean`,
    `ZK/HopsH4Pt.lean`, `ZK/HopsROMExp.lean`, `ZK/HopsH6Exp.lean`, `ZK/IvOverlap.lean`; audit
    `Audit/ZKPoint.lean`): H4 at points (`hide_rom_query_pt`, `≤ 221·(4607 + E_real[#keys read at
@@ -1724,8 +1724,13 @@ What is **not** established, roughly in order of importance:
    cannot be met by point charges (`real_sim_leN_jointAdm`); a hop costs `(1+B)·Pr[deltaN i]`
    (`real_sim_leN_jointRaw`); a refused slot must be charged nothing (`real_sim_leN_leanA`) and
    must have an `iv` of its own (`ivR`, a reserved `H₄` input), or `2³⁰` refused spends cost about
-   `2⁻⁴⁶` through the overlaps. Not done: Moussaka and unbound Moussaka with the joint step (their
-   many-token bounds stay `(U+M)·2⁻⁵⁵ + 2⁻⁵⁹`), and the permutation-row variant. `Adv^ow` stays the advantage of the explicit inverter, a computational
+   `2⁻⁴⁶` through the overlaps. The same five steps are mechanized for
+   Moussaka's redirect game (`Theft/JointMousBad.lean` … `Theft/JointMousNumJ.lean`, audit
+   `Audit/ZKPointMous.lean`; the extraction at points is stated for any forgery, `rOut_congrP`),
+   so **`noRedirectN_lean_numJ`**: `Pr[BadN] ≤ 2⁻⁵⁴ + Σ_h Adv^ow(inverter h)` for `U, M ≤ 2³⁰`
+   (same hypotheses as `noRedirectN_lean_numL`; `c_E = 2·(N·cells(pR) + q_E) + 9215`). Not done:
+   unbound Moussaka with the joint step (its many-token bound stays `(U+M)·2⁻⁵⁵ + 2⁻⁵⁹`), and the
+   permutation-row variant. `Adv^ow` stays the advantage of the explicit inverter, a computational
    assumption on Keccak-p[800,12]: `Com` is evaluated inside the relations, so it cannot be a table
    of the game, and some inverter wins with probability 1 (`owAdv_one_ratatouille`,
    `owAdv_one_moussaka`). In a random-table model of the standalone experiment a `q`-query
