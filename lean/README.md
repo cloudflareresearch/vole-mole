@@ -1702,9 +1702,13 @@ What is **not** established, roughly in order of importance:
    CTR blocks of iv]) / (2^128 − 221·qm)`, via a GGM hybrid that replaces rows only on a set of
    inputs, `IC.puncturePt_real`), H1 (`h3_rom_query_real`), H6's bad event (`pr_bad_exp`), and the
    number of proofs one read concerns (`exP_sum_inY_le`: total charge `≤ q·(1 + N²·2⁻⁶⁴)`, since a
-   shared CTR block means shared middle 64 bits of the `iv`s). Not done: assembling them into the
-   one-proof theorem `hyb_hop_exp` needs, the theft hops' per-point read budgets, and the theft
-   games' `iv`s as uniform blocks; the overlap factor `1 + N²·2⁻⁶⁴` (up to 5/4) also means
+   shared CTR block means shared middle 64 bits of the `iv`s). They are assembled into the one-proof
+   theorem (`ZK/ChainExp.lean` `chain3_le`, `ZK/HopsICExp.lean` `zk_rom_ic_h23_exp`,
+   `ZK/ReadsROExp.lean` `zk_ro_exp`, audit `Audit/ZKPoint2.lean`): for a consistent point reader
+   (`PtReads`, `Cons`), `|real − sim| ≤ (εZK + E_real[chZK])/(1 − βZK)` with `εZK ≈ 2⁻¹⁰⁷` and
+   `βZK < 2⁻⁵⁵` at budgets `2⁶⁴`, the hypothesis shape of `hyb_hop_exp` (function rows). Not done:
+   the theft hops' distinguishers as consistent point readers with their charges summed in the
+   simulated game, and the theft games' `iv`s as uniform blocks; the overlap factor `1 + N²·2⁻⁶⁴` (up to 5/4) also means
    `jointNum_le`'s assumption `J ≤ zkB` is slightly optimistic as stated (points would have to be
    restricted to the counters and tweaks in use). `Adv^ow` stays the advantage of the explicit inverter, a computational
    assumption on Keccak-p[800,12]: `Com` is evaluated inside the relations, so it cannot be a table
