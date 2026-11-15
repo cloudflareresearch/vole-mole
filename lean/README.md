@@ -1849,8 +1849,17 @@ What is **not** established, roughly in order of importance:
    `Audit/MainUnboundAll.lean`): `anonymityU_main_sharedAll`, `anonymityNC_main_U_sharedAll`, with a
    term `coll*` (two real proofs with one prefix) that is `≤ 2⁻¹²⁸` for queries answered by
    different Clients (`*_two`) but not bounded when one Client answers both (one witness and one
-   statement give one `H₃` column; the reduction of `main_sharedAll_le` does not see `ρ`); not done
-   for it: more than two queries, adaptive queries in (a), the Lean issuance prover in U5(b). Not done: and (PU) for the real 12-round permutation (an
+   statement give one `H₃` column; the reduction of `main_sharedAll_le` does not see `ρ`); the joint hop
+   is also mechanized for `n` proofs on all-shared tables (`ZK/MainSharedN.lean`,
+   `main_sharedAll_leN`: `(2ⁿ−1)·(εS(q₃+n, q_E+2n·4607) + Δ23N(d,n)) + (2ⁿ−1)·Pr_sim[bstarN]`) with
+   no prefix-collision term (a later real proof with the same prefix reads the replaced proof's
+   `H₃` column only at its own `ρ`, counted in `εS`; `ZK/MainSharedNSim.lean`), giving U5(b) on
+   `main` with `n` adaptive queries and a statistical (PU) term (`anonymityNC_main_U_sharedAllN`)
+   and with `main`'s Lean issuance prover (`anonymityNC_main_U_leanN`, `+4·2⁻¹¹³`;
+   `Privacy/MoussakaUnboundNCMain{N,LeanN}.lean`, audit `Audit/MainUnboundN.lean`). Not done: U5(a)
+   on `main` with `n > 2` queries or on the `ρ`-aware hop (the two-query shared-table theorem keeps
+   `collUH`), and a dependence better than `2ⁿ−1` (it needs the identical-until-bad form of the
+   one-proof theorem). Not done: and (PU) for the real 12-round permutation (an
    assumption; the exhaustive predictor has advantage 1). The QROM ZK bound
    is loose (2⁻¹⁹ at 2³⁰) until the 256-bit `rho` and salt are added.
    With the fix, zero knowledge of the executable Lean prover and the three protocols' privacy
