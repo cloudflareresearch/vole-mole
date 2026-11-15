@@ -1320,6 +1320,13 @@ and affords the amount, else it is refused for both (feasibility is leakage).
   proofs have one prefix only if two uniform openings agree (the two issued tokens', or round 1's
   spent token's and its change token's; issuance and spend witnesses have different lengths),
   `2·2⁻¹²⁸` per world (`pr_collR_le`).
+  **On the linear joint hop** (`Privacy/RatatouilleMainSharedLin.lean`, `ZK/MainSharedLin4.lean`,
+  `lean/docs/zk.md` §4.2): the same game restated as a four-slot `ZK.Sim.NGame`.
+  **`unlinkability_main_sharedLin`**: `16·(εS(q₃ + 4, q_E + 8·4607) + Δ23N(9, 4)) + PUH(b₁, b₂) +
+  PUH(b₁', b₂') + 8·noHitProb + 3750·2⁻¹²⁸ + 2·εhide`, for an Issuer whose guess and `H₅` read set
+  read `H₃` and the cipher jointly (`ConsJ`). The (PU) terms lose the factor `15`, and the
+  prefix-collision term `4·2⁻¹²⁸` is gone. At budgets `0` the terms other than (PU) and hiding are
+  `≤ 2⁻¹⁰⁰`.
 - The spec's proof sizes are a parameter (`Spec.Ratatouille.Sizes`: `main`'s, or the label-row
   layout's 256 bytes longer proofs). **[Lean] `lean/VoleMole/Privacy/RatatouilleLean.lean`**:
   `unlinkability_label_rows`, the same bound with the executable Lean prover and verifier as the

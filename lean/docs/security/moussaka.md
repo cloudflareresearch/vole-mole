@@ -1121,6 +1121,13 @@ Clients is mechanized for the random-oracle games of Appendix B (`lean/docs/zk.m
   rule (`Privacy/MoussakaRule.lean`), and `anonymity_main_sharedAll_find`
   (`Privacy/MoussakaMainFind.lean`) is the same bound at `find_issuer`'s rule `findIdx`
   (`redeemRequest_eq_findIdx`: `main`'s step is the index-taking step at that index).
+  **On the linear joint hop** (`Privacy/MoussakaMainSharedLin.lean`, `ZK/MainSharedLin4.lean`,
+  `lean/docs/zk.md` §4.2): the same game restated as a four-slot `ZK.Sim.NGame`.
+  `anonymity_main_sharedLin` (and `_find`): `16·(εS(q₃ + 4, q_E + 8·4607) + Δ23N(9, 4)) +
+  Σ_{b,c} puAdv Com (predH_c b) + 8·noHitProb + 3750·2⁻¹²⁸ + 2·Adv^hide_Com`, for a guess whose
+  reads of `H₃` and the cipher are one set for the guess and its `H₅` read set (`ConsJ`). The
+  (PU) terms lose the factor `15`, and the prefix-collision term `2·2⁻¹²⁸` is gone. At budgets `0`
+  the terms other than (PU) and hiding are `≤ 2⁻¹⁰⁰` (`≈ 2⁻⁹⁹·⁴` before).
 
 Remarks from the mechanization:
 - **The `2^{−192}` term of Theorem 4(a) is not needed.** After the hiding hop the two revealed
@@ -1188,6 +1195,12 @@ only the two redemption requests or the refusal. The refusal rule is that of 4(a
   `complete_rom_ic` with the column of a uniform `H₃` as the slice), so replacing the two verdicts
   by `true` costs `2·2⁻¹¹³` per world (`realNCML_close`). **`anonymityNC_main_lean`**: the bound of
   `anonymityNC_main` plus `4·2⁻¹¹³`, with no abstract issuance proof system.
+  **On the linear joint hop** (`Privacy/MoussakaMainSharedLin.lean`, `lean/docs/zk.md` §4.2):
+  `anonymityNC_main_lin`: `16·(εS(q₃ + 4, q_E + 8·4607) + Δ23N(9, 4)) + 8·noHitProb +
+  (4·(q₅ + 625) + 626)·2⁻¹²⁸ + 2·(φ₀ + φ₁)`, no prefix-collision term; also
+  `unlinkabilityNC_main_lin`, the `_find` versions and `anonymityNC_main_lean_lin` (`+ 4·2⁻¹¹³`).
+  At budgets `0` with the trapdoor signers of the audit the whole bound is `≤ 2⁻¹⁰⁰`, also with
+  the Lean issuance prover (`Audit/MainSharedLin4.lean`, `ncm_lin_le`, `ncm_lean_lin_le`).
 - **In the random-oracle and ideal-cipher model** (`lean/VoleMole/Privacy/MoussakaNCRO.lean`,
   Appendix B; the analogue of `anonymityRO_lean_num`): `A`'s guess also sees the tables, and the
   honest Anchors run the Lean **verifier** on the issuance proofs over the same tables. In each

@@ -77,7 +77,10 @@ included, as in the scheme (`anonymity_main_sharedAll`, `unlinkability_main_shar
 Moussaka's non-colluding Theorem 4(b') holds on `main` with a statistical (PU) term, since the
 Moderator's view depends on the openings only through the refusal bit (`anonymityNC_main`; with
 `main`'s Lean issuance prover and the Anchors' Lean verifier on the shared tables,
-`anonymityNC_main_lean`, `+ 4·2⁻¹¹³`); unbound Moussaka's U5 holds on `main` with two redemption
+`anonymityNC_main_lean`, `+ 4·2⁻¹¹³`); on the linear joint hop these three have the factor `16`
+instead of `30` on the hop terms, `1` instead of `15` on (PU), and no prefix-collision term
+(`anonymity_main_sharedLin`, `unlinkability_main_sharedLin`, `anonymityNC_main_lin`; at budgets
+`0` the numeric part is `≤ 2⁻¹⁰⁰`); unbound Moussaka's U5 holds on `main` with two redemption
 queries, also with all tables shared, up to an explicit prefix-collision term
 (`anonymityU_main_sharedAll`, `anonymityNC_main_U_sharedAll`) [Lean, §4.2]. (PU) is stated as a game
 (`PU.puAdv`); for Moussaka the (PU) event is reduced to the advantage of explicit predictors in it
@@ -877,13 +880,75 @@ the Client that owns it (`qOf_simA`), and the predictors rerun the interaction f
 no prefix-collision term (`collUH`), the issuance proofs `main`'s Lean prover on the shared tables.
 Audit: `Audit/MainUnboundLin.lean`.
 
+**The four-proof theorems on the linear hop** (`ZK/MainSharedLin4.lean`,
+`Privacy/MoussakaMainSharedLin.lean`, `Privacy/RatatouilleMainSharedLin.lean`,
+`Audit/MainSharedLin4.lean`). Moussaka 4(a), 4(b') and Ratatouille are stated as a
+`MainChain.Game` run by `realAll` and `simAll`. Their games are not rewritten; the bridge restates
+any such game as a `ZK.Sim.NGame` of four slots:
+- *The game* (`toN`, `ns4`): slot `i`'s statement is `σᵢ₊₁` of the secret and the earlier
+  outputs. `realAll`'s tape is the `NGame`'s tape plus four `H₃` slices and three raw `H₂³` tables
+  that the shared game does not read (`tapeEquiv4`). On the rest the views agree up to the slices
+  (`gvN`; `hybVAll_gvN`, `hybV23_gvN`, by `rfl`), and the events ignore the slices (`RdH.i₁ … i₄`).
+  So `realAll F` is hybrid `0` of the `NGame` and `simAll F` is hybrid `4` (`realAll_eq_hybN`,
+  `simAll_eq_hybN`). `bstarN` of the four slots implies `bstar` of the game (`bstarN_imp`).
+- *Joint reads* (`main_sharedAll_leLinJ`, `rdN_or_bstarN`). `main_sharedAll_leLin` takes separate
+  read sets for the event and for its `H₅` read set `R5`, and pays `2q₃`, `2q_E` in `εS`. A guess
+  and its read set come from one oracle run, so they read `H₃` and the cipher at one set of points
+  and keys. Under that hypothesis (`RdN` of the pair) `F ∨ bstarN` reads the cipher at `n·4607`
+  more keys only, and the hop costs `εS(q₃ + n, q_E + 2n·4607) + Δ23N(d, n)`.
+- **`main_sharedAll_le4LinJ`**: for four proofs and an event with joint reads,
+
+      |Pr[all real; F] − Pr[all simulated; F]|
+          ≤ 8·(εS(q₃ + 4, q_E + 8·4607) + Δ23N(d, 4)) + Pr[all simulated; bstar].
+
+  `main_sharedAll_le4Lin` is the same with separate reads (`2q₃`, `2q_E`). There is no
+  prefix-collision term.
+- The simulated side is unchanged: `simAll` and its `bstar` are the same as before. So hiding, the
+  swap, the abort hop and the bounds on `bstar` (`simAll_bstar_le`, `pr_bstarNCM_le`,
+  `simAll_bstar_leR`) apply as they are, now with the factor `1`.
+
+The adversaries need joint reads (`AdversaryH.ConsJ`, `AdversaryNCM.ConsJ`, `AdversaryRH.ConsJ`).
+Separate reads at budgets `(q₃, q_E)` are joint reads at `(2q₃, 2q_E)` (`ConsH.consJ`). The
+bounds (`#print axioms`: `propext`, `Classical.choice`, `Quot.sound`):
+
+    Moussaka 4(a) (anonymity_main_sharedLin, _find):
+      |Pr[W₀] − Pr[W₁]| ≤ 16·(εS(q₃ + 4, q_E + 8·4607) + Δ23N(9, 4))
+          + Σ_{b,c} puAdv Com (predH_c b) + 8·noHitProb + 3750·2⁻¹²⁸ + 2·εhide
+    Ratatouille (unlinkability_main_sharedLin): for any two worlds,
+        16·(εS(q₃ + 4, q_E + 8·4607) + Δ23N(9, 4))
+          + PUH(b₁, b₂) + PUH(b₁', b₂') + 8·noHitProb + 3750·2⁻¹²⁸ + 2·εhide
+    Moussaka 4(b') (anonymityNC_main_lin, _find; unlinkabilityNC_main_lin, _find without φ):
+      |Pr[W₀] − Pr[W₁]| ≤ 16·(εS(q₃ + 4, q_E + 8·4607) + Δ23N(9, 4))
+          + 8·noHitProb + (4·(q₅ + 625) + 626)·2⁻¹²⁸ + 2·(φ false + φ true)
+    with main's Lean issuance prover (anonymityNC_main_lean_lin): the same + 4·2⁻¹¹³
+
+Compared with `main_sharedAll_le`: the factor on `εS + Δ23` is `16` instead of `30` for two worlds,
+the (PU) terms have the factor `1` instead of `15`, and the prefix-collision terms (`2·2⁻¹²⁸`,
+`4·2⁻¹²⁸`) are gone. The numbers at budgets `0`:
+
+| | `main_sharedAll_le` | linear hop |
+|---|---|---|
+| hop terms, two worlds | `30·(εS(0, 8·4607) + Δ23) ≈ 2⁻⁹⁹·⁴²` | `16·(εS(4, 8·4607) + Δ23N(9, 4)) ≈ 2⁻¹⁰⁰·³³` |
+| 4(a), Ratatouille: all but (PU) and `εhide` | `≈ 2⁻⁹⁹·⁴²` | `≈ 2⁻¹⁰⁰·³³`, `≤ 2⁻¹⁰⁰` (`lin4_zero_le`) |
+| (PU) terms | `15·Σ puAdv` | `Σ puAdv` |
+| 4(b'), `q₅ = 0`, without `φ` | `≈ 2⁻⁹⁹·⁴²` | `≈ 2⁻¹⁰⁰·³³`, `≤ 2⁻¹⁰⁰` (`linNC_zero_le`) |
+| 4(b') with the Lean issuance prover | `≈ 2⁻⁹⁹·⁴²` | `≤ 2⁻¹⁰⁰` |
+
+The gain at budgets `0` is only `30/16`: the dominant term is the cipher reads of the other proofs
+inside `εS` (`221·10·4607·2⁻¹²⁸` per application), which the linear hop applies `16` times
+instead of `30`. The (PU) terms gain the full factor `15`. Per pair of worlds the budgets enter as
+`16·(q₃ + 221·q_E)·2⁻¹²⁸` (was `30·(…)`) with joint reads, and as `32·(…)` with separate reads.
+The audit instantiates every theorem; for the Moderator `ncm d` of `Audit/MainSharedAll.lean`
+(trapdoor signers, `φ = 0`), the whole bound of 4(b') is `≤ 2⁻¹⁰⁰`, also with `main`'s Lean
+issuance prover (`ncm_lin_le`, `ncm_lean_lin_le`).
+
 **Still on paper, for ZK on `main`:**
-- the factor `15` on `εS` and on the (PU) terms of the four-proof theorems (Moussaka 4(a), 4(b'),
-  Ratatouille, U5 with two queries) is a cost of the mechanized transfer (each hop's bad event is
-  moved across the later hops); the paper's lazy sampling gives `4` and `1`. The linear hop
-  (`main_sharedAll_leLin`, factor `2n` and `1`) applies to games stated as a `ZK.Sim.NGame`; those
-  theorems use `main_sharedAll_le` (the slice reduction to `main_shared23_le`, a
-  `MainChain.Game`) and were not restated;
+- the factor `8` per world on `εS + Δ23N` of the four-proof theorems on the linear hop
+  (`anonymity_main_sharedLin`, `anonymityNC_main_lin`, `unlinkability_main_sharedLin`) is `2n`,
+  not the paper's `n = 4` (see the item on the linear hop below). In 4(b') the first two slots prove nothing
+  but each costs one hop; a two-slot `NGame` would give `4`, not done. The two-query U5 theorems
+  (`anonymityU_main_sharedAll`, `anonymityNC_main_U_sharedAll`) keep `main_sharedAll_le`; their
+  `n`-query versions on the linear hop replace them;
 - the adversary's earlier choices (responses, Anchor Sets, amounts) do not read the tables, as in
   §10.2's games (this is also what lets the one-`H₃` reduction compute the prefixes from the view);
   the `main` games take any token-reading index rule, `main`'s `find_issuer` Client included
@@ -892,8 +957,8 @@ Audit: `Audit/MainUnboundLin.lean`.
   an abstract `PI`; with `n` queries the route of 4(b') is mechanized (`anonymityNC_main_U_leanN`);
 - the linear hop is `2n·ε + Pr_sim[bstarN]`, not the paper's `n·ε + Pr_sim[bstarN]`: the event
   `Pr[b ∧ ¬F]` is compared between the first and the last hybrid through `Pr[b]`, which moves by
-  `n·ε` too; and the guess's reads are counted twice (`2q₃`, `2q_E`), once for `F` and once for
-  `bstarN`;
+  `n·ε` too; and in `main_sharedAll_leLin` the guess's reads are counted twice (`2q₃`, `2q_E`),
+  once for `F` and once for `bstarN` (with joint reads, `main_sharedAll_leLinJ`, once);
 - a bound on (PU) for the real permutation: §4.3 states (PU) as a game, reduces Moussaka's
   `PU_b` to it and bounds it in the ideal-permutation model; for Keccak-p[800,12] itself it is an
   assumption (also for Ratatouille's `comI` and `comCh`, §4.3);
