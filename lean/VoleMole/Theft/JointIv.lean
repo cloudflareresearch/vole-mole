@@ -29,7 +29,7 @@ set_option synthInstance.maxSize 1024
 namespace VoleMole.Theft
 
 open VoleMole.Privacy VoleMole.ZK.Sim VoleMole.ZK VoleMole.Verifier VoleMole.Verifier.Bridge
-open VoleMole.ROM VoleMole.ROM.IC VoleMole.ROM.Reads VoleMole.Theft.Hit
+open VoleMole.ROM VoleMole.ROM.IC VoleMole.ROM.Reads VoleMole.Theft.Hit VoleMole.ZK.IC
 
 namespace Ratatouille
 
@@ -310,6 +310,224 @@ theorem ivs_view (hL : 49 ≤ L) (z : TapeJ U M L) :
       rfl
 
 end View
+
+/-! ## Expectations of coordinates -/
+
+section Coord
+
+variable {α β γ δ : Type*} [Fintype α] [Fintype β] [Fintype γ] [Fintype δ]
+
+lemma exP_prod_snd' [Nonempty α] (f : β → ℝ) : exP (α × β) (fun p => f p.2) = exP β f := by
+  rw [exP_prod]; exact exP_const (exP β f)
+
+/-- **The expectation of a function of one coordinate of a tape.** -/
+lemma exP_coord {N : ℕ} [Nonempty α] [Nonempty β] [Nonempty γ] (j : Fin N) (F : β → ℝ) :
+    exP ((α × (Fin N → β)) × γ) (fun z => F (z.1.2 j)) = exP β F := by
+  rw [exP_prod_fst (fun a : α × (Fin N → β) => F (a.2 j)),
+    exP_prod_snd' (fun τ : Fin N → β => F (τ j))]
+  classical
+  rw [← exP_equiv (Equiv.funSplitAt j β).symm (fun τ => F (τ j))]
+  have e0 : ∀ (b : β) (r : {k // k ≠ j} → β), (Equiv.funSplitAt j β).symm (b, r) j = b :=
+    fun b r => by simp [Equiv.funSplitAt, Equiv.piSplitAt]
+  simp only [e0]
+  exact exP_prod_fst (β := {k // k ≠ j} → β) F
+
+/-- **The expectation of a function of two coordinates of a tape.** -/
+lemma exP_coord2 {N : ℕ} [Nonempty α] [Nonempty β] [Nonempty γ] {i j : Fin N} (hij : i ≠ j)
+    (F : β → β → ℝ) {c : ℝ} (hF : ∀ b, exP β (fun b' => F b' b) ≤ c) :
+    exP ((α × (Fin N → β)) × γ) (fun z => F (z.1.2 i) (z.1.2 j)) ≤ c := by
+  rw [exP_prod_fst (fun a : α × (Fin N → β) => F (a.2 i) (a.2 j)),
+    exP_prod_snd' (fun τ : Fin N → β => F (τ i) (τ j))]
+  classical
+  rw [← exP_equiv (Equiv.funSplitAt i β).symm (fun τ => F (τ i) (τ j)), exP_prod]
+  have e : ∀ (b : β) (r : {k // k ≠ i} → β), (Equiv.funSplitAt i β).symm (b, r) j = r ⟨j, hij.symm⟩ :=
+    fun b r => by simp [Equiv.funSplitAt, Equiv.piSplitAt, hij.symm]
+  have e0 : ∀ (b : β) (r : {k // k ≠ i} → β), (Equiv.funSplitAt i β).symm (b, r) i = b :=
+    fun b r => by simp [Equiv.funSplitAt, Equiv.piSplitAt]
+  simp only [e, e0]
+  calc exP β (fun b => exP ({k // k ≠ i} → β) (fun r => F b (r ⟨j, hij.symm⟩)))
+      = exP ({k // k ≠ i} → β) (fun r => exP β (fun b => F b (r ⟨j, hij.symm⟩))) := by
+        simp only [exP]
+        rw [← Finset.sum_div, ← Finset.sum_div, Finset.sum_comm]
+        ring
+    _ ≤ exP ({k // k ≠ i} → β) (fun _ => c) := exP_mono fun r => hF _
+    _ = c := exP_const c
+
+/-- A uniform `16`-byte coin equals a given value with probability `2⁻¹²⁸`. -/
+lemma exP_eq_bytes (v : ZK.Sim.Bytes 16) :
+    exP (ZK.Sim.Bytes 16) (fun u => if u = v then 1 else 0) = 1 / 2 ^ 128 := by
+  classical
+  simp only [exP, Finset.sum_ite_eq', Finset.mem_univ, ↓reduceIte]
+  rw [show Fintype.card (ZK.Sim.Bytes 16) = 2 ^ 128 from card_blk]
+  norm_num
+
+end Coord
+
+/-! ## Collisions of the `H₄` inputs -/
+
+section Dup
+
+variable {U M L : ℕ}
+
+/-- The two `iv_pre` coins of a slot. -/
+def coin1 (b : Slot (ZK.Sim.Bytes 16) (SimCoins pI × SimCoins pS) Tab3) : ZK.Sim.Bytes 16 :=
+  b.1.2.1.1.1
+def coin2 (b : Slot (ZK.Sim.Bytes 16) (SimCoins pI × SimCoins pS) Tab3) : ZK.Sim.Bytes 16 :=
+  b.1.2.2.1.1
+
+/-- **A slot's coin equals a given value with probability `2⁻¹²⁸`.** -/
+lemma exP_coin1_eq (v : ZK.Sim.Bytes 16) :
+    exP (Slot (ZK.Sim.Bytes 16) (SimCoins pI × SimCoins pS) Tab3)
+      (fun b => if coin1 b = v then 1 else 0) = 1 / 2 ^ 128 := by
+  classical
+  unfold coin1
+  rw [exP_prod_fst (fun a : ZK.Sim.Bytes 16 × (SimCoins pI × SimCoins pS) =>
+      if a.2.1.1.1 = v then (1 : ℝ) else 0),
+    exP_prod_snd' (fun c : SimCoins pI × SimCoins pS => if c.1.1.1 = v then (1 : ℝ) else 0),
+    exP_prod_fst (fun c : SimCoins pI => if c.1.1 = v then (1 : ℝ) else 0),
+    exP_prod_fst (fun c : Shared => if c.1 = v then (1 : ℝ) else 0),
+    exP_prod_fst (fun u : ZK.Sim.Bytes 16 => if u = v then (1 : ℝ) else 0)]
+  exact exP_eq_bytes v
+
+lemma exP_coin2_eq (v : ZK.Sim.Bytes 16) :
+    exP (Slot (ZK.Sim.Bytes 16) (SimCoins pI × SimCoins pS) Tab3)
+      (fun b => if coin2 b = v then 1 else 0) = 1 / 2 ^ 128 := by
+  classical
+  unfold coin2
+  rw [exP_prod_fst (fun a : ZK.Sim.Bytes 16 × (SimCoins pI × SimCoins pS) =>
+      if a.2.2.1.1 = v then (1 : ℝ) else 0),
+    exP_prod_snd' (fun c : SimCoins pI × SimCoins pS => if c.2.1.1 = v then (1 : ℝ) else 0),
+    exP_prod_snd' (fun c : SimCoins pS => if c.1.1 = v then (1 : ℝ) else 0),
+    exP_prod_fst (fun c : Shared => if c.1 = v then (1 : ℝ) else 0),
+    exP_prod_fst (fun u : ZK.Sim.Bytes 16 => if u = v then (1 : ℝ) else 0)]
+  exact exP_eq_bytes v
+
+/-- The coin of a statement's simulation is one of the slot's two coins. -/
+lemma coinIv_mem (y : RI) (b : Slot (ZK.Sim.Bytes 16) (SimCoins pI × SimCoins pS) Tab3) :
+    coinIv y b.1.2 = coin1 b ∨ coinIv y b.1.2 = coin2 b := by
+  rcases y with y | y
+  · exact Or.inl rfl
+  · exact Or.inr rfl
+
+/-- Equal `H₄` inputs have equal coins. -/
+lemma coin_of_inp4 {x x' : XR L} {y y' : RI} {c c' : SimCoins pI × SimCoins pS}
+    (h : inp4 x y c = inp4 x' y' c') : coinIv y c = coinIv y' c' := by
+  funext i
+  have hi := i.isLt
+  have s1 : ∀ (u : ZK.Sim.Bytes 16) (m : ByteArray), i.val < (ba u ++ m).size := fun u m => by
+    rw [ByteArray.size_append, size_ba]; omega
+  have key : ∀ (u : ZK.Sim.Bytes 16) (m : ByteArray), ((ba u ++ m).push 4).get! i = u i := by
+    intro u m
+    rw [get!_push]
+    simp only [s1 u m, ↓reduceIte]
+    rw [get!_append_left (by rw [size_ba]; exact hi), get!_ba _ hi]
+  have := congrArg (fun b : ByteArray => b.get! i) h
+  simp only [inp4, key] at this
+  exact this
+
+variable (A : ThiefN Sizes.labelRows U M Tab3 (TabR L))
+
+/-- **A collision of the `H₄` inputs of two slots is a collision of their coins** (or none). -/
+lemma dIv_eq (hL : 49 ≤ L) (hN : U + M ≤ 2 ^ 32) (ω' : RestJ U M L) {i j : Fin (U + M)}
+    (hij : i ≠ j) (h : dIv A ω' i = dIv A ω' j) :
+    (coin1 (ω'.1.2 i) = coin1 (ω'.1.2 j) ∨ coin1 (ω'.1.2 i) = coin2 (ω'.1.2 j)) ∨
+      (coin2 (ω'.1.2 i) = coin1 (ω'.1.2 j) ∨ coin2 (ω'.1.2 i) = coin2 (ω'.1.2 j)) := by
+  have hL4 : 4 ≤ L := by omega
+  have hkey : ∀ (y : RI) (k : Fin (U + M)), ∃ a, keyL L (inp4 (joinX ω'.2.2.2 fun _ => 0) y
+      (tapeC ω'.1.2 k)) = some a ∧ (encL a).size = 49 := fun y k => by
+    obtain ⟨a, ha⟩ := exists_encL (L := L) (b := inp4 (joinX ω'.2.2.2 fun _ => 0) y (tapeC ω'.1.2 k))
+      (by rw [inp4_size]; exact hL)
+    exact ⟨a, by rw [← ha, keyL_encL], by rw [ha, inp4_size]⟩
+  have hne : ∀ (a : KL L) (k : ℕ), (encL a).size = 49 → a ≠ rsvK k := fun a k ha e => by
+    have := rsvK_size hL4 k
+    rw [← e, ha] at this
+    omega
+  have hti : tapeC ω'.1.2 i = (ω'.1.2 i).1.2 := extN_val _ i
+  have htj : tapeC ω'.1.2 j = (ω'.1.2 j).1.2 := extN_val _ j
+  unfold dIv at h
+  generalize xN A (pubOf ω'.1.1)
+    (simPre (gS simJ (xJ A)) (gPg (progJ (L := L)) (xJ A)) ω'.1.1 (tapeC ω'.1.2) i).1 = oi at h
+  generalize xN A (pubOf ω'.1.1)
+    (simPre (gS simJ (xJ A)) (gPg (progJ (L := L)) (xJ A)) ω'.1.1 (tapeC ω'.1.2) j).1 = oj at h
+  rcases oi with _ | yi <;> rcases oj with _ | yj
+  · exact absurd (Fin.ext (rsvK_inj hL4 (by omega) (by omega) h)) hij
+  · obtain ⟨a, ha, hs⟩ := hkey yj j
+    simp only [ha, Option.getD_some] at h
+    exact absurd h.symm (hne a i hs)
+  · obtain ⟨a, ha, hs⟩ := hkey yi i
+    simp only [ha, Option.getD_some] at h
+    exact absurd h (hne a j hs)
+  · obtain ⟨a, ha, -⟩ := hkey yi i
+    obtain ⟨b, hb, -⟩ := hkey yj j
+    simp only [ha, hb, Option.getD_some] at h
+    subst h
+    have e := coin_of_inp4 ((encL_of_keyL ha).symm.trans (encL_of_keyL hb))
+    rw [hti, htj] at e
+    rcases coinIv_mem yi (ω'.1.2 i) with h1 | h1 <;> rcases coinIv_mem yj (ω'.1.2 j) with h2 | h2
+    · exact Or.inl (Or.inl (h1.symm.trans (e.trans h2)))
+    · exact Or.inl (Or.inr (h1.symm.trans (e.trans h2)))
+    · exact Or.inr (Or.inl (h1.symm.trans (e.trans h2)))
+    · exact Or.inr (Or.inr (h1.symm.trans (e.trans h2)))
+
+/-- **`E[#dupPairs] ≤ 4·N²·2⁻¹²⁸`**: two slots' `H₄` inputs collide only if their uniform
+`iv_pre` coins do. -/
+theorem exP_dupPairs_le (hL : 49 ≤ L) (hN : U + M ≤ 2 ^ 32) :
+    exP (RestJ U M L) (fun ω' => ((dupPairs (dIv A ω')).card : ℝ)) ≤
+      4 * ((U + M : ℕ) : ℝ) ^ 2 / 2 ^ 128 := by
+  classical
+  let C : Slot (ZK.Sim.Bytes 16) (SimCoins pI × SimCoins pS) Tab3 →
+      Slot (ZK.Sim.Bytes 16) (SimCoins pI × SimCoins pS) Tab3 → ℝ := fun a b =>
+    (if coin1 a = coin1 b then 1 else 0) + (if coin1 a = coin2 b then 1 else 0) +
+      ((if coin2 a = coin1 b then 1 else 0) + (if coin2 a = coin2 b then 1 else 0))
+  have hC0 : ∀ a b, 0 ≤ C a b := fun a b => by simp only [C]; positivity
+  have hpt : ∀ ω' : RestJ U M L, ((dupPairs (dIv A ω')).card : ℝ) ≤
+      ∑ ij : Fin (U + M) × Fin (U + M), if ij.1 < ij.2 then C (ω'.1.2 ij.1) (ω'.1.2 ij.2) else 0 := by
+    intro ω'
+    unfold dupPairs
+    rw [Finset.card_filter, Nat.cast_sum]
+    refine Finset.sum_le_sum fun ij _ => ?_
+    by_cases hlt : ij.1 < ij.2
+    · simp only [hlt, true_and, ↓reduceIte]
+      split_ifs with he
+      · have hd := dIv_eq A hL hN ω' (ne_of_lt hlt) he
+        simp only [C]
+        rcases hd with (h | h) | (h | h) <;> simp only [h, ↓reduceIte] <;>
+          split_ifs <;> norm_num
+      · simp only [Nat.cast_zero]; exact hC0 _ _
+    · simp [hlt]
+  refine (exP_mono hpt).trans ?_
+  rw [show (fun ω' : RestJ U M L => ∑ ij : Fin (U + M) × Fin (U + M),
+      if ij.1 < ij.2 then C (ω'.1.2 ij.1) (ω'.1.2 ij.2) else 0) =
+      fun ω' => ∑ ij : Fin (U + M) × Fin (U + M), (if ij.1 < ij.2 then C (ω'.1.2 ij.1) (ω'.1.2 ij.2)
+        else 0) from rfl]
+  have hsum : exP (RestJ U M L) (fun ω' => ∑ ij : Fin (U + M) × Fin (U + M),
+      if ij.1 < ij.2 then C (ω'.1.2 ij.1) (ω'.1.2 ij.2) else 0) =
+      ∑ ij : Fin (U + M) × Fin (U + M), exP (RestJ U M L) (fun ω' =>
+        if ij.1 < ij.2 then C (ω'.1.2 ij.1) (ω'.1.2 ij.2) else 0) := by
+    simp only [exP]
+    rw [← Finset.sum_div, Finset.sum_comm]
+  rw [hsum]
+  have hone : ∀ ij : Fin (U + M) × Fin (U + M), exP (RestJ U M L) (fun ω' =>
+      if ij.1 < ij.2 then C (ω'.1.2 ij.1) (ω'.1.2 ij.2) else 0) ≤ 4 / 2 ^ 128 := by
+    intro ij
+    by_cases hlt : ij.1 < ij.2
+    · simp only [hlt, ↓reduceIte]
+      refine exP_coord2 (ne_of_lt hlt) C fun b => ?_
+      simp only [C]
+      rw [exP_add, exP_add, exP_add]
+      have e1 := exP_coin1_eq (coin1 b)
+      have e2 := exP_coin1_eq (coin2 b)
+      have e3 := exP_coin2_eq (coin1 b)
+      have e4 := exP_coin2_eq (coin2 b)
+      linarith
+    · simp only [hlt, ↓reduceIte, exP_const]
+      positivity
+  refine (Finset.sum_le_sum fun ij _ => hone ij).trans (le_of_eq ?_)
+  rw [Finset.sum_const, Finset.card_univ, Fintype.card_prod, Fintype.card_fin, nsmul_eq_mul]
+  push_cast
+  ring
+
+end Dup
 
 end Ratatouille
 
