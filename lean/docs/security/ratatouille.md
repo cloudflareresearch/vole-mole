@@ -1072,8 +1072,15 @@ honest openings, not about signatures. The table's bound in §0 is the right one
        the uniform table.
 
     The same construction for Moussaka gives `noRedirectN_lean_numJ` (`Theft/JointMousNumJ.lean`,
-    `security/moussaka.md` §5.3, `lean/docs/zk.md` §10.8). Not done: unbound Moussaka
-    (`nmUN_lean_numJ`); and the permutation-row variant (`_numJP`).
+    `security/moussaka.md` §5.3, `lean/docs/zk.md` §10.8), and for unbound Moussaka
+    `nmUN_lean_numJ` (`Theft/JointUnbNumJ.lean`, `security/moussaka-unbound.md`). Not done: the
+    permutation-row variants (`_numJP`); `noTheftN_lean_numLP` stays linear. The joint step's
+    per-proof theorem does not port by charging inverse queries at their answers: a proof reveals
+    cipher outputs of hidden rows (the hidden leaves' commitments), and inverse queries at such a
+    value under many keys gain `q·2^{−128}` per proof while reading no CTR block of the proof's
+    `iv` except under the hidden key (`inv_point_charge_fails`, `ZK/InvPoint.lean`; audit
+    `Audit/ZKPointPerm.lean`). Inverse queries must be charged at the values a proof reveals;
+    `lean/docs/zk.md` §10.8, "The permutation-row variants".
   - **`noTheft_lean_rom`** (`Theft/PlainRataRom.lean`): `noTheft_leanX_hitL` with plain extraction
     discharged. Function rows (`R = Blk → Blk`), `M = uovM`, `L ≥ Lmin`, an adversary whose last
     stage is the run of an oracle computation within `QBudT q q_E n_G` (`hA`), the extractor

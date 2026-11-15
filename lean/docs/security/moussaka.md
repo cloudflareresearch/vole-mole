@@ -782,7 +782,10 @@ is **[Lean]** for one honest token (`lean/VoleMole/Theft/`; for `U` tokens see b
   and the simulated game's `iv`s are `H₄` blocks at `iv_pre ‖ μ₁ ‖ 4`, refused redemptions (token
   not finalized, or no key of the set verifies it) at reserved `H₄` inputs (`ivs_view`,
   `redirect_J_le`, `Theft/JointMousIv.lean`); `lean/docs/zk.md` §10.8. The permutation-row
-  variant stays linear (`noRedirectN_lean_numLP`).
+  variant stays linear (`noRedirectN_lean_numLP`; `noRedirectN_lean_numJP` is not proved). With
+  permutation rows, inverse queries at a value the proof reveals (a hidden leaf's commitment) are
+  not charged by the forward points at the proof's `iv` (`inv_point_charge_fails`,
+  `ZK/InvPoint.lean`; `lean/docs/zk.md` §10.8, "The permutation-row variants").
 - Not covered:
   - `PlainSE` in the model of `noRedirect_leanX_plain`, from `ROM/`'s extraction bounds. What
     separates the two models is listed in `security/ratatouille.md` §5 ("What is not covered").
