@@ -297,15 +297,21 @@ def ShiftFailZ (i : ℕ) (z : (List (ByteArray × SIss) × Bool) × HTSG (List T
 variable (lr : Bool) (pre : TG → SIss) (A : Forger) (Lst : List TG) (ℓ i : ℕ)
 
 set_option maxHeartbeats 1600000 in
-/-- **A failed forgery of U2 is a bad event of the derived prover's game, table by table** (U2's
-shift rule `hintS`, a 32-byte key digest): the verifier accepts and no alive tree extracts, Post,
-the verifier's `H₂³` input unqueried, a chain hit or an order hit. -/
-theorem shiftFail_events (hd : pk.digest.size = 32)
+/-- **A failed forgery of U2 is a bad event of the derived prover's game, table by table**
+(`shiftFail_events` for any failure event `cf` outside which `KeysPre` holds, as
+`pfail_events_of`). -/
+theorem shiftFail_events_of
+    (cf : Out (((TG × ByteArray × ByteArray) × AuxP) × QueryLog specIC) → Prop)
+    (hcf : ∀ s g', ¬cf (evalWithAnswerFn (QueryImpl.ofFn g')
+        (gameIC CrtGen.tables (stG lr pk s) (proverP lr pk pre A Lst i) E)) →
+      KeysPre (stG lr pk s) E (jOf g' (proverP lr pk pre A Lst i) E)
+        (gLog CrtGen.tables (stG lr pk s) (proverP lr pk pre A Lst i) E g') g')
+    (hd : pk.digest.size = 32)
     (h : ShiftFailZ pk i (runG g CrtGen.tables lr E noHint (hintS lr E) tgts2 pk pre A Lst ℓ)) :
     let r := evalWithAnswerFn (QueryImpl.ofFn g) (gameDP lr E pk pre A Lst i)
     (r.2.2.accept = true ∧ ¬SomeExtracted E (stG lr pk (stOut r))
       (witKT pk hG (some (stOut r))) r) ∨
-    PostOut E r ∨
+    cf r ∨
     (r.2.2.accept = true ∧ ((.h23, zOut (stG lr pk (stOut r)) r) : Dom) ∉ hashLog r.2.1.aux.2) ∨
     ∃ e ∈ tableQueryLog (gameDP lr E pk pre A Lst i) g,
       chainHitL cbP (tableQueryLog (gameDP lr E pk pre A Lst i)) e.1 g ∨
@@ -345,7 +351,7 @@ theorem shiftFail_events (hd : pk.digest.size = 32)
         e.1.1
       rw [hlogA]; exact hc)
   have hkp : KeysPre st E (jOf g P E) (gLog T st P E g) g :=
-    keysPre_of_not_postOut T st P E g (by rw [← hrg]; exact hpost)
+    hcf _ g (by rw [← hrg]; exact hpost)
   have haccv : (verify (Hashes.ofTable g) T st (πOf g P E)).accept = true := by
     rw [← e0]; exact hacc
   obtain ⟨hf, leaves, hrec, -⟩ := (accept_iff _ T st (πOf g P E)).1 haccv
@@ -393,8 +399,8 @@ theorem shiftFail_events (hd : pk.digest.size = 32)
     rw [hJ]; unfold hashLog; rw [List.filterMap_append]; exact List.mem_append_left _ hx1L
   have halk : aliveR E r ⊆ r.2.1.known := by
     rw [hrg]
-    exact aliveR_subset_known T st P E g hh (by rw [← hrg]; exact hpost) (by rw [← hrg]; exact hacc)
-      hrec' hx1J
+    exact aliveR_subset_known_of T st P E g cf (hcf _) hh (by rw [← hrg]; exact hpost)
+      (by rw [← hrg]; exact hacc) hrec' hx1J
   -- the `i`-th forgery's data
   obtain ⟨haux0, haux⟩ := aux_proverP g lr E pk pre A Lst i
   have hb1 : st.binder1 = sB1 lr ms.2 := by
@@ -558,6 +564,22 @@ theorem shiftFail_events (hd : pk.digest.size = 32)
   simp only [tgts2, List.mem_map] at hδ
   obtain ⟨δ', hδ', rfl⟩ := hδ
   exact ⟨δ', hδ', hrel⟩
+
+/-- **A failed forgery of U2 is a bad event of the derived prover's game, table by table** (U2's
+shift rule `hintS`, a 32-byte key digest): the verifier accepts and no alive tree extracts, Post,
+the verifier's `H₂³` input unqueried, a chain hit or an order hit. -/
+theorem shiftFail_events (hd : pk.digest.size = 32)
+    (h : ShiftFailZ pk i (runG g CrtGen.tables lr E noHint (hintS lr E) tgts2 pk pre A Lst ℓ)) :
+    let r := evalWithAnswerFn (QueryImpl.ofFn g) (gameDP lr E pk pre A Lst i)
+    (r.2.2.accept = true ∧ ¬SomeExtracted E (stG lr pk (stOut r))
+      (witKT pk hG (some (stOut r))) r) ∨
+    PostOut E r ∨
+    (r.2.2.accept = true ∧ ((.h23, zOut (stG lr pk (stOut r)) r) : Dom) ∉ hashLog r.2.1.aux.2) ∨
+    ∃ e ∈ tableQueryLog (gameDP lr E pk pre A Lst i) g,
+      chainHitL cbP (tableQueryLog (gameDP lr E pk pre A Lst i)) e.1 g ∨
+        orderHitL (tableQueryLog (gameDP lr E pk pre A Lst i)) e.1 g :=
+  shiftFail_events_of g E pk lr pre A Lst ℓ i (PostOut E)
+    (fun _ g' h => keysPre_of_not_postOut CrtGen.tables _ _ E g' h) hd h
 
 end Fail
 

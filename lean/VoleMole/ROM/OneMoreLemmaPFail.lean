@@ -153,15 +153,22 @@ noncomputable abbrev gameDP : OracleComp spec (Out (((TG × ByteArray × ByteArr
 
 set_option maxHeartbeats 1600000 in
 /-- **A failed forgery is a bad event of the derived prover's game, table by table** (Lemma P's
-`E₁`, a 32-byte key digest). -/
-theorem pfail_events (hd : pk.digest.size = 32)
+`E₁`, a 32-byte key digest), for any failure event `cf` outside which `KeysPre` holds (Post: the
+PRF view's `PostOut` in `pfail_events`, the point-tied `PostPOut` in the permutation model). -/
+theorem pfail_events_of
+    (cf : Out (((TG × ByteArray × ByteArray) × AuxP) × QueryLog specIC) → Prop)
+    (hcf : ∀ s g', ¬cf (evalWithAnswerFn (QueryImpl.ofFn g')
+        (gameIC CrtGen.tables (stG lr pk s) (proverP lr pk pre A Lst i) E)) →
+      KeysPre (stG lr pk s) E (jOf g' (proverP lr pk pre A Lst i) E)
+        (gLog CrtGen.tables (stG lr pk s) (proverP lr pk pre A Lst i) E g') g')
+    (hd : pk.digest.size = 32)
     (h : PFailZ pk i (evalWithAnswerFn (QueryImpl.ofFn g)
       ((simulateQ (htW (AR := Ans) addHint pre)
         (Acomp CrtGen.tables lr E (e1P lr E) tgts1 pk ℓ A)).run (hs0 Lst)))) :
     let r := evalWithAnswerFn (QueryImpl.ofFn g) (gameDP lr E pk pre A Lst i)
     (r.2.2.accept = true ∧ ¬MajorExtracted E (stG lr pk (stOut r))
       (witKT pk hG (some (stOut r))) r) ∨
-    PostOut E r ∨
+    cf r ∨
     (r.2.2.accept = true ∧ ((.h23, zOut (stG lr pk (stOut r)) r) : Dom) ∉ hashLog r.2.1.aux.2) ∨
     ∃ e ∈ tableQueryLog (gameDP lr E pk pre A Lst i) g,
       chainHitL cbP (tableQueryLog (gameDP lr E pk pre A Lst i)) e.1 g ∨
@@ -204,7 +211,7 @@ theorem pfail_events (hd : pk.digest.size = 32)
         e.1.1
       rw [hlogA]; exact hc)
   have hkp : KeysPre st E (jOf g P E) (gLog T st P E g) g :=
-    keysPre_of_not_postOut T st P E g (by rw [← hrg]; exact hpost)
+    hcf _ g (by rw [← hrg]; exact hpost)
   have haccv : (verify (Hashes.ofTable g) T st (πOf g P E)).accept = true := by
     have h' := hacc
     rw [o3] at h'
@@ -262,8 +269,8 @@ theorem pfail_events (hd : pk.digest.size = 32)
     rw [hJ]; unfold hashLog; rw [List.filterMap_append]; exact List.mem_append_left _ hx1L
   have halk : aliveR E r ⊆ r.2.1.known := by
     rw [hrg]
-    exact aliveR_subset_known T st P E g hh (by rw [← hrg]; exact hpost) (by rw [← hrg]; exact hacc)
-      hrec' hx1J
+    exact aliveR_subset_known_of T st P E g cf (hcf _) hh (by rw [← hrg]; exact hpost)
+      (by rw [← hrg]; exact hacc) hrec' hx1J
   -- the `i`-th forgery's data
   set ms := b0.1.getD i (ByteArray.empty, ByteArray.empty) with hms
   obtain ⟨hout1, hout2⟩ := out_proverP g lr E pk pre A Lst i
@@ -411,6 +418,23 @@ theorem pfail_events (hd : pk.digest.size = 32)
   refine ⟨hls, ?_⟩
   rw [heval, he']
   exact (toL_encT_add_toTG _ _ hlr).symm
+
+/-- **A failed forgery is a bad event of the derived prover's game, table by table** (Lemma P's
+`E₁`, a 32-byte key digest). -/
+theorem pfail_events (hd : pk.digest.size = 32)
+    (h : PFailZ pk i (evalWithAnswerFn (QueryImpl.ofFn g)
+      ((simulateQ (htW (AR := Ans) addHint pre)
+        (Acomp CrtGen.tables lr E (e1P lr E) tgts1 pk ℓ A)).run (hs0 Lst)))) :
+    let r := evalWithAnswerFn (QueryImpl.ofFn g) (gameDP lr E pk pre A Lst i)
+    (r.2.2.accept = true ∧ ¬MajorExtracted E (stG lr pk (stOut r))
+      (witKT pk hG (some (stOut r))) r) ∨
+    PostOut E r ∨
+    (r.2.2.accept = true ∧ ((.h23, zOut (stG lr pk (stOut r)) r) : Dom) ∉ hashLog r.2.1.aux.2) ∨
+    ∃ e ∈ tableQueryLog (gameDP lr E pk pre A Lst i) g,
+      chainHitL cbP (tableQueryLog (gameDP lr E pk pre A Lst i)) e.1 g ∨
+        orderHitL (tableQueryLog (gameDP lr E pk pre A Lst i)) e.1 g :=
+  pfail_events_of g lr E pk pre A Lst ℓ i (PostOut E)
+    (fun _ g' h => keysPre_of_not_postOut CrtGen.tables _ _ E g' h) hd h
 
 end Fail
 

@@ -163,6 +163,7 @@ import VoleMole.ROM.SimJointSpec
 import VoleMole.ROM.MoussakaUnboundSim
 import VoleMole.ROM.SimPerm
 import VoleMole.ROM.PermJoint
+import VoleMole.ROM.PermFamily
 import VoleMole.ROM.SimPermJoint
 import VoleMole.ROM.SimPermJointSpec
 import VoleMole.ROM.MoussakaUnboundSimPerm
@@ -196,6 +197,9 @@ import VoleMole.ROM.OneMoreShiftTable
 import VoleMole.ROM.OneMoreShiftFail
 import VoleMole.ROM.OneMoreShiftBound
 import VoleMole.ROM.OneMoreShiftSim
+import VoleMole.ROM.OneMorePerm
+import VoleMole.ROM.OneMoreLemmaPSimPerm
+import VoleMole.ROM.OneMoreShiftSimPerm
 import VoleMole.ROM.TableReads
 import VoleMole.ROM.PrivacyReads
 import VoleMole.Privacy.Basic
@@ -394,6 +398,7 @@ import VoleMole.Assumptions.BlindPomfritT6Lean
 import VoleMole.Assumptions.PomfritLemmaPSim
 import VoleMole.Assumptions.PomfritShift
 import VoleMole.Assumptions.PomfritShiftSim
+import VoleMole.Assumptions.PomfritPermSim
 import VoleMole.Theft.Basic
 import VoleMole.Theft.Ratatouille
 import VoleMole.Theft.RatatouilleLean
@@ -454,6 +459,7 @@ import VoleMole.Audit.TheoremR
 import VoleMole.Audit.SymmetryCount
 import VoleMole.Audit.SymmetryT3
 import VoleMole.Audit.PomfritLemmaP
+import VoleMole.Audit.PomfritPerm
 import VoleMole.Audit.Theft
 import VoleMole.Audit.TheftPlainLog
 import VoleMole.Audit.MainPU

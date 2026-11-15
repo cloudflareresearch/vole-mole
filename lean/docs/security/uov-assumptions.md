@@ -77,7 +77,8 @@ gates, above AES-128 key search at every depth limit), and finds no multi-target
   hypothesis can be taken with `Tag` a random permutation with inverse queries (`TagIdealP`;
   `balance_le_ompr_perm`, `balance_le_ompr_sim_perm`, §5.8), also with AES as random
   permutations (`balance_le_ompr_simP`, `balance_le_ompr_sim_permP`). PomFRIT's U1 and U2 are stated with OMPR and OMPR⊕τ
-  (`pomfrit_U1_ompr`, `pomfrit_U2_omprShift`).
+  (`pomfrit_U1_ompr`, `pomfrit_U2_omprShift`), also with simultaneous extraction and AES as
+  random permutations with inverse queries (`pomfrit_U1_ompr_simP`, `pomfrit_U2_omprShift_simP`).
 - Secondary statements: Moussaka and Ratatouille also follow, with loss `q`, from GPI plus the UOV
   problem (or OW). Ratatouille also follows from SUF-CMA of the specified scheme.
 
