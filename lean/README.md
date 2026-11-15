@@ -1694,8 +1694,8 @@ What is **not** established, roughly in order of importance:
    least of order `q_E·2⁻¹²⁸`), not from the protocol: cipher inputs carry the proof's fresh `iv`.
    The composition step of a joint argument is proved (`Theft/JointZK.lean`: `joint_le`,
    `real_sim_leN_jointZK`; audit `Audit/TheftJointZK.lean`); its all-events hypothesis is too strong,
-   and the restated step below gives `≤ 2⁻⁵⁴` for all `U, M ≤ 2³⁰` for Ratatouille
-   and Moussaka (`noTheftN_lean_numJ`, `noRedirectN_lean_numJ`; `security/ratatouille.md` §5). Toward that hypothesis, one-proof hops charged by the
+   and the restated step below gives `≤ 2⁻⁵⁴` for all `U, M ≤ 2³⁰` for Ratatouille,
+   Moussaka and unbound Moussaka (`noTheftN_lean_numJ`, `noRedirectN_lean_numJ`, `nmUN_lean_numJ`; `security/ratatouille.md` §5). Toward that hypothesis, one-proof hops charged by the
    expected number of reads at the proof's points are proved (`ZK/IdealCipherPt.lean`,
    `ZK/HopsH4Pt.lean`, `ZK/HopsROMExp.lean`, `ZK/HopsH6Exp.lean`, `ZK/IvOverlap.lean`; audit
    `Audit/ZKPoint.lean`): H4 at points (`hide_rom_query_pt`, `≤ 221·(4607 + E_real[#keys read at
@@ -1728,9 +1728,13 @@ What is **not** established, roughly in order of importance:
    Moussaka's redirect game (`Theft/JointMousBad.lean` … `Theft/JointMousNumJ.lean`, audit
    `Audit/ZKPointMous.lean`; the extraction at points is stated for any forgery, `rOut_congrP`),
    so **`noRedirectN_lean_numJ`**: `Pr[BadN] ≤ 2⁻⁵⁴ + Σ_h Adv^ow(inverter h)` for `U, M ≤ 2³⁰`
-   (same hypotheses as `noRedirectN_lean_numL`; `c_E = 2·(N·cells(pR) + q_E) + 9215`). Not done:
-   unbound Moussaka with the joint step (its many-token bound stays `(U+M)·2⁻⁵⁵ + 2⁻⁵⁹`), and the
-   permutation-row variant. `Adv^ow` stays the advantage of the explicit inverter, a computational
+   (same hypotheses as `noRedirectN_lean_numL`; `c_E = 2·(N·cells(pR) + q_E) + 9215`). For
+   unbound Moussaka the same five steps are mechanized (`Theft/JointUnbBad.lean` …
+   `Theft/JointUnbNumJ.lean`, audit `Audit/ZKPointUnb.lean`; the event's reader includes the hit of
+   an honest token, `badGRd_reads`, `cells(pR) = 101372`; `nmU_joint_le`, `nmU_J_le`), so
+   **`nmUN_lean_numJ`**: `Pr[BadN] ≤ 2⁻⁵⁴ + Σ_h (ε_prf + Adv^bind(B₁ h) + Adv^spr-k(B₂ h))` for
+   `U, M ≤ 2³⁰` (same hypotheses as `nmUN_lean_numL`). Not done: the permutation-row variants
+   (`_numLP` stay linear in `U + M`). `Adv^ow` stays the advantage of the explicit inverter, a computational
    assumption on Keccak-p[800,12]: `Com` is evaluated inside the relations, so it cannot be a table
    of the game, and some inverter wins with probability 1 (`owAdv_one_ratatouille`,
    `owAdv_one_moussaka`). In a random-table model of the standalone experiment a `q`-query
