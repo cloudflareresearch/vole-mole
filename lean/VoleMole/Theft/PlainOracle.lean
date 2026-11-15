@@ -426,4 +426,114 @@ theorem qtree_runT [Nonempty Y] (a : (K → Y) → (d : ι) → spec d) (P : ι 
 
 end Tree
 
+
+/-! ## The chain tables are read by decision trees -/
+
+section Hit
+
+variable {R : Type} [CipherRow R] {p : Params} {L M : ℕ} {α : Type}
+
+omit [CipherRow R] in
+/-- `recP` at a kind depends on the extra table only through the base record at that kind. -/
+lemma recP_congr_x (g₁ g₂ : Tab3) (G2 : Tab2G p) (G5E : Tab5F × (Blk → R)) {x x' : XTab L M}
+    {k : Kind} {b : ByteArray} (h : (hbX x).hash k b = (hbX x').hash k b) :
+    (recP g₁ g₂ ((G2, (G5E, x)) : ShX R p (XTab L M))).hash k b =
+      (recP g₁ g₂ ((G2, (G5E, x')) : ShX R p (XTab L M))).hash k b := by
+  by_cases h3 : k = .h3
+  · subst h3; rw [recP_h3, recP_h3]; simp only [h]
+  by_cases h5 : k = .h5
+  · subst h5; rw [recP_h5, recP_h5]; simp only [h]
+  by_cases h23 : k = .h23
+  · subst h23; rw [recP_h23, recP_h23]; simp only [h]
+  rw [recP_other _ _ _ h3 h5 h23, recP_other _ _ _ h3 h5 h23, h]
+
+/-- The dependence of the answers on one chain table (`set`), read at the key `keyL` of a
+short input of its kind `k₀`. -/
+lemma hdep_chain {Y : Type} (g₁ g₂ : Tab3) (G2 : Tab2G p) (G5E : Tab5F × (Blk → R))
+    (set : (KL L → Y) → XTab L M) (k₀ : Kind)
+    (hoff : ∀ T T', (hbX (set T)).AgreeOff k₀ (hbX (set T')))
+    (hon : ∀ b, Hit.keyL L b = none → ∀ T T', (hbX (set T)).hash k₀ b = (hbX (set T')).hash k₀ b)
+    (hkey : ∀ b κ, Hit.keyL L b = some κ → ∀ T T', T κ = T' κ →
+      (hbX (set T)).hash k₀ b = (hbX (set T')).hash k₀ b) (d : DomIC) :
+    (∀ T T', ansP g₁ g₂ ((G2, (G5E, set T)) : ShX R p (XTab L M)) d =
+        ansP g₁ g₂ ((G2, (G5E, set T')) : ShX R p (XTab L M)) d) ∨
+      (kindB k₀ d = true ∧ ∃ κ, ∀ T T', T κ = T' κ →
+        ansP g₁ g₂ ((G2, (G5E, set T)) : ShX R p (XTab L M)) d =
+          ansP g₁ g₂ ((G2, (G5E, set T')) : ShX R p (XTab L M)) d) := by
+  rcases d with ⟨k, b⟩ | c
+  · by_cases hk : k = k₀
+    · subst hk
+      rcases hκ : Hit.keyL L b with _ | κ
+      · exact Or.inl fun T T' => by
+          rw [ansP_inl, ansP_inl]
+          exact congrArg _ (recP_congr_x g₁ g₂ G2 G5E (hon b hκ T T'))
+      · exact Or.inr ⟨by simp [kindB], κ, fun T T' hT => by
+          rw [ansP_inl, ansP_inl]
+          exact congrArg _ (recP_congr_x g₁ g₂ G2 G5E (hkey b κ hκ T T' hT))⟩
+    · exact Or.inl fun T T' => by
+        rw [ansP_inl, ansP_inl]
+        exact congrArg _ (recP_congr_x g₁ g₂ G2 G5E (congrFun (hoff T T' k hk) b))
+  · exact Or.inl fun T T' => by rw [ansP_inr, ansP_inr]; rfl
+
+omit [CipherRow R] in
+lemma hbX_mu_none {b : ByteArray} (hb : Hit.keyL L b = none) (T T' : KL L → Bytes 32)
+    (x : XTab L M) : (hbX (Hit.setMu T x)).hash .mu b = (hbX (Hit.setMu T' x)).hash .mu b := by
+  rw [Hit.hbX_mu_eq, Hit.hbX_mu_eq, hb]
+
+omit [CipherRow R] in
+lemma hbX_mu_some {b : ByteArray} {κ : KL L} (hb : Hit.keyL L b = some κ) (T T' : KL L → Bytes 32)
+    (x : XTab L M) (hT : T κ = T' κ) :
+    (hbX (Hit.setMu T x)).hash .mu b = (hbX (Hit.setMu T' x)).hash .mu b := by
+  rw [Hit.hbX_mu_eq, Hit.hbX_mu_eq, hb]
+  show ba (T κ) = ba (T' κ)
+  rw [hT]
+
+omit [CipherRow R] in
+lemma hbX_21_none {b : ByteArray} (hb : Hit.keyL L b = none) (T T' : KL L → Bytes 136)
+    (x : XTab L M) : (hbX (Hit.set21 T x)).hash .h21 b = (hbX (Hit.set21 T' x)).hash .h21 b := by
+  rw [Hit.hbX_21_eq, Hit.hbX_21_eq, hb]
+
+omit [CipherRow R] in
+lemma hbX_21_some {b : ByteArray} {κ : KL L} (hb : Hit.keyL L b = some κ)
+    (T T' : KL L → Bytes 136) (x : XTab L M) (hT : T κ = T' κ) :
+    (hbX (Hit.set21 T x)).hash .h21 b = (hbX (Hit.set21 T' x)).hash .h21 b := by
+  rw [Hit.hbX_21_eq, Hit.hbX_21_eq, hb]
+  show ba (T κ) = ba (T' κ)
+  rw [hT]
+
+omit [CipherRow R] in
+lemma hbX_22_none {b : ByteArray} (hb : Hit.keyL L b = none) (T T' : KL L → Bytes 56)
+    (x : XTab L M) : (hbX (Hit.set22 T x)).hash .h22 b = (hbX (Hit.set22 T' x)).hash .h22 b := by
+  rw [Hit.hbX_22_eq, Hit.hbX_22_eq, hb]
+
+omit [CipherRow R] in
+lemma hbX_22_some {b : ByteArray} {κ : KL L} (hb : Hit.keyL L b = some κ)
+    (T T' : KL L → Bytes 56) (x : XTab L M) (hT : T κ = T' κ) :
+    (hbX (Hit.set22 T x)).hash .h22 b = (hbX (Hit.set22 T' x)).hash .h22 b := by
+  rw [Hit.hbX_22_eq, Hit.hbX_22_eq, hb]
+  show ba (T κ) = ba (T' κ)
+  rw [hT]
+
+/-- **A run on the tables reads the chain tables by decision trees** with as many queries as it
+makes to `H₂⁰`, `H₂¹`, `H₂²` (`Hit.AdmHit`). -/
+theorem admHit_runT {oa : OracleComp specIC α} {q : Kind → ℕ} {qE : ℕ} (h : QBud q qE oa) :
+    Hit.AdmHit (R := R) (p := p) (L := L) (M := M) (q .mu) (q .h21) (q .h22)
+      (fun g₁ g₂ t => runT (ansP g₁ g₂ t) oa) := by
+  intro g₁ g₂
+  refine ⟨fun G2 G5E x => ?_, fun G2 G5E x => ?_, fun G2 G5E x => ?_⟩
+  · have hd := hdep_chain (R := R) (p := p) g₁ g₂ G2 G5E (fun T => Hit.setMu T x) .mu
+      (fun T T' => Hit.hbX_agreeOff_mu T T' x) (fun b hb T T' => hbX_mu_none hb T T' x)
+      (fun b κ hb T T' hT => hbX_mu_some hb T T' x hT)
+    exact qtree_runT _ (fun d => kindB .mu d = true) hd oa (isQueryBoundP_kind h.1 .mu)
+  · have hd := hdep_chain (R := R) (p := p) g₁ g₂ G2 G5E (fun T => Hit.set21 T x) .h21
+      (fun T T' => Hit.hbX_agreeOff_21 T T' x) (fun b hb T T' => hbX_21_none hb T T' x)
+      (fun b κ hb T T' hT => hbX_21_some hb T T' x hT)
+    exact qtree_runT _ (fun d => kindB .h21 d = true) hd oa (isQueryBoundP_kind h.1 .h21)
+  · have hd := hdep_chain (R := R) (p := p) g₁ g₂ G2 G5E (fun T => Hit.set22 T x) .h22
+      (fun T T' => Hit.hbX_agreeOff_22 T T' x) (fun b hb T T' => hbX_22_none hb T T' x)
+      (fun b κ hb T T' hT => hbX_22_some hb T T' x hT)
+    exact qtree_runT _ (fun d => kindB .h22 d = true) hd oa (isQueryBoundP_kind h.1 .h22)
+
+end Hit
+
 end VoleMole.Theft
