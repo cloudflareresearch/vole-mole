@@ -322,4 +322,138 @@ theorem game_bad (stF : ι → Statement) (out : Op Sizes.labelRows → ByteArra
 
 end Bad
 
+/-! ## Plain extraction from `ROM/`'s bound -/
+
+section Plain
+
+open VoleMole.Spec.Ratatouille VoleMole.EndToEnd
+open VoleMole.Privacy.Ratatouille (pI pS stI stS)
+
+/-- **The error of `ROM/`'s simultaneous extraction** for one issuance and one spend output
+(`ratatouille_sim_joint_lean` with `m = 2`), for `q k` hash queries of kind `k`, `qE` cipher
+cells and `nG` hash queries in all. -/
+noncomputable def epsRom (q : Kind → ℕ) (qE nG : ℕ) : ℝ≥0∞ :=
+  (q .h21 + 2) * (2 ^ 150 : ℝ≥0∞)⁻¹ +
+    (q .h22 + 2) * (ENNReal.ofReal (Seed.epsQS (2 ^ 128) (2 ^ 64) 12282) +
+      (2 ^ 128 : ℝ≥0∞)⁻¹ + ((nG + 2 + verifierTotal : ℕ) : ℝ≥0∞) / 2 ^ 448) +
+    (q .h23 + 2) * ((9 : ℝ≥0∞) / 2 ^ 128) +
+    chainHitEpsCombSim q Arith.Ratatouille.uovM 2 + stmtBindEpsSim q 2 + 2 * failEps q qE
+
+lemma epsRom_ne_top (q : Kind → ℕ) (qE nG : ℕ) : epsRom q qE nG ≠ ⊤ := by
+  simp [epsRom, chainHitEpsCombSim, chainHitEpsSim, stmtBindEpsSim, failEps, openHashEps,
+    ladderEps, ENNReal.mul_eq_top, ENNReal.div_eq_top]
+
+variable {L : ℕ}
+
+lemma leanVIRX_eq (x : IssueInstance) (π : IssueProof Sizes.labelRows)
+    (t : ShX (Blk → Blk) pI (XTab L Arith.Ratatouille.uovM)) :
+    Ratatouille.leanVIRX hbX x π t = (verRO pI (hbX t.2.2) (stI x) (Privacy.Ratatouille.bOf π)
+      (shOf t)).accept := rfl
+
+lemma leanVSRX_eq (x : SpendInstance) (π : SpendProof Sizes.labelRows)
+    (t : ShX (Blk → Blk) pI (XTab L Arith.Ratatouille.uovM)) :
+    Ratatouille.leanVSRX hbX x π t = (verRO pI (hbX t.2.2) (stS x) (Privacy.Ratatouille.bOf π)
+      (shOf t)).accept := rfl
+
+/-- The prefix runs of a single output are trivial. -/
+lemma prefixRuns_self {ι β : Type} (E : CTable) (P : OracleComp specIC (ByteArray × (ι × β))) :
+    PrefixRuns E P (fun _ : Unit => P) Finset.univ :=
+  fun _ _ _ => ⟨⟨[], (List.append_nil _).symm⟩, ⟨[], (List.append_nil _).symm⟩⟩
+
+lemma allQ_map_normT {β : Type} (f : Op Sizes.labelRows → β)
+    (oa : OracleComp specIC (Op Sizes.labelRows)) :
+    AllQueriesSatisfy (f <$> normT pI L Arith.Ratatouille.uovM oa) (OnT pI L Arith.Ratatouille.uovM) := by
+  rw [map_eq_bind_pure_comp]
+  exact allQueriesSatisfy_bind (allQueriesSatisfy_normT _) fun _ => allQueriesSatisfy_pure _ _
+
+/-- **Plain extraction for the theft game from `ROM/`'s bound** (Ratatouille, function rows,
+`M = uovM`, `L ≥ Lmin`): `PlainSEL` holds for `ROM/`'s straight-line extractor `eRom A` against
+the last stages within `QBudT q qE nG`, with the error `epsRom q qE nG` of
+`ratatouille_sim_joint_lean` for one issuance and one spend output. -/
+theorem plainSEL_rom
+    (A : Ratatouille.Thief Sizes.labelRows Tab3 (ShX (Blk → Blk) pI (XTab L Arith.Ratatouille.uovM)))
+    (hL : Hit.Rata.Lmin ≤ L) (q : Kind → ℕ) (qE nG : ℕ) :
+    PlainSEL ansP (Ratatouille.AccOp A (Ratatouille.leanVIRX hbX) (Ratatouille.leanVSRX hbX))
+      (Ratatouille.FreshOp A) (Ratatouille.RelOp A) (Ratatouille.eRom A) (QBudT q qE nG)
+      (epsRom q qE nG).toReal := by
+  classical
+  intro α _ _ p₁ p₂ oa hoa
+  rw [pr_eq_toReal_prU]
+  refine ENNReal.toReal_mono (epsRom_ne_top q qE nG) (Prob.prU_prod_le_right _ fun a => ?_)
+  -- the normalized adversary as the provers, and the joint game
+  set N := normT pI L Arith.Ratatouille.uovM (oa a)
+  set PI := Ratatouille.outI <$> N
+  set PR := Ratatouille.outS A <$> N
+  let m : CTable → OracleComp spec (Out ((IssueInstance × Unit) × QueryLog specIC) ×
+      Out ((SpendK A.pk × Unit) × QueryLog specIC)) := fun E =>
+    gameA CrtGen.tables stI PI E >>= fun r₁ =>
+      gameA CrtGen.tables (stK A.pk) PR E >>= fun r₂ => pure (r₁, r₂)
+  let ev : CTable → Out ((IssueInstance × Unit) × QueryLog specIC) ×
+      Out ((SpendK A.pk × Unit) × QueryLog specIC) → Prop := fun E r =>
+    (r.1.2.2.accept = true ∧ ¬ @Extracted (icPrg E.cipher) _ (stI (stOut r.1))
+      (fun _ w => IssueRel (stOut r.1) (SpecRel.issueWitOfR w)) r.1) ∨
+    (r.2.2.2.accept = true ∧ ¬ @Extracted (icPrg E.cipher) _ (stK A.pk (stOut r.2))
+      (fun _ w => SpendRel (stOut r.2).1 (SpecRel.spendWitOf w)) r.2)
+  have heval : ∀ E g, evalWithAnswerFn (QueryImpl.ofFn g) (m E) =
+      (evalWithAnswerFn (QueryImpl.ofFn g) (gameA CrtGen.tables stI PI E),
+        evalWithAnswerFn (QueryImpl.ofFn g) (gameA CrtGen.tables (stK A.pk) PR E)) := by
+    intro E g
+    simp only [m, evalWithAnswerFn_bind, evalWithAnswerFn_pure]
+  -- `ROM/`'s bound on the joint game
+  have hb := (hoa a)
+  have hrom := ratatouille_sim_joint_lean A.pk PI (fun _ : Unit => PI) PR (fun _ : Unit => PR)
+    Finset.univ Finset.univ qE
+    (fun _ _ => (isQueryBoundP_map_iff _ _ _).2 (isQueryBoundP_normT hb.1.2))
+    (fun _ _ => (isQueryBoundP_map_iff _ _ _).2 (isQueryBoundP_normT hb.1.2)) q
+    (fun _ _ => (isQueryBound_map_iff _ _ _ _ _).2 (isKindQueryBoundIC_normT hb.1.1))
+    ((isQueryBound_map_iff _ _ _ _ _).2 (isKindQueryBoundIC_normT hb.1.1))
+    (fun _ _ => (isQueryBound_map_iff _ _ _ _ _).2 (isKindQueryBoundIC_normT hb.1.1)) nG
+    (fun _ _ => (isQueryBoundP_map_iff _ _ _).2 (isQueryBoundP_normT hb.2))
+    ((isQueryBoundP_map_iff _ _ _).2 (isQueryBoundP_normT hb.2))
+    (fun _ _ => (isQueryBoundP_map_iff _ _ _).2 (isQueryBoundP_normT hb.2))
+    (fun E => prefixRuns_self E PI) (fun E => prefixRuns_self E PR)
+    (fun E g => by rw [tableQueryLog_runE_map, tableQueryLog_runE_map]) m ev
+    (fun E g hev => by
+      rw [heval] at hev
+      rcases hev with h | h
+      · exact Or.inl ⟨(), Finset.mem_univ _, h⟩
+      · exact Or.inr ⟨(), Finset.mem_univ _, h⟩)
+  have hrom' : Pr{let E ← $ᵗ CTable; let r ← (simulateQ randomOracle (m E)).run' ∅}[ev E r] ≤
+      epsRom q qE nG := by
+    refine hrom.trans (le_of_eq ?_)
+    simp only [Finset.card_univ, Fintype.card_unit, epsRom]
+    norm_num
+    ring
+  -- the joint game queries only table points: the tables are the lazy oracle
+  have hm : ∀ E, AllQueriesSatisfy (m E) (· ∈ TPts pI L Arith.Ratatouille.uovM) := fun E =>
+    allQueriesSatisfy_bind (gameA_onT stI (fun x => verOk_stI hL x) (allQ_map_normT _ _) E)
+      fun _ => allQueriesSatisfy_bind (gameA_onT (stK A.pk) (fun s => verOk_stS hL s.1)
+        (allQ_map_normT _ _) E) fun _ => allQueriesSatisfy_pure _ _
+  have hbr := pr_tables_eq_ro m hm ev
+  rw [pr_eq_toReal_prU] at hbr
+  have hfin : Pr{let E ← $ᵗ CTable; let r ← (simulateQ randomOracle (m E)).run' ∅}[ev E r] ≠ ⊤ :=
+    ne_top_of_le_ne_top (epsRom_ne_top q qE nG) hrom'
+  rw [← (ENNReal.toReal_eq_toReal_iff' (ne_top_of_le_ne_top ENNReal.one_ne_top
+    (Prob.prU_le_one _)) hfin).1 hbr] at hrom'
+  refine (Prob.prU_mono fun z hz => ?_).trans hrom'
+  -- on the tables, the bad event is the game's
+  obtain ⟨hacc, -, hne⟩ := hz
+  show ev (cellP z.2) (runT (tabP z.1.1 z.1.2 z.2) (m (cellP z.2)))
+  rw [runT_eq_eval, heval]
+  rcases hop : runT (ansP z.1.1 z.1.2 z.2) (oa a) with ⟨qq, tt, cc⟩ | ⟨qq, cc, rr⟩
+  · rw [hop] at hacc
+    have hacc' := (leanVIRX_eq _ _ _).symm.trans hacc
+    exact Or.inl (game_bad A stI Ratatouille.outI (fun x w => IssueRel x (SpecRel.issueWitOfR w))
+      (oa a) z.1.1 z.1.2 z.2 (p₁ a) (p₂ a) (by rw [hop]; rfl) (by rw [hop]; exact hacc')
+      (fun w hw => by rw [hop] at hw ⊢; exact hw) hne)
+  · rw [hop] at hacc
+    have hacc' := (leanVSRX_eq _ _ _).symm.trans hacc
+    exact Or.inr (game_bad A (stK A.pk) (Ratatouille.outS A)
+      (fun s w => SpendRel s.1 (SpecRel.spendWitOf w))
+      (oa a) z.1.1 z.1.2 z.2 (p₁ a) (p₂ a) (by rw [hop]; rfl) (by rw [hop]; exact hacc')
+      (fun w hw => by rw [hop] at hw ⊢; exact hw) hne)
+
+
+end Plain
+
 end VoleMole.Theft
