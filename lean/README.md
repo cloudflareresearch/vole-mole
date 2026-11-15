@@ -437,7 +437,8 @@ lean/
                             zero-knowledge table model, weak SE as a hypothesis; read budgets
                             (Reads); L8's programming step (SimExtract, SimExtractLean); any base
                             hash record and the other hashes as tables (LeanHb, Tables);
-                            one-wayness of Com with random tables (ComOW); unbound
+                            one-wayness of Com with random tables (ComOW); plain extraction with
+                            query logs (PlainLog, PlainOracle, PlainRata, PlainMous); unbound
                             Moussaka Prop U3 and Thm U4 (MoussakaUnbound, MoussakaUnboundLean);
                             `N` honest proofs and `WeakSEN` (Many); `U` tokens and `M`
                             redemptions (MoussakaMany, MoussakaManyLean, MoussakaUnboundMany);
@@ -1603,11 +1604,18 @@ What is **not** established, roughly in order of importance:
    (`KeyOk`, the C++ shape), `noRedirectN_leanX_hitC` and `nmUN_leanX_hitC`
    (`Theft/MoussakaDigest.lean`, `Theft/MoussakaUnboundDigest.lean`) add `Adv^coll_SHAKE256(B)` for
    an explicit finder `B`, a computational assumption like `Adv^ow` (`Audit/TheftManyHit.lean`). Plain extraction stays a
-   hypothesis. `ROM/`'s extraction bounds do not carry over as they stand: `PlainSE`'s
-   extractor does not see the adversary's queries (an adversary that derives its GGM key from an
-   `H₂³` answer is not extractable by it, so the `_plain` theorems say nothing for such
-   adversaries), read budgets are certificate sizes and not query bounds, a cipher read is a row and
-   not a cell, and `ROM/`'s oracle is lazy (`docs/security/ratatouille.md` §5). `Adv^ow` stays the advantage of the explicit inverter, a computational
+   hypothesis, but in `ROM/`'s shape for one Client or token: `noTheft_leanX_hitL` and
+   `noRedirect_leanX_hitL` (`Theft/PlainRata.lean`, `Theft/PlainMous.lean`) take the adversary's
+   last stage as the run on the tables of an oracle computation over `ROM/`'s oracle `specIC`, with
+   query bounds and cipher cell queries (`QBud q q_E`; `Theft/PlainOracle.lean`: `stageBudgetX_runT`,
+   `admHit_runT` give the read budgets and `AdmHit`). The extractor reads the query list of the
+   programming step's reduction, which answers the programmed `H₂³` points itself after recomputing
+   the simulated prefixes by queries (`vPreIC`, `ROM/PrefixIC.lean`); `WeakSE2 ≤ ε_plain +
+   ε_moves` holds for it (`weakSE2_of_plainL`, `PlainSEL`, `Theft/PlainLog.lean`). What remains
+   before `ROM/`'s bounds apply is the lazy-to-eager step: a measure-preserving map from the finite
+   tables (SHAKE elsewhere) to the lazy oracle, that the verifier queries only table points,
+   applying `ratatouille_sim_joint_spec` with the straight-line extractor, and that extractor's read
+   budget (`docs/security/ratatouille.md` §5, item 4). The many-token theorems still use `PlainSEN`. `Adv^ow` stays the advantage of the explicit inverter, a computational
    assumption on Keccak-p[800,12]: `Com` is evaluated inside the relations, so it cannot be a table
    of the game, and some inverter wins with probability 1 (`owAdv_one_ratatouille`,
    `owAdv_one_moussaka`). In a random-table model of the standalone experiment a `q`-query
