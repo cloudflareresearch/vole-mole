@@ -69,6 +69,12 @@ lemma exP_const_add [Nonempty α] (c : ℝ) (f : α → ℝ) :
   rw [Finset.sum_add_distrib, Finset.sum_const, Finset.card_univ, nsmul_eq_mul, add_div,
     mul_div_cancel_left₀ _ hc]
 
+lemma exP_const [Nonempty α] (c : ℝ) : exP α (fun _ => c) = c := by
+  have := exP_const_add (α := α) c (fun _ => 0)
+  simp only [add_zero] at this
+  rw [this]
+  simp [exP]
+
 lemma exP_equiv (e : α ≃ β) (f : β → ℝ) : exP α (fun a => f (e a)) = exP β f := by
   simp only [exP]
   rw [Fintype.card_congr e, Equiv.sum_comp e f]
