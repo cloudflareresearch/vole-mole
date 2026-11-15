@@ -4,6 +4,8 @@
   estimates   Forgery cost with and without P1 in the cost model of the UOV round-3
               specification, section 4.2: hybrid Wiedemann XL, after Thomae-Wolf or after
               Hashimoto's reduction, whichever is cheaper.  log2 bit operations.
+  spec        A second implementation of the formulas of the specification, from its text, for
+              comparison with `estimates` (about a minute).
   toy [quick | i,j,..]
               Independent toy experiment (p1_review_toy.c): direct attack and P1, each with
               plain variable fixing and with the Thomae-Wolf step, hybrid XL, dense elimination.
@@ -125,6 +127,41 @@ def estimates():
         g = [f(256, int(2.6 * m), m)[0] - class_attack(f, 256, int(2.6 * m), m)[0]
              for m in range(40, 53)]
         print(f"  {label:15s} " + " ".join(f"{x:.1f}" for x in g) + f"   mean {sum(g) / len(g):.2f}")
+
+
+# ---------------------------------------------------------------- cross-check
+def spec_crosscheck():
+    """A second implementation of section 4.2 of the round-3 specification, written from its text
+    and sharing no code with mq / hashimoto above: exact integers, the series by polynomial
+    arithmetic, all (a, c).  MQ(q; 1, 1) has no solving degree in the formula of the
+    specification (the series of a square system stays positive and k < n); it is taken as 0."""
+    def dreg(N, M, L=300):
+        a = [0] * L
+        for i in range(M + 1):
+            if 2 * i < L:
+                a[2 * i] = (-1) ** i * comb(M, i)
+        for _ in range(N + 1):
+            for j in range(1, L):
+                a[j] += a[j - 1]
+        return next((d for d in range(1, L) if a[d] <= 0), None)
+
+    def MQ(q, n, m):
+        vals = [q ** k * 3 * comb(n - k + 2, 2) * comb(d + n - k, d) ** 2
+                * (2 * log2(q) ** 2 + log2(q))
+                for k in range(n) for d in [dreg(n - k, m)] if d is not None]
+        return min(vals) if vals else 0
+
+    def direct(q, n, m):
+        h = min((m - a - c + 1) * MQ(q, a, a) + q ** c * (MQ(q, a - 1, a - 1) + MQ(q, m - a - c, m - a))
+                for a in range(1, m) for c in range(m - a)
+                if n >= max((a + 1) * (m - c - a + 1), a * (m - c) - (a - 1) ** 2 + c))
+        return log2(min(MQ(q, m - 1, m - 1), h))
+
+    print("(n, m, q): direct here / here at (n - 1, m - 1) with q / (q - 1) / estimates above")
+    for _, n, m, q, _ in SETS:
+        d, p = direct(q, n, m), direct(q, n - 1, m - 1) + log2(q / (q - 1))
+        print(f"  ({n}, {m}, {q}): {d:.2f} / {p:.2f} / {spec_direct(q, n, m)[0]:.2f}, "
+              f"{class_attack(spec_direct, q, n, m)[0]:.2f}")
 
 
 # ---------------------------------------------------------------- toy experiment
@@ -293,6 +330,8 @@ def main():
     what = sys.argv[1] if len(sys.argv) > 1 else "estimates"
     if what == "estimates":
         estimates()
+    elif what == "spec":
+        spec_crosscheck()
     elif what == "toyh":
         arg = sys.argv[2] if len(sys.argv) > 2 else ""
         toy_h([int(x) for x in arg.split(",")] if arg[:1].isdigit() else None)
