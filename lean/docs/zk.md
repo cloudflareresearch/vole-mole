@@ -3871,23 +3871,57 @@ audit `Audit/ZKPoint3.lean`). Proved:
   and `exU_sum_nZKA_le` bounds the sum with `E[#active slots with no iv]` (a failed simulation) in
   place of `E[#slots with no iv]`; an inactive slot costs only `2N·h` through the others' overlaps.
 
-Not done:
-- *The theft games' event reader*: the composition of the run's reader, the verifier's reader on
-  the run's operation and the extractor's reader, with the extractor's query list (the patches'
-  prefix computations `vPreIC` of the first `N` log entries, `logQM`, each a run on `ansP` and so a
-  point reader confined to its proof's `iv`, then the run's queries, as `extLN` chooses them); and
-  the event `BadN` (`accN`, `freshN`, `relN`, `opensN`) as one it reads. The bounds `T₃` (the run's
-  slice queries in all) and `c_E` (classes of the run's cells, the patches' cells and the
-  extraction's points) follow from `runGRd_bnd`, `card_romPts_keys_le` and the patches' budgets.
-- *The theft games as instances*: `PN`, `SmP`, `pgP` as `gP`, `gS`, `gPg` of `osumProve`,
-  `osumSim`, `osumProg` with `xOf = xN` (`act` = some instance), the tape `Coins 16` as
-  `Bytes 16`, the `vecOf` output map's `iv` decoder, and the spend system at `pS` on the tables of
-  `pI` (`Sh pS` is `Sh pI` by definition; `Conf` at `pS` gives `Conf` at `pI` by `gate5_params`).
-- *The `iv` structure of the simulated theft game*: the simulated `iv`s are `H₄` of `XTab` at
-  `iv_pre ‖ μ₁ ‖ 4` with `iv_pre` from the simulation coins, so `exU_sum_nZKA_le` applies with
-  `E[#dupPairs] ≤ N²·2⁻¹²⁸` and the failed-simulation term `N·Pr[grinding fails]`.
-So `noTheftN_lean_numJ` is not stated, and the mechanized many-token bound stays
-`(U + M)·2⁻⁵⁵ + 2⁻⁵⁹` (`noTheftN_lean_numL`).
+*The joint step for the theft game* (`Theft/JointBad.lean`, `Theft/JointInst.lean`,
+`Theft/JointTheft.lean`, `Theft/JointIv.lean`, `Theft/JointNumJ.lean`; audit
+`Audit/ZKPoint5.lean`). Proved, for Ratatouille (function rows, `L ≥ Lmin`):
+- *The theft event as one reader's event* (`badGRd`, `badGRd_cons`, **`badGRd_reads`**). The
+  extractor's query list is a list of runs on the game's answers `ansPN` (`qsJ`, `extRomN_eq`):
+  the patches' prefix computations `vQM` of the first `N` log entries (no `H₃` query, no `H₂³`
+  read: `qlog_vQM_N`) and the last stage `oaN`, the computation `extLN` takes with
+  `Classical.choose` (`opN_eq`). `runsGRd` reads their slice keys, `H₅` keys and cells and so the
+  operation and the query list (`runsGRd_val`); `chkGRd` reads, at an operation and a query list,
+  the verifier's points (`verQ5`, `verQE`; issuance at `pI`, spend at `pS`; `ver_cons`) and the
+  extractor's (`romPts`); `badGRd = GRd.seq runsGRd runsVal chkGRd`, and `BadN` with `extRomN`
+  is `chkEv` at the runs' value (`badN_iff`). Budgets (`badGRd_bnd`, `badGRd_T3`,
+  `badGRd_cls`): each slice and all slices together at `q h3` keys (`T₃ = q h3`;
+  `sum_card_dec3N_le`: a query is a key of one slice at most), `H₅` at `N·312 + q h5 + 312`, the
+  cipher at `a_E = c_E = 2·(N·cells(pS) + q_E) + 9215` keys and classes (the extractor reads every
+  logged key again at the CTR blocks of the forged proof's `iv`, `card_ptCls_ptsOf_le`).
+- *The theft game as an instance* (`Theft/JointInst.lean`). The instance of slot `j` is
+  `xJ = (j, xN …)`; `proveJ`, `simJ`, `progJ` are `osumProve`, `osumSim`, `osumProg` of the two
+  Lean systems with the `vecOf` output maps `φI`, `φS` and "no proof"; **`PN_eq`, `SmP_eq`,
+  `pgP_eq`**: the theft game's slots are `gP`, `gS`, `gPg` of them (`Coins 16` is `Bytes 16`).
+  The spend system runs at `pS` on the tables of `pI`: readers, confinements (`gate5_params`) and
+  `ZKExp` (`chPt_params`) transport (`TRd.toI`, `Conf.toI`, `ZKExp.toI`). **`zkExpJ`**: `ZKExp`
+  at the point charge of `ivJ` for active slots and `0` for refused ones; `progRdJ_conf`,
+  `proveRdJ_conf`: the honest readers are confined, within `(312, 4607)` and `(624, 4607)`.
+  **`theft_joint_le`**: `real_sim_leN_leanA` for the theft game, with `J` left.
+- *The simulated game's `iv`s* (`Theft/JointIv.lean`). A simulated proof's `iv` is
+  `H₄(iv_pre ‖ μ₁ ‖ 4)` with `iv_pre` its coin (`ivA_simJ`, `outOf_ivPre`), `μ₁` not reading
+  `H₄` (`mu1_setH4`) and `H₄` the extra table's table on these 49-byte inputs (`hbX_h4`); so
+  **`ivs_view`**: the view's `iv`s are the `H₄` table's blocks at `dIv`, a function of the rest of
+  the tape (`splitT`), or absent. **`exP_dupPairs_le`**: `E[#dupPairs] ≤ 4N²·2⁻¹²⁸` (equal
+  inputs need equal uniform `iv_pre` coins of two slots, `dIv_eq`, `exP_coord2`).
+  **`exU_nNone_le`**, `exU_nNoneA_le`: the absent `iv`s are failed simulations,
+  `≤ 2N·pFail ≤ 2N·2⁻¹¹³` in expectation. **`theft_J_le`**: `J` for the simulated game, the
+  budget once times `1 + N²·2⁻⁶⁴ + 4N²·2⁻¹²⁸`, plus the failed simulations.
+- *Correction: refused slots get an `iv` of their own.* With no `iv`, a refused slot is an absent
+  `iv` that `exU_sum_nZKA_le` charges to every other slot (`2N·#refused·(w_E·4607 + w₅·624)`,
+  about `2⁻⁴⁶` at `N = 2³¹` with `2³⁰` refused spends, `refused_overlap_big`). A refused slot
+  reads nothing, so it is confined to any `iv`: `ivJ` gives refused slot `j` the `iv`
+  `H₄(rsv j)` at a reserved 4-byte input (`ivR`, `rsvK_inj`); the instance carries the slot's
+  index for this.
+- **`noTheftN_lean_numJ`** (`Theft/JointNumJ.lean`): with every per-kind hash budget and the
+  cipher budget at most `2⁶⁴` and `U, M ≤ 2³⁰`,
+
+      Pr[BadN] ≤ 2⁻⁵⁴ + Σ_j Adv^ow(inverter j),
+
+  the hypotheses of `noTheftN_lean_numL` (`(U + M)·2⁻⁵⁵ + 2⁻⁵⁹`). The simulated game's event is
+  `ROM/`'s extraction error and the inverters (`theft_sim_le`); numerically `B ≤ 2⁻⁵⁵`,
+  `J ≤ 300·2⁻⁶³`, the per-slot terms `≤ 2⁻⁷⁰` in all, `ε_SE ≤ 14·2⁻⁶³` (`numJ_final`).
+
+Not done: the same for Moussaka and unbound Moussaka (`noRedirectN_lean_numJ`, `nmUN_lean_numJ`:
+their event readers, instances and `iv` structure), and the permutation-row variants.
 
 ### 10.9 Hiding of `Com` (`Privacy/ComHide.lean`)
 

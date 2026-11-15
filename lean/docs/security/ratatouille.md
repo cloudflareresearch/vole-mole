@@ -32,7 +32,7 @@ Line references are `file:line` at `6d7113e`.
 | Notion | Result | Main terms |
 |---|---|---|
 | **Balance** (no inflation): accepted spends ≤ issued + refunded, against adaptive malicious clients, honest clients present | **Proved** (Thm 1), classical. [Lean] as a game on the executable spec and the Lean verifier in the ROM and ideal-cipher model, `N·ε_iss + N·ε_spend + Adv^{uf-tag}(B) + Adv^{coll}(C)` (`ROM/RatatouilleBalance.lean`, `balance_le_ufTag`; §4), and with simultaneous extraction `ε_bal^sim + …` (`balance_le_ufTag_sim`, `balance_le_ompr_sim`: each query of the run charged once for both relations, `≈ 2⁻⁶⁰·⁵` against `2⁻²⁹·⁶` at `2⁶⁴` queries and `N = 2³⁰`): `B` a UF-Tag forger (with a signability probe) and `C` a `Com` collision finder, explicit; their advantages stay terms. The probe costs only the Issuer's aborts: `balance_le_noProbe` (`ROM/RatatouilleProbe.lean`) has a probe-free forger plus a failure term `≤ N·δ(sk)^{255}` (`uov-assumptions.md` §5.8). Under one-more-UOV: `balance_le_ompr` (`Assumptions/RatatouilleOMPR.lean`), the UOV term `Adv^{ompr}` of an explicit reduction, with `Tag` a random function in the standalone game (the modelling hypothesis `TagIdeal`) | `ε_ext + Adv^{uf-tag} + q_K²·2^{−257} + N·E[δ^{255}]` |
-| **No theft**: an adversary cannot spend an honest client's credits through a request it did not copy verbatim (in the extraction form; a relay can still burn the honest nullifier, §5) | **Proved** (Thm 3), using weak SE and a ZK hop. [Lean] the reduction as a game on the executable spec in the ROM and ideal-cipher table model, `ε_I + ε_S + δ_S + ε_SE + Adv^ow(B)` (`Theft/Ratatouille.lean`, `noTheft`; with the Lean prover's zero knowledge, `noTheft_lean`; with the hops' read budgets proved, `noTheft_lean_reads`); weak SE reduced to plain extraction plus a programmed-point term, both hypotheses (`noTheft_lean_plain`, §5); the same with `H₁`, `H₂⁰…H₂²`, `H₄`, `H_comb` read off uniform tables (`noTheft_leanX_plain`, `Theft/Tables.lean`); `Adv^ow` in a random-table model for the standalone experiment, `(q+2)·2⁻¹²⁶` (`owAdvColRO_num`, `Theft/ComOW.lean`); for `U` honest clients and `M` honest spends with chained change tokens, `U·ε_I + M·ε_S + Σ_i δ_i + ε_SE + Σ_j Adv^ow(B_j)` (`noTheftN`, `Theft/RatatouilleMany.lean`; with the Lean prover, the hops' budgets proved and weak SE reduced to plain extraction, `noTheftN_lean_plain`, §5); every term but `Adv^ow` explicit, at per-kind and cipher budgets `2⁶⁴`: `≤ 2⁻⁵⁴ + Adv^ow` for one Client and `≤ 2⁻²⁴ + Σ_j Adv^ow` for `U, M ≤ 2³⁰` (`noTheft_lean_num`, `noTheftN_lean_num`; `_numP` with AES as random permutations and inverse queries; §5) | `ε_ZK + ε_SE + q_K·2^{−127}` |
+| **No theft**: an adversary cannot spend an honest client's credits through a request it did not copy verbatim (in the extraction form; a relay can still burn the honest nullifier, §5) | **Proved** (Thm 3), using weak SE and a ZK hop. [Lean] the reduction as a game on the executable spec in the ROM and ideal-cipher table model, `ε_I + ε_S + δ_S + ε_SE + Adv^ow(B)` (`Theft/Ratatouille.lean`, `noTheft`; with the Lean prover's zero knowledge, `noTheft_lean`; with the hops' read budgets proved, `noTheft_lean_reads`); weak SE reduced to plain extraction plus a programmed-point term, both hypotheses (`noTheft_lean_plain`, §5); the same with `H₁`, `H₂⁰…H₂²`, `H₄`, `H_comb` read off uniform tables (`noTheft_leanX_plain`, `Theft/Tables.lean`); `Adv^ow` in a random-table model for the standalone experiment, `(q+2)·2⁻¹²⁶` (`owAdvColRO_num`, `Theft/ComOW.lean`); for `U` honest clients and `M` honest spends with chained change tokens, `U·ε_I + M·ε_S + Σ_i δ_i + ε_SE + Σ_j Adv^ow(B_j)` (`noTheftN`, `Theft/RatatouilleMany.lean`; with the Lean prover, the hops' budgets proved and weak SE reduced to plain extraction, `noTheftN_lean_plain`, §5); every term but `Adv^ow` explicit, at per-kind and cipher budgets `2⁶⁴`: `≤ 2⁻⁵⁴ + Adv^ow` for one Client and `≤ 2⁻²⁴ + Σ_j Adv^ow` for `U, M ≤ 2³⁰` (`noTheft_lean_num`, `noTheftN_lean_num`; `_numP` with AES as random permutations and inverse queries; §5), and with the joint zero-knowledge step at points `≤ 2⁻⁵⁴ + Σ_j Adv^ow` for `U, M ≤ 2³⁰` (`noTheftN_lean_numJ`, function rows; §5) | `ε_ZK + ε_SE + q_K·2^{−127}` |
 | **No theft by copying** (hijack): anyone who obtains a spend request can redeem it first | **Fails** (F2). Nothing binds a spend to a session, unlike {{ACT}}'s `ctx_spend` and Moussaka's `challenge_digest` | — |
 | **Unlinkability/anonymity** against a malicious Issuer: spends and issuances leak only `(pk, ctx_iss, T_init, d)` and whether the client could afford the spend | **Proved** (Thm 2). On `main` it relies on Keccak one-wayness in `r`; with the fix it is standard NIZK. [Lean] a two-round left/right form, from ZK and hiding hypotheses (`Privacy/Ratatouille.lean`); with the executable Lean prover (label rows) down to its tape hypothesis (`Privacy/RatatouilleLean.lean`, `unlinkability_label_rows`); for the Lean prover in the ROM and ideal-cipher model with every zero-knowledge term explicit, `≈ 2⁻¹⁰²·³` plus budget terms and `2·ε_hide` (`unlinkabilityRO_lean_num`), and `≈ 2⁻¹⁰¹·⁶` with a table-reading Issuer (`unlinkabilityRA_lean_num`; §6); also with AES as random permutations (`_perm`) and with one shared `H₃` (`unlinkabilitySh_num`, `unlinkabilityRASh_num`); from the real Clients' OS seeds and seed XOF, each `+ 2·(2q_H + 2)·2⁻²⁵⁶` with `q_H` the Issuer's XOF queries (`unlinkability*_seed`, `lean/docs/zk.md` §10.6; the note's H1 does not charge seed collisions); with a key stage (the Issuer's key, context and balance) that reads the tables too (`unlinkabilityRAK_lean_num`, `≈ 2⁻¹⁰¹·⁶`); with any number `n` of further honest Clients, `≤ n·2⁻¹⁰¹` plus budget terms and `2·ε_hide` (`unlinkabilityN_lean_num`), also adaptively scheduled, each further session's key, context, balance, response and amount chosen from earlier outcomes and the challenge key, context and balance from the sessions before it (`unlinkabilityAd_lean_num`, the same numbers), and interleaved in any order with each further Client spending up to `K` times along its change tokens (`unlinkabilityIL_lean_num`, `≤ (n(K + 1) + 2)·2⁻¹⁰¹`; with a table-reading scheduler that also places the challenge's stages, `unlinkabilityILO_lean_num`, `+ 46·L·(a₃ + a₂ + a₅ + 221·a_E)·2⁻¹²⁸`), and with `N` challenge pairs (`unlinkabilityP_lean_num`; `lean/docs/zk.md` §10.8, §11) | `ε_ZK + q_K·2^{−127}` |
 | **Correctness** of issuance, spends, refunds and the 64-bit edge cases | **Proved** (Thm 4); arithmetic checked in Lean | prover abort `≤ (1−p)^{2³²}` |
@@ -1042,15 +1042,37 @@ honest openings, not about signatures. The table's bound in §0 is the right one
        instance must be charged nothing: `real_sim_leN_leanA` and `exU_sum_nZKA_le`, where only a
        failed simulation of an active slot pays the budget term.
 
-    Not done: the theft event `BadN` as an event of one consistent game reader (the composition
-    of `runGRd`, `verPtRd` on the run's operation, and the extractor's reader with its query list:
-    the patches' prefix computations of the first `N` log entries, then the run's queries), with
-    `T₃` and `c_E`; the theft game as an instance of the generic game (`osumProve` with
-    `xOf = xN`, `Coins 16` as `Bytes 16`, the `vecOf` output map's `iv` decoder, the spend system's
-    `Sh pS` as `Sh pI`); and the simulated game's `iv` structure (`H₄` of `XTab` at
-    `iv_pre ‖ μ₁ ‖ 4`, `E[#dupPairs] ≤ N²·2^{−128}`, the failed-simulation term). So
-    `noTheftN_lean_numJ` is not stated, and the mechanized many-token bound stays
-    `(U + M)·2^{−55} + 2^{−59}`.
+    7. *The many-token theft bound with the joint step* (`Theft/JointBad.lean`,
+       `Theft/JointInst.lean`, `Theft/JointTheft.lean`, `Theft/JointIv.lean`,
+       `Theft/JointNumJ.lean`; `docs/zk.md` §10.8, "The joint step for the theft game"; audit
+       `Audit/ZKPoint5.lean`). Proved:
+
+           noTheftN_lean_numJ:  Pr[BadN] ≤ 2^{−54} + Σ_j Adv^ow(inverter j)
+
+       for `U, M ≤ 2³⁰`, every per-kind hash budget and the cipher budget at most `2⁶⁴`, function
+       rows, `L ≥ Lmin`, the hypotheses of `noTheftN_lean_numL` (which gives
+       `(U + M)·2^{−55} + 2^{−59}`, about `2^{−24}` at `U + M = 2³¹`). The pieces: `BadN` with
+       `ROM/`'s extractor is the event of one consistent game reader (`badGRd`: the last stage's
+       run and the patches' prefix runs, then the verifier and the extractor at the operation and
+       the query list; `badGRd_reads`), with `T₃ = q_{h3}` and `c_E = 2·(N·cells(pS) + q_E) + 9215`
+       (`badGRd_T3`, `badGRd_cls`); the theft game is the joint game of the two Lean systems and
+       "no proof" (`PN_eq`, `SmP_eq`, `pgP_eq`, `zkExpJ`, the spend system at `pS` on the tables of
+       `pI`: `ZKExp.toI`, `Conf.toI`), so `theft_joint_le`; the simulated game's `iv`s are `H₄` of
+       the extra table at `iv_pre ‖ μ₁ ‖ 4` (`ivs_view`), `E[#dupPairs] ≤ 4N²·2^{−128}`
+       (`exP_dupPairs_le`: equal inputs need equal uniform `iv_pre` coins) and the absent `iv`s are
+       failed simulations, `≤ 2N·2^{−113}` in expectation (`exU_nNone_le`), so `theft_J_le`; the
+       simulated game's event is `ROM/`'s extraction error and the inverters (`theft_sim_le`).
+       Numerically the bound is about `2^{−54.8}` (`J ≤ 300·2^{−63}`, `B ≤ 2^{−55}`).
+
+       Correction: a refused slot (no proof) with no `iv` is charged to every other slot through
+       the overlap term (`2N·#refused·(w_E·4607 + w₅·624)`, about `2^{−46}` at `N = 2³¹` with `2³⁰`
+       refused spends). A refused slot reads nothing, so any `iv` confines it; the joint system's
+       `iv` decoder gives refused slot `j` the `iv` `H₄(rsv j)` at a reserved 4-byte input (`ivR`;
+       the instance carries the slot's index, `xJ`), which collides with the others only through
+       the uniform table.
+
+    Not done: Moussaka and unbound Moussaka (`noRedirectN_lean_numJ`, `nmUN_lean_numJ`), the same
+    construction for their games; and the permutation-row variant (`_numJP`).
   - **`noTheft_lean_rom`** (`Theft/PlainRataRom.lean`): `noTheft_leanX_hitL` with plain extraction
     discharged. Function rows (`R = Blk → Blk`), `M = uovM`, `L ≥ Lmin`, an adversary whose last
     stage is the run of an oracle computation within `QBudT q q_E n_G` (`hA`), the extractor
