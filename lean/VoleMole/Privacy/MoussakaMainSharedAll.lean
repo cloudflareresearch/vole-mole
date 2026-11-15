@@ -337,20 +337,6 @@ theorem simAll_bstar_eq (b : Bool) :
     rfl
   rw [c, pr_prod, Finset.sum_congr rfl fun T _ => h T]
 
-/-- **(PU) of a predictor that draws the table itself** is the average over the table. -/
-theorem puAdv_avgH {N R Tc Aux : Type*} [Fintype N] [Fintype R] [Fintype Aux] (com : N → R → Tc)
-    (P : H3T → N → Tc → Aux → Finset R) :
-    puAdv com (fun n t (a : Aux × H3T) => P a.2 n t a.1) =
-      (∑ T : H3T, puAdv com (P T)) / Fintype.card H3T := by
-  unfold puAdv
-  let e : H3T × ((N × R) × Aux) ≃ (N × R) × (Aux × H3T) :=
-    { toFun := fun z => (z.2.1, (z.2.2, z.1))
-      invFun := fun z => (z.2.2, (z.1, z.2.1))
-      left_inv := fun _ => rfl
-      right_inv := fun _ => rfl }
-  rw [← pr_equiv e, pr_prod]
-  rfl
-
 /-- **The predictor for Client `false`'s opening in world `b`** with one `H₃`: it draws the table
 and runs `predS23₀` for the guess at that table. -/
 noncomputable def predH₀ (b : Bool) (n : Coins nfBytes) (t : Bytes)

@@ -396,7 +396,37 @@ theorem preOf_eq_imp (hHb : HashesWF Hb) {p p' : Params} {y y' : SW}
   rw [prefB_get! hw (by omega), prefB_get! hw' (by omega)] at g
   exact g
 
+/-- **Two optional proofs with different prefixes**: if their witnesses have their parameters'
+lengths and, when the lengths agree, different first 16 bytes. -/
+theorem distO_of (hHb : HashesWF Hb) {p p' : Params} {a b : Option SW}
+    (ha : ∀ y ∈ a, y.2.size = p.witnessBytes) (hb : ∀ y ∈ b, y.2.size = p'.witnessBytes)
+    (h16 : 16 ≤ p.witnessBytes) (hm : p.witnessBytes + 32 < preMax)
+    (hm' : p'.witnessBytes + 32 < preMax)
+    (hne : ∀ y ∈ a, ∀ y' ∈ b, p.witnessBytes = p'.witnessBytes → wPre y.2 ≠ wPre y'.2) :
+    DistO (a.map (preOf Hb p)) (b.map (preOf Hb p')) := by
+  rintro k hk k' hk' rfl
+  obtain ⟨y, hy, rfl⟩ := Option.mem_map.1 hk
+  obtain ⟨y', hy', hyy⟩ := Option.mem_map.1 hk'
+  obtain ⟨h1, h2⟩ := preOf_eq_imp hHb (ha y hy) (hb y' hy') h16 hm hm' hyy.symm
+  exact hne y hy y' hy' h1 h2
+
 end Prefix
+
+/-! ## A predictor that draws the table -/
+
+/-- **(PU) of a predictor that draws the table itself** is the average over the table. -/
+theorem puAdv_avgH {N R Tc Aux : Type*} [Fintype N] [Fintype R] [Fintype Aux] (com : N → R → Tc)
+    (P : H3T → N → Tc → Aux → Finset R) :
+    Privacy.PU.puAdv com (fun n t (a : Aux × H3T) => P a.2 n t a.1) =
+      (∑ T : H3T, Privacy.PU.puAdv com (P T)) / Fintype.card H3T := by
+  unfold Privacy.PU.puAdv
+  let e : H3T × ((N × R) × Aux) ≃ (N × R) × (Aux × H3T) :=
+    { toFun := fun z => (z.2.1, (z.2.2, z.1))
+      invFun := fun z => (z.2.2, (z.1, z.2.1))
+      left_inv := fun _ => rfl
+      right_inv := fun _ => rfl }
+  rw [← pr_equiv e, pr_prod]
+  rfl
 
 /-! ## The shared game, and the reduction to the slice game -/
 
