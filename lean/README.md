@@ -1695,7 +1695,18 @@ What is **not** established, roughly in order of importance:
    The composition step of a joint argument is proved (`Theft/JointZK.lean`: `joint_le`,
    `real_sim_leN_jointZK`) and would give `≤ 2⁻⁵⁴` for all `U, M ≤ 2³⁰` (`jointNum_le`); its
    hypothesis, one-proof zero knowledge charged by expected point-level reads, is not proved
-   (`security/ratatouille.md` §5; audit `Audit/TheftJointZK.lean`). `Adv^ow` stays the advantage of the explicit inverter, a computational
+   (`security/ratatouille.md` §5; audit `Audit/TheftJointZK.lean`). Toward that hypothesis, one-proof hops charged by the
+   expected number of reads at the proof's points are proved (`ZK/IdealCipherPt.lean`,
+   `ZK/HopsH4Pt.lean`, `ZK/HopsROMExp.lean`, `ZK/HopsH6Exp.lean`, `ZK/IvOverlap.lean`; audit
+   `Audit/ZKPoint.lean`): H4 at points (`hide_rom_query_pt`, `≤ 221·(4607 + E_real[#keys read at
+   CTR blocks of iv]) / (2^128 − 221·qm)`, via a GGM hybrid that replaces rows only on a set of
+   inputs, `IC.puncturePt_real`), H1 (`h3_rom_query_real`), H6's bad event (`pr_bad_exp`), and the
+   number of proofs one read concerns (`exP_sum_inY_le`: total charge `≤ q·(1 + N²·2⁻⁶⁴)`, since a
+   shared CTR block means shared middle 64 bits of the `iv`s). Not done: assembling them into the
+   one-proof theorem `hyb_hop_exp` needs, the theft hops' per-point read budgets, and the theft
+   games' `iv`s as uniform blocks; the overlap factor `1 + N²·2⁻⁶⁴` (up to 5/4) also means
+   `jointNum_le`'s assumption `J ≤ zkB` is slightly optimistic as stated (points would have to be
+   restricted to the counters and tweaks in use). `Adv^ow` stays the advantage of the explicit inverter, a computational
    assumption on Keccak-p[800,12]: `Com` is evaluated inside the relations, so it cannot be a table
    of the game, and some inverter wins with probability 1 (`owAdv_one_ratatouille`,
    `owAdv_one_moussaka`). In a random-table model of the standalone experiment a `q`-query
