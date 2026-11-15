@@ -432,9 +432,14 @@ section Keys
 variable {β : Type} (T : CrtTables) (st : Statement) (Q : OracleComp specIC (ByteArray × β))
 
 /-- **Outside `PostP p`, the keys committed at the `H₂¹` inputs are found before them**, for any
-forward prover whose log has N1 at `p` (`keysPre_of_not_postP_iv` without the normalization). -/
-theorem keysPre_of_not_postP_Q (p : Params) (hp : st.params = p) (E : CTable) (g : Table)
-    (hN1 : IvBefore p (jOf g Q E)) (hpost : ¬PostP p E (jOf g Q E)) :
+forward prover whose log has N1 at `p` for the `H₂¹` inputs with the statement's `mu₁` (the only
+ones `KeysPre` reads). -/
+theorem keysPre_of_not_postP_mu (p : Params) (hp : st.params = p) (E : CTable) (g : Table)
+    (hN1 : ∀ (pre post : QueryLog specIC) (x : ByteArray) (u : Ans (.h21, x)),
+      jOf g Q E = pre ++ (⟨.inl (.h21, x), u⟩ : (t : DomIC) × AnsIC t) :: post →
+      x.extract 0 32 = st.mu1 (Hashes.ofTable g) →
+      (.inl (.h4, ivIn p x) : DomIC) ∈ pre.map Sigma.fst)
+    (hpost : ¬PostP p E (jOf g Q E)) :
     KeysPre st E (jOf g Q E) (gLog T st Q E g) g := by
   intro x hxmu i hi j hj a hcom _
   set J := jOf g Q E
@@ -499,7 +504,7 @@ theorem keysPre_of_not_postP_Q (p : Params) (hp : st.params = p) (E : CTable) (g
         refine mem_hashLog.2 ?_
         have hJ0 : jOf g Q E =
             Jx ++ (⟨.inl (.h21, x), u⟩ : (t : DomIC) × AnsIC t) :: rest := hJ
-        have := hN1 Jx rest x u hJ0
+        have := hN1 Jx rest x u hJ0 hxmu
         exact List.map_subset _ (List.subset_append_left _ _) this
       have hiv : ivAt p (hashEnt pre) x = some iv := by
         rw [ivAt_eq hG h4]
@@ -531,6 +536,13 @@ theorem keysPre_of_not_postP_Q (p : Params) (hp : st.params = p) (E : CTable) (g
         ⟨j, List.mem_range.2 hj, ?_⟩⟩
       rw [hcom']
       exact List.mem_cons_self
+
+/-- **Outside `PostP p`, the keys committed at the `H₂¹` inputs are found before them**, for any
+forward prover whose log has N1 at `p` (`keysPre_of_not_postP_iv` without the normalization). -/
+theorem keysPre_of_not_postP_Q (p : Params) (hp : st.params = p) (E : CTable) (g : Table)
+    (hN1 : IvBefore p (jOf g Q E)) (hpost : ¬PostP p E (jOf g Q E)) :
+    KeysPre st E (jOf g Q E) (gLog T st Q E g) g :=
+  keysPre_of_not_postP_mu T st Q p hp E g (fun pre post x u h _ => hN1 pre post x u h) hpost
 
 end Keys
 

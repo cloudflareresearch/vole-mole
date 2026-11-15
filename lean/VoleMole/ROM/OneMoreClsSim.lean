@@ -203,12 +203,18 @@ variable (lr : Bool) (pk : UovPk) (pre : TG → SIss) (A : Forger) (Lst : List T
 set_option exponentiation.threshold 500 in
 set_option maxRecDepth 4000 in
 /-- **U1^cls's term with simultaneous extraction, for fixed key, target stream and cipher table**,
-for a forger whose log covers the decoder (`prEvent_pfailZ_sim_le_E` with `E₁^cls`):
-the queries of the last derived prover's run (which extends every derived prover's run where a
-forgery fails) are charged once, each forgery's extraction and verification queries once per
-forgery, and each forgery's failure events. -/
-theorem prEvent_clsFailZ_sim_le_E (hd : pk.digest.size = 32) {qA : Kind → ℕ} {nA qE QT : ℕ}
+for a forger whose log covers the decoder (`prEvent_pfailZ_sim_le_Ec` with `E₁^cls`), with a
+failure event `cf` guarding `KeysPre` in place of Post (`prEvent_clsFailZ_sim_le_E` is
+`cf = PostOut E`): the queries of the last derived prover's run (which extends every derived
+prover's run where a forgery fails) are charged once, each forgery's extraction and verification
+queries once per forgery, and each forgery's failure events. -/
+theorem prEvent_clsFailZ_sim_le_Ec (hd : pk.digest.size = 32) {qA : Kind → ℕ} {nA qE QT : ℕ}
     (hA : ForgerBound A qA nA qE QT) (E : CTable)
+    (cf : Out (((TG × ByteArray × ByteArray) × AuxP) × QueryLog specIC) → Prop)
+    (hcf : ∀ j : Fin (ℓ + 1), ∀ s g', ¬cf (evalWithAnswerFn (QueryImpl.ofFn g')
+        (gameIC CrtGen.tables (stG lr pk s) (proverP lr pk pre A Lst j.val) E)) →
+      KeysPre (stG lr pk s) E (jOf g' (proverP lr pk pre A Lst j.val) E)
+        (gLog CrtGen.tables (stG lr pk s) (proverP lr pk pre A Lst j.val) E g') g')
     (hcovA : ∀ g, CovL lr E g (evalWithAnswerFn (QueryImpl.ofFn (join g E))
       ((simulateQ (wrapIC lr hintVoid pre) (A pk)).run ([], hs0 Lst, fun _ => none))).2.1) :
     let q := qP qA QT ℓ
@@ -220,7 +226,7 @@ theorem prEvent_clsFailZ_sim_le_E (hd : pk.digest.size = 32) {qA : Kind → ℕ}
       ∑ _j : Fin (ℓ + 1), ∑ k ∈ adaptKinds,
         ((extractorQueries + verifierQueries) k : ℝ≥0∞) * ε k +
       ∑ j : Fin (ℓ + 1), Pr{let r ← (simulateQ randomOracle
-        (gameDP lr E pk pre A Lst j.val)).run' ∅}[failP lr pk E r] := by
+        (gameDP lr E pk pre A Lst j.val)).run' ∅}[failPc lr pk E cf r] := by
   classical
   intro q ε
   set n := nP nA QT ℓ
@@ -261,21 +267,21 @@ theorem prEvent_clsFailZ_sim_le_E (hd : pk.digest.size = 32) {qA : Kind → ℕ}
           (evalWithAnswerFn (QueryImpl.ofFn g) (runE E (P j.val)))) g,
         e.1 ∉ (tableQueryLog (runE E (P j.val)) g).map Sigma.fst ∧ simBadC lr pk E (P j.val) e.1 g) ∨
       (∃ j ∈ (Finset.univ : Finset (Fin (ℓ + 1))),
-        failP lr pk E
+        failPc lr pk E cf
           (evalWithAnswerFn (QueryImpl.ofFn g) (gameDP lr E pk pre A Lst j.val))) := by
     intro g hev
     obtain ⟨i, hi⟩ := hev
     have hiℓ : i.val ≤ ℓ := Nat.lt_succ_iff.1 i.isLt
-    have hev4 := clsFail_events g lr E pk pre A Lst ℓ i.val hd (hcovA g) hi
+    have hev4 := clsFail_events_of g lr E pk pre A Lst ℓ i.val cf (hcf i) hd (hcovA g) hi
     obtain ⟨hH, hJ⟩ := prefix_of_clsFail g lr E pk pre A Lst ℓ hiℓ hi
     -- a failure of the `i`-th derived game, or a bad query of its log
-    have key : failP lr pk E
+    have key : failPc lr pk E cf
         (evalWithAnswerFn (QueryImpl.ofFn g) (gameDP lr E pk pre A Lst i.val)) ∨
         ∃ e ∈ tableQueryLog (gameDP lr E pk pre A Lst i.val) g, simBadC lr pk E (P i.val) e.1 g := by
       rcases hev4 with h0 | h1 | h2 | ⟨e, he, hb'⟩
       · by_cases hf : bindFailA stF E (evalWithAnswerFn (QueryImpl.ofFn g)
             (gameDP lr E pk pre A Lst i.val)) ∨ deadOpenA stF E (evalWithAnswerFn (QueryImpl.ofFn g)
-            (gameDP lr E pk pre A Lst i.val)) ∨ PostOut E (evalWithAnswerFn (QueryImpl.ofFn g)
+            (gameDP lr E pk pre A Lst i.val)) ∨ cf (evalWithAnswerFn (QueryImpl.ofFn g)
             (gameDP lr E pk pre A Lst i.val))
         · left
           rcases hf with hf | hf | hf
@@ -287,7 +293,7 @@ theorem prEvent_clsFailZ_sim_le_E (hd : pk.digest.size = 32) {qA : Kind → ℕ}
           obtain ⟨e, he, hbad⟩ := pomBadC_trace pk hG (fun s => s.2.1) (fun s => s.2.2) lr
             CrtGen.tables (P i.val) E liftInvOk_tables (2 ^ 50)
             (fun s => combDetC_pomfritT pk hG (fun s => s.2.1) (fun s => s.2.2) lr E s)
-            (PostOut E) (fun s g' h => keysPre_of_not_postOut CrtGen.tables _ _ E g' h) g
+            cf (hcf i) g
             ⟨h0, hf.1, hf.2.1, hf.2.2⟩
           exact ⟨e, he, Or.inl hbad⟩
       · exact Or.inl (Or.inr (Or.inr (Or.inl h1)))
@@ -322,12 +328,36 @@ theorem prEvent_clsFailZ_sim_le_E (hd : pk.digest.size = 32) {qA : Kind → ℕ}
     (fun j _ => isTotalQueryBound_runE E (hb j).2.1)
     (fun _ a => isTotalQueryBound_gameK CrtGen.tables stF E id a)
     (fun j => simBadC lr pk E (P j.val)) Finset.univ
-    (fun j : Fin (ℓ + 1) => gameDP lr E pk pre A Lst j.val) (fun _ r => failP lr pk E r)
+    (fun j : Fin (ℓ + 1) => gameDP lr E pk pre A Lst j.val) (fun _ r => failPc lr pk E cf r)
     (fun j _ => hSG j) (n + (2 + verifierTotal)) (by omega) le_rfl
     (fun c t hc hcard => prEvent_simBadC_le lr pk E P₀ q hb₀.1 S hKS _ c t hc hcard)
     (fun j _ c t hc hcard => prEvent_simBadC_le lr pk E (P j.val) q (hb j).1 S hKS _ c t hc hcard)
     htr
   exact key
+
+set_option exponentiation.threshold 500 in
+set_option maxRecDepth 4000 in
+/-- **U1^cls's term with simultaneous extraction, for fixed key, target stream and cipher table**,
+for a forger whose log covers the decoder (`prEvent_pfailZ_sim_le_E` with `E₁^cls`):
+the queries of the last derived prover's run (which extends every derived prover's run where a
+forgery fails) are charged once, each forgery's extraction and verification queries once per
+forgery, and each forgery's failure events. -/
+theorem prEvent_clsFailZ_sim_le_E (hd : pk.digest.size = 32) {qA : Kind → ℕ} {nA qE QT : ℕ}
+    (hA : ForgerBound A qA nA qE QT) (E : CTable)
+    (hcovA : ∀ g, CovL lr E g (evalWithAnswerFn (QueryImpl.ofFn (join g E))
+      ((simulateQ (wrapIC lr hintVoid pre) (A pk)).run ([], hs0 Lst, fun _ => none))).2.1) :
+    let q := qP qA QT ℓ
+    let ε := simEpsC (nP nA QT ℓ + (2 + verifierTotal)) (q + extractorQueries + verifierQueries)
+    Pr{let z ← (simulateQ randomOracle ((simulateQ (htW (AR := Ans) addHint pre)
+        (Acomp CrtGen.tables lr E (e1C lr E) tgts1 pk ℓ A)).run (hs0 Lst))).run' ∅}[
+        ∃ i : Fin (ℓ + 1), PFailZ pk i.val z] ≤
+      ∑ k ∈ adaptKinds, (q k : ℝ≥0∞) * ε k +
+      ∑ _j : Fin (ℓ + 1), ∑ k ∈ adaptKinds,
+        ((extractorQueries + verifierQueries) k : ℝ≥0∞) * ε k +
+      ∑ j : Fin (ℓ + 1), Pr{let r ← (simulateQ randomOracle
+        (gameDP lr E pk pre A Lst j.val)).run' ∅}[failP lr pk E r] :=
+  prEvent_clsFailZ_sim_le_Ec lr pk pre A Lst ℓ hd hA E (PostOut E)
+    (fun _ _ g' h => keysPre_of_not_postOut CrtGen.tables _ _ E g' h) hcovA
 
 end SimE
 
