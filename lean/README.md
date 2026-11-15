@@ -1706,11 +1706,21 @@ What is **not** established, roughly in order of importance:
    theorem (`ZK/ChainExp.lean` `chain3_le`, `ZK/HopsICExp.lean` `zk_rom_ic_h23_exp`,
    `ZK/ReadsROExp.lean` `zk_ro_exp`, audit `Audit/ZKPoint2.lean`): for a consistent point reader
    (`PtReads`, `Cons`), `|real − sim| ≤ (εZK + E_real[chZK])/(1 − βZK)` with `εZK ≈ 2⁻¹⁰⁷` and
-   `βZK < 2⁻⁵⁵` at budgets `2⁶⁴`, the hypothesis shape of `hyb_hop_exp` (function rows). Not done:
-   the theft hops' distinguishers as consistent point readers with their charges summed in the
-   simulated game, and the theft games' `iv`s as uniform blocks; the overlap factor `1 + N²·2⁻⁶⁴` (up to 5/4) also means
-   `jointNum_le`'s assumption `J ≤ zkB` is slightly optimistic as stated (points would have to be
-   restricted to the counters and tweaks in use). `Adv^ow` stays the advantage of the explicit inverter, a computational
+   `βZK < 2⁻⁵⁵` at budgets `2⁶⁴`, the hypothesis shape of `hyb_hop_exp` (function rows). The joint
+   many-proof step with point charges (`Theft/JointLean.lean` `real_sim_leN_lean`, audit
+   `Audit/ZKPoint3.lean`) gives `(Σ_i(εZK/(1−βZK) + (1+B)·Pr[deltaN i]) + J)/(1 − N·B)` for a game
+   of Lean proofs, for every event a consistent point game reader reads (`lean_zkExp`,
+   `ZK/ZKExp.lean`). The hop readers are built by composition (`hopRd`, `ZK/PtRd.lean`), the hop
+   charge is bounded by the view for honest readers confined to their `iv`s (`hopRd_charges`), and
+   the real prover is confined (`realPtRd_conf`). For table `iv`s the sum is `exU_sum_nZK_le`: the
+   budget once, times `1 + N²·2⁻⁶⁴`, plus an `iv` input-collision term; even with that factor
+   `jointNumK_le` reaches ≤ 2⁻⁵⁴ at U+M ≤ 2³¹. Correction: `real_sim_leN_jointZK`'s all-events
+   hypothesis cannot be met by point charges, so the step is restated for a class of events
+   (`real_sim_leN_jointAdm`), and a hop costs `(1+B)·Pr[deltaN i]` (`real_sim_leN_jointRaw`). Not
+   done: the simulator's programming at points (`vPre`), the theft games' reader at points
+   (adversary, verifier, extractor `eRom`), the theft games as instances (sum of two proof systems,
+   output map), and the simulated `iv` structure; so `noTheftN_lean_numJ` is not stated and the
+   mechanized many-token bound stays `(U+M)·2⁻⁵⁵ + 2⁻⁵⁹`. `Adv^ow` stays the advantage of the explicit inverter, a computational
    assumption on Keccak-p[800,12]: `Com` is evaluated inside the relations, so it cannot be a table
    of the game, and some inverter wins with probability 1 (`owAdv_one_ratatouille`,
    `owAdv_one_moussaka`). In a random-table model of the standalone experiment a `q`-query
