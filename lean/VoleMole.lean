@@ -370,6 +370,8 @@ import VoleMole.Privacy.PomFRITAdaptive
 import VoleMole.Privacy.PomFRITRAHPfx
 import VoleMole.Privacy.PomFRITAdaptivePfx
 import VoleMole.ZK.ReadsPoint
+import VoleMole.ZK.IdealCipherPt
+import VoleMole.ZK.HopsH4Pt
 import VoleMole.Privacy.PomFRITLin
 import VoleMole.Privacy.MoussakaMany
 import VoleMole.Privacy.Split
