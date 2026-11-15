@@ -937,6 +937,63 @@ honest openings, not about signatures. The table's bound in §0 is the right one
     `2^{−35}`. What is left is `Adv^ow`, a computational assumption (below). Audit:
     `Audit/TheftNum.lean` (the theorems at the trivial adversaries with every budget `2^{64}`, any
     `U, M ≤ 2^{30}`, and an inverse-query thief).
+  - **Linear in `U + M`** (`Theft/NumLin.lean`): for every `U, M ≤ 2^{30}`, with the same
+    budgets,
+
+        noTheftN_lean_numL, noTheftN_lean_numLP:
+          Pr[BadN] ≤ (U + M)·2^{−55} + 2^{−59} + Σ_j Adv^ow(inverter j).
+
+    Each honest proof pays one hop, one collision term and one programmed-point term, together
+    below `2^{−55}` (`perProof_le`); `ROM/`'s error is paid once. So `2^{−54} + 2^{−59}` for
+    `U = M = 1`, about `2^{−35}` at `U + M = 2^{20}`, about `2^{−24}` at `U + M = 2^{31}`. The same
+    for Moussaka (`noRedirectN_lean_numL`, `_numLP`) and unbound Moussaka (`nmUN_lean_numL`,
+    `_numLP`). Audit: `Audit/TheftJointZK.lean`.
+  - **Why every hop pays the adversary's budget.** The factor `U + M` multiplies the budget terms
+    of `zkB`, `(q₃ + q₅ + 221·q_E')·2^{−128}`, not only per-proof constants. This comes from the
+    proof, not from the protocol:
+    1. *Black-box hops.* Hop `i` applies the one-proof theorem (`ZKRow.zk`) to the rest of the
+       game, adversary included, with worst-case budgets. One proof's zero-knowledge error is at
+       least of order `q_E·2^{−128}`: guess the key of a hidden node whose child is opened, encrypt
+       the child's CTR input (`xIn`: the public `iv`, the child's side and the parent's index) and
+       compare with the opened seed. Each query succeeds with probability `2^{−128}` against the
+       real prover and tells it from the simulator. Hop `i`'s distinguisher may spend all `q_E`
+       queries on proof `i`. So a sum of per-proof bounds is at least of order `N·q_E·2^{−128}`
+       (`2^{−33}` at `N = 2^{31}`, `q_E = 2^{64}`), whatever the per-proof theorem.
+    2. *Key-level charging.* H4 (`IC.puncture`) charges every read of a hidden node's row, at any
+       input. In one joint hybrid the event "some adversary read is at a hidden key of some proof"
+       still has probability about `221·N·q_E·2^{−128}`: a random key is a hidden key of one of the
+       `N` proofs with probability `221·N·2^{−128}`. That is the present bound.
+    3. *What the adversary can actually gain.* A cipher query `(k, x)` concerns only the proofs
+       whose CTR blocks contain `x`: a CTR block keeps the `iv`'s middle 64 bits and adds a counter
+       and a tweak to its outer lanes (`AES.ctrBlock`, `lane1_of_ctrBlock_eq`). With `iv` read off
+       the `H₄` table, fresh per proof, a query concerns at most one proof unless two proofs'
+       `iv`s nearly collide (equal middle lanes, outer lanes within the counter and tweak
+       offsets): probability about `N²·R·2^{−128}`, `R` the number of offsets. The key-guessing
+       attack of item 1 then gains about `q_E·2^{−128}` in all, not per proof. `H₃` (private slices) and `H₅` (keys that begin with the `iv`) behave the same.
+  - **The joint step** (`Theft/JointZK.lean`). Proved, as a composition lemma: if hop `i` costs
+    `c_i + E_i[Y_i]` for every event, with `Y_i ∈ [0, B]` a function of hybrid `i`'s view and
+    `E_i` the expectation in hybrid `i`, and `Σ_i E_sim[Y_i] ≤ J` in the simulated game, then
+
+        |Pr_real − Pr_sim| ≤ (Σ_i c_i + J) / (1 − N·B)       (N·B < 1)
+
+    (`joint_le`, `real_sim_leN_joint`; per rest of the tape as in `hyb_hop`: `hyb_hop_exp`,
+    `real_sim_leN_jointZK`). The expectations are taken in different hybrids. They are compared
+    through the hybrids' distance (`exU_sub_le`: `|E_i f − E_N f| ≤ B·TV`), which the sum itself
+    bounds, so the error closes on itself. With `Y_i ≡ 0` it is `real_sim_leN`. Let `Y_i` charge
+    `2^{−128}` per read of proof `i`'s slice or of its `H₅` keys and `221·2^{−128}` per cipher
+    read at proof `i`'s points. Then `B` is one hop's budget term, `N·B ≈ 2^{−24}`, and `J` is
+    the budget term once (times the expected largest number of proofs a read concerns, about
+    `1`). With per-proof
+    terms `≤ 2^{−100}`, the many-token bound would be `≤ 2^{−54}` for every `U, M ≤ 2^{30}`
+    (`jointNum_le`).
+    **Not proved: the hypothesis.** `hyb_hop_exp` needs one-proof zero knowledge with an error
+    linear in the **expected** number of the distinguisher's reads at the proof's **points**.
+    `ZK/` proves zero knowledge with worst-case budgets (`Rd3`, `Rd5`, `RdE`) and charges whole
+    rows. What is missing: H4 at points (the hidden part reads only the points `pts`,
+    `HopsH4Ideal.lean`, so only their values need replacing); H1, H4 and H6 charged in
+    expectation; the theft hops' read budgets per proof and per point (`Theft/Reads.lean`,
+    `Theft/ManyReads.lean`, `Theft/PlainSlicesN.lean`); and the bound on the number of proofs a
+    read concerns. So the mechanized many-token bound stays `(U + M)·2^{−55} + 2^{−59}`.
   - **`noTheft_lean_rom`** (`Theft/PlainRataRom.lean`): `noTheft_leanX_hitL` with plain extraction
     discharged. Function rows (`R = Blk → Blk`), `M = uovM`, `L ≥ Lmin`, an adversary whose last
     stage is the run of an oracle computation within `QBudT q q_E n_G` (`hA`), the extractor

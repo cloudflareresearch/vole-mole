@@ -3277,7 +3277,9 @@ birthday bound of the 128-bit `iv`s and root seeds: the bad event counts two ses
 gate labels unless those collide too; bounding that needs the labels' distribution across
 sessions (not done). It dominates at `n = 2³²` (`2⁻⁶¹` against the linear `2⁻⁷²`). The budget
 terms are still charged once per pair, not once in all (that needs one bad event over all
-proofs, the paper's joint hybrid). The point-level H4 hop (item 2 above) is not needed for this
+proofs, the paper's joint hybrid; `Theft/JointZK.lean` proves the composition step of such an
+argument, for hops whose cost is linear in the expected point-level reads, a hypothesis `ZK/` does
+not provide: `security/ratatouille.md` §5). The point-level H4 hop (item 2 above) is not needed for this
 route and is not formalized; the further sessions are simply no longer part of the hops'
 distinguisher. Permutation rows are not covered (the lazy sampling patches single points of a
 row).
