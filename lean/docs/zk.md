@@ -72,7 +72,11 @@ On `main`, one proof of the executable prover is close to the simulator up to th
 explicit predictor of `w[0..16)` (`zk_rom_ic_main`; with the tables shared, `H₂³` visible and the
 cipher global, `zk_rom_ic_h23_main`), and Moussaka's Theorem 4(a) and Ratatouille's
 Theorem 2 hold with the joint (PU) hop over the proofs that share `r`, with the (PU) event as an
-explicit term (`anonymity_main`, `unlinkability_main`) [Lean, §4.2]. (PU) is stated as a game
+explicit term (`anonymity_main`, `unlinkability_main`); with all tables shared, one `H₃`
+included, as in the scheme (`anonymity_main_sharedAll`, `unlinkability_main_sharedAll`); and
+Moussaka's non-colluding Theorem 4(b') holds on `main` with a statistical (PU) term, since the
+Moderator's view depends on the openings only through the refusal bit (`anonymityNC_main`)
+[Lean, §4.2]. (PU) is stated as a game
 (`PU.puAdv`); for Moussaka the (PU) event is reduced to the advantage of explicit predictors in it
 (`anonymity_main_pu`), and in the ideal-permutation model for Keccak-p[800] the advantage is at
 most `(c + q)/(2¹²⁸ − q) + q/(2⁴⁴⁰ − q)` for `q` queries and `c` candidates
@@ -559,20 +563,104 @@ The bounds (`#print axioms`: `propext`, `Classical.choice`, `Quot.sound`):
 (`comCh`). Sharing `H₂³` adds `30·Δ23 ≤ 2⁻¹⁰¹·¹` to each bound. Instantiated in
 `Audit/MainShared23.lean`, also for guesses that read the shared `H₅` table.
 
+**One `H₃` for the four proofs** (`ZK/MainSharedAll.lean`, `Privacy/MoussakaMainSharedAll.lean`,
+`Privacy/RatatouilleMainSharedAll.lean`, `Audit/MainSharedAll.lean`). All tables are shared, as in
+the scheme: one `H₃` table `T` with a column at every prefix (`H3T = Pre → Tab3`), and the real
+proof with statement and witness `y` reads the column at its prefix `wPrefix ‖ μ₁` (`preOf`; the
+executable prover with one `H₃` is this, `prove_recOne`, §10.5). The adversary sees `T` and reads it
+at `q₃` **points** `(prefix, ρ)` (`RdH`), a separate budget, not counted with the cipher rows as in
+§10.5.
+
+- *Not §10.5's route.* The joint hop is not redone. An event `F` of the view and of `T` becomes an
+  event of the slice game, `F' T₀ v = F v (tabOf T₀ v)`: `tabOf` writes the view's four slices
+  into the columns of an independent table `T₀` at the four proofs' prefixes, the earliest
+  outermost. The prefixes are functions of the view (of the secret and the earlier outputs), so
+  `F'` is an event of the view in the sense of `main_shared23_le`, reading slice `j` at the points
+  of `F`'s `H₃` reads in proof `j`'s column (`rdH_tabOf`), and `main_shared23_le` applies at every
+  `T₀`. This reduction knows the secret (it computes the prefixes); that is sound because
+  `main_shared23_le` holds for every event of the view, the secret included, and because the
+  statements of the game do not read the tables. (§10.5 did not have this: there the reduction
+  would have had to answer the adversary's `H₃` queries, and the table-reading interactions of
+  §10.3 choose statements after reading `H₃`.)
+- *Real side* (`pr_upd4`, `realAll_close`): writing the tape's slice `g_j` (unused by the shared
+  game) into the column at `k_j` keeps `T` uniform when `k_j` depends on no slice `g_m`, `m ≥ j`;
+  the prefix of proof `j` depends on the earlier outputs, so the columns are written in game order
+  (`pr_updO_lens`, a measure-preserving swap). After the writing, the shared game's proof `j` reads
+  `g_j` and runs as the slice game's, **unless two proofs have the same prefix** (`DistV`).
+  `|Pr_shared[F] − Pr_slice[F']| ≤ Pr[two prefixes coincide]`.
+- *Simulated side* (`simAll_eq`): the simulators read no `H₃`, so the writing is exact, for `F`
+  and for `bstar`.
+- **`main_sharedAll_le`**: `|Pr[all real; F] − Pr[all simulated; F]| ≤ 15·(εS(q₃, q_E + 8·4607) +
+  Δ23) + 15·Pr_sim[bstar] + Pr[two of the real proofs' prefixes coincide]`.
+- *The prefix-collision term* (`preOf_eq_imp`, `distO_of`): equal prefixes have equal lengths and
+  equal first 16 witness bytes. Issuance and redemption (spend) witnesses have different lengths
+  (`256`/`343`, `240`/`847`) and each starts with its token's opening, so a collision means two
+  openings agree: `2⁻¹²⁸` per world for Moussaka (`coll_imp`, `pr_coll_le`), `2·2⁻¹²⁸` for
+  Ratatouille (the two issued tokens, or round 1's spent token and its change token;
+  `coll_impR`, `pr_collR_le`). This is the paper's `ε_iv` in its correct form (§10.5 "On the
+  paper's `ε_iv`"): the reduction pays it, §10.5's hybrid argument does not need it.
+- *With all proofs simulated* the guess at a fixed `T` is an `AdversaryS` (`AdversarySR`)
+  (`withH`), so hiding, the exchange of the worlds and the predictors of the `H₂³`-shared theorems
+  apply table by table; the (PU) predictors draw `T` themselves (`predH_c b`, `predHR₀`,
+  `predHR₁`, `predHRC`; `puAdv_avgH`).
+
+The bounds (`#print axioms`: `propext`, `Classical.choice`, `Quot.sound`):
+
+    Moussaka 4(a) (anonymity_main_sharedAll):
+      |Pr[W₀] − Pr[W₁]| ≤ 30·(εS(q₃, q_E + 8·4607) + Δ23)
+        + 15·(Σ_{b,c} puAdv Com (predH_c b) + 8·noHitProb + 3750·2⁻¹²⁸) + 2·εhide + 2·2⁻¹²⁸
+    Ratatouille (unlinkability_main_sharedAll): for any two worlds,
+        30·(εS(q₃, q_E + 8·4607) + Δ23)
+        + 15·(PUH(b₁, b₂) + PUH(b₁', b₂') + 8·noHitProb + 3750·2⁻¹²⁸) + 2·εhide + 4·2⁻¹²⁸
+
+with `q₃` now the number of `H₃` points the guess reads. Sharing `H₃` adds `2·2⁻¹²⁸` (`4·2⁻¹²⁸`).
+Instantiated in `Audit/MainSharedAll.lean`, also for guesses that read `H₃`.
+
+**Moussaka 4(b') on `main`** (`Privacy/MoussakaNCMain.lean`, `Audit/MainSharedAll.lean`). The
+non-colluding game of `Privacy/MoussakaNC.lean` with `main`'s honest Anchor (`issue_response`,
+`issueRequestBytes = 45 + 7272`; `respN`, `tokN_issReal`, `goodN_eq_of_derive`), the executable
+prover for the two redemptions, all tables shared, and a Moderator whose guess sees the two
+redemption requests (or the refusal), the shared tables and `H₃`. The issuance proofs are never
+shown and are neither simulated nor run on the game's tables: `PI` is any issuance proof system,
+as in `anonymityNC`. Four slots of a `MainChain.Game`: the first two prove nothing, the last two
+are the redemptions, proved iff the refusal bit `gNC` holds.
+- The joint hop is `main_sharedAll_le` (`real_sim_NCM`); its prefix-collision term is `2⁻¹²⁸`
+  (`pr_collNCM_le`).
+- **With both redemptions simulated the view depends on the openings only through the refusal
+  bit** (`simNCM_key`, `simNCM_vis`: the guess's input and tables are functions of `gNC`, the two
+  nullifiers, the simulators' coins and the raw tables).
+- **The (PU) term is statistical** (`bstarNCM_imp`, `pr_bstarNCM_le`): `bstar` on the simulated
+  proofs is a failed simulation (`noHitProb`), a sibling collision of the two proofs (`313·2⁻¹²⁸`,
+  `pr_sib_hit_le`), or a prediction of a redemption's opening from candidates computed **with the
+  refusal bit set to true** (`candNCM`): these do not depend on the openings, so each prediction is
+  at most `(q₅ + 625)·2⁻¹²⁸` (`pr_open_le`, from `pr_mem_uniform_le`). When the redemptions are
+  refused no proof is computed. (`pr_thetaMain_le` is not needed: unlike `anonymity_main`'s game,
+  no proof is made for a dummy token.)
+- The abort hop and the swap of the Clients' tapes are those of `anonymityNC` (`sim_hyb_NCM`,
+  `hybNCM_eq`).
+
+      anonymityNC_main:  |Pr[W₀] − Pr[W₁]| ≤ 30·(εS(q₃, q_E + 8·4607) + Δ23)
+          + 15·(8·noHitProb + (4·(q₅ + 625) + 626)·2⁻¹²⁸) + 2·2⁻¹²⁸ + 2·(φ false + φ true)
+
+for a sound index rule, signers correct for their keys and a guess with consistent reads and at
+most `q₅` `H₅` keys; `unlinkabilityNC_main` (one Anchor, any index rule): the same without the
+abort term. Every term is a number except `φ` (bounded by `δ^255` for pqov in the vinegar
+random-oracle model, `Privacy/MoussakaPqov.lean`); no assumption on `Com`. At zero budgets the
+total is about `2⁻⁹⁹·³` plus the abort term (`30·εS(0, 8·4607) ≈ 2⁻⁹⁹·⁸`, `30·Δ23 ≤ 2⁻¹⁰¹·¹`). The audit instantiates it with the
+trapdoor signer of `Audit/Liveness.lean`, for which `φ = 0`.
+
 **Still on paper, for ZK on `main`:**
-- **one `H₃` for the proofs.** With one `H₂³` table this is done (above,
-  `anonymity_main_shared23`, `unlinkability_main_shared23`); each proof still has its own `H₃`
-  slice. One shared `H₃` is §10.5's argument (re-sample the replaced proof's column, `pr_setK`;
-  the slice prover's theorem with the `H₃` columns as extra row data, `ZKRow.rowH`). On `main` it
-  needs the one-proof theorem `zk_rom_ic_h23_main` for rows carrying `H₃` columns (it is stated for
-  function rows only) and the joint hop with the columns in the shared tables; not done;
 - the factor `15` on `εS` and on the (PU) terms is a cost of the mechanized transfer (each hop's
   bad event is moved across the later hops); the paper's lazy sampling gives `4` and `1`;
 - the adversary's earlier choices (responses, Anchor Sets, amounts) do not read the tables, as in
-  §10.2's games; Moussaka's game is the index-taking Client's (`main`'s `find_issuer` Client, and
-  the non-colluding mode 4(b) with its statistical `Pred = 2⁻¹²⁸`, are not done on `main`; for
-  4(b) the pieces are there: `pr_thetaMain_le` and `pr_mem_uniform_le` give the statistical bound
-  once the view is shown to depend on `r` only through the refusal bit);
+  §10.2's games (this is also what lets the one-`H₃` reduction compute the prefixes from the view);
+  Moussaka's games are the index-taking Client's (`main`'s `find_issuer` Client is not done on
+  `main`);
+- in 4(b') on `main` the issuance proofs are an abstract `PI` that does not read the game's tables:
+  the refusal bit is a function of the secret (a `MainChain.Game`'s statements may not read the
+  tables). Running the executable issuance prover and the Anchor's Lean verifier on the shared
+  tables would need either the verifier's completeness on honest proofs or hybrids that read the
+  tables in the statements (as §10.7 does for the label-row layout);
 - a bound on (PU) for the real permutation: §4.3 states (PU) as a game, reduces Moussaka's
   `PU_b` to it and bounds it in the ideal-permutation model; for Keccak-p[800,12] itself it is an
   assumption (also for Ratatouille's `comI` and `comCh`, §4.3);
@@ -2306,6 +2394,11 @@ paper's argument for the slice model is incomplete rather than its bound wrong. 
 same prefix, the adversary, or an interaction that read a future proof's prefix), `2⁻¹²⁸` per read,
 already inside the slice-model bounds' `q₃·2⁻¹²⁸` term (and `i₃·2⁻¹²⁸` in §10.3) once those reads
 are counted. The slice-model theorems are unchanged; the shared-model ones are new theorems.
+On `main` (§4.2, `main_sharedAll_le`) the step is done the paper's way after all, as a reduction
+that knows the secret: the joint hop there holds for every event of the view, the secret included,
+and the statements do not read the tables, so an event of one `H₃` becomes an event of the slice
+game by writing the slices into the columns at the proofs' prefixes; it costs the prefix-collision
+probability (`2⁻¹²⁸` per world for Moussaka, `2·2⁻¹²⁸` for Ratatouille), the `ε_iv` above.
 
 **Open.** The model counts the adversary's `H₃` reads with its cipher queries (`q_E`), so the
 bounds charge `221·2⁻¹²⁸` per `H₃` read where `2⁻¹²⁸` would do; a separate `H₃` budget would

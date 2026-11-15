@@ -260,6 +260,7 @@ import VoleMole.ZK.MainSharedGame
 import VoleMole.ZK.MainSharedSim
 import VoleMole.ZK.CollideMain
 import VoleMole.ZK.MainShared23
+import VoleMole.ZK.MainSharedAll
 import VoleMole.ZK.VerifyPre
 import VoleMole.ZK.HopsH23
 import VoleMole.ZK.HopsIC
@@ -284,12 +285,15 @@ import VoleMole.Privacy.RatatouilleMainPU
 import VoleMole.Privacy.RatatouilleMainShared
 import VoleMole.Privacy.RatatouilleMainSharedPU
 import VoleMole.Privacy.RatatouilleMainShared23
+import VoleMole.Privacy.RatatouilleMainSharedAll
 import VoleMole.Privacy.PU
 import VoleMole.Privacy.PUKeccak
 import VoleMole.Privacy.MoussakaMainPU
 import VoleMole.Privacy.MoussakaMainShared
 import VoleMole.Privacy.MoussakaMainSharedPU
 import VoleMole.Privacy.MoussakaMainShared23
+import VoleMole.Privacy.MoussakaMainSharedAll
+import VoleMole.Privacy.MoussakaNCMain
 import VoleMole.Privacy.RatatouilleRO
 import VoleMole.ZK.TwoPhaseRO
 import VoleMole.ZK.TwoPhaseIC
@@ -485,3 +489,4 @@ import VoleMole.Audit.PomfritCls
 import VoleMole.Audit.PomfritClsPerm
 import VoleMole.Audit.MainRata
 import VoleMole.Audit.MainShared23
+import VoleMole.Audit.MainSharedAll

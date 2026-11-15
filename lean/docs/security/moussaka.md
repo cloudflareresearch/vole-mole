@@ -42,7 +42,7 @@ Contents:
 | One nullifier per signed commitment; double-spend detection (Cor 2) | **Yes**, if the Moderator keeps one record per `(ctx_iss, ctx_red)` across all Anchor Sets (`moussaka.hpp:141-146`) | as Thm 1 | as Thm 1 |
 | Redemption non-malleability: no redirect to another `challenge_digest`, Anchor Set or `ctx_red` (Thm 3) | **Yes**; [Lean] the reduction as a game on the spec in the ROM and ideal-cipher table model, one token (`Theft/Moussaka.lean`, `noRedirect`; with the Lean prover's zero knowledge, `noRedirect_lean`; with the hops' read budgets proved, `noRedirect_lean_reads`); weak SE reduced to plain extraction plus a programmed-point term, both hypotheses (`noRedirect_lean_plain`, §5.3); the same with `H₁`, `H₂⁰…H₂²`, `H₄`, `H_comb` read off uniform tables (`noRedirect_leanX_plain`), and there the programmed-point term bounded (`noRedirect_leanX_hit`; for `U` tokens `noRedirectN_leanX_hit`, `noRedirectN_leanX_hitC`); `Adv^ow` in a random-table model for the standalone experiment (`owAdvRO_num`) | `ε_hop + ε_SE^red + Adv^ow_Com` (corrected, §5.3); mechanized: `ε_I + ε_R + δ_R + ε_SE + Adv^ow(B)`; for `U` tokens and `M` honest redemptions `U·ε_I + M·ε_R + Σ_i δ_i + ε_SE + Σ_h Adv^ow(B_h)` (`noRedirectN`, `Theft/MoussakaMany.lean`, with `WeakSEN`; hops' budgets proved and `WeakSEN` reduced to plain extraction, `noRedirectN_lean_plain`, `Theft/MoussakaManyReads.lean`; with the chain hashes uniform tables `Σ_i ε_hit,i ≤ N·((q₂₂+N+1)·2⁻⁴⁴⁸ + (q₂₁+N+1)·2⁻¹⁰⁸⁸ + (q_μ+N+1)·2⁻²⁵⁶)`, `N = U + M`, `noRedirectN_leanX_hit`) | weak SE (L8), one-wayness of `Com` (any opening of `t`) |
 | Issuer hiding and unlinkability vs a Moderator **colluding with all Anchors**, with adversarial keys (Thm 4a) | **Yes, computationally**; [Lean] from uniform seed outputs (`Privacy/Moussaka.lean`, `anonymity`; for `main`'s Client, which finds its index itself, `Privacy/MoussakaFind.lean`); with the executable Lean prover (label rows) down to its tape hypothesis (`Privacy/MoussakaLean.lean`, `anonymity_label_rows`); for the Lean prover in the ROM and ideal-cipher model with every zero-knowledge term explicit, `≈ 2⁻¹⁰²·³` plus budget terms and `2·Adv^hide_Com` (`anonymityRO_lean_num`), and `≈ 2⁻¹⁰¹·⁹` with a table-reading interaction (`anonymityRA_lean_num`; Appendix B); also with AES as random permutations (`_perm`) and with one shared `H₃` (`anonymitySh_num`, `anonymityRASh_num`); from the real Clients' OS seeds and seed XOF, each `+ 2·(2q_X + 2)·2⁻²⁵⁶` (`anonymity*_seed`, `lean/docs/zk.md` §10.6); with a key stage (contexts, keys) that reads the tables too (`anonymityRAK_lean_num`, `≈ 2⁻¹⁰¹·⁹`); with any number `n` of further honest Clients, `≤ n·2⁻¹⁰²` plus budget terms and `2·Adv^hide_Com` (`anonymityN_lean_num`), also adaptively scheduled, each further session's contexts, key, response and Anchor Set chosen from earlier outcomes and the challenge contexts and keys from the sessions before it (`anonymityAd_lean_num`, the same numbers), and interleaved in any order (`anonymityIL_lean_num`, `≤ (n + 2)·2⁻¹⁰¹`; with a table-reading scheduler that also places the challenge, `anonymityILO_lean_num`, `+ 28·L·(a₃ + a₂ + a₅ + 221·a_E)·2⁻¹²⁸`), and with `N` challenge pairs (`anonymityP_lean_num`; linear in `N` up to a bad event bounded on paper, `anonymityP_lin`; `lean/docs/zk.md` §10.8; §11 item 5) | `2·ε_ZK^joint + 2·Adv^hide_Com` (the `2^{−192}` is not needed, §6) | ZK (lean/docs/zk.md), hiding of `Com` |
-| The same vs a Moderator that sees no issuance (Thm 4b) | **Yes**, with no Keccak assumption, up to an abort term the note missed (§6); [Lean] from uniform seed outputs (`Privacy/MoussakaNC.lean`, `anonymityNC`, `unlinkabilityNC`; for `main`'s Client `Privacy/MoussakaNCFind.lean`), with the vinegar hash a random oracle (`anonymityNC_vinegarRO`), and with the executable Lean prover down to its tape or hop hypotheses (`anonymityNC_label_rows`, `_shake`); in the ROM and ideal-cipher model with every proof and the honest Anchors' Lean verifier on the shared tables, `≈ 2⁻¹⁰³·²` plus budget terms and `2·(φ₀ + φ₁)` (`anonymityNCRO_lean_num`, `unlinkabilityNCRO_lean_num`, also `_perm`), also with one shared `H₃` (`anonymityNCSh_num`), with the Moderator's choices read off the tables (`anonymityNCRA_lean_num`, as oracle computations `anonymityNCOC_lean_num`) and from the real Clients' seeds (`*NC*_seed`; Appendix B); with a model of pqov's `derive_preimage` as the Anchors' signer (`anonymityNC_pqov`, `anonymityNCRO_pqov`), averaged over keys of pqov's key generation with any oil matrix (`anonymityNCRO_pqov_pqovKeys`; `O = 0`: `anonymityNCRO_pqov_keys`; abort term `≈ 2⁻²⁹³·⁸`; the model reproduces the C++ `derive_preimage` on the KAT targets), and the games shown to reach redemption (`pr_refused_NCRO_le`; Appendix B) | `2·Σ ε_ZK^red + 2·(φ₀ + φ₁)`, `φ_c ≤ δ_c^{255}` on average over the vinegar random oracle (pqov uses 255 vinegars, §6), `E[δ_c^{255}] ≤ 255^{−37} + 1/(255·256^{37}) ≈ 2^{−295.8}` on average over the key (`δ ≤ 1/255` holds on average over the key, not per key) (`0` for one Anchor; no `2^{−192}`) | ZK of the redemption proofs only; both issuers in the Anchor Sets (`main`'s Client; for the index-taking Client of the random-oracle games, an index taken from `S`) |
+| The same vs a Moderator that sees no issuance (Thm 4b) | **Yes**, with no Keccak assumption, up to an abort term the note missed (§6); [Lean] from uniform seed outputs (`Privacy/MoussakaNC.lean`, `anonymityNC`, `unlinkabilityNC`; for `main`'s Client `Privacy/MoussakaNCFind.lean`), with the vinegar hash a random oracle (`anonymityNC_vinegarRO`), and with the executable Lean prover down to its tape or hop hypotheses (`anonymityNC_label_rows`, `_shake`); on `main` (no label rows) with the joint hop, all tables shared and a statistical (PU) term, `≈ 2⁻⁹⁹·³` plus budget terms and `2·(φ₀ + φ₁)` (`Privacy/MoussakaNCMain.lean`, `anonymityNC_main`, `unlinkabilityNC_main`); in the ROM and ideal-cipher model with every proof and the honest Anchors' Lean verifier on the shared tables, `≈ 2⁻¹⁰³·²` plus budget terms and `2·(φ₀ + φ₁)` (`anonymityNCRO_lean_num`, `unlinkabilityNCRO_lean_num`, also `_perm`), also with one shared `H₃` (`anonymityNCSh_num`), with the Moderator's choices read off the tables (`anonymityNCRA_lean_num`, as oracle computations `anonymityNCOC_lean_num`) and from the real Clients' seeds (`*NC*_seed`; Appendix B); with a model of pqov's `derive_preimage` as the Anchors' signer (`anonymityNC_pqov`, `anonymityNCRO_pqov`), averaged over keys of pqov's key generation with any oil matrix (`anonymityNCRO_pqov_pqovKeys`; `O = 0`: `anonymityNCRO_pqov_keys`; abort term `≈ 2⁻²⁹³·⁸`; the model reproduces the C++ `derive_preimage` on the KAT targets), and the games shown to reach redemption (`pr_refused_NCRO_le`; Appendix B) | `2·Σ ε_ZK^red + 2·(φ₀ + φ₁)`, `φ_c ≤ δ_c^{255}` on average over the vinegar random oracle (pqov uses 255 vinegars, §6), `E[δ_c^{255}] ≤ 255^{−37} + 1/(255·256^{37}) ≈ 2^{−295.8}` on average over the key (`δ ≤ 1/255` holds on average over the key, not per key) (`0` for one Anchor; no `2^{−192}`) | ZK of the redemption proofs only; both issuers in the Anchor Sets (`main`'s Client; for the index-taking Client of the random-oracle games, an index taken from `S`) |
 | Issuer hiding under a Moderator-chosen Anchor Set | **Only relative to the Anchors in the set that are honest and in common use** (§7) | n/a | Anchor-Set consistency outside the library |
 
 Main findings (§9):
@@ -1009,9 +1009,13 @@ Clients is mechanized for the random-oracle games of Appendix B (`lean/docs/zk.m
   `lean/docs/zk.md` §4.2): `anonymity_main_shared23`, the same bound with `εS` replaced by
   `εS + Δ23`, `Δ23 ≤ 2⁻¹⁰⁶` the programming-collision term of a hop (`ZK.Sim.pr_collide_main`; its
   second application of zero knowledge has a statistical (PU) term, `313·2⁻¹²⁸`). Each proof still
-  has its own `H₃` slice.
-  Not covered: one `H₃` for the four proofs on `main` (§10.5's argument), `main`'s
-  `find_issuer` Client and the non-colluding mode 4(b).
+  has its own `H₃` slice. **With one `H₃` too** (`Privacy/MoussakaMainSharedAll.lean`,
+  `ZK/MainSharedAll.lean`, `lean/docs/zk.md` §4.2): `anonymity_main_sharedAll`, all tables shared
+  as in the scheme, the guess reading `H₃` at `q₃` points; the same bound plus `2·2⁻¹²⁸`, the
+  probability that two proofs of a world have one prefix (then the two Clients' openings agree).
+  This is the `ε_iv` of this section in its correct form, paid by a reduction to the slice game
+  that knows the secret (sound since the joint hop holds for every event of the view).
+  Not covered: `main`'s `find_issuer` Client.
 
 Remarks from the mechanization:
 - **The `2^{−192}` term of Theorem 4(a) is not needed.** After the hiding hop the two revealed
@@ -1055,18 +1059,22 @@ only the two redemption requests or the refusal. The refusal rule is that of 4(a
   hypothesis), `anonymityNC_label_rows_shake` (hop hypotheses: `εR = ε_rho + ε_grind + ε_bavc +
   ε_lab`), `unlinkabilityNC_label_rows`.
 - As in 4(a), the per-proof zero-knowledge hypothesis holds with the label-row fix only. On `main`
-  no efficient simulator satisfies it against witness-knowing distinguishers, and the note's joint
-  hop with `Pred = 2^{−128}` (which is valid here, since `r` is independent of `A`'s view) is not
-  mechanized for 4(b); the joint hop itself is (`ZK/MainGame.lean`, used for 4(a) on `main`,
-  `anonymity_main`), and for a prefix independent of the predictor's inputs it gives
-  `(q₅ + 1)·2⁻¹²⁸` per proof (`pr_mem_uniform_le`), but the non-colluding game on `main` is not
-  written. What it needs: this file's game with the honest Anchor checking `main`'s request
-  length (`issueResponseN issueRequestBytes`; `respNC` is fixed to the label-row length), the two
-  redemption proofs as slots of `main_chain_le`, and the (PU) term bounded statistically: with
-  both proofs simulated the view depends on the openings only through the refusal bit
-  (`simNC_iff`), so the candidates are independent of `r` when the redemptions run
-  (`pr_mem_uniform_le`) and of the simulator's `d` when they do not (`pr_thetaMain_le`,
-  `ZK/MainPU.lean`, as for 4(a) in `puTerm_le`).
+  no efficient simulator satisfies it against witness-knowing distinguishers; there the note's
+  joint hop with a statistical `Pred` (valid here, since `r` is independent of `A`'s view) is
+  mechanized: [Lean] `lean/VoleMole/Privacy/MoussakaNCMain.lean`, `lean/docs/zk.md` §4.2. The game
+  is this file's with `main`'s honest Anchor (`issue_response`, `issueRequestBytes`; `respN`,
+  `tokN_issReal`, `goodN_eq_of_derive`), the executable prover for the two redemptions as slots of
+  the joint hop with all tables shared (`main_sharedAll_le`), and a guess that also sees the tables
+  and `H₃`. With both proofs simulated the view depends on the openings only through the refusal
+  bit (`simNCM_key`, `simNCM_vis`), so the (PU) term is statistical: the candidates, computed with
+  the refusal bit set, do not depend on `r` (`pr_open_le`, from `pr_mem_uniform_le`; no proof is
+  made when the redemptions are refused, so `pr_thetaMain_le` is not needed).
+  **`anonymityNC_main`**: `|Pr[W₀] − Pr[W₁]| ≤ 30·(εS(q₃, q_E + 8·4607) + Δ23) + 15·(8·noHitProb +
+  (4·(q₅ + 625) + 626)·2⁻¹²⁸) + 2·2⁻¹²⁸ + 2·(φ₀ + φ₁)`, about `2⁻⁹⁹·³` plus the budget and abort
+  terms; `unlinkabilityNC_main` (one Anchor, any index rule) without the abort term. Every term is
+  a number except `φ`; no assumption on `Com`. The issuance proofs are an abstract `PI` that does
+  not read the game's tables (they are never shown; the refusal bit must be a function of the
+  secret in the joint hop's game model).
 - **In the random-oracle and ideal-cipher model** (`lean/VoleMole/Privacy/MoussakaNCRO.lean`,
   Appendix B; the analogue of `anonymityRO_lean_num`): `A`'s guess also sees the tables, and the
   honest Anchors run the Lean **verifier** on the issuance proofs over the same tables. In each
@@ -1310,8 +1318,8 @@ the fix column describes `d5def9c`, where Moussaka used the rows (and what dropp
 | ZK notion | (PU)-ZK: `Pred_R` = predicting `r` | Standard adaptive NIZK |
 | `ε_lab` per proof | `(Q₅ + n_mult·Q_V)·Pred + Q_P·2^{−128}` | `(Q₅ + n_mult·Q_V + Q_P)·2^{−128}` |
 | Thm 4(a), colluding | needs `Adv^ow-r` inside ZK *and* `Adv^hide`. The formal bound is vacuous at `q ≈ 2^{64}` | needs only `Adv^hide` (`≈ 2^{−63}` generic) |
-| Thm 4(b'), non-colluding | `Pred = 2^{−128}`, no Keccak assumption, `+ 2·(φ₀ + φ₁)` | same, with a cleaner bound ([Lean] `anonymityNC`; in the ROM and ideal-cipher model `anonymityNCRO_lean_num`) |
-| Joint hop over proofs sharing `r` | needed (§6); [Lean] for 4(a), `anonymity_main` (`lean/docs/zk.md` §4.2) | not needed: the hops are independent |
+| Thm 4(b'), non-colluding | `Pred = 2^{−128}`, no Keccak assumption, `+ 2·(φ₀ + φ₁)` ([Lean] `anonymityNC_main`, all tables shared) | same, with a cleaner bound ([Lean] `anonymityNC`; in the ROM and ideal-cipher model `anonymityNCRO_lean_num`) |
+| Joint hop over proofs sharing `r` | needed (§6); [Lean] for 4(a), `anonymity_main`, with all tables shared `anonymity_main_sharedAll`; for 4(b'), `anonymityNC_main` (`lean/docs/zk.md` §4.2) | not needed: the hops are independent |
 | Thms 1 and 3 | unchanged (ZK enters Thm 3 only through `ε_hop`) | unchanged |
 | Quantum privacy | AES-128 Grover cap (§8) | same cap |
 
