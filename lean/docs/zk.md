@@ -2394,6 +2394,11 @@ paper's argument for the slice model is incomplete rather than its bound wrong. 
 same prefix, the adversary, or an interaction that read a future proof's prefix), `2⁻¹²⁸` per read,
 already inside the slice-model bounds' `q₃·2⁻¹²⁸` term (and `i₃·2⁻¹²⁸` in §10.3) once those reads
 are counted. The slice-model theorems are unchanged; the shared-model ones are new theorems.
+On `main` (§4.2, `main_sharedAll_le`) the step is done the paper's way after all, as a reduction
+that knows the secret: the joint hop there holds for every event of the view, the secret included,
+and the statements do not read the tables, so an event of one `H₃` becomes an event of the slice
+game by writing the slices into the columns at the proofs' prefixes; it costs the prefix-collision
+probability (`2⁻¹²⁸` per world for Moussaka, `2·2⁻¹²⁸` for Ratatouille), the `ε_iv` above.
 
 **Open.** The model counts the adversary's `H₃` reads with its cipher queries (`q_E`), so the
 bounds charge `221·2⁻¹²⁸` per `H₃` read where `2⁻¹²⁸` would do; a separate `H₃` budget would
