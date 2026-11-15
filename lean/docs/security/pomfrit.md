@@ -357,7 +357,8 @@ the per-chain step `class_or_small_dec`, `extract_or_class` (`ROM/LemmaPClass.le
 the code; proved for a gate model). These hypotheses are now proved for the executable verifier,
 and the one-more game with `E₁^cls` is mechanized (§6.4 item 11): **Theorem U1^cls in Lean**,
 `pomfrit_U1_cls_sim'`, with `(Q₃ + ℓ + 1)·2⁻⁷⁸ + (q₁ + ℓ + 1)·2⁻¹³⁴` in place of
-`(Q₃ + ℓ + 1)·2⁻⁷¹`. `pomfrit_U1_explicit` and `pomfrit_U1_sim` (with `E₁`) are unchanged.
+`(Q₃ + ℓ + 1)·2⁻⁷¹`, also with AES as random permutations with inverse queries
+(`pomfrit_U1_cls_simP`). `pomfrit_U1_explicit` and `pomfrit_U1_sim` (with `E₁`) are unchanged.
 
 ## 6. One-more unforgeability (classical)
 
@@ -837,8 +838,34 @@ family of uniform random permutations and the forger also queries it backwards.
   the cipher terms transferred to the unwrapped forger's derived prover, `events_wrapE`). Results:
   `pomfrit_U1_cls_sim'` (simultaneous, `clsSimEps`, `clsSimEps_eq`) and `pomfrit_U1_cls'` (union,
   `(ℓ + 1)·clsFailEps`), for the forger's budget (`forgerBound_wrapE`); against the standalone OMPR
-  game `pomfrit_U1_ompr_cls_sim`, `pomfrit_U1_ompr_cls`. The cipher is the PRF view (random
-  functions); the permutation model above is not done for U1^cls.
+  game `pomfrit_U1_ompr_cls_sim`, `pomfrit_U1_ompr_cls`.
+
+  *With AES as random permutations and inverse queries* (`ROM/OneMoreClsPerm.lean`,
+  `Assumptions/PomfritClsPerm.lean`, `Audit/PomfritClsPerm.lean`): `pomfrit_U1_cls_simP`
+  (`pomfrit_U1_ompr_cls_simP`) for a forger of the permutation model (`ForgerP`, `gameP`),
+
+      Pr[PomWin] ≤ Adv^{ompr}(red (wrapEP, E₁^cls); Q_T + ℓ + 1, ℓ) + clsSimEpsP(q', q_E', n', ℓ),
+
+  `clsSimEpsP` is `clsSimEps` with `failEpsP` for `failEps` (`clsSimEpsP_eq`), at
+  `q' = qP (qW (addH4 qA) NdC) Q_T ℓ`, `q_E' = eP lr q_E ℓ`, `n' = nP (nW (nA + qA₂₁) (addH4 qA) NdC)
+  Q_T ℓ`. The reduction's forger is `wrapEP lr A π = wrapE lr π.fwd (A.toIC lr π)`: normalized at
+  `π`, then wrapped with the forward table (`pomWin_le_wrapP`; the game is `gamePE`, `gameP` for a
+  forger that depends on `π`). The wrapped family is not a `RecFamily` (its `H₅` inputs read
+  `π.fwd` at the committed keys), so Lemma P^cls is applied per table with the point-tied Post
+  (`prEvent_clsFailZ_sim_le_Ec`, `clsFail_events_of`: `clsFail_events` with the Post event as a
+  parameter), and binding, an opened dead leaf and `PostPOut` are moved table by table to the
+  normalized forger's derived provers (`events_wrapE`, `postPOut_wrapE`), which are a `RecFamily`
+  (`recFamily_proverP`); `sum_fail_le_fam` averages them. No new averaging lemma is needed. Two
+  steps are new:
+  - `KeysPre` for the wrapped prover outside its `PostPOut` (`keysPre_proverP_wrapE`). The wrapper
+    queries `H₄(iv_pre ‖ mu₁ ‖ 4)` with the true `mu₁` before every `H₂¹` input; for the inputs that
+    carry the true `mu₁` (the only ones `KeysPre` reads) this is N1 (`IvMu`, `ivMu_proverP_wrapE`,
+    `keysPre_of_not_postP_mu`). It holds for any forger.
+  - Post moves to the forger (`postP_of_filter`): the two joint logs agree up to the wrapper's
+    `H₂⁴`, `H₄`, `H₅` entries, so a half-target of the wrapped prefix is one of the plain prefix
+    (same `H₂¹` inputs and `H₁` entries; the plain log has every `iv` by N1, `n1c_proverP`).
+  Numbers as in the PRF view (`failEpsP ≈ 2⁻¹¹⁵·⁸` per forgery, `≈ 2⁻⁸⁶` at `ℓ = 2³⁰`): about
+  `2⁻¹⁴` at `2⁶⁴` queries, the table below unchanged.
 
   | `q` | `ℓ` | U1 simultaneous (`E₁`) | U1^cls simultaneous (`E₁^cls`) |
   |---|---|---|---|
@@ -1369,6 +1396,8 @@ dedicated to PomFRIT.
   before each `H₂¹` query it makes the decoder's `H₅` queries, computed with the cipher table, which
   the reduction samples. A forger-side wrapper (the plan recorded before) does not work: the
   decoder's inputs depend on leaf keys that the extractor finds with the cipher at unqueried cells.
+  Also with AES as random permutations with inverse queries: `pomfrit_U1_cls_simP`
+  (`pomfrit_U1_ompr_cls_simP`), the same bound with `failEpsP` for `failEps` (§6.4 item 11).
   What stays outside Lean: running times (the wrapper's work), and a tight count of its `H₅`
   queries (a crude one, `NdC`, enters only `n'·2⁻⁴⁴⁸`).
 - **G9 (closed).** Theorem 6 (OMPR ≤ PomFRIT, `uov-assumptions.md` §5.6) is in Lean for the Lean

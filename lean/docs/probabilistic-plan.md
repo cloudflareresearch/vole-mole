@@ -1422,6 +1422,11 @@ Files: `Assumptions/LazyPerm.lean` (generic), `Assumptions/CTUFPerm.lean`,
   (`ForgerBoundP.toIC`). Numbers as in §2m (`2⁻⁷·⁰` for U1, `2⁻⁶²·⁰` for U2 at `2⁶⁴` queries,
   `ℓ = 2³⁰`; the per-forgery failure terms `≈ 2⁻⁸⁶`). `#print axioms` of the four theorems:
   `propext`, `Classical.choice`, `Quot.sound`.
+  U1 with the class extractor too (`pomfrit_U1_cls_simP`, `pomfrit_U1_ompr_cls_simP`,
+  `ROM/OneMoreClsPerm.lean`; `pomfrit-lemmap-tight.md` §6A.5): `clsSimEps` with `failEpsP`, the
+  forger normalized and wrapped with `π.fwd` (`wrapEP`); per table with `PostPOut`, the cipher
+  terms moved to the normalized forger's `RecFamily` (`postPOut_wrapE`), `KeysPre` from the
+  wrapper's own `iv` queries (`keysPre_of_not_postP_mu`).
 - **Not done.**
   - The lazily sampled permutation is the uniformly drawn one (`EagerPerm.rp_eqd_eager`, joint
     distribution of output, table and state, any oracle computation; proof: condition on the table,
