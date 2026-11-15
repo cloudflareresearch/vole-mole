@@ -3958,7 +3958,43 @@ adversaries with the Anchor keys of `kt`):
   numbers are those of the theft game with `cells(pR) = 69116` in place of `cells(pS) = 142844`
   (`B ≤ 2⁻⁵⁵`, `J ≤ 300·2⁻⁶³`, the per-slot terms `≤ 2⁻⁷⁰`, `ε_SE ≤ 14·2⁻⁶³`, `numJ_final`).
 
-Not done: the same for unbound Moussaka (`nmUN_lean_numJ`), and the permutation-row variants.
+*The joint step for the unbound game* (`Theft/JointUnbBad.lean`, `Theft/JointUnbInst.lean`,
+`Theft/JointUnbIv.lean`, `Theft/JointUnbNumJ.lean`; audit `Audit/ZKPointUnb.lean`). The same five
+steps, for unbound Moussaka (function rows, `L ≥ LminU = 9749`, `HitWfN` adversaries with the
+Anchor keys of `kt`), reusing the generic pieces of the redirect game:
+- *The event as one reader's event* (`Theft/JointUnbBad.lean`). `eRomU` reads the cipher only at
+  `romPtsU op = romPtsF (fdU op)` (**`eRomU_congrP`**, by `rOut_congrP`). `qsJ` (the patches'
+  prefixes `vQUm`, then the last stage `oaN`; `extRomUN_eq`), `runsGRd`, `chkGRd` (the unbound
+  verifiers at `pI` and `pR` on the tables of Moussaka's `pI`, `ver_cons`), `badGRd`;
+  **`badGRd_reads`**: it reads `BadN` with `extRomUN`, the hit of an honest token included
+  (`HitOp` is a function of the secrets, the operation and the extracted witness). Budgets
+  (`badGRd_bnd`, `badGRd_T3`, `badGRd_cls`): `T₃ = q h3`, `a₅ = N·312 + q h5 + 312` (`a5U`),
+  `a_E = c_E = 2·(N·cells(pR) + q_E) + 9215` (`aEU`), `cells(pR) = 101372`.
+- *The game as an instance* (`Theft/JointUnbInst.lean`). `xJ = (j, xN …)`; the witness is the pair
+  `(w, w)` of `xwN`'s (`wJ`, `relJ_xJ`); the output maps `φI`, `φR` are the game's log entries
+  (`toL` of the proof, the empty proof for a failed run), and `ivA` reads an `iv` only off a proof
+  of the parameters' size (`ivA_φI`, `ivA_φR`; `pI_proofBytes_pos`). Both unbound systems run on
+  the tables of Moussaka's `pI` (`TRd.toMI`, `TRd.toMR`, `Conf.toMI`, `Conf.toMR`, `ZKExp.toMI`,
+  `ZKExp.toMR`). **`PN_eq`, `SmP_eq`, `pgP_eq`**, **`zkExpJ`**, `progRdJ_conf`, `proveRdJ_conf`;
+  **`nmU_joint_le`**: `real_sim_leN_leanA` for the unbound game, with `J` left.
+- *The simulated game's `iv`s* (`Theft/JointUnbIv.lean`). `ivA_simJ`, **`ivs_view`** (the refused
+  slots' `iv`s are `Moussaka.ivR`), **`exP_dupPairs_le`** (`≤ 4N²·2⁻¹²⁸`), **`exU_nNone_le`**
+  (`≤ 2N·pFail`), **`nmU_J_le`**. The refused-slot correction applies unchanged: a redemption slot
+  is refused when the token did not finalize or no Anchor of the set verifies it, which the
+  adversary controls.
+- **`nmUN_lean_numJ`** (`Theft/JointUnbNumJ.lean`): with every per-kind hash budget and the
+  cipher budget at most `2⁶⁴` and `U, M ≤ 2³⁰`,
+
+      Pr[BadN] ≤ 2⁻⁵⁴ + Σ_h (ε_prf + Adv^bind(B₁ h) + Adv^spr-k(B₂ h)),
+
+  the hypotheses of `nmUN_lean_numL` (`(U + M)·2⁻⁵⁵ + 2⁻⁵⁹`). The simulated game's event is
+  `ROM/`'s extraction error and the hit of an honest token (**`nmU_sim_le`**: `ε_SE` and
+  `Σ_h (ε_prf + (M+1)·2⁻¹⁹² + Adv^bind + Adv^spr-k)`, as `nmUN_of_se`); the
+  `U·(M+1)·2⁻¹⁹² ≤ 2⁻¹⁰⁰` term goes into the constant (`numJ_finalU`: `ε_SE` and it `≤ 15·2⁻⁶³`);
+  the other numbers are those of the theft game with `cells(pR) = 101372` (`B ≤ 2⁻⁵⁵`,
+  `J ≤ 300·2⁻⁶³`, the per-slot terms `≤ 2⁻⁷⁰`).
+
+Not done: the permutation-row variants.
 
 ### 10.9 Hiding of `Com` (`Privacy/ComHide.lean`)
 
