@@ -456,6 +456,7 @@ import VoleMole.Audit.SymmetryT3
 import VoleMole.Audit.PomfritLemmaP
 import VoleMole.Audit.Theft
 import VoleMole.Audit.TheftPlainLog
+import VoleMole.Audit.TheftPlainRom
 import VoleMole.Audit.MainPU
 import VoleMole.Audit.MainShared
 import VoleMole.Audit.PomfritLemmaPCls
