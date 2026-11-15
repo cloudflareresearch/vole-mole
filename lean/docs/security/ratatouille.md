@@ -792,11 +792,19 @@ honest openings, not about signatures. The table's bound in §0 is the right one
   - `ε_hit` is bounded for Ratatouille (`noTheft_leanX_hit` above), for Moussaka with one token
     (`noRedirect_leanX_hit`, `security/moussaka.md` §5.3: for well-formed statements and a
     freshness on the hashed fields) and for Ratatouille with `U` Clients and `M` spends
-    (`noTheftN_leanX_hit`, below). It is not bounded for Moussaka with `U > 1` tokens or for
-    unbound Moussaka: their many-token theorems (`noRedirectN_lean_plain`, `nmUN_lean_plain`)
-    still use SHAKE for the chain hashes and keep the terms `SlotEvN` as hypotheses. The generic
-    steps are there (`Theft/ManyTables.lean`, `Hit.progMovesN_chain`); what is missing is each
-    game at a value of the extra table and its freshness for well-formed statements.
+    (`noTheftN_leanX_hit`, below), for Moussaka with `U` tokens and `M` redemptions
+    (`noRedirectN_leanX_hit`, `Theft/MoussakaManyHit.lean`) and for unbound Moussaka
+    (`nmUN_leanX_hit`, `Theft/MoussakaUnboundHit.lean`; one token and one redemption:
+    `nmUN_leanX_hit_one`), each with `N·((q₂₂+N+1)·2^{−448} + (q₂₁+N+1)·2^{−1088} +
+    (q_μ+N+1)·2^{−256})`, `N = U + M`, from the generic steps (`Theft/ManyTables.lean`,
+    `Hit.progMovesN_chain`): the game at a value of the extra table, and a freshness for
+    well-formed statements (`FreshOkN`) that the game's freshness implies for adversaries with
+    the lengths of the C++ types (`HitWfN`). The Moussaka freshness compares the hashed fields of
+    a redemption (the Anchors' digests, not their maps), so `HitWfN` also asks that a redemption
+    with the digests of a set the adversary chose is under that set; `noRedirectN_leanX_hitC`,
+    `nmUN_leanX_hitC` (`Theft/MoussakaDigest.lean`, `Theft/MoussakaUnboundDigest.lean`) replace
+    that clause by an explicit SHAKE256 collision term `Adv^coll(B)`, for keys that are digests
+    and expansions of compressed keys (`KeyOk`).
   - `Adv^ow ≤ q_K·2^{−127}` for the inverter of `noTheft`. In the games `Com` is concrete code:
     the issuance and spend relations evaluate Keccak-p[800,12], and the zero-knowledge theorems
     need the honest witness to satisfy that concrete relation. So `Com` cannot be a random table
