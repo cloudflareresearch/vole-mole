@@ -170,4 +170,111 @@ theorem events_wrapE :
 
 end Transfer
 
+/-! ## Lemma P^cls for a prover that reads the cipher table through the reduction -/
+
+section Dep
+
+/-- **Comparison of two families of games over the cipher table, table by table.** -/
+lemma prEvent_transfer {X Y : Type} (oa : CTable → OracleComp spec X) (ob : CTable → OracleComp spec Y)
+    (P : CTable → X → Prop) (Q : CTable → Y → Prop)
+    (h : ∀ E g, P E (evalWithAnswerFn (QueryImpl.ofFn g) (oa E)) →
+      Q E (evalWithAnswerFn (QueryImpl.ofFn g) (ob E))) :
+    Pr{let E ← $ᵗ CTable; let r ← (simulateQ randomOracle (oa E)).run' ∅}[P E r] ≤
+      Pr{let E ← $ᵗ CTable; let r ← (simulateQ randomOracle (ob E)).run' ∅}[Q E r] :=
+  (prEvent_bind_le_sum_of_table ($ᵗ CTable) oa (Finset.univ : Finset Unit) (fun _ E => ob E) P
+    (fun _ => Q) fun E g hP => ⟨(), Finset.mem_univ _, h E g hP⟩).trans (by simp)
+
+variable {ι β β₀ : Type} (pk : UovPk) (hF : ι → ByteArray → ByteArray) (b1F b2F : ι → ByteArray)
+  (lr : Bool)
+
+set_option exponentiation.threshold 500 in
+set_option maxRecDepth 8000 in
+/-- **Lemma P^cls, adaptive form, for a prover `PE E` that depends on the cipher table**, whose
+binding failure, opened dead leaf and Post events imply, table by table, those of a prover `P₀`
+that does not: the bound of `pomfritT_accept_le_cls`, with `PE`'s hash budget for the chain terms
+and `P₀`'s cipher budget for the cipher terms. -/
+theorem pomfritT_accept_le_cls_dep (PE : CTable → OracleComp specIC (ByteArray × (ι × β)))
+    (P₀ : OracleComp specIC (ByteArray × (ι × β₀)))
+    (htr : ∀ E g,
+      let r' := evalWithAnswerFn (QueryImpl.ofFn g)
+        (gameA CrtGen.tables (stT pk hF b1F b2F lr) (PE E) E)
+      let r := evalWithAnswerFn (QueryImpl.ofFn g) (gameA CrtGen.tables (stT pk hF b1F b2F lr) P₀ E)
+      (bindFailA (stT pk hF b1F b2F lr) E r' → bindFailA (stT pk hF b1F b2F lr) E r) ∧
+        (deadOpenA (stT pk hF b1F b2F lr) E r' → deadOpenA (stT pk hF b1F b2F lr) E r) ∧
+        (PostOut E r' → PostOut E r))
+    (qE : ℕ) (hqE : IsQueryBoundP P₀ (fun t => t.isRight = true) qE) (n : ℕ)
+    (hn : ∀ E, IsQueryBoundP (PE E) (fun t => t.isLeft = true) n) (q : Kind → ℕ)
+    (hq : ∀ E, IsKindQueryBoundIC (PE E) q) (hq₀ : IsKindQueryBoundIC P₀ q) :
+    Pr{let E ← $ᵗ CTable; let r ← (simulateQ randomOracle (gameA CrtGen.tables
+      (stT pk hF b1F b2F lr) (PE E) E)).run' ∅}[
+        r.2.2.accept = true ∧
+          ClsCovered E (stT pk hF b1F b2F lr (stOut r)) CrtGen.tables r ∧
+          ¬ClsExtracted E (stT pk hF b1F b2F lr (stOut r)) CrtGen.tables
+            (witKT pk hF (some (stOut r))) r] ≤
+      (q .h21 + 1) * ((2 ^ 150 : ℝ≥0∞)⁻¹ + (2 ^ 134 : ℝ≥0∞)⁻¹) +
+        (q .h22 + 1) * (ENNReal.ofReal (Seed.epsQS (2 ^ 128) (2 ^ 64) 1313) +
+          (2 ^ 128 : ℝ≥0∞)⁻¹ + ((n + 2 + verifierTotal : ℕ) : ℝ≥0∞) / 2 ^ 448) +
+        (q .h23 + 1) * ((2 ^ 50 : ℝ≥0∞) / 2 ^ 128) +
+        (2 * qE ^ 2 * (2 ^ 256)⁻¹ + (openHashEps q + q .h1 * (2 ^ 256 : ℝ≥0∞)⁻¹)) +
+        (openHashEps q + q .h1 * (2 ^ 256 : ℝ≥0∞)⁻¹) +
+        ((qE * 2 : ℕ) : ℝ≥0∞) * (((512 * q .h1 : ℕ) : ℝ≥0∞) * (2 ^ 256 : ℝ≥0∞)⁻¹) +
+        chainHitEpsComb q 45 + stmtBindEpsD q := by
+  classical
+  set stF := stT pk hF b1F b2F lr
+  set T := CrtGen.tables
+  have hE := fun E => prEvent_accept_le_adaptive_pomfritC_E pk hF b1F b2F lr T (PE E) E
+    liftInvOk_tables (2 ^ 50) (n' := 1313)
+    (fun o c1 l => (PomFRIT.pomfritRedeemSystem_length _ _ _ _ _ _ _).trans (by norm_num))
+    (fun o c1 w => prU_comb_bad_le _ _ w fun hW => pomfrit_comb_bad_gf128 _ _ _ _ w hW)
+    (fun s => combDetC_pomfritT pk hF b1F b2F lr E s) (fun r => PostOut E r)
+    (fun s g h => keysPre_of_not_postOut T (stF s) (PE E) E g h) n (hn E) q (hq E)
+  have hdo := prEvent_joint_deadOpen_le_A T stF P₀ (pomfritParams lr) (fun _ => rfl) q hq₀
+  have hb := prEvent_transfer (fun E => gameA T stF (PE E) E) (fun E => gameA T stF P₀ E)
+    (fun E r => bindFailA stF E r) (fun E r => bindFailA stF E r) fun E g h => (htr E g).1 h
+  have hd := prEvent_transfer (fun E => gameA T stF (PE E) E) (fun E => gameA T stF P₀ E)
+    (fun E r => deadOpenA stF E r) (fun E r => deadOpenA stF E r) fun E g h => (htr E g).2.1 h
+  have hp := prEvent_transfer (fun E => gameA T stF (PE E) E) (fun E => gameA T stF P₀ E)
+    (fun E r => PostOut E r) (fun E r => PostOut E r) fun E g h => (htr E g).2.2 h
+  refine (prEvent_avg_le_add3 _ _ (fun E r => bindFailA stF E r) (fun E r => deadOpenA stF E r)
+    (fun E r => PostOut E r) _ hE).trans ?_
+  have hj := add_le_add (add_le_add (add_le_add (le_refl (
+      (q + extractorQueries + verifierQueries) .h21 * (epsKOS #chal3Blocks
+          (Chain.kosL (stKT pk hF b1F b2F lr none)) + parEps (Chain.kosL (stKT pk hF b1F b2F lr none))) +
+        (q + extractorQueries + verifierQueries) .h22 *
+          (ENNReal.ofReal (Seed.epsQS (2 ^ 128) (2 ^ 64) 1313) + (2 ^ 128 : ℝ≥0∞)⁻¹ +
+            ((n + 2 + verifierTotal : ℕ) : ℝ≥0∞) / 2 ^ 448) +
+        (q + extractorQueries + verifierQueries) .h23 * (((2 ^ 50 : ℕ) : ℝ≥0∞) / 2 ^ 128) +
+        hitSum (q + extractorQueries + verifierQueries)
+          (hitEps (q + extractorQueries + verifierQueries)
+            (combCount (some (45, dstP)) (q + extractorQueries + verifierQueries))) +
+        (q + extractorQueries + verifierQueries) .mu *
+          stmtEpsD (q + extractorQueries + verifierQueries) .mu))
+    ((hb.trans (prEvent_joint_bindFail_le_A T stF P₀ qE hqE)).trans (add_le_add le_rfl hdo)))
+    (hd.trans hdo)) (hp.trans (prEvent_joint_postOut_le_A T stF P₀ qE hqE q hq₀))
+  refine hj.trans ?_
+  rw [hitSum_add_extractorQueries, hitSum_hitEps_comb q 45 rfl, stmtEpsD_game]
+  have hkos : epsKOS #chal3Blocks (Chain.kosL (stKT pk hF b1F b2F lr none)) ≤
+      (2 ^ 150 : ℝ≥0∞)⁻¹ :=
+    epsKOS_chal3Blocks_le _ (by norm_num [stKT, OneMore.Pomfrit.pomfritRedeemT, pomfritParams])
+      (by norm_num [stKT, OneMore.Pomfrit.pomfritRedeemT, pomfritParams])
+  have hpar : parEps (Chain.kosL (stKT pk hF b1F b2F lr none)) ≤ (2 ^ 134 : ℝ≥0∞)⁻¹ :=
+    parEps_le (by
+      cases lr <;>
+        norm_num [Chain.kosL, stKT, OneMore.Pomfrit.pomfritRedeemT, pomfritParams,
+          Params.correctionRows, Params.witnessBits])
+  simp only [Pi.add_apply, extractorQueries, verifierQueries, reduceCtorEq, or_self, ite_false,
+    add_zero, Nat.cast_add, Nat.cast_one, Nat.cast_ofNat, Nat.cast_pow]
+  calc _ ≤ ((q .h21 : ℝ≥0∞) + 1) * ((2 ^ 150 : ℝ≥0∞)⁻¹ + (2 ^ 134 : ℝ≥0∞)⁻¹) +
+          ((q .h22 : ℝ≥0∞) + 1) * (ENNReal.ofReal (Seed.epsQS (2 ^ 128) (2 ^ 64) 1313) +
+            (2 ^ 128 : ℝ≥0∞)⁻¹ + ((n : ℝ≥0∞) + 2 + (verifierTotal : ℝ≥0∞)) / 2 ^ 448) +
+          ((q .h23 : ℝ≥0∞) + 1) * ((2 ^ 50 : ℝ≥0∞) / 2 ^ 128) + chainHitEpsComb q 45 +
+          stmtBindEpsD q +
+          (2 * qE ^ 2 * (2 ^ 256)⁻¹ + (openHashEps q + q .h1 * (2 ^ 256 : ℝ≥0∞)⁻¹)) +
+          (openHashEps q + q .h1 * (2 ^ 256 : ℝ≥0∞)⁻¹) +
+          ((qE * 2 : ℕ) : ℝ≥0∞) * (((512 * q .h1 : ℕ) : ℝ≥0∞) * (2 ^ 256 : ℝ≥0∞)⁻¹) := by
+        gcongr
+    _ = _ := by push_cast; ring
+
+end Dep
+
 end VoleMole.ROM.OneMore.Pomfrit
