@@ -1071,8 +1071,9 @@ honest openings, not about signatures. The table's bound in §0 is the right one
        the instance carries the slot's index, `xJ`), which collides with the others only through
        the uniform table.
 
-    Not done: Moussaka and unbound Moussaka (`noRedirectN_lean_numJ`, `nmUN_lean_numJ`), the same
-    construction for their games; and the permutation-row variant (`_numJP`).
+    The same construction for Moussaka gives `noRedirectN_lean_numJ` (`Theft/JointMousNumJ.lean`,
+    `security/moussaka.md` §5.3, `lean/docs/zk.md` §10.8). Not done: unbound Moussaka
+    (`nmUN_lean_numJ`); and the permutation-row variant (`_numJP`).
   - **`noTheft_lean_rom`** (`Theft/PlainRataRom.lean`): `noTheft_leanX_hitL` with plain extraction
     discharged. Function rows (`R = Blk → Blk`), `M = uovM`, `L ≥ Lmin`, an adversary whose last
     stage is the run of an oracle computation within `QBudT q q_E n_G` (`hA`), the extractor
