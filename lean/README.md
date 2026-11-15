@@ -457,7 +457,8 @@ lean/
                             query logs (PlainLog, PlainOracle, PlainRata, PlainMous); plain
                             extraction from ROM/ (PlainEager, PlainVerQ, PlainRom, PlainRataRom,
                             PlainRataReads, PlainMousJoint, PlainMousRom, PlainMousRedirect,
-                            PlainMousReads; ROM/ExtractCells);
+                            PlainMousReads; ROM/ExtractCells); many tokens (ManyPlainLog,
+                            PlainSlicesN, PlainRataManyRom, PlainMousManyRom);
                             unbound
                             Moussaka Prop U3 and Thm U4 (MoussakaUnbound, MoussakaUnboundLean);
                             `N` honest proofs and `WeakSEN` (Many); `U` tokens and `M`
@@ -1647,7 +1648,18 @@ What is **not** established, roughly in order of importance:
    bound on the adversary (`QBudT`), and for Moussaka `HitWf` and `KeysOut A kt` (the redemption
    statement hashes the Anchors' digests, not their maps, so the adversary's Anchor keys must be
    fixed by their digests; otherwise a SHAKE256 collision). The plan's `L ≥ 6293` for Moussaka was
-   too small (corrected, `moussaka.md` §5.3). The many-token theorems still use `PlainSEN`. The many-token theorems still use `PlainSEN`. `Adv^ow` stays the advantage of the explicit inverter, a computational
+   too small (corrected, `moussaka.md` §5.3). For `U` Clients and `M`
+   spends (Ratatouille) and `U` tokens and `M` redemptions (Moussaka) it is also proved from `ROM/`:
+   `noTheftN_lean_rom'` (`Theft/PlainRataManyRom.lean`) and `noRedirectN_lean_rom'`
+   (`Theft/PlainMousManyRom.lean`; `FreshKN kt`, `KeysOutN`), with the extractors' read budgets
+   proved (`stageBudgetNX_extRomN`, `stageBudgetNX_extRomMN`), through `weakSEN_of_plainL`
+   (`Theft/ManyPlainLog.lean`: `PlainSENL`; the reduction `redQN` computes each simulated proof's
+   patch by queries, most recent first) and the `N` slices answered locally
+   (`Theft/PlainSlicesN.lean`: `ansPN`, `locN`, `runT_locN`), so the one-token bound applies with
+   the slices as advice (`ε_rom = epsRom (q + N·qPre) (q_E + N·cells(pS)) (n_G + N·338)`, resp.
+   `epsRomM`). Unbound Moussaka (`nmUN_leanX_hit`) still uses `PlainSEN`: its Lean redemption
+   statement evaluates spec maps, and `moussakaUnbound_sim_joint_spec` needs byte-key Anchors, so
+   it needs a Lean-maps restatement as `Theft/PlainMousJoint.lean` does for bound Moussaka. `Adv^ow` stays the advantage of the explicit inverter, a computational
    assumption on Keccak-p[800,12]: `Com` is evaluated inside the relations, so it cannot be a table
    of the game, and some inverter wins with probability 1 (`owAdv_one_ratatouille`,
    `owAdv_one_moussaka`). In a random-table model of the standalone experiment a `q`-query
