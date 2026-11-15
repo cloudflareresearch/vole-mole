@@ -626,7 +626,13 @@ of them (`simPre_moved`), so `ε_moves ≤ Σ_i ε_hit,i`, where `ε_hit,i` boun
 fresh forgery's verifier reads `H₂³` at a grinding key of simulated proof `i`'s recomputed prefix
 (`SlotEvN i`). It is instantiated for the Lean simulators and verifiers of Ratatouille, Moussaka
 and unbound Moussaka (`weakSEN_ratatouille`, `weakSEN_moussaka`, `weakSEN_moussakaU`), with SHAKE
-for the other hashes. `PlainSEN` and the `SlotEvN` terms are hypotheses.
+for the other hashes. `PlainSEN` and the `SlotEvN` terms are hypotheses. In the shape of `ROM/`'s
+bounds the step is `weakSEN_of_plainL` (`Theft/ManyPlainLog.lean`): plain extraction `PlainSENL`
+against oracle computations on the `N` slices, an extractor that reads the reduction's query list,
+and a reduction that computes each simulated proof's patch by queries, most recent first, on the
+tables the later programmings produced (`redQN`). `PlainSENL` is proved from `ROM/`'s simultaneous
+extraction for Ratatouille and Moussaka (`noTheftN_lean_rom'`, `noRedirectN_lean_rom'`;
+`security/ratatouille.md` §5, `security/moussaka.md` §5.3).
 
 The same holds with the other hashes random, for two simulated proofs. The zero-knowledge theorem, the read budgets and the
 programming step hold for every base hash record (`Theft/LeanHb.lean`), so they lift, by
