@@ -625,8 +625,7 @@ exactly a prediction of `r`: the extra `2(q₅+1)·2⁻¹²⁸` per world (`docs
 `d[0..16) ⊕ w[0..16)`), `ZK/MainSharedGame.lean` (`main_shared_le`), `ZK/MainSharedSim.lean`
 (`pr_sib_hit_le`, `bstar_sim`), `Privacy/MoussakaMainSharedPU.lean` (`anonymity_main_shared`),
 `Audit/MainShared.lean`; computing redemption proofs only when §6's rule lets redemptions happen
-also removes the dummy-token term of `anonymity_main_pu`. Ratatouille likewise: `unlinkability_main_pu`, `unlinkability_main_shared` (`Privacy/RatatouilleMain*.lean`). With one `H₂³` table: `main_shared23_le`, `anonymity_main_shared23`, `unlinkability_main_shared23`. Still [paper]: one
-`H₃` for the proofs on `main`, Moussaka's `find_issuer` Client and 4(b) on `main`, and (PU) for the real
+also removes the dummy-token term of `anonymity_main_pu`. Ratatouille likewise: `unlinkability_main_pu`, `unlinkability_main_shared` (`Privacy/RatatouilleMain*.lean`). With one `H₂³` table: `main_shared23_le`, `anonymity_main_shared23`, `unlinkability_main_shared23`. With all tables shared: `main_sharedAll_le`, `anonymity_main_sharedAll`, `unlinkability_main_sharedAll`; 4(b') on `main`: `anonymityNC_main`. Still [paper]: Moussaka's `find_issuer` Client on `main`, and (PU) for the real
 Keccak-p[800,12], which is an assumption.
 
 **Statement (with the fix).** Adaptive, multi-proof, statistical-in-the-witness zero knowledge in
@@ -1779,8 +1778,19 @@ What is **not** established, roughly in order of importance:
    q_E+8·4607) + 15·(Σ six puAdv + 8·noHitProb + 3750·2⁻¹²⁸) + 2·εhide` (audit
    `Audit/MainRata.lean`). With one `H₂³` table too: `anonymity_main_shared23`,
    `unlinkability_main_shared23` (`Privacy/*MainShared23.lean`, audit `Audit/MainShared23.lean`),
-   the same bounds with `εS` replaced by `εS + Δ23`. Not done: one `H₃` for the proofs on `main` (§10.5's argument; it needs
-   `zk_rom_ic_h23_main` for rows carrying `H₃` columns), Moussaka 4(b) on `main`, and (PU) for the real 12-round permutation (an
+   the same bounds with `εS` replaced by `εS + Δ23`. With all tables shared, one `H₃` included, as in the scheme
+   (`ZK/MainSharedAll.lean`, `main_sharedAll_le`: a reduction to `main_shared23_le` that writes the
+   slices into one `H₃` at the proofs' prefixes, costing the probability that two proofs share a
+   prefix, i.e. that two uniform openings agree): `anonymity_main_sharedAll`,
+   `unlinkability_main_sharedAll` (`Privacy/*MainSharedAll.lean`, audit `Audit/MainSharedAll.lean`),
+   the shared-`H₂³` bounds plus `2·2⁻¹²⁸` and `4·2⁻¹²⁸`, the guess reading `H₃` at `q₃` points.
+   Moussaka 4(b') on `main` (`Privacy/MoussakaNCMain.lean`): `main`'s honest Anchor
+   (`issueRequestBytes`), both redemptions in the all-shared joint hop, and a statistical (PU) term
+   (the view depends on the openings only through the refusal bit): `anonymityNC_main` `≤
+   30·(εS(q₃, q_E+8·4607)+Δ23) + 15·(8·noHitProb + (4(q₅+625)+626)·2⁻¹²⁸) + 2·2⁻¹²⁸ + 2·(φ₀+φ₁)`,
+   about `2⁻⁹⁹·³` plus the abort term, with no assumption on `Com`; `unlinkabilityNC_main` drops
+   the abort term; the issuance proofs there are an abstract `PI` that does not read the tables.
+   Not done: `main`'s `find_issuer` Client on `main`, and (PU) for the real 12-round permutation (an
    assumption; the exhaustive predictor has advantage 1). The QROM ZK bound
    is loose (2⁻¹⁹ at 2³⁰) until the 256-bit `rho` and salt are added.
    With the fix, zero knowledge of the executable Lean prover and the three protocols' privacy
@@ -1804,8 +1814,8 @@ What is **not** established, roughly in order of importance:
    The abstract privacy theorems (`VoleMole/Privacy/`) take per-proof zero knowledge and hiding of
    `Com` as hypotheses, so they apply to any proof system with the label-row fix; on `main` the
    joint (PU) hop over proofs sharing `r` replaces the per-proof hypothesis: `anonymity_main`,
-   `unlinkability_main` (Moussaka 4(a) and Ratatouille; 4(b), the `find_issuer` Client and unbound
-   Moussaka's U5 are not done on `main`). Every
+   `unlinkability_main` (Moussaka 4(a), 4(b') (`anonymityNC_main`) and Ratatouille; the `find_issuer` Client and
+   unbound Moussaka's U5 are not done on `main`). Every
    deterministic side condition for the Lean prover is proved (the witness encodings satisfy the
    systems, interpolation, `N_MASK`, the CRT certificate, BAVC and CRT completeness:
    `Privacy/MoussakaLean.lean`, `Privacy/RatatouilleLean.lean`, `Privacy/PomFRITLean.lean`,
