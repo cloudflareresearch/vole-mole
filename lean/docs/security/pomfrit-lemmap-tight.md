@@ -737,17 +737,62 @@ this conclusion. `per_query_bound_cls`: `2⁵⁰/2¹²⁸ = 2⁻⁷⁸`.
   with `(Q₃ + 1)·2⁵⁰/2¹²⁸` for `(Q₃ + 1)·2⁵⁷/2¹²⁸`, plus `(q₁ + 1)·2⁻¹³⁴`.
 - `Audit/PomfritLemmaPCls.lean`: the hypotheses at real objects.
 
-Not mechanized, and why:
-- *The one-more game.* `pomfritT_accept_le_cls` is item (1) of `pomfrit.md` §6.4 for `E₁^cls`.
-  Items (2)–(9) are not done: `E₁^cls` as a function of the log at the `H_T` query (`e1P` with
-  the label rows, `ũ` from `x`, the dead blocks and `h5Of`), the ordering step (the hint at the
-  ghost log is `clsExt` on the output; `e1P_eq_major`), `pfail_events` and the assembly. The
-  decoder's `H₅` evaluations must be in the log. Planned route: the game is unchanged, and the
-  forger is wrapped so that it makes the decoder's `H₅` queries before each `H_T` query and for
-  each forgery before it stops; `ClsCovered` for the derived provers is then an invariant of the
-  wrapped run. This invariant is not proved. **`pomfrit_U1_explicit` and `pomfrit_U1_sim` are
-  unchanged, with `2⁻⁷¹`.** U1^cls is a paper theorem; its per-chain step and its adaptive bound
-  for one statement are mechanized for the executable verifier.
+**In the one-more game** (`ROM/OneMoreCls*.lean`, `Assumptions/PomfritCls.lean`;
+`pomfrit.md` §6.4 item 11). Theorem U1^cls is mechanized, with simultaneous extraction:
+`pomfrit_U1_cls_sim'` (`pomfrit_U1_ompr_cls_sim` against the standalone OMPR game; the union
+version `pomfrit_U1_cls'`, `pomfrit_U1_ompr_cls`). The pieces:
+- *`E₁^cls` on the log* (`e1C`, `ROM/OneMoreCls.lean`): `e1P`'s data at the first `H₂¹` preimage
+  `x₁` of `x`'s `chal1`, with `ũ` (bytes `175 … 239` of `x`, `xU`), `d[0..45)` and `chal1` read
+  off `x`, the dead blocks `hdOf (deadPre …)` and `H₅` read off the log (`tableOfLog`); its value is
+  `clsExt`'s.
+- *The reduction's `H₅` queries.* The game and `auxSpec` are unchanged. The reduction runs the
+  forger wrapped (`wrapE`, `clsW`): before each `H₂¹` query `x₁` of the forger the wrapper asks
+  `mu₁`, `iv` and `H₅` at every gate input of `clsPts` for every tree of a second class of width
+  `≥ 51` (`decIns`, `wideOther`), computed from its log and **the cipher table `E`**. Correction to
+  the route planned here before: a wrapper that only queries the cipher cannot compute these inputs.
+  They depend on the committed leaf keys, which the straight-line extractor finds with `E` at cells
+  the forger may never have queried (`extractKey` evaluates both halves of a commitment); a
+  forger-side wrapper would need a "guessed commitment" event whose bound is not in Lean. So the
+  wrapper is part of the reduction (it reads `E`, which the reduction samples), as the paper's `B`
+  evaluates `H₅` itself. The game with an `E`-dependent forger is `gameE` (`advCE`), and U1's
+  reduction for it is `pomfrit_U1_boundE`.
+- *The wrapper changes nothing the forger sees* (`ROM/OneMoreClsTable.lean`, `eval_wrapE`): table
+  by table, the same forgeries and target-oracle state, logs equal up to the wrapper's `H₂⁴`, `H₄`,
+  `H₅` entries (`keepK`), and the wrapped log covers the decoder (`CovL`, an invariant). Hence the
+  same win (`flag_wrapE`, `pomWin_le_wrapE`), and derived provers with the same proof, statement and
+  cipher log (`eval_proverP_wrapE`).
+- *The ordering step* (`e1C_eq_cls`, `ROM/OneMoreClsOrder.lean`): if the ghost log holds the
+  verifier's `H₂¹` input and covers the decoder, `E₁^cls(x)` is `clsExt` at the end of the run
+  (`clsOut`, the prefix of `ClsExtracted`) and the derived prover's log covers the decoder
+  (`ClsCovered`). Through `pre_ident` (`e1P_eq_major`'s identification), chain congruences
+  (`CoreEq`, `chKos_congr`) and the coverage of `clsPts`'s gate inputs (`clsTarget_mem_wideOther`).
+- *Per table* (`clsFail_events`, `ROM/OneMoreClsFail.lean`): `pfail_events` with the event of
+  `pomfritT_accept_le_cls` in place of `MajorExtracted`.
+- *Bounds* (`ROM/OneMoreClsBound.lean`, `ROM/OneMoreClsSim.lean`). The derived prover of the wrapped
+  forger reads `E` through the wrapper's `H₅` inputs. Lemma P^cls is applied per cipher table
+  (`pomfritT_accept_le_cls_dep`); binding, an opened dead leaf and Post are transferred table by
+  table to the derived prover of the forger, which does not read `E` (`events_wrapE`,
+  `postJ_of_filter`), and bounded there. With simultaneous extraction: the per-query event
+  `simBadC` (`pomBadC` or an order hit, `simEpsC`), the prefix runs (`prefix_of_clsFail`), and
+  `clsSimEps`:
+
+      clsSimEps = (q'₂₁ + ℓ + 1)·(2⁻¹⁵⁰ + 2⁻¹³⁴) + (q'₂₂ + ℓ + 1)·(ε_QS + 2⁻¹²⁸ + (n' + 339)·2⁻⁴⁴⁸)
+                  + (q'₂₃ + ℓ + 1)·2⁵⁰·2⁻¹²⁸ + hits + (ℓ + 1)·(failEps(q', q_E') + 2⁻¹²⁸)
+
+  (`clsSimEps_eq`). `q'`, `q_E'`, `n'` are the derived provers' budgets of the wrapped forger. The
+  wrapper adds per `H₂¹` query one `H₂⁴`, one `H₄` and at most `NdC` `H₅` queries
+  (`forgerBound_wrapE`, `decIns_length_le`), none of the charged kinds, so `q'` and `q_E'` are
+  U1's and only `n'` grows. `NdC = 17·255·2¹³⁶·242·312` is a crude count; it enters only
+  `n'·2⁻⁴⁴⁸ < 2⁻²¹⁹` per `H₂²` query.
+- At `q` queries of each kind and `ℓ = 2³⁰` the bound is `≈ q·2⁻⁷⁸`: `2⁻¹⁴` at `2⁶⁴` (U1's `2⁻⁷`),
+  `2⁻³⁰` at `2⁴⁸`, `2⁻³⁸` at `2⁴⁰` (dominant terms of `clsSimEps_eq`; the `H₂²` charge is `≈ 2⁻⁶³`
+  at `2⁶⁴`, the per-forgery terms `≈ (ℓ + 1)·2⁻⁷⁸`).
+- `Audit/PomfritCls.lean`: the theorems at the honest Issuer, a 32-byte key digest and two forgers.
+
+What the theorem is about. The reduction is U1's with the wrapped forger and `E₁^cls`; its OMPR
+advantage is that of `red addHint (advCE … wrapE … e1C …)`. The wrapper's work is not modelled
+(running times are not); in the paper it is the decoder's `< 2¹⁵` linear systems and `< 2¹⁹`
+values of `H₅` per `H_T` query, here per `H₂¹` query and for every tree of the second wide class.
 
 ### 6A.6 What remains of (H-dec), and a correction to §6.4
 
@@ -939,8 +984,9 @@ slices (the gate model `translateOn_gate_slice` is: any hash, any `c_mult`, labe
 bits as sums over the trees); Lemma P^∞, Lemma P^lin and Lemma P^dec as statements about the
 one-more game (they would need `KOSPar` as a bad event at `H₂¹` in `ROM/Chains.lean`'s style, and
 the extractor as a function of the log); §6.4–§6.5 (the search); for §6A: the label rows' tree
-form and `AffineOn`, `TwoLabelOn` for the executable verifier's masks, Lemma P^cls and U1^cls in
-the one-more game (§6A.5), and the rows of §6A.4 other than `θ = 51`.
+form and `AffineOn`, `TwoLabelOn` for the executable verifier's masks (both now in Lean, §6A.5),
+and the rows of §6A.4 other than `θ = 51`. Lemma P^cls and U1^cls in the one-more game are in Lean
+(§6A.5).
 
 Non-vacuity. `slice_collision_sound` takes the hypotheses of `witness_determined` (`KOSPar`:
 `exists_kosPar`) and the tree form of the witness rows on `S`, which is `Claim4Hyp.tree_form`'s
@@ -975,9 +1021,8 @@ codimension 4 and 6. About 25 s; `--j=10` adds 30 s.
    left over, and for third classes. It needs a bound on the candidate sets for labels chosen
    after the `H₅` table is seen, and a treatment of level sets whose slopes are not the trees'.
    Or a forger that defeats the search at a cost below the search's.
-2. Mechanize Lemma P^cls and U1^cls in the one-more game (§6A.5): the label rows' tree form and
-   `AffineOn`, `TwoLabelOn` for `Verifier`'s masks; `E₁^cls` on the log with its `H₅` evaluations
-   as queries; `KOSPar` as a bad event at `H₂¹`; a `pomEps` with `2⁵⁰`. The per-chain core is
-   `class_or_small_dec`.
+2. (Done, §6A.5: `pomfrit_U1_cls_sim'`.) Open there: a tight Lean count of the wrapper's `H₅`
+   queries (two wide classes leave at most one tree), and a forger-side wrapper, which would need a
+   bound on commitments that match a key at an unqueried cipher cell.
 3. The committed-shift variant of A-OMPR⊕17 (§7): is it implied by OMPR?
 4. (iii′) of §8: the size and the consistency analysis of a FAEST-style check with affine masks.

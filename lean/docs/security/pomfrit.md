@@ -354,9 +354,10 @@ value. Lemma P holds for `E₁^cls` with
 with no conjecture and no property of `H₅` (`2⁻⁷⁹` for `2²²` systems, `2⁻⁸⁵` for `2³⁶`). In Lean:
 the per-chain step `class_or_small_dec`, `extract_or_class` (`ROM/LemmaPClass.lean`,
 `Seed/SliceDecode.lean`), with the structure of the CRT masks on slices as hypotheses (read off
-the code; proved for a gate model). Not in Lean: these hypotheses for the executable verifier, and
-the one-more game with `E₁^cls`. So **the mechanized Lemma P and U1 below keep `2⁻⁷¹`**; the
-`2⁻⁷⁸` is Theorem U1^cls of that note, a paper theorem.
+the code; proved for a gate model). These hypotheses are now proved for the executable verifier,
+and the one-more game with `E₁^cls` is mechanized (§6.4 item 11): **Theorem U1^cls in Lean**,
+`pomfrit_U1_cls_sim'`, with `(Q₃ + ℓ + 1)·2⁻⁷⁸ + (q₁ + ℓ + 1)·2⁻¹³⁴` in place of
+`(Q₃ + ℓ + 1)·2⁻⁷¹`. `pomfrit_U1_explicit` and `pomfrit_U1_sim` (with `E₁`) are unchanged.
 
 ## 6. One-more unforgeability (classical)
 
@@ -826,6 +827,27 @@ family of uniform random permutations and the forger also queries it backwards.
   query, a forward and an inverse cipher query and a `hash_to_target` query). Nothing in the
   paper's argument changes; the paper does not treat inverse queries for U1 and U2 explicitly.
 
+- *(11) Theorem U1^cls* (G8-cls; `ROM/OneMoreCls{,Table,Order,Fail,Bound,Game,Sim,Queries}.lean`,
+  `Assumptions/PomfritCls.lean`, `Audit/PomfritCls.lean`; `pomfrit-lemmap-tight.md` §6A.5). The
+  reduction programs `H_T(x) + E₁^cls(x)` (`e1C`) and runs the forger wrapped (`wrapE`, part of the
+  reduction: it reads the cipher table) so that the decoder's `H₅` values are in the log at each
+  target query. Table by table the wrapper changes neither the forgeries nor the win
+  (`pomWin_le_wrapE`). The ordering step is `e1C_eq_cls`, the per-table implication
+  `clsFail_events`, Lemma P^cls's adaptive bound `pomfritT_accept_le_cls` (per cipher table, with
+  the cipher terms transferred to the unwrapped forger's derived prover, `events_wrapE`). Results:
+  `pomfrit_U1_cls_sim'` (simultaneous, `clsSimEps`, `clsSimEps_eq`) and `pomfrit_U1_cls'` (union,
+  `(ℓ + 1)·clsFailEps`), for the forger's budget (`forgerBound_wrapE`); against the standalone OMPR
+  game `pomfrit_U1_ompr_cls_sim`, `pomfrit_U1_ompr_cls`. The cipher is the PRF view (random
+  functions); the permutation model above is not done for U1^cls.
+
+  | `q` | `ℓ` | U1 simultaneous (`E₁`) | U1^cls simultaneous (`E₁^cls`) |
+  |---|---|---|---|
+  | `2⁶⁴` | `2³⁰` | `2⁻⁷·⁰` | `≈ 2⁻¹⁴` |
+  | `2⁴⁸` | `2³⁰` | `2⁻²³·⁰` | `≈ 2⁻³⁰` |
+  | `2⁴⁰` | `2³⁰` | `2⁻³¹·⁰` | `≈ 2⁻³⁸` |
+
+  (Dominant term `(q'₂₃ + ℓ + 1)·2⁻⁷⁸` of `clsSimEps_eq`; not evaluated in Lean.)
+
 ## 7. One-more unforgeability in the QROM
 
 *Status.* This section explains why the classical reduction does not lift with Q2 alone. The
@@ -1267,8 +1289,8 @@ dedicated to PomFRIT.
   `pomfrit-lemmap-tight.md`: `ũ` in `hash_to_target` already pins `r` information-theoretically
   (§4 there); for first messages whose trees disagree on the label rows, extraction is reduced to
   finding a slice (§6 there); the class extractor finds it whenever more than `2⁵⁰` challenges
-  accept, which gives `2⁻⁷⁸` per `H₂³` query on paper, unconditionally (§6A there; per-chain step
-  in Lean, the one-more game with it not mechanized); protocol options are in §8 there.
+  accept, which gives `2⁻⁷⁸` per `H₂³` query, unconditionally (§6A there; in Lean,
+  `pomfrit_U1_cls_sim'`, §6.4 item 11); protocol options are in §8 there.
 - **G2.** QROM unforgeability (§7) needs mid-run extraction, or a different reduction. Q7 §4
   supplies one (database-controlled programming, simultaneous extraction from ℓ+1 proofs by
   Theorem M), on paper and under the new assumptions A-OMPR-RO and A-OMPR⊕τ-RO; from the
@@ -1339,22 +1361,16 @@ dedicated to PomFRIT.
   **AES as random permutations, with inverse queries** (§6.4, end): `pomfrit_U1_simP`,
   `pomfrit_U2_simP` (and the OMPR forms `pomfrit_U1_ompr_simP`, `pomfrit_U2_omprShift_simP`),
   the same bounds with `failEpsP` for `failEps`.
-- **G8-cls (open; per-chain step and adaptive bound closed).** Theorem U1^cls in Lean
-  (`pomfrit-lemmap-tight.md` §6A): U1 with the class extractor and `(Q₃ + ℓ + 1)·2⁻⁷⁸ + q₁·2⁻¹³⁴`
-  for Lemma P's `(Q₃ + ℓ + 1)·2⁻⁷¹`. In Lean, for the executable verifier:
-  the affine and two-label structure of the CRT masks on slices and the label rows' tree form
-  (`chain_affineOn`, `chain_twoLabelOn`, `chain_claim4_lab`, `Verifier/Bridge/MaskSlices.lean`),
-  so the per-chain step has no hypothesis on the response (`pomfritT_extract_class_chain`,
-  `ROM/LemmaPClassDet.lean`); `KOSPar` as a bad event at `H₂¹` with `2⁻¹³⁴` per query
-  (`parBad`, `prU_kos_par_le`, `parEps_le`); a goal that reads the label rows, `ũ`, the dead
-  blocks and the check value (`GoalC`, `ClsExtracted`); and the adaptive bound for one statement
-  with any target function, `Pr[accept ∧ ClsCovered ∧ ¬ClsExtracted] ≤ … + (q₁ + 1)·2⁻¹³⁴ +
-  (Q₃ + 1)·2⁻⁷⁸` (`pomfritT_accept_le_cls`, `ROM/LemmaPClsBound.lean`), for provers whose log
-  holds the decoder's `H₅` queries (`ClsCovered`). Missing: the one-more game (§6.4 items 2–9
-  for `E₁^cls`): `E₁^cls` on the query log, the proof that the reduction's (or a wrapped
-  forger's) `H₅` queries give `ClsCovered` for the derived provers, the ordering step,
-  `pfail_events` and the assembly. `pomfrit_U1_explicit` and `pomfrit_U1_sim` are unchanged
-  (`2⁻⁷¹`).
+- **G8-cls (closed).** Theorem U1^cls in Lean (`pomfrit-lemmap-tight.md` §6A.5; §6.4 item 11):
+  U1 with the class extractor, `pomfrit_U1_cls_sim'` (`pomfrit_U1_ompr_cls_sim`):
+  `Pr[PomWin] ≤ Adv^{ompr}(red (wrapE, E₁^cls); Q_T + ℓ + 1, ℓ) + clsSimEps`, whose chain charges
+  are `(q'₂₁ + ℓ + 1)·(2⁻¹⁵⁰ + 2⁻¹³⁴) + … + (q'₂₃ + ℓ + 1)·2⁻⁷⁸` (`clsSimEps_eq`): `≈ 2⁻¹⁴` at
+  `2⁶⁴` queries, against `pomfrit_U1_sim`'s `2⁻⁷`. The reduction runs the forger wrapped (`wrapE`):
+  before each `H₂¹` query it makes the decoder's `H₅` queries, computed with the cipher table, which
+  the reduction samples. A forger-side wrapper (the plan recorded before) does not work: the
+  decoder's inputs depend on leaf keys that the extractor finds with the cipher at unqueried cells.
+  What stays outside Lean: running times (the wrapper's work), and a tight count of its `H₅`
+  queries (a crude one, `NdC`, enters only `n'·2⁻⁴⁴⁸`).
 - **G9 (closed).** Theorem 6 (OMPR ≤ PomFRIT, `uov-assumptions.md` §5.6) is in Lean for the Lean
   client with the completeness term bounded: `compFail ≤ (ℓ+1)·2^{−113}` (`compFail_le`) and
   `Adv^{ompr}(B; n, ℓ) ≤ Pr[PomWin] + (ℓ+1)·2^{−113}` (`pomfrit_T6_lean`, `pomfrit_T6_lean_bound`;
