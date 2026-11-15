@@ -1,5 +1,5 @@
 import VoleMole.ZK.MainShared23
-import VoleMole.ZK.SharedH3
+import VoleMole.ZK.SharedH3One
 
 /-!
 # The joint hop on `main` with one shared `H₃` (`lean/docs/zk.md` §4.2)
@@ -347,6 +347,57 @@ theorem rdH_tabOf {X : Sort*} {f : GView S p₁ p₂ p₃ p₄ → H3T → X}
 
 end Keys
 
+/-! ## When two prefixes coincide -/
+
+section Prefix
+
+variable {Hb : Hashes}
+
+lemma size_mu1_wf (hHb : HashesWF Hb) (st : Statement) : (st.mu1 Hb).size = 32 := by
+  unfold Statement.mu1 mu
+  split <;> simp [hHb _ _, Kind.outLen]
+
+variable (Hb) in
+/-- The bytes of a proof's prefix, `wPrefix ‖ μ₁`. -/
+def prefB (p : Params) (y : SW) : ByteArray :=
+  y.2.extract 0 p.witnessBytes ++ (withP y.1 p).mu1 Hb
+
+lemma size_prefB (hHb : HashesWF Hb) {p : Params} {y : SW} (hw : y.2.size = p.witnessBytes) :
+    (prefB Hb p y).size = p.witnessBytes + 32 := by
+  simp [prefB, ByteArray.size_append, ByteArray.size_extract, size_mu1_wf hHb, hw]
+
+lemma prefB_get! {p : Params} {y : SW} (hw : y.2.size = p.witnessBytes) {k : ℕ}
+    (hk : k < p.witnessBytes) : (prefB Hb p y).get! k = y.2.get! k := by
+  have hs : (y.2.extract 0 p.witnessBytes).size = p.witnessBytes := by
+    simp [ByteArray.size_extract, hw]
+  rw [prefB, get!_append, hs]
+  simp only [hk, ↓reduceIte]
+  exact get!_extract0 _ hk hw.ge
+
+/-- **Two proofs with one prefix** (witnesses of their parameters' lengths, short prefixes) have
+the same witness length and the same first 16 witness bytes. -/
+theorem preOf_eq_imp (hHb : HashesWF Hb) {p p' : Params} {y y' : SW}
+    (hw : y.2.size = p.witnessBytes) (hw' : y'.2.size = p'.witnessBytes)
+    (h16 : 16 ≤ p.witnessBytes) (hm : p.witnessBytes + 32 < preMax)
+    (hm' : p'.witnessBytes + 32 < preMax) (h : preOf Hb p y = preOf Hb p' y') :
+    p.witnessBytes = p'.witnessBytes ∧ wPre y.2 = wPre y'.2 := by
+  have e : prefB Hb p y = prefB Hb p' y' := by
+    have h' := congrArg preBytes h
+    unfold preOf at h'
+    rwa [preBytes_preKey (by rw [show y.2.extract 0 p.witnessBytes ++ (withP y.1 p).mu1 Hb =
+      prefB Hb p y from rfl, size_prefB hHb hw]; exact hm),
+      preBytes_preKey (by rw [show y'.2.extract 0 p'.witnessBytes ++ (withP y'.1 p').mu1 Hb =
+      prefB Hb p' y' from rfl, size_prefB hHb hw']; exact hm')] at h'
+  have hs := congrArg ByteArray.size e
+  rw [size_prefB hHb hw, size_prefB hHb hw'] at hs
+  have hwb : p.witnessBytes = p'.witnessBytes := by omega
+  refine ⟨hwb, funext fun k => ?_⟩
+  have g := congrArg (·.get! k.1) e
+  rw [prefB_get! hw (by omega), prefB_get! hw' (by omega)] at g
+  exact g
+
+end Prefix
+
 /-! ## The shared game, and the reduction to the slice game -/
 
 section Chain
@@ -375,7 +426,7 @@ noncomputable def simAll (F : GView S (pw p₀ n₁) (pw p₀ n₂) (pw p₀ n�
   pr (GTape S (pw p₀ n₁) (pw p₀ n₂) (pw p₀ n₃) (pw p₀ n₄) × H3T) (fun z =>
     F (hybV23 Hb G true true true true z.1) z.2)
 
-lemma withU_u (v : GView S p₁ p₂ p₃ p₄) : v.withU v.u = v := by cases v; rfl
+lemma withU_u {p₁ p₂ p₃ p₄ : Params} (v : GView S p₁ p₂ p₃ p₄) : v.withU v.u = v := by cases v; rfl
 
 /-- **With different prefixes, the shared game on the table built from the slices is the slice
 game.** -/
