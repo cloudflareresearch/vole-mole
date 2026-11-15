@@ -715,14 +715,22 @@ def swapNCM : GTape SecNC pIm pIm pRm pRm × H3T ≃ GTape SecNC pIm pIm pRm pRm
   left_inv _ := rfl
   right_inv _ := rfl
 
+/-- The simulated game with the refusal bit `G x₀ && G x₁` for a predicate `G` of a Client's tape. -/
+noncomputable def hybG (G : IssT → Bool) (b : Bool) : ℝ :=
+  pr (GTape SecNC pIm pIm pRm pRm × H3T) (fun z =>
+    hvNCM A b (G z.1.1.1 && G z.1.1.2) (nNC z.1.1 false) (nNC z.1.1 true) z.1.2 z.2)
+
 /-- **A symmetric refusal bit makes the worlds coincide**: swapping the Clients' tapes exchanges
 them. -/
-theorem hybNCM_eq : hybNCM A idx PI false = hybNCM A idx PI true := by
-  unfold hybNCM
+theorem hybG_eq (G : IssT → Bool) : hybG A G false = hybG A G true := by
+  unfold hybG
   rw [← pr_equiv swapNCM]
   refine pr_congr fun z => ?_
-  simp only [swapNCM, Equiv.coe_fn_mk, Bool.and_comm (gSymN A.nc idx PI z.1.1.2)]
+  simp only [swapNCM, Equiv.coe_fn_mk, Bool.and_comm (G z.1.1.2)]
   rfl
+
+theorem hybNCM_eq : hybNCM A idx PI false = hybNCM A idx PI true :=
+  hybG_eq A (gSymN A.nc idx PI)
 
 end SwapM
 /-! ## The (PU) term: statistical -/
@@ -873,5 +881,223 @@ theorem bstarNCM_imp (hsk : ∀ c, (sk c).Correct (A.pk c)) (b : Bool)
     · exact ⟨w, by simpa [sibO] using hw, hw'⟩
 
 end BstarM
+/-! ## The (PU) term: the numbers -/
+
+section PrM
+
+variable (A : AdversaryNCM) (idx : AnchorSet → UOVKey → ℕ) (PI : NIZK IssueInstance)
+  (sk : Bool → Signer)
+
+theorem pr_errNC₁_le : pr (GTape SecNC pIm pIm pRm pRm) (fun x => errC pIm x.2.2.1.1.2) ≤
+    noHitProb :=
+  pr_le_of_fst fun _ => pr_le_of_fst fun _ => pr_le_of_snd fun _ => pr_errC_le
+
+theorem pr_errNC₂_le : pr (GTape SecNC pIm pIm pRm pRm) (fun x => errC pIm x.2.2.2.1.1.2) ≤
+    noHitProb :=
+  pr_le_of_fst fun _ => pr_le_of_fst fun _ => pr_le_of_fst fun _ => pr_le_of_snd fun _ =>
+    pr_errC_le
+
+theorem pr_errNC₃_le : pr (GTape SecNC pIm pIm pRm pRm) (fun x => errC pRm x.2.2.2.2.1.1.2) ≤
+    noHitProb :=
+  pr_le_of_fst fun _ => pr_le_of_fst fun _ => pr_le_of_fst fun _ => pr_le_of_fst fun _ =>
+    pr_le_of_snd fun _ => pr_errC_le
+
+theorem pr_errNC₄_le : pr (GTape SecNC pIm pIm pRm pRm) (fun x => errC pRm x.2.2.2.2.2.1.2) ≤
+    noHitProb :=
+  pr_le_of_fst fun _ => pr_le_of_fst fun _ => pr_le_of_fst fun _ => pr_le_of_fst fun _ =>
+    pr_le_of_fst fun _ => pr_errC_le
+
+set_option maxRecDepth 8192 in
+/-- **A Client's opening against candidates from the nullifiers, coins, tables and `H₃`**: at most
+`(q + 1)·2⁻¹²⁸`, the opening being uniform and independent of them. -/
+theorem pr_open_le (c : Bool) (C : Bytes → Bytes → AuxS → H3T → Finset (ZK.Sim.Bytes 16)) {q : ℕ}
+    (hC : ∀ n₀ n₁ a T, (C n₀ n₁ a T).card ≤ q + 1) :
+    pr (GTape SecNC pIm pIm pRm pRm × H3T) (fun z =>
+      (xOf z.1.1 c).2.1 ∈ C (nNC z.1.1 false) (nNC z.1.1 true) z.1.2 z.2) ≤ (q + 1) / 2 ^ 128 := by
+  cases c
+  · let e : Coins rBytes × (((Coins nfBytes × Coins proveSeedBytes) × IssT) × (AuxS × H3T)) ≃
+        GTape SecNC pIm pIm pRm pRm × H3T :=
+      { toFun := fun z => ((((z.2.1.1.1, z.1, z.2.1.1.2), z.2.1.2), z.2.2.1), z.2.2.2)
+        invFun := fun z => (z.1.1.1.2.1, (((z.1.1.1.1, z.1.1.1.2.2), z.1.1.2), (z.1.2, z.2)))
+        left_inv := fun _ => rfl
+        right_inv := fun _ => rfl }
+    rw [← pr_equiv e]
+    exact pr_mem_uniform_le (X := ((Coins nfBytes × Coins proveSeedBytes) × IssT) × (AuxS × H3T))
+      (fun y => C (List.ofFn y.1.1.1) (List.ofFn y.1.2.1) y.2.1 y.2.2) fun _ => hC _ _ _ _
+  · let e : Coins rBytes × ((IssT × (Coins nfBytes × Coins proveSeedBytes)) × (AuxS × H3T)) ≃
+        GTape SecNC pIm pIm pRm pRm × H3T :=
+      { toFun := fun z => (((z.2.1.1, (z.2.1.2.1, z.1, z.2.1.2.2)), z.2.2.1), z.2.2.2)
+        invFun := fun z => (z.1.1.2.2.1, ((z.1.1.1, (z.1.1.2.1, z.1.1.2.2.2)), (z.1.2, z.2)))
+        left_inv := fun _ => rfl
+        right_inv := fun _ => rfl }
+    rw [← pr_equiv e]
+    exact pr_mem_uniform_le (X := (IssT × (Coins nfBytes × Coins proveSeedBytes)) × (AuxS × H3T))
+      (fun y => C (List.ofFn y.1.1.1) (List.ofFn y.1.2.1) y.2.1 y.2.2) fun _ => hC _ _ _ _
+
+set_option maxRecDepth 8192 in
+/-- **The two simulated redemptions collide with probability `≤ 313·2⁻¹²⁸`**: the right proof's
+`d` is uniform and independent of the left proof. -/
+theorem pr_sibNCM_le (hsk : ∀ c, (sk c).Correct (A.pk c)) (b : Bool) :
+    pr (GTape SecNC pIm pIm pRm pRm) (fun x =>
+      ∃ w ∈ sibO Hashes.shake pRm (qOf ((gameNCM A idx PI sk b).σ₃ x.1 none none)) x.2.1.2
+          x.2.2.2.2.1.1.2,
+        w ∈ sibO Hashes.shake pRm (qOf ((gameNCM A idx PI sk b).σ₄ x.1 none none none)) x.2.1.2
+          x.2.2.2.2.2.1.2) ≤ ((312 : ℕ) + 1) / 2 ^ 128 := by
+  refine pr_le_of_fst fun s => pr_le_of_fst fun u => pr_le_of_fst fun k₁ => pr_le_of_fst fun k₂ =>
+    pr_le_of_fst fun k₃ => pr_KS_d_le _ fun ρ sh c1 c2 c3 c5 V => ?_
+  have hlen := sibO_length_le Hashes.shake (p := pRm)
+    (qOf ((gameNCM A idx PI sk b).σ₃ s none none)) u.2 k₃.1.2
+  cases hg : gNC A idx PI sk s
+  · refine le_trans (le_of_eq ?_) (by positivity)
+    rw [pr_congr (Q := fun _ => False) fun d => by
+      have : qOf ((gameNCM A idx PI sk b).σ₄ s none none none) = none := by
+        show qOf (bif gNC A idx PI sk s then _ else none) = none
+        rw [hg]; rfl
+      rw [this]
+      simp [sibO]]
+    exact pr_false
+  · obtain ⟨w, hw, -, hw'⟩ := redStmt_gNC hsk hg b true
+    have hq : qOf ((gameNCM A idx PI sk b).σ₄ s none none none) =
+        some (stR ⟨(A.choose true).1.keys, List.ofFn (xOf s (b ^^ true)).1, A.m.int.ci,
+          A.m.int.cr, (A.choose true).2⟩, (xOf s (b ^^ true)).2.1) := by
+      show qOf (bif gNC A idx PI sk s then _ else none) = _
+      rw [hg]
+      show (redStmt A.m (ptNM A idx PI sk b s true)).map _ = _
+      rw [hw]
+      show some (_, wPre w) = _
+      rw [hw']
+    refine le_trans (pr_mono fun d hd => ?_) (pr_sib_hit_le Hashes.shake mainP_pRm
+      (stR ⟨(A.choose true).1.keys, List.ofFn (xOf s (b ^^ true)).1, A.m.int.ci,
+        A.m.int.cr, (A.choose true).2⟩) u.2 sh c1 c2 c3 c5 (xOf s (b ^^ true)).2.1 _ hlen)
+    rw [hq] at hd
+    exact hd
+
+set_option maxRecDepth 8192 in
+/-- **The (PU) term of the non-colluding game on `main` is statistical**: with both redemptions
+simulated, `bstar` has probability at most `4·noHitProb + 2·(q₅ + 625)·2⁻¹²⁸ + 313·2⁻¹²⁸`, for a
+guess whose `H₅` read sets have at most `q₅` keys. -/
+theorem pr_bstarNCM_le (hsk : ∀ c, (sk c).Correct (A.pk c)) {q5 : ℕ}
+    (h5 : ∀ y t T, (A.R5 y t T).card ≤ q5) (b : Bool) :
+    simAll (p₀ := pIm) (n₁ := 256) (n₂ := 256) (n₃ := 343) (n₄ := 343) Hashes.shake
+        (gameNCM A idx PI sk b) (fun v T => bstar Hashes.shake (gameNCM A idx PI sk b)
+          (fun v => r5NCM A idx PI sk b v T) v) ≤
+      4 * noHitProb + 2 * ((q5 + 625) / 2 ^ 128) + 313 / 2 ^ 128 := by
+  unfold simAll
+  have h := (pr_mono fun (z : GTape SecNC pIm pIm pRm pRm × H3T) hz =>
+    bstarNCM_imp (idx := idx) (PI := PI) hsk b z.1 z.2 hz).trans ((pr_or_le _ _).trans
+    (add_le_add ((pr_or_le _ _).trans (add_le_add le_rfl ((pr_or_le _ _).trans (add_le_add le_rfl
+      (pr_or_le _ _))))) ((pr_or_le _ _).trans (add_le_add le_rfl ((pr_or_le _ _).trans
+        (add_le_add le_rfl le_rfl))))))
+  have e₁ := (le_of_eq (pr_prod_fst (β := H3T) (fun x : GTape SecNC pIm pIm pRm pRm =>
+    errC pIm x.2.2.1.1.2))).trans (pr_errNC₁_le)
+  have e₂ := (le_of_eq (pr_prod_fst (β := H3T) (fun x : GTape SecNC pIm pIm pRm pRm =>
+    errC pIm x.2.2.2.1.1.2))).trans (pr_errNC₂_le)
+  have e₃ := (le_of_eq (pr_prod_fst (β := H3T) (fun x : GTape SecNC pIm pIm pRm pRm =>
+    errC pRm x.2.2.2.2.1.1.2))).trans (pr_errNC₃_le)
+  have e₄ := (le_of_eq (pr_prod_fst (β := H3T) (fun x : GTape SecNC pIm pIm pRm pRm =>
+    errC pRm x.2.2.2.2.2.1.2))).trans (pr_errNC₄_le)
+  have c₃ := (pr_mono fun (z : GTape SecNC pIm pIm pRm pRm × H3T)
+      (hz : gNC A idx PI sk z.1.1 = true ∧ (xOf z.1.1 (b ^^ false)).2.1 ∈
+        candNCM A b false (nNC z.1.1 false) (nNC z.1.1 true) z.1.2 z.2) => hz.2).trans
+    (pr_open_le (b ^^ false) (fun n₀ n₁ a T => candNCM A b false n₀ n₁ a T)
+      (q := q5 + 624) fun n₀ n₁ a T => card_candNCM_le A h5 b false n₀ n₁ a T)
+  have c₄ := (pr_mono fun (z : GTape SecNC pIm pIm pRm pRm × H3T)
+      (hz : gNC A idx PI sk z.1.1 = true ∧ (xOf z.1.1 (b ^^ true)).2.1 ∈
+        candNCM A b true (nNC z.1.1 false) (nNC z.1.1 true) z.1.2 z.2) => hz.2).trans
+    (pr_open_le (b ^^ true) (fun n₀ n₁ a T => candNCM A b true n₀ n₁ a T)
+      (q := q5 + 624) fun n₀ n₁ a T => card_candNCM_le A h5 b true n₀ n₁ a T)
+  have s₃₄ := (le_of_eq (pr_prod_fst (β := H3T) (fun x : GTape SecNC pIm pIm pRm pRm =>
+      ∃ w ∈ sibO Hashes.shake pRm (qOf ((gameNCM A idx PI sk b).σ₃ x.1 none none)) x.2.1.2
+          x.2.2.2.2.1.1.2,
+        w ∈ sibO Hashes.shake pRm (qOf ((gameNCM A idx PI sk b).σ₄ x.1 none none none)) x.2.1.2
+          x.2.2.2.2.2.1.2))).trans (pr_sibNCM_le A idx PI sk hsk b)
+  have hq : ((q5 + 624 : ℕ) + 1 : ℝ) = (q5 : ℝ) + 625 := by push_cast; ring
+  rw [hq] at c₃ c₄
+  have hn : (((312 : ℕ) + 1 : ℝ) / 2 ^ 128) = 313 / 2 ^ 128 := by norm_num
+  rw [hn] at s₃₄
+  refine h.trans ?_
+  linarith
+
+end PrM
+/-! ## Theorem 4(b') on `main` -/
+
+section MainM
+
+variable (A : AdversaryNCM) (idx : AnchorSet → UOVKey → ℕ) (PI : NIZK IssueInstance)
+  (sk : Bool → Signer)
+
+/-- **Theorem 4(b') on `main` (no label rows), all tables shared.** For every non-colluding
+Moderator (contexts, keys, Anchor Sets and digests of its choice; it sees no issuance), honest
+Anchors with signers correct for their keys answering with `main`'s `issue_response`, a sound index
+rule, any issuance proof system, and the executable prover for the two redemptions with one `H₃`,
+one `H₂³` table, one `H₅` table and one cipher: if the guess reads `H₃` at `q3` points, the cipher
+at `qE` keys and `H₅` at a consistent read set of at most `q5` keys,
+
+    |Pr[W₀] − Pr[W₁]| ≤ 30·(εS(q3, qE + 8·4607) + Δ23)
+        + 15·(8·noHitProb + (4·(q5 + 625) + 626)·2⁻¹²⁸) + 2·2⁻¹²⁸ + 2·(φ false + φ true).
+
+The (PU) term is statistical: no assumption on `Com`. `φ c` is the abort probability of
+Anchor `c` (`phi`; `≤ δ_c^255` for pqov in the vinegar random-oracle model). -/
+theorem anonymityNC_main (hsk : ∀ c, (sk c).Correct (A.pk c)) (hidx : IdxSound idx) {q3 qE q5 : ℕ}
+    (hC : A.ConsH q3 qE) (h5 : ∀ y t T, (A.R5 y t T).card ≤ q5) :
+    |realNCM A idx PI sk false - realNCM A idx PI sk true| ≤
+      30 * (εS q3 (qE + 8 * 4607) + Δ23 9) +
+        15 * (8 * noHitProb + (4 * (q5 + 625) + 626) / 2 ^ 128) + 2 / 2 ^ 128 +
+        2 * (phi A.nc sk false + phi A.nc sk true) := by
+  have r0 := real_sim_NCM A idx PI sk hsk hC false
+  have r1 := real_sim_NCM A idx PI sk hsk hC true
+  have b0 := pr_bstarNCM_le A idx PI sk hsk h5 false
+  have b1 := pr_bstarNCM_le A idx PI sk hsk h5 true
+  have c0 := pr_collNCM_le A idx PI sk hsk false
+  have c1 := pr_collNCM_le A idx PI sk hsk true
+  have g0 := sim_hyb_NCM A idx PI sk hsk hidx false
+  have g1 := sim_hyb_NCM A idx PI sk hsk hidx true
+  have he := hybNCM_eq A idx PI
+  have hn : (4 * ((q5 : ℝ) + 625) + 626) / 2 ^ 128 =
+      2 * ((q5 + 625) / 2 ^ 128) + 313 / 2 ^ 128 + (2 * ((q5 + 625) / 2 ^ 128) + 313 / 2 ^ 128) := by
+    ring
+  have := abs_sub_le_iff.1 r0; have := abs_sub_le_iff.1 r1; have := abs_sub_le_iff.1 g0
+  have := abs_sub_le_iff.1 g1
+  rw [abs_sub_le_iff, hn]
+  constructor <;> linarith
+
+/-- **Unlinkability against a non-colluding Moderator on `main`**: with one Anchor (equal keys
+and signers) and any index rule, the same bound without the abort term. -/
+theorem unlinkabilityNC_main (hsk : ∀ c, (sk c).Correct (A.pk c)) (hpk : A.pk false = A.pk true)
+    (hs : sk false = sk true) {q3 qE q5 : ℕ} (hC : A.ConsH q3 qE)
+    (h5 : ∀ y t T, (A.R5 y t T).card ≤ q5) :
+    |realNCM A idx PI sk false - realNCM A idx PI sk true| ≤
+      30 * (εS q3 (qE + 8 * 4607) + Δ23 9) +
+        15 * (8 * noHitProb + (4 * (q5 + 625) + 626) / 2 ^ 128) + 2 / 2 ^ 128 := by
+  have hg : goodN A.nc idx PI sk false = goodN A.nc idx PI sk true := by
+    funext i
+    have hpk' : A.nc.pk false = A.nc.pk true := hpk
+    simp only [goodN, okN, tokDN, tokN, respN, hpk', hs]
+  have hsim (b : Bool) : simNCM A idx PI sk b =
+      hybG A (fun x => goodN A.nc idx PI sk true (issReal A.nc.base PI x)) b := by
+    rw [simNCM_eq A idx PI sk hsk b]
+    refine pr_congr fun z => ?_
+    have e : gNC A idx PI sk z.1.1 = (goodN A.nc idx PI sk true (issReal A.nc.base PI z.1.1.1) &&
+        goodN A.nc idx PI sk true (issReal A.nc.base PI z.1.1.2)) := by
+      unfold gNC iOf xOf
+      rw [hg]
+      rfl
+    rw [e]
+  have r0 := real_sim_NCM A idx PI sk hsk hC false
+  have r1 := real_sim_NCM A idx PI sk hsk hC true
+  have b0 := pr_bstarNCM_le A idx PI sk hsk h5 false
+  have b1 := pr_bstarNCM_le A idx PI sk hsk h5 true
+  have c0 := pr_collNCM_le A idx PI sk hsk false
+  have c1 := pr_collNCM_le A idx PI sk hsk true
+  have he := hybG_eq A (fun x => goodN A.nc idx PI sk true (issReal A.nc.base PI x))
+  rw [← hsim, ← hsim] at he
+  have hn : (4 * ((q5 : ℝ) + 625) + 626) / 2 ^ 128 =
+      2 * ((q5 + 625) / 2 ^ 128) + 313 / 2 ^ 128 + (2 * ((q5 + 625) / 2 ^ 128) + 313 / 2 ^ 128) := by
+    ring
+  have := abs_sub_le_iff.1 r0; have := abs_sub_le_iff.1 r1
+  rw [abs_sub_le_iff, hn]
+  constructor <;> linarith
+
+end MainM
 
 end VoleMole.Privacy.Moussaka
