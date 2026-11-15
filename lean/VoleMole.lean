@@ -571,6 +571,7 @@ import VoleMole.Audit.TheftJointZK
 import VoleMole.Audit.ZKPoint
 import VoleMole.Audit.ZKPoint2
 import VoleMole.Audit.ZKPoint3
+import VoleMole.Audit.ZKPoint4
 import VoleMole.Audit.MainPU
 import VoleMole.Audit.MainShared
 import VoleMole.Audit.PomfritLemmaPCls
