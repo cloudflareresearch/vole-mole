@@ -152,6 +152,7 @@ import VoleMole.ROM.MoussakaUnbound
 import VoleMole.ROM.MoussakaUnboundAdapt
 import VoleMole.ROM.MoussakaUnboundSpec
 import VoleMole.ROM.VerifyIC
+import VoleMole.ROM.ExtractCells
 import VoleMole.ROM.PrefixIC
 import VoleMole.ROM.ProverIC
 import VoleMole.ROM.MoussakaOMUF
@@ -437,6 +438,7 @@ import VoleMole.Theft.PlainEager
 import VoleMole.Theft.PlainVerQ
 import VoleMole.Theft.PlainRom
 import VoleMole.Theft.PlainRataRom
+import VoleMole.Theft.PlainRataReads
 import VoleMole.Theft.MoussakaHit
 import VoleMole.Theft.ManyPlain
 import VoleMole.Theft.ManyReads
@@ -476,6 +478,7 @@ import VoleMole.Audit.PomfritPerm
 import VoleMole.Audit.Theft
 import VoleMole.Audit.TheftPlainLog
 import VoleMole.Audit.TheftPlainRom
+import VoleMole.Audit.TheftPlainReads
 import VoleMole.Audit.MainPU
 import VoleMole.Audit.MainShared
 import VoleMole.Audit.PomfritLemmaPCls
