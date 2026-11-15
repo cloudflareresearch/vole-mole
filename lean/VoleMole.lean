@@ -528,6 +528,7 @@ import VoleMole.Audit.TheftPlainMous
 import VoleMole.Audit.TheftPlainMany
 import VoleMole.Audit.TheftPlainUnbound
 import VoleMole.Audit.TheftPlainPerm
+import VoleMole.Audit.TheftNum
 import VoleMole.Audit.MainPU
 import VoleMole.Audit.MainShared
 import VoleMole.Audit.PomfritLemmaPCls
