@@ -546,4 +546,218 @@ theorem idealNN_eq : idealNN A n false = idealNN A n true :=
 
 end HopsN
 
+/-! ## The (PU) term is statistical -/
+
+section PUN
+
+variable (A : AdversaryUNCH) (PI : NIZK IssueInstance) (sk : Bool → Signer) (n : ℕ)
+
+/-- The non-secret part of the tape: the coins, `H₃`, the shared tables. -/
+abbrev AuxN := CoinsN pIu (nsU n) × H3T × USh × Tab2G pIu
+
+/-- The simulators' coins of the non-secret part. -/
+def csZ (z : AuxN n) : Fin n → SimCoins pRu := fun j => (z.1 j).2
+
+/-- **The public key set with both tokens finalized**, from the keys, the coins and the tables:
+the guess's `H₅` read set on the history `histTR`, and the `n` proofs' active gate inputs. -/
+noncomputable def spT (b : Bool) (k : KTape) (z : AuxN n) : Finset (ZK.Sim.Bytes 37) :=
+  A.R5 (some (histTR A n b k (csZ n z) n)) z.2.2.1
+      (tabHN (A := A) (histTR A n b k (csZ n z) n) (csZ n z) z.2.2.1 z.2.2.2) z.2.1 ∪
+    univ.biUnion fun j : Fin n => (actL Hashes.shake pRu
+      (stR (xKey A.unc b k (A.next (histTR A n b k (csZ n z) j)))) z.2.2.1.2
+        (csZ n z j)).toFinset.image (blk 37)
+
+/-- **The candidates of slot `i`** for the witness prefix, from the keys, the coins and the
+tables (no opening). -/
+noncomputable def candTN (b : Bool) (k : KTape) (z : AuxN n) (i : Fin n) :
+    Finset (ZK.Sim.Bytes 16) :=
+  candC Hashes.shake (stR (xKey A.unc b k (A.next (histTR A n b k (csZ n z) i)))) z.2.2.1.2
+    (csZ n z i) (spT A n b k z)
+
+lemma card_spT_le {q5 : ℕ} (h5 : ∀ y u G2 T, (A.R5 y u G2 T).card ≤ q5) (b : Bool) (k : KTape)
+    (z : AuxN n) : (spT A n b k z).card ≤ q5 + n * 312 := by
+  unfold spT
+  refine (card_union_le _ _).trans (add_le_add (h5 _ _ _ _) ?_)
+  refine card_biUnion_le.trans ?_
+  calc ∑ j : Fin n, _ ≤ ∑ _j : Fin n, 312 := sum_le_sum fun j _ =>
+        card_image_le.trans ((List.toFinset_card_le _).trans (actL_length_le Hashes.shake _ _ _))
+    _ = n * 312 := by simp
+
+lemma card_candTN_le {q5 : ℕ} (h5 : ∀ y u G2 T, (A.R5 y u G2 T).card ≤ q5) (b : Bool)
+    (k : KTape) (z : AuxN n) (i : Fin n) : (candTN A n b k z i).card ≤ (q5 + n * 312) + 1 :=
+  (card_candC_le Hashes.shake mainP_pRu _ _ _ _).trans (Nat.succ_le_succ (card_spT_le A n h5 b k z))
+
+variable {A PI sk n}
+
+set_option maxRecDepth 8192 in
+/-- **The prediction event of slot `i` implies that an opening is a candidate computed without the
+openings.** -/
+theorem candN_imp (hsk : ∀ c, (sk c).Correct (A.pk c)) (hK : Contains A.unc.nc) (b : Bool)
+    (x : NTU n) (i : Fin n)
+    (h : candN Hashes.shake pIu (nsU n) (gameNN A PI sk n b) (r5NN A PI sk n b) i x) :
+    x.1.1.2.1 ∈ candTN A n b (x.1.1.1, x.1.2.1) x.2 i ∨
+      x.1.2.2.1 ∈ candTN A n b (x.1.1.1, x.1.2.1) x.2 i := by
+  classical
+  set v := simVN (A := A) (PI := PI) (sk := sk) b x with hv
+  unfold candN at h
+  change candO Hashes.shake (qOf (yN (gameNN A PI sk n b) i v)) _ _ _ at h
+  cases hg : gN A.unc PI sk x.1
+  · have hy : yN (gameNN A PI sk n b) i v = none := by
+      rw [yN_simNN]; exact stK_none b x.1 hg _
+    rw [hy] at h
+    exact h.elim
+  · have hH : ∀ k, k ≤ n → histK A PI sk n b x.1 v.os k =
+        histTR A n b (x.1.1.1, x.1.2.1) (csN x) k := histK_sim_true hsk hK b x hg
+    -- the statements of the slots
+    have hst : ∀ j : Fin n, ∀ y ∈ yN (gameNN A PI sk n b) j v,
+        y.1 = stR (xKey A.unc b (x.1.1.1, x.1.2.1)
+          (A.next (histTR A n b (x.1.1.1, x.1.2.1) (csN x) j))) ∧
+        wPre y.2 = (bif who b (A.next (histTR A n b (x.1.1.1, x.1.2.1) (csN x) j))
+          then x.1.2 else x.1.1).2.1 := by
+      intro j y hy
+      rw [yN_simNN, hH j j.2.le] at hy
+      unfold stK at hy
+      rw [hg] at hy
+      cases hval : validNC A.unc.nc PI sk x.1.1 x.1.2
+          (histTR A n b (x.1.1.1, x.1.2.1) (csN x) j)
+          (A.next (histTR A n b (x.1.1.1, x.1.2.1) (csN x) j))
+      · rw [hval] at hy; cases hy
+      · rw [hval] at hy
+        exact redStmt_good hsk hg b _ y hy
+    -- the public key set
+    have hSp : SpN Hashes.shake pIu (nsU n) (gameNN A PI sk n b) (r5NN A PI sk n b) x ⊆
+        spT A n b (x.1.1.1, x.1.2.1) x.2 := by
+      have hkey : keyNN A PI sk n b v = some (histTR A n b (x.1.1.1, x.1.2.1) (csN x) n) := by
+        unfold keyNN
+        rw [show v.s = x.1 from rfl, hg, hH n le_rfl]
+        rfl
+      have hM : v.M = tabHN (A := A) (histTR A n b (x.1.1.1, x.1.2.1) (csN x) n) (csN x)
+          x.2.2.2.1 x.2.2.2.2 := by
+        rw [simVN_M_true b x hg, hH n le_rfl]
+      unfold SpN
+      refine union_subset_union (le_of_eq ?_) (biUnion_subset_biUnion_of_subset_left _ le_rfl |>.trans
+        (biUnion_mono fun j _ => actO_sub (fun y hy => ?_) _ _))
+      · show A.R5 (keyNN A PI sk n b v) v.u v.M v.T = _
+        rw [hkey, hM]
+        rfl
+      · obtain ⟨y', hy', rfl⟩ := Option.mem_map.1 hy
+        exact (hst j y' hy').1
+    rcases hy : yN (gameNN A PI sk n b) i v with _ | y
+    · rw [hy] at h
+      exact h.elim
+    · rw [hy] at h
+      obtain ⟨h1, h2⟩ := hst i y hy
+      have hc := candO_someU (st := y.1) (r := wPre y.2) rfl h
+      have hc' : wPre y.2 ∈ candTN A n b (x.1.1.1, x.1.2.1) x.2 i := by
+        show wPre y.2 ∈ candC Hashes.shake (stR (xKey A.unc b (x.1.1.1, x.1.2.1)
+          (A.next (histTR A n b (x.1.1.1, x.1.2.1) (csN x) i)))) x.2.2.2.1.2 (csN x i)
+            (spT A n b (x.1.1.1, x.1.2.1) x.2)
+        rw [← h1]
+        exact candC_mono Hashes.shake hSp hc
+      rw [h2] at hc'
+      rcases hw : who b (A.next (histTR A n b (x.1.1.1, x.1.2.1) (csN x) i)) with _ | _
+      · rw [hw] at hc'; exact Or.inl hc'
+      · rw [hw] at hc'; exact Or.inr hc'
+
+set_option maxRecDepth 8192 in
+/-- **A Client's opening against candidates from the keys and the rest of the tape**: at most
+`(q + 1)·2⁻¹²⁸`, the opening being uniform and independent of them. -/
+theorem pr_open_leN (c : Bool) (C : KTape → AuxN n → Finset (ZK.Sim.Bytes 16)) {q : ℕ}
+    (hC : ∀ k z, (C k z).card ≤ q + 1) :
+    pr (NTU n) (fun x => (bif c then x.1.2 else x.1.1).2.1 ∈ C (x.1.1.1, x.1.2.1) x.2) ≤
+      (q + 1) / 2 ^ 128 := by
+  cases c
+  · let e : Coins rBytes × (((Coins nfKeyBytes × Coins proveSeedBytes) × IssT) × AuxN n) ≃
+        NTU n :=
+      { toFun := fun z => (((z.2.1.1.1, z.1, z.2.1.1.2), z.2.1.2), z.2.2)
+        invFun := fun x => (x.1.1.2.1, (((x.1.1.1, x.1.1.2.2), x.1.2), x.2))
+        left_inv := fun _ => rfl
+        right_inv := fun _ => rfl }
+    rw [← pr_equiv e]
+    exact pr_mem_uniform_le (X := ((Coins nfKeyBytes × Coins proveSeedBytes) × IssT) × AuxN n)
+      (fun y => C (y.1.1.1, y.1.2.1) y.2) fun _ => hC _ _
+  · let e : Coins rBytes × ((IssT × (Coins nfKeyBytes × Coins proveSeedBytes)) × AuxN n) ≃
+        NTU n :=
+      { toFun := fun z => ((z.2.1.1, (z.2.1.2.1, z.1, z.2.1.2.2)), z.2.2)
+        invFun := fun x => (x.1.2.2.1, ((x.1.1, (x.1.2.1, x.1.2.2.2)), x.2))
+        left_inv := fun _ => rfl
+        right_inv := fun _ => rfl }
+    rw [← pr_equiv e]
+    exact pr_mem_uniform_le (X := (IssT × (Coins nfKeyBytes × Coins proveSeedBytes)) × AuxN n)
+      (fun y => C (y.1.1.1, y.1.2.1) y.2) fun _ => hC _ _
+
+/-- **Each slot's prediction term** is at most `2·(q₅ + 312n + 1)·2⁻¹²⁸`. -/
+theorem pr_candNN_le (hsk : ∀ c, (sk c).Correct (A.pk c)) (hK : Contains A.unc.nc) {q5 : ℕ}
+    (h5 : ∀ y u G2 T, (A.R5 y u G2 T).card ≤ q5) (b : Bool) (i : Fin n) :
+    pr (NTU n) (candN Hashes.shake pIu (nsU n) (gameNN A PI sk n b) (r5NN A PI sk n b) i) ≤
+      2 * (((q5 + n * 312 : ℕ) + 1) / 2 ^ 128) := by
+  refine (pr_mono fun x hx => candN_imp hsk hK b x i hx).trans ((pr_or_le _ _).trans ?_)
+  have h0 := pr_open_leN (n := n) false (fun k z => candTN A n b k z i)
+    (q := q5 + n * 312) fun k z => card_candTN_le A n h5 b k z i
+  have h1 := pr_open_leN (n := n) true (fun k z => candTN A n b k z i)
+    (q := q5 + n * 312) fun k z => card_candTN_le A n h5 b k z i
+  simp only [Bool.cond_false, Bool.cond_true] at h0 h1
+  push_cast at h0 h1 ⊢
+  linarith
+
+/-- **The bad event with all `n` proofs simulated**, a number. -/
+theorem bstarNN_le (hsk : ∀ c, (sk c).Correct (A.pk c)) (hK : Contains A.unc.nc) {q5 : ℕ}
+    (h5 : ∀ y u G2 T, (A.R5 y u G2 T).card ≤ q5) (b : Bool) :
+    bstarNN A PI sk n b ≤ n * noHitProb + n * (2 * (((q5 + n * 312 : ℕ) + 1) / 2 ^ 128)) +
+      n * n * (((312 : ℕ) + 1) / 2 ^ 128) := by
+  refine (pr_bstarN_sim_le Hashes.shake pIu (nsU n) (gameNN A PI sk n b) hashesWF_shake
+    (nvalidNN A PI sk n hsk b) (r5NN A PI sk n b)).trans ?_
+  have hs : ∑ i, pr (NTU n) (candN Hashes.shake pIu (nsU n) (gameNN A PI sk n b)
+      (r5NN A PI sk n b) i) ≤ n * (2 * (((q5 + n * 312 : ℕ) + 1) / 2 ^ 128)) := by
+    calc _ ≤ ∑ _i : Fin n, 2 * (((q5 + n * 312 : ℕ) + 1) / 2 ^ 128 : ℝ) :=
+          sum_le_sum fun i _ => pr_candNN_le hsk hK h5 b i
+      _ = _ := by simp
+  linarith
+
+end PUN
+
+/-! ## The theorem -/
+
+section Main
+
+variable (A : AdversaryUNCH) (PI : NIZK IssueInstance) (sk : Bool → Signer) (n : ℕ)
+
+/-- **Unbound Moussaka U5(b) on `main` with `n` adaptive redemption queries and all tables
+shared** (one `H₃`, one `H₂³` table, one `H₅` table, one cipher; `main`'s redemption layout, the
+executable prover): for signers correct for their keys, Anchor Sets with both issuers, a guess with
+consistent reads (`H₃` at `q₃` points, the cipher at `q_E` keys, `H₅` at `q₅` keys) and the PRF
+reductions at fixed rest of the tape,
+
+    |Pr[W₀] − Pr[W₁]| ≤ 2·(2ⁿ − 1)·(εS(q₃ + n, q_E + 2n·4607) + Δ23N(9, n))
+        + 2·(2ⁿ − 1)·(n·noHitProb + 2n·(q₅ + 312n + 1)·2⁻¹²⁸ + n²·313·2⁻¹²⁸)
+        + 2·(ψ false + ψ true) + 2·εprf.
+
+No assumption on `UCom`; no prefix-collision term (one Client may answer several queries with one
+statement). The issuance proof system `PI` is abstract (the issuance proofs are never shown). -/
+theorem anonymityNC_main_U_sharedAllN (hsk : ∀ c, (sk c).Correct (A.pk c))
+    (hK : Contains A.unc.nc) {q3 qE q5 : ℕ} (hC : A.ConsH q3 qE)
+    (h5 : ∀ y u G2 T, (A.R5 y u G2 T).card ≤ q5) {εprf : ℝ}
+    (hprf : ∀ b z, prfAdvNC (redNN A n b z) ≤ εprf) :
+    |realNN A PI sk n false - realNN A PI sk n true| ≤
+      2 * ((2 ^ n - 1) * (εS (q3 + n) (qE + 2 * n * 4607) + Δ23N 9 n)) +
+        2 * ((2 ^ n - 1) * (n * noHitProb + n * (2 * (((q5 + n * 312 : ℕ) + 1) / 2 ^ 128)) +
+          n * n * (((312 : ℕ) + 1) / 2 ^ 128))) +
+        2 * (psi A.unc.nc PI sk false + psi A.unc.nc PI sk true) + 2 * εprf := by
+  have hn : (0 : ℝ) ≤ 2 ^ n - 1 := by
+    have : (1 : ℝ) ≤ 2 ^ n := one_le_pow₀ (by norm_num)
+    linarith
+  have r0 := real_sim_NN A PI sk n hsk hC false
+  have r1 := real_sim_NN A PI sk n hsk hC true
+  have b0 := mul_le_mul_of_nonneg_left (bstarNN_le (PI := PI) (n := n) hsk hK h5 false) hn
+  have b1 := mul_le_mul_of_nonneg_left (bstarNN_le (PI := PI) (n := n) hsk hK h5 true) hn
+  have s0 := sim_hyb_NN A PI sk n hsk hK false
+  have s1 := sim_hyb_NN A PI sk n hsk hK true
+  have p0 := prf_hop_NN A n false (hprf false)
+  have p1 := prf_hop_NN A n true (hprf true)
+  have ie := idealNN_eq A n
+  rw [abs_sub_le_iff] at r0 r1 s0 s1 p0 p1 ⊢
+  constructor <;> linarith
+
+end Main
+
 end VoleMole.Privacy.MoussakaUnbound
