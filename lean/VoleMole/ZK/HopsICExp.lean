@@ -144,7 +144,7 @@ noncomputable def ch5 (R : PtReads p) (Hb : Hashes) (T : CrtTables) (st : Statem
 
 namespace PtReads
 
-variable (R : PtReads p) (Hb : Hashes) (T : CrtTables) (st : Statement)
+variable (R : PtReads p) (Hb : Hashes) (T : CrtTables) (st : Statement) {q3 q5 qE : ℕ}
 
 lemma ch3_withT (hc : R.Cons) (v : VwIC p) (G3 G5 E) (h : R.Agree v G3 G5 E) :
     ch3 R (withT v G3 G5 E) = ch3 R v := by
@@ -912,5 +912,187 @@ theorem joint2_h6_exp (hlr : st.params.labelRows = true)
     (fun o G5 => Q5 o G3 (simTab Hb T st G5 o x.2.1.2.1 G2) G5) x.1 x.2.1 x.2.2)
 
 end H6
+
+/-! ## The chain, charged in the real world -/
+
+section Main
+
+lemma exP_prod' {α β : Type*} [Fintype α] [Fintype β] (f : α × β → ℝ) :
+    exP (α × β) f = exP β (fun b => exP α (fun a => f (a, b))) := by
+  rw [← exP_equiv (Equiv.prodComm β α) f, exP_prod]
+  rfl
+
+variable (Hb : Hashes) (st : Statement) (w : ByteArray)
+
+/-- The coins of the real world. -/
+abbrev Co0 (p : Params) := ((Bytes 16 × Tab2G p) × (Tab3 × Tab5F)) × Cipher
+
+/-- The coins of the simulated world. -/
+abbrev Co7 (p : Params) := (SimCoins p × Vis2 p) × Cipher
+
+/-- **The real view**: the executable prover with the ideal-cipher PRG of `E` and the record
+`recH`, the tables. -/
+noncomputable def view0 (c : Co0 st.params) : VwIC st.params :=
+  (@Prover.prove (icPrg c.2) (recH Hb st w c.1.2.1 c.1.1.2 c.1.2.2) CrtGen.tables st w (ba c.1.1.1)
+    st.params.witnessBytes, c.1.2.1, c.1.1.2, c.1.2.2, c.2)
+
+/-- **The simulated view**: the simulated proof, `H₂³` programmed by `simTab`. -/
+noncomputable def view7 (T : CrtTables) (c : Co7 st.params) : VwIC st.params :=
+  (simulate st.params c.1.1, c.1.2.1,
+    @simTab (icPrg c.2) Hb T st c.1.2.2.2 (simulate st.params c.1.1) c.1.1.1.2.1 c.1.2.2.1,
+    c.1.2.2.2, c.2)
+
+variable {Hb st w}
+
+namespace PtReads
+
+variable (R : PtReads st.params)
+
+lemma reads_h3 {F : VwIC st.params → Prop} (hF : R.Reads F) (o G3 G3' G2 G5 E)
+    (h : ∀ k ∈ R.Q3 (o, G3, G2, G5, E), G3 k = G3' k) :
+    F (o, G3, G2, G5, E) ↔ F (o, G3', G2, G5, E) :=
+  (hF (o, G3, G2, G5, E) G3' G5 E ⟨h, fun _ _ => rfl, fun _ _ => rfl⟩).symm
+
+lemma reads_h5 {F : VwIC st.params → Prop} (hF : R.Reads F) (o G3 G2 G5 G5' E)
+    (h : ∀ k ∈ R.Q5 (o, G3, G2, G5, E), G5 k = G5' k) :
+    F (o, G3, G2, G5, E) ↔ F (o, G3, G2, G5', E) :=
+  (hF (o, G3, G2, G5, E) G3 G5' E ⟨fun _ _ => rfl, h, fun _ _ => rfl⟩).symm
+
+end PtReads
+
+variable (Hb st w)
+
+/-- **The hops before H4, charged in the real world**, averaged over the cipher. -/
+theorem hopA_real {cs : ByteArray → ByteArray → System GF128} (hlr : st.params.labelRows = true)
+    (hzk : ZKHyp CrtGen.tables st w cs) (hHb : HashesWF Hb) (R : PtReads st.params)
+    (hc : R.Cons) {q3 q5 qE : ℕ} (hb : R.Bnd q3 q5 qE) (hsmall : (q3 : ℝ) < 2 ^ 128)
+    (F : VwIC st.params → Prop) (hF : R.Reads F) :
+    |pr (Co0 st.params) (fun c => F (view0 Hb st w c)) -
+        pr (Co3 st.params) (fun c => F (view3 Hb CrtGen.tables st w c))| ≤
+      exP (Co0 st.params) (fun c => (ch3 R (view0 Hb st w c) : ℝ)) / (2 ^ 128 - q3) +
+        pr Grind (GrindBad CrtGen.tables) := by
+  have h := abs_pr_prod_sub_le_exP' (fun c => F (view0 Hb st w c))
+    (fun c => F (view3 Hb CrtGen.tables st w c))
+    (fun E => exP ((Bytes 16 × Tab2G st.params) × (Tab3 × Tab5F)) (fun a =>
+      (ch3 R (view0 Hb st w (a, E)) : ℝ)) / (2 ^ 128 - q3) + pr Grind (GrindBad CrtGen.tables))
+    fun E => @zk_pre_h4_real (icPrg E) Hb st w cs hlr hzk hHb
+      (fun o G3 G2 G5 => F (o, G3, G2, G5, E)) (fun o G3 G2 G5 => R.Q3 (o, G3, G2, G5, E))
+      (fun o G3 G3' G2 G5 h => R.reads_h3 hF o G3 G3' G2 G5 E h)
+      (fun o G3 G3' G2 G5 h => (hc (o, G3, G2, G5, E) G3' G5 E
+        ⟨h, fun _ _ => rfl, fun _ _ => rfl⟩).1.symm)
+      q3 (fun o G3 G2 G5 => hb.h3 _) hsmall
+  refine h.trans (le_of_eq ?_)
+  rw [exP_add, exP_div, exP_const, exP_prod']
+
+/-- **The hops after H4, charged in the simulated world**, averaged over the cipher. -/
+theorem hopC_exp {cs : ByteArray → ByteArray → System GF128} (hlr : st.params.labelRows = true)
+    (hzk : ZKHyp CrtGen.tables st w cs) (hHb : HashesWF Hb) (R : PtReads st.params)
+    (F : VwIC st.params → Prop) (hF : R.Reads F) :
+    |pr (Co4 st.params) (fun c => F (view4 Hb CrtGen.tables st w c)) -
+        pr (Co7 st.params) (fun c => F (view7 Hb st CrtGen.tables c))| ≤
+      (1 + exP (Co7 st.params) (fun c => (ch5 R Hb CrtGen.tables st (view7 Hb st CrtGen.tables c) : ℝ)))
+        / 2 ^ 128 := by
+  let e : SimCoins st.params × Vis2 st.params ≃ (Tab3 × Tab2G st.params) × (Tab5F × SimCoins st.params) :=
+    { toFun := fun c => ((c.2.1, c.2.2.1), (c.2.2.2, c.1))
+      invFun := fun x => (x.2.2, (x.1.1, x.1.2, x.2.1))
+      left_inv := fun _ => rfl
+      right_inv := fun _ => rfl }
+  have h := abs_pr_prod_sub_le_exP' (fun c => F (view4 Hb CrtGen.tables st w c))
+    (fun c => F (view7 Hb st CrtGen.tables c))
+    (fun E => (1 + exP (SimCoins st.params × Vis2 st.params) (fun a =>
+      (ch5 R Hb CrtGen.tables st (view7 Hb st CrtGen.tables (a, E)) : ℝ))) / 2 ^ 128) fun E => by
+    have h5 := @joint2_tape (icPrg E) Hb CrtGen.tables st w (fun o G3 G2 G5 => F (o, G3, G2, G5, E))
+    have h6 := @joint2_h6_exp (icPrg E) CrtGen.tables st w cs Hb hlr hzk hHb
+      (fun o G3 G2 G5 => F (o, G3, G2, G5, E)) (fun o G3 G2 G5 => R.Q5 (o, G3, G2, G5, E))
+      (fun o G3 G2 G5 G5' h => R.reads_h5 hF o G3 G2 G5 G5' E h)
+    have h7 := @joint2_sim (icPrg E) Hb CrtGen.tables st w cs hzk
+      (fun o G3 G2 G5 => F (o, G3, G2, G5, E))
+    have hY : exP ((Tab3 × Tab2G st.params) × (Tab5F × SimCoins st.params)) (fun x =>
+        (ch5Q st.params CrtGen.tables (R.Q5 (outOf st x.2.2.1 x.2.2.2, x.1.1,
+          @simTab (icPrg E) Hb CrtGen.tables st x.2.1 (outOf st x.2.2.1 x.2.2.2) x.2.2.1.2.1 x.1.2,
+          x.2.1, E)) (ivV Hb st (outOf st x.2.2.1 x.2.2.2)) : ℝ)) =
+        exP (SimCoins st.params × Vis2 st.params) (fun a =>
+          (ch5 R Hb CrtGen.tables st (view7 Hb st CrtGen.tables (a, E)) : ℝ)) := by
+      rw [← exP_equiv e]
+      refine congrArg (exP _) (funext fun a => ?_)
+      obtain ⟨⟨s', f⟩, v⟩ := a
+      rw [ch5_eq]
+      simp only [view7, e, Equiv.coe_fn_mk, simulate_eq_outOf]
+    rw [hY] at h6
+    have := abs_sub_le _ _ _ |>.trans (add_le_add h5 ((abs_sub_le _ _ _).trans (add_le_add h6 h7)))
+    exact this.trans (le_of_eq (by ring))
+  refine h.trans (le_of_eq ?_)
+  rw [exP_div, exP_const_add, exP_prod']
+
+/-- **Zero knowledge of `zk_rom_ic_h23` with expected charges at the proof's points, in the
+real world.** For a consistent reader `R` (`Cons`) with worst-case budgets `q₃`, `q₅`, `q_E`
+(`Bnd`; they enter only the denominators) and every event `F` it reads:
+
+    |Pr_real[F] − Pr_sim[F]| ≤ (Pr[GrindBad] + 221·9214/d_E + 2⁻¹²⁸
+        + E_real[ch3/(2¹²⁸ − q₃) + 221·chE/d_E + ch5/2¹²⁸]) / (1 − 221·q_E/d_E − q₅/2¹²⁸),
+
+`d_E = 2¹²⁸ − 221·(q_E + 4607)`, `E_real` the expectation over the real world's coins (`view0`):
+`ch3` the `H₃` keys read, `chE` the cipher keys read at a CTR block of the proof's `iv`, `ch5`
+the `H₅` keys read at gate inputs of the proof's `iv`. -/
+theorem zk_rom_ic_h23_exp {cs : ByteArray → ByteArray → System GF128}
+    (hlr : st.params.labelRows = true) (hzk : ZKHyp CrtGen.tables st w cs) (hHb : HashesWF Hb)
+    (hp : SmallParams st.params) (R : PtReads st.params) (hc : R.Cons) {q3 q5 qE : ℕ}
+    (hb : R.Bnd q3 q5 qE) (h3 : (q3 : ℝ) < 2 ^ 128)
+    (hE : 221 * ((qE + 4607 : ℕ) : ℝ) < 2 ^ 128)
+    (hβ : 221 / (2 ^ 128 - 221 * ((qE + 4607 : ℕ) : ℝ)) * qE + 1 / 2 ^ 128 * q5 < 1)
+    (F : VwIC st.params → Prop) (hF : R.Reads F) :
+    |pr (Co0 st.params) (fun c => F (view0 Hb st w c)) -
+        pr (Co7 st.params) (fun c => F (view7 Hb st CrtGen.tables c))| ≤
+      (pr Grind (GrindBad CrtGen.tables) + 221 * 9214 / (2 ^ 128 - 221 * ((qE + 4607 : ℕ) : ℝ)) +
+          1 / 2 ^ 128 +
+        exP (Co0 st.params) (fun c => (ch3 R (view0 Hb st w c) : ℝ) / (2 ^ 128 - q3) +
+          221 * (chE R Hb st (view0 Hb st w c) : ℝ) / (2 ^ 128 - 221 * ((qE + 4607 : ℕ) : ℝ)) +
+          (ch5 R Hb CrtGen.tables st (view0 Hb st w c) : ℝ) / 2 ^ 128)) /
+        (1 - 221 / (2 ^ 128 - 221 * ((qE + 4607 : ℕ) : ℝ)) * qE - 1 / 2 ^ 128 * q5) := by
+  set dE : ℝ := 2 ^ 128 - 221 * ((qE + 4607 : ℕ) : ℝ) with hdE
+  have hdE0 : 0 < dE := by linarith
+  have h3' : (0 : ℝ) < 2 ^ 128 - q3 := by linarith
+  let μ0 : (VwIC st.params → Prop) → ℝ := fun G => pr (Co0 st.params) (fun c => G (view0 Hb st w c))
+  let μ1 : (VwIC st.params → Prop) → ℝ :=
+    fun G => pr (Co3 st.params) (fun c => G (view3 Hb CrtGen.tables st w c))
+  let μ2 : (VwIC st.params → Prop) → ℝ :=
+    fun G => pr (Co4 st.params) (fun c => G (view4 Hb CrtGen.tables st w c))
+  let μ3 : (VwIC st.params → Prop) → ℝ :=
+    fun G => pr (Co7 st.params) (fun c => G (view7 Hb st CrtGen.tables c))
+  have hl : ∀ Y : VwIC st.params → ℕ, (∀ v G3 G5 E, R.Agree v G3 G5 E →
+      Y (PtReads.withT v G3 G5 E) = Y v) → ∀ l, R.Reads (fun v => l < Y v) :=
+    fun Y hY l => R.reads_level Y hY l
+  have hA := hl (ch3 R) (R.ch3_withT hc)
+  have hB := hl (chE R Hb st) (R.chE_withT Hb st hc)
+  have hC := hl (ch5 R Hb CrtGen.tables st) (R.ch5_withT Hb CrtGen.tables st hc)
+  have L0 : ∀ (Y : VwIC st.params → ℕ) (M : ℕ), (∀ v, Y v ≤ M) →
+      lcE μ0 Y M = exP (Co0 st.params) (fun c => (Y (view0 Hb st w c) : ℝ)) :=
+    fun Y M hY => lcE_pr _ Y fun _ => hY _
+  have h01 : ∀ G, R.Reads G → |μ0 G - μ1 G| ≤
+      pr Grind (GrindBad CrtGen.tables) + 1 / (2 ^ 128 - q3) * lcE μ0 (ch3 R) q3 := fun G hG => by
+    rw [L0 _ _ (R.ch3_le hb)]
+    have := hopA_real Hb st w hlr hzk hHb R hc hb h3 G hG
+    rw [one_div_mul_eq_div]; linarith
+  have h12 : ∀ G, R.Reads G → |μ1 G - μ2 G| ≤
+      221 * 9214 / dE + 221 / dE * lcE μ1 (chE R Hb st) qE := fun G hG => by
+    rw [lcE_pr _ _ fun c => R.chE_le Hb st hb _]
+    have := joint3_h4_pt Hb CrtGen.tables st w hp hzk R hc hb hE G hG
+    refine this.trans (le_of_eq ?_)
+    rw [← hdE]; ring
+  have h23 : ∀ G, R.Reads G → |μ2 G - μ3 G| ≤
+      1 / 2 ^ 128 + 1 / 2 ^ 128 * lcE μ3 (ch5 R Hb CrtGen.tables st) q5 := fun G hG => by
+    rw [lcE_pr _ _ fun c => R.ch5_le Hb CrtGen.tables st hb _]
+    have := hopC_exp Hb st w hlr hzk hHb R G hG
+    refine this.trans (le_of_eq ?_)
+    ring
+  have hch := chain3_le R.Reads μ0 μ1 μ2 μ3 (ch3 R) (chE R Hb st) (ch5 R Hb CrtGen.tables st) q3 qE q5
+    (by positivity) (by positivity) hA hB hC h01 h12 h23 hβ F hF
+  refine hch.trans (le_of_eq ?_)
+  rw [L0 _ _ (R.ch3_le hb), L0 _ _ (R.chE_le Hb st hb), L0 _ _ (R.ch5_le Hb CrtGen.tables st hb)]
+  congr 1
+  rw [exP_add, exP_add, exP_div, exP_div, exP_div, exP_mul_left]
+  ring
+
+end Main
 
 end VoleMole.ZK.Sim
