@@ -796,7 +796,7 @@ honest openings, not about signatures. The table's bound in §0 is the right one
        off the table points are answered by SHAKE locally (its cipher log, which `ROM/`'s
        extractor reads, is unchanged); (b) that the verifier on an operation queries only table
        points (`fd_fOk` gives the chain inputs; the `H₁`, `H₄`, combination inputs and the
-       `H₂³` input, a grinding point only for a counter below `nGrind`, remain); (c) applying
+       `H₂³` input, a grinding point when the recomputed prefix has `preLen` bytes, remain); (c) applying
        `ratatouille_sim_joint_spec` to the normalized adversary, with `e` the straight-line
        extractor (`keysOf`, `knownOf`, `candidate`) mapped to the witnesses of `RelOp`, and the
        budget `QBud (q + 2·(extractorQueries + vPreQueries)) (q_E + cells(pS) + cells(pI))`
