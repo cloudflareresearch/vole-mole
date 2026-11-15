@@ -642,5 +642,236 @@ theorem simNCM_vis (hsk : ∀ c, (sk c).Correct (A.pk c)) (b : Bool)
     (Prod.ext (Prod.ext rfl ?_) (Prod.ext rfl ?_)))) <;> exact hM
 
 end SimM
+/-! ## The abort hop and the swap of the Clients -/
+
+section SwapM
+
+variable (A : AdversaryNCM) (idx : AnchorSet → UOVKey → ℕ) (PI : NIZK IssueInstance)
+  (sk : Bool → Signer)
+
+/-- **The simulated game's event** from the refusal bit, the nullifiers in Client order, the
+simulators' coins and raw tables, and `H₃`. -/
+noncomputable def hvNCM (b g : Bool) (n₀ n₁ : Bytes) (a : AuxS) (T : H3T) : Prop :=
+  A.guess (keyNM b g n₀ n₁ a) (visNCM A b g n₀ n₁ a) T
+
+lemma simNCM_eq (hsk : ∀ c, (sk c).Correct (A.pk c)) (b : Bool) :
+    simNCM A idx PI sk b = pr (GTape SecNC pIm pIm pRm pRm × H3T) (fun z =>
+      hvNCM A b (gNC A idx PI sk z.1.1) (nNC z.1.1 false) (nNC z.1.1 true) z.1.2 z.2) :=
+  pr_congr fun z => by
+    exact Iff.of_eq (congrArg₂ (fun a t => A.guess a t z.2) (simNCM_key idx PI sk hsk b z.1)
+      (simNCM_vis idx PI sk hsk b z.1))
+
+/-- The hybrid with the symmetric refusal bit. -/
+noncomputable def hybNCM (b : Bool) : ℝ :=
+  pr (GTape SecNC pIm pIm pRm pRm × H3T) (fun z =>
+    hvNCM A b (gSymN A.nc idx PI z.1.1.1 && gSymN A.nc idx PI z.1.1.2) (nNC z.1.1 false)
+      (nNC z.1.1 true) z.1.2 z.2)
+
+/-- **The abort hop**: with both redemptions simulated, replacing the refusal bit by the
+symmetric one costs at most `φ false + φ true` (identical until a `derive_preimage` fails). -/
+theorem sim_hyb_NCM (hsk : ∀ c, (sk c).Correct (A.pk c)) (hidx : IdxSound idx) (b : Bool) :
+    |simNCM A idx PI sk b - hybNCM A idx PI b| ≤ phi A.nc sk false + phi A.nc sk true := by
+  have hsk' : ∀ c, (sk c).Correct (A.nc.pk c) := hsk
+  rw [simNCM_eq A idx PI sk hsk b]
+  have hb := abs_pr_sub_le_of_agree
+    (fun z : GTape SecNC pIm pIm pRm pRm × H3T =>
+      hvNCM A b (gNC A idx PI sk z.1.1) (nNC z.1.1 false) (nNC z.1.1 true) z.1.2 z.2)
+    (fun z => hvNCM A b (gSymN A.nc idx PI z.1.1.1 && gSymN A.nc idx PI z.1.1.2) (nNC z.1.1 false)
+      (nNC z.1.1 true) z.1.2 z.2)
+    (fun z => (sk false).derivePreimage (tNC A.nc z.1.1.1) = none ∨
+      (sk true).derivePreimage (tNC A.nc z.1.1.2) = none) fun z hz => by
+    simp only [not_or] at hz
+    have g0 := goodN_eq_of_derive A.nc idx PI sk hsk' hidx false z.1.1.1 hz.1
+    have g1 := goodN_eq_of_derive A.nc idx PI sk hsk' hidx true z.1.1.2 hz.2
+    have hg : gNC A idx PI sk z.1.1 = (gSymN A.nc idx PI z.1.1.1 && gSymN A.nc idx PI z.1.1.2) := by
+      unfold gNC iOf xOf gSymN
+      simp only [Bool.cond_false, Bool.cond_true]
+      rw [g0, g1]
+      have e : ∀ a₀ a₁ f₀ f₁ f₂ f₃ : Bool, ((a₀ && (f₀ && f₁)) && (a₁ && (f₂ && f₃))) =
+          ((a₀ && ((f₀ && f₁) && (f₂ && f₃))) && (a₁ && ((f₀ && f₁) && (f₂ && f₃)))) := by decide
+      exact e _ _ _ _ _ _
+    rw [hg]
+  refine hb.trans ((pr_or_le _ _).trans (le_of_eq ?_))
+  have m0 : pr (GTape SecNC pIm pIm pRm pRm × H3T) (fun z =>
+      (sk false).derivePreimage (tNC A.nc z.1.1.1) = none) = phi A.nc sk false := by
+    rw [pr_prod_fst (fun x : GTape SecNC pIm pIm pRm pRm =>
+        (sk false).derivePreimage (tNC A.nc x.1.1) = none),
+      pr_prod_fst (fun s : SecNC => (sk false).derivePreimage (tNC A.nc s.1) = none),
+      pr_prod_fst (fun x : IssT => (sk false).derivePreimage (tNC A.nc x) = none)]
+    exact pr_derive_none A.nc sk false
+  have m1 : pr (GTape SecNC pIm pIm pRm pRm × H3T) (fun z =>
+      (sk true).derivePreimage (tNC A.nc z.1.1.2) = none) = phi A.nc sk true := by
+    rw [pr_prod_fst (fun x : GTape SecNC pIm pIm pRm pRm =>
+        (sk true).derivePreimage (tNC A.nc x.1.2) = none),
+      pr_prod_fst (fun s : SecNC => (sk true).derivePreimage (tNC A.nc s.2) = none),
+      pr_prod_snd (fun x : IssT => (sk true).derivePreimage (tNC A.nc x) = none)]
+    exact pr_derive_none A.nc sk true
+  rw [m0, m1]
+
+/-- Exchange the two Clients' tapes. -/
+def swapNCM : GTape SecNC pIm pIm pRm pRm × H3T ≃ GTape SecNC pIm pIm pRm pRm × H3T where
+  toFun z := (((z.1.1.2, z.1.1.1), z.1.2), z.2)
+  invFun z := (((z.1.1.2, z.1.1.1), z.1.2), z.2)
+  left_inv _ := rfl
+  right_inv _ := rfl
+
+/-- **A symmetric refusal bit makes the worlds coincide**: swapping the Clients' tapes exchanges
+them. -/
+theorem hybNCM_eq : hybNCM A idx PI false = hybNCM A idx PI true := by
+  unfold hybNCM
+  rw [← pr_equiv swapNCM]
+  refine pr_congr fun z => ?_
+  simp only [swapNCM, Equiv.coe_fn_mk, Bool.and_comm (gSymN A.nc idx PI z.1.1.2)]
+  rfl
+
+end SwapM
+/-! ## The (PU) term: statistical -/
+
+section BstarM
+
+variable (A : AdversaryNCM) (idx : AnchorSet → UOVKey → ℕ) (PI : NIZK IssueInstance)
+  (sk : Bool → Signer)
+
+/-- **The public key set with the redemptions happening**: the guess's read set (computed with the
+refusal bit set) and the two simulated proofs' active gate inputs. -/
+noncomputable def spNCM (b : Bool) (n₀ n₁ : Bytes) (a : AuxS) (T : H3T) :
+    Finset (ZK.Sim.Bytes 37) :=
+  A.R5 (keyNM b true n₀ n₁ a) (visNCM A b true n₀ n₁ a) T ∪
+    ((actL Hashes.shake pRm (stNCM A false (bif b then n₁ else n₀)) a.1.2
+        a.2.2.2.1.1.2).toFinset.image (blk 37) ∪
+      (actL Hashes.shake pRm (stNCM A true (bif b then n₀ else n₁)) a.1.2
+        a.2.2.2.2.1.2).toFinset.image (blk 37))
+
+/-- **The candidates for the opening in the redemption of side `side`**, computed with the
+refusal bit set: from the nullifiers, the simulators' coins, the raw tables and `H₃`, not from
+the openings. -/
+noncomputable def candNCM (b side : Bool) (n₀ n₁ : Bytes) (a : AuxS) (T : H3T) :
+    Finset (ZK.Sim.Bytes 16) :=
+  candC Hashes.shake (stNCM A side (bif b ^^ side then n₁ else n₀)) a.1.2
+    (bif side then a.2.2.2.2.1.2 else a.2.2.2.1.1.2) (spNCM A b n₀ n₁ a T)
+
+lemma card_candNCM_le {q5 : ℕ} (h5 : ∀ y t T, (A.R5 y t T).card ≤ q5) (b side : Bool)
+    (n₀ n₁ : Bytes) (a : AuxS) (T : H3T) : (candNCM A b side n₀ n₁ a T).card ≤ q5 + 624 + 1 := by
+  refine (card_candC_le Hashes.shake mainP_pRm _ _ _ _).trans (Nat.succ_le_succ ?_)
+  unfold spNCM
+  refine (card_union_le _ _).trans (add_le_add (h5 _ _ _) ((card_union_le _ _).trans ?_))
+  have l₁ := (card_image_le (f := blk 37)).trans ((List.toFinset_card_le _).trans
+    (actL_length_le Hashes.shake (p := pRm) (stNCM A false (bif b then n₁ else n₀)) a.1.2
+      a.2.2.2.1.1.2))
+  have l₂ := (card_image_le (f := blk 37)).trans ((List.toFinset_card_le _).trans
+    (actL_length_le Hashes.shake (p := pRm) (stNCM A true (bif b then n₀ else n₁)) a.1.2
+      a.2.2.2.2.1.2))
+  omega
+
+variable {A idx PI sk}
+
+set_option maxRecDepth 8000 in
+lemma candO_some {q : Option (Statement × ZK.Sim.Bytes 16)} {st : Statement} {r : ZK.Sim.Bytes 16}
+    {E : Cipher} {c : SimCoins pRm} {S : Finset (ZK.Sim.Bytes 37)} (hq : q = some (st, r))
+    (h : candO Hashes.shake q E c S) : r ∈ candC Hashes.shake st E c S := by
+  subst hq; exact h
+
+set_option maxRecDepth 8192 in
+/-- **`bstar` with both redemptions simulated**: a failed simulation, a prediction of a
+redemption's opening from candidates computed with the refusal bit set, or a sibling gate input of
+the left proof that is one of the right proof's. -/
+theorem bstarNCM_imp (hsk : ∀ c, (sk c).Correct (A.pk c)) (b : Bool)
+    (x : GTape SecNC pIm pIm pRm pRm) (T : H3T)
+    (h : bstar Hashes.shake (gameNCM A idx PI sk b) (fun v => r5NCM A idx PI sk b v T)
+      (hybV23 (p₀ := pIm) (n₁ := 256) (n₂ := 256) (n₃ := 343) (n₄ := 343) Hashes.shake
+        (gameNCM A idx PI sk b) true true true true x)) :
+    (errC pIm x.2.2.1.1.2 ∨ errC pIm x.2.2.2.1.1.2 ∨ errC pRm x.2.2.2.2.1.1.2 ∨
+      errC pRm x.2.2.2.2.2.1.2) ∨
+    (gNC A idx PI sk x.1 = true ∧
+      (xOf x.1 (b ^^ false)).2.1 ∈ candNCM A b false (nNC x.1 false) (nNC x.1 true) x.2 T) ∨
+    (gNC A idx PI sk x.1 = true ∧
+      (xOf x.1 (b ^^ true)).2.1 ∈ candNCM A b true (nNC x.1 false) (nNC x.1 true) x.2 T) ∨
+    (∃ w ∈ sibO Hashes.shake pRm (qOf ((gameNCM A idx PI sk b).σ₃ x.1 none none)) x.2.1.2
+        x.2.2.2.2.1.1.2,
+      w ∈ sibO Hashes.shake pRm (qOf ((gameNCM A idx PI sk b).σ₄ x.1 none none none)) x.2.1.2
+        x.2.2.2.2.2.1.2) := by
+  classical
+  set G := gameNCM A idx PI sk b
+  set R := r5NCM A idx PI sk b (hybV23 (p₀ := pIm) (n₁ := 256) (n₂ := 256) (n₃ := 343)
+    (n₄ := 343) Hashes.shake G true true true true x) T with hR
+  have hb := bstar_sim (p₁ := pIm) (p₂ := pIm) (p₃ := pRm) (p₄ := pRm) Hashes.shake G hashesWF_shake
+    x.1 x.2.1.2 x.2.2.1.1.2 x.2.2.2.1.1.2 x.2.2.2.2.1.1.2 x.2.2.2.2.2.1.2 R
+    none none ((G.σ₃ x.1 none none).map fun _ => simulate pRm x.2.2.2.2.1.1.2)
+    ((G.σ₄ x.1 none none none).map fun _ => simulate pRm x.2.2.2.2.2.1.2)
+    none none (qOf (G.σ₃ x.1 none none)) (qOf (G.σ₄ x.1 none none none))
+    rfl rfl rfl rfl rfl rfl rfl rfl _ rfl h
+  -- the read set with the redemptions happening
+  have hRg : gNC A idx PI sk x.1 = true → R = A.R5 (keyNM b true (nNC x.1 false) (nNC x.1 true)
+      x.2) (visNCM A b true (nNC x.1 false) (nNC x.1 true) x.2) T := fun hg => by
+    rw [hR]
+    have k := simNCM_key idx PI sk hsk b x
+    have v := simNCM_vis idx PI sk hsk b x
+    rw [hg] at k v
+    exact congrArg₂ (fun a t => A.R5 a t T) k v
+  have hq : ∀ side, gNC A idx PI sk x.1 = true →
+      qOf (bif gNC A idx PI sk x.1 then redStmt A.m (ptNM A idx PI sk b x.1 side) else none) =
+        some (stNCM A side (bif b ^^ side then nNC x.1 true else nNC x.1 false),
+          (xOf x.1 (b ^^ side)).2.1) := fun side hg => by
+    obtain ⟨w, hw, -, hw'⟩ := redStmt_gNC hsk hg b side
+    rw [hg]
+    show (redStmt A.m (ptNM A idx PI sk b x.1 side)).map _ = _
+    rw [hw]
+    show some (_, wPre w) = _
+    rw [hw']
+    have e : List.ofFn (xOf x.1 (b ^^ side)).1 =
+        (bif b ^^ side then nNC x.1 true else nNC x.1 false) := by
+      cases b ^^ side <;> rfl
+    rw [e]
+    rfl
+  have hn : ∀ side, (bif b ^^ side then nNC x.1 true else nNC x.1 false) =
+      (bif side then (bif b then nNC x.1 false else nNC x.1 true)
+        else (bif b then nNC x.1 true else nNC x.1 false)) := fun side => by
+    cases b <;> cases side <;> rfl
+  have hsub : gNC A idx PI sk x.1 = true →
+      R ∪ ((actO Hashes.shake pIm none x.2.1.2 x.2.2.1.1.2).toFinset.image (blk 37) ∪
+        (actO Hashes.shake pIm none x.2.1.2 x.2.2.2.1.1.2).toFinset.image (blk 37) ∪
+        (actO Hashes.shake pRm (qOf (G.σ₃ x.1 none none)) x.2.1.2
+          x.2.2.2.2.1.1.2).toFinset.image (blk 37) ∪
+        (actO Hashes.shake pRm (qOf (G.σ₄ x.1 none none none)) x.2.1.2
+          x.2.2.2.2.2.1.2).toFinset.image (blk 37)) ⊆
+      spNCM A b (nNC x.1 false) (nNC x.1 true) x.2 T := fun hg => by
+    have q₃ : qOf (G.σ₃ x.1 none none) = _ := hq false hg
+    have q₄ : qOf (G.σ₄ x.1 none none none) = _ := hq true hg
+    rw [q₃, q₄, hRg hg, hn false, hn true]
+    intro k hk
+    simp only [actO, List.toFinset_nil, image_empty, empty_union, mem_union] at hk
+    unfold spNCM
+    simp only [mem_union]
+    tauto
+  rcases hb with he | hc | hs
+  · exact Or.inl he
+  · rcases hc with h1 | h2 | h3 | h4
+    · exact h1.elim
+    · exact h2.elim
+    · right; left
+      cases hg : gNC A idx PI sk x.1
+      · have : qOf (G.σ₃ x.1 none none) = none := by
+          show qOf (bif gNC A idx PI sk x.1 then _ else none) = none
+          rw [hg]; rfl
+        rw [this] at h3; exact h3.elim
+      · refine ⟨rfl, ?_⟩
+        have q₃ : qOf (G.σ₃ x.1 none none) = _ := hq false hg
+        exact candC_mono Hashes.shake (hsub hg) (candO_some q₃ h3)
+    · right; right; left
+      cases hg : gNC A idx PI sk x.1
+      · have : qOf (G.σ₄ x.1 none none none) = none := by
+          show qOf (bif gNC A idx PI sk x.1 then _ else none) = none
+          rw [hg]; rfl
+        rw [this] at h4; exact h4.elim
+      · refine ⟨rfl, ?_⟩
+        have q₄ : qOf (G.σ₄ x.1 none none none) = _ := hq true hg
+        exact candC_mono Hashes.shake (hsub hg) (candO_some q₄ h4)
+  · right; right; right
+    rcases hs with ⟨w, hw, -⟩ | ⟨w, hw, -⟩ | ⟨w, hw, hw'⟩
+    · exact (List.not_mem_nil hw).elim
+    · exact (List.not_mem_nil hw).elim
+    · exact ⟨w, by simpa [sibO] using hw, hw'⟩
+
+end BstarM
 
 end VoleMole.Privacy.Moussaka
