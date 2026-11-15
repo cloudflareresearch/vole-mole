@@ -201,8 +201,13 @@ permutations with inverse queries):
     2⁻⁷. The reduction runs the forger wrapped (`wrapE`, which reads the cipher table, since the
     decoder's gate inputs depend on committed leaf keys the forger may never have queried) so that
     the decoder's `H₅` values are in the log; the wrapper changes neither the forgeries nor the win
-    (`pomWin_le_wrapE`), and its budget follows from the forger's (`forgerBound_wrapE`). Not
-    modelled: the wrapper's running time; PRF view only (no permutation model). The earlier many-label-vector decoding problem was an artefact of
+    (`pomWin_le_wrapE`), and its budget follows from the forger's (`forgerBound_wrapE`). Also
+    with AES as random permutations with inverse queries: `pomfrit_U1_cls_simP`,
+    `pomfrit_U1_ompr_cls_simP` (`ROM/OneMoreClsPerm.lean`, `Assumptions/PomfritClsPerm.lean`,
+    `Audit/PomfritClsPerm.lean`), the same bound with `failEpsP` for `failEps` (`clsSimEpsP`; the
+    forger normalized and wrapped with `π.fwd`, `wrapEP`; the cipher terms moved to the normalized
+    forger's `RecFamily`, `postPOut_wrapE`; `KeysPre` from the wrapper's own `iv` queries,
+    `keysPre_of_not_postP_mu`). Not modelled: the wrapper's running time. The earlier many-label-vector decoding problem was an artefact of
     the widest-group default; the heuristic decoder is needed only below 2⁻⁸⁵, and its wrong-gate
     step rests on an assumption that fails for some level sets of codimension ≥ 4 (`slice.py` R7). Keep `ũ` in `hash_to_target`: it is
     security-relevant. The converse, OMPR ≤ PomFRIT one-more forgery plus a completeness term, is
@@ -1726,7 +1731,8 @@ What is **not** established, roughly in order of importance:
      `eval_normU`; `ROM/OneMoreLemmaPSimPerm.lean`, `ROM/OneMoreShiftSimPerm.lean`,
      `Assumptions/PomfritPermSim.lean`): `pomfrit_U1_simP`/`pomfrit_U1_ompr_simP` and
      `pomfrit_U2_simP`/`pomfrit_U2_omprShift_simP`, the PRF-view bounds with `failEpsP` for
-     `failEps` (`2⁻⁷` and `2⁻⁶²` at `2⁶⁴` queries, `ℓ = 2³⁰`); Post becomes the point-tied
+     `failEps` (`2⁻⁷` and `2⁻⁶²` at `2⁶⁴` queries, `ℓ = 2³⁰`), and U1 with the class extractor too,
+     `pomfrit_U1_cls_simP`/`pomfrit_U1_ompr_cls_simP` (`≈ 2⁻¹⁴` at `2⁶⁴` queries); Post becomes the point-tied
      `PostPOut`, and the averaged failure bounds hold for any prover family that depends on the
      permutation only through its records (`ROM/PermFamily.lean`, `RecFamily`, `sum_fail_le_fam`;
      audit `Audit/PomfritPerm.lean`). So every protocol theorem now also holds with AES as random
