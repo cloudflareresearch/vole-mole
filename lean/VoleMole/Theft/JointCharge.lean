@@ -240,7 +240,8 @@ variable {p : Params} {X : Type} {I W C O Ω : Type*}
 proof, at the `iv` of its output in the history. -/
 theorem realFromRd_cE
     (RP : ∀ x xI w r g', TRd (fun (_ : Tab3) (s : Sh p) => prove x xI w r g' s)) {s5 sE : ℕ}
-    (hRP : ∀ x xI w r g', Conf (RP x xI w r g') (fun s => ivO x xI (prove x xI w r g' s)) s5 sE)
+    (hRP : ∀ x ω (h : List O) r g', Conf (RP x (xOf ω h) (wOf ω h) r g')
+      (fun s => ivO x (xOf ω h) (prove x (xOf ω h) (wOf ω h) r g' s)) s5 sE)
     (x : X) (ω : Ω) (rs : ℕ → Bytes 16 × Tab3) {Φ : List O → Tab3 → Sh p → Prop}
     (RΦ : ∀ l, TRd (Φ l)) (iv0 : Option ByteArray) :
     ∀ m (h : List O) j g s,
@@ -258,7 +259,7 @@ theorem realFromRd_cE
         realFrom (gP prove xOf wOf) ω rs (atX s x) (h ++ [o]) (j + 1) m := rfl
     have ih := realFromRd_cE RP hRP x ω rs RΦ iv0 m (h ++ [o]) (j + 1) g s
     have h1 : cEof iv0 ((RP x (xOf ω h) (wOf ω h) (rs j).1 (rs j).2).QE g s) ≤
-        sE * ovE iv0 (ivO x (xOf ω h) o) := (hRP x (xOf ω h) (wOf ω h) (rs j).1 (rs j).2).cE iv0 g s
+        sE * ovE iv0 (ivO x (xOf ω h) o) := (hRP x ω h (rs j).1 (rs j).2).cE iv0 g s
     obtain ⟨r, hr⟩ := realFrom_prefix (gP prove xOf wOf) ω rs (atX s x) m (h ++ [o]) (j + 1)
     have hlast : ivAt ivO xOf x ω (realFrom (gP prove xOf wOf) ω rs (atX s x) (h ++ [o]) (j + 1) m)
         h.length = ivO x (xOf ω h) o := by rw [hr]; exact ivAt_last ivO xOf x ω h o r
@@ -275,7 +276,8 @@ theorem realFromRd_cE
 /-- **The later real proofs' `H₅` charge.** -/
 theorem realFromRd_c5
     (RP : ∀ x xI w r g', TRd (fun (_ : Tab3) (s : Sh p) => prove x xI w r g' s)) {s5 sE : ℕ}
-    (hRP : ∀ x xI w r g', Conf (RP x xI w r g') (fun s => ivO x xI (prove x xI w r g' s)) s5 sE)
+    (hRP : ∀ x ω (h : List O) r g', Conf (RP x (xOf ω h) (wOf ω h) r g')
+      (fun s => ivO x (xOf ω h) (prove x (xOf ω h) (wOf ω h) r g' s)) s5 sE)
     (x : X) (ω : Ω) (rs : ℕ → Bytes 16 × Tab3) {Φ : List O → Tab3 → Sh p → Prop}
     (RΦ : ∀ l, TRd (Φ l)) (iv0 : Option ByteArray) :
     ∀ m (h : List O) j g s,
@@ -293,7 +295,7 @@ theorem realFromRd_c5
         realFrom (gP prove xOf wOf) ω rs (atX s x) (h ++ [o]) (j + 1) m := rfl
     have ih := realFromRd_c5 RP hRP x ω rs RΦ iv0 m (h ++ [o]) (j + 1) g s
     have h1 : c5of p CrtGen.tables iv0 ((RP x (xOf ω h) (wOf ω h) (rs j).1 (rs j).2).Q5 g s) ≤
-        s5 * ov5 iv0 (ivO x (xOf ω h) o) := (hRP x (xOf ω h) (wOf ω h) (rs j).1 (rs j).2).c5 iv0 g s
+        s5 * ov5 iv0 (ivO x (xOf ω h) o) := (hRP x ω h (rs j).1 (rs j).2).c5 iv0 g s
     obtain ⟨r, hr⟩ := realFrom_prefix (gP prove xOf wOf) ω rs (atX s x) m (h ++ [o]) (j + 1)
     have hlast : ivAt ivO xOf x ω (realFrom (gP prove xOf wOf) ω rs (atX s x) (h ++ [o]) (j + 1) m)
         h.length = ivO x (xOf ω h) o := by rw [hr]; exact ivAt_last ivO xOf x ω h o r
@@ -310,7 +312,8 @@ theorem realFromRd_c5
 /-- **The later real proofs read no slice**: the `H₃` keys are the reader's after them. -/
 theorem realFromRd_q3
     (RP : ∀ x xI w r g', TRd (fun (_ : Tab3) (s : Sh p) => prove x xI w r g' s)) {s5 sE : ℕ}
-    (hRP : ∀ x xI w r g', Conf (RP x xI w r g') (fun s => ivO x xI (prove x xI w r g' s)) s5 sE)
+    (hRP : ∀ x ω (h : List O) r g', Conf (RP x (xOf ω h) (wOf ω h) r g')
+      (fun s => ivO x (xOf ω h) (prove x (xOf ω h) (wOf ω h) r g' s)) s5 sE)
     (x : X) (ω : Ω) (rs : ℕ → Bytes 16 × Tab3) {Φ : List O → Tab3 → Sh p → Prop}
     (RΦ : ∀ l, TRd (Φ l)) :
     ∀ m (h : List O) j g s,
@@ -322,7 +325,7 @@ theorem realFromRd_q3
         (RP x (xOf ω h) (wOf ω h) (rs j).1 (rs j).2).Q3 g s ∪
           (realFromRd (xOf := xOf) prove wOf RP x ω rs RΦ m
             (h ++ [prove x (xOf ω h) (wOf ω h) (rs j).1 (rs j).2 s]) (j + 1)).Q3 g s := rfl
-    rw [e, (hRP x (xOf ω h) (wOf ω h) (rs j).1 (rs j).2).h3, Finset.empty_union,
+    rw [e, (hRP x ω h (rs j).1 (rs j).2).h3, Finset.empty_union,
       realFromRd_q3 RP hRP x ω rs RΦ m _ (j + 1) g s]
     rfl
 
@@ -331,7 +334,8 @@ theorem realFromRd_q3
 output in the history. -/
 theorem progsRd_cE (hkeep : ∀ x xI c s, (prog x xI c s).2 = s.2)
     (Rpg : ∀ x xI c, TRd (fun (_ : Tab3) s => (prog x xI c s).1)) {m5 mE : ℕ}
-    (hRpg : ∀ x xI c, Conf (Rpg x xI c) (fun _ => ivO x xI (sim xI c)) m5 mE)
+    (hRpg : ∀ x ω (h : List O) c, Conf (Rpg x (xOf ω h) c) (fun _ => ivO x (xOf ω h) (sim (xOf ω h) c))
+      m5 mE)
     (x : X) (ω : Ω) (cs : ℕ → C) (iv0 : Option ByteArray) :
     ∀ j g s, cEof iv0 ((progsRd (sim := sim) (xOf := xOf) hkeep Rpg x ω cs j).QE g s) ≤
       ∑ k ∈ range j, mE * ovE iv0 (ivAt ivO xOf x ω (simPre (gS sim xOf) (gPg prog xOf) ω cs j).1 k)
@@ -347,7 +351,7 @@ theorem progsRd_cE (hkeep : ∀ x xI c s, (prog x xI c s).2 = s.2)
     have ih := progsRd_cE hkeep Rpg hRpg x ω cs iv0 j g (prog x (xOf ω h) (cs j) s)
     change _ ≤ ∑ k ∈ range j, mE * ovE iv0 (ivAt ivO xOf x ω h k) at ih
     have h1 : cEof iv0 ((Rpg x (xOf ω h) (cs j)).QE g s) ≤
-        mE * ovE iv0 (ivO x (xOf ω h) (sim (xOf ω h) (cs j))) := (hRpg _ _ _).cE iv0 g s
+        mE * ovE iv0 (ivO x (xOf ω h) (sim (xOf ω h) (cs j))) := (hRpg x ω h (cs j)).cE iv0 g s
     have hl : (simPre (gS sim xOf) (gPg prog xOf) ω cs (j + 1)).1 = h ++ [sim (xOf ω h) (cs j)] :=
       simPre_succ_fst _ _ ω cs j
     have hlen : h.length = j := simPre_length _ _ ω cs j
@@ -366,7 +370,8 @@ theorem progsRd_cE (hkeep : ∀ x xI c s, (prog x xI c s).2 = s.2)
 /-- **The earlier programmings' `H₅` charge.** -/
 theorem progsRd_c5 (hkeep : ∀ x xI c s, (prog x xI c s).2 = s.2)
     (Rpg : ∀ x xI c, TRd (fun (_ : Tab3) s => (prog x xI c s).1)) {m5 mE : ℕ}
-    (hRpg : ∀ x xI c, Conf (Rpg x xI c) (fun _ => ivO x xI (sim xI c)) m5 mE)
+    (hRpg : ∀ x ω (h : List O) c, Conf (Rpg x (xOf ω h) c) (fun _ => ivO x (xOf ω h) (sim (xOf ω h) c))
+      m5 mE)
     (x : X) (ω : Ω) (cs : ℕ → C) (iv0 : Option ByteArray) :
     ∀ j g s, c5of p CrtGen.tables iv0
         ((progsRd (sim := sim) (xOf := xOf) hkeep Rpg x ω cs j).Q5 g s) ≤
@@ -383,7 +388,7 @@ theorem progsRd_c5 (hkeep : ∀ x xI c s, (prog x xI c s).2 = s.2)
     have ih := progsRd_c5 hkeep Rpg hRpg x ω cs iv0 j g (prog x (xOf ω h) (cs j) s)
     change _ ≤ ∑ k ∈ range j, m5 * ov5 iv0 (ivAt ivO xOf x ω h k) at ih
     have h1 : c5of p CrtGen.tables iv0 ((Rpg x (xOf ω h) (cs j)).Q5 g s) ≤
-        m5 * ov5 iv0 (ivO x (xOf ω h) (sim (xOf ω h) (cs j))) := (hRpg _ _ _).c5 iv0 g s
+        m5 * ov5 iv0 (ivO x (xOf ω h) (sim (xOf ω h) (cs j))) := (hRpg x ω h (cs j)).c5 iv0 g s
     have hl : (simPre (gS sim xOf) (gPg prog xOf) ω cs (j + 1)).1 = h ++ [sim (xOf ω h) (cs j)] :=
       simPre_succ_fst _ _ ω cs j
     have hlen : h.length = j := simPre_length _ _ ω cs j
@@ -402,7 +407,8 @@ theorem progsRd_c5 (hkeep : ∀ x xI c s, (prog x xI c s).2 = s.2)
 /-- **The earlier programmings read no slice.** -/
 theorem progsRd_q3 (hkeep : ∀ x xI c s, (prog x xI c s).2 = s.2)
     (Rpg : ∀ x xI c, TRd (fun (_ : Tab3) s => (prog x xI c s).1)) {m5 mE : ℕ}
-    (hRpg : ∀ x xI c, Conf (Rpg x xI c) (fun _ => ivO x xI (sim xI c)) m5 mE)
+    (hRpg : ∀ x ω (h : List O) c, Conf (Rpg x (xOf ω h) c) (fun _ => ivO x (xOf ω h) (sim (xOf ω h) c))
+      m5 mE)
     (x : X) (ω : Ω) (cs : ℕ → C) :
     ∀ j g s, (progsRd (sim := sim) (xOf := xOf) hkeep Rpg x ω cs j).Q3 g s = ∅
   | 0, g, s => rfl
@@ -411,7 +417,7 @@ theorem progsRd_q3 (hkeep : ∀ x xI c s, (prog x xI c s).2 = s.2)
         (Rpg x (xOf ω (simPre (gS sim xOf) (gPg prog xOf) ω cs j).1) (cs j)).Q3 g s ∪
           (progsRd (sim := sim) (xOf := xOf) hkeep Rpg x ω cs j).Q3 g
             (prog x (xOf ω (simPre (gS sim xOf) (gPg prog xOf) ω cs j).1) (cs j) s) := rfl
-    rw [e, (hRpg _ _ _).h3, progsRd_q3 hkeep Rpg hRpg x ω cs j, Finset.union_empty]
+    rw [e, (hRpg x ω _ (cs j)).h3, progsRd_q3 hkeep Rpg hRpg x ω cs j, Finset.union_empty]
 
 
 /-- **Sums over the slots before and after `i`** are within the sum over the slots other than
@@ -481,9 +487,11 @@ variable (prove wOf) in
 `nE`, `n5` of the rest of the game's view. -/
 theorem hopRd_charges (hkeep : ∀ x xI c s, (prog x xI c s).2 = s.2)
     (Rpg : ∀ x xI c, TRd (fun (_ : Tab3) s => (prog x xI c s).1)) {m5 mE : ℕ}
-    (hRpg : ∀ x xI c, Conf (Rpg x xI c) (fun _ => ivO x xI (sim xI c)) m5 mE)
+    (hRpg : ∀ x ω (h : List O) c, Conf (Rpg x (xOf ω h) c) (fun _ => ivO x (xOf ω h) (sim (xOf ω h) c))
+      m5 mE)
     (RP : ∀ x xI w r g', TRd (fun (_ : Tab3) (s : Sh p) => prove x xI w r g' s)) {s5 sE : ℕ}
-    (hRP : ∀ x xI w r g', Conf (RP x xI w r g') (fun s => ivO x xI (prove x xI w r g' s)) s5 sE)
+    (hRP : ∀ x ω (h : List O) r g', Conf (RP x (xOf ω h) (wOf ω h) r g')
+      (fun s => ivO x (xOf ω h) (prove x (xOf ω h) (wOf ω h) r g' s)) s5 sE)
     (R : GRd Ω O p X N) (hc : R.Cons)
     (Ev : Ω → List O → (Fin N → Tab3) → ShX (Blk → Blk) p X → Prop)
     (hEv : R.Reads (fun v => Ev v.1 v.2.1 v.2.2.1 v.2.2.2)) (i : Fin N) (ω : Ω)

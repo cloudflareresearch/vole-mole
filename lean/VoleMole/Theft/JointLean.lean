@@ -60,14 +60,15 @@ variable {prove : X → I → W → Bytes 16 → Tab3 → Sh p → O} {sim : I �
 /-- **The first `j` programmings' budgets.** -/
 theorem progsRd_bnd (hkeep : ∀ x xI c s, (prog x xI c s).2 = s.2)
     (Rpg : ∀ x xI c, TRd (fun (_ : Tab3) s => (prog x xI c s).1)) {m5 mE : ℕ}
-    (hRpg : ∀ x xI c, Conf (Rpg x xI c) (fun _ => ivO x xI (sim xI c)) m5 mE)
+    (hRpg : ∀ x ω (h : List O) c, Conf (Rpg x (xOf ω h) c) (fun _ => ivO x (xOf ω h) (sim (xOf ω h) c))
+      m5 mE)
     (x : X) (ω : Ω) (cs : ℕ → C) :
     ∀ j, (progsRd (sim := sim) (xOf := xOf) hkeep Rpg x ω cs j).Bnd 0 (j * m5) (j * mE)
   | 0 => ⟨fun _ _ => le_rfl, fun _ _ => by simp [progsRd, h23Rd, TRd.congr],
       fun _ _ => by simp [progsRd, h23Rd, TRd.congr]⟩
   | j + 1 => by
     have h0 := TRd.bnd_prog (hL := hkeep x (xOf ω (simPre (gS sim xOf) (gPg prog xOf) ω cs j).1) (cs j))
-        (hRpg x _ _).bnd (progsRd_bnd hkeep Rpg hRpg x ω cs j)
+        (hRpg x ω _ (cs j)).bnd (progsRd_bnd hkeep Rpg hRpg x ω cs j)
     have h : (progsRd (sim := sim) (xOf := xOf) hkeep Rpg x ω cs (j + 1)).Bnd (0 + 0)
         (m5 + j * m5) (mE + j * mE) := ⟨fun g s => h0.h3 g s, fun g s => h0.h5 g s, fun g s => h0.hE g s⟩
     exact h.mono le_rfl (by rw [Nat.succ_mul]; omega) (by rw [Nat.succ_mul]; omega)
@@ -75,14 +76,15 @@ theorem progsRd_bnd (hkeep : ∀ x xI c s, (prog x xI c s).2 = s.2)
 /-- **`m` real proofs and then a reader**: the budgets add up. -/
 theorem realFromRd_bnd
     (RP : ∀ x xI w r g', TRd (fun (_ : Tab3) (s : Sh p) => prove x xI w r g' s)) {s5 sE : ℕ}
-    (hRP : ∀ x xI w r g', Conf (RP x xI w r g') (fun s => ivO x xI (prove x xI w r g' s)) s5 sE)
+    (hRP : ∀ x ω (h : List O) r g', Conf (RP x (xOf ω h) (wOf ω h) r g')
+      (fun s => ivO x (xOf ω h) (prove x (xOf ω h) (wOf ω h) r g' s)) s5 sE)
     (x : X) (ω : Ω) (rs : ℕ → Bytes 16 × Tab3) {Φ : List O → Tab3 → Sh p → Prop}
     (RΦ : ∀ l, TRd (Φ l)) {b3 b5 bE : ℕ} (hΦ : ∀ l, (RΦ l).Bnd b3 b5 bE) :
     ∀ m (h : List O) j, (realFromRd (xOf := xOf) prove wOf RP x ω rs RΦ m h j).Bnd b3
       (m * s5 + b5) (m * sE + bE)
   | 0, h, _ => (hΦ h).mono le_rfl (by omega) (by omega)
   | m + 1, h, j => by
-    have hb := TRd.bnd_bind (hRP x (xOf ω h) (wOf ω h) (rs j).1 (rs j).2).bnd
+    have hb := TRd.bnd_bind (hRP x ω h (rs j).1 (rs j).2).bnd
       fun o => realFromRd_bnd RP hRP x ω rs RΦ hΦ m (h ++ [o]) (j + 1)
     have h : (realFromRd (xOf := xOf) prove wOf RP x ω rs RΦ (m + 1) h j).Bnd (0 + b3)
         (s5 + (m * s5 + b5)) (sE + (m * sE + bE)) :=
@@ -94,9 +96,11 @@ variable [Nonempty C]
 /-- **The hop reader's budgets**: `(a₃, a₅ + N·h₅, a_E + N·h_E)`. -/
 theorem hopRd_bnd (hkeep : ∀ x xI c s, (prog x xI c s).2 = s.2)
     (Rpg : ∀ x xI c, TRd (fun (_ : Tab3) s => (prog x xI c s).1)) {m5 mE : ℕ}
-    (hRpg : ∀ x xI c, Conf (Rpg x xI c) (fun _ => ivO x xI (sim xI c)) m5 mE)
+    (hRpg : ∀ x ω (h : List O) c, Conf (Rpg x (xOf ω h) c) (fun _ => ivO x (xOf ω h) (sim (xOf ω h) c))
+      m5 mE)
     (RP : ∀ x xI w r g', TRd (fun (_ : Tab3) (s : Sh p) => prove x xI w r g' s)) {s5 sE : ℕ}
-    (hRP : ∀ x xI w r g', Conf (RP x xI w r g') (fun s => ivO x xI (prove x xI w r g' s)) s5 sE)
+    (hRP : ∀ x ω (h : List O) r g', Conf (RP x (xOf ω h) (wOf ω h) r g')
+      (fun s => ivO x (xOf ω h) (prove x (xOf ω h) (wOf ω h) r g' s)) s5 sE)
     (R : GRd Ω O p X N) (hc : R.Cons) {a3 a5 aE : ℕ} (hb : R.Bnd a3 a5 aE)
     (Ev : Ω → List O → (Fin N → Tab3) → ShX (Blk → Blk) p X → Prop)
     (hEv : R.Reads (fun v => Ev v.1 v.2.1 v.2.2.1 v.2.2.2)) (i : Fin N) (ω : Ω)
@@ -256,7 +260,8 @@ variable {X : Type} [Fintype X] [Nonempty X] {I W O Ω : Type*} [Fintype Ω] [No
 /-- **The joint many-proof bound for a game of Lean proofs.** The slots are Lean proofs (base
 record `Hb x` of the extra table, output map `φ` with an `iv` decoder `ivO` that never invents an
 `iv`), the instance and witness functions of the history; the later real proofs and the earlier
-programmings are read by readers confined to their `iv`s (`hRP`, `hRpg`, within `(s₅, s_E)` and
+programmings are read by readers confined to their `iv`s (`hRP`, for instances with a witness;
+`hRpg`; within `(s₅, s_E)` and
 `(m₅, m_E)`); `R` is a consistent game reader within `(a₃, a₅, a_E)`. With
 `q₅ = a₅ + N·max(m₅, s₅)`, `q_E = a_E + N·max(m_E, s_E)`, for every event `R` reads,
 
@@ -274,7 +279,7 @@ theorem real_sim_leN_lean (Hb : X → Hashes) (hHb : ∀ x, HashesWF (Hb x)) (st
     (hRpg : ∀ x xI c, Conf (Rpg x xI c) (fun _ => ivO x xI (lSim p φ xI c)) m5 mE)
     (RP : ∀ x xI w r g', TRd (fun (_ : Tab3) (s : Sh p) => lProve p Hb stOf enc φ x xI w r g' s))
     {s5 sE : ℕ}
-    (hRP : ∀ x xI w r g', Conf (RP x xI w r g')
+    (hRP : ∀ x xI w r g', Rl xI w → Conf (RP x xI w r g')
       (fun s => ivO x xI (lProve p Hb stOf enc φ x xI w r g' s)) s5 sE)
     (R : GRd Ω O p X N) (hc : R.Cons) {a3 a5 aE : ℕ} (hb : R.Bnd a3 a5 aE)
     (h3 : (a3 : ℝ) < 2 ^ 128) (hE : 221 * ((aE + N * max mE sE + 4607 : ℕ) : ℝ) < 2 ^ 128)
@@ -314,13 +319,15 @@ theorem real_sim_leN_lean (Hb : X → Hashes) (hHb : ∀ x, HashesWF (Hb x)) (st
     (fun x xI o Q3 Q5 QE => chPt p CrtGen.tables a3 qE (ivO x xI o) Q3 Q5 QE / (1 - βZK q5 qE))
     (fun x => lean_zkExp p (Hb x) stOf hp hlr enc Rl cs hz (hHb x) hsp φ (ivO x) (hiv x) h3 hE hβ)
     hrel hkeep Rpg RP R hc
-    (fun Ev' hEv' i ω τ x o => hopRd_bnd ivO hkeep Rpg hRpg RP hRP R hc hb Ev' hEv' i ω τ x o)
+    (fun Ev' hEv' i ω τ x o => hopRd_bnd ivO hkeep Rpg (fun x ω h c => hRpg x _ c) RP
+      (fun x ω h r g' => hRP x _ _ r g' (hrel ω h)) R hc hb Ev' hEv' i ω τ x o)
     (wZK a3 q5 qE) hw (nZK p ivO xOf R (max m5 s5) (max mE sE)) (MZK N a3 a5 aE (max m5 s5) (max mE sE))
     (fun i _ k v => nZK_le ivO xOf R hb _ _ i k v)
     (fun i _ k ω l gs t gs' t' h => nZK_agree ivO xOf R hc _ _ i k ω l gs t gs' t' h)
     (fun Ev' hEv' i ω τ r g t => ?_) hJ hNB Ev hEv
   obtain ⟨c3, cE, c5⟩ := hopRd_charges (ivO := ivO) (prove := lProve p Hb stOf enc φ) (wOf := wOf)
-    (sim := lSim p φ) (xOf := xOf) hkeep Rpg hRpg RP hRP R hc
+    (sim := lSim p φ) (xOf := xOf) hkeep Rpg (fun x ω h c => hRpg x _ c) RP
+    (fun x ω h r g' => hRP x _ _ r g' (hrel ω h)) R hc
     Ev' hEv' i ω τ t.2.2 (gP (lProve p Hb stOf enc φ) xOf wOf ω
       (simPre (gS (lSim p φ) xOf) (gPg (lProg p Hb stOf) xOf) ω (tapeC τ) i).1 r g t) g (shOf t)
   rw [Fin.sum_univ_three]
