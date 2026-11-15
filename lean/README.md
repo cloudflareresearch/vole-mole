@@ -445,7 +445,9 @@ lean/
                             (Reads); L8's programming step (SimExtract, SimExtractLean); any base
                             hash record and the other hashes as tables (LeanHb, Tables);
                             one-wayness of Com with random tables (ComOW); plain extraction with
-                            query logs (PlainLog, PlainOracle, PlainRata, PlainMous); unbound
+                            query logs (PlainLog, PlainOracle, PlainRata, PlainMous); plain
+                            extraction from ROM/ (PlainEager, PlainVerQ, PlainRom, PlainRataRom);
+                            unbound
                             Moussaka Prop U3 and Thm U4 (MoussakaUnbound, MoussakaUnboundLean);
                             `N` honest proofs and `WeakSEN` (Many); `U` tokens and `M`
                             redemptions (MoussakaMany, MoussakaManyLean, MoussakaUnboundMany);
@@ -1618,11 +1620,18 @@ What is **not** established, roughly in order of importance:
    `admHit_runT` give the read budgets and `AdmHit`). The extractor reads the query list of the
    programming step's reduction, which answers the programmed `H₂³` points itself after recomputing
    the simulated prefixes by queries (`vPreIC`, `ROM/PrefixIC.lean`); `WeakSE2 ≤ ε_plain +
-   ε_moves` holds for it (`weakSE2_of_plainL`, `PlainSEL`, `Theft/PlainLog.lean`). What remains
-   before `ROM/`'s bounds apply is the lazy-to-eager step: a measure-preserving map from the finite
-   tables (SHAKE elsewhere) to the lazy oracle, that the verifier queries only table points,
-   applying `ratatouille_sim_joint_spec` with the straight-line extractor, and that extractor's read
-   budget (`docs/security/ratatouille.md` §5, item 4). The many-token theorems still use `PlainSEN`. `Adv^ow` stays the advantage of the explicit inverter, a computational
+   ε_moves` holds for it (`weakSE2_of_plainL`, `PlainSEL`, `Theft/PlainLog.lean`). For Ratatouille with one
+   Client, plain extraction is proved from `ROM/`'s simultaneous extraction (`plainSEL_rom`,
+   `noTheft_lean_rom`, `Theft/PlainRataRom.lean`), for function rows, `M = uovM` and last stages
+   within `QBudT q q_E n_G` (a total hash-query bound added): the tables are a uniform table on the
+   finite set of table points with SHAKE elsewhere (`tabEquiv`, `pr_tables_eq_ro`,
+   `Theft/PlainEager.lean`), the adversary is normalized to answer off-table hash queries locally
+   (`normT`), the verifier and the straight-line extractor query only table points (`verifyQ_onT`,
+   `gameA_onT`, `Theft/PlainVerQ.lean`), and the joint bound is restated for the Lean statements
+   (`ratatouille_sim_joint_lean`, `Theft/PlainRom.lean`); `ε_plain` becomes `epsRom (q + 2·qPre)
+   (q_E + cells(pS) + cells(pI)) (n_G + 676)`. The read budget of `ROM/`'s extractor (`hX`) stays
+   a hypothesis (`docs/security/ratatouille.md` §5, item 4 (d)). Moussaka (`noRedirect_lean_rom`)
+   still has `PlainSEL` as a hypothesis (`security/moussaka.md` §5.3). The many-token theorems still use `PlainSEN`. `Adv^ow` stays the advantage of the explicit inverter, a computational
    assumption on Keccak-p[800,12]: `Com` is evaluated inside the relations, so it cannot be a table
    of the game, and some inverter wins with probability 1 (`owAdv_one_ratatouille`,
    `owAdv_one_moussaka`). In a random-table model of the standalone experiment a `q`-query
