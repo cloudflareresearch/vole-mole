@@ -819,4 +819,279 @@ theorem idealAN_eq : idealAN A n false = idealAN A n true := by
 
 end HopsAN
 
+
+/-! ## The (PU) term: the public candidates and the predictors -/
+
+section PubCand
+
+variable (A : AdversaryUAH) (n : ℕ)
+
+/-- **The public key set**: the guess's `H₅` read set and the active gate inputs of the `n + 2`
+simulated proofs, from the commitments, the nullifier table and the rest of the tape. -/
+noncomputable def spAN (b : Bool) (t₀ t₁ : Bytes) (O : Bool → Coins ctxBytes → Bytes)
+    (z : RestAN n) : Finset (ZK.Sim.Bytes 37) :=
+  r5PubAN A n b t₀ t₁ O z ∪ univ.biUnion fun i : Fin (n + 2) =>
+    (actLo (stPubA A n t₀ t₁ (hsAN A n b t₀ t₁ O z) i) z.2.2.1.2 (z.1 i).2).toFinset.image (blk 37)
+
+/-- **The candidates**: those of the `n + 2` simulated proofs for the public key set. -/
+noncomputable def candAN (b : Bool) (t₀ t₁ : Bytes) (O : Bool → Coins ctxBytes → Bytes)
+    (z : RestAN n) : Finset (Coins rBytes) :=
+  univ.biUnion fun i : Fin (n + 2) =>
+    candCo (stPubA A n t₀ t₁ (hsAN A n b t₀ t₁ O z) i) z.2.2.1.2 (z.1 i).2 (spAN A n b t₀ t₁ O z)
+
+/-- **The predictor for Client `false`** in the game `PU.puAdv` for `UCom`: public part
+`nf_key₀`, commitment `t₀`, auxiliary coins the other Client's `(nf_key₁, r₁)` and the rest of the
+tape. It reruns the interaction (`runAN` on the nullifier table of the two keys) and outputs the
+candidates of all `n + 2` proofs. -/
+noncomputable def predAN₀ (b : Bool) (k : Coins nfKeyBytes) (t : Bytes)
+    (a : (Coins nfKeyBytes × Coins rBytes) × RestAN n) : Finset (Coins rBytes) :=
+  candAN A n b t (comU A.um a.1.1 a.1.2) (tabU (List.ofFn k) (List.ofFn a.1.1)) a.2
+
+/-- **The predictor for Client `true`.** -/
+noncomputable def predAN₁ (b : Bool) (k : Coins nfKeyBytes) (t : Bytes)
+    (a : (Coins nfKeyBytes × Coins rBytes) × RestAN n) : Finset (Coins rBytes) :=
+  candAN A n b (comU A.um a.1.1 a.1.2) t (tabU (List.ofFn a.1.1) (List.ofFn k)) a.2
+
+/-- **At most `(n + 2)·(q₅ + 312(n + 2) + 1)` candidates**, if the read sets have at most `q₅`
+keys. -/
+theorem card_candAN_le {q5 : ℕ} (h5 : ∀ q₀ q₁ y u G2 T, (A.R5 q₀ q₁ y u G2 T).card ≤ q5)
+    (b : Bool) (t₀ t₁ : Bytes) (O : Bool → Coins ctxBytes → Bytes) (z : RestAN n) :
+    (candAN A n b t₀ t₁ O z).card ≤ (n + 2) * (q5 + (n + 2) * 312 + 1) := by
+  have hS : (spAN A n b t₀ t₁ O z).card ≤ q5 + (n + 2) * 312 := by
+    unfold spAN
+    refine (card_union_le _ _).trans (add_le_add (h5 _ _ _ _ _ _) ?_)
+    refine card_biUnion_le.trans ?_
+    calc ∑ i : Fin (n + 2), _ ≤ ∑ _i : Fin (n + 2), 312 := sum_le_sum fun i _ => card_imgo_le _ _ _
+      _ = (n + 2) * 312 := by simp
+  unfold candAN
+  refine card_biUnion_le.trans ?_
+  calc ∑ i : Fin (n + 2), _ ≤ ∑ _i : Fin (n + 2), (q5 + (n + 2) * 312 + 1) :=
+        sum_le_sum fun i _ => (card_candCo_le (mainP_nsA n i) _ _ _ _).trans (by omega)
+    _ = (n + 2) * (q5 + (n + 2) * 312 + 1) := by simp
+
+end PubCand
+
+section SlotsAN
+
+variable {A : AdversaryUAH} {n : ℕ}
+
+/-- **A redemption slot's witness prefix is the answering Client's opening.** -/
+lemma wPre_stA (b : Bool) (j : Fin n) (s : SecU) (os : Fin (n + 2) → Option Out) :
+    ∀ y ∈ stA A n b j s os, wPre y.2 = rOfU s (who b (A.next (iA A n s os false).2
+      (iA A n s os true).2 (histA A n b s os j))) := by
+  intro y hy
+  unfold stA at hy
+  cases hv : validA A n s os (histA A n b s os j)
+      (A.next (iA A n s os false).2 (iA A n s os true).2 (histA A n b s os j))
+  · rw [hv] at hy; cases hy
+  · rw [hv] at hy
+    have hfin : finBoth A.ad (iA A n s os false) (iA A n s os true) = true := by
+      unfold validA at hv
+      simp only [Bool.and_eq_true] at hv
+      exact hv.1
+    rw [finBoth_eq] at hfin
+    simp only [Bool.and_eq_true] at hfin
+    unfold redStmtU at hy
+    obtain ⟨i, -, rfl⟩ := Option.mem_map.1 hy
+    unfold ptQ
+    cases who b (A.next (iA A n s os false).2 (iA A n s os true).2 (histA A n b s os j))
+    · rw [tokD_of_finT A.ad _ _ false hfin.1]
+      exact wPre_redeemWitnessU _ _ _ _ _ _
+    · rw [tokD_of_finT A.ad _ _ true hfin.2]
+      exact wPre_redeemWitnessU _ _ _ _ _ _
+
+/-- **Every slot of the simulated game** has a public statement and the opening of one Client as
+witness prefix. -/
+lemma qOf_simA (b : Bool) (x : NTA n) (i : Fin (n + 2)) :
+    ∃ c, qOf (yN (gameAN A n b) i (simVAN (A := A) b x)) =
+      qo (stPubA A n (tA (A := A) x false) (tA (A := A) x true)
+        (hsAN A n b (tA (A := A) x false) (tA (A := A) x true) (oA x) x.2) i) (rOfU x.1 c) := by
+  have hst := congrFun (stF_pub (A := A) b x) i
+  revert hst
+  refine Fin.cases ?_ (fun j => Fin.cases ?_ (fun k => ?_) j) i
+  · intro hst
+    refine ⟨false, qOf_of _ _ _ hst fun y hy => ?_⟩
+    cases hy
+    exact wPre_issueWitnessU _ _ _
+  · intro hst
+    refine ⟨true, qOf_of _ _ _ hst fun y hy => ?_⟩
+    cases hy
+    exact wPre_issueWitnessU _ _ _
+  · intro hst
+    refine ⟨who b (A.next (iA A n x.1 (simVAN (A := A) b x).os false).2
+      (iA A n x.1 (simVAN (A := A) b x).os true).2 (histA A n b x.1 (simVAN (A := A) b x).os k)),
+      qOf_of _ _ _ hst fun y hy => ?_⟩
+    rw [yN_simA_red b x k] at hy
+    exact wPre_stA b k x.1 _ y hy
+
+/-- The public key set of the simulated hybrid is `spAN`. -/
+lemma SpN_simA (b : Bool) (x : NTA n) :
+    SpN Hashes.shake pIu (nsA n) (gameAN A n b) (r5AN A n b) x =
+      spAN A n b (tA (A := A) x false) (tA (A := A) x true) (oA x) x.2 := by
+  unfold SpN spAN
+  rw [r5_sim b x]
+  congr 1
+  refine Finset.biUnion_congr rfl fun i _ => ?_
+  obtain ⟨c, hc⟩ := qOf_simA (A := A) b x i
+  rw [hc, actO_qo]
+
+/-- Client `c`'s opening is among the candidates. -/
+def winAN (b c : Bool) (x : NTA n) : Prop :=
+  rOfU x.1 c ∈ candAN A n b (tA (A := A) x false) (tA (A := A) x true) (oA x) x.2
+
+set_option maxRecDepth 8000 in
+/-- **A prediction of a slot's witness prefix** is a prediction of a Client's opening by the
+public candidates. -/
+lemma candN_impA (b : Bool) (x : NTA n)
+    (h : ∃ i, candN Hashes.shake pIu (nsA n) (gameAN A n b) (r5AN A n b) i x) :
+    winAN (A := A) b false x ∨ winAN (A := A) b true x := by
+  obtain ⟨i, hi⟩ := h
+  obtain ⟨c, hc⟩ := qOf_simA (A := A) b x i
+  unfold candN at hi
+  rw [hc, SpN_simA b x] at hi
+  have hm := candO_qo _ _ _ _ _ hi
+  have hw : winAN (A := A) b c x :=
+    mem_biUnion.2 ⟨i, mem_univ _, hm⟩
+  cases c
+  · exact Or.inl hw
+  · exact Or.inr hw
+
+end SlotsAN
+
+/-! ## The (PU) term: the probabilities -/
+
+namespace ZKN
+
+open VoleMole.ZK.Sim
+
+/-- `pr_bstarN_sim_le` with the prediction events as one existential. -/
+theorem pr_bstarN_sim_le' (Hb : Hashes) (p₀ : Params) {m : ℕ} (ns : Fin m → ℕ) {S : Type}
+    [Fintype S] [Nonempty S] (G : NGame S m) (hHb : HashesWF Hb) (hv : NValid G p₀ ns)
+    (R5 : NView S m p₀ → Finset (ZK.Sim.Bytes 37)) :
+    hybN Hb p₀ ns G m (bstarN Hb G (fun i => pw p₀ (ns i)) R5) ≤
+      m * noHitProb + pr (NTape p₀ ns S) (fun x => ∃ i, candN Hb p₀ ns G R5 i x) +
+        m * m * (((312 : ℕ) + 1) / 2 ^ 128) := by
+  classical
+  have h1 : hybN Hb p₀ ns G m (bstarN Hb G (fun i => pw p₀ (ns i)) R5) ≤
+      pr (NTape p₀ ns S) (fun x => (∃ i, errC (pw p₀ (ns i)) (x.2.1 i).2) ∨
+        (∃ i, candN Hb p₀ ns G R5 i x) ∨
+        ∃ k i : Fin m, if i < k then collN Hb p₀ ns G i k x else False) :=
+    pr_mono fun x hx => by
+      rcases bstarN_sim Hb p₀ ns G hHb R5 x hx with h | h | ⟨k, i, hik, hc⟩
+      · exact Or.inl h
+      · exact Or.inr (Or.inl h)
+      · exact Or.inr (Or.inr ⟨k, i, by simp only [hik, ↓reduceIte]; exact hc⟩)
+  have hA : pr (NTape p₀ ns S) (fun x => ∃ i, errC (pw p₀ (ns i)) (x.2.1 i).2) ≤
+      m * noHitProb := by
+    refine (pr_exists_le_sum _).trans ?_
+    calc ∑ i : Fin m, pr (NTape p₀ ns S) (fun x => errC (pw p₀ (ns i)) (x.2.1 i).2)
+        ≤ ∑ _i : Fin m, noHitProb := sum_le_sum fun i _ => pr_errN_le p₀ ns i
+      _ = m * noHitProb := by simp
+  have hC : pr (NTape p₀ ns S) (fun x => ∃ k i : Fin m,
+      if i < k then collN Hb p₀ ns G i k x else False) ≤
+      m * m * (((312 : ℕ) + 1) / 2 ^ 128) := by
+    refine (pr_exists_le_sum _).trans ?_
+    calc ∑ k : Fin m, pr (NTape p₀ ns S) (fun x => ∃ i : Fin m,
+          if i < k then collN Hb p₀ ns G i k x else False)
+        ≤ ∑ _k : Fin m, ∑ _i : Fin m, (((312 : ℕ) + 1) / 2 ^ 128 : ℝ) :=
+          sum_le_sum fun k _ => (pr_exists_le_sum _).trans (sum_le_sum fun i _ => by
+            by_cases hik : i < k
+            · simp only [hik, ↓reduceIte]
+              exact pr_collN_le Hb p₀ ns G hv i k hik
+            · simp only [hik, ↓reduceIte]
+              rw [pr_false]; positivity)
+      _ = m * m * (((312 : ℕ) + 1) / 2 ^ 128) := by
+          simp only [sum_const, card_univ, Fintype.card_fin, nsmul_eq_mul]; ring
+  have h2 := pr_or_le (α := NTape p₀ ns S) (fun x => ∃ i, errC (pw p₀ (ns i)) (x.2.1 i).2)
+    (fun x => (∃ i, candN Hb p₀ ns G R5 i x) ∨
+      ∃ k i : Fin m, if i < k then collN Hb p₀ ns G i k x else False)
+  have h3 := pr_or_le (α := NTape p₀ ns S) (fun x => ∃ i, candN Hb p₀ ns G R5 i x)
+    (fun x => ∃ k i : Fin m, if i < k then collN Hb p₀ ns G i k x else False)
+  linarith
+
+end ZKN
+
+section PrAN
+
+variable (A : AdversaryUAH) (n : ℕ)
+
+theorem pr_winAN_false (b : Bool) :
+    pr (NTA n) (winAN (A := A) b false) = puAdv (comU A.um) (predAN₀ A n b) := by
+  let e : (Coins nfKeyBytes × Coins rBytes) × ((Coins nfKeyBytes × Coins rBytes) × RestAN n) ≃
+      NTA n :=
+    { toFun := fun z => ((z.1, z.2.1), z.2.2)
+      invFun := fun x => (x.1.1, (x.1.2, x.2))
+      left_inv := fun _ => rfl
+      right_inv := fun _ => rfl }
+  rw [← pr_equiv e]
+  rfl
+
+theorem pr_winAN_true (b : Bool) :
+    pr (NTA n) (winAN (A := A) b true) = puAdv (comU A.um) (predAN₁ A n b) := by
+  let e : (Coins nfKeyBytes × Coins rBytes) × ((Coins nfKeyBytes × Coins rBytes) × RestAN n) ≃
+      NTA n :=
+    { toFun := fun z => ((z.2.1, z.1), z.2.2)
+      invFun := fun x => (x.1.2, (x.1.1, x.2))
+      left_inv := fun _ => rfl
+      right_inv := fun _ => rfl }
+  rw [← pr_equiv e]
+  rfl
+
+/-- **The (PU) term of U5(a) on `main` with `n` queries**: the advantage of the two explicit
+predictors, plus `(n + 2)·noHitProb` (failed simulations) and `(n + 2)²·313·2⁻¹²⁸` (collisions
+between simulated proofs). -/
+theorem bstarAN_le (b : Bool) :
+    bstarAN A n b ≤ (n + 2 : ℕ) * noHitProb + (puAdv (comU A.um) (predAN₀ A n b) +
+      puAdv (comU A.um) (predAN₁ A n b)) + (n + 2 : ℕ) * (n + 2 : ℕ) * (((312 : ℕ) + 1) / 2 ^ 128) := by
+  refine (ZKN.pr_bstarN_sim_le' Hashes.shake pIu (nsA n) (gameAN A n b) hashesWF_shake
+    (nvalidAN A n b) (r5AN A n b)).trans ?_
+  have h := (pr_mono (candN_impA (A := A) (n := n) b)).trans (pr_or_le _ _)
+  rw [pr_winAN_false, pr_winAN_true] at h
+  linarith
+
+end PrAN
+
+/-! ## Theorem U5(a) on `main` with `n` adaptive queries -/
+
+section MainAN
+
+variable (A : AdversaryUAH) (n : ℕ)
+
+/-- **Theorem U5(a) on `main` (no label rows), `n` adaptive redemption queries, all tables shared,
+with the (PU) advantage of explicit predictors.** For the colluding adversary whose guess reads
+`H₃` at `q3` points, the cipher at `qE` keys and `H₅` at a consistent read set
+(`AdversaryUAH.ConsH`), if every PRF reduction at the rest of the tape has advantage at most
+`εprf`,
+
+    |Pr[W₀] − Pr[W₁]| ≤ 4(n + 2)·(εS(2q₃ + n + 2, 2q_E + 2(n + 2)·4607) + Δ23N(9, n + 2))
+        + Σ_{b,c} puAdv UCom (predAN_c b)
+        + 2·((n + 2)·noHitProb + (n + 2)²·313·2⁻¹²⁸) + 2·εprf.
+
+No prefix-collision term: one Client may answer several queries with one statement. The four
+`puAdv` terms are (PU) for `UCom` (bounded in the ideal-permutation model by
+`puAdvPerm_unbound_le`; each predictor outputs at most `(n + 2)·(q₅ + 312(n + 2) + 1)`
+candidates, `card_candAN_le`). -/
+theorem anonymityU_main_sharedAllN {q3 qE : ℕ} (hC : A.ConsH q3 qE) {εprf : ℝ}
+    (hprf : ∀ b z, prfAdv A.ad.base.ci (redAN A n b z) ≤ εprf) :
+    |realAN A n false - realAN A n true| ≤
+      4 * ((n + 2 : ℕ) : ℝ) * (εS (2 * q3 + (n + 2)) (2 * qE + 2 * (n + 2) * 4607) +
+        Δ23N 9 (n + 2)) +
+        (puAdv (comU A.um) (predAN₀ A n false) + puAdv (comU A.um) (predAN₁ A n false) +
+          puAdv (comU A.um) (predAN₀ A n true) + puAdv (comU A.um) (predAN₁ A n true)) +
+        2 * ((n + 2 : ℕ) * noHitProb + (n + 2 : ℕ) * (n + 2 : ℕ) * (((312 : ℕ) + 1) / 2 ^ 128)) +
+        2 * εprf := by
+  have r0 := real_sim_AN A n hC false
+  have r1 := real_sim_AN A n hC true
+  have p0 := bstarAN_le A n false
+  have p1 := bstarAN_le A n true
+  have f0 := prf_hop_AN A n false (hprf false)
+  have f1 := prf_hop_AN A n true (hprf true)
+  have e := idealAN_eq A n
+  have := abs_sub_le_iff.1 r0; have := abs_sub_le_iff.1 r1; have := abs_sub_le_iff.1 f0
+  have := abs_sub_le_iff.1 f1
+  rw [abs_sub_le_iff]
+  constructor <;> linarith
+
+end MainAN
+
 end VoleMole.Privacy.MoussakaUnbound
