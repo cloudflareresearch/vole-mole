@@ -415,6 +415,7 @@ import VoleMole.Theft.PlainLog
 import VoleMole.Theft.PlainOracle
 import VoleMole.Theft.PlainRata
 import VoleMole.Theft.PlainMous
+import VoleMole.Theft.PlainEager
 import VoleMole.Theft.MoussakaHit
 import VoleMole.Theft.ManyPlain
 import VoleMole.Theft.ManyReads
