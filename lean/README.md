@@ -375,9 +375,13 @@ averaged abort term, the `P2` part of pqov's keys uniform; one-more-UOV (OMPR, D
     (`scaled_preimage`). The cost model of the UOV round-3 specification (Thomae–Wolf or Hashimoto,
     hybrid Wiedemann XL) does not include it; applied to that model the forgery at (119, 45) costs
     `≈ 2^135.1` multiplications (`2^142.2` bit operations) instead of `2^139.7` (`2^146.8`),
-    slightly below NIST level 1's `2^143` in the RAM model (an estimate; the Thomae–Wolf step is
-    checked on toy keys, the Hashimoto step is not; `ompr-cryptanalysis-2.md` §8,
-    `scripts/ompr-cryptanalysis/p1_review.py`). No oracle call: this is an attack on UOV itself.
+    at NIST level 1's `2^143` line in the RAM model, ±3.4 bits per solving degree and before
+    memory costs (about +7 bits in the specification's memory-aware model), so the model cannot
+    resolve the 0.8 bit. Both the Thomae–Wolf and the Hashimoto steps combined with P1 are
+    checked on toy keys (F₁₆ and F₂₅₆, 7 keys; shape, solution rates and XL degrees as predicted),
+    and the cost formula agrees with a second implementation written from the specification
+    (`ompr-cryptanalysis-2.md` §8.7–8.9, `scripts/ompr-cryptanalysis/p1_review.py`,
+    `p1_review_toy.c`). No oracle call: this is an attack on UOV itself.
     The round-3 specification also lists the wedge key-recovery attack at `2^144` bit operations,
     below this project's `≈ 2^194` multiplications. (ii) Statistics of goodness: the exact Fourier transform of the bad set (Theorem H); any
     statistic fixed before the key has rms bias `≤ 2⁻²⁹⁶` at any degree (Theorem V); every linear
