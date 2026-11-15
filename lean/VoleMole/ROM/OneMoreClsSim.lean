@@ -342,6 +342,42 @@ noncomputable def clsSimEps (q : Kind → ℕ) (qE n ℓ : ℕ) : ℝ≥0∞ :=
       simEpsC (n + (2 + verifierTotal)) (q + extractorQueries + verifierQueries) k +
     (ℓ + 1) * (failEps q qE + (2 ^ 128 : ℝ≥0∞)⁻¹)
 
+set_option exponentiation.threshold 1100 in
+/-- **`clsSimEps` with the chain charges written out**: Lemma P^cls's `2⁵⁰·2⁻¹²⁸ = 2⁻⁷⁸` per `H₂³`
+query of the run and per forgery (`(q₂₃ + ℓ + 1)·2⁻⁷⁸`, the paper's `(Q₃ + ℓ + 1)·2⁻⁷⁸`), the
+parallelism term `2⁻¹³⁴` next to KOS's `2⁻¹⁵⁰` per `H₂¹` query (`(q₂₁ + ℓ + 1)·2⁻¹³⁴`); the
+combined `H₂²` bound; the hits, statement hits and order hits; and the failure terms per
+forgery. -/
+theorem clsSimEps_eq (q : Kind → ℕ) (qE n ℓ : ℕ) :
+    clsSimEps q qE n ℓ =
+      ((q .h21 : ℝ≥0∞) + (ℓ + 1)) * ((2 ^ 150 : ℝ≥0∞)⁻¹ + (2 ^ 134 : ℝ≥0∞)⁻¹) +
+      ((q .h22 : ℝ≥0∞) + (ℓ + 1)) * (ENNReal.ofReal (Seed.epsQS (2 ^ 128) (2 ^ 64) 1313) +
+        (2 ^ 128 : ℝ≥0∞)⁻¹ + ((n + (2 + verifierTotal) : ℕ) : ℝ≥0∞) / 2 ^ 448) +
+      ((q .h23 : ℝ≥0∞) + (ℓ + 1)) * ((2 ^ 50 : ℝ≥0∞) / 2 ^ 128) +
+      ∑ k ∈ adaptKinds, ((q k : ℝ≥0∞) + (ℓ + 1) * ((extractorQueries + verifierQueries) k : ℝ≥0∞)) *
+        (hitEps (q + extractorQueries + verifierQueries)
+          (combCount (some (45, dstP)) (q + extractorQueries + verifierQueries)) k +
+          stmtEpsD (q + extractorQueries + verifierQueries) k +
+          orderEps (q + extractorQueries + verifierQueries) k) +
+      (ℓ + 1) * (failEps q qE + (2 ^ 128 : ℝ≥0∞)⁻¹) := by
+  unfold clsSimEps
+  congr 1
+  have hsplit : ∀ k, simEpsC (n + (2 + verifierTotal)) (q + extractorQueries + verifierQueries) k =
+      cellEpsC (n + (2 + verifierTotal)) k +
+        (hitEps (q + extractorQueries + verifierQueries)
+          (combCount (some (45, dstP)) (q + extractorQueries + verifierQueries)) k +
+          stmtEpsD (q + extractorQueries + verifierQueries) k +
+          orderEps (q + extractorQueries + verifierQueries) k) := fun k => by
+    simp only [simEpsC, add_assoc]
+  simp only [hsplit, mul_add, Finset.sum_add_distrib]
+  congr 1
+  simp only [adaptKinds]
+  rw [Finset.sum_insert (by decide), Finset.sum_insert (by decide),
+    Finset.sum_insert (by decide), Finset.sum_insert (by decide), Finset.sum_singleton]
+  simp only [cellEpsC, Pi.add_apply, extractorQueries, verifierQueries, reduceCtorEq, or_self,
+    ↓reduceIte, add_zero, mul_zero, Nat.cast_add, Nat.cast_one, Nat.cast_zero]
+  ring
+
 variable (lr : Bool) (pk : UovPk) (pre : TG → SIss) (A : Forger) (Lst : List TG) (ℓ : ℕ)
 
 set_option exponentiation.threshold 500 in
