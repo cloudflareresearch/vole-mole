@@ -473,6 +473,8 @@ import VoleMole.Theft.JointInst
 import VoleMole.Theft.JointTheft
 import VoleMole.Theft.JointIv
 import VoleMole.Theft.JointNumJ
+import VoleMole.Theft.JointUnbBad
+import VoleMole.Theft.JointUnbInst
 import VoleMole.Theft.MoussakaUnbound
 import VoleMole.Theft.MoussakaUnboundMany
 import VoleMole.Theft.MoussakaUnboundLean
