@@ -207,6 +207,7 @@ import VoleMole.ROM.OneMoreClsSim
 import VoleMole.ROM.OneMoreClsQueries
 import VoleMole.ROM.OneMorePerm
 import VoleMole.ROM.OneMoreLemmaPSimPerm
+import VoleMole.ROM.OneMoreClsPerm
 import VoleMole.ROM.OneMoreShiftSimPerm
 import VoleMole.ROM.TableReads
 import VoleMole.ROM.PrivacyReads
@@ -408,6 +409,7 @@ import VoleMole.Assumptions.PomfritShift
 import VoleMole.Assumptions.PomfritShiftSim
 import VoleMole.Assumptions.PomfritCls
 import VoleMole.Assumptions.PomfritPermSim
+import VoleMole.Assumptions.PomfritClsPerm
 import VoleMole.Theft.Basic
 import VoleMole.Theft.Ratatouille
 import VoleMole.Theft.RatatouilleLean
@@ -475,5 +477,6 @@ import VoleMole.Audit.MainPU
 import VoleMole.Audit.MainShared
 import VoleMole.Audit.PomfritLemmaPCls
 import VoleMole.Audit.PomfritCls
+import VoleMole.Audit.PomfritClsPerm
 import VoleMole.Audit.MainRata
 import VoleMole.Audit.MainShared23
