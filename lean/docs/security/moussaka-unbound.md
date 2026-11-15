@@ -793,8 +793,24 @@ adversary's operations are unbound requests.
     are computational assumptions on Keccak-p[800,12]. Audit: `Audit/TheftNum.lean`.
     For every `U, M ≤ 2^{30}` the bound is `(U + M)·2^{−55} + 2^{−59}` plus the same terms
     (`nmUN_lean_numL`, `nmUN_lean_numLP`, `Theft/NumLin.lean`; audit `Audit/TheftJointZK.lean`).
-    The joint step that would charge the adversary's budget once is in `Theft/JointZK.lean`, its
-    hypothesis not proved (`security/ratatouille.md` §5).
+    Why the factor `U + M` multiplies the adversary's budget: `security/ratatouille.md` §5.
+  - **The joint step at points** (`Theft/JointUnbBad.lean` … `Theft/JointUnbNumJ.lean`; audit
+    `Audit/ZKPointUnb.lean`; `lean/docs/zk.md` §10.8). With the hypotheses of `nmUN_lean_numL`,
+    for every `U, M ≤ 2^{30}` (function rows):
+
+        nmUN_lean_numJ:
+          Pr[BadN] ≤ 2^{−54} + Σ_h (ε_prf + Adv^bind(B₁ h) + Adv^spr-k(B₂ h)).
+
+    The event with `ROM/`'s extractor, the hit of an honest token included, is read by one
+    consistent game reader (`badGRd_reads`; `T₃ = q h3`, `c_E = 2·(N·cells(pR) + q_E) + 9215`,
+    `cells(pR) = 101372`); the game is the joint game of the two unbound Lean systems on the
+    tables of Moussaka's `pI`, with "no proof" for refused slots (`PN_eq`, `zkExpJ`,
+    `nmU_joint_le`); the simulated game's `iv`s are `H₄` blocks at `iv_pre ‖ μ₁ ‖ 4`, refused
+    redemptions (token not finalized, or no Anchor of the set verifies it) at reserved `H₄`
+    inputs (`ivs_view`, `nmU_J_le`); the simulated game's event is `ROM/`'s extraction error and
+    the hit terms (`nmU_sim_le`), with `U·(M + 1)·2^{−192}` in the constant. A failed honest run is
+    logged with the empty proof, which has no `iv` (`ivA`). The permutation-row variant stays
+    linear (`nmUN_lean_numLP`).
 
 A malicious Moderator therefore cannot spend an honest Client's token at another Moderator, even
 though the token is valid there.
@@ -1172,7 +1188,8 @@ the base protocol.
    hash budgets only (`nmUN_lean_romK`), and with permutation rows and inverse cipher queries
    (`nmUN_lean_romP'`). The collision terms are bounded and every non-computational term is a
    number: `≤ 2^{−24}` plus the PRF, binding and second-preimage terms at budgets `2^{64}` and
-   `U, M ≤ 2^{30}` (`nmUN_lean_num`, `nmUN_lean_numP`).
+   `U, M ≤ 2^{30}` (`nmUN_lean_num`, `nmUN_lean_numP`); with the joint step at points `≤ 2^{−54}`
+   for every `U, M ≤ 2^{30}` (`nmUN_lean_numJ`, function rows).
 5. The mechanized Thm U5 takes **per-proof** zero knowledge (`ZeroKnowledge` for `IssueRelW` and
    `RedeemRelW`, against distinguishers that know the witness). That hypothesis holds with
    dedicated label rows (`lean/docs/zk.md`). On `main` the CRT masks come from the witness, the
@@ -1345,6 +1362,10 @@ All in `lean/VoleMole/`; no `sorry`, no axioms beyond the standard three.
   `simPre_progTails`, `pr_deltaN_le`, **`deltaNU_le`**. `Theft/NumTerms.lean`, `Theft/Num.lean`:
   `zkB`, `epsRomPG`, **`nmUN_lean_num`**, **`nmUN_lean_numP`**. `Audit/TheftNum.lean` instantiates
   them at budgets `2^{64}`.
+- `Theft/JointUnbBad.lean`, `Theft/JointUnbInst.lean`, `Theft/JointUnbIv.lean`,
+  `Theft/JointUnbNumJ.lean`: `eRomU_congrP`, **`badGRd_reads`**, `badGRd_bnd`, `PN_eq`, `zkExpJ`,
+  **`nmU_joint_le`**, `ivs_view`, **`nmU_J_le`**, **`nmU_sim_le`**, **`nmUN_lean_numJ`**.
+  `Audit/ZKPointUnb.lean` instantiates `nmUN_lean_numJ` at the trivial adversary.
 - `Audit/UnboundMany.lean`: the Lean-prover and many-token theorems instantiated for trivial
   adversaries (budgets discharged; SE and PRF with error `1`); `issueRelW_honest`, `exists_pts`,
   `replay_not_freshN`, `redirect_ctx_freshN`, `owkN_zero`.
