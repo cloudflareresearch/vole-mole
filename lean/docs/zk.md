@@ -4019,26 +4019,82 @@ weighed:
   `E_real[#keys read on P] ≤ 2q/n` (`inv_charge_le`), so the point-level form gives `< 2⁻¹²⁷`.
   The BAVC is in this situation. Its hidden part (`Hidden`, `ZK/Hops.lean`) contains the hidden
   leaves' commitments (`comsOf`): two blocks of each hidden leaf's row at CTR blocks of the
-  proof's `iv`. (Whether the pads, with the opened seeds, also determine some of the hidden
-  leaves' VOLE blocks was not checked; the commitments suffice.) So with permutation rows each
-  proof is worth `q_inv·2⁻¹²⁸` to an adversary who inverse-queries its revealed blocks under many
-  keys, and that is not a charge on the forward points.
+  proof's `iv`. The pads reveal more: the corrections `c_i = u₀ ⊕ u_i` (on the correction rows,
+  `Prover.lean`) and the masked witness `d = w ⊕ u₀[..witness]` (`realCorr`) are in the proof, so a distinguisher that knows the witness (the zero
+  knowledge statements allow it) gets `u_i` on the witness bytes, and with the opened leaves'
+  blocks (from the opened seeds and the table) the hidden leaves' VOLE blocks there. So with
+  permutation rows each proof is worth `q_inv·2⁻¹²⁸` to an adversary who inverse-queries its
+  revealed blocks under many keys, and that is not a charge on the forward points.
 
-What the port needs:
-- *The read model.* An inverse read set in `TRd`, `PtReads` and `GRd`: the queries `(k, y)`,
-  `y` the input. An inverse read is charged to a proof when `y` is a block its output reveals
-  (the hidden leaves' commitment blocks, and any other block of the hidden part the output
-  determines). A forward read is charged at the CTR blocks of the proof's `iv`, as now. Inverse
-  reads are proof-specific through the revealed values, as forward reads are through the `iv`. So
-  the joint sum should still charge the budget about once, with one more overlap term: two proofs
-  with an equal revealed block (uniform in the simulated game).
-- *The hop.* The hop for permutation rows at points, with that charge. Re-programming the node's
-  row on `P` only moves the points `P` and the preimages of the hidden values, so the moved reads
-  are the forward reads on `P` and the inverse reads at hidden values. Then `hide_rom_query_pt` and
-  `zk_rom_ic_h23_exp` with permutation rows and `switchEps` on the hidden part's reads, and
-  `ZKExp` with the new charge.
-- *The rest.* The joint layer (`Theft/Joint*.lean`, typed on `ShX (Blk → Blk)`) over the row type
-  (`CipherRow`), and the three games' instances and numbers.
+**The hop with a value charge** (zk-permpt; `ZK/IdealCipherPtPerm.lean`, `ZK/HopsH4PtPerm.lean`,
+`ZK/InvValue.lean`, `ZK/ValOverlap.lean`; audit `Audit/ZKPermPt.lean`). A reader of a permutation
+table reads forward points `(k, z)`; an inverse query `(k, y)` is the point `(k, π_k⁻¹ y)`
+(`qInv_cons`). The charge of reads `Q` at a value set `V` is
+
+    chV = #{k | ∃ (k, z) ∈ Q, z ∈ P ∨ π_k z ∈ V}          (`IC.vkeys`):
+
+the keys read at an input in `P` or **at a value in `V`**.
+- *The hop* (`IC.hopPtPm`). A secret node `n` is read at a finite set `Pn n` (its children's
+  inputs and what the output reads of it). Its replacement is a uniform **function** `u` on
+  `Pn n`. The table's row `σ` at the node's value is programmed by the swaps
+  `swap (σ p) (u p)` for `p ∈ Pn n` (`IC.stepPm`, an involution of `Perm K × (K → K)`; so the
+  programming is perfect, `IC.pr_progPm_eq`). If `u` has no collision on `Pn n`, the new row agrees
+  with `u` there (`IC.progL_on`), and with `σ` at every input `z ∉ Pn n` with `σ z ∉ u(Pn n)`
+  (`IC.progL_off`). So the hop costs
+  `(N + E_after[#keys read at an input in Pn n or at a value in u(Pn n)])/|K| + C(|Pn n|, 2)/|K|`.
+  The value condition is what inverse queries need: the moved pairs of the row are the inputs
+  `Pn n` and the preimages of the new values.
+- *The hybrid in the real experiment* (**`IC.puncturePtPm_real`**). The charge's value set is
+  `valsP`, the values of all secret rows at their points; the distinguisher's event may depend on
+  it (the values are equal in the coupled experiments), so the charges move to the real experiment
+  as in `IC.puncturePt_real`:
+
+      |real − fully replaced| ≤ (s·(N + E_real[chV]) + Σ_m C(|Pn m|, 2)) / (|K| − s·qm).
+
+  The fully replaced experiment has uniform function rows at the secret nodes, so the
+  function-row last step applies for every permutation table; no switching term.
+- *H4* (**`hide_rom_query_ptPm`**, `hide_rom_query_ptPm_num`). For the BAVC, `PnB n`: the
+  children's inputs, `u_hi`'s blocks at the root, the commitment and VOLE blocks at a hidden leaf
+  (`hidOfRows_congrPn`; `|PnB n| ≤ 4 + nHi + VOLE_COL_BLOCKS`). The values `hidVals`: the hidden
+  nodes' children's keys (the hidden children's keys and the opened seeds), the hidden leaves'
+  commitment and VOLE blocks, the root's `u_hi` blocks. For `nHi = 1`, at most `56` VOLE column
+  blocks and at most `qm ≤ 2⁶⁴` charged keys,
+
+      |Pr_real[A] − Pr_ideal[A]| ≤ (1422577 + 221·E_real[chV at CTR blocks of iv and hidVals])
+                                    / (2¹²⁸ − 221·2⁶⁴),
+
+  `1422577 = 221·4607 + 221·C(61, 2)` (the collision term `collPm ≤ 404430·2⁻¹²⁸`).
+- *The check against zk-perm.* The counterexample is an instance of `IC.puncturePtPm_real`
+  (`IC.inv_vbound`: `|real − replaced| ≤ (1 + q + 3)/(n − q)`), and its reads are charged `q`
+  (`IC.qInv_vkeys`, `IC.inv_vcharge_eq`: `E_real[chV] = q` exactly, against `≤ 2q/n` for the point
+  charge). At `q = 2⁶⁴` the bound `(2⁶⁴ + 4)/(2¹²⁸ − 2⁶⁴)` is above the attack's
+  `2⁻⁶⁴ − 2⁻¹²⁸` (`Audit.ZKPermPt.attack_consistent`). Against the BAVC, `|S|` inverse queries at a
+  hidden leaf's commitment block are charged `|S|` (`Audit.ZKPermPt.com_attack_charged`).
+- *Overlap* (`IC.exP_sum_inV_le`). If proof `i` reveals `m` values `g i` and the reads `Z` (any
+  function of the values) have values `val`, then `Σ_i #{a ∈ Z | val a ∈ g i} ≤ |Z|·(1 + #valPairs)`
+  (`IC.sum_inV_le`; `valPairs`: pairs of proofs that reveal an equal value), and for independent
+  uniform values `E[#valPairs] ≤ N²·m²/|K|` (`IC.exP_valPairs_le`). So the total value charge of
+  `N` proofs is the read budget once, times `1 + N²·m²/|K|`.
+
+**Not done** (the chain of step 2, and steps 3 and 4): `zk_rom_ic_h23_exp`, `zk_ro_exp` and `ZKExp` with
+permutation rows, and everything after. The obstacle is the charge's value set. The chain moves
+the H4 charge from the world after H1 to the real world as a function of the **view** (the
+proof and the tables), and `Theft.hyb_hop_exp` needs a function of the view (`viewN`). But
+`hidVals` is a function of the hidden tree:
+- The hidden children's keys are revealed by nothing. They can be dropped from the charge: in the
+  fully replaced experiment they are fresh, so they cost about `#read points·221/2¹²⁸` (a point
+  budget is needed, not only a key budget). Not done.
+- The commitment blocks and the opened seeds are in the proof.
+- The hidden leaves' VOLE blocks and the root's `u_hi` blocks are not a function of the proof
+  bytes and the tables: they need the witness (`d = w ⊕ u₀`) and the opened leaves' blocks
+  (computed through the table), and the blocks past the witness bytes and `u_hi`'s last block are
+  revealed only in part (a truncation, or XORs with masks). A value charge as a function of the
+  view must decode them, with a value predicate for the partly revealed blocks. Not done.
+
+So `lean_zkExpP` and its `εZK`/`βZK` analogues are not proved; the H4 numbers above are the
+permutation-row analogue of the `221·(9214 + E[chE])/d_E` term of `εZK`. The joint layer
+(`Theft/Joint*.lean`, typed on `ShX (Blk → Blk)`) over the row type, and the three games'
+instances and numbers, remain as before.
 
 ### 10.9 Hiding of `Com` (`Privacy/ComHide.lean`)
 
