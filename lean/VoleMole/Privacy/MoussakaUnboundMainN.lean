@@ -760,4 +760,63 @@ theorem r5_sim (b : Bool) (x : NTA n) :
 
 end SimMain
 
+
+/-! ## The PRF hop and the swap -/
+
+section HopsAN
+
+variable (A : AdversaryUAH) (n : ℕ)
+
+/-- **The reduction to the PRF** at the rest of the tape: the guess on the run with the
+commitments and the nullifier table it is given (read adaptively, at the queried contexts). -/
+noncomputable def redAN (b : Bool) (z : RestAN n)
+    (y : Bytes × Bytes × (Bool → Coins ctxBytes → Bytes)) : Prop :=
+  hvAN A n b y.1 y.2.1 y.2.2 z
+
+/-- The game after the PRF hop. -/
+noncomputable def idealAN (b : Bool) : ℝ :=
+  pr ((PTape × Table) × RestAN n) (fun y => redAN A n b y.2 (prfIdeal A.ad.base.ci y.1))
+
+lemma simAN_eq (b : Bool) :
+    simAN A n b = pr (PTape × RestAN n) (fun y => redAN A n b y.2 (prfReal A.ad.base.ci y.1)) :=
+  pr_congr fun x => simAN_iff b x
+
+/-- **The PRF hop** (the PRF advantage with the commitments leaked). -/
+theorem prf_hop_AN (b : Bool) {εprf : ℝ}
+    (hprf : ∀ z, prfAdv A.ad.base.ci (redAN A n b z) ≤ εprf) :
+    |simAN A n b - idealAN A n b| ≤ εprf := by
+  rw [simAN_eq]
+  exact abs_pr_prod_sub_le' _ _ fun z => hprf z
+
+/-- **After the PRF hop the worlds coincide** (the swap of `pr_run_swap`: the guess may read the
+simulators' coins and the tables). -/
+theorem idealAN_eq : idealAN A n false = idealAN A n true := by
+  let t : PTape → Bool → Bytes := fun p c =>
+    ucom (List.ofFn (bif c then p.2 else p.1).1) A.ad.base.ci (List.ofFn (bif c then p.2 else p.1).2)
+  let q : PTape × RestAN n → Bool → Bytes := fun z c => qAN n (t z.1 false) (t z.1 true) z.2 c
+  have hv (z : PTape × RestAN n) (H : Hist) (qq : Query)
+      (h : validT A.ad (q z false) (q z true) (t z.1 false) (t z.1 true) H qq = true) :
+      ctxOk H qq = true := by
+    unfold validT at h
+    simp only [Bool.and_eq_true] at h
+    exact h.2
+  have key := pr_run_swap simRU A.ad.base (fun z => A.next (q z false) (q z true))
+    (fun z => validT A.ad (q z false) (q z true) (t z.1 false) (t z.1 true)) hv
+    (fun z => csRA n z.2)
+    (fun z Hs => A.guess (q z false) (q z true)
+      (bif finAN A n (t z.1 false) (t z.1 true) z.2 then some Hs else none) z.2.2.2.1
+      (compAN n (stPubA A n (t z.1 false) (t z.1 true)
+          (bif finAN A n (t z.1 false) (t z.1 true) z.2 then Hs else []))
+        (fun i => (z.2.1 i).2) z.2.2.2.1 (n + 2) z.2.2.2.2) z.2.2.1)
+  let e : Table × (PTape × RestAN n) ≃ (PTape × Table) × RestAN n :=
+    { toFun := fun y => ((y.2.1, y.1), y.2.2)
+      invFun := fun x => (x.1.2, (x.1.1, x.2))
+      left_inv := fun _ => rfl
+      right_inv := fun _ => rfl }
+  unfold idealAN
+  rw [← pr_equiv e, ← pr_equiv e]
+  exact key
+
+end HopsAN
+
 end VoleMole.Privacy.MoussakaUnbound
