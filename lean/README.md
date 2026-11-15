@@ -1813,8 +1813,11 @@ What is **not** established, roughly in order of importance:
    (the view depends on the openings only through the refusal bit): `anonymityNC_main` `≤
    30·(εS(q₃, q_E+8·4607)+Δ23) + 15·(8·noHitProb + (4(q₅+625)+626)·2⁻¹²⁸) + 2·2⁻¹²⁸ + 2·(φ₀+φ₁)`,
    about `2⁻⁹⁹·³` plus the abort term, with no assumption on `Com`; `unlinkabilityNC_main` drops
-   the abort term; the issuance proofs there are an abstract `PI` that does not read the tables
-   (the route through `complete_rom_ic`, `2·2⁻¹¹³` per world, is on paper, `docs/zk.md` §4.2). The
+   the abort term; with `main`'s Lean issuance prover on the shared tables and the Anchors'
+   `issue_response` with the Lean verifier (`Privacy/MoussakaNCMainLean.lean`, audit
+   `Audit/MainNCLean.lean`; `issueReq_length`, `issue_complete_shared`, `realNCML_close`):
+   `anonymityNC_main_lean` is `anonymityNC_main`'s bound plus `4·2⁻¹¹³`, with no abstract issuance
+   proof system. The
    `main` games take an index rule that may read the token (`Rule`, `Privacy/MoussakaRule.lean`), so
    they hold for `main`'s `find_issuer` Client (`findIdx`; `redeemRequest_eq_findIdx`):
    `anonymity_main_sharedAll_find`, `anonymityNC_main_find` (Anchor Sets with both issuers),
@@ -1823,8 +1826,13 @@ What is **not** established, roughly in order of importance:
    (a) `anonymityU_main_pu` `≤ 8·εRF + 15·(Σ puAdv UCom (predU_c b) + 4(q₅+1)·2⁻¹²⁸) + 2·εprf`,
    with `puAdvPerm_unbound_le` in the ideal-permutation model; (b) `anonymityNC_main_U` `≤ 8·εRF +
    15·8(q₅+1)·2⁻¹²⁸ + 2(ψ₀+ψ₁) + 2·εprf`, a statistical (PU) term (`Privacy/MoussakaUnboundMain*.lean`,
-   `Privacy/MoussakaUnboundNCMain.lean`, audit `Audit/MainUnbound.lean`); not done for it: more than
-   two queries, shared tables, adaptive queries in (a). Not done: and (PU) for the real 12-round permutation (an
+   `Privacy/MoussakaUnboundNCMain.lean`, audit `Audit/MainUnbound.lean`); with all tables shared
+   (`Privacy/MoussakaUnboundMainAll.lean`, `Privacy/MoussakaUnboundNCMainAll.lean`, audit
+   `Audit/MainUnboundAll.lean`): `anonymityU_main_sharedAll`, `anonymityNC_main_U_sharedAll`, with a
+   term `coll*` (two real proofs with one prefix) that is `≤ 2⁻¹²⁸` for queries answered by
+   different Clients (`*_two`) but not bounded when one Client answers both (one witness and one
+   statement give one `H₃` column; the reduction of `main_sharedAll_le` does not see `ρ`); not done
+   for it: more than two queries, adaptive queries in (a), the Lean issuance prover in U5(b). Not done: and (PU) for the real 12-round permutation (an
    assumption; the exhaustive predictor has advantage 1). The QROM ZK bound
    is loose (2⁻¹⁹ at 2³⁰) until the 256-bit `rho` and salt are added.
    With the fix, zero knowledge of the executable Lean prover and the three protocols' privacy
@@ -1849,7 +1857,8 @@ What is **not** established, roughly in order of importance:
    `Com` as hypotheses, so they apply to any proof system with the label-row fix; on `main` the
    joint (PU) hop over proofs sharing `r` replaces the per-proof hypothesis: `anonymity_main`,
    `unlinkability_main` (Moussaka 4(a), 4(b') (`anonymityNC_main`) and Ratatouille, also for `main`'s `find_issuer`
-   Client; unbound Moussaka's U5 on `main` with two queries and per-proof tables). Every
+   Client; unbound Moussaka's U5 on `main` with two queries and per-proof tables, and with all tables shared
+   up to the prefix-collision term). Every
    deterministic side condition for the Lean prover is proved (the witness encodings satisfy the
    systems, interpolation, `N_MASK`, the CRT certificate, BAVC and CRT completeness:
    `Privacy/MoussakaLean.lean`, `Privacy/RatatouilleLean.lean`, `Privacy/PomFRITLean.lean`,
