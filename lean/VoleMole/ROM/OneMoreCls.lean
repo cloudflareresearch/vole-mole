@@ -14,12 +14,15 @@ hint is a function of the cipher table and the log. So the reduction here runs t
 **wrapped** (`wrapE`): before each `H₂¹` query `x₁` of the forger, the wrapper asks `mu₁`, `iv` at
 `x₁`, and `H₅` at every gate input of the decoder's points for the data committed at `x₁`
 (`decIns`, from the log before `x₁` and the cipher table `E`). The wrapper is part of the reduction:
-it reads `E`, which the reduction samples (the forger only queries the cipher). The forger never
-sees the wrapper's answers, so its view and its forgeries are unchanged.
+it reads `E`, which the reduction samples (the forger only queries the cipher). It must: the decoder's
+gate inputs depend on the committed leaf keys, which the straight-line extractor finds with `E` at
+cells the forger may never have queried, so a wrapper that only queries the cipher cannot compute
+them without a guessing event. The forger never sees the wrapper's answers, so its view and its
+forgeries are unchanged (`pomWin_le_wrapE`).
 
 * `decIns`: the decoder's `H₅` inputs at `x₁`: the gate inputs of `clsPts` at the trees of the
   second wide class (all such trees; the class extractor decodes one of them).
-* `coverQ`, `clsW`, `wrapE`: the wrapper.
+* `coverIC`, `coverAt`, `clsW`, `wrapE`: the wrapper.
 * `e1C`: `E₁^cls` on the log at the target query: the data committed at the first `H₂¹` preimage
   `x₁` of `x`'s `chal1` (as `e1P`), with `ũ`, `d[0..45)` and `chal1` read off `x` and `H₅` read off
   the log; the output of `PomFRIT.clsExt`.
