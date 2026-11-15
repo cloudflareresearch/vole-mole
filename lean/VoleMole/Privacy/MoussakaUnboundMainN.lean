@@ -417,4 +417,347 @@ lemma histA_sim (b : Bool) (x : NTA n) :
 
 end SimAN
 
+
+/-! ## The public view: a function of the commitments, the nullifier table and the rest -/
+
+section Pub
+
+variable (A : AdversaryUAH) (n : ℕ)
+
+/-- The rest of the tape: the slots' coins, `H₃`, the shared `H₅` table and cipher, the raw `H₂³`
+table. -/
+abbrev RestAN := CoinsN pIu (nsA n) × H3T × USh × Tab2G pIu
+
+/-- The redemption simulators' coins. -/
+def csRA (z : RestAN n) (j : Fin n) : SimCoins pRu := (z.1 j.succ.succ).2
+
+/-- The requests, from the commitments and the issuance simulators' coins. -/
+noncomputable def qAN (t₀ t₁ : Bytes) (z : RestAN n) (c : Bool) : Bytes :=
+  bif c then reqU t₁ (z.1 (s1 n)).2 else reqU t₀ (z.1 (s0 n)).2
+
+/-- Both tokens finalize, from public values. -/
+noncomputable def finAN (t₀ t₁ : Bytes) (z : RestAN n) : Bool :=
+  finT A.ad.base (qAN n t₀ t₁ z false) (qAN n t₀ t₁ z true) t₀ t₁ false &&
+    finT A.ad.base (qAN n t₀ t₁ z false) (qAN n t₀ t₁ z true) t₀ t₁ true
+
+/-- **The simulated run** (`MoussakaUnbound.runT`) on the nullifier table `O`. -/
+noncomputable def runAN (b : Bool) (t₀ t₁ : Bytes) (O : Bool → Coins ctxBytes → Bytes)
+    (z : RestAN n) : Hist :=
+  runT A.ad simRU b (qAN n t₀ t₁ z false) (qAN n t₀ t₁ z true) t₀ t₁ O (csRA n z)
+
+/-- **The statement of a history entry**: an answer `Derive ‖ π` was proved for the query's set,
+context and digest, with the answer's first 32 bytes as the nullifier. -/
+def stOfAnsN (q : Query) (a : Except Error Bytes) : Option Statement :=
+  match a with
+  | .ok bs => some (stR ⟨q.anchors.keys, bs.take nfBytes, A.um.int.ci, List.ofFn q.ctxRed, q.cd⟩)
+  | .error _ => none
+
+/-- The statement of entry `j` of a history. -/
+def stAtN (H : Hist) (j : ℕ) : Option Statement :=
+  match H[j]? with
+  | some e => stOfAnsN A e.1 e.2
+  | none => none
+
+/-- **The public statements of the `n + 2` slots**: the issuance statements from the
+commitments, the redemption statements from the history. -/
+def stPubA (t₀ t₁ : Bytes) (H : Hist) : Fin (n + 2) → Option Statement :=
+  Fin.cases (motive := fun _ => Option Statement) (some (stI ⟨t₀, A.um.int.ci⟩))
+    (Fin.cases (motive := fun _ => Option Statement) (some (stI ⟨t₁, A.um.int.ci⟩))
+      fun j => stAtN A H j)
+
+/-- **The programmings of the first `k` slots**, the first outermost. -/
+noncomputable def compAN (st : Fin (n + 2) → Option Statement)
+    (cs : (i : Fin (n + 2)) → SimCoins (pw pIu (nsA n i))) (u : USh) :
+    ℕ → Tab2G pIu → Tab2G pIu
+  | 0 => id
+  | k + 1 => if h : k < n + 2 then
+      compAN st cs u k ∘ pgP (pw pIu (nsA n ⟨k, h⟩)) (cs ⟨k, h⟩) (st ⟨k, h⟩) u
+    else compAN st cs u k
+
+/-- The history the statements are read from (none proved unless both tokens finalized). -/
+noncomputable def hsAN (b : Bool) (t₀ t₁ : Bytes) (O : Bool → Coins ctxBytes → Bytes)
+    (z : RestAN n) : Hist :=
+  bif finAN A n t₀ t₁ z then runAN A n b t₀ t₁ O z else []
+
+/-- **The `H₂³` table the guess sees**, from public values. -/
+noncomputable def tabAN (b : Bool) (t₀ t₁ : Bytes) (O : Bool → Coins ctxBytes → Bytes)
+    (z : RestAN n) : Tab2G pIu :=
+  compAN n (stPubA A n t₀ t₁ (hsAN A n b t₀ t₁ O z)) (fun i => (z.1 i).2) z.2.2.1 (n + 2) z.2.2.2
+
+/-- The guess's history input, from public values. -/
+noncomputable def keyAN (b : Bool) (t₀ t₁ : Bytes) (O : Bool → Coins ctxBytes → Bytes)
+    (z : RestAN n) : Option Hist :=
+  bif finAN A n t₀ t₁ z then some (runAN A n b t₀ t₁ O z) else none
+
+/-- **The simulated game's event** from the commitments, the nullifier table and the rest. -/
+noncomputable def hvAN (b : Bool) (t₀ t₁ : Bytes) (O : Bool → Coins ctxBytes → Bytes)
+    (z : RestAN n) : Prop :=
+  A.guess (qAN n t₀ t₁ z false) (qAN n t₀ t₁ z true) (keyAN A n b t₀ t₁ O z) z.2.2.1
+    (tabAN A n b t₀ t₁ O z) z.2.1
+
+/-- Its `H₅` read set. -/
+noncomputable def r5PubAN (b : Bool) (t₀ t₁ : Bytes) (O : Bool → Coins ctxBytes → Bytes)
+    (z : RestAN n) : Finset (ZK.Sim.Bytes 37) :=
+  A.R5 (qAN n t₀ t₁ z false) (qAN n t₀ t₁ z true) (keyAN A n b t₀ t₁ O z) z.2.2.1
+    (tabAN A n b t₀ t₁ O z) z.2.1
+
+end Pub
+
+/-! ## With all proofs simulated: the view is the public view -/
+
+section SimPub
+
+variable {A : AdversaryUAH} {n : ℕ}
+
+/-- With all redemption proofs simulated and both tokens finalized, the adaptive run with the
+honest pending tokens is `runT` on the nullifier table of the keys (`viewAd_redSim`). -/
+lemma interact_redSim (B : AdversaryAd) (b : Bool) (i₀ i₁ : PendingToken × Bytes)
+    (cs : Fin n → SimCoins pRu)
+    (h₀ : i₀.1.t = ucom i₀.1.k B.base.ci i₀.1.r) (h₁ : i₁.1.t = ucom i₁.1.k B.base.ci i₁.1.r)
+    (hf : ∀ c, finT B.base i₀.2 i₁.2 i₀.1.t i₁.1.t c = true) :
+    interact (B.next i₀.2 i₁.2) (validR B i₀ i₁) refused
+        (List.ofFn fun j q => redSim B.base simRU (cs j) (ptQ B b i₀ i₁ q)) [] =
+      runT B simRU b i₀.2 i₁.2 i₀.1.t i₁.1.t
+        (fun c ctx => bif c then derive i₁.1.k (List.ofFn ctx) else derive i₀.1.k (List.ofFn ctx))
+        cs := by
+  have hcom (c : Bool) : ucom (bif c then i₁ else i₀).1.k B.base.ci (bif c then i₁ else i₀).1.r =
+      bif c then i₁.1.t else i₀.1.t := by
+    cases c
+    · exact h₀.symm
+    · exact h₁.symm
+  have hv : validR B i₀ i₁ = validT B i₀.2 i₁.2 i₀.1.t i₁.1.t := by
+    funext H q
+    unfold validR validT redeemable okT
+    rw [tokD_of_finT B i₀ i₁ false (hf false), tokD_of_finT B i₀ i₁ true (hf true)]
+    simp only [hcom]
+  unfold runT
+  rw [hv]
+  refine interact_congr_of _ _ _
+    (fun q => okT B.base i₀.2 i₁.2 i₀.1.t i₁.1.t (who b q) q.anchors = true) _ _
+    (fun j q hq => redSim_ptQ B simRU b i₀ i₁ h₀ h₁ hf q hq (cs j)) _ fun H' _ _ hval => ?_
+  unfold validT at hval
+  simp only [Bool.and_eq_true] at hval
+  cases who b (B.next i₀.2 i₁.2 H')
+  · exact hval.1.1
+  · exact hval.1.2
+
+/-- A refusing rule refuses every query. -/
+lemma histR_refused {Q Y : Type*} (next : List (Q × Y) → Q) (valid : List (Q × Y) → Q → Bool)
+    (refuse : Y) (f : Fin n → Q → Y) (hv : ∀ H q, valid H q = false) :
+    ∀ m, ∀ e ∈ histR next valid refuse f m, e.2 = refuse
+  | 0 => by simp [histR]
+  | m + 1 => by
+    intro e he
+    by_cases hm : m < n
+    · rw [histR_succ next valid refuse f hm] at he
+      rcases List.mem_append.1 he with he | he
+      · exact histR_refused next valid refuse f hv m e he
+      · rw [List.mem_singleton] at he
+        subst he
+        simp [hv]
+    · simp only [histR, hm, ↓reduceDIte] at he
+      exact histR_refused next valid refuse f hv m e he
+
+/-- The statement of an answered query is the statement of its proof. -/
+lemma stOfAnsN_redOutU (B : AdversaryUAH) (b : Bool) (i₀ i₁ : PendingToken × Bytes) (q : Query)
+    (o : Option Out) :
+    stOfAnsN B q (redOutU B.um (ptQ B.ad b i₀ i₁ q) o) =
+      (redStmtU B.um (ptQ B.ad b i₀ i₁ q)).map Prod.fst := by
+  unfold redOutU redStmtU
+  cases findIssuer (ptQ B.ad b i₀ i₁ q).anchors
+    (ucom (ptQ B.ad b i₀ i₁ q).tok.k B.um.int.ci (ptQ B.ad b i₀ i₁ q).tok.r)
+    (ptQ B.ad b i₀ i₁ q).tok.s with
+  | none => rfl
+  | some i =>
+    show some _ = some _
+    unfold xRU
+    rw [List.take_left' (length_derive _ _)]
+    rfl
+
+/-- **The statement of query `j`** is the statement of entry `j` of the final history. -/
+lemma stA_fst (b : Bool) (j : Fin n) (s : SecU) (os : Fin (n + 2) → Option Out) :
+    (stA A n b j s os).map Prod.fst = stAtN A (histA A n b s os n) j := by
+  have hg : (histA A n b s os n)[j.val]? = some
+      (A.next (iA A n s os false).2 (iA A n s os true).2 (histA A n b s os j),
+        if validA A n s os (histA A n b s os j)
+            (A.next (iA A n s os false).2 (iA A n s os true).2 (histA A n b s os j)) then
+          redOutU A.um (ptQ A.ad b (iA A n s os false) (iA A n s os true)
+            (A.next (iA A n s os false).2 (iA A n s os true).2 (histA A n b s os j)))
+            (os j.succ.succ)
+        else refused) :=
+    histR_get _ _ _ _ j.val j.2 n (by omega)
+  unfold stAtN
+  rw [hg]
+  unfold stA
+  cases hv : validA A n s os (histA A n b s os j)
+      (A.next (iA A n s os false).2 (iA A n s os true).2 (histA A n b s os j))
+  · rfl
+  · simp only [Bool.cond_true, ↓reduceIte]
+    exact (stOfAnsN_redOutU A b _ _ _ _).symm
+
+/-- With a token not finalized, no entry has a statement. -/
+lemma stAtN_none (b : Bool) (s : SecU) (os : Fin (n + 2) → Option Out)
+    (hf : finBoth A.ad (iA A n s os false) (iA A n s os true) = false) (j : ℕ) :
+    stAtN A (histA A n b s os n) j = none := by
+  unfold stAtN
+  rcases he : (histA A n b s os n)[j]? with _ | e
+  · rfl
+  · have hm := List.mem_of_getElem? he
+    have h2 := histR_refused _ _ _ _ (fun H q => by unfold validA; rw [hf]; rfl) n e hm
+    show stOfAnsN A e.1 e.2 = none
+    rw [h2]
+    rfl
+
+lemma stAtN_nil (j : ℕ) : stAtN A [] j = none := rfl
+
+end SimPub
+
+
+/-! ## With all proofs simulated: the event is the public event -/
+
+section SimMain
+
+variable {A : AdversaryUAH} {n : ℕ}
+
+/-- The commitments, the nullifier table and the rest of a tape. -/
+abbrev tA (x : NTA n) (c : Bool) : Bytes := tUM A.um x.1 c
+
+/-- The nullifier table of the tape's keys. -/
+abbrev oA (x : NTA n) : Bool → Coins ctxBytes → Bytes := tabU (kOfU x.1 false) (kOfU x.1 true)
+
+lemma yN_simA_red (b : Bool) (x : NTA n) (j : Fin n) :
+    yN (gameAN A n b) j.succ.succ (simVAN (A := A) b x) =
+      stA A n b j x.1 (simVAN (A := A) b x).os := by
+  show stA A n b j x.1 (maskO j.succ.succ (simVAN (A := A) b x).os) = _
+  refine stA_congr b j x.1 _ _ fun i hi => ?_
+  have hi' : i.val < j.val + 1 + 1 := by omega
+  simp only [maskO, maskK, Fin.val_succ, hi', ↓reduceIte]
+
+lemma qAN_sim (b : Bool) (x : NTA n) (c : Bool) :
+    (iA A n x.1 (simVAN (A := A) b x).os c).2 = qAN n (tA (A := A) x false) (tA (A := A) x true) x.2 c := by
+  rw [iA_sim b x c]
+  cases c <;> rfl
+
+lemma finAN_sim (b : Bool) (x : NTA n) :
+    finBoth A.ad (iA A n x.1 (simVAN (A := A) b x).os false)
+        (iA A n x.1 (simVAN (A := A) b x).os true) =
+      finAN A n (tA (A := A) x false) (tA (A := A) x true) x.2 := by
+  rw [finBoth_eq, iA_sim b x false, iA_sim b x true]
+  rfl
+
+/-- **With both tokens finalized, the simulated history is the run `runAN`** on the nullifier table
+of the keys. -/
+lemma histA_sim_fin (b : Bool) (x : NTA n)
+    (hf : finAN A n (tA (A := A) x false) (tA (A := A) x true) x.2 = true) :
+    histA A n b x.1 (simVAN (A := A) b x).os n =
+      runAN A n b (tA (A := A) x false) (tA (A := A) x true) (oA x) x.2 := by
+  rw [← finAN_sim b x] at hf
+  rw [histA_sim b x n]
+  have hvA : validA A n x.1 (simVAN (A := A) b x).os =
+      validR A.ad (iA A n x.1 (simVAN (A := A) b x).os false)
+        (iA A n x.1 (simVAN (A := A) b x).os true) := by
+    funext H q
+    unfold validA
+    rw [hf]
+    rfl
+  rw [hvA, ← interact_eq_histR]
+  rw [finBoth_eq] at hf
+  simp only [Bool.and_eq_true] at hf
+  have hf' : ∀ c, finT A.ad.base (iA A n x.1 (simVAN (A := A) b x).os false).2
+      (iA A n x.1 (simVAN (A := A) b x).os true).2
+      (iA A n x.1 (simVAN (A := A) b x).os false).1.t
+      (iA A n x.1 (simVAN (A := A) b x).os true).1.t c = true := fun c => by
+    cases c
+    · exact hf.1
+    · exact hf.2
+  refine (interact_redSim A.ad b _ _ (fun j => (x.2.1 j.succ.succ).2)
+    (by rw [iA_sim b x false]; rfl) (by rw [iA_sim b x true]; rfl) hf').trans ?_
+  rw [iA_sim b x false, iA_sim b x true]
+  rfl
+
+/-- A simulator's programming depends on the statement only. -/
+lemma simF_pg_A (i : Fin (n + 2)) (c : SimCoins (pw pIu (nsA n i))) (u : USh) (y : Option SW) :
+    (simF Hashes.shake pIu (nsA n) i c u y).pg = pgP (pw pIu (nsA n i)) c (y.map Prod.fst) u := by
+  rcases y with _ | y <;> rfl
+
+set_option maxRecDepth 8192 in
+/-- The simulated view's `H₂³` table: the raw table programmed for the slots' statements. -/
+lemma simVAN_M (b : Bool) (x : NTA n) :
+    (simVAN (A := A) b x).M = compAN n
+      (fun i => (yN (gameAN A n b) i (simVAN (A := A) b x)).map Prod.fst) (fun i => (x.2.1 i).2)
+      x.2.2.2.1 (n + 2) x.2.2.2.2 := by
+  show (runN _ x.1 _ x.2.2.2.2 (n + 2)).2 x.2.2.2.2 = _
+  suffices h : ∀ k, k ≤ n + 2 → (runN (gameAN A n b) x.1
+      (modeF Hashes.shake pIu (nsA n) (n + 2) x.2.1 x.2.2.1 x.2.2.2.1) x.2.2.2.2 k).2 =
+      compAN n (fun i => (yN (gameAN A n b) i (simVAN (A := A) b x)).map Prod.fst)
+        (fun i => (x.2.1 i).2) x.2.2.2.1 k by
+    rw [h _ le_rfl]
+  intro k hk
+  induction k with
+  | zero => rfl
+  | succ k ih =>
+    have hkn : k < n + 2 := by omega
+    rw [runN_succ _ _ _ _ hkn, ih (by omega)]
+    simp only [compAN, hkn, ↓reduceDIte]
+    congr 1
+    unfold sfN
+    have hki : (⟨k, hkn⟩ : Fin (n + 2)).val < n + 2 := hkn
+    simp only [modeF, hki, ↓reduceIte]
+    rw [simF_pg_A]
+    congr 2
+    exact (yN_viewN _ _ _ _ _ _ _).symm
+
+/-- **The slots' statements are the public statements.** -/
+lemma stF_pub (b : Bool) (x : NTA n) :
+    (fun i => (yN (gameAN A n b) i (simVAN (A := A) b x)).map Prod.fst) =
+      stPubA A n (tA (A := A) x false) (tA (A := A) x true)
+        (hsAN A n b (tA (A := A) x false) (tA (A := A) x true) (oA x) x.2) := by
+  funext i
+  refine Fin.cases ?_ (fun j => Fin.cases ?_ (fun k => ?_) j) i
+  · rfl
+  · rfl
+  · rw [yN_simA_red b x k, stA_fst]
+    show stAtN A _ k = stAtN A (hsAN A n b (tA (A := A) x false) (tA (A := A) x true) (oA x) x.2) k
+    unfold hsAN
+    cases hf : finAN A n (tA (A := A) x false) (tA (A := A) x true) x.2
+    · rw [stAtN_none b x.1 _ ((finAN_sim b x).trans hf)]
+      rfl
+    · rw [histA_sim_fin b x hf]
+      rfl
+
+lemma keyA_sim (b : Bool) (x : NTA n) :
+    keyA A n b (simVAN (A := A) b x) =
+      keyAN A n b (tA (A := A) x false) (tA (A := A) x true) (oA x) x.2 := by
+  unfold keyA keyAN
+  rw [show (simVAN (A := A) b x).s = x.1 from rfl, finAN_sim b x]
+  cases hf : finAN A n (tA (A := A) x false) (tA (A := A) x true) x.2
+  · rfl
+  · rw [histA_sim_fin b x hf]
+
+lemma M_sim (b : Bool) (x : NTA n) :
+    (simVAN (A := A) b x).M = tabAN A n b (tA (A := A) x false) (tA (A := A) x true) (oA x) x.2 := by
+  rw [simVAN_M, stF_pub]
+  rfl
+
+/-- **With all proofs simulated, the final event is the public event `hvAN`**: a function of the
+commitments, the nullifier table of the keys and the rest of the tape. -/
+theorem simAN_iff (b : Bool) (x : NTA n) :
+    evAN A n b (simVAN (A := A) b x) ↔
+      hvAN A n b (tA (A := A) x false) (tA (A := A) x true) (oA x) x.2 := by
+  unfold evAN hvAN
+  rw [show (simVAN (A := A) b x).s = x.1 from rfl, qAN_sim b x false, qAN_sim b x true,
+    keyA_sim b x, M_sim b x]
+  rfl
+
+/-- The same for the read set. -/
+theorem r5_sim (b : Bool) (x : NTA n) :
+    r5AN A n b (simVAN (A := A) b x) =
+      r5PubAN A n b (tA (A := A) x false) (tA (A := A) x true) (oA x) x.2 := by
+  unfold r5AN r5PubAN
+  rw [show (simVAN (A := A) b x).s = x.1 from rfl, qAN_sim b x false, qAN_sim b x true,
+    keyA_sim b x, M_sim b x]
+  rfl
+
+end SimMain
+
 end VoleMole.Privacy.MoussakaUnbound
