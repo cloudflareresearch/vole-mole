@@ -695,6 +695,25 @@ the candidates of its issuance proof and of each query it answers, at most `3·(
 and `c` candidates has advantage at most `(c + q)/(2¹²⁸ − q) + q/(2⁴⁴⁰ − q)`
 (`puAdvPerm_unbound_le`). As for `Com`, (PU) for the real 12-round permutation is an assumption.
 
+**Unbound Moussaka U5(b) on `main`** (`Privacy/MoussakaUnboundNCMain.lean`, `Audit/MainUnbound.lean`).
+The non-colluding game of `MoussakaUnbound.anonymityNC` (corrected, UF7) with **two adaptive
+redemption queries** (the second chosen from the first and its answer), honest Anchors running
+`unbound_issue_response` with an abstract issuance proof system, Anchor Sets with both issuers
+(`Contains`), and the two redemptions proved by the executable prover with `main`'s layout and
+per-proof tables (`main_chain_le`; the issuance slots prove nothing). As in 4(b') on `main`, the
+(PU) term is **statistical**: with the proofs simulated and both tokens finalized, the history is
+`hNC`'s (`hist_good`, from `simNC_iff`), and the redemption statements are functions of the keys
+(`redStmt_good`, `xKey`), so each proof's witness prefix, the answering Client's uniform opening,
+is independent of the candidates (`candNU`, at most `2·(q₅ + 1)`), and `PU_b ≤ 4·(q₅ + 1)·2⁻¹²⁸`
+(`puTermNU_le`). After the joint hop the game is `simGameNC` at fixed tables (`simNU_eq`), and the
+abort hop, the PRF hop and the swap of `anonymityNC` finish:
+
+    anonymityNC_main_U:  |Pr[W₀] − Pr[W₁]| ≤ 8·εRF(q₃, q_E) + 15·8·(q₅ + 1)·2⁻¹²⁸
+        + 2·(ψ false + ψ true) + 2·εprf,
+
+no assumption on `UCom`; `εprf` is `Adv^prf_2` (without the commitments) of the explicit reductions
+at fixed tables, `ψ c ≤ κ + φ c` (`κ = 0` for a complete issuance proof system).
+
 **Still on paper, for ZK on `main`:**
 - the factor `15` on `εS` and on the (PU) terms is a cost of the mechanized transfer (each hop's
   bad event is moved across the later hops); the paper's lazy sampling gives `4` and `1`;

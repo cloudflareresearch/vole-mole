@@ -827,9 +827,9 @@ expansions' outputs `(nf_key, r, ρ_iss)` and every `ρ_red` uniform.
   proof, so the joint `ε_ZK^joint` of the theorem is the sum `2εI + n·εR` per world. This is the
   form `lean/docs/zk.md` establishes with **dedicated label rows**. On `main` (CRT masks from the
   witness, `REUSE_CRT_WITNESS = true`) no efficient simulator meets it: the label term is a joint
-  term over the `H₅` queries (§3.1, UF6), and the joint (PU) hop replaces it. For U5(a) with two
-  redemption queries the joint hop is mechanized on `main` (next item); for `n > 2` queries and
-  for U5(b) it is on paper.
+  term over the `H₅` queries (§3.1, UF6), and the joint (PU) hop replaces it. With two redemption
+  queries the joint hop is mechanized on `main` for (a) and (b) (next items); for `n > 2` queries
+  it is on paper.
 
 **[Lean] Theorem U5(a) on `main`, two queries** (`Privacy/MoussakaUnboundMain.lean`,
 `Privacy/MoussakaUnboundMainPU.lean`, `lean/docs/zk.md` §4.2). The colluding game with two
@@ -844,8 +844,24 @@ The four `puAdv` terms are (PU) for `UCom` (§3.1's `Pred_R`) as the game `PU.pu
 predictors that see the key `nf_key`, the commitment and independent coins, with at most
 `3·(q₅ + 1)` candidates; in the ideal-permutation model each is at most
 `(c + q)/(2¹²⁸ − q) + q/(2⁴⁴⁰ − q)` (`puAdvPerm_unbound_le`). `εprf` is the PRF hypothesis above,
-for the reductions at fixed tables. Not done on `main`: `n > 2` queries (the joint hop is for four
-proofs), adaptive queries, the tables shared between the proofs, and U5(b).
+for the reductions at fixed tables.
+
+**[Lean] Theorem U5(b) on `main`, two adaptive queries** (`Privacy/MoussakaUnboundNCMain.lean`).
+The game of `anonymityNC` with the second query chosen from the first and its answer, the two
+redemptions proved by the executable prover on `main` (per-proof tables, joint hop), Anchor Sets
+with both issuers:
+
+    anonymityNC_main_U:  |Pr[W₀] − Pr[W₁]| ≤ 8·εRF(q₃, q_E) + 15·8·(q₅ + 1)·2⁻¹²⁸
+        + 2·(ψ₀ + ψ₁) + 2·εprf.
+
+The (PU) term is statistical, as for base 4(b') on `main`: the Moderator sees no issuance, so with
+simulated proofs the view and the redemption statements are functions of the keys, and each
+proof's witness prefix (the opening `r`) is independent of the candidates. No assumption on
+`UCom`.
+
+Not done on `main`: `n > 2` queries (the joint hop of `ZK/MainGame.lean` is for four proofs),
+adaptive queries in (a), and the tables shared between the proofs (the hops of
+`ZK/MainSharedAll.lean` for unbound Moussaka).
 - **The PRF.** `prfAdv A.ci (reductionAd …) ≤ εprf` (`Adv^prf-t_2`): given `t₀, t₁`, distinguish the
   table `c, ctx ↦ Derive(k_c, ctx)` from a uniform table. It is stated for the explicit reductions
   (the adversary with the simulator coins fixed, reading the table at the contexts it queries,
@@ -965,9 +981,10 @@ the base protocol.
    `RedeemRelW`, against distinguishers that know the witness). That hypothesis holds with
    dedicated label rows (`lean/docs/zk.md`). On `main` the CRT masks come from the witness, the
    label term is joint over the `H₅` queries (§3.1), and no per-proof simulator exists; the joint
-   (PU) hop replaces it. It is mechanized for U5(a) with two queries and per-proof tables
-   (`anonymityU_main_pu`, with (PU) for `UCom` as explicit predictor advantages); for `n > 2`
-   queries, shared tables and U5(b) it is on paper.
+   (PU) hop replaces it. It is mechanized with two redemption queries and per-proof tables, for
+   U5(a) (`anonymityU_main_pu`, with (PU) for `UCom` as explicit predictor advantages) and U5(b)
+   (`anonymityNC_main_U`, statistical (PU) term); for `n > 2` queries and shared tables it is on
+   paper.
 
 ---
 
