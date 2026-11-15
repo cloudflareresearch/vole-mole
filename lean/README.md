@@ -1881,9 +1881,17 @@ What is **not** established, roughly in order of importance:
    it: `anonymityNC_main_U_sharedAllLin`, `anonymityNC_main_U_leanLin`
    (`Privacy/MoussakaUnboundNCMainLin.lean`); U5(a) with `n` adaptive queries, all tables shared,
    no `collUH`: `anonymityU_main_sharedAllN` (`Privacy/MoussakaUnboundMainN.lean`; the predictors
-   rerun the adaptive interaction; audit `Audit/MainUnboundLin.lean`). Not done: the four-proof
-   theorems (Moussaka 4(a), 4(b'), Ratatouille) still carry the factor 15 of `main_sharedAll_le`;
-   the linear hop applies to games stated as a `ZK.Sim.NGame`, and those were not restated. Not done: and (PU) for the real 12-round permutation (an
+   rerun the adaptive interaction; audit `Audit/MainUnboundLin.lean`). The four-proof
+   theorems are on the linear hop too (`ZK/MainSharedLin4.lean`: any four-proof `MainChain.Game`
+   with all tables shared is a four-slot `NGame`, `toN`, `realAll_eq_hybN`, `simAll_eq_hybN`; with
+   joint reads `ConsJ`, `main_sharedAll_le4LinJ`: `8·(εS(q₃+4, q_E+8·4607) + Δ23N(9,4)) +
+   Pr_sim[bstar]` per world): `anonymity_main_sharedLin` (`_find`), `unlinkability_main_sharedLin`,
+   `anonymityNC_main_lin` (`_find`), `unlinkabilityNC_main_lin`, `anonymityNC_main_lean_lin`
+   (`Privacy/MoussakaMainSharedLin.lean`, `Privacy/RatatouilleMainSharedLin.lean`, audit
+   `Audit/MainSharedLin4.lean`), with `16·(εS + Δ23N)` instead of `30·(εS + Δ23)` for two worlds,
+   (PU) factor 1 instead of 15, no prefix-collision term, and the numeric part `≤ 2⁻¹⁰⁰` at zero
+   budgets. Still a factor `2n` rather than the paper's `n`, and in 4(b') two empty slots each
+   cost a hop. Not done: and (PU) for the real 12-round permutation (an
    assumption; the exhaustive predictor has advantage 1). The QROM ZK bound
    is loose (2⁻¹⁹ at 2³⁰) until the 256-bit `rho` and salt are added.
    With the fix, zero knowledge of the executable Lean prover and the three protocols' privacy
