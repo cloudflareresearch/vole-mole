@@ -572,7 +572,7 @@ end Pre
 
 section H6
 
-variable (Hs : Hashes) (T : CrtTables) (st : Statement) (w : ByteArray)
+variable [HasPrg] (Hs : Hashes) (T : CrtTables) (st : Statement) (w : ByteArray)
   (cs : ByteArray → ByteArray → System GF128)
   {K : Type} [Fintype K] [DecidableEq K] (enc : K → ByteArray)
   (sk : Shared × PadsU st.params → Fin 312 → K)
@@ -581,7 +581,6 @@ variable (Hs : Hashes) (T : CrtTables) (st : Statement) (w : ByteArray)
 /-- **The H6 charge of a proof, any layout**: the distinguisher's `H₅` keys that guess something
 (`guessOfG`: gate inputs of this proof). -/
 noncomputable def chg5G (G : K → Bytes 4) (s : Shared) (f : SimFields st.params) : ℕ :=
-  haveI := Classical.decPred fun k : K => (guessOfG Hs T st enc s f k).Nonempty
   ((QD (outOf st s f) G).filter fun k => (guessOfG Hs T st enc s f k).Nonempty).card
 
 lemma card_guessesG_le_chg (G : K → Bytes 4) (s : Shared) (f : SimFields st.params) :
@@ -745,6 +744,172 @@ theorem lab_rom_hyp_sG_exp
     (pr_equiv E3 _).symm
   rw [e1, e2]
   exact lab_rom_query_sG_exp Hs T st w cs enc sk hsk hkey hlr h D QD hA
+
+/-- **The `H₅` charge of a read set** at an output's `iv` (every key, without an `iv`). -/
+noncomputable def ch5Q (p : Params) (T : CrtTables) (Q : Finset (Bytes 37)) :
+    Option ByteArray → ℕ
+  | some iv => (Q.filter (Gate5 p T iv)).card
+  | none => Q.card
+
+omit [HasPrg] in
+lemma ch5_eq (R : PtReads st.params) (Hb : Hashes) (v : VwIC st.params) :
+    ch5 R Hb T st v = ch5Q st.params T (R.Q5 v) (ivV Hb st v.1) := by
+  unfold ch5 ch5Q
+  split <;> rfl
+
+omit [HasPrg] in
+/-- An ok output of the ideal-tape prover has the shared tape's `iv_pre`. -/
+lemma outOf_ivPre {s : Shared} {f : SimFields st.params} {b : ByteArray}
+    (h : outOf st s f = .ok b) : (⟨st.params, b⟩ : Proof).ivPre = ba s.1 := by
+  unfold outOf at h
+  rcases hf : firstHit s.2.1 with _ | ⟨ctr, δ⟩
+  · rw [hf] at h; cases h
+  · rw [hf] at h
+    simp only [Except.ok.injEq] at h
+    subst h
+    exact (fields_assemble st.params _).2.2.2.2.2.2.2.1.trans (fit_of_size (size_ba _))
+
+/-- A key that guesses something is a gate input of the proof's `iv`. -/
+lemma guessOfG_gate {s : Shared} {f : SimFields st.params} {k : Bytes 37}
+    (h : (guessOfG Hs T st enc5 s f k).Nonempty) :
+    Gate5 st.params T (pubOf Hs st s (deltaOf s.2.1)).iv k := by
+  unfold guessOfG at h
+  split at h
+  · rename_i hex
+    obtain ⟨v, e, he⟩ := hex
+    exact ⟨_, v, e, he⟩
+  · simp at h
+
+/-- **The H6 charge is at most the view's `H₅` charge**, for a record with the base record's
+`H₄` and `μ₁`. -/
+lemma chg5G_le_ch5Q (Hb : Hashes) (hmu : st.mu1 Hs = st.mu1 Hb) (h4 : Hs.hash .h4 = Hb.hash .h4)
+    (QD5 : Except String ByteArray → Tab5F → Finset (Bytes 37)) (G : Tab5F) (s : Shared)
+    (f : SimFields st.params) :
+    chg5G Hs T st enc5 QD5 G s f ≤ ch5Q st.params T (QD5 (outOf st s f) G) (ivV Hb st (outOf st s f)) := by
+  unfold chg5G
+  rcases ho : outOf st s f with e | b
+  · exact Finset.card_filter_le _ _
+  · have hiv : ivV Hb st (.ok b) = some (pubOf Hs st s (deltaOf s.2.1)).iv := by
+      simp only [ivV, ivOf, outOf_ivPre st ho, pubOf, hmu, h4]
+    rw [hiv]
+    refine Finset.card_le_card fun k hk => ?_
+    rw [Finset.mem_filter] at hk ⊢
+    exact ⟨hk.1, guessOfG_gate Hs T st hk.2⟩
+
+variable (Hb : Hashes)
+
+/-- **H6 with the tables, charged in the simulated world**: `joint2_h6` with
+`(1 + E[ch5Q]) / 2¹²⁸`, the expectation over the tables and the simulator's coins, of the
+distinguisher's `H₅` keys at the gate inputs of the simulated proof's `iv`. -/
+theorem joint2_h6_exp (hlr : st.params.labelRows = true)
+    (hzk : ZKHyp T st w cs) (hHb : HashesWF Hb)
+    (D : Except String ByteArray → Tab3 → Tab2G st.params → Tab5F → Prop)
+    (Q5 : Except String ByteArray → Tab3 → Tab2G st.params → Tab5F →
+      Finset (Bytes 37))
+    (hQ5 : ∀ o G3 G2 G5 G5', (∀ k ∈ Q5 o G3 G2 G5, G5 k = G5' k) →
+      (D o G3 G2 G5 ↔ D o G3 G2 G5')) :
+    |pr (IdealTape st.params × Vis2 st.params) (fun c =>
+        Dp Hb T st D (proveIdeal (recB Hb st w c.2.1 c.2.2.2) T st w
+          (fillSib (recB Hb st w c.2.1 c.2.2.2) T st c.1)) c.1.1.2.1 c.2) -
+      pr (IdealTape st.params × Vis2 st.params) (fun c =>
+        Dp Hb T st D (proveIdeal (recB Hb st w c.2.1 c.2.2.2) T st w c.1) c.1.1.2.1 c.2)| ≤
+      (1 + exP ((Tab3 × Tab2G st.params) × (Tab5F × SimCoins st.params)) (fun x =>
+        (ch5Q st.params T (Q5 (outOf st x.2.2.1 x.2.2.2) x.1.1
+          (simTab Hb T st x.2.1 (outOf st x.2.2.1 x.2.2.2) x.2.2.1.2.1 x.1.2) x.2.1)
+          (ivV Hb st (outOf st x.2.2.1 x.2.2.2)) : ℝ))) / 2 ^ 128 := by
+  obtain ⟨h1, -, -, h2⟩ := labelRows_sizes hlr
+  have hlab : st.params.labelRowOffset + 128 ≤ st.params.correctionRows := by omega
+  let E6 : (Tab3 × Tab2G st.params) × (IdealTape st.params × Tab5F) ≃
+      IdealTape st.params × Vis2 st.params :=
+    { toFun := fun c => (c.2.1, (c.1.1, (c.1.2, c.2.2)))
+      invFun := fun c => ((c.2.1, c.2.2.1), (c.1, c.2.2.2))
+      left_inv := fun _ => rfl
+      right_inv := fun _ => rfl }
+  let Y : Tab3 × Tab2G st.params → Tab5F × SimCoins st.params → ℝ := fun a y =>
+    (ch5Q st.params T (Q5 (outOf st y.2.1 y.2.2) a.1
+      (simTab Hb T st y.1 (outOf st y.2.1 y.2.2) y.2.1.2.1 a.2) y.1)
+      (ivV Hb st (outOf st y.2.1 y.2.2)) : ℝ)
+  let η : Tab3 × Tab2G st.params → ℝ := fun a => (1 + exP (Tab5F × SimCoins st.params) (Y a)) / 2 ^ 128
+  rw [← pr_equiv E6, ← pr_equiv E6]
+  refine (abs_pr_prod_sub_le_exP (fun z => Dp Hb T st D (proveIdeal (recB Hb st w (E6 z).2.1
+      (E6 z).2.2.2) T st w (fillSib (recB Hb st w (E6 z).2.1 (E6 z).2.2.2) T st (E6 z).1))
+      (E6 z).1.1.2.1 (E6 z).2)
+    (fun z => Dp Hb T st D (proveIdeal (recB Hb st w (E6 z).2.1 (E6 z).2.2.2) T st w (E6 z).1)
+      (E6 z).1.1.2.1 (E6 z).2) η fun a => ?_).trans (le_of_eq ?_)
+  swap
+  · have key : exP (Tab3 × Tab2G st.params) (fun a => exP (Tab5F × SimCoins st.params) (Y a)) =
+        exP ((Tab3 × Tab2G st.params) × (Tab5F × SimCoins st.params)) (fun x => Y x.1 x.2) :=
+      (exP_prod (fun x => Y x.1 x.2)).symm
+    simp only [η]
+    rw [exP_div, exP_const_add, key]
+  obtain ⟨G3, G2⟩ := a
+  set base := (Hb.withTable .h3 (seedInput (st.mu1 Hb) (w.extract 0 st.params.witnessBytes)) G3
+    ).withTable .h23 (enc2 st.params) (fun _ => 0) with hbase
+  have a1 := Hb.agreeOff_withTable .h3 (seedInput (st.mu1 Hb) (w.extract 0 st.params.witnessBytes)) G3
+  have a2 := (Hb.withTable .h3 (seedInput (st.mu1 Hb) (w.extract 0 st.params.witnessBytes)) G3
+    ).agreeOff_withTable .h23 (enc2 st.params) (fun _ => 0)
+  have hbwf : HashesWF base := (hHb.withTable .h3 _ G3).withTable .h23 _ _
+  have hmu : st.mu1 base = st.mu1 Hb :=
+    ((a1.mu1 (by decide) (by decide) st).trans (a2.mu1 (by decide) (by decide) st)).symm
+  have hh4 : base.hash .h4 = Hb.hash .h4 := ((a1 .h4 (by decide)).trans (a2 .h4 (by decide))).symm
+  let sk : Shared × PadsU st.params → Fin 312 → Bytes 37 := fun c e =>
+    blk 37 (sibInput base T st c.1 (withSib c.2 fun _ => fun _ => 0) e)
+  have hsk : ∀ c e, enc5 (sk c e) = sibInput base T st c.1 (withSib c.2 fun _ => fun _ => 0) e :=
+    fun c e => ba_blk_of_size (sibInput_size base T st hbwf _ _ e)
+  have hkey : ∀ c e, keyOf enc5 (sk c e) = sk c e :=
+    fun c e => keyOf_eq (fun a b h => ba_injective h) _
+  have hv5 : ∀ G : Tab5F, vIn5 (rec5 Hb G) T st = vIn5 base T st := by
+    intro G
+    have a0 := Hb.agreeOff_withTable .h5 enc5 G
+    refine vIn5_congr T st ?_ ?_
+    · exact (a0.mu1 (by decide) (by decide) st).symm.trans
+        ((a1.mu1 (by decide) (by decide) st).trans (a2.mu1 (by decide) (by decide) st))
+    · exact (a0 .h4 (by decide)).symm.trans ((a1 .h4 (by decide)).trans (a2 .h4 (by decide)))
+  have hA : ∀ (t : IdealTape st.params) (G G' : Tab5F), (∀ k ∈ proverKeysG base T st enc5 t ∪
+      (fun o (s : Shared) G5 => Q5 o G3 (simTab Hb T st G5 o s.2.1 G2) G5)
+        (proveIdeal (base.withTable .h5 enc5 G) T st w t) t.1 G, G k = G' k) →
+      ((fun o (s : Shared) G5 => Dp Hb T st D o s.2.1 (G3, G2, G5))
+          (proveIdeal (base.withTable .h5 enc5 G) T st w t) t.1 G ↔
+        (fun o (s : Shared) G5 => Dp Hb T st D o s.2.1 (G3, G2, G5))
+          (proveIdeal (base.withTable .h5 enc5 G') T st w t) t.1 G') := by
+    intro t G G' hG
+    have hp := proveIdeal_table_congrG base T st w enc5 hlab t G G'
+      fun k hk => hG k (Finset.mem_union_left _ hk)
+    have hpre : outPre Hb T st G (proveIdeal (base.withTable .h5 enc5 G) T st w t) =
+        outPre Hb T st G' (proveIdeal (base.withTable .h5 enc5 G) T st w t) := by
+      rcases ho : proveIdeal (base.withTable .h5 enc5 G) T st w t with e | b
+      · rfl
+      · simp only [outPre]
+        have hag : (rec5 Hb G).AgreeOff .h5 (rec5 Hb G') :=
+          Hashes.AgreeOff.withTable_same (k := .h5) (Hs := Hb) (Hs' := Hb) (fun _ _ => rfl) enc5
+            enc5 G G'
+        refine vPre_h5_congr hag T st b fun x hx => ?_
+        rw [hv5] at hx
+        have hx' : x ∈ actInputs base T st t.1 t.2 :=
+          vIn5_proveIdeal base T st w (base.withTable .h5 enc5 G) hzk t.1 t.2 ho x hx
+        simp only [rec5, Hashes.withTable, ↓reduceIte]
+        split
+        · rename_i hy
+          have hk : hy.choose ∈ proverKeysG base T st enc5 t := by
+            rw [mem_proverKeysG, hy.choose_spec]; exact hx'
+          exact congrArg ba (hG _ (Finset.mem_union_left _ hk))
+        · rfl
+    have hX : simTab Hb T st G' (proveIdeal (base.withTable .h5 enc5 G') T st w t) t.1.2.1 G2 =
+        simTab Hb T st G (proveIdeal (base.withTable .h5 enc5 G) T st w t) t.1.2.1 G2 := by
+      unfold simTab
+      rw [← hp, ← hpre]
+    show D (proveIdeal (base.withTable .h5 enc5 G) T st w t) G3
+        (simTab Hb T st G (proveIdeal (base.withTable .h5 enc5 G) T st w t) t.1.2.1 G2) G ↔
+      D (proveIdeal (base.withTable .h5 enc5 G') T st w t) G3
+        (simTab Hb T st G' (proveIdeal (base.withTable .h5 enc5 G') T st w t) t.1.2.1 G2) G'
+    rw [hX, ← hp]
+    exact hQ5 _ G3 _ G G' fun k hk => hG k (Finset.mem_union_right _ hk)
+  refine (lab_rom_hyp_sG_exp base T st w cs enc5 sk hsk hkey hlr hzk
+    (fun o (s : Shared) G5 => Dp Hb T st D o s.2.1 (G3, G2, G5))
+    (fun o (s : Shared) G5 => Q5 o G3 (simTab Hb T st G5 o s.2.1 G2) G5) hA).trans ?_
+  refine div_le_div_of_nonneg_right (add_le_add_right (exP_mono fun x => ?_) 1) (by positivity)
+  exact Nat.cast_le.2 (chg5G_le_ch5Q base T st Hb hmu hh4
+    (fun o G5 => Q5 o G3 (simTab Hb T st G5 o x.2.1.2.1 G2) G5) x.1 x.2.1 x.2.2)
 
 end H6
 
