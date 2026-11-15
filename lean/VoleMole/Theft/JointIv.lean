@@ -16,7 +16,7 @@ absent. Here this is set up for the simulated theft game:
 * a refused slot `j` gets the `iv` `H₄(rsv j)` at a reserved 4-byte input (`ivR`, `rsvK`): it makes
   no proof and reads nothing, so any `iv` confines it, and with an `iv` it is no longer an
   "absent `iv`" that every other slot is charged for (**correction**: with no `iv`, `M` refused
-  spends cost `2N·M·(w_E·4607 + w₅·624) ≈ 2⁻⁴⁵` at `N = 2³¹`);
+  spends cost `2N·M·(w_E·4607 + w₅·624) ≈ 2⁻⁴⁶` at `N = 2³¹`, `M = 2³⁰`);
 * **`ivs_view`**: the view's `iv`s are `T(d j)` or absent, `T` the `H₄` table and `d` (`dIv`) a
   function of the rest of the tape (`splitT`);
 * the absent `iv`s are failed simulations only (`ivAt_none`).
