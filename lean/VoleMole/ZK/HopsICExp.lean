@@ -405,4 +405,167 @@ theorem joint3_h4_pt (hp : SmallParams st.params) {cs : ByteArray → ByteArray 
 
 end H4
 
+/-! ## H1 with the expected number of `H₃` reads, before H4 -/
+
+section Pre
+
+variable [HasPrg] (Hb : Hashes) (T : CrtTables) (st : Statement) (w : ByteArray)
+
+/-- **H1 with the tables, charged in the real world**: `joint2_h1` for a consistent reader of at
+most `q₃ < 2¹²⁸` `H₃` keys, with the expected number of keys read in the real world. -/
+theorem joint2_h1_real (D : Except String ByteArray → Tab3 → Tab2G st.params → Tab5F → Prop)
+    (Q3 : Except String ByteArray → Tab3 → Tab2G st.params → Tab5F → Finset (Bytes 16))
+    (hQ3 : ∀ o G3 G3' G2 G5, (∀ k ∈ Q3 o G3 G2 G5, G3 k = G3' k) →
+      (D o G3 G2 G5 ↔ D o G3' G2 G5))
+    (hQ3c : ∀ o G3 G3' G2 G5, (∀ k ∈ Q3 o G3 G2 G5, G3 k = G3' k) →
+      Q3 o G3 G2 G5 = Q3 o G3' G2 G5)
+    {q3 : ℕ} (hq3 : ∀ o G3 G2 G5, (Q3 o G3 G2 G5).card ≤ q3) (hsmall : (q3 : ℝ) < 2 ^ 128) :
+    |pr ((Bytes 16 × Tab2G st.params) × (Tab3 × Tab5F)) (fun c =>
+        D (proveP (recH Hb st w c.2.1 c.1.2 c.2.2) T st w (preR Hb T st w c.2.2) c.1.1)
+          c.2.1 c.1.2 c.2.2) -
+      pr (((Bytes 16 × Bytes 16) × Tab2G st.params) × (Tab3 × Tab5F)) (fun c =>
+        D (runP (recH Hb st w c.2.1 c.1.2 c.2.2) T st w (preR Hb T st w c.2.2) c.1.1)
+          c.2.1 c.1.2 c.2.2)| ≤
+      exP ((Bytes 16 × Tab2G st.params) × (Tab3 × Tab5F)) (fun c => ((Q3
+        (proveP (recH Hb st w c.2.1 c.1.2 c.2.2) T st w (preR Hb T st w c.2.2) c.1.1)
+          c.2.1 c.1.2 c.2.2).card : ℝ)) / (2 ^ 128 - q3) := by
+  let wP := w.extract 0 st.params.witnessBytes
+  let E0 : (Tab2G st.params × Tab5F) × (Bytes 16 × Tab3) ≃
+      (Bytes 16 × Tab2G st.params) × (Tab3 × Tab5F) :=
+    { toFun := fun c => ((c.2.1, c.1.1), (c.2.2, c.1.2))
+      invFun := fun c => ((c.1.2, c.2.2), (c.1.1, c.2.1))
+      left_inv := fun _ => rfl
+      right_inv := fun _ => rfl }
+  let E1 : (Tab2G st.params × Tab5F) × (Tab3 × (Bytes 16 × Bytes 16)) ≃
+      ((Bytes 16 × Bytes 16) × Tab2G st.params) × (Tab3 × Tab5F) :=
+    { toFun := fun c => ((c.2.2, c.1.1), (c.2.1, c.1.2))
+      invFun := fun c => ((c.1.2, c.2.2), (c.2.1, c.1.1))
+      left_inv := fun _ => rfl
+      right_inv := fun _ => rfl }
+  have hR : ∀ G2 G5 (G3 : Tab3), runP (recH Hb st w G3 G2 G5) T st w (preR Hb T st w G5) =
+      runP (recH Hb st w (fun _ => 0) G2 G5) T st w (preR Hb T st w G5) :=
+    fun G2 G5 G3 => by rw [runP_agreeOff_h3' (recH_agreeOff_h3 _ (fun _ => 0) G2 G5)]
+  have hP : ∀ G2 G5 (G3 : Tab3) (ρ : Bytes 16),
+      proveP (recH Hb st w G3 G2 G5) T st w (preR Hb T st w G5) ρ =
+        runP (recH Hb st w (fun _ => 0) G2 G5) T st w (preR Hb T st w G5) (splitSeed (G3 ρ)) :=
+    fun G2 G5 G3 ρ => by simp only [proveP, recH_h3Seed, hR]
+  let η : Tab2G st.params × Tab5F → ℝ := fun a => exP (Bytes 16 × Tab3) (fun b => ((Q3
+    (proveP (recH Hb st w b.2 a.1 a.2) T st w (preR Hb T st w a.2) b.1) b.2 a.1 a.2).card : ℝ)) /
+      (2 ^ 128 - q3)
+  have hb : ∀ a : Tab2G st.params × Tab5F,
+      |pr (Bytes 16 × Tab3) (fun b => D (proveP (recH Hb st w b.2 a.1 a.2) T st w
+          (preR Hb T st w a.2) b.1) b.2 a.1 a.2) - pr (Tab3 × (Bytes 16 × Bytes 16)) (fun b =>
+          D (runP (recH Hb st w b.1 a.1 a.2) T st w (preR Hb T st w a.2) b.2) b.1 a.1 a.2)| ≤
+        η a := by
+    intro a
+    obtain ⟨G2, G5⟩ := a
+    let Rr : Bytes 16 × Bytes 16 → Except String ByteArray :=
+      runP (recH Hb st w (fun _ => 0) G2 G5) T st w (preR Hb T st w G5)
+    let A : Bytes 16 × Bytes 16 → Tab3 → Prop := fun v G3 => D (Rr v) G3 G2 G5
+    have h := h3_rom_query_real (mu1 := st.mu1 Hb) (wPrefix := wP) Hb A
+      (fun v G3 => Q3 (Rr v) G3 G2 G5)
+      (fun v G3 G3' hk => hQ3 (Rr v) G3 G3' G2 G5 hk) (fun v G3 G3' hk => hQ3c (Rr v) G3 G3' G2 G5 hk)
+      (fun v G3 => hq3 _ G3 G2 G5) hsmall
+    have e1 : pr (Bytes 16 × Tab3) (fun b => D (proveP (recH Hb st w b.2 G2 G5) T st w
+        (preR Hb T st w G5) b.1) b.2 G2 G5) = pr (Bytes 16 × (Bytes 16 → Bytes 32)) (fun p =>
+          A (h3Seed (Hb.withTable .h3 (seedInput (st.mu1 Hb) wP) p.2) (st.mu1 Hb) wP (ba p.1)) p.2) := by
+      refine pr_congr fun b => ?_
+      simp only [A, h3Seed_withTable, hP]
+      rfl
+    have e2 : pr (Bytes 16 × ((Bytes 16 → Bytes 32) × Bytes 32)) (fun p => A (splitSeed p.2.2) p.2.1) =
+        pr (Tab3 × (Bytes 16 × Bytes 16)) (fun b => D (runP (recH Hb st w b.1 G2 G5) T st w
+          (preR Hb T st w G5) b.2) b.1 G2 G5) := by
+      rw [pr_prod_snd (α := Bytes 16) (fun q : (Bytes 16 → Bytes 32) × Bytes 32 => A (splitSeed q.2) q.1),
+        ← pr_equiv (Equiv.prodCongr (Equiv.refl Tab3) splitEquiv)]
+      refine pr_congr fun b => ?_
+      simp only [A, Rr, hR]
+      rfl
+    have e3 : exP (Bytes 16 × (Bytes 16 → Bytes 32)) (fun p =>
+        ((Q3 (Rr (splitSeed (p.2 p.1))) p.2 G2 G5).card : ℝ)) =
+        exP (Bytes 16 × Tab3) (fun b => ((Q3 (proveP (recH Hb st w b.2 G2 G5) T st w
+          (preR Hb T st w G5) b.1) b.2 G2 G5).card : ℝ)) := by
+      exact congrArg (exP _) (funext fun b => by rw [hP])
+    rw [e1, ← e2]
+    refine h.trans (le_of_eq ?_)
+    simp only [η]
+    rw [← e3]
+  have hb' : ∀ a : Tab2G st.params × Tab5F,
+      |pr (Bytes 16 × Tab3) (fun b => D (proveP (recH Hb st w (E0 (a, b)).2.1 (E0 (a, b)).1.2
+          (E0 (a, b)).2.2) T st w (preR Hb T st w (E0 (a, b)).2.2) (E0 (a, b)).1.1) (E0 (a, b)).2.1
+          (E0 (a, b)).1.2 (E0 (a, b)).2.2) -
+        pr (Tab3 × (Bytes 16 × Bytes 16)) (fun b => D (runP (recH Hb st w (E1 (a, b)).2.1
+          (E1 (a, b)).1.2 (E1 (a, b)).2.2) T st w (preR Hb T st w (E1 (a, b)).2.2) (E1 (a, b)).1.1)
+          (E1 (a, b)).2.1 (E1 (a, b)).1.2 (E1 (a, b)).2.2)| ≤ η a := fun a => hb a
+  rw [← pr_equiv E0, ← pr_equiv E1]
+  refine (abs_pr_prod_sub_le_exP (fun z => D (proveP (recH Hb st w (E0 z).2.1 (E0 z).1.2
+    (E0 z).2.2) T st w (preR Hb T st w (E0 z).2.2) (E0 z).1.1) (E0 z).2.1 (E0 z).1.2 (E0 z).2.2)
+    (fun z => D (runP (recH Hb st w (E1 z).2.1 (E1 z).1.2 (E1 z).2.2) T st w
+      (preR Hb T st w (E1 z).2.2) (E1 z).1.1) (E1 z).2.1 (E1 z).1.2 (E1 z).2.2) η hb').trans
+    (le_of_eq ?_)
+  have key : exP (Tab2G st.params × Tab5F) (fun a => exP (Bytes 16 × Tab3) (fun b => ((Q3
+      (proveP (recH Hb st w b.2 a.1 a.2) T st w (preR Hb T st w a.2) b.1) b.2 a.1 a.2).card : ℝ))) =
+      exP ((Bytes 16 × Tab2G st.params) × (Tab3 × Tab5F)) (fun c => ((Q3
+        (proveP (recH Hb st w c.2.1 c.1.2 c.2.2) T st w (preR Hb T st w c.2.2) c.1.1)
+          c.2.1 c.1.2 c.2.2).card : ℝ)) :=
+    (exP_prod (fun z : (Tab2G st.params × Tab5F) × (Bytes 16 × Tab3) => ((Q3
+      (proveP (recH Hb st w (E0 z).2.1 (E0 z).1.2 (E0 z).2.2) T st w (preR Hb T st w (E0 z).2.2)
+        (E0 z).1.1) (E0 z).2.1 (E0 z).1.2 (E0 z).2.2).card : ℝ))).symm.trans
+      (exP_equiv E0 (fun c => ((Q3 (proveP (recH Hb st w c.2.1 c.1.2 c.2.2) T st w
+        (preR Hb T st w c.2.2) c.1.1) c.2.1 c.1.2 c.2.2).card : ℝ)))
+  rw [exP_div, key]
+
+/-- **The hybrids before H4, charged in the real world** (`zk_pre_h4` with H1 charged by the
+expected number of `H₃` keys read by the real prover's distinguisher), for any PRG. -/
+theorem zk_pre_h4_real {cs : ByteArray → ByteArray → System GF128}
+    (hlr : st.params.labelRows = true) (hzk : ZKHyp CrtGen.tables st w cs) (hHb : HashesWF Hb)
+    (D : Except String ByteArray → Tab3 → Tab2G st.params → Tab5F → Prop)
+    (Q3 : Except String ByteArray → Tab3 → Tab2G st.params → Tab5F → Finset (Bytes 16))
+    (hQ3 : ∀ o G3 G3' G2 G5, (∀ k ∈ Q3 o G3 G2 G5, G3 k = G3' k) →
+      (D o G3 G2 G5 ↔ D o G3' G2 G5))
+    (hQ3c : ∀ o G3 G3' G2 G5, (∀ k ∈ Q3 o G3 G2 G5, G3 k = G3' k) →
+      Q3 o G3 G2 G5 = Q3 o G3' G2 G5)
+    {q3 : ℕ} (hq3 : ∀ o G3 G2 G5, (Q3 o G3 G2 G5).card ≤ q3) (hsmall : (q3 : ℝ) < 2 ^ 128) :
+    |pr ((Bytes 16 × Tab2G st.params) × (Tab3 × Tab5F)) (fun c =>
+        D (Prover.prove (recH Hb st w c.2.1 c.1.2 c.2.2) CrtGen.tables st w (ba c.1.1))
+          c.2.1 c.1.2 c.2.2) -
+      pr (((Bytes 16 × Bytes 16) × (Tab2G st.params × Grind)) × (Tab3 × Tab5F)) (fun c =>
+        Dp Hb CrtGen.tables st D (hyb3 (recB Hb st w c.2.1 c.2.2) CrtGen.tables st w
+          (c.1.1.2, c.1.2.2)
+          (hiddenOut st.params (ivOfPre Hb st c.1.1.2) (ba (deltaOf c.1.2.2)) c.1.1.1))
+          c.1.2.2 (c.2.1, c.1.2.1, c.2.2))| ≤
+      exP ((Bytes 16 × Tab2G st.params) × (Tab3 × Tab5F)) (fun c => ((Q3
+        (Prover.prove (recH Hb st w c.2.1 c.1.2 c.2.2) CrtGen.tables st w (ba c.1.1))
+          c.2.1 c.1.2 c.2.2).card : ℝ)) / (2 ^ 128 - q3) + pr Grind (GrindBad CrtGen.tables) := by
+  obtain ⟨hl1, -, -, hl2⟩ := labelRows_sizes hlr
+  have hlab : st.params.labelRowOffset + 128 ≤ st.params.correctionRows := by omega
+  have hpp : ∀ c : (Bytes 16 × Tab2G st.params) × (Tab3 × Tab5F),
+      Prover.prove (recH Hb st w c.2.1 c.1.2 c.2.2) CrtGen.tables st w (ba c.1.1) =
+        proveP (recH Hb st w c.2.1 c.1.2 c.2.2) CrtGen.tables st w
+          (preR Hb CrtGen.tables st w c.2.2) c.1.1 := fun c => by
+    have hR : RunHyp (recH Hb st w c.2.1 c.1.2 c.2.2) CrtGen.tables st w cs :=
+      ⟨hzk, recH_wf hHb _ _ _, bavcComplete, fun rho => crtComplete _ _ _ _ rho _ hlab, hlab⟩
+    rw [← proveP_prove _ CrtGen.tables st w hR c.1.1, prePrefix_recH]
+  have e0 : pr ((Bytes 16 × Tab2G st.params) × (Tab3 × Tab5F)) (fun c =>
+      D (Prover.prove (recH Hb st w c.2.1 c.1.2 c.2.2) CrtGen.tables st w (ba c.1.1))
+        c.2.1 c.1.2 c.2.2) =
+      pr ((Bytes 16 × Tab2G st.params) × (Tab3 × Tab5F)) (fun c =>
+        D (proveP (recH Hb st w c.2.1 c.1.2 c.2.2) CrtGen.tables st w
+          (preR Hb CrtGen.tables st w c.2.2) c.1.1) c.2.1 c.1.2 c.2.2) :=
+    pr_congr fun c => by rw [hpp c]
+  have eX : exP ((Bytes 16 × Tab2G st.params) × (Tab3 × Tab5F)) (fun c => ((Q3
+        (Prover.prove (recH Hb st w c.2.1 c.1.2 c.2.2) CrtGen.tables st w (ba c.1.1))
+          c.2.1 c.1.2 c.2.2).card : ℝ)) =
+      exP ((Bytes 16 × Tab2G st.params) × (Tab3 × Tab5F)) (fun c => ((Q3
+        (proveP (recH Hb st w c.2.1 c.1.2 c.2.2) CrtGen.tables st w
+          (preR Hb CrtGen.tables st w c.2.2) c.1.1) c.2.1 c.1.2 c.2.2).card : ℝ)) :=
+    congrArg (exP _) (funext fun c => by rw [hpp c])
+  rw [e0, eX]
+  have h1 := joint2_h1_real Hb CrtGen.tables st w D Q3 hQ3 hQ3c hq3 hsmall
+  have h2 := joint2_prog Hb CrtGen.tables st w hHb hzk.q D
+  have h3 := joint2_keys Hb st w hHb hzk hlab D
+  have := abs_sub_le _ _ _ |>.trans (add_le_add h1 ((abs_sub_le _ _ _).trans (add_le_add h2 h3)))
+  exact this.trans (le_of_eq (by ring))
+
+end Pre
+
 end VoleMole.ZK.Sim
