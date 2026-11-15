@@ -123,9 +123,10 @@ mod hw {
 /// `SB_I[io] ^ SB_J[jo] ^ 0x63` for tables that undo that linear map and apply the affine map
 /// of the S-box. Infinity (1/0) is 0x80: it survives the additions, and swizzle maps any index
 /// above 15 to 0, which is both 1/infinity and the table entry for a zero coordinate. The tables
-/// are generated, and checked for all 256 inputs, by tools/gen_aes_tables.py.
+/// are in `mod sbox16`; `tests::sbox16_tables` derives them and checks them for all 256 inputs.
 #[cfg(all(target_arch = "wasm32", target_feature = "simd128"))]
 mod hw {
+    use super::sbox16 as t;
     use crate::block::Block;
     use core::arch::wasm32::*;
 
@@ -138,33 +139,14 @@ mod hw {
         )
     }
 
-    /// The isomorphism from the AES field, by nibble: the result is i << 4 | k.
-    const IN_LO: v128 = table([
-        0x00, 0x01, 0x1c, 0x1d, 0x2d, 0x2c, 0x31, 0x30, 0x27, 0x26, 0x3b, 0x3a, 0x0a, 0x0b, 0x16, 0x17,
-    ]);
-    const IN_HI: v128 = table([
-        0x00, 0x86, 0xfd, 0x7b, 0x8e, 0x08, 0x73, 0xf5, 0x77, 0xf1, 0x8a, 0x0c, 0xf9, 0x7f, 0x04, 0x82,
-    ]);
-    /// 1/x and a/x in GF(2^4).
-    const INV: v128 = table([
-        0x80, 0x01, 0x09, 0x0e, 0x0d, 0x0b, 0x07, 0x06, 0x0f, 0x02, 0x0c, 0x05, 0x0a, 0x04, 0x03, 0x08,
-    ]);
-    const INVA: v128 = table([
-        0x80, 0x02, 0x01, 0x0f, 0x09, 0x05, 0x0e, 0x0c, 0x0d, 0x04, 0x0b, 0x0a, 0x07, 0x08, 0x06, 0x03,
-    ]);
-    /// The S-box output, without the constant 0x63, and twice it.
-    const SB_I: v128 = table([
-        0x00, 0xcb, 0xd7, 0xb0, 0x21, 0x8d, 0x67, 0xac, 0x7b, 0x5a, 0xea, 0x3d, 0x46, 0xf6, 0x91, 0x1c,
-    ]);
-    const SB_J: v128 = table([
-        0x00, 0x9f, 0x61, 0x16, 0xc2, 0x2a, 0x77, 0xe8, 0x89, 0x4b, 0x5d, 0x3c, 0xb5, 0xa3, 0xd4, 0xfe,
-    ]);
-    const SB2_I: v128 = table([
-        0x00, 0x8d, 0xb5, 0x7b, 0x42, 0x01, 0xce, 0x43, 0xf6, 0xb4, 0xcf, 0x7a, 0x8c, 0xf7, 0x39, 0x38,
-    ]);
-    const SB2_J: v128 = table([
-        0x00, 0x25, 0xc2, 0x2c, 0x9f, 0x54, 0xee, 0xcb, 0x09, 0x96, 0xba, 0x78, 0x71, 0x5d, 0xb3, 0xe7,
-    ]);
+    const IN_LO: v128 = table(t::IN_LO);
+    const IN_HI: v128 = table(t::IN_HI);
+    const INV: v128 = table(t::INV);
+    const INVA: v128 = table(t::INVA);
+    const SB_I: v128 = table(t::SB_I);
+    const SB_J: v128 = table(t::SB_J);
+    const SB2_I: v128 = table(t::SB2_I);
+    const SB2_J: v128 = table(t::SB2_J);
 
     /// io and jo for every byte of `x`.
     #[inline(always)]
@@ -230,6 +212,31 @@ mod hw {
         let u = v128_xor(i8x16_swizzle(SB_I, io), i8x16_swizzle(SB_J, jo));
         Block::from_inner(v128_xor(v128_xor(u, k10.inner()), u8x16_splat(0x63)))
     }
+}
+
+/// The 16-entry tables of the WebAssembly `simd128` S-box (see `mod hw` there). They are outside
+/// it so that the tests can check them on every target.
+#[cfg(any(test, all(target_arch = "wasm32", target_feature = "simd128")))]
+mod sbox16 {
+    /// The isomorphism from the AES field, by nibble: the result is i << 4 | k.
+    pub const IN_LO: [u8; 16] =
+        [0x00, 0x01, 0x1c, 0x1d, 0x2d, 0x2c, 0x31, 0x30, 0x27, 0x26, 0x3b, 0x3a, 0x0a, 0x0b, 0x16, 0x17];
+    pub const IN_HI: [u8; 16] =
+        [0x00, 0x86, 0xfd, 0x7b, 0x8e, 0x08, 0x73, 0xf5, 0x77, 0xf1, 0x8a, 0x0c, 0xf9, 0x7f, 0x04, 0x82];
+    /// 1/x and a/x in GF(2^4).
+    pub const INV: [u8; 16] =
+        [0x80, 0x01, 0x09, 0x0e, 0x0d, 0x0b, 0x07, 0x06, 0x0f, 0x02, 0x0c, 0x05, 0x0a, 0x04, 0x03, 0x08];
+    pub const INVA: [u8; 16] =
+        [0x80, 0x02, 0x01, 0x0f, 0x09, 0x05, 0x0e, 0x0c, 0x0d, 0x04, 0x0b, 0x0a, 0x07, 0x08, 0x06, 0x03];
+    /// The S-box output, without the constant 0x63, and twice it.
+    pub const SB_I: [u8; 16] =
+        [0x00, 0xcb, 0xd7, 0xb0, 0x21, 0x8d, 0x67, 0xac, 0x7b, 0x5a, 0xea, 0x3d, 0x46, 0xf6, 0x91, 0x1c];
+    pub const SB_J: [u8; 16] =
+        [0x00, 0x9f, 0x61, 0x16, 0xc2, 0x2a, 0x77, 0xe8, 0x89, 0x4b, 0x5d, 0x3c, 0xb5, 0xa3, 0xd4, 0xfe];
+    pub const SB2_I: [u8; 16] =
+        [0x00, 0x8d, 0xb5, 0x7b, 0x42, 0x01, 0xce, 0x43, 0xf6, 0xb4, 0xcf, 0x7a, 0x8c, 0xf7, 0x39, 0x38];
+    pub const SB2_J: [u8; 16] =
+        [0x00, 0x25, 0xc2, 0x2c, 0x9f, 0x54, 0xee, 0xcb, 0x09, 0x96, 0xba, 0x78, 0x71, 0x5d, 0xb3, 0xe7];
 }
 
 #[cfg(not(any(
@@ -600,6 +607,92 @@ mod tests {
             let b = Block::from_bytes(&core::array::from_fn(|i| v.wrapping_mul(i as u8 | 1) ^ i as u8));
             assert_eq!(RoundKeys::new(k).encrypt(b), reference(k, b));
             assert_eq!(RoundKeys::new(b).encrypt(k), reference(b, k));
+        }
+    }
+
+    /// Derives the tables of `mod sbox16` from a = 2 and the image of the AES generator x
+    /// (`IN_LO[2]`), and runs their lookup sequence against the S-box for all 256 inputs.
+    #[test]
+    fn sbox16_tables() {
+        use super::sbox16::*;
+        const A: u8 = 2;
+        // GF(2)[z]/(z^4 + z + 1).
+        fn mul16(x: u8, y: u8) -> u8 {
+            let mut r = 0;
+            for b in 0..4 {
+                if y >> b & 1 == 1 {
+                    r ^= x << b;
+                }
+            }
+            for b in [6, 5, 4] {
+                if r >> b & 1 == 1 {
+                    r ^= 0b10011 << (b - 4);
+                }
+            }
+            r
+        }
+        fn inv16(x: u8) -> u8 {
+            (1..16).find(|&y| mul16(x, y) == 1).unwrap_or(0)
+        }
+        // The AES field.
+        fn gmul(mut x: u8, mut y: u8) -> u8 {
+            let mut r = 0;
+            while y != 0 {
+                if y & 1 == 1 {
+                    r ^= x;
+                }
+                x = (x << 1) ^ if x & 0x80 != 0 { 0x1b } else { 0 };
+                y >>= 1;
+            }
+            r
+        }
+        // The linear part of the S-box's affine map.
+        fn lin(y: u8) -> u8 {
+            (0..5).fold(0, |r, s| r ^ y.rotate_left(s))
+        }
+        fn sbox(x: u8) -> u8 {
+            0x63 ^ lin((1..=255).find(|&c| gmul(x, c) == 1).unwrap_or(0))
+        }
+        // GF(2^4)[t]/(t^2 + at + a), with i t + k as i << 4 | k.
+        fn kmul(x: u8, y: u8) -> u8 {
+            let (i1, k1, i2, k2) = (x >> 4, x & 15, y >> 4, y & 15);
+            let h = mul16(i1, i2);
+            (mul16(i1, k2) ^ mul16(k1, i2) ^ mul16(h, A)) << 4 | (mul16(k1, k2) ^ mul16(h, A))
+        }
+        assert_eq!(sbox(0x53), 0xed); // FIPS 197, Section 5.1.1
+
+        let mut pw = [1u8; 8];
+        for b in 1..8 {
+            pw[b] = kmul(pw[b - 1], IN_LO[2]);
+        }
+        let phi = |x: u8| (0..8).filter(|b| x >> b & 1 == 1).fold(0, |r, b| r ^ pw[b]);
+        let mut phinv = [0u8; 256];
+        for x in 0..=255u8 {
+            phinv[phi(x) as usize] = x;
+        }
+        let a2inv = inv16(mul16(A, A));
+        let (c1, c2) = (mul16(1 ^ A, a2inv) << 4 | 1, a2inv << 4);
+        let sb = |c: u8| {
+            core::array::from_fn(|u| if u == 0 { 0 } else { lin(phinv[kmul(inv16(u as u8), c) as usize]) })
+        };
+        assert_eq!(IN_LO, core::array::from_fn(|n| phi(n as u8)));
+        assert_eq!(IN_HI, core::array::from_fn(|n| phi((n as u8) << 4)));
+        assert_eq!(INV, core::array::from_fn(|k| if k == 0 { 0x80 } else { inv16(k as u8) }));
+        assert_eq!(INVA, core::array::from_fn(|k| if k == 0 { 0x80 } else { mul16(A, inv16(k as u8)) }));
+        assert_eq!(SB_I, sb(c1));
+        assert_eq!(SB_J, sb(c2));
+        assert_eq!(SB2_I, SB_I.map(|v| gmul(2, v)));
+        assert_eq!(SB2_J, SB_J.map(|v| gmul(2, v)));
+
+        // The lookups of `hw::invert` and `hw::last`; swizzle maps an index above 15 to 0.
+        let swz = |t: [u8; 16], i: u8| if i < 16 { t[i as usize] } else { 0 };
+        for x in 0..=255u8 {
+            let y = IN_LO[(x & 15) as usize] ^ IN_HI[(x >> 4) as usize];
+            let (i, k) = (y >> 4, y & 15);
+            let (j, ak) = (i ^ k, swz(INVA, k));
+            let io = swz(INV, swz(INV, i) ^ ak) ^ j;
+            let jo = swz(INV, swz(INV, j) ^ ak) ^ i;
+            assert_eq!(swz(SB_I, io) ^ swz(SB_J, jo) ^ 0x63, sbox(x), "x = {x:#04x}");
         }
     }
 }
