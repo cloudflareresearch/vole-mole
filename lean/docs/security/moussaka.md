@@ -953,9 +953,12 @@ Clients is mechanized for the random-oracle games of Appendix B (`lean/docs/zk.m
   another, bounded by the uniform `d` of the later proof (no property of `H₄` or of the `iv`s is
   needed). The predictors see the commitments, the nullifiers, the simulators' coins and the
   tables, and output at most `2(q₅ + 1249)` candidates (the guess's `H₅` reads and the proofs'
-  active gate inputs). Each proof still has its own `H₂³` table and `H₃` slice.
-  Not covered: one `H₂³` table and one `H₃` for the four proofs on `main` (the
-  programming-collision terms of `lean/docs/zk.md` §10.2 and §10.5's argument), `main`'s
+  active gate inputs). **With one `H₂³` table too** (`Privacy/MoussakaMainShared23.lean`,
+  `lean/docs/zk.md` §4.2): `anonymity_main_shared23`, the same bound with `εS` replaced by
+  `εS + Δ23`, `Δ23 ≤ 2⁻¹⁰⁶` the programming-collision term of a hop (`ZK.Sim.pr_collide_main`; its
+  second application of zero knowledge has a statistical (PU) term, `313·2⁻¹²⁸`). Each proof still
+  has its own `H₃` slice.
+  Not covered: one `H₃` for the four proofs on `main` (§10.5's argument), `main`'s
   `find_issuer` Client and the non-colluding mode 4(b).
 
 Remarks from the mechanization:

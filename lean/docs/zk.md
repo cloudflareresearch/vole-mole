@@ -504,14 +504,68 @@ world (`anonymity_main` has `8·εRF ≈ 2⁻¹⁰⁵·¹` at zero budgets, with
 theorem is instantiated in `Audit/MainShared.lean`, also for a guess that reads the shared `H₅`
 table.
 
+**One `H₂³` table for the four proofs** (`ZK/CollideMain.lean`, `ZK/MainShared23.lean`,
+`Privacy/MoussakaMainShared23.lean`, `Privacy/RatatouilleMainShared23.lean`,
+`Audit/MainShared23.lean`). The joint hop is redone with the `H₂³` table shared too: one raw table
+on every grinding point, read by every real prover and programmed by every simulator. Each proof
+keeps its own `H₃` slice.
+
+- *The game* (`viewOf23`). The slots run in sequence; slot `k` reads the raw table with the
+  programmings of the earlier slots applied, **the earliest outermost** (`pg₁ (pg₂ (… G2))`), and
+  the adversary sees the table with all four programmings applied in that order (as each proof's
+  `H₂³` component of the view, so `Rd`, `bstar` and the guesses of §4.2 apply unchanged). The order
+  matters: replacing proof `j` by the one-proof theorem programs proof `j`'s points first and the
+  earlier simulations' on top, so the theorem's simulated side is exactly the next hybrid. Later
+  proofs are real in every hybrid and program nothing (the hops take this as a hypothesis,
+  `i₂ … i₄`). The raw table is the first slot's tape component (`hybV23`), so the hybrids live on
+  the tape of `main_shared_le` and the all-simulated lemmas (failure, collision terms) are reused.
+- *The hop* (`hop23₁` … `hop23₄`): `ctx_hop` as before, plus the **programming-collision term**:
+  in the hybrid the real proof `j` reads the table programmed by the earlier simulations, in the
+  one-proof theorem the raw one. A simulation programs only the keys of one prefix block, whose
+  tail is its uniform `ã` (`SB.Tl`, `simSB_tl`). **`pr_collide_main`** is §10.2's
+  `pr_collide_zk` on `main`: unless the grinding outcome is bad (`2⁻¹¹³`), a collision means the
+  tail of the prefix the verifier recomputes from the real proof is one of the earlier tails;
+  zero knowledge applied a second time (`zk_rom_ic_h23_main_num`, budget `(0, 4607)`) moves this
+  to the simulated proof, where the tail is its own uniform `ã`. On `main` the second application
+  adds a (PU) term, and it is **statistical**: the distinguisher reads `H₅` at the simulated
+  proof's own active gate inputs, which, like the candidate offsets they name, do not depend on
+  the simulator's field `d` (`progKeys5_congr_f`, `guessSetG_congr_f`), so the witness prefix is a
+  candidate with probability `≤ 313·2⁻¹²⁸` whatever the witness (`pr_mainPredIC_act_le`). With at
+  most three earlier tails (`pr_collide_slot`):
+
+      Δ23 = 2⁻¹¹³ + εS(0, 4607) + 313·2⁻¹²⁸ + noHitProb + 3·2⁻¹⁰²⁴ ≤ 2⁻¹⁰⁶      (Δ23_le)
+
+  per hop application.
+- **`main_shared23_le`**: `|Pr[all real] − Pr[all simulated]| ≤ 15·(εS(q₃, q_E + 8·4607) + Δ23) +
+  15·Pr_sim[bstar]`, for four proofs of one QuickSilver degree (`pw p₀ n`). The `Δ23` of the first
+  hop is `0` in fact; it is charged uniformly.
+- *With all proofs simulated* the table is a function of the public statements (Moussaka:
+  `tabP`, `simS23_eq`) or of the requests the Issuer sees (Ratatouille: `tab23`, `vtab23`,
+  `simSR23_eq`, from `simVis_iss`, `vis₃_eq`, `vis₄_eq` through `pg_of_simVis`), so hiding and the
+  exchange of the worlds finish as before (`hiding_hopS23`, `idealS23_eq`, `hiding_hopSR23`,
+  `idealSR23_eq`), and `bstar` is bounded by the same predictors with the guess's read set computed
+  on the shared table (`predS23`, `predIS23`, `predCS23`) and the same failure and collision terms.
+
+The bounds (`#print axioms`: `propext`, `Classical.choice`, `Quot.sound`):
+
+    Moussaka 4(a) (anonymity_main_shared23):
+      |Pr[W₀] − Pr[W₁]| ≤ 30·(εS(q₃, q_E + 8·4607) + Δ23)
+        + 15·(Σ_{b,c} puAdv Com (predS23_c b) + 8·noHitProb + 3750·2⁻¹²⁸) + 2·εhide
+    Ratatouille (unlinkability_main_shared23): for any two worlds,
+        30·(εS(q₃, q_E + 8·4607) + Δ23)
+        + 15·(PU23(b₁, b₂) + PU23(b₁', b₂') + 8·noHitProb + 3750·2⁻¹²⁸) + 2·εhide
+
+`PU23(b₁, b₂)` the three `puAdv` terms of `predSR23₀`, `predSR23₁` (`comI`) and `predSRC23`
+(`comCh`). Sharing `H₂³` adds `30·Δ23 ≤ 2⁻¹⁰¹·¹` to each bound. Instantiated in
+`Audit/MainShared23.lean`, also for guesses that read the shared `H₅` table.
+
 **Still on paper, for ZK on `main`:**
-- **one `H₂³` table and one `H₃` for the proofs.** `anonymity_main_shared` and
-  `unlinkability_main_shared` (§4.3) share `H₅` and the cipher; each proof has its own `H₂³` table and `H₃` slice. With one `H₂³` table the hops also
-  cost the programming-collision terms `δ` of §10.2 (a real proof reads a grinding point that an
-  earlier simulation programmed); their bound there (`pr_collide_zk`) applies the one-proof
-  theorem a second time, which on `main` adds one more (PU) term, statistical here (the
-  distinguisher reads `H₅` at the proof's own active inputs, whose only candidate is `r = d`).
-  One shared `H₃` is §10.5's argument. Neither is done on `main`;
+- **one `H₃` for the proofs.** With one `H₂³` table this is done (above,
+  `anonymity_main_shared23`, `unlinkability_main_shared23`); each proof still has its own `H₃`
+  slice. One shared `H₃` is §10.5's argument (re-sample the replaced proof's column, `pr_setK`;
+  the slice prover's theorem with the `H₃` columns as extra row data, `ZKRow.rowH`). On `main` it
+  needs the one-proof theorem `zk_rom_ic_h23_main` for rows carrying `H₃` columns (it is stated for
+  function rows only) and the joint hop with the columns in the shared tables; not done;
 - the factor `15` on `εS` and on the (PU) terms is a cost of the mechanized transfer (each hop's
   bad event is moved across the later hops); the paper's lazy sampling gives `4` and `1`;
 - the adversary's earlier choices (responses, Anchor Sets, amounts) do not read the tables, as in
