@@ -792,6 +792,44 @@ scheme. `main_sharedAll_le` is generic in the game, so the joint hop is one appl
 proof system stays abstract (`PI`), as in `anonymityNC`; the route of 4(b') above applies, not
 done.
 
+**`n` proofs, the `H₃` reads counted by `ρ`** (`ZK/MainSharedN.lean`, `ZK/MainSharedNSim.lean`,
+`Privacy/MoussakaUnboundNCMainN.lean`, `Privacy/MoussakaUnboundNCMainLeanN.lean`,
+`Audit/MainUnboundN.lean`). The joint hop is redone for **`n` proofs**, directly on the shared
+tables (one `H₃` table `T`, one `H₂³` table, one `H₅` table, one cipher), without the slice
+reduction of `main_sharedAll_le`:
+
+- *The game* (`NGame`, `runN`, `viewN`). Slot `i`'s statement is a function of the secret and the
+  earlier outputs. A slot is what it does on its statement (`SlotF`): its programming of `H₂³`,
+  its output as a function of the `H₂³` table it reads, and its `H₅` and cipher keys. The run
+  applies the programmings the earliest outermost (as in `viewOf23`); the view (`NView`) is the
+  secret, the shared `H₅` table and cipher, the programmed `H₂³` table, `T` and the outputs. The
+  real prover (`realF`) reads the column of `T` at its prefix (`preOf`), the simulator (`simF`)
+  reads no `H₃`. Hybrid `j` (`hybN j`): slots before `j` simulated.
+- *The hop* (`hopN`, `hop_fiber`). A lens on the tape (`getJ`, `setJ`, `pr_lens`) puts slot `j`'s
+  coins, the column of `T` at its prefix, the raw `H₂³` table and the shared tables in the shape
+  of `slot_zk_main`'s tape. The rest of the game (`ctxF`, `ctxV`: earlier slots simulated, slot
+  `j` given, later slots real) is the distinguisher; **it reads slot `j`'s column at the later real
+  proofs' `ρ`** (`ctxF_T`, from `realROb_g3_congr'`), which `ctx_hopN` counts as `n` more `H₃`
+  reads. The earlier simulations' programmings cost `Δ23N(d, n)` (`pr_collide_slotN`, at most `n`
+  tails). The bad event on the simulated proof implies `bstarN` (`ctx_bad`), `bstar` for `n` slots.
+- **`main_sharedAll_leN`**: for an event `F` with consistent reads (`RdN`),
+
+      |Pr[all real; F] − Pr[all simulated; F]|
+          ≤ (2ⁿ − 1)·(εS(q₃ + n, q_E + 2n·4607) + Δ23N(d, n)) + (2ⁿ − 1)·Pr_sim[bstarN]
+
+  (`chain_le`: each hop's bad event moved across the later hops). **There is no prefix-collision
+  term**: two real proofs with one prefix cost a `ρ` collision, one of the `n` extra reads in
+  `εS`. For four slots this replaces `main_sharedAll_le`'s `Pr[two prefixes coincide]` by
+  `15·4·2⁻¹²⁸`.
+- *With all proofs simulated* (`pr_bstarN_sim_le`): `Pr_sim[bstarN] ≤ n·noHitProb +
+  Σᵢ Pr[candNᵢ] + n²·313·2⁻¹²⁸`, `candNᵢ` the prediction of slot `i`'s witness prefix from the
+  public key set (`SpN`: the event's `H₅` read set and the proofs' active gate inputs).
+
+Unbound Moussaka U5(b) with `n` adaptive queries on this hop: `anonymityNC_main_U_sharedAllN`,
+and with `main`'s Lean issuance prover `anonymityNC_main_U_leanN` (bounds in
+`security/moussaka-unbound.md`, §U5 on `main`). The (PU) term is statistical, so every term is a
+number except `ψ` (or `φ`) and `εprf`.
+
 **Still on paper, for ZK on `main`:**
 - the factor `15` on `εS` and on the (PU) terms is a cost of the mechanized transfer (each hop's
   bad event is moved across the later hops); the paper's lazy sampling gives `4` and `1`;
@@ -799,15 +837,15 @@ done.
   §10.2's games (this is also what lets the one-`H₃` reduction compute the prefixes from the view);
   the `main` games take any token-reading index rule, `main`'s `find_issuer` Client included
   (`findIdx`);
-- in U5(b) on `main` the issuance proofs are an abstract `PI` that does not read the game's
-  tables. For 4(b') the route to the executable issuance prover and the Anchor's Lean verifier
-  is mechanized (`anonymityNC_main_lean`, above); for U5(b) the same route applies
-  (`unbound_issue_response` has no length check, so only completeness is needed), not done;
-- unbound Moussaka on `main` with more than two redemption queries: the joint hops
-  (`main_chain_le`, `main_sharedAll_le`) are for four proofs; `n` proofs need the transfer of
-  the bad event across `n` hops (a factor `2ⁿ − 1` in this proof), not done;
-- with all tables shared, two redemptions by one Client with one prefix (above): the term
-  `collUH`/`collNH` is explicit; a reduction that sees the proofs' `ρ` would make it `2⁻¹²⁸`;
+- in U5(b) on `main` with two queries (`anonymityNC_main_U_sharedAll`) the issuance proofs are
+  an abstract `PI`; with `n` queries the route of 4(b') is mechanized (`anonymityNC_main_U_leanN`);
+- unbound Moussaka U5(a) on `main` with more than two redemption queries, and U5(a) on the
+  `ρ`-aware hop: `main_sharedAll_leN` applies (two issuance slots and `n` redemption slots), but
+  the simulated side and the (PU) predictors for `n` queries are not done, so U5(a) with shared
+  tables still carries `collUH` (U5(b) has no such term, `anonymityNC_main_U_sharedAllN`);
+- the factor `2ⁿ − 1` of `main_sharedAll_leN` (`15` for four proofs) is the cost of moving each
+  hop's bad event across the later hops; a per-hybrid bound would need the identical-until-bad
+  form of the one-proof theorem (`Pr[F ∨ bad]` unchanged across H5–H6), not only its statement;
 - a bound on (PU) for the real permutation: §4.3 states (PU) as a game, reduces Moussaka's
   `PU_b` to it and bounds it in the ideal-permutation model; for Keccak-p[800,12] itself it is an
   assumption (also for Ratatouille's `comI` and `comCh`, §4.3);
