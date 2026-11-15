@@ -1065,7 +1065,12 @@ and affords the amount, else it is refused for both (feasibility is leakage).
   (`lean/docs/zk.md` §4.3). With one `H₂³` table too (`Privacy/RatatouilleMainShared23.lean`;
   the shared table is a function of the requests, `vtab23`): **`unlinkability_main_shared23`**, the
   same bound with `εS` replaced by `εS + Δ23`, `Δ23 ≤ 2⁻¹⁰⁶` (`lean/docs/zk.md` §4.2). Each proof
-  still has its own `H₃` slice.
+  still has its own `H₃` slice there. With one `H₃` too (`Privacy/RatatouilleMainSharedAll.lean`,
+  all tables shared as in the scheme, the Issuer's guess reading `H₃` at `q₃` points):
+  **`unlinkability_main_sharedAll`**, the same bound plus `4·2⁻¹²⁸`: in each world, two of the four
+  proofs have one prefix only if two uniform openings agree (the two issued tokens', or round 1's
+  spent token's and its change token's; issuance and spend witnesses have different lengths),
+  `2·2⁻¹²⁸` per world (`pr_collR_le`).
 - The spec's proof sizes are a parameter (`Spec.Ratatouille.Sizes`: `main`'s, or the label-row
   layout's 256 bytes longer proofs). **[Lean] `lean/VoleMole/Privacy/RatatouilleLean.lean`**:
   `unlinkability_label_rows`, the same bound with the executable Lean prover and verifier as the
