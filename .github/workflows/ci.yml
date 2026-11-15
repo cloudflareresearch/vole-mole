@@ -31,8 +31,8 @@ jobs:
         if: runner.os == 'macOS'
         run: |
           brew install meson ninja llvm@22 ccache
-          echo "CC=$(brew --prefix llvm@22)/bin/clang" >> "$GITHUB_ENV"
-          echo "CXX=$(brew --prefix llvm@22)/bin/clang++" >> "$GITHUB_ENV"
+          echo "CC=ccache $(brew --prefix llvm@22)/bin/clang" >> "$GITHUB_ENV"
+          echo "CXX=ccache $(brew --prefix llvm@22)/bin/clang++" >> "$GITHUB_ENV"
 
       - name: Install dependencies (Ubuntu)
         if: runner.os == 'Linux'
@@ -41,10 +41,11 @@ jobs:
           sudo bash llvm.sh 22
           pipx install meson
           sudo apt-get install -y ninja-build ccache
-          echo "CC=clang-22" >> "$GITHUB_ENV"
-          echo "CXX=clang++-22" >> "$GITHUB_ENV"
+          echo "CC=ccache clang-22" >> "$GITHUB_ENV"
+          echo "CXX=ccache clang++-22" >> "$GITHUB_ENV"
 
-      # See the lint job. Meson picks up ccache by itself.
+      # See the lint job. A build directory keeps the compilers of its first setup, so bump the
+      # key's version when changing CC or CXX.
       - name: Cache build
         uses: actions/cache@v4
         with:
@@ -54,8 +55,8 @@ jobs:
             !subprojects/*.wrap
             !subprojects/packagefiles
             .ccache
-          key: build-${{ matrix.os }}-${{ matrix.sanitize }}-${{ hashFiles('subprojects/*.wrap', 'subprojects/packagefiles/**') }}-${{ github.sha }}
-          restore-keys: build-${{ matrix.os }}-${{ matrix.sanitize }}-${{ hashFiles('subprojects/*.wrap', 'subprojects/packagefiles/**') }}-
+          key: build-v2-${{ matrix.os }}-${{ matrix.sanitize }}-${{ hashFiles('subprojects/*.wrap', 'subprojects/packagefiles/**') }}-${{ github.sha }}
+          restore-keys: build-v2-${{ matrix.os }}-${{ matrix.sanitize }}-${{ hashFiles('subprojects/*.wrap', 'subprojects/packagefiles/**') }}-
 
       # The sanitized build keeps the default debugoptimized build type: at -O0, the slowest tests
       # come close to their timeouts. meson test sets halt_on_error=1 for both sanitizers.
