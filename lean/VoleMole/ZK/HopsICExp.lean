@@ -30,9 +30,23 @@ the base record):
 For an output that is an error (no grinding answer accepted), `chE` and `ch5` count every read.
 
 **The hops**:
+* `zk_pre_h4_real` (`joint2_h1_real`): H1, grinding and programming, the programmed points
+  recomputed: `≤ E_0[ch3]/(2¹²⁸ − q₃) + Pr[GrindBad]`, in the real world.
 * `joint3_h4_pt`: H4 at points, the honest recomputation's reads (`rdKeys`, whole rows) counted
   with the distinguisher's: `≤ 221·(9214 + E_3[chE]) / (2¹²⁸ − 221·(q_E + 4607))`, in the world
   before the hop.
+* `joint2_h6_exp` (`pr_bad_expG`, `lab_rom_hyp_sG_exp`, `chg5G_le_ch5Q`): the tape, H6 and the
+  simulator: `≤ (1 + E_7[ch5])/2¹²⁸`, in the simulated world.
+* `hopA_real`, `hopC_exp`: the same averaged over the cipher, on the views `view0`, `view3`,
+  `view4`, `view7`.
+
+**`zk_rom_ic_h23_exp`**: the three hops composed by `IC.chain3_le`, every expectation in the real
+world:
+
+    |Pr_real[F] − Pr_sim[F]| ≤ (Pr[GrindBad] + 221·9214/d_E + 2⁻¹²⁸
+        + E_real[ch3/(2¹²⁸ − q₃) + 221·chE/d_E + ch5/2¹²⁸]) / (1 − 221·q_E/d_E − q₅/2¹²⁸).
+
+Function rows only (the PRF view of the ideal cipher), as `zk_rom_ic_h23`.
 -/
 
 open Finset
