@@ -269,6 +269,7 @@ import VoleMole.Privacy.RatatouilleMainPub
 import VoleMole.Privacy.RatatouilleMainPU
 import VoleMole.Privacy.RatatouilleMainShared
 import VoleMole.Privacy.RatatouilleMainSharedPU
+import VoleMole.Privacy.RatatouilleMainShared23
 import VoleMole.Privacy.PU
 import VoleMole.Privacy.PUKeccak
 import VoleMole.Privacy.MoussakaMainPU
