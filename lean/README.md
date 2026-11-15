@@ -459,7 +459,8 @@ lean/
                             PlainRataReads, PlainMousJoint, PlainMousRom, PlainMousRedirect,
                             PlainMousReads; ROM/ExtractCells); many tokens (ManyPlainLog,
                             PlainSlicesN, PlainRataManyRom, PlainMousManyRom); unbound (PlainUnboundJoint,
-                            PlainUnboundRom, PlainUnboundManyRom);
+                            PlainUnboundRom, PlainUnboundManyRom); collision terms and numeric
+                            bounds (DeltaX, DeltaBound, NumTerms, Num);
                             unbound
                             Moussaka Prop U3 and Thm U4 (MoussakaUnbound, MoussakaUnboundLean);
                             `N` honest proofs and `WeakSEN` (Many); `U` tokens and `M`
@@ -1677,7 +1678,16 @@ What is **not** established, roughly in order of importance:
    permutation-model joint bound (`*_sim_joint_leanP`). So in all three theft/non-malleability
    games, one token or many, plain extraction and the programmed-point term are proved, with
    function rows or with permutation rows and inverse queries, for adversaries with per-kind query
-   budgets. `Adv^ow` stays the advantage of the explicit inverter, a computational
+   budgets. The collision terms of the hops are bounded, `δ ≤ 2⁻¹¹³ + εz(p; 0, 312, 4607) +
+   noHitProb + 2·(U+M)·2⁻¹⁰²⁴` (about `2⁻¹⁰⁶`; `Theft/DeltaBound.lean`, via `pr_collide_zkX`,
+   `Theft/DeltaX.lean`), and every non-computational term is a number (`Theft/NumTerms.lean`). With
+   every per-kind hash budget and the cipher budget at most `2⁶⁴`: `Pr[Bad] ≤ 2⁻⁵⁴ + Adv^ow` for one
+   Client or token (`noTheft_lean_num`, `noRedirect_lean_num`), and for `U, M ≤ 2³⁰` `≤ 2⁻²⁴ + Σ
+   Adv^ow` (`noTheftN_lean_num`, `noRedirectN_lean_num`) and `≤ 2⁻²⁴ + Σ_h (ε_prf + Adv^bind +
+   Adv^spr-k)` (`nmUN_lean_num`); the same with permutation rows and inverse queries (`_numP`;
+   `Theft/Num.lean`, audit `Audit/TheftNum.lean`). Each zero-knowledge hop costs about `223·2⁻⁶³ ≈
+   2⁻⁵⁵·²`, dominated by the cipher term `221·q_E'·2⁻¹²⁸`, so the many-token bound is linear in
+   `U + M` (about `2⁻³⁵` at `U + M = 2²⁰`). `Adv^ow` stays the advantage of the explicit inverter, a computational
    assumption on Keccak-p[800,12]: `Com` is evaluated inside the relations, so it cannot be a table
    of the game, and some inverter wins with probability 1 (`owAdv_one_ratatouille`,
    `owAdv_one_moussaka`). In a random-table model of the standalone experiment a `q`-query
