@@ -616,6 +616,176 @@ theorem hopPtPm (sec : ℕ → Prop) [DecidablePred sec] (Pn : ℕ → Finset K)
   rw [h1, ← h2]
   exact (abs_pr_sub_le_of_agree _ _ bad h4).trans h3
 
+/-! ## The hybrid over the secret nodes -/
+
+variable (x N P) in
+/-- **The charge of the hop for node `j`**: `(N + E[chV])/|K| + C(|Pn j|, 2)/|K|`, the expectation
+in the experiment with the secret nodes up to `j` replaced. -/
+noncomputable def chgQ (sec : ℕ → Prop) [DecidablePred sec] (Pn : ℕ → Finset K)
+    (Φ : (ℕ → K → K) → O) (Q : O → (K → Equiv.Perm K) → Finset (K × K)) (j : ℕ) : ℝ :=
+  (N + exP (Coins K K N × (K → Equiv.Perm K)) (fun p =>
+    ((vkeys P (valsP N sec Pn (rowAtP x N P ((range (j + 1)).filter sec) (cf p.2) p.1.2 p.1.1))
+      (Q (Φ (rowAtP x N P ((range (j + 1)).filter sec) (cf p.2) p.1.2 p.1.1)) p.2) p.2).card : ℝ))) /
+    Fintype.card K + ((Pn j).card.choose 2 : ℕ) / Fintype.card K
+
+lemma chgQ_nonneg (sec : ℕ → Prop) [DecidablePred sec] (Pn : ℕ → Finset K)
+    (Φ : (ℕ → K → K) → O) (Q : O → (K → Equiv.Perm K) → Finset (K × K)) (j : ℕ) :
+    0 ≤ chgQ x N P sec Pn Φ Q j :=
+  add_nonneg (div_nonneg (add_nonneg (Nat.cast_nonneg _) (exP_nonneg fun _ => Nat.cast_nonneg _))
+    (Nat.cast_nonneg _)) (div_nonneg (Nat.cast_nonneg _) (Nat.cast_nonneg _))
+
+/-- **The hybrid over the secret nodes**: for an upward-closed set `sec` of nodes, replacing the
+secret nodes below `j` on their points costs the sum of their hops' charges. -/
+theorem puncturePtPm (sec : ℕ → Prop) [DecidablePred sec] (Pn : ℕ → Finset K)
+    (hup : ∀ n < N, sec n → n ≠ 0 → sec ((n - 1) / 2))
+    (hsib : ∀ n < N, sec n → n ≠ 0 → ∀ m, m ≠ 0 → m ≠ n → (m - 1) / 2 = (n - 1) / 2 → x m ≠ x n)
+    (hPx : ∀ m, P (x m)) (hPn : ∀ m, ∀ z ∈ Pn m, P z)
+    (hch : ∀ c, c ≠ 0 → x c ∈ Pn ((c - 1) / 2)) (Φ : (ℕ → K → K) → O)
+    (hΦ : ∀ n < N, sec n → n ≠ 0 → ∀ ρ y, Φ (Function.update ρ ((n - 1) / 2)
+      (Function.update (ρ ((n - 1) / 2)) (x n) y)) = Φ ρ)
+    (hΦP : ∀ ρ ρ', (∀ m < N, sec m → ∀ z ∈ Pn m, ρ m z = ρ' m z) →
+      (∀ m < N, ¬ sec m → ρ m = ρ' m) → Φ ρ = Φ ρ')
+    (A : O → Finset K → (K → Equiv.Perm K) → Prop)
+    (Q : O → (K → Equiv.Perm K) → Finset (K × K))
+    (hQ : ∀ o V G G', (∀ kz ∈ Q o G, G kz.1 kz.2 = G' kz.1 kz.2) → (A o V G ↔ A o V G')) :
+    ∀ j ≤ N, |experQ x N P sec Pn ∅ Φ A - experQ x N P sec Pn ((range j).filter sec) Φ A| ≤
+      ∑ i ∈ (range j).filter sec, chgQ x N P sec Pn Φ Q i := by
+  intro j
+  induction j with
+  | zero => intro _; simp
+  | succ j ih =>
+    intro hj
+    have ih := ih (by omega)
+    rw [Finset.range_add_one, Finset.filter_insert]
+    split_ifs with hs
+    · have hnot : j ∉ (range j).filter sec := by simp
+      have h := hopPtPm (P := P) sec Pn ((range j).filter sec) j (by omega) hnot hs (fun h0 =>
+          Finset.mem_filter.2 ⟨Finset.mem_range.2 (by omega), hup j (by omega) hs h0⟩)
+        (hsib j (by omega) hs) hPx hPn hch Φ (hΦ j (by omega) hs) hΦP A Q hQ
+      have he : insert j ((range j).filter sec) = (range (j + 1)).filter sec := by
+        rw [Finset.range_add_one, Finset.filter_insert]; simp only [hs, ↓reduceIte]
+      have hc : (N + exP (Coins K K N × (K → Equiv.Perm K)) (fun p =>
+          ((candsVQ x N P Pn (insert j ((range j).filter sec)) j (by omega) Φ Q p).card : ℝ))) /
+          Fintype.card K + ((Pn j).card.choose 2 : ℕ) / Fintype.card K ≤
+          chgQ x N P sec Pn Φ Q j := by
+        unfold chgQ
+        refine add_le_add (div_le_div_of_nonneg_right (add_le_add le_rfl
+          (exP_mono (α := Coins K K N × (K → Equiv.Perm K)) fun p => ?_))
+          (Nat.cast_nonneg (α := ℝ) _)) le_rfl
+        have := card_le_card (candsVQ_sub (x := x) (P := P) sec Pn hPn (N := N) (by omega)
+          (Finset.mem_insert_self j ((range j).filter sec)) hs Φ Q p)
+        rw [he] at this ⊢
+        exact_mod_cast this
+      rw [Finset.sum_insert hnot]
+      have := abs_sub_le (experQ x N P sec Pn ∅ Φ A) (experQ x N P sec Pn ((range j).filter sec) Φ A)
+        (experQ x N P sec Pn (insert j ((range j).filter sec)) Φ A)
+      linarith
+    · exact ih
+
+/-- **The hybrid at points with permutation rows, charged in the real experiment.** For a
+**consistent** reader `Q` (`hQc`) that reads at most `qm` charged keys (`hqm`), with
+`s·qm < |K|` (`s` secret nodes below `N`):
+
+    |real − fully replaced| ≤ (s·(N + E_real[chV]) + Σ_m C(|Pn m|, 2)) / (|K| − s·qm),
+
+`E_real[chV]` the expected number of keys read at an input in `P` or at a value of the real secret
+rows at their points (`valsP`), in the real experiment. The fully replaced experiment has uniform
+**function** rows at the secret nodes. -/
+theorem puncturePtPm_real (sec : ℕ → Prop) [DecidablePred sec] (Pn : ℕ → Finset K)
+    (hup : ∀ n < N, sec n → n ≠ 0 → sec ((n - 1) / 2))
+    (hsib : ∀ n < N, sec n → n ≠ 0 → ∀ m, m ≠ 0 → m ≠ n → (m - 1) / 2 = (n - 1) / 2 → x m ≠ x n)
+    (hPx : ∀ m, P (x m)) (hPn : ∀ m, ∀ z ∈ Pn m, P z)
+    (hch : ∀ c, c ≠ 0 → x c ∈ Pn ((c - 1) / 2)) (Φ : (ℕ → K → K) → O)
+    (hΦ : ∀ n < N, sec n → n ≠ 0 → ∀ ρ y, Φ (Function.update ρ ((n - 1) / 2)
+      (Function.update (ρ ((n - 1) / 2)) (x n) y)) = Φ ρ)
+    (hΦP : ∀ ρ ρ', (∀ m < N, sec m → ∀ z ∈ Pn m, ρ m z = ρ' m z) →
+      (∀ m < N, ¬ sec m → ρ m = ρ' m) → Φ ρ = Φ ρ')
+    (A : O → (K → Equiv.Perm K) → Prop) (Q : O → (K → Equiv.Perm K) → Finset (K × K))
+    (hQ : ∀ o G G', (∀ kz ∈ Q o G, G kz.1 kz.2 = G' kz.1 kz.2) → (A o G ↔ A o G'))
+    (hQc : ∀ o G G', (∀ kz ∈ Q o G, G kz.1 kz.2 = G' kz.1 kz.2) → Q o G = Q o G')
+    {qm : ℕ} (hqm : ∀ o V G, (vkeys P V (Q o G) G).card ≤ qm)
+    (hsmall : ((range N).filter sec).card * (qm : ℝ) < Fintype.card K) :
+    |pr (Coins K K N × (K → Equiv.Perm K)) (fun p => A (Φ (rowAt x N ∅ (cf p.2) p.1.2 p.1.1)) p.2) -
+        pr (Coins K K N × (K → Equiv.Perm K))
+          (fun p => A (Φ (rowAt x N ((range N).filter sec) (cf p.2) p.1.2 p.1.1)) p.2)| ≤
+      (((range N).filter sec).card * (N + exP (Coins K K N × (K → Equiv.Perm K)) (fun p =>
+        ((vkeys P (valsP N sec Pn (rowAt x N ∅ (cf p.2) p.1.2 p.1.1))
+          (Q (Φ (rowAt x N ∅ (cf p.2) p.1.2 p.1.1)) p.2) p.2).card : ℝ))) +
+        ∑ m ∈ (range N).filter sec, ((Pn m).card.choose 2 : ℕ)) /
+        (Fintype.card K - ((range N).filter sec).card * qm) := by
+  set secN := (range N).filter sec
+  set S := ∑ i ∈ secN, chgQ x N P sec Pn Φ Q i with hSdef
+  set E0 := exP (Coins K K N × (K → Equiv.Perm K)) (fun p =>
+    ((vkeys P (valsP N sec Pn (rowAt x N ∅ (cf p.2) p.1.2 p.1.1))
+      (Q (Φ (rowAt x N ∅ (cf p.2) p.1.2 p.1.1)) p.2) p.2).card : ℝ))
+  set Cs : ℝ := ((∑ m ∈ secN, (Pn m).card.choose 2 : ℕ) : ℝ)
+  set s := secN.card
+  have hK : (0 : ℝ) < Fintype.card K := by exact_mod_cast Fintype.card_pos
+  have hpun := puncturePtPm (P := P) sec Pn hup hsib hPx hPn hch Φ hΦ hΦP
+  -- the real experiment
+  have hreal : ∀ (B : O → Finset K → (K → Equiv.Perm K) → Prop),
+      experQ x N P sec Pn ∅ Φ B = pr (Coins K K N × (K → Equiv.Perm K)) (fun p =>
+        B (Φ (rowAt x N ∅ (cf p.2) p.1.2 p.1.1)) (valsP N sec Pn (rowAt x N ∅ (cf p.2) p.1.2 p.1.1))
+          p.2) := fun B =>
+    pr_congr fun p => by rw [rowAtP_empty (P := P) (cf p.2) p.1.2 p.1.2 p.1.1]
+  -- the level sets of the charge are read
+  let Al : ℕ → O → Finset K → (K → Equiv.Perm K) → Prop := fun l o V G =>
+    l < (vkeys P V (Q o G) G).card
+  have hAl : ∀ l o V G G', (∀ kz ∈ Q o G, G kz.1 kz.2 = G' kz.1 kz.2) → (Al l o V G ↔ Al l o V G') :=
+    fun l o V G G' h => by
+      simp only [Al]
+      rw [← hQc o G G' h, vkeys_congr V h]
+  -- each hop's charge is within `qm · S` of the real one
+  have hE : ∀ i ∈ secN, chgQ x N P sec Pn Φ Q i ≤
+      (N + E0 + qm * S) / Fintype.card K + ((Pn i).card.choose 2 : ℕ) / Fintype.card K := by
+    intro i hi
+    have hiN : i + 1 ≤ N := by have := Finset.mem_range.1 (Finset.mem_filter.1 hi).1; omega
+    unfold chgQ
+    refine add_le_add (div_le_div_of_nonneg_right ?_ (Nat.cast_nonneg (α := ℝ) _)) le_rfl
+    have hlevels : ∀ l < qm, |pr (Coins K K N × (K → Equiv.Perm K)) (fun p => l <
+          (vkeys P (valsP N sec Pn (rowAtP x N P ((range (i + 1)).filter sec) (cf p.2) p.1.2 p.1.1))
+            (Q (Φ (rowAtP x N P ((range (i + 1)).filter sec) (cf p.2) p.1.2 p.1.1)) p.2) p.2).card) -
+        pr (Coins K K N × (K → Equiv.Perm K)) (fun p =>
+          l < (vkeys P (valsP N sec Pn (rowAt x N ∅ (cf p.2) p.1.2 p.1.1))
+            (Q (Φ (rowAt x N ∅ (cf p.2) p.1.2 p.1.1)) p.2) p.2).card)| ≤ S := by
+      intro l _
+      have h := hpun (Al l) Q (hAl l) (i + 1) hiN
+      rw [hreal] at h
+      rw [abs_sub_comm]
+      refine h.trans (Finset.sum_le_sum_of_subset_of_nonneg ?_ fun j _ _ => chgQ_nonneg _ _ _ _ _)
+      intro j hj
+      simp only [Finset.mem_filter, Finset.mem_range, secN] at hj ⊢
+      exact ⟨by omega, hj.2⟩
+    have h := exP_sub_le_of_levels _ _ (fun p => hqm _ _ _) (fun p => hqm _ _ _) hlevels
+    have := (le_abs_self _).trans h
+    linarith
+  have hS : S ≤ s * ((N + E0 + qm * S) / Fintype.card K) + Cs / Fintype.card K := by
+    calc S ≤ ∑ i ∈ secN, ((N + E0 + qm * S) / Fintype.card K +
+          ((Pn i).card.choose 2 : ℕ) / Fintype.card K) := Finset.sum_le_sum hE
+      _ = s * ((N + E0 + qm * S) / Fintype.card K) + Cs / Fintype.card K := by
+          rw [Finset.sum_add_distrib, Finset.sum_const, nsmul_eq_mul, ← Finset.sum_div]
+          simp only [Cs, s, Nat.cast_sum]
+  have hden : 0 < (Fintype.card K : ℝ) - s * qm := by linarith
+  have hS' : S ≤ (s * (N + E0) + Cs) / (Fintype.card K - s * qm) := by
+    rw [le_div_iff₀ hden]
+    have h2 : S * Fintype.card K ≤ s * (N + E0 + qm * S) + Cs := by
+      have := mul_le_mul_of_nonneg_right hS hK.le
+      rw [add_mul, mul_div_assoc', div_mul_cancel₀ _ hK.ne', div_mul_cancel₀ _ hK.ne'] at this
+      exact this
+    nlinarith
+  -- the fully replaced experiment
+  have hfin := hpun (fun o _ G => A o G) Q (fun o _ G G' h => hQ o G G' h) N le_rfl
+  rw [hreal] at hfin
+  have hfull : experQ x N P sec Pn secN Φ (fun o _ G => A o G) =
+      pr (Coins K K N × (K → Equiv.Perm K))
+        (fun p => A (Φ (rowAt x N secN (cf p.2) p.1.2 p.1.1)) p.2) := by
+    refine pr_congr fun p => ?_
+    have hag := rowAtP_full_agree (P := P) (x := x) (N := N) sec hPx (cf p.2) p.1.2 p.1.1
+    rw [hΦP _ _ (fun m hm hs z hz => (hag m hm).2 hs z (hPn m z hz))
+      (fun m hm hs => ((hag m hm).1 hs).1)]
+  rw [hfull] at hfin
+  exact hfin.trans hS'
+
 end HopQ
 
 end VoleMole.ZK.IC
