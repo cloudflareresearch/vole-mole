@@ -466,6 +466,10 @@ import VoleMole.Theft.PlainUnboundRom
 import VoleMole.Theft.PlainUnboundManyRom
 import VoleMole.Theft.PlainTotal
 import VoleMole.Theft.PlainTotalRom
+import VoleMole.Theft.PlainPerm
+import VoleMole.Theft.PlainEagerP
+import VoleMole.Theft.PlainRomP
+import VoleMole.Theft.PlainRataPerm
 import VoleMole.Theft.MoussakaHit
 import VoleMole.Theft.ManyPlain
 import VoleMole.Theft.ManyReads
