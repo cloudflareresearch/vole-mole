@@ -70,7 +70,7 @@ namespace VoleMole.Privacy.MoussakaUnbound
 open VoleMole.Spec VoleMole.Spec.MoussakaUnbound VoleMole.ZK.Sim VoleMole.Privacy.MainChain
 open VoleMole.Verifier VoleMole.Verifier.Bridge
 open VoleMole.Spec.Moussaka (NIZK AnchorSet Error ctxBytes proveSeedBytes rBytes nfBytes maxAnchors)
-open VoleMole.Privacy.Moussaka (pf pgP simSB_pg_eq candO_some)
+open VoleMole.Privacy.Moussaka (pf pgP simSB_pg_eq)
 
 -- `UCom` and `Derive` evaluate Keccak-p[800]; nothing below needs to unfold them.
 attribute [local irreducible] ucom derive UOVKey.eval
@@ -361,60 +361,105 @@ lemma σ_map_fst (b : Bool) (s : SecN) (hg : gN A.unc PI sk s = true) (H : Hist)
   · rfl
   · exact (stOfAns_redOutU b s.1 s.2 q o).symm
 
+/-- The simulated view of world `b` on tape `x`. -/
+noncomputable abbrev simV (b : Bool) (x : TapeU) : GVU :=
+  hybV23 (p₀ := pIu) (n₁ := 232) (n₂ := 232) (n₃ := 559) (n₄ := 559) Hashes.shake
+    (gameNU A.unc PI sk b) true true true true x
+
 set_option maxRecDepth 8192 in
+/-- The `H₂³` table of the simulated view: the raw table programmed for the two slots'
+statements. -/
+lemma simV_tab (b : Bool) (x : TapeU) :
+    (simV (A := A) (PI := PI) (sk := sk) b x).v₁.2 =
+      pgP pRu x.2.2.2.2.1.1.2 (((gameNU A.unc PI sk b).σ₃ x.1 none none).map Prod.fst) x.2.1
+        (pgP pRu x.2.2.2.2.2.1.2 (((gameNU A.unc PI sk b).σ₄ x.1 none none
+          (((gameNU A.unc PI sk b).σ₃ x.1 none none).map fun _ =>
+            simulate pRu x.2.2.2.2.1.1.2)).map Prod.fst) x.2.1 x.2.2.1.2.2) := by
+  show (simSB Hashes.shake pIu x.2.2.1.1.2 x.2.2.1.2.1).pg none x.2.1
+    ((simSB Hashes.shake pIu x.2.2.2.1.1.2 x.2.2.2.1.2.1).pg none x.2.1
+      ((simSB Hashes.shake pRu x.2.2.2.2.1.1.2 x.2.2.2.2.1.2.1).pg
+        ((gameNU A.unc PI sk b).σ₃ x.1 none none) x.2.1
+        ((simSB Hashes.shake pRu x.2.2.2.2.2.1.2 x.2.2.2.2.2.2.1).pg
+          ((gameNU A.unc PI sk b).σ₄ x.1 none none
+            (((gameNU A.unc PI sk b).σ₃ x.1 none none).map fun _ =>
+              simulate pRu x.2.2.2.2.1.1.2)) x.2.1 x.2.2.1.2.2))) = _
+  simp only [simSB_pg_eq]
+  rfl
+
+set_option maxRecDepth 8192 in
+/-- **With a token refused**, the simulated view shows no history and the raw `H₂³` table. -/
+lemma simV_false (b : Bool) (x : TapeU) (hg : gN A.unc PI sk x.1 = false) :
+    yNU A.unc PI sk b x.1 (simV (A := A) (PI := PI) (sk := sk) b x).o₃
+        (simV (A := A) (PI := PI) (sk := sk) b x).o₄ = none ∧
+      (simV (A := A) (PI := PI) (sk := sk) b x).v₁.2 = x.2.2.1.2.2 := by
+  have h3 : (gameNU A.unc PI sk b).σ₃ x.1 none none = none := by
+    show (bif gN A.unc PI sk x.1 && _ then _ else none) = none
+    rw [hg]; rfl
+  have h4 : ∀ o, (gameNU A.unc PI sk b).σ₄ x.1 none none o = none := fun o => by
+    show (bif gN A.unc PI sk x.1 && _ then _ else none) = none
+    rw [hg]; rfl
+  refine ⟨by unfold yNU; rw [hg]; rfl, ?_⟩
+  rw [simV_tab, h3, h4]
+  rfl
+
+set_option maxRecDepth 8192 in
+/-- **With both tokens finalized**, the simulated view shows the history `histT` (a function of
+the keys and the simulators' coins) and the `H₂³` table `tabH` of that history. -/
+lemma simV_true (hsk : ∀ c, (sk c).Correct (A.pk c)) (hK : Contains A.unc.nc) (b : Bool)
+    (x : TapeU) (hg : gN A.unc PI sk x.1 = true) :
+    yNU A.unc PI sk b x.1 (simV (A := A) (PI := PI) (sk := sk) b x).o₃
+        (simV (A := A) (PI := PI) (sk := sk) b x).o₄ =
+        some (histT A.unc b (x.1.1.1, x.1.2.1) x.2.2.2.2.1.1.2 x.2.2.2.2.2.1.2) ∧
+      (simV (A := A) (PI := PI) (sk := sk) b x).v₁.2 =
+        tabH A (histT A.unc b (x.1.1.1, x.1.2.1) x.2.2.2.2.1.1.2 x.2.2.2.2.2.1.2)
+          x.2.2.2.2.1.1.2 x.2.2.2.2.2.1.2 x.2.1 x.2.2.1.2.2 := by
+  set G := gameNU A.unc PI sk b
+  set c₃ := x.2.2.2.2.1.1.2
+  set c₄ := x.2.2.2.2.2.1.2
+  set o₃ := (G.σ₃ x.1 none none).map fun _ => simulate pRu c₃ with ho₃
+  set o₄ := (G.σ₄ x.1 none none o₃).map fun _ => simulate pRu c₄ with ho₄
+  have hy := yNU_sim A.unc PI sk b x.1 c₃ c₄
+  have hg' : ((tokNC A.unc.nc PI sk false x.1.1).isSome &&
+      (tokNC A.unc.nc PI sk true x.1.2).isSome) = true := hg
+  rw [hg', Bool.cond_true, hist_good hsk hK b x.1 c₃ c₄ hg] at hy
+  have hy' : yNU A.unc PI sk b x.1 o₃ o₄ = some (histN A.unc PI sk b x.1 o₃ o₄) := by
+    unfold yNU; rw [hg]; rfl
+  have hH : histN A.unc PI sk b x.1 o₃ o₄ = histT A.unc b (x.1.1.1, x.1.2.1) c₃ c₄ :=
+    Option.some.inj (hy'.symm.trans hy)
+  refine ⟨hy, ?_⟩
+  have s3 : (G.σ₃ x.1 none none).map Prod.fst = stAt A (histN A.unc PI sk b x.1 o₃ o₄) 0 :=
+    σ_map_fst b x.1 hg [] _ o₃
+  have s4 : (G.σ₄ x.1 none none o₃).map Prod.fst = stAt A (histN A.unc PI sk b x.1 o₃ o₄) 1 :=
+    σ_map_fst b x.1 hg _ _ o₄
+  rw [simV_tab, s3, s4, hH]
+  rfl
+
+/-- **With both redemptions simulated, any function of the guess's input is a function of the
+refusal bit, the history `histT`, the coins and the raw tables.** -/
+theorem simNH_eq' {X : Sort*} (f : Option Hist → USh → Tab2G pIu → X)
+    (hsk : ∀ c, (sk c).Correct (A.pk c)) (hK : Contains A.unc.nc) (b : Bool) (x : TapeU) :
+    f (yNU A.unc PI sk b x.1 (simV (A := A) (PI := PI) (sk := sk) b x).o₃
+        (simV (A := A) (PI := PI) (sk := sk) b x).o₄) x.2.1
+        (simV (A := A) (PI := PI) (sk := sk) b x).v₁.2 =
+      f (bif gN A.unc PI sk x.1 then
+          some (histT A.unc b (x.1.1.1, x.1.2.1) x.2.2.2.2.1.1.2 x.2.2.2.2.2.1.2) else none) x.2.1
+        (bif gN A.unc PI sk x.1 then
+          tabH A (histT A.unc b (x.1.1.1, x.1.2.1) x.2.2.2.2.1.1.2 x.2.2.2.2.2.1.2)
+            x.2.2.2.2.1.1.2 x.2.2.2.2.2.1.2 x.2.1 x.2.2.1.2.2 else x.2.2.1.2.2) := by
+  cases hg : gN A.unc PI sk x.1
+  · obtain ⟨h1, h2⟩ := simV_false b x hg
+    rw [h1, h2]; rfl
+  · obtain ⟨h1, h2⟩ := simV_true hsk hK b x hg
+    rw [h1, h2]; rfl
+
 /-- **With both redemptions simulated, the final event is `hvNH`** at the refusal bit, the history
 `histT` (a function of the keys and the simulators' coins), the coins and the raw tables. -/
 theorem simNH_iff (hsk : ∀ c, (sk c).Correct (A.pk c)) (hK : Contains A.unc.nc) (b : Bool)
     (x : TapeU) (T : H3T) :
-    evNH A PI sk b (hybV23 (p₀ := pIu) (n₁ := 232) (n₂ := 232) (n₃ := 559) (n₄ := 559)
-        Hashes.shake (gameNU A.unc PI sk b) true true true true x) T ↔
+    evNH A PI sk b (simV (A := A) (PI := PI) (sk := sk) b x) T ↔
       hvNH A (gN A.unc PI sk x.1) (histT A.unc b (x.1.1.1, x.1.2.1) x.2.2.2.2.1.1.2
-        x.2.2.2.2.2.1.2) x.2.2.2.2.1.1.2 x.2.2.2.2.2.1.2 x.2.1 x.2.2.1.2.2 T := by
-  set G := gameNU A.unc PI sk b
-  set c₃ := x.2.2.2.2.1.1.2
-  set c₄ := x.2.2.2.2.2.1.2
-  set u := x.2.1
-  set G2 := x.2.2.1.2.2
-  set o₃ := (G.σ₃ x.1 none none).map fun _ => simulate pRu c₃ with ho₃
-  set o₄ := (G.σ₄ x.1 none none o₃).map fun _ => simulate pRu c₄ with ho₄
-  have hM : (hybV23 (p₀ := pIu) (n₁ := 232) (n₂ := 232) (n₃ := 559) (n₄ := 559)
-      Hashes.shake G true true true true x).v₁.2 =
-      pgP pRu c₃ ((G.σ₃ x.1 none none).map Prod.fst) u
-        (pgP pRu c₄ ((G.σ₄ x.1 none none o₃).map Prod.fst) u G2) := by
-    show (simSB Hashes.shake pIu x.2.2.1.1.2 x.2.2.1.2.1).pg none u
-      ((simSB Hashes.shake pIu x.2.2.2.1.1.2 x.2.2.2.1.2.1).pg none u
-        ((simSB Hashes.shake pRu c₃ x.2.2.2.2.1.2.1).pg (G.σ₃ x.1 none none) u
-          ((simSB Hashes.shake pRu c₄ x.2.2.2.2.2.2.1).pg (G.σ₄ x.1 none none o₃) u G2))) = _
-    simp only [simSB_pg_eq]
-    rfl
-  show A.guess (yNU A.unc PI sk b x.1 o₃ o₄) u _ T ↔ _
-  rw [hM]
-  unfold hvNH
-  cases hg : gN A.unc PI sk x.1
-  · have h3 : G.σ₃ x.1 none none = none := by
-      show (bif gN A.unc PI sk x.1 && _ then _ else none) = none
-      rw [hg]; rfl
-    have h4 : G.σ₄ x.1 none none o₃ = none := by
-      show (bif gN A.unc PI sk x.1 && _ then _ else none) = none
-      rw [hg]; rfl
-    have hy : yNU A.unc PI sk b x.1 o₃ o₄ = none := by
-      unfold yNU; rw [hg]; rfl
-    rw [h3, h4, hy]
-    rfl
-  · have hy := yNU_sim A.unc PI sk b x.1 c₃ c₄
-    have hg' : ((tokNC A.unc.nc PI sk false x.1.1).isSome &&
-        (tokNC A.unc.nc PI sk true x.1.2).isSome) = true := hg
-    rw [hg', Bool.cond_true, hist_good hsk hK b x.1 c₃ c₄ hg] at hy
-    have hy' : yNU A.unc PI sk b x.1 o₃ o₄ = some (histN A.unc PI sk b x.1 o₃ o₄) := by
-      unfold yNU; rw [hg]; rfl
-    have hH : histN A.unc PI sk b x.1 o₃ o₄ = histT A.unc b (x.1.1.1, x.1.2.1) c₃ c₄ :=
-      Option.some.inj (hy'.symm.trans hy)
-    have s3 : (G.σ₃ x.1 none none).map Prod.fst = stAt A (histN A.unc PI sk b x.1 o₃ o₄) 0 :=
-      σ_map_fst b x.1 hg [] _ o₃
-    have s4 : (G.σ₄ x.1 none none o₃).map Prod.fst = stAt A (histN A.unc PI sk b x.1 o₃ o₄) 1 :=
-      σ_map_fst b x.1 hg _ _ o₄
-    rw [s3, s4, hy', ← hH]
-    rfl
+        x.2.2.2.2.2.1.2) x.2.2.2.2.1.1.2 x.2.2.2.2.2.1.2 x.2.1 x.2.2.1.2.2 T :=
+  iff_of_eq (simNH_eq' (fun y u G2 => A.guess y u G2 T) hsk hK b x)
 
 end SimH
 
@@ -518,4 +563,386 @@ theorem idealNH_eq : idealNH A false = idealNH A true :=
 
 end HopsH
 
+/-! ## The (PU) term: statistical -/
+
+section BstarH
+
+variable (A : AdversaryUNCH)
+
+/-- The simulators' coins and the raw tables (the tape without the secret). -/
+abbrev AuxH := USh × KS pIu × KS pIu × KS pRu × KS pRu
+
+/-- The statement of the first query with both tokens finalized, from the keys. -/
+def st₀H (b : Bool) (k : KTape) : Statement := stR (xKey A.unc b k (A.next []))
+
+/-- The statement of the second query, from the keys and the first simulator's coins. -/
+noncomputable def st₁H (b : Bool) (k : KTape) (c₃ : SimCoins pRu) : Statement :=
+  stR (xKey A.unc b k (A.next (histT₁ A.unc b k c₃)))
+
+/-- **The public key set with both tokens finalized**: the guess's read set and the two simulated
+proofs' active gate inputs, from the keys, the coins, the raw tables and `H₃`. -/
+noncomputable def spNH (b : Bool) (k : KTape) (a : AuxH) (T : H3T) : Finset (ZK.Sim.Bytes 37) :=
+  A.R5 (some (histT A.unc b k a.2.2.2.1.1.2 a.2.2.2.2.1.2)) a.1
+      (tabH A (histT A.unc b k a.2.2.2.1.1.2 a.2.2.2.2.1.2) a.2.2.2.1.1.2 a.2.2.2.2.1.2 a.1
+        a.2.1.2.2) T ∪
+    ((actL Hashes.shake pRu (st₀H A b k) a.1.2 a.2.2.2.1.1.2).toFinset.image (blk 37) ∪
+      (actL Hashes.shake pRu (st₁H A b k a.2.2.2.1.1.2) a.1.2 a.2.2.2.2.1.2).toFinset.image (blk 37))
+
+/-- **The candidates for the openings**: those of the two simulated proofs on the public key set,
+computed from the keys, the coins, the raw tables and `H₃`, not from the openings. -/
+noncomputable def candNH (b : Bool) (k : KTape) (a : AuxH) (T : H3T) : Finset (ZK.Sim.Bytes 16) :=
+  candC Hashes.shake (st₀H A b k) a.1.2 a.2.2.2.1.1.2 (spNH A b k a T) ∪
+    candC Hashes.shake (st₁H A b k a.2.2.2.1.1.2) a.1.2 a.2.2.2.2.1.2 (spNH A b k a T)
+
+lemma card_spNH_le {q5 : ℕ} (h5 : ∀ y u G2 T, (A.R5 y u G2 T).card ≤ q5) (b : Bool) (k : KTape)
+    (a : AuxH) (T : H3T) : (spNH A b k a T).card ≤ q5 + 624 := by
+  unfold spNH
+  refine (card_union_le _ _).trans (add_le_add (h5 _ _ _ _) ((card_union_le _ _).trans ?_))
+  have l₁ := (card_image_le (f := blk 37)).trans ((List.toFinset_card_le _).trans
+    (actL_length_le Hashes.shake (p := pRu) (st₀H A b k) a.1.2 a.2.2.2.1.1.2))
+  have l₂ := (card_image_le (f := blk 37)).trans ((List.toFinset_card_le _).trans
+    (actL_length_le Hashes.shake (p := pRu) (st₁H A b k a.2.2.2.1.1.2) a.1.2 a.2.2.2.2.1.2))
+  omega
+
+lemma card_candNH_le {q5 : ℕ} (h5 : ∀ y u G2 T, (A.R5 y u G2 T).card ≤ q5) (b : Bool) (k : KTape)
+    (a : AuxH) (T : H3T) : (candNH A b k a T).card ≤ (2 * q5 + 1249) + 1 := by
+  have c₁ := (card_candC_le Hashes.shake mainP_pRu (st₀H A b k) a.1.2 a.2.2.2.1.1.2
+    (spNH A b k a T)).trans (Nat.succ_le_succ (card_spNH_le A h5 b k a T))
+  have c₂ := (card_candC_le Hashes.shake mainP_pRu (st₁H A b k a.2.2.2.1.1.2) a.1.2 a.2.2.2.2.1.2
+    (spNH A b k a T)).trans (Nat.succ_le_succ (card_spNH_le A h5 b k a T))
+  exact (card_union_le _ _).trans (by omega)
+
+variable {A} {PI : NIZK IssueInstance} {sk : Bool → Signer}
+
+set_option maxRecDepth 8000 in
+lemma candO_someU {q : Option (Statement × ZK.Sim.Bytes 16)} {st : Statement} {r : ZK.Sim.Bytes 16}
+    {E : Cipher} {c : SimCoins pRu} {S : Finset (ZK.Sim.Bytes 37)} (hq : q = some (st, r))
+    (h : candO Hashes.shake q E c S) : r ∈ candC Hashes.shake st E c S := by
+  subst hq; exact h
+
+/-- The active gate inputs of a slot whose statement, if any, is `st`. -/
+lemma actO_sub {q : Option (Statement × ZK.Sim.Bytes 16)} {st : Statement}
+    (h : ∀ y ∈ q, y.1 = st) (E : Cipher) (c : SimCoins pRu) :
+    (actO Hashes.shake pRu q E c).toFinset.image (blk 37) ⊆
+      (actL Hashes.shake pRu st E c).toFinset.image (blk 37) := by
+  rcases q with _ | y
+  · intro k hk; simp [actO] at hk
+  · rw [show actO Hashes.shake pRu (some y) E c = actL Hashes.shake pRu y.1 E c from rfl, h y rfl]
+
+/-- A slot's statement and witness prefix, with both tokens finalized. -/
+lemma qOf_σ (hsk : ∀ c, (sk c).Correct (A.pk c)) (b : Bool) (s : SecN) (hg : gN A.unc PI sk s = true)
+    (H : Hist) (q : Query) :
+    ∀ y ∈ qOf (bif gN A.unc PI sk s && validNC A.unc.nc PI sk s.1 s.2 H q then
+        redStmtU A.unc.um (ptNC A.unc.nc PI sk b s.1 s.2 q) else none),
+      y = (stR (xKey A.unc b (s.1.1, s.2.1) q), (bif who b q then s.2 else s.1).2.1) := by
+  intro y hy
+  rw [hg] at hy
+  cases hv : validNC A.unc.nc PI sk s.1 s.2 H q
+  · rw [hv] at hy; cases hy
+  · rw [hv] at hy
+    obtain ⟨z, hz, rfl⟩ := Option.mem_map.1 hy
+    obtain ⟨h1, h2⟩ := redStmt_good hsk hg b q z hz
+    rw [h1, h2]
+
+set_option maxRecDepth 8192 in
+/-- **`bstar` with both redemptions simulated**: a failed simulation, a prediction of an opening
+from candidates computed without the openings, or a sibling gate input of the first proof that is
+one of the second's. -/
+theorem bstarNH_imp (hsk : ∀ c, (sk c).Correct (A.pk c)) (hK : Contains A.unc.nc) (b : Bool)
+    (x : TapeU) (T : H3T)
+    (h : bstar Hashes.shake (gameNU A.unc PI sk b) (fun v => r5NH A PI sk b v T)
+      (simV (A := A) (PI := PI) (sk := sk) b x)) :
+    (errC pIu x.2.2.1.1.2 ∨ errC pIu x.2.2.2.1.1.2 ∨ errC pRu x.2.2.2.2.1.1.2 ∨
+      errC pRu x.2.2.2.2.2.1.2) ∨
+    (x.1.1.2.1 ∈ candNH A b (x.1.1.1, x.1.2.1) x.2 T ∨
+      x.1.2.2.1 ∈ candNH A b (x.1.1.1, x.1.2.1) x.2 T) ∨
+    (∃ w ∈ sibO Hashes.shake pRu (qOf ((gameNU A.unc PI sk b).σ₃ x.1 none none)) x.2.1.2
+        x.2.2.2.2.1.1.2,
+      w ∈ sibO Hashes.shake pRu (qOf ((gameNU A.unc PI sk b).σ₄ x.1 none none
+        (((gameNU A.unc PI sk b).σ₃ x.1 none none).map fun _ => simulate pRu x.2.2.2.2.1.1.2)))
+        x.2.1.2 x.2.2.2.2.2.1.2) := by
+  classical
+  set G := gameNU A.unc PI sk b
+  set c₃ := x.2.2.2.2.1.1.2
+  set c₄ := x.2.2.2.2.2.1.2
+  set o₃ := (G.σ₃ x.1 none none).map fun _ => simulate pRu c₃ with ho₃
+  set k : KTape := (x.1.1.1, x.1.2.1)
+  set R := r5NH A PI sk b (simV (A := A) (PI := PI) (sk := sk) b x) T with hR
+  have hb := bstar_sim (p₁ := pIu) (p₂ := pIu) (p₃ := pRu) (p₄ := pRu) Hashes.shake G hashesWF_shake
+    x.1 x.2.1.2 x.2.2.1.1.2 x.2.2.2.1.1.2 c₃ c₄ R
+    none none o₃ ((G.σ₄ x.1 none none o₃).map fun _ => simulate pRu c₄)
+    none none (qOf (G.σ₃ x.1 none none)) (qOf (G.σ₄ x.1 none none o₃))
+    rfl rfl rfl rfl rfl rfl rfl rfl _ rfl h
+  -- with both tokens finalized: the read set, the statements and the prefixes are public
+  have hRg : gN A.unc PI sk x.1 = true → R = A.R5 (some (histT A.unc b k c₃ c₄)) x.2.1
+      (tabH A (histT A.unc b k c₃ c₄) c₃ c₄ x.2.1 x.2.2.1.2.2) T := fun hg => by
+    obtain ⟨h1, h2⟩ := simV_true (A := A) (PI := PI) (sk := sk) hsk hK b x hg
+    rw [hR]
+    show A.R5 (yNU A.unc PI sk b x.1 (simV (A := A) (PI := PI) (sk := sk) b x).o₃
+      (simV (A := A) (PI := PI) (sk := sk) b x).o₄) x.2.1
+      (simV (A := A) (PI := PI) (sk := sk) b x).v₁.2 T = _
+    rw [h1, h2]
+  have hq₃ : gN A.unc PI sk x.1 = true → ∀ y ∈ qOf (G.σ₃ x.1 none none),
+      y = (st₀H A b k, (bif who b (A.next []) then x.1.2 else x.1.1).2.1) := fun hg =>
+    qOf_σ hsk b x.1 hg [] (A.next [])
+  have hq₄ : gN A.unc PI sk x.1 = true → ∀ y ∈ qOf (G.σ₄ x.1 none none o₃),
+      y = (st₁H A b k c₃,
+        (bif who b (A.next (histT₁ A.unc b k c₃)) then x.1.2 else x.1.1).2.1) := fun hg => by
+    have h₁ := hist₁_good hsk hK b x.1 c₃ hg
+    have e : G.σ₄ x.1 none none o₃ = bif gN A.unc PI sk x.1 &&
+        validNC A.unc.nc PI sk x.1.1 x.1.2 (histT₁ A.unc b k c₃) (A.next (histT₁ A.unc b k c₃))
+        then redStmtU A.unc.um (ptNC A.unc.nc PI sk b x.1.1 x.1.2 (A.next (histT₁ A.unc b k c₃)))
+        else none := by
+      show (bif gN A.unc PI sk x.1 && validNC A.unc.nc PI sk x.1.1 x.1.2 (hist₁ A.unc PI sk b x.1 o₃)
+        (A.next (hist₁ A.unc PI sk b x.1 o₃)) then redStmtU A.unc.um
+          (ptNC A.unc.nc PI sk b x.1.1 x.1.2 (A.next (hist₁ A.unc PI sk b x.1 o₃))) else none) = _
+      rw [h₁]
+    rw [e]
+    exact qOf_σ hsk b x.1 hg _ _
+  have hsub : gN A.unc PI sk x.1 = true →
+      R ∪ ((actO Hashes.shake pIu none x.2.1.2 x.2.2.1.1.2).toFinset.image (blk 37) ∪
+        (actO Hashes.shake pIu none x.2.1.2 x.2.2.2.1.1.2).toFinset.image (blk 37) ∪
+        (actO Hashes.shake pRu (qOf (G.σ₃ x.1 none none)) x.2.1.2 c₃).toFinset.image (blk 37) ∪
+        (actO Hashes.shake pRu (qOf (G.σ₄ x.1 none none o₃)) x.2.1.2 c₄).toFinset.image (blk 37)) ⊆
+      spNH A b k x.2 T := fun hg => by
+    have a₃ := actO_sub (st := st₀H A b k) (fun y hy => by rw [hq₃ hg y hy]) x.2.1.2 c₃
+    have a₄ := actO_sub (st := st₁H A b k c₃) (fun y hy => by rw [hq₄ hg y hy]) x.2.1.2 c₄
+    rw [hRg hg]
+    intro z hz
+    simp only [actO, List.toFinset_nil, image_empty, empty_union, mem_union] at hz
+    unfold spNH
+    simp only [mem_union]
+    rcases hz with hz | hz | hz
+    · exact Or.inl hz
+    · exact Or.inr (Or.inl (a₃ hz))
+    · exact Or.inr (Or.inr (a₄ hz))
+  have hpick : ∀ c : Bool, (bif c then x.1.2 else x.1.1).2.1 ∈ candNH A b k x.2 T →
+      x.1.1.2.1 ∈ candNH A b k x.2 T ∨ x.1.2.2.1 ∈ candNH A b k x.2 T := fun c hc => by
+    cases c
+    · exact Or.inl hc
+    · exact Or.inr hc
+  rcases hb with he | hc | hs
+  · exact Or.inl he
+  · right; left
+    rcases hc with h1 | h2 | h3 | h4
+    · exact h1.elim
+    · exact h2.elim
+    · cases hg : gN A.unc PI sk x.1
+      · have : qOf (G.σ₃ x.1 none none) = none := by
+          show qOf (bif gN A.unc PI sk x.1 && _ then _ else none) = none
+          rw [hg]; rfl
+        rw [this] at h3; exact h3.elim
+      · rcases hq : qOf (G.σ₃ x.1 none none) with _ | y
+        · rw [hq] at h3; exact h3.elim
+        · have h' := candO_someU (hq.trans (congrArg some (hq₃ hg y hq))) h3
+          exact hpick _ (mem_union_left _ (candC_mono Hashes.shake (hsub hg) h'))
+    · cases hg : gN A.unc PI sk x.1
+      · have : qOf (G.σ₄ x.1 none none o₃) = none := by
+          show qOf (bif gN A.unc PI sk x.1 && _ then _ else none) = none
+          rw [hg]; rfl
+        rw [this] at h4; exact h4.elim
+      · rcases hq : qOf (G.σ₄ x.1 none none o₃) with _ | y
+        · rw [hq] at h4; exact h4.elim
+        · have h' := candO_someU (hq.trans (congrArg some (hq₄ hg y hq))) h4
+          exact hpick _ (mem_union_right _ (candC_mono Hashes.shake (hsub hg) h'))
+  · right; right
+    rcases hs with ⟨w, hw, -⟩ | ⟨w, hw, -⟩ | ⟨w, hw, hw'⟩
+    · exact (List.not_mem_nil hw).elim
+    · exact (List.not_mem_nil hw).elim
+    · exact ⟨w, by simpa [sibO] using hw, hw'⟩
+
+end BstarH
+
+/-! ## The (PU) term: the numbers -/
+
+section PrH
+
+variable (A : AdversaryUNCH) (PI : NIZK IssueInstance) (sk : Bool → Signer)
+
+theorem pr_errNH₁_le : pr TapeU (fun x => errC pIu x.2.2.1.1.2) ≤ noHitProb :=
+  pr_le_of_fst fun _ => pr_le_of_fst fun _ => pr_le_of_snd fun _ => pr_errC_le
+
+theorem pr_errNH₂_le : pr TapeU (fun x => errC pIu x.2.2.2.1.1.2) ≤ noHitProb :=
+  pr_le_of_fst fun _ => pr_le_of_fst fun _ => pr_le_of_fst fun _ => pr_le_of_snd fun _ =>
+    pr_errC_le
+
+theorem pr_errNH₃_le : pr TapeU (fun x => errC pRu x.2.2.2.2.1.1.2) ≤ noHitProb :=
+  pr_le_of_fst fun _ => pr_le_of_fst fun _ => pr_le_of_fst fun _ => pr_le_of_fst fun _ =>
+    pr_le_of_snd fun _ => pr_errC_le
+
+theorem pr_errNH₄_le : pr TapeU (fun x => errC pRu x.2.2.2.2.2.1.2) ≤ noHitProb :=
+  pr_le_of_fst fun _ => pr_le_of_fst fun _ => pr_le_of_fst fun _ => pr_le_of_fst fun _ =>
+    pr_le_of_fst fun _ => pr_errC_le
+
+set_option maxRecDepth 8192 in
+/-- **A Client's opening against candidates from the keys, the coins, the tables and `H₃`**: at
+most `(q + 1)·2⁻¹²⁸`, the opening being uniform and independent of them. -/
+theorem pr_openH_le (c : Bool) (C : KTape → AuxH → H3T → Finset (ZK.Sim.Bytes 16)) {q : ℕ}
+    (hC : ∀ k a T, (C k a T).card ≤ q + 1) :
+    pr (TapeU × H3T) (fun z => (bif c then z.1.1.2 else z.1.1.1).2.1 ∈
+      C (z.1.1.1.1, z.1.1.2.1) z.1.2 z.2) ≤ (q + 1) / 2 ^ 128 := by
+  cases c
+  · let e : Coins rBytes × (((Coins nfKeyBytes × Coins proveSeedBytes) × IssT) × (AuxH × H3T)) ≃
+        TapeU × H3T :=
+      { toFun := fun z => ((((z.2.1.1.1, z.1, z.2.1.1.2), z.2.1.2), z.2.2.1), z.2.2.2)
+        invFun := fun z => (z.1.1.1.2.1, (((z.1.1.1.1, z.1.1.1.2.2), z.1.1.2), (z.1.2, z.2)))
+        left_inv := fun _ => rfl
+        right_inv := fun _ => rfl }
+    rw [← pr_equiv e]
+    exact pr_mem_uniform_le (X := ((Coins nfKeyBytes × Coins proveSeedBytes) × IssT) × (AuxH × H3T))
+      (fun y => C (y.1.1.1, y.1.2.1) y.2.1 y.2.2) fun _ => hC _ _ _
+  · let e : Coins rBytes × ((IssT × (Coins nfKeyBytes × Coins proveSeedBytes)) × (AuxH × H3T)) ≃
+        TapeU × H3T :=
+      { toFun := fun z => (((z.2.1.1, (z.2.1.2.1, z.1, z.2.1.2.2)), z.2.2.1), z.2.2.2)
+        invFun := fun z => (z.1.1.2.2.1, ((z.1.1.1, (z.1.1.2.1, z.1.1.2.2.2)), (z.1.2, z.2)))
+        left_inv := fun _ => rfl
+        right_inv := fun _ => rfl }
+    rw [← pr_equiv e]
+    exact pr_mem_uniform_le (X := (IssT × (Coins nfKeyBytes × Coins proveSeedBytes)) × (AuxH × H3T))
+      (fun y => C (y.1.1.1, y.1.2.1) y.2.1 y.2.2) fun _ => hC _ _ _
+
+set_option maxRecDepth 8192 in
+/-- **The two simulated redemptions collide with probability `≤ 313·2⁻¹²⁸`**: the second proof's
+`d` is uniform and independent of the first proof and of its own statement. -/
+theorem pr_sibNH_le (b : Bool) :
+    pr TapeU (fun x =>
+      ∃ w ∈ sibO Hashes.shake pRu (qOf ((gameNU A.unc PI sk b).σ₃ x.1 none none)) x.2.1.2
+          x.2.2.2.2.1.1.2,
+        w ∈ sibO Hashes.shake pRu (qOf ((gameNU A.unc PI sk b).σ₄ x.1 none none
+          (((gameNU A.unc PI sk b).σ₃ x.1 none none).map fun _ => simulate pRu x.2.2.2.2.1.1.2)))
+          x.2.1.2 x.2.2.2.2.2.1.2) ≤ ((312 : ℕ) + 1) / 2 ^ 128 := by
+  refine pr_le_of_fst fun s => pr_le_of_fst fun u => pr_le_of_fst fun k₁ => pr_le_of_fst fun k₂ =>
+    pr_le_of_fst fun k₃ => pr_KS_d_le _ fun ρ sh c1 c2 c3 c5 V => ?_
+  have hlen := sibO_length_le Hashes.shake (p := pRu)
+    (qOf ((gameNU A.unc PI sk b).σ₃ s none none)) u.2 k₃.1.2
+  rcases hq : qOf ((gameNU A.unc PI sk b).σ₄ s none none
+      (((gameNU A.unc PI sk b).σ₃ s none none).map fun _ => simulate pRu k₃.1.2)) with _ | ⟨st, r⟩
+  · refine le_trans (le_of_eq ?_) (by positivity)
+    rw [pr_congr (Q := fun _ => False) fun d => by
+      show (∃ w ∈ _, w ∈ sibO Hashes.shake pRu (qOf ((gameNU A.unc PI sk b).σ₄ s none none
+        (((gameNU A.unc PI sk b).σ₃ s none none).map fun _ => simulate pRu k₃.1.2))) u.2 _) ↔ False
+      rw [hq]
+      simp [sibO]]
+    exact pr_false
+  · refine le_trans (pr_mono fun d hd => ?_) (pr_sib_hit_le Hashes.shake mainP_pRu st u.2 sh c1 c2
+      c3 c5 r _ hlen)
+    have hd' : ∃ w ∈ sibO Hashes.shake pRu (qOf ((gameNU A.unc PI sk b).σ₃ s none none)) u.2 k₃.1.2,
+        w ∈ sibO Hashes.shake pRu (qOf ((gameNU A.unc PI sk b).σ₄ s none none
+          (((gameNU A.unc PI sk b).σ₃ s none none).map fun _ => simulate pRu k₃.1.2))) u.2
+          (sh, c1, c2, c3, d, c5) := hd
+    rw [hq] at hd'
+    exact hd'
+
+set_option maxRecDepth 8192 in
+/-- **The (PU) term of U5(b) on `main` with all tables shared is statistical**: with both
+redemptions simulated, `bstar` has probability at most
+`4·noHitProb + 4·(q₅ + 625)·2⁻¹²⁸ + 313·2⁻¹²⁸`, for a guess whose `H₅` read sets have at most `q₅`
+keys. -/
+theorem pr_bstarNH_le (hsk : ∀ c, (sk c).Correct (A.pk c)) (hK : Contains A.unc.nc) {q5 : ℕ}
+    (h5 : ∀ y u G2 T, (A.R5 y u G2 T).card ≤ q5) (b : Bool) :
+    simAll (p₀ := pIu) (n₁ := 232) (n₂ := 232) (n₃ := 559) (n₄ := 559) Hashes.shake
+        (gameNU A.unc PI sk b) (fun v T => bstar Hashes.shake (gameNU A.unc PI sk b)
+          (fun v => r5NH A PI sk b v T) v) ≤
+      4 * noHitProb + 4 * ((q5 + 625) / 2 ^ 128) + 313 / 2 ^ 128 := by
+  unfold simAll
+  have h := (pr_mono fun (z : TapeU × H3T) hz =>
+    bstarNH_imp (PI := PI) (sk := sk) hsk hK b z.1 z.2 hz).trans ((pr_or_le _ _).trans
+    (add_le_add ((pr_or_le _ _).trans (add_le_add le_rfl ((pr_or_le _ _).trans (add_le_add le_rfl
+      (pr_or_le _ _))))) ((pr_or_le _ _).trans (add_le_add (pr_or_le _ _) le_rfl))))
+  have e₁ := (le_of_eq (pr_prod_fst (β := H3T) (fun x : TapeU =>
+    errC pIu x.2.2.1.1.2))).trans (pr_errNH₁_le)
+  have e₂ := (le_of_eq (pr_prod_fst (β := H3T) (fun x : TapeU =>
+    errC pIu x.2.2.2.1.1.2))).trans (pr_errNH₂_le)
+  have e₃ := (le_of_eq (pr_prod_fst (β := H3T) (fun x : TapeU =>
+    errC pRu x.2.2.2.2.1.1.2))).trans (pr_errNH₃_le)
+  have e₄ := (le_of_eq (pr_prod_fst (β := H3T) (fun x : TapeU =>
+    errC pRu x.2.2.2.2.2.1.2))).trans (pr_errNH₄_le)
+  have c₀ := pr_openH_le false (fun k a T => candNH A b k a T) (q := 2 * q5 + 1249)
+    fun k a T => card_candNH_le A h5 b k a T
+  have c₁ := pr_openH_le true (fun k a T => candNH A b k a T) (q := 2 * q5 + 1249)
+    fun k a T => card_candNH_le A h5 b k a T
+  have s₃₄ := (le_of_eq (pr_prod_fst (β := H3T) (fun x : TapeU =>
+      ∃ w ∈ sibO Hashes.shake pRu (qOf ((gameNU A.unc PI sk b).σ₃ x.1 none none)) x.2.1.2
+          x.2.2.2.2.1.1.2,
+        w ∈ sibO Hashes.shake pRu (qOf ((gameNU A.unc PI sk b).σ₄ x.1 none none
+          (((gameNU A.unc PI sk b).σ₃ x.1 none none).map fun _ => simulate pRu x.2.2.2.2.1.1.2)))
+          x.2.1.2 x.2.2.2.2.2.1.2))).trans (pr_sibNH_le A PI sk b)
+  have hq : ((2 * q5 + 1249 : ℕ) + 1 : ℝ) = 2 * ((q5 : ℝ) + 625) := by push_cast; ring
+  rw [hq] at c₀ c₁
+  have hn : (((312 : ℕ) + 1 : ℝ) / 2 ^ 128) = 313 / 2 ^ 128 := by norm_num
+  rw [hn] at s₃₄
+  refine h.trans ?_
+  have : 2 * ((q5 : ℝ) + 625) / 2 ^ 128 + 2 * ((q5 : ℝ) + 625) / 2 ^ 128 =
+      4 * ((q5 + 625) / 2 ^ 128) := by ring
+  simp only [Bool.cond_false, Bool.cond_true] at c₀ c₁
+  linarith
+
+end PrH
+
+/-! ## Theorem U5(b) on `main` with all tables shared -/
+
+section MainH
+
+variable (A : AdversaryUNCH) (PI : NIZK IssueInstance) (sk : Bool → Signer)
+
+/-- **Theorem U5(b) on `main` (no label rows), corrected, two adaptive queries, all tables
+shared.** For every non-colluding Moderator whose queried Anchor Sets contain both issuers
+(`Contains`), honest Anchors whose signers are correct for their keys, any issuance proof system,
+and the executable prover for the two redemptions with one `H₃`, one `H₂³` table, one `H₅` table
+and one cipher: if the guess reads `H₃` at `q3` points, the cipher at `qE` keys and `H₅` at a
+consistent read set of at most `q5` keys, and every PRF reduction (`redNH`, the guess at the rest
+of the tape) has advantage (without the commitments) at most `εprf`,
+
+    |Pr[W₀] − Pr[W₁]| ≤ 30·(εS(q3, qE + 8·4607) + Δ23)
+        + 15·(8·noHitProb + (8·(q5 + 625) + 626)·2⁻¹²⁸) + collNH 0 + collNH 1
+        + 2·(ψ false + ψ true) + 2·εprf.
+
+`collNH b` is the probability that the two real redemption proofs of world `b` have one prefix
+(at most `2⁻¹²⁸` when the queries are answered by different Clients, `collNH_le_of_who`). The
+(PU) term is statistical: no assumption on `UCom`. -/
+theorem anonymityNC_main_U_sharedAll (hsk : ∀ c, (sk c).Correct (A.pk c))
+    (hK : Contains A.unc.nc) {q3 qE q5 : ℕ} (hC : A.ConsH q3 qE)
+    (h5 : ∀ y u G2 T, (A.R5 y u G2 T).card ≤ q5) {εprf : ℝ}
+    (hprf : ∀ b z, prfAdvNC (redNH A b z) ≤ εprf) :
+    |realNH A PI sk false - realNH A PI sk true| ≤
+      30 * (εS q3 (qE + 8 * 4607) + Δ23 9) +
+        15 * (8 * noHitProb + (8 * (q5 + 625) + 626) / 2 ^ 128) +
+        (collNH A PI sk false + collNH A PI sk true) +
+        2 * (psi A.unc.nc PI sk false + psi A.unc.nc PI sk true) + 2 * εprf := by
+  have r0 := real_sim_NH A PI sk hsk hC false
+  have r1 := real_sim_NH A PI sk hsk hC true
+  have b0 := pr_bstarNH_le A PI sk hsk hK h5 false
+  have b1 := pr_bstarNH_le A PI sk hsk hK h5 true
+  have g0 := sim_hyb_NH A PI sk hsk hK false
+  have g1 := sim_hyb_NH A PI sk hsk hK true
+  have f0 := prf_hop_NH A false (hprf false)
+  have f1 := prf_hop_NH A true (hprf true)
+  have he := idealNH_eq A
+  have hn : (8 * ((q5 : ℝ) + 625) + 626) / 2 ^ 128 =
+      4 * ((q5 + 625) / 2 ^ 128) + 313 / 2 ^ 128 + (4 * ((q5 + 625) / 2 ^ 128) + 313 / 2 ^ 128) := by
+    ring
+  have := abs_sub_le_iff.1 r0; have := abs_sub_le_iff.1 r1; have := abs_sub_le_iff.1 g0
+  have := abs_sub_le_iff.1 g1; have := abs_sub_le_iff.1 f0; have := abs_sub_le_iff.1 f1
+  rw [abs_sub_le_iff, hn]
+  constructor <;> linarith
+
+/-- **U5(b) on `main` with all tables shared, for queries answered by different Clients**
+(`TwoClients`): the prefix-collision term is `2·2⁻¹²⁸`. -/
+theorem anonymityNC_main_U_sharedAll_two (hsk : ∀ c, (sk c).Correct (A.pk c))
+    (hK : Contains A.unc.nc) (hW : TwoClients A) {q3 qE q5 : ℕ} (hC : A.ConsH q3 qE)
+    (h5 : ∀ y u G2 T, (A.R5 y u G2 T).card ≤ q5) {εprf : ℝ}
+    (hprf : ∀ b z, prfAdvNC (redNH A b z) ≤ εprf) :
+    |realNH A PI sk false - realNH A PI sk true| ≤
+      30 * (εS q3 (qE + 8 * 4607) + Δ23 9) +
+        15 * (8 * noHitProb + (8 * (q5 + 625) + 626) / 2 ^ 128) + 2 / 2 ^ 128 +
+        2 * (psi A.unc.nc PI sk false + psi A.unc.nc PI sk true) + 2 * εprf := by
+  have h := anonymityNC_main_U_sharedAll A PI sk hsk hK hC h5 hprf
+  have c0 := collNH_le_of_who A PI sk hsk hW false
+  have c1 := collNH_le_of_who A PI sk hsk hW true
+  have : (2 : ℝ) / 2 ^ 128 = 1 / 2 ^ 128 + 1 / 2 ^ 128 := by ring
+  linarith
+
+end MainH
+
 end VoleMole.Privacy.MoussakaUnbound
+
