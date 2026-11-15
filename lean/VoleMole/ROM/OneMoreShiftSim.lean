@@ -239,14 +239,16 @@ theorem prEvent_shiftFailZ_sim_le_Ec (hd : pk.digest.size = 32) {qA : Kind → �
           (evalWithAnswerFn (QueryImpl.ofFn g) (runE E (P j.val)))) g,
         e.1 ∉ (tableQueryLog (runE E (P j.val)) g).map Sigma.fst ∧ simBadS lr pk E (P j.val) e.1 g) ∨
       (∃ j ∈ (Finset.univ : Finset (Fin (ℓ + 1))),
-        failPc lr pk E cf (evalWithAnswerFn (QueryImpl.ofFn g) (gameDP lr E pk pre A Lst j.val))) := by
+        failPc lr pk E cf
+          (evalWithAnswerFn (QueryImpl.ofFn g) (gameDP lr E pk pre A Lst j.val))) := by
     intro g hev
     obtain ⟨i, hi⟩ := hev
     have hiℓ : i.val ≤ ℓ := Nat.lt_succ_iff.1 i.isLt
     have hev4 := shiftFail_events_of g E pk lr pre A Lst ℓ i.val cf (hcf i) hd hi
     obtain ⟨hH, hJ⟩ := prefix_of_shiftFail g lr E pk pre A Lst ℓ hiℓ hi
     -- a failure of the `i`-th derived game, or a bad query of its log
-    have key : failPc lr pk E cf (evalWithAnswerFn (QueryImpl.ofFn g) (gameDP lr E pk pre A Lst i.val)) ∨
+    have key : failPc lr pk E cf
+        (evalWithAnswerFn (QueryImpl.ofFn g) (gameDP lr E pk pre A Lst i.val)) ∨
         ∃ e ∈ tableQueryLog (gameDP lr E pk pre A Lst i.val) g, simBadS lr pk E (P i.val) e.1 g := by
       rcases hev4 with h0 | h1 | h2 | ⟨e, he, hb'⟩
       · by_cases hf : bindFailA stF E (evalWithAnswerFn (QueryImpl.ofFn g)

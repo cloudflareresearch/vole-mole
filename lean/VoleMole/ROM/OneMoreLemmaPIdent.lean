@@ -301,7 +301,8 @@ theorem aliveR_subset_known (hh : NoHit (gameIC T st P E) (chainHit T st P E) g)
     (hx : ((.h21, runX (Hashes.ofTable g) st (πOf g P E) leaves) : Dom) ∈ hashLog (jOf g P E)) :
     aliveR E (evalWithAnswerFn (QueryImpl.ofFn g) (gameIC T st P E)) ⊆
       (evalWithAnswerFn (QueryImpl.ofFn g) (gameIC T st P E)).2.1.known :=
-  aliveR_subset_known_of T st P E g (PostOut E) (keysPre_of_not_postOut T st P E) hh hpost hacc hr hx
+  aliveR_subset_known_of T st P E g (PostOut E) (keysPre_of_not_postOut T st P E) hh hpost hacc hr
+    hx
 
 end Chain
 

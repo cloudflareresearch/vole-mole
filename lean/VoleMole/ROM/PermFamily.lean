@@ -105,7 +105,8 @@ theorem recFamily_query (t : DomIC) :
     rw [jQ_query, jQ_query]
     rcases t with d | c
     · exact ⟨rfl, rfl⟩
-    · have hc : π' c.1 c.2 = σ c.1 c.2 := hag c _ (by rw [jQ_query]; exact List.mem_singleton_self _)
+    · have hc : π' c.1 c.2 = σ c.1 c.2 :=
+        hag c _ (by rw [jQ_query]; exact List.mem_singleton_self _)
       have : join h π'.fwd (.inr c) = join h σ.fwd (.inr c) := hc
       refine ⟨by rw [this], ?_⟩
       simp only [evalWithAnswerFn_liftM_query, QueryImpl.ofFn_apply]

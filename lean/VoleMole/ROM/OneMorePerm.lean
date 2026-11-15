@@ -71,7 +71,8 @@ lemma ivBefore_of_noH21 {p : Params} {L : QueryLog specIC}
 
 /-- **A log whose only `H₂¹` entry is the last, with its `iv`'s `H₄` query before it.** -/
 lemma ivBefore_append_h21 {p : Params} {L : QueryLog specIC} {x : ByteArray} {u : Ans (.h21, x)}
-    (h : ∀ e ∈ L, ∀ x', e.1 ≠ .inl (.h21, x')) (h4 : (.inl (.h4, ivIn p x) : DomIC) ∈ L.map Sigma.fst) :
+    (h : ∀ e ∈ L, ∀ x', e.1 ≠ .inl (.h21, x'))
+    (h4 : (.inl (.h4, ivIn p x) : DomIC) ∈ L.map Sigma.fst) :
     IvBefore p (L ++ [⟨.inl (.h21, x), u⟩]) := by
   intro pre post x' u' hL
   rcases List.eq_nil_or_concat post with rfl | ⟨post', y, rfl⟩
@@ -185,7 +186,8 @@ end Chal1
 section Forger
 
 /-- The answers of the forger's oracles in the permutation model. -/
-abbrev AnsUP : DomP ⊕ (ByteArray ⊕ TG) → Type := Sum.elim AnsP (Sum.elim (fun _ => TG) fun _ => SIss)
+abbrev AnsUP : DomP ⊕ (ByteArray ⊕ TG) → Type :=
+  Sum.elim AnsP (Sum.elim (fun _ => TG) fun _ => SIss)
 
 /-- **The forger's oracles in the permutation model**: the hashes, the cipher with forward and
 inverse queries (`PCell`), `hash_to_target` and the Issuer. -/
@@ -271,7 +273,8 @@ theorem recFamily_wrap {α : Type} (F : OracleComp specUP α) :
     simp only [wrap_normU_bind]
     refine RecFamily.bind ?_ fun r => ih r.1 r.2
     rcases t with (d | ⟨b, c⟩) | (x | t)
-    · exact recFamily_const ((simulateQ (wrapIC lr hint pre) (normUImpl p π0 (.inl (.inl d)))).run s)
+    · exact recFamily_const
+        ((simulateQ (wrapIC lr hint pre) (normUImpl p π0 (.inl (.inl d)))).run s)
     · cases b
       · refine (recFamily_inv c.1 c.2
           (fun x v => (x, (s.1 ++ [⟨.inr (c.1, x), v⟩], s.2)))).of_eq fun π g => ?_
@@ -297,8 +300,10 @@ theorem recFamily_wrap {α : Type} (F : OracleComp specUP α) :
           exact (evalWithAnswerFn_pure _ _).trans rfl
       · exact recFamily_const
           ((simulateQ (wrapIC lr hint pre) (normUImpl p π0 (.inl (.inr (true, c))))).run s)
-    · exact recFamily_const ((simulateQ (wrapIC lr hint pre) (normUImpl p π0 (.inr (.inl x)))).run s)
-    · exact recFamily_const ((simulateQ (wrapIC lr hint pre) (normUImpl p π0 (.inr (.inr t)))).run s)
+    · exact recFamily_const
+        ((simulateQ (wrapIC lr hint pre) (normUImpl p π0 (.inr (.inl x)))).run s)
+    · exact recFamily_const
+        ((simulateQ (wrapIC lr hint pre) (normUImpl p π0 (.inr (.inr t)))).run s)
 
 /-- **The forger's part of the derived prover has N1** (at the normalization's parameters). -/
 theorem n1c_wrap (π : PTable) {α : Type} (F : OracleComp specUP α) :
@@ -331,11 +336,11 @@ theorem n1c_wrap (π : PTable) {α : Type} (F : OracleComp specUP α) :
       · have : (simulateQ (wrapIC lr hint pre) (normUImpl p π (.inl (.inl d)))).run s =
             (fun u => (u, (s.1 ++ [⟨.inl d, u⟩], s.2))) <$>
               (liftM (specIC.query (.inl d)) : OracleComp specIC (AnsIC (.inl d))) := by
-          simp only [normUImpl, hd, ite_false, simulateQ_spec_query]
+          simp only [normUImpl, hd, ite_false]
           rfl
         rw [this]
         exact n1c_of_kind (isKindQueryBoundIC_map_hash d _)
-          (by simp [Function.update_apply, Ne.symm hd])
+          (by simp [Ne.symm hd])
     · cases b
       · intro g E
         simp only [normUImpl, simulateQ_bind, StateT.run_bind]
@@ -348,7 +353,7 @@ theorem n1c_wrap (π : PTable) {α : Type} (F : OracleComp specUP α) :
       · have : (simulateQ (wrapIC lr hint pre) (normUImpl p π (.inl (.inr (true, c))))).run s =
             (fun u => (u, (s.1 ++ [⟨.inr c, u⟩], s.2))) <$>
               (liftM (specIC.query (.inr c)) : OracleComp specIC Blk) := by
-          simp only [normUImpl, simulateQ_spec_query]
+          simp only [normUImpl]
           rfl
         rw [this]
         exact n1c_of_kind (isKindQueryBoundIC_map_cipher c _) rfl
@@ -366,7 +371,8 @@ end Family
 
 section Derived
 
-theorem n1c_chal1PreIC (st : Statement) (proof : ByteArray) : N1C st.params (chal1PreIC st proof) := by
+theorem n1c_chal1PreIC (st : Statement) (proof : ByteArray) :
+    N1C st.params (chal1PreIC st proof) := by
   unfold chal1PreIC
   refine N1C.bind (n1c_of_kind (isKindQueryBoundIC_liftIC (isKindQueryBound_ivQ st proof))
     (by simp [extractorQueries])) fun iv => ?_
@@ -393,7 +399,7 @@ theorem n1c_verPreIC (L : QueryLog specIC) (m sg : ByteArray) (s : HTS × Gh) :
 theorem n1c_verPreAll (L : QueryLog specIC) :
     ∀ (ms : List (ByteArray × ByteArray)) (s : HTS × Gh),
       N1C (pomfritParams lr) (verPreAll lr pk L ms s)
-  | [], s => n1c_pure _ _
+  | [], _ => n1c_pure _ _
   | (m, sg) :: rest, s => (n1c_verPreIC lr pk L m sg s).bind fun s' => n1c_verPreAll L rest s'
 
 theorem n1c_verLastIC (L : QueryLog specIC) (ms : ByteArray × ByteArray) (s : HTS × Gh) :
@@ -549,7 +555,7 @@ theorem kinds_normU {F : OracleComp specUP α} {q : Kind → ℕ} (hq : IsKindQu
         rw [hb]
         exact ih u (hk u)
     · cases b
-      · simp only [normUImpl, bind_assoc, pure_bind]
+      · simp only [normUImpl, bind_assoc]
         refine (isQueryBound_query_bind_iff _ _ _ _ _).2 ?_
         exact ⟨trivial, fun _ => ih _ (hk _)⟩
       · simp only [normUImpl]
@@ -581,7 +587,8 @@ theorem hashes_normU {F : OracleComp specUP α} {n : ℕ} {q : Kind → ℕ}
         rw [hd] at h0
         refine (isQueryBoundP_query_bind_iff _ _ _ _).2 ?_
         refine ⟨by omega, fun _ => ?_⟩
-        refine (isQueryBoundP_query_bind_iff _ _ _ _).2 ⟨Or.inr (by simp only [isHashU, ite_true]; omega), fun u => ?_⟩
+        refine (isQueryBoundP_query_bind_iff _ _ _ _).2
+          ⟨Or.inr (by simp only [isHashU, ite_true]; omega), fun u => ?_⟩
         have := ih u (hn u) (hk u)
         rw [hd, Function.update_self] at this
         refine this.mono ?_
@@ -597,7 +604,7 @@ theorem hashes_normU {F : OracleComp specUP α} {n : ℕ} {q : Kind → ℕ}
         omega
     · simp only [isHashUP, Bool.false_eq_true, ite_false] at hn
       cases b
-      · simp only [normUImpl, bind_assoc, pure_bind]
+      · simp only [normUImpl, bind_assoc]
         refine (isQueryBoundP_query_bind_iff _ _ _ _).2 ?_
         simp only [isHashU, Bool.false_eq_true, not_false_eq_true, true_or, ite_false, true_and]
         exact fun _ => ih _ (hn.2 _) (hk _)
@@ -631,14 +638,15 @@ theorem cipher_normU {F : OracleComp specUP α} {n : ℕ}
         refine (isQueryBoundP_query_bind_iff _ _ _ _).2 ?_
         simp only [isCipherU, Bool.false_eq_true, not_false_eq_true, true_or, ite_false, true_and]
         intro _
-        exact (isQueryBoundP_query_bind_iff _ _ _ _).2 ⟨Or.inl (by simp [isCipherU]), fun u => ih u (hn.2 u)⟩
+        exact (isQueryBoundP_query_bind_iff _ _ _ _).2 ⟨Or.inl (by simp),
+          fun u => ih u (hn.2 u)⟩
       · simp only [normUImpl, hd, ite_false]
         refine (isQueryBoundP_query_bind_iff _ _ _ _).2 ?_
         simp only [isCipherU, Bool.false_eq_true, not_false_eq_true, true_or, ite_false, true_and]
         exact fun u => ih u (hn.2 u)
     · simp only [isCipherUP, not_true_eq_false, false_or, ite_true] at hn
       cases b
-      · simp only [normUImpl, bind_assoc, pure_bind]
+      · simp only [normUImpl, bind_assoc]
         refine (isQueryBoundP_query_bind_iff _ _ _ _).2 ?_
         simp only [isCipherU, not_true_eq_false, false_or, ite_true]
         exact ⟨hn.1, fun _ => ih _ (hn.2 _)⟩
@@ -672,14 +680,15 @@ theorem ht_normU {F : OracleComp specUP α} {n : ℕ}
         refine (isQueryBoundP_query_bind_iff _ _ _ _).2 ?_
         simp only [isHT, Bool.false_eq_true, not_false_eq_true, true_or, ite_false, true_and]
         intro _
-        exact (isQueryBoundP_query_bind_iff _ _ _ _).2 ⟨Or.inl (by simp [isHT]), fun u => ih u (hn.2 u)⟩
+        exact (isQueryBoundP_query_bind_iff _ _ _ _).2 ⟨Or.inl (by simp),
+          fun u => ih u (hn.2 u)⟩
       · simp only [normUImpl, hd, ite_false]
         refine (isQueryBoundP_query_bind_iff _ _ _ _).2 ?_
         simp only [isHT, Bool.false_eq_true, not_false_eq_true, true_or, ite_false, true_and]
         exact fun u => ih u (hn.2 u)
     · simp only [isHTP, Bool.false_eq_true, ite_false] at hn
       cases b
-      · simp only [normUImpl, bind_assoc, pure_bind]
+      · simp only [normUImpl, bind_assoc]
         refine (isQueryBoundP_query_bind_iff _ _ _ _).2 ?_
         simp only [isHT, Bool.false_eq_true, not_false_eq_true, true_or, ite_false, true_and]
         exact fun _ => ih _ (hn.2 _)
@@ -709,5 +718,51 @@ theorem ForgerBoundP.toIC {A : ForgerP} {qA : Kind → ℕ} {nA qE QT : ℕ}
   ht pk := ht_normU _ π (hA.ht pk)
 
 end Budget
+
+/-! ## The forger's view -/
+
+section View
+
+/-- The answers of the permutation model's oracles from those of `specU` and a permutation
+table: the cipher answered by `π` forward or inverse. -/
+def joinUP (f : (t : DomIC ⊕ (ByteArray ⊕ TG)) → AnsU t) (π : PTable) :
+    (t : DomP ⊕ (ByteArray ⊕ TG)) → AnsUP t
+  | .inl (.inl d) => f (.inl (.inl d))
+  | .inl (.inr c) => pans π c
+  | .inr (.inl x) => f (.inr (.inl x))
+  | .inr (.inr t) => f (.inr (.inr t))
+
+/-- **The forger's view is the permutation oracle**: at any answer table whose cipher part is the
+forward table `π.fwd`, the normalized forger computes what the forger computes against `π` with
+forward and inverse queries (the reduction's `H₄` queries are hidden from it). -/
+theorem eval_normU (p : Params) (π : PTable) (f : (t : DomIC ⊕ (ByteArray ⊕ TG)) → AnsU t)
+    (hf : ∀ c, f (.inl (.inr c)) = π.fwd c) {α : Type} (F : OracleComp specUP α) :
+    evalWithAnswerFn (QueryImpl.ofFn f) (normU p π F) =
+      evalWithAnswerFn (QueryImpl.ofFn (joinUP f π)) F := by
+  induction F using OracleComp.inductionOn with
+  | pure a => simp [normU]
+  | query_bind t k ih =>
+    rw [normU_query_bind, evalWithAnswerFn_bind, evalWithAnswerFn_bind,
+      evalWithAnswerFn_liftM_query, QueryImpl.ofFn_apply]
+    rcases t with (d | ⟨b, c⟩) | (x | t)
+    · by_cases hd : d.1 = .h21
+      · simp only [normUImpl, hd, ite_true]
+        exact ih _
+      · simp only [normUImpl, hd, ite_false]
+        exact ih _
+    · cases b
+      · simp only [normUImpl]
+        exact ih _
+      · simp only [normUImpl]
+        show evalWithAnswerFn (QueryImpl.ofFn f) (normU p π (k (f (.inl (.inr c))))) =
+          evalWithAnswerFn (QueryImpl.ofFn (joinUP f π)) (k (π.fwd c))
+        rw [hf]
+        exact ih _
+    · simp only [normUImpl]
+      exact ih _
+    · simp only [normUImpl]
+      exact ih _
+
+end View
 
 end VoleMole.ROM.OneMore.Pomfrit
