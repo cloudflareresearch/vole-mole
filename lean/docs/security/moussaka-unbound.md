@@ -760,6 +760,17 @@ adversary's operations are unbound requests.
     bound `ε_prf` (`hprf`), `Adv^bind`, `Adv^spr-k`, `HitWfN`, `KeysOutNU` and the explicit numbers
     of `epsRomU`. Audit: `Audit/TheftPlainUnbound.lean` (the well-formed trivial adversary
     `thiefNUW`, `L = 9749`, `ktW`).
+  - **`nmUN_lean_romK`** (`Theft/PlainTotalRom.lean`): `nmUN_lean_rom'` for adversaries with
+    per-kind hash budgets only (`QBud q q_E`), `n_G := totK Moussaka.M q`. With `M` fixed every hash
+    query the tables answer other than by SHAKE has one of ten kinds; the adversary answers the
+    others itself, so the total follows (`admLN_qBudT`, `Theft/PlainTotal.lean`;
+    `security/ratatouille.md` §5, `noTheft_lean_romK`). Audit: `Audit/TheftPlainPerm.lean`.
+  - Not done: the unbound theorem with permutation rows and inverse cipher queries. The
+    permutation-model joint bound exists (`moussakaUnbound_sim_joint_specP`,
+    `ROM/MoussakaUnboundSimPerm.lean`), and the one-token steps are done for bound Moussaka and
+    Ratatouille (`noRedirect_lean_romP'`, `noTheft_lean_romP'`); what is missing is the `N`-slice
+    machinery (`locN`, `stageBudgetNX_runTN`, the patches' budgets, the extractor's read budget)
+    over `specP`.
 
 A malicious Moderator therefore cannot spend an honest Client's token at another Moderator, even
 though the token is valid there.
@@ -1052,7 +1063,8 @@ the base protocol.
    hashes uniform tables the programmed-point terms are bounded (`nmUN_leanX_hit`, and with the
    digest condition as a SHAKE256 collision term `nmUN_leanX_hitC`); plain extraction is proved
    from `ROM/`'s simultaneous extraction for function rows and `L ≥ 9749`, for adversaries whose
-   Anchor keys are determined by their digests (`nmUN_lean_rom'`, `KeysOutNU`).
+   Anchor keys are determined by their digests (`nmUN_lean_rom'`, `KeysOutNU`), with per-kind
+   hash budgets only (`nmUN_lean_romK`).
 5. The mechanized Thm U5 takes **per-proof** zero knowledge (`ZeroKnowledge` for `IssueRelW` and
    `RedeemRelW`, against distinguishers that know the witness). That hypothesis holds with
    dedicated label rows (`lean/docs/zk.md`). On `main` the CRT masks come from the witness, the

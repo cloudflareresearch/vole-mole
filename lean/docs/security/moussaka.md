@@ -726,6 +726,29 @@ is **[Lean]** for one honest token (`lean/VoleMole/Theft/`; for `U` tokens see b
     (q_E + cells(pR) + cells(pI)) (n_G + 2·338)`. Left: `εz`, `δ_R`, `Adv^ow`, the explicit
     numbers of `epsRomM`, and `HitWf`, `KeysOut` on the adversary. Audit:
     `Audit/TheftPlainMous.lean` (the well-formed trivial adversary `thiefW`, `L = 8193`).
+- **`noRedirect_lean_romK`** (`Theft/PlainTotalRom.lean`): `noRedirect_lean_rom'` for adversaries
+  with per-kind hash budgets only (`QBud q q_E`), `n_G := totK Moussaka.M q`: with `M` fixed, the
+  hash queries the tables answer other than by SHAKE have ten kinds, and the others the adversary
+  answers itself (`admL_qBudT`, `Theft/PlainTotal.lean`; `security/ratatouille.md` §5,
+  `noTheft_lean_romK`). Likewise `noRedirectN_lean_romK` for `U` tokens.
+- **`noRedirect_lean_romP'`** (`Theft/PlainMousPermReads.lean`; `noRedirect_lean_romP` with `hX`,
+  `Theft/PlainMousPerm.lean`; `moussaka_sim_joint_leanP`, `Theft/PlainMousJointP.lean`):
+  redemption non-malleability with **permutation rows** (`ZKRow.perm`, `εROPm`) and an adversary
+  over `specP` with **forward and inverse** cipher queries, within `QBudP q q_E` (no total),
+  `q_E + 129015 < 2^{128}`, for `HitWf` adversaries with `KeysOut A kt`:
+
+      Pr[Bad] ≤ εROPm(pI; q') + εROPm(pR; q') + δ_R + ε_rom
+        + 2·((q_μ+3)·2^{−256} + (q₂₁+3)·2^{−1088} + (q₂₂+3)·2^{−448}) + Adv^ow(inverter),
+
+  `q' = (2·q h3, 2·q h5 + 1560, 2·q_E + 138230)`, `ε_rom = epsRomMP q₀ (q_E + cells(pR) +
+  cells(pI)) (totK Moussaka.M q₀)`, `q₀ = q + 2·qPre`; `epsRomMP` is `epsRomM` with `failEpsP`
+  and `n_G + 2·q₂₁` in the `2^{−448}` term (`ROM/SimPermJointSpec.lean`,
+  `moussaka_sim_joint_specP`). The proof is Ratatouille's (`security/ratatouille.md` §5,
+  `noTheft_lean_romP'`): the extractor `eRomMP` is `eRomM` on the records of the adversary's
+  forward and inverse queries (`toIC`, `cLog_normJ`), the tables are `ROM/`'s permutation-model
+  experiment (`pr_tables_eq_roP`), and the extractor's read budget is the function-row one
+  (`stageBudgetX_extRomMP`). Audit: `Audit/TheftPlainPerm.lean` (`thiefW`, `L = 8193`). Not done
+  with permutation rows: `U` tokens (`noRedirectN_lean_rom'` is for function rows only).
 - Not covered:
   - `PlainSE` in the model of `noRedirect_leanX_plain`, from `ROM/`'s extraction bounds. What
     separates the two models is listed in `security/ratatouille.md` §5 ("What is not covered").
