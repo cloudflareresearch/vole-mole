@@ -20,9 +20,11 @@ and the cipher budget at most `2⁶⁴`:
 
 So `≤ 2⁻⁵⁴ + 2⁻⁵⁹` for `U = M = 1`, `≈ 2⁻³⁵` for `U + M = 2²⁰` and `≈ 2⁻²⁴` for `U + M = 2³¹`.
 The factor `U + M` stays: every hop charges the adversary's whole cipher budget (`221·q_E·2⁻¹²⁸`,
-key-level) again. `Theft/JointZK.lean` states the composition step that would charge it once, and
+key-level) again. `Theft/JointZK.lean` proves the composition step that would charge it once,
+from a per-proof zero-knowledge hypothesis that `ZK/` does not provide (point-level charges, in
+expectation); `jointNum_le` evaluates what it would give: `2⁻⁵⁴` for every `U, M ≤ 2³⁰`.
 `lean/docs/security/ratatouille.md` §5 explains why the hybrid of `Theft/Many.lean`, which uses the
-one-proof zero-knowledge theorem as a black box, cannot.
+one-proof zero-knowledge theorem as a black box, cannot do better.
 -/
 
 -- (The coin types are large products: their `Fintype` instances exceed the default size.)
@@ -100,6 +102,37 @@ lemma many_lin_le {U M : ℕ} (hU : U ≤ 2 ^ 30) (hM : M ≤ 2 ^ 30) {zI zS r e
       ((U + M : ℕ) : ℝ) / 2 ^ 55 + 1 / 2 ^ 59 := by
   have h := many_lin_le' hU hM hzI hzS hD hr he (x := 0) (by positivity)
   rwa [add_zero] at h
+
+set_option exponentiation.threshold 1100 in
+/-- **What the joint step would give, numerically** (`Theft/JointZK.lean`,
+`real_sim_leN_jointZK`; its hypothesis is **not proved**, see there). With `N ≤ 2³¹` proofs, the
+per-proof terms summing to at most `N·2⁻¹⁰⁰`, the budget charge `J` and the largest per-hop charge
+`B` each at most one hop's `zkB` at the hops' budgets, and `ROM/`'s error `r ≤ 13·2⁻⁶³`: `N·B < 1`
+and `(Σ c + J)/(1 − N·B) + r ≤ 2⁻⁵⁴`, the one-token number. -/
+lemma jointNum_le {N : ℕ} (hN : N ≤ 2 ^ 31) {a J B r : ℝ}
+    (ha : a ≤ N / 2 ^ 100) (hJ : J ≤ zkB (2 ^ 65) (2 ^ 65 + 2 ^ 41) (2 ^ 65 + 2 ^ 50))
+    (hB0 : 0 ≤ B) (hB : B ≤ zkB (2 ^ 65) (2 ^ 65 + 2 ^ 41) (2 ^ 65 + 2 ^ 50))
+    (hr : r ≤ 13 / 2 ^ 63) :
+    N * B < 1 ∧ (a + J) / (1 - N * B) + r ≤ 1 / 2 ^ 54 := by
+  set Z := zkB (2 ^ 65) (2 ^ 65 + 2 ^ 41) (2 ^ 65 + 2 ^ 50)
+  have hN' : (N : ℝ) ≤ 2 ^ 31 := by exact_mod_cast hN
+  have hz : (2 : ℝ) ^ 31 * Z ≤ 1 / 2 ^ 24 := by simp only [Z]; norm_num [zkB]
+  have hNB : (N : ℝ) * B ≤ 1 / 2 ^ 24 :=
+    (mul_le_mul hN' hB hB0 (by positivity)).trans hz
+  have hden : (1 : ℝ) - 1 / 2 ^ 24 ≤ 1 - N * B := by linarith
+  have hden0 : (0 : ℝ) < 1 - 1 / 2 ^ 24 := by norm_num
+  have hnum : a + J ≤ 2 ^ 31 / 2 ^ 100 + Z := by
+    have : (N : ℝ) / 2 ^ 100 ≤ 2 ^ 31 / 2 ^ 100 := div_le_div_of_nonneg_right hN' (by positivity)
+    linarith
+  have hfin : (2 ^ 31 / 2 ^ 100 + Z) / (1 - 1 / 2 ^ 24) + 13 / 2 ^ 63 ≤ (1 : ℝ) / 2 ^ 54 := by
+    simp only [Z]; norm_num [zkB]
+  refine ⟨by linarith, ?_⟩
+  have h1 : (a + J) / (1 - N * B) ≤ (2 ^ 31 / 2 ^ 100 + Z) / (1 - N * B) :=
+    div_le_div_of_nonneg_right hnum (by linarith)
+  have hZ0 : 0 ≤ Z := zkB_nonneg _ _ _
+  have h2 : (2 ^ 31 / 2 ^ 100 + Z) / (1 - N * B) ≤ (2 ^ 31 / 2 ^ 100 + Z) / (1 - 1 / 2 ^ 24) :=
+    div_le_div_of_nonneg_left (by positivity) hden0 hden
+  linarith
 
 end Sums
 
