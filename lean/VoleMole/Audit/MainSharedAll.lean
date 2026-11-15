@@ -17,7 +17,7 @@ import VoleMole.Audit.Liveness
 * **`anonymityNC_main` (Moussaka 4(b') on `main`) applies with a non-trivial signer and no abort
   term**: the Moderator `ncm d` uses the key `keyI d` of `Audit/Liveness.lean` for both Anchors,
   whose trapdoor signer `skI d` never fails (`skI_some`), so `φ = 0` (`phi_skI`); the index rule
-  is `idxEval` (`IdxSound`). Every hypothesis holds and every term of the bound is a number.
+  is `Rule.ofIdx idxEval` (`IdxSound`, `ruleNC_ofIdx`). Every hypothesis holds and every term of the bound is a number.
 * **The prefix-collision term is a number**: `pr_coll_le`, `pr_collR_le` bound it by `2⁻¹²⁸`
   (Moussaka) and `2·2⁻¹²⁸` (Ratatouille) per world, for every adversary.
 
@@ -48,7 +48,7 @@ lemma rdTH_const {X : Sort*} (x : X) : RdTH (fun _ _ => x) (fun _ _ => ∅) 0 0 
 theorem mH_cons : mH.ConsH 0 0 := ⟨fun _ _ _ => rdTH_const True, fun _ _ _ => rdTH_const ∅⟩
 
 /-- `anonymity_main_sharedAll` for `mH`. -/
-example (idx : AnchorSet → UOVKey → ℕ) :=
+example (idx : Rule) :=
   anonymity_main_sharedAll mH idx mH_cons (εhide := 0)
     (fun _ _ _ => (Audit.hidingAdv_true _ _).le)
 
@@ -67,12 +67,12 @@ theorem mH3_cons (k : Pre) (ρ : ZK.Sim.Bytes 16) : (mH3 k ρ).ConsH 1 0 :=
       ⟨fun _ _ => ∅, fun _ _ => Nat.zero_le _, fun _ _ _ _ => rfl⟩⟩⟩
 
 /-- `anonymity_main_sharedAll` for the `H₃`-reading adversary `mH3 k ρ` (trivial `εhide = 1`). -/
-example (k : Pre) (ρ : ZK.Sim.Bytes 16) (idx : AnchorSet → UOVKey → ℕ) :=
+example (k : Pre) (ρ : ZK.Sim.Bytes 16) (idx : Rule) :=
   anonymity_main_sharedAll (mH3 k ρ) idx (mH3_cons k ρ) (εhide := 1)
     (fun _ _ _ => Audit.hidingAdv_le_one _ _ _)
 
 /-- The prefix-collision term of either world is at most `2⁻¹²⁸`, for every adversary. -/
-example (A : AdversaryH) (idx : AnchorSet → UOVKey → ℕ) (b : Bool) :=
+example (A : AdversaryH) (idx : Rule) (b : Bool) :=
   pr_coll_le A idx b
 
 end Moussaka
@@ -144,12 +144,13 @@ theorem phi_skI (d : Spec.Bytes) (A : AdversaryNC) (c : Bool) : phi A (fun _ => 
 /-- `anonymityNC_main` for `ncm d` with the trapdoor signers: every hypothesis holds, and the
 abort term vanishes. -/
 example (d : Spec.Bytes) (PI : NIZK IssueInstance) :
-    |realNCM (ncm d) Audit.idxEval PI (fun _ => skI d) false -
-        realNCM (ncm d) Audit.idxEval PI (fun _ => skI d) true| ≤
+    |realNCM (ncm d) (Rule.ofIdx Audit.idxEval) PI (fun _ => skI d) false -
+        realNCM (ncm d) (Rule.ofIdx Audit.idxEval) PI (fun _ => skI d) true| ≤
       30 * (εS 0 (0 + 8 * 4607) + Δ23 9) +
         15 * (8 * noHitProb + (4 * ((0 : ℕ) + 625) + 626) / 2 ^ 128) + 2 / 2 ^ 128 := by
-  have h := anonymityNC_main (ncm d) Audit.idxEval PI (fun _ => skI d) (fun _ => skI_correct d)
-    Audit.idxEval_sound (ncm_cons d) (q5 := 0) (fun _ _ _ => le_rfl)
+  have h := anonymityNC_main (ncm d) (Rule.ofIdx Audit.idxEval) PI (fun _ => skI d)
+    (fun _ => skI_correct d) (ruleNC_ofIdx _ _ Audit.idxEval_sound) (ncm_cons d) (q5 := 0)
+    (fun _ _ _ => le_rfl)
   rw [phi_skI, phi_skI] at h
   simpa using h
 

@@ -45,11 +45,11 @@ lemma rdT_const {X : Sort*} (x : X) :
 theorem mS_cons : mS.Cons 0 0 := ⟨fun _ _ _ => rdT_const True, fun _ _ _ => rdT_const ∅⟩
 
 /-- `anonymity_main_shared` for `mS`. -/
-example (idx : AnchorSet → UOVKey → ℕ) :=
+example (idx : Rule) :=
   anonymity_main_shared mS idx mS_cons (εhide := 0) (fun _ _ => (Audit.hidingAdv_true _ _).le)
 
 /-- The predictors of `mS` name at most `2498` candidates. -/
-example (idx : AnchorSet → UOVKey → ℕ) (b : Bool) (t₀ t₁ n₀ n₁ : Spec.Bytes) (a : AuxS) (c : Bool) :
+example (idx : Rule) (b : Bool) (t₀ t₁ n₀ n₁ : Spec.Bytes) (a : AuxS) (c : Bool) :
     (predS mS idx b t₀ t₁ n₀ n₁ a c).card ≤ 2 * (0 + 1249) :=
   card_predS_le mS idx (q5 := 0) (fun _ _ _ _ => le_rfl) b t₀ t₁ n₀ n₁ a c
 
@@ -73,7 +73,7 @@ theorem mR_cons (k₀ : ZK.Sim.Bytes 37) : (mR k₀).Cons 0 0 :=
 
 /-- `anonymity_main_shared` for the `H₅`-reading adversary `mR k₀` (with the trivial `εhide = 1`:
 the theorem's hypotheses are satisfiable for an adversary that reads the shared table). -/
-example (k₀ : ZK.Sim.Bytes 37) (idx : AnchorSet → UOVKey → ℕ) :=
+example (k₀ : ZK.Sim.Bytes 37) (idx : Rule) :=
   anonymity_main_shared (mR k₀) idx (mR_cons k₀) (εhide := 1)
     (fun _ _ => Audit.hidingAdv_le_one _ _ _)
 

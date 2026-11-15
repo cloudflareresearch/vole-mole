@@ -48,16 +48,16 @@ section Moussaka
 open VoleMole.Spec VoleMole.Spec.Moussaka VoleMole.Privacy.Moussaka
 
 /-- `anonymity_main_shared23` for `mS`. -/
-example (idx : AnchorSet → UOVKey → ℕ) :=
+example (idx : Rule) :=
   anonymity_main_shared23 mS idx mS_cons (εhide := 0) (fun _ _ => (Audit.hidingAdv_true _ _).le)
 
 /-- `anonymity_main_shared23` for the `H₅`-reading adversary `mR k₀`. -/
-example (k₀ : ZK.Sim.Bytes 37) (idx : AnchorSet → UOVKey → ℕ) :=
+example (k₀ : ZK.Sim.Bytes 37) (idx : Rule) :=
   anonymity_main_shared23 (mR k₀) idx (mR_cons k₀) (εhide := 1)
     (fun _ _ => Audit.hidingAdv_le_one _ _ _)
 
 /-- The predictors of `mS` on the shared table name at most `2498` candidates. -/
-example (idx : AnchorSet → UOVKey → ℕ) (b : Bool) (t₀ t₁ n₀ n₁ : Spec.Bytes) (a : AuxS) (c : Bool) :
+example (idx : Rule) (b : Bool) (t₀ t₁ n₀ n₁ : Spec.Bytes) (a : AuxS) (c : Bool) :
     (predS23 mS idx b t₀ t₁ n₀ n₁ a c).card ≤ 2 * (0 + 1249) :=
   card_predS23_le mS idx (q5 := 0) (fun _ _ _ _ => le_rfl) b t₀ t₁ n₀ n₁ a c
 

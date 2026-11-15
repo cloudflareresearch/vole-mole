@@ -1,5 +1,6 @@
 import VoleMole.Privacy.MoussakaMainSharedAll
 import VoleMole.Privacy.MoussakaNC
+import VoleMole.Privacy.MoussakaRule
 
 /-!
 # Moussaka issuer hiding against a non-colluding Moderator on `main` (Theorem 4(b'))
@@ -18,7 +19,10 @@ issuance, so the view depends on the Clients' openings only through the refusal 
 it is `Spec.Moussaka.issueResponse`, `main`'s Anchor (`issueRequestBytes = 45 + 7272`), with the
 same lemmas: an honest issuance gives the Client's token iff the Anchor accepts and
 `derive_preimage` succeeds (`tokN_issReal`); unless `derive_preimage` fails, success is
-"accepted, and the issuer's key is found in both sets" (`goodN_eq_of_derive`). The issuance proof
+"accepted, and the rule finds a verifying key in both sets", a bit that does not depend on the
+token for a rule sound for the honest Clients (`RuleNC`, `goodN_eq_of_derive`). The rule is a
+`Rule` (`Privacy/MoussakaRule.lean`): the index-taking Client (`Rule.ofIdx`) or `main`'s
+`find_issuer` (`findIdx`, `Privacy/MoussakaMainFind.lean`). The issuance proof
 system `PI` stays abstract: the issuance proofs are never shown, and they are neither simulated
 nor run on the game's tables (as in `anonymityNC`).
 
@@ -78,7 +82,7 @@ attribute [local irreducible] simulate realRO progRO
 
 section HonestN
 
-variable (A : AdversaryNC) (idx : AnchorSet → UOVKey → ℕ) (PI : NIZK IssueInstance)
+variable (A : AdversaryNC) (idx : Rule) (PI : NIZK IssueInstance)
   (sk : Bool → Signer)
 
 /-- The honest Anchor `c`'s answer to a request on `main` (`issue_response`, `main`'s request
@@ -99,7 +103,7 @@ def tokDN (c : Bool) (i : PendingToken × Bytes) : Token :=
 /-- Client `c` can redeem at its own index in the set of side `side`. -/
 def okN (c side : Bool) (i : PendingToken × Bytes) : Bool :=
   redeemOk A.base.ci A.base.cr (tokDN A PI sk c i) (A.choose side).1
-    (idx (A.choose side).1 (A.pk c))
+    (idx (A.choose side).1 (A.pk c) (tokT A.base (tokDN A PI sk c i)) (tokDN A PI sk c i).s)
 
 /-- Client `c`'s issuance succeeded and its token is redeemable at its index in both sets. -/
 def goodN (c : Bool) (i : PendingToken × Bytes) : Bool :=
@@ -167,18 +171,41 @@ lemma tokDN_of_some (hsk : ∀ c, (sk c).Correct (A.pk c)) (c : Bool) (x : IssT)
     | some s => exact ⟨rfl, rfl⟩
   · cases h
 
-/-- The symmetric success predicate of the hybrid on `main`. -/
-def gSymN (x : IssT) : Bool :=
-  accN A PI (issReal A.base PI x).2 &&
-    ((foundNC A idx false false && foundNC A idx false true) &&
-      (foundNC A idx true false && foundNC A idx true true))
+/-- **A rule is sound for the honest Clients with outcome `f`**: at a token that verifies under
+its issuer's key, whether the Client can redeem in the set of side `side` is `f c side`, which does
+not depend on the token. The index-taking Client with a sound rule has `f = foundNC`
+(`ruleNC_ofIdx`); `main`'s `find_issuer` Client, for sets that contain both issuers' maps, has
+`f = true` (`Privacy/MoussakaMainFind.lean`). -/
+def RuleNC (idx : Rule) (f : Bool → Bool → Bool) : Prop :=
+  ∀ (c side : Bool) (tk : Token), (A.pk c).eval tk.s = tokT A.base tk →
+    redeemOk A.base.ci A.base.cr tk (A.choose side).1
+      (idx (A.choose side).1 (A.pk c) (tokT A.base tk) tk.s) = f c side
 
-/-- **Unless `derive_preimage` fails**, Client `c`'s success is "accepted, and its key is found in
-both sets" (sound index rule). -/
-lemma goodN_eq_of_derive (hsk : ∀ c, (sk c).Correct (A.pk c)) (hidx : IdxSound idx) (c : Bool)
+omit idx in
+/-- **The index-taking Client** with a sound index rule. -/
+lemma ruleNC_ofIdx (idx : AnchorSet → UOVKey → ℕ) (hidx : IdxSound idx) :
+    RuleNC A (Rule.ofIdx idx) (foundNC A idx) := by
+  intro c side tk hc
+  unfold redeemOk foundNC Rule.ofIdx
+  cases hk : (A.choose side).1.keys[idx (A.choose side).1 (A.pk c)]? with
+  | none => rfl
+  | some k =>
+    simp only [Option.isSome_some, decide_eq_true_eq]
+    rw [hidx _ _ _ hk]
+    exact hc
+
+/-- The symmetric success predicate of the hybrid on `main`, for the outcome `f` of a sound
+rule. -/
+def gSymN (f : Bool → Bool → Bool) (x : IssT) : Bool :=
+  accN A PI (issReal A.base PI x).2 && ((f false false && f false true) && (f true false && f true true))
+
+/-- **Unless `derive_preimage` fails**, Client `c`'s success is "accepted, and the rule finds its
+key in both sets" (`RuleNC`). -/
+lemma goodN_eq_of_derive (hsk : ∀ c, (sk c).Correct (A.pk c)) {f : Bool → Bool → Bool}
+    (hidx : RuleNC A idx f) (c : Bool)
     (x : IssT) (hd : (sk c).derivePreimage (tNC A x) ≠ none) :
     goodN A idx PI sk c (issReal A.base PI x) =
-      (accN A PI (issReal A.base PI x).2 && (foundNC A idx c false && foundNC A idx c true)) := by
+      (accN A PI (issReal A.base PI x).2 && (f c false && f c true)) := by
   obtain ⟨s, hs⟩ := Option.ne_none_iff_exists'.1 hd
   have hc := (hsk c (tNC A x) s (length_com _ _ _ _) hs).2
   have htok := tokN_issReal A PI sk hsk c x
@@ -191,14 +218,9 @@ lemma goodN_eq_of_derive (hsk : ∀ c, (sk c).Correct (A.pk c)) (hidx : IdxSound
     simp only [Option.map_some, ite_true] at htok
     simp only [htok, Option.isSome_some, Option.getD_some, Bool.true_and]
     have hok (side : Bool) : redeemOk A.base.ci A.base.cr ⟨List.ofFn x.1, List.ofFn x.2.1, s⟩
-        (A.choose side).1 (idx (A.choose side).1 (A.pk c)) = foundNC A idx c side := by
-      unfold redeemOk foundNC
-      cases hk : (A.choose side).1.keys[idx (A.choose side).1 (A.pk c)]? with
-      | none => rfl
-      | some k =>
-        simp only [Option.isSome_some, decide_eq_true_eq]
-        rw [hidx _ _ _ hk]
-        exact hc
+        (A.choose side).1 (idx (A.choose side).1 (A.pk c)
+          (tokT A.base ⟨List.ofFn x.1, List.ofFn x.2.1, s⟩) s) = f c side :=
+      hidx c side ⟨List.ofFn x.1, List.ofFn x.2.1, s⟩ hc
     rw [hok, hok]
 
 end HonestN
@@ -246,7 +268,7 @@ def xOf (s : SecNC) (c : Bool) : IssT := bif c then s.2 else s.1
 
 section GameM
 
-variable (A : AdversaryNCM) (idx : AnchorSet → UOVKey → ℕ) (PI : NIZK IssueInstance)
+variable (A : AdversaryNCM) (idx : Rule) (PI : NIZK IssueInstance)
   (sk : Bool → Signer)
 
 /-- Client `c`'s issuance output. -/
@@ -260,7 +282,9 @@ def gNC (s : SecNC) : Bool :=
 /-- The redemption of side `side` in world `b`: Client `b ^^ side`'s token. -/
 def ptNM (b : Bool) (s : SecNC) (side : Bool) : RedeemPt :=
   ⟨tokDN A.nc PI sk (b ^^ side) (iOf A PI s (b ^^ side)), (A.choose side).1,
-    idx (A.choose side).1 (A.pk (b ^^ side)), (A.choose side).2⟩
+    idx (A.choose side).1 (A.pk (b ^^ side))
+      (tokT A.nc.base (tokDN A.nc PI sk (b ^^ side) (iOf A PI s (b ^^ side))))
+      (tokDN A.nc PI sk (b ^^ side) (iOf A PI s (b ^^ side))).s, (A.choose side).2⟩
 
 /-- **The game of world `b`** on `main`: no issuance slot, the two redemptions if not refused. -/
 def gameNCM (b : Bool) : Game SecNC Out SW SW SW SW where
@@ -451,7 +475,7 @@ end GameM
 
 section CollM
 
-variable {A : AdversaryNCM} {idx : AnchorSet → UOVKey → ℕ} {PI : NIZK IssueInstance}
+variable {A : AdversaryNCM} {idx : Rule} {PI : NIZK IssueInstance}
   {sk : Bool → Signer}
 
 lemma σNC_wit (hsk : ∀ c, (sk c).Correct (A.pk c)) (b : Bool) (s : SecNC) (side : Bool) (y : SW)
@@ -558,7 +582,7 @@ noncomputable def keyNM (b g : Bool) (n₀ n₁ : Bytes) (a : AuxS) :
       .ok ((bif b then n₀ else n₁) ++ pf (some (simulate pRm a.2.2.2.2.1.2))))
   else none
 
-variable {A} {idx : AnchorSet → UOVKey → ℕ} {PI : NIZK IssueInstance} {sk : Bool → Signer}
+variable {A} {idx : Rule} {PI : NIZK IssueInstance} {sk : Bool → Signer}
 
 lemma σ₃NC_map (hsk : ∀ c, (sk c).Correct (A.pk c)) (b : Bool) (s : SecNC) (side : Bool) :
     (bif gNC A idx PI sk s then redStmt A.m (ptNM A idx PI sk b s side) else none).map
@@ -646,8 +670,8 @@ end SimM
 
 section SwapM
 
-variable (A : AdversaryNCM) (idx : AnchorSet → UOVKey → ℕ) (PI : NIZK IssueInstance)
-  (sk : Bool → Signer)
+variable (A : AdversaryNCM) (idx : Rule) (PI : NIZK IssueInstance)
+  (sk : Bool → Signer) (f : Bool → Bool → Bool)
 
 /-- **The simulated game's event** from the refusal bit, the nullifiers in Client order, the
 simulators' coins and raw tables, and `H₃`. -/
@@ -664,26 +688,26 @@ lemma simNCM_eq (hsk : ∀ c, (sk c).Correct (A.pk c)) (b : Bool) :
 /-- The hybrid with the symmetric refusal bit. -/
 noncomputable def hybNCM (b : Bool) : ℝ :=
   pr (GTape SecNC pIm pIm pRm pRm × H3T) (fun z =>
-    hvNCM A b (gSymN A.nc idx PI z.1.1.1 && gSymN A.nc idx PI z.1.1.2) (nNC z.1.1 false)
+    hvNCM A b (gSymN A.nc PI f z.1.1.1 && gSymN A.nc PI f z.1.1.2) (nNC z.1.1 false)
       (nNC z.1.1 true) z.1.2 z.2)
 
 /-- **The abort hop**: with both redemptions simulated, replacing the refusal bit by the
 symmetric one costs at most `φ false + φ true` (identical until a `derive_preimage` fails). -/
-theorem sim_hyb_NCM (hsk : ∀ c, (sk c).Correct (A.pk c)) (hidx : IdxSound idx) (b : Bool) :
-    |simNCM A idx PI sk b - hybNCM A idx PI b| ≤ phi A.nc sk false + phi A.nc sk true := by
+theorem sim_hyb_NCM (hsk : ∀ c, (sk c).Correct (A.pk c)) (hidx : RuleNC A.nc idx f) (b : Bool) :
+    |simNCM A idx PI sk b - hybNCM A PI f b| ≤ phi A.nc sk false + phi A.nc sk true := by
   have hsk' : ∀ c, (sk c).Correct (A.nc.pk c) := hsk
   rw [simNCM_eq A idx PI sk hsk b]
   have hb := abs_pr_sub_le_of_agree
     (fun z : GTape SecNC pIm pIm pRm pRm × H3T =>
       hvNCM A b (gNC A idx PI sk z.1.1) (nNC z.1.1 false) (nNC z.1.1 true) z.1.2 z.2)
-    (fun z => hvNCM A b (gSymN A.nc idx PI z.1.1.1 && gSymN A.nc idx PI z.1.1.2) (nNC z.1.1 false)
+    (fun z => hvNCM A b (gSymN A.nc PI f z.1.1.1 && gSymN A.nc PI f z.1.1.2) (nNC z.1.1 false)
       (nNC z.1.1 true) z.1.2 z.2)
     (fun z => (sk false).derivePreimage (tNC A.nc z.1.1.1) = none ∨
       (sk true).derivePreimage (tNC A.nc z.1.1.2) = none) fun z hz => by
     simp only [not_or] at hz
     have g0 := goodN_eq_of_derive A.nc idx PI sk hsk' hidx false z.1.1.1 hz.1
     have g1 := goodN_eq_of_derive A.nc idx PI sk hsk' hidx true z.1.1.2 hz.2
-    have hg : gNC A idx PI sk z.1.1 = (gSymN A.nc idx PI z.1.1.1 && gSymN A.nc idx PI z.1.1.2) := by
+    have hg : gNC A idx PI sk z.1.1 = (gSymN A.nc PI f z.1.1.1 && gSymN A.nc PI f z.1.1.2) := by
       unfold gNC iOf xOf gSymN
       simp only [Bool.cond_false, Bool.cond_true]
       rw [g0, g1]
@@ -729,15 +753,15 @@ theorem hybG_eq (G : IssT → Bool) : hybG A G false = hybG A G true := by
   simp only [swapNCM, Equiv.coe_fn_mk, Bool.and_comm (G z.1.1.2)]
   rfl
 
-theorem hybNCM_eq : hybNCM A idx PI false = hybNCM A idx PI true :=
-  hybG_eq A (gSymN A.nc idx PI)
+theorem hybNCM_eq : hybNCM A PI f false = hybNCM A PI f true :=
+  hybG_eq A (gSymN A.nc PI f)
 
 end SwapM
 /-! ## The (PU) term: statistical -/
 
 section BstarM
 
-variable (A : AdversaryNCM) (idx : AnchorSet → UOVKey → ℕ) (PI : NIZK IssueInstance)
+variable (A : AdversaryNCM) (idx : Rule) (PI : NIZK IssueInstance)
   (sk : Bool → Signer)
 
 /-- **The public key set with the redemptions happening**: the guess's read set (computed with the
@@ -885,7 +909,7 @@ end BstarM
 
 section PrM
 
-variable (A : AdversaryNCM) (idx : AnchorSet → UOVKey → ℕ) (PI : NIZK IssueInstance)
+variable (A : AdversaryNCM) (idx : Rule) (PI : NIZK IssueInstance)
   (sk : Bool → Signer)
 
 theorem pr_errNC₁_le : pr (GTape SecNC pIm pIm pRm pRm) (fun x => errC pIm x.2.2.1.1.2) ≤
@@ -1023,13 +1047,15 @@ end PrM
 
 section MainM
 
-variable (A : AdversaryNCM) (idx : AnchorSet → UOVKey → ℕ) (PI : NIZK IssueInstance)
+variable (A : AdversaryNCM) (idx : Rule) (PI : NIZK IssueInstance)
   (sk : Bool → Signer)
 
 /-- **Theorem 4(b') on `main` (no label rows), all tables shared.** For every non-colluding
 Moderator (contexts, keys, Anchor Sets and digests of its choice; it sees no issuance), honest
-Anchors with signers correct for their keys answering with `main`'s `issue_response`, a sound index
-rule, any issuance proof system, and the executable prover for the two redemptions with one `H₃`,
+Anchors with signers correct for their keys answering with `main`'s `issue_response`, a rule
+sound for the honest Clients (`RuleNC`: the index-taking Client with `IdxSound`, `ruleNC_ofIdx`;
+`main`'s `find_issuer` Client for sets with both issuers, `ruleNC_findIdx`), any issuance proof
+system, and the executable prover for the two redemptions with one `H₃`,
 one `H₂³` table, one `H₅` table and one cipher: if the guess reads `H₃` at `q3` points, the cipher
 at `qE` keys and `H₅` at a consistent read set of at most `q5` keys,
 
@@ -1038,7 +1064,8 @@ at `qE` keys and `H₅` at a consistent read set of at most `q5` keys,
 
 The (PU) term is statistical: no assumption on `Com`. `φ c` is the abort probability of
 Anchor `c` (`phi`; `≤ δ_c^255` for pqov in the vinegar random-oracle model). -/
-theorem anonymityNC_main (hsk : ∀ c, (sk c).Correct (A.pk c)) (hidx : IdxSound idx) {q3 qE q5 : ℕ}
+theorem anonymityNC_main (hsk : ∀ c, (sk c).Correct (A.pk c)) {f : Bool → Bool → Bool}
+    (hidx : RuleNC A.nc idx f) {q3 qE q5 : ℕ}
     (hC : A.ConsH q3 qE) (h5 : ∀ y t T, (A.R5 y t T).card ≤ q5) :
     |realNCM A idx PI sk false - realNCM A idx PI sk true| ≤
       30 * (εS q3 (qE + 8 * 4607) + Δ23 9) +
@@ -1050,9 +1077,9 @@ theorem anonymityNC_main (hsk : ∀ c, (sk c).Correct (A.pk c)) (hidx : IdxSound
   have b1 := pr_bstarNCM_le A idx PI sk hsk h5 true
   have c0 := pr_collNCM_le A idx PI sk hsk false
   have c1 := pr_collNCM_le A idx PI sk hsk true
-  have g0 := sim_hyb_NCM A idx PI sk hsk hidx false
-  have g1 := sim_hyb_NCM A idx PI sk hsk hidx true
-  have he := hybNCM_eq A idx PI
+  have g0 := sim_hyb_NCM A idx PI sk f hsk hidx false
+  have g1 := sim_hyb_NCM A idx PI sk f hsk hidx true
+  have he := hybNCM_eq A PI f
   have hn : (4 * ((q5 : ℝ) + 625) + 626) / 2 ^ 128 =
       2 * ((q5 + 625) / 2 ^ 128) + 313 / 2 ^ 128 + (2 * ((q5 + 625) / 2 ^ 128) + 313 / 2 ^ 128) := by
     ring

@@ -12,7 +12,7 @@ proofs simulated. Here that event is reduced to the game `Privacy.PU.puAdv` for 
 
 **The predictors** (`predM`, `predM₀`, `predM₁`). With all proofs simulated, everything the
 adversary sees is a function of the commitments `t₀, t₁`, the nullifiers `n₀, n₁`, the four
-simulators' coins and the tables (`yM_sim`, from `Moussaka.post_redSim`). So are the statements of
+simulators' coins and the tables (`yM_sim`, from `Moussaka.post_redSimG`). So are the statements of
 the proofs (`redStmt_allOk`), the `H₅` read sets and hence the candidate sets `candJ`. For Client
 `c`, `predM b … c` is the union of the candidates of its issuance proof and, when §6's rule lets
 the redemptions run (`allOkT`), of its redemption proof. Both proofs have the Client's opening
@@ -83,7 +83,7 @@ lemma wPre_redeemWitness (nf ci cr s : Bytes) (i : ℕ) (r : Coins 16) :
 
 /-! ## The simulated game as a function of the commitments and the nullifiers -/
 
-variable (A : AdversaryM) (idx : AnchorSet → UOVKey → ℕ)
+variable (A : AdversaryM) (idx : Rule)
 
 /-- `Com` on the Clients' coins, with the adversary's contexts. -/
 def comM (n : Coins nfBytes) (r : Coins rBytes) : Bytes :=
@@ -123,7 +123,7 @@ def visM (k : AuxM) : VisM := (k.1.2, k.2.1.2, k.2.2.1.2, k.2.2.2.2)
 and the simulators' coins. -/
 noncomputable def ySimM (b : Bool) (t₀ t₁ n₀ n₁ : Bytes) (k : AuxM) :
     Option (Except Error Bytes × Except Error Bytes) :=
-  bif allOkT A.int idx (reqS t₀ k.1.1) (reqS t₁ k.2.1.1) t₀ t₁ then
+  bif allOkTG A.int idx (reqS t₀ k.1.1) (reqS t₁ k.2.1.1) t₀ t₁ then
     some (ySim A.int simRM b (reqS t₀ k.1.1) (reqS t₁ k.2.1.1) n₀ n₁ k.2.2.1.1 false,
       ySim A.int simRM b (reqS t₀ k.1.1) (reqS t₁ k.2.1.1) n₀ n₁ k.2.2.2.1 true)
   else none
@@ -158,7 +158,7 @@ and, if the redemptions run (`allOkT`), of its redemption proof (side `b ^^ c`).
 noncomputable def predM (b : Bool) (t₀ t₁ n₀ n₁ : Bytes) (k : AuxM) (c : Bool) :
     Finset (Coins rBytes) :=
   (bif c then candM₂ A idx b t₀ t₁ n₀ n₁ k else candM₁ A idx b t₀ t₁ n₀ n₁ k) ∪
-    (bif allOkT A.int idx (reqS t₀ k.1.1) (reqS t₁ k.2.1.1) t₀ t₁ then
+    (bif allOkTG A.int idx (reqS t₀ k.1.1) (reqS t₁ k.2.1.1) t₀ t₁ then
       (bif b ^^ c then candM₄ A idx b t₀ t₁ n₀ n₁ k else candM₃ A idx b t₀ t₁ n₀ n₁ k)
     else ∅)
 
@@ -181,7 +181,7 @@ theorem card_predM_le {q5 : ℕ}
   generalize candM₂ A idx b t₀ t₁ n₀ n₁ k = C₂ at e₂ ⊢
   generalize candM₃ A idx b t₀ t₁ n₀ n₁ k = C₃ at e₃ ⊢
   generalize candM₄ A idx b t₀ t₁ n₀ n₁ k = C₄ at e₄ ⊢
-  generalize allOkT A.int idx (reqS t₀ k.1.1) (reqS t₁ k.2.1.1) t₀ t₁ = ok
+  generalize allOkTG A.int idx (reqS t₀ k.1.1) (reqS t₁ k.2.1.1) t₀ t₁ = ok
   refine (Finset.card_union_le _ _).trans ?_
   have a : (bif c then C₂ else C₁).card ≤ q5 + 1 := by
     cases c
@@ -198,7 +198,7 @@ theorem card_predM_le {q5 : ℕ}
 /-! ## The simulated game, rewritten -/
 
 /-- **With all proofs simulated, the guess's third input is a function of the commitments, the
-nullifiers and the simulators' coins** (`Moussaka.post_redSim`, for the adversary whose guess
+nullifiers and the simulators' coins** (`Moussaka.post_redSimG`, for the adversary whose guess
 compares its input with `ySimM`). -/
 theorem yM_sim (b : Bool) (s : SecM) (k : AuxM) :
     yM A idx b s (some (simulate pIm k.1.1)) (some (simulate pIm k.2.1.1))
@@ -211,7 +211,7 @@ theorem yM_sim (b : Bool) (s : SecM) (k : AuxM) :
   rw [redOut_sim A (visM k), redOut_sim A (visM k)]
   let A' : Adversary := ⟨A.ctxIss, A.ctxRed, A.pk, A.respond, A.choose, fun _ _ y =>
     y = ySimM A idx b (tM A s false) (tM A s true) (nOf s false) (nOf s true) k⟩
-  exact (post_redSim A' idx simRM b (issM A s false (some (simulate pIm k.1.1)))
+  exact (post_redSimG A' idx simRM b (issM A s false (some (simulate pIm k.1.1)))
     (issM A s true (some (simulate pIm k.2.1.1))) k.2.2.1.1 k.2.2.2.1 rfl rfl).2 rfl
 
 /-- **A redemption statement of a finalized token**: its instance is public (`xSideM`), and its
@@ -234,9 +234,11 @@ theorem redStmt_fin (b : Bool) (s : SecM) (k : AuxM) (side : Bool)
     cases b ^^ side <;> rfl
   have hP : ptM A idx b s (some (simulate pIm k.1.1)) (some (simulate pIm k.2.1.1)) side =
       ⟨⟨nOf s (b ^^ side), List.ofFn (rOf s (b ^^ side)), resp A.int i₀.2 i₁.2 (b ^^ side)⟩,
-        (A.int.choose i₀.2 i₁.2 side).1, idx (A.int.choose i₀.2 i₁.2 side).1 (A.int.pk (b ^^ side)),
+        (A.int.choose i₀.2 i₁.2 side).1, idx (A.int.choose i₀.2 i₁.2 side).1 (A.int.pk (b ^^ side))
+          (tokT A.int ⟨nOf s (b ^^ side), List.ofFn (rOf s (b ^^ side)),
+            resp A.int i₀.2 i₁.2 (b ^^ side)⟩) (resp A.int i₀.2 i₁.2 (b ^^ side)),
         (A.int.choose i₀.2 i₁.2 side).2⟩ := by
-    unfold ptM pt
+    unfold ptM ptG
     rw [htok]
   rw [hP] at hy
   unfold redStmt at hy
@@ -355,7 +357,7 @@ theorem puEv_imp (b : Bool) (x : SecM × AuxM)
   rw [puEv_iff] at h
   obtain ⟨s, k⟩ := x
   dsimp only at h ⊢
-  have hY : allOkT A.int idx (reqS (tM A s false) k.1.1) (reqS (tM A s true) k.2.1.1)
+  have hY : allOkTG A.int idx (reqS (tM A s false) k.1.1) (reqS (tM A s true) k.2.1.1)
       (tM A s false) (tM A s true) = false →
       ySimM A idx b (tM A s false) (tM A s true) (nOf s false) (nOf s true) k = none := by
     intro hok
@@ -380,14 +382,14 @@ theorem puEv_imp (b : Bool) (x : SecM × AuxM)
     rw [hw] at h
     exact h
   · -- redemption of the left side: Client `b`
-    cases hok : allOkT A.int idx (reqS (tM A s false) k.1.1) (reqS (tM A s true) k.2.1.1)
+    cases hok : allOkTG A.int idx (reqS (tM A s false) k.1.1) (reqS (tM A s true) k.2.1.1)
       (tM A s false) (tM A s true)
     · rw [hY hok] at h
       exact Or.inr (Or.inl (predJ_hid A idx b false s k.1.1 k.2.1.1 _ k.2.2.1 h))
     · have hfin : ∀ c, finT A.int (reqS (tM A s false) k.1.1) (reqS (tM A s true) k.2.1.1)
           (tM A s false) (tM A s true) c = true := by
         have := hok
-        unfold allOkT at this
+        unfold allOkTG at this
         simp only [Bool.and_eq_true] at this
         intro c
         cases c
@@ -412,14 +414,14 @@ theorem puEv_imp (b : Bool) (x : SecM × AuxM)
         · exact Or.inl (Or.inl hin)
         · exact Or.inl (Or.inr hin)
   · -- redemption of the right side: Client `!b`
-    cases hok : allOkT A.int idx (reqS (tM A s false) k.1.1) (reqS (tM A s true) k.2.1.1)
+    cases hok : allOkTG A.int idx (reqS (tM A s false) k.1.1) (reqS (tM A s true) k.2.1.1)
       (tM A s false) (tM A s true)
     · rw [hY hok] at h
       exact Or.inr (Or.inr (predJ_hid A idx b true s k.1.1 k.2.1.1 _ k.2.2.2 h))
     · have hfin : ∀ c, finT A.int (reqS (tM A s false) k.1.1) (reqS (tM A s true) k.2.1.1)
           (tM A s false) (tM A s true) c = true := by
         have := hok
-        unfold allOkT at this
+        unfold allOkTG at this
         simp only [Bool.and_eq_true] at this
         intro c
         cases c
@@ -541,7 +543,7 @@ Keccak-p[800,12]. -/
 theorem anonymity_main_pu {q3 q5 qE : ℕ} (hA : A.Budget q3 qE) (hC : A.Cons)
     (h₃ : ∀ q₀ q₁ y v, (A.R₃ q₀ q₁ y v).card ≤ q5) (h₄ : ∀ q₀ q₁ y v, (A.R₄ q₀ q₁ y v).card ≤ q5)
     {εhide : ℝ} (hhide : ∀ v b c, hidingAdv (A.atV v).ci (A.atV v).cr
-      (reduction (A.atV v) idx simIM simRM b c) ≤ εhide) :
+      (reductionG (A.atV v) idx simIM simRM b c) ≤ εhide) :
     |realMain A idx false - realMain A idx true| ≤
       8 * εRF q3 qE + 15 * (puAdv (comM A) (predM₀ A idx false) +
         puAdv (comM A) (predM₁ A idx false) + puAdv (comM A) (predM₀ A idx true) +

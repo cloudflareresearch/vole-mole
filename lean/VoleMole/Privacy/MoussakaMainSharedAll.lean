@@ -98,7 +98,7 @@ structure ConsH (q3 qE : ℕ) : Prop where
 
 end AdversaryH
 
-variable (A : AdversaryH) (idx : AnchorSet → UOVKey → ℕ)
+variable (A : AdversaryH) (idx : Rule)
 
 lemma gameS_withH (T : H3T) (b : Bool) : gameS (A.withH T) idx b = gameS A.base idx b := rfl
 
@@ -179,18 +179,18 @@ lemma issStmt_wPre (s : SecM) (c : Bool) : wPre (issStmt B s c).2 = rOf s c :=
 /-- **A redemption statement of `main`'s game** (the tokens finalized): its witness has `343`
 bytes and starts with the opening of Client `b ^^ side`. -/
 lemma redStmt_wit (b : Bool) (s : SecM) (o₁ o₂ : Option Out) (side : Bool) (y : SW)
-    (hy : y ∈ (bif allOk B.int idx (issM B s false o₁) (issM B s true o₂) then
+    (hy : y ∈ (bif allOkG B.int idx (issM B s false o₁) (issM B s true o₂) then
       redStmt B (ptM B idx b s o₁ o₂ side) else none)) :
     y.2.size = 343 ∧ wPre y.2 = rOf s (b ^^ side) := by
   set i₀ := issM B s false o₁
   set i₁ := issM B s true o₂
-  cases hok : allOk B.int idx i₀ i₁
+  cases hok : allOkG B.int idx i₀ i₁
   · rw [hok] at hy; cases hy
   rw [hok] at hy
   have hy' : redStmt B (ptM B idx b s o₁ o₂ side) = some y := hy
   set c := b ^^ side
   have hs : (tok B.int i₀ i₁ c).isSome = true := by
-    unfold allOk at hok
+    unfold allOkG at hok
     simp only [Bool.and_eq_true] at hok
     cases c
     · exact hok.1.1.1.1.1
@@ -207,8 +207,10 @@ lemma redStmt_wit (b : Bool) (s : SecM) (o₁ o₂ : Option Out) (side : Bool) (
   have hr : (bif c then i₁ else i₀).1.r = List.ofFn (rOf s c) := by cases c <;> rfl
   have hP : ptM B idx b s o₁ o₂ side = ⟨⟨(bif c then i₁ else i₀).1.nf, List.ofFn (rOf s c),
       resp B.int i₀.2 i₁.2 c⟩, (B.int.choose i₀.2 i₁.2 side).1,
-      idx (B.int.choose i₀.2 i₁.2 side).1 (B.int.pk c), (B.int.choose i₀.2 i₁.2 side).2⟩ := by
-    unfold ptM pt
+      idx (B.int.choose i₀.2 i₁.2 side).1 (B.int.pk c)
+        (tokT B.int ⟨(bif c then i₁ else i₀).1.nf, List.ofFn (rOf s c), resp B.int i₀.2 i₁.2 c⟩)
+        (resp B.int i₀.2 i₁.2 c), (B.int.choose i₀.2 i₁.2 side).2⟩ := by
+    unfold ptM ptG
     rw [htok, hr]
   rw [hP] at hy'
   unfold redStmt at hy'

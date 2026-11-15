@@ -54,7 +54,7 @@ open VoleMole.Verifier VoleMole.Verifier.Bridge VoleMole.Privacy.PU
 attribute [local irreducible] com UOVKey.eval
 attribute [local irreducible] simulate realRO progRO
 
-variable (A : AdversaryS) (idx : AnchorSet → UOVKey → ℕ)
+variable (A : AdversaryS) (idx : Rule)
 
 /-! ## The public key set and the predictors -/
 
@@ -196,7 +196,7 @@ lemma qOf_σ₃ (b : Bool) (s : SecM) (a : AuxS) :
   have h := redStmt_sim A idx b s a.2.1.1.2 a.2.2.1.1.2 false
   rw [σ₃_sim]
   unfold qR stRP okP
-  cases hok : allOkT A.toM.int idx (reqS (tM A.toM s false) a.2.1.1.2)
+  cases hok : allOkTG A.toM.int idx (reqS (tM A.toM s false) a.2.1.1.2)
     (reqS (tM A.toM s true) a.2.2.1.1.2) (tM A.toM s false) (tM A.toM s true)
   · rfl
   · rw [hok] at h
@@ -209,7 +209,7 @@ lemma qOf_σ₄ (b : Bool) (s : SecM) (a : AuxS) (o : Option Out) :
   have h := redStmt_sim A idx b s a.2.1.1.2 a.2.2.1.1.2 true
   rw [σ₄_sim]
   unfold qR stRP okP
-  cases hok : allOkT A.toM.int idx (reqS (tM A.toM s false) a.2.1.1.2)
+  cases hok : allOkTG A.toM.int idx (reqS (tM A.toM s false) a.2.1.1.2)
     (reqS (tM A.toM s true) a.2.2.1.1.2) (tM A.toM s false) (tM A.toM s true)
   · rfl
   · rw [hok] at h

@@ -40,7 +40,7 @@ example (x : IssueInstance) (w : Spec.Bytes) (h : IssueRelW x w) :=
     (fun _ _ _ _ _ => ∅) (fun _ _ _ _ _ _ _ => Iff.rfl) (qE := 0) (fun _ _ _ _ _ => le_rfl)
 
 /-- `anonymity_main_pu` for the adversary of `Audit/Nonvacuous.lean`. -/
-example [HasPrg] (idx : AnchorSet → UOVKey → ℕ) :=
+example [HasPrg] (idx : Rule) :=
   anonymity_main_pu Audit.mM idx Audit.mM_budget Audit.mM_cons (q5 := 0)
     (fun _ _ _ _ => le_rfl) (fun _ _ _ _ => le_rfl) (εhide := 0)
     (fun _ _ _ => (hidingAdv_true _ _).le)

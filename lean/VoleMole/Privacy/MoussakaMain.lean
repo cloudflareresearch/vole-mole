@@ -1,5 +1,6 @@
 import VoleMole.ZK.MainGame
 import VoleMole.Privacy.MoussakaLean
+import VoleMole.Privacy.MoussakaRule
 
 /-!
 # Moussaka issuer hiding and unlinkability on `main` (no dedicated label rows), under (PU)
@@ -31,8 +32,13 @@ its own tables) for `main`'s statements (`stI`, `stR` with the parameters `pIm`,
   `security/moussaka.md` §6, measured where `r` enters the view only through the commitments.
   (PU) is the assumption that it is small; it is one-wayness of Keccak-p[800] in `r` towards an
   adversary that holds `t = Com(nf, ctx_iss, ctx_red, r)`, and it is not proved here;
-* `εhide`: hiding of `Com`, for the reductions `Moussaka.reduction` of the adversary with the
-  tables fixed (`hiding_hop`, `idealGame_eq`, as in `Moussaka.anonymity`).
+* `εhide`: hiding of `Com`, for the reductions `Moussaka.reductionG` of the adversary with the
+  tables fixed (`hiding_hopG`, `idealGame_eqG`, as in `Moussaka.anonymity`).
+
+**The Client's index** comes from a `Rule` (`Privacy/MoussakaRule.lean`), a function of the
+Anchor Set, the issuer's key and the token's `(t, s)`: `Rule.ofIdx idx` is the index-taking Client
+of `Privacy/Moussaka.lean`, `findIdx` is `main`'s Client (`find_issuer`). Every theorem of the
+`main` files holds for every rule; `Privacy/MoussakaMainFind.lean` states them at `findIdx`.
 
 The `15` is a cost of the proof of the joint H6 (`MainChain.fill_ideal_le`). The adversary's `H₅`
 read sets must be consistent (`AdversaryM.Cons`); its `H₃` and cipher reads are budgets
@@ -136,7 +142,7 @@ def Cons : Prop :=
 
 end AdversaryM
 
-variable (A : AdversaryM) (idx : AnchorSet → UOVKey → ℕ)
+variable (A : AdversaryM) (idx : Rule)
 
 /-- The two Clients' `(nf, r)`. -/
 abbrev SecM := (Coins nfBytes × Coins rBytes) × (Coins nfBytes × Coins rBytes)
@@ -183,7 +189,7 @@ def redOut (P : RedeemPt) (o : Option Out) : Except Error Bytes :=
 
 /-- The redemption point of side `side` in world `b`. -/
 def ptM (b : Bool) (s : SecM) (o₁ o₂ : Option Out) (side : Bool) : RedeemPt :=
-  pt A.int idx b (issM A s false o₁) (issM A s true o₂) side
+  ptG A.int idx b (issM A s false o₁) (issM A s true o₂) side
 
 /-- **The game of world `b`**, as four proofs in sequence. -/
 def gameM (b : Bool) : Game SecM Out SW SW SW SW where
@@ -195,7 +201,7 @@ def gameM (b : Bool) : Game SecM Out SW SW SW SW where
 /-- The guess's input in world `b`: the requests and the redemptions (if §6's rule allows them). -/
 def yM (b : Bool) (s : SecM) (o₁ o₂ o₃ o₄ : Option Out) :
     Option (Except Error Bytes × Except Error Bytes) :=
-  bif allOk A.int idx (issM A s false o₁) (issM A s true o₂) then
+  bif allOkG A.int idx (issM A s false o₁) (issM A s true o₂) then
     some (redOut A (ptM A idx b s o₁ o₂ false) o₃, redOut A (ptM A idx b s o₁ o₂ true) o₄)
   else none
 
@@ -311,7 +317,7 @@ lemma redOut_sim (v : VisM) (P : RedeemPt) (c : SimCoins pRm) :
     · exact absurd h2 h1
     · rfl
 
-/-- The simulated game's tape, regrouped: the tables, then `Moussaka.simGame`'s tape. -/
+/-- The simulated game's tape, regrouped: the tables, then `Moussaka.simGameG`'s tape. -/
 def regroupM : SecM × (simSlot pIm).K × (simSlot pIm).K × (simSlot pRm).K × (simSlot pRm).K ≃ VisM × (((Coins nfBytes × Coins rBytes × SimCoins pIm) ×
       (Coins nfBytes × Coins rBytes × SimCoins pIm)) × (SimCoins pRm × SimCoins pRm)) where
   toFun x := ((x.2.1.2, x.2.2.1.2, x.2.2.2.1.2, x.2.2.2.2.2),
@@ -321,14 +327,14 @@ def regroupM : SecM × (simSlot pIm).K × (simSlot pIm).K × (simSlot pRm).K × 
   left_inv _ := rfl
   right_inv _ := rfl
 
-/-- **With all four proofs simulated, the game is `Moussaka.simGame` of the adversary at the tables**
+/-- **With all four proofs simulated, the game is `Moussaka.simGameG` of the adversary at the tables**
 (which are then independent of everything else). -/
 theorem sim_eq (b : Bool) :
     pr _ (ev (gameM A idx b) (simSlot pIm) (simSlot pIm) (simSlot pRm) (simSlot pRm) (evM A idx b)) =
       @pr (VisM × (((Coins nfBytes × Coins rBytes × SimCoins pIm) ×
         (Coins nfBytes × Coins rBytes × SimCoins pIm)) × (SimCoins pRm × SimCoins pRm)))
         (@instFintypeProd _ _ _ _)
-        (fun z => simGame (A.atV z.1) idx simIM simRM b z.2) := by
+        (fun z => simGameG (A.atV z.1) idx simIM simRM b z.2) := by
   rw [← @pr_equiv _ _ _ (@instFintypeProd _ _ _ _) regroupM]
   refine pr_congr fun x => ?_
   show A.guess _ _ (yM A idx b x.1 _ _ _ _) _ ↔ _
@@ -350,20 +356,20 @@ of the adversary at fixed tables has advantage at most `εhide`, the two worlds 
 where `puTerm b` is the (PU) event of world `b` on simulated proofs (`puTerm`). -/
 theorem anonymity_main {q3 qE : ℕ} (hA : A.Budget q3 qE) (hC : A.Cons) {εhide : ℝ}
     (hhide : ∀ v b c, hidingAdv (A.atV v).ci (A.atV v).cr
-      (reduction (A.atV v) idx simIM simRM b c) ≤ εhide) :
+      (reductionG (A.atV v) idx simIM simRM b c) ≤ εhide) :
     |realMain A idx false - realMain A idx true| ≤
       8 * εRF q3 qE + 15 * (puTerm A idx false + puTerm A idx true) + 2 * εhide := by
   have r0 := real_sim_main A idx hA hC false
   have r1 := real_sim_main A idx hA hC true
   rw [sim_eq] at r0 r1
-  have h0 := avg_close (fun v => simGame (A.atV v) idx simIM simRM false)
-    (fun v => idealGame (A.atV v) idx simIM simRM false)
-    fun v => hiding_hop (A.atV v) idx simIM simRM false (hhide v false)
-  have h1 := avg_close (fun v => simGame (A.atV v) idx simIM simRM true)
-    (fun v => idealGame (A.atV v) idx simIM simRM true)
-    fun v => hiding_hop (A.atV v) idx simIM simRM true (hhide v true)
-  have e := avg_eq (fun v => idealGame (A.atV v) idx simIM simRM false)
-    (fun v => idealGame (A.atV v) idx simIM simRM true) fun v => idealGame_eq (A.atV v) idx simIM simRM
+  have h0 := avg_close (fun v => simGameG (A.atV v) idx simIM simRM false)
+    (fun v => idealGameG (A.atV v) idx simIM simRM false)
+    fun v => hiding_hopG (A.atV v) idx simIM simRM false (hhide v false)
+  have h1 := avg_close (fun v => simGameG (A.atV v) idx simIM simRM true)
+    (fun v => idealGameG (A.atV v) idx simIM simRM true)
+    fun v => hiding_hopG (A.atV v) idx simIM simRM true (hhide v true)
+  have e := avg_eq (fun v => idealGameG (A.atV v) idx simIM simRM false)
+    (fun v => idealGameG (A.atV v) idx simIM simRM true) fun v => idealGame_eqG (A.atV v) idx simIM simRM
   beta_reduce at h0 h1 e
   have := abs_sub_le_iff.1 r0; have := abs_sub_le_iff.1 r1; have := abs_sub_le_iff.1 h0
   have := abs_sub_le_iff.1 h1

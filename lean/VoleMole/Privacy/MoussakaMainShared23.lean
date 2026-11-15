@@ -47,7 +47,7 @@ open VoleMole.Verifier VoleMole.Verifier.Bridge VoleMole.Privacy.PU
 attribute [local irreducible] com UOVKey.eval
 attribute [local irreducible] simulate realRO progRO
 
-variable (A : AdversaryS) (idx : AnchorSet → UOVKey → ℕ)
+variable (A : AdversaryS) (idx : Rule)
 
 /-! ## The game with one `H₂³` table -/
 
@@ -132,7 +132,7 @@ theorem simS23_eq {X : Sort*}
         (u, k₁, k₂, k₃, k₄) false := by
     rw [σ₃_sim]
     unfold stRP okP
-    cases hok : allOkT A.toM.int idx (reqS (tM A.toM s false) k₁.1.2)
+    cases hok : allOkTG A.toM.int idx (reqS (tM A.toM s false) k₁.1.2)
       (reqS (tM A.toM s true) k₂.1.2) (tM A.toM s false) (tM A.toM s true)
     · rfl
     · rw [hok] at h3
@@ -145,7 +145,7 @@ theorem simS23_eq {X : Sort*}
         (u, k₁, k₂, k₃, k₄) true := by
     rw [σ₄_sim]
     unfold stRP okP
-    cases hok : allOkT A.toM.int idx (reqS (tM A.toM s false) k₁.1.2)
+    cases hok : allOkTG A.toM.int idx (reqS (tM A.toM s false) k₁.1.2)
       (reqS (tM A.toM s true) k₂.1.2) (tM A.toM s false) (tM A.toM s true)
     · rfl
     · rw [hok] at h4

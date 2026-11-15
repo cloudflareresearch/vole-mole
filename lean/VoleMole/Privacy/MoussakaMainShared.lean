@@ -92,16 +92,16 @@ structure Cons (q3 qE : ℕ) : Prop where
 
 end AdversaryS
 
-variable (A : AdversaryS) (idx : AnchorSet → UOVKey → ℕ)
+variable (A : AdversaryS) (idx : Rule)
 
 /-- **The game of world `b`**, as four proofs in sequence: the two issuance proofs, and the two
 redemption proofs if §6's rule lets the redemptions happen. -/
 def gameS (b : Bool) : Game SecM Out SW SW SW SW where
   σ₁ s := some (issStmt A.toM s false)
   σ₂ s _ := some (issStmt A.toM s true)
-  σ₃ s o₁ o₂ := bif allOk A.toM.int idx (issM A.toM s false o₁) (issM A.toM s true o₂) then
+  σ₃ s o₁ o₂ := bif allOkG A.toM.int idx (issM A.toM s false o₁) (issM A.toM s true o₂) then
     redStmt A.toM (ptM A.toM idx b s o₁ o₂ false) else none
-  σ₄ s o₁ o₂ _ := bif allOk A.toM.int idx (issM A.toM s false o₁) (issM A.toM s true o₂) then
+  σ₄ s o₁ o₂ _ := bif allOkG A.toM.int idx (issM A.toM s false o₁) (issM A.toM s true o₂) then
     redStmt A.toM (ptM A.toM idx b s o₁ o₂ true) else none
 
 /-- What the guess gets besides the tables: the two requests and the redemptions. -/
@@ -135,15 +135,15 @@ lemma gvalidS (b : Bool) : GValid (gameS A idx b) pIm pIm pRm pRm where
   v₁ s y hy := by cases hy; exact issStmt_valid A.toM s false
   v₂ s _ y hy := by cases hy; exact issStmt_valid A.toM s true
   v₃ s o₁ o₂ y hy := by
-    have hy' : y ∈ (bif allOk A.toM.int idx (issM A.toM s false o₁) (issM A.toM s true o₂) then
+    have hy' : y ∈ (bif allOkG A.toM.int idx (issM A.toM s false o₁) (issM A.toM s true o₂) then
       redStmt A.toM (ptM A.toM idx b s o₁ o₂ false) else none) := hy
-    cases h : allOk A.toM.int idx (issM A.toM s false o₁) (issM A.toM s true o₂)
+    cases h : allOkG A.toM.int idx (issM A.toM s false o₁) (issM A.toM s true o₂)
     · rw [h] at hy'; cases hy'
     · rw [h] at hy'; exact ptM_valid A.toM idx b s o₁ o₂ false y hy'
   v₄ s o₁ o₂ _ y hy := by
-    have hy' : y ∈ (bif allOk A.toM.int idx (issM A.toM s false o₁) (issM A.toM s true o₂) then
+    have hy' : y ∈ (bif allOkG A.toM.int idx (issM A.toM s false o₁) (issM A.toM s true o₂) then
       redStmt A.toM (ptM A.toM idx b s o₁ o₂ true) else none) := hy
-    cases h : allOk A.toM.int idx (issM A.toM s false o₁) (issM A.toM s true o₂)
+    cases h : allOkG A.toM.int idx (issM A.toM s false o₁) (issM A.toM s true o₂)
     · rw [h] at hy'; cases hy'
     · rw [h] at hy'; exact ptM_valid A.toM idx b s o₁ o₂ true y hy'
 
@@ -190,7 +190,7 @@ lemma simVis_congr (Hb : Hashes) (p : Params) (c : SimCoins p) (V : VP p) {y y' 
 
 /-- §6's rule on the simulated requests, from the commitments and the simulators' coins. -/
 noncomputable def okP (t₀ t₁ : Bytes) (a : AuxS) : Bool :=
-  allOkT A.toM.int idx (reqS t₀ a.2.1.1.2) (reqS t₁ a.2.2.1.1.2) t₀ t₁
+  allOkTG A.toM.int idx (reqS t₀ a.2.1.1.2) (reqS t₁ a.2.2.1.1.2) t₀ t₁
 
 /-- The guess's third input with all proofs simulated, from the commitments, the nullifiers and
 the simulators' coins. -/
@@ -226,32 +226,32 @@ noncomputable def hviewS (b : Bool) (t₀ t₁ n₀ n₁ : Bytes) (a : AuxS) : P
 
 /-- `allOk` on simulated issuance outputs is `allOkT` on the requests and the commitments. -/
 lemma allOk_sim (s : SecM) (c₁ c₂ : SimCoins pIm) :
-    allOk A.toM.int idx (issM A.toM s false (some (simulate pIm c₁)))
+    allOkG A.toM.int idx (issM A.toM s false (some (simulate pIm c₁)))
         (issM A.toM s true (some (simulate pIm c₂))) =
-      allOkT A.toM.int idx (reqS (tM A.toM s false) c₁) (reqS (tM A.toM s true) c₂)
+      allOkTG A.toM.int idx (reqS (tM A.toM s false) c₁) (reqS (tM A.toM s true) c₂)
         (tM A.toM s false) (tM A.toM s true) :=
-  allOk_eq_allOkT idx A.toM.int _ _ rfl rfl
+  allOkG_eq_allOkTG A.toM.int idx _ _ rfl rfl
 
 /-- **A redemption statement of the simulated game**: none unless §6's rule holds, and then the
 public statement `stR (xSideM …)` with the opening of Client `b ^^ side` as witness prefix. -/
 theorem redStmt_sim (b : Bool) (s : SecM) (c₁ c₂ : SimCoins pIm) (side : Bool) :
-    (bif allOkT A.toM.int idx (reqS (tM A.toM s false) c₁) (reqS (tM A.toM s true) c₂)
+    (bif allOkTG A.toM.int idx (reqS (tM A.toM s false) c₁) (reqS (tM A.toM s true) c₂)
         (tM A.toM s false) (tM A.toM s true) then
       ∃ y, redStmt A.toM (ptM A.toM idx b s (some (simulate pIm c₁)) (some (simulate pIm c₂))
         side) = some y ∧
         y.1 = stR (xSideM A.toM b (reqS (tM A.toM s false) c₁) (reqS (tM A.toM s true) c₂)
           (nOf s false) (nOf s true) side) ∧ wPre y.2 = rOf s (b ^^ side)
     else True) := by
-  cases hok : allOkT A.toM.int idx (reqS (tM A.toM s false) c₁) (reqS (tM A.toM s true) c₂)
+  cases hok : allOkTG A.toM.int idx (reqS (tM A.toM s false) c₁) (reqS (tM A.toM s true) c₂)
     (tM A.toM s false) (tM A.toM s true)
   · trivial
-  · have hA : allOk A.toM.int idx (issM A.toM s false (some (simulate pIm c₁)))
+  · have hA : allOkG A.toM.int idx (issM A.toM s false (some (simulate pIm c₁)))
         (issM A.toM s true (some (simulate pIm c₂))) = true := by rw [allOk_sim, hok]
-    have hr := redeemOk_pt_of_allOk idx A.toM.int hA b side
+    have hr := redeemOk_ptG_of_allOkG A.toM.int idx hA b side
     have hfin : finT A.toM.int (reqS (tM A.toM s false) c₁) (reqS (tM A.toM s true) c₂)
         (tM A.toM s false) (tM A.toM s true) (b ^^ side) = true := by
       have := hok
-      unfold allOkT at this
+      unfold allOkTG at this
       simp only [Bool.and_eq_true] at this
       cases b ^^ side
       · exact this.1.1.1.1.1
@@ -261,7 +261,7 @@ theorem redStmt_sim (b : Bool) (s : SecM) (c₁ c₂ : SimCoins pIm) (side : Boo
       unfold redeemOk at hr
       unfold redStmt
       have e : ptM A.toM idx b s (some (simulate pIm c₁)) (some (simulate pIm c₂)) side =
-          pt A.toM.int idx b (issM A.toM s false (some (simulate pIm c₁)))
+          ptG A.toM.int idx b (issM A.toM s false (some (simulate pIm c₁)))
             (issM A.toM s true (some (simulate pIm c₂))) side := rfl
       rw [e]
       split at hr
@@ -281,20 +281,20 @@ theorem redStmt_sim (b : Bool) (s : SecM) (c₁ c₂ : SimCoins pIm) (side : Boo
 /-- The redemption statements of the simulated game, gated by §6's rule. -/
 lemma σ₃_sim (b : Bool) (s : SecM) (c₁ c₂ : SimCoins pIm) :
     (gameS A idx b).σ₃ s (some (simulate pIm c₁)) (some (simulate pIm c₂)) =
-      bif allOkT A.toM.int idx (reqS (tM A.toM s false) c₁) (reqS (tM A.toM s true) c₂)
+      bif allOkTG A.toM.int idx (reqS (tM A.toM s false) c₁) (reqS (tM A.toM s true) c₂)
         (tM A.toM s false) (tM A.toM s true) then
         redStmt A.toM (ptM A.toM idx b s (some (simulate pIm c₁)) (some (simulate pIm c₂)) false)
       else none := by
-  show (bif allOk _ _ _ _ then _ else _) = _
+  show (bif allOkG _ _ _ _ then _ else _) = _
   rw [allOk_sim]
 
 lemma σ₄_sim (b : Bool) (s : SecM) (c₁ c₂ : SimCoins pIm) (o : Option Out) :
     (gameS A idx b).σ₄ s (some (simulate pIm c₁)) (some (simulate pIm c₂)) o =
-      bif allOkT A.toM.int idx (reqS (tM A.toM s false) c₁) (reqS (tM A.toM s true) c₂)
+      bif allOkTG A.toM.int idx (reqS (tM A.toM s false) c₁) (reqS (tM A.toM s true) c₂)
         (tM A.toM s false) (tM A.toM s true) then
         redStmt A.toM (ptM A.toM idx b s (some (simulate pIm c₁)) (some (simulate pIm c₂)) true)
       else none := by
-  show (bif allOk _ _ _ _ then _ else _) = _
+  show (bif allOkG _ _ _ _ then _ else _) = _
   rw [allOk_sim]
 
 /-- **The guess's third input with all proofs simulated** is a function of the requests, the
@@ -306,7 +306,7 @@ theorem yS_sim (b : Bool) (s : SecM) (c₁ c₂ : SimCoins pIm) (c₃ c₄ : Sim
       (((gameS A idx b).σ₄ s (some (simulate pIm c₁)) (some (simulate pIm c₂))
         (((gameS A idx b).σ₃ s (some (simulate pIm c₁)) (some (simulate pIm c₂))).map fun _ =>
           simulate pRm c₃)).map fun _ => simulate pRm c₄) =
-      bif allOkT A.toM.int idx (reqS (tM A.toM s false) c₁) (reqS (tM A.toM s true) c₂)
+      bif allOkTG A.toM.int idx (reqS (tM A.toM s false) c₁) (reqS (tM A.toM s true) c₂)
         (tM A.toM s false) (tM A.toM s true) then
         some (ySim A.toM.int simRM b (reqS (tM A.toM s false) c₁) (reqS (tM A.toM s true) c₂)
             (nOf s false) (nOf s true) c₃ false,
@@ -314,7 +314,7 @@ theorem yS_sim (b : Bool) (s : SecM) (c₁ c₂ : SimCoins pIm) (c₃ c₄ : Sim
             (nOf s false) (nOf s true) c₄ true)
       else none := by
   rw [σ₄_sim, σ₃_sim]
-  cases hok : allOkT A.toM.int idx (reqS (tM A.toM s false) c₁) (reqS (tM A.toM s true) c₂)
+  cases hok : allOkTG A.toM.int idx (reqS (tM A.toM s false) c₁) (reqS (tM A.toM s true) c₂)
     (tM A.toM s false) (tM A.toM s true)
   · unfold yM
     rw [allOk_sim, hok]
@@ -323,7 +323,7 @@ theorem yS_sim (b : Bool) (s : SecM) (c₁ c₂ : SimCoins pIm) (c₃ c₄ : Sim
       (c₃, Classical.arbitrary _), (c₄, Classical.arbitrary _))
     have h := yM_sim A.toM idx b s k
     unfold ySimM at h
-    rw [show allOkT A.toM.int idx (reqS (tM A.toM s false) k.1.1) (reqS (tM A.toM s true) k.2.1.1)
+    rw [show allOkTG A.toM.int idx (reqS (tM A.toM s false) k.1.1) (reqS (tM A.toM s true) k.2.1.1)
       (tM A.toM s false) (tM A.toM s true) = true from hok] at h
     exact h
 
@@ -353,7 +353,7 @@ theorem simS_eq {X : Sort*}
     refine simVis_congr _ _ _ _ ?_ u
     rw [σ₃_sim]
     unfold stRP okP
-    cases hok : allOkT A.toM.int idx (reqS (tM A.toM s false) k₁.1.2)
+    cases hok : allOkTG A.toM.int idx (reqS (tM A.toM s false) k₁.1.2)
       (reqS (tM A.toM s true) k₂.1.2) (tM A.toM s false) (tM A.toM s true)
     · rfl
     · rw [hok] at h3
@@ -370,7 +370,7 @@ theorem simS_eq {X : Sort*}
     refine simVis_congr _ _ _ _ ?_ u
     rw [σ₄_sim]
     unfold stRP okP
-    cases hok : allOkT A.toM.int idx (reqS (tM A.toM s false) k₁.1.2)
+    cases hok : allOkTG A.toM.int idx (reqS (tM A.toM s false) k₁.1.2)
       (reqS (tM A.toM s true) k₂.1.2) (tM A.toM s false) (tM A.toM s true)
     · rfl
     · rw [hok] at h4

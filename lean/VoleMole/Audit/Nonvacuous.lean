@@ -483,7 +483,7 @@ theorem mM_budget : mM.Budget 0 0 :=
 
 theorem mM_cons : mM.Cons := fun _ _ _ => vcons_const True
 
-example [HasPrg] (idx : AnchorSet → UOVKey → ℕ) :=
+example [HasPrg] (idx : Rule) :=
   anonymity_main mM idx mM_budget mM_cons (εhide := 0) (fun _ _ _ => (hidingAdv_true _ _).le)
 
 end MoussakaMain

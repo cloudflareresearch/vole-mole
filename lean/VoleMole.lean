@@ -294,6 +294,8 @@ import VoleMole.Privacy.MoussakaMainSharedPU
 import VoleMole.Privacy.MoussakaMainShared23
 import VoleMole.Privacy.MoussakaMainSharedAll
 import VoleMole.Privacy.MoussakaNCMain
+import VoleMole.Privacy.MoussakaRule
+import VoleMole.Privacy.MoussakaMainFind
 import VoleMole.Privacy.RatatouilleRO
 import VoleMole.ZK.TwoPhaseRO
 import VoleMole.ZK.TwoPhaseIC
@@ -490,3 +492,4 @@ import VoleMole.Audit.PomfritClsPerm
 import VoleMole.Audit.MainRata
 import VoleMole.Audit.MainShared23
 import VoleMole.Audit.MainSharedAll
+import VoleMole.Audit.MainFind
