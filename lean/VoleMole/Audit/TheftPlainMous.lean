@@ -1,5 +1,5 @@
 import VoleMole.Audit.TheftPlainRom
-import VoleMole.Theft.PlainMousRedirect
+import VoleMole.Theft.PlainMousReads
 
 /-!
 # Audit of redemption non-malleability with `ROM/`'s plain extraction
@@ -9,7 +9,8 @@ import VoleMole.Theft.PlainMousRedirect
   `hitWf_thiefW`), with `L = 8193` (`Lrom`): its last stage is the run of `pure op`, within
   `QBudT 0 0 0`; its one Anchor key is the key of its digest under the constant assignment
   `ktW` (`keysOut_thiefW`). The extractor's read budget is taken at the table sizes
-  (`stageBudget_univ`), which checks consistency only.
+  (`stageBudget_univ`), which checks consistency only; `noRedirect_lean_rom'`
+  (`Theft/PlainMousReads.lean`) has no read-budget hypothesis and is instantiated too.
 * `plainSEL_romM` has no hypothesis but the table length; its error `epsRomM` is finite
   (`epsRomM_ne_top`).
 
@@ -46,6 +47,13 @@ example :=
     (fun _ _ => ⟨pure (.redeem setW [] (List.replicate ctxBytes 0) (List.replicate ctxBytes 0)
       (List.replicate cdBytes 0)), ⟨⟨trivial, trivial⟩, trivial⟩, rfl⟩)
     (fun _ _ _ => stageBudget_univ _)
+
+/-- `noRedirect_lean_rom'` (no read-budget hypothesis) for the same adversary. -/
+example :=
+  noRedirect_lean_rom' (L := Lrom) (thiefW _ _) hitWf_thiefW keysOut_thiefW le_rfl
+    (q := 0) (qE := 0) (nG := 0)
+    (fun _ _ => ⟨pure (.redeem setW [] (List.replicate ctxBytes 0) (List.replicate ctxBytes 0)
+      (List.replicate cdBytes 0)), ⟨⟨trivial, trivial⟩, trivial⟩, rfl⟩)
 
 example (q : Kind → ℕ) (qE nG : ℕ) : epsRomM q qE nG ≠ ⊤ := epsRomM_ne_top q qE nG
 
