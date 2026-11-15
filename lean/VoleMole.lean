@@ -488,6 +488,7 @@ import VoleMole.Theft.DeltaX
 import VoleMole.Theft.DeltaBound
 import VoleMole.Theft.NumTerms
 import VoleMole.Theft.Num
+import VoleMole.Theft.NumLin
 import VoleMole.Theft.MoussakaHit
 import VoleMole.Theft.ManyPlain
 import VoleMole.Theft.ManyReads
