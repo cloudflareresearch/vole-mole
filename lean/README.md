@@ -1693,9 +1693,9 @@ What is **not** established, roughly in order of importance:
    zero-knowledge theorem as a black box with worst-case key-level budgets (one proof's error is at
    least of order `q_E·2⁻¹²⁸`), not from the protocol: cipher inputs carry the proof's fresh `iv`.
    The composition step of a joint argument is proved (`Theft/JointZK.lean`: `joint_le`,
-   `real_sim_leN_jointZK`) and would give `≤ 2⁻⁵⁴` for all `U, M ≤ 2³⁰` (`jointNum_le`); its
-   hypothesis, one-proof zero knowledge charged by expected point-level reads, is not proved
-   (`security/ratatouille.md` §5; audit `Audit/TheftJointZK.lean`). Toward that hypothesis, one-proof hops charged by the
+   `real_sim_leN_jointZK`; audit `Audit/TheftJointZK.lean`); its all-events hypothesis is too strong,
+   and the restated step below gives `≤ 2⁻⁵⁴` for all `U, M ≤ 2³⁰` for Ratatouille
+   (`noTheftN_lean_numJ`; `security/ratatouille.md` §5). Toward that hypothesis, one-proof hops charged by the
    expected number of reads at the proof's points are proved (`ZK/IdealCipherPt.lean`,
    `ZK/HopsH4Pt.lean`, `ZK/HopsROMExp.lean`, `ZK/HopsH6Exp.lean`, `ZK/IvOverlap.lean`; audit
    `Audit/ZKPoint.lean`): H4 at points (`hide_rom_query_pt`, `≤ 221·(4607 + E_real[#keys read at
@@ -1706,31 +1706,26 @@ What is **not** established, roughly in order of importance:
    theorem (`ZK/ChainExp.lean` `chain3_le`, `ZK/HopsICExp.lean` `zk_rom_ic_h23_exp`,
    `ZK/ReadsROExp.lean` `zk_ro_exp`, audit `Audit/ZKPoint2.lean`): for a consistent point reader
    (`PtReads`, `Cons`), `|real − sim| ≤ (εZK + E_real[chZK])/(1 − βZK)` with `εZK ≈ 2⁻¹⁰⁷` and
-   `βZK < 2⁻⁵⁵` at budgets `2⁶⁴`, the hypothesis shape of `hyb_hop_exp` (function rows). The joint
-   many-proof step with point charges (`Theft/JointLean.lean` `real_sim_leN_lean`, audit
+   `βZK < 2⁻⁵⁵` at budgets `2⁶⁴`, the hypothesis shape of `hyb_hop_exp` (function rows). The joint many-proof step with point charges (`Theft/JointLean.lean` `real_sim_leN_lean`, audit
    `Audit/ZKPoint3.lean`) gives `(Σ_i(εZK/(1−βZK) + (1+B)·Pr[deltaN i]) + J)/(1 − N·B)` for a game
    of Lean proofs, for every event a consistent point game reader reads (`lean_zkExp`,
-   `ZK/ZKExp.lean`). The hop readers are built by composition (`hopRd`, `ZK/PtRd.lean`), the hop
-   charge is bounded by the view for honest readers confined to their `iv`s (`hopRd_charges`), and
-   both kinds of honest reader are proved confined: the real prover (`realPtRd_conf`) and the
-   simulator's programming (`progPtRd_conf`, from the BAVC reconstruction and `vPre` at points,
-   `reconstruct_ic_congrP`, `vPre_ic_congrP`). So `real_sim_leN_lean_full`
-   (`Theft/JointLeanSum.lean`, audit `Audit/ZKPoint4.lean`) leaves only the game reader and `J`.
-   For table `iv`s the sum is `exU_sum_nZK_le`: the budget once, times `1 + N²·2⁻⁶⁴`, plus an `iv`
-   input-collision term; even with that factor `jointNumK_le` reaches ≤ 2⁻⁵⁴ at U+M ≤ 2³¹. The
-   theft games' readers are point readers: the verifier (`verPtRd`), the adversary's oracle run
-   (`runGRd`, `Theft/JointRun.lean`) and `ROM/`'s extractor (`eRom_congrP`, `Theft/JointExt.lean`:
-   the query list's cells and the forged proof's `iv`), composed by `GRd.seq`. Two proof systems
-   with different parameters are one (`gate5_params`, `chPt_params`, `ZKExp.osum`,
-   `real_sim_leN_leanG`). Corrections: `real_sim_leN_jointZK`'s all-events hypothesis cannot be met
-   by point charges, so the step is restated for a class of events (`real_sim_leN_jointAdm`), and a
-   hop costs `(1+B)·Pr[deltaN i]` (`real_sim_leN_jointRaw`). A slot with no proof (a refused spend)
-   must be charged nothing, or `M` refused spends cost `M` budget terms; this is
-   `real_sim_leN_leanA` with `exU_sum_nZKA_le`. Not done: the theft event `BadN` as one reader's
-   event (run, verifier, extractor with its patch queries; `T₃`, `c_E`), the theft games as
-   instances (`osumProve` with `xOf = xN`, output map and `iv` decoder), and the simulated `iv`
-   structure (`H₄` of `XTab`, `E[#dupPairs]`, failed simulations). So `noTheftN_lean_numJ` is not
-   stated and the mechanized many-token bound stays `(U+M)·2⁻⁵⁵ + 2⁻⁵⁹`. `Adv^ow` stays the advantage of the explicit inverter, a computational
+   `ZK/ZKExp.lean`). The honest readers are proved confined to their `iv`s (`realPtRd_conf`,
+   `progPtRd_conf`; `real_sim_leN_lean_full`, `Audit/ZKPoint4.lean`); two proof systems and "no
+   proof" are one (`ZKExp.osum`, `gate5_params`), and slots with no proof are charged nothing
+   (`real_sim_leN_leanA`, `exU_sum_nZKA_le`). For Ratatouille this is mechanized end to end
+   (`Theft/JointBad.lean` … `Theft/JointNumJ.lean`, audit `Audit/ZKPoint5.lean`): the theft event
+   with `ROM/`'s extractor is one consistent reader's event (`badGRd_reads`; `T₃ = q h3`,
+   `c_E = 2·(N·cells(pS) + q_E) + 9215`), the theft game is the joint game (`PN_eq`, `zkExpJ`,
+   `theft_joint_le`), and the simulated game's `iv`s are `H₄` blocks at `iv_pre ‖ μ₁ ‖ 4`
+   (`ivs_view`, `E[#dupPairs] ≤ 4N²·2⁻¹²⁸`, failed simulations `≤ 2N·2⁻¹¹³`; `theft_J_le`). So
+   **`noTheftN_lean_numJ`**: `Pr[BadN] ≤ 2⁻⁵⁴ + Σ_j Adv^ow(inverter j)` for `U, M ≤ 2³⁰` at
+   per-kind and cipher budgets `2⁶⁴` (function rows; same hypotheses as `noTheftN_lean_numL`,
+   which gave `(U+M)·2⁻⁵⁵ + 2⁻⁵⁹`). Corrections: `real_sim_leN_jointZK`'s all-events hypothesis
+   cannot be met by point charges (`real_sim_leN_jointAdm`); a hop costs `(1+B)·Pr[deltaN i]`
+   (`real_sim_leN_jointRaw`); a refused slot must be charged nothing (`real_sim_leN_leanA`) and
+   must have an `iv` of its own (`ivR`, a reserved `H₄` input), or `2³⁰` refused spends cost about
+   `2⁻⁴⁶` through the overlaps. Not done: Moussaka and unbound Moussaka with the joint step (their
+   many-token bounds stay `(U+M)·2⁻⁵⁵ + 2⁻⁵⁹`), and the permutation-row variant. `Adv^ow` stays the advantage of the explicit inverter, a computational
    assumption on Keccak-p[800,12]: `Com` is evaluated inside the relations, so it cannot be a table
    of the game, and some inverter wins with probability 1 (`owAdv_one_ratatouille`,
    `owAdv_one_moussaka`). In a random-table model of the standalone experiment a `q`-query
