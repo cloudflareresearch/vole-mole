@@ -194,8 +194,15 @@ permutations with inverse queries):
     `(Q₃+ℓ+1)·2⁻⁷⁸ + q₁·2⁻¹³⁴` instead of `(Q₃+ℓ+1)·2⁻⁷¹` (2⁻¹⁴ at 2⁶⁴ queries), with no conjecture
     and no property of `H₅`. The mask structure is proved for the executable verifier
     (`chain_affineOn`, `chain_twoLabelOn`), and so is the adaptive single-statement bound
-    (`pomfritT_accept_le_cls`); not mechanized: the one-more game with `E₁^cls` (G8-cls), so
-    `pomfrit_U1_sim` keeps 2⁻⁷¹. The earlier many-label-vector decoding problem was an artefact of
+    (`pomfritT_accept_le_cls`), and so is **U1 with the class extractor in the one-more game**
+    (G8-cls closed): `pomfrit_U1_cls_sim'`, `pomfrit_U1_ompr_cls_sim` (`ROM/OneMoreCls*.lean`,
+    `Assumptions/PomfritCls.lean`, `Audit/PomfritCls.lean`) with `(q'₂₃+ℓ+1)·2⁻⁷⁸ +
+    (q'₂₁+ℓ+1)·2⁻¹³⁴ + …` (`clsSimEps_eq`), about 2⁻¹⁴ at 2⁶⁴ queries against `pomfrit_U1_sim`'s
+    2⁻⁷. The reduction runs the forger wrapped (`wrapE`, which reads the cipher table, since the
+    decoder's gate inputs depend on committed leaf keys the forger may never have queried) so that
+    the decoder's `H₅` values are in the log; the wrapper changes neither the forgeries nor the win
+    (`pomWin_le_wrapE`), and its budget follows from the forger's (`forgerBound_wrapE`). Not
+    modelled: the wrapper's running time; PRF view only (no permutation model). The earlier many-label-vector decoding problem was an artefact of
     the widest-group default; the heuristic decoder is needed only below 2⁻⁸⁵, and its wrong-gate
     step rests on an assumption that fails for some level sets of codimension ≥ 4 (`slice.py` R7). Keep `ũ` in `hash_to_target`: it is
     security-relevant. The converse, OMPR ≤ PomFRIT one-more forgery plus a completeness term, is
@@ -1626,7 +1633,7 @@ What is **not** established, roughly in order of importance:
    remains: the cipher-side failure terms (binding, opened dead leaf, Post) stay per proof (`m·failEps`,
    negligible at `2⁶⁴` queries). PomFRIT's U1 is mechanized with Lemma P's term bounded
    (`pomfrit_U1_explicit`, and with simultaneous extraction `pomfrit_U1_sim`), and so is U2
-   (`pomfrit_U2_sim`; plan §2n, `docs/security/pomfrit.md` G8). U1 with the class extractor (`2⁻⁷⁸` per `H₂³` query instead of `2⁻⁷¹`, plus `2⁻¹³⁴` per `H₂¹` query) is a paper theorem; mechanized for the executable verifier: the affine and two-label structure of the CRT masks on slices (`chain_affineOn`, `chain_twoLabelOn`, `Verifier/Bridge/MaskSlices.lean`), the per-chain step with no hypothesis on the response (`pomfritT_extract_class_chain`), the parallelism event at `H₂¹` (`prU_kos_par_le`), and the adaptive bound for one statement (`pomfritT_accept_le_cls`, for provers whose log holds the decoder's `H₅` queries; `ROM/LemmaPCls*.lean`, `Audit/PomfritLemmaPCls.lean`). The one-more game with `E₁^cls` is open (`pomfrit.md` G8-cls); `pomfrit_U1_sim` keeps `2⁻⁷¹`. For zero knowledge and privacy with the fix, the classical random-oracle
+   (`pomfrit_U2_sim`; plan §2n, `docs/security/pomfrit.md` G8). U1 with the class extractor (`2⁻⁷⁸` per `H₂³` query instead of `2⁻⁷¹`, plus `2⁻¹³⁴` per `H₂¹` query) is in Lean (`pomfrit_U1_cls_sim'`, about 2⁻¹⁴ at 2⁶⁴ queries; PRF view), built on: the affine and two-label structure of the CRT masks on slices (`chain_affineOn`, `chain_twoLabelOn`, `Verifier/Bridge/MaskSlices.lean`), the per-chain step with no hypothesis on the response (`pomfritT_extract_class_chain`), the parallelism event at `H₂¹` (`prU_kos_par_le`), and the adaptive bound for one statement (`pomfritT_accept_le_cls`, for provers whose log holds the decoder's `H₅` queries; `ROM/LemmaPCls*.lean`, `Audit/PomfritLemmaPCls.lean`). `pomfrit_U1_sim` keeps `2⁻⁷¹` for `E₁`. For zero knowledge and privacy with the fix, the classical random-oracle
    and ideal-cipher arguments are mechanized (§3, Gap 7). The quantum arguments are paper proofs;
    mechanizing them is beyond current tools.
    For the Lean verifier (§8), what the end-to-end extraction theorems still assume about the
