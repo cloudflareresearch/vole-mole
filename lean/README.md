@@ -460,7 +460,7 @@ lean/
                             PlainMousReads; ROM/ExtractCells); many tokens (ManyPlainLog,
                             PlainSlicesN, PlainRataManyRom, PlainMousManyRom); unbound (PlainUnboundJoint,
                             PlainUnboundRom, PlainUnboundManyRom); collision terms and numeric
-                            bounds (DeltaX, DeltaBound, NumTerms, Num);
+                            bounds (DeltaX, DeltaBound, NumTerms, Num, NumLin, JointZK);
                             unbound
                             Moussaka Prop U3 and Thm U4 (MoussakaUnbound, MoussakaUnboundLean);
                             `N` honest proofs and `WeakSEN` (Many); `U` tokens and `M`
@@ -1687,7 +1687,15 @@ What is **not** established, roughly in order of importance:
    Adv^spr-k)` (`nmUN_lean_num`); the same with permutation rows and inverse queries (`_numP`;
    `Theft/Num.lean`, audit `Audit/TheftNum.lean`). Each zero-knowledge hop costs about `223·2⁻⁶³ ≈
    2⁻⁵⁵·²`, dominated by the cipher term `221·q_E'·2⁻¹²⁸`, so the many-token bound is linear in
-   `U + M` (about `2⁻³⁵` at `U + M = 2²⁰`). `Adv^ow` stays the advantage of the explicit inverter, a computational
+   `U + M` (about `2⁻³⁵` at `U + M = 2²⁰`). For every `U, M ≤ 2³⁰` the bound is `(U + M)·2⁻⁵⁵ + 2⁻⁵⁹` plus
+   the computational terms (`noTheftN_lean_numL`, `noRedirectN_lean_numL`, `nmUN_lean_numL`,
+   `_numLP`; `Theft/NumLin.lean`). The factor `U + M` comes from using the one-proof
+   zero-knowledge theorem as a black box with worst-case key-level budgets (one proof's error is at
+   least of order `q_E·2⁻¹²⁸`), not from the protocol: cipher inputs carry the proof's fresh `iv`.
+   The composition step of a joint argument is proved (`Theft/JointZK.lean`: `joint_le`,
+   `real_sim_leN_jointZK`) and would give `≤ 2⁻⁵⁴` for all `U, M ≤ 2³⁰` (`jointNum_le`); its
+   hypothesis, one-proof zero knowledge charged by expected point-level reads, is not proved
+   (`security/ratatouille.md` §5; audit `Audit/TheftJointZK.lean`). `Adv^ow` stays the advantage of the explicit inverter, a computational
    assumption on Keccak-p[800,12]: `Com` is evaluated inside the relations, so it cannot be a table
    of the game, and some inverter wins with probability 1 (`owAdv_one_ratatouille`,
    `owAdv_one_moussaka`). In a random-table model of the standalone experiment a `q`-query
