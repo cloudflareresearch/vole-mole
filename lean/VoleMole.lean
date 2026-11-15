@@ -474,6 +474,8 @@ import VoleMole.Theft.PlainRataPermReads
 import VoleMole.Theft.PlainMousJointP
 import VoleMole.Theft.PlainMousPerm
 import VoleMole.Theft.PlainMousPermReads
+import VoleMole.Theft.PlainSlicesNP
+import VoleMole.Theft.PlainRataManyPerm
 import VoleMole.Theft.MoussakaHit
 import VoleMole.Theft.ManyPlain
 import VoleMole.Theft.ManyReads

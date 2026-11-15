@@ -1,5 +1,6 @@
 import VoleMole.Theft.PlainRataPermReads
 import VoleMole.Theft.PlainMousPermReads
+import VoleMole.Theft.PlainRataManyPerm
 import VoleMole.Theft.PlainTotalRom
 import VoleMole.Audit.TheftPlainReads
 import VoleMole.Audit.TheftPlainMany
@@ -13,6 +14,8 @@ import VoleMole.Audit.TheftPlainUnbound
   with permutation rows, and at a thief whose last stage makes one **inverse** cipher query
   (`admL_thiefInv`, within `QBudP 0 1`): the class of adversaries contains inverse queries.
   `epsRomP` is finite below `2¹²⁸ − 4607` cipher queries (`epsRomP_ne_top`).
+* `noTheftN_lean_romP'` (`Theft/PlainRataManyPerm.lean`) is instantiated at the trivial
+  adversary of `Audit/TheftManyR.lean` (`thiefNR`, `U = M = 1`) with permutation rows.
 * `noRedirect_lean_romP'` (`Theft/PlainMousPermReads.lean`) is instantiated at the well-formed
   trivial adversary of `Audit/TheftPlainMous.lean` (`thiefW`, `L = Lrom`) with permutation rows.
 * **No total budget.** `noTheft_lean_romK`, `noTheftN_lean_romK`, `noRedirect_lean_romK`,
@@ -118,6 +121,13 @@ variable {U M : ℕ}
 /-- `noTheftN_lean_romK`'s hypotheses hold for the trivial adversary, within `QBud 0 0`. -/
 example [NeZero U] :=
   noTheftN_lean_romK (L := Hit.Rata.Lmin) (thiefNR _ U M _ _) le_rfl (q := 0) (qE := 0)
+    fun _ _ => ⟨pure (.spend (zeroSpend _) (Vector.replicate 16 0) 0), ⟨trivial, trivial⟩, rfl⟩
+
+/-- `noTheftN_lean_romP'`'s hypotheses hold for the trivial adversary with permutation rows, one
+Client and one spend. -/
+example :=
+  noTheftN_lean_romP' (L := Hit.Rata.Lmin) (U := 1) (M := 1) (thiefNR _ 1 1 _ _) le_rfl (q := 0)
+    (qE := 0) (by norm_num)
     fun _ _ => ⟨pure (.spend (zeroSpend _) (Vector.replicate 16 0) 0), ⟨trivial, trivial⟩, rfl⟩
 
 end Many
