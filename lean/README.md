@@ -611,7 +611,7 @@ exactly a prediction of `r`: the extra `2(q₅+1)·2⁻¹²⁸` per world (`docs
 `d[0..16) ⊕ w[0..16)`), `ZK/MainSharedGame.lean` (`main_shared_le`), `ZK/MainSharedSim.lean`
 (`pr_sib_hit_le`, `bstar_sim`), `Privacy/MoussakaMainSharedPU.lean` (`anonymity_main_shared`),
 `Audit/MainShared.lean`; computing redemption proofs only when §6's rule lets redemptions happen
-also removes the dummy-token term of `anonymity_main_pu`. Ratatouille likewise: `unlinkability_main_pu`, `unlinkability_main_shared` (`Privacy/RatatouilleMain*.lean`). Still [paper]: one `H₂³` table and one
+also removes the dummy-token term of `anonymity_main_pu`. Ratatouille likewise: `unlinkability_main_pu`, `unlinkability_main_shared` (`Privacy/RatatouilleMain*.lean`). With one `H₂³` table: `main_shared23_le`, `anonymity_main_shared23`, `unlinkability_main_shared23`. Still [paper]: one
 `H₃` for the proofs on `main`, Moussaka's `find_issuer` Client and 4(b) on `main`, and (PU) for the real
 Keccak-p[800,12], which is an assumption.
 
@@ -1728,8 +1728,11 @@ What is **not** established, roughly in order of importance:
    sets; `ZK/HopsMain.lean`, `ZK/MainGame.lean`; `docs/zk.md` §4.2), with per-proof tables;
    for one proof the shared-table model with `H₂³` visible and a global cipher is mechanized on
    `main` (`zk_rom_ic_h23_main`), and for a token's four proofs the joint hop with one `H₅` table and
-   one cipher (`ZK.Sim.main_shared_le`: `15·εS + 15·Pr_sim[bstar]` for any four-proof game; each
-   proof keeps its own `H₂³` table and `H₃` slice); (PU) is a game (`PU.puAdv`), and Moussaka's
+   one cipher (`ZK.Sim.main_shared_le`: `15·εS + 15·Pr_sim[bstar]` for any four-proof game), and
+   also with one `H₂³` table (`ZK.Sim.main_shared23_le`, `ZK/MainShared23.lean`: `15·(εS + Δ23) +
+   15·Pr_sim[bstar]`, `Δ23 ≤ 2⁻¹⁰⁶` the programming-collision term of `pr_collide_main`,
+   `ZK/CollideMain.lean`, whose second application of zero knowledge has a statistical (PU) term
+   `313·2⁻¹²⁸`); each proof keeps its own `H₃` slice; (PU) is a game (`PU.puAdv`), and Moussaka's
    Theorem 4(a) on `main` with the shared `H₅` table and cipher is `anonymity_main_shared`: `≤
    30·εS(q₃, q_E + 8·4607) + 15·(Σ_{b,c} puAdv Com (predS_c b) + 8·noHitProb + 3750·2⁻¹²⁸) +
    2·εhide`, every term a number except the four (PU) advantages and `εhide`; the cross-proof
@@ -1743,8 +1746,10 @@ What is **not** established, roughly in order of importance:
    15·(Σ six puAdv + 4·(q₅+1)·2⁻¹²⁸) + 2·εhide`; with one `H₅` table and one cipher for the four
    proofs (`Privacy/RatatouilleMainShared*.lean`), `unlinkability_main_shared`: `≤ 30·εS(q₃,
    q_E+8·4607) + 15·(Σ six puAdv + 8·noHitProb + 3750·2⁻¹²⁸) + 2·εhide` (audit
-   `Audit/MainRata.lean`). Not done: one `H₂³` table and one `H₃` for the proofs on `main` (both
-   protocols; the programming-collision terms of §10.2), Moussaka 4(b) on `main`, and (PU) for the real 12-round permutation (an
+   `Audit/MainRata.lean`). With one `H₂³` table too: `anonymity_main_shared23`,
+   `unlinkability_main_shared23` (`Privacy/*MainShared23.lean`, audit `Audit/MainShared23.lean`),
+   the same bounds with `εS` replaced by `εS + Δ23`. Not done: one `H₃` for the proofs on `main` (§10.5's argument; it needs
+   `zk_rom_ic_h23_main` for rows carrying `H₃` columns), Moussaka 4(b) on `main`, and (PU) for the real 12-round permutation (an
    assumption; the exhaustive predictor has advantage 1). The QROM ZK bound
    is loose (2⁻¹⁹ at 2³⁰) until the 256-bit `rho` and salt are added.
    With the fix, zero knowledge of the executable Lean prover and the three protocols' privacy
