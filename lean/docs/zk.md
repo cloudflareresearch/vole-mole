@@ -721,11 +721,18 @@ at fixed tables, `ψ c ≤ κ + φ c` (`κ = 0` for a complete issuance proof sy
   §10.2's games (this is also what lets the one-`H₃` reduction compute the prefixes from the view);
   the `main` games take any token-reading index rule, `main`'s `find_issuer` Client included
   (`findIdx`);
-- in 4(b') on `main` the issuance proofs are an abstract `PI` that does not read the game's tables:
-  the refusal bit is a function of the secret (a `MainChain.Game`'s statements may not read the
-  tables). Running the executable issuance prover and the Anchor's Lean verifier on the shared
-  tables would need either the verifier's completeness on honest proofs or hybrids that read the
-  tables in the statements (as §10.7 does for the label-row layout);
+- in 4(b') on `main` (and in U5(b) on `main`) the issuance proofs are an abstract `PI` that does
+  not read the game's tables: the refusal bit is a function of the secret (a `MainChain.Game`'s
+  statements may not read the tables). The route to the executable issuance prover and the
+  Anchor's Lean verifier on the shared tables, on paper: the issuance proofs are never shown and
+  a real prover does not program the tables, so they enter the view only through the Anchor's
+  verdict, computed before any redemption on the raw uniform tables; by completeness in the
+  random-oracle and ideal-cipher model (`complete_rom_ic`, `≤ 2⁻¹¹³` per proof) replacing the
+  verdict by `true` costs `2·2⁻¹¹³` per world, and the game is then `realNCM` for a `PI` that
+  accepts the honest requests (`κ = 0`). Not mechanized: it needs `complete_rom_ic` restated for
+  `ZK/MainSharedAll.lean`'s model (one `H₃`, one `H₂³` table, one `H₅` table and one cipher shared
+  with the redemption proofs) and the length of `main`'s Lean issuance proof equal to
+  `issueRequestBytes − 45`;
 - a bound on (PU) for the real permutation: §4.3 states (PU) as a game, reduces Moussaka's
   `PU_b` to it and bounds it in the ideal-permutation model; for Keccak-p[800,12] itself it is an
   assumption (also for Ratatouille's `comI` and `comCh`, §4.3);
