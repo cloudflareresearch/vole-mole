@@ -777,6 +777,20 @@ adversary's operations are unbound requests.
     forward-only patches (`progQUmP`), `eRomUP_congr`, `stageBudgetNX_extRomUNP`; as for
     Ratatouille (`security/ratatouille.md` §5, `noTheft_lean_romP'`). The PRF bound stays a
     hypothesis. Audit: `Audit/TheftPlainPerm.lean` (`thiefNUW`, `U = M = 1`).
+  - **The collision terms and explicit numbers** (`Theft/DeltaBound.lean`, `Theft/Num.lean`;
+    the argument in `security/ratatouille.md` §5). `deltaNU_le`: `δ_i ≤ 2^{−113} +
+    εz(pI; 0, 312, 4607) + εz(pR; 0, 312, 4607) + noHitProb + 2·(U + M)·2^{−1024}` (about
+    `2^{−106}`), for both row types and every base record read off the extra table. With every
+    per-kind hash budget and the cipher budget at most `2^{64}` and `U, M ≤ 2^{30}`:
+
+        nmUN_lean_num, nmUN_lean_numP:
+          Pr[Bad] ≤ 2^{−24} + Σ_h (ε_prf + Adv^bind(B₁ h) + Adv^spr-k(B₂ h)),
+
+    for function rows (`nmUN_lean_romK`) and permutation rows with inverse queries
+    (`nmUN_lean_romP'`), for `HitWfN` adversaries with `KeysOutNU`; the term `U·(M + 1)·2^{−192}`
+    is in `2^{−24}`. The `U + M ≤ 2^{31}` zero-knowledge hops dominate (`≈ 223·2^{−63}` each, the
+    cipher term `221·q_E'·2^{−128}`): `≈ 2^{−24.2}`. The PRF, binding and second-preimage terms
+    are computational assumptions on Keccak-p[800,12]. Audit: `Audit/TheftNum.lean`.
 
 A malicious Moderator therefore cannot spend an honest Client's token at another Moderator, even
 though the token is valid there.
@@ -1108,7 +1122,9 @@ the base protocol.
    from `ROM/`'s simultaneous extraction for function rows and `L ≥ 9749`, for adversaries whose
    Anchor keys are determined by their digests (`nmUN_lean_rom'`, `KeysOutNU`), with per-kind
    hash budgets only (`nmUN_lean_romK`), and with permutation rows and inverse cipher queries
-   (`nmUN_lean_romP'`).
+   (`nmUN_lean_romP'`). The collision terms are bounded and every non-computational term is a
+   number: `≤ 2^{−24}` plus the PRF, binding and second-preimage terms at budgets `2^{64}` and
+   `U, M ≤ 2^{30}` (`nmUN_lean_num`, `nmUN_lean_numP`).
 5. The mechanized Thm U5 takes **per-proof** zero knowledge (`ZeroKnowledge` for `IssueRelW` and
    `RedeemRelW`, against distinguishers that know the witness). That hypothesis holds with
    dedicated label rows (`lean/docs/zk.md`). On `main` the CRT masks come from the witness, the
@@ -1265,6 +1281,10 @@ All in `lean/VoleMole/`; no `sorry`, no axioms beyond the standard three.
   `Theft/PlainUnboundManyPerm.lean`: `plainSENL_romUP`, `progQUmP`, `qBudP_redQNu`,
   `eRomUP_congr`, `stageBudgetNX_extRomUNP`, **`nmUN_lean_romP`**, **`nmUN_lean_romP'`**
   (permutation rows, inverse queries). `Audit/TheftPlainPerm.lean` instantiates them.
+- `Theft/DeltaX.lean`, `Theft/DeltaBound.lean`: `ProgTails`, `pr_collide_zkX`,
+  `simPre_progTails`, `pr_deltaN_le`, **`deltaNU_le`**. `Theft/NumTerms.lean`, `Theft/Num.lean`:
+  `zkB`, `epsRomPG`, **`nmUN_lean_num`**, **`nmUN_lean_numP`**. `Audit/TheftNum.lean` instantiates
+  them at budgets `2^{64}`.
 - `Audit/UnboundMany.lean`: the Lean-prover and many-token theorems instantiated for trivial
   adversaries (budgets discharged; SE and PRF with error `1`); `issueRelW_honest`, `exists_pts`,
   `replay_not_freshN`, `redirect_ctx_freshN`, `owkN_zero`.

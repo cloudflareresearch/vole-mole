@@ -484,6 +484,10 @@ import VoleMole.Theft.PlainMousManyPerm
 import VoleMole.Theft.PlainUnboundJointP
 import VoleMole.Theft.PlainUnboundPerm
 import VoleMole.Theft.PlainUnboundManyPerm
+import VoleMole.Theft.DeltaX
+import VoleMole.Theft.DeltaBound
+import VoleMole.Theft.NumTerms
+import VoleMole.Theft.Num
 import VoleMole.Theft.MoussakaHit
 import VoleMole.Theft.ManyPlain
 import VoleMole.Theft.ManyReads
@@ -528,6 +532,7 @@ import VoleMole.Audit.TheftPlainMous
 import VoleMole.Audit.TheftPlainMany
 import VoleMole.Audit.TheftPlainUnbound
 import VoleMole.Audit.TheftPlainPerm
+import VoleMole.Audit.TheftNum
 import VoleMole.Audit.MainPU
 import VoleMole.Audit.MainShared
 import VoleMole.Audit.PomfritLemmaPCls
