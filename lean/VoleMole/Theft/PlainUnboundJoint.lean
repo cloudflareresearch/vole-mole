@@ -11,7 +11,7 @@ are byte keys (`UovPk`). The unbound game uses the Lean statements of
 `Privacy/MoussakaUnboundLean.lean`: the issuance statement `stI x` is `moussakaUnboundIssue` of the
 instance's bytes; the redemption statement `stR x` hashes the Anchors' digests (as a bound
 redemption, `toBound`) and evaluates their spec maps (any maps, unrelated to the digests). Here the
-joint bound is restated for them (`docs/security/moussaka-unbound.md` §4), as
+joint bound is restated for them (`docs/security/moussaka-unbound.md` §5.3), as
 `moussaka_sim_joint_lean` (`Theft/PlainMousJoint.lean`) does for bound Moussaka:
 
 * `uRedeemRel_of_wit_lean`: `SpecRel.uRedeemRel_of_wit` for Anchors with any maps.

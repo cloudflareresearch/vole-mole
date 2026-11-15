@@ -715,6 +715,51 @@ adversary's operations are unbound requests.
     `nmUN_leanX_hitC` instantiated at a well-formed trivial adversary (`hitWfN_thiefNUW`,
     `hitLenN_thiefNUW`, `keysOkN_thiefNUW`). `noSquatN` and `noRedirectUN` restrict `nmUN`'s
     event; their `leanX` forms are not stated separately.
+- *Plain extraction from `ROM/`* (`Theft/PlainUnboundJoint.lean`, `Theft/PlainUnboundRom.lean`,
+  `Theft/PlainUnboundManyRom.lean`). As `noRedirectN_lean_rom'` for bound Moussaka
+  (`security/moussaka.md` §5.3), `PlainSEN` is replaced by `PlainSENL` and proved from `ROM/`'s
+  simultaneous extraction, for function rows, `M = Moussaka.M` and `L ≥ 9749`:
+  - **`moussakaUnbound_sim_joint_lean`**: `moussakaUnbound_sim_joint_spec` restated for the Lean
+    statements. The Lean redemption statement `stR x` evaluates the spec maps of the Anchors, so
+    the redemption system and witness predicate are those of the maps (`leanURedeemSysL`,
+    `leanURedeemWit`, `stRU_extract_chain`), and a candidate decodes to a spec witness for Anchors
+    with any maps (`uRedeemRel_of_wit_lean`). `ROM/`'s argument decodes a statement from its `H₂⁰`
+    input, which holds the Anchors' digests, not their maps; so the redemption family is
+    `RedKU kt`, the well-formed instances whose Anchor keys are the keys `kt d` of their digests
+    (`KeysBy kt (toBound x)`; `muIn_redKU_injective`), and the issuance family is `IssWU`
+    (`muIn_issWU_injective`). Each query of the run is charged at the redemption relation's
+    charge, `ε_QS(7929)`.
+  - `verOk_stIUW`, `verOk_stRUW`: the well-formed statements' inputs fit the tables for
+    `L ≥ 9749` (`LminU`). Unlike bound Moussaka, the hit bound's table length already covers the
+    verifier's `H₁` leaf inputs (`8193` bytes), so no larger `L` is needed.
+  - **`plainSEL_romU`**: `PlainSEL` for `ROM/`'s straight-line extractor `eRomU` (a known tree's
+    candidate mapped by `uIssueWitOf`, `uRedeemWitOf`) against `QBudT q q_E n_G`, for the freshness
+    `FreshKU kt` (well-formed, Anchor keys of `kt`), error `epsRomU q q_E n_G`: `epsRomM` with
+    `ε_QS(7929)` in place of `ε_QS(4409)`. `game_badU`: on the tables, a bad output is a bad output
+    of `ROM/`'s game.
+  - **`plainSENL_romU`** (the slices as advice), the patches of the unbound simulators by queries
+    (`progQIU`, `progQRU`, `hpatchUm`, `hlogUm`), the reduction's budget (`qBudT_redQNu`), the rows
+    the extractor reads (`romRowsU`, `eRomU_congr`) and its read budget
+    (`stageBudgetNX_extRomUN`: each slice at `q h3` keys, `H₅` at `q h5 + N·312`, the cipher at
+    `q_E + N·cells(pR) + 4608` rows, `cells(pR) = 101372` for the unbound redemption relation's
+    559 witness bytes). The hops' budgets for this extractor: `distPN_budgetUXI'`,
+    `distPN_budgetUXR'`.
+  - **`nmUN_lean_rom'`**: for a `HitWfN` adversary whose output redemptions have the keys of `kt`
+    (`KeysOutNU`; the game's freshness is then `FreshKNU kt`, `sim_se_leN_okKU`) and whose last
+    stage is the run of an oracle computation within `QBudT q q_E n_G` on the `N` slices and the
+    tables, with `N = U + M`,
+
+        Pr[BadN] ≤ U·εz(pI; q') + M·εz(pR; q') + Σ_i δ_i + ε_rom
+          + N·((q₂₂+N+1)·2^{−448} + (q₂₁+N+1)·2^{−1088} + (q_μ+N+1)·2^{−256})
+          + Σ_h (ε_prf + (M+1)·2^{−192} + Adv^bind(B₁ h) + Adv^spr-k(B₂ h)),
+
+    `ε_rom = epsRomU (q + N·qPre) (q_E + N·cells(pR)) (n_G + N·338)`, `q' = (2·q h3,
+    2·q h5 + N·312 + 312 + (N − 1)·624, 2·q_E + N·105979 + 4608)`. **`nmUN_lean_rom_one`**: `U = M =
+    1`, `q' = (2·q h3, 2·q h5 + 1560, 2·q_E + 216566)`, programming term
+    `2·((q_μ+3)·2^{−256} + (q₂₁+3)·2^{−1088} + (q₂₂+3)·2^{−448})`. Left: `εz`, the `δ_i`, the PRF
+    bound `ε_prf` (`hprf`), `Adv^bind`, `Adv^spr-k`, `HitWfN`, `KeysOutNU` and the explicit numbers
+    of `epsRomU`. Audit: `Audit/TheftPlainUnbound.lean` (the well-formed trivial adversary
+    `thiefNUW`, `L = 9749`, `ktW`).
 
 A malicious Moderator therefore cannot spend an honest Client's token at another Moderator, even
 though the token is valid there.
@@ -975,8 +1020,9 @@ the base protocol.
    budgets are proved and `WeakSEN` is reduced to plain extraction and one programmed-point term
    per simulated proof, both hypotheses (`nmUN_lean_reads`, `nmUN_lean_plain`); with the chain
    hashes uniform tables the programmed-point terms are bounded (`nmUN_leanX_hit`, and with the
-   digest condition as a SHAKE256 collision term `nmUN_leanX_hitC`); plain extraction stays a
-   hypothesis.
+   digest condition as a SHAKE256 collision term `nmUN_leanX_hitC`); plain extraction is proved
+   from `ROM/`'s simultaneous extraction for function rows and `L ≥ 9749`, for adversaries whose
+   Anchor keys are determined by their digests (`nmUN_lean_rom'`, `KeysOutNU`).
 5. The mechanized Thm U5 takes **per-proof** zero knowledge (`ZeroKnowledge` for `IssueRelW` and
    `RedeemRelW`, against distinguishers that know the witness). That hypothesis holds with
    dedicated label rows (`lean/docs/zk.md`). On `main` the CRT masks come from the witness, the
@@ -1107,6 +1153,15 @@ All in `lean/VoleMole/`; no `sorry`, no axioms beyond the standard three.
   `LminU`, `FreshOkN`, `HitWfN`, `freshOkN_of_sim`, `sim_se_leN_ok`, `progMovesN_hitU`,
   **`nmUN_leanX_hit`**, **`nmUN_leanX_hit_one`**. `Theft/MoussakaUnboundDigest.lean`:
   `HitLenN`, `KeysOkN`, `collBN`, **`nmUN_leanX_hitC`**. `Audit/TheftManyHit.lean` instantiates
+  them.
+- `Theft/PlainUnboundJoint.lean`: `uRedeemRel_of_wit_lean`, `leanURedeemSysL`, `leanURedeemWit`,
+  `stRU_extract_chain`, `IssWU`, `RedKU`, `muIn_issWU_injective`, `muIn_redKU_injective`,
+  **`moussakaUnbound_sim_joint_lean`**, `verOk_stIUW`, `verOk_stRUW`.
+  `Theft/PlainUnboundRom.lean`: `KeysOpU`, `FreshKU`, `eRomU`, `outIU`, `outRU`, `game_badU`,
+  `epsRomU`, **`plainSEL_romU`**. `Theft/PlainUnboundManyRom.lean`: `FreshKNU`, `KeysOutNU`,
+  `sim_se_leN_okKU`, `plainSENL_romU`, `progQUm`, `qBudT_redQNu`, `eRomU_congr`,
+  `stageBudgetNX_extRomUN`, `distPN_budgetUXI'`, `distPN_budgetUXR'`, **`nmUN_lean_rom`**,
+  **`nmUN_lean_rom'`**, **`nmUN_lean_rom_one`**. `Audit/TheftPlainUnbound.lean` instantiates
   them.
 - `Audit/UnboundMany.lean`: the Lean-prover and many-token theorems instantiated for trivial
   adversaries (budgets discharged; SE and PRF with error `1`); `issueRelW_honest`, `exists_pts`,

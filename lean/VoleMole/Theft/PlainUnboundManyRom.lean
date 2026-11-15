@@ -8,7 +8,7 @@ import VoleMole.Theft.PlainMousManyRom
 hypothesis. Here it is replaced by `PlainSENL` (`Theft/ManyPlainLog.lean`) and proved from
 `ROM/`'s simultaneous extraction (`plainSEL_romU`, `Theft/PlainUnboundRom.lean`), as
 `noRedirectN_lean_rom'` (`Theft/PlainMousManyRom.lean`) does for bound Moussaka
-(`docs/security/moussaka-unbound.md` §4):
+(`docs/security/moussaka-unbound.md` §5.3):
 
 * **`FreshKNU kt`**: the freshness of the bound: `FreshOkN` and, for a redemption, Anchor keys that
   are the keys `kt d` of their digests (`KeysOpU`). In the game, for adversaries whose output

@@ -5,7 +5,7 @@ import VoleMole.Theft.PlainMousRom
 # Plain extraction for the unbound game from `ROM/`'s bound (unbound Moussaka)
 
 The unbound counterpart of `Theft/PlainMousRom.lean`'s `plainSEL_romM`
-(`docs/security/moussaka-unbound.md` §4): `PlainSEL` for the unbound operations, proved from
+(`docs/security/moussaka-unbound.md` §5.3): `PlainSEL` for the unbound operations, proved from
 `ROM/`'s simultaneous extraction (`moussakaUnbound_sim_joint_lean`), for function rows, the
 combination of `Moussaka.M` equations and `L ≥ 9749` (`LminU`).
 
