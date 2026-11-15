@@ -267,7 +267,7 @@ permutations with inverse queries):
 
 **On paper only**: removing U1's `2⁻⁷¹` term efficiently in general, the affinity of the
 verifier's CRT masks under label agreement, and Lemmas P^∞ / P^lin in the one-more game
-(`pomfrit-lemmap-tight.md`); for the many-token forms of Ratatouille's Thm 3, Moussaka's Thm 3 and unbound Moussaka's Prop U3 / Thm U4 (`noTheftN`, `noRedirectN`, `nmUN`): plain extraction with no simulated proofs (`PlainSEN`) and one programmed-point term per simulated proof (`SlotEvN`), to which `WeakSEN` is reduced (the hops' read budgets are proved; `SlotEvN` bounded with the chain hashes uniform tables for all three: `noTheftN_leanX_hit`, `noRedirectN_leanX_hit`, `nmUN_leanX_hit`), and these theorems with the other hashes read off uniform tables; its Thm U1
+(`pomfrit-lemmap-tight.md`); for the theft/non-malleability theorems, their proofs with permutation rows (AES as random permutations) rather than function rows, and adversaries without a total hash-query budget; its Thm U1
 with inverse queries, and one joint bound over all three extraction families;
 weak simulation-extractability (L8) for the Lean simulators, which Moussaka non-malleability
 (Thm 3) and Ratatouille no theft take as the hypothesis `WeakSE2`, the read budgets of their ZK
@@ -458,7 +458,8 @@ lean/
                             extraction from ROM/ (PlainEager, PlainVerQ, PlainRom, PlainRataRom,
                             PlainRataReads, PlainMousJoint, PlainMousRom, PlainMousRedirect,
                             PlainMousReads; ROM/ExtractCells); many tokens (ManyPlainLog,
-                            PlainSlicesN, PlainRataManyRom, PlainMousManyRom);
+                            PlainSlicesN, PlainRataManyRom, PlainMousManyRom); unbound (PlainUnboundJoint,
+                            PlainUnboundRom, PlainUnboundManyRom);
                             unbound
                             Moussaka Prop U3 and Thm U4 (MoussakaUnbound, MoussakaUnboundLean);
                             `N` honest proofs and `WeakSEN` (Many); `U` tokens and `M`
@@ -1657,9 +1658,14 @@ What is **not** established, roughly in order of importance:
    patch by queries, most recent first) and the `N` slices answered locally
    (`Theft/PlainSlicesN.lean`: `ansPN`, `locN`, `runT_locN`), so the one-token bound applies with
    the slices as advice (`ε_rom = epsRom (q + N·qPre) (q_E + N·cells(pS)) (n_G + N·338)`, resp.
-   `epsRomM`). Unbound Moussaka (`nmUN_leanX_hit`) still uses `PlainSEN`: its Lean redemption
-   statement evaluates spec maps, and `moussakaUnbound_sim_joint_spec` needs byte-key Anchors, so
-   it needs a Lean-maps restatement as `Theft/PlainMousJoint.lean` does for bound Moussaka. `Adv^ow` stays the advantage of the explicit inverter, a computational
+   `epsRomM`). For unbound Moussaka it is proved from `ROM/` too: `nmUN_lean_rom'`
+   (`Theft/PlainUnbound{Joint,Rom,ManyRom}.lean`; `nmUN_lean_rom_one` for `U = M = 1`), with `L ≥
+   9749`, `FreshKNU kt` and `KeysOutNU`; the joint bound is restated for the Lean statements
+   (`moussakaUnbound_sim_joint_lean`, `uRedeemRel_of_wit_lean`, `stRU_extract_chain`); `ε_rom =
+   epsRomU (q + N·qPre) (q_E + N·101372) (n_G + N·338)`; the PRF, `Adv^bind` and `Adv^spr-k`
+   terms stay (audit `Audit/TheftPlainUnbound.lean`). So in all three theft/non-malleability games,
+   one token or many, plain extraction and the programmed-point term are proved, for function rows
+   and adversaries with a total query budget. `Adv^ow` stays the advantage of the explicit inverter, a computational
    assumption on Keccak-p[800,12]: `Com` is evaluated inside the relations, so it cannot be a table
    of the game, and some inverter wins with probability 1 (`owAdv_one_ratatouille`,
    `owAdv_one_moussaka`). In a random-table model of the standalone experiment a `q`-query
