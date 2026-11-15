@@ -377,6 +377,8 @@ import VoleMole.ZK.IdealCipherPt
 import VoleMole.ZK.HopsH4Pt
 import VoleMole.ZK.IvOverlap
 import VoleMole.ZK.IvOverlapK
+import VoleMole.ZK.PtRd
+import VoleMole.ZK.ZKExp
 import VoleMole.ZK.HopsROMExp
 import VoleMole.ZK.HopsH6Exp
 import VoleMole.ZK.ChainExp
