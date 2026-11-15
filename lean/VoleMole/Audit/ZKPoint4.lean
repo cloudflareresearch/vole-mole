@@ -72,27 +72,3 @@ theorem runGRd_pure {Ω O : Type*} {p : Params} {L M N : ℕ} {α : Type} (a : �
 
 end VoleMole.Audit.ZKPoint4
 
-#print axioms VoleMole.Theft.progPtRd_conf
-#print axioms VoleMole.Theft.lProgRd_conf
-#print axioms VoleMole.Theft.real_sim_leN_lean_pg
-#print axioms VoleMole.Theft.real_sim_leN_lean_full
-#print axioms VoleMole.Theft.real_sim_leN_leanG
-#print axioms VoleMole.Theft.real_sim_leN_leanA
-#print axioms VoleMole.Theft.ZKExp.osum
-#print axioms VoleMole.Theft.lean_zkExpD
-#print axioms VoleMole.Theft.gate5_params
-#print axioms VoleMole.Theft.chPt_params
-#print axioms VoleMole.Theft.exU_sum_nZKA_le
-#print axioms VoleMole.Theft.verPt_cons
-#print axioms VoleMole.Theft.verPtRd_bnd
-#print axioms VoleMole.Theft.runT_agree
-#print axioms VoleMole.Theft.runGRd_cons
-#print axioms VoleMole.Theft.runGRd_reads
-#print axioms VoleMole.Theft.runGRd_bnd
-#print axioms VoleMole.Theft.GRd.seq_cons
-#print axioms VoleMole.Theft.GRd.seq_reads
-#print axioms VoleMole.Theft.GRd.ofTRd_cons
-#print axioms VoleMole.Theft.Ratatouille.eRom_congrP
-#print axioms VoleMole.Theft.Ratatouille.romPts_congr
-#print axioms VoleMole.Audit.ZKPoint4.rata_progI_conf
-#print axioms VoleMole.Audit.ZKPoint4.rata_progS_conf

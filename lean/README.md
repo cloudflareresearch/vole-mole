@@ -1712,15 +1712,25 @@ What is **not** established, roughly in order of importance:
    of Lean proofs, for every event a consistent point game reader reads (`lean_zkExp`,
    `ZK/ZKExp.lean`). The hop readers are built by composition (`hopRd`, `ZK/PtRd.lean`), the hop
    charge is bounded by the view for honest readers confined to their `iv`s (`hopRd_charges`), and
-   the real prover is confined (`realPtRd_conf`). For table `iv`s the sum is `exU_sum_nZK_le`: the
-   budget once, times `1 + N²·2⁻⁶⁴`, plus an `iv` input-collision term; even with that factor
-   `jointNumK_le` reaches ≤ 2⁻⁵⁴ at U+M ≤ 2³¹. Correction: `real_sim_leN_jointZK`'s all-events
-   hypothesis cannot be met by point charges, so the step is restated for a class of events
-   (`real_sim_leN_jointAdm`), and a hop costs `(1+B)·Pr[deltaN i]` (`real_sim_leN_jointRaw`). Not
-   done: the simulator's programming at points (`vPre`), the theft games' reader at points
-   (adversary, verifier, extractor `eRom`), the theft games as instances (sum of two proof systems,
-   output map), and the simulated `iv` structure; so `noTheftN_lean_numJ` is not stated and the
-   mechanized many-token bound stays `(U+M)·2⁻⁵⁵ + 2⁻⁵⁹`. `Adv^ow` stays the advantage of the explicit inverter, a computational
+   both kinds of honest reader are proved confined: the real prover (`realPtRd_conf`) and the
+   simulator's programming (`progPtRd_conf`, from the BAVC reconstruction and `vPre` at points,
+   `reconstruct_ic_congrP`, `vPre_ic_congrP`). So `real_sim_leN_lean_full`
+   (`Theft/JointLeanSum.lean`, audit `Audit/ZKPoint4.lean`) leaves only the game reader and `J`.
+   For table `iv`s the sum is `exU_sum_nZK_le`: the budget once, times `1 + N²·2⁻⁶⁴`, plus an `iv`
+   input-collision term; even with that factor `jointNumK_le` reaches ≤ 2⁻⁵⁴ at U+M ≤ 2³¹. The
+   theft games' readers are point readers: the verifier (`verPtRd`), the adversary's oracle run
+   (`runGRd`, `Theft/JointRun.lean`) and `ROM/`'s extractor (`eRom_congrP`, `Theft/JointExt.lean`:
+   the query list's cells and the forged proof's `iv`), composed by `GRd.seq`. Two proof systems
+   with different parameters are one (`gate5_params`, `chPt_params`, `ZKExp.osum`,
+   `real_sim_leN_leanG`). Corrections: `real_sim_leN_jointZK`'s all-events hypothesis cannot be met
+   by point charges, so the step is restated for a class of events (`real_sim_leN_jointAdm`), and a
+   hop costs `(1+B)·Pr[deltaN i]` (`real_sim_leN_jointRaw`). A slot with no proof (a refused spend)
+   must be charged nothing, or `M` refused spends cost `M` budget terms; this is
+   `real_sim_leN_leanA` with `exU_sum_nZKA_le`. Not done: the theft event `BadN` as one reader's
+   event (run, verifier, extractor with its patch queries; `T₃`, `c_E`), the theft games as
+   instances (`osumProve` with `xOf = xN`, output map and `iv` decoder), and the simulated `iv`
+   structure (`H₄` of `XTab`, `E[#dupPairs]`, failed simulations). So `noTheftN_lean_numJ` is not
+   stated and the mechanized many-token bound stays `(U+M)·2⁻⁵⁵ + 2⁻⁵⁹`. `Adv^ow` stays the advantage of the explicit inverter, a computational
    assumption on Keccak-p[800,12]: `Com` is evaluated inside the relations, so it cannot be a table
    of the game, and some inverter wins with probability 1 (`owAdv_one_ratatouille`,
    `owAdv_one_moussaka`). In a random-table model of the standalone experiment a `q`-query
