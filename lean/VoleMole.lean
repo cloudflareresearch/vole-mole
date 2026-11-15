@@ -434,6 +434,7 @@ import VoleMole.Audit.UnboundMany
 import VoleMole.Audit.TheftMany
 import VoleMole.Audit.PermOMPR
 import VoleMole.Audit.TheftManyR
+import VoleMole.Audit.TheftManyHit
 import VoleMole.Audit.PermFDH
 import VoleMole.Audit.PermSim
 import VoleMole.Audit.OMPRShift
