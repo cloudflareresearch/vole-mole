@@ -55,8 +55,8 @@ def aliveOf (E : CTable) (Lb : QueryLog specIC) (x1 iv : ByteArray) : Finset (Fi
 /-- The trees the class extractor may decode for the alive trees `S` and the class keys `key`:
 if the widest class has width at least 51, the trees of the other classes of width at least
 51. -/
-def wideOther {Kt : Type*} [DecidableEq Kt] (S : Finset (Fin 17)) (key : Fin 17 → Kt) :
-    Finset (Fin 17) :=
+def wideOther {Kt : Type*} [DecidableEq Kt] (S : Finset (Fin BAVC.tau)) (key : Fin BAVC.tau → Kt) :
+    Finset (Fin BAVC.tau) :=
   match majTree S key with
   | some i₁ => if 51 ≤ grpW S key (key i₁) then
       S.filter fun i => key i ≠ key i₁ ∧ 51 ≤ grpW S key (key i) else ∅
