@@ -529,6 +529,139 @@ theorem exP_dupPairs_le (hL : 49 ≤ L) (hN : U + M ≤ 2 ^ 32) :
 
 end Dup
 
+/-! ## Failed simulations -/
+
+section Fail
+
+variable {U M L : ℕ}
+
+/-- **Grinding fails**, as an indicator. -/
+noncomputable def failG (g : Grind) : ℝ := if firstHit g = none then 1 else 0
+
+/-- The probability that grinding fails. -/
+noncomputable def pFail : ℝ := exP Grind failG
+
+/-- A slot's two simulations' grinding failures. -/
+noncomputable def failS (b : Slot (ZK.Sim.Bytes 16) (SimCoins pI × SimCoins pS) Tab3) : ℝ :=
+  failG b.1.2.1.1.2.1 + failG b.1.2.2.1.2.1
+
+lemma failG_nonneg (g : Grind) : 0 ≤ failG g := by unfold failG; split_ifs <;> norm_num
+
+/-- **A slot fails with probability at most `2·pFail`.** -/
+lemma exP_failS : exP (Slot (ZK.Sim.Bytes 16) (SimCoins pI × SimCoins pS) Tab3) failS = 2 * pFail := by
+  unfold failS
+  rw [exP_add]
+  have h1 : exP (Slot (ZK.Sim.Bytes 16) (SimCoins pI × SimCoins pS) Tab3)
+      (fun b => failG b.1.2.1.1.2.1) = pFail := by
+    rw [exP_prod_fst (fun a : ZK.Sim.Bytes 16 × (SimCoins pI × SimCoins pS) => failG a.2.1.1.2.1),
+      exP_prod_snd' (fun c : SimCoins pI × SimCoins pS => failG c.1.1.2.1),
+      exP_prod_fst (fun c : SimCoins pI => failG c.1.2.1),
+      exP_prod_fst (fun c : Shared => failG c.2.1),
+      exP_prod_snd' (fun c : Grind × (Fin BAVC.tau → ZK.Sim.Bytes 32) × (Fin 105 → ZK.Sim.Bytes 16) =>
+        failG c.1),
+      exP_prod_fst failG]
+    rfl
+  have h2 : exP (Slot (ZK.Sim.Bytes 16) (SimCoins pI × SimCoins pS) Tab3)
+      (fun b => failG b.1.2.2.1.2.1) = pFail := by
+    rw [exP_prod_fst (fun a : ZK.Sim.Bytes 16 × (SimCoins pI × SimCoins pS) => failG a.2.2.1.2.1),
+      exP_prod_snd' (fun c : SimCoins pI × SimCoins pS => failG c.2.1.2.1),
+      exP_prod_snd' (fun c : SimCoins pS => failG c.1.2.1),
+      exP_prod_fst (fun c : Shared => failG c.2.1),
+      exP_prod_snd' (fun c : Grind × (Fin BAVC.tau → ZK.Sim.Bytes 32) × (Fin 105 → ZK.Sim.Bytes 16) =>
+        failG c.1),
+      exP_prod_fst failG]
+    rfl
+  rw [h1, h2]; ring
+
+variable (A : ThiefN Sizes.labelRows U M Tab3 (TabR L))
+
+/-- **The absent `iv`s are failed simulations.** -/
+lemma nNone_view_le (z : TapeJ U M L) :
+    (nNone (ivAt (ivJ ivR) (xJ A) (viewJ A z).2.2.2.2.2 (viewJ A z).1 (viewJ A z).2.1) (U + M) : ℝ) ≤
+      ∑ j : Fin (U + M), failS (z.1.2 j) := by
+  rw [← ind_none_sum, Nat.cast_sum, ← Fin.sum_univ_eq_sum_range
+    (fun j => (((if ivAt (ivJ ivR) (xJ A) (viewJ A z).2.2.2.2.2 (viewJ A z).1 (viewJ A z).2.1 j = none
+      then 1 else 0 : ℕ)) : ℝ))]
+  refine Finset.sum_le_sum fun j _ => ?_
+  have hS : 0 ≤ failS (z.1.2 j) := add_nonneg (failG_nonneg _) (failG_nonneg _)
+  rw [ivAt_view]
+  have ht : tapeC z.1.2 j = (z.1.2 j).1.2 := extN_val _ j
+  generalize xN A (pubOf z.1.1)
+    (simPre (gS simJ (xJ A)) (gPg (progJ (L := L)) (xJ A)) z.1.1 (tapeC z.1.2) j).1 = o
+  rcases o with _ | y
+  · simp [ivR, hS]
+  · simp only
+    by_cases hf : simFail y (tapeC z.1.2 j)
+    · simp only [hf, ↓reduceIte, Nat.cast_one]
+      rw [ht] at hf
+      unfold failS failG
+      rcases y with y | y <;> simp only [simFail] at hf <;> simp only [hf, ↓reduceIte] <;>
+        split_ifs <;> norm_num
+    · simp only [hf, ↓reduceIte, reduceCtorEq, Nat.cast_zero]
+      exact hS
+
+/-- **`E[#absent ivs] ≤ 2N·pFail`.** -/
+theorem exU_nNone_le :
+    exU (TapeJ U M L) (fun z => (nNone (ivAt (ivJ ivR) (xJ A) (viewJ A z).2.2.2.2.2 (viewJ A z).1
+      (viewJ A z).2.1) (U + M) : ℝ)) ≤ 2 * (U + M : ℕ) * pFail := by
+  refine (exP_mono (nNone_view_le A)).trans (le_of_eq ?_)
+  have e : exP (TapeJ U M L) (fun z => ∑ j : Fin (U + M), failS (z.1.2 j)) =
+      ∑ j : Fin (U + M), exP (TapeJ U M L) (fun z => failS (z.1.2 j)) := by
+    simp only [exP]
+    rw [← Finset.sum_div, Finset.sum_comm]
+  rw [e]
+  simp only [exP_coord _ failS, exP_failS, Finset.sum_const, Finset.card_univ, Fintype.card_fin,
+    nsmul_eq_mul]
+  ring
+
+/-- **`E[#active slots with absent ivs] ≤ 2N·pFail`.** -/
+theorem exU_nNoneA_le :
+    exU (TapeJ U M L) (fun z => (nNoneA (actAt actJ (xJ A) (viewJ A z))
+      (ivAt (ivJ ivR) (xJ A) (viewJ A z).2.2.2.2.2 (viewJ A z).1 (viewJ A z).2.1) (U + M) : ℝ)) ≤
+      2 * (U + M : ℕ) * pFail := by
+  refine le_trans (exP_mono fun z => ?_) (exU_nNone_le A)
+  unfold nNoneA nNone
+  exact_mod_cast card_le_card fun j hj => by
+    simp only [mem_filter] at hj ⊢
+    exact ⟨hj.1, hj.2.2⟩
+
+end Fail
+
+/-! ## The summed charges of the simulated theft game -/
+
+section J
+
+variable {U M L : ℕ} (A : ThiefN Sizes.labelRows U M Tab3 (TabR L)) {q : Kind → ℕ} {qE nG : ℕ}
+  (hA : ∀ iss sp, AdmLN (QBudT q qE nG) ansPN (A.out iss sp))
+
+/-- **`J` for the simulated theft game**: the summed charges of the active slots are at most the
+game reader's budget once (`T₃ = q h3`, `c_E = a_E`, `a₅`), times the overlap
+`N²·2⁻⁶⁴ + E[#dupPairs] ≤ N²·2⁻⁶⁴ + 4N²·2⁻¹²⁸`, plus the failed simulations
+(`E[#absent ivs] ≤ 2N·pFail`). -/
+theorem theft_J_le (hL : 49 ≤ L) (hN : U + M ≤ 2 ^ 32) (w : Fin 3 → ℝ) (hw : ∀ k, 0 ≤ w k) :
+    ∑ i ∈ range (U + M), ∑ k, w k * exU _ (fun z => (nZKA actJ (ivJ ivR) (xJ A) (badGRd A hA)
+        (max 312 624) (max 4607 4607) i k (viewJ A z) : ℝ)) ≤
+      w 0 * q .h3 + w 1 * aER (U + M) qE + w 2 * a5R (U + M) q +
+        (w 1 * (aER (U + M) qE + 2 * (max 4607 4607 : ℕ)) +
+            w 2 * (a5R (U + M) q + 2 * (max 312 624 : ℕ))) *
+          (((U + M : ℕ) : ℝ) ^ 2 / 2 ^ 64 + 4 * ((U + M : ℕ) : ℝ) ^ 2 / 2 ^ 128) +
+        (w 1 * aER (U + M) qE + w 2 * a5R (U + M) q) * (2 * (U + M : ℕ) * pFail) +
+        2 * (U + M : ℕ) * (w 1 * (max 4607 4607 : ℕ) + w 2 * (max 312 624 : ℕ)) *
+          (2 * (U + M : ℕ) * pFail) := by
+  have h := exU_sum_nZKA_le actJ (ivJ ivR) (xJ A) (badGRd A hA) (badGRd_bnd A hA)
+    (badGRd_T3 A hA) (badGRd_cls A hA) (max 312 624) (max 4607 4607) w hw (viewJ A) splitT
+    (dIv A) (ivs_view A hL)
+  refine h.trans ?_
+  have hw1 := hw 1
+  have hw2 := hw 2
+  have hd := exP_dupPairs_le A hL hN
+  have hA' := exU_nNoneA_le A
+  have hn := exU_nNone_le A
+  unfold a5R aER
+  gcongr
+
+end J
+
 end Ratatouille
 
 end VoleMole.Theft
