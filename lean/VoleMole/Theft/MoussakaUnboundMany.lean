@@ -674,16 +674,11 @@ theorem sim_se_leN {AdmE : ((Fin (U + M) → G) → S → UOp) → Prop} {εSE :
   simGN_le_of_weakSEN (ρ := Coins proveSeedBytes) hse (fun ω l => xN A (pubOf A ω) l)
     (fun _ l => opN A l) fun _ l => hAE l
 
-/-- **Unbound redemption non-malleability and no squatting for `U` honest tokens and `M` honest
-redemptions (Theorems U4 and U3 together).** For every adversary, with zero knowledge of both
-unbound proof systems at the hops' distinguishers, weak simulation-extractability with `U + M`
-simulated proofs, and the PRF assumption for the key-recovery distinguishers:
-
-    Pr[BadN] ≤ U·ε_I + M·ε_R + Σ_i δ_i + ε_SE
-                 + Σ_h (ε_prf + (M+1)·2⁻¹⁹² + Adv^bind(B₁ h) + Adv^spr-k(B₂ h)). -/
-theorem nmUN [Nonempty S]
+/-- **Unbound non-malleability for `U` tokens and `M` redemptions, from a bound on the simulated
+game's `Acc ∧ Fresh ∧ ¬ Rel` event** (`hse'`; `nmUN` gets it from `WeakSEN`). -/
+theorem nmUN_of_se [Nonempty S]
     {AdmI : (Bytes → G → S → Prop) → Prop} {AdmR : (Bytes → G → S → Prop) → Prop}
-    {AdmE : ((Fin (U + M) → G) → S → UOp) → Prop} {εI εR εSE εprf : ℝ}
+    {εI εR εSE εprf : ℝ}
     (hzkI : ZeroKnowledgeRO IssueRelW
       (fun x w (ρ : Coins proveSeedBytes) g s => PI w x (List.ofFn ρ) g s) simI progI AdmI εI)
     (hεI : 0 ≤ εI)
@@ -694,9 +689,8 @@ theorem nmUN [Nonempty S]
       AdmI (distPN A PI PR simI progI simR progR verI verR ext i ω τ))
     (hAR : ∀ i : Fin (U + M), U ≤ i.val → ∀ ω τ,
       AdmR (distPN A PI PR simI progI simR progR verI verR ext i ω τ))
-    (hse : WeakSEN (U + M) (simU simI simR) (progU progI progR) (AccOp verI verR) FreshOpN RelOp
-      ext AdmE εSE)
-    (hAE : ∀ l, AdmE (opN A l))
+    (hse' : pr (TapeN U M CI CR G S)
+      (nmSimN A simI progI simR progR (seEvN A verI verR ext)) ≤ εSE)
     (pts : Fin (M + 1) → Coins ctxBytes) (hpts : Function.Injective pts)
     (hprf : ∀ h b, prf1Adv (A.ci h)
       (owkDN (keyBN A simI progI simR progR ext h) pts b) ≤ εprf) :
@@ -750,7 +744,6 @@ theorem nmUN [Nonempty S]
         simp only [hi, ↓reduceIte]
         rw [xwN_fst] at this
         exact this)
-  have hse' := sim_se_leN A simI progI simR progR verI verR ext hse hAE
   have hhit := sim_hit_leN A simI progI simR progR ext
   have hkey : ∀ hh : Fin U, owkAdvN (A.ci hh) (keyBN A simI progI simR progR ext hh) ≤
       εprf + (M + 1) / 2 ^ 192 := fun hh =>
@@ -790,6 +783,41 @@ theorem nmUN [Nonempty S]
   rw [e2] at hse'
   rw [e3] at hhit
   linarith
+
+/-- **Unbound redemption non-malleability and no squatting for `U` honest tokens and `M` honest
+redemptions (Theorems U4 and U3 together).** For every adversary, with zero knowledge of both
+unbound proof systems at the hops' distinguishers, weak simulation-extractability with `U + M`
+simulated proofs, and the PRF assumption for the key-recovery distinguishers:
+
+    Pr[BadN] ≤ U·ε_I + M·ε_R + Σ_i δ_i + ε_SE
+                 + Σ_h (ε_prf + (M+1)·2⁻¹⁹² + Adv^bind(B₁ h) + Adv^spr-k(B₂ h)). -/
+theorem nmUN [Nonempty S]
+    {AdmI : (Bytes → G → S → Prop) → Prop} {AdmR : (Bytes → G → S → Prop) → Prop}
+    {AdmE : ((Fin (U + M) → G) → S → UOp) → Prop} {εI εR εSE εprf : ℝ}
+    (hzkI : ZeroKnowledgeRO IssueRelW
+      (fun x w (ρ : Coins proveSeedBytes) g s => PI w x (List.ofFn ρ) g s) simI progI AdmI εI)
+    (hεI : 0 ≤ εI)
+    (hzkR : ZeroKnowledgeRO RedeemRelW
+      (fun x w (ρ : Coins proveSeedBytes) g s => PR w x (List.ofFn ρ) g s) simR progR AdmR εR)
+    (hεR : 0 ≤ εR)
+    (hAI : ∀ i : Fin (U + M), i.val < U → ∀ ω τ,
+      AdmI (distPN A PI PR simI progI simR progR verI verR ext i ω τ))
+    (hAR : ∀ i : Fin (U + M), U ≤ i.val → ∀ ω τ,
+      AdmR (distPN A PI PR simI progI simR progR verI verR ext i ω τ))
+    (hse : WeakSEN (U + M) (simU simI simR) (progU progI progR) (AccOp verI verR) FreshOpN RelOp
+      ext AdmE εSE)
+    (hAE : ∀ l, AdmE (opN A l))
+    (pts : Fin (M + 1) → Coins ctxBytes) (hpts : Function.Injective pts)
+    (hprf : ∀ h b, prf1Adv (A.ci h)
+      (owkDN (keyBN A simI progI simR progR ext h) pts b) ≤ εprf) :
+    pr (TapeN U M CI CR G S) (nmRealNE A PI PR (BadN A verI verR ext)) ≤
+      U * εI + M * εR + ∑ i, pr (TapeN U M CI CR G S) (deltaNU A PI PR simI progI simR progR i) +
+        εSE +
+        ∑ h : Fin U, (εprf + (M + 1) / 2 ^ 192 +
+          bindAdv (bindBN A simI progI simR progR ext h) +
+          sprAdvN (A.ci h) (sprBN A simI progI simR progR ext h)) :=
+  nmUN_of_se A PI PR simI progI simR progR verI verR ext hzkI hεI hzkR hεR hAI hAR
+    (sim_se_leN A simI progI simR progR verI verR ext hse hAE) pts hpts hprf
 
 /-- **Proposition U3 (no nullifier squatting) for `U` honest tokens and `M` honest redemptions**:
 the probability that an accepted redemption with a fresh statement carries the nullifier of some

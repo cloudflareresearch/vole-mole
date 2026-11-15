@@ -429,14 +429,11 @@ theorem sim_se_leN {AdmE : ((Fin (U + M) → G) → S → MOp) → Prop} {εSE :
   simGN_le_of_weakSEN (ρ := Coins proveSeedBytes) hse (fun ω l => xN A (pubOf A ω) l)
     (fun _ l => opN A l) fun _ l => hAE l
 
-/-- **Redemption non-malleability for `U` honest tokens and `M` honest redemptions (Theorem 3).**
-For every adversary, with zero knowledge of both proof systems at the hops' distinguishers and
-weak simulation-extractability with `U + M` simulated proofs:
-
-    Pr[BadN] ≤ U·ε_I + M·ε_R + Σ_i δ_i + ε_SE + Σ_h Adv^ow(inverter h). -/
-theorem noRedirectN [Nonempty S]
+/-- **Redemption non-malleability for `U` tokens and `M` redemptions, from a bound on the
+simulated game's `Acc ∧ Fresh ∧ ¬ Rel` event** (`hse'`; `noRedirectN` gets it from `WeakSEN`). -/
+theorem noRedirectN_of_se [Nonempty S]
     {AdmI : (Bytes → G → S → Prop) → Prop} {AdmR : (Bytes → G → S → Prop) → Prop}
-    {AdmE : ((Fin (U + M) → G) → S → MOp) → Prop} {εI εR εSE : ℝ}
+    {εI εR εSE : ℝ}
     (hzkI : ZeroKnowledgeRO IssueRelW
       (fun x w (ρ : Coins proveSeedBytes) g s => PI w x (List.ofFn ρ) g s) simI progI AdmI εI)
     (hεI : 0 ≤ εI)
@@ -447,9 +444,8 @@ theorem noRedirectN [Nonempty S]
       AdmI (distPN A PI PR simI progI simR progR verI verR ext i ω τ))
     (hAR : ∀ i : Fin (U + M), U ≤ i.val → ∀ ω τ,
       AdmR (distPN A PI PR simI progI simR progR verI verR ext i ω τ))
-    (hse : WeakSEN (U + M) (simM simI simR) (progM progI progR) (AccOp verI verR) FreshOpN RelOp
-      ext AdmE εSE)
-    (hAE : ∀ l, AdmE (opN A l)) :
+    (hse' : pr (TapeN U M CI CR G S)
+      (nmSimN A simI progI simR progR (seEvN A verI verR ext)) ≤ εSE) :
     pr (TapeN U M CI CR G S) (nmRealN A PI PR verI verR ext) ≤
       U * εI + M * εR + ∑ i, pr (TapeN U M CI CR G S) (deltaNM A PI PR simI progI simR progR i) +
         εSE + ∑ h : Fin U, owAdv (A.ci h) (A.cr h) (inverterN A simI progI simR progR ext h) := by
@@ -497,7 +493,6 @@ theorem noRedirectN [Nonempty S]
         simp only [hi, ↓reduceIte]
         rw [xwN_fst] at this
         exact this)
-  have hse' := sim_se_leN A simI progI simR progR verI verR ext hse hAE
   have hop := sim_opens_leN A simI progI simR progR ext
   have hε : ∑ i : Fin (U + M), (if i.val < U then εI else εR) = U * εI + M * εR := by
     rw [Fin.sum_univ_add]
@@ -525,6 +520,33 @@ theorem noRedirectN [Nonempty S]
   rw [e2] at hse'
   rw [e3] at hop
   linarith
+
+/-- **Redemption non-malleability for `U` honest tokens and `M` honest redemptions (Theorem 3).**
+For every adversary, with zero knowledge of both proof systems at the hops' distinguishers and
+weak simulation-extractability with `U + M` simulated proofs:
+
+    Pr[BadN] ≤ U·ε_I + M·ε_R + Σ_i δ_i + ε_SE + Σ_h Adv^ow(inverter h). -/
+theorem noRedirectN [Nonempty S]
+    {AdmI : (Bytes → G → S → Prop) → Prop} {AdmR : (Bytes → G → S → Prop) → Prop}
+    {AdmE : ((Fin (U + M) → G) → S → MOp) → Prop} {εI εR εSE : ℝ}
+    (hzkI : ZeroKnowledgeRO IssueRelW
+      (fun x w (ρ : Coins proveSeedBytes) g s => PI w x (List.ofFn ρ) g s) simI progI AdmI εI)
+    (hεI : 0 ≤ εI)
+    (hzkR : ZeroKnowledgeRO RedeemRelW
+      (fun x w (ρ : Coins proveSeedBytes) g s => PR w x (List.ofFn ρ) g s) simR progR AdmR εR)
+    (hεR : 0 ≤ εR)
+    (hAI : ∀ i : Fin (U + M), i.val < U → ∀ ω τ,
+      AdmI (distPN A PI PR simI progI simR progR verI verR ext i ω τ))
+    (hAR : ∀ i : Fin (U + M), U ≤ i.val → ∀ ω τ,
+      AdmR (distPN A PI PR simI progI simR progR verI verR ext i ω τ))
+    (hse : WeakSEN (U + M) (simM simI simR) (progM progI progR) (AccOp verI verR) FreshOpN RelOp
+      ext AdmE εSE)
+    (hAE : ∀ l, AdmE (opN A l)) :
+    pr (TapeN U M CI CR G S) (nmRealN A PI PR verI verR ext) ≤
+      U * εI + M * εR + ∑ i, pr (TapeN U M CI CR G S) (deltaNM A PI PR simI progI simR progR i) +
+        εSE + ∑ h : Fin U, owAdv (A.ci h) (A.cr h) (inverterN A simI progI simR progR ext h) :=
+  noRedirectN_of_se A PI PR simI progI simR progR verI verR ext hzkI hεI hzkR hεR hAI hAR
+    (sim_se_leN A simI progI simR progR verI verR ext hse hAE)
 
 end Red
 

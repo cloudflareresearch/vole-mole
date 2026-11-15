@@ -675,11 +675,46 @@ adversary's operations are unbound requests.
   `noRedirectUN_lean_plain`, with `ε_SE = ε_plain + Σ_i ε_hit,i`. `PlainSEN` and the `SlotEvN`
   terms are hypotheses (`security/ratatouille.md` §5 says why). The one-token unbound theorems
   (`nmU_lean`) still take the hops' budgets and `WeakSE2` as hypotheses.
-  The `SlotEvN` terms are not bounded here. For Ratatouille they are, with the chain hashes
-  uniform tables (`noTheftN_leanX_hit`, `security/ratatouille.md` §5), and for bound Moussaka
-  with one token (`noRedirect_leanX_hit`). The generic steps apply (`Hit.progMovesN_chain`,
-  `Theft/ManyTables.lean`); the unbound game at a value of the extra table, and a freshness for
-  well-formed unbound statements (as `Hit.Mous.FreshOk`, `HitWf`), are not done.
+- *The other hashes random tables, `ε_hit` bounded* (`Theft/MoussakaUnboundTables.lean`,
+  `Theft/MoussakaUnboundHit.lean`). As for bound Moussaka (`security/moussaka.md` §5.3):
+  - The Lean unbound provers, programmings and verifiers for any base hash record (`leanPIUH`,
+    …, `verRLUH`), zero knowledge for every well-formed record (`leanPIUH_zkRO`,
+    `leanPRUH_zkRO`), and with the record read off one more uniform shared table (`leanPIUX`, …,
+    `leanPIUX_zkRO`, `zkRO_tables`). The game at a value of the extra table (`atTN`, `PN_atX`,
+    `pgP_atX`, `badN_atX`) gives the hops' budgets at every value (`distPN_budgetUXI`,
+    `distPN_budgetUXR`). **`nmUN_leanX_plain`**: `nmUN_lean_plain` in this model, with
+    `ε_plain + ε_moves` (`ProgMovesN`), through `nmUN_of_se` (`Theft/MoussakaUnboundMany.lean`).
+  - The unbound statements' `H₂⁰` inputs are the bound ones with the domain separators of
+    `mous`/1 (the issuance encoding `t ‖ ctx_iss` is the bound one; the redemption is hashed by
+    `hash_redeem_instance`). So well-formed statements are determined by their `H₂⁰` inputs as for
+    bound Moussaka (`muIn_stIU_inj`, `muIn_stRU_inj`, via `toBI`, `toBound` and `Hit.Mous`), and
+    issuance and redemption inputs differ (`muIn_stIU_ne_stRU`). The forgery's chain inputs have
+    at most `9749` bytes (`LminU`: the `H₂¹` input of the unbound redemption relation,
+    witness 559 bytes; `fdU_fOk`).
+  - **`FreshOkN`**, **`HitWfN`**: as for bound Moussaka. The redemption context is the
+    adversary's choice and `AccOp` checks both contexts' lengths, so `HitWfN` asks for 32-byte
+    digests and challenge digests and the digest clause (`freshOkN_of_sim`, `sim_se_leN_ok`).
+  - **`nmUN_leanX_hit`**: at `XTab L M'` (`L ≥ 9749`), for `HitWfN` adversaries whose last stage
+    reads `H₂⁰`, `H₂¹`, `H₂²` with `q_μ`, `q₂₁`, `q₂₂` queries (`AdmHitN`),
+
+        Pr[BadN] ≤ U·εz(pI; q) + M·εz(pR; q) + Σ_i δ_i + ε_plain
+          + N·((q₂₂+N+1)·2^{−448} + (q₂₁+N+1)·2^{−1088} + (q_μ+N+1)·2^{−256})
+          + Σ_h (ε_prf + (M+1)·2^{−192} + Adv^bind(B₁ h) + Adv^spr-k(B₂ h)),
+
+    `N = U + M` (`progMovesN_hitU`, from `Hit.progMovesN_chain`). **`nmUN_leanX_hit_one`**: one
+    token and one redemption (`U = M = 1`), with the programming term
+    `2·((q_μ+3)·2^{−256} + (q₂₁+3)·2^{−1088} + (q₂₂+3)·2^{−448})` and the budget
+    `(a₃ + x₃, a₅ + x₅ + 936, a_E + x_E + 9214)` of the one-token theorems. This is the game
+    NM-U^{1,1}, not the one-token game of `Theft/MoussakaUnbound.lean` (whose `nmU_lean` keeps
+    the hops' budgets and `WeakSE2` as hypotheses); the two games run the same spec calls.
+  - **`nmUN_leanX_hitC`** (`Theft/MoussakaUnboundDigest.lean`): the digest clause of `HitWfN`
+    replaced by the term `Adv^coll_sha(B)` for an explicit finder, for adversaries whose Anchor
+    keys are digests and expansions of compressed keys (`KeysOkN`, `Moussaka.KeyOk`), as
+    `noRedirectN_leanX_hitC` for bound Moussaka.
+  - `Audit/TheftManyHit.lean`: `nmUN_leanX_plain`, `nmUN_leanX_hit`, `nmUN_leanX_hit_one` and
+    `nmUN_leanX_hitC` instantiated at a well-formed trivial adversary (`hitWfN_thiefNUW`,
+    `hitLenN_thiefNUW`, `keysOkN_thiefNUW`). `noSquatN` and `noRedirectUN` restrict `nmUN`'s
+    event; their `leanX` forms are not stated separately.
 
 A malicious Moderator therefore cannot spend an honest Client's token at another Moderator, even
 though the token is valid there.
@@ -905,7 +940,10 @@ the base protocol.
    simulated proofs; L8 on paper), the read budgets of the hops' distinguishers, the PRF
    assumption with `t` leaked, `Adv^spr-k` and binding of `UCom`. For many tokens the hops'
    budgets are proved and `WeakSEN` is reduced to plain extraction and one programmed-point term
-   per simulated proof, both hypotheses (`nmUN_lean_reads`, `nmUN_lean_plain`).
+   per simulated proof, both hypotheses (`nmUN_lean_reads`, `nmUN_lean_plain`); with the chain
+   hashes uniform tables the programmed-point terms are bounded (`nmUN_leanX_hit`, and with the
+   digest condition as a SHAKE256 collision term `nmUN_leanX_hitC`); plain extraction stays a
+   hypothesis.
 5. The mechanized Thm U5 takes **per-proof** zero knowledge (`ZeroKnowledge` for `IssueRelW` and
    `RedeemRelW`, against distinguishers that know the witness). That hypothesis holds with
    dedicated label rows (`lean/docs/zk.md`). On `main` the CRT masks come from the witness, the
@@ -1027,6 +1065,14 @@ All in `lean/VoleMole/`; no `sorry`, no axioms beyond the standard three.
   `HitKeyU`, `weakSEN_moussakaU`, **`nmUN_lean_plain`**, `noSquatN_lean_plain`,
   `noRedirectUN_lean_plain`. `Audit/TheftManyR.lean` instantiates `nmUN_lean_reads` and
   `nmUN_lean_plain` for a trivial adversary.
+- `Theft/MoussakaUnboundTables.lean`: `leanPIUH` … `verRLUH`, `leanPIUH_zkRO`, `leanPRUH_zkRO`,
+  `accOp_movesUH`; `leanPIUX` … `verRLUX`, `accOp_movesUX`; `atTN`, `distPN_budgetUXI`,
+  `distPN_budgetUXR`, `nmUN_leanX_of_se`, **`nmUN_leanX_plain`**.
+- `Theft/MoussakaUnboundHit.lean`: `muIn_stIU_inj`, `muIn_stRU_inj`, `muIn_stIU_ne_stRU`, `fdU`,
+  `LminU`, `FreshOkN`, `HitWfN`, `freshOkN_of_sim`, `sim_se_leN_ok`, `progMovesN_hitU`,
+  **`nmUN_leanX_hit`**, **`nmUN_leanX_hit_one`**. `Theft/MoussakaUnboundDigest.lean`:
+  `HitLenN`, `KeysOkN`, `collBN`, **`nmUN_leanX_hitC`**. `Audit/TheftManyHit.lean` instantiates
+  them.
 - `Audit/UnboundMany.lean`: the Lean-prover and many-token theorems instantiated for trivial
   adversaries (budgets discharged; SE and PRF with error `1`); `issueRelW_honest`, `exists_pts`,
   `replay_not_freshN`, `redirect_ctx_freshN`, `owkN_zero`.

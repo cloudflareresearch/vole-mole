@@ -425,6 +425,11 @@ import VoleMole.Theft.MoussakaUnboundManyReads
 import VoleMole.Theft.ManyTables
 import VoleMole.Theft.HitMany
 import VoleMole.Theft.RatatouilleManyHit
+import VoleMole.Theft.MoussakaManyHit
+import VoleMole.Theft.MoussakaUnboundTables
+import VoleMole.Theft.MoussakaUnboundHit
+import VoleMole.Theft.MoussakaDigest
+import VoleMole.Theft.MoussakaUnboundDigest
 import VoleMole.Audit.Nonvacuous
 import VoleMole.Audit.Liveness
 import VoleMole.Audit.UnboundROM
@@ -436,6 +441,7 @@ import VoleMole.Audit.UnboundMany
 import VoleMole.Audit.TheftMany
 import VoleMole.Audit.PermOMPR
 import VoleMole.Audit.TheftManyR
+import VoleMole.Audit.TheftManyHit
 import VoleMole.Audit.PermFDH
 import VoleMole.Audit.PermSim
 import VoleMole.Audit.OMPRShift
