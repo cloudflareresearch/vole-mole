@@ -828,8 +828,8 @@ expansions' outputs `(nf_key, r, ρ_iss)` and every `ρ_red` uniform.
   form `lean/docs/zk.md` establishes with **dedicated label rows**. On `main` (CRT masks from the
   witness, `REUSE_CRT_WITNESS = true`) no efficient simulator meets it: the label term is a joint
   term over the `H₅` queries (§3.1, UF6), and the joint (PU) hop replaces it. With two redemption
-  queries the joint hop is mechanized on `main` for (a) and (b) (next items); for `n > 2` queries
-  it is on paper.
+  queries the joint hop is mechanized on `main` for (a) and (b) (next items), with per-proof
+  tables and with all tables shared; for `n > 2` queries it is on paper.
 
 **[Lean] Theorem U5(a) on `main`, two queries** (`Privacy/MoussakaUnboundMain.lean`,
 `Privacy/MoussakaUnboundMainPU.lean`, `lean/docs/zk.md` §4.2). The colluding game with two
@@ -859,9 +859,39 @@ simulated proofs the view and the redemption statements are functions of the key
 proof's witness prefix (the opening `r`) is independent of the candidates. No assumption on
 `UCom`.
 
-Not done on `main`: `n > 2` queries (the joint hop of `ZK/MainGame.lean` is for four proofs),
-adaptive queries in (a), and the tables shared between the proofs (the hops of
-`ZK/MainSharedAll.lean` for unbound Moussaka).
+**[Lean] Theorem U5 on `main` with all tables shared** (`Privacy/MoussakaUnboundMainAll.lean`,
+`Privacy/MoussakaUnboundNCMainAll.lean`, `Audit/MainUnboundAll.lean`, `lean/docs/zk.md` §4.2). The
+same two-query games with one `H₃`, one `H₂³` table, one `H₅` table and one cipher for the four
+proofs, as in the scheme, through `ZK.Sim.main_sharedAll_le`. In (a) the redemption proofs are
+computed only if the rule lets the redemptions happen. With the proofs simulated, the shared
+`H₂³` table is a function of the guess's input (each answer `Derive ‖ π` determines its
+statement), so the PRF hop and the swap of the nullifier table apply at every value of the
+simulators' coins and the tables:
+
+    anonymityU_main_sharedAll:  |Pr[W₀] − Pr[W₁]| ≤ 30·(εS(q₃, q_E + 8·4607) + Δ23)
+        + 15·(Σ_{b,c} puAdv UCom (predUH_c b) + 8·noHitProb + 3750·2⁻¹²⁸)
+        + collUH 0 + collUH 1 + 2·εprf
+    anonymityNC_main_U_sharedAll:  |Pr[W₀] − Pr[W₁]| ≤ 30·(εS(q₃, q_E + 8·4607) + Δ23)
+        + 15·(8·noHitProb + (8·(q₅ + 625) + 626)·2⁻¹²⁸) + collNH 0 + collNH 1
+        + 2·(ψ₀ + ψ₁) + 2·εprf
+
+`coll*_b` is the probability that two real proofs of world `b` have one prefix `wPrefix ‖ μ₁`,
+which the reduction of `main_sharedAll_le` charges whole. It is at most `2⁻¹²⁸` if the two queries
+are answered by different Clients (`TwoClientsU`, `TwoClients`; `*_two` theorems with `2·2⁻¹²⁸`).
+It is **not** small when one Client answers both queries in one context with one issuer index:
+the two redemption witnesses and statements are then equal, so are the prefixes, and the two real
+proofs read one column of `H₃`. They read it at their own `ρ` only (`realROb_g3_congr'`), so the
+true cost is a collision of the two `ρ` (`2⁻¹²⁸`); the reduction, which writes slices at the
+view's prefixes and does not see `ρ`, cannot use that. For two contexts the witnesses differ in
+the committed Keccak states of `Derive`, which needs injectivity of the Keccak-p[800] rounds (not
+in Lean). So for queries answered by one Client the shared-table theorems carry this term, and the
+per-proof theorems above are the ones without it.
+
+Not done on `main`: `n > 2` queries (the joint hops are for four proofs; `n` proofs need the bad
+event moved across `n` hops), adaptive queries in (a), the Lean issuance prover in (b) (the route
+of `anonymityNC_main_lean`, `Privacy/MoussakaNCMainLean.lean`, applies: `unbound_issue_response`
+checks no length, so completeness on the shared tables suffices), and a `ρ`-aware reduction for the
+one-Client prefix collision.
 - **The PRF.** `prfAdv A.ci (reductionAd …) ≤ εprf` (`Adv^prf-t_2`): given `t₀, t₁`, distinguish the
   table `c, ctx ↦ Derive(k_c, ctx)` from a uniform table. It is stated for the explicit reductions
   (the adversary with the simulator coins fixed, reading the table at the contexts it queries,
@@ -983,8 +1013,10 @@ the base protocol.
    label term is joint over the `H₅` queries (§3.1), and no per-proof simulator exists; the joint
    (PU) hop replaces it. It is mechanized with two redemption queries and per-proof tables, for
    U5(a) (`anonymityU_main_pu`, with (PU) for `UCom` as explicit predictor advantages) and U5(b)
-   (`anonymityNC_main_U`, statistical (PU) term); for `n > 2` queries and shared tables it is on
-   paper.
+   (`anonymityNC_main_U`, statistical (PU) term), and with all tables shared
+   (`anonymityU_main_sharedAll`, `anonymityNC_main_U_sharedAll`), there with an explicit
+   prefix-collision term that is `≤ 2⁻¹²⁸` for queries answered by different Clients but not
+   bounded when one Client answers both (§U5 above); for `n > 2` queries it is on paper.
 
 ---
 

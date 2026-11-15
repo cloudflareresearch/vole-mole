@@ -295,11 +295,14 @@ import VoleMole.Privacy.MoussakaMainSharedPU
 import VoleMole.Privacy.MoussakaMainShared23
 import VoleMole.Privacy.MoussakaMainSharedAll
 import VoleMole.Privacy.MoussakaNCMain
+import VoleMole.Privacy.MoussakaNCMainLean
 import VoleMole.Privacy.MoussakaRule
 import VoleMole.Privacy.MoussakaMainFind
 import VoleMole.Privacy.MoussakaUnboundMain
 import VoleMole.Privacy.MoussakaUnboundMainPU
 import VoleMole.Privacy.MoussakaUnboundNCMain
+import VoleMole.Privacy.MoussakaUnboundNCMainAll
+import VoleMole.Privacy.MoussakaUnboundMainAll
 import VoleMole.Privacy.RatatouilleRO
 import VoleMole.ZK.TwoPhaseRO
 import VoleMole.ZK.TwoPhaseIC
@@ -510,3 +513,5 @@ import VoleMole.Audit.MainShared23
 import VoleMole.Audit.MainSharedAll
 import VoleMole.Audit.MainFind
 import VoleMole.Audit.MainUnbound
+import VoleMole.Audit.MainUnboundAll
+import VoleMole.Audit.MainNCLean

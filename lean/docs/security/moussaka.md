@@ -1130,9 +1130,17 @@ only the two redemption requests or the refusal. The refusal rule is that of 4(a
   **`anonymityNC_main`**: `|Pr[W₀] − Pr[W₁]| ≤ 30·(εS(q₃, q_E + 8·4607) + Δ23) + 15·(8·noHitProb +
   (4·(q₅ + 625) + 626)·2⁻¹²⁸) + 2·2⁻¹²⁸ + 2·(φ₀ + φ₁)`, about `2⁻⁹⁹·³` plus the budget and abort
   terms; `unlinkabilityNC_main` (one Anchor, any index rule) without the abort term. Every term is
-  a number except `φ`; no assumption on `Com`. The issuance proofs are an abstract `PI` that does
-  not read the game's tables (they are never shown; the refusal bit must be a function of the
-  secret in the joint hop's game model).
+  a number except `φ`; no assumption on `Com`. The issuance proofs there are an abstract `PI`
+  that does not read the game's tables (they are never shown; the refusal bit must be a function
+  of the secret in the joint hop's game model). **With `main`'s Lean issuance prover**
+  (`lean/VoleMole/Privacy/MoussakaNCMainLean.lean`, `lean/docs/zk.md` §4.2): the issuance proofs
+  run on the shared tables (`H₃` the column at the proof's prefix) and the Anchors judge them with
+  `main`'s `issue_response` and the Lean verifier on the same tables; an honest request has
+  `issueRequestBytes` bytes (`issueReq_length`: the Lean proof has `pIm.proofBytes = 7272` bytes),
+  and the prover fails or the verifier rejects with probability `≤ 2⁻¹¹³` (`issue_complete_shared`,
+  `complete_rom_ic` with the column of a uniform `H₃` as the slice), so replacing the two verdicts
+  by `true` costs `2·2⁻¹¹³` per world (`realNCML_close`). **`anonymityNC_main_lean`**: the bound of
+  `anonymityNC_main` plus `4·2⁻¹¹³`, with no abstract issuance proof system.
 - **In the random-oracle and ideal-cipher model** (`lean/VoleMole/Privacy/MoussakaNCRO.lean`,
   Appendix B; the analogue of `anonymityRO_lean_num`): `A`'s guess also sees the tables, and the
   honest Anchors run the Lean **verifier** on the issuance proofs over the same tables. In each
