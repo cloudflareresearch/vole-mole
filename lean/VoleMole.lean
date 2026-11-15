@@ -374,6 +374,7 @@ import VoleMole.Privacy.PomFRITRAHPfx
 import VoleMole.Privacy.PomFRITAdaptivePfx
 import VoleMole.ZK.ReadsPoint
 import VoleMole.ZK.IdealCipherPt
+import VoleMole.ZK.InvPoint
 import VoleMole.ZK.HopsH4Pt
 import VoleMole.ZK.IvOverlap
 import VoleMole.ZK.IvOverlapK
@@ -588,6 +589,7 @@ import VoleMole.Audit.ZKPoint4
 import VoleMole.Audit.ZKPoint5
 import VoleMole.Audit.ZKPointMous
 import VoleMole.Audit.ZKPointUnb
+import VoleMole.Audit.ZKPointPerm
 import VoleMole.Audit.MainPU
 import VoleMole.Audit.MainShared
 import VoleMole.Audit.PomfritLemmaPCls
