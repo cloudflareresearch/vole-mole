@@ -686,10 +686,16 @@ is **[Lean]** for one honest token (`lean/VoleMole/Theft/`; for `U` tokens see b
   `q` queries: `≤ (q + 2)·2^{−128} + (q + 1)·2^{−360}`. It does not bound `owAdv` of `noRedirect`.
 - Not covered:
   - `PlainSE` in the model of `noRedirect_leanX_plain`, from `ROM/`'s extraction bounds. What
-    separates the two models is listed in
-    `security/ratatouille.md` §5 ("What is not covered"): the extractor must see the last stage's
-    query log, the last stage must be an oracle computation with cell queries to the cipher, and
-    the lazy oracle must be matched with the finite tables.
+    separates the two models is listed in `security/ratatouille.md` §5 ("What is not covered").
+    The extractor's view, query bounds and cell queries are done for one token:
+    **`noRedirect_leanX_hitL`** (`Theft/PlainMous.lean`) is `noRedirect_leanX_hit` for a last
+    stage that is the run of an oracle computation over `specIC` within `QBud q q_E`, the
+    extractor `extLM e` reading the programming step's reduction's query list, and plain
+    extraction `PlainSEL` against the reduction's budget; the bound has `q' = (q h3 + x₃,
+    q h5 + x₅ + 936, q_E + x_E + 9214)` and `ε_hit = epsHit (q mu) (q h21) (q h22)`. The
+    Moussaka simulators always output bytes (empty if grinding fails), so the patch recomputes
+    the prefix of the output and uses the empty prefix when the simulation failed (`progQIm`,
+    `preOf`). The lazy-to-eager step remains.
   - Statements that are not well-formed, and (for one token) redemptions under an Anchor Set
     with the digests of the Client's set and other maps (`HitWf`, above; for `U` tokens this is
     the collision term of `noRedirectN_leanX_hitC`).
