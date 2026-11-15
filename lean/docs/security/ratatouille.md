@@ -1025,11 +1025,30 @@ honest openings, not about signatures. The table's bound in §0 is the right one
        `1 + N²·2⁻⁶⁴` plus the input-collision term), and the target is still reached with that
        factor (`jointNumK_le`: `≤ 2⁻⁵⁴`, about `2⁻⁵⁴·⁸`, at `U + M ≤ 2³¹`).
 
-    Not done: the simulator's programming as a confined point reader (`vPre` at points), the
-    theft games' game reader at points (the adversary's oracle run, the verifier, the extractor
-    `eRom`), the theft games as instances of the generic game (sum of two proof systems, output
-    map, `iv` decoder), and the simulated game's `iv` structure (`H₄` of `XTab` at inputs
-    `iv_pre ‖ μ₁ ‖ 4`, the `iv_pre` collision term, the grinding-failure term). So
+    6. *The theft games' pieces at points* (`docs/zk.md` §10.8, "The theft games' pieces at
+       points"; audit `Audit/ZKPoint4.lean`). Proved: the simulator's programming is a point reader
+       confined to the simulated proof's `iv` (`progPtRd_conf`, from the BAVC reconstruction, the
+       recomputed prefix and the verifier's gate inputs at points: `reconstruct_ic_congrP`,
+       `vPre_ic_congrP`, `vIn5_ic_congrP`), so `real_sim_leN_lean` holds with no hypothesis on the
+       honest readers (`real_sim_leN_lean_full`); the verifier (`verPtRd`), the adversary's oracle
+       run on the `N` slices and the tables (`runGRd`: its reads are its slice and `H₅` queries
+       and its cipher cells) and `ROM/`'s extractor (`eRom_congrP`: the query list's cells and
+       `≤ |cells' keys| + 4608` keys at the CTR blocks of the forged proof's `iv`) are point readers,
+       and game readers compose (`GRd.seq`); two proof systems with different parameters are one
+       (`gate5_params`, `chPt_params`, `ZKExp.osum`, `lean_zkExpD`, `real_sim_leN_leanG`).
+       Correction: a Client that refuses a spend makes no proof, and `real_sim_leN_lean` charges a
+       slot with no `iv` every key the game reader reads, so `M` refused spends (the adversary
+       chooses the spends) would cost `M` times the adversary's budget term again. Slots with no
+       instance must be charged nothing: `real_sim_leN_leanA` and `exU_sum_nZKA_le`, where only a
+       failed simulation of an active slot pays the budget term.
+
+    Not done: the theft event `BadN` as an event of one consistent game reader (the composition
+    of `runGRd`, `verPtRd` on the run's operation, and the extractor's reader with its query list:
+    the patches' prefix computations of the first `N` log entries, then the run's queries), with
+    `T₃` and `c_E`; the theft game as an instance of the generic game (`osumProve` with
+    `xOf = xN`, `Coins 16` as `Bytes 16`, the `vecOf` output map's `iv` decoder, the spend system's
+    `Sh pS` as `Sh pI`); and the simulated game's `iv` structure (`H₄` of `XTab` at
+    `iv_pre ‖ μ₁ ‖ 4`, `E[#dupPairs] ≤ N²·2^{−128}`, the failed-simulation term). So
     `noTheftN_lean_numJ` is not stated, and the mechanized many-token bound stays
     `(U + M)·2^{−55} + 2^{−59}`.
   - **`noTheft_lean_rom`** (`Theft/PlainRataRom.lean`): `noTheft_leanX_hitL` with plain extraction
