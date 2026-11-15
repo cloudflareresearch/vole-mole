@@ -891,7 +891,9 @@ expansions' outputs `(nf_key, r, ρ_iss)` and every `ρ_red` uniform.
   witness, `REUSE_CRT_WITNESS = true`) no efficient simulator meets it: the label term is a joint
   term over the `H₅` queries (§3.1, UF6), and the joint (PU) hop replaces it. With two redemption
   queries the joint hop is mechanized on `main` for (a) and (b) (next items), with per-proof
-  tables and with all tables shared; for `n > 2` queries it is on paper.
+  tables and with all tables shared; with `n` adaptive queries and all tables shared it is
+  mechanized for (b) and for (a) (below, `anonymityNC_main_U_sharedAllLin`,
+  `anonymityU_main_sharedAllN`).
 
 **[Lean] Theorem U5(a) on `main`, two queries** (`Privacy/MoussakaUnboundMain.lean`,
 `Privacy/MoussakaUnboundMainPU.lean`, `lean/docs/zk.md` §4.2). The colluding game with two
@@ -980,17 +982,59 @@ complete, so `ψ_c ≤ φ_c`:
 The audit instantiates both with a Moderator that asks one query `n` times (one Client, one
 statement and witness, one prefix in each world), the case where `collNH` is `1`.
 
-The factor `2ⁿ − 1` is a cost of the transfer (each hop's bad event `bstarN` is moved to the
-all-simulated hybrid across the later hops, and each may double it); the paper's lazy sampling
-gives `n` and `1`. For `n = 2` (four slots in the old games, two here) the new bound is
-`2·3·(…)` against `30·(…)`.
+**[Lean] The joint hop linear in `n`** (`ZK/HopsMainICLin.lean`, `ZK/MainSharedLin.lean`,
+`Privacy/MoussakaUnboundNCMainLin.lean`, `Audit/MainUnboundLin.lean`, `lean/docs/zk.md` §4.2). The
+factor `2ⁿ − 1` above came from moving each hop's bad event `bstarN` across the later hops. The
+one-proof theorem now has an identical-until-bad form (`slot_zk_main_iub`): for an event that holds
+wherever the prediction holds on the simulated side, H6 is exact, so the hop costs `εS` only. With
+`F ∨ bstarN` and `bstarN` as events (`main_sharedAll_leLin`):
 
-Not done on `main`: U5(a) with `n > 2` queries (adaptive or not) and the `ρ`-aware hop for U5(a)
-with two queries. The route is the one above: `gameNN` with two issuance slots (`pIu`, 232 witness
-bytes) before the `n` redemption slots, `main_sharedAll_leN` with `ns = (232, 232, 559, …)`, and
-the (PU) term `pr_bstarN_sim_le` with predictors that draw everything but the target Client's
-`(nf_key, r)` and run the adaptive interaction themselves (as `predUH`). U5(a) on `main` therefore
-still carries `collUH` with shared tables, or uses per-proof tables (`anonymityU_main_pu`).
+    |Pr[all real; F] − Pr[all simulated; F]|
+        ≤ 2n·(εS(2q₃ + n, 2q_E + 2n·4607) + Δ23N(d, n)) + Pr[all simulated; bstarN].
+
+The reads of `F` and of `bstarN` are counted separately (`2q₃`, `2q_E`). For U5(b):
+
+    anonymityNC_main_U_sharedAllLin:  |Pr[W₀] − Pr[W₁]|
+        ≤ 4n·(εS(2q₃ + n, 2q_E + 2n·4607) + Δ23N(9, n))
+        + 2·(n·noHitProb + 2n·(q₅ + 312n + 1)·2⁻¹²⁸ + n²·313·2⁻¹²⁸)
+        + 2·(ψ₀ + ψ₁) + 2·εprf
+    anonymityNC_main_U_leanLin:  the same with 2·(φ₀ + φ₁) for 2·(ψ₀ + ψ₁), + 4·2⁻¹¹³.
+
+The paper's lazy sampling gives `n` and `1`; the mechanized bound has `2n` and `1`.
+
+**[Lean] Theorem U5(a) on `main` with `n` adaptive queries, all tables shared**
+(`Privacy/MoussakaUnboundMainN.lean`, `Audit/MainUnboundLin.lean`). The colluding adversary of
+`AdversaryAd` (`AdversaryUAH`: `ctx_iss`, the keys, the responses, each query from the requests
+and the history, a guess that also sees the shared tables and `H₃`). The game (`gameAN`) has
+`n + 2` slots: the two issuance proofs (`pIu`, `main`'s Lean prover on the shared tables) and the
+`n` queries (`pRu`), each proved iff both tokens finalized and the query is valid (`validR`); the
+history (`histA`) is read off the earlier outputs. The steps:
+- the joint hop is `main_sharedAll_leLin` with `ns = (232, 232, 559, …)` (`real_sim_AN`); no
+  prefix-collision term;
+- with all proofs simulated the event is a function of the commitments, the nullifier table
+  `c, ctx ↦ Derive(k_c, ctx)` and the rest of the tape (`simAN_iff`): the history is the run
+  `runT` of `Privacy/MoussakaUnboundAd.lean` on that table (`histA_sim`, `interact_redSim`), and
+  the `H₂³` table is the raw table programmed for the public statements: the commitments' issuance
+  statements and the statements read off the history's answers (`stPubA`, `simVAN_M`, `stF_pub`);
+- the PRF hop with the commitments leaked (`prf_hop_AN`, `prfAdv`) and the swap of
+  `pr_run_swap` (`idealAN_eq`);
+- (PU): with all proofs simulated, `bstarN` is a failed simulation, a collision of two simulated
+  proofs' sibling inputs, or a prediction of a slot's witness prefix, which is the opening of the
+  Client that owns the slot (`qOf_simA`, `wPre_stA`). The predictors `predAN_c b` rerun the
+  interaction: from `nf_key_c` and `t_c`, the other Client's `(nf_key, r)` and the rest of the
+  tape, they compute the requests, the run, the statements, the `H₂³` table, the guess's read set
+  and the active gate inputs, and output the candidates of all `n + 2` proofs (`candAN`, at most
+  `(n + 2)·(q₅ + 312(n + 2) + 1)`, `card_candAN_le`).
+
+      anonymityU_main_sharedAllN:  |Pr[W₀] − Pr[W₁]|
+          ≤ 4(n + 2)·(εS(2q₃ + n + 2, 2q_E + 2(n + 2)·4607) + Δ23N(9, n + 2))
+          + Σ_{b,c} puAdv UCom (predAN_c b)
+          + 2·((n + 2)·noHitProb + (n + 2)²·313·2⁻¹²⁸) + 2·εprf
+
+for any adaptive queries, in particular one Client answering every query with one statement (the
+audit's `uAN`, where the two-query theorem's `collUH` is `1`). The four `puAdv` terms are (PU) for
+`UCom`, bounded in the ideal-permutation model by `puAdvPerm_unbound_le` and an assumption for
+Keccak-p[800,12] itself; `εprf` is `Adv^prf-t_2` of the explicit reductions `redAN`.
 - **The PRF.** `prfAdv A.ci (reductionAd …) ≤ εprf` (`Adv^prf-t_2`): given `t₀, t₁`, distinguish the
   table `c, ctx ↦ Derive(k_c, ctx)` from a uniform table. It is stated for the explicit reductions
   (the adversary with the simulator coins fixed, reading the table at the contexts it queries,
@@ -1120,7 +1164,10 @@ the base protocol.
    prefix-collision term that is `≤ 2⁻¹²⁸` for queries answered by different Clients but not
    bounded when one Client answers both (§U5 above). U5(b) is also mechanized with `n` adaptive
    queries, all tables shared and no collision term (`anonymityNC_main_U_sharedAllN`; with the
-   Lean issuance prover, `anonymityNC_main_U_leanN`); U5(a) with `n > 2` queries is on paper.
+   Lean issuance prover, `anonymityNC_main_U_leanN`), and with the joint hop linear in `n`
+   (`anonymityNC_main_U_sharedAllLin`, `anonymityNC_main_U_leanLin`); U5(a) with `n` adaptive
+   queries, all tables shared and no collision term is `anonymityU_main_sharedAllN`, with (PU) for
+   `UCom` as explicit predictor advantages.
 
 ---
 
@@ -1161,6 +1208,15 @@ All in `lean/VoleMole/`; no `sorry`, no axioms beyond the standard three.
 - `Privacy/MoussakaUnboundNCMainLeanN.lean`: the same with `main`'s Lean issuance prover and the
   Anchors' Lean verifier (`anonymityNC_main_U_leanN`, `issue_complete_sharedU`).
 - `Audit/MainUnboundN.lean`: both instantiated for a Moderator that asks one query `n` times.
+- `Privacy/MoussakaUnboundNCMainLin.lean`: U5(b) on `main` with `n` queries and the joint hop
+  linear in `n` (`anonymityNC_main_U_sharedAllLin`, `anonymityNC_main_U_leanLin`).
+- `Privacy/MoussakaUnboundMainN.lean`: Theorem U5(a) on `main` with `n` adaptive queries and all
+  tables shared, no prefix-collision term (`anonymityU_main_sharedAllN`); the game `gameAN`, the
+  public view `hvAN` (`simAN_iff`), the PRF hop and swap (`prf_hop_AN`, `idealAN_eq`), the
+  predictors `predAN₀`, `predAN₁` that rerun the interaction (`candAN`, `card_candAN_le`).
+- `Audit/MainUnboundLin.lean`: the linear U5(b) theorems for the Moderator of
+  `Audit/MainUnboundN.lean`, and U5(a) with `n` queries for an adversary that asks one query `n`
+  times (`uAN`).
 - `Audit/Nonvacuous.lean`, section `Unbound`: `anonymityAd` for a constant-guess adversary
   (`εprf = 0`) and `anonymityNC_vinegarRO` with pqov's signer, a Moderator whose sets contain both
   issuers, and a complete issuance proof system.
