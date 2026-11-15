@@ -1062,7 +1062,10 @@ and affords the amount, else it is refused for both (feasibility is leakage).
   for the four proofs (`Privacy/RatatouilleMainShared.lean`, `RatatouilleMainSharedPU.lean`; the
   simulators' programming is a function of the requests, `vtab`): **`unlinkability_main_shared`**,
   `30·εS(q₃, q_E + 8·4607) + 15·(Σ six puAdv + 8·noHitProb + 3750·2⁻¹²⁸) + 2·εhide`
-  (`lean/docs/zk.md` §4.3). Each proof still has its own `H₂³` table and `H₃` slice.
+  (`lean/docs/zk.md` §4.3). With one `H₂³` table too (`Privacy/RatatouilleMainShared23.lean`;
+  the shared table is a function of the requests, `vtab23`): **`unlinkability_main_shared23`**, the
+  same bound with `εS` replaced by `εS + Δ23`, `Δ23 ≤ 2⁻¹⁰⁶` (`lean/docs/zk.md` §4.2). Each proof
+  still has its own `H₃` slice.
 - The spec's proof sizes are a parameter (`Spec.Ratatouille.Sizes`: `main`'s, or the label-row
   layout's 256 bytes longer proofs). **[Lean] `lean/VoleMole/Privacy/RatatouilleLean.lean`**:
   `unlinkability_label_rows`, the same bound with the executable Lean prover and verifier as the
