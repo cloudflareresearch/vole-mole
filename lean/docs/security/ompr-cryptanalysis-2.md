@@ -27,14 +27,17 @@ Hashimoto's reduction, which the UOV round-3 specification uses. In the model of
 specification the forgery costs `2^{142.2}` bit operations at `(119, 45)` with P1, against
 `2^{146.8}` without. **Where §0 to §7 say `2^{138.5}` multiplications or `2^{145.6}` bit
 operations for the forgery, read `2^{135.1}` and `2^{142.2}`**; §8 lists every figure that
-changes.
+changes. A second pass (§8.7 to §8.9) ran Hashimoto's reduction with P1 on toy keys: the reduced
+systems have the predicted shape, solution rate and XL degree, and the cost formula is
+implemented as the specification states it. The figure stands at `2^{142.2}`; the model cannot
+tell it from `2^{143}`.
 
 ## 0. Summary
 
 | # | Item | Result at `(119, 45, 256)` | Status | Where |
 |---|---|---|---|---|
 | R1 | [OC] L1 (law of the answers), K1 (`Q²·2^{−585}`), Lemma F (variance) | confirmed; Lemma F also follows from Theorem H | re-derived; experimental | §1 |
-| **P1** | **Class attack.** `P(s) ∈ F·t` is 44 homogeneous quadrics; a solution scales to a preimage of `t` | forgery `2^{138.5}` multiplications (`2^{145.6}` bit operations), not `2^{140.3}`, with Thomae–Wolf; **`2^{135.1}` (`2^{142.2}`), not `2^{139.7}` (`2^{146.8}`), in the model of the round-3 specification (§8). New baseline B0′.** Uses no call. Known: Ostuzzi 2026/2247 | proved (algebra; Lean `scaled_preimage`); estimate; experimental (gain `2^{2.2}` to `2^{5.7}` on toy keys) | §3.1 |
+| **P1** | **Class attack.** `P(s) ∈ F·t` is 44 homogeneous quadrics; a solution scales to a preimage of `t` | forgery `2^{138.5}` multiplications (`2^{145.6}` bit operations), not `2^{140.3}`, with Thomae–Wolf; **`2^{135.1}` (`2^{142.2}`), not `2^{139.7}` (`2^{146.8}`), in the model of the round-3 specification (§8). New baseline B0′.** Uses no call. Known: Ostuzzi 2026/2247 | proved (algebra; Lean `scaled_preimage`); estimate; experimental (gain `2^{2.2}` to `2^{5.7}` on toy keys; with Hashimoto's reduction `2^{3.3}` to `2^{5.4}`, §8.7) | §3.1 |
 | R2 | [OC] F2: `D(0)` and the singular line | costs **two** forgeries, `2^{139.5}`: above B0′ | proved (budget lemma) | §3.2 |
 | R3 | [OC] K2: dependent sets of answers | a zero of `P` can be tested for being an oil vector. The right reason: spans of answers meet `𝒪` exactly as often as random subspaces | proved | §1 |
 | H | Exact Fourier transform of the bad set | `X(w) = Σ_{T ≠ 0, L*(T) = w} κ(rank T)`, for every key | proved; experimental (exact, six keys) | §2.1 |
@@ -591,7 +594,7 @@ sizes; T and V need a uniform `P2`. The costs of §3 and §4 are estimates in th
 - Amortizing XL over many right-hand sides (§3.4). A positive answer would be an attack on UOV.
 - A reference for P1 and its effect with Hashimoto's refinement: done in §8. Still open: the
   effect of P1 with the crossbred algorithm and with the pseudo-oil algorithm of Ostuzzi
-  (ePrint 2026/1122), and a test of P1 with Hashimoto's reduction on toy keys.
+  (ePrint 2026/1122). The test of P1 with Hashimoto's reduction on toy keys is in §8.7.
 - Quantum algorithms for MQ over `F₂₅₆` beyond Grover on the guesses.
 - OMPR ⇒ OMPR⊕17 by a reduction: unchanged ([OR] §7, [SA] §7).
 
@@ -601,7 +604,8 @@ No new Lean. The algebra of P1 is `scaled_preimage` and `qmap_smul` (`Spec/PqovS
 S2′ uses `preimage_plane` (`Spec/PqovShift.lean`). Theorems H, T, V, Lemma Q and Lemma B are on
 paper. H is checked exactly by E8.
 
-Review scripts (§8): `p1_review.py [estimates|toy [quick | i,j,..]]`, `p1_review_toy.c`.
+Review scripts (§8): `p1_review.py [estimates|spec|toy [quick | i,j,..]|toyh [i,j,..]]`,
+`p1_review_toy.c`.
 
 Script: `ompr_second.py [fourier|moment4|degree|scale|quantum|multi|table|all] [seed]`. `all`
 omits `scale`. Run it under a memory cap.
@@ -609,22 +613,24 @@ omits `scale`. Run it under a memory cap.
 ## 8. Review of P1
 
 An independent review of §3.1, made after §0 to §7. Scripts:
-`scripts/ompr-cryptanalysis/p1_review.py` (`estimates`, `toy`) and `p1_review_toy.c`, which
-shares no code with `c1_toy.c`. Sources read for this section: the UOV round-3 specification
-(30 August 2026, text of §4), the abstract of ePrint 2026/2247 and its public optimizer script,
-the abstracts of ePrint 2026/1122 and 2026/2181, and the code of CryptographicEstimators
-(MQEstimator). The papers themselves were not read. [TW12], [FNT21], [Beu21] are from memory.
+`scripts/ompr-cryptanalysis/p1_review.py` (`estimates`, `spec`, `toy`, `toyh`) and
+`p1_review_toy.c`, which shares no code with `c1_toy.c`. Sources read for this section: the UOV
+round-3 specification (30 August 2026, text of §4), the abstract of ePrint 2026/2247 and its
+public optimizer script, the abstracts of ePrint 2026/1122 and 2026/2181, and the code of
+CryptographicEstimators (MQEstimator); for §8.7 to §8.9 also Hashimoto's paper (JSIAM Letters 15,
+2023, pp. 53–56, in full) and §4.2 of the specification again. The other papers were not read.
+[TW12], [FNT21], [Beu21] are from memory.
 
 ### 8.1 Verdict
 
 | Question | Answer | Status |
 |---|---|---|
 | Is the reduction right? | Yes | proved (§3.1, `scaled_preimage`); checked on toy keys |
-| Is it one equation? | Yes: `(n, m)` becomes `(n − 1, m − 1)` in any solver for underdetermined systems. It adds to Thomae–Wolf | checked on toy keys with Thomae–Wolf; with Hashimoto's reduction estimate only |
+| Is it one equation? | Yes: `(n, m)` becomes `(n − 1, m − 1)` in any solver for underdetermined systems. It adds to Thomae–Wolf and to Hashimoto's reduction | checked on toy keys with both (§8.6, §8.7) |
 | Do the standard estimates include it? | No. The round-3 specification and MQEstimator count `m` equations before Thomae–Wolf or Hashimoto | read in the sources |
 | Is it new? | No. Ostuzzi, ePrint 2026/2247 (30 September 2026): a "multi-target reduction for homogeneous MQ maps". P1 is its case `d = 1` | abstract and optimizer script read; paper not read |
 | Are the costs of §3.1 right? | The figures are right for the model stated (Thomae–Wolf only). That model is not the standard one any more: the specification also uses Hashimoto's reduction. With it P1 gains `2^{4.6}`, not `2^{1.8}` | estimate |
-| "`(112, 44)` is one bit below level 1" | Survives in the model, and `(119, 45)` joins it: `2^{142.2}` bit operations, `2^{0.8}` below `2^{143}` | estimate |
+| "`(112, 44)` is one bit below level 1" | Survives in the model, and `(119, 45)` joins it: `2^{142.2}` bit operations, `2^{0.8}` below `2^{143}`. The model cannot resolve 0.8 bit (§8.9) | estimate |
 
 ### 8.2 The reduction
 
@@ -658,7 +664,7 @@ is known that uses several targets. It does not use the homogeneity of `P` in th
 attack. MQEstimator applies the same two reductions to `(n, m)` and has no notion of a
 homogeneous map. So neither includes P1. `p1_review.py estimates` implements the formulas of
 the specification; it returns 146.8, 162.5, 216.8, 277.9 for the four parameter sets, and the
-table of the specification has 146, 162, 216, 277.
+table of the specification has 146, 162, 216, 277. Rechecked in §8.9.
 
 **The parameters.** `(119, 45, 256)` is the uov-Ip of round 3. `(112, 44, 256)` was the uov-Ip
 of rounds 1 and 2; round 3 replaced it because of the wedge attack. §0 and §3.1 call `(112, 44)`
@@ -673,7 +679,7 @@ at `(n − 1, m − 1)`, times `q/(q − 1)`.
 | | | **minimum (spec)** | **146.8** (Hashimoto, `a = 2`, `c = 5`: 43 eqs, 38 vars, `D = 16`) | **142.2** (`a = 2`, `c = 4`: 42 eqs, 38 vars, `D = 17`) | **4.6** |
 | `(112, 44, 256)`, uov-Ip rounds 1, 2 | 143 | Thomae–Wolf | 145.6 | 141.9 | 3.7 |
 | | | minimum (spec) | 145.6 | 141.2 | 4.4 |
-| `(160, 64, 16)`, uov-Is | 143 | minimum (spec) | 162.5 | 160.3 | 2.1 |
+| `(160, 64, 16)`, uov-Is | 143 | minimum (spec) | 162.5 | 160.4 | 2.0 |
 | `(193, 72, 256)`, uov-III round 3 | 207 | minimum (spec) | 216.8 | 212.4 | 4.4 |
 | `(259, 96, 256)`, uov-V round 3 | 272 | minimum (spec) | 277.9 | 275.4 | 2.5 |
 
@@ -735,9 +741,10 @@ at `(n − 1, m − 1)`, times `q/(q − 1)`.
 > the UOV round-3 specification does not include this. Applied to that model, the direct attack
 > on uov-Ip `(119, 45, 256)` costs about `2^{142.2}` bit operations (`2^{135.1}`
 > multiplications) instead of `2^{146.8}`: slightly below the `2^{143}` of NIST level 1. This is
-> an estimate in the RAM model with the Wiedemann count `3·T²·binom(n+2, 2)`. The step with
-> Thomae–Wolf is checked on toy keys; the step with Hashimoto's reduction is not. The
-> memory-aware model of the specification adds about 7 bits to the direct attack.
+> an estimate in the RAM model with the Wiedemann count `3·T²·binom(n+2, 2)`; a change of one
+> in the solving degree moves it by 3.4 bits. P1 combined with Thomae–Wolf and with Hashimoto's
+> reduction was checked on toy keys: shapes, solution rates and XL degrees are as the model
+> assumes. The memory-aware model of the specification adds about 7 bits to the direct attack.
 
 - **Do not say** "new", "below level 1" without the model, or "above level 1 at `(119, 45)`".
 - **Caveats to keep.** The gap is 0.8 bit and the model is not that precise. The specification
@@ -781,14 +788,120 @@ multiplications per forgery, best `g`:
   (criterion `≤ 1`).
 - **Calls.** Solutions per call are `q^{−g}`: for the key (21, 8), 216 for 207 expected (direct,
   plain), 2783 for 2776 (P1, plain), 1003 for 985 (direct, TW), 1658 for 1698 (P1, TW).
-- **One cell is off, unexplained.** Key (26, 10), P1, plain, `g = 5`: 12 forgeries in
-  `2.4·10^6` calls for 2.4 expected. They are distinct and all verify. The cells `g = 3, 4` of
-  the same key (33 for 34, 6 for 5.3) and a second key (3 for 2.4) are as expected. The cell is
-  not the best `g` and enters no figure above. It was not resolved.
+- **One cell was off.** Key (26, 10), P1, plain, `g = 5`: 12 forgeries in `2.4·10^6` calls
+  for 2.4 expected. Resolved in §8.8: a fluctuation of the default random stream, not a bug and
+  not structure. The cell enters no figure above.
 - **Not done.** The two `F₂₅₆` keys of E11 were not run with the new program. The Thomae–Wolf
-  step costs linear algebra per call that is not counted. Hashimoto's reduction is not
-  implemented, so the `2^{4.6}` of §8.3 is not tested. Wiedemann is not implemented; the model
-  column uses the series degrees.
+  step costs linear algebra per call that is not counted. Wiedemann is not implemented; the
+  model column uses the series degrees. Hashimoto's reduction: §8.7.
+
+### 8.7 Hashimoto's reduction on toy keys
+
+`p1_review_toy.c`, attack `h<a>.<c>.<c′>`; driver `p1_review.py toyh`. The algorithm is §4 of
+Hashimoto's paper, which the specification quotes; its `k` is the `c` of the specification. For
+`m′` equations (the `M` of the direct attack, or the `M − 1` homogeneous quadrics of P1) and
+`r = m′ − a − c + 1`:
+
+1. Once per key: `X`, `r` vectors spanning a space that is totally singular for the first `a`
+   quadrics. Vector `i` meets `a(i − 1)` linear conditions and `a` quadratic ones, solved by
+   enumeration on a random `a`-flat (the `(m − a − c + 1)·MQ(q; a, a)` of the formula). Then
+   `K2`, the vectors orthogonal to `X` for the first `a − 1` polar forms, and `a − 1` vectors `Y`
+   in it.
+2. Per restart: `w` uniform in `K2` (for P1 outside `span(X, Y)`, else the flat holds 0). On
+   `w + span(Y)` the first `a − 1` equations involve `y` only: `a − 1` quadrics in `a − 1`
+   variables, solved by enumeration. For each root, equation `a` is linear on the flat over `X`
+   and removes one variable. Left: `m′ − a` quadrics in `m′ − a − c` variables, given to hybrid XL
+   with `g` more guesses.
+
+The program checks the shape on 20 random flats per key, counts restarts, solutions and forgeries,
+and checks every forgery against the public map. `a = 2` throughout; `c` and `c′` are the least
+values the condition of the specification allows. For P1 the condition is applied with `N`
+variables in step 1 and `N − 1` in steps 2 and 3 (the flat must miss 0); at the sizes of §8.3 this
+gives the same `c′` as `(N − 1, M − 1)` and changes no figure. 6 seconds per cell, 4 threads.
+
+| Field, `(N, M)` | direct: `c`, eqs/vars | P1: `c′`, eqs/vars | `H` direct | `H` P1 | gain | gain, Wiedemann at measured `D` | gain, model | gain with TW, measured |
+|---|---|---|---|---|---|---|---|---|
+| `F₁₆`, (21, 8) | 0, 6/6 | 0, 5/5 | 22.3 | 18.5 | 3.8 | 4.1 | 3.7 | 2.4 |
+| `F₁₆`, (23, 10) | 2, 8/6 | 1, 7/6 | ~28.6 | 24.8 | 3.8 | 3.9 | 3.9 | 3.3 |
+| `F₁₆`, (26, 10) | 1, 8/7 | 0, 7/7 | ~28.6 | 24.8 | 3.8 | 3.9 | 3.9 | 3.3 |
+| `F₁₆`, (25, 11) | 2, 9/7 | 1, 8/7 | ~32.1 | ~28.7 | 3.3 | 2.0 | 2.0 | 4.2 |
+| `F₁₆`, (29, 11) | 1, 9/8 | 0, 8/8 | ~32.1 | ~28.7 | 3.3 | 2.0 | 2.0 | 2.5 |
+| `F₂₅₆`, (16, 7) | 1, 5/4 | 0, 4/4 | 26.3 | 20.9 | 5.4 | 4.3 | 4.4 | 5.3 |
+| `F₂₅₆`, (19, 8) | 1, 6/5 | 0, 5/5 | ~31.6 | 26.2 | 5.4 | 6.3 | 4.3 | 2.3 |
+
+`log₂` multiplications per forgery at the best `g`, dense elimination; `~` as in §8.6. "Model"
+is `q^c·MQ(q; m′ − a − c, m′ − a)` of the specification in multiplications, with `q/(q − 1)`
+for P1.
+
+- **Shape.** As predicted in every key: the direct attack has `M − 2` quadrics in `M − 2 − c`
+  variables, P1 has `M − 3` in `M − 3 − c′`. Where the condition binds (the last six keys), P1
+  needs one guess less and keeps the number of variables: the same trade as `(119, 45)`, where
+  43 quadrics in 38 variables become 42 in 38. Shape violations: 0 in 14 setups. With one guess
+  less than the condition allows, step 1 fails in all 8 cases tried, as the condition says.
+- **Solution rate.** A restart has a solution with probability `q^{−(c+g)}`: 5 991 solutions for
+  6 073 expected (direct), 44 045 for 45 238 (P1), over all cells. The shortfall is in the cells
+  with `q^{−(c+g)} = 1/16`, where a flat with two solutions is undecided and lost (`e^{−1/16}` =
+  0.94). Longer reruns, with other seeds, of the cells furthest off: 75 for 71.6, 64 for 64.7,
+  151 for 147.9, 6 728 and 6 596 for 6 731. Landing: 0.937 on `F₁₆` (21, 8) (0.9375), 0.9963
+  over `F₂₅₆` (0.9961).
+- **Degree.** XL never needs more than the series degree: equal in 42 of 52 cells, one lower in
+  10 (small or nearly square systems, where the criterion `≤ 1` gives that degree). The model
+  degree is not optimistic for the attacker.
+- **Cost.** Hashimoto's reduction beats Thomae–Wolf on every key, for the direct attack and for
+  P1. The gain of P1 in Wiedemann's count at the measured degrees is within 0.4 bit of the model
+  on six keys; on `F₂₅₆` (19, 8) it is 2.0 bits above, because the best P1 cell decides one
+  degree below the series degree. The dense-elimination gain is 3.3 to 5.4 bits; where it is
+  above the model (`(25, 11)`, `(29, 11)`), the cells are extrapolated from per-restart work.
+- **What transfers.** The algebra (shape, condition, solution rate) is exact and holds at all
+  sizes. The degree statement is tested only up to 7 variables and degree 6; at `(118, 44)` the
+  model needs `D = 17` for 42 quadrics in 38 variables.
+
+### 8.8 The cell (26, 10), `g = 5`
+
+Plain P1 on key (26, 10): 9 homogeneous quadrics on random affine 4-flats, XL at `D = 3`.
+`p1_review_toy.c` now takes a run seed and prints each forgery with its thread and call index.
+
+- **No structure can raise the rate.** With `w` uniform, a point lies on the flat with
+  probability exactly `q^{4−26}`; so a call has on average `|V|·q^{−22}` solutions, `V` the
+  solution set of P1, whatever the key. XL can only lose solutions. `|V|` is fixed by the key,
+  and the cells `g = 3, 4` of the same key measure it at the expected value.
+- **Independent streams.** Eleven run seeds other than the default (3 to 10, 1001 to 1003):
+  50 solutions in `5.4·10^7` calls for 51.1 expected.
+- **The default stream** (run seed 2, threads 0 to 7, the stream of §8.6): the hits are distinct,
+  verify, and are spread over all eight threads. By call index within each thread: 11 in the
+  first `3·10^5` (the original cell), 11 in the next `6.3·10^5` for 4.8 expected (Poisson tail
+  0.008), 4 beyond for about 5.
+- **Verdict.** A fluctuation of one random stream, picked out of about 100 cells after the
+  fact. Not a bug: every hit is a verified forgery. Not structure: the mean is fixed by `|V|`, and
+  other streams on the same key give it. The continuation of the stream is still high at
+  `p ≈ 0.008`; we found no mechanism and treat it as chance.
+
+### 8.9 The cost formula, rechecked, and the final figure
+
+- **Against the text of the specification (§4.2).** `p1_review.py` matches it: `MQ(q; n, m)` with
+  `k ∈ [0, n)`, the series criterion "non-positive", `(2 log²q + log q)` bit operations per
+  multiplication, Thomae–Wolf as `MQ(q; m − 1, m − 1)`, Hashimoto's condition and cost as quoted.
+  Hashimoto's paper (§4) gives the same condition and cost. A second implementation from the
+  text (`p1_review.py spec`, exact integers, no shared code) agrees to 0.01 on all seven
+  parameter sets, with and without P1.
+- **Two differences, both small.** (i) `MQ(q; 1, 1)`, the step-4 term at `a = 2`, has no
+  solving degree in the formula of the specification (the series of a square system stays
+  positive, and `k < n`); the script uses exhaustive search, the second implementation 0.
+  Neither changes a figure. (ii) **Error fixed:** `class_attack` took the landing as
+  `d(q − 1)/(q^d − 1)`, which is 1 at `d = 1`, so the factor `q/(q − 1)` that §8.3 states was
+  missing. Now `d(q − 1)/q^d`. Effect: `+0.006` bit at `q = 256`; uov-Is P1 `160.3 → 160.4`
+  (gain `2.1 → 2.0`). §8.3 is updated.
+- **Final figure.** P1 at uov-Ip `(119, 45, 256)`: **`2^{142.2}` bit operations
+  (`2^{135.1}` multiplications)**, `a = 2`, `c = 4`, 42 quadrics in 38 variables, `D = 17`,
+  against `2^{146.8}` for the direct attack.
+- **Uncertainty.** As an evaluation of the formula: `±0.01`. As an estimate of the cost of the
+  attack, the model has three soft parts. (1) The degree: one degree is 3.4 bits (`D = 16`:
+  138.8; `D = 18`: 145.5). The toy keys show no degree above the series degree, but only up to 7
+  variables. (2) The count `3·T²·binom(n+2, 2)` of Wiedemann, a lower bound by the
+  specification's own words; constants of a factor 2 to 4 are within it. (3) Memory: the
+  specification's MEM-2D adds about 7 bits to the direct attack. So the figure is
+  "about `2^{142}` in the RAM model, at the level-1 line"; the 0.8 bit below `2^{143}` is not
+  resolved by the model, in either direction.
 
 ## References
 
@@ -809,6 +922,7 @@ Citations are from memory.
   S.-P. Merz, L. Ran, *Attacking UOV-based Signatures with Schur–Macaulay Matrices*, ePrint
   2026/2181. Abstracts only.
 - Y. Hashimoto, *An improvement of algorithms to solve under-defined systems of multivariate
-  quadratic equations*, 2021 (formula as quoted in the specification).
+  quadratic equations*, JSIAM Letters 15 (2023), 53–56 (ePrint 2021/1045). Read in full for
+  §8.7.
 - NIST, *Submission requirements and evaluation criteria for the post-quantum cryptography
   standardization process*, 2016 (security levels, MAXDEPTH).
