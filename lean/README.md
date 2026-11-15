@@ -255,7 +255,7 @@ permutations with inverse queries):
 
 **On paper only**: removing U1's `2⁻⁷¹` term efficiently in general, the affinity of the
 verifier's CRT masks under label agreement, and Lemmas P^∞ / P^lin in the one-more game
-(`pomfrit-lemmap-tight.md`); with AES as random permutations, PomFRIT's U1/U2 with simultaneous extraction; for the many-token forms of Ratatouille's Thm 3, Moussaka's Thm 3 and unbound Moussaka's Prop U3 / Thm U4 (`noTheftN`, `noRedirectN`, `nmUN`): plain extraction with no simulated proofs (`PlainSEN`) and one programmed-point term per simulated proof (`SlotEvN`), to which `WeakSEN` is reduced (the hops' read budgets are proved; `SlotEvN` bounded with the chain hashes uniform tables for all three: `noTheftN_leanX_hit`, `noRedirectN_leanX_hit`, `nmUN_leanX_hit`), and these theorems with the other hashes read off uniform tables; its Thm U1
+(`pomfrit-lemmap-tight.md`); for the many-token forms of Ratatouille's Thm 3, Moussaka's Thm 3 and unbound Moussaka's Prop U3 / Thm U4 (`noTheftN`, `noRedirectN`, `nmUN`): plain extraction with no simulated proofs (`PlainSEN`) and one programmed-point term per simulated proof (`SlotEvN`), to which `WeakSEN` is reduced (the hops' read budgets are proved; `SlotEvN` bounded with the chain hashes uniform tables for all three: `noTheftN_leanX_hit`, `noRedirectN_leanX_hit`, `nmUN_leanX_hit`), and these theorems with the other hashes read off uniform tables; its Thm U1
 with inverse queries, and one joint bound over all three extraction families;
 weak simulation-extractability (L8) for the Lean simulators, which Moussaka non-malleability
 (Thm 3) and Ratatouille no theft take as the hypothesis `WeakSE2`, the read budgets of their ZK
@@ -1704,8 +1704,17 @@ What is **not** established, roughly in order of importance:
      the uniform one: for every oracle computation, running against `rpImpl` has the same joint
      distribution of output, table and state as drawing `π` uniformly from `Equiv.Perm B` and
      answering from it (`rp_eqd_eager`, `prEvent_rp_eq_eager`, `Assumptions/EagerPerm.lean`); the
-     `_eager` restatements of the headline theorems are immediate but not written. Not done with
-     AES as permutations: PomFRIT U1/U2 (no permutation-model one-more game).
+     `_eager` restatements of the headline theorems are immediate but not written. PomFRIT U1 and U2 also hold with AES
+     as random permutations with inverse queries (`ROM/OneMorePerm.lean`: `ForgerP`, `gameP`; the
+     reduction records inverse queries as forward records and adds hidden `iv` queries, `normU`,
+     `eval_normU`; `ROM/OneMoreLemmaPSimPerm.lean`, `ROM/OneMoreShiftSimPerm.lean`,
+     `Assumptions/PomfritPermSim.lean`): `pomfrit_U1_simP`/`pomfrit_U1_ompr_simP` and
+     `pomfrit_U2_simP`/`pomfrit_U2_omprShift_simP`, the PRF-view bounds with `failEpsP` for
+     `failEps` (`2⁻⁷` and `2⁻⁶²` at `2⁶⁴` queries, `ℓ = 2³⁰`); Post becomes the point-tied
+     `PostPOut`, and the averaged failure bounds hold for any prover family that depends on the
+     permutation only through its records (`ROM/PermFamily.lean`, `RecFamily`, `sum_fail_le_fam`;
+     audit `Audit/PomfritPerm.lean`). So every protocol theorem now also holds with AES as random
+     permutations.
    - PomFRIT's tight bound needs OMPR⊕17; OMPR ⇒ OMPR⊕17 without the `τ^{q+1}` loss has no
      black-box proof (`uov-open-reductions.md`); by Theorem R (`ompr-shift-algebra.md`; Lean `thmR`) a
      proof must be non-black-box in the adversary or break OMPR^free. In Lean every term of
