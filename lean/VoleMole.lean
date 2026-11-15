@@ -460,6 +460,7 @@ import VoleMole.Theft.JointGame
 import VoleMole.Theft.JointNum
 import VoleMole.Theft.JointCharge
 import VoleMole.Theft.JointLean
+import VoleMole.Theft.JointSum
 import VoleMole.Theft.MoussakaUnbound
 import VoleMole.Theft.MoussakaUnboundMany
 import VoleMole.Theft.MoussakaUnboundLean
