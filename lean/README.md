@@ -267,7 +267,7 @@ permutations with inverse queries):
 
 **On paper only**: removing U1's `2⁻⁷¹` term efficiently in general, the affinity of the
 verifier's CRT masks under label agreement, and Lemmas P^∞ / P^lin in the one-more game
-(`pomfrit-lemmap-tight.md`); for the theft/non-malleability theorems, their proofs with permutation rows (AES as random permutations) rather than function rows, and adversaries without a total hash-query budget; its Thm U1
+(`pomfrit-lemmap-tight.md`);  its Thm U1
 with inverse queries, and one joint bound over all three extraction families;
 weak simulation-extractability (L8) for the Lean simulators, which Moussaka non-malleability
 (Thm 3) and Ratatouille no theft take as the hypothesis `WeakSE2`, the read budgets of their ZK
@@ -1663,9 +1663,21 @@ What is **not** established, roughly in order of importance:
    9749`, `FreshKNU kt` and `KeysOutNU`; the joint bound is restated for the Lean statements
    (`moussakaUnbound_sim_joint_lean`, `uRedeemRel_of_wit_lean`, `stRU_extract_chain`); `ε_rom =
    epsRomU (q + N·qPre) (q_E + N·101372) (n_G + N·338)`; the PRF, `Adv^bind` and `Adv^spr-k`
-   terms stay (audit `Audit/TheftPlainUnbound.lean`). So in all three theft/non-malleability games,
-   one token or many, plain extraction and the programmed-point term are proved, for function rows
-   and adversaries with a total query budget. `Adv^ow` stays the advantage of the explicit inverter, a computational
+   terms stay (audit `Audit/TheftPlainUnbound.lean`). The total hash budget is not needed: with `M`
+   fixed, the hash queries the tables answer other than by SHAKE have ten kinds (`kindsT M`), and
+   the adversary answers the others itself, so per-kind budgets give the total `totK M q`
+   (`admL_qBudT`, `admLN_qBudT`, `Theft/PlainTotal.lean`; `noTheft_lean_romK`, `noTheftN_lean_romK`,
+   `noRedirect_lean_romK`, `noRedirectN_lean_romK`, `nmUN_lean_romK`, `Theft/PlainTotalRom.lean`).
+   All five also hold with permutation rows (AES as uniformly random permutations, `ZKRow.perm`,
+   error `εROPm`) and an adversary making forward and inverse cipher queries over `ROM/`'s `specP`
+   (`Theft/PlainPerm.lean`, `Theft/PlainEagerP.lean` `pr_tables_eq_roP`; `cLog_normJ`):
+   `noTheft_lean_romP'`, `noTheftN_lean_romP'`, `noRedirect_lean_romP'`, `noRedirectN_lean_romP'`,
+   `nmUN_lean_romP'` (`Theft/Plain{Rata,Mous,Unbound}{,Many}Perm*.lean`, audit
+   `Audit/TheftPlainPerm.lean`), with `q_E` below `2¹²⁸` minus the cells and `ε_rom` the
+   permutation-model joint bound (`*_sim_joint_leanP`). So in all three theft/non-malleability
+   games, one token or many, plain extraction and the programmed-point term are proved, with
+   function rows or with permutation rows and inverse queries, for adversaries with per-kind query
+   budgets. `Adv^ow` stays the advantage of the explicit inverter, a computational
    assumption on Keccak-p[800,12]: `Com` is evaluated inside the relations, so it cannot be a table
    of the game, and some inverter wins with probability 1 (`owAdv_one_ratatouille`,
    `owAdv_one_moussaka`). In a random-table model of the standalone experiment a `q`-query
