@@ -747,8 +747,11 @@ is **[Lean]** for one honest token (`lean/VoleMole/Theft/`; for `U` tokens see b
   `noTheft_lean_romP'`): the extractor `eRomMP` is `eRomM` on the records of the adversary's
   forward and inverse queries (`toIC`, `cLog_normJ`), the tables are `ROM/`'s permutation-model
   experiment (`pr_tables_eq_roP`), and the extractor's read budget is the function-row one
-  (`stageBudgetX_extRomMP`). Audit: `Audit/TheftPlainPerm.lean` (`thiefW`, `L = 8193`). Not done
-  with permutation rows: `U` tokens (`noRedirectN_lean_rom'` is for function rows only).
+  (`stageBudgetX_extRomMP`). Audit: `Audit/TheftPlainPerm.lean` (`thiefW`, `L = 8193`). For `U`
+  tokens and `M` redemptions: **`noRedirectN_lean_romP'`** (`Theft/PlainMousManyPerm.lean`), for
+  `q_E + N·69116 + 4607 < 2^{128}`, the `q'` of `noRedirectN_lean_rom'` and `ε_rom = epsRomMP
+  (q + N·qPre) (q_E + N·cells(pR)) (totK Moussaka.M (q + N·qPre))`, with the `N`-slice machinery
+  over `specP` of `Theft/PlainSlicesNP.lean`.
 - Not covered:
   - `PlainSE` in the model of `noRedirect_leanX_plain`, from `ROM/`'s extraction bounds. What
     separates the two models is listed in `security/ratatouille.md` §5 ("What is not covered").
@@ -1502,8 +1505,10 @@ the fix column describes `d5def9c`, where Moussaka used the rows (and what dropp
    `noRedirectN_leanX_hitC` with the digest condition as a SHAKE256 collision term). For one
    token, function rows, `M = Moussaka.M` and `L ≥ 8193`, plain extraction and the extractor's
    read budget are proved from `ROM/`'s simultaneous extraction (`noRedirect_lean_rom'`, §5.3),
-   for adversaries whose Anchor keys are determined by their digests (`KeysOut`); for `U` tokens
-   plain extraction stays a hypothesis.
+   for adversaries whose Anchor keys are determined by their digests (`KeysOut`), and for `U`
+   tokens (`noRedirectN_lean_rom'`); with per-kind hash budgets only (`noRedirect_lean_romK`,
+   `noRedirectN_lean_romK`), and with permutation rows and inverse cipher queries
+   (`noRedirect_lean_romP'`, `noRedirectN_lean_romP'`).
 8. Timing side channels beyond the index check (OS RNG, allocation) are out of scope.
 
 ---

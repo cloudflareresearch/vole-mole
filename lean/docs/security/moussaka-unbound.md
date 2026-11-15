@@ -765,12 +765,18 @@ adversary's operations are unbound requests.
     query the tables answer other than by SHAKE has one of ten kinds; the adversary answers the
     others itself, so the total follows (`admLN_qBudT`, `Theft/PlainTotal.lean`;
     `security/ratatouille.md` §5, `noTheft_lean_romK`). Audit: `Audit/TheftPlainPerm.lean`.
-  - Not done: the unbound theorem with permutation rows and inverse cipher queries. The
-    permutation-model joint bound exists (`moussakaUnbound_sim_joint_specP`,
-    `ROM/MoussakaUnboundSimPerm.lean`), and the one-token steps are done for bound Moussaka and
-    Ratatouille (`noRedirect_lean_romP'`, `noTheft_lean_romP'`); what is missing is the `N`-slice
-    machinery (`locN`, `stageBudgetNX_runTN`, the patches' budgets, the extractor's read budget)
-    over `specP`.
+  - **`nmUN_lean_romP'`** (`Theft/PlainUnboundManyPerm.lean`; `nmUN_lean_romP` with the
+    unsimplified budgets): `nmUN_lean_rom'` with **permutation rows** (`ZKRow.perm`, `εROPm`) and
+    an adversary over `specP` with **forward and inverse** cipher queries, within `QBudP q q_E`
+    (no total hash budget), `q_E + N·101372 + 4607 < 2^{128}`: the same bound with `ε_rom =
+    epsRomUP (q + N·qPre) (q_E + N·cells(pR)) (totK Moussaka.M (q + N·qPre))`; `epsRomUP` is
+    `epsRomU` with `failEpsP` and `n_G + 2·q₂₁` in the `2^{−448}` term. Steps:
+    `moussakaUnbound_sim_joint_leanP` (`Theft/PlainUnboundJointP.lean`, from
+    `moussakaUnbound_sim_joint_specP`), `plainSEL_romUP` (`Theft/PlainUnboundPerm.lean`: `eRomUP`
+    is `eRomU` on the records of the forward and inverse queries), `plainSENL_romUP`, the
+    forward-only patches (`progQUmP`), `eRomUP_congr`, `stageBudgetNX_extRomUNP`; as for
+    Ratatouille (`security/ratatouille.md` §5, `noTheft_lean_romP'`). The PRF bound stays a
+    hypothesis. Audit: `Audit/TheftPlainPerm.lean` (`thiefNUW`, `U = M = 1`).
 
 A malicious Moderator therefore cannot spend an honest Client's token at another Moderator, even
 though the token is valid there.
@@ -1064,7 +1070,8 @@ the base protocol.
    digest condition as a SHAKE256 collision term `nmUN_leanX_hitC`); plain extraction is proved
    from `ROM/`'s simultaneous extraction for function rows and `L ≥ 9749`, for adversaries whose
    Anchor keys are determined by their digests (`nmUN_lean_rom'`, `KeysOutNU`), with per-kind
-   hash budgets only (`nmUN_lean_romK`).
+   hash budgets only (`nmUN_lean_romK`), and with permutation rows and inverse cipher queries
+   (`nmUN_lean_romP'`).
 5. The mechanized Thm U5 takes **per-proof** zero knowledge (`ZeroKnowledge` for `IssueRelW` and
    `RedeemRelW`, against distinguishers that know the witness). That hypothesis holds with
    dedicated label rows (`lean/docs/zk.md`). On `main` the CRT masks come from the witness, the
@@ -1207,6 +1214,12 @@ All in `lean/VoleMole/`; no `sorry`, no axioms beyond the standard three.
   `stageBudgetNX_extRomUN`, `distPN_budgetUXI'`, `distPN_budgetUXR'`, **`nmUN_lean_rom`**,
   **`nmUN_lean_rom'`**, **`nmUN_lean_rom_one`**. `Audit/TheftPlainUnbound.lean` instantiates
   them.
+- `Theft/PlainTotalRom.lean`: **`nmUN_lean_romK`** (no total hash budget).
+  `Theft/PlainUnboundJointP.lean`: **`moussakaUnbound_sim_joint_leanP`**.
+  `Theft/PlainUnboundPerm.lean`: `eRomUP`, `game_badUP`, `epsRomUP`, **`plainSEL_romUP`**.
+  `Theft/PlainUnboundManyPerm.lean`: `plainSENL_romUP`, `progQUmP`, `qBudP_redQNu`,
+  `eRomUP_congr`, `stageBudgetNX_extRomUNP`, **`nmUN_lean_romP`**, **`nmUN_lean_romP'`**
+  (permutation rows, inverse queries). `Audit/TheftPlainPerm.lean` instantiates them.
 - `Audit/UnboundMany.lean`: the Lean-prover and many-token theorems instantiated for trivial
   adversaries (budgets discharged; SE and PRF with error `1`); `issueRelW_honest`, `exists_pts`,
   `replay_not_freshN`, `redirect_ctx_freshN`, `owkN_zero`.
