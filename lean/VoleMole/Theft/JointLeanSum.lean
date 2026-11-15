@@ -281,4 +281,139 @@ theorem real_sim_leN_leanG (prove : X → I → W → Bytes 16 → Tab3 → Sh p
 
 end LeanJointG
 
+
+/-! ## Slots with no proof are charged nothing -/
+
+section Active
+
+variable {X : Type} [Fintype X] [Nonempty X] {I W C O Ω : Type*} [Fintype Ω] [Nonempty Ω]
+  [Fintype C] [Nonempty C] {p : Params} {N : ℕ}
+
+/-- **The charge of slot `i` in a view, zero when the slot's instance is not active** (no proof
+is made: the Client refused). -/
+noncomputable def nZKA (act : I → Prop) [DecidablePred act] (ivO : X → I → O → Option ByteArray)
+    (xOf : Ω → List O → I) (R : GRd Ω O p X N) (h5 hE : ℕ) (i : ℕ) (k : Fin 3)
+    (v : Ω × List O × (Fin N → Tab3) × ShX (Blk → Blk) p X) : ℕ :=
+  if act (xOf v.1 (v.2.1.take i)) then nZK p ivO xOf R h5 hE i k v else 0
+
+omit [Fintype X] [Nonempty X] [Fintype Ω] [Nonempty Ω] in
+lemma nZKA_le_nZK (act : I → Prop) [DecidablePred act] (ivO : X → I → O → Option ByteArray)
+    (xOf : Ω → List O → I) (R : GRd Ω O p X N) (h5 hE : ℕ) (i : ℕ) (k : Fin 3) (v) :
+    nZKA act ivO xOf R h5 hE i k v ≤ nZK p ivO xOf R h5 hE i k v := by
+  unfold nZKA; split_ifs <;> omega
+
+omit [Fintype X] [Nonempty X] [Fintype Ω] [Nonempty Ω] [Fintype C] in
+/-- The history of the view of hop `i` begins with the hop's history. -/
+lemma contView_take (P : Ω → List O → Bytes 16 → Tab3 → ShX (Blk → Blk) p X → O)
+    (Sm : Ω → List O → C → O) (pg : Ω → List O → C → ShX (Blk → Blk) p X → ShX (Blk → Blk) p X)
+    (i : Fin N) (ω : Ω) (τ : Fin N → Slot (Bytes 16) C Tab3) (o : O) (g : Tab3)
+    (u : ShX (Blk → Blk) p X) :
+    ((contView P Sm pg i ω τ o g u).2.1).take i.val = (simPre Sm pg ω (tapeC τ) i).1 := by
+  obtain ⟨r, hr⟩ := realFrom_prefix P ω (tapeR τ) u (N - (i.val + 1))
+    ((simPre Sm pg ω (tapeC τ) i).1 ++ [o]) (i.val + 1)
+  have hlen : (simPre Sm pg ω (tapeC τ) i).1.length = i.val := simPre_length _ _ ω _ i.val
+  show (realFrom P ω (tapeR τ) u ((simPre Sm pg ω (tapeC τ) i).1 ++ [o]) (i.val + 1)
+    (N - (i.val + 1))).take i.val = _
+  rw [hr, List.append_assoc]
+  exact List.take_left' hlen
+
+/-- **The joint bound with inactive slots charged nothing.** As `real_sim_leN_leanG`, with the
+charge of an instance zero unless it is active (`act`): `ZKExp` at the charge `chPt` for active
+instances and `0` for the others (`hzk`; for a slot with no proof the hop is an identity). The
+counts are `nZKA`: `nZK` for the active slots, `0` for the others. -/
+theorem real_sim_leN_leanA (prove : X → I → W → Bytes 16 → Tab3 → Sh p → O) (sim : I → C → O)
+    (prog : X → I → C → Sh p → Sh p) (hkeep : ∀ x xI c s, (prog x xI c s).2 = s.2)
+    (Rl : I → W → Prop) (act : I → Prop) [DecidablePred act] (ivO : X → I → O → Option ByteArray)
+    (xOf : Ω → List O → I) (wOf : Ω → List O → W) (hrel : ∀ ω h, Rl (xOf ω h) (wOf ω h))
+    (Rpg : ∀ x xI c, TRd (fun (_ : Tab3) s => (prog x xI c s).1)) {m5 mE : ℕ}
+    (hRpg : ∀ x xI c, Conf (Rpg x xI c) (fun _ => ivO x xI (sim xI c)) m5 mE)
+    (RP : ∀ x xI w r g', TRd (fun (_ : Tab3) (s : Sh p) => prove x xI w r g' s))
+    {s5 sE : ℕ}
+    (hRP : ∀ x xI w r g', Rl xI w → Conf (RP x xI w r g')
+      (fun s => ivO x xI (prove x xI w r g' s)) s5 sE)
+    (R : GRd Ω O p X N) (hc : R.Cons) {a3 a5 aE : ℕ} (hb : R.Bnd a3 a5 aE)
+    (h3 : (a3 : ℝ) < 2 ^ 128) (hE : 221 * ((aE + N * max mE sE + 4607 : ℕ) : ℝ) < 2 ^ 128)
+    (hβ : βZK (a5 + N * max m5 s5) (aE + N * max mE sE) < 1)
+    (hzk : ∀ x, ZKExp Rl (prove x) sim (prog x) a3 (a5 + N * max m5 s5) (aE + N * max mE sE)
+      (εZK (aE + N * max mE sE) / (1 - βZK (a5 + N * max m5 s5) (aE + N * max mE sE)))
+      (fun xI o Q3 Q5 QE => if act xI then chPt p CrtGen.tables a3 (aE + N * max mE sE)
+        (ivO x xI o) Q3 Q5 QE / (1 - βZK (a5 + N * max m5 s5) (aE + N * max mE sE)) else 0))
+    {J : ℝ}
+    (hJ : ∑ i ∈ range N, ∑ k, wZK a3 (a5 + N * max m5 s5) (aE + N * max mE sE) k *
+      exU _ (fun z => (nZKA act ivO xOf R (max m5 s5) (max mE sE) i k
+        (viewN (C := C) (ρ := Bytes 16) (gP prove xOf wOf) (gS sim xOf) (gPg prog xOf) N z) : ℝ))
+      ≤ J)
+    (hNB : N * ∑ k, wZK a3 (a5 + N * max m5 s5) (aE + N * max mE sE) k *
+      MZK N a3 a5 aE (max m5 s5) (max mE sE) k < 1)
+    (Ev : Ω → List O → (Fin N → Tab3) → ShX (Blk → Blk) p X → Prop)
+    (hEv : R.Reads (fun v => Ev v.1 v.2.1 v.2.2.1 v.2.2.2)) :
+    |pr _ (realGN (C := C) (gP prove xOf wOf) Ev) -
+        pr _ (simGN (ρ := Bytes 16) (gS sim xOf) (gPg prog xOf) Ev)| ≤
+      (∑ i : Fin N, (εZK (aE + N * max mE sE) /
+          (1 - βZK (a5 + N * max m5 s5) (aE + N * max mE sE)) +
+        (1 + ∑ k, wZK a3 (a5 + N * max m5 s5) (aE + N * max mE sE) k *
+          MZK N a3 a5 aE (max m5 s5) (max mE sE) k) *
+          pr _ (deltaN (gP prove xOf wOf) (gS sim xOf) (gPg prog xOf) i)) + J) /
+        (1 - N * ∑ k, wZK a3 (a5 + N * max m5 s5) (aE + N * max mE sE) k *
+          MZK N a3 a5 aE (max m5 s5) (max mE sE) k) := by
+  set q5 := a5 + N * max m5 s5
+  set qE := aE + N * max mE sE
+  have hd : 0 < dEZK qE := dEZK_pos hE
+  have hden : 0 < 1 - βZK q5 qE := by linarith
+  have h3' : (0 : ℝ) < 2 ^ 128 - a3 := by linarith
+  have hw : ∀ k, 0 ≤ wZK a3 q5 qE k := by
+    intro k
+    fin_cases k
+    · exact div_nonneg (div_nonneg zero_le_one h3'.le) hden.le
+    · exact div_nonneg (div_nonneg (by norm_num) hd.le) hden.le
+    · exact div_nonneg (by positivity) hden.le
+  refine real_sim_leN_game prove (sim := sim) (prog := prog) (xOf := xOf) wOf
+    (fun x xI o Q3 Q5 QE => if act xI then chPt p CrtGen.tables a3 qE (ivO x xI o) Q3 Q5 QE /
+      (1 - βZK q5 qE) else 0)
+    hzk hrel hkeep Rpg RP R hc
+    (fun Ev' hEv' i ω τ x o => hopRd_bnd ivO hkeep Rpg (fun x ω h c => hRpg x _ c) RP
+      (fun x ω h r g' => hRP x _ _ r g' (hrel ω h)) R hc hb Ev' hEv' i ω τ x o)
+    (wZK a3 q5 qE) hw (nZKA act ivO xOf R (max m5 s5) (max mE sE))
+    (MZK N a3 a5 aE (max m5 s5) (max mE sE))
+    (fun i _ k v => (nZKA_le_nZK act ivO xOf R _ _ i k v).trans (nZK_le ivO xOf R hb _ _ i k v))
+    (fun i _ k ω l gs t gs' t' h => by
+      unfold nZKA
+      simp only [nZK_agree ivO xOf R hc _ _ i k ω l gs t gs' t' h])
+    (fun Ev' hEv' i ω τ r g t => ?_) hJ hNB Ev hEv
+  have htake := contView_take (gP prove xOf wOf) (gS sim xOf) (gPg prog xOf) i ω τ
+    (gP prove xOf wOf ω (simPre (gS sim xOf) (gPg prog xOf) ω (tapeC τ) i).1 r g t) g
+    ((simPre (gS sim xOf) (gPg prog xOf) ω (tapeC τ) i).2 t)
+  obtain ⟨c3, cE, c5⟩ := hopRd_charges (ivO := ivO) (prove := prove) (wOf := wOf)
+    (sim := sim) (xOf := xOf) hkeep Rpg (fun x ω h c => hRpg x _ c) RP
+    (fun x ω h r g' => hRP x _ _ r g' (hrel ω h)) R hc
+    Ev' hEv' i ω τ t.2.2 (gP prove xOf wOf ω
+      (simPre (gS sim xOf) (gPg prog xOf) ω (tapeC τ) i).1 r g t) g (shOf t)
+  by_cases ha : act (xOf ω (simPre (gS sim xOf) (gPg prog xOf) ω (tapeC τ) i).1)
+  · have ha' : act (xOf (contView (gP prove xOf wOf) (gS sim xOf) (gPg prog xOf) i ω τ
+        (gP prove xOf wOf ω (simPre (gS sim xOf) (gPg prog xOf) ω (tapeC τ) i).1 r g t) g
+        ((simPre (gS sim xOf) (gPg prog xOf) ω (tapeC τ) i).2 t)).1
+        ((contView (gP prove xOf wOf) (gS sim xOf) (gPg prog xOf) i ω τ
+        (gP prove xOf wOf ω (simPre (gS sim xOf) (gPg prog xOf) ω (tapeC τ) i).1 r g t) g
+        ((simPre (gS sim xOf) (gPg prog xOf) ω (tapeC τ) i).2 t)).2.1.take i.val)) := by
+      rw [htake]; exact ha
+    unfold nZKA
+    simp only [ha, ha', ↓reduceIte]
+    rw [Fin.sum_univ_three]
+    simp only [wZK, nZK, Matrix.cons_val_zero, Matrix.cons_val_one, Matrix.cons_val_two,
+      Matrix.head_cons, Matrix.tail_cons]
+    unfold chPt
+    exact lin3_le h3' hd (by positivity) hden (by exact_mod_cast c3) (by exact_mod_cast cE)
+      (by exact_mod_cast c5)
+  · have ha' : ¬ act (xOf (contView (gP prove xOf wOf) (gS sim xOf) (gPg prog xOf) i ω τ
+        (gP prove xOf wOf ω (simPre (gS sim xOf) (gPg prog xOf) ω (tapeC τ) i).1 r g t) g
+        ((simPre (gS sim xOf) (gPg prog xOf) ω (tapeC τ) i).2 t)).1
+        ((contView (gP prove xOf wOf) (gS sim xOf) (gPg prog xOf) i ω τ
+        (gP prove xOf wOf ω (simPre (gS sim xOf) (gPg prog xOf) ω (tapeC τ) i).1 r g t) g
+        ((simPre (gS sim xOf) (gPg prog xOf) ω (tapeC τ) i).2 t)).2.1.take i.val)) := by
+      rw [htake]; exact ha
+    unfold nZKA
+    simp only [ha, ha', ↓reduceIte, Nat.cast_zero, mul_zero, Finset.sum_const_zero, le_refl]
+
+end Active
+
 end VoleMole.Theft
