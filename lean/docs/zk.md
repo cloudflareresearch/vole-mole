@@ -3780,12 +3780,60 @@ expansion, `H₂³` visible) is redone with point charges:
   q₃/(2¹²⁸ − q₃) + 221·q_E/d_E + q₅·2⁻¹²⁸` (`Audit/ZKPoint2.lean`: `chZK_le`; also a reader with
   fixed read sets, `zk_ro_exp_const`). Function rows only.
 
-Not done: points restricted to the counters and tweaks in use (the overlap factor stays
-`1 + N²·2^{−64}`, `exP_sum_inY_le`); the theft games' read budgets per proof and per point (the
-hop distinguisher `distN` — the later real proofs, the adversary, the extractor — as a consistent
-`PtReads`, and its charge summed over the proofs in the simulated world); the theft games' `iv`s
-as independent uniform blocks (`H₄` a table, distinct inputs); and the instantiation of
-`real_sim_leN_jointZK` (`lean/docs/security/ratatouille.md` §5).
+*The joint step for a game of Lean proofs* (`ZK/IvOverlapK.lean`, `ZK/PtRd.lean`, `ZK/ZKExp.lean`,
+`Theft/JointRaw.lean`, `Theft/JointAdm.lean`, `Theft/JointGame.lean`, `Theft/JointCharge.lean`,
+`Theft/JointLean.lean`, `Theft/JointSum.lean`, `Theft/JointProver.lean`, `Theft/JointNum.lean`;
+audit `Audit/ZKPoint3.lean`). Proved:
+- *Table readers* (`TRd`): a consistent point reader of a function of one slice and the shared
+  tables, composed by `TRd.bind` (sequencing) and `TRd.prog` (an `H₂³` programming whose new table
+  is read at points); a family of them is a consistent `PtReads` that reads the distinguisher
+  (`TRd.toPt_cons`, `TRd.toPt_reads`).
+- *Per-proof theorem as a proof-system property* (`ZKExp`, `lean_zkExp`): the Lean prover with an
+  output map and an `iv` decoder, error `εZK/(1 − βZK)`, charge `chPt/(1 − βZK)` of the reads at
+  the real tables.
+- *The hop's charge in the zero-knowledge theorem's world* (`hyb_hop_expRaw`): `zk_ro_exp` takes the
+  expectation with the proof made on the unprogrammed tables; hybrid `i` makes it on the programmed
+  ones. They differ on `deltaN i` only, so the hop costs `(1 + B)·Pr[deltaN i]` instead of
+  `Pr[deltaN i]`.
+- *A class of events* (`joint_le_adm`, `real_sim_leN_jointAdm`). `real_sim_leN_jointZK` asks the
+  hops for every event of the view (`exU_sub_le`), which a point reader cannot give: an arbitrary
+  event reads whole tables. The joint step is restated for the events one consistent game reader
+  reads (`GRd`), with charges `Σ_k w_k·n_k` of natural-valued counts whose level sets it reads
+  (layer cakes, as `chain3_le`). This corrects the shape of `real_sim_leN_jointZK`'s hypothesis
+  (it is not satisfiable by the point-level per-proof theorem as stated).
+- *The hop readers* (`hopRd`): the earlier simulations' programmings (`progsRd`), the later real
+  proofs (`realFromRd`), then the game reader (`GRd.atRd`); budgets `hopRd_bnd`.
+- *The hop's charge is a function of the view* (`hopRd_charges`): for honest readers **confined**
+  to their own `iv` (`Conf`), a later proof or earlier programming is charged to proof `i` only if
+  their `iv`s share middle bytes (cipher, `ovE`) or are equal (`H₅`, `ov5`; a gate input begins
+  with its `iv`, `gate5_iv_eq`). The counts `nZK` = (game reader's slice-`i` keys, its keys at CTR
+  blocks of `iv_i` + `h_E`·#overlapping slots, its gate-input keys + `h₅`·#overlapping slots).
+- **`real_sim_leN_lean`**: for a game of Lean proofs (`ShX` tables, base record `Hb x`),
+
+      |Pr_real[Ev] − Pr_sim[Ev]| ≤ (Σ_i (εZK/(1 − βZK) + (1 + B)·Pr[deltaN i]) + J) / (1 − N·B)
+
+  for every event the game reader reads, given confined honest readers and `J ≥ Σ_i E_sim[charge_i]`.
+- *The sum* (`sum_nZK_le`, `exU_sum_nZK_le`; `sum_qkeys_inY_le`, `exP_collPairs_tab_le` in
+  `ZK/IvOverlapK.lean`): counting keys by `(key, middle bytes)` classes and with the `iv`s the blocks
+  `T(d_i)` of a uniform table `T` at inputs `d` that do not read it,
+  `J ≤ w₀T₃ + w_E c_E + w₅a₅ + (w_E(c_E + 2h_E) + w₅(a₅ + 2h₅))(N²·2⁻⁶⁴ + E[#dupPairs d]) +
+  (…)·E[#absent ivs]`: the budget once, times `1 + N²·2⁻⁶⁴`, plus the input-collision term.
+- *The real prover is confined* (`realPtRd`, `realPtRd_conf`): `realRO` is a consistent point
+  reader of its 624 gate inputs and of the CTR blocks of its `iv` at its 4607 nodes, and an
+  output's `iv` is its `rIv` (`realRO_ivV`).
+- *Numbers* (`jointNumK_le`): the overlap factor `≤ 5/4` at `N ≤ 2³¹` still gives `≤ 2⁻⁵⁴`
+  (about `2⁻⁵⁴·⁸`).
+
+Not done: the simulator's programming as a point reader confined to the simulated `iv` (needs
+`vPre` at points; only the key-level `vPre_ic_congr` exists); the theft games' game reader (the
+adversary's oracle run, the verifier and the extractor `eRom` at points, with a class bound
+`c_E` and a total slice bound `T₃`); the theft games as instances of the generic game (two proof
+systems on a sum type, the `vecOf` output map and its `iv` decoder, the transport along
+`(stOf x).params = p`); the `iv` structure of the simulated theft game (`H₄` the `XTab` table at
+inputs `iv_pre ‖ μ₁ ‖ 4`, `E[#dupPairs] ≤ N²·2⁻¹²⁸` from the uniform `iv_pre` coins) and the
+absent-`iv` term (`Pr[grinding fails]`); points restricted to the counters and tweaks in use. So
+`noTheftN_lean_numJ` is not stated, and the mechanized many-token bound stays
+`(U + M)·2⁻⁵⁵ + 2⁻⁵⁹`.
 
 ### 10.9 Hiding of `Com` (`Privacy/ComHide.lean`)
 

@@ -376,6 +376,9 @@ import VoleMole.ZK.ReadsPoint
 import VoleMole.ZK.IdealCipherPt
 import VoleMole.ZK.HopsH4Pt
 import VoleMole.ZK.IvOverlap
+import VoleMole.ZK.IvOverlapK
+import VoleMole.ZK.PtRd
+import VoleMole.ZK.ZKExp
 import VoleMole.ZK.HopsROMExp
 import VoleMole.ZK.HopsH6Exp
 import VoleMole.ZK.ChainExp
@@ -451,6 +454,14 @@ import VoleMole.Theft.MoussakaMany
 import VoleMole.Theft.MoussakaManyLean
 import VoleMole.Theft.Many
 import VoleMole.Theft.JointZK
+import VoleMole.Theft.JointRaw
+import VoleMole.Theft.JointAdm
+import VoleMole.Theft.JointGame
+import VoleMole.Theft.JointNum
+import VoleMole.Theft.JointCharge
+import VoleMole.Theft.JointLean
+import VoleMole.Theft.JointSum
+import VoleMole.Theft.JointProver
 import VoleMole.Theft.MoussakaUnbound
 import VoleMole.Theft.MoussakaUnboundMany
 import VoleMole.Theft.MoussakaUnboundLean
@@ -553,6 +564,7 @@ import VoleMole.Audit.TheftNum
 import VoleMole.Audit.TheftJointZK
 import VoleMole.Audit.ZKPoint
 import VoleMole.Audit.ZKPoint2
+import VoleMole.Audit.ZKPoint3
 import VoleMole.Audit.MainPU
 import VoleMole.Audit.MainShared
 import VoleMole.Audit.PomfritLemmaPCls
