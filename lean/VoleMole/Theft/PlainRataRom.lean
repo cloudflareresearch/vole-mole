@@ -45,6 +45,42 @@ variable {α : Type}
 def QBudT (q : Kind → ℕ) (qE nG : ℕ) (oa : OracleComp specIC α) : Prop :=
   QBud q qE oa ∧ IsQueryBoundP oa (fun t => t.isLeft = true) nG
 
+
+/-- **The prefix computation makes at most 338 hash queries** (`mu₁`, `iv`, then the verifier's
+without `chal3`). -/
+theorem isQueryBoundP_left_vPreIC (T : CrtTables) (st : Statement) (proof : ByteArray) :
+    IsQueryBoundP (vPreIC T st proof) (fun t => t.isLeft = true) 338 := by
+  have hv : ∀ [HasPrg], IsTotalQueryBound (vPreQ T st proof) 336 := by
+    intro _
+    unfold vPreQ
+    dsimp only
+    have hmu : ∀ {f : ByteArray → OracleComp spec ByteArray} {n : ℕ}, 0 < n →
+        (∀ u, IsTotalQueryBound (f u) (n - 1)) → IsTotalQueryBound (mu1Q st >>= f) n := by
+      intro f n h hf
+      unfold mu1Q
+      split <;> exact isTotalQueryBound_hashQ_bind_iff.2 ⟨h, fun u => hf _⟩
+    refine hmu (by decide) fun mu1 => ?_
+    refine isTotalQueryBound_hashQ_bind_iff.2 ⟨by decide, fun iv => ?_⟩
+    split
+    · trivial
+    refine isTotalQueryBound_mapM_hashQ_bind _ _ (by simp [length_leafHashInputs]) fun lh => ?_
+    simp only [length_leafHashInputs]
+    refine isTotalQueryBound_hashQ_bind_iff.2 ⟨by decide, fun com => ?_⟩
+    refine isTotalQueryBound_hashQ_bind_iff.2 ⟨by decide, fun c1 => ?_⟩
+    refine isTotalQueryBound_mapM_hashQ_bind _ _ (by simp [length_gateInputs]) fun gh => ?_
+    simp only [length_gateInputs]
+    refine isTotalQueryBound_muDelayedQ_bind _ _ (by decide) fun muD => ?_
+    refine isTotalQueryBound_hashQ_bind_iff.2 ⟨by decide, fun c2 => ?_⟩
+    refine isTotalQueryBound_combBytesQ_bind _ _ (by decide) fun lb => ?_
+    trivial
+  unfold vPreIC
+  refine (isQueryBoundP_bind (n := 2) (m := 336) (isQueryBoundP_left_liftIC
+    (isTotalQueryBound_ivQ st proof)) fun iv _ => ?_)
+  refine (isQueryBoundP_bind (n := 0) (m := 336) (isQueryBoundP_left_treeQ _ _ _) fun A _ => ?_).mono
+    (by omega)
+  exact (isQueryBoundP_bind (n := 0) (m := 336) (isQueryBoundP_left_cellsQ _ _ _) fun M _ =>
+    isQueryBoundP_left_liftIC (@hv (icPrg (fillC M)))).mono (by omega)
+
 end Budget
 
 /-! ## Logs -/
@@ -455,5 +491,110 @@ theorem plainSEL_rom
 
 
 end Plain
+
+/-! ## No theft with `ROM/`'s plain extraction -/
+
+namespace Ratatouille
+
+open VoleMole.Privacy.Ratatouille VoleMole.Spec.Ratatouille
+
+lemma left_progQI (x : IssueInstance) (c : SimCoins pI) :
+    IsQueryBoundP (progQI x c) (fun t => t.isLeft = true) 338 := by
+  unfold progQI
+  split
+  · trivial
+  · exact (isQueryBoundP_map_iff _ _ _).2 (isQueryBoundP_left_vPreIC _ _ _)
+
+lemma left_progQS (x : SpendInstance) (c : SimCoins pS) :
+    IsQueryBoundP (progQS x c) (fun t => t.isLeft = true) 338 := by
+  unfold progQS
+  split
+  · trivial
+  · exact (isQueryBoundP_map_iff _ _ _).2 (isQueryBoundP_left_vPreIC _ _ _)
+
+lemma left_progQO {I C M' : Type} {progQ : I → C → OracleComp specIC M'}
+    (h : ∀ x c, IsQueryBoundP (progQ x c) (fun t => t.isLeft = true) 338) (x : Option I) (c : C) :
+    IsQueryBoundP (progQO progQ x c) (fun t => t.isLeft = true) 338 := by
+  rcases x with _ | x
+  · trivial
+  · exact (isQueryBoundP_map_iff _ _ _).2 (h x c)
+
+set_option maxHeartbeats 1000000 in
+/-- **The reduction's budget with a total**: the two patches' queries (338 hash queries each),
+then the adversary's. -/
+theorem qBudT_redQ {α : Type} {q : Kind → ℕ} {qE nG : ℕ} {oa : OracleComp specIC α}
+    (h : QBudT q qE nG oa) (x₁ : Option IssueInstance) (c₁ : SimCoins pI)
+    (x₂ : Option SpendInstance) (c₂ : SimCoins pS) :
+    QBudT (q + qPre + qPre) (qE + verifyCellBound pS + verifyCellBound pI) (nG + 338 + 338)
+      (redQ progQI (patch2 pI) progQS (patch2 pI) x₁ c₁ x₂ c₂ oa) := by
+  refine ⟨qBud_redQ h.1 x₁ c₁ x₂ c₂, ?_⟩
+  unfold redQ
+  have h2 : IsQueryBoundP (progQO progQS x₂ c₂) (fun t => t.isLeft = true) 338 :=
+    left_progQO (fun x c => left_progQS x c) x₂ c₂
+  have h1 : IsQueryBoundP (progQO progQI x₁ c₁) (fun t => t.isLeft = true) 338 :=
+    left_progQO (fun x c => left_progQI x c) x₁ c₁
+  refine (isQueryBoundP_bind (n := 338) (m := 338 + nG) h2 fun m₂ _ =>
+    isQueryBoundP_bind (n := 338) (m := nG) h1 fun m₁ _ => ?_).mono (by omega)
+  exact isQueryBoundP_simP _ h.2
+
+variable {L : ℕ}
+
+/-- **The extractor**: `ROM/`'s straight-line extractor `eRom A` on the reduction's queries. -/
+noncomputable def extRom (A : Thief Sizes.labelRows Tab3 (ShX (Blk → Blk) pI (XTab L Arith.Ratatouille.uovM)))
+    (q : Kind → ℕ) (qE nG : ℕ) : Ext Sizes.labelRows Tab3 (ShX (Blk → Blk) pI (XTab L Arith.Ratatouille.uovM)) :=
+  extL ansP (QBudT q qE nG) logQI logQS (eRom A)
+
+/-- **No theft with `ROM/`'s plain extraction** (Ratatouille, one Client): as
+`noTheft_leanX_hitL`, with function rows, `M = uovM`, `L ≥ Lmin`, an adversary whose last stage is
+the run on the tables of an oracle computation with at most `q k` hash queries of kind `k`, `nG`
+in all and `q_E` cipher cells (`hA`), and `ROM/`'s straight-line extractor (`extRom`); plain
+extraction is no longer a hypothesis:
+
+    Pr[Bad] ≤ εz(pI; q') + εz(pS; q') + δ_S + ε_rom
+      + 2·((q_μ+3)·2⁻²⁵⁶ + (q₂₁+3)·2⁻¹⁰⁸⁸ + (q₂₂+3)·2⁻⁴⁴⁸) + Adv^ow(inverter),
+
+`ε_rom = epsRom (q + 2·qPre) (q_E + cells(pS) + cells(pI)) (nG + 2·338)` (`ROM/`'s simultaneous
+extraction for the reduction's budget), `q' = (q h3 + x₃, q h5 + x₅ + 936, q_E + x_E + 9214)`
+with the extractor's read budget `hX`. -/
+theorem noTheft_lean_rom
+    (A : Thief Sizes.labelRows Tab3 (ShX (Blk → Blk) pI (XTab L Arith.Ratatouille.uovM)))
+    (hL : Hit.Rata.Lmin ≤ L) {q : Kind → ℕ} {qE nG x3 x5 xE : ℕ}
+    (hA : ∀ o₁ o₂, AdmL (QBudT q qE nG) ansP (A.out o₁ o₂))
+    (hX : ∀ o₁ o₂, StageBudgetX (extRom A q qE nG (stI A o₁) (stS A o₂) (A.out o₁ o₂)) x3 x5 xE) :
+    pr _ (theftReal A (leanPIRX hbX) (leanPSRX hbX) (leanVIRX hbX) (leanVSRX hbX)
+        (extRom A q qE nG)) ≤
+      ZKRow.εz (Blk → Blk) pI (q .h3 + x3) (q .h5 + x5 + 936) (qE + xE + 9214) +
+        ZKRow.εz (Blk → Blk) pS (q .h3 + x3) (q .h5 + x5 + 936) (qE + xE + 9214) +
+        pr _ (deltaS A (leanPIRX hbX) (leanPSRX hbX) leanSimIR (leanProgIRX hbX)) +
+        ((epsRom (q + qPre + qPre) (qE + verifyCellBound pS + verifyCellBound pI)
+          (nG + 338 + 338)).toReal + Hit.epsHit (q .mu) (q .h21) (q .h22)) +
+        owAdv A.ctx (inverter A (extRom A q qE nG) leanSimIR (leanProgIRX hbX) leanSimSR
+          (leanProgSRX hbX)) := by
+  have hSB : ∀ o₁ o₂, StageBudgetX (A.out o₁ o₂) (q .h3) (q .h5) qE := fun o₁ o₂ => by
+    obtain ⟨oa, hb, hF⟩ := hA o₁ o₂
+    rw [hF]
+    exact stageBudgetX_runT hb.1
+  have hAH : ∀ F : Tab3 → Tab3 → ShX (Blk → Blk) pI (XTab L Arith.Ratatouille.uovM) → Op Sizes.labelRows,
+      AdmL (QBudT q qE nG) ansP F →
+      Hit.AdmHit (R := Blk → Blk) (p := pI) (L := L) (M := Arith.Ratatouille.uovM) (G := Tab3)
+        (q .mu) (q .h21) (q .h22) F := by
+    rintro F ⟨oa, hb, rfl⟩
+    exact admHit_runT hb.1
+  exact noTheft_ok (CI := SimCoins pI) (CS := SimCoins pS) A (leanVIRX hbX) (leanVSRX hbX)
+    (extRom A q qE nG) leanSimIR (leanProgIRX hbX) leanSimSR (leanProgSRX hbX) (leanPIRX hbX)
+    (leanPSRX hbX) (leanPIRX_zkRO hbX_wf _ _ _) (ZKRow.εz_nonneg _ _ _ _)
+    (leanPSRX_zkRO hbX_wf _ _ _) (ZKRow.εz_nonneg _ _ _ _)
+    (distI_budgetX' hbX A _ hbX_wf hSB hX) (distS_budgetX' hbX A _ hSB hX)
+    (weakSE2_of_plainL progQI (patch2 pI) progQS (patch2 pI) logQI logQS
+      ((plainSEL_rom A hL _ _ _).mono (fun _ _ _ h => Hit.Rata.FreshOk.freshOp A h)
+        (fun _ h => h) le_rfl)
+      (progMoves_of_ev (fun _ _ _ => rfl) (fun _ _ _ => rfl) (accOp_movesX hbX A)
+        ((Hit.Rata.progEv_hit A hL (q .mu) (q .h21) (q .h22)).mono hAH))
+      (fun _ _ _ => rfl) (fun _ _ _ => rfl) hpatchI hpatchS
+      (fun x c g₁ g₂ s s' h => hpreI x c g₁ g₂ s s' h) hlogI hlogS (fun _ _ _ => rfl)
+      (fun _ _ _ => rfl) fun oa x₁ c₁ x₂ c₂ h => qBudT_redQ h x₁ c₁ x₂ c₂)
+    hA
+
+end Ratatouille
 
 end VoleMole.Theft
