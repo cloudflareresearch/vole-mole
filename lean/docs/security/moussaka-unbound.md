@@ -887,11 +887,48 @@ the committed Keccak states of `Derive`, which needs injectivity of the Keccak-p
 in Lean). So for queries answered by one Client the shared-table theorems carry this term, and the
 per-proof theorems above are the ones without it.
 
-Not done on `main`: `n > 2` queries (the joint hops are for four proofs; `n` proofs need the bad
-event moved across `n` hops), adaptive queries in (a), the Lean issuance prover in (b) (the route
-of `anonymityNC_main_lean`, `Privacy/MoussakaNCMainLean.lean`, applies: `unbound_issue_response`
-checks no length, so completeness on the shared tables suffices), and a `ρ`-aware reduction for the
-one-Client prefix collision.
+**[Lean] Theorem U5(b) on `main` with `n` adaptive queries, all tables shared**
+(`Privacy/MoussakaUnboundNCMainN.lean`, `Privacy/MoussakaUnboundNCMainLeanN.lean`,
+`Audit/MainUnboundN.lean`, `lean/docs/zk.md` §4.2). The joint hop is redone for `n` proofs
+directly on the shared tables (`ZK.Sim.main_sharedAll_leN`): when proof `j` is replaced, its `H₃`
+column is the proof's slice, and the later real proofs with the same prefix read that column at
+their own `ρ` (`realROb_g3_congr'`), as `n` more `H₃` reads of the distinguisher. So the
+one-Client prefix collision costs a `ρ` collision inside `εS(q₃ + n, ·)`, and there is no `coll`
+term. The game (`gameNN`) is the Moderator's `n` adaptive queries, each proved iff both tokens
+finalized and the query is valid; with all proofs simulated the history is `hNC`'s run
+(`histTR`, `runHN`) and the `H₂³` table the guess sees is the raw table programmed for the
+history's statements (`tabHN`), so the abort hop, the PRF hop and the swap apply as for two
+queries. The (PU) term is statistical (`pr_candNN_le`).
+
+    anonymityNC_main_U_sharedAllN:  |Pr[W₀] − Pr[W₁]|
+        ≤ 2·(2ⁿ − 1)·(εS(q₃ + n, q_E + 2n·4607) + Δ23N(9, n))
+        + 2·(2ⁿ − 1)·(n·noHitProb + 2n·(q₅ + 312n + 1)·2⁻¹²⁸ + n²·313·2⁻¹²⁸)
+        + 2·(ψ₀ + ψ₁) + 2·εprf
+
+`Δ23N(9, n) = 2⁻¹¹³ + εS(0, 4607) + 313·2⁻¹²⁸ + noHitProb + n·2⁻¹⁰²⁴` (`Δ23 = Δ23N(·, 3)`).
+**With the Lean issuance prover** (`anonymityNC_main_U_leanN`): the issuance proofs are `main`'s
+Lean prover for `pIu` on the shared tables and each Anchor runs `unbound_issue_response` with the
+Lean verifier on the same tables. `unbound_issue_response` checks no length, so completeness on
+the shared tables suffices (`issue_complete_sharedU`, `≤ 2⁻¹¹³` per Client); replacing the
+verdicts by `true` costs `4·2⁻¹¹³` in all, and the proof system that accepts every request is
+complete, so `ψ_c ≤ φ_c`:
+
+    anonymityNC_main_U_leanN:  the bound above with 2·(φ₀ + φ₁) for 2·(ψ₀ + ψ₁), + 4·2⁻¹¹³.
+
+The audit instantiates both with a Moderator that asks one query `n` times (one Client, one
+statement and witness, one prefix in each world), the case where `collNH` is `1`.
+
+The factor `2ⁿ − 1` is a cost of the transfer (each hop's bad event `bstarN` is moved to the
+all-simulated hybrid across the later hops, and each may double it); the paper's lazy sampling
+gives `n` and `1`. For `n = 2` (four slots in the old games, two here) the new bound is
+`2·3·(…)` against `30·(…)`.
+
+Not done on `main`: U5(a) with `n > 2` queries (adaptive or not) and the `ρ`-aware hop for U5(a)
+with two queries. The route is the one above: `gameNN` with two issuance slots (`pIu`, 232 witness
+bytes) before the `n` redemption slots, `main_sharedAll_leN` with `ns = (232, 232, 559, …)`, and
+the (PU) term `pr_bstarN_sim_le` with predictors that draw everything but the target Client's
+`(nf_key, r)` and run the adaptive interaction themselves (as `predUH`). U5(a) on `main` therefore
+still carries `collUH` with shared tables, or uses per-proof tables (`anonymityU_main_pu`).
 - **The PRF.** `prfAdv A.ci (reductionAd …) ≤ εprf` (`Adv^prf-t_2`): given `t₀, t₁`, distinguish the
   table `c, ctx ↦ Derive(k_c, ctx)` from a uniform table. It is stated for the explicit reductions
   (the adversary with the simulator coins fixed, reading the table at the contexts it queries,
@@ -1016,7 +1053,9 @@ the base protocol.
    (`anonymityNC_main_U`, statistical (PU) term), and with all tables shared
    (`anonymityU_main_sharedAll`, `anonymityNC_main_U_sharedAll`), there with an explicit
    prefix-collision term that is `≤ 2⁻¹²⁸` for queries answered by different Clients but not
-   bounded when one Client answers both (§U5 above); for `n > 2` queries it is on paper.
+   bounded when one Client answers both (§U5 above). U5(b) is also mechanized with `n` adaptive
+   queries, all tables shared and no collision term (`anonymityNC_main_U_sharedAllN`; with the
+   Lean issuance prover, `anonymityNC_main_U_leanN`); U5(a) with `n > 2` queries is on paper.
 
 ---
 
@@ -1051,6 +1090,12 @@ All in `lean/VoleMole/`; no `sorry`, no axioms beyond the standard three.
   (`anonymityNC`, `2n·εR + 2·(ψ₀ + ψ₁) + 2εprf`; `psi_le`, `kappa_eq_zero`, `anonymityNC_complete`;
   `anonymityNC_vinegarRO`, `2n·εR + 2·(δ₀²⁵⁶ + δ₁²⁵⁶) + 2εprf`), with the honest Anchor's
   `issueResponse` (§6).
+- `Privacy/MoussakaUnboundNCMainN.lean`: Theorem U5(b) on `main` with `n` adaptive queries and all
+  tables shared, no prefix-collision term (`anonymityNC_main_U_sharedAllN`); the game `gameNN`,
+  the simulated history `histTR`, the table `tabHN`, the statistical (PU) bound `pr_candNN_le`.
+- `Privacy/MoussakaUnboundNCMainLeanN.lean`: the same with `main`'s Lean issuance prover and the
+  Anchors' Lean verifier (`anonymityNC_main_U_leanN`, `issue_complete_sharedU`).
+- `Audit/MainUnboundN.lean`: both instantiated for a Moderator that asks one query `n` times.
 - `Audit/Nonvacuous.lean`, section `Unbound`: `anonymityAd` for a constant-guess adversary
   (`εprf = 0`) and `anonymityNC_vinegarRO` with pqov's signer, a Moderator whose sets contain both
   issuers, and a complete issuance proof system.
