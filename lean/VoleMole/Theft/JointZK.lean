@@ -49,7 +49,10 @@ probability `≈ 221·N·q_E·2⁻¹²⁸`, the bound of `Theft/Many.lean`. See
 Steps toward the hypothesis are proved in `ZK/`: H4 at points with the charge in the real
 experiment (`hide_rom_query_pt`, `ZK/HopsH4Pt.lean`), H1 and H6's bad event in expectation
 (`h3_rom_query_real`, `pr_bad_exp`), and the number of proofs a read concerns
-(`exP_sum_inY_le`, `ZK/IvOverlap.lean`). They are not yet assembled into it.
+(`exP_sum_inY_le`, `ZK/IvOverlap.lean`). They are assembled into one-proof zero knowledge of
+this shape for a consistent point reader (`ZK.Sim.zk_ro_exp`, `ZK/ReadsROExp.lean`). Not done:
+the hops' distinguishers `distN` as consistent point readers, the sum of their charges in the
+simulated game, and so the instantiation of `real_sim_leN_jointZK`.
 -/
 
 open Finset

@@ -3748,12 +3748,44 @@ the budget once if each hop cost a constant plus the **expected** number of read
   (`Audit/ZKPoint.lean`). The factor is real (two `iv`s sharing their middle bits share every
   read at their common blocks); points restricted to the counters and tweaks in use would lower it.
 
-Not done: assembling these into one-proof zero knowledge of the form `hyb_hop_exp` needs (the
-whole chain `zk_rom_ic`: H1, grinding, H4, H6 and the tape steps, with the rest of the game as a
-consistent reader, and the expectations of H4 (real world) and H6 (the proof's fields) moved to
-one world); the theft games' read budgets per proof and per point; the theft games' `iv`s as
-independent uniform blocks; and the instantiation of `real_sim_leN_jointZK`
-(`lean/docs/security/ratatouille.md` §5).
+*The one-proof theorem, assembled* (`ZK/ChainExp.lean`, `ZK/HopsICExp.lean`,
+`ZK/ReadsROExp.lean`). The chain of `zk_rom_ic_h23` (H1, grinding and programming, the programmed
+points recomputed, H4, the tape, H6, the simulator; the cipher in the whole BAVC and VOLE
+expansion, `H₂³` visible) is redone with point charges:
+- *The read model* (`PtReads`): the distinguisher's view is `VwIC` (output, `H₃`, `H₂³`, `H₅`,
+  cipher); a reader gives its `H₃` keys, `H₅` keys and cipher **points** as functions of the view,
+  and is **consistent** (`Cons`: views that agree at the reads have the same reads). An event is
+  read by `R` (`Reads`) if it depends on `H₃`, `H₅` and the cipher only at `R`'s reads. Worst-case
+  budgets (`Bnd`) enter only denominators.
+- *The charges*, functions of the view (`ivV`: the output's `iv`): `ch3` (the `H₃` keys read),
+  `chE` (keys read at a CTR block of the output's `iv`), `ch5` (`H₅` keys read that are gate
+  inputs of the output's `iv`, `Gate5`); for an error output (grinding failed) every read counts.
+- *The hops*: `zk_pre_h4_real` (H1 charged in the real world, `joint2_h1_real`; grinding and the
+  recomputed points as before), `joint3_h4_pt` (H4 at points; the honest recomputation's reads,
+  whole rows of the `≤ 4607` reconstructed nodes, are counted, `221·(9214 + E_3[chE])/d_E`),
+  `joint2_h6_exp` (H6 with `Tab5F`, charged in the simulated world: `pr_bad_expG`,
+  `lab_rom_hyp_sG_exp`; a guessing key is a gate input of the proof's `iv`, `chg5G_le_ch5Q`).
+- *One world* (`chain3_le`): each hop's expectation is moved to the real world through the
+  hybrids' distance, which the total bounds (layer cakes of event functionals, `lcE`).
+- **`zk_rom_ic_h23_exp`**, and in `zk_ro`'s form **`zk_ro_exp`**: for a consistent reader with
+  budgets `q₃`, `q₅`, `q_E` and every event it reads,
+
+      |Pr_real − Pr_sim| ≤ (εZK + E_real[chZK]) / (1 − βZK),
+
+  `εZK = Pr[GrindBad] + 221·9214/d_E + 2⁻¹²⁸`, `βZK = 221·q_E/d_E + q₅·2⁻¹²⁸ < 2⁻⁵⁵` at
+  `q₅ = q_E = 2⁶⁴`, `d_E = 2¹²⁸ − 221·(q_E + 4607)`, and
+  `chZK = ch3/(2¹²⁸ − q₃) + 221·chE/d_E + ch5·2⁻¹²⁸`. This is the shape of `hyb_hop_exp`'s
+  hypothesis for one hop (constant plus an expectation, in the world where the proof is real, of a
+  bounded function of the view). Never much worse than the worst case: `chZK ≤
+  q₃/(2¹²⁸ − q₃) + 221·q_E/d_E + q₅·2⁻¹²⁸` (`Audit/ZKPoint2.lean`: `chZK_le`; also a reader with
+  fixed read sets, `zk_ro_exp_const`). Function rows only.
+
+Not done: points restricted to the counters and tweaks in use (the overlap factor stays
+`1 + N²·2^{−64}`, `exP_sum_inY_le`); the theft games' read budgets per proof and per point (the
+hop distinguisher `distN` — the later real proofs, the adversary, the extractor — as a consistent
+`PtReads`, and its charge summed over the proofs in the simulated world); the theft games' `iv`s
+as independent uniform blocks (`H₄` a table, distinct inputs); and the instantiation of
+`real_sim_leN_jointZK` (`lean/docs/security/ratatouille.md` §5).
 
 ### 10.9 Hiding of `Com` (`Privacy/ComHide.lean`)
 

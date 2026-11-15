@@ -1006,14 +1006,21 @@ honest openings, not about signatures. The table's bound in §0 is the right one
        is at most `5/4`, which `jointNum_le` (factor `1`) does not allow for; restricting the
        points to the counters and tweaks in use would make it about `1 + N²·R·2^{−128}`.
 
-    Not done: these hops are not yet assembled into a one-proof theorem of the form
-    `hyb_hop_exp` needs (the chain `zk_rom_ic` with H1, grinding, H4, H6 and the tape steps,
-    with the reads of the rest of the game as the consistent reader; H4's and H6's expectations
-    are in different worlds, the real one and the proof's fields); the theft hops' read budgets
-    per proof and per point (`Theft/Reads.lean`, `Theft/ManyReads.lean`,
-    `Theft/PlainSlicesN.lean`); the `iv`s of the theft games as independent uniform blocks
-    (`H₄` a table, distinct inputs); and the instantiation of `real_sim_leN_jointZK`. So the
-    mechanized many-token bound stays `(U + M)·2^{−55} + 2^{−59}`.
+    4. *The one-proof theorem* (`ZK/HopsICExp.lean`, `ZK/ReadsROExp.lean`): the chain of
+       `zk_rom_ic_h23` with these hops, every expectation moved to the real world by
+       self-bounding (`chain3_le`), for a consistent point reader (`PtReads`, `Cons`):
+       `zk_ro_exp`, `|real − sim| ≤ (εZK + E_real[chZK]) / (1 − βZK)`, `εZK ≤ 2⁻¹¹³ + 221·9214/d_E + 2⁻¹²⁸ ≈ 2⁻¹⁰⁷`,
+       `βZK < 2⁻⁵⁵` at budgets `2⁶⁴`, `chZK` the `2⁻¹²⁸`-weighted reads of the proof's slice, of
+       its `H₅` gate inputs, and `221`-weighted cipher keys at its CTR blocks. That is
+       `hyb_hop_exp`'s hypothesis for one hop, given the hop's distinguisher as such a reader.
+
+    Not done: the theft hops' distinguishers (`distN`: the later real proofs, the adversary, the
+    extractor) as consistent point readers, and their charges summed over the proofs in the
+    simulated world (`Theft/Reads.lean`, `Theft/ManyReads.lean`, `Theft/PlainSlicesN.lean` give
+    worst-case key budgets only); the points restricted to the counters and tweaks in use; the
+    `iv`s of the theft games as independent uniform blocks (`H₄` a table, distinct inputs); and
+    the instantiation of `real_sim_leN_jointZK`. So the mechanized many-token bound stays
+    `(U + M)·2^{−55} + 2^{−59}`.
   - **`noTheft_lean_rom`** (`Theft/PlainRataRom.lean`): `noTheft_leanX_hitL` with plain extraction
     discharged. Function rows (`R = Blk → Blk`), `M = uovM`, `L ≥ Lmin`, an adversary whose last
     stage is the run of an oracle computation within `QBudT q q_E n_G` (`hA`), the extractor
