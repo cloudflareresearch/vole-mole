@@ -226,4 +226,137 @@ theorem sum_ov5_le (iv : ℕ → Option ByteArray) (g : Fin N → Bytes 16) (hiv
 
 end Count
 
+/-! ## The weighted charges of all slots, and their expectation -/
+
+section Sum
+
+variable {X : Type} {I O Ω : Type*} {p : Params} {N : ℕ}
+
+/-- **The weighted charges of all slots in a view** are at most the budget terms once, times
+`1 + #collPairs`, plus the absent-`iv` terms: for a game reader whose slices are read at `T₃` keys
+in all and whose cipher reads have at most `c_E` classes. -/
+theorem sum_nZK_le (ivO : X → I → O → Option ByteArray) (xOf : Ω → List O → I) (R : GRd Ω O p X N)
+    {a3 a5 aE : ℕ} (hb : R.Bnd a3 a5 aE) {T3 cE : ℕ}
+    (hT3 : ∀ ω l gs t, ∑ j, (R.Q3 ω l gs t j).card ≤ T3)
+    (hcls : ∀ ω l gs t, (ptCls (R.QE ω l gs t)).card ≤ cE) (h5 hE : ℕ) (w : Fin 3 → ℝ)
+    (hw : ∀ k, 0 ≤ w k) (v : Ω × List O × (Fin N → Tab3) × ShX (Blk → Blk) p X)
+    (g : Fin N → Bytes 16) (hiv : IvsOf (ivAt ivO xOf v.2.2.2.2.2 v.1 v.2.1) g) :
+    ∑ i ∈ range N, ∑ k, w k * (nZK p ivO xOf R h5 hE i k v : ℝ) ≤
+      w 0 * T3 + w 1 * (cE + (aE + 2 * N * hE) * nNone (ivAt ivO xOf v.2.2.2.2.2 v.1 v.2.1) N) +
+        w 2 * (a5 + (a5 + 2 * N * h5) * nNone (ivAt ivO xOf v.2.2.2.2.2 v.1 v.2.1) N) +
+        (w 1 * (cE + 2 * hE) + w 2 * (a5 + 2 * h5)) * (collPairs g).card := by
+  set iv := ivAt ivO xOf v.2.2.2.2.2 v.1 v.2.1
+  set nn := nNone iv N with hnn
+  set cp := (collPairs g).card with hcp
+  set Q := R.QE v.1 v.2.1 v.2.2.1 v.2.2.2
+  set Q5 := R.Q5 v.1 v.2.1 v.2.2.1 v.2.2.2
+  -- the three counts summed over the slots
+  have s3 : ∑ i ∈ range N, n3 R i v ≤ T3 := by
+    have e : ∑ i ∈ range N, n3 R i v = ∑ j : Fin N, (R.Q3 v.1 v.2.1 v.2.2.1 v.2.2.2 j).card := by
+      rw [← Fin.sum_univ_eq_sum_range (fun i => n3 R i v) N]
+      refine Finset.sum_congr rfl fun j _ => ?_
+      simp only [n3, j.isLt, ↓reduceDIte]
+    rw [e]; exact hT3 _ _ _ _
+  have sE : ∑ i ∈ range N, nE ivO (xOf := xOf) R hE i v ≤
+      cE * (1 + cp) + nn * aE + hE * (2 * cp + 2 * N * nn) := by
+    have e : ∑ i ∈ range N, nE ivO (xOf := xOf) R hE i v =
+        ∑ i ∈ range N, cEof (iv i) Q + hE * ∑ i ∈ range N, ∑ j ∈ (range N).erase i, ovE (iv i) (iv j) := by
+      simp only [nE, Finset.sum_add_distrib, Finset.mul_sum]; rfl
+    rw [e]
+    have h1 := sum_cEof_le iv g hiv Q
+    have h2 := sum_ovE_le iv g hiv
+    simp only [← hcp, ← hnn] at h1 h2
+    have h3 : (ptCls Q).card * (1 + cp) ≤ cE * (1 + cp) := Nat.mul_le_mul_right _ (hcls _ _ _ _)
+    have h4 : nn * (Q.image Prod.fst).card ≤ nn * aE := Nat.mul_le_mul_left _ (hb.hE _ _ _ _)
+    have h5' := Nat.mul_le_mul_left hE h2
+    omega
+  have s5 : ∑ i ∈ range N, n5 ivO (xOf := xOf) R h5 i v ≤
+      a5 * (1 + cp) + nn * a5 + h5 * (2 * cp + 2 * N * nn) := by
+    have e : ∑ i ∈ range N, n5 ivO (xOf := xOf) R h5 i v =
+        ∑ i ∈ range N, c5of p CrtGen.tables (iv i) Q5 +
+          h5 * ∑ i ∈ range N, ∑ j ∈ (range N).erase i, ov5 (iv i) (iv j) := by
+      simp only [n5, Finset.sum_add_distrib, Finset.mul_sum]; rfl
+    rw [e]
+    have h1 := sum_c5of_le p iv g hiv Q5
+    have h2 := sum_ov5_le iv g hiv
+    simp only [← hcp, ← hnn] at h1 h2
+    have h3 : Q5.card * (1 + cp) ≤ a5 * (1 + cp) := Nat.mul_le_mul_right _ (hb.h5 _ _ _ _)
+    have h4 : nn * Q5.card ≤ nn * a5 := Nat.mul_le_mul_left _ (hb.h5 _ _ _ _)
+    have h5' := Nat.mul_le_mul_left h5 h2
+    omega
+  -- weighted
+  have e : ∑ i ∈ range N, ∑ k, w k * (nZK p ivO xOf R h5 hE i k v : ℝ) =
+      w 0 * (∑ i ∈ range N, n3 R i v : ℕ) + w 1 * (∑ i ∈ range N, nE ivO (xOf := xOf) R hE i v : ℕ) +
+        w 2 * (∑ i ∈ range N, n5 ivO (xOf := xOf) R h5 i v : ℕ) := by
+    simp only [Fin.sum_univ_three, nZK, Matrix.cons_val_zero, Matrix.cons_val_one,
+      Matrix.cons_val_two, Matrix.head_cons, Matrix.tail_cons, Finset.sum_add_distrib,
+      Nat.cast_sum, Finset.mul_sum]
+  rw [e]
+  have r3 : ((∑ i ∈ range N, n3 R i v : ℕ) : ℝ) ≤ T3 := by exact_mod_cast s3
+  have rE : ((∑ i ∈ range N, nE ivO (xOf := xOf) R hE i v : ℕ) : ℝ) ≤
+      cE * (1 + cp) + nn * aE + hE * (2 * cp + 2 * N * nn) := by exact_mod_cast sE
+  have r5 : ((∑ i ∈ range N, n5 ivO (xOf := xOf) R h5 i v : ℕ) : ℝ) ≤
+      a5 * (1 + cp) + nn * a5 + h5 * (2 * cp + 2 * N * nn) := by exact_mod_cast s5
+  have := mul_le_mul_of_nonneg_left r3 (hw 0)
+  have := mul_le_mul_of_nonneg_left rE (hw 1)
+  have := mul_le_mul_of_nonneg_left r5 (hw 2)
+  nlinarith
+
+/-- **The expected weighted charges of all slots**: for views on a tape `Z ≃ Ω' × (D → Bytes 16)`
+whose `iv`s are the table's blocks at inputs `d ω'` that do not read the table (or absent),
+
+    Σ_i Σ_k w k · E[n i k] ≤ w₀·T₃ + w₁·c_E + w₂·a₅
+      + (w₁·(c_E + 2h_E) + w₂·(a₅ + 2h₅))·(N²·2⁻⁶⁴ + E[#dupPairs d])
+      + (w₁·(a_E + 2N·h_E) + w₂·(a₅ + 2N·h₅))·E[#absent]. -/
+theorem exU_sum_nZK_le (ivO : X → I → O → Option ByteArray) (xOf : Ω → List O → I)
+    (R : GRd Ω O p X N) {a3 a5 aE : ℕ} (hb : R.Bnd a3 a5 aE) {T3 cE : ℕ}
+    (hT3 : ∀ ω l gs t, ∑ j, (R.Q3 ω l gs t j).card ≤ T3)
+    (hcls : ∀ ω l gs t, (ptCls (R.QE ω l gs t)).card ≤ cE) (h5 hE : ℕ) (w : Fin 3 → ℝ)
+    (hw : ∀ k, 0 ≤ w k) {Z Ω' D : Type*} [Fintype Z] [Nonempty Z] [Fintype Ω'] [Nonempty Ω']
+    [Fintype D] [DecidableEq D] (view : Z → Ω × List O × (Fin N → Tab3) × ShX (Blk → Blk) p X)
+    (e : Z ≃ Ω' × (D → Bytes 16)) (d : Ω' → Fin N → D)
+    (hiv : ∀ z, IvsOf (ivAt ivO xOf (view z).2.2.2.2.2 (view z).1 (view z).2.1)
+      (fun j => (e z).2 (d (e z).1 j))) :
+    ∑ i ∈ range N, ∑ k, w k * exU Z (fun z => (nZK p ivO xOf R h5 hE i k (view z) : ℝ)) ≤
+      w 0 * T3 + w 1 * cE + w 2 * a5 +
+        (w 1 * (cE + 2 * hE) + w 2 * (a5 + 2 * h5)) *
+          ((N : ℝ) ^ 2 / 2 ^ 64 + exP Ω' (fun ω' => ((dupPairs (d ω')).card : ℝ))) +
+        (w 1 * (aE + 2 * N * hE) + w 2 * (a5 + 2 * N * h5)) *
+          exU Z (fun z => (nNone (ivAt ivO xOf (view z).2.2.2.2.2 (view z).1 (view z).2.1) N : ℝ)) := by
+  set A := w 1 * (cE + 2 * hE) + w 2 * (a5 + 2 * h5)
+  set B := w 1 * (aE + 2 * N * hE) + w 2 * (a5 + 2 * N * h5)
+  have hA : 0 ≤ A := by have := hw 1; have := hw 2; positivity
+  -- swap the sums and the expectation
+  have e1 : ∑ i ∈ range N, ∑ k, w k * exU Z (fun z => (nZK p ivO xOf R h5 hE i k (view z) : ℝ)) =
+      exU Z (fun z => ∑ i ∈ range N, ∑ k, w k * (nZK p ivO xOf R h5 hE i k (view z) : ℝ)) := by
+    rw [exU_sum]
+    refine Finset.sum_congr rfl fun i _ => ?_
+    rw [exU_sum]
+    exact Finset.sum_congr rfl fun k _ => (exU_mul_left _ _).symm
+  rw [e1]
+  have hpt : ∀ z, ∑ i ∈ range N, ∑ k, w k * (nZK p ivO xOf R h5 hE i k (view z) : ℝ) ≤
+      (w 0 * T3 + w 1 * cE + w 2 * a5) +
+        A * ((collPairs (fun j => (e z).2 (d (e z).1 j))).card : ℝ) +
+        B * (nNone (ivAt ivO xOf (view z).2.2.2.2.2 (view z).1 (view z).2.1) N : ℝ) := by
+    intro z
+    have := sum_nZK_le ivO xOf R hb hT3 hcls h5 hE w hw (view z) _ (hiv z)
+    simp only [A, B]
+    nlinarith
+  refine (exP_mono hpt).trans ?_
+  rw [exP_add, exP_add, exP_const, exP_mul_left, exP_mul_left]
+  -- the collision pairs
+  have hcp : exP Z (fun z => ((collPairs (fun j => (e z).2 (d (e z).1 j))).card : ℝ)) ≤
+      (N : ℝ) ^ 2 / 2 ^ 64 + exP Ω' (fun ω' => ((dupPairs (d ω')).card : ℝ)) := by
+    have e2 : exP Z (fun z => ((collPairs (fun j => (e z).2 (d (e z).1 j))).card : ℝ)) =
+        exP (Ω' × (D → Bytes 16)) (fun y => ((collPairs (fun j => y.2 (d y.1 j))).card : ℝ)) :=
+      exP_equiv e (fun y => ((collPairs (fun j => y.2 (d y.1 j))).card : ℝ))
+    rw [e2, exP_prod]
+    refine (exP_mono fun ω' => exP_collPairs_tab_le (d ω')).trans (le_of_eq ?_)
+    rw [exP_const_add]
+  have := mul_le_mul_of_nonneg_left hcp hA
+  show _ ≤ _ + _ + B * exP Z _
+  linarith
+
+end Sum
+
 end VoleMole.Theft
