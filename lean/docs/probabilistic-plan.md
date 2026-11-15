@@ -1318,8 +1318,8 @@ The `2⁻⁷¹` per `H₂³` query (Lemma P's `Shift`) dominates; it is the pape
 `2⁻⁵⁶·⁰`). The dominant terms are the `H₂²` and `H₂³` charges, `≈ 2⁻⁶³` each at `2⁶⁴`: the
 paper's `ε_ext`.
 
-**Not covered.** In the AES permutation model, the UF-Tag and OMPR corollaries of Ratatouille's
-balance theorem and PomFRIT's U1 and U2 (above; Moussaka's are in §2o); the quantum setting.
+**Not covered.** The quantum setting. (In the AES permutation model with inverse queries,
+Ratatouille's UF-Tag and OMPR corollaries and PomFRIT's U1 and U2 are in §2o.)
 `Com` and `Tag` as random permutations in the standalone games: §2o.
 
 ### 2o. `Com` and `Tag` as random permutations with inverse queries (standalone games)
@@ -1328,7 +1328,11 @@ Files: `Assumptions/LazyPerm.lean` (generic), `Assumptions/CTUFPerm.lean`,
 `Assumptions/PermLinks.lean`, `Assumptions/FDHPerm.lean`, `Assumptions/RatatouillePerm.lean`,
 `Assumptions/PermSimLinks.lean`, `Assumptions/RatatouillePermSim.lean`,
 `ROM/MoussakaUnboundOMUFSimPerm.lean`, `Assumptions/UnboundPermSimLinks.lean`,
-`Audit/PermOMPR.lean`, `Audit/PermFDH.lean`, `Audit/PermSim.lean`; `lean/docs/security/uov-assumptions.md` §5.4 and §5.8 state the results.
+`ROM/PermFamily.lean`, `ROM/OneMorePerm.lean`, `ROM/OneMoreLemmaPSimPerm.lean`,
+`ROM/OneMoreShiftSimPerm.lean`, `Assumptions/PomfritPermSim.lean`,
+`Audit/PermOMPR.lean`, `Audit/PermFDH.lean`, `Audit/PermSim.lean`, `Audit/PomfritPerm.lean`;
+`lean/docs/security/uov-assumptions.md` §5.4 and §5.8 state the results, `lean/docs/security/pomfrit.md`
+§6.4 PomFRIT's.
 
 - **The shared step** (`LazyPerm`). A lazily sampled permutation of a finite block type with
   forward and inverse queries (`rpImpl`), next to other oracles that may read it at one point
@@ -1392,13 +1396,33 @@ Files: `Assumptions/LazyPerm.lean` (generic), `Assumptions/CTUFPerm.lean`,
   `tableQueryLog_normP` for the bound issuance provers), `omufU_le_num_open_simP`, and with
   `hmodelP` `omufU_le_num_ompr_simP`. Non-vacuity of both: `Audit/PermSim.lean` (`balA0P`;
   `aUUP`, an inverse cipher query then a bound and an unbound Issue query and a redemption).
+- **AES as random permutations, PomFRIT U1 and U2** (`ROM/PermFamily.lean`,
+  `ROM/OneMorePerm.lean`, `ROM/OneMoreLemmaPSimPerm.lean`, `ROM/OneMoreShiftSimPerm.lean`,
+  `Assumptions/PomfritPermSim.lean`, `Audit/PomfritPerm.lean`; `pomfrit.md` §6.4). The forger
+  (`ForgerP`) makes forward and inverse cipher queries; the reduction normalizes them at the
+  table (`normU`, `ForgerP.toIC`: inverse queries recorded as forward records, the reduction's
+  hidden `H₄` query of the `iv` before every `H₂¹` query), the forger's view is the permutation
+  oracle (`eval_normU`), and the game draws `π` (`gameP`, `advCP`). Per table the normalized forger
+  is a forger of the PRF view, so the per-table lemmas of §2n apply at `π.fwd`, with the Post
+  event a parameter (`prEvent_pfailZ_sim_le_Ec`, `prEvent_shiftFailZ_sim_le_Ec`,
+  `pfail_events_of`, `shiftFail_events_of`, `aliveR_subset_known_of`) set to the point-tied
+  `PostPOut`; `KeysPre` outside it from N1 of the derived prover's log (`n1c_proverP`: the
+  forger's `H₂¹` queries by the normalization, the verifications' by `chal1Pre`'s own `iv`
+  query, `ivBefore_chal1Pre`; `keysPre_of_not_postP_Q`, `keysPre_proverP`). The derived provers are
+  not `normP p π P` of a fixed prover (`normP` would query the verifications' `iv` again), so the
+  averaged failure bounds are restated for families that depend on `π` only through their
+  records (`RecFamily`, closed under binds, `recFamily_inv`, `recFamily_const`;
+  `prEvent_fam_coll_le`, `prEvent_fam_postP_le`, `prEvent_fam_deadQueried_le`,
+  `sum_fail_le_fam`: the proofs of `ROM/PermBind.lean`, `ROM/PermOpen.lean`, `ROM/PermJoint.lean`
+  with `normP_prefix`, `normP_congr` replaced by the two properties), and
+  `recFamily_proverP`. Results: `pomfrit_U1_simP`, `pomfrit_U2_simP`, `pomfrit_U1_ompr_simP`,
+  `pomfrit_U2_omprShift_simP`, `Pr[PomWin] ≤ Adv^{ompr(⊕17)} + pfailSimEpsP` (resp.
+  `sfailSimEpsP`): the PRF-view bounds with `failEpsP` for `failEps`, at `q' = qP (addH4 qA) Q_T ℓ`,
+  `q_E' = eP lr q_E ℓ` (`q_E` forward and inverse), `n' = nP (nA + qA₂₁) Q_T ℓ`
+  (`ForgerBoundP.toIC`). Numbers as in §2m (`2⁻⁷·⁰` for U1, `2⁻⁶²·⁰` for U2 at `2⁶⁴` queries,
+  `ℓ = 2³⁰`; the per-forgery failure terms `≈ 2⁻⁸⁶`). `#print axioms` of the four theorems:
+  `propext`, `Classical.choice`, `Quot.sound`.
 - **Not done.**
-  - PomFRIT U1 and U2 with AES as random permutations with inverse queries: there is no
-    permutation-model one-more game. It needs the game with a forger making inverse cipher
-    queries, the derived provers (`wrapIC`, `wrapP`) per permutation table normalized as in
-    `ROM/PermJoint.lean`, and the per-table Lemma P bounds (`prEvent_pfailZ_sim_le_E`,
-    `prEvent_shiftFailZ_sim_le_E`) averaged with `failEpsP` instead of `failEps`, as
-    `ROM/MoussakaOMUFSimPerm.lean` does for Moussaka.
   - The lazily sampled permutation is the uniformly drawn one (`EagerPerm.rp_eqd_eager`, joint
     distribution of output, table and state, any oracle computation; proof: condition on the table,
     the fibres of `π(b)` have equal size by composing with a transposition, induct on the

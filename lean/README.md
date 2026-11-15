@@ -255,7 +255,7 @@ permutations with inverse queries):
 
 **On paper only**: removing U1's `2⁻⁷¹` term efficiently in general, the affinity of the
 verifier's CRT masks under label agreement, and Lemmas P^∞ / P^lin in the one-more game
-(`pomfrit-lemmap-tight.md`); with AES as random permutations, PomFRIT's U1/U2 with simultaneous extraction; for the many-token forms of Ratatouille's Thm 3, Moussaka's Thm 3 and unbound Moussaka's Prop U3 / Thm U4 (`noTheftN`, `noRedirectN`, `nmUN`): plain extraction with no simulated proofs (`PlainSEN`) and one programmed-point term per simulated proof (`SlotEvN`), to which `WeakSEN` is reduced (the hops' read budgets are proved), and these theorems with the other hashes read off uniform tables; its Thm U1
+(`pomfrit-lemmap-tight.md`); for the many-token forms of Ratatouille's Thm 3, Moussaka's Thm 3 and unbound Moussaka's Prop U3 / Thm U4 (`noTheftN`, `noRedirectN`, `nmUN`): plain extraction with no simulated proofs (`PlainSEN`) and one programmed-point term per simulated proof (`SlotEvN`), to which `WeakSEN` is reduced (the hops' read budgets are proved; `SlotEvN` bounded with the chain hashes uniform tables for all three: `noTheftN_leanX_hit`, `noRedirectN_leanX_hit`, `nmUN_leanX_hit`), and these theorems with the other hashes read off uniform tables; its Thm U1
 with inverse queries, and one joint bound over all three extraction families;
 weak simulation-extractability (L8) for the Lean simulators, which Moussaka non-malleability
 (Thm 3) and Ratatouille no theft take as the hypothesis `WeakSE2`, the read budgets of their ZK
@@ -437,7 +437,8 @@ lean/
                             zero-knowledge table model, weak SE as a hypothesis; read budgets
                             (Reads); L8's programming step (SimExtract, SimExtractLean); any base
                             hash record and the other hashes as tables (LeanHb, Tables);
-                            one-wayness of Com with random tables (ComOW); unbound
+                            one-wayness of Com with random tables (ComOW); plain extraction with
+                            query logs (PlainLog, PlainOracle, PlainRata, PlainMous); unbound
                             Moussaka Prop U3 and Thm U4 (MoussakaUnbound, MoussakaUnboundLean);
                             `N` honest proofs and `WeakSEN` (Many); `U` tokens and `M`
                             redemptions (MoussakaMany, MoussakaManyLean, MoussakaUnboundMany);
@@ -610,7 +611,7 @@ exactly a prediction of `r`: the extra `2(q₅+1)·2⁻¹²⁸` per world (`docs
 `d[0..16) ⊕ w[0..16)`), `ZK/MainSharedGame.lean` (`main_shared_le`), `ZK/MainSharedSim.lean`
 (`pr_sib_hit_le`, `bstar_sim`), `Privacy/MoussakaMainSharedPU.lean` (`anonymity_main_shared`),
 `Audit/MainShared.lean`; computing redemption proofs only when §6's rule lets redemptions happen
-also removes the dummy-token term of `anonymity_main_pu`. Ratatouille likewise: `unlinkability_main_pu`, `unlinkability_main_shared` (`Privacy/RatatouilleMain*.lean`). Still [paper]: one `H₂³` table and one
+also removes the dummy-token term of `anonymity_main_pu`. Ratatouille likewise: `unlinkability_main_pu`, `unlinkability_main_shared` (`Privacy/RatatouilleMain*.lean`). With one `H₂³` table: `main_shared23_le`, `anonymity_main_shared23`, `unlinkability_main_shared23`. Still [paper]: one
 `H₃` for the proofs on `main`, Moussaka's `find_issuer` Client and 4(b) on `main`, and (PU) for the real
 Keccak-p[800,12], which is an assumption.
 
@@ -1593,13 +1594,28 @@ What is **not** established, roughly in order of importance:
    resistance of the key digest). For Ratatouille with `U` Clients and `M` spends,
    `noTheftN_leanX_hit` (`Theft/RatatouilleManyHit.lean`, `Theft/ManyTables.lean`,
    `Theft/HitMany.lean`) has the other hashes as uniform tables and the programmed-point terms
-   bounded: `N·((q₂₂+N+1)·2⁻⁴⁴⁸ + (q₂₁+N+1)·2⁻¹⁰⁸⁸ + (q_μ+N+1)·2⁻²⁵⁶)`, `N = U + M`. `ε_hit` for
-   Moussaka with `U > 1` tokens and for unbound Moussaka is not done. Plain extraction stays a
-   hypothesis. `ROM/`'s extraction bounds do not carry over as they stand: `PlainSE`'s
-   extractor does not see the adversary's queries (an adversary that derives its GGM key from an
-   `H₂³` answer is not extractable by it, so the `_plain` theorems say nothing for such
-   adversaries), read budgets are certificate sizes and not query bounds, a cipher read is a row and
-   not a cell, and `ROM/`'s oracle is lazy (`docs/security/ratatouille.md` §5). `Adv^ow` stays the advantage of the explicit inverter, a computational
+   bounded: `N·((q₂₂+N+1)·2⁻⁴⁴⁸ + (q₂₁+N+1)·2⁻¹⁰⁸⁸ + (q_μ+N+1)·2⁻²⁵⁶)`, `N = U + M`. For Moussaka with `U`
+   tokens and `M` redemptions and for unbound Moussaka, `noRedirectN_leanX_hit`
+   (`Theft/MoussakaManyHit.lean`, `L ≥ 6293`) and `nmUN_leanX_hit` (`Theft/MoussakaUnboundTables.lean`,
+   `Theft/MoussakaUnboundHit.lean`, `L ≥ 9749`; `nmUN_leanX_plain` with the other hashes tables)
+   have the same programmed-point bound, for `FreshOkN` and adversaries with `HitWfN`
+   (`nmUN_leanX_hit_one` is the case `U = M = 1`). `HitWfN`'s digest clause can be replaced by an
+   explicit collision term: for Anchor keys that are digest and expansion of a compressed key
+   (`KeyOk`, the C++ shape), `noRedirectN_leanX_hitC` and `nmUN_leanX_hitC`
+   (`Theft/MoussakaDigest.lean`, `Theft/MoussakaUnboundDigest.lean`) add `Adv^coll_SHAKE256(B)` for
+   an explicit finder `B`, a computational assumption like `Adv^ow` (`Audit/TheftManyHit.lean`). Plain extraction stays a
+   hypothesis, but in `ROM/`'s shape for one Client or token: `noTheft_leanX_hitL` and
+   `noRedirect_leanX_hitL` (`Theft/PlainRata.lean`, `Theft/PlainMous.lean`) take the adversary's
+   last stage as the run on the tables of an oracle computation over `ROM/`'s oracle `specIC`, with
+   query bounds and cipher cell queries (`QBud q q_E`; `Theft/PlainOracle.lean`: `stageBudgetX_runT`,
+   `admHit_runT` give the read budgets and `AdmHit`). The extractor reads the query list of the
+   programming step's reduction, which answers the programmed `H₂³` points itself after recomputing
+   the simulated prefixes by queries (`vPreIC`, `ROM/PrefixIC.lean`); `WeakSE2 ≤ ε_plain +
+   ε_moves` holds for it (`weakSE2_of_plainL`, `PlainSEL`, `Theft/PlainLog.lean`). What remains
+   before `ROM/`'s bounds apply is the lazy-to-eager step: a measure-preserving map from the finite
+   tables (SHAKE elsewhere) to the lazy oracle, that the verifier queries only table points,
+   applying `ratatouille_sim_joint_spec` with the straight-line extractor, and that extractor's read
+   budget (`docs/security/ratatouille.md` §5, item 4). The many-token theorems still use `PlainSEN`. `Adv^ow` stays the advantage of the explicit inverter, a computational
    assumption on Keccak-p[800,12]: `Com` is evaluated inside the relations, so it cannot be a table
    of the game, and some inverter wins with probability 1 (`owAdv_one_ratatouille`,
    `owAdv_one_moussaka`). In a random-table model of the standalone experiment a `q`-query
@@ -1688,8 +1704,17 @@ What is **not** established, roughly in order of importance:
      the uniform one: for every oracle computation, running against `rpImpl` has the same joint
      distribution of output, table and state as drawing `π` uniformly from `Equiv.Perm B` and
      answering from it (`rp_eqd_eager`, `prEvent_rp_eq_eager`, `Assumptions/EagerPerm.lean`); the
-     `_eager` restatements of the headline theorems are immediate but not written. Not done with
-     AES as permutations: PomFRIT U1/U2 (no permutation-model one-more game).
+     `_eager` restatements of the headline theorems are immediate but not written. PomFRIT U1 and U2 also hold with AES
+     as random permutations with inverse queries (`ROM/OneMorePerm.lean`: `ForgerP`, `gameP`; the
+     reduction records inverse queries as forward records and adds hidden `iv` queries, `normU`,
+     `eval_normU`; `ROM/OneMoreLemmaPSimPerm.lean`, `ROM/OneMoreShiftSimPerm.lean`,
+     `Assumptions/PomfritPermSim.lean`): `pomfrit_U1_simP`/`pomfrit_U1_ompr_simP` and
+     `pomfrit_U2_simP`/`pomfrit_U2_omprShift_simP`, the PRF-view bounds with `failEpsP` for
+     `failEps` (`2⁻⁷` and `2⁻⁶²` at `2⁶⁴` queries, `ℓ = 2³⁰`); Post becomes the point-tied
+     `PostPOut`, and the averaged failure bounds hold for any prover family that depends on the
+     permutation only through its records (`ROM/PermFamily.lean`, `RecFamily`, `sum_fail_le_fam`;
+     audit `Audit/PomfritPerm.lean`). So every protocol theorem now also holds with AES as random
+     permutations.
    - PomFRIT's tight bound needs OMPR⊕17; OMPR ⇒ OMPR⊕17 without the `τ^{q+1}` loss has no
      black-box proof (`uov-open-reductions.md`); by Theorem R (`ompr-shift-algebra.md`; Lean `thmR`) a
      proof must be non-black-box in the adversary or break OMPR^free. In Lean every term of
@@ -1712,8 +1737,11 @@ What is **not** established, roughly in order of importance:
    sets; `ZK/HopsMain.lean`, `ZK/MainGame.lean`; `docs/zk.md` §4.2), with per-proof tables;
    for one proof the shared-table model with `H₂³` visible and a global cipher is mechanized on
    `main` (`zk_rom_ic_h23_main`), and for a token's four proofs the joint hop with one `H₅` table and
-   one cipher (`ZK.Sim.main_shared_le`: `15·εS + 15·Pr_sim[bstar]` for any four-proof game; each
-   proof keeps its own `H₂³` table and `H₃` slice); (PU) is a game (`PU.puAdv`), and Moussaka's
+   one cipher (`ZK.Sim.main_shared_le`: `15·εS + 15·Pr_sim[bstar]` for any four-proof game), and
+   also with one `H₂³` table (`ZK.Sim.main_shared23_le`, `ZK/MainShared23.lean`: `15·(εS + Δ23) +
+   15·Pr_sim[bstar]`, `Δ23 ≤ 2⁻¹⁰⁶` the programming-collision term of `pr_collide_main`,
+   `ZK/CollideMain.lean`, whose second application of zero knowledge has a statistical (PU) term
+   `313·2⁻¹²⁸`); each proof keeps its own `H₃` slice; (PU) is a game (`PU.puAdv`), and Moussaka's
    Theorem 4(a) on `main` with the shared `H₅` table and cipher is `anonymity_main_shared`: `≤
    30·εS(q₃, q_E + 8·4607) + 15·(Σ_{b,c} puAdv Com (predS_c b) + 8·noHitProb + 3750·2⁻¹²⁸) +
    2·εhide`, every term a number except the four (PU) advantages and `εhide`; the cross-proof
@@ -1727,8 +1755,10 @@ What is **not** established, roughly in order of importance:
    15·(Σ six puAdv + 4·(q₅+1)·2⁻¹²⁸) + 2·εhide`; with one `H₅` table and one cipher for the four
    proofs (`Privacy/RatatouilleMainShared*.lean`), `unlinkability_main_shared`: `≤ 30·εS(q₃,
    q_E+8·4607) + 15·(Σ six puAdv + 8·noHitProb + 3750·2⁻¹²⁸) + 2·εhide` (audit
-   `Audit/MainRata.lean`). Not done: one `H₂³` table and one `H₃` for the proofs on `main` (both
-   protocols; the programming-collision terms of §10.2), Moussaka 4(b) on `main`, and (PU) for the real 12-round permutation (an
+   `Audit/MainRata.lean`). With one `H₂³` table too: `anonymity_main_shared23`,
+   `unlinkability_main_shared23` (`Privacy/*MainShared23.lean`, audit `Audit/MainShared23.lean`),
+   the same bounds with `εS` replaced by `εS + Δ23`. Not done: one `H₃` for the proofs on `main` (§10.5's argument; it needs
+   `zk_rom_ic_h23_main` for rows carrying `H₃` columns), Moussaka 4(b) on `main`, and (PU) for the real 12-round permutation (an
    assumption; the exhaustive predictor has advantage 1). The QROM ZK bound
    is loose (2⁻¹⁹ at 2³⁰) until the 256-bit `rho` and salt are added.
    With the fix, zero knowledge of the executable Lean prover and the three protocols' privacy

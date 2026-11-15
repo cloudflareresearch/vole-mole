@@ -254,10 +254,14 @@ theorem aliveR_eq_filter (hh : NoHit (gameIC T st P E) (chainHit T st P E) g)
   unfold deadAtX
   rw [hlog, hivX]
 
-/-- **Outside Post and the hits, the alive trees are known** (L2(c)), when `P` queried the
-verifier's `H₂¹` input. -/
-theorem aliveR_subset_known (hh : NoHit (gameIC T st P E) (chainHit T st P E) g)
-    (hpost : ¬PostOut E (evalWithAnswerFn (QueryImpl.ofFn g) (gameIC T st P E)))
+/-- **Outside a failure event `cf` that guards `KeysPre`, and the hits, the alive trees are
+known** (L2(c)), when `P` queried the verifier's `H₂¹` input (`cf` is Post: `PostOut` in the PRF
+view, the point-tied `PostPOut` in the permutation model). -/
+theorem aliveR_subset_known_of (cf : Out (β × QueryLog specIC) → Prop)
+    (hcf : ∀ g, ¬cf (evalWithAnswerFn (QueryImpl.ofFn g) (gameIC T st P E)) →
+      KeysPre st E (jOf g P E) (gLog T st P E g) g)
+    (hh : NoHit (gameIC T st P E) (chainHit T st P E) g)
+    (hpost : ¬cf (evalWithAnswerFn (QueryImpl.ofFn g) (gameIC T st P E)))
     (hacc : (evalWithAnswerFn (QueryImpl.ofFn g) (gameIC T st P E)).2.2.accept = true)
     {leaves : BAVC.Leaves}
     (hr : @BAVC.reconstruct (icPrg E.cipher) (ivE g st P E) (Proof.opening ⟨st.params, πOf g P E⟩)
@@ -268,7 +272,7 @@ theorem aliveR_subset_known (hh : NoHit (gameIC T st P E) (chainHit T st P E) g)
   intro i hi
   rw [aliveR_eq_filter T st P E g hh hacc hr hx, Finset.mem_filter] at hi
   by_contra hk
-  have hs := sameChainHyp_ic T st P E g hacc hpost hh
+  have hs := sameChainHyp_ic_of T st P E cf hcf g hacc hpost hh
   have hr' : @BAVC.reconstruct (icPrg E.cipher)
       (evalWithAnswerFn (QueryImpl.ofFn g) (gameIC T st P E)).2.2.iv
       (Proof.opening ⟨st.params, (evalWithAnswerFn (QueryImpl.ofFn g) (gameIC T st P E)).1⟩)
@@ -285,6 +289,20 @@ theorem aliveR_subset_known (hh : NoHit (gameIC T st P E) (chainHit T st P E) g)
   have := (hs leaves hr').2 i hk
   rw [hi.2] at this
   exact Finset.not_nonempty_empty this
+
+/-- **Outside Post and the hits, the alive trees are known** (L2(c)), when `P` queried the
+verifier's `H₂¹` input. -/
+theorem aliveR_subset_known (hh : NoHit (gameIC T st P E) (chainHit T st P E) g)
+    (hpost : ¬PostOut E (evalWithAnswerFn (QueryImpl.ofFn g) (gameIC T st P E)))
+    (hacc : (evalWithAnswerFn (QueryImpl.ofFn g) (gameIC T st P E)).2.2.accept = true)
+    {leaves : BAVC.Leaves}
+    (hr : @BAVC.reconstruct (icPrg E.cipher) (ivE g st P E) (Proof.opening ⟨st.params, πOf g P E⟩)
+      (Proof.delta ⟨st.params, πOf g P E⟩) = some leaves)
+    (hx : ((.h21, runX (Hashes.ofTable g) st (πOf g P E) leaves) : Dom) ∈ hashLog (jOf g P E)) :
+    aliveR E (evalWithAnswerFn (QueryImpl.ofFn g) (gameIC T st P E)) ⊆
+      (evalWithAnswerFn (QueryImpl.ofFn g) (gameIC T st P E)).2.1.known :=
+  aliveR_subset_known_of T st P E g (PostOut E) (keysPre_of_not_postOut T st P E) hh hpost hacc hr
+    hx
 
 end Chain
 

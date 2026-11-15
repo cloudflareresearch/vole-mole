@@ -636,10 +636,17 @@ averaging, to shared tables with one more uniform component from which `H₁`, `
 For `ε_plain`, `ROM/`'s extraction bounds do not apply as they stand: the extractor of `PlainSE`
 does not see the adversary's queries (the extractor of §2 does), read budgets are certificate
 sizes and not query counts, a cipher read is a whole row and not a cell, and `ROM/`'s oracle is
-lazy. `ε_hit` is bounded for Ratatouille's Lean verifiers and simulators
+lazy. The first three are resolved for two simulated proofs (`Theft/PlainLog.lean`,
+`PlainSEL`, `weakSE2_of_plainL`; `noTheft_leanX_hitL`, `noRedirect_leanX_hitL`): the last stage
+is an oracle computation over `ROM/`'s oracle with query bounds and cell queries, and the
+extractor reads the query list of the programming step's reduction, which answers the programmed
+points itself after recomputing the simulated prefixes by queries (`vPreIC`). The lazy oracle is
+not yet matched with the finite tables. `ε_hit` is bounded for the Lean verifiers and simulators
 (`Theft/HitChain.lean`, `Theft/HitLevel.lean`, `progEv_chain`; `noTheft_leanX_hit`,
-`noRedirect_leanX_hit`, and `noTheftN_leanX_hit` for `N` simulated proofs): a forgery that
-hits a programmed point meets the simulated proof's chain `H₂⁰ → H₂¹ → H₂²` at a first level
+`noRedirect_leanX_hit`, and for `N` simulated proofs `noTheftN_leanX_hit`,
+`noRedirectN_leanX_hit`, `nmUN_leanX_hit`, with `N·((q₂₂+N+1)·2^{−448} + (q₂₁+N+1)·2^{−1088} +
+(q_μ+N+1)·2^{−256})`; for Moussaka for well-formed statements, `security/moussaka.md` §5.3): a
+forgery that hits a programmed point meets the simulated proof's chain `H₂⁰ → H₂¹ → H₂²` at a first level
 where the inputs differ and the outputs agree (`chain_hit`), equal `H₂⁰` inputs mean equal
 statements, and a tree with `q` queries to that level's table finds such a point with
 probability `≤ (q + 3)·2^{−8n}`, `n` the output length. With two simulated proofs:
