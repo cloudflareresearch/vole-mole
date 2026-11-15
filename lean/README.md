@@ -255,7 +255,7 @@ permutations with inverse queries):
 
 **On paper only**: removing U1's `2⁻⁷¹` term efficiently in general, the affinity of the
 verifier's CRT masks under label agreement, and Lemmas P^∞ / P^lin in the one-more game
-(`pomfrit-lemmap-tight.md`); with AES as random permutations, PomFRIT's U1/U2 with simultaneous extraction; for the many-token forms of Ratatouille's Thm 3, Moussaka's Thm 3 and unbound Moussaka's Prop U3 / Thm U4 (`noTheftN`, `noRedirectN`, `nmUN`): plain extraction with no simulated proofs (`PlainSEN`) and one programmed-point term per simulated proof (`SlotEvN`), to which `WeakSEN` is reduced (the hops' read budgets are proved), and these theorems with the other hashes read off uniform tables; its Thm U1
+(`pomfrit-lemmap-tight.md`); with AES as random permutations, PomFRIT's U1/U2 with simultaneous extraction; for the many-token forms of Ratatouille's Thm 3, Moussaka's Thm 3 and unbound Moussaka's Prop U3 / Thm U4 (`noTheftN`, `noRedirectN`, `nmUN`): plain extraction with no simulated proofs (`PlainSEN`) and one programmed-point term per simulated proof (`SlotEvN`), to which `WeakSEN` is reduced (the hops' read budgets are proved; `SlotEvN` bounded with the chain hashes uniform tables for all three: `noTheftN_leanX_hit`, `noRedirectN_leanX_hit`, `nmUN_leanX_hit`), and these theorems with the other hashes read off uniform tables; its Thm U1
 with inverse queries, and one joint bound over all three extraction families;
 weak simulation-extractability (L8) for the Lean simulators, which Moussaka non-malleability
 (Thm 3) and Ratatouille no theft take as the hypothesis `WeakSE2`, the read budgets of their ZK
@@ -1593,8 +1593,16 @@ What is **not** established, roughly in order of importance:
    resistance of the key digest). For Ratatouille with `U` Clients and `M` spends,
    `noTheftN_leanX_hit` (`Theft/RatatouilleManyHit.lean`, `Theft/ManyTables.lean`,
    `Theft/HitMany.lean`) has the other hashes as uniform tables and the programmed-point terms
-   bounded: `N·((q₂₂+N+1)·2⁻⁴⁴⁸ + (q₂₁+N+1)·2⁻¹⁰⁸⁸ + (q_μ+N+1)·2⁻²⁵⁶)`, `N = U + M`. `ε_hit` for
-   Moussaka with `U > 1` tokens and for unbound Moussaka is not done. Plain extraction stays a
+   bounded: `N·((q₂₂+N+1)·2⁻⁴⁴⁸ + (q₂₁+N+1)·2⁻¹⁰⁸⁸ + (q_μ+N+1)·2⁻²⁵⁶)`, `N = U + M`. For Moussaka with `U`
+   tokens and `M` redemptions and for unbound Moussaka, `noRedirectN_leanX_hit`
+   (`Theft/MoussakaManyHit.lean`, `L ≥ 6293`) and `nmUN_leanX_hit` (`Theft/MoussakaUnboundTables.lean`,
+   `Theft/MoussakaUnboundHit.lean`, `L ≥ 9749`; `nmUN_leanX_plain` with the other hashes tables)
+   have the same programmed-point bound, for `FreshOkN` and adversaries with `HitWfN`
+   (`nmUN_leanX_hit_one` is the case `U = M = 1`). `HitWfN`'s digest clause can be replaced by an
+   explicit collision term: for Anchor keys that are digest and expansion of a compressed key
+   (`KeyOk`, the C++ shape), `noRedirectN_leanX_hitC` and `nmUN_leanX_hitC`
+   (`Theft/MoussakaDigest.lean`, `Theft/MoussakaUnboundDigest.lean`) add `Adv^coll_SHAKE256(B)` for
+   an explicit finder `B`, a computational assumption like `Adv^ow` (`Audit/TheftManyHit.lean`). Plain extraction stays a
    hypothesis. `ROM/`'s extraction bounds do not carry over as they stand: `PlainSE`'s
    extractor does not see the adversary's queries (an adversary that derives its GGM key from an
    `H₂³` answer is not extractable by it, so the `_plain` theorems say nothing for such
