@@ -447,4 +447,200 @@ theorem real_sim_NCM (hsk : ∀ c, (sk c).Correct (A.pk c)) {q3 qE : ℕ} (hC : 
 
 end GameM
 
+/-! ## Two redemptions with one prefix -/
+
+section CollM
+
+variable {A : AdversaryNCM} {idx : AnchorSet → UOVKey → ℕ} {PI : NIZK IssueInstance}
+  {sk : Bool → Signer}
+
+lemma σNC_wit (hsk : ∀ c, (sk c).Correct (A.pk c)) (b : Bool) (s : SecNC) (side : Bool) (y : SW)
+    (hy : y ∈ (bif gNC A idx PI sk s then redStmt A.m (ptNM A idx PI sk b s side) else none)) :
+    y.2.size = pRm.witnessBytes ∧ wPre y.2 = (xOf s (b ^^ side)).2.1 := by
+  cases hg : gNC A idx PI sk s
+  · rw [hg] at hy; cases hy
+  · rw [hg] at hy
+    obtain ⟨w, hw, h1, h2⟩ := redStmt_gNC hsk hg b side
+    have hy' : redStmt A.m (ptNM A idx PI sk b s side) = some y := hy
+    rw [hw] at hy'
+    cases hy'
+    exact ⟨h1, h2⟩
+
+/-- **Two redemptions of a world with one prefix**: then the two Clients' openings agree (each
+redemption witness starts with its Client's opening; the issuance slots prove nothing). -/
+theorem coll_impNC (hsk : ∀ c, (sk c).Correct (A.pk c)) (b : Bool)
+    (v : GView SecNC pIm pIm pRm pRm) (h : ¬ DistV Hashes.shake (gameNCM A idx PI sk b) v) :
+    (xOf v.s false).2.1 = (xOf v.s true).2.1 := by
+  by_contra hne
+  have r₃ : ∀ y ∈ yv₃ (gameNCM A idx PI sk b) v, y.2.size = pRm.witnessBytes ∧
+      wPre y.2 = (xOf v.s (b ^^ false)).2.1 := fun y hy => σNC_wit hsk b v.s false y hy
+  have r₄ : ∀ y ∈ yv₄ (gameNCM A idx PI sk b) v, y.2.size = pRm.witnessBytes ∧
+      wPre y.2 = (xOf v.s (b ^^ true)).2.1 := fun y hy => σNC_wit hsk b v.s true y hy
+  have n₁ : ∀ y ∈ yv₁ (gameNCM A idx PI sk b) v, y.2.size = pIm.witnessBytes :=
+    fun y hy => by cases hy
+  have n₂ : ∀ y ∈ yv₂ (gameNCM A idx PI sk b) v, y.2.size = pIm.witnessBytes :=
+    fun y hy => by cases hy
+  have h16 : 16 ≤ pIm.witnessBytes := by decide
+  have h16' : 16 ≤ pRm.witnessBytes := by decide
+  have mI : pIm.witnessBytes + 32 < preMax := by decide
+  have mR : pRm.witnessBytes + 32 < preMax := by decide
+  apply h
+  have e₁ : ∀ y, y ∉ yv₁ (gameNCM A idx PI sk b) v := fun y hy => Option.not_mem_none y hy
+  have e₂ : ∀ y, y ∉ yv₂ (gameNCM A idx PI sk b) v := fun y hy => Option.not_mem_none y hy
+  refine ⟨distO_of hashesWF_shake n₁ n₂ h16 mI mI fun y hy => (e₁ y hy).elim,
+    distO_of hashesWF_shake n₁ (fun y hy => (r₃ y hy).1) h16 mI mR fun y hy => (e₁ y hy).elim,
+    distO_of hashesWF_shake n₁ (fun y hy => (r₄ y hy).1) h16 mI mR fun y hy => (e₁ y hy).elim,
+    distO_of hashesWF_shake n₂ (fun y hy => (r₃ y hy).1) h16 mI mR fun y hy => (e₂ y hy).elim,
+    distO_of hashesWF_shake n₂ (fun y hy => (r₄ y hy).1) h16 mI mR fun y hy => (e₂ y hy).elim,
+    distO_of hashesWF_shake (fun y hy => (r₃ y hy).1) (fun y hy => (r₄ y hy).1) h16' mR mR
+      fun y hy y' hy' _ => by
+        rw [(r₃ y hy).2, (r₄ y' hy').2]
+        cases b
+        · exact hne
+        · exact Ne.symm hne⟩
+
+variable (A idx PI sk) in
+/-- **The prefix-collision term is at most `2⁻¹²⁸`**: the two Clients' uniform openings agree. -/
+theorem pr_collNCM_le (hsk : ∀ c, (sk c).Correct (A.pk c)) (b : Bool) :
+    pr (GTape SecNC pIm pIm pRm pRm) (fun x => ¬ DistV Hashes.shake (gameNCM A idx PI sk b)
+      (hybV23 (p₀ := pIm) (n₁ := 256) (n₂ := 256) (n₃ := 343) (n₄ := 343) Hashes.shake
+        (gameNCM A idx PI sk b) false false false false x)) ≤ 1 / 2 ^ 128 := by
+  refine (pr_mono fun x hx => coll_impNC hsk b _ hx).trans ?_
+  have e1 := pr_prod_fst (β := USh × KS pIm × KS pIm × KS pRm × KS pRm)
+    (fun s : SecNC => (xOf s false).2.1 = (xOf s true).2.1)
+  refine (le_of_eq e1).trans ?_
+  let e : Coins rBytes × ((Coins nfBytes × Coins proveSeedBytes) × IssT) ≃ SecNC :=
+    { toFun := fun z => ((z.2.1.1, z.1, z.2.1.2), z.2.2)
+      invFun := fun s => (s.1.2.1, ((s.1.1, s.1.2.2), s.2))
+      left_inv := fun _ => rfl
+      right_inv := fun _ => rfl }
+  rw [← pr_equiv e]
+  have := pr_mem_uniform_le (X := (Coins nfBytes × Coins proveSeedBytes) × IssT)
+    (fun z => {z.2.2.1}) (q := 0) (fun _ => by simp)
+  simpa [e, xOf] using this
+
+end CollM
+
+/-! ## With both redemptions simulated: the view depends on the openings only through the
+refusal bit -/
+
+section SimM
+
+variable (A : AdversaryNCM)
+
+/-- The redemption statement of side `side` for the nullifier `n`. -/
+def stNCM (side : Bool) (n : Bytes) : Statement :=
+  stR ⟨(A.choose side).1.keys, n, A.m.int.ci, A.m.int.cr, (A.choose side).2⟩
+
+/-- The statement of side `side` if the redemptions happen. -/
+def stOptNCM (g side : Bool) (n : Bytes) : Option Statement :=
+  bif g then some (stNCM A side n) else none
+
+/-- Client `c`'s nullifier. -/
+def nNC (s : SecNC) (c : Bool) : Bytes := List.ofFn (xOf s c).1
+
+/-- **The `H₂³` table with both redemptions simulated**, from the refusal bit, the nullifiers in
+Client order and the simulators' coins and raw tables. -/
+noncomputable def tabNCM (b g : Bool) (n₀ n₁ : Bytes) (a : AuxS) : Tab2G pIm :=
+  pgP pRm a.2.2.2.1.1.2 (stOptNCM A g false (bif b then n₁ else n₀)) a.1
+    (pgP pRm a.2.2.2.2.1.2 (stOptNCM A g true (bif b then n₀ else n₁)) a.1 a.2.1.2.2)
+
+/-- The tables the guess sees with both redemptions simulated. -/
+noncomputable def visNCM (b g : Bool) (n₀ n₁ : Bytes) (a : AuxS) : VisS :=
+  (a.1, ((fun _ => 0, tabNCM A b g n₀ n₁ a), (fun _ => 0, tabNCM A b g n₀ n₁ a),
+    (fun _ => 0, tabNCM A b g n₀ n₁ a), (fun _ => 0, tabNCM A b g n₀ n₁ a)))
+
+/-- The redemption requests with both redemptions simulated (or the refusal). -/
+noncomputable def keyNM (b g : Bool) (n₀ n₁ : Bytes) (a : AuxS) :
+    Option (Except Error Bytes × Except Error Bytes) :=
+  bif g then
+    some (.ok ((bif b then n₁ else n₀) ++ pf (some (simulate pRm a.2.2.2.1.1.2))),
+      .ok ((bif b then n₀ else n₁) ++ pf (some (simulate pRm a.2.2.2.2.1.2))))
+  else none
+
+variable {A} {idx : AnchorSet → UOVKey → ℕ} {PI : NIZK IssueInstance} {sk : Bool → Signer}
+
+lemma σ₃NC_map (hsk : ∀ c, (sk c).Correct (A.pk c)) (b : Bool) (s : SecNC) (side : Bool) :
+    (bif gNC A idx PI sk s then redStmt A.m (ptNM A idx PI sk b s side) else none).map
+      Prod.fst = stOptNCM A (gNC A idx PI sk s) side (nNC s (b ^^ side)) := by
+  cases hg : gNC A idx PI sk s
+  · rfl
+  · obtain ⟨w, hw, -, -⟩ := redStmt_gNC hsk hg b side
+    show (redStmt A.m (ptNM A idx PI sk b s side)).map Prod.fst = _
+    rw [hw]
+    rfl
+
+lemma nNC_xor (s : SecNC) (b : Bool) :
+    nNC s (b ^^ false) = (bif b then nNC s true else nNC s false) ∧
+      nNC s (b ^^ true) = (bif b then nNC s false else nNC s true) := by
+  cases b <;> exact ⟨rfl, rfl⟩
+
+variable (idx PI sk) in
+/-- **The guess's input with both redemptions simulated** is a function of the refusal bit, the
+nullifiers and the simulators' coins. -/
+theorem simNCM_key (hsk : ∀ c, (sk c).Correct (A.pk c)) (b : Bool)
+    (x : GTape SecNC pIm pIm pRm pRm) :
+    keyNCM A idx PI sk b (hybV23 (p₀ := pIm) (n₁ := 256) (n₂ := 256) (n₃ := 343) (n₄ := 343)
+        Hashes.shake (gameNCM A idx PI sk b) true true true true x) =
+      keyNM b (gNC A idx PI sk x.1) (nNC x.1 false) (nNC x.1 true) x.2 := by
+  have hs : (hybV23 (p₀ := pIm) (n₁ := 256) (n₂ := 256) (n₃ := 343) (n₄ := 343)
+      Hashes.shake (gameNCM A idx PI sk b) true true true true x).s = x.1 := rfl
+  unfold keyNCM keyNM
+  rw [hs]
+  cases hg : gNC A idx PI sk x.1
+  · rfl
+  · obtain ⟨w₃, hw₃, -, -⟩ := redStmt_gNC hsk hg b false
+    obtain ⟨w₄, hw₄, -, -⟩ := redStmt_gNC hsk hg b true
+    have o₃ : (hybV23 (p₀ := pIm) (n₁ := 256) (n₂ := 256) (n₃ := 343) (n₄ := 343)
+        Hashes.shake (gameNCM A idx PI sk b) true true true true x).o₃ =
+        some (simulate pRm x.2.2.2.2.1.1.2) := by
+      show (bif gNC A idx PI sk x.1 then redStmt A.m (ptNM A idx PI sk b x.1 false)
+        else none).map _ = _
+      rw [hg]
+      show (redStmt A.m (ptNM A idx PI sk b x.1 false)).map _ = _
+      rw [hw₃]
+      rfl
+    have o₄ : (hybV23 (p₀ := pIm) (n₁ := 256) (n₂ := 256) (n₃ := 343) (n₄ := 343)
+        Hashes.shake (gameNCM A idx PI sk b) true true true true x).o₄ =
+        some (simulate pRm x.2.2.2.2.2.1.2) := by
+      show (bif gNC A idx PI sk x.1 then redStmt A.m (ptNM A idx PI sk b x.1 true)
+        else none).map _ = _
+      rw [hg]
+      show (redStmt A.m (ptNM A idx PI sk b x.1 true)).map _ = _
+      rw [hw₄]
+      rfl
+    simp only [Bool.cond_true]
+    rw [redOut_gNC hsk hg, redOut_gNC hsk hg, o₃, o₄]
+    have := nNC_xor x.1 b
+    simp only [nNC] at this
+    rw [this.1, this.2]
+    rfl
+
+variable (idx PI sk) in
+/-- **The tables the guess sees with both redemptions simulated** are a function of the refusal
+bit, the nullifiers and the simulators' coins and raw tables. -/
+theorem simNCM_vis (hsk : ∀ c, (sk c).Correct (A.pk c)) (b : Bool)
+    (x : GTape SecNC pIm pIm pRm pRm) :
+    clrS (hybV23 (p₀ := pIm) (n₁ := 256) (n₂ := 256) (n₃ := 343) (n₄ := 343)
+        Hashes.shake (gameNCM A idx PI sk b) true true true true x).vis =
+      visNCM A b (gNC A idx PI sk x.1) (nNC x.1 false) (nNC x.1 true) x.2 := by
+  have e := σ₃NC_map (idx := idx) (PI := PI) hsk b x.1
+  have hn := nNC_xor x.1 b
+  have hM : (simSB Hashes.shake pIm x.2.2.1.1.2 x.2.2.1.2.1).pg none x.2.1
+      ((simSB Hashes.shake pIm x.2.2.2.1.1.2 x.2.2.2.1.2.1).pg none x.2.1
+        ((simSB Hashes.shake pRm x.2.2.2.2.1.1.2 x.2.2.2.2.1.2.1).pg
+          (bif gNC A idx PI sk x.1 then redStmt A.m (ptNM A idx PI sk b x.1 false) else none) x.2.1
+          ((simSB Hashes.shake pRm x.2.2.2.2.2.1.2 x.2.2.2.2.2.2.1).pg
+            (bif gNC A idx PI sk x.1 then redStmt A.m (ptNM A idx PI sk b x.1 true) else none)
+              x.2.1 x.2.2.1.2.2))) =
+      tabNCM A b (gNC A idx PI sk x.1) (nNC x.1 false) (nNC x.1 true) x.2 := by
+    simp only [simSB_pg_eq]
+    rw [e false, e true, hn.1, hn.2]
+    rfl
+  unfold clrS visNCM
+  refine Prod.ext rfl (Prod.ext (Prod.ext rfl ?_) (Prod.ext (Prod.ext rfl ?_)
+    (Prod.ext (Prod.ext rfl ?_) (Prod.ext rfl ?_)))) <;> exact hM
+
+end SimM
+
 end VoleMole.Privacy.Moussaka
