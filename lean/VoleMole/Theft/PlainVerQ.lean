@@ -42,7 +42,13 @@ lemma toUInt8_le32 (b0 b1 b2 b3 : UInt8) :
     x.toUInt8 = b0 ∧ (x >>> 8).toUInt8 = b1 ∧ (x >>> 16).toUInt8 = b2 ∧
       (x >>> 24).toUInt8 = b3 := by
   intro x
-  refine ⟨?_, ?_, ?_, ?_⟩ <;> simp only [x] <;> bv_decide
+  have hx := toNat_le32 b0 b1 b2 b3
+  have h0 := b0.toNat_lt
+  have h1 := b1.toNat_lt
+  have h2 := b2.toNat_lt
+  have h3 := b3.toNat_lt
+  refine ⟨?_, ?_, ?_, ?_⟩ <;> apply UInt8.toNat_inj.1 <;>
+    simp only [UInt32.toNat_toUInt8, UInt32.toNat_shiftRight, x, hx] <;> norm_num <;> omega
 
 /-- **A 4-byte suffix is the little-endian encoding of its counter.** -/
 lemma pushLE32_getLE32 (pre b : ByteArray) (hb : b.size = 4) :
