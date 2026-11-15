@@ -266,6 +266,7 @@ import VoleMole.ZK.MainSharedN
 import VoleMole.ZK.MainSharedNSim
 import VoleMole.ZK.HopsMainICLin
 import VoleMole.ZK.MainSharedLin
+import VoleMole.ZK.MainSharedLin4
 import VoleMole.ZK.VerifyPre
 import VoleMole.ZK.HopsH23
 import VoleMole.ZK.HopsIC
@@ -310,6 +311,8 @@ import VoleMole.Privacy.MoussakaUnboundNCMainN
 import VoleMole.Privacy.MoussakaUnboundNCMainLeanN
 import VoleMole.Privacy.MoussakaUnboundNCMainLin
 import VoleMole.Privacy.MoussakaUnboundMainN
+import VoleMole.Privacy.MoussakaMainSharedLin
+import VoleMole.Privacy.RatatouilleMainSharedLin
 import VoleMole.Privacy.MoussakaUnboundMainAll
 import VoleMole.Privacy.RatatouilleRO
 import VoleMole.ZK.TwoPhaseRO
@@ -554,3 +557,4 @@ import VoleMole.Audit.MainUnboundAll
 import VoleMole.Audit.MainUnboundN
 import VoleMole.Audit.MainUnboundLin
 import VoleMole.Audit.MainNCLean
+import VoleMole.Audit.MainSharedLin4

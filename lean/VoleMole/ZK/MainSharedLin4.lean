@@ -44,6 +44,116 @@ open VoleMole.Privacy.MainChain
 attribute [local instance] decEqW128
 attribute [local irreducible] simulate realRO progRO realKeys5 realKeysE progKeys5 progKeysE
 
+/-! ## The linear hop with joint reads -/
+
+section Joint
+
+variable (Hb : Hashes) {S : Type} {n : ℕ} {p₀ : Params} (G : NGame S n) (ps : Fin n → Params)
+
+/-- The reads of a pair are reads of its second component. -/
+theorem rdN_snd {X : Type*} {F : NView S n p₀ → X} {R5 : NView S n p₀ → Finset (Bytes 37)}
+    {q3 qE : ℕ} (hJ : RdN (fun v => (F v, R5 v)) R5 q3 qE) : RdN R5 R5 q3 qE := by
+  obtain ⟨h5, ⟨QE, hQEc, hQE⟩, ⟨Q3, hQ3c, hQ3⟩⟩ := hJ
+  exact ⟨fun v G5 h => congrArg Prod.snd (h5 v G5 h),
+    ⟨QE, hQEc, fun v E h => congrArg Prod.snd (hQE v E h)⟩,
+    ⟨Q3, hQ3c, fun v T h => congrArg Prod.snd (hQ3 v T h)⟩⟩
+
+/-- **An event and the bad event of its read set, with joint reads**: if `F` and `R5` read the
+tables jointly (one cipher read set and one `H₃` read set for both), then `F ∨ bstarN` reads the
+cipher at `n·4607` more keys only (not at `F`'s and `R5`'s keys counted twice, as `rdN_or`). -/
+theorem rdN_or_bstarN {F : NView S n p₀ → Prop} {R5 : NView S n p₀ → Finset (Bytes 37)}
+    {q3 qE : ℕ} (hJ : RdN (fun v => (F v, R5 v)) R5 q3 qE) :
+    RdN (fun v => F v ∨ bstarN Hb G ps R5 v) R5 q3 (qE + n * 4607) := by
+  classical
+  obtain ⟨h5, ⟨Q, hQc, hQ⟩, ⟨Q3, hQ3c, hQ3⟩⟩ := hJ
+  refine ⟨fun v G5 h => ?_, ⟨fun v => Q v ∪ univ.biUnion
+      (fun i => slotRd Hb (ps i) (yN G i v) (v.os i) v.u.2), fun v => ?_, fun v E h => ?_⟩,
+    ⟨Q3, hQ3c, fun v T' h => ?_⟩⟩
+  · have e := h5 v G5 h
+    simp only [Prod.mk.injEq] at e
+    show (F _ ∨ bstarN Hb G ps R5 (v.withU (G5, v.u.2))) = (F v ∨ bstarN Hb G ps R5 v)
+    unfold bstarN
+    rw [e.1, e.2]; rfl
+  · have h1 := card_union_le (Q v)
+      (univ.biUnion (fun i => slotRd Hb (ps i) (yN G i v) (v.os i) v.u.2))
+    have h2 : (univ.biUnion (fun i => slotRd Hb (ps i) (yN G i v) (v.os i) v.u.2)).card ≤
+        n * 4607 := by
+      refine card_biUnion_le.trans ?_
+      calc ∑ i : Fin n, (slotRd Hb (ps i) (yN G i v) (v.os i) v.u.2).card
+          ≤ ∑ _i : Fin n, 4607 := sum_le_sum fun i _ => card_slotRd Hb _ _ _ _
+        _ = n * 4607 := by simp
+    have := hQc v
+    beta_reduce
+    omega
+  · have e : ∀ i, slotKeys Hb (ps i) (yN G i v) (v.os i) E =
+        slotKeys Hb (ps i) (yN G i v) (v.os i) v.u.2 := fun i =>
+      slotKeys_congrE Hb (ps i) _ _ fun k hk =>
+        h k (mem_union_right _ (mem_biUnion.2 ⟨i, mem_univ _, hk⟩))
+    have e' : ∀ i, slotHit Hb (ps i) (yN G i v) (v.os i) E =
+        slotHit Hb (ps i) (yN G i v) (v.os i) v.u.2 := fun i =>
+      slotHit_congrE Hb (ps i) _ _ fun k hk =>
+        h k (mem_union_right _ (mem_biUnion.2 ⟨i, mem_univ _, hk⟩))
+    have eJ := hQ v E fun k hk => h k (mem_union_left _ hk)
+    simp only [Prod.mk.injEq] at eJ
+    show (F _ ∨ bstarN Hb G ps R5 (v.withU (v.u.1, E))) = (F v ∨ bstarN Hb G ps R5 v)
+    unfold bstarN
+    rw [eJ.1, eJ.2]
+    simp only [NView.withU, yN] at e e' ⊢
+    simp only [e, e']
+  · have e := hQ3 v T' h
+    simp only [Prod.mk.injEq] at e
+    show (F _ ∨ bstarN Hb G ps R5 (v.withT T')) = (F v ∨ bstarN Hb G ps R5 v)
+    unfold bstarN
+    rw [e.1, e.2]; rfl
+
+variable {Hb G}
+variable {ns : Fin n → ℕ} [Fintype S] [Nonempty S]
+
+/-- **The joint zero-knowledge hop on `main` for `n` proofs, linear, with joint reads**: if the
+event `F` and its `H₅` read set `R5` read the cipher at `q_E` keys and `H₃` at `q₃` points
+**jointly** (one read set for both, as for a guess and the read set of one oracle run),
+
+    |Pr[all real; F] − Pr[all simulated; F]|
+        ≤ 2n·(εS(q₃ + n, q_E + 2n·4607) + Δ23N(d, n)) + Pr[all simulated; bstarN].
+
+`main_sharedAll_leLin` takes separate read sets for `F` and `R5` and pays `2q₃`, `2q_E`. -/
+theorem main_sharedAll_leLinJ (hHb : HashesWF Hb) (hv : NValid G p₀ ns) (F : NView S n p₀ → Prop)
+    (R5 : NView S n p₀ → Finset (Bytes 37)) {q3 qE : ℕ}
+    (hJ : RdN (fun v => (F v, R5 v)) R5 q3 qE) :
+    |hybN Hb p₀ ns G 0 F - hybN Hb p₀ ns G n F| ≤
+      2 * n * (εS (q3 + n) (qE + 2 * n * 4607) + Δ23N p₀.qsDegree n) +
+        hybN Hb p₀ ns G n (bstarN Hb G (fun i => pw p₀ (ns i)) R5) := by
+  set b := bstarN Hb G (fun i => pw p₀ (ns i)) R5 with hbdef
+  set ε := εS (q3 + n) (qE + 2 * n * 4607) + Δ23N p₀.qsDegree n with hε
+  have hFB : RdN (fun v => F v ∨ b v) R5 q3 (qE + n * 4607) :=
+    rdN_or_bstarN Hb G (fun i => pw p₀ (ns i)) hJ
+  have hB' : RdN b R5 q3 (qE + n * 4607) := rd_bstarN Hb G (fun i => pw p₀ (ns i)) (rdN_snd hJ)
+  have e2 : qE + n * 4607 + n * 4607 = qE + 2 * n * 4607 := by ring
+  have hop : ∀ Φ : NView S n p₀ → Prop, RdN Φ R5 q3 (qE + n * 4607) →
+      (∀ v, b v → Φ v) → |hybN Hb p₀ ns G 0 Φ - hybN Hb p₀ ns G n Φ| ≤ n * ε := by
+    intro Φ hΦ hbΦ
+    refine lin_chain_le ε n (fun j => hybN Hb p₀ ns G j Φ) fun j hj => ?_
+    have := hopN_iub Hb p₀ ns G hHb hv j hj Φ R5 hΦ hbΦ
+    rw [e2] at this
+    exact this
+  have h1 := abs_sub_le_iff.1 (hop _ hFB fun v hv => Or.inr hv)
+  have h2 := abs_sub_le_iff.1 (hop _ hB' fun v hv => hv)
+  have m : ∀ j, hybN Hb p₀ ns G j F ≤ hybN Hb p₀ ns G j (fun v => F v ∨ b v) := fun j =>
+    pr_mono fun x hx => Or.inl hx
+  have o : ∀ j, hybN Hb p₀ ns G j (fun v => F v ∨ b v) ≤
+      hybN Hb p₀ ns G j F + hybN Hb p₀ ns G j b := fun j =>
+    pr_or_le (fun x => F (hybVN Hb p₀ ns G j x)) (fun x => b (hybVN Hb p₀ ns G j x))
+  have m0 := m 0
+  have mn := m n
+  have o0 := o 0
+  have on := o n
+  have hε0 : 0 ≤ ε := add_nonneg (εS_nonneg _ _) (Δ23N_nonneg _ _)
+  have hn0 : (0 : ℝ) ≤ n := Nat.cast_nonneg n
+  rw [abs_sub_le_iff]
+  constructor <;> nlinarith
+
+end Joint
+
 /-! ## The game as an `NGame` -/
 
 /-- **The witness lengths of the four slots.** -/
@@ -247,18 +357,29 @@ theorem bstarN_imp (R5 : GView S (pw p₀ n₁) (pw p₀ n₂) (pw p₀ n₃) (p
         rcases fin4_cases m with rfl | rfl | rfl | rfl <;>
         first
         | exact absurd rfl hmj
-        | exact Or.inr (Or.inl (Or.inr ⟨k, mem_union_right _ (mem_union_left _ (mem_union_left _ hkm)), hhit⟩))
-        | exact Or.inr (Or.inl (Or.inr ⟨k, mem_union_right _ (mem_union_left _ (mem_union_right _ hkm)), hhit⟩))
+        | exact Or.inr (Or.inl (Or.inr
+            ⟨k, mem_union_right _ (mem_union_left _ (mem_union_left _ hkm)), hhit⟩))
+        | exact Or.inr (Or.inl (Or.inr
+            ⟨k, mem_union_right _ (mem_union_left _ (mem_union_right _ hkm)), hhit⟩))
         | exact Or.inr (Or.inl (Or.inr ⟨k, mem_union_right _ (mem_union_right _ hkm), hhit⟩))
-        | exact Or.inr (Or.inr (Or.inl (Or.inr ⟨k, mem_union_right _ (mem_union_left _ (mem_union_left _ hkm)), hhit⟩)))
-        | exact Or.inr (Or.inr (Or.inl (Or.inr ⟨k, mem_union_right _ (mem_union_left _ (mem_union_right _ hkm)), hhit⟩)))
-        | exact Or.inr (Or.inr (Or.inl (Or.inr ⟨k, mem_union_right _ (mem_union_right _ hkm), hhit⟩)))
-        | exact Or.inr (Or.inr (Or.inr (Or.inl (Or.inr ⟨k, mem_union_right _ (mem_union_left _ (mem_union_left _ hkm)), hhit⟩))))
-        | exact Or.inr (Or.inr (Or.inr (Or.inl (Or.inr ⟨k, mem_union_right _ (mem_union_left _ (mem_union_right _ hkm)), hhit⟩))))
-        | exact Or.inr (Or.inr (Or.inr (Or.inl (Or.inr ⟨k, mem_union_right _ (mem_union_right _ hkm), hhit⟩))))
-        | exact Or.inr (Or.inr (Or.inr (Or.inr (Or.inr ⟨k, mem_union_right _ (mem_union_left _ (mem_union_left _ hkm)), hhit⟩))))
-        | exact Or.inr (Or.inr (Or.inr (Or.inr (Or.inr ⟨k, mem_union_right _ (mem_union_left _ (mem_union_right _ hkm)), hhit⟩))))
-        | exact Or.inr (Or.inr (Or.inr (Or.inr (Or.inr ⟨k, mem_union_right _ (mem_union_right _ hkm), hhit⟩))))
+        | exact Or.inr (Or.inr (Or.inl (Or.inr
+            ⟨k, mem_union_right _ (mem_union_left _ (mem_union_left _ hkm)), hhit⟩)))
+        | exact Or.inr (Or.inr (Or.inl (Or.inr
+            ⟨k, mem_union_right _ (mem_union_left _ (mem_union_right _ hkm)), hhit⟩)))
+        | exact Or.inr (Or.inr (Or.inl (Or.inr
+            ⟨k, mem_union_right _ (mem_union_right _ hkm), hhit⟩)))
+        | exact Or.inr (Or.inr (Or.inr (Or.inl (Or.inr
+            ⟨k, mem_union_right _ (mem_union_left _ (mem_union_left _ hkm)), hhit⟩))))
+        | exact Or.inr (Or.inr (Or.inr (Or.inl (Or.inr
+            ⟨k, mem_union_right _ (mem_union_left _ (mem_union_right _ hkm)), hhit⟩))))
+        | exact Or.inr (Or.inr (Or.inr (Or.inl (Or.inr
+            ⟨k, mem_union_right _ (mem_union_right _ hkm), hhit⟩))))
+        | exact Or.inr (Or.inr (Or.inr (Or.inr (Or.inr
+            ⟨k, mem_union_right _ (mem_union_left _ (mem_union_left _ hkm)), hhit⟩))))
+        | exact Or.inr (Or.inr (Or.inr (Or.inr (Or.inr
+            ⟨k, mem_union_right _ (mem_union_left _ (mem_union_right _ hkm)), hhit⟩))))
+        | exact Or.inr (Or.inr (Or.inr (Or.inr (Or.inr
+            ⟨k, mem_union_right _ (mem_union_right _ hkm), hhit⟩))))
 
 theorem nvalid_toN (hm₁ : MainP (pw p₀ n₁)) (hm₂ : MainP (pw p₀ n₂))
     (hm₃ : MainP (pw p₀ n₃)) (hm₄ : MainP (pw p₀ n₄)) (hp₁ : SmallParams (pw p₀ n₁))
@@ -314,6 +435,81 @@ theorem main_sharedAll_le4Lin (hm₁ : MainP (pw p₀ n₁)) (hm₂ : MainP (pw 
   have e' : 2 * qE + 2 * 4 * 4607 = 2 * qE + 8 * 4607 := by norm_num
   rw [e, e'] at key
   linarith
+
+/-- **The joint hop for four proofs, linear, with joint reads**: if the event `F` and its `H₅`
+read set `R5` read the cipher and `H₃` jointly (`RdH` of the pair: one cipher read set of `q_E`
+keys and one `H₃` read set of `q₃` points for both),
+
+    |Pr[all real; F] − Pr[all simulated; F]|
+        ≤ 8·(εS(q₃ + 4, q_E + 8·4607) + Δ23N(d, 4)) + Pr[all simulated; bstar].
+
+Per world the budgets `q₃`, `q_E` enter with the factor `8` (`main_sharedAll_le`: `15`). -/
+theorem main_sharedAll_le4LinJ (hm₁ : MainP (pw p₀ n₁)) (hm₂ : MainP (pw p₀ n₂))
+    (hm₃ : MainP (pw p₀ n₃)) (hm₄ : MainP (pw p₀ n₄)) (hp₁ : SmallParams (pw p₀ n₁))
+    (hp₂ : SmallParams (pw p₀ n₂)) (hp₃ : SmallParams (pw p₀ n₃)) (hp₄ : SmallParams (pw p₀ n₄))
+    (hHb : HashesWF Hb) (hv : GValid G (pw p₀ n₁) (pw p₀ n₂) (pw p₀ n₃) (pw p₀ n₄))
+    (F : GView S (pw p₀ n₁) (pw p₀ n₂) (pw p₀ n₃) (pw p₀ n₄) → H3T → Prop)
+    (R5 : GView S (pw p₀ n₁) (pw p₀ n₂) (pw p₀ n₃) (pw p₀ n₄) → H3T → Finset (Bytes 37))
+    {q3 qE : ℕ} (hJ : RdH (fun v T => (F v T, R5 v T)) R5 q3 qE) :
+    |realAll Hb G F - simAll Hb G F| ≤
+      8 * (εS (q3 + 4) (qE + 8 * 4607) + Δ23N p₀.qsDegree 4) +
+        simAll Hb G (fun v T => bstar Hb G (fun v => R5 v T) v) := by
+  have hsl := noSl_of_rdH hJ
+  have hNF : NoSl F := fun v T g₁ g₂ g₃ g₄ => by
+    have e := congrArg Prod.fst (hsl v T g₁ g₂ g₃ g₄)
+    simp only at e
+    rw [e]
+  have hNB : NoSl (fun v T => bstar Hb G (fun v => R5 v T) v) := fun v T g₁ g₂ g₃ g₄ => by
+    show bstarCore Hb G _ _ _ _ _ _ (R5 (v.with3 g₁ g₂ g₃ g₄) T) ↔ _
+    have e := congrArg Prod.snd (hsl v T g₁ g₂ g₃ g₄)
+    simp only at e
+    rw [e]; rfl
+  have key := main_sharedAll_leLinJ (Hb := Hb) (p₀ := p₀) (ns := ns4 n₁ n₂ n₃ n₄) (G := toN G)
+    hHb (nvalid_toN G hm₁ hm₂ hm₃ hm₄ hp₁ hp₂ hp₃ hp₄ hv) (evN F) (fun v => R5 (gvN v) v.T)
+    (rdN_of_rdH hJ)
+  have hb : hybN Hb p₀ (ns4 n₁ n₂ n₃ n₄) (toN G) 4
+      (bstarN Hb (toN G) (fun i => pw p₀ (ns4 n₁ n₂ n₃ n₄ i)) (fun v => R5 (gvN v) v.T)) ≤
+      simAll Hb G (fun v T => bstar Hb G (fun v => R5 v T) v) := by
+    rw [simAll_eq_hybN Hb G hNB]
+    exact pr_mono fun x hx => bstarN_imp Hb G R5 _ hx
+  rw [realAll_eq_hybN Hb G hNF, simAll_eq_hybN Hb G hNF]
+  have e : (2 : ℝ) * ((4 : ℕ) : ℝ) = 8 := by norm_num
+  have e' : qE + 2 * 4 * 4607 = qE + 8 * 4607 := by norm_num
+  rw [e, e'] at key
+  linarith
+
+/-- **Separate read sets are joint read sets at the sum of the budgets.** -/
+theorem rdH_pair {X Y : Type*} {F : GView S (pw p₀ n₁) (pw p₀ n₂) (pw p₀ n₃) (pw p₀ n₄) → H3T → X}
+    {R : GView S (pw p₀ n₁) (pw p₀ n₂) (pw p₀ n₃) (pw p₀ n₄) → H3T → Y}
+    {R5 : GView S (pw p₀ n₁) (pw p₀ n₂) (pw p₀ n₃) (pw p₀ n₄) → H3T → Finset (Bytes 37)}
+    {q3 qE q3' qE' : ℕ} (hF : RdH F R5 q3 qE) (hR : RdH R R5 q3' qE') :
+    RdH (fun v T => (F v T, R v T)) R5 (q3 + q3') (qE + qE') := by
+  classical
+  obtain ⟨QE, hQEc, hQE⟩ := hF.hE
+  obtain ⟨QT, hQTc, hQT⟩ := hF.hT
+  obtain ⟨PE, hPEc, hPE⟩ := hR.hE
+  obtain ⟨PT, hPTc, hPT⟩ := hR.hT
+  refine ⟨fun v T G5 h => ?_, ⟨fun v T => QE v T ∪ PE v T, fun v T => (card_union_le _ _).trans
+      (add_le_add (hQEc v T) (hPEc v T)), fun v T E h => ?_⟩,
+    ⟨fun v T => QT v T ∪ PT v T, fun v T => (card_union_le _ _).trans
+      (add_le_add (hQTc v T) (hPTc v T)), fun v T T' h => ?_⟩,
+    fun v T G3 => ?_, fun v T G3 => ?_, fun v T G3 => ?_, fun v T G3 => ?_⟩
+  · show (F _ T, R _ T) = (F v T, R v T)
+    rw [hF.h5 v T G5 h, hR.h5 v T G5 h]
+  · show (F _ T, R _ T) = (F v T, R v T)
+    rw [hQE v T E fun k hk => h k (mem_union_left _ hk),
+      hPE v T E fun k hk => h k (mem_union_right _ hk)]
+  · show (F v T', R v T') = (F v T, R v T)
+    rw [hQT v T T' fun k hk => h k (mem_union_left _ hk),
+      hPT v T T' fun k hk => h k (mem_union_right _ hk)]
+  · show (F _ T, R _ T) = (F v T, R v T)
+    rw [hF.i₁, hR.i₁]
+  · show (F _ T, R _ T) = (F v T, R v T)
+    rw [hF.i₂, hR.i₂]
+  · show (F _ T, R _ T) = (F v T, R v T)
+    rw [hF.i₃, hR.i₃]
+  · show (F _ T, R _ T) = (F v T, R v T)
+    rw [hF.i₄, hR.i₄]
 
 end Four
 
