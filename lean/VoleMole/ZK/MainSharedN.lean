@@ -1162,4 +1162,231 @@ theorem ctx_bad (hHb : HashesWF Hb) (hv : NValid G p₀ ns) (j : ℕ) (hj : j < 
 
 end CtxBad
 
+/-! ## The hop -/
+
+section HopMain
+
+variable (Hb : Hashes) (p₀ : Params) {n : ℕ} (ns : Fin n → ℕ) {S : Type} (G : NGame S n)
+
+lemma viewN_withU (s : S) (f f' : (i : Fin n) → Option SW → SlotF p₀) (G2 : Tab2G p₀)
+    (u u' : USh) (T : H3T) (h : runN G s f' G2 n = runN G s f G2 n) :
+    viewN G s f' G2 u' T = (viewN G s f G2 u T).withU u' := by
+  unfold viewN NView.withU
+  rw [h]
+
+lemma viewN_withT (s : S) (f f' : (i : Fin n) → Option SW → SlotF p₀) (G2 : Tab2G p₀)
+    (u : USh) (T T' : H3T) (h : runN G s f' G2 n = runN G s f G2 n) :
+    viewN G s f' G2 u T' = (viewN G s f G2 u T).withT T' := by
+  unfold viewN NView.withT
+  rw [h]
+
+set_option maxRecDepth 8000 in
+/-- **Hop `j` on one fiber of the tape** (the other slots' coins and the rest of `H₃` fixed):
+`slot_zk_main` in the context, the programming-collision term, and the bad event as `bstarN`. -/
+theorem hop_fiber (hHb : HashesWF Hb) (hv : NValid G p₀ ns) (j : ℕ) (hj : j < n)
+    (x : NTape p₀ ns S) (y : SW) (hy : yJ Hb p₀ ns G j hj x = some y)
+    (Ψ : NView S n p₀ → Prop) (R5 : NView S n p₀ → Finset (Bytes 37)) {q3 qE : ℕ}
+    (hΨ : RdN Ψ R5 q3 qE) :
+    |pr (USh × KS (pw p₀ (ns ⟨j, hj⟩))) (fun b =>
+        Ψ (hybVN Hb p₀ ns G j (setJ Hb p₀ ns G j hj x b))) -
+      pr (USh × KS (pw p₀ (ns ⟨j, hj⟩))) (fun b =>
+        Ψ (hybVN Hb p₀ ns G (j + 1) (setJ Hb p₀ ns G j hj x b)))| ≤
+      εS (q3 + n) (qE + n * 4607) + Δ23N p₀.qsDegree n +
+        pr (USh × KS (pw p₀ (ns ⟨j, hj⟩))) (fun b =>
+          bstarN Hb G (fun i => pw p₀ (ns i)) R5
+            (hybVN Hb p₀ ns G (j + 1) (setJ Hb p₀ ns G j hj x b))) := by
+  classical
+  set pj := pw p₀ (ns ⟨j, hj⟩) with hpj
+  set P := preJ Hb p₀ ns G j hj x with hP
+  set C := ctxV Hb p₀ ns G j hj x with hC
+  have hyv : ValidZK CrtGen.tables pj y := hv.v ⟨j, hj⟩ x.1 _ y hy
+  -- the real side, through the programmed table
+  have eR : ∀ b : USh × KS pj, Ψ (hybVN Hb p₀ ns G j (setJ Hb p₀ ns G j hj x b)) ↔
+      Ψ (C (realRO pj Hb (withP y.1 pj) y.2 b.2.1.1 b.2.2.1
+        (shOf (p := pj) (LJ Hb p₀ ns G j x b.1 b.2.2.2) b.1)) b.2.2 b.1) := by
+    rintro ⟨u, ⟨ρ, c⟩, G3, G2⟩
+    rw [hyb_real_eq Hb p₀ ns G j hj x y hy u ρ c G3 G2]
+  have eS : ∀ b : USh × KS pj, hybVN Hb p₀ ns G (j + 1) (setJ Hb p₀ ns G j hj x b) =
+      C (simulate pj b.2.1.2) (b.2.2.1, (progRO pj Hb (withP y.1 pj) b.2.1.2
+        (shOf b.2.2.2 b.1)).1) b.1 := by
+    rintro ⟨u, ⟨ρ, c⟩, G3, G2⟩
+    exact hyb_sim_eq Hb p₀ ns G j hj x y hy u ρ c G3 G2
+  -- the programming-collision term
+  set Tl := (univ.filter fun i : Fin n => i.val < j).image (fun i => simTail (x.2.1 i).2)
+    with hTl
+  have hTl_card : Tl.card ≤ n := card_image_le.trans ((card_filter_le _ _).trans (by simp))
+  have hδ : |pr (USh × KS pj) (fun b => Ψ (C (realRO pj Hb (withP y.1 pj) y.2 b.2.1.1 b.2.2.1
+        (shOf (p := pj) (LJ Hb p₀ ns G j x b.1 b.2.2.2) b.1)) b.2.2 b.1)) -
+      pr (USh × KS pj) (fun b => Ψ (C (realRO pj Hb (withP y.1 pj) y.2 b.2.1.1 b.2.2.1
+        (shOf b.2.2.2 b.1)) b.2.2 b.1))| ≤ Δ23N p₀.qsDegree n := by
+    refine (abs_pr_sub_le_of_agree _ _ _ fun b hb => ?_).trans
+      (pr_collide_slotN Hb (hv.m _) (hv.sm _) hHb y hyv
+        (fun u H => LJ Hb p₀ ns G j x u H) Tl hTl_card fun u H k hk =>
+          preRun_tl Hb p₀ ns G hHb j hj.le x.1 x.2.1 x.2.2.1 u x.2.2.2.2 H k hk)
+    have e : realRO pj Hb (withP y.1 pj) y.2 b.2.1.1 b.2.2.1
+        (shOf (p := pj) (LJ Hb p₀ ns G j x b.1 b.2.2.2) b.1) =
+        realRO pj Hb (withP y.1 pj) y.2 b.2.1.1 b.2.2.1 (shOf b.2.2.2 b.1) := not_not.1 hb
+    rw [e]
+  -- the context hop
+  have key := ctx_hopN Hb (hv.m _) (hv.sm _) hHb y hyv NView.u NView.withU
+    (fun v => v.T P) (fun v g => v.withT (Function.update v.T P g)) Ψ R5 C
+    (fun o V u => trace5 p₀ G x.1 (ctxF Hb p₀ ns j x.2.1 (TJ Hb p₀ ns G j hj x V.1) u o) V.2)
+    (fun o V u => traceE p₀ G x.1 (ctxF Hb p₀ ns j x.2.1 (TJ Hb p₀ ns G j hj x V.1) u o) V.2)
+    (univ.image fun i : Fin n => (x.2.1 i).1) (tE := n * 4607) (fun _ _ _ => rfl)
+    (fun o V u G5 h => viewN_withU p₀ G x.1 _ _ V.2 u (G5, u.2) _
+      (runN_congr p₀ G x.1 _ _ V.2 fun i => ctxF_u5 Hb p₀ ns j x.2.1 _ u o i _ _ G5
+        fun k hk => h k (mem_biUnion.2 ⟨i, mem_univ _, hk⟩)))
+    (fun o V u E h => viewN_withU p₀ G x.1 _ _ V.2 u (u.1, E) _
+      (runN_congr p₀ G x.1 _ _ V.2 fun i => ctxF_uE Hb p₀ ns hHb j x.2.1 _ u o i _ _ E
+        fun k hk => h k (mem_biUnion.2 ⟨i, mem_univ _, hk⟩)))
+    (fun o V u => by
+      refine card_biUnion_le.trans ?_
+      calc ∑ i : Fin n, _ ≤ ∑ _i : Fin n, 4607 := sum_le_sum fun i _ =>
+            card_ctxF_kE Hb p₀ ns j _ _ u o i _ _
+        _ = n * 4607 := by simp)
+    (fun o G3 G3' G2 u h => by
+      have e := viewN_withT p₀ G x.1 _ _ G2 u (TJ Hb p₀ ns G j hj x G3)
+        (TJ Hb p₀ ns G j hj x G3')
+        (runN_congr p₀ G x.1 _ _ G2 fun i => ctxF_T Hb p₀ ns j x.2.1 P x.2.2.1 G3 G3' u o i _ _
+          (h _ (mem_image_of_mem _ (mem_univ i))))
+      refine e.trans ?_
+      show _ = NView.withT _ (Function.update (TJ Hb p₀ ns G j hj x G3) P G3')
+      unfold TJ
+      rw [← hP, Function.update_idem]
+      rfl)
+    (fun o G3 G2 u => by
+      show TJ Hb p₀ ns G j hj x G3 P = G3
+      unfold TJ
+      rw [← hP, Function.update_self])
+    hΨ.h5 hΨ.hE (by
+      obtain ⟨Q, hQc, hQ⟩ := hΨ.hT
+      refine ⟨fun v => colPts (Q v) (some P), fun v => (card_colPts _ _).trans (hQc v),
+        fun v G3 h => hQ v _ fun k hk => ?_⟩
+      by_cases hk1 : k.1 = P
+      · obtain ⟨k1, k2⟩ := k
+        simp only at hk1
+        subst hk1
+        rw [Function.update_self]
+        exact h k2 (mem_colPts hk rfl)
+      · rw [Function.update_of_ne hk1])
+  have hcard : εS (q3 + (univ.image fun i : Fin n => (x.2.1 i).1).card) (qE + n * 4607) ≤
+      εS (q3 + n) (qE + n * 4607) :=
+    εS_mono (by have := (card_image_le (s := (univ : Finset (Fin n)))
+      (f := fun i : Fin n => (x.2.1 i).1)); simp at this; omega) le_rfl
+  -- the bad event
+  have hbad : pr (USh × KS pj) (fun z => mainPredIC Hb (withP y.1 pj) (hv.m _)
+        (fun o G3 G2 G5 E => R5 (C o (G3, G2) (G5, E)) ∪
+          trace5 p₀ G x.1 (ctxF Hb p₀ ns j x.2.1 (TJ Hb p₀ ns G j hj x (G3, G2).1) (G5, E) o)
+            (G3, G2).2) (wPre y.2) ((z.2.1.2, (z.2.2.1, z.2.2.2, z.1.1)), z.1.2)) ≤
+      pr (USh × KS pj) (fun b => bstarN Hb G (fun i => pw p₀ (ns i)) R5
+        (hybVN Hb p₀ ns G (j + 1) (setJ Hb p₀ ns G j hj x b))) := by
+    refine pr_mono fun z hz => ?_
+    rw [eS z]
+    have eP := progRO_fst Hb (withP y.1 pj) z.2.1.2 (shOf z.2.2.2 z.1)
+    rw [eP]
+    unfold mainPredIC mainPred2 at hz
+    exact ctx_bad Hb p₀ ns G hHb hv j hj x y hy R5 z.2.1.2 _ z.1 hz
+  have hR : pr (USh × KS pj) (fun b => Ψ (hybVN Hb p₀ ns G j (setJ Hb p₀ ns G j hj x b))) =
+      pr (USh × KS pj) (fun b => Ψ (C (realRO pj Hb (withP y.1 pj) y.2 b.2.1.1 b.2.2.1
+        (shOf (p := pj) (LJ Hb p₀ ns G j x b.1 b.2.2.2) b.1)) b.2.2 b.1)) := pr_congr eR
+  have hS : pr (USh × KS pj) (fun b => Ψ (hybVN Hb p₀ ns G (j + 1)
+        (setJ Hb p₀ ns G j hj x b))) =
+      pr (USh × KS pj) (fun b => Ψ (C (simulate pj b.2.1.2) (b.2.2.1,
+        (progRO pj Hb (withP y.1 pj) b.2.1.2 (shOf b.2.2.2 b.1)).1) b.1)) :=
+    pr_congr fun b => by rw [eS b]
+  rw [hR, hS]
+  have := abs_sub_le (pr (USh × KS pj) (fun b => Ψ (C (realRO pj Hb (withP y.1 pj) y.2 b.2.1.1
+      b.2.2.1 (shOf (p := pj) (LJ Hb p₀ ns G j x b.1 b.2.2.2) b.1)) b.2.2 b.1)))
+    (pr (USh × KS pj) (fun b => Ψ (C (realRO pj Hb (withP y.1 pj) y.2 b.2.1.1 b.2.2.1
+      (shOf b.2.2.2 b.1)) b.2.2 b.1)))
+    (pr (USh × KS pj) (fun b => Ψ (C (simulate pj b.2.1.2) (b.2.2.1,
+      (progRO pj Hb (withP y.1 pj) b.2.1.2 (shOf b.2.2.2 b.1)).1) b.1)))
+  linarith
+
+end HopMain
+
+/-! ## The hops and the result -/
+
+section Chain
+
+variable (Hb : Hashes) (p₀ : Params) {n : ℕ} (ns : Fin n → ℕ) {S : Type} [Fintype S]
+  [Nonempty S] (G : NGame S n)
+
+/-- **Hop `j`**: replacing slot `j` by the simulator costs `εS(q₃ + n, q_E + n·4607)`, the
+programming-collision term `Δ23N` and the bad event in hybrid `j + 1`. -/
+theorem hopN (hHb : HashesWF Hb) (hv : NValid G p₀ ns) (j : ℕ) (hj : j < n)
+    (Ψ : NView S n p₀ → Prop) (R5 : NView S n p₀ → Finset (Bytes 37)) {q3 qE : ℕ}
+    (hΨ : RdN Ψ R5 q3 qE) :
+    |hybN Hb p₀ ns G j Ψ - hybN Hb p₀ ns G (j + 1) Ψ| ≤
+      εS (q3 + n) (qE + n * 4607) + Δ23N p₀.qsDegree n +
+        hybN Hb p₀ ns G (j + 1) (bstarN Hb G (fun i => pw p₀ (ns i)) R5) := by
+  rw [hybN_lens Hb p₀ ns G j hj j Ψ, hybN_lens Hb p₀ ns G j hj (j + 1) Ψ,
+    hybN_lens Hb p₀ ns G j hj (j + 1) (bstarN Hb G (fun i => pw p₀ (ns i)) R5)]
+  refine abs_pr_fiber_le _ _ _ fun x => ?_
+  rcases hy : yJ Hb p₀ ns G j hj x with _ | y
+  · have e : ∀ b, hybVN Hb p₀ ns G j (setJ Hb p₀ ns G j hj x b) =
+        hybVN Hb p₀ ns G (j + 1) (setJ Hb p₀ ns G j hj x b) := hyb_none Hb p₀ ns G j hj x hy
+    simp only [e, sub_self, abs_zero]
+    have := εS_nonneg (q3 + n) (qE + n * 4607)
+    have := Δ23N_nonneg p₀.qsDegree n
+    have := pr_nonneg (α := USh × KS (pw p₀ (ns ⟨j, hj⟩))) fun b =>
+      bstarN Hb G (fun i => pw p₀ (ns i)) R5 (hybVN Hb p₀ ns G (j + 1) (setJ Hb p₀ ns G j hj x b))
+    linarith
+  · exact hop_fiber Hb p₀ ns G hHb hv j hj x y hy Ψ R5 hΨ
+
+/-- **Moving a bad event across the hops**: if each hop changes `h` by `ε` and the bad event `b`
+of the next hybrid, and changes `b` itself by `ε'` and `b`, then the first and the last hybrid
+differ by `(2ⁿ − 1)·(ε' + b n)`. -/
+theorem chain_le (ε ε' : ℝ) (hεε : ε ≤ ε') : ∀ (n : ℕ) (h b : ℕ → ℝ),
+    (∀ j < n, |h j - h (j + 1)| ≤ ε + b (j + 1)) →
+    (∀ j < n, |b j - b (j + 1)| ≤ ε' + b (j + 1)) →
+    |h 0 - h n| ≤ (2 ^ n - 1) * (ε' + b n) ∧ b 0 ≤ 2 ^ n * b n + (2 ^ n - 1) * ε'
+  | 0, h, b, _, _ => by simp
+  | n + 1, h, b, hF, hB => by
+    obtain ⟨ih1, ih2⟩ := chain_le ε ε' hεε n (fun j => h (j + 1)) (fun j => b (j + 1))
+      (fun j hj => hF (j + 1) (by omega)) (fun j hj => hB (j + 1) (by omega))
+    have f0 := abs_sub_le_iff.1 (hF 0 (by omega))
+    have g0 := abs_sub_le_iff.1 (hB 0 (by omega))
+    have i1 := abs_sub_le_iff.1 ih1
+    simp only [zero_add] at f0 g0 i1 ih2 ⊢
+    rw [pow_succ]
+    set t : ℝ := 2 ^ n
+    constructor
+    · rw [abs_sub_le_iff]
+      constructor <;> nlinarith
+    · nlinarith
+
+variable {Hb p₀ ns G}
+
+/-- **The joint zero-knowledge hop on `main` for `n` proofs with all tables shared**: one `H₃`,
+one `H₂³` table, one `H₅` table, one cipher. For an event `F` of the view with consistent reads
+(`H₅` at `R5`, the cipher at `q_E` keys, `H₃` at `q₃` points),
+
+    |Pr[all real; F] − Pr[all simulated; F]|
+        ≤ (2ⁿ − 1)·(εS(q₃ + n, q_E + 2n·4607) + Δ23N(d, n)) + (2ⁿ − 1)·Pr[all simulated; bstarN].
+
+There is no prefix-collision term: a later real proof with the same prefix reads the replaced
+proof's `H₃` column at its own `ρ`, one of the `q₃ + n` reads in `εS`. -/
+theorem main_sharedAll_leN (hHb : HashesWF Hb) (hv : NValid G p₀ ns) (F : NView S n p₀ → Prop)
+    (R5 : NView S n p₀ → Finset (Bytes 37)) {q3 qE : ℕ} (hF : RdN F R5 q3 qE)
+    (hR : RdN R5 R5 q3 qE) :
+    |hybN Hb p₀ ns G 0 F - hybN Hb p₀ ns G n F| ≤
+      (2 ^ n - 1) * (εS (q3 + n) (qE + 2 * n * 4607) + Δ23N p₀.qsDegree n) +
+        (2 ^ n - 1) * hybN Hb p₀ ns G n (bstarN Hb G (fun i => pw p₀ (ns i)) R5) := by
+  have hB := rd_bstarN Hb G (fun i => pw p₀ (ns i)) hR
+  have e2 : qE + n * 4607 + n * 4607 = qE + 2 * n * 4607 := by ring
+  have hε : εS (q3 + n) (qE + n * 4607) + Δ23N p₀.qsDegree n ≤
+      εS (q3 + n) (qE + 2 * n * 4607) + Δ23N p₀.qsDegree n :=
+    add_le_add (εS_mono le_rfl (by omega)) le_rfl
+  obtain ⟨h1, -⟩ := chain_le _ _ hε n (fun j => hybN Hb p₀ ns G j F)
+    (fun j => hybN Hb p₀ ns G j (bstarN Hb G (fun i => pw p₀ (ns i)) R5))
+    (fun j hj => hopN Hb p₀ ns G hHb hv j hj F R5 hF)
+    (fun j hj => by
+      have := hopN Hb p₀ ns G hHb hv j hj _ R5 hB
+      rw [e2] at this
+      exact this)
+  simpa only [mul_add] using h1
+
+end Chain
+
 end VoleMole.ZK.Sim
