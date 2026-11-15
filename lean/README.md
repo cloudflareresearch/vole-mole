@@ -1866,10 +1866,16 @@ What is **not** established, roughly in order of importance:
    `H₃` column only at its own `ρ`, counted in `εS`; `ZK/MainSharedNSim.lean`), giving U5(b) on
    `main` with `n` adaptive queries and a statistical (PU) term (`anonymityNC_main_U_sharedAllN`)
    and with `main`'s Lean issuance prover (`anonymityNC_main_U_leanN`, `+4·2⁻¹¹³`;
-   `Privacy/MoussakaUnboundNCMain{N,LeanN}.lean`, audit `Audit/MainUnboundN.lean`). Not done: U5(a)
-   on `main` with `n > 2` queries or on the `ρ`-aware hop (the two-query shared-table theorem keeps
-   `collUH`), and a dependence better than `2ⁿ−1` (it needs the identical-until-bad form of the
-   one-proof theorem). Not done: and (PU) for the real 12-round permutation (an
+   `Privacy/MoussakaUnboundNCMain{N,LeanN}.lean`, audit `Audit/MainUnboundN.lean`). The one-proof
+   theorem also holds in identical-until-bad form (`zk_rom_ic_h23_main_iub`, `slot_zk_main_iub`,
+   `ZK/HopsMainICLin.lean`), which makes the `n`-proof joint hop linear (`ZK/MainSharedLin.lean`,
+   `main_sharedAll_leLin`: `2n·(εS(2q₃+n, 2q_E+2n·4607) + Δ23N(d,n)) + Pr_sim[bstarN]`); U5(b) with
+   it: `anonymityNC_main_U_sharedAllLin`, `anonymityNC_main_U_leanLin`
+   (`Privacy/MoussakaUnboundNCMainLin.lean`); U5(a) with `n` adaptive queries, all tables shared,
+   no `collUH`: `anonymityU_main_sharedAllN` (`Privacy/MoussakaUnboundMainN.lean`; the predictors
+   rerun the adaptive interaction; audit `Audit/MainUnboundLin.lean`). Not done: the four-proof
+   theorems (Moussaka 4(a), 4(b'), Ratatouille) still carry the factor 15 of `main_sharedAll_le`;
+   the linear hop applies to games stated as a `ZK.Sim.NGame`, and those were not restated. Not done: and (PU) for the real 12-round permutation (an
    assumption; the exhaustive predictor has advantage 1). The QROM ZK bound
    is loose (2⁻¹⁹ at 2³⁰) until the 256-bit `rho` and salt are added.
    With the fix, zero knowledge of the executable Lean prover and the three protocols' privacy
