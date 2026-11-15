@@ -791,6 +791,10 @@ adversary's operations are unbound requests.
     is in `2^{−24}`. The `U + M ≤ 2^{31}` zero-knowledge hops dominate (`≈ 223·2^{−63}` each, the
     cipher term `221·q_E'·2^{−128}`): `≈ 2^{−24.2}`. The PRF, binding and second-preimage terms
     are computational assumptions on Keccak-p[800,12]. Audit: `Audit/TheftNum.lean`.
+    For every `U, M ≤ 2^{30}` the bound is `(U + M)·2^{−55} + 2^{−59}` plus the same terms
+    (`nmUN_lean_numL`, `nmUN_lean_numLP`, `Theft/NumLin.lean`; audit `Audit/TheftJointZK.lean`).
+    The joint step that would charge the adversary's budget once is in `Theft/JointZK.lean`, its
+    hypothesis not proved (`security/ratatouille.md` §5).
 
 A malicious Moderator therefore cannot spend an honest Client's token at another Moderator, even
 though the token is valid there.

@@ -769,6 +769,11 @@ is **[Lean]** for one honest token (`lean/VoleMole/Theft/`; for `U` tokens see b
   cipher term `221·q_E'·2^{−128}`, `q_E' ≈ 2^{65}`), `ROM/`'s error is `≤ 13·2^{−63}`: one token
   `≈ 2^{−54.2}`; `U + M ≤ 2^{31}` hops `≈ 2^{−24.2}` (linear in `U + M`). Audit:
   `Audit/TheftNum.lean`.
+  For every `U, M ≤ 2^{30}`: `Pr[BadN] ≤ (U + M)·2^{−55} + 2^{−59} + Σ_h Adv^ow(inverter h)`
+  (`noRedirectN_lean_numL`, `noRedirectN_lean_numLP`, `Theft/NumLin.lean`; audit
+  `Audit/TheftJointZK.lean`). Why the factor `U + M` multiplies the adversary's budget, and the
+  joint step that would remove it (`Theft/JointZK.lean`, hypothesis not proved): see
+  `security/ratatouille.md` §5.
 - Not covered:
   - `PlainSE` in the model of `noRedirect_leanX_plain`, from `ROM/`'s extraction bounds. What
     separates the two models is listed in `security/ratatouille.md` §5 ("What is not covered").
