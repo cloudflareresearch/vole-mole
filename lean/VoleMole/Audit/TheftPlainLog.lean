@@ -29,7 +29,8 @@ open OracleComp OracleSpec
 
 /-- **The query list shows the cipher keys**: a last stage that queries the cell `(k, z)` has the
 query list `[(k, z)]` on every table. -/
-theorem qlog_query_cell {L M : ℕ} (g₁ g₂ : Tab3) (t : ShX (Blk → Blk) pI (XTab L M)) (c : Cell) :
+theorem qlog_query_cell {p : VoleMole.Verifier.Params} {L M : ℕ} (g₁ g₂ : Tab3)
+    (t : ShX (Blk → Blk) p (XTab L M)) (c : Cell) :
     VoleMole.ROM.Reads.qlog (ansP g₁ g₂ t)
       (liftM (specIC.query (.inr c)) : OracleComp specIC (AnsIC (.inr c))) = [.inr c] := rfl
 
