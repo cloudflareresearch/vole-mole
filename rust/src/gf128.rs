@@ -25,18 +25,29 @@ impl Wide {
 
     #[inline(always)]
     pub fn mul(a: Block, b: Block) -> Wide {
-        Wide {
-            lo: Block::clmul_ll(a, b),
-            mid: Block::clmul_lh(a, b) ^ Block::clmul_hl(a, b),
-            hi: Block::clmul_hh(a, b),
+        let lo = Block::clmul_ll(a, b);
+        let hi = Block::clmul_hh(a, b);
+        Wide { lo, mid: Self::mid(a, b, lo, hi), hi }
+    }
+
+    /// The middle term of a · b given its low and high terms. Without hardware carry-less
+    /// multiplication, Karatsuba saves one of the four multiplications.
+    #[inline(always)]
+    fn mid(a: Block, b: Block, lo: Block, hi: Block) -> Block {
+        if Block::HW_CLMUL {
+            Block::clmul_lh(a, b) ^ Block::clmul_hl(a, b)
+        } else {
+            Block::clmul_ll(a ^ a.shr64(), b ^ b.shr64()) ^ lo ^ hi
         }
     }
 
     #[inline(always)]
     pub fn add_mul(&mut self, a: Block, b: Block) {
-        self.lo ^= Block::clmul_ll(a, b);
-        self.mid ^= Block::clmul_lh(a, b) ^ Block::clmul_hl(a, b);
-        self.hi ^= Block::clmul_hh(a, b);
+        let lo = Block::clmul_ll(a, b);
+        let hi = Block::clmul_hh(a, b);
+        self.lo ^= lo;
+        self.mid ^= Self::mid(a, b, lo, hi);
+        self.hi ^= hi;
     }
 
     /// Add a · b where b has only its low 64 bits set.
@@ -62,6 +73,14 @@ impl Wide {
     pub fn reduce(self) -> Block {
         let lo = self.lo ^ self.mid.shl64();
         let hi = self.hi ^ self.mid.shr64();
+        if !Block::HW_CLMUL {
+            // hi·x^128 = hi·(x^7 + x^2 + x + 1). The bits of hi·x^7 etc. above x^128 are o, and
+            // o·x^128 again fits in 128 bits.
+            let h = hi.to_u128();
+            let o = (h >> 127) ^ (h >> 126) ^ (h >> 121);
+            let t = h ^ o;
+            return lo ^ Block::from_u128(t ^ (t << 1) ^ (t << 2) ^ (t << 7));
+        }
         let x = Block::clmul_hl(hi, MODULUS);
         let lo = lo ^ x.shl64();
         lo ^ Block::clmul_ll(hi ^ x.shr64(), MODULUS)
@@ -229,6 +248,8 @@ impl Hasher {
 
 #[cfg(test)]
 mod tests {
+    #[cfg(target_arch = "wasm32")]
+    use wasm_bindgen_test::wasm_bindgen_test as test;
     use super::*;
 
     fn mul_ref(a: u128, b: u128) -> u128 {

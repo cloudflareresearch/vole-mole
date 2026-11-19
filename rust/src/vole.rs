@@ -1,7 +1,7 @@
 //! VOLE commitment with CRT VOLE masks (FAEST v3): SoftSpoken small VOLEs over the BAVC leaves,
 //! then lifted to a VOLE over GF(2^128).
 
-use crate::aes::{RoundKeys, ctr_block, encrypt_many, keygen_ctr};
+use crate::aes::{keygen_ctr, keygen_ctr_each};
 use crate::bavc::{self, ProverCommitment, leaf_pos, vole_key_leaf};
 use crate::block::{Block, as_bytes, as_bytes_mut, zeroed};
 use crate::crt::{self, barrett_reduce};
@@ -44,43 +44,27 @@ fn small_vole(
     let mut i: usize = 0;
     if receiver {
         let k7: [Block; 7] = core::array::from_fn(|l| keys[1 + l]);
-        let mut rks: [RoundKeys; 7] = core::array::from_fn(|_| RoundKeys::new(Block::ZERO));
-        let mut out = [[Block::ZERO; 1]; 7];
-        keygen_ctr(&k7, iv, &[tweak; 7], 0, Some(&mut rks), &mut out);
-        for j in 0..cb {
-            let y: [Block; 7] = if j == 0 {
-                core::array::from_fn(|l| out[l][0])
-            } else {
-                encrypt_many(&rks, &[ctr_block(iv, j as u32, tweak); 7])
-            };
+        keygen_ctr_each(&k7, iv, tweak, cb, |j, y| {
             let mut x = [Block::ZERO; 8];
             x[1..].copy_from_slice(&y);
             xor_reduce(&mut x);
             for c in 0..3 {
                 vq[c * cb + j] ^= x[c + 1];
             }
-        }
+        });
         i = 8;
     }
     while i < 1 << k {
         let output_col = ((i + 8) | (1 << (k - 1))).trailing_zeros() as usize;
         let k8: [Block; 8] = core::array::from_fn(|l| keys[i + l]);
-        let mut rks: [RoundKeys; 8] = core::array::from_fn(|_| RoundKeys::new(Block::ZERO));
-        let mut out = [[Block::ZERO; 1]; 8];
-        keygen_ctr(&k8, iv, &[tweak; 8], 0, Some(&mut rks), &mut out);
-        for j in 0..cb {
-            let mut x: [Block; 8] = if j == 0 {
-                core::array::from_fn(|l| out[l][0])
-            } else {
-                encrypt_many(&rks, &[ctr_block(iv, j as u32, tweak); 8])
-            };
+        keygen_ctr_each(&k8, iv, tweak, cb, |j, mut x| {
             xor_reduce(&mut x);
             accum[j] ^= x[0];
             for c in 0..3 {
                 vq[c * cb + j] ^= x[c + 1];
             }
             vq[output_col * cb + j] ^= accum[j];
-        }
+        });
         i += 8;
     }
 }
@@ -319,6 +303,8 @@ pub fn reconstruct(p: &Params, iv: Block, proof: &[u8]) -> Option<(VerifierVole,
 
 #[cfg(test)]
 mod tests {
+    #[cfg(target_arch = "wasm32")]
+    use wasm_bindgen_test::wasm_bindgen_test as test;
     use super::*;
 
     #[test]

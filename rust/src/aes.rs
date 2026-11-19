@@ -1,7 +1,10 @@
 //! AES-128 in CTR mode with a fresh key per PRG seed.
 //!
 //! Hardware AES (aarch64 `aes`, x86-64 AES-NI + SSSE3) runs the key schedule of several keys
-//! interleaved with the encryption rounds. Without it, the `aes` crate is used.
+//! interleaved with the encryption rounds. WebAssembly has no AES instruction; with `simd128`
+//! the same code runs on a constant-time vector-permute round function (one block per vector,
+//! so every block can have its own key). Without any of these, the bitsliced `aes` crate is
+//! used, several blocks per pass.
 
 use crate::block::Block;
 
@@ -19,6 +22,8 @@ mod hw {
     use core::arch::aarch64::*;
 
     pub const HW: bool = true;
+    /// Whether `round(s, k)` ends in AddRoundKey(k) (AESENC) or starts with it (AESE).
+    pub const AESENC: bool = false;
 
     /// Broadcast RotWord of the last word of the round key into every lane.
     const ROT_DUP: [u8; 16] = [13, 14, 15, 12, 13, 14, 15, 12, 13, 14, 15, 12, 13, 14, 15, 12];
@@ -69,6 +74,7 @@ mod hw {
     use core::arch::x86_64::*;
 
     pub const HW: bool = true;
+    pub const AESENC: bool = true;
 
     #[inline(always)]
     pub fn next_round_key(k: Block, rcon: u8) -> Block {
@@ -102,6 +108,137 @@ mod hw {
     }
 }
 
+/// WebAssembly `simd128`: there is no AES instruction, so the S-box is computed with 16-entry
+/// table lookups (`i8x16.swizzle`), which are constant time, following Hamburg, "Accelerating
+/// AES with Vector Permute Instructions" (CHES 2009).
+///
+/// GF(2^8) is represented as GF(2^4)[t]/(t^2 + at + a) with a = 2 and GF(2^4) = GF(2)[z]/(z^4 +
+/// z + 1). For x = i t + k with norm N = a i^2 + a i k + k^2, the inverse is (i t + (a i + k))/N.
+/// With j = i + k, the values
+///
+///   io = 1/(1/i + a/k) + j = N/(a i + k)
+///   jo = 1/(1/j + a/k) + i = N/(a i + (1 + a) k)
+///
+/// are the inverses of two GF(2^4)-linear functions of the coordinates of 1/x, so SubBytes(x) is
+/// `SB_I[io] ^ SB_J[jo] ^ 0x63` for tables that undo that linear map and apply the affine map
+/// of the S-box. Infinity (1/0) is 0x80: it survives the additions, and swizzle maps any index
+/// above 15 to 0, which is both 1/infinity and the table entry for a zero coordinate. The tables
+/// are in `mod sbox16`; `tests::sbox16_tables` derives them and checks them for all 256 inputs.
+#[cfg(all(target_arch = "wasm32", target_feature = "simd128"))]
+mod hw {
+    use super::sbox16 as t;
+    use crate::block::Block;
+    use core::arch::wasm32::*;
+
+    pub const HW: bool = true;
+    pub const AESENC: bool = true;
+
+    const fn table(t: [u8; 16]) -> v128 {
+        u8x16(
+            t[0], t[1], t[2], t[3], t[4], t[5], t[6], t[7], t[8], t[9], t[10], t[11], t[12], t[13], t[14], t[15],
+        )
+    }
+
+    const IN_LO: v128 = table(t::IN_LO);
+    const IN_HI: v128 = table(t::IN_HI);
+    const INV: v128 = table(t::INV);
+    const INVA: v128 = table(t::INVA);
+    const SB_I: v128 = table(t::SB_I);
+    const SB_J: v128 = table(t::SB_J);
+    const SB2_I: v128 = table(t::SB2_I);
+    const SB2_J: v128 = table(t::SB2_J);
+
+    /// io and jo for every byte of `x`.
+    #[inline(always)]
+    fn invert(x: v128) -> (v128, v128) {
+        let nib = u8x16_splat(0x0f);
+        let y = v128_xor(
+            i8x16_swizzle(IN_LO, v128_and(x, nib)),
+            i8x16_swizzle(IN_HI, u8x16_shr(x, 4)),
+        );
+        let k = v128_and(y, nib);
+        let i = u8x16_shr(y, 4);
+        let j = v128_xor(i, k);
+        let ak = i8x16_swizzle(INVA, k);
+        let iak = v128_xor(i8x16_swizzle(INV, i), ak);
+        let jak = v128_xor(i8x16_swizzle(INV, j), ak);
+        (v128_xor(i8x16_swizzle(INV, iak), j), v128_xor(i8x16_swizzle(INV, jak), i))
+    }
+
+    #[inline(always)]
+    fn shift_rows(s: v128) -> v128 {
+        i8x16_shuffle::<0, 5, 10, 15, 4, 9, 14, 3, 8, 13, 2, 7, 12, 1, 6, 11>(s, s)
+    }
+
+    #[inline(always)]
+    pub fn next_round_key(k: Block, rcon: u8) -> Block {
+        let k = k.inner();
+        // SubWord(RotWord(w3)) ^ rcon, in every column.
+        let t = i8x16_shuffle::<13, 14, 15, 12, 13, 14, 15, 12, 13, 14, 15, 12, 13, 14, 15, 12>(k, k);
+        let (io, jo) = invert(t);
+        let t = v128_xor(i8x16_swizzle(SB_I, io), i8x16_swizzle(SB_J, jo));
+        let t = v128_xor(t, u32x4_splat(0x6363_6363 ^ rcon as u32));
+        let z = u64x2(0, 0);
+        let k = v128_xor(k, i8x16_shuffle::<16, 16, 16, 16, 0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11>(k, z));
+        let k = v128_xor(k, i8x16_shuffle::<16, 16, 16, 16, 16, 16, 16, 16, 0, 1, 2, 3, 4, 5, 6, 7>(k, z));
+        Block::from_inner(v128_xor(k, t))
+    }
+
+    #[inline(always)]
+    pub fn first(s: Block, k0: Block) -> Block {
+        s ^ k0
+    }
+
+    /// ShiftRows, SubBytes, MixColumns, AddRoundKey(k), as AESENC.
+    #[inline(always)]
+    pub fn round(s: Block, k: Block) -> Block {
+        let (io, jo) = invert(shift_rows(s.inner()));
+        // u is SubBytes without its constant, which MixColumns preserves.
+        let u = v128_xor(i8x16_swizzle(SB_I, io), i8x16_swizzle(SB_J, jo));
+        let u2 = v128_xor(i8x16_swizzle(SB2_I, io), i8x16_swizzle(SB2_J, jo));
+        // Row r of a column of MixColumns is 2 u[r] ^ 3 u[r + 1] ^ u[r + 2] ^ u[r + 3].
+        let r1 = i8x16_shuffle::<1, 2, 3, 0, 5, 6, 7, 4, 9, 10, 11, 8, 13, 14, 15, 12>(u, u);
+        let r2 = i8x16_shuffle::<2, 3, 0, 1, 6, 7, 4, 5, 10, 11, 8, 9, 14, 15, 12, 13>(u, u);
+        let t = v128_xor(v128_xor(u2, u), v128_xor(r1, r2));
+        let t = i8x16_shuffle::<1, 2, 3, 0, 5, 6, 7, 4, 9, 10, 11, 8, 13, 14, 15, 12>(t, t);
+        let k = v128_xor(k.inner(), u8x16_splat(0x63));
+        Block::from_inner(v128_xor(v128_xor(u2, t), k))
+    }
+
+    /// ShiftRows, SubBytes, AddRoundKey(k10), as AESENCLAST.
+    #[inline(always)]
+    pub fn last(s: Block, _k9: Block, k10: Block) -> Block {
+        let (io, jo) = invert(shift_rows(s.inner()));
+        let u = v128_xor(i8x16_swizzle(SB_I, io), i8x16_swizzle(SB_J, jo));
+        Block::from_inner(v128_xor(v128_xor(u, k10.inner()), u8x16_splat(0x63)))
+    }
+}
+
+/// The 16-entry tables of the WebAssembly `simd128` S-box (see `mod hw` there). They are outside
+/// it so that the tests can check them on every target.
+#[cfg(any(test, all(target_arch = "wasm32", target_feature = "simd128")))]
+mod sbox16 {
+    /// The isomorphism from the AES field, by nibble: the result is i << 4 | k.
+    pub const IN_LO: [u8; 16] =
+        [0x00, 0x01, 0x1c, 0x1d, 0x2d, 0x2c, 0x31, 0x30, 0x27, 0x26, 0x3b, 0x3a, 0x0a, 0x0b, 0x16, 0x17];
+    pub const IN_HI: [u8; 16] =
+        [0x00, 0x86, 0xfd, 0x7b, 0x8e, 0x08, 0x73, 0xf5, 0x77, 0xf1, 0x8a, 0x0c, 0xf9, 0x7f, 0x04, 0x82];
+    /// 1/x and a/x in GF(2^4).
+    pub const INV: [u8; 16] =
+        [0x80, 0x01, 0x09, 0x0e, 0x0d, 0x0b, 0x07, 0x06, 0x0f, 0x02, 0x0c, 0x05, 0x0a, 0x04, 0x03, 0x08];
+    pub const INVA: [u8; 16] =
+        [0x80, 0x02, 0x01, 0x0f, 0x09, 0x05, 0x0e, 0x0c, 0x0d, 0x04, 0x0b, 0x0a, 0x07, 0x08, 0x06, 0x03];
+    /// The S-box output, without the constant 0x63, and twice it.
+    pub const SB_I: [u8; 16] =
+        [0x00, 0xcb, 0xd7, 0xb0, 0x21, 0x8d, 0x67, 0xac, 0x7b, 0x5a, 0xea, 0x3d, 0x46, 0xf6, 0x91, 0x1c];
+    pub const SB_J: [u8; 16] =
+        [0x00, 0x9f, 0x61, 0x16, 0xc2, 0x2a, 0x77, 0xe8, 0x89, 0x4b, 0x5d, 0x3c, 0xb5, 0xa3, 0xd4, 0xfe];
+    pub const SB2_I: [u8; 16] =
+        [0x00, 0x8d, 0xb5, 0x7b, 0x42, 0x01, 0xce, 0x43, 0xf6, 0xb4, 0xcf, 0x7a, 0x8c, 0xf7, 0x39, 0x38];
+    pub const SB2_J: [u8; 16] =
+        [0x00, 0x25, 0xc2, 0x2c, 0x9f, 0x54, 0xee, 0xcb, 0x09, 0x96, 0xba, 0x78, 0x71, 0x5d, 0xb3, 0xe7];
+}
+
 #[cfg(not(any(
     all(target_arch = "aarch64", target_feature = "neon", target_feature = "aes"),
     all(
@@ -110,7 +247,8 @@ mod hw {
         target_feature = "ssse3",
         target_feature = "pclmulqdq",
         target_feature = "aes"
-    )
+    ),
+    all(target_arch = "wasm32", target_feature = "simd128")
 )))]
 mod hw {
     pub const HW: bool = false;
@@ -129,7 +267,8 @@ pub struct RoundKeys {
             target_feature = "ssse3",
             target_feature = "pclmulqdq",
             target_feature = "aes"
-        )
+        ),
+        all(target_arch = "wasm32", target_feature = "simd128")
     )))]
     soft: ::aes::Aes128Enc,
     #[allow(dead_code)]
@@ -144,7 +283,8 @@ pub struct RoundKeys {
         target_feature = "ssse3",
         target_feature = "pclmulqdq",
         target_feature = "aes"
-    )
+    ),
+    all(target_arch = "wasm32", target_feature = "simd128")
 ))]
 mod imp {
     use super::*;
@@ -163,16 +303,52 @@ mod imp {
             let k = &self.keys;
             let mut s = hw::first(b, k[0]);
             for r in 0..ROUNDS - 1 {
-                s = hw::round(s, k[r + usize::from(cfg!(target_arch = "x86_64"))]);
+                s = hw::round(s, k[r + usize::from(hw::AESENC)]);
             }
             hw::last(s, k[ROUNDS - 1], k[ROUNDS])
+        }
+
+        /// Encrypt every block of `x` in place.
+        #[inline(always)]
+        pub fn encrypt_blocks(&self, x: &mut [Block]) {
+            let mut chunks = x.chunks_exact_mut(8);
+            for chunk in &mut chunks {
+                let y: [Block; 8] = core::array::from_fn(|j| self.encrypt(chunk[j]));
+                chunk.copy_from_slice(&y);
+            }
+            for b in chunks.into_remainder() {
+                *b = self.encrypt(*b);
+            }
+        }
+    }
+
+    /// Expand `N` keys and call `f(j, x)` for `j = 0, 1, ..., blocks - 1` in order, where `x[i]`
+    /// is the CTR output of key `i` for counter `j` and tweak `tweak`.
+    #[inline(always)]
+    pub fn keygen_ctr_each<const N: usize>(
+        keys: &[Block; N],
+        iv: Block,
+        tweak: u32,
+        blocks: usize,
+        mut f: impl FnMut(usize, [Block; N]),
+    ) {
+        if blocks == 0 {
+            return;
+        }
+        let mut rks: [RoundKeys; N] =
+            core::array::from_fn(|_| RoundKeys { keys: [Block::ZERO; ROUNDS + 1] });
+        let mut out = [[Block::ZERO; 1]; N];
+        keygen_ctr(keys, iv, &[tweak; N], 0, Some(&mut rks), &mut out);
+        f(0, core::array::from_fn(|i| out[i][0]));
+        for j in 1..blocks {
+            f(j, encrypt_many(&rks, &[ctr_block(iv, j as u32, tweak); N]));
         }
     }
 
     /// Encrypt one block under each of `N` keys, interleaving the rounds.
     #[inline(always)]
     pub fn encrypt_many<const N: usize>(rks: &[RoundKeys; N], x: &[Block; N]) -> [Block; N] {
-        let off = usize::from(cfg!(target_arch = "x86_64"));
+        let off = usize::from(hw::AESENC);
         let mut s: [Block; N] = core::array::from_fn(|i| hw::first(x[i], rks[i].keys[0]));
         for r in 0..ROUNDS - 1 {
             for i in 0..N {
@@ -194,7 +370,6 @@ mod imp {
         rks: Option<&mut [RoundKeys; N]>,
         out: &mut [[Block; B]; N],
     ) {
-        let x86 = cfg!(target_arch = "x86_64");
         let mut k = *keys;
         let mut st = [[Block::ZERO; B]; N];
         let mut saved = [[Block::ZERO; ROUNDS + 1]; N];
@@ -205,7 +380,7 @@ mod imp {
             }
         }
         for r in 0..ROUNDS - 1 {
-            if x86 {
+            if hw::AESENC {
                 for i in 0..N {
                     k[i] = hw::next_round_key(k[i], RCON[r]);
                     saved[i][r + 1] = k[i];
@@ -216,7 +391,7 @@ mod imp {
                     st[i][j] = hw::round(st[i][j], k[i]);
                 }
             }
-            if !x86 {
+            if !hw::AESENC {
                 for i in 0..N {
                     k[i] = hw::next_round_key(k[i], RCON[r]);
                     saved[i][r + 1] = k[i];
@@ -250,7 +425,8 @@ mod imp {
         target_feature = "ssse3",
         target_feature = "pclmulqdq",
         target_feature = "aes"
-    )
+    ),
+    all(target_arch = "wasm32", target_feature = "simd128")
 )))]
 mod imp {
     use super::*;
@@ -271,6 +447,57 @@ mod imp {
             self.soft.encrypt_block(&mut a);
             Block::from_bytes(&a.0)
         }
+
+        /// Encrypt every block of `x` in place. The bitsliced backend encrypts `PAR` blocks in
+        /// about the time of one, but only when it is handed full batches, so the last batch
+        /// is padded.
+        pub fn encrypt_blocks(&self, x: &mut [Block]) {
+            const BUF: usize = 2 * PAR;
+            let mut buf = [Array([0u8; 16]); BUF];
+            for chunk in x.chunks_mut(BUF) {
+                let n = chunk.len().next_multiple_of(PAR);
+                for (a, b) in buf.iter_mut().zip(chunk.iter()) {
+                    a.0 = b.to_bytes();
+                }
+                self.soft.encrypt_blocks(&mut buf[..n]);
+                for (b, a) in chunk.iter_mut().zip(buf.iter()) {
+                    *b = Block::from_bytes(&a.0);
+                }
+            }
+        }
+    }
+
+    /// The largest number of blocks the `aes` crate's bitsliced backend encrypts in one pass
+    /// (with 64-bit words; it is 2 with 32-bit words, which divides this).
+    const PAR: usize = 4;
+
+    /// Expand `N` keys and call `f(j, x)` for `j = 0, 1, ..., blocks - 1` in order, where `x[i]`
+    /// is the CTR output of key `i` for counter `j` and tweak `tweak`.
+    #[inline(always)]
+    pub fn keygen_ctr_each<const N: usize>(
+        keys: &[Block; N],
+        iv: Block,
+        tweak: u32,
+        blocks: usize,
+        mut f: impl FnMut(usize, [Block; N]),
+    ) {
+        const W: usize = 2 * PAR;
+        let rks: [RoundKeys; N] = core::array::from_fn(|i| RoundKeys::new(keys[i]));
+        let mut j = 0;
+        while j < blocks {
+            let n = W.min(blocks - j);
+            let mut y = [[Block::ZERO; W]; N];
+            for i in 0..N {
+                for d in 0..n {
+                    y[i][d] = ctr_block(iv, (j + d) as u32, tweak);
+                }
+                rks[i].encrypt_blocks(&mut y[i][..n]);
+            }
+            for d in 0..n {
+                f(j + d, core::array::from_fn(|i| y[i][d]));
+            }
+            j += n;
+        }
     }
 
     pub fn encrypt_many<const N: usize>(rks: &[RoundKeys; N], x: &[Block; N]) -> [Block; N] {
@@ -287,9 +514,8 @@ mod imp {
     ) {
         let expanded: [RoundKeys; N] = core::array::from_fn(|i| RoundKeys::new(keys[i]));
         for i in 0..N {
-            for j in 0..B {
-                out[i][j] = expanded[i].encrypt(ctr_block(iv, ctr + j as u32, tweaks[i]));
-            }
+            out[i] = core::array::from_fn(|j| ctr_block(iv, ctr + j as u32, tweaks[i]));
+            expanded[i].encrypt_blocks(&mut out[i]);
         }
         if let Some(rks) = rks {
             *rks = expanded;
@@ -297,29 +523,24 @@ mod imp {
     }
 }
 
-pub use imp::{encrypt_many, keygen_ctr};
+pub use imp::{encrypt_many, keygen_ctr, keygen_ctr_each};
 
 pub const HARDWARE: bool = hw::HW;
 
 impl RoundKeys {
     /// Fill `out` with CTR output for counters `ctr`, `ctr + 1`, ... and tweak `tweak`.
     pub fn ctr(&self, iv: Block, tweak: u32, ctr: u32, out: &mut [Block]) {
-        let mut chunks = out.chunks_exact_mut(8);
-        let mut c = ctr;
-        for chunk in &mut chunks {
-            let blocks: [Block; 8] =
-                core::array::from_fn(|j| self.encrypt(ctr_block(iv, c + j as u32, tweak)));
-            chunk.copy_from_slice(&blocks);
-            c += 8;
+        for (j, o) in out.iter_mut().enumerate() {
+            *o = ctr_block(iv, ctr + j as u32, tweak);
         }
-        for (j, o) in chunks.into_remainder().iter_mut().enumerate() {
-            *o = self.encrypt(ctr_block(iv, c + j as u32, tweak));
-        }
+        self.encrypt_blocks(out);
     }
 }
 
 #[cfg(test)]
 mod tests {
+    #[cfg(target_arch = "wasm32")]
+    use wasm_bindgen_test::wasm_bindgen_test as test;
     use super::*;
     use ::aes::Aes128Enc;
     use ::aes::cipher::{Array, BlockCipherEncrypt, KeyInit};
@@ -348,11 +569,130 @@ mod tests {
                 assert_eq!(rks[i].encrypt(ctr_block(iv, 7 + j as u32, tweaks[i])), want);
                 assert_eq!(RoundKeys::new(keys[i]).encrypt(ctr_block(iv, 7 + j as u32, tweaks[i])), want);
             }
-            let mut v = vec![Block::ZERO; 11];
-            rks[i].ctr(iv, tweaks[i], 3, &mut v);
-            for (j, x) in v.iter().enumerate() {
-                assert_eq!(*x, reference(keys[i], ctr_block(iv, 3 + j as u32, tweaks[i])));
+            for len in 0..20 {
+                let mut v = vec![Block::ZERO; len];
+                rks[i].ctr(iv, tweaks[i], 3, &mut v);
+                for (j, x) in v.iter().enumerate() {
+                    assert_eq!(*x, reference(keys[i], ctr_block(iv, 3 + j as u32, tweaks[i])));
+                }
             }
+        }
+        for blocks in [0, 1, 2, 7, 8, 9, 18] {
+            let mut next = 0;
+            keygen_ctr_each(&keys, iv, 9, blocks, |j, x| {
+                assert_eq!(j, next);
+                next += 1;
+                for i in 0..3 {
+                    assert_eq!(x[i], reference(keys[i], ctr_block(iv, j as u32, 9)));
+                }
+            });
+            assert_eq!(next, blocks);
+        }
+    }
+
+    /// The round primitives against FIPS 197 Appendix B, and against the `aes` crate on inputs
+    /// covering every byte value in every position.
+    #[test]
+    fn all_byte_values() {
+        let key = Block::from_bytes(&[
+            0x2b, 0x7e, 0x15, 0x16, 0x28, 0xae, 0xd2, 0xa6, 0xab, 0xf7, 0x15, 0x88, 0x09, 0xcf, 0x4f, 0x3c,
+        ]);
+        let pt = Block::from_bytes(&[
+            0x32, 0x43, 0xf6, 0xa8, 0x88, 0x5a, 0x30, 0x8d, 0x31, 0x31, 0x98, 0xa2, 0xe0, 0x37, 0x07, 0x34,
+        ]);
+        let ct = [0x39, 0x25, 0x84, 0x1d, 0x02, 0xdc, 0x09, 0xfb, 0xdc, 0x11, 0x85, 0x97, 0x19, 0x6a, 0x0b, 0x32];
+        assert_eq!(RoundKeys::new(key).encrypt(pt).to_bytes(), ct);
+        for v in 0..=255u8 {
+            let k = Block::from_bytes(&core::array::from_fn(|i| v.wrapping_add(17 * i as u8)));
+            let b = Block::from_bytes(&core::array::from_fn(|i| v.wrapping_mul(i as u8 | 1) ^ i as u8));
+            assert_eq!(RoundKeys::new(k).encrypt(b), reference(k, b));
+            assert_eq!(RoundKeys::new(b).encrypt(k), reference(b, k));
+        }
+    }
+
+    /// Derives the tables of `mod sbox16` from a = 2 and the image of the AES generator x
+    /// (`IN_LO[2]`), and runs their lookup sequence against the S-box for all 256 inputs.
+    #[test]
+    fn sbox16_tables() {
+        use super::sbox16::*;
+        const A: u8 = 2;
+        // GF(2)[z]/(z^4 + z + 1).
+        fn mul16(x: u8, y: u8) -> u8 {
+            let mut r = 0;
+            for b in 0..4 {
+                if y >> b & 1 == 1 {
+                    r ^= x << b;
+                }
+            }
+            for b in [6, 5, 4] {
+                if r >> b & 1 == 1 {
+                    r ^= 0b10011 << (b - 4);
+                }
+            }
+            r
+        }
+        fn inv16(x: u8) -> u8 {
+            (1..16).find(|&y| mul16(x, y) == 1).unwrap_or(0)
+        }
+        // The AES field.
+        fn gmul(mut x: u8, mut y: u8) -> u8 {
+            let mut r = 0;
+            while y != 0 {
+                if y & 1 == 1 {
+                    r ^= x;
+                }
+                x = (x << 1) ^ if x & 0x80 != 0 { 0x1b } else { 0 };
+                y >>= 1;
+            }
+            r
+        }
+        // The linear part of the S-box's affine map.
+        fn lin(y: u8) -> u8 {
+            (0..5).fold(0, |r, s| r ^ y.rotate_left(s))
+        }
+        fn sbox(x: u8) -> u8 {
+            0x63 ^ lin((1..=255).find(|&c| gmul(x, c) == 1).unwrap_or(0))
+        }
+        // GF(2^4)[t]/(t^2 + at + a), with i t + k as i << 4 | k.
+        fn kmul(x: u8, y: u8) -> u8 {
+            let (i1, k1, i2, k2) = (x >> 4, x & 15, y >> 4, y & 15);
+            let h = mul16(i1, i2);
+            (mul16(i1, k2) ^ mul16(k1, i2) ^ mul16(h, A)) << 4 | (mul16(k1, k2) ^ mul16(h, A))
+        }
+        assert_eq!(sbox(0x53), 0xed); // FIPS 197, Section 5.1.1
+
+        let mut pw = [1u8; 8];
+        for b in 1..8 {
+            pw[b] = kmul(pw[b - 1], IN_LO[2]);
+        }
+        let phi = |x: u8| (0..8).filter(|b| x >> b & 1 == 1).fold(0, |r, b| r ^ pw[b]);
+        let mut phinv = [0u8; 256];
+        for x in 0..=255u8 {
+            phinv[phi(x) as usize] = x;
+        }
+        let a2inv = inv16(mul16(A, A));
+        let (c1, c2) = (mul16(1 ^ A, a2inv) << 4 | 1, a2inv << 4);
+        let sb = |c: u8| {
+            core::array::from_fn(|u| if u == 0 { 0 } else { lin(phinv[kmul(inv16(u as u8), c) as usize]) })
+        };
+        assert_eq!(IN_LO, core::array::from_fn(|n| phi(n as u8)));
+        assert_eq!(IN_HI, core::array::from_fn(|n| phi((n as u8) << 4)));
+        assert_eq!(INV, core::array::from_fn(|k| if k == 0 { 0x80 } else { inv16(k as u8) }));
+        assert_eq!(INVA, core::array::from_fn(|k| if k == 0 { 0x80 } else { mul16(A, inv16(k as u8)) }));
+        assert_eq!(SB_I, sb(c1));
+        assert_eq!(SB_J, sb(c2));
+        assert_eq!(SB2_I, SB_I.map(|v| gmul(2, v)));
+        assert_eq!(SB2_J, SB_J.map(|v| gmul(2, v)));
+
+        // The lookups of `hw::invert` and `hw::last`; swizzle maps an index above 15 to 0.
+        let swz = |t: [u8; 16], i: u8| if i < 16 { t[i as usize] } else { 0 };
+        for x in 0..=255u8 {
+            let y = IN_LO[(x & 15) as usize] ^ IN_HI[(x >> 4) as usize];
+            let (i, k) = (y >> 4, y & 15);
+            let (j, ak) = (i ^ k, swz(INVA, k));
+            let io = swz(INV, swz(INV, i) ^ ak) ^ j;
+            let jo = swz(INV, swz(INV, j) ^ ak) ^ i;
+            assert_eq!(swz(SB_I, io) ^ swz(SB_J, jo) ^ 0x63, sbox(x), "x = {x:#04x}");
         }
     }
 }

@@ -350,6 +350,8 @@ pub fn qs_byte<Q: Qs, const D: usize>(q: &Q, state: &[Q::Bit<D>], k: usize) -> Q
 
 #[cfg(test)]
 mod tests {
+    #[cfg(target_arch = "wasm32")]
+    use wasm_bindgen_test::wasm_bindgen_test as test;
     use super::*;
     use crate::block::Block;
     use crate::qs::Prover;

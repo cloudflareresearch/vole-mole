@@ -1,6 +1,8 @@
 mod common;
 
 use common::*;
+#[cfg(target_arch = "wasm32")]
+use wasm_bindgen_test::wasm_bindgen_test as test;
 use vole_mole::act::{self, testing};
 use vole_mole::uov::SecretKey;
 

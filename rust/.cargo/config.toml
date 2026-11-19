@@ -1,2 +1,7 @@
-[build]
+# Not for wasm32: there, `native` isn't a CPU, so rustc drops wasm's default features (e.g.,
+# reference-types), and wasm-bindgen then fails.
+[target.'cfg(not(target_arch = "wasm32"))']
 rustflags = ["-C", "target-cpu=native"]
+
+[target.wasm32-unknown-unknown]
+runner = "wasm-bindgen-test-runner"

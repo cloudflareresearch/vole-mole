@@ -229,6 +229,8 @@ pub fn verify(iv: Block, opening: &[u8], delta: &[u8; 16]) -> Option<VerifierCom
 
 #[cfg(test)]
 mod tests {
+    #[cfg(target_arch = "wasm32")]
+    use wasm_bindgen_test::wasm_bindgen_test as test;
     use super::*;
 
     fn inv(i: usize) -> usize {
