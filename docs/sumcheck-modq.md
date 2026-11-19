@@ -193,3 +193,48 @@ the derived witness's key is shorter, see `local_key_bits`.)
 
 Possible further reductions (not done): leaves of 2^r bits each, checked with a degree-2^r
 constraint at the bottom (D - r layers), or committing the top r layers directly.
+
+## 7. Implementation and measurements
+
+Code: `src/sumcheck/` (`gf128.hpp`: the field and g; `tree_sumcheck.hpp`: the layered sumcheck,
+the Fiat-Shamir `Chain`, the committed-element and leaf linear forms; `exp_modq.hpp`: the packing,
+leaf exponents and quotients, with `ModQ`'s Spec and semantics; `voleith_fs.hpp`: the prover's
+pads and the verifier's masked bytes, for derived and direct witnesses). Tests:
+`tests/sumcheck/test_sumcheck.cpp` (exhaustive and random exactness of the exponent encoding,
+including the extreme weights q - 1; VOLEitH proofs of small relations, direct and derived, for
+D = 3, 8 and 10, rejecting mutated data bits, wrong quotients, flipped bits anywhere in the
+answer, and false claims). The ML-DSA PoK uses it unless `VOLE_MOLE_MLDSA_POK_MODQ_ADDERS` is
+defined (`MODQ_SUMCHECK` in `verify_gadget.hpp`); the DST is `MLDSA_POK_SUMCHECK_DST`.
+
+`bench_mldsa_pok` medians (clang release, same machine and tree, 5 repetitions):
+
+| | adders | sumcheck |
+|---|---|---|
+| proof | 66,951 B | 29,307 B |
+| witness | 452,128 bits | 162,264 bits |
+| VOLE key (local PRG) | 3,200 bits | 2,536 bits |
+| prove | 497 ms | 57 ms |
+| verify | 81 ms | 8.0 ms |
+
+(Earlier the adders measured 460 / 61 ms on a quieter machine.) The proof is now the FAEST part
+(9,024 B) and e (20,283 B: message hash 1,032 B, signature gadget 14,407 B, checks 4,844 B).
+
+Profile (perf, self time). Prove: the Keccak constraints (the c-tilde and SampleInBall
+permutations: `qs_mul` products and segmented Keccak) about 70%, SampleInBall 9%, the sumcheck
+about 10% (the clear prover, `encode`, `quotients`, the committed linear forms), the PRG 3%.
+Verify: the PRG's `qs_eval` 17%, Keccak about 45%, `ExpModQ::encode` 15% (the leaf exponents,
+about 270k multiplications), the sumcheck constraints 8% (`qs_element`: 127 constant
+multiplications per element, and the leaf linear forms), SampleInBall 3%.
+
+Further reductions, not done:
+
+- Leaves of 2^r bits: L = prod (1 + c x) has degree 2^r in the bits, the final check A B = c
+  degree 2^(r+1) (twice that over the derived witness, at most 22 here, so r <= 2). r = 2 gives
+  D = 14 and 236 elements, about 1 KB less, at the cost of the products in the leaf forms.
+- `qs_element` by shifts instead of constant multiplications, and the leaf exponents with wider
+  fixed-base windows (verifier time).
+
+Open: the soundness and ZK sketches above need full proofs, in particular the state-restoration
+bound for the chained hashes together with the extraction of K, and the exact soundness of the
+Gruen-factored round (the factor 1 + z_j + rho_j must be nonzero; it vanishes with probability
+2^-128 per round and is then harmless only if we argue it separately).
