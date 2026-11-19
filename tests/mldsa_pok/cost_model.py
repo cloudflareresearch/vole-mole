@@ -20,7 +20,7 @@ This model predates the implementation and doesn't account for deriving the witn
 The implementation (src/mldsa_pok/verify_gadget.hpp, all binary, with the local PRG) hides the
 message, too: mu is computed in the proof from a hidden 32-byte message (one more permutation), and
 the UseHint boundary is handled by two guarded bits per coefficient (after Baum and Beckmann). The
-standalone proof (relation.hpp) measures 66,951 bytes, 344 ms to prove, and 50 ms to verify (128f,
+standalone proof (relation.hpp) measures 67,207 bytes, 344 ms to prove, and 50 ms to verify (128f,
 release, Apple M4 Pro).
 """
 

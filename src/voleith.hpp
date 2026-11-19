@@ -41,8 +41,9 @@
 // OWF_CONSTANTS::REUSE_CRT_WITNESS is set. Separate rows add 256 bytes per proof, and break
 // compatibility with FAEST signatures. FAEST's own parameter sets, VOLE-IHAT, and VOLE-ACT set
 // the flag: their witnesses start with a uniform secret (the key, or commitment randomness r).
-// RelationConstants also sets it for every derived witness, since the VOLE witness is then the
-// key K, which is pseudorandom and never revealed.
+// RelationConstants clears it for every derived witness: the VOLE witness is then the PRG key K,
+// which e = w + G(K) relates algebraically to public data, so a check on its first lambda bits
+// would leak more than the PRG's key-length analysis assumes.
 //
 // This code was adapted from faest-arch-opt, which is distributed under the following license:
 //
@@ -119,7 +120,9 @@ template <typename Relation> using ProveSeed = std::array<uint8_t, PROVE_SEED_BY
 //
 // RELATION_REUSE_CRT_WITNESS says whether the relation's witness starts with secpar_bits uniform
 // secret bits, so that the CRT VOLE masks may reuse its rows (see "CRT VOLE masks" above).
-// REUSE_CRT_WITNESS is set if it does, or if the witness is derived: the VOLE witness is then K.
+// REUSE_CRT_WITNESS is set only if it does and the witness isn't derived: the VOLE witness is then
+// K, and reusing its rows would give a check on K beyond e = w + G(K), which the PRG's key length
+// doesn't account for.
 template <size_t RELATION_WITNESS_BITS_, size_t RELATION_QS_DEGREE_, typename WitnessPrg_,
           bool RELATION_REUSE_CRT_WITNESS_ = false>
 struct RelationConstants {
@@ -142,7 +145,7 @@ struct RelationConstants {
 
     static constexpr bool RELATION_REUSE_CRT_WITNESS = RELATION_REUSE_CRT_WITNESS_;
     static constexpr bool REUSE_CRT_WITNESS =
-        RELATION_REUSE_CRT_WITNESS || derives_witness<WitnessPrg>;
+        RELATION_REUSE_CRT_WITNESS && !derives_witness<WitnessPrg>;
     // The CRT VOLE masks reuse the first 128 witness rows (secpar_bits, for secpar::s128).
     static_assert(!REUSE_CRT_WITNESS || WITNESS_BITS >= 128);
 
