@@ -1,0 +1,112 @@
+Per-key register-resident AES-128 key schedule on aarch64
+
+The aarch64 aes_keygen_impl runs the key schedule on groups of 4 keys in a transposed (sliced)
+layout. Each round it transposes the slices back to get the round keys, stores them to the
+aes_round_keys, and the encryption then loads them again. On Apple M-series cores this made the
+GGM tree expansion (aes_keygen_impl<4, 2>) about 5 times slower than computing each round key in
+registers.
+
+For AES-128, compute each key's next round key directly instead (a table lookup, an AESE with a
+zero key, and a few XORs), and use it for encryption straight away. The round keys are still
+written to aes_round_keys, so the output is unchanged. AES-192 and AES-256 keep the sliced
+key schedule.
+
+--- a/aarch64/aes_impl.cpp
++++ b/aarch64/aes_impl.cpp
+@@ -103,6 +103,79 @@
+     }
+ }
+ 
++// AES-128 key schedule and encryption for each key independently, keeping the round keys in
++// registers and using each one as soon as it is computed. This is cheaper on aarch64 than the
++// sliced key schedule above, which needs a transpose per round and a round trip through memory.
++//
++// This is only enabled on aarch64, where it was benchmarked on Apple M-series cores. The same
++// approach hasn't been benchmarked on x86_64, which keeps the sliced key schedule in
++// avx2/aes_impl.cpp.
++#define AES128_KEYGEN_IMPL_PER_KEY 1
++
++// The next AES-128 round key after k.
++ALWAYS_INLINE uint8x16_t aes128_next_round_key(uint8x16_t k, uint8_t round_constant)
++{
++    // RotWord(w3) in every column, so ShiftRows does nothing and AESE computes SubWord.
++    constexpr std::array<uint8_t, 16> rot_word_dup = {13, 14, 15, 12, 13, 14, 15, 12,
++                                                      13, 14, 15, 12, 13, 14, 15, 12};
++    uint8x16_t t = vqtbl1q_u8(k, vld1q_u8(rot_word_dup.data()));
++    t = vaeseq_u8(t, vdupq_n_u8(0));
++    t = veorq_u8(t, vreinterpretq_u8_u32(vdupq_n_u32(round_constant)));
++
++    // Prefix XOR of the 4 words.
++    const uint8x16_t zero = vdupq_n_u8(0);
++    k = veorq_u8(k, vextq_u8(zero, k, 12));
++    k = veorq_u8(k, vextq_u8(zero, k, 8));
++    return veorq_u8(k, t);
++}
++
++template <size_t num_keys, uint32_t num_blocks>
++ALWAYS_INLINE void aes128_keygen_impl_per_key(aes_round_keys<secpar::s128>* __restrict__ aeses,
++                                              const block128* __restrict__ keys,
++                                              block128* __restrict__ output)
++{
++    uint8x16_t round_keys[num_keys];
++    PRAGMA_UNROLL(8)
++    for (size_t i = 0; i < num_keys; ++i)
++    {
++        aeses[i].keys[0] = keys[i];
++        round_keys[i] = vreinterpretq_u8_u32(keys[i].data);
++    }
++
++    for (size_t round = 0; round < AES_ROUNDS<secpar::s128>; ++round)
++    {
++        PRAGMA_UNROLL(8)
++        for (size_t i = 0; i < num_keys; ++i)
++        {
++            PRAGMA_UNROLL(4)
++            for (size_t j = 0; j < num_blocks; ++j)
++            {
++                block128& out = output[i * num_blocks + j];
++                uint8x16_t state = vaeseq_u8(vreinterpretq_u8_u32(out.data), round_keys[i]);
++                if (round < AES_ROUNDS<secpar::s128> - 1)
++                    state = vaesmcq_u8(state);
++                out = {vreinterpretq_u32_u8(state)};
++            }
++        }
++
++        PRAGMA_UNROLL(8)
++        for (size_t i = 0; i < num_keys; ++i)
++        {
++            round_keys[i] = aes128_next_round_key(round_keys[i], aes_round_constants[round]);
++            aeses[i].keys[round + 1] = {vreinterpretq_u32_u8(round_keys[i])};
++        }
++    }
++
++    PRAGMA_UNROLL(8)
++    for (size_t i = 0; i < num_keys; ++i)
++    {
++        PRAGMA_UNROLL(4)
++        for (size_t j = 0; j < num_blocks; ++j)
++            output[i * num_blocks + j] = {veorq_u32(output[i * num_blocks + j].data,
++                                                    vreinterpretq_u32_u8(round_keys[i]))};
++    }
++}
++
+ // emulate AES-NI _mm_aeskeygenassist_si128
+ template <size_t m> static inline uint32x4_t aeskeygenassist(uint32x4_t a, const int round_constant)
+ {
+--- a/aes.cpp
++++ b/aes.cpp
+@@ -14,6 +14,14 @@
+     const block_secpar<S>* __restrict__ keys,
+     block128* __restrict__ output)
+ {
++#ifdef AES128_KEYGEN_IMPL_PER_KEY
++    if constexpr (S == secpar::s128)
++    {
++        aes128_keygen_impl_per_key<num_keys, num_blocks>(aeses, keys, output);
++        return;
++    }
++#endif
++
+     aes_keygen_state<S> keygen_states[(num_keys + KEYGEN_WIDTH - 1) / KEYGEN_WIDTH];
+     aes_keygen_init(keygen_states, aeses, keys, num_keys);
+ 
