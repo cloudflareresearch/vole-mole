@@ -70,11 +70,13 @@
 //
 // The checks. The equations r - gamma2 psi - f = 0 for r = A z - c t1 2^d are linear in the bits
 // of z, c, psi, and f. After the witness above (and mu) is committed, the verifier picks
-// NUM_CHECKS random combinations of the K N equations, and the prover shows each modulo q (see
-// modq/modq.hpp), with soundness error 1 / q per check, with an answer of ANSWER_BITS bits that's
-// committed after the checks are known. So the enclosing relation must commit to the gadget's
-// witness before it derives the check seed, e.g., by putting it in the witness prefix (see
-// voleith.hpp), and put the answer after it.
+// NUM_CHECKS = 6 random combinations of the K N equations, each with soundness error 1 / q, and
+// the prover shows that they hold modulo q with two product trees in the exponent of GF(2^128)^*,
+// proven by sumcheck (see sumcheck/exp_modq.hpp and docs/sumcheck-modq.md). The answer (the
+// quotients, then the sumcheck's elements) is committed after the checks are known, and the
+// sumcheck's challenges are derived from the masked answer. So the enclosing relation must commit
+// to the gadget's witness before it derives the check seed, e.g., by putting it in the witness
+// prefix (see voleith.hpp), and put the answer after it.
 //
 // For gamma in R_q^K (uniform, derived from the check seed), the combination is
 // <gamma, A z - c t1 2^d - gamma2 psi - f>, with <u, v> = sum_n u_n v_n for polynomials
@@ -96,7 +98,6 @@
 #include "mldsa_pok/sample_in_ball.hpp"
 #include "mldsa_pok/shake_relation.hpp"
 #include "modq/columns.hpp"
-#include "modq/modq.hpp"
 #include "modq/range_le.hpp"
 #include "qs_bit.hpp"
 #include "sumcheck/exp_modq.hpp"
@@ -108,7 +109,6 @@
 #include <cstddef>
 #include <cstdint>
 #include <span>
-#include <type_traits>
 #include <utility>
 #include <vector>
 
@@ -120,7 +120,6 @@ using mldsa::detail::N;
 using mldsa::detail::Poly;
 using Elem = Fq;
 using modq::detail::Columns;
-using modq::detail::ModQ;
 using modq::detail::RangeLe;
 
 constexpr size_t K = P::K;
@@ -165,7 +164,9 @@ constexpr size_t HINT_CARRIES = COUNTER_LOG == 3 ? 288 : 519; // see test_mldsa_
 using ZRange = RangeLe<2 * Z_BOUND, Z_BITS, 8>;
 using FRange = RangeLe<ALPHA - 1, F_BITS, F_BITS>;
 
-// The values of the checks (see modq/modq.hpp): value V_OFF_Z + j is z_j + Z_BOUND, V_OFF_C + x is
+// The values of the checks: check k is sum_j W_{k,j} (x_j - offset(j)) = 0 (mod q), for the values
+// x_j = sum_i 2^bit_shift(j, i) x_{j,i} of the committed bits x_{j,i} = value_bit(j, i),
+// i < value_bits(j) (see sumcheck/exp_modq.hpp). Value V_OFF_Z + j is z_j + Z_BOUND, V_OFF_C + x is
 // c_x + 1 (bits z_x, p_x of sample_in_ball.hpp), V_OFF_PSI + j is psi_j + 1 (bits b0, b1,
 // w1_0, ..., w1_5 with weights 1, 2, 2, 4, ..., 64), and V_OFF_F + j is f_j + gamma2 (the 18 bits
 // of f'_j + gamma2 - 1, then nb_j and yb_j with weight 1).
@@ -190,32 +191,17 @@ struct ModQSpec {
     static constexpr Elem offset(size_t j) {
         return j < V_OFF_C ? Z_BOUND : j < V_OFF_F ? 1 : GAMMA2;
     }
-    // Soundness error q^-6 < 2^-137.
+    // Soundness error q^-6 < 2^-137 (two trees of three checks).
     static constexpr size_t NUM_CHECKS = 6;
-    // Sparse weights with exponents up to 95 (see "Recoding" in modq/modq.hpp).
-    static constexpr size_t DIGIT_EXPS = 96;
-    static constexpr size_t COUNTER_LOG = detail::COUNTER_LOG;
-    // About the mean + 13 sd (see test_mldsa_pok.cpp).
-    static constexpr size_t CARRY_BUDGET = COUNTER_LOG == 3 ? 328048 : 600616;
 };
-using MlDsaModQ = ModQ<ModQSpec>;
-using Weights = MlDsaModQ::Weights;
+using ModQChecks = sumcheck::detail::ExpModQ<ModQSpec>;
 
-// The checks are proven with the product-tree sumcheck of sumcheck/exp_modq.hpp (see
-// docs/sumcheck-modq.md) rather than with the adders of modq/modq.hpp, unless
-// VOLE_MOLE_MLDSA_POK_MODQ_ADDERS is defined. Their public data is then the encoding of the checks
-// and the sumcheck's challenges, which the verifier derives from the masked answer.
-#ifdef VOLE_MOLE_MLDSA_POK_MODQ_ADDERS
-constexpr bool MODQ_SUMCHECK = false;
-#else
-constexpr bool MODQ_SUMCHECK = true;
-#endif
-using MlDsaExp = sumcheck::detail::ExpModQ<ModQSpec>;
-struct SumcheckChecks {
-    MlDsaExp::Encoded enc;
-    MlDsaExp::Challenges challenges;
+// The public data of the checks: their encoding, and the sumcheck's challenges, which the verifier
+// derives from the masked answer.
+struct Checks {
+    ModQChecks::Encoded enc;
+    ModQChecks::Challenges challenges;
 };
-using Checks = std::conditional_t<MODQ_SUMCHECK, SumcheckChecks, Weights>;
 
 // The public key, prepared for the checks.
 struct VerifyKey {
@@ -226,7 +212,7 @@ struct VerifyKey {
 VerifyKey make_verify_key(const mldsa::PublicKey<P>& pk);
 
 // The check weights W_{k,j} (k NUM_VALUES + j), from a seed that binds the commitment to the
-// gadget's witness and to mu. Feed them to MlDsaModQ::make_weights.
+// gadget's witness and to mu. Feed them to ModQChecks::encode.
 std::vector<Elem> check_weights(const VerifyKey& key, std::span<const uint8_t> seed);
 
 namespace gadget_detail {
@@ -255,8 +241,7 @@ class VerifyGadget {
     static constexpr size_t WITNESS_BITS = BOFF_GUARDED + 2 * NUM_R;
     static constexpr size_t WITNESS_BYTES = (WITNESS_BITS + 7) / 8;
     // The answer to the checks, committed after the checks are known.
-    static constexpr size_t ANSWER_BYTES =
-        MODQ_SUMCHECK ? MlDsaExp::ANSWER_BYTES : MlDsaModQ::ANSWER_BYTES;
+    static constexpr size_t ANSWER_BYTES = ModQChecks::ANSWER_BYTES;
 
     static constexpr size_t QS_DEGREE = 11;
     static_assert(Kf1600Deg9::QS_DEGREE <= QS_DEGREE && Sib::DEGREE <= QS_DEGREE &&
@@ -270,9 +255,7 @@ class VerifyGadget {
                                               + NUM_Z * ZRange::NUM_CONSTRAINTS  // z range
                                               + NUM_R * FRange::NUM_CONSTRAINTS  // f range
                                               + 2 * NUM_R                        // nb, yb guards
-                                              + (MODQ_SUMCHECK                   // the checks
-                                                     ? MlDsaExp::NUM_CONSTRAINTS
-                                                     : MlDsaModQ::NUM_BINARY_CONSTRAINTS);
+                                              + ModQChecks::NUM_CONSTRAINTS;     // the checks
 
     constexpr VerifyGadget(size_t base, size_t answer_base)
         : base_(base), answer_base_(answer_base) {}
@@ -334,19 +317,13 @@ class VerifyGadget {
                         std::span<const uint8_t, MU_BYTES> mu,
                         const mldsa::detail::DecodedSignature<P>& sig) const;
 
-    // The answer to the checks (with the adders), for the witness (the relation's witness, which
-    // must contain the gadget's). Returns false if the checks need more committed bits than the
-    // budget (see MlDsaModQ::CARRY_BUDGET); the verifier rejects such checks.
-    bool answer(std::span<const uint8_t> witness, const Weights& weights,
-                std::span<uint8_t, MlDsaModQ::ANSWER_BYTES> out) const;
-
-    // The answer to the checks (with the sumcheck), for the witness, as MlDsaExp::answer: next(off,
-    // len) returns the challenge after answer bytes [off, off + len), and the challenges are
-    // written to checks.challenges.
+    // The answer to the checks, for the witness (the relation's witness, which must contain the
+    // gadget's), as ModQChecks::answer: next(off, len) returns the challenge after answer bytes
+    // [off, off + len), and the challenges are written to checks.challenges.
     template <typename Next>
-    void answer_sumcheck(std::span<const uint8_t> witness, SumcheckChecks& checks,
-                         std::span<uint8_t, MlDsaExp::ANSWER_BYTES> out, Next&& next) const {
-        MlDsaExp::answer(
+    void answer(std::span<const uint8_t> witness, Checks& checks,
+                std::span<uint8_t, ANSWER_BYTES> out, Next&& next) const {
+        ModQChecks::answer(
             checks.enc,
             [&](size_t j, size_t i) {
                 const size_t b = value_bit(j, i);
@@ -355,26 +332,25 @@ class VerifyGadget {
             out, next, checks.challenges);
     }
 
-    // Whether the checks hold on the witness (in the clear).
-    bool holds(std::span<const uint8_t> witness, const Weights& weights) const;
+    // Whether the checks with the given weights (from check_weights) hold on the witness (in the
+    // clear).
+    bool holds(std::span<const uint8_t> witness, std::span<const Elem> weights) const;
 
-    // The constraints, for mu given by its committed bits (of degree 1). (C is Checks; it's a
-    // template parameter so that only the branch for it is instantiated.)
-    template <typename QS, typename C>
+    // The constraints, for mu given by its committed bits (of degree 1).
+    template <typename QS>
     void constraints(QS* qs, const VerifyKey& key,
                      std::span<const vole_mole::detail::qs_bit<QS, 1>, 8 * MU_BYTES> mu,
-                     const C& checks) const;
+                     const Checks& checks) const;
 
   private:
     size_t base_;
     size_t answer_base_;
 };
 
-template <typename QS, typename C>
+template <typename QS>
 void VerifyGadget::constraints(QS* qs, const VerifyKey& /* key */,
                                std::span<const vole_mole::detail::qs_bit<QS, 1>, 8 * MU_BYTES> mu,
-                               const C& checks) const {
-    static_assert(std::is_same_v<C, Checks>);
+                               const Checks& checks) const {
     using Bit = vole_mole::detail::qs_bit<QS, 1>;
     using faest::poly1;
     using gadget_detail::zero;
@@ -454,13 +430,8 @@ void VerifyGadget::constraints(QS* qs, const VerifyKey& /* key */,
     }
 
     // r - gamma2 psi - f = 0, by random checks.
-    if constexpr (MODQ_SUMCHECK) {
-        MlDsaExp::qs_constraints(qs, checks.enc, checks.challenges, 8 * answer_base_,
-                                 [&](size_t j, size_t i) { return wbit(value_bit(j, i)); });
-    } else {
-        MlDsaModQ::qs_constraints(qs, checks, 8 * answer_base_,
-                                  [&](size_t j, size_t i) { return wbit(value_bit(j, i)); });
-    }
+    ModQChecks::qs_constraints(qs, checks.enc, checks.challenges, 8 * answer_base_,
+                               [&](size_t j, size_t i) { return wbit(value_bit(j, i)); });
 }
 
 // mu = H(tr || 0 || 0 || M, 64) for a hidden M of MSG_BYTES bytes, as a gadget whose witness (M,

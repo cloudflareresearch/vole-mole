@@ -11,7 +11,9 @@
 //
 //   1. the witness prefix, committed by VOLE generation: MuHash's witness (M, and the state of the
 //      hash), then VerifyGadget's;
-//   2. the answer to the checks of VerifyGadget, whose seed binds the commitment to the prefix.
+//   2. the answer to the mod-q checks of VerifyGadget (the quotients and the elements of the
+//      product-tree sumcheck, see docs/sumcheck-modq.md), whose seed binds the commitment to the
+//      prefix, and whose sumcheck challenges are derived from its masked bytes.
 
 #ifndef VOLE_MOLE_MLDSA_POK_RELATION_HPP
 #define VOLE_MOLE_MLDSA_POK_RELATION_HPP
@@ -76,7 +78,7 @@ struct BinRelation {
     struct instance {
         const Statement* stmt;
         CheckSeed seed;
-        const Checks* checks; // derived from stmt and seed (and, for the sumcheck, the proof)
+        const Checks* checks; // derived from stmt, seed, and the masked answer
     };
     static constexpr size_t NUM_CONSTRAINTS = B_NUM_CONSTRAINTS;
     static constexpr size_t WITNESS_PREFIX_BYTES = B_PREFIX_BYTES;

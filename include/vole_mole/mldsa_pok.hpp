@@ -15,9 +15,10 @@
 //
 // The proof is a single binary VOLE-in-the-Head proof (FAEST's, extended to long witnesses by
 // deriving the witness from a short key with a local PRG), and the arithmetic modulo q is checked
-// with random linear combinations. See src/mldsa_pok/relation.hpp. Zero knowledge rests on the
-// local PRG being a PRG, whose key length is a rough estimate that hasn't been checked against the
-// literature (see tools/local_key_bits.py).
+// with random linear combinations, proven by a product-tree sumcheck in the exponent of
+// GF(2^128)^* (see docs/sumcheck-modq.md). See src/mldsa_pok/relation.hpp. Zero knowledge rests on
+// the local PRG being a PRG, whose key length is a rough estimate that hasn't been checked against
+// the literature (see tools/local_key_bits.py).
 
 #ifndef VOLE_MOLE_MLDSA_POK_HPP
 #define VOLE_MOLE_MLDSA_POK_HPP

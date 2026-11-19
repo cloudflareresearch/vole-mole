@@ -21,7 +21,6 @@
 #include <cstdint>
 #include <span>
 #include <stdexcept>
-#include <type_traits>
 #include <utility>
 #include <vector>
 
@@ -64,51 +63,33 @@ Proof prove_witness(const Statement& stmt, const Witness& w, const Rho& rho) {
     Proof proof(PROOF_BYTES_);
     const std::span<uint8_t, PROOF_BYTES_> bin(proof);
     const std::span<const uint8_t, B_PREFIX_BYTES> prefix(w.prefix);
-    std::array<uint8_t, VerifyGadget::ANSWER_BYTES> answer;
-    for (uint8_t attempt = 0; attempt < 8; ++attempt) {
-        ProveSeed<BinRelation> rho_bin;
-        {
-            const std::array<uint8_t, 1> a = {attempt};
-            const std::array<std::span<const uint8_t>, 3> parts = {
-                vole_mole::detail::MLDSA_POK_RHO_DST, rho, a};
-            mldsa::detail::shake256(parts, rho_bin);
-        }
-        auto pending =
-            vole_mole::detail::voleith_vole_gen<BinRelation>(bin, nullptr, prefix, rho_bin);
-        BinRelation::instance inst{&stmt, check_seed(stmt, pending.chal1, bin), nullptr};
-        Checks checks;
-        // (A generic lambda, so that only the branch for Checks is instantiated.)
-        const bool answered = [&](auto& c) {
-            if constexpr (std::is_same_v<std::remove_cvref_t<decltype(c)>, SumcheckChecks>) {
-                // Each message's masked bytes, w + G(K), are known before voleith_prove_commit
-                // writes them to the proof.
-                c.enc = MlDsaExp::encode(check_weights(stmt.key, inst.seed));
-                auto chain = sumcheck_chain(inst.seed);
-                std::array<uint8_t, MlDsaExp::MESSAGE_BYTES> masked;
-                SIG.answer_sumcheck(w.prefix, c, answer, [&](size_t off, size_t len) {
-                    for (size_t i = 0; i < len; ++i) {
-                        masked[i] =
-                            answer[off + i] ^ sumcheck::detail::prover_pad_byte<BinRelation>(
-                                                  pending, B_PREFIX_BYTES + off + i);
-                    }
-                    return chain.next(std::span<const uint8_t>(masked).first(len));
-                });
-                return true;
-            } else {
-                c = MlDsaModQ::make_weights(check_weights(stmt.key, inst.seed));
-                return SIG.answer(w.prefix, c, answer);
-            }
-        }(checks);
-        if (!answered) {
-            continue; // the checks need more committed bits than the budget
-        }
-        inst.checks = &checks;
-        vole_mole::detail::voleith_prove_commit<BinRelation>(
-            bin, inst, std::span<const uint8_t, VerifyGadget::ANSWER_BYTES>(answer),
-            std::move(pending));
-        return proof;
+    ProveSeed<BinRelation> rho_bin;
+    {
+        const std::array<std::span<const uint8_t>, 2> parts = {vole_mole::detail::MLDSA_POK_RHO_DST,
+                                                               rho};
+        mldsa::detail::shake256(parts, rho_bin);
     }
-    throw std::runtime_error("ML-DSA PoK: too many attempts");
+    auto pending = vole_mole::detail::voleith_vole_gen<BinRelation>(bin, nullptr, prefix, rho_bin);
+    BinRelation::instance inst{&stmt, check_seed(stmt, pending.chal1, bin), nullptr};
+    Checks checks;
+    checks.enc = ModQChecks::encode(check_weights(stmt.key, inst.seed));
+    // Each message's masked bytes, w + G(K), are known before voleith_prove_commit writes them to
+    // the proof.
+    auto chain = sumcheck_chain(inst.seed);
+    std::array<uint8_t, VerifyGadget::ANSWER_BYTES> answer;
+    std::array<uint8_t, ModQChecks::MESSAGE_BYTES> masked;
+    SIG.answer(w.prefix, checks, answer, [&](size_t off, size_t len) {
+        for (size_t i = 0; i < len; ++i) {
+            masked[i] = answer[off + i] ^ sumcheck::detail::prover_pad_byte<BinRelation>(
+                                              pending, B_PREFIX_BYTES + off + i);
+        }
+        return chain.next(std::span<const uint8_t>(masked).first(len));
+    });
+    inst.checks = &checks;
+    vole_mole::detail::voleith_prove_commit<BinRelation>(
+        bin, inst, std::span<const uint8_t, VerifyGadget::ANSWER_BYTES>(answer),
+        std::move(pending));
+    return proof;
 }
 
 bool verify_proof(const Statement& stmt, std::span<const uint8_t, PROOF_BYTES_> bin) {
@@ -118,23 +99,12 @@ bool verify_proof(const Statement& stmt, std::span<const uint8_t, PROOF_BYTES_> 
     }
     BinRelation::instance inst{&stmt, check_seed(stmt, pending->chal1, bin), nullptr};
     Checks checks;
-    const bool ok = [&](auto& c) {
-        if constexpr (std::is_same_v<std::remove_cvref_t<decltype(c)>, SumcheckChecks>) {
-            c.enc = MlDsaExp::encode(check_weights(stmt.key, inst.seed));
-            const auto masked = sumcheck::detail::masked_witness<BinRelation>(
-                bin, B_PREFIX_BYTES, MlDsaExp::ANSWER_BYTES);
-            c.challenges = MlDsaExp::challenges(
-                sumcheck_chain(inst.seed),
-                std::span<const uint8_t, MlDsaExp::ANSWER_BYTES>(masked.data(), masked.size()));
-            return true;
-        } else {
-            c = MlDsaModQ::make_weights(check_weights(stmt.key, inst.seed));
-            return MlDsaModQ::count_carries(c) <= MlDsaModQ::CARRY_BUDGET;
-        }
-    }(checks);
-    if (!ok) {
-        return false;
-    }
+    checks.enc = ModQChecks::encode(check_weights(stmt.key, inst.seed));
+    const auto masked = sumcheck::detail::masked_witness<BinRelation>(bin, B_PREFIX_BYTES,
+                                                                      ModQChecks::ANSWER_BYTES);
+    checks.challenges = ModQChecks::challenges(
+        sumcheck_chain(inst.seed),
+        std::span<const uint8_t, ModQChecks::ANSWER_BYTES>(masked.data(), masked.size()));
     inst.checks = &checks;
     return vole_mole::detail::voleith_verify_commit<BinRelation>(bin, inst, std::move(*pending));
 }

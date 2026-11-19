@@ -1,22 +1,23 @@
 # Mod-q checks by product-tree sumcheck in the exponent
 
-Status: prototype (branch `proto/sumcheck-modq`). This note describes the protocol that replaces
-the binary adders of `src/modq/` (`ModQ`, `Columns`) for the ML-DSA-44 proof of knowledge. It
-follows Longfellow's exact mode (`lf/rust/src/runtime/v2/foreign/adapter/exact.rs`), but proves
+Status: prototype. This note describes how the ML-DSA-44 proof of knowledge proves its mod-q
+checks. It replaces the previous approach, the binary adders of `src/modq/modq.hpp` (`ModQ`, which
+the ML-KEM PoP binary prototype still uses), whose answer took 41 KB instead of 4.8 KB (section 6).
+It follows Longfellow's exact mode (`lf/rust/src/runtime/v2/foreign/adapter/exact.rs`), but proves
 the two product trees with a GKR-style sumcheck inside the VOLEitH proof instead of a separate
 circuit.
 
 ## The claims
 
 After the gadget's witness is committed, the verifier derives NUM_CHECKS = 6 random combinations
-(see `verify_gadget.hpp`). For the n = `MlDsaModQ::NUM_BITS` = 47,616 committed value bits x_b
-(bits of z, c, psi, f, in `ModQ::circuit` order), check k is
+(see `verify_gadget.hpp`). For the n = `ModQChecks::NUM_BITS` = 47,616 committed value bits x_b
+(bits of z, c, psi, f, in `ExpModQ::bit_values` order), check k is
 
     sum_b w_{k,b} x_b = B_k (mod q),   q = 8380417,
 
 with public w_{k,b} = W_{k,j} 2^{t_{j,b}} mod q in [0, q) (nonnegative canonical) and
 B_k = A_k + sum_j W_{k,j} offset(j) mod q in [0, q). Each check has soundness error 1/q, so
-q^-6 < 2^-137 for the six (unchanged from the adder version).
+q^-6 < 2^-137 for the six (as with the previous adders).
 
 ## 1. Addition in the exponent
 
@@ -190,8 +191,8 @@ With n value bits, kappa = bit_width(n - 1), D = ceil(log2(n + 3 kappa)):
     answer bits = 8 ceil(6 kappa / 8) + 128 E,   E = 2 sum_{d<D} (d + 1) + 2 (D - 1) = D (D + 1) + 2 (D - 1)
 
 For n = 47,616: kappa = 16, D = 16, E = 302, answer = 96 + 38,656 = 38,752 bits (4,844 bytes),
-versus 328,616 bits (41,077 bytes) for the adders. Constraints: D = 16 instead of
-CARRY_BUDGET + 6 COLUMNS = 328,856. (The proof shrinks by somewhat more than the answer, since
+versus 328,616 bits (41,077 bytes) for the adders it replaces. Constraints: D = 16, versus
+328,856 for the adders (their carry budget plus 6 columns). (The proof shrinks by somewhat more than the answer, since
 the derived witness's key is shorter, see `local_key_bits`.)
 
 Possible further reductions (not done): leaves of 2^r bits each, checked with a degree-2^r
@@ -206,21 +207,28 @@ pads and the verifier's masked bytes, for derived and direct witnesses). Tests:
 `tests/sumcheck/test_sumcheck.cpp` (exhaustive and random exactness of the exponent encoding,
 including the extreme weights q - 1; VOLEitH proofs of small relations, direct and derived, for
 D = 3, 8 and 10, rejecting mutated data bits, wrong quotients, flipped bits anywhere in the
-answer, and false claims). The ML-DSA PoK uses it unless `VOLE_MOLE_MLDSA_POK_MODQ_ADDERS` is
-defined (`MODQ_SUMCHECK` in `verify_gadget.hpp`); the DST is `MLDSA_POK_SUMCHECK_DST`.
+answer, and false claims). The ML-DSA PoK uses it (`ModQChecks` in `verify_gadget.hpp`); the
+DST is `MLDSA_POK_SUMCHECK_DST`.
 
-`bench_mldsa_pok` medians (clang release, same machine and tree, 5 repetitions):
+Medians of `bench_mldsa_pok` (clang release, 9 repetitions) and of Longfellow's `mldsa` benchmark
+(`glorious` branch, `cargo bench --bench mldsa --features mldsa,testonly`, `target-cpu=native`, 9
+samples), both single-threaded and pinned to one core of an AMD Ryzen 9 9900X:
 
-| | adders | sumcheck |
-|---|---|---|
-| proof | 66,951 B | 29,307 B |
-| witness | 452,128 bits | 162,264 bits |
-| VOLE key (local PRG) | 3,200 bits | 2,536 bits |
-| prove | 497 ms | 57 ms |
-| verify | 81 ms | 8.0 ms |
+| ML-DSA-44 | Proof | Prove | Verify |
+|---|--:|--:|--:|
+| This (sumcheck) | 29,563 B | 56–58 ms | 7.8–8.0 ms |
+| The adders this replaces | 66,951 B | 459 ms | 59 ms |
+| Longfellow, scalar Keccak | 60,588 B | 55.6 ms | 33.0 ms |
+| Longfellow, SIMD Keccak | 78,956 B | 39.7 ms | 25.6 ms |
 
-(Earlier the adders measured 460 / 61 ms on a quieter machine.) The proof is now the FAEST part
-(9,024 B) and e (20,283 B: message hash 1,032 B, signature gadget 14,407 B, checks 4,844 B).
+The adder figure is from before the rebase onto main; with main's separate CRT VOLE rows it would
+be 256 B larger (67,207 B). Longfellow's timings exclude its offline circuit compilation (about
+2.9 s; the compiled binary circuit is 1.86 MB). Its statement takes mu as a private input; ours
+hides the message and computes mu in the proof (one more Keccak-f[1600] permutation).
+
+The proof is the FAEST part (9,280 B) and e (20,283 B: message hash 1,032 B, signature gadget
+14,407 B, checks 4,844 B), from a witness of 162,264 bits and a 2,536-bit VOLE key (local PRG).
+The adders' answer took 328,616 bits (41,077 B), with 452,128 witness bits and a 3,200-bit key.
 
 Profile (perf, self time). Prove: the Keccak constraints (the c-tilde and SampleInBall
 permutations: `qs_mul` products and segmented Keccak) about 70%, SampleInBall 9%, the sumcheck

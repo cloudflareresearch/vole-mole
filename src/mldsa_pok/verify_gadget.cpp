@@ -19,6 +19,7 @@ namespace vole_mole::mldsa_pok::detail {
 
 namespace {
 
+using mldsa::detail::fq_add;
 using mldsa::detail::fq_mul;
 using mldsa::detail::fq_neg;
 using mldsa::detail::fq_sub;
@@ -239,15 +240,26 @@ void VerifyGadget::encode_witness(std::span<uint8_t> witness, const VerifyKey& k
     }
 }
 
-bool VerifyGadget::answer(std::span<const uint8_t> witness, const Weights& weights,
-                          std::span<uint8_t, MlDsaModQ::ANSWER_BYTES> out) const {
-    return MlDsaModQ::answer(
-        weights, [&](size_t j, size_t i) { return get_bit(witness, value_bit(j, i)); }, out);
-}
-
-bool VerifyGadget::holds(std::span<const uint8_t> witness, const Weights& weights) const {
-    return MlDsaModQ::holds(weights,
-                            [&](size_t j, size_t i) { return get_bit(witness, value_bit(j, i)); });
+bool VerifyGadget::holds(std::span<const uint8_t> witness, std::span<const Elem> weights) const {
+    if (weights.size() != ModQSpec::NUM_CHECKS * NUM_VALUES) {
+        throw std::logic_error("ML-DSA gadget: wrong number of check weights");
+    }
+    for (size_t k = 0; k < ModQSpec::NUM_CHECKS; ++k) {
+        Elem sum = 0;
+        for (size_t j = 0; j < NUM_VALUES; ++j) {
+            uint32_t x = 0;
+            for (size_t i = 0; i < ModQSpec::value_bits(j); ++i) {
+                x += uint32_t{get_bit(witness, value_bit(j, i))} << ModQSpec::bit_shift(j, i);
+            }
+            // x_j - offset(j), in [0, q) (x_j < 2^20 < q).
+            const Elem v = fq_sub(static_cast<Elem>(x), ModQSpec::offset(j));
+            sum = fq_add(sum, fq_mul(weights[k * NUM_VALUES + j], v));
+        }
+        if (sum != 0) {
+            return false;
+        }
+    }
+    return true;
 }
 
 } // namespace vole_mole::mldsa_pok::detail

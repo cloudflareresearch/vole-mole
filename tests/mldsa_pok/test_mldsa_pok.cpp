@@ -5,6 +5,7 @@
 #include "mldsa_pok/prover.hpp"        // internal
 #include "mldsa_pok/relation.hpp"      // internal
 #include "mldsa_pok/verify_gadget.hpp" // internal
+#include "sumcheck/tree_sumcheck.hpp"  // internal
 #include "voleith.hpp"                 // internal
 
 #include <gtest/gtest.h>
@@ -12,7 +13,6 @@
 #include <algorithm>
 #include <array>
 #include <chrono>
-#include <cmath>
 #include <cstddef>
 #include <cstdint>
 #include <cstdio>
@@ -88,7 +88,7 @@ CheckSeed seed_of(uint32_t s) {
 
 // Whether the checks hold on the witness (in the clear).
 bool checks_hold(const Statement& stmt, const Witness& w, const CheckSeed& seed) {
-    return SIG.holds(w.prefix, MlDsaModQ::make_weights(check_weights(stmt.key, seed)));
+    return SIG.holds(w.prefix, check_weights(stmt.key, seed));
 }
 
 // The value f' + gamma2 - 1 of coefficient j, and w1_j.
@@ -209,7 +209,19 @@ TEST(MlDsaPok, GadgetRelocates) {
     moved.encode_witness(w2, stmt.key, mu, *md::decode_signature<P>(f.sig));
     EXPECT_TRUE(std::equal(w2.begin() + BASE, w2.end(),
                            w.prefix.begin() + static_cast<ptrdiff_t>(SIG.base())));
-    EXPECT_TRUE(moved.holds(w2, MlDsaModQ::make_weights(check_weights(stmt.key, seed_of(1)))));
+    EXPECT_TRUE(moved.holds(w2, check_weights(stmt.key, seed_of(1))));
+    // Nor does its answer to the checks.
+    const auto enc = ModQChecks::encode(check_weights(stmt.key, seed_of(1)));
+    const auto answer = [&](const VerifyGadget& g, std::span<const uint8_t> witness) {
+        Checks checks{enc, {}};
+        std::array<uint8_t, VerifyGadget::ANSWER_BYTES> out;
+        sumcheck::detail::Chain chain(bytes("test"), seed_of(1));
+        g.answer(witness, checks, out, [&](size_t off, size_t len) {
+            return chain.next(std::span<const uint8_t>(out).subspan(off, len));
+        });
+        return out;
+    };
+    EXPECT_EQ(answer(moved, w2), answer(SIG, w.prefix));
     std::vector<uint8_t> short_witness(BASE + VerifyGadget::WITNESS_BYTES - 1);
     EXPECT_THROW(moved.encode_witness(short_witness, stmt.key, mu, *md::decode_signature<P>(f.sig)),
                  std::logic_error);
@@ -334,30 +346,6 @@ TEST(MlDsaPok, RangeLe) {
         ASSERT_EQ(holds(ZRange{}, 2 * Z_BOUND, x), x <= 2 * Z_BOUND) << x;
         ASSERT_EQ(holds(FRange{}, ALPHA - 1, x), x <= ALPHA - 1) << x;
     }
-}
-
-// The carry budget is far above the number the checks need.
-TEST(MlDsaPok, CarryBudget) {
-    const Fixture f;
-    const auto stmt = f.statement();
-    std::vector<double> counts;
-    for (uint32_t s = 0; s < 100; ++s) {
-        counts.push_back(static_cast<double>(MlDsaModQ::count_carries(
-            MlDsaModQ::make_weights(check_weights(stmt.key, seed_of(s))))));
-    }
-    double mean = 0, var = 0;
-    for (const auto c : counts) {
-        mean += c;
-    }
-    mean /= static_cast<double>(counts.size());
-    for (const auto c : counts) {
-        var += (c - mean) * (c - mean);
-    }
-    const double sd = std::sqrt(var / static_cast<double>(counts.size()));
-    std::printf("check carries: mean %.1f, sd %.1f, max %.0f, budget %zu (mean + %.1f sd)\n", mean,
-                sd, *std::ranges::max_element(counts), MlDsaModQ::CARRY_BUDGET,
-                (static_cast<double>(MlDsaModQ::CARRY_BUDGET) - mean) / sd);
-    EXPECT_GT(static_cast<double>(MlDsaModQ::CARRY_BUDGET), mean + 8 * sd);
 }
 
 TEST(MlDsaPok, ProvesAndVerifies) {
