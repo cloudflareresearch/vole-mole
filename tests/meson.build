@@ -27,6 +27,7 @@ if get_option('tests')
     ['pomfrit', 'pomfrit/test_pomfrit.cpp'],
     ['poly2d', 'poly2d/test_poly2d.cpp'],
     ['random', 'random/test_random.cpp'],
+    ['sumcheck', 'sumcheck/test_sumcheck.cpp'],
     ['uov', 'uov/test_uov.cpp'],
     ['voleith', 'voleith/test_voleith.cpp'],
     ['voleith-derived', 'voleith/test_derived_witness.cpp'],
