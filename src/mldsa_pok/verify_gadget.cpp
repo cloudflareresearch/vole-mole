@@ -240,7 +240,7 @@ void VerifyGadget::encode_witness(std::span<uint8_t> witness, const VerifyKey& k
 }
 
 bool VerifyGadget::answer(std::span<const uint8_t> witness, const Weights& weights,
-                          std::span<uint8_t, ANSWER_BYTES> out) const {
+                          std::span<uint8_t, MlDsaModQ::ANSWER_BYTES> out) const {
     return MlDsaModQ::answer(
         weights, [&](size_t j, size_t i) { return get_bit(witness, value_bit(j, i)); }, out);
 }

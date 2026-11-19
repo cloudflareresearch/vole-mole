@@ -8,6 +8,8 @@
 #include "mldsa_pok/prover.hpp"
 #include "mldsa_pok/relation.hpp"
 #include "mldsa_pok/verify_gadget.hpp"
+#include "sumcheck/tree_sumcheck.hpp"
+#include "sumcheck/voleith_fs.hpp"
 #include "voleith.hpp"
 
 #include "faest_sig.hpp"  // from faest-arch-opt
@@ -19,6 +21,7 @@
 #include <cstdint>
 #include <span>
 #include <stdexcept>
+#include <type_traits>
 #include <utility>
 #include <vector>
 
@@ -51,12 +54,17 @@ Witness make_witness(const Statement& stmt, const Message& msg,
     return w;
 }
 
+// The sumcheck's Fiat-Shamir chain, which starts from the check seed (see docs/sumcheck-modq.md).
+sumcheck::detail::Chain sumcheck_chain(const CheckSeed& seed) {
+    return {vole_mole::detail::MLDSA_POK_SUMCHECK_DST, seed};
+}
+
 Proof prove_witness(const Statement& stmt, const Witness& w, const Rho& rho) {
     using vole_mole::detail::ProveSeed;
     Proof proof(PROOF_BYTES_);
     const std::span<uint8_t, PROOF_BYTES_> bin(proof);
     const std::span<const uint8_t, B_PREFIX_BYTES> prefix(w.prefix);
-    std::array<uint8_t, MlDsaModQ::ANSWER_BYTES> answer;
+    std::array<uint8_t, VerifyGadget::ANSWER_BYTES> answer;
     for (uint8_t attempt = 0; attempt < 8; ++attempt) {
         ProveSeed<BinRelation> rho_bin;
         {
@@ -68,13 +76,35 @@ Proof prove_witness(const Statement& stmt, const Witness& w, const Rho& rho) {
         auto pending =
             vole_mole::detail::voleith_vole_gen<BinRelation>(bin, nullptr, prefix, rho_bin);
         BinRelation::instance inst{&stmt, check_seed(stmt, pending.chal1, bin), nullptr};
-        const Weights weights = MlDsaModQ::make_weights(check_weights(stmt.key, inst.seed));
-        if (!SIG.answer(w.prefix, weights, answer)) {
+        Checks checks;
+        // (A generic lambda, so that only the branch for Checks is instantiated.)
+        const bool answered = [&](auto& c) {
+            if constexpr (std::is_same_v<std::remove_cvref_t<decltype(c)>, SumcheckChecks>) {
+                // Each message's masked bytes, w + G(K), are known before voleith_prove_commit
+                // writes them to the proof.
+                c.enc = MlDsaExp::encode(check_weights(stmt.key, inst.seed));
+                auto chain = sumcheck_chain(inst.seed);
+                std::array<uint8_t, MlDsaExp::MESSAGE_BYTES> masked;
+                SIG.answer_sumcheck(w.prefix, c, answer, [&](size_t off, size_t len) {
+                    for (size_t i = 0; i < len; ++i) {
+                        masked[i] =
+                            answer[off + i] ^ sumcheck::detail::prover_pad_byte<BinRelation>(
+                                                  pending, B_PREFIX_BYTES + off + i);
+                    }
+                    return chain.next(std::span<const uint8_t>(masked).first(len));
+                });
+                return true;
+            } else {
+                c = MlDsaModQ::make_weights(check_weights(stmt.key, inst.seed));
+                return SIG.answer(w.prefix, c, answer);
+            }
+        }(checks);
+        if (!answered) {
             continue; // the checks need more committed bits than the budget
         }
-        inst.weights = &weights;
+        inst.checks = &checks;
         vole_mole::detail::voleith_prove_commit<BinRelation>(
-            bin, inst, std::span<const uint8_t, MlDsaModQ::ANSWER_BYTES>(answer),
+            bin, inst, std::span<const uint8_t, VerifyGadget::ANSWER_BYTES>(answer),
             std::move(pending));
         return proof;
     }
@@ -87,11 +117,25 @@ bool verify_proof(const Statement& stmt, std::span<const uint8_t, PROOF_BYTES_> 
         return false;
     }
     BinRelation::instance inst{&stmt, check_seed(stmt, pending->chal1, bin), nullptr};
-    const Weights weights = MlDsaModQ::make_weights(check_weights(stmt.key, inst.seed));
-    if (MlDsaModQ::count_carries(weights) > MlDsaModQ::CARRY_BUDGET) {
+    Checks checks;
+    const bool ok = [&](auto& c) {
+        if constexpr (std::is_same_v<std::remove_cvref_t<decltype(c)>, SumcheckChecks>) {
+            c.enc = MlDsaExp::encode(check_weights(stmt.key, inst.seed));
+            const auto masked = sumcheck::detail::masked_witness<BinRelation>(
+                bin, B_PREFIX_BYTES, MlDsaExp::ANSWER_BYTES);
+            c.challenges = MlDsaExp::challenges(
+                sumcheck_chain(inst.seed),
+                std::span<const uint8_t, MlDsaExp::ANSWER_BYTES>(masked.data(), masked.size()));
+            return true;
+        } else {
+            c = MlDsaModQ::make_weights(check_weights(stmt.key, inst.seed));
+            return MlDsaModQ::count_carries(c) <= MlDsaModQ::CARRY_BUDGET;
+        }
+    }(checks);
+    if (!ok) {
         return false;
     }
-    inst.weights = &weights;
+    inst.checks = &checks;
     return vole_mole::detail::voleith_verify_commit<BinRelation>(bin, inst, std::move(*pending));
 }
 

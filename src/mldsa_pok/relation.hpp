@@ -51,7 +51,7 @@ static_assert(Mu::NUM_PERMUTATIONS == 1);
 constexpr Mu MU{0};
 constexpr size_t B_PREFIX_BYTES = Mu::WITNESS_BYTES + VerifyGadget::WITNESS_BYTES;
 constexpr VerifyGadget SIG{Mu::WITNESS_BYTES, /* answer */ B_PREFIX_BYTES};
-constexpr size_t B_WITNESS_BITS = 8 * B_PREFIX_BYTES + MlDsaModQ::ANSWER_BITS;
+constexpr size_t B_WITNESS_BITS = 8 * (B_PREFIX_BYTES + VerifyGadget::ANSWER_BYTES);
 
 constexpr size_t B_NUM_CONSTRAINTS = Mu::NUM_CONSTRAINTS + VerifyGadget::NUM_CONSTRAINTS;
 constexpr size_t B_QS_DEGREE = VerifyGadget::QS_DEGREE;
@@ -76,7 +76,7 @@ struct BinRelation {
     struct instance {
         const Statement* stmt;
         CheckSeed seed;
-        const Weights* weights; // derived from stmt and seed
+        const Checks* checks; // derived from stmt and seed (and, for the sumcheck, the proof)
     };
     static constexpr size_t NUM_CONSTRAINTS = B_NUM_CONSTRAINTS;
     static constexpr size_t WITNESS_PREFIX_BYTES = B_PREFIX_BYTES;
@@ -95,7 +95,7 @@ struct BinRelation {
         using Bit = vole_mole::detail::qs_bit<QS, 1>;
         const auto mu = MU.constraints(qs, x.stmt->key.parsed.tr);
         SIG.constraints(qs, x.stmt->key,
-                        std::span<const Bit, 8 * MU_BYTES>(mu.data(), 8 * MU_BYTES), *x.weights);
+                        std::span<const Bit, 8 * MU_BYTES>(mu.data(), 8 * MU_BYTES), *x.checks);
     }
 };
 

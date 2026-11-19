@@ -168,7 +168,7 @@ TEST(MlDsaPok, Constants) {
                 "signature %zu, checks %zu)\n",
                 mldsa_pok::PROOF_BYTES, 8 * vole_mole::detail::VOLE_WITNESS_BYTES<BinRelation>,
                 vole_mole::detail::DERIVED_E_BYTES<BinRelation>, B_WITNESS_BITS,
-                8 * Mu::WITNESS_BYTES, VerifyGadget::WITNESS_BITS, MlDsaModQ::ANSWER_BITS);
+                8 * Mu::WITNESS_BYTES, VerifyGadget::WITNESS_BITS, 8 * VerifyGadget::ANSWER_BYTES);
 }
 
 // MuHash computes the message representative of FIPS 204, with an empty context, also for

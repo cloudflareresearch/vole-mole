@@ -79,11 +79,12 @@ constexpr Dst UNBOUND_IHAT_REDEEM_SEED_DST =
     make_dst("mous", ihat::detail::UNBOUND_VERSION, 's', '1');
 
 // ML-DSA proof of knowledge of a signature.
-constexpr Dst MLDSA_POK_PRG_DST = make_dst("mdpk", mldsa_pok::VERSION, 'p', '0');     // witness PRG
-constexpr Dst MLDSA_POK_PROOF_DST = make_dst("mdpk", mldsa_pok::VERSION, 'b', '0');   // proof
-constexpr Dst MLDSA_POK_RHO_DST = make_dst("mdpk", mldsa_pok::VERSION, 'r', '0');     // VOLE seeds
-constexpr Dst MLDSA_POK_SEED_DST = make_dst("mdpk", mldsa_pok::VERSION, 's', '0');    // check seed
-constexpr Dst MLDSA_POK_WEIGHTS_DST = make_dst("mdpk", mldsa_pok::VERSION, 'w', '0'); // weights
+constexpr Dst MLDSA_POK_PRG_DST = make_dst("mdpk", mldsa_pok::VERSION, 'p', '0');   // witness PRG
+constexpr Dst MLDSA_POK_PROOF_DST = make_dst("mdpk", mldsa_pok::VERSION, 'b', '0'); // proof
+constexpr Dst MLDSA_POK_RHO_DST = make_dst("mdpk", mldsa_pok::VERSION, 'r', '0');   // VOLE seeds
+constexpr Dst MLDSA_POK_SEED_DST = make_dst("mdpk", mldsa_pok::VERSION, 's', '0');  // check seed
+constexpr Dst MLDSA_POK_SUMCHECK_DST = make_dst("mdpk", mldsa_pok::VERSION, 'f', '0'); // sumcheck
+constexpr Dst MLDSA_POK_WEIGHTS_DST = make_dst("mdpk", mldsa_pok::VERSION, 'w', '0');  // weights
 
 // ML-KEM proof of possession: the VOLEitH relation for each parameter set, indexed by k.
 constexpr Dst MLKEM_POP_PROOF_512_DST = make_dst("mpop", mlkem_pop::VERSION, 'p', '2');
@@ -122,6 +123,7 @@ constexpr bool dsts_are_distinct() {
         MLDSA_POK_PROOF_DST,
         MLDSA_POK_RHO_DST,
         MLDSA_POK_SEED_DST,
+        MLDSA_POK_SUMCHECK_DST,
         MLDSA_POK_WEIGHTS_DST,
         MLKEM_POP_PROOF_512_DST,
         MLKEM_POP_PROOF_768_DST,
