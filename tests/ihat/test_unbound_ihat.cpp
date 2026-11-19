@@ -8,6 +8,7 @@
 #include "ihat/token.hpp"          // internal
 #include "ihat/unbound_issue.hpp"  // internal
 #include "ihat/unbound_redeem.hpp" // internal
+#include "voleith.hpp"             // internal
 
 #include "test.hpp"
 
@@ -30,6 +31,7 @@
 
 using namespace vole_mole;
 using namespace vole_mole::ihat;
+using vole_mole::detail::FAEST_PROOF_BYTES;
 using vole_mole::ihat::detail::Commitment;
 using vole_mole::ihat::detail::derive;
 using vole_mole::ihat::detail::NfKey;
@@ -40,6 +42,8 @@ using vole_mole::ihat::detail::TokenAccess;
 using vole_mole::ihat::detail::unbound_commit;
 using vole_mole::ihat::detail::unbound_issue_request_with_seed;
 using vole_mole::ihat::detail::unbound_redeem_request_with_seed;
+using vole_mole::ihat::detail::UnboundIssueRelation;
+using vole_mole::ihat::detail::UnboundRedeemRelation;
 using vole_mole::test::filled;
 using vole_mole::test::read_kat_field;
 using vole_mole::test::read_kat_number;
@@ -256,11 +260,32 @@ TEST(UnboundIssueRequest, RejectTamperedProof) {
         EXPECT_FALSE(verifies(req, CTX_ISS)) << "flipped a bit of byte " << i;
         proof[i] ^= 0x04;
     }
-    // The last bytes are delta (chall_3), iv_pre and the grinding counter.
-    for (size_t i = UNBOUND_ISSUE_PROOF_BYTES - 36; i < UNBOUND_ISSUE_PROOF_BYTES; ++i) {
+    // The last bytes of the FAEST part are delta (chall_3), iv_pre and the grinding counter.
+    constexpr size_t FAEST_BYTES = FAEST_PROOF_BYTES<UnboundIssueRelation>;
+    for (size_t i = FAEST_BYTES - 36; i < FAEST_BYTES; ++i) {
         proof[i] ^= 0x01;
         EXPECT_FALSE(verifies(req, CTX_ISS)) << "flipped a bit of byte " << i;
         proof[i] ^= 0x01;
+    }
+    EXPECT_TRUE(verifies(req, CTX_ISS));
+}
+
+// The proof ends with e = w + G(K), one bit per bit of the derived witness w.
+TEST(UnboundIssueRequest, RejectTamperedDerivedWitness) {
+    constexpr size_t FAEST_BYTES = FAEST_PROOF_BYTES<UnboundIssueRelation>;
+    if constexpr (!vole_mole::detail::DERIVED_WITNESS<UnboundIssueRelation>) {
+        GTEST_SKIP() << "the witness isn't derived";
+    }
+    static_assert(UNBOUND_ISSUE_PROOF_BYTES ==
+                  FAEST_BYTES + vole_mole::detail::DERIVED_E_BYTES<UnboundIssueRelation>);
+    const auto res = make_request();
+    UnboundIssueRequest req = res.request;
+    const auto e = std::span(req).last<UNBOUND_ISSUE_PROOF_BYTES>().subspan<FAEST_BYTES>();
+    for (size_t i = 0; i < e.size(); i += (i < 8 || i + 8 >= e.size()) ? 1 : 13) {
+        const auto mask = static_cast<uint8_t>(1u << (i % 8));
+        e[i] ^= mask;
+        EXPECT_FALSE(verifies(req, CTX_ISS)) << "flipped bit " << i % 8 << " of byte " << i;
+        e[i] ^= mask;
     }
     EXPECT_TRUE(verifies(req, CTX_ISS));
 }
@@ -540,11 +565,31 @@ TEST(UnboundRedeem, RejectsTamperedProof) {
         EXPECT_FALSE(finalize(req)) << "flipped a bit of byte " << i;
         proof[i] ^= 0x10;
     }
-    // The last bytes are delta (chall_3), iv_pre and the grinding counter.
-    for (size_t i = UNBOUND_REDEEM_PROOF_BYTES - 36; i < UNBOUND_REDEEM_PROOF_BYTES; ++i) {
+    // The last bytes of the FAEST part are delta (chall_3), iv_pre and the grinding counter.
+    constexpr size_t FAEST_BYTES = FAEST_PROOF_BYTES<UnboundRedeemRelation>;
+    for (size_t i = FAEST_BYTES - 36; i < FAEST_BYTES; ++i) {
         proof[i] ^= 0x01;
         EXPECT_FALSE(finalize(req)) << "flipped a bit of byte " << i;
         proof[i] ^= 0x01;
+    }
+    EXPECT_TRUE(finalize(req));
+}
+
+// The proof ends with e = w + G(K), one bit per bit of the derived witness w.
+TEST(UnboundRedeem, RejectsTamperedDerivedWitness) {
+    constexpr size_t FAEST_BYTES = FAEST_PROOF_BYTES<UnboundRedeemRelation>;
+    if constexpr (!vole_mole::detail::DERIVED_WITNESS<UnboundRedeemRelation>) {
+        GTEST_SKIP() << "the witness isn't derived";
+    }
+    static_assert(UNBOUND_REDEEM_PROOF_BYTES ==
+                  FAEST_BYTES + vole_mole::detail::DERIVED_E_BYTES<UnboundRedeemRelation>);
+    UnboundRedeemRequest req = redemption();
+    const auto e = std::span(req).last<UNBOUND_REDEEM_PROOF_BYTES>().subspan<FAEST_BYTES>();
+    for (size_t i = 0; i < e.size(); i += (i < 8 || i + 8 >= e.size()) ? 1 : 13) {
+        const auto mask = static_cast<uint8_t>(1u << (i % 8));
+        e[i] ^= mask;
+        EXPECT_FALSE(finalize(req)) << "flipped bit " << i % 8 << " of byte " << i;
+        e[i] ^= mask;
     }
     EXPECT_TRUE(finalize(req));
 }

@@ -8,6 +8,7 @@
 #include "ihat/unbound_issue.hpp"  // internal
 #include "ihat/unbound_redeem.hpp" // internal
 #include "keccak/segmented.hpp"    // internal
+#include "voleith.hpp"             // internal
 
 #include "test.hpp"
 
@@ -47,13 +48,21 @@ int main(int argc, char** argv) {
     }
     out << "# VOLE-IHAT v" << unsigned(detail::UNBOUND_VERSION)
         << " issuance and redemption KATs for unbound tokens.\n"
-        << "# QuickSilver degrees: issuance " << detail::UNBOUND_ISSUE_QS_DEGREE << ", redemption "
-        << detail::UNBOUND_REDEEM_QS_DEGREE << ".\n# Committed states:";
+        << "# QuickSilver degrees: issuance " << detail::UnboundIssueParams::OWF_CONSTS::QS_DEGREE
+        << ", redemption " << detail::UnboundRedeemParams::OWF_CONSTS::QS_DEGREE
+        << ".\n# Committed states:";
     for (size_t k = 1; k <= vole_mole::keccak::detail::NUM_COMMITTED_STATES; ++k) {
         out << " s" << vole_mole::keccak::detail::SEGMENT_START[k];
     }
+    using vole_mole::detail::MQ_PRG_INSTANCES;
+    using vole_mole::detail::VOLE_WITNESS_BYTES;
     out << ".\n# Witness bytes: issuance " << detail::UNBOUND_ISSUE_WITNESS_BYTES << ", redemption "
-        << detail::UNBOUND_REDEEM_WITNESS_BYTES << ".\n# Proof bytes: issuance "
+        << detail::UNBOUND_REDEEM_WITNESS_BYTES
+        << ".\n# MQ PRG instances (0 if the witness isn't derived): issuance "
+        << MQ_PRG_INSTANCES<detail::UnboundIssueRelation> << ", redemption "
+        << MQ_PRG_INSTANCES<detail::UnboundRedeemRelation> << ".\n# VOLE witness bytes: issuance "
+        << VOLE_WITNESS_BYTES<detail::UnboundIssueRelation> << ", redemption "
+        << VOLE_WITNESS_BYTES<detail::UnboundRedeemRelation> << ".\n# Proof bytes: issuance "
         << UNBOUND_ISSUE_PROOF_BYTES << ", redemption " << UNBOUND_REDEEM_PROOF_BYTES
         << ".\n# Fields are hex bytes, except anchor_count, issuer (zero-based), and "
            "redemption_count, which are decimal.\n"
