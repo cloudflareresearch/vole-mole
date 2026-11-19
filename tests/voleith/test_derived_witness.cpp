@@ -1,10 +1,11 @@
-// Tests for deriving the witness with the MQ PRG (see "Derived witnesses" in voleith.hpp). The same
-// relation is proven with the witness committed directly (MQ_PRG_INSTANCES = 0) and derived with
-// one or more instances of the MQ PRG.
+// Tests for deriving the witness from a short key with a PRG (see "Derived witnesses" in
+// voleith.hpp). The same relation is proven with the witness committed directly (NoPrg) and derived
+// with one or more instances of the MQ PRG.
 
-#include "mq/split.hpp" // internal
-#include "qs_bit.hpp"   // internal
-#include "voleith.hpp"  // internal
+#include "mq/split.hpp"    // internal
+#include "qs_bit.hpp"      // internal
+#include "voleith.hpp"     // internal
+#include "witness_prg.hpp" // internal
 
 #include "test.hpp"
 
@@ -35,6 +36,16 @@ constexpr size_t T_BYTES = WITNESS_BYTES / 2;
 constexpr size_t QS_DEGREE = 2;
 constexpr size_t NUM_CONSTRAINTS = 8 * WITNESS_BYTES + 8 * T_BYTES;
 
+// The variants: c = 0 commits to the witness directly, c = 1, 2, 3 derive it with c instances of
+// the MQ PRG.
+template <size_t c> struct prg {
+    using type = vole_mole::detail::MqPrg<c>;
+};
+template <> struct prg<0> {
+    using type = vole_mole::detail::NoPrg;
+};
+template <size_t c> using Prg = typename prg<c>::type;
+
 template <size_t c>
 constexpr faest::owf OWF = static_cast<faest::owf>(((0x54u + c) << 8) | 0b10'0000);
 
@@ -44,7 +55,8 @@ constexpr faest::owf OWF = static_cast<faest::owf>(((0x54u + c) << 8) | 0b10'000
 #define TOY_OWF_CONSTANTS(c)                                                                       \
     template <>                                                                                    \
     struct faest::OWF_CONSTANTS<faest::secpar::s128, toy::OWF<c>>                                  \
-        : vole_mole::detail::RelationConstants<8 * toy::WITNESS_BYTES, toy::QS_DEGREE, c> {}
+        : vole_mole::detail::RelationConstants<8 * toy::WITNESS_BYTES, toy::QS_DEGREE,             \
+                                               toy::Prg<c>> {}
 TOY_OWF_CONSTANTS(0);
 TOY_OWF_CONSTANTS(1);
 TOY_OWF_CONSTANTS(2);
@@ -56,7 +68,7 @@ namespace {
 using namespace vole_mole::detail;
 
 constexpr std::array<uint8_t, 4> TOY_DST = {'t', 'o', 'y', '0'};
-constexpr std::array<uint8_t, 4> TOY_MQ_DST = {'t', 'o', 'y', 'q'};
+constexpr std::array<uint8_t, 4> TOY_PRG_DST = {'t', 'o', 'y', 'q'};
 
 using Witness = std::array<uint8_t, toy::WITNESS_BYTES>;
 using Target = std::array<uint8_t, toy::T_BYTES>;
@@ -75,7 +87,7 @@ template <size_t c> struct ToyRelation {
     static constexpr size_t NUM_CONSTRAINTS = toy::NUM_CONSTRAINTS;
     static constexpr size_t WITNESS_PREFIX_BYTES = toy::PREFIX_BYTES;
     static constexpr std::span<const uint8_t> DST = TOY_DST;
-    static constexpr std::span<const uint8_t> MQ_PRG_DST = TOY_MQ_DST;
+    static constexpr std::span<const uint8_t> WITNESS_PRG_DST = TOY_PRG_DST;
 
     static void hash_instance(faest::hash_state& hasher, const instance& x) { hasher.update(x.t); }
 

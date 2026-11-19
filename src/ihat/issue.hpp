@@ -18,7 +18,11 @@
 // Soundness of the proof requires proving each witness bit is in fact a bit; this adds an
 // additional 2048 constraints of degree 2.
 //
-// We use the VOLE-in-the-Head parameters of FAEST-EM-128f v3.
+// We use the VOLE-in-the-Head parameters of FAEST-EM-128f v3. Optionally, the witness is derived
+// from a short key with the witness PRG IssueWitnessPrg (see "Derived witnesses" in voleith.hpp).
+// Then the witness bits are committed values of degree 2, so all of the degrees above double.
+// (The bit constraints on the witness are then redundant, as the bits of the key are constrained
+// to be bits, but they're cheap.)
 
 #ifndef VOLE_MOLE_IHAT_ISSUE_HPP
 #define VOLE_MOLE_IHAT_ISSUE_HPP
@@ -31,6 +35,7 @@
 #include "ihat/commit.hpp"
 #include "keccak/segmented.hpp"
 #include "voleith.hpp"
+#include "witness_prg.hpp"
 
 #include "hash.hpp"       // from faest-arch-opt
 #include "parameters.hpp" // from faest-arch-opt
@@ -113,9 +118,11 @@ static_assert(faest::is_owf_with_witness_bits_check(OWF_IHAT_ISSUE));
 static_assert(!faest::is_owf_with_aes_ecb(OWF_IHAT_ISSUE));
 static_assert(!faest::is_owf_with_aes_em(OWF_IHAT_ISSUE));
 
-// Commit to the witness directly rather than deriving it with the MQ PRG (see "Derived witnesses"
-// in voleith.hpp).
-constexpr size_t ISSUE_MQ_PRG_INSTANCES = 0;
+// Commit to the witness directly rather than deriving it from a short key with a PRG (see
+// "Derived witnesses" in voleith.hpp and witness_prg.hpp). MqPrg<2> makes the proof much smaller,
+// at the cost of proving and verification time; it then deviates from the draft, and
+// ISSUE_PROOF_BYTES must be updated.
+using IssueWitnessPrg = vole_mole::detail::NoPrg;
 
 } // namespace vole_mole::ihat::detail
 
@@ -126,7 +133,7 @@ template <>
 struct faest::OWF_CONSTANTS<faest::secpar::s128, vole_mole::ihat::detail::OWF_IHAT_ISSUE>
     : vole_mole::detail::RelationConstants<vole_mole::ihat::detail::ISSUE_WITNESS_BITS,
                                            vole_mole::ihat::detail::ISSUE_QS_DEGREE,
-                                           vole_mole::ihat::detail::ISSUE_MQ_PRG_INSTANCES,
+                                           vole_mole::ihat::detail::IssueWitnessPrg,
                                            /* REUSE_CRT_WITNESS */ true> {};
 
 namespace vole_mole::ihat::detail {
@@ -149,8 +156,8 @@ struct IssueRelation {
 
     static constexpr std::span<const uint8_t> DST = IHAT_ISSUE_PROOF_DST;
 
-    // The public maps of the MQ PRG, if the witness is derived.
-    static constexpr std::span<const uint8_t> MQ_PRG_DST = IHAT_ISSUE_MQ_DST;
+    // The public map of the witness PRG, if the witness is derived.
+    static constexpr std::span<const uint8_t> WITNESS_PRG_DST = IHAT_ISSUE_PRG_DST;
 
     static void hash_instance(faest::hash_state& hasher, const instance& x) {
         hasher.update(x.t);

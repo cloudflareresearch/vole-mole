@@ -30,6 +30,7 @@
 #include "keccak/segmented.hpp"
 #include "qs_bit.hpp"
 #include "voleith.hpp"
+#include "witness_prg.hpp"
 
 #include "constants.hpp"   // from faest-arch-opt
 #include "hash.hpp"        // from faest-arch-opt
@@ -101,9 +102,9 @@ static_assert(faest::is_owf_with_witness_bits_check(OWF_ACT_ISSUE));
 static_assert(!faest::is_owf_with_aes_ecb(OWF_ACT_ISSUE));
 static_assert(!faest::is_owf_with_aes_em(OWF_ACT_ISSUE));
 
-// Commit to the witness directly rather than deriving it with the MQ PRG (see "Derived witnesses"
-// in voleith.hpp).
-constexpr size_t ISSUE_MQ_PRG_INSTANCES = 0;
+// Commit to the witness directly rather than deriving it from a short key with a PRG (see
+// "Derived witnesses" in voleith.hpp and witness_prg.hpp).
+using IssueWitnessPrg = vole_mole::detail::NoPrg;
 
 } // namespace vole_mole::act::detail
 
@@ -114,7 +115,7 @@ template <>
 struct faest::OWF_CONSTANTS<faest::secpar::s128, vole_mole::act::detail::OWF_ACT_ISSUE>
     : vole_mole::detail::RelationConstants<vole_mole::act::detail::ISSUE_WITNESS_BITS,
                                            vole_mole::act::detail::ISSUE_QS_DEGREE,
-                                           vole_mole::act::detail::ISSUE_MQ_PRG_INSTANCES,
+                                           vole_mole::act::detail::IssueWitnessPrg,
                                            /* REUSE_CRT_WITNESS */ true> {};
 
 namespace vole_mole::act::detail {
@@ -156,8 +157,8 @@ struct IssueRelation {
 
     static constexpr std::span<const uint8_t> DST = ACT_ISSUE_PROOF_DST;
 
-    // The public maps of the MQ PRG, if the witness is derived.
-    static constexpr std::span<const uint8_t> MQ_PRG_DST = ACT_ISSUE_MQ_DST;
+    // The public map of the witness PRG, if the witness is derived.
+    static constexpr std::span<const uint8_t> WITNESS_PRG_DST = ACT_ISSUE_PRG_DST;
 
     static void hash_instance(faest::hash_state& hasher, const instance& x) {
         hasher.update(x.c);

@@ -100,9 +100,10 @@ instances ([`src/mq/split.hpp`](src/mq/split.hpp)), each with its own key: this
 divides the cost of evaluating `G` by about `c`, while the total key grows like
 `√c`.
 
-Like τ, this is a VOLEitH parameter of each relation: `MQ_PRG_INSTANCES` (`c`,
-or 0 to commit to the witness directly) next to its parameter set, e.g.,
-`ISSUE_MQ_PRG_INSTANCES` in [`src/ihat/issue.hpp`](src/ihat/issue.hpp).
+Like τ, this is a VOLEitH parameter of each relation: its witness PRG
+([`src/witness_prg.hpp`](src/witness_prg.hpp): `MqPrg<c>`, or `NoPrg` to commit
+to the witness directly) next to its parameter set, e.g., `IssueWitnessPrg` in
+[`src/ihat/issue.hpp`](src/ihat/issue.hpp).
 Changing it changes the proof size, so the size in the public header has to be
 updated, too. By default, none of the protocols derives its witnesses. Deriving
 them makes the proofs 32–52% smaller, but proving and verifying several

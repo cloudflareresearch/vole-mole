@@ -64,6 +64,7 @@
 #include "uov/circuit.hpp"
 #include "uov/public_key.hpp"
 #include "voleith.hpp"
+#include "witness_prg.hpp"
 
 #include "constants.hpp"   // from faest-arch-opt
 #include "hash.hpp"        // from faest-arch-opt
@@ -269,9 +270,9 @@ static_assert(faest::is_owf_with_witness_bits_check(OWF_ACT_SPEND));
 static_assert(!faest::is_owf_with_aes_ecb(OWF_ACT_SPEND));
 static_assert(!faest::is_owf_with_aes_em(OWF_ACT_SPEND));
 
-// Commit to the witness directly rather than deriving it with the MQ PRG (see "Derived witnesses"
-// in voleith.hpp).
-constexpr size_t SPEND_MQ_PRG_INSTANCES = 0;
+// Commit to the witness directly rather than deriving it from a short key with a PRG (see
+// "Derived witnesses" in voleith.hpp and witness_prg.hpp).
+using SpendWitnessPrg = vole_mole::detail::NoPrg;
 
 } // namespace vole_mole::act::detail
 
@@ -282,7 +283,7 @@ template <>
 struct faest::OWF_CONSTANTS<faest::secpar::s128, vole_mole::act::detail::OWF_ACT_SPEND>
     : vole_mole::detail::RelationConstants<vole_mole::act::detail::SPEND_WITNESS_BITS,
                                            vole_mole::act::detail::SPEND_QS_DEGREE,
-                                           vole_mole::act::detail::SPEND_MQ_PRG_INSTANCES,
+                                           vole_mole::act::detail::SpendWitnessPrg,
                                            /* REUSE_CRT_WITNESS */ true> {};
 
 namespace vole_mole::act::detail {
@@ -326,8 +327,8 @@ struct SpendRelation {
 
     static constexpr std::span<const uint8_t> DST = ACT_SPEND_PROOF_DST;
 
-    // The public maps of the MQ PRG, if the witness is derived.
-    static constexpr std::span<const uint8_t> MQ_PRG_DST = ACT_SPEND_MQ_DST;
+    // The public map of the witness PRG, if the witness is derived.
+    static constexpr std::span<const uint8_t> WITNESS_PRG_DST = ACT_SPEND_PRG_DST;
 
     static void hash_instance(faest::hash_state& hasher, const instance& x) {
         hasher.update(uov::detail::PublicKeyAccess::digest(x.pk));

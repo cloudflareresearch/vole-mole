@@ -23,6 +23,7 @@
 #include "ihat/commit.hpp"
 #include "keccak/segmented.hpp"
 #include "voleith.hpp"
+#include "witness_prg.hpp"
 
 #include "hash.hpp"       // from faest-arch-opt
 #include "parameters.hpp" // from faest-arch-opt
@@ -88,9 +89,11 @@ static_assert(faest::is_owf_with_witness_bits_check(OWF_UNBOUND_IHAT_ISSUE));
 static_assert(!faest::is_owf_with_aes_ecb(OWF_UNBOUND_IHAT_ISSUE));
 static_assert(!faest::is_owf_with_aes_em(OWF_UNBOUND_IHAT_ISSUE));
 
-// Commit to the witness directly rather than deriving it with the MQ PRG (see "Derived witnesses"
-// in voleith.hpp).
-constexpr size_t UNBOUND_ISSUE_MQ_PRG_INSTANCES = 0;
+// Commit to the witness directly rather than deriving it from a short key with a PRG (see
+// "Derived witnesses" in voleith.hpp and witness_prg.hpp), as for standard tokens. MqPrg<2> makes
+// the proof much smaller, at the cost of proving and verification time; it then deviates from the
+// draft, and UNBOUND_ISSUE_PROOF_BYTES must be updated.
+using UnboundIssueWitnessPrg = vole_mole::detail::NoPrg;
 
 } // namespace vole_mole::ihat::detail
 
@@ -101,7 +104,7 @@ template <>
 struct faest::OWF_CONSTANTS<faest::secpar::s128, vole_mole::ihat::detail::OWF_UNBOUND_IHAT_ISSUE>
     : vole_mole::detail::RelationConstants<vole_mole::ihat::detail::UNBOUND_ISSUE_WITNESS_BITS,
                                            vole_mole::ihat::detail::UNBOUND_ISSUE_QS_DEGREE,
-                                           vole_mole::ihat::detail::UNBOUND_ISSUE_MQ_PRG_INSTANCES,
+                                           vole_mole::ihat::detail::UnboundIssueWitnessPrg,
                                            /* REUSE_CRT_WITNESS */ true> {};
 
 namespace vole_mole::ihat::detail {
@@ -124,8 +127,8 @@ struct UnboundIssueRelation {
 
     static constexpr std::span<const uint8_t> DST = UNBOUND_IHAT_ISSUE_PROOF_DST;
 
-    // The public maps of the MQ PRG, if the witness is derived.
-    static constexpr std::span<const uint8_t> MQ_PRG_DST = UNBOUND_IHAT_ISSUE_MQ_DST;
+    // The public map of the witness PRG, if the witness is derived.
+    static constexpr std::span<const uint8_t> WITNESS_PRG_DST = UNBOUND_IHAT_ISSUE_PRG_DST;
 
     static void hash_instance(faest::hash_state& hasher, const instance& x) {
         hasher.update(x.t);

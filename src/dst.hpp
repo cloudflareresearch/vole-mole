@@ -39,38 +39,38 @@ constexpr Dst make_dst(const char (&protocol)[5], uint8_t version, char purpose,
 
 // VOLE-ACT
 constexpr Dst ACT_COM_DST = make_dst("rata", act::VERSION, 'c', '0');
-constexpr Dst ACT_ISSUE_MQ_DST = make_dst("rata", act::VERSION, 'q', '0'); // MQ PRG
+constexpr Dst ACT_ISSUE_PRG_DST = make_dst("rata", act::VERSION, 'q', '0'); // witness PRG
 constexpr Dst ACT_ISSUE_PROOF_DST = make_dst("rata", act::VERSION, 'i', '0');
 constexpr Dst ACT_ISSUE_SEED_DST = make_dst("rata", act::VERSION, 's', '0');
 constexpr Dst ACT_SPEND_COMBINE_DST = make_dst("rata", act::VERSION, 'l', '0');
-constexpr Dst ACT_SPEND_MQ_DST = make_dst("rata", act::VERSION, 'q', '1'); // MQ PRG
+constexpr Dst ACT_SPEND_PRG_DST = make_dst("rata", act::VERSION, 'q', '1'); // witness PRG
 constexpr Dst ACT_SPEND_PROOF_DST = make_dst("rata", act::VERSION, 'p', '0');
 constexpr Dst ACT_SPEND_SEED_DST = make_dst("rata", act::VERSION, 's', '1');
 constexpr Dst ACT_TAG_DST = make_dst("rata", act::VERSION, 't', '0');
 
 // VOLE-IHAT
 constexpr Dst IHAT_COM_DST = make_dst("mous", ihat::VERSION, 'c', '0');
-constexpr Dst IHAT_ISSUE_MQ_DST = make_dst("mous", ihat::VERSION, 'q', '0'); // MQ PRG
+constexpr Dst IHAT_ISSUE_PRG_DST = make_dst("mous", ihat::VERSION, 'q', '0'); // witness PRG
 constexpr Dst IHAT_ISSUE_PROOF_DST = make_dst("mous", ihat::VERSION, 'i', '0');
 constexpr Dst IHAT_ISSUE_SEED_DST = make_dst("mous", ihat::VERSION, 's', '0');
 constexpr Dst IHAT_REDEEM_COMBINE_DST = make_dst("mous", ihat::VERSION, 'l', '0');
-constexpr Dst IHAT_REDEEM_MQ_DST = make_dst("mous", ihat::VERSION, 'q', '1'); // MQ PRG
+constexpr Dst IHAT_REDEEM_PRG_DST = make_dst("mous", ihat::VERSION, 'q', '1'); // witness PRG
 constexpr Dst IHAT_REDEEM_PROOF_DST = make_dst("mous", ihat::VERSION, 'r', '0');
 constexpr Dst IHAT_REDEEM_SEED_DST = make_dst("mous", ihat::VERSION, 's', '1');
 
 // VOLE-IHAT (unbound tokens)
 constexpr Dst UNBOUND_IHAT_COM_DST = make_dst("mous", ihat::detail::UNBOUND_VERSION, 'c', '0');
 constexpr Dst UNBOUND_IHAT_DERIVE_DST = make_dst("mous", ihat::detail::UNBOUND_VERSION, 'd', '0');
-constexpr Dst UNBOUND_IHAT_ISSUE_MQ_DST =
-    make_dst("mous", ihat::detail::UNBOUND_VERSION, 'q', '0'); // MQ PRG
+constexpr Dst UNBOUND_IHAT_ISSUE_PRG_DST =
+    make_dst("mous", ihat::detail::UNBOUND_VERSION, 'q', '0'); // witness PRG
 constexpr Dst UNBOUND_IHAT_ISSUE_PROOF_DST =
     make_dst("mous", ihat::detail::UNBOUND_VERSION, 'i', '0');
 constexpr Dst UNBOUND_IHAT_ISSUE_SEED_DST =
     make_dst("mous", ihat::detail::UNBOUND_VERSION, 's', '0');
 constexpr Dst UNBOUND_IHAT_REDEEM_COMBINE_DST =
     make_dst("mous", ihat::detail::UNBOUND_VERSION, 'l', '0');
-constexpr Dst UNBOUND_IHAT_REDEEM_MQ_DST =
-    make_dst("mous", ihat::detail::UNBOUND_VERSION, 'q', '1'); // MQ PRG
+constexpr Dst UNBOUND_IHAT_REDEEM_PRG_DST =
+    make_dst("mous", ihat::detail::UNBOUND_VERSION, 'q', '1'); // witness PRG
 constexpr Dst UNBOUND_IHAT_REDEEM_PROOF_DST =
     make_dst("mous", ihat::detail::UNBOUND_VERSION, 'r', '0');
 constexpr Dst UNBOUND_IHAT_REDEEM_SEED_DST =
@@ -78,7 +78,7 @@ constexpr Dst UNBOUND_IHAT_REDEEM_SEED_DST =
 
 // PomFRIT
 constexpr Dst POMFRIT_COMBINE_DST = make_dst("pomf", pomfrit::VERSION, 'l', '0');
-constexpr Dst POMFRIT_MQ_DST = make_dst("pomf", pomfrit::VERSION, 'q', '0');    // MQ PRG
+constexpr Dst POMFRIT_PRG_DST = make_dst("pomf", pomfrit::VERSION, 'q', '0');   // witness PRG
 constexpr Dst POMFRIT_PROOF_DST = make_dst("pomf", pomfrit::VERSION, 'p', '0'); // VOLEitH relation
 constexpr Dst POMFRIT_REFRESHER_DST = make_dst("pomf", pomfrit::VERSION, 'r', '0'); // refresher_com
 constexpr Dst POMFRIT_SEED_DST = make_dst("pomf", pomfrit::VERSION, 's', '0');      // Client's seed
@@ -88,35 +88,35 @@ constexpr bool dsts_are_distinct() {
     // Every DST must be distinct. Add new DSTs to this list.
     std::array all = {
         ACT_COM_DST,
-        ACT_ISSUE_MQ_DST,
+        ACT_ISSUE_PRG_DST,
         ACT_ISSUE_PROOF_DST,
         ACT_ISSUE_SEED_DST,
         ACT_SPEND_COMBINE_DST,
-        ACT_SPEND_MQ_DST,
+        ACT_SPEND_PRG_DST,
         ACT_SPEND_PROOF_DST,
         ACT_SPEND_SEED_DST,
         ACT_TAG_DST,
         IHAT_COM_DST,
-        IHAT_ISSUE_MQ_DST,
+        IHAT_ISSUE_PRG_DST,
         IHAT_ISSUE_PROOF_DST,
         IHAT_ISSUE_SEED_DST,
         IHAT_REDEEM_COMBINE_DST,
-        IHAT_REDEEM_MQ_DST,
+        IHAT_REDEEM_PRG_DST,
         IHAT_REDEEM_PROOF_DST,
         IHAT_REDEEM_SEED_DST,
         POMFRIT_COMBINE_DST,
-        POMFRIT_MQ_DST,
+        POMFRIT_PRG_DST,
         POMFRIT_PROOF_DST,
         POMFRIT_REFRESHER_DST,
         POMFRIT_SEED_DST,
         POMFRIT_TARGET_DST,
         UNBOUND_IHAT_COM_DST,
         UNBOUND_IHAT_DERIVE_DST,
-        UNBOUND_IHAT_ISSUE_MQ_DST,
+        UNBOUND_IHAT_ISSUE_PRG_DST,
         UNBOUND_IHAT_ISSUE_PROOF_DST,
         UNBOUND_IHAT_ISSUE_SEED_DST,
         UNBOUND_IHAT_REDEEM_COMBINE_DST,
-        UNBOUND_IHAT_REDEEM_MQ_DST,
+        UNBOUND_IHAT_REDEEM_PRG_DST,
         UNBOUND_IHAT_REDEEM_PROOF_DST,
         UNBOUND_IHAT_REDEEM_SEED_DST,
     };
