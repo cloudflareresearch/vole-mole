@@ -48,12 +48,12 @@ struct Moderator {
                        const ihat::UnboundRedeemRequest& request,
                        const ihat::ChallengeDigest& challenge_digest) {
         const auto ctx_red = make_context(name);
-        const auto nf =
+        const auto redemption =
             ihat::unbound_finalize_redeem(anchors, request, ctx_iss, ctx_red, challenge_digest);
-        if (!nf) {
+        if (!redemption) {
             std::println("Moderator {}: rejected an invalid token", name);
             return false;
-        } else if (!spent.insert(*nf).second) {
+        } else if (!spent.insert(redemption->nf).second) {
             std::println("Moderator {}: rejected a token that was already redeemed", name);
             return false;
         }
@@ -121,9 +121,11 @@ int main() {
     const ihat::ChallengeDigest challenge_digest{0x01};
 
     for (Moderator& moderator : moderators) {
-        // Client: Request redemption with this Moderator.
+        // Client: Request redemption with this Moderator. (The report of the issuing Anchor is
+        // handled as for standard tokens; see ihat.cpp.)
         const auto redeem_request =
-            token->redeem_request(anchors, ctx_iss, make_context(moderator.name), challenge_digest);
+            token->redeem_request(anchors, ctx_iss, make_context(moderator.name), challenge_digest)
+                .request;
 
         // Moderator: Finalize redemption.
         if (!moderator.handle_redeem(anchors, ctx_iss, redeem_request, challenge_digest)) {

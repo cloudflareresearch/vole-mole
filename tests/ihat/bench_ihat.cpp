@@ -119,9 +119,9 @@ void BM_FinalizeRedeem(benchmark::State& state) {
     const auto req = redeem_request_with_seed(copy(token()), keys, CTX_ISS, CTX_RED,
                                               CHALLENGE_DIGEST, seed_from_counter(0));
     for (auto _ : state) {
-        auto nf = finalize_redeem(keys, req, CTX_ISS, CTX_RED, CHALLENGE_DIGEST);
-        benchmark::DoNotOptimize(nf);
-        if (!nf) {
+        auto res = finalize_redeem(keys, req.request, CTX_ISS, CTX_RED, CHALLENGE_DIGEST);
+        benchmark::DoNotOptimize(res);
+        if (!res) {
             state.SkipWithError("proof failed to verify");
             break;
         }
@@ -199,9 +199,9 @@ void BM_UnboundFinalizeRedeem(benchmark::State& state) {
     const auto req = unbound_redeem_request_with_seed(unbound_token(), keys, CTX_ISS, CTX_RED,
                                                       CHALLENGE_DIGEST, seed_from_counter(0));
     for (auto _ : state) {
-        auto nf = unbound_finalize_redeem(keys, req, CTX_ISS, CTX_RED, CHALLENGE_DIGEST);
-        benchmark::DoNotOptimize(nf);
-        if (!nf) {
+        auto res = unbound_finalize_redeem(keys, req.request, CTX_ISS, CTX_RED, CHALLENGE_DIGEST);
+        benchmark::DoNotOptimize(res);
+        if (!res) {
             state.SkipWithError("proof failed to verify");
             break;
         }

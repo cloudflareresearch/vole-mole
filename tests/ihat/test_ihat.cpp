@@ -91,6 +91,7 @@ TEST(Ihat, KnownAnswers) {
         IssueRequest request;
         IssueResponse response;
         RedeemRequest redeem_request;
+        Report report;
         Nullifier redeemed_nf;
         size_t anchor_count, issuer;
         ASSERT_TRUE(read_kat_field(in, "issue_seed", issue_seed));
@@ -123,6 +124,7 @@ TEST(Ihat, KnownAnswers) {
         ASSERT_TRUE(read_kat_field(in, "issue_response", response));
         ASSERT_TRUE(read_kat_field(in, "redeem_witness", redeem_witness));
         ASSERT_TRUE(read_kat_field(in, "redeem_request", redeem_request));
+        ASSERT_TRUE(read_kat_field(in, "report", report));
         ASSERT_TRUE(read_kat_field(in, "redeemed_nf", redeemed_nf));
 
         auto res = issue_request_with_seed(ctx_iss, ctx_red, issue_seed);
@@ -149,23 +151,33 @@ TEST(Ihat, KnownAnswers) {
         EXPECT_EQ(TokenAccess::s(*token), response);
         EXPECT_EQ(ihat::detail::encode_redeem_witness(TokenAccess::nf(*token), ctx_iss, ctx_red,
                                                       TokenAccess::r(*token),
-                                                      TokenAccess::s(*token), issuer),
+                                                      TokenAccess::s(*token), report, issuer),
                   redeem_witness);
         const auto generated_redemption = redeem_request_with_seed(
             std::move(*token), anchors, ctx_iss, ctx_red, challenge_digest, redeem_seed);
-        EXPECT_TRUE(std::ranges::equal(generated_redemption, redeem_request))
+        EXPECT_TRUE(std::ranges::equal(generated_redemption.request, redeem_request))
             << "redemption request bytes differ";
+        EXPECT_EQ(generated_redemption.report, report);
         EXPECT_EQ(to_hex(std::span(redeem_request).first<NF_BYTES>()), to_hex(nf));
         EXPECT_EQ(redeemed_nf, nf);
-        const auto generated_nf =
-            finalize_redeem(anchors, generated_redemption, ctx_iss, ctx_red, challenge_digest);
-        ASSERT_TRUE(generated_nf.has_value());
-        EXPECT_EQ(*generated_nf, redeemed_nf);
+        const auto generated = finalize_redeem(anchors, generated_redemption.request, ctx_iss,
+                                               ctx_red, challenge_digest);
+        ASSERT_TRUE(generated.has_value());
+        EXPECT_EQ(generated->nf, redeemed_nf);
         // Verify the stored redemption proof even if regeneration changes its bytes.
-        const auto stored_nf =
+        const auto stored =
             finalize_redeem(anchors, redeem_request, ctx_iss, ctx_red, challenge_digest);
-        ASSERT_TRUE(stored_nf.has_value());
-        EXPECT_EQ(*stored_nf, redeemed_nf);
+        ASSERT_TRUE(stored.has_value());
+        EXPECT_EQ(stored->nf, redeemed_nf);
+
+        // The report opens to the stored tag and to the Aggregator's share for the issuer.
+        const OpenedReport opened = open_report(report);
+        EXPECT_EQ(opened.tag, stored->tag);
+        HistogramShare sum = stored->share;
+        aggregate(sum, opened.share);
+        for (size_t u = 0; u < MAX_ANCHORS; ++u) {
+            EXPECT_EQ(sum[u], u == issuer ? 1 : 0) << "u = " << u;
+        }
         ++count;
     }
     EXPECT_EQ(count, 3u);
@@ -351,10 +363,28 @@ Token copy(const Token& t) { return TokenAccess::copy(t); }
 
 const Seed REDEEM_SEED = filled<SEED_BYTES>(0x90);
 
-const RedeemRequest& redemption() {
-    static const RedeemRequest req = redeem_request_with_seed(
+const RedeemRequestResult& redemption_result() {
+    static const RedeemRequestResult res = redeem_request_with_seed(
         copy(token()), anchors().keys, CTX_ISS, CTX_RED, CHALLENGE_DIGEST, REDEEM_SEED);
-    return req;
+    return res;
+}
+
+const RedeemRequest& redemption() { return redemption_result().request; }
+
+// The sum of the Moderator's and the Aggregator's shares of a redemption.
+HistogramShare combined(const Redemption& redemption, const Report& report) {
+    const OpenedReport opened = open_report(report);
+    EXPECT_EQ(opened.tag, redemption.tag);
+    HistogramShare sum = redemption.share;
+    aggregate(sum, opened.share);
+    return sum;
+}
+
+// The one-hot vector with a 1 at index i.
+HistogramShare one_hot(size_t i) {
+    HistogramShare v{};
+    v[i] = 1;
+    return v;
 }
 
 } // namespace
@@ -425,11 +455,12 @@ TEST(FinalizeIssue, ConsumesPendingToken) {
 }
 
 TEST(Redeem, Verifies) {
-    const auto nf =
+    const auto res =
         finalize_redeem(anchors().keys, redemption(), CTX_ISS, CTX_RED, CHALLENGE_DIGEST);
-    ASSERT_TRUE(nf.has_value());
-    EXPECT_EQ(to_hex(*nf), to_hex(TokenAccess::nf(token())));
+    ASSERT_TRUE(res.has_value());
+    EXPECT_EQ(to_hex(res->nf), to_hex(TokenAccess::nf(token())));
     EXPECT_EQ(to_hex(std::span(redemption()).first<NF_BYTES>()), to_hex(TokenAccess::nf(token())));
+    EXPECT_EQ(combined(*res, redemption_result().report), one_hot(ISSUER));
 }
 
 TEST(Redeem, RandomizedVerifies) {
@@ -438,11 +469,12 @@ TEST(Redeem, RandomizedVerifies) {
     auto t = std::move(pending).finalize_issue(pk, *issue_response(sk, request, CTX_ISS));
     ASSERT_TRUE(t.has_value());
     const Nullifier want = TokenAccess::nf(*t);
-    const auto req =
+    const auto [req, report] =
         std::move(*t).redeem_request(anchors().keys, CTX_ISS, CTX_RED, CHALLENGE_DIGEST);
-    const auto nf = finalize_redeem(anchors().keys, req, CTX_ISS, CTX_RED, CHALLENGE_DIGEST);
-    ASSERT_TRUE(nf.has_value());
-    EXPECT_EQ(to_hex(*nf), to_hex(want));
+    const auto res = finalize_redeem(anchors().keys, req, CTX_ISS, CTX_RED, CHALLENGE_DIGEST);
+    ASSERT_TRUE(res.has_value());
+    EXPECT_EQ(to_hex(res->nf), to_hex(want));
+    EXPECT_EQ(combined(*res, report), one_hot(ISSUER));
 }
 
 // The issuing Anchor may be anywhere in the Anchor Set.
@@ -450,19 +482,22 @@ TEST(Redeem, VerifiesAtEveryPosition) {
     for (const size_t n : {size_t{1}, size_t{2}}) {
         for (size_t i = 0; i < n; ++i) {
             const AnchorSet keys = anchor_set_with_issuer_at(n, i);
-            const auto req = redeem_request_with_seed(copy(token()), keys, CTX_ISS, CTX_RED,
-                                                      CHALLENGE_DIGEST, REDEEM_SEED);
-            EXPECT_TRUE(finalize_redeem(keys, req, CTX_ISS, CTX_RED, CHALLENGE_DIGEST))
-                << "n = " << n << ", i = " << i;
+            const auto [req, report] = redeem_request_with_seed(
+                copy(token()), keys, CTX_ISS, CTX_RED, CHALLENGE_DIGEST, REDEEM_SEED);
+            const auto res = finalize_redeem(keys, req, CTX_ISS, CTX_RED, CHALLENGE_DIGEST);
+            ASSERT_TRUE(res.has_value()) << "n = " << n << ", i = " << i;
+            EXPECT_EQ(combined(*res, report), one_hot(i)) << "n = " << n << ", i = " << i;
         }
     }
 }
 
 TEST(Redeem, VerifiesLargestAnchorSet) {
     const AnchorSet keys = anchor_set_with_issuer_at(MAX_ANCHORS, MAX_ANCHORS / 2);
-    const auto req = redeem_request_with_seed(copy(token()), keys, CTX_ISS, CTX_RED,
-                                              CHALLENGE_DIGEST, REDEEM_SEED);
-    EXPECT_TRUE(finalize_redeem(keys, req, CTX_ISS, CTX_RED, CHALLENGE_DIGEST));
+    const auto [req, report] = redeem_request_with_seed(copy(token()), keys, CTX_ISS, CTX_RED,
+                                                        CHALLENGE_DIGEST, REDEEM_SEED);
+    const auto res = finalize_redeem(keys, req, CTX_ISS, CTX_RED, CHALLENGE_DIGEST);
+    ASSERT_TRUE(res.has_value());
+    EXPECT_EQ(combined(*res, report), one_hot(MAX_ANCHORS / 2));
 }
 
 // Example: An application that owns its Anchors' keys in a container builds an Anchor Set from
@@ -475,10 +510,11 @@ TEST(Redeem, AnchorSetFromOwnedKeys) {
     keys.emplace_back(anchors().c.sk.public_key_bytes());
 
     const AnchorSet anchor_set(keys);
-    const auto req = copy(token()).redeem_request(anchor_set, CTX_ISS, CTX_RED, CHALLENGE_DIGEST);
-    const auto nf = finalize_redeem(anchor_set, req, CTX_ISS, CTX_RED, CHALLENGE_DIGEST);
-    ASSERT_TRUE(nf.has_value());
-    EXPECT_EQ(to_hex(*nf), to_hex(TokenAccess::nf(token())));
+    const auto req =
+        copy(token()).redeem_request(anchor_set, CTX_ISS, CTX_RED, CHALLENGE_DIGEST).request;
+    const auto res = finalize_redeem(anchor_set, req, CTX_ISS, CTX_RED, CHALLENGE_DIGEST);
+    ASSERT_TRUE(res.has_value());
+    EXPECT_EQ(to_hex(res->nf), to_hex(TokenAccess::nf(token())));
 
     // The same Anchor Set, from references to the keys.
     const std::vector<AnchorRef> refs(keys.begin(), keys.end());
@@ -486,22 +522,30 @@ TEST(Redeem, AnchorSetFromOwnedKeys) {
 
     // A different Anchor Set: the first two keys in reverse order.
     const AnchorSet subset({keys[1], keys[0]});
-    const auto req2 = copy(token()).redeem_request(subset, CTX_ISS, CTX_RED, CHALLENGE_DIGEST);
-    EXPECT_TRUE(finalize_redeem(subset, req2, CTX_ISS, CTX_RED, CHALLENGE_DIGEST));
+    const auto [req2, report2] =
+        copy(token()).redeem_request(subset, CTX_ISS, CTX_RED, CHALLENGE_DIGEST);
+    const auto res2 = finalize_redeem(subset, req2, CTX_ISS, CTX_RED, CHALLENGE_DIGEST);
+    ASSERT_TRUE(res2.has_value());
+    EXPECT_EQ(combined(*res2, report2), one_hot(0));
 }
 
 TEST(Redeem, IsDeterministicGivenSeed) {
-    const auto& a = redemption();
+    const auto& a = redemption_result();
     const auto b = redeem_request_with_seed(copy(token()), anchors().keys, CTX_ISS, CTX_RED,
                                             CHALLENGE_DIGEST, REDEEM_SEED);
-    EXPECT_TRUE(std::ranges::equal(a, b));
+    EXPECT_TRUE(std::ranges::equal(a.request, b.request));
+    EXPECT_EQ(a.report, b.report);
 
-    // A different seed yields a different proof for the same token.
+    // A different seed yields a different proof and report for the same token.
     const auto c = redeem_request_with_seed(copy(token()), anchors().keys, CTX_ISS, CTX_RED,
                                             CHALLENGE_DIGEST, filled<SEED_BYTES>(0x91));
-    EXPECT_FALSE(std::ranges::equal(a, c));
-    EXPECT_TRUE(std::ranges::equal(std::span(a).first<NF_BYTES>(), std::span(c).first<NF_BYTES>()));
-    EXPECT_TRUE(finalize_redeem(anchors().keys, c, CTX_ISS, CTX_RED, CHALLENGE_DIGEST));
+    EXPECT_FALSE(std::ranges::equal(a.request, c.request));
+    EXPECT_NE(a.report, c.report);
+    EXPECT_TRUE(std::ranges::equal(std::span(a.request).first<NF_BYTES>(),
+                                   std::span(c.request).first<NF_BYTES>()));
+    const auto res = finalize_redeem(anchors().keys, c.request, CTX_ISS, CTX_RED, CHALLENGE_DIGEST);
+    ASSERT_TRUE(res.has_value());
+    EXPECT_EQ(combined(*res, c.report), one_hot(ISSUER));
 }
 
 // The challenge is chosen after issuance. The same token can produce a proof for either
@@ -510,7 +554,8 @@ TEST(Redeem, BindsChallengeDigest) {
     ChallengeDigest other = CHALLENGE_DIGEST;
     other.back() ^= 1;
     const auto req = redeem_request_with_seed(copy(token()), anchors().keys, CTX_ISS, CTX_RED,
-                                              other, REDEEM_SEED);
+                                              other, REDEEM_SEED)
+                         .request;
     EXPECT_FALSE(std::ranges::equal(req, redemption()));
     EXPECT_EQ(finalize_redeem(anchors().keys, req, CTX_ISS, CTX_RED, other),
               finalize_redeem(anchors().keys, redemption(), CTX_ISS, CTX_RED, CHALLENGE_DIGEST));
@@ -595,6 +640,133 @@ TEST(Redeem, RejectsTamperedProof) {
     EXPECT_TRUE(finalize_redeem(anchors().keys, req, CTX_ISS, CTX_RED, CHALLENGE_DIGEST));
 }
 
+// The Moderator's share and the report tag are bound by the proof.
+TEST(Redeem, RejectsTamperedShareOrTag) {
+    for (size_t i = NF_BYTES; i < REDEEM_REQUEST_BYTES - REDEEM_PROOF_BYTES; i += 7) {
+        RedeemRequest req = redemption();
+        req[i] ^= 0x01;
+        EXPECT_FALSE(finalize_redeem(anchors().keys, req, CTX_ISS, CTX_RED, CHALLENGE_DIGEST))
+            << "flipped a bit of byte " << i;
+    }
+
+    // Misattribution: Shift one unit of the Moderator's share from the issuer to another Anchor.
+    // (Then the shares add up to e_0 rather than e_ISSUER.)
+    RedeemRequest req = redemption();
+    auto res = *finalize_redeem(anchors().keys, req, CTX_ISS, CTX_RED, CHALLENGE_DIGEST);
+    res.share[ISSUER] = static_cast<uint16_t>(res.share[ISSUER] - 1);
+    res.share[0] = static_cast<uint16_t>(res.share[0] + 1);
+    for (size_t u = 0; u < MAX_ANCHORS; ++u) {
+        req[NF_BYTES + 2 * u] = static_cast<uint8_t>(res.share[u]);
+        req[NF_BYTES + 2 * u + 1] = static_cast<uint8_t>(res.share[u] >> 8);
+    }
+    EXPECT_FALSE(finalize_redeem(anchors().keys, req, CTX_ISS, CTX_RED, CHALLENGE_DIGEST));
+}
+
+// The redemption request carries the Moderator's share and the report tag in the clear.
+TEST(Redeem, RequestLayout) {
+    const auto res =
+        *finalize_redeem(anchors().keys, redemption(), CTX_ISS, CTX_RED, CHALLENGE_DIGEST);
+    const auto& req = redemption();
+    for (size_t u = 0; u < MAX_ANCHORS; ++u) {
+        EXPECT_EQ(req[NF_BYTES + 2 * u] | (req[NF_BYTES + 2 * u + 1] << 8), res.share[u]);
+    }
+    EXPECT_TRUE(std::ranges::equal(
+        std::span(req).subspan<NF_BYTES + HISTOGRAM_SHARE_BYTES, REPORT_TAG_BYTES>(), res.tag));
+}
+
+// End to end: The Moderator and the Aggregator aggregate the shares of several redemptions, then
+// combine their aggregates into the histogram of issuing Anchors.
+TEST(Redeem, AggregatesHistogram) {
+    constexpr size_t N = 4;
+    const std::array<size_t, 6> issuers = {0, 2, 2, 3, 2, 0};
+    HistogramShare want{};
+    HistogramShare moderator_agg{}, aggregator_agg{};
+    std::vector<ReportTag> vouched;
+    std::vector<Report> reports;
+    for (size_t k = 0; k < issuers.size(); ++k) {
+        const AnchorSet keys = anchor_set_with_issuer_at(N, issuers[k]);
+        Seed seed = REDEEM_SEED;
+        seed[0] = static_cast<uint8_t>(k);
+        const auto [req, report] =
+            redeem_request_with_seed(copy(token()), keys, CTX_ISS, CTX_RED, CHALLENGE_DIGEST, seed);
+        const auto res = finalize_redeem(keys, req, CTX_ISS, CTX_RED, CHALLENGE_DIGEST);
+        ASSERT_TRUE(res.has_value());
+        aggregate(moderator_agg, res->share);
+        vouched.push_back(res->tag);
+        reports.push_back(report);
+        ++want[issuers[k]];
+    }
+
+    // The Aggregator counts a report only if the Moderator vouched for its tag.
+    for (const Report& report : reports) {
+        const OpenedReport opened = open_report(report);
+        ASSERT_NE(std::ranges::find(vouched, opened.tag), vouched.end());
+        aggregate(aggregator_agg, opened.share);
+    }
+
+    // Neither aggregate on its own is the histogram.
+    EXPECT_NE(moderator_agg, want);
+    EXPECT_NE(aggregator_agg, want);
+
+    HistogramShare histogram = moderator_agg;
+    aggregate(histogram, aggregator_agg);
+    EXPECT_EQ(histogram, want);
+}
+
+// A report the Client made up, rather than the one it proved, has a tag the Moderator didn't vouch
+// for.
+TEST(Redeem, MadeUpReportHasUnvouchedTag) {
+    const auto res =
+        *finalize_redeem(anchors().keys, redemption(), CTX_ISS, CTX_RED, CHALLENGE_DIGEST);
+    Report made_up = redemption_result().report;
+    made_up[0] ^= 1;
+    EXPECT_NE(open_report(made_up).tag, res.tag);
+    EXPECT_EQ(open_report(redemption_result().report).tag, res.tag);
+}
+
+// Known answer for the report expansion: B || t is the first 160 bytes of the concatenation of the
+// first 68 bytes of Keccak-p[800, 12]("mous" || VERSION || "h0" || j || k || 0^76) for j = 0, 1, 2.
+TEST(Report, Expansion) {
+    const Report k = filled<REPORT_BYTES>(0xa0);
+    const OpenedReport opened = open_report(k);
+    std::array<uint8_t, HISTOGRAM_SHARE_BYTES + REPORT_TAG_BYTES> out{};
+    for (size_t j = 0; j < 3; ++j) {
+        Kp800State state{};
+        const std::string_view dst = "mous";
+        std::ranges::copy(dst, state.begin());
+        state[4] = VERSION;
+        state[5] = 'h';
+        state[6] = '0';
+        state[7] = static_cast<uint8_t>(j);
+        std::ranges::copy(k, state.begin() + 8);
+        const Kp800State block = keccak_p800(state);
+        std::copy_n(block.begin(), std::min<size_t>(68, out.size() - 68 * j), out.begin() + 68 * j);
+    }
+    for (size_t u = 0; u < MAX_ANCHORS; ++u) {
+        EXPECT_EQ(opened.share[u], out[2 * u] | (out[2 * u + 1] << 8)) << "u = " << u;
+    }
+    EXPECT_TRUE(std::ranges::equal(opened.tag, std::span(out).last<REPORT_TAG_BYTES>()));
+
+    // Distinct reports have distinct expansions.
+    Report other = k;
+    other.back() ^= 0x80;
+    EXPECT_NE(open_report(other), opened);
+}
+
+TEST(Report, AggregateWrapsAround) {
+    HistogramShare agg{};
+    agg[0] = 0xffff;
+    agg[1] = 0x8000;
+    HistogramShare x{};
+    x[0] = 2;
+    x[1] = 0x8000;
+    x[2] = 7;
+    aggregate(agg, x);
+    EXPECT_EQ(agg[0], 1);
+    EXPECT_EQ(agg[1], 0);
+    EXPECT_EQ(agg[2], 7);
+}
+
 // An issuance proof isn't a redemption proof, and vice versa, even though both are VOLEitH proofs
 // with the same parameters for statements about the same commitment.
 TEST(Redeem, RejectsIssuanceProof) {
@@ -629,7 +801,8 @@ TEST(Redeem, RequestRejectsInvalidArguments) {
 
     // The token is still intact.
     const auto req = redeem_request_with_seed(std::move(t), keys, CTX_ISS, CTX_RED,
-                                              CHALLENGE_DIGEST, REDEEM_SEED);
+                                              CHALLENGE_DIGEST, REDEEM_SEED)
+                         .request;
     EXPECT_TRUE(std::ranges::equal(req, redemption()));
 }
 

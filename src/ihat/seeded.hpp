@@ -26,9 +26,10 @@ IssueRequestResult issue_request_with_seed(const Context& ctx_iss, const Context
 //
 // Throws as for Token::redeem_request, except that it doesn't use the operating system's random
 // number generator.
-RedeemRequest redeem_request_with_seed(Token&& token, const AnchorSet& anchors,
-                                       const Context& ctx_iss, const Context& ctx_red,
-                                       const ChallengeDigest& challenge_digest, const Seed& seed);
+RedeemRequestResult redeem_request_with_seed(Token&& token, const AnchorSet& anchors,
+                                             const Context& ctx_iss, const Context& ctx_red,
+                                             const ChallengeDigest& challenge_digest,
+                                             const Seed& seed);
 
 // As ihat::unbound_issue_request, but using seed as the source of randomness.
 //
@@ -40,7 +41,7 @@ UnboundIssueRequestResult unbound_issue_request_with_seed(const Context& ctx_iss
 //
 // Throws as for UnboundToken::redeem_request, except that it doesn't use the operating system's
 // random number generator.
-UnboundRedeemRequest
+UnboundRedeemRequestResult
 unbound_redeem_request_with_seed(const UnboundToken& token, const AnchorSet& anchors,
                                  const Context& ctx_iss, const Context& ctx_red,
                                  const ChallengeDigest& challenge_digest, const Seed& seed);

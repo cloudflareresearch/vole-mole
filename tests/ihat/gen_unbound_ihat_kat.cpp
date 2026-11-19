@@ -60,7 +60,7 @@ int main(int argc, char** argv) {
            "# anchor_sk repeats once per Anchor, in Anchor Set order; compact test-only UOV "
            "keys.\n"
            "# Each token is redeemed redemption_count times, each with redeem_seed through "
-           "redeem_request.\n";
+           "report.\n";
     for (size_t i = 0; i < 3; ++i) {
         Seed seed{}, redeem_seed{};
         Context ctx_iss{}, ctx_red{};
@@ -127,20 +127,20 @@ int main(int argc, char** argv) {
                 redeem_seed[0] ^= 0x01;
             }
             const auto nf = derive(nf_key, ctx_red);
-            const auto redeem_witness = detail::encode_unbound_redeem_witness(
-                nf_key, ctx_iss, ctx_red, r, *response, issuer);
-            const auto redeem_request = unbound_redeem_request_with_seed(
+            const auto [redeem_request, report] = unbound_redeem_request_with_seed(
                 *token, anchors, ctx_iss, ctx_red, challenge_digest, redeem_seed);
-            const auto redeemed_nf = unbound_finalize_redeem(anchors, redeem_request, ctx_iss,
-                                                             ctx_red, challenge_digest);
-            if (!redeemed_nf || *redeemed_nf != nf) {
+            const auto redeem_witness = detail::encode_unbound_redeem_witness(
+                nf_key, ctx_iss, ctx_red, r, *response, report, issuer);
+            const auto redeemed = unbound_finalize_redeem(anchors, redeem_request, ctx_iss, ctx_red,
+                                                          challenge_digest);
+            if (!redeemed || redeemed->nf != nf || open_report(report).tag != redeemed->tag) {
                 std::cerr << "Redemption " << j << " failed verification for case " << i << '\n';
                 return 1;
             }
             out << "\nredeem_seed " << to_hex(redeem_seed) << "\nctx_red " << to_hex(ctx_red)
                 << "\nchallenge_digest " << to_hex(challenge_digest) << "\nnf " << to_hex(nf)
                 << "\nredeem_witness " << to_hex(redeem_witness) << "\nredeem_request "
-                << to_hex(redeem_request);
+                << to_hex(redeem_request) << "\nreport " << to_hex(report);
         }
         out << '\n';
     }

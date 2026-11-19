@@ -6,6 +6,7 @@
 
 #include "ihat/circuit.hpp"        // internal
 #include "ihat/commit.hpp"         // internal
+#include "ihat/report.hpp"         // internal
 #include "ihat/unbound_redeem.hpp" // internal
 #include "keccak/segmented.hpp"    // internal
 
@@ -35,6 +36,7 @@ const Context CTX_RED = filled<CTX_BYTES>(0x20);
 const ChallengeDigest CHALLENGE_DIGEST = filled<CHALLENGE_DIGEST_BYTES>(0x70);
 const NfKey NF_KEY = filled<NF_KEY_BYTES>(0x30);
 const Opening R = filled<R_BYTES>(0x40);
+const Report K = filled<REPORT_BYTES>(0xa0);
 
 using Witness = std::array<uint8_t, UNBOUND_REDEEM_WITNESS_BYTES>;
 
@@ -57,13 +59,18 @@ const uov::Preimage& signature() {
     return s;
 }
 
+// The instance for report k and the Anchor at index i.
 UnboundRedeemRelation::instance make_instance(AnchorSpan keys = anchors().keys,
-                                              const Context& ctx_red = CTX_RED) {
-    return {keys, derive(NF_KEY, ctx_red), CTX_ISS, ctx_red, CHALLENGE_DIGEST};
+                                              const Context& ctx_red = CTX_RED, size_t i = ISSUER,
+                                              const Report& k = K) {
+    const OpenedReport opened = open_report_output(expand_report(k));
+    return {keys,      derive(NF_KEY, ctx_red), CTX_ISS,
+            ctx_red,   CHALLENGE_DIGEST,        moderator_share(opened.share, i),
+            opened.tag};
 }
 
-Witness honest_witness(size_t i = ISSUER, const Context& ctx_red = CTX_RED) {
-    return encode_unbound_redeem_witness(NF_KEY, CTX_ISS, ctx_red, R, signature(), i);
+Witness honest_witness(size_t i = ISSUER, const Context& ctx_red = CTX_RED, const Report& k = K) {
+    return encode_unbound_redeem_witness(NF_KEY, CTX_ISS, ctx_red, R, signature(), k, i);
 }
 
 std::vector<bool> evaluate(const Witness& w, const UnboundRedeemRelation::instance& x) {
@@ -88,7 +95,13 @@ constexpr size_t WEIGHT_OFF = SELECTOR_OFF + 2 * MAX_ANCHORS - 1;
 constexpr size_t DERIVE_OUT_OFF =
     SELECTOR_OFF + SELECTOR_NUM_CONSTRAINTS + 2 * keccak::detail::NUM_SEGMENT_CONSTRAINTS;
 constexpr size_t SIGNATURE_OFF = DERIVE_OUT_OFF + 8 * NF_BYTES;
-static_assert(SIGNATURE_OFF + 1 == UNBOUND_REDEEM_NUM_CONSTRAINTS);
+constexpr size_t REPORT_OFF = SIGNATURE_OFF + 1;
+static_assert(REPORT_OFF + REPORT_NUM_CONSTRAINTS == UNBOUND_REDEEM_NUM_CONSTRAINTS);
+
+// Number of violated constraints before the report constraints.
+size_t count_violated_before_report(const std::vector<bool>& v) {
+    return count_violated(std::vector<bool>(v.begin(), v.begin() + REPORT_OFF));
+}
 
 void set_selector(Witness& w, size_t u, bool value) {
     const size_t b = unbound_selector_bit(u);
@@ -111,7 +124,7 @@ TEST(UnboundRedeemRelation, HonestWitnessAtEveryPosition) {
         for (size_t i = 0; i < n; ++i) {
             std::vector<AnchorRef> keys(n, other);
             keys[i] = issuer;
-            const auto violated = evaluate(honest_witness(i), make_instance(keys));
+            const auto violated = evaluate(honest_witness(i), make_instance(keys, CTX_RED, i));
             EXPECT_EQ(violated.size(), UnboundRedeemRelation::NUM_CONSTRAINTS);
             EXPECT_EQ(count_violated(violated), 0u) << "n = " << n << ", i = " << i;
         }
@@ -121,7 +134,9 @@ TEST(UnboundRedeemRelation, HonestWitnessAtEveryPosition) {
 TEST(UnboundRedeemRelation, HonestWitnessForLargestAnchorSet) {
     std::vector<AnchorRef> keys(MAX_ANCHORS, anchors().keys[0]);
     keys.back() = uov_key_pair().pk;
-    EXPECT_EQ(count_violated(evaluate(honest_witness(MAX_ANCHORS - 1), make_instance(keys))), 0u);
+    EXPECT_EQ(count_violated(evaluate(honest_witness(MAX_ANCHORS - 1),
+                                      make_instance(keys, CTX_RED, MAX_ANCHORS - 1))),
+              0u);
 }
 
 // The same token has an honest witness for every redemption context, with a different nullifier.
@@ -138,7 +153,8 @@ TEST(UnboundRedeemRelation, HonestWitnessForEveryRedemptionContext) {
 }
 
 // Every bit of the witness matters: r, nf_key, and the intermediate states determine the
-// commitment and the nullifier, s determines the signature, and b determines the selected Anchor.
+// commitment and the nullifier, s determines the signature, k and its intermediate states determine
+// the report, and b determines the selected Anchor.
 TEST(UnboundRedeemRelation, AnyWitnessBitFlipViolatesAConstraint) {
     const auto honest = honest_witness();
     const auto x = make_instance();
@@ -201,6 +217,22 @@ TEST(UnboundRedeemRelation, WrongInstanceViolatesAConstraint) {
     x.nf = derive(NF_KEY, x.ctx_red);
     EXPECT_GT(count_violated(evaluate(w, x)), 0u) << "ctx_red and nf";
 
+    // Each bit of the share and of the tag is constrained, by the report constraints only.
+    for (size_t i = 0; i < 16 * MAX_ANCHORS; ++i) {
+        x = make_instance();
+        x.share[i / 16] ^= static_cast<uint16_t>(1u << (i % 16));
+        const auto violated = evaluate(w, x);
+        EXPECT_EQ(count_violated_before_report(violated), 0u) << "flipping bit " << i << " of A";
+        EXPECT_GT(count_violated(violated), 0u) << "flipping bit " << i << " of A";
+    }
+    for (size_t i = 0; i < 8 * REPORT_TAG_BYTES; ++i) {
+        x = make_instance();
+        x.tag[i / 8] ^= static_cast<uint8_t>(1u << (i % 8));
+        const auto violated = evaluate(w, x);
+        EXPECT_EQ(count_violated_before_report(violated), 0u) << "flipping bit " << i << " of t";
+        EXPECT_GT(count_violated(violated), 0u) << "flipping bit " << i << " of t";
+    }
+
     // The issuing Anchor is moved or removed.
     auto keys = anchors().keys;
     std::swap(keys[0], keys[ISSUER]);
@@ -217,7 +249,8 @@ TEST(UnboundRedeemRelation, WrongInstanceViolatesAConstraint) {
 TEST(UnboundRedeemRelation, NullifierKeyIsCommitted) {
     NfKey other = NF_KEY;
     other[0] ^= 1;
-    const auto w = encode_unbound_redeem_witness(other, CTX_ISS, CTX_RED, R, signature(), ISSUER);
+    const auto w =
+        encode_unbound_redeem_witness(other, CTX_ISS, CTX_RED, R, signature(), K, ISSUER);
     auto x = make_instance();
     x.nf = derive(other, CTX_RED);
     const auto violated = evaluate(w, x);
@@ -225,7 +258,27 @@ TEST(UnboundRedeemRelation, NullifierKeyIsCommitted) {
     EXPECT_TRUE(violated[SIGNATURE_OFF]);
 }
 
-// The witness is consistent with the plaintext commitment and nullifier.
+// A Client can't attribute its redemption to an Anchor other than the issuing one, or prove a share
+// for another report than the one it gives the Aggregator.
+TEST(UnboundRedeemRelation, RejectsMisattribution) {
+    const auto w = honest_witness();
+    for (size_t j = 0; j < MAX_ANCHORS; ++j) {
+        if (j == ISSUER) {
+            continue;
+        }
+        const auto violated = evaluate(w, make_instance(anchors().keys, CTX_RED, j));
+        EXPECT_EQ(count_violated_before_report(violated), 0u) << "j = " << j;
+        EXPECT_GT(count_violated(violated), 0u) << "j = " << j;
+    }
+
+    const Report other = filled<REPORT_BYTES>(0xb0);
+    const auto x = make_instance(anchors().keys, CTX_RED, ISSUER, other);
+    EXPECT_EQ(count_violated(evaluate(honest_witness(ISSUER, CTX_RED, other), x)), 0u);
+    EXPECT_GT(count_violated(evaluate(honest_witness(ISSUER, CTX_RED, other), make_instance())),
+              0u);
+}
+
+// The witness is consistent with the plaintext commitment, nullifier, and report expansion.
 TEST(UnboundRedeemRelation, WitnessIsConsistent) {
     using namespace keccak::detail;
     const auto w = honest_witness();
@@ -241,4 +294,13 @@ TEST(UnboundRedeemRelation, WitnessIsConsistent) {
         std::equal(com.begin(), com.begin() + uov::M, unbound_commit(NF_KEY, CTX_ISS, R).begin()));
     const auto nf = last_segment(UNBOUND_REDEEM_WIT_OFF_DERIVE_STATES);
     EXPECT_TRUE(std::equal(nf.begin(), nf.begin() + NF_BYTES, derive(NF_KEY, CTX_RED).begin()));
+    EXPECT_TRUE(std::equal(K.begin(), K.end(), w.begin() + UNBOUND_REDEEM_WIT_OFF_K));
+    const ReportOutput out = expand_report(K);
+    for (size_t j = 0; j < REPORT_BLOCKS; ++j) {
+        const auto block =
+            last_segment(UNBOUND_REDEEM_WIT_OFF_REPORT_STATES + j * COMMITTED_STATES_BYTES);
+        EXPECT_TRUE(std::equal(block.begin(), block.begin() + report_block_out_bytes(j),
+                               out.begin() + j * REPORT_BLOCK_OUT_BYTES))
+            << "block " << j;
+    }
 }

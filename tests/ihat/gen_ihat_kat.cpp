@@ -95,13 +95,13 @@ int main(int argc, char** argv) {
             std::cerr << "Issuance finalization failed for case " << i << '\n';
             return 1;
         }
-        const auto redeem_witness =
-            detail::encode_redeem_witness(nf, ctx_iss, ctx_red, r, *response, issuer);
-        const auto redeem_request = redeem_request_with_seed(
+        const auto [redeem_request, report] = redeem_request_with_seed(
             std::move(*token), anchors, ctx_iss, ctx_red, challenge_digest, redeem_seed);
-        const auto redeemed_nf =
+        const auto redeem_witness =
+            detail::encode_redeem_witness(nf, ctx_iss, ctx_red, r, *response, report, issuer);
+        const auto redeemed =
             finalize_redeem(anchors, redeem_request, ctx_iss, ctx_red, challenge_digest);
-        if (!redeemed_nf || *redeemed_nf != nf) {
+        if (!redeemed || redeemed->nf != nf || open_report(report).tag != redeemed->tag) {
             std::cerr << "Redemption failed verification for case " << i << '\n';
             return 1;
         }
@@ -118,7 +118,8 @@ int main(int argc, char** argv) {
             << to_hex(detail::encode_issue_witness(nf, ctx_iss, ctx_red, r)) << "\nissue_request "
             << to_hex(res.request) << "\nissue_response " << to_hex(*response)
             << "\nredeem_witness " << to_hex(redeem_witness) << "\nredeem_request "
-            << to_hex(redeem_request) << "\nredeemed_nf " << to_hex(*redeemed_nf) << '\n';
+            << to_hex(redeem_request) << "\nreport " << to_hex(report) << "\nredeemed_nf "
+            << to_hex(redeemed->nf) << '\n';
     }
     out.close();
     if (!out) {

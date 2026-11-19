@@ -53,6 +53,9 @@ constexpr Dst IHAT_ISSUE_SEED_DST = make_dst("mous", ihat::VERSION, 's', '0');
 constexpr Dst IHAT_REDEEM_COMBINE_DST = make_dst("mous", ihat::VERSION, 'l', '0');
 constexpr Dst IHAT_REDEEM_PROOF_DST = make_dst("mous", ihat::VERSION, 'r', '0');
 constexpr Dst IHAT_REDEEM_SEED_DST = make_dst("mous", ihat::VERSION, 's', '1');
+// Report expansion, for both standard and unbound tokens, so that the Aggregator needn't know
+// which kind of token was redeemed.
+constexpr Dst IHAT_REPORT_DST = make_dst("mous", ihat::VERSION, 'h', '0');
 
 // VOLE-IHAT (unbound tokens)
 constexpr Dst UNBOUND_IHAT_COM_DST = make_dst("mous", ihat::detail::UNBOUND_VERSION, 'c', '0');
@@ -91,6 +94,7 @@ constexpr bool dsts_are_distinct() {
         IHAT_REDEEM_COMBINE_DST,
         IHAT_REDEEM_PROOF_DST,
         IHAT_REDEEM_SEED_DST,
+        IHAT_REPORT_DST,
         POMFRIT_COMBINE_DST,
         POMFRIT_PROOF_DST,
         POMFRIT_REFRESHER_DST,

@@ -148,31 +148,43 @@ TEST(IhatUnbound, KnownAnswers) {
             Nullifier nf;
             std::array<uint8_t, ihat::detail::UNBOUND_REDEEM_WITNESS_BYTES> redeem_witness;
             UnboundRedeemRequest redeem_request;
+            Report report;
             ASSERT_TRUE(read_kat_field(in, "redeem_seed", redeem_seed));
             ASSERT_TRUE(read_kat_field(in, "ctx_red", ctx_red));
             ASSERT_TRUE(read_kat_field(in, "challenge_digest", challenge_digest));
             ASSERT_TRUE(read_kat_field(in, "nf", nf));
             ASSERT_TRUE(read_kat_field(in, "redeem_witness", redeem_witness));
             ASSERT_TRUE(read_kat_field(in, "redeem_request", redeem_request));
+            ASSERT_TRUE(read_kat_field(in, "report", report));
 
             EXPECT_EQ(derive(nf_key, ctx_red), nf);
             EXPECT_EQ(ihat::detail::encode_unbound_redeem_witness(nf_key, ctx_iss, ctx_red, r,
-                                                                  response, issuer),
+                                                                  response, report, issuer),
                       redeem_witness);
             const auto generated_redemption = unbound_redeem_request_with_seed(
                 *token, anchors, ctx_iss, ctx_red, challenge_digest, redeem_seed);
-            EXPECT_TRUE(std::ranges::equal(generated_redemption, redeem_request))
+            EXPECT_TRUE(std::ranges::equal(generated_redemption.request, redeem_request))
                 << "redemption request bytes differ";
+            EXPECT_EQ(generated_redemption.report, report);
             EXPECT_EQ(to_hex(std::span(redeem_request).first<NF_BYTES>()), to_hex(nf));
-            const auto generated_nf = unbound_finalize_redeem(anchors, generated_redemption,
-                                                              ctx_iss, ctx_red, challenge_digest);
-            ASSERT_TRUE(generated_nf.has_value());
-            EXPECT_EQ(*generated_nf, nf);
+            const auto generated = unbound_finalize_redeem(anchors, generated_redemption.request,
+                                                           ctx_iss, ctx_red, challenge_digest);
+            ASSERT_TRUE(generated.has_value());
+            EXPECT_EQ(generated->nf, nf);
             // Verify the stored redemption proof even if regeneration changes its bytes.
-            const auto stored_nf = unbound_finalize_redeem(anchors, redeem_request, ctx_iss,
-                                                           ctx_red, challenge_digest);
-            ASSERT_TRUE(stored_nf.has_value());
-            EXPECT_EQ(*stored_nf, nf);
+            const auto stored = unbound_finalize_redeem(anchors, redeem_request, ctx_iss, ctx_red,
+                                                        challenge_digest);
+            ASSERT_TRUE(stored.has_value());
+            EXPECT_EQ(stored->nf, nf);
+
+            // The report opens to the stored tag and to the Aggregator's share for the issuer.
+            const OpenedReport opened = open_report(report);
+            EXPECT_EQ(opened.tag, stored->tag);
+            HistogramShare sum = stored->share;
+            aggregate(sum, opened.share);
+            for (size_t u = 0; u < MAX_ANCHORS; ++u) {
+                EXPECT_EQ(sum[u], u == issuer ? 1 : 0) << "u = " << u;
+            }
         }
         ++count;
     }
@@ -309,15 +321,39 @@ const UnboundToken& token() {
 
 const Seed REDEEM_SEED = filled<SEED_BYTES>(0x90);
 
-const UnboundRedeemRequest& redemption() {
-    static const UnboundRedeemRequest req = unbound_redeem_request_with_seed(
+const UnboundRedeemRequestResult& redemption_result() {
+    static const UnboundRedeemRequestResult res = unbound_redeem_request_with_seed(
         token(), anchors().keys, CTX_ISS, CTX_RED, CHALLENGE_DIGEST, REDEEM_SEED);
-    return req;
+    return res;
 }
 
+const UnboundRedeemRequest& redemption() { return redemption_result().request; }
+
+// The nullifier of a valid redemption request for the Anchor Set anchors().keys.
 std::optional<Nullifier> finalize(const UnboundRedeemRequest& req, const Context& ctx_red = CTX_RED,
                                   const ChallengeDigest& challenge_digest = CHALLENGE_DIGEST) {
-    return unbound_finalize_redeem(anchors().keys, req, CTX_ISS, ctx_red, challenge_digest);
+    const auto res =
+        unbound_finalize_redeem(anchors().keys, req, CTX_ISS, ctx_red, challenge_digest);
+    if (!res) {
+        return std::nullopt;
+    }
+    return res->nf;
+}
+
+// The sum of the Moderator's and the Aggregator's shares of a redemption.
+HistogramShare combined(const Redemption& redemption, const Report& report) {
+    const OpenedReport opened = open_report(report);
+    EXPECT_EQ(opened.tag, redemption.tag);
+    HistogramShare sum = redemption.share;
+    aggregate(sum, opened.share);
+    return sum;
+}
+
+// The one-hot vector with a 1 at index i.
+HistogramShare one_hot(size_t i) {
+    HistogramShare v{};
+    v[i] = 1;
+    return v;
 }
 
 } // namespace
@@ -382,6 +418,11 @@ TEST(UnboundRedeem, Verifies) {
     ASSERT_TRUE(nf.has_value());
     EXPECT_EQ(*nf, derive(TokenAccess::nf_key(token()), CTX_RED));
     EXPECT_EQ(to_hex(std::span(redemption()).first<NF_BYTES>()), to_hex(*nf));
+
+    const auto res =
+        unbound_finalize_redeem(anchors().keys, redemption(), CTX_ISS, CTX_RED, CHALLENGE_DIGEST);
+    ASSERT_TRUE(res.has_value());
+    EXPECT_EQ(combined(*res, redemption_result().report), one_hot(ISSUER));
 }
 
 TEST(UnboundRedeem, RandomizedVerifies) {
@@ -390,18 +431,22 @@ TEST(UnboundRedeem, RandomizedVerifies) {
     const auto t =
         std::move(pending).finalize_issue(pk, *unbound_issue_response(sk, request, CTX_ISS));
     ASSERT_TRUE(t.has_value());
-    const auto req = t->redeem_request(anchors().keys, CTX_ISS, CTX_RED, CHALLENGE_DIGEST);
+    const auto req = t->redeem_request(anchors().keys, CTX_ISS, CTX_RED, CHALLENGE_DIGEST).request;
     const auto nf = finalize(req);
     ASSERT_TRUE(nf.has_value());
     EXPECT_EQ(*nf, derive(TokenAccess::nf_key(*t), CTX_RED));
 }
 
 // Redemption doesn't consume the token. Redeeming it again for the same redemption context
-// yields a fresh proof with the same nullifier, so the Moderator can detect the replay.
+// yields a fresh proof (and report) with the same nullifier, so the Moderator can detect the
+// replay.
 TEST(UnboundRedeem, DoesNotConsumeToken) {
-    const auto req1 = token().redeem_request(anchors().keys, CTX_ISS, CTX_RED, CHALLENGE_DIGEST);
-    const auto req2 = token().redeem_request(anchors().keys, CTX_ISS, CTX_RED, CHALLENGE_DIGEST);
+    const auto [req1, report1] =
+        token().redeem_request(anchors().keys, CTX_ISS, CTX_RED, CHALLENGE_DIGEST);
+    const auto [req2, report2] =
+        token().redeem_request(anchors().keys, CTX_ISS, CTX_RED, CHALLENGE_DIGEST);
     EXPECT_FALSE(std::ranges::equal(req1, req2));
+    EXPECT_NE(report1, report2);
     const auto nf1 = finalize(req1);
     const auto nf2 = finalize(req2);
     ASSERT_TRUE(nf1.has_value());
@@ -421,7 +466,7 @@ TEST(UnboundRedeem, NullifierPerRedemptionContext) {
         ctx_red[k] ^= 0x01;
         contexts.push_back(ctx_red);
         requests.push_back(
-            token().redeem_request(anchors().keys, CTX_ISS, ctx_red, CHALLENGE_DIGEST));
+            token().redeem_request(anchors().keys, CTX_ISS, ctx_red, CHALLENGE_DIGEST).request);
         const auto nf = finalize(requests.back(), ctx_red);
         ASSERT_TRUE(nf.has_value()) << "ctx_red " << unsigned{k};
         EXPECT_EQ(*nf, derive(TokenAccess::nf_key(token()), ctx_red));
@@ -443,40 +488,50 @@ TEST(UnboundRedeem, VerifiesAtEveryPosition) {
     for (const size_t n : {size_t{1}, size_t{2}}) {
         for (size_t i = 0; i < n; ++i) {
             const AnchorSet keys = anchor_set_with_issuer_at(n, i);
-            const auto req = unbound_redeem_request_with_seed(token(), keys, CTX_ISS, CTX_RED,
-                                                              CHALLENGE_DIGEST, REDEEM_SEED);
-            EXPECT_TRUE(unbound_finalize_redeem(keys, req, CTX_ISS, CTX_RED, CHALLENGE_DIGEST))
-                << "n = " << n << ", i = " << i;
+            const auto [req, report] = unbound_redeem_request_with_seed(
+                token(), keys, CTX_ISS, CTX_RED, CHALLENGE_DIGEST, REDEEM_SEED);
+            const auto res = unbound_finalize_redeem(keys, req, CTX_ISS, CTX_RED, CHALLENGE_DIGEST);
+            ASSERT_TRUE(res.has_value()) << "n = " << n << ", i = " << i;
+            EXPECT_EQ(combined(*res, report), one_hot(i)) << "n = " << n << ", i = " << i;
         }
     }
 }
 
 TEST(UnboundRedeem, VerifiesLargestAnchorSet) {
     const AnchorSet keys = anchor_set_with_issuer_at(MAX_ANCHORS, MAX_ANCHORS / 2);
-    const auto req = unbound_redeem_request_with_seed(token(), keys, CTX_ISS, CTX_RED,
-                                                      CHALLENGE_DIGEST, REDEEM_SEED);
-    EXPECT_TRUE(unbound_finalize_redeem(keys, req, CTX_ISS, CTX_RED, CHALLENGE_DIGEST));
+    const auto [req, report] = unbound_redeem_request_with_seed(token(), keys, CTX_ISS, CTX_RED,
+                                                                CHALLENGE_DIGEST, REDEEM_SEED);
+    const auto res = unbound_finalize_redeem(keys, req, CTX_ISS, CTX_RED, CHALLENGE_DIGEST);
+    ASSERT_TRUE(res.has_value());
+    EXPECT_EQ(combined(*res, report), one_hot(MAX_ANCHORS / 2));
 }
 
 TEST(UnboundRedeem, IsDeterministicGivenSeed) {
-    const auto& a = redemption();
+    const auto& a = redemption_result();
     const auto b = unbound_redeem_request_with_seed(token(), anchors().keys, CTX_ISS, CTX_RED,
                                                     CHALLENGE_DIGEST, REDEEM_SEED);
-    EXPECT_TRUE(std::ranges::equal(a, b));
+    EXPECT_TRUE(std::ranges::equal(a.request, b.request));
+    EXPECT_EQ(a.report, b.report);
 
-    // A different seed yields a different proof for the same token.
+    // A different seed yields a different proof and report for the same token.
     const auto c = unbound_redeem_request_with_seed(token(), anchors().keys, CTX_ISS, CTX_RED,
                                                     CHALLENGE_DIGEST, filled<SEED_BYTES>(0x91));
-    EXPECT_FALSE(std::ranges::equal(a, c));
-    EXPECT_TRUE(std::ranges::equal(std::span(a).first<NF_BYTES>(), std::span(c).first<NF_BYTES>()));
-    EXPECT_TRUE(finalize(c));
+    EXPECT_FALSE(std::ranges::equal(a.request, c.request));
+    EXPECT_NE(a.report, c.report);
+    EXPECT_TRUE(std::ranges::equal(std::span(a.request).first<NF_BYTES>(),
+                                   std::span(c.request).first<NF_BYTES>()));
+    const auto res =
+        unbound_finalize_redeem(anchors().keys, c.request, CTX_ISS, CTX_RED, CHALLENGE_DIGEST);
+    ASSERT_TRUE(res.has_value());
+    EXPECT_EQ(combined(*res, c.report), one_hot(ISSUER));
 }
 
 TEST(UnboundRedeem, BindsChallengeDigest) {
     ChallengeDigest other = CHALLENGE_DIGEST;
     other.back() ^= 1;
     const auto req = unbound_redeem_request_with_seed(token(), anchors().keys, CTX_ISS, CTX_RED,
-                                                      other, REDEEM_SEED);
+                                                      other, REDEEM_SEED)
+                         .request;
     EXPECT_FALSE(std::ranges::equal(req, redemption()));
     EXPECT_EQ(finalize(req, CTX_RED, other), finalize(redemption()));
     EXPECT_FALSE(finalize(req));
@@ -555,7 +610,8 @@ TEST(UnboundRedeem, RedemptionContextsUseIndependentRandomness) {
     Context ctx_red = CTX_RED;
     ctx_red[0] ^= 1;
     const auto req = unbound_redeem_request_with_seed(token(), anchors().keys, CTX_ISS, ctx_red,
-                                                      CHALLENGE_DIGEST, REDEEM_SEED);
+                                                      CHALLENGE_DIGEST, REDEEM_SEED)
+                         .request;
     using P = ihat::detail::UnboundRedeemParams;
     const faest::faest_signature<P> a =
         std::span(redemption()).last<UNBOUND_REDEEM_PROOF_BYTES>().data();
@@ -587,7 +643,8 @@ TEST(UnboundRedeem, RequestRejectsInvalidArguments) {
 
     // The token is still intact.
     const auto req =
-        unbound_redeem_request_with_seed(t, keys, CTX_ISS, CTX_RED, CHALLENGE_DIGEST, REDEEM_SEED);
+        unbound_redeem_request_with_seed(t, keys, CTX_ISS, CTX_RED, CHALLENGE_DIGEST, REDEEM_SEED)
+            .request;
     EXPECT_TRUE(std::ranges::equal(req, redemption()));
 
     // A token that was moved from can't be redeemed.
@@ -598,7 +655,7 @@ TEST(UnboundRedeem, RequestRejectsInvalidArguments) {
                                                         REDEEM_SEED),
                  std::logic_error);
     EXPECT_THROW((void)TokenAccess::nf_key(t), std::logic_error);
-    EXPECT_TRUE(finalize(u.redeem_request(keys, CTX_ISS, CTX_RED, CHALLENGE_DIGEST)));
+    EXPECT_TRUE(finalize(u.redeem_request(keys, CTX_ISS, CTX_RED, CHALLENGE_DIGEST).request));
 }
 
 // An issuance proof isn't a redemption proof, even though both are VOLEitH proofs with the same
@@ -620,6 +677,23 @@ TEST(UnboundRedeem, CoexistsWithStandardTokens) {
     ASSERT_TRUE(standard.has_value());
     const auto standard_req =
         std::move(*standard).redeem_request(anchors().keys, CTX_ISS, CTX_RED, CHALLENGE_DIGEST);
-    EXPECT_TRUE(finalize_redeem(anchors().keys, standard_req, CTX_ISS, CTX_RED, CHALLENGE_DIGEST));
+    EXPECT_TRUE(
+        finalize_redeem(anchors().keys, standard_req.request, CTX_ISS, CTX_RED, CHALLENGE_DIGEST));
     EXPECT_TRUE(finalize(redemption()));
+
+    // Reports of both kinds of token open the same way.
+    const auto res =
+        finalize_redeem(anchors().keys, standard_req.request, CTX_ISS, CTX_RED, CHALLENGE_DIGEST);
+    ASSERT_TRUE(res.has_value());
+    EXPECT_EQ(combined(*res, standard_req.report), one_hot(ISSUER));
+}
+
+// The Moderator's share and the report tag are bound by the proof.
+TEST(UnboundRedeem, RejectsTamperedShareOrTag) {
+    for (size_t i = NF_BYTES; i < UNBOUND_REDEEM_REQUEST_BYTES - UNBOUND_REDEEM_PROOF_BYTES;
+         i += 7) {
+        UnboundRedeemRequest req = redemption();
+        req[i] ^= 0x01;
+        EXPECT_FALSE(finalize(req)) << "flipped a bit of byte " << i;
+    }
 }

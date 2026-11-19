@@ -171,6 +171,8 @@ struct RedeemInstance {
     Context ctx_iss;
     Context ctx_red;
     ChallengeDigest challenge_digest;
+    HistogramShare share; // the Moderator's share
+    ReportTag tag;
 };
 
 inline void hash_redeem_instance(faest::hash_state& hasher, const RedeemInstance& x) {
@@ -191,6 +193,12 @@ inline void hash_redeem_instance(faest::hash_state& hasher, const RedeemInstance
     hasher.update(x.ctx_iss);
     hasher.update(x.ctx_red);
     hasher.update(x.challenge_digest);
+    for (const uint16_t a : x.share) {
+        const std::array<uint8_t, 2> bytes = {static_cast<uint8_t>(a),
+                                              static_cast<uint8_t>(a >> 8)};
+        hasher.update(bytes);
+    }
+    hasher.update(x.tag);
 }
 
 } // namespace vole_mole::ihat::detail
