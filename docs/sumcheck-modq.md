@@ -77,9 +77,10 @@ section 3):
    variables, prod_{i<j} (1 + z_i + rho_i)):
    - P sends t_1, t_2, the linear and quadratic coefficients of
      t(X) = sum_{nu_{>j}} eq(z_{>j}, nu_{>j}) A(rho_{<j}, X, nu_{>j}) B(rho_{<j}, X, nu_{>j}).
-     The round polynomial is s(X) = (1 + z_j + X) t(X) (Gruen's factoring of the eq term,
-     degree 3), and s(0) + s(1) = c fixes t_0 = c + z_j (t_1 + t_2). (In characteristic 2,
-     (1 + z)(1 + X) + z X = 1 + z + X.)
+     The (reduced) round polynomial is s(X) = (1 + z_j + X) t(X) (Gruen's factoring of the eq
+     term; in characteristic 2, (1 + z)(1 + X) + z X = 1 + z + X), and s(0) + s(1) = c, i.e.,
+     c = (1 + z_j) t(0) + z_j t(1), fixes t_0 = c + z_j (t_1 + t_2). Nothing is divided: the
+     factors 1 + z_i + rho_i are simply dropped from the claims.
    - V picks rho_j; c <- t(rho_j) = c + (z_j + rho_j) t_1 + (z_j + rho_j^2) t_2.
 
    Then c should be A_d(rho) B_d(rho).
@@ -158,16 +159,18 @@ Per proof (before multiplying by the number Q of hash queries):
 - Exactness: the tree equation for bits is equivalent to the integer equations (section 1), no
   error.
 - Roots: if (V_0(0), V_0(1)) != (R_0, R_1), the claim at tau_0 is false except w.p. 2^-128.
-- Rounds: a false reduced claim c with a t of the wrong form: s(X) = (1 + z_j + X) t(X) and the
-  true s* both have degree <= 3 and s - s* != 0, so s(rho) = s*(rho) w.p. <= 3/2^128. (The factor
-  1 + z_j + rho is nonzero except w.p. 2^-128 and is common to both.)
+- Rounds: the reduced protocol is itself a sumcheck that never divides by the eq factors: with
+  t_j(X) = sum_{nu_{>j}} eq(z_{>j}, nu_{>j}) A(rho_{<j}, X, nu_{>j}) B(rho_{<j}, X, nu_{>j}), the
+  true values satisfy c_j = (1 + z_j) t_j(0) + z_j t_j(1) and c_{j+1} = t_j(rho_j). If the
+  reduced claim c_j is false, the prover's t (with t_0 derived from c_j) differs from the true
+  t_j, both of degree 2, so c_{j+1} is true w.p. <= 2/2^128.
 - Layer ends: a b = c with (a, b) != (a*, b*): a + tau (a + b) = a* + tau (a* + b*) for at most
   one tau, w.p. 2^-128.
 - The rest is QuickSilver (D degree-2 constraints among the others; the batching error is
   unchanged) and VOLEitH.
 
-Sum of the sumcheck terms: (1 + 3 D (D + 1) / 2 + (D - 1)) / 2^128 < 2^-119 for D = 16, i.e.,
-eps_rbr <= 3 / 2^128 per round, so Q eps_rbr <= Q 2^-126.4.
+Sum of the sumcheck terms: (1 + 2 D (D + 1) / 2 + (D - 1)) / 2^128 < 2^-119 for D = 16, i.e.,
+eps_rbr <= 2 / 2^128 per round, so Q eps_rbr <= Q 2^-127.
 
 ## 5. Zero knowledge sketch
 
@@ -235,6 +238,5 @@ Further reductions, not done:
   fixed-base windows (verifier time).
 
 Open: the soundness and ZK sketches above need full proofs, in particular the state-restoration
-bound for the chained hashes together with the extraction of K, and the exact soundness of the
-Gruen-factored round (the factor 1 + z_j + rho_j must be nonzero; it vanishes with probability
-2^-128 per round and is then harmless only if we argue it separately).
+bound for the chained hashes together with the extraction of K (the VOLEitH extractor must run
+before the first sumcheck challenge, as for the existing check seed).
